@@ -1,0 +1,13 @@
+# Shared models, database, config
+# Install first: pip install -e ../../packages/shared
+# soa-shared is a local workspace package
+
+# Web framework
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+
+# Already in soa-shared but explicit for Vercel build clarity:
+sqlalchemy>=2.0
+psycopg2-binary
+python-dotenv
