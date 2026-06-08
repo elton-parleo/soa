@@ -903,7 +903,7 @@ function Step5({ state, setState, onBack, onGoTo, onSuccess }) {
 
 // ─── Root Wizard ──────────────────────────────────────────────────────────────
 
-export default function NewCycleWizard() {
+export default function NewCycleWizard({ onComplete, onCancel } = {}) {
   const [step, setStep] = useState(1)
   const [state, setState] = useState(INITIAL_STATE)
   const [queryCount, setQueryCount] = useState(0)
@@ -912,9 +912,14 @@ export default function NewCycleWizard() {
     if (state.studyType?.queryCount) setQueryCount(state.studyType.queryCount)
   }, [state.studyType])
 
-  const handleSuccess = () => {
+  const reset = () => {
     setStep(1)
     setState(INITIAL_STATE)
+  }
+
+  const handleSuccess = () => {
+    reset()
+    if (onComplete) onComplete()
   }
 
   return (
@@ -932,6 +937,16 @@ export default function NewCycleWizard() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <Topbar stepName={STEP_LABELS[step - 1]} />
         <StepIndicator current={step} />
+
+        {/* Cancel setup link */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 32px 0', borderBottom: `1px solid ${T.border}`, paddingBottom: 8 }}>
+          <button
+            onClick={() => { if (onCancel) onCancel() }}
+            style={{ background: 'none', border: 'none', color: T.slate, fontSize: 13, cursor: 'pointer', padding: '4px 0' }}
+          >
+            ✕ Cancel Setup
+          </button>
+        </div>
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {step === 1 && (
