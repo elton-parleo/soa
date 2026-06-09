@@ -56,6 +56,8 @@ class CycleStatusResponse(BaseModel):
     total_runs_planned: int
     completed_runs: int
     created_at: Optional[str] = None
+    platforms: Optional[List[str]] = None
+    runs_per_query: Optional[int] = None
 
 class CycleCheckResponse(BaseModel):
     available: bool

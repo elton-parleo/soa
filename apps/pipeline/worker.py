@@ -34,11 +34,15 @@ POLL_INTERVAL = 30  # seconds when idle
 def get_next_planned_cycle():
     """
     Fetch the oldest planned cycle.
-    Returns a Row with (cycle_code, study_type) or None.
+    Returns a Row with (cycle_code, study_type, platforms, runs_per_query) or None.
     """
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT cycle_code, study_type
+            SELECT
+              cycle_code,
+              study_type,
+              platforms,
+              runs_per_query
             FROM soa_cycles
             WHERE status = 'planned'
             ORDER BY created_at ASC
@@ -64,12 +68,21 @@ def mark_failed(cycle_code: str, error: str):
     log.error(f"Marked {cycle_code} as failed: {error}")
 
 
-async def execute_cycle(cycle_code: str, study_type: str):
+async def execute_cycle(
+    cycle_code: str,
+    study_type: str,
+    platforms: list,
+    runs_per_query: int,
+):
     from orchestrator.pipeline import PipelineOrchestrator
     log.info(f"Starting pipeline for {cycle_code} ({study_type})")
+    log.info(f"Platforms: {platforms}")
+    log.info(f"Runs per query: {runs_per_query}")
     orch = PipelineOrchestrator(
         cycle_code=cycle_code,
         study_type=study_type,
+        platforms=platforms,
+        runs_per_query=runs_per_query,
     )
     await orch.run_pipeline()
     log.info(f"Pipeline done: {cycle_code}")
@@ -86,11 +99,27 @@ def main():
             row = get_next_planned_cycle()
 
             if row:
-                cycle_code = row[0]
-                study_type = row[1]
+                cycle_code     = row[0]
+                study_type     = row[1]
+                platforms      = row[2]
+                runs_per_query = row[3]
+
+                # Fallback for pre-migration cycles with NULL columns
+                if not platforms:
+                    log.warning(
+                        f"{cycle_code}: platforms is NULL — using default [chatgpt, gemini]"
+                    )
+                    platforms = ['chatgpt', 'gemini']
+
+                if not runs_per_query:
+                    log.warning(
+                        f"{cycle_code}: runs_per_query is NULL — using default 5"
+                    )
+                    runs_per_query = 5
+
                 log.info(f"Dequeued: {cycle_code}")
                 try:
-                    asyncio.run(execute_cycle(cycle_code, study_type))
+                    asyncio.run(execute_cycle(cycle_code, study_type, platforms, runs_per_query))
                 except Exception as e:
                     log.exception(f"Cycle {cycle_code} failed: {e}")
                     mark_failed(cycle_code, str(e))

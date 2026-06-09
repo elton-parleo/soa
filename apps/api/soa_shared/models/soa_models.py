@@ -227,6 +227,18 @@ class SoaCycle(Base):
     status = Column(Text, nullable=False, default="planned", server_default="planned")
     notes = Column(Text)
 
+    platforms = Column(
+        JSON,
+        nullable=True,
+        comment='List of platform ids e.g. ["chatgpt", "gemini"]',
+    )
+    runs_per_query = Column(
+        Integer,
+        nullable=True,
+        default=5,
+        comment='Runs per query per platform',
+    )
+
     study_type = Column(
         Text,
         nullable=False,

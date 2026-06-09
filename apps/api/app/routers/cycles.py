@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 from datetime import date
+import json
 from soa_shared.database import engine
 from app.schemas import (
     CreateCycleRequest,
@@ -76,18 +77,22 @@ def create_cycle(data: CreateCycleRequest):
         cycle_row = conn.execute(text("""
             INSERT INTO soa_cycles (
                 cycle_code, study_type, study_pattern, status,
-                total_runs_planned, completed_runs, start_date, notes
+                total_runs_planned, completed_runs, start_date, notes,
+                platforms, runs_per_query
             ) VALUES (
-                :code, :st, :sp, 'planned', :total, 0, :today, :notes
+                :code, :st, :sp, 'planned', :total, 0, :today, :notes,
+                :platforms, :runs_per_query
             )
             RETURNING id, created_at
         """), {
-            "code":  data.cycle_code,
-            "st":    data.study_type,
-            "sp":    study_pattern,
-            "total": total_runs,
-            "today": date.today(),
-            "notes": data.notes,
+            "code":          data.cycle_code,
+            "st":            data.study_type,
+            "sp":            study_pattern,
+            "total":         total_runs,
+            "today":         date.today(),
+            "notes":         data.notes,
+            "platforms":     json.dumps(data.platforms),
+            "runs_per_query": data.runs_per_query,
         }).fetchone()
 
         cycle_id   = cycle_row[0]
@@ -115,6 +120,8 @@ def create_cycle(data: CreateCycleRequest):
         total_runs_planned=total_runs,
         completed_runs=0,
         created_at=str(created_at) if created_at else None,
+        platforms=data.platforms,
+        runs_per_query=data.runs_per_query,
     )
 
 
@@ -124,7 +131,8 @@ def list_cycles():
         rows = conn.execute(text("""
             SELECT
               cycle_code, status, study_type, study_pattern,
-              total_runs_planned, completed_runs, created_at
+              total_runs_planned, completed_runs, created_at,
+              platforms, runs_per_query
             FROM soa_cycles
             ORDER BY created_at DESC
         """)).fetchall()
@@ -137,7 +145,8 @@ def get_cycle(cycle_code: str):
         row = conn.execute(text("""
             SELECT
               cycle_code, status, study_type, study_pattern,
-              total_runs_planned, completed_runs, created_at
+              total_runs_planned, completed_runs, created_at,
+              platforms, runs_per_query
             FROM soa_cycles
             WHERE cycle_code = :code
         """), {"code": cycle_code}).fetchone()
@@ -158,4 +167,6 @@ def _row_to_cycle(row) -> CycleStatusResponse:
         total_runs_planned=row[4] or 0,
         completed_runs=row[5] or 0,
         created_at=str(row[6])[:10] if row[6] else None,
+        platforms=json.loads(row[7]) if isinstance(row[7], str) else row[7],
+        runs_per_query=row[8],
     )
