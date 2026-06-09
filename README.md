@@ -107,7 +107,7 @@ cd web && npm install && npm run dev
 4. Set env vars:
    - `DATABASE_URL` (Supabase direct connection)
    - `USE_POOLED_DB=false`
-   - `OPENAI_API_KEY`
+   - `OPEN_AI_API_KEY`
    - `GEMINI_API_KEY`
    - `PERPLEXITY_API_KEY`
-   - `ANTHROPIC_API_KEY`
+   - `ANTHROPIC_CLAUDE_API_KEY`
