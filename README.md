@@ -7,13 +7,42 @@ Measures Share of Algorithm across AI shopping agents.
 
 ```
 packages/
-  shared/          Python package shared by both apps
-                   (models, database, config)
+  shared/               Python package shared by both apps
+    soa_shared/         Models, database, config
+                        → pip install -e packages/shared
+
 apps/
-  api/             FastAPI + React frontend
-                   → Deploy to Vercel
-  pipeline/        Pipeline runner + worker
-                   → Deploy to Railway
+  api/                  FastAPI + React frontend → Deploy to Vercel
+    api/
+      index.py          Vercel serverless entry point (imports app only)
+    app/
+      app.py            FastAPI application
+      schemas.py        Pydantic request/response models
+      routers/
+        studies.py      GET /api/studies, /api/studies/{type}/queries
+        entities.py     GET/POST /api/entities
+        cycles.py       GET/POST /api/cycles, /api/cycles/check
+    web/                React/Vite frontend
+      src/
+        App.jsx         View routing (dashboard ↔ wizard)
+        api.js          API client
+        components/
+          CycleDashboard.jsx   Cycle management page
+          NewCycleWizard.jsx   5-step new cycle wizard
+    requirements.txt
+    vercel.json
+
+  pipeline/             Pipeline runner + worker → Deploy to Railway
+    orchestrator/       PipelineOrchestrator (runner → coding → metrics)
+    runners/            ChatGPT, Gemini, Claude, Perplexity runners
+    parser/             Response coding and validation
+    metrics/            Metrics calculation and xlsx export
+    seeds/              Query and entity seed scripts
+    alembic/            Database migrations
+    worker.py           Polling worker (polls soa_cycles every 30s)
+    main.py             CLI entry point
+    railway.toml
+    requirements.txt
 ```
 
 ## Architecture
@@ -56,7 +85,7 @@ python main.py pipeline --cycle 2026-05 --study-type retailer_sephora
 cd apps/api
 pip install -r requirements.txt --break-system-packages
 cp .env.example .env  # fill DATABASE_URL
-uvicorn api.app:app --reload --port 8000 &
+uvicorn app.app:app --reload --port 8000 &
 cd web && npm install && npm run dev
 # Frontend: http://localhost:5173
 # API:      http://localhost:8000/api
