@@ -66,4 +66,10 @@ export const api = {
 
   getCycle: (code) =>
     get(`/api/cycles/${code}`),
+
+  getMetrics: (cycleCode) =>
+    get(`/api/cycles/${cycleCode}/metrics`),
+
+  getCycleEntities: (cycleCode) =>
+    get(`/api/cycles/${cycleCode}/entities`),
 }
