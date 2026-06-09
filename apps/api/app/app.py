@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from app.routers import studies, entities, cycles
+from app.routers import studies, entities, cycles, metrics
 
 app = FastAPI(
     title="SoA Platform API",
@@ -28,6 +28,7 @@ app.add_middleware(
 app.include_router(studies.router,  prefix="/api")
 app.include_router(entities.router, prefix="/api")
 app.include_router(cycles.router,   prefix="/api")
+app.include_router(metrics.router,  prefix="/api")
 
 
 @app.get("/api/health")
