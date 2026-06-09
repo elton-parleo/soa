@@ -48,6 +48,12 @@ export const api = {
   createEntity: (data) =>
     post('/api/entities', data),
 
+  updateEntity: (id, data) =>
+    post(`/api/entities/${id}`, data),
+
+  deleteEntity: (id) =>
+    request('DELETE', `/api/entities/${id}`),
+
   // Cycles
   checkCycleCode: (code) =>
     get(`/api/cycles/check?code=${encodeURIComponent(code)}`),

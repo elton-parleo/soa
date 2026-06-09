@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import CycleDashboard from './components/CycleDashboard.jsx'
 import NewCycleWizard from './components/NewCycleWizard.jsx'
+import EntityRegistry from './components/EntityRegistry.jsx'
 
 export default function App() {
   const [view,          setView]          = useState('dashboard')
@@ -15,9 +16,18 @@ export default function App() {
     )
   }
 
+  if (view === 'entities') {
+    return (
+      <EntityRegistry
+        onNavigate={(v) => setView(v)}
+      />
+    )
+  }
+
   return (
     <CycleDashboard
       onNewCycle={() => setView('wizard')}
+      onNavigate={(v) => setView(v)}
       onViewCycle={(code) => {
         setSelectedCycle(code)
         // placeholder — future detail view

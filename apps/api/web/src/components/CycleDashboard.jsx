@@ -126,13 +126,13 @@ function formatEstRemaining(totalRuns, completedRuns) {
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-function Sidebar() {
+function Sidebar({ onNavigate }) {
   const navItems = [
-    { label: 'Cycles',          active: true  },
-    { label: 'Studies',         active: false },
-    { label: 'Results',         active: false },
-    { label: 'Entity Registry', active: false },
-    { label: 'Settings',        active: false },
+    { label: 'Cycles',          view: 'dashboard', active: true  },
+    { label: 'Studies',         view: 'studies',   active: false },
+    { label: 'Results',         view: 'results',   active: false },
+    { label: 'Entity Registry', view: 'entities',  active: false },
+    { label: 'Settings',        view: 'settings',  active: false },
   ]
   return (
     <div style={{ width: 200, minHeight: '100vh', background: T.navy, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
@@ -142,15 +142,19 @@ function Sidebar() {
       </div>
       <nav style={{ flex: 1, padding: '8px 0' }}>
         {navItems.map(item => (
-          <div key={item.label} style={{
-            padding: '10px 20px',
-            fontSize: 13,
-            fontWeight: item.active ? 600 : 400,
-            color: item.active ? T.white : T.sidebarText,
-            background: item.active ? T.navyMid : 'transparent',
-            borderLeft: item.active ? `3px solid ${T.teal}` : '3px solid transparent',
-            cursor: 'pointer',
-          }}>
+          <div
+            key={item.label}
+            onClick={() => onNavigate && onNavigate(item.view)}
+            style={{
+              padding: '10px 20px',
+              fontSize: 13,
+              fontWeight: item.active ? 600 : 400,
+              color: item.active ? T.white : T.sidebarText,
+              background: item.active ? T.navyMid : 'transparent',
+              borderLeft: item.active ? `3px solid ${T.teal}` : '3px solid transparent',
+              cursor: 'pointer',
+            }}
+          >
             {item.label}
           </div>
         ))}
@@ -484,7 +488,7 @@ function FilterPill({ label, count, dotColor, active, onClick }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function CycleDashboard({ onNewCycle, onViewCycle }) {
+export default function CycleDashboard({ onNewCycle, onViewCycle, onNavigate }) {
   const [cycles,       setCycles]       = useState([])
   const [loading,      setLoading]      = useState(true)
   const [error,        setError]        = useState(null)
@@ -552,7 +556,7 @@ export default function CycleDashboard({ onNewCycle, onViewCycle }) {
         * { box-sizing: border-box; }
       `}</style>
 
-      <Sidebar />
+      <Sidebar onNavigate={onNavigate} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <Topbar />
