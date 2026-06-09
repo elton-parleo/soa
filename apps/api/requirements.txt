@@ -1,13 +1,14 @@
-# Shared models, database, config
-# Install first: pip install -e ../../packages/shared
-# soa-shared is a local workspace package
+# NOTE: soa_shared/ is copied from packages/shared/soa_shared/ for
+# Vercel deployment. The local path install only works in local dev
+# and Railway. When updating shared models, run:
+#   cp -r packages/shared/soa_shared apps/api/soa_shared
 
 # Web framework
 fastapi>=0.110.0
 uvicorn[standard]>=0.29.0
 python-multipart>=0.0.9
 
-# Already in soa-shared but explicit for Vercel build clarity:
+# Database / models (also used by soa_shared)
 sqlalchemy>=2.0
 psycopg2-binary
 python-dotenv
