@@ -37,7 +37,9 @@ def health():
 
 # Serve built React frontend in production
 _web_dist = os.path.join(os.path.dirname(__file__), "../web/dist")
-if os.path.exists(_web_dist):
+_on_vercel = os.getenv('VERCEL') == '1'
+if os.path.exists(_web_dist) \
+        and not _on_vercel:
     app.mount(
         "/assets",
         StaticFiles(directory=f"{_web_dist}/assets"),
