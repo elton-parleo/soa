@@ -168,6 +168,12 @@ def normalize_rsi(value) -> Optional[float]:
     """
     RSI range is 0 to 3 (Option B denominator: divides by total mentions).
     Normalize to 0-100. NULL means entity had zero mentions → return None.
+
+    NOTE: No longer used in the primary metrics path (as of the raw-RSI
+    change). build_entity_metrics() now returns the raw DB value directly
+    (range -1.0 to +3.0). The frontend handles display scaling and
+    relative min-max normalization for chart layout.
+    Kept here for ad-hoc / legacy use.
     """
     if value is None:
         return None

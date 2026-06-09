@@ -5,8 +5,9 @@ Join strategy (confirmed by Phase 0 audit):
   soa_dashboard_summary.merchant_slug = soa_entities.slug
   100% slug intersection verified for all complete cycles.
 
-  RSI normalization: 0-3 range (Option B denominator divides by
-  total mentions, not total runs). normalize_rsi() divides by 3.
+  RSI: raw DB value (-1.0 to +3.0) returned as-is (Option B denominator
+  divides by total mentions). Frontend handles relative min-max
+  normalisation for scatter chart layout and raw display in scorecard.
 
   All other ratios (mention_rate, soa_pct, position_index,
   deal_citation_rate, platform_dist_index) are 0.0-1.0 ratios
@@ -19,7 +20,7 @@ from app.schemas import (
     CycleEntitiesResponse,
     CycleEntityInfo,
     normalize_metric,
-    normalize_rsi,
+    # normalize_rsi intentionally omitted: RSI now sent as raw DB value
 )
 
 router = APIRouter()
@@ -102,7 +103,7 @@ def get_cycle_metrics(cycle_code: str):
 
     Data source: soa_dashboard_summary
     All raw values (0.0-1.0 ratios) normalized to 0-100 scale.
-    RSI (0-3 range) normalized separately via normalize_rsi().
+    RSI: raw DB value (-1.0 to +3.0) — no scaling applied.
 
     Response shape:
     {
@@ -203,16 +204,22 @@ def get_cycle_metrics(cycle_code: str):
 
     def build_entity_metrics(row) -> dict:
         """
-        Normalize one soa_dashboard_summary row to 0-100 scale.
+        Normalize one soa_dashboard_summary row.
         mention_rate, soa_pct, position_index, deal_citation_rate,
         platform_dist_index are 0.0-1.0 → normalize_metric() × 100.
-        rsi_score is 0-3 → normalize_rsi().
+        rsi_score is sent as the raw DB value (-1.0 to +3.0) — no scaling.
+        The frontend applies relative min-max normalization for chart layout
+        and displays the raw value in the scorecard.
         """
         return {
             "mention_rate":       normalize_metric(row[6]),
             "som":                normalize_metric(row[7]),
             "position_index":     normalize_metric(row[8]),
-            "rsi":                normalize_rsi(row[9]),
+            "rsi":                (
+                round(float(row[9]), 2)
+                if row[9] is not None
+                else None
+            ),
             "deal_citation_rate": normalize_metric(row[10]),
             "pdi":                normalize_metric(row[11]),  # often None
             "total_runs":         row[4],

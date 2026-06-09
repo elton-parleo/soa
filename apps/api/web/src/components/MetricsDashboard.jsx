@@ -82,10 +82,40 @@ function heatColor(value) {
   return '#DC2626'
 }
 
+// RSI-specific heat color: raw scale −1 to +3
+function heatColorRsi(value) {
+  if (value === null || value === undefined) return T.slate
+  if (value >= 1.5) return '#16A34A'
+  if (value >= 0.5) return '#D97706'
+  if (value >= 0.0) return '#EA580C'
+  return '#DC2626'
+}
+
 function formatMetric(v) {
   if (v === null || v === undefined) return '—'
   if (v < 10) return v.toFixed(1).padStart(4, '0')
   return v.toFixed(1)
+}
+
+// RSI-specific formatter: 2 decimal places, sign preserved
+function formatRsi(v) {
+  if (v === null || v === undefined) return '—'
+  return v.toFixed(2)
+}
+
+// Relative min-max normalisation across an array of values.
+// Returns each value mapped to [0, 100] relative to the set's own min/max.
+// All-equal values map to 50 (mid-point). Nulls pass through as null.
+function relativeNormalize(values) {
+  const valid = values.filter(v => v !== null && v !== undefined)
+  if (valid.length === 0) return values.map(() => 50)
+  const minV = Math.min(...valid)
+  const maxV = Math.max(...valid)
+  if (maxV === minV) return values.map(v => (v === null || v === undefined) ? null : 50)
+  return values.map(v => {
+    if (v === null || v === undefined) return null
+    return Math.round(((v - minV) / (maxV - minV)) * 100)
+  })
 }
 
 function abbrevName(name) {
@@ -279,7 +309,10 @@ function MentionRateChart({ entities, metrics, activeEntities }) {
 }
 
 // ─── Scatter chart ────────────────────────────────────────────────────────────
-function ScatterChart({ entities, metrics, activeEntities }) {
+// Uses relative min-max normalisation so all active entities spread across the
+// full plot area regardless of their absolute metric values.
+// Tooltip preserves raw values (rawMr, rawRsi) for honest display.
+function ScatterChart({ entities, overall, activeEntities }) {
   const [animated, setAnimated] = useState(false)
   useEffect(() => {
     const t = setTimeout(() => setAnimated(true), 80)
@@ -291,15 +324,26 @@ function ScatterChart({ entities, metrics, activeEntities }) {
   const chartW = W - PAD.left - PAD.right
   const chartH = H - PAD.top - PAD.bottom
 
-  const mentionMetric = metrics.find(m => m.key === 'mention_rate')
-  const rsiMetric     = metrics.find(m => m.key === 'rsi')
+  // Collect raw values for the active entity set only
+  const rawMentionRates = activeEntities.map(code => overall?.[code]?.mention_rate ?? null)
+  const rawRsiValues    = activeEntities.map(code => overall?.[code]?.rsi         ?? null)
+
+  // Relative min-max: stretch values to fill 0–100 within this study's set
+  const normMr  = relativeNormalize(rawMentionRates)
+  const normRsi = relativeNormalize(rawRsiValues)
 
   const bubbles = activeEntities.map((code, i) => {
-    const mx = mentionMetric?.values[code] || 0
-    const ry = rsiMetric?.values[code]     || 0
-    const cx = PAD.left + (mx / 100) * chartW
-    const cy = PAD.top  + chartH - (ry / 100) * chartH
-    return { code, mx, ry, cx, cy, entity: entities.find(e => e.code === code), delay: i * 0.1 }
+    const nx = normMr[i]  ?? 50
+    const ny = normRsi[i] ?? 50
+    const cx = PAD.left + (nx / 100) * chartW
+    const cy = PAD.top  + chartH - (ny / 100) * chartH
+    return {
+      code, cx, cy,
+      rawMr:  rawMentionRates[i],
+      rawRsi: rawRsiValues[i],
+      entity: entities.find(e => e.code === code),
+      delay: i * 0.1,
+    }
   })
 
   return (
@@ -317,10 +361,11 @@ function ScatterChart({ entities, metrics, activeEntities }) {
             {q.text}
           </text>
         ))}
-        <text x={PAD.left + chartW / 2} y={H - 4} fontSize={10} fill={T.slate} textAnchor="middle" fontFamily="sans-serif">MENTION RATE</text>
-        <text x={12} y={PAD.top + chartH / 2} fontSize={10} fill={T.slate} textAnchor="middle" fontFamily="sans-serif" transform={`rotate(-90, 12, ${PAD.top + chartH / 2})`}>RSI SCORE</text>
+        <text x={PAD.left + chartW / 2} y={H - 4} fontSize={10} fill={T.slate} textAnchor="middle" fontFamily="sans-serif">MENTION RATE (relative)</text>
+        <text x={12} y={PAD.top + chartH / 2} fontSize={10} fill={T.slate} textAnchor="middle" fontFamily="sans-serif" transform={`rotate(-90, 12, ${PAD.top + chartH / 2})`}>RSI SCORE (relative)</text>
         {bubbles.map(b => (
           <g key={b.code}>
+            <title>{b.entity?.name || b.code}{b.rawMr !== null ? ` · MR: ${b.rawMr?.toFixed(1)}%` : ''}{b.rawRsi !== null ? ` · RSI: ${b.rawRsi?.toFixed(2)}` : ''}</title>
             <circle cx={b.cx} cy={b.cy} r={18} fill={b.entity?.color || T.slate} stroke="white" strokeWidth={2}
               style={{ transform: animated ? 'scale(1)' : 'scale(0)', transformOrigin: `${b.cx}px ${b.cy}px`, transition: `transform 0.4s cubic-bezier(0.34,1.56,0.64,1) ${b.delay}s` }}
             />
@@ -741,7 +786,7 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
                     <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>Summary Scorecard</span>
                       <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.slate }}>
-                        ALL DATA NORMALIZED TO SCALE [0-100]
+                        Scores 0–100 · RSI raw (−1 to +3)
                       </span>
                     </div>
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -761,13 +806,25 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
                       <tbody>
                         {SCORECARD_METRICS.map((metric, mi) => (
                           <tr key={metric.key} style={{ height: 44, borderBottom: mi < SCORECARD_METRICS.length - 1 ? `1px solid ${T.border}` : 'none' }}>
-                            <td style={{ padding: '0 20px', fontSize: 13, fontWeight: 600, color: T.text }}>{metric.label}</td>
+                            <td style={{ padding: '0 20px', fontSize: 13, fontWeight: 600, color: T.text }}>
+                              {metric.key === 'rsi' ? (
+                                <span>
+                                  {metric.label}
+                                  <span style={{ display: 'block', fontSize: 9, fontStyle: 'italic', color: T.slateLight, fontWeight: 400 }}>
+                                    −1 to +3
+                                  </span>
+                                </span>
+                              ) : metric.label}
+                            </td>
                             {activeEntities.map(code => {
                               const v = slices.overall?.[code]?.[metric.key] ?? null
+                              const isRsi = metric.key === 'rsi'
                               return (
                                 <td key={code} style={{ textAlign: 'center' }}>
                                   {v !== null
-                                    ? <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace', color: heatColor(v) }}>{formatMetric(v)}</span>
+                                    ? <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'monospace', color: isRsi ? heatColorRsi(v) : heatColor(v) }}>
+                                        {isRsi ? formatRsi(v) : formatMetric(v)}
+                                      </span>
                                     : <span style={{ fontSize: 14, color: T.slateLight }}>—</span>
                                   }
                                 </td>
@@ -791,9 +848,14 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
 
                   {/* ── SECTION 3: Chart row 2 ─────────────────────────────── */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                    <ChartCard title="Recommendation Strength vs Mention Rate">
-                      <ScatterChart entities={entities} metrics={metrics} activeEntities={activeEntities} />
-                    </ChartCard>
+                    <div>
+                      <ChartCard title="Recommendation Strength vs Mention Rate">
+                        <ScatterChart entities={entities} overall={slices.overall} activeEntities={activeEntities} />
+                      </ChartCard>
+                      <p style={{ margin: '8px 0 0', fontSize: 11, color: T.slateLight, fontStyle: 'italic' }}>
+                        Axes show relative performance within this study. Quadrant dividers are at the study midpoint on each dimension.
+                      </p>
+                    </div>
                     <ChartCard title="Position Index by Quintile">
                       <PositionIndexChart entities={entities} positionData={positionData} activeEntities={activeEntities} />
                     </ChartCard>
