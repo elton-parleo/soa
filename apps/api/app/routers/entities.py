@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query, HTTPException
 from sqlalchemy import text
 from soa_shared.database import engine
-from api.schemas import (
+from app.schemas import (
     EntityResponse,
     CreateEntityRequest,
     ENTITY_TYPE_DISPLAY,

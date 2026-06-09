@@ -1,7 +1,6 @@
-"""
-Vercel ASGI entry point.
+from app.app import app  # noqa: F401
 
-Vercel's Python runtime invokes the ASGI app defined here. No uvicorn.run()
-needed. The 'app' name is the convention Vercel looks for in api/index.py.
-"""
-from api.app import app  # noqa: F401
+# Vercel Python serverless entry point.
+# Vercel invokes the ASGI 'app' callable
+# defined here. All application logic
+# lives in app/app.py.

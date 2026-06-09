@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from sqlalchemy import text
 from collections import defaultdict
 from soa_shared.database import engine
-from api.schemas import (
+from app.schemas import (
     StudyResponse,
     StudyQueryBreakdown,
     STUDY_TYPE_NAMES,

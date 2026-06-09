@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 from datetime import date
 from soa_shared.database import engine
-from api.schemas import (
+from app.schemas import (
     CreateCycleRequest,
     CycleStatusResponse,
     CycleCheckResponse,
