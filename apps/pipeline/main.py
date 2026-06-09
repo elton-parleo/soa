@@ -313,7 +313,7 @@ def _metrics(args: argparse.Namespace) -> None:
 
 def _setup_cycle(args: argparse.Namespace) -> None:
     validate()
-    from models.soa_models import SoaEntity, SoaCycleEntity
+    from soa_shared.models.soa_models import SoaEntity, SoaCycleEntity
 
     cycle_code = args.cycle
     study_type = args.study_type

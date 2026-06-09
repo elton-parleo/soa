@@ -16,7 +16,7 @@ from parser.coding_response import CodingResponse, MerchantCoding, OtherMerchant
 from parser.prompts import build_coding_schema, build_system_prompt
 
 if TYPE_CHECKING:
-    from models.soa_models import SoaCycleEntity
+    from soa_shared.models.soa_models import SoaCycleEntity
 
 logger = logging.getLogger(__name__)
 

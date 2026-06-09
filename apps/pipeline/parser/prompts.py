@@ -5,7 +5,7 @@ Dynamic per-cycle via build_system_prompt() and build_coding_schema().
 from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
-    from models.soa_models import SoaCycleEntity
+    from soa_shared.models.soa_models import SoaCycleEntity
 
 ENTITY_LIST_PLACEHOLDER = "{{ENTITY_LIST}}"
 RUBRIC_NOTE_PLACEHOLDER = "{{RUBRIC_NOTE}}"

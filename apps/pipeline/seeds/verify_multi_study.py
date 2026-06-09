@@ -140,7 +140,7 @@ with engine.connect() as conn:
 print("\n[CHECK 5] Dynamic prompt generation")
 try:
     from parser.prompts import build_system_prompt
-    from models.soa_models import SoaCycleEntity
+    from soa_shared.models.soa_models import SoaCycleEntity
     from sqlalchemy.orm import joinedload, make_transient
 
     with session_factory() as session:

@@ -99,7 +99,7 @@ class RunOrchestrator:
         }
 
     def _validate_prerequisites(self) -> None:
-        from models.soa_models import SoaCycleEntity
+        from soa_shared.models.soa_models import SoaCycleEntity
         with session_factory() as session:
             entity_count = (
                 session.query(SoaCycleEntity)
