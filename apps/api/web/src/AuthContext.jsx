@@ -4,30 +4,38 @@ import { supabase } from './supabase.js'
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  // session === undefined → still loading from storage (prevents flash of login page)
-  // session === null      → no session (logged out)
-  // session is object    → authenticated session
   const [session, setSession] = useState(undefined)
+  // undefined = still initialising (show loading spinner)
+  // null      = confirmed no session (show login page)
+  // object    = confirmed session (show main app)
 
   useEffect(() => {
-    // Get initial session (restores persisted session on page reload)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-    })
-
-    // Listen for auth state changes (login, logout, token refresh)
+    // onAuthStateChange is the single source of truth for session state.
+    //
+    // It fires in three situations:
+    //   1. On mount with current session from localStorage (existing
+    //      session across page reloads)
+    //   2. After OAuth redirect when Supabase parses the URL hash
+    //      (the situation that was broken)
+    //   3. On sign out
+    //
+    // IMPORTANT: Do not call the auth session lookup API separately.
+    // Doing so races with URL hash parsing after OAuth redirect and
+    // returns null too early, causing the login redirect loop.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         setSession(session)
       }
     )
 
+    // Cleanup on unmount
     return () => subscription.unsubscribe()
   }, [])
 
   const signOut = async () => {
     await supabase.auth.signOut()
-    setSession(null)
+    // onAuthStateChange fires SIGNED_OUT and sets session to null automatically
+    // No need to call setSession(null) here
   }
 
   return (
