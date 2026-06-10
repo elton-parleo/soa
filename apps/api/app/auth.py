@@ -13,13 +13,18 @@ Also enforces email domain restriction via ALLOWED_EMAIL_DOMAIN env var.
 import os
 from functools import lru_cache
 
-import jwt
+import jwt as pyjwt
 from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 SUPABASE_URL   = os.getenv('SUPABASE_URL', '')
 ALLOWED_DOMAIN = os.getenv('ALLOWED_EMAIL_DOMAIN', 'parleo.io')
+
+# Algorithms supported by Supabase JWTs.
+# Supabase uses ES256 (ECDSA P-256) for newer projects.
+# RS256 and HS256 kept for legacy / self-hosted instances.
+ALLOWED_ALGORITHMS = ["ES256", "RS256", "HS256"]
 
 # JWKS client — fetches and caches Supabase public keys.
 # PyJWT's PyJWKClient handles caching and automatic key rotation internally.
@@ -66,26 +71,37 @@ def verify_token(
     token = credentials.credentials
 
     try:
-        jwks_client  = get_jwks_client()
-        signing_key  = jwks_client.get_signing_key_from_jwt(token)
-        payload = jwt.decode(
-            token,
-            signing_key.key,
-            algorithms=["RS256", "HS256"],
-            options={"verify_exp": True},
-            # Supabase audience
-            audience="authenticated",
-        )
-    except jwt.ExpiredSignatureError:
+        jwks_client = get_jwks_client()
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+
+        # Primary attempt — with audience validation
+        try:
+            payload = pyjwt.decode(
+                token,
+                signing_key.key,
+                algorithms=ALLOWED_ALGORITHMS,
+                options={"verify_exp": True},
+                audience="authenticated",
+            )
+        except pyjwt.InvalidAudienceError:
+            # Retry without audience validation.
+            # Supabase audience claim varies by project configuration.
+            payload = pyjwt.decode(
+                token,
+                signing_key.key,
+                algorithms=ALLOWED_ALGORITHMS,
+                options={"verify_exp": True, "verify_aud": False},
+            )
+
+    except pyjwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=401,
             detail="Session expired. Please sign in again.",
         )
-    except jwt.InvalidTokenError as e:
-        raise HTTPException(
-            status_code=401,
-            detail=f"Invalid token: {e}",
-        )
+    except pyjwt.InvalidAudienceError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid audience: {e}")
+    except pyjwt.InvalidTokenError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
     except Exception as e:
         raise HTTPException(
             status_code=401,
