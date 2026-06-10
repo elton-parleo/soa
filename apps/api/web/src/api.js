@@ -3,30 +3,45 @@
  * BASE is empty so requests go to the same origin in production.
  * Vite dev server proxies /api → localhost:8000.
  *
- * Every request includes the Supabase JWT as a Bearer token.
- * 401 responses trigger automatic sign-out and page reload.
+ * Token management: the auth context calls setApiToken() synchronously
+ * inside onAuthStateChange so _accessToken is always current before any
+ * React render triggered by a session change fires API calls. This avoids
+ * the async session-lookup race condition that caused 401s after OAuth.
  */
 import { supabase } from './supabase.js'
 
-async function request(method, path, body) {
-  // Get current session token
-  const { data: { session } } = await supabase.auth.getSession()
-  const token = session?.access_token
+// Module-level token store.
+// Updated by setApiToken() which is called from the auth provider whenever
+// the session changes. Avoids async session-lookup on every request,
+// which races with OAuth redirect session initialisation.
+let _accessToken = null
 
+export function setApiToken(token) {
+  _accessToken = token
+}
+
+async function request(method, path, body) {
   const opts = {
     method,
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(_accessToken
+        ? { 'Authorization': `Bearer ${_accessToken}` }
+        : {}
+      ),
     },
   }
   if (body !== undefined) {
     opts.body = JSON.stringify(body)
   }
+
   const res = await fetch(path, opts)
+
   if (!res.ok) {
-    // If 401, session may have expired — sign out and reload
     if (res.status === 401) {
+      // Token is invalid or expired.
+      // Sign out and reload to return to login page.
+      // The auth provider clears the token via onAuthStateChange.
       await supabase.auth.signOut()
       window.location.reload()
       return
@@ -38,6 +53,7 @@ async function request(method, path, body) {
     } catch (_) {}
     throw new Error(detail)
   }
+
   return res.json()
 }
 
@@ -56,7 +72,7 @@ export const api = {
   getEntities: (params = {}) => {
     const qs = new URLSearchParams(
       Object.fromEntries(
-        Object.entries(params).filter(([, v]) => v != null)
+        Object.entries(params).filter(([, v]) => v != null && v !== '')
       )
     ).toString()
     return get(`/api/entities${qs ? '?' + qs : ''}`)
@@ -66,7 +82,7 @@ export const api = {
     post('/api/entities', data),
 
   updateEntity: (id, data) =>
-    post(`/api/entities/${id}`, data),
+    request('POST', `/api/entities/${id}`, data),
 
   deleteEntity: (id) =>
     request('DELETE', `/api/entities/${id}`),
@@ -84,6 +100,7 @@ export const api = {
   getCycle: (code) =>
     get(`/api/cycles/${code}`),
 
+  // Metrics
   getMetrics: (cycleCode) =>
     get(`/api/cycles/${cycleCode}/metrics`),
 
