@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../api.js'
+import { useAuth } from '../AuthContext.jsx'
 
 // ─── Design tokens (verbatim from CycleDashboard.jsx) ────────────────────────
 const T = {
@@ -146,6 +147,7 @@ function slugify(name) {
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 function Sidebar({ onNavigate }) {
+  const { signOut } = useAuth()
   const navItems = [
     { label: 'Cycles',          view: 'dashboard', active: false },
     { label: 'Studies',         view: 'studies',   active: false },
@@ -180,7 +182,7 @@ function Sidebar({ onNavigate }) {
       </nav>
       <div style={{ padding: '16px 20px', borderTop: `1px solid ${T.navyBdr}` }}>
         <div style={{ fontSize: 12, color: T.sidebarText, cursor: 'pointer', marginBottom: 8 }}>Help Center</div>
-        <div style={{ fontSize: 12, color: T.sidebarText, cursor: 'pointer' }}>Log Out</div>
+        <div style={{ fontSize: 12, color: T.sidebarText, cursor: 'pointer' }} onClick={() => signOut()}>Log Out</div>
       </div>
     </div>
   )

@@ -1,9 +1,10 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.routers import studies, entities, cycles, metrics
+from app.auth import verify_token
 
 app = FastAPI(
     title="SoA Platform API",
@@ -25,10 +26,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(studies.router,  prefix="/api")
-app.include_router(entities.router, prefix="/api")
-app.include_router(cycles.router,   prefix="/api")
-app.include_router(metrics.router,  prefix="/api")
+# Apply JWT verification to all routes in these routers.
+# /api/health (defined directly on app below) remains public.
+app.include_router(
+    studies.router,
+    prefix="/api",
+    dependencies=[Depends(verify_token)],
+)
+app.include_router(
+    entities.router,
+    prefix="/api",
+    dependencies=[Depends(verify_token)],
+)
+app.include_router(
+    cycles.router,
+    prefix="/api",
+    dependencies=[Depends(verify_token)],
+)
+app.include_router(
+    metrics.router,
+    prefix="/api",
+    dependencies=[Depends(verify_token)],
+)
 
 
 @app.get("/api/health")
@@ -37,10 +56,9 @@ def health():
 
 
 # Serve built React frontend in production
-_web_dist = os.path.join(os.path.dirname(__file__), "../web/dist")
+_web_dist  = os.path.join(os.path.dirname(__file__), "../web/dist")
 _on_vercel = os.getenv('VERCEL') == '1'
-if os.path.exists(_web_dist) \
-        and not _on_vercel:
+if os.path.exists(_web_dist) and not _on_vercel:
     app.mount(
         "/assets",
         StaticFiles(directory=f"{_web_dist}/assets"),
