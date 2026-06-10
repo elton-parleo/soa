@@ -262,3 +262,112 @@ def get_cycle_metrics(cycle_code: str):
         "entities":   [e.model_dump() for e in entities],
         "slices":     slices,
     }
+
+
+# ─── GET /api/cycles/{cycle_code}/positions ───────────────────────────────────
+
+@router.get(
+    "/cycles/{cycle_code}/positions",
+    response_model=None,
+)
+def get_cycle_positions(cycle_code: str):
+    """
+    Returns position distribution for each entity in the cycle.
+
+    Data source: soa_coded_mentions
+    Only rows where mentioned = true AND position IS NOT NULL are counted.
+    Some rows have mentioned=true but null position — these are excluded.
+
+    Position groupings:
+      top: position = 1
+      mid: position IN (2, 3)
+      low: position >= 4
+
+    Returns percentages (0-100) based on total mentions per entity.
+    """
+    from app.schemas import (
+        EntityPositionBreakdown,
+        CyclePositionsResponse,
+    )
+    from collections import defaultdict
+
+    with engine.connect() as conn:
+
+        # Verify cycle exists and get its ID
+        cycle = conn.execute(text("""
+            SELECT id FROM soa_cycles
+            WHERE cycle_code = :code
+        """), {"code": cycle_code}).fetchone()
+
+        if not cycle:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Cycle '{cycle_code}' not found.",
+            )
+
+        # Get position counts per entity
+        # Only mentioned=true rows with a non-null position value
+        rows = conn.execute(text("""
+            SELECT
+              ce.comparison_code,
+              cm.position,
+              COUNT(*) AS cnt
+            FROM soa_coded_mentions cm
+            JOIN soa_runs r
+              ON r.id = cm.run_id
+            JOIN soa_cycle_entities ce
+              ON ce.cycle_id = r.cycle_id
+              AND ce.entity_id = cm.entity_id
+            WHERE r.cycle_id = :cid
+            AND cm.mentioned = true
+            AND cm.position IS NOT NULL
+            GROUP BY
+              ce.comparison_code,
+              cm.position
+            ORDER BY
+              ce.comparison_code,
+              cm.position
+        """), {"cid": cycle[0]}).fetchall()
+
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No position data found for cycle '{cycle_code}'. "
+                f"Ensure coding has been run for this cycle."
+            ),
+        )
+
+    # Aggregate counts by comparison_code
+    counts = defaultdict(lambda: {"top": 0, "mid": 0, "low": 0})
+
+    for row in rows:
+        comp_code = row[0]
+        position  = row[1]
+        cnt       = row[2]
+
+        if position == 1:
+            counts[comp_code]["top"] += cnt
+        elif position in (2, 3):
+            counts[comp_code]["mid"] += cnt
+        else:
+            # position >= 4
+            counts[comp_code]["low"] += cnt
+
+    # Convert counts to percentages
+    positions = {}
+    for comp_code, c in counts.items():
+        total = c["top"] + c["mid"] + c["low"]
+        if total == 0:
+            continue
+        positions[comp_code] = EntityPositionBreakdown(
+            top=round(c["top"] / total * 100, 1),
+            mid=round(c["mid"] / total * 100, 1),
+            low=round(c["low"] / total * 100, 1),
+            mention_count=total,
+        )
+
+    return CyclePositionsResponse(
+        cycle_code=cycle_code,
+        positions={k: v.model_dump() for k, v in positions.items()},
+    )

@@ -141,6 +141,33 @@ class CycleMetricsResponse(BaseModel):
     # }
 
 
+class EntityPositionBreakdown(BaseModel):
+    """
+    Position distribution for one entity.
+    top: % of mentions where position = 1
+    mid: % of mentions where position = 2 or 3
+    low: % of mentions where position >= 4
+    All values are percentages (0-100).
+    mention_count: total rows where
+      mentioned = true for this entity.
+    """
+    top:           float
+    mid:           float
+    low:           float
+    mention_count: int
+
+
+class CyclePositionsResponse(BaseModel):
+    """
+    Position breakdown for all entities
+    in a cycle. Key is comparison_code
+    e.g. M001, M002.
+    """
+    cycle_code: str
+    positions:  dict
+    # Dict[comparison_code, EntityPositionBreakdown]
+
+
 # ─── Normalization helpers ─────────────
 # Module-level functions for use in routers.
 

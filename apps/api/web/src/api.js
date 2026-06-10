@@ -72,4 +72,7 @@ export const api = {
 
   getCycleEntities: (cycleCode) =>
     get(`/api/cycles/${cycleCode}/entities`),
+
+  getPositions: (cycleCode) =>
+    get(`/api/cycles/${cycleCode}/positions`),
 }

@@ -380,23 +380,50 @@ function ScatterChart({ entities, overall, activeEntities }) {
 }
 
 // ─── Position Index stacked bar ───────────────────────────────────────────────
+const POSITION_MOCK = {
+  M001: { top: 55, mid: 30, low: 15 },
+  M002: { top: 38, mid: 42, low: 20 },
+  M003: { top: 45, mid: 35, low: 20 },
+  M004: { top: 28, mid: 38, low: 34 },
+  M005: { top: 18, mid: 32, low: 50 },
+}
+
 function PositionIndexChart({ entities, positionData, activeEntities }) {
-  // TODO: wire to soa_coded_mentions position breakdown when available
+  const resolvedPositionData = positionData ?? POSITION_MOCK
+  const isLiveData           = positionData !== null
+
   const BAR_HEIGHT = 160
-  const showCodes  = activeEntities.slice(0, 3)
+  // Dynamic: only show active entities that have position data; max 5
+  const showCodes = activeEntities
+    .filter(code => resolvedPositionData[code] != null)
+    .slice(0, 5)
+
   const segments = [
     { key: 'top', label: 'TOP',              color: '#1E293B' },
     { key: 'mid', label: 'Position 2 and 3', color: '#64748B' },
     { key: 'low', label: '4+',               color: '#CBD5E1' },
   ]
+
   return (
     <div>
+      {/* SAMPLE DATA badge — shown when falling back to mock */}
+      {!isLiveData && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <span style={{
+            fontSize: 9, fontWeight: 700, textTransform: 'uppercase',
+            background: '#FEF3C7', color: '#92400E',
+            borderRadius: 4, padding: '2px 6px',
+          }}>
+            SAMPLE DATA
+          </span>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-end', marginBottom: 12, justifyContent: 'center' }}>
         {showCodes.map(code => {
           const entity = entities.find(e => e.code === code)
-          const data   = positionData[code] || { top: 33, mid: 34, low: 33 }
+          const data   = resolvedPositionData[code]
           return (
-            <div key={code} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <div key={code} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
               <div style={{ width: 80, height: BAR_HEIGHT, display: 'flex', flexDirection: 'column', borderRadius: 6, overflow: 'hidden' }}>
                 {segments.map(seg => (
                   <div key={seg.key} style={{ background: seg.color, height: `${data[seg.key]}%`, transition: 'height 0.6s ease' }} />
@@ -405,6 +432,11 @@ function PositionIndexChart({ entities, positionData, activeEntities }) {
               <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: T.slate, letterSpacing: '0.04em', textAlign: 'center' }}>
                 {abbrevName(entity?.name || code)}
               </span>
+              {isLiveData && data.mention_count != null && (
+                <span style={{ fontSize: 9, color: T.slateLight, textAlign: 'center' }}>
+                  {data.mention_count} mentions
+                </span>
+              )}
             </div>
           )
         })}
@@ -489,6 +521,7 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
   const [activeEntities, setActiveEntities] = useState([])
   const [allCycles,      setAllCycles]      = useState([])
   const [usingMock,      setUsingMock]      = useState(false)
+  const [positionData,   setPositionData]   = useState(null)
 
   // ── Data loading: parallel fetch with mock fallback ─────────────────────────
   useEffect(() => {
@@ -509,7 +542,8 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
       api.getMetrics(cycleCode),
       api.getCycle(cycleCode),
       api.getCycles(),
-    ]).then(([entResult, metResult, cycResult, cyclesResult]) => {
+      api.getPositions(cycleCode),
+    ]).then(([entResult, metResult, cycResult, cyclesResult, posResult]) => {
 
       // Determine entity list from live API
       let liveEntities = null
@@ -533,6 +567,17 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
         setAllCycles(cyclesResult.value)
       }
 
+      // Position data (graceful — chart falls back to POSITION_MOCK if absent)
+      if (
+        posResult.status === 'fulfilled' &&
+        posResult.value?.positions &&
+        Object.keys(posResult.value.positions).length > 0
+      ) {
+        setPositionData(posResult.value.positions)
+      } else {
+        setPositionData(null)
+      }
+
       if (liveMetrics && liveEntities) {
         // Live data path: assign CHART_COLORS by position
         const palette = liveEntities.map((e, i) => ({
@@ -541,8 +586,7 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
         }))
         setEntities(palette)
         setActiveEntities(palette.map(e => e.code))
-        // Store live data with positionData placeholder
-        setMetricsData({ ...liveMetrics, positionData: {} })
+        setMetricsData(liveMetrics)
         setUsingMock(false)
       } else {
         // Mock fallback
@@ -569,8 +613,7 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
   }
 
   // ── Derived data ────────────────────────────────────────────────────────────
-  const slices      = metricsData?.slices || {}
-  const positionData = metricsData?.positionData || {}
+  const slices = metricsData?.slices || {}
 
   // Build metrics array for chart components from slices.overall
   const metrics = buildMetricsArray(slices.overall)
@@ -859,6 +902,7 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
                     <ChartCard title="Position Index by Quintile">
                       <PositionIndexChart entities={entities} positionData={positionData} activeEntities={activeEntities} />
                     </ChartCard>
+                    {/* positionData is null → PositionIndexChart uses POSITION_MOCK fallback internally */}
                   </div>
                 </>
               )}
