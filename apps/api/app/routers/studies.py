@@ -1,4 +1,5 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
+from typing import Optional
 from sqlalchemy import text
 from collections import defaultdict
 from soa_shared.database import engine
@@ -105,3 +106,76 @@ def get_study_queries(study_type: str):
         total=total,
         by_pattern=by_pattern,
     )
+
+
+@router.get("/studies/{study_type}/query-rows")
+def get_study_query_rows(
+    study_type: str,
+    stage:        Optional[str] = Query(None),
+    specificity:  Optional[str] = Query(None),
+    persona:      Optional[str] = Query(None),
+    status:       Optional[str] = Query(None),
+):
+    """
+    Returns all individual query rows for a given study_type from soa_queries.
+    Supports optional server-side filtering by stage, specificity, persona, status.
+    (Frontend also filters client-side, so server params are optional.)
+    """
+    with engine.connect() as conn:
+        conditions = ["study_type = :study_type"]
+        params = {"study_type": study_type}
+
+        if stage and stage != "All":
+            conditions.append("stage = :stage")
+            params["stage"] = stage
+
+        if specificity and specificity != "All":
+            conditions.append("specificity = :specificity")
+            params["specificity"] = specificity
+
+        if persona and persona != "All":
+            conditions.append("persona = :persona")
+            params["persona"] = persona
+
+        if status and status != "All":
+            conditions.append("LOWER(status) = LOWER(:status)")
+            params["status"] = status
+
+        where = " AND ".join(conditions)
+
+        rows = conn.execute(text(f"""
+            SELECT
+              query_code,
+              query_text,
+              category,
+              stage,
+              specificity,
+              persona,
+              study_type,
+              study_pattern,
+              status,
+              soa_focus,
+              rationale,
+              created_at
+            FROM soa_queries
+            WHERE {where}
+            ORDER BY query_code
+        """), params).fetchall()
+
+    return [
+        {
+            "query_code":    r[0],
+            "query_text":    r[1],
+            "category":      r[2],
+            "stage":         r[3],
+            "specificity":   r[4],
+            "persona":       r[5],
+            "study_type":    r[6],
+            "study_pattern": r[7],
+            "status":        r[8],
+            "soa_focus":     r[9],
+            "rationale":     r[10],
+            "created_at":    str(r[11])[:10] if r[11] else None,
+        }
+        for r in rows
+    ]

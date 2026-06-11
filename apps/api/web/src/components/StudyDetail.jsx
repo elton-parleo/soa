@@ -112,7 +112,7 @@ const EMPTY_FORM = {
   query_text:  '',
   category:    '',
   stage:       'Research',
-  specificity: 'High',
+  specificity: 'Broad',
   persona:     '',
   status:      'active',
 }
@@ -212,20 +212,37 @@ export default function StudyDetail({ studyType, onNavigate }) {
   const [stageFilter,         setStageFilter]         = useState('All')
   const [specificityFilter,   setSpecificityFilter]   = useState('All')
   const [personaFilter,       setPersonaFilter]       = useState('All')
-  const [statusFilter,        setStatusFilter]        = useState('Active')
+  const [statusFilter,        setStatusFilter]        = useState('All')
   const [saving,              setSaving]              = useState(false)
   const [formData,            setFormData]            = useState(EMPTY_FORM)
 
   const studyName = study?.name ?? studyDisplayName(studyType ?? '')
 
   useEffect(() => {
-    // Use mock data as fallback since the API returns query counts not rows
-    setStudy(MOCK_STUDY)
-    setQueries(MOCK_QUERIES)
-    setLoading(false)
+    setLoading(true)
+    api.getQueryRows(studyType)
+      .then(data => {
+        if (data && data.length > 0) {
+          setQueries(data)
+        } else {
+          setQueries(MOCK_QUERIES)
+        }
+        setStudy(MOCK_STUDY)
+      })
+      .catch(() => {
+        setQueries(MOCK_QUERIES)
+        setStudy(MOCK_STUDY)
+      })
+      .finally(() => setLoading(false))
   }, [studyType])
 
   const displayQueries = queries.length > 0 ? queries : MOCK_QUERIES
+
+  // Derive unique persona values from loaded data for dynamic filter dropdown
+  const personaOptions = [
+    'All',
+    ...Array.from(new Set(displayQueries.map(q => q.persona).filter(Boolean))).sort(),
+  ]
 
   // Apply all active filters
   const filteredQueries = displayQueries.filter(q => {
@@ -246,7 +263,7 @@ export default function StudyDetail({ studyType, onNavigate }) {
       query_text:  query.query_text  ?? '',
       category:    query.category    ?? '',
       stage:       query.stage       ?? 'Research',
-      specificity: query.specificity ?? 'High',
+      specificity: query.specificity ?? 'Broad',
       persona:     query.persona     ?? '',
       status:      query.status      ?? 'active',
     })
@@ -405,35 +422,34 @@ export default function StudyDetail({ studyType, onNavigate }) {
           </div>
 
           {/* Filter bar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, color: T.slate }}>Filter by:</span>
+            {/* Stage — actual DB values: Research, Comparison, Ready to Buy */}
             <select value={stageFilter} onChange={e => setStageFilter(e.target.value)} style={filterSelectStyle}>
               <option value="All">Stage: All</option>
               <option value="Research">Research</option>
               <option value="Comparison">Comparison</option>
-              <option value="Awareness">Awareness</option>
-              <option value="Retention">Retention</option>
-              <option value="Consideration">Consideration</option>
               <option value="Ready to Buy">Ready to Buy</option>
             </select>
+            {/* Specificity — actual DB values: Broad, Mid, Narrow */}
             <select value={specificityFilter} onChange={e => setSpecificityFilter(e.target.value)} style={filterSelectStyle}>
               <option value="All">Specificity: All</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
+              <option value="Broad">Broad</option>
+              <option value="Mid">Mid</option>
+              <option value="Narrow">Narrow</option>
             </select>
+            {/* Persona — derived dynamically from loaded query data */}
             <select value={personaFilter} onChange={e => setPersonaFilter(e.target.value)} style={filterSelectStyle}>
-              <option value="All">Persona: All</option>
-              <option value="Consumer">Consumer</option>
-              <option value="Shopper">Shopper</option>
-              <option value="General">General</option>
-              <option value="Patient">Patient</option>
-              <option value="Owner">Owner</option>
-              <option value="Professional">Professional</option>
+              {personaOptions.map(p => (
+                <option key={p} value={p}>
+                  {p === 'All' ? 'Persona: All' : p}
+                </option>
+              ))}
             </select>
+            {/* Status — DB only has "Active"; include All for completeness */}
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={filterSelectStyle}>
-              <option value="Active">Status: Active</option>
               <option value="All">Status: All</option>
+              <option value="Active">Active</option>
               <option value="Pending">Pending</option>
               <option value="Archived">Archived</option>
             </select>
@@ -588,9 +604,6 @@ export default function StudyDetail({ studyType, onNavigate }) {
                   >
                     <option>Research</option>
                     <option>Comparison</option>
-                    <option>Awareness</option>
-                    <option>Retention</option>
-                    <option>Consideration</option>
                     <option>Ready to Buy</option>
                   </select>
                 </div>
@@ -605,9 +618,9 @@ export default function StudyDetail({ studyType, onNavigate }) {
                     onChange={e => setFormData(f => ({ ...f, specificity: e.target.value }))}
                     style={selectStyle}
                   >
-                    <option>High</option>
-                    <option>Medium</option>
-                    <option>Low</option>
+                    <option>Broad</option>
+                    <option>Mid</option>
+                    <option>Narrow</option>
                   </select>
                 </div>
                 <div style={{ flex: 1 }}>

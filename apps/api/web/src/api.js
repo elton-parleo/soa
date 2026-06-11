@@ -71,6 +71,9 @@ export const api = {
   createQuery: (studyType, data) =>
     post(`/api/studies/${studyType}/queries`, data),
 
+  getQueryRows: (studyType) =>
+    get(`/api/studies/${studyType}/query-rows`),
+
   // Entities
   getEntities: (params = {}) => {
     const qs = new URLSearchParams(
