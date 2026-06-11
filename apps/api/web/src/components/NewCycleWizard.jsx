@@ -900,7 +900,7 @@ export default function NewCycleWizard({ onComplete, onCancel, onNavigate } = {}
         }}
       />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', marginLeft: 200 }}>
         <Topbar stepName={STEP_LABELS[step - 1]} />
         <StepIndicator current={step} />
 

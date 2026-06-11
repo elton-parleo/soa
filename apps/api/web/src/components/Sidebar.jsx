@@ -26,12 +26,16 @@ export default function Sidebar({ activeView, onNavigate }) {
 
   return (
     <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
       width: 200,
-      minHeight: '100vh',
+      height: '100vh',
       background: T.navy,
       display: 'flex',
       flexDirection: 'column',
-      flexShrink: 0,
+      overflowY: 'auto',
+      zIndex: 10,
     }}>
 
       {/* Logo + subtitle */}

@@ -606,7 +606,7 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
 
       <Sidebar activeView="dashboard" onNavigate={onNavigate} />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', overflow: 'hidden', marginLeft: 200 }}>
 
         {/* ── Topbar ──────────────────────────────────────────────────────── */}
         <div style={{

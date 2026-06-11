@@ -414,7 +414,7 @@ export default function EntityRegistry({ onNavigate }) {
 
       <Sidebar activeView="entities" onNavigate={onNavigate} />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', marginLeft: 200 }}>
         <Topbar />
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 32 }}>
