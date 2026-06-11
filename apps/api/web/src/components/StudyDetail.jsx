@@ -1,0 +1,726 @@
+import { useState, useEffect } from 'react'
+import { api } from '../api.js'
+import Sidebar from './Sidebar.jsx'
+
+// ─── Design tokens (verbatim from CycleDashboard.jsx) ────────────────────────
+const T = {
+  navy:        '#0D1829',
+  navyMid:     '#162032',
+  navyBdr:     '#1E2D42',
+  white:       '#FFFFFF',
+  offWhite:    '#F8FAFC',
+  slate:       '#64748B',
+  slateLight:  '#94A3B8',
+  border:      '#E2E8F0',
+  borderDark:  '#CBD5E1',
+  text:        '#0F172A',
+  textMid:     '#334155',
+  teal:        '#0D9488',
+  tealLight:   '#CCFBF1',
+  indigo:      '#4F46E5',
+  green:       '#16A34A',
+  greenLight:  '#DCFCE7',
+  amber:       '#D97706',
+  amberLight:  '#FEF3C7',
+  red:         '#DC2626',
+  redLight:    '#FEE2E2',
+  sidebarText: '#94A3B8',
+}
+
+// ─── Query status tokens ──────────────────────────────────────────────────────
+const QUERY_STATUS = {
+  active: {
+    label: 'ACTIVE',
+    color: '#14532D',
+    bg:    '#DCFCE7',
+  },
+  pending: {
+    label: 'PENDING',
+    color: '#92400E',
+    bg:    '#FEF3C7',
+  },
+  archived: {
+    label: 'ARCHIVED',
+    color: '#374151',
+    bg:    '#F3F4F6',
+  },
+}
+
+// ─── Mock data ────────────────────────────────────────────────────────────────
+const MOCK_STUDY = {
+  study_type:  'brand_oral_b',
+  name:        'Oral-B Brand Study',
+  description: 'Deep dive into competitive performance and search engine visibility for oral care.',
+  category:    'Oral Care',
+  status:      'active',
+}
+
+const MOCK_QUERIES = [
+  {
+    query_code:  'QRY-001',
+    query_text:  'What is the best electric toothbrush for whitening?',
+    category:    'Oral Care',
+    stage:       'Research',
+    specificity: 'High',
+    persona:     'Consumer',
+    status:      'active',
+  },
+  {
+    query_code:  'QRY-002',
+    query_text:  'Oral-B iO vs Sonicare 9900 Prestige comparison',
+    category:    'Oral Care',
+    stage:       'Comparison',
+    specificity: 'High',
+    persona:     'Shopper',
+    status:      'active',
+  },
+  {
+    query_code:  'QRY-003',
+    query_text:  'Are electric toothbrushes worth the money?',
+    category:    'Oral Care',
+    stage:       'Awareness',
+    specificity: 'Low',
+    persona:     'General',
+    status:      'pending',
+  },
+  {
+    query_code:  'QRY-004',
+    query_text:  'Best soft bristle heads for sensitive gums',
+    category:    'Oral Care',
+    stage:       'Research',
+    specificity: 'Medium',
+    persona:     'Patient',
+    status:      'active',
+  },
+  {
+    query_code:  'QRY-005',
+    query_text:  'How often should I replace electric toothbrush heads?',
+    category:    'Oral Care',
+    stage:       'Retention',
+    specificity: 'Medium',
+    persona:     'Owner',
+    status:      'archived',
+  },
+]
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function studyDisplayName(studyType) {
+  return studyType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+const EMPTY_FORM = {
+  query_text:  '',
+  category:    '',
+  stage:       'Research',
+  specificity: 'High',
+  persona:     '',
+  status:      'active',
+}
+
+// ─── Topbar ───────────────────────────────────────────────────────────────────
+function Topbar({ studyName, onBack }) {
+  return (
+    <div style={{
+      height: 56,
+      background: T.white,
+      borderBottom: `1px solid ${T.border}`,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '0 32px',
+      flexShrink: 0,
+    }}>
+      <div style={{ fontSize: 13, color: T.slate }}>
+        <span
+          style={{ color: T.teal, fontWeight: 500, cursor: 'pointer' }}
+          onClick={onBack}
+        >STUDIES</span>
+        {' › '}
+        <span style={{ color: T.text, fontWeight: 700 }}>{studyName}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <span style={{ fontSize: 18, cursor: 'pointer' }}>🔔</span>
+        <div style={{
+          width: 32, height: 32,
+          borderRadius: '50%',
+          background: T.indigo,
+          color: T.white,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 13,
+          fontWeight: 700,
+        }}>E</div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Query status badge ───────────────────────────────────────────────────────
+function QueryStatusBadge({ status }) {
+  const s = QUERY_STATUS[status?.toLowerCase()] || QUERY_STATUS.pending
+  return (
+    <span style={{
+      padding: '4px 8px',
+      borderRadius: 4,
+      fontSize: 10,
+      fontWeight: 700,
+      textTransform: 'uppercase',
+      color: s.color,
+      background: s.bg,
+      whiteSpace: 'nowrap',
+    }}>
+      {s.label}
+    </span>
+  )
+}
+
+// ─── Field label style ────────────────────────────────────────────────────────
+const labelStyle = {
+  display: 'block',
+  fontSize: 10,
+  fontWeight: 700,
+  color: T.slate,
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  marginBottom: 6,
+}
+
+const inputStyle = {
+  width: '100%',
+  padding: '9px 12px',
+  fontSize: 13,
+  color: T.text,
+  background: T.white,
+  border: `1px solid ${T.border}`,
+  borderRadius: 8,
+  outline: 'none',
+  fontFamily: "'DM Sans', sans-serif",
+}
+
+const selectStyle = {
+  ...inputStyle,
+  cursor: 'pointer',
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+export default function StudyDetail({ studyType, onNavigate }) {
+  const [study,               setStudy]               = useState(null)
+  const [queries,             setQueries]             = useState([])
+  const [loading,             setLoading]             = useState(true)
+  const [slideOver,           setSlideOver]           = useState(null)
+  const [stageFilter,         setStageFilter]         = useState('All')
+  const [specificityFilter,   setSpecificityFilter]   = useState('All')
+  const [personaFilter,       setPersonaFilter]       = useState('All')
+  const [statusFilter,        setStatusFilter]        = useState('Active')
+  const [saving,              setSaving]              = useState(false)
+  const [formData,            setFormData]            = useState(EMPTY_FORM)
+
+  const studyName = study?.name ?? studyDisplayName(studyType ?? '')
+
+  useEffect(() => {
+    // Use mock data as fallback since the API returns query counts not rows
+    setStudy(MOCK_STUDY)
+    setQueries(MOCK_QUERIES)
+    setLoading(false)
+  }, [studyType])
+
+  const displayQueries = queries.length > 0 ? queries : MOCK_QUERIES
+
+  // Apply all active filters
+  const filteredQueries = displayQueries.filter(q => {
+    const matchStage   = stageFilter       === 'All' || q.stage === stageFilter
+    const matchSpec    = specificityFilter === 'All' || q.specificity === specificityFilter
+    const matchPersona = personaFilter     === 'All' || q.persona === personaFilter
+    const matchStatus  = statusFilter      === 'All' || q.status?.toLowerCase() === statusFilter.toLowerCase()
+    return matchStage && matchSpec && matchPersona && matchStatus
+  })
+
+  function openAdd() {
+    setFormData(EMPTY_FORM)
+    setSlideOver({ mode: 'add' })
+  }
+
+  function openEdit(query) {
+    setFormData({
+      query_text:  query.query_text  ?? '',
+      category:    query.category    ?? '',
+      stage:       query.stage       ?? 'Research',
+      specificity: query.specificity ?? 'High',
+      persona:     query.persona     ?? '',
+      status:      query.status      ?? 'active',
+    })
+    setSlideOver({ mode: 'edit', query })
+  }
+
+  async function handleSaveQuery() {
+    if (!formData.query_text.trim()) return
+    setSaving(true)
+    try {
+      if (slideOver?.mode === 'add') {
+        try {
+          const created = await api.createQuery(studyType, formData)
+          setQueries(prev => [...prev, created])
+        } catch {
+          // Optimistic local add if API route not yet built
+          const optimistic = {
+            ...formData,
+            query_code: `QRY-${String(queries.length + 1).padStart(3, '0')}`,
+          }
+          setQueries(prev => [...prev, optimistic])
+        }
+      } else {
+        // Edit — optimistic local update
+        setQueries(prev =>
+          prev.map(q =>
+            q.query_code === slideOver.query.query_code
+              ? { ...q, ...formData }
+              : q
+          )
+        )
+      }
+      setSlideOver(null)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const filterSelectStyle = {
+    padding: '7px 10px',
+    fontSize: 13,
+    color: T.text,
+    background: T.white,
+    border: `1px solid ${T.border}`,
+    borderRadius: 8,
+    cursor: 'pointer',
+    outline: 'none',
+  }
+
+  // Table column config
+  const COL_WIDTHS = {
+    id:          100,
+    question:    null, // flex: 1
+    category:    120,
+    stage:       120,
+    specificity: 110,
+    persona:     110,
+    status:      100,
+  }
+
+  const thStyle = (flex, width) => ({
+    flex: flex ? 1 : undefined,
+    width: width ?? undefined,
+    minWidth: width ?? undefined,
+    padding: '0 12px',
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    color: T.slate,
+    textAlign: 'left',
+    whiteSpace: 'nowrap',
+  })
+
+  const tdStyle = (flex, width) => ({
+    flex: flex ? 1 : undefined,
+    width: width ?? undefined,
+    minWidth: width ?? undefined,
+    padding: '0 12px',
+  })
+
+  return (
+    <div style={{
+      display: 'flex',
+      minHeight: '100vh',
+      fontFamily: "'DM Sans', sans-serif",
+      background: T.offWhite,
+    }}>
+      <style>{`* { box-sizing: border-box; }`}</style>
+
+      <Sidebar activeView="studies" onNavigate={onNavigate} />
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', marginLeft: 200 }}>
+        <Topbar studyName={studyName} onBack={() => onNavigate && onNavigate('studies')} />
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: 32 }}>
+
+          {/* Page header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
+            <div>
+              <h1 style={{ margin: '0 0 6px', fontSize: 28, fontWeight: 700, color: T.text }}>
+                {studyName}
+              </h1>
+              <p style={{ margin: 0, fontSize: 14, color: T.slate }}>
+                {study?.description ?? ''}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+              <button
+                onClick={() => alert('Export Data coming soon')}
+                style={{
+                  padding: '9px 18px',
+                  background: T.white,
+                  color: T.text,
+                  border: `1px solid ${T.text}`,
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                ↓ Export Data
+              </button>
+              <button
+                onClick={openAdd}
+                style={{
+                  padding: '9px 18px',
+                  background: T.text,
+                  color: T.white,
+                  border: 'none',
+                  borderRadius: 8,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                + Add Query
+              </button>
+            </div>
+          </div>
+
+          {/* Tabs row */}
+          <div style={{ display: 'flex', borderBottom: `1px solid ${T.border}`, marginBottom: 20 }}>
+            <div style={{
+              padding: '10px 0',
+              marginRight: 24,
+              fontSize: 14,
+              fontWeight: 600,
+              color: T.text,
+              borderBottom: `2px solid ${T.text}`,
+              marginBottom: -1,
+              cursor: 'pointer',
+            }}>
+              Queries
+            </div>
+          </div>
+
+          {/* Filter bar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <span style={{ fontSize: 13, color: T.slate }}>Filter by:</span>
+            <select value={stageFilter} onChange={e => setStageFilter(e.target.value)} style={filterSelectStyle}>
+              <option value="All">Stage: All</option>
+              <option value="Research">Research</option>
+              <option value="Comparison">Comparison</option>
+              <option value="Awareness">Awareness</option>
+              <option value="Retention">Retention</option>
+              <option value="Consideration">Consideration</option>
+              <option value="Ready to Buy">Ready to Buy</option>
+            </select>
+            <select value={specificityFilter} onChange={e => setSpecificityFilter(e.target.value)} style={filterSelectStyle}>
+              <option value="All">Specificity: All</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+            <select value={personaFilter} onChange={e => setPersonaFilter(e.target.value)} style={filterSelectStyle}>
+              <option value="All">Persona: All</option>
+              <option value="Consumer">Consumer</option>
+              <option value="Shopper">Shopper</option>
+              <option value="General">General</option>
+              <option value="Patient">Patient</option>
+              <option value="Owner">Owner</option>
+              <option value="Professional">Professional</option>
+            </select>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={filterSelectStyle}>
+              <option value="Active">Status: Active</option>
+              <option value="All">Status: All</option>
+              <option value="Pending">Pending</option>
+              <option value="Archived">Archived</option>
+            </select>
+          </div>
+
+          {/* Query table */}
+          <div style={{
+            background: T.white,
+            border: `1px solid ${T.border}`,
+            borderRadius: 12,
+            overflow: 'hidden',
+          }}>
+            {/* Table header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              height: 40,
+              background: T.offWhite,
+              borderBottom: `1px solid ${T.border}`,
+            }}>
+              <div style={thStyle(false, COL_WIDTHS.id)}>Query ID</div>
+              <div style={thStyle(true,  null)}>Question / Prompt</div>
+              <div style={thStyle(false, COL_WIDTHS.category)}>Category</div>
+              <div style={thStyle(false, COL_WIDTHS.stage)}>Stage</div>
+              <div style={thStyle(false, COL_WIDTHS.specificity)}>Specificity</div>
+              <div style={thStyle(false, COL_WIDTHS.persona)}>Persona</div>
+              <div style={thStyle(false, COL_WIDTHS.status)}>Status</div>
+            </div>
+
+            {/* Table rows */}
+            {loading ? (
+              <div style={{ padding: 32, textAlign: 'center', color: T.slate, fontSize: 13 }}>
+                Loading queries...
+              </div>
+            ) : filteredQueries.length === 0 ? (
+              <div style={{ padding: 32, textAlign: 'center', color: T.slate, fontSize: 13 }}>
+                No queries match the current filters.
+              </div>
+            ) : filteredQueries.map((query, idx) => (
+              <QueryRow
+                key={query.query_code ?? idx}
+                query={query}
+                isLast={idx === filteredQueries.length - 1}
+                tdStyle={tdStyle}
+                COL_WIDTHS={COL_WIDTHS}
+                onClick={() => openEdit(query)}
+              />
+            ))}
+          </div>
+
+        </div>
+      </div>
+
+      {/* Slide-over overlay + panel */}
+      {slideOver && (
+        <>
+          {/* Overlay */}
+          <div
+            onClick={() => !saving && setSlideOver(null)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.4)',
+              zIndex: 40,
+            }}
+          />
+
+          {/* Panel */}
+          <div style={{
+            position: 'fixed',
+            right: 0,
+            top: 0,
+            bottom: 0,
+            width: 380,
+            background: T.white,
+            boxShadow: '-8px 0 32px rgba(0,0,0,0.12)',
+            zIndex: 50,
+            display: 'flex',
+            flexDirection: 'column',
+            transform: 'translateX(0)',
+            transition: 'transform 0.25s ease',
+          }}>
+            {/* Panel header */}
+            <div style={{
+              height: 56,
+              borderBottom: `1px solid ${T.border}`,
+              padding: '0 24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+                Query Details
+              </span>
+              <button
+                onClick={() => setSlideOver(null)}
+                style={{
+                  width: 24, height: 24,
+                  background: 'none',
+                  border: 'none',
+                  fontSize: 18,
+                  color: T.slate,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 0,
+                }}
+              >×</button>
+            </div>
+
+            {/* Panel body */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: 24,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 20,
+            }}>
+              {/* Query text */}
+              <div>
+                <label style={labelStyle}>QUERY TEXT</label>
+                <textarea
+                  rows={5}
+                  value={formData.query_text}
+                  onChange={e => setFormData(f => ({ ...f, query_text: e.target.value }))}
+                  placeholder="Enter query prompt..."
+                  style={{ ...inputStyle, resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Category + Stage row */}
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>CATEGORY</label>
+                  <input
+                    type="text"
+                    value={formData.category}
+                    onChange={e => setFormData(f => ({ ...f, category: e.target.value }))}
+                    placeholder="e.g. Oral Care"
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>STAGE</label>
+                  <select
+                    value={formData.stage}
+                    onChange={e => setFormData(f => ({ ...f, stage: e.target.value }))}
+                    style={selectStyle}
+                  >
+                    <option>Research</option>
+                    <option>Comparison</option>
+                    <option>Awareness</option>
+                    <option>Retention</option>
+                    <option>Consideration</option>
+                    <option>Ready to Buy</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Specificity + Persona row */}
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>SPECIFICITY</label>
+                  <select
+                    value={formData.specificity}
+                    onChange={e => setFormData(f => ({ ...f, specificity: e.target.value }))}
+                    style={selectStyle}
+                  >
+                    <option>High</option>
+                    <option>Medium</option>
+                    <option>Low</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>PERSONA</label>
+                  <input
+                    type="text"
+                    value={formData.persona}
+                    onChange={e => setFormData(f => ({ ...f, persona: e.target.value }))}
+                    placeholder="e.g. Consumer"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Panel footer */}
+            <div style={{
+              height: 64,
+              borderTop: `1px solid ${T.border}`,
+              padding: '0 24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 12,
+              flexShrink: 0,
+            }}>
+              <button
+                onClick={() => setSlideOver(null)}
+                style={{
+                  padding: '9px 18px',
+                  background: T.white,
+                  color: T.text,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >Cancel</button>
+              <button
+                onClick={handleSaveQuery}
+                disabled={saving}
+                style={{
+                  padding: '9px 18px',
+                  background: T.text,
+                  color: T.white,
+                  border: 'none',
+                  borderRadius: 8,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  opacity: saving ? 0.7 : 1,
+                }}
+              >
+                {saving ? '...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ─── Query row — extracted to prevent re-render closure issues ────────────────
+function QueryRow({ query, isLast, tdStyle, COL_WIDTHS, onClick }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        height: 56,
+        borderBottom: isLast ? 'none' : `1px solid ${T.border}`,
+        background: hovered ? T.offWhite : T.white,
+        cursor: 'pointer',
+        transition: 'background 0.1s',
+      }}
+    >
+      <div style={{ ...tdStyle(false, COL_WIDTHS.id), fontFamily: 'monospace', fontSize: 12, color: T.slate }}>
+        {query.query_code}
+      </div>
+      <div style={{
+        ...tdStyle(true, null),
+        fontSize: 13,
+        color: T.text,
+        overflow: 'hidden',
+        display: '-webkit-box',
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: 'vertical',
+        lineHeight: 1.4,
+      }}>
+        {query.query_text}
+      </div>
+      <div style={{ ...tdStyle(false, COL_WIDTHS.category), fontSize: 13, color: T.textMid }}>
+        {query.category}
+      </div>
+      <div style={{ ...tdStyle(false, COL_WIDTHS.stage), fontSize: 13, color: T.textMid }}>
+        {query.stage}
+      </div>
+      <div style={{ ...tdStyle(false, COL_WIDTHS.specificity), fontSize: 13, color: T.textMid }}>
+        {query.specificity}
+      </div>
+      <div style={{ ...tdStyle(false, COL_WIDTHS.persona), fontSize: 13, color: T.textMid }}>
+        {query.persona}
+      </div>
+      <div style={tdStyle(false, COL_WIDTHS.status)}>
+        <QueryStatusBadge status={query.status} />
+      </div>
+    </div>
+  )
+}
+

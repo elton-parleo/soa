@@ -1,15 +1,21 @@
 import { useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from './AuthContext.jsx'
-import LoginPage      from './components/LoginPage.jsx'
-import CycleDashboard from './components/CycleDashboard.jsx'
-import NewCycleWizard from './components/NewCycleWizard.jsx'
-import EntityRegistry from './components/EntityRegistry.jsx'
+import LoginPage        from './components/LoginPage.jsx'
+import CycleDashboard   from './components/CycleDashboard.jsx'
+import NewCycleWizard   from './components/NewCycleWizard.jsx'
+import EntityRegistry   from './components/EntityRegistry.jsx'
 import MetricsDashboard from './components/MetricsDashboard.jsx'
+import StudyLibrary     from './components/StudyLibrary.jsx'
+import StudyDetail      from './components/StudyDetail.jsx'
 
 // ─── Read initial view from URL hash on page load ────────────────────────────
 function getInitialView() {
   const hash = window.location.hash.replace('#', '')
-  const validViews = ['dashboard', 'wizard', 'entities', 'metrics']
+  const validViews = [
+    'dashboard', 'wizard',
+    'entities', 'metrics',
+    'studies', 'study-detail',
+  ]
   return validViews.includes(hash) ? hash : 'dashboard'
 }
 
@@ -18,6 +24,7 @@ function AppContent() {
   const { session } = useAuth()
   const [view,          setView]          = useState(getInitialView)
   const [selectedCycle, setSelectedCycle] = useState(null)
+  const [selectedStudy, setSelectedStudy] = useState(null)
 
   // Replace the initial history entry with a proper state object so
   // popstate fires correctly on the first back press.
@@ -36,6 +43,9 @@ function AppContent() {
         setView(event.state.view)
         if (event.state.cycleCode !== undefined) {
           setSelectedCycle(event.state.cycleCode)
+        }
+        if (event.state.studyType !== undefined) {
+          setSelectedStudy(event.state.studyType)
         }
       } else {
         // No state — at the initial history entry: go to dashboard.
@@ -58,6 +68,9 @@ function AppContent() {
     setView(newView)
     if (params.cycleCode !== undefined) {
       setSelectedCycle(params.cycleCode)
+    }
+    if (params.studyType !== undefined) {
+      setSelectedStudy(params.studyType)
     }
   }
 
@@ -112,6 +125,33 @@ function AppContent() {
             navigateTo('metrics', { cycleCode: params.cycleCode })
           } else {
             navigateTo(v)
+          }
+        }}
+      />
+    )
+  }
+
+  if (view === 'studies') {
+    return (
+      <StudyLibrary
+        onNavigate={navigateTo}
+        onSelectStudy={(studyType) => {
+          setSelectedStudy(studyType)
+          navigateTo('study-detail', { studyType })
+        }}
+      />
+    )
+  }
+
+  if (view === 'study-detail') {
+    return (
+      <StudyDetail
+        studyType={selectedStudy}
+        onNavigate={(v, params) => {
+          if (v === 'studies') {
+            navigateTo('studies')
+          } else {
+            navigateTo(v, params)
           }
         }}
       />
