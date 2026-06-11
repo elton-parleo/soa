@@ -100,9 +100,6 @@ export default function Sidebar({ activeView, onNavigate }) {
 
       {/* Bottom links */}
       <div style={{ padding: '16px 20px', borderTop: `1px solid ${T.navyBdr}` }}>
-        <div style={{ fontSize: 12, color: T.sidebarText, cursor: 'pointer', marginBottom: 8 }}>
-          Help Center
-        </div>
         <div
           style={{ fontSize: 12, color: T.sidebarText, cursor: 'pointer' }}
           onClick={() => signOut()}
