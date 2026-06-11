@@ -1,6 +1,8 @@
-# Shared models, database, config
-# Install first: pip install -e ../../packages/shared
-# soa-shared is a local workspace package
+# NOTE: soa_shared/ is copied from packages/shared/soa_shared/ for
+# Railway deployment. The local path install only works in local dev.
+# When updating shared models, run:
+#   cp -r packages/shared/soa_shared apps/pipeline/soa_shared
+# Same pattern is used in apps/api/
 
 # All original /soa dependencies:
 SQLAlchemy==2.0.46
