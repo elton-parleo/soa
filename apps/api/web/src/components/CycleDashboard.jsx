@@ -312,7 +312,7 @@ function CompleteBody({ cycle, onViewCycle }) {
     <>
       <div>
         <MetricRow label="Elapsed Time" value={<span style={{ fontFamily: 'monospace', color: T.teal }}>{calcElapsed(cycle.created_at, cycle.updated_at)}</span>} />
-        <MetricRow label="Total Processed" value={cycle.total_runs_planned.toLocaleString()} />
+        <MetricRow label="Completed Runs" value={cycle.completed_runs ?? '—'} />
         <MetricRow label="Export Ready" value={<span style={{ color: T.teal }}>📄</span>} last />
       </div>
       <button
