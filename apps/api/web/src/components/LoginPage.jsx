@@ -52,33 +52,43 @@ export default function LoginPage() {
         alignItems: 'center',
       }}>
 
-        {/* Logo block */}
+        {/* Parleo logo + wordmark */}
         <div style={{
-          width: 52,
-          height: 52,
-          background: '#0D1829',
-          borderRadius: 10,
           display: 'flex',
           alignItems: 'center',
+          gap: '8px',
+          marginBottom: '32px',
           justifyContent: 'center',
-          marginBottom: 14,
-          flexShrink: 0,
         }}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <rect x="3"  y="12" width="4" height="9"  rx="1" fill="white"/>
-            <rect x="10" y="7"  width="4" height="14" rx="1" fill="white"/>
-            <rect x="17" y="3"  width="4" height="18" rx="1" fill="white"/>
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <rect
+              x="2" y="2"
+              width="8" height="20"
+              rx="1.5"
+              fill="hsl(213,99%,50%)"
+            />
+            <rect
+              x="14" y="6"
+              width="8" height="12"
+              rx="1.5"
+              fill="hsl(213,99%,50%)"
+              opacity="0.4"
+            />
           </svg>
-        </div>
-
-        {/* App name */}
-        <div style={{
-          fontSize: 20,
-          fontWeight: 700,
-          color: '#0F172A',
-          marginBottom: 28,
-        }}>
-          SoA Intelligence
+          <span style={{
+            fontSize: '22px',
+            fontWeight: '700',
+            color: '#0F172A',
+            letterSpacing: '0.04em',
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            PARLEO
+          </span>
         </div>
 
         {/* Welcome text */}
@@ -86,11 +96,8 @@ export default function LoginPage() {
           textAlign: 'center',
           marginBottom: 24,
         }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A' }}>
             Welcome back
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 400, color: '#64748B', lineHeight: 1.5 }}>
-            Access your algorithm performance dashboard
           </div>
         </div>
 
