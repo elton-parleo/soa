@@ -64,6 +64,30 @@ class CycleCheckResponse(BaseModel):
     available: bool
     cycle_code: str
 
+class QueryCreate(BaseModel):
+    """Fields for creating a new query. query_code is auto-generated."""
+    query_text:    str
+    category:      Optional[str] = None
+    stage:         Optional[str] = None
+    specificity:   Optional[str] = None
+    persona:       Optional[str] = None
+    study_pattern: Optional[str] = None
+    soa_focus:     Optional[str] = None
+    rationale:     Optional[str] = None
+    status:        str = 'Active'
+
+class QueryUpdate(BaseModel):
+    """Fields that can be updated on an existing query. All optional."""
+    query_text:    Optional[str] = None
+    category:      Optional[str] = None
+    stage:         Optional[str] = None
+    specificity:   Optional[str] = None
+    persona:       Optional[str] = None
+    study_pattern: Optional[str] = None
+    soa_focus:     Optional[str] = None
+    rationale:     Optional[str] = None
+    status:        Optional[str] = None
+
 # ─── Type mappings ────────────────────
 
 ENTITY_TYPE_DISPLAY = {

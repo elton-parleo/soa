@@ -71,6 +71,9 @@ export const api = {
   createQuery: (studyType, data) =>
     post(`/api/studies/${studyType}/queries`, data),
 
+  updateQuery: (studyType, queryCode, data) =>
+    request('PATCH', `/api/studies/${studyType}/queries/${encodeURIComponent(queryCode)}`, data),
+
   getQueryRows: (studyType) =>
     get(`/api/studies/${studyType}/query-rows`),
 

@@ -231,6 +231,8 @@ export default function StudyDetail({ studyType, onNavigate }) {
   const [statusFilter,        setStatusFilter]        = useState('All')
   const [saving,              setSaving]              = useState(false)
   const [formData,            setFormData]            = useState(EMPTY_FORM)
+  const [saveError,           setSaveError]           = useState(null)
+  const [toast,               setToast]               = useState(null)
 
   const studyName = studyDisplayName(studyType ?? '')
 
@@ -269,8 +271,16 @@ export default function StudyDetail({ studyType, onNavigate }) {
     return matchStage && matchSpec && matchPersona && matchStatus
   })
 
+  // Auto-dismiss toast after 4 s
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [toast])
+
   function openAdd() {
     setFormData(EMPTY_FORM)
+    setSaveError(null)
     setSlideOver({ mode: 'add' })
   }
 
@@ -283,36 +293,35 @@ export default function StudyDetail({ studyType, onNavigate }) {
       persona:     query.persona     ?? '',
       status:      query.status      ?? 'active',
     })
+    setSaveError(null)
     setSlideOver({ mode: 'edit', query })
   }
 
   async function handleSaveQuery() {
     if (!formData.query_text.trim()) return
     setSaving(true)
+    setSaveError(null)
     try {
       if (slideOver?.mode === 'add') {
-        try {
-          const created = await api.createQuery(studyType, formData)
-          setQueries(prev => [...prev, created])
-        } catch {
-          // Optimistic local add if API route not yet built
-          const optimistic = {
-            ...formData,
-            query_code: `QRY-${String(queries.length + 1).padStart(3, '0')}`,
-          }
-          setQueries(prev => [...prev, optimistic])
-        }
+        const created = await api.createQuery(studyType, formData)
+        setQueries(prev => [...prev, created])
+        setToast('Query added successfully.')
       } else {
-        // Edit — optimistic local update
+        const updated = await api.updateQuery(
+          studyType,
+          slideOver.query.query_code,
+          formData,
+        )
         setQueries(prev =>
           prev.map(q =>
-            q.query_code === slideOver.query.query_code
-              ? { ...q, ...formData }
-              : q
+            q.query_code === slideOver.query.query_code ? updated : q
           )
         )
+        setToast('Query updated successfully.')
       }
       setSlideOver(null)
+    } catch (err) {
+      setSaveError(err.message ?? 'Save failed. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -635,6 +644,22 @@ export default function StudyDetail({ studyType, onNavigate }) {
               </div>
             </div>
 
+            {/* Save error */}
+            {saveError && (
+              <div style={{
+                margin: '0 24px 12px',
+                padding: '10px 14px',
+                background: T.redLight,
+                color: T.red,
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 500,
+                flexShrink: 0,
+              }}>
+                {saveError}
+              </div>
+            )}
+
             {/* Panel footer */}
             <div style={{
               height: 64,
@@ -679,6 +704,27 @@ export default function StudyDetail({ studyType, onNavigate }) {
             </div>
           </div>
         </>
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          bottom: 32,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: T.text,
+          color: T.white,
+          padding: '12px 24px',
+          borderRadius: 10,
+          fontSize: 13,
+          fontWeight: 600,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.18)',
+          zIndex: 9999,
+          pointerEvents: 'none',
+        }}>
+          {toast}
+        </div>
       )}
     </div>
   )

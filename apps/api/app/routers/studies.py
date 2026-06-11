@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 from typing import Optional
 from sqlalchemy import text
 from collections import defaultdict
@@ -6,6 +6,8 @@ from soa_shared.database import engine
 from app.schemas import (
     StudyResponse,
     StudyQueryBreakdown,
+    QueryCreate,
+    QueryUpdate,
     STUDY_TYPE_NAMES,
     PATTERN_DISPLAY,
 )
@@ -179,3 +181,172 @@ def get_study_query_rows(
         }
         for r in rows
     ]
+
+
+# ─── Query code prefix helper ─────────────────────────────────────────────────
+
+def _query_code_prefix(study_type: str) -> str:
+    """
+    Derive a short uppercase prefix from the study_type slug for use in
+    auto-generated query codes.
+    e.g. brand_gillette → GIL,  brand_oral_b → ORL,  retailer_target → TGT
+    """
+    name = study_type
+    for pfx in ['brand_', 'retailer_', 'sonic_', 'senso_']:
+        if name.startswith(pfx):
+            name = name[len(pfx):]
+            break
+    first_word = name.split('_')[0]
+    return first_word[:3].upper()
+
+
+# ─── POST /studies/{study_type}/queries — create new query ────────────────────
+
+@router.post("/studies/{study_type}/queries", status_code=201)
+def create_query(study_type: str, data: QueryCreate):
+    """
+    Creates a new query in soa_queries for the given study_type.
+    Auto-generates query_code in the format PREFIX_NNN.
+    """
+    with engine.connect() as conn:
+        # Count existing queries for this study_type to generate next code
+        count_row = conn.execute(
+            text("SELECT COUNT(*) FROM soa_queries WHERE study_type = :st"),
+            {"st": study_type},
+        ).fetchone()
+        next_num = (count_row[0] or 0) + 1
+
+        prefix = _query_code_prefix(study_type)
+        query_code = f"{prefix}_{next_num:03d}"
+
+        # Check uniqueness — increment on collision
+        while True:
+            exists = conn.execute(
+                text("SELECT 1 FROM soa_queries WHERE query_code = :code"),
+                {"code": query_code},
+            ).fetchone()
+            if not exists:
+                break
+            next_num += 1
+            query_code = f"{prefix}_{next_num:03d}"
+
+        # category/stage/specificity/persona are NOT NULL in the schema
+        result = conn.execute(
+            text("""
+                INSERT INTO soa_queries (
+                    query_code, query_text, category, stage,
+                    specificity, persona, study_type, study_pattern,
+                    soa_focus, rationale, status, created_at
+                ) VALUES (
+                    :query_code, :query_text, :category, :stage,
+                    :specificity, :persona, :study_type, :study_pattern,
+                    :soa_focus, :rationale, :status, NOW()
+                )
+                RETURNING
+                    id, query_code, query_text, category, stage,
+                    specificity, persona, study_type, study_pattern,
+                    status, soa_focus, rationale, created_at
+            """),
+            {
+                "query_code":    query_code,
+                "query_text":    data.query_text,
+                "category":      data.category    or "",
+                "stage":         data.stage       or "",
+                "specificity":   data.specificity or "",
+                "persona":       data.persona     or "",
+                "study_type":    study_type,
+                "study_pattern": data.study_pattern or "",
+                "soa_focus":     data.soa_focus,
+                "rationale":     data.rationale,
+                "status":        data.status,
+            },
+        )
+        conn.commit()
+        row = result.fetchone()
+
+    return {
+        "query_code":    row[1],
+        "query_text":    row[2],
+        "category":      row[3],
+        "stage":         row[4],
+        "specificity":   row[5],
+        "persona":       row[6],
+        "study_type":    row[7],
+        "study_pattern": row[8],
+        "status":        row[9],
+        "soa_focus":     row[10],
+        "rationale":     row[11],
+        "created_at":    str(row[12])[:10] if row[12] else None,
+    }
+
+
+# ─── PATCH /studies/{study_type}/queries/{query_code} — update query ──────────
+
+@router.patch("/studies/{study_type}/queries/{query_code}")
+def update_query(study_type: str, query_code: str, data: QueryUpdate):
+    """
+    Updates an existing query by query_code within a study_type.
+    Only provided (non-None) fields are updated via a dynamic SET clause.
+    Returns the updated query row.
+    """
+    with engine.connect() as conn:
+        existing = conn.execute(
+            text("""
+                SELECT id FROM soa_queries
+                WHERE query_code = :code AND study_type = :st
+            """),
+            {"code": query_code, "st": study_type},
+        ).fetchone()
+
+        if not existing:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Query '{query_code}' not found in study '{study_type}'.",
+            )
+
+        # Build SET clause from only the fields actually provided
+        updates = {}
+        for field in [
+            "query_text", "category", "stage", "specificity",
+            "persona", "study_pattern", "soa_focus", "rationale", "status",
+        ]:
+            val = getattr(data, field)
+            if val is not None:
+                updates[field] = val
+
+        if not updates:
+            raise HTTPException(status_code=422, detail="No fields to update.")
+
+        set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+        params = {**updates, "code": query_code, "st": study_type}
+
+        result = conn.execute(
+            text(f"""
+                UPDATE soa_queries
+                SET {set_clause}, updated_at = NOW()
+                WHERE query_code = :code AND study_type = :st
+                RETURNING
+                    query_code, query_text, category, stage,
+                    specificity, persona, study_type, study_pattern,
+                    status, soa_focus, rationale, created_at, updated_at
+            """),
+            params,
+        )
+        conn.commit()
+        row = result.fetchone()
+
+    return {
+        "query_code":    row[0],
+        "query_text":    row[1],
+        "category":      row[2],
+        "stage":         row[3],
+        "specificity":   row[4],
+        "persona":       row[5],
+        "study_type":    row[6],
+        "study_pattern": row[7],
+        "status":        row[8],
+        "soa_focus":     row[9],
+        "rationale":     row[10],
+        "created_at":    str(row[11])[:10] if row[11] else None,
+        "updated_at":    str(row[12])[:19] if row[12] else None,
+    }
