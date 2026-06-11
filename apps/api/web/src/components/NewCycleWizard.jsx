@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api.js'
-import { useAuth } from '../AuthContext.jsx'
+import Sidebar from './Sidebar.jsx'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -112,85 +112,6 @@ function StepIndicator({ current }) {
           </React.Fragment>
         )
       })}
-    </div>
-  )
-}
-
-// ─── Sidebar ──────────────────────────────────────────────────────────────────
-
-function Sidebar({ activeStep }) {
-  const { signOut } = useAuth()
-  const navItems = [
-    { label: 'Cycles', active: true },
-    { label: 'Studies', active: false },
-    { label: 'Results', active: false },
-    { label: 'Entity Registry', active: false },
-    { label: 'Settings', active: false },
-  ]
-  return (
-    <div style={{
-      width: 200, minHeight: '100vh',
-      background: T.navy,
-      display: 'flex', flexDirection: 'column',
-      flexShrink: 0,
-    }}>
-      <div style={{ padding: '24px 20px 16px' }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-        }}>
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-          >
-            <rect
-              x="2" y="2"
-              width="8" height="20"
-              rx="1.5"
-              fill="hsl(213,99%,50%)"
-            />
-            <rect
-              x="14" y="6"
-              width="8" height="12"
-              rx="1.5"
-              fill="hsl(213,99%,50%)"
-              opacity="0.4"
-            />
-          </svg>
-          <span style={{
-            fontSize: '16px',
-            fontWeight: '700',
-            color: '#FFFFFF',
-            letterSpacing: '0.06em',
-            fontFamily: "'DM Sans', sans-serif",
-          }}>
-            PARLEO
-          </span>
-        </div>
-        <div style={{ color: T.sidebarText, fontSize: 11, marginTop: 2 }}>SoA Diagnostic</div>
-      </div>
-      <nav style={{ flex: 1, padding: '8px 0' }}>
-        {navItems.map(item => (
-          <div key={item.label} style={{
-            padding: '10px 20px',
-            fontSize: 13,
-            fontWeight: item.active ? 600 : 400,
-            color: item.active ? T.white : T.sidebarText,
-            background: item.active ? T.navyMid : 'transparent',
-            borderLeft: item.active ? `3px solid ${T.teal}` : '3px solid transparent',
-            cursor: 'pointer',
-          }}>
-            {item.label}
-          </div>
-        ))}
-      </nav>
-      <div style={{ padding: '16px 20px', borderTop: `1px solid ${T.navyBdr}` }}>
-        <div style={{ fontSize: 12, color: T.sidebarText, cursor: 'pointer', marginBottom: 8 }}>Help Center</div>
-        <div style={{ fontSize: 12, color: T.sidebarText, cursor: 'pointer' }} onClick={() => signOut()}>Log Out</div>
-      </div>
     </div>
   )
 }
@@ -968,7 +889,7 @@ export default function NewCycleWizard({ onComplete, onCancel } = {}) {
         * { box-sizing: border-box; }
       `}</style>
 
-      <Sidebar activeStep={step} />
+      <Sidebar activeView="dashboard" onNavigate={onCancel} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <Topbar stepName={STEP_LABELS[step - 1]} />
