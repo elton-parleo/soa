@@ -104,7 +104,23 @@ const MOCK_QUERIES = [
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// Known study_type → display name map (mirrors backend STUDY_TYPE_NAMES)
+const STUDY_NAMES = {
+  'brand_oral_b':             'Oral-B Brand Study',
+  'brand_oral_b_100':         'Oral-B Extended Study',
+  'brand_oral_b_unbranded':   'Oral-B Unbranded Study',
+  'brand_oral_b_neutral':     'Oral-B Neutral Study',
+  'brand_oral_b_etb_neutral': 'Oral-B ETB Neutral Study',
+  'brand_gillette':           'Gillette Brand Study',
+  'brand_gillette_100':       'Gillette 100 Study',
+  'brand_gillette_unbranded': 'Gillette Unbranded Study',
+  'retailer_sephora':         'Sephora Retailer Study',
+}
+
 function studyDisplayName(studyType) {
+  if (!studyType) return ''
+  if (STUDY_NAMES[studyType]) return STUDY_NAMES[studyType]
+  // Fall back: title-case the underscored slug
   return studyType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
@@ -216,7 +232,7 @@ export default function StudyDetail({ studyType, onNavigate }) {
   const [saving,              setSaving]              = useState(false)
   const [formData,            setFormData]            = useState(EMPTY_FORM)
 
-  const studyName = study?.name ?? studyDisplayName(studyType ?? '')
+  const studyName = studyDisplayName(studyType ?? '')
 
   useEffect(() => {
     setLoading(true)
@@ -315,7 +331,7 @@ export default function StudyDetail({ studyType, onNavigate }) {
 
   // Table column config
   const COL_WIDTHS = {
-    id:          100,
+    id:          200,  // widened for long codes e.g. GROOM_RES_BRD_CAS_01
     question:    null, // flex: 1
     category:    120,
     stage:       120,
@@ -326,8 +342,9 @@ export default function StudyDetail({ studyType, onNavigate }) {
 
   const thStyle = (flex, width) => ({
     flex: flex ? 1 : undefined,
+    minWidth: flex ? 0 : (width ?? undefined),
     width: width ?? undefined,
-    minWidth: width ?? undefined,
+    flexShrink: flex ? 1 : 0,
     padding: '0 12px',
     fontSize: 11,
     fontWeight: 700,
@@ -340,8 +357,9 @@ export default function StudyDetail({ studyType, onNavigate }) {
 
   const tdStyle = (flex, width) => ({
     flex: flex ? 1 : undefined,
+    minWidth: flex ? 0 : (width ?? undefined),
     width: width ?? undefined,
-    minWidth: width ?? undefined,
+    flexShrink: flex ? 1 : 0,
     padding: '0 12px',
   })
 
@@ -364,45 +382,26 @@ export default function StudyDetail({ studyType, onNavigate }) {
           {/* Page header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
             <div>
-              <h1 style={{ margin: '0 0 6px', fontSize: 28, fontWeight: 700, color: T.text }}>
+              <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: T.text }}>
                 {studyName}
               </h1>
-              <p style={{ margin: 0, fontSize: 14, color: T.slate }}>
-                {study?.description ?? ''}
-              </p>
             </div>
-            <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
-              <button
-                onClick={() => alert('Export Data coming soon')}
-                style={{
-                  padding: '9px 18px',
-                  background: T.white,
-                  color: T.text,
-                  border: `1px solid ${T.text}`,
-                  borderRadius: 8,
-                  fontWeight: 600,
-                  fontSize: 13,
-                  cursor: 'pointer',
-                }}
-              >
-                ↓ Export Data
-              </button>
-              <button
-                onClick={openAdd}
-                style={{
-                  padding: '9px 18px',
-                  background: T.text,
-                  color: T.white,
-                  border: 'none',
-                  borderRadius: 8,
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: 'pointer',
-                }}
-              >
-                + Add Query
-              </button>
-            </div>
+            <button
+              onClick={openAdd}
+              style={{
+                padding: '9px 18px',
+                background: T.text,
+                color: T.white,
+                border: 'none',
+                borderRadius: 8,
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              + Add Query
+            </button>
           </div>
 
           {/* Tabs row */}
@@ -703,7 +702,7 @@ function QueryRow({ query, isLast, tdStyle, COL_WIDTHS, onClick }) {
         transition: 'background 0.1s',
       }}
     >
-      <div style={{ ...tdStyle(false, COL_WIDTHS.id), fontFamily: 'monospace', fontSize: 12, color: T.slate }}>
+      <div style={{ ...tdStyle(false, COL_WIDTHS.id), fontFamily: 'monospace', fontSize: 11, color: T.slate, wordBreak: 'break-all' }}>
         {query.query_code}
       </div>
       <div style={{
