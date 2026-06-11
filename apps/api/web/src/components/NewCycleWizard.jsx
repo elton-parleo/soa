@@ -860,7 +860,7 @@ function Step5({ state, setState, onBack, onGoTo, onSuccess }) {
 
 // ─── Root Wizard ──────────────────────────────────────────────────────────────
 
-export default function NewCycleWizard({ onComplete, onCancel } = {}) {
+export default function NewCycleWizard({ onComplete, onCancel, onNavigate } = {}) {
   const [step, setStep] = useState(1)
   const [state, setState] = useState(INITIAL_STATE)
   const [queryCount, setQueryCount] = useState(0)
@@ -889,7 +889,16 @@ export default function NewCycleWizard({ onComplete, onCancel } = {}) {
         * { box-sizing: border-box; }
       `}</style>
 
-      <Sidebar activeView="dashboard" onNavigate={onCancel} />
+      <Sidebar
+        activeView="dashboard"
+        onNavigate={(v) => {
+          if (onNavigate) {
+            onNavigate(v)
+          } else if (onCancel) {
+            onCancel()
+          }
+        }}
+      />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <Topbar stepName={STEP_LABELS[step - 1]} />

@@ -41,6 +41,7 @@ function AppContent() {
       <NewCycleWizard
         onComplete={() => setView('dashboard')}
         onCancel={() => setView('dashboard')}
+        onNavigate={(v) => setView(v)}
       />
     )
   }
