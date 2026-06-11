@@ -100,6 +100,9 @@ export const api = {
   getCycle: (code) =>
     get(`/api/cycles/${code}`),
 
+  resumeCycle: (cycleCode) =>
+    post(`/api/cycles/${cycleCode}/resume`, {}),
+
   // Metrics
   getMetrics: (cycleCode) =>
     get(`/api/cycles/${cycleCode}/metrics`),

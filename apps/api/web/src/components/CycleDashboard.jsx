@@ -74,7 +74,8 @@ const MOCK_CYCLES = [
     status:             'running',
     total_runs_planned: 500,
     completed_runs:     268,
-    created_at:         '2026-05-19',
+    created_at:         '2026-05-19T08:00:00',
+    updated_at:         null,
     notes:              null,
   },
   {
@@ -83,7 +84,8 @@ const MOCK_CYCLES = [
     status:             'needs_review',
     total_runs_planned: 500,
     completed_runs:     500,
-    created_at:         '2026-04-28',
+    created_at:         '2026-04-28T09:00:00',
+    updated_at:         '2026-04-30T11:22:00',
     notes:              'Coding complete. 42 responses flagged.',
   },
   {
@@ -92,7 +94,8 @@ const MOCK_CYCLES = [
     status:             'complete',
     total_runs_planned: 900,
     completed_runs:     900,
-    created_at:         '2026-03-15',
+    created_at:         '2026-03-15T10:00:00',
+    updated_at:         '2026-03-15T12:34:52',
     notes:              null,
   },
   {
@@ -101,12 +104,33 @@ const MOCK_CYCLES = [
     status:             'failed',
     total_runs_planned: 500,
     completed_runs:     312,
-    created_at:         '2026-02-10',
+    created_at:         '2026-02-10T14:00:00',
+    updated_at:         '2026-02-10T15:12:33',
     notes:              'Failed at: Metrics stage\nReason: API timeout on cross-reference validation.',
   },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function calcElapsed(createdAt, updatedAt) {
+  // Returns a formatted duration string between createdAt and updatedAt
+  // (or now if updatedAt is null). e.g. "02:34:52" or "1d 03:12:44"
+  if (!createdAt) return '—'
+  const start = new Date(createdAt)
+  const end   = updatedAt ? new Date(updatedAt) : new Date()
+  if (isNaN(start.getTime())) return '—'
+  const diffMs    = Math.max(0, end.getTime() - start.getTime())
+  const totalSecs = Math.floor(diffMs / 1000)
+  const days  = Math.floor(totalSecs / 86400)
+  const hours = Math.floor((totalSecs % 86400) / 3600)
+  const mins  = Math.floor((totalSecs % 3600) / 60)
+  const secs  = totalSecs % 60
+  const hh = String(hours).padStart(2, '0')
+  const mm = String(mins).padStart(2, '0')
+  const ss = String(secs).padStart(2, '0')
+  if (days > 0) return `${days}d ${hh}:${mm}:${ss}`
+  return `${hh}:${mm}:${ss}`
+}
 
 function cycleDisplayName(cycle_code) {
   const parts = cycle_code.split('-')
@@ -287,7 +311,7 @@ function CompleteBody({ cycle, onViewCycle }) {
   return (
     <>
       <div>
-        <MetricRow label="Elapsed Time" value={<span style={{ fontFamily: 'monospace', color: T.teal }}>02:34:52</span>} />
+        <MetricRow label="Elapsed Time" value={<span style={{ fontFamily: 'monospace', color: T.teal }}>{calcElapsed(cycle.created_at, cycle.updated_at)}</span>} />
         <MetricRow label="Total Processed" value={cycle.total_runs_planned.toLocaleString()} />
         <MetricRow label="Export Ready" value={<span style={{ color: T.teal }}>📄</span>} last />
       </div>
@@ -303,10 +327,11 @@ function CompleteBody({ cycle, onViewCycle }) {
 
 // ─── Failed card body ─────────────────────────────────────────────────────────
 
-function FailedBody({ cycle, onViewCycle }) {
+function FailedBody({ cycle, onViewCycle, onResume, resuming }) {
   const notesLines = (cycle.notes || '').split('\n')
   const stageLine  = notesLines.find(l => l.toLowerCase().startsWith('failed at')) || 'Failed at: unknown stage'
   const reasonLine = notesLines.find(l => l.toLowerCase().startsWith('reason'))    || 'Reason: Unknown error'
+  const isResuming = resuming === cycle.cycle_code
 
   return (
     <>
@@ -317,10 +342,17 @@ function FailedBody({ cycle, onViewCycle }) {
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <button
-          onClick={e => { e.stopPropagation(); onViewCycle && onViewCycle(cycle.cycle_code) }}
-          style={{ flex: 1, padding: '9px 0', background: T.text, border: 'none', color: T.white, borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+          onClick={e => { e.stopPropagation(); onResume && onResume(cycle) }}
+          disabled={isResuming}
+          style={{
+            flex: 1, padding: '9px 0',
+            background: T.text, border: 'none', color: T.white,
+            borderRadius: 8, fontWeight: 600, fontSize: 13,
+            opacity: isResuming ? 0.7 : 1,
+            cursor: isResuming ? 'not-allowed' : 'pointer',
+          }}
         >
-          ▶ Resume
+          {isResuming ? '...' : '▶ Resume'}
         </button>
         <button
           style={{ width: 40, height: 40, padding: 0, background: T.white, border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, fontWeight: 600, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -452,6 +484,7 @@ export default function CycleDashboard({ onNewCycle, onViewCycle, onNavigate }) 
   const [error,        setError]        = useState(null)
   const [activeFilter, setActiveFilter] = useState('all')
   const [liveTimer,    setLiveTimer]    = useState(0)
+  const [resuming,     setResuming]     = useState(null) // cycle_code being resumed
 
   const fetchCycles = () =>
     api.getCycles()
@@ -481,6 +514,26 @@ export default function CycleDashboard({ onNewCycle, onViewCycle, onNavigate }) 
     fetchCycles().finally(() => setLoading(false))
   }
 
+  async function handleResume(cycle) {
+    setResuming(cycle.cycle_code)
+    try {
+      await api.resumeCycle(cycle.cycle_code)
+      // Optimistically update local state without waiting for next poll
+      setCycles(prev =>
+        prev.map(c =>
+          c.cycle_code === cycle.cycle_code
+            ? { ...c, status: 'planned' }
+            : c
+        )
+      )
+    } catch (err) {
+      console.error('Resume failed:', err.message)
+      alert(`Could not resume cycle: ` + err.message)
+    } finally {
+      setResuming(null)
+    }
+  }
+
   const displayCycles = cycles.length > 0 ? cycles : MOCK_CYCLES
 
   // Counts for filter pills
@@ -500,7 +553,7 @@ export default function CycleDashboard({ onNewCycle, onViewCycle, onNavigate }) 
     if (cycle.status === 'running')      return <RunningBody      cycle={cycle} onViewCycle={onViewCycle} key={liveTimer} />
     if (cycle.status === 'needs_review') return <NeedsReviewBody  cycle={cycle} onViewCycle={onViewCycle} />
     if (cycle.status === 'complete')     return <CompleteBody      cycle={cycle} onViewCycle={onViewCycle} />
-    if (cycle.status === 'failed')       return <FailedBody        cycle={cycle} onViewCycle={onViewCycle} />
+    if (cycle.status === 'failed')       return <FailedBody        cycle={cycle} onViewCycle={onViewCycle} onResume={handleResume} resuming={resuming} />
     return <PlannedBody cycle={cycle} onViewCycle={onViewCycle} />
   }
 

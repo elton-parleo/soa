@@ -132,7 +132,7 @@ def list_cycles():
             SELECT
               cycle_code, status, study_type, study_pattern,
               total_runs_planned, completed_runs, created_at,
-              platforms, runs_per_query
+              updated_at, platforms, runs_per_query
             FROM soa_cycles
             ORDER BY created_at DESC
         """)).fetchall()
@@ -146,7 +146,7 @@ def get_cycle(cycle_code: str):
             SELECT
               cycle_code, status, study_type, study_pattern,
               total_runs_planned, completed_runs, created_at,
-              platforms, runs_per_query
+              updated_at, platforms, runs_per_query
             FROM soa_cycles
             WHERE cycle_code = :code
         """), {"code": cycle_code}).fetchone()
@@ -158,6 +158,61 @@ def get_cycle(cycle_code: str):
     return _row_to_cycle(row)
 
 
+@router.post("/cycles/{cycle_code}/resume")
+def resume_cycle(cycle_code: str):
+    """
+    Resume a failed cycle by setting its status back to 'planned'.
+    The pipeline worker polls for 'planned' cycles every 30s and
+    will pick it up automatically.
+
+    Only cycles with status 'failed' can be resumed. Returns 409 if
+    the cycle is not in failed state.
+    """
+    with engine.connect() as conn:
+        # Check current status
+        row = conn.execute(text("""
+            SELECT id, status
+            FROM soa_cycles
+            WHERE cycle_code = :code
+        """), {"code": cycle_code}).fetchone()
+
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Cycle '{cycle_code}' not found.",
+            )
+
+        current_status = row[1]
+        if current_status != 'failed':
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Cycle is '{current_status}'"
+                    f" — only failed cycles can be resumed."
+                ),
+            )
+
+        # Set status back to planned and update timestamp
+        conn.execute(text("""
+            UPDATE soa_cycles
+            SET
+              status = 'planned',
+              updated_at = NOW()
+            WHERE cycle_code = :code
+        """), {"code": cycle_code})
+        conn.commit()
+
+    return {
+        "cycle_code": cycle_code,
+        "status":     "planned",
+        "message":    (
+            "Cycle queued for retry. "
+            "The pipeline worker will "
+            "pick it up within 30 seconds."
+        ),
+    }
+
+
 def _row_to_cycle(row) -> CycleStatusResponse:
     return CycleStatusResponse(
         cycle_code=row[0],
@@ -166,7 +221,8 @@ def _row_to_cycle(row) -> CycleStatusResponse:
         study_pattern=row[3],
         total_runs_planned=row[4] or 0,
         completed_runs=row[5] or 0,
-        created_at=str(row[6])[:10] if row[6] else None,
-        platforms=json.loads(row[7]) if isinstance(row[7], str) else row[7],
-        runs_per_query=row[8],
+        created_at=str(row[6])[:19] if row[6] else None,
+        updated_at=str(row[7])[:19] if row[7] else None,
+        platforms=json.loads(row[8]) if isinstance(row[8], str) else row[8],
+        runs_per_query=row[9],
     )
