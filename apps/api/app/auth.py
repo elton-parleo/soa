@@ -1,10 +1,8 @@
 """
-JWT verification for FastAPI using
-Supabase JWKS.
-
-Fetches public keys directly from
-Supabase's JWKS endpoint and verifies
-JWTs without PyJWKClient.
+JWT verification for FastAPI.
+Supports RS256 (RSA via JWKS), ES256
+(ECDSA via JWKS), and HS256 (JWT secret
+fallback when JWKS is empty).
 """
 
 import os
@@ -24,7 +22,9 @@ from cryptography.hazmat.primitives\
     )
 from cryptography.hazmat.backends\
     import default_backend
-from fastapi import HTTPException, Security
+from fastapi import (
+    HTTPException, Security, Depends,
+)
 from fastapi.security import (
     HTTPBearer,
     HTTPAuthorizationCredentials,
@@ -32,15 +32,19 @@ from fastapi.security import (
 
 log = logging.getLogger(__name__)
 
-SUPABASE_URL = os.getenv(
-    'SUPABASE_URL', ''
+SUPABASE_PROJECT_URL = os.getenv(
+    'SUPABASE_PROJECT_URL', ''
 ).rstrip('/')
+
+SUPABASE_JWT_SECRET = os.getenv(
+    'SUPABASE_JWT_SECRET', ''
+)
 
 ALLOWED_DOMAIN = os.getenv(
     'ALLOWED_EMAIL_DOMAIN', ''
 )
 
-# ── In-memory JWKS cache ──────────────────
+# ── JWKS cache ────────────────────────────
 
 _jwks_cache = {
     'keys':       None,
@@ -49,10 +53,6 @@ _jwks_cache = {
 }
 
 def _get_jwks() -> list:
-    """
-    Fetch JWKS from Supabase with
-    1-hour in-memory cache.
-    """
     now = time.time()
     if (
         _jwks_cache['keys'] is not None
@@ -61,16 +61,15 @@ def _get_jwks() -> list:
     ):
         return _jwks_cache['keys']
 
-    if not SUPABASE_URL:
+    if not SUPABASE_PROJECT_URL:
         raise RuntimeError(
-            'SUPABASE_URL is not set.'
+            'SUPABASE_PROJECT_URL is not set.'
         )
 
     url = (
-        f'{SUPABASE_URL}'
+        f'{SUPABASE_PROJECT_URL}'
         f'/auth/v1/.well-known/jwks.json'
     )
-    log.info(f'[auth] Fetching JWKS: {url}')
     try:
         r = httpx.get(url, timeout=10)
         r.raise_for_status()
@@ -78,111 +77,137 @@ def _get_jwks() -> list:
         _jwks_cache['keys'] = keys
         _jwks_cache['fetched_at'] = now
         log.info(
-            f'[auth] JWKS: '
-            f'{len(keys)} key(s) cached'
+            f'[auth] JWKS: {len(keys)} key(s)'
         )
         return keys
     except Exception as e:
         log.error(
-            f'[auth] JWKS fetch failed: {e}'
+            f'[auth] JWKS fetch error: {e}'
         )
-        raise RuntimeError(
-            f'Could not fetch JWKS: {e}'
-        )
+        # Cache empty list briefly so we do
+        # not hammer the endpoint on every req
+        _jwks_cache['keys'] = []
+        _jwks_cache['fetched_at'] = now
+        return []
 
 def _invalidate_jwks_cache():
     _jwks_cache['keys'] = None
     _jwks_cache['fetched_at'] = 0
 
-def _get_public_key(kid: str):
+# ── Key builders ──────────────────────────
+
+def _build_rsa_key(jwk: dict):
+    """Build RSA public key from JWK n/e."""
+    def b64_to_int(val):
+        pad = (4 - len(val) % 4) % 4
+        data = base64.urlsafe_b64decode(
+            val + '=' * pad
+        )
+        return int.from_bytes(data, 'big')
+
+    n = b64_to_int(jwk['n'])
+    e = b64_to_int(jwk['e'])
+    return RSAPublicNumbers(
+        e, n
+    ).public_key(default_backend())
+
+_EC_CURVES = {
+    'P-256': SECP256R1(),
+    'P-384': SECP384R1(),
+    'P-521': SECP521R1(),
+}
+
+def _build_ec_key(jwk: dict):
+    """Build ECDSA public key from JWK x/y."""
+    crv = jwk.get('crv', 'P-256')
+    curve = _EC_CURVES.get(crv)
+    if curve is None:
+        raise ValueError(
+            f'Unsupported EC curve: {crv}'
+        )
+
+    def b64_to_int(val):
+        pad = (4 - len(val) % 4) % 4
+        data = base64.urlsafe_b64decode(
+            val + '=' * pad
+        )
+        return int.from_bytes(data, 'big')
+
+    x = b64_to_int(jwk['x'])
+    y = b64_to_int(jwk['y'])
+    return EllipticCurvePublicNumbers(
+        x=x, y=y, curve=curve
+    ).public_key(default_backend())
+
+# ── Key selection ─────────────────────────
+
+def _get_signing_key(kid: str, alg: str):
     """
-    Find and build the public key
-    matching kid from the JWKS.
-    Supports RSA (RS256) and
-    HMAC (HS256) key types.
+    Return (key, algorithms) for JWT decode.
+
+    Priority:
+    1. EC public key from JWKS  (ES256)
+    2. RSA public key from JWKS (RS256)
+    3. HMAC oct key from JWKS   (HS256)
+    4. SUPABASE_JWT_SECRET      (HS256 fallback)
+       — used when JWKS returns no keys,
+       common with newer Supabase projects
+       that use symmetric signing.
     """
     keys = _get_jwks()
 
-    # Find key by kid
-    match = next(
-        (k for k in keys
-         if k.get('kid') == kid),
-        None,
+    if keys:
+        # Find by kid, fall back to first key
+        match = next(
+            (k for k in keys
+             if k.get('kid') == kid),
+            keys[0],
+        )
+        kty = match.get('kty', '')
+
+        if kty == 'EC':
+            return _build_ec_key(match), ['ES256']
+
+        elif kty == 'RSA':
+            return _build_rsa_key(match), ['RS256']
+
+        elif kty == 'oct':
+            k = match.get('k', '')
+            pad = (4 - len(k) % 4) % 4
+            secret = base64.urlsafe_b64decode(
+                k + '=' * pad
+            )
+            return secret, ['HS256']
+
+        else:
+            raise ValueError(
+                f'Unsupported JWK kty: {kty}'
+            )
+
+    # JWKS empty — use JWT secret (HS256)
+    if SUPABASE_JWT_SECRET:
+        log.info(
+            '[auth] Using JWT secret '
+            '(JWKS empty)'
+        )
+        return (
+            SUPABASE_JWT_SECRET.encode('utf-8'),
+            ['HS256'],
+        )
+
+    raise ValueError(
+        'No signing key available: '
+        'JWKS returned no keys and '
+        'SUPABASE_JWT_SECRET is not set. '
+        'Add SUPABASE_JWT_SECRET to your '
+        '.env — find it in Supabase '
+        'dashboard → Settings → API → '
+        'JWT Settings.'
     )
-    # Fall back to first key if no match
-    if match is None:
-        if not keys:
-            raise ValueError(
-                'JWKS returned no keys'
-            )
-        log.warning(
-            f'[auth] kid={kid!r} not found'
-            f' — using first key'
-        )
-        match = keys[0]
 
-    kty = match.get('kty', '')
+# ── FastAPI dependency ────────────────────
 
-    if kty == 'RSA':
-        def b64_to_int(val):
-            # Pad to multiple of 4
-            pad = (4 - len(val) % 4) % 4
-            data = base64.urlsafe_b64decode(
-                val + '=' * pad
-            )
-            return int.from_bytes(data, 'big')
-
-        n = b64_to_int(match['n'])
-        e = b64_to_int(match['e'])
-        return RSAPublicNumbers(
-            e, n
-        ).public_key(default_backend())
-
-    elif kty == 'EC':
-        # ECDSA public key (ES256 / ES384 / ES512)
-        _ec_curves = {
-            'P-256': SECP256R1(),
-            'P-384': SECP384R1(),
-            'P-521': SECP521R1(),
-        }
-        crv = match.get('crv', 'P-256')
-        curve = _ec_curves.get(crv)
-        if curve is None:
-            raise ValueError(
-                f'Unsupported EC curve: {crv}'
-            )
-
-        def b64_to_int(val):
-            pad = (4 - len(val) % 4) % 4
-            data = base64.urlsafe_b64decode(
-                val + '=' * pad
-            )
-            return int.from_bytes(data, 'big')
-
-        x = b64_to_int(match['x'])
-        y = b64_to_int(match['y'])
-        return EllipticCurvePublicNumbers(
-            x=x, y=y, curve=curve
-        ).public_key(default_backend())
-
-    elif kty == 'oct':
-        # HMAC secret (HS256)
-        k = match.get('k', '')
-        pad = (4 - len(k) % 4) % 4
-        return base64.urlsafe_b64decode(
-            k + '=' * pad
-        )
-
-    else:
-        raise ValueError(
-            f'Unsupported key type: {kty}'
-        )
-
-# ── FastAPI auth dependency ───────────────
-
-bearer_scheme = HTTPBearer(
-    auto_error=False
-)
+bearer_scheme = HTTPBearer(auto_error=False)
 
 def verify_token(
     credentials: HTTPAuthorizationCredentials
@@ -194,13 +219,12 @@ def verify_token(
     the email domain restriction.
 
     Returns the decoded JWT payload.
-    Raises 401 for invalid tokens.
+    Raises 401 for invalid/missing tokens.
     Raises 403 for wrong email domain.
     """
     if not credentials:
         log.warning(
-            '[auth] No Authorization '
-            'header in request'
+            '[auth] No Authorization header'
         )
         raise HTTPException(
             status_code=401,
@@ -214,13 +238,9 @@ def verify_token(
 
     # Decode header without verification
     try:
-        header = jwt.get_unverified_header(
-            token
-        )
+        header = jwt.get_unverified_header(token)
     except Exception as e:
-        log.error(
-            f'[auth] Bad token header: {e}'
-        )
+        log.error(f'[auth] Bad token header: {e}')
         raise HTTPException(
             status_code=401,
             detail='Malformed token.',
@@ -229,35 +249,40 @@ def verify_token(
     alg = header.get('alg', 'RS256')
     kid = header.get('kid', '')
     log.info(
-        f'[auth] Token alg={alg} '
+        f'[auth] alg={alg} '
         f'kid={kid[:16] if kid else "none"}'
     )
 
-    # Get public key — retry once if miss
+    # Get signing key (retry once on failure)
     try:
-        public_key = _get_public_key(kid)
+        signing_key, algorithms = \
+            _get_signing_key(kid, alg)
+    except ValueError as e:
+        log.error(f'[auth] No key: {e}')
+        raise HTTPException(
+            status_code=401, detail=str(e),
+        )
     except Exception as e:
         log.warning(
-            f'[auth] Key miss, retrying: {e}'
+            f'[auth] Key lookup failed, '
+            f'invalidating cache: {e}'
         )
         _invalidate_jwks_cache()
         try:
-            public_key = _get_public_key(kid)
+            signing_key, algorithms = \
+                _get_signing_key(kid, alg)
         except Exception as e2:
-            log.error(
-                f'[auth] Key lookup '
-                f'failed: {e2}'
-            )
+            log.error(f'[auth] Key error: {e2}')
             raise HTTPException(
                 status_code=401,
-                detail='Key verification failed.',
+                detail='Key lookup failed.',
             )
 
-    # Try to verify — first with audience
-    # check, then without (Supabase aud
-    # value varies by project)
+    # Verify — try with audience check first,
+    # then retry without (Supabase aud claim
+    # varies by project configuration)
     payload = None
-    for verify_aud, aud in [
+    for verify_aud, aud_val in [
         (True,  'authenticated'),
         (False, None),
     ]:
@@ -266,21 +291,19 @@ def verify_token(
             if not verify_aud:
                 opts['verify_aud'] = False
 
-            decode_kwargs = dict(
-                algorithms=[alg],
+            kw = dict(
+                algorithms=algorithms,
                 options=opts,
             )
             if verify_aud:
-                decode_kwargs['audience'] = aud
+                kw['audience'] = aud_val
 
             payload = jwt.decode(
-                token,
-                public_key,
-                **decode_kwargs,
+                token, signing_key, **kw
             )
             log.info(
-                f'[auth] Signature valid'
-                f'(aud_check={verify_aud})'
+                f'[auth] Token valid '
+                f'aud_check={verify_aud}'
             )
             break
 
@@ -294,15 +317,14 @@ def verify_token(
                 ),
             )
         except jwt.InvalidAudienceError:
-            # Try again without aud check
             log.warning(
                 f'[auth] Audience mismatch '
-                f'for aud={aud!r}, retrying'
+                f'({aud_val!r}), retrying'
             )
             continue
         except jwt.InvalidTokenError as e:
             log.error(
-                f'[auth] Invalid token: {e}'
+                f'[auth] Token error: {e}'
             )
             raise HTTPException(
                 status_code=401,
@@ -310,7 +332,7 @@ def verify_token(
             )
         except Exception as e:
             log.error(
-                f'[auth] Unexpected error: '
+                f'[auth] Error: '
                 f'{type(e).__name__}: {e}'
             )
             raise HTTPException(
@@ -325,22 +347,20 @@ def verify_token(
             detail='Token verification failed.',
         )
 
-    # Email domain check
+    # Email domain restriction
     email = payload.get('email', '')
     if ALLOWED_DOMAIN:
         if not email.endswith(
             f'@{ALLOWED_DOMAIN}'
         ):
             log.warning(
-                f'[auth] Domain rejected: '
-                f'{email}'
+                f'[auth] Rejected: {email}'
             )
             raise HTTPException(
                 status_code=403,
                 detail=(
                     f'Access restricted to '
-                    f'@{ALLOWED_DOMAIN} '
-                    f'accounts.'
+                    f'@{ALLOWED_DOMAIN}.'
                 ),
             )
 
@@ -348,6 +368,6 @@ def verify_token(
     return payload
 
 def get_current_user(
-    user: dict = Security(verify_token)
+    user: dict = Depends(verify_token)
 ) -> dict:
     return user
