@@ -139,8 +139,42 @@ function Sidebar({ onNavigate }) {
   return (
     <div style={{ width: 200, minHeight: '100vh', background: T.navy, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
       <div style={{ padding: '24px 20px 16px' }}>
-        <div style={{ color: T.white, fontWeight: 700, fontSize: 15 }}>SoA Platform</div>
-        <div style={{ color: T.sidebarText, fontSize: 11, marginTop: 2 }}>Brand Intelligence</div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}>
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <rect
+              x="2" y="2"
+              width="8" height="20"
+              rx="1.5"
+              fill="hsl(213,99%,50%)"
+            />
+            <rect
+              x="14" y="6"
+              width="8" height="12"
+              rx="1.5"
+              fill="hsl(213,99%,50%)"
+              opacity="0.4"
+            />
+          </svg>
+          <span style={{
+            fontSize: '16px',
+            fontWeight: '700',
+            color: '#FFFFFF',
+            letterSpacing: '0.06em',
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+            PARLEO
+          </span>
+        </div>
+        <div style={{ color: T.sidebarText, fontSize: 11, marginTop: 2 }}>SoA Diagnostic</div>
       </div>
       <nav style={{ flex: 1, padding: '8px 0' }}>
         {navItems.map(item => (
