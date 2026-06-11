@@ -297,7 +297,7 @@ function NewStudyCard() {
   const [hovered, setHovered] = useState(false)
   return (
     <div
-      onClick={() => alert('Create Study coming soon')}
+      title="Coming soon"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -420,7 +420,8 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
               </p>
             </div>
             <button
-              onClick={() => alert('Create Study coming soon')}
+              disabled
+              title="Coming soon"
               style={{
                 padding: '10px 20px',
                 background: T.text,
@@ -429,9 +430,11 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
                 borderRadius: 8,
                 fontWeight: 700,
                 fontSize: 14,
-                cursor: 'pointer',
+                cursor: 'not-allowed',
                 whiteSpace: 'nowrap',
                 flexShrink: 0,
+                opacity: 0.45,
+                pointerEvents: 'none',
               }}
             >
               ⊕ Create Study

@@ -444,7 +444,8 @@ export default function StudyDetail({ studyType, onNavigate }) {
               </h1>
             </div>
             <button
-              onClick={openAdd}
+              disabled
+              title="Coming soon"
               style={{
                 padding: '9px 18px',
                 background: T.text,
@@ -453,8 +454,10 @@ export default function StudyDetail({ studyType, onNavigate }) {
                 borderRadius: 8,
                 fontWeight: 700,
                 fontSize: 13,
-                cursor: 'pointer',
+                cursor: 'not-allowed',
                 flexShrink: 0,
+                opacity: 0.45,
+                pointerEvents: 'none',
               }}
             >
               + Add Query
