@@ -24,6 +24,23 @@ from sqlalchemy.orm import relationship
 
 from .base import Base
 from .merchant_ref import Merchant  # noqa: F401 — ensures Merchant is mapped
+from soa_shared.constants import (
+    QUERY_CATEGORIES,
+    QUERY_STAGES,
+    QUERY_SPECIFICITIES,
+    QUERY_PERSONAS,
+    QUERY_STATUSES,
+    QUERY_STUDY_PATTERNS,
+)
+
+
+def _in_list(values: list) -> str:
+    """
+    Build SQL IN clause value list from a Python list.
+    e.g. ['a', 'b'] → "('a', 'b')"
+    """
+    quoted = ', '.join(f"'{v}'" for v in values)
+    return f"({quoted})"
 
 
 # ---------------------------------------------------------------------------
@@ -125,27 +142,27 @@ class SoaQuery(Base):
     __tablename__ = "soa_queries"
     __table_args__ = (
         CheckConstraint(
-            "category IN ('Skincare','Makeup','Fragrance','Haircare','Cross-Category','Grooming','Oral Care')",
+            f"category IN {_in_list(QUERY_CATEGORIES)}",
             name="ck_soa_queries_category",
         ),
         CheckConstraint(
-            "stage IN ('Research','Comparison','Ready to Buy')",
+            f"stage IN {_in_list(QUERY_STAGES)}",
             name="ck_soa_queries_stage",
         ),
         CheckConstraint(
-            "specificity IN ('Broad','Mid','Narrow')",
+            f"specificity IN {_in_list(QUERY_SPECIFICITIES)}",
             name="ck_soa_queries_specificity",
         ),
         CheckConstraint(
-            "persona IN ('Casual / Gift Buyer','Value-Conscious','Beauty Enthusiast','Problem-Skin Sufferer','Eco-Conscious / Minimalist','Oral Health Symptom Sufferer')",
+            f"persona IN {_in_list(QUERY_PERSONAS)}",
             name="ck_soa_queries_persona",
         ),
         CheckConstraint(
-            "status IN ('Active','Paused','Retired')",
+            f"status IN {_in_list(QUERY_STATUSES)}",
             name="ck_soa_queries_status",
         ),
         CheckConstraint(
-            "study_pattern IN ('retailer','brand_at_retail','brand_vs_brand')",
+            f"study_pattern IN {_in_list(QUERY_STUDY_PATTERNS)}",
             name="ck_soa_queries_study_pattern",
         ),
         Index("ix_soa_queries_category_stage_status", "category", "stage", "status"),

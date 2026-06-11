@@ -27,20 +27,20 @@ const T = {
   sidebarText: '#94A3B8',
 }
 
-// ─── Query status tokens ──────────────────────────────────────────────────────
+// ─── Query status tokens — keys match DB values (Active / Paused / Retired) ───
 const QUERY_STATUS = {
-  active: {
+  Active: {
     label: 'ACTIVE',
     color: '#14532D',
     bg:    '#DCFCE7',
   },
-  pending: {
-    label: 'PENDING',
+  Paused: {
+    label: 'PAUSED',
     color: '#92400E',
     bg:    '#FEF3C7',
   },
-  archived: {
-    label: 'ARCHIVED',
+  Retired: {
+    label: 'RETIRED',
     color: '#374151',
     bg:    '#F3F4F6',
   },
@@ -61,45 +61,45 @@ const MOCK_QUERIES = [
     query_text:  'What is the best electric toothbrush for whitening?',
     category:    'Oral Care',
     stage:       'Research',
-    specificity: 'High',
-    persona:     'Consumer',
-    status:      'active',
+    specificity: 'Broad',
+    persona:     'Casual / Gift Buyer',
+    status:      'Active',
   },
   {
     query_code:  'QRY-002',
     query_text:  'Oral-B iO vs Sonicare 9900 Prestige comparison',
     category:    'Oral Care',
     stage:       'Comparison',
-    specificity: 'High',
-    persona:     'Shopper',
-    status:      'active',
+    specificity: 'Mid',
+    persona:     'Beauty Enthusiast',
+    status:      'Active',
   },
   {
     query_code:  'QRY-003',
     query_text:  'Are electric toothbrushes worth the money?',
     category:    'Oral Care',
-    stage:       'Awareness',
-    specificity: 'Low',
-    persona:     'General',
-    status:      'pending',
+    stage:       'Research',
+    specificity: 'Broad',
+    persona:     'Value-Conscious',
+    status:      'Paused',
   },
   {
     query_code:  'QRY-004',
     query_text:  'Best soft bristle heads for sensitive gums',
     category:    'Oral Care',
     stage:       'Research',
-    specificity: 'Medium',
-    persona:     'Patient',
-    status:      'active',
+    specificity: 'Narrow',
+    persona:     'Oral Health Symptom Sufferer',
+    status:      'Active',
   },
   {
     query_code:  'QRY-005',
     query_text:  'How often should I replace electric toothbrush heads?',
     category:    'Oral Care',
-    stage:       'Retention',
-    specificity: 'Medium',
-    persona:     'Owner',
-    status:      'archived',
+    stage:       'Ready to Buy',
+    specificity: 'Mid',
+    persona:     'Eco-Conscious / Minimalist',
+    status:      'Retired',
   },
 ]
 
@@ -130,7 +130,7 @@ const EMPTY_FORM = {
   stage:       'Research',
   specificity: 'Broad',
   persona:     '',
-  status:      'active',
+  status:      'Active',
 }
 
 // ─── Topbar ───────────────────────────────────────────────────────────────────
@@ -174,7 +174,7 @@ function Topbar({ studyName, onBack }) {
 
 // ─── Query status badge ───────────────────────────────────────────────────────
 function QueryStatusBadge({ status }) {
-  const s = QUERY_STATUS[status?.toLowerCase()] || QUERY_STATUS.pending
+  const s = QUERY_STATUS[status] || QUERY_STATUS['Active']
   return (
     <span style={{
       padding: '4px 8px',
@@ -219,6 +219,36 @@ const selectStyle = {
   cursor: 'pointer',
 }
 
+// ─── Constraint-driven select (used in slide-over form) ──────────────────────
+function ConstrainedSelect({
+  label,
+  field,
+  value,
+  onChange,
+  placeholder = 'Select...',
+  constraints,
+  constraintsLoading,
+}) {
+  const options = constraints[field] || []
+  return (
+    <div>
+      <label style={labelStyle}>{label}</label>
+      <select
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        style={selectStyle}
+      >
+        <option value="">
+          {constraintsLoading ? 'Loading...' : placeholder}
+        </option>
+        {options.map(opt => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function StudyDetail({ studyType, onNavigate }) {
   const [study,               setStudy]               = useState(null)
@@ -233,25 +263,43 @@ export default function StudyDetail({ studyType, onNavigate }) {
   const [formData,            setFormData]            = useState(EMPTY_FORM)
   const [saveError,           setSaveError]           = useState(null)
   const [toast,               setToast]               = useState(null)
+  const [constraints,         setConstraints]         = useState({})
+  const [constraintsLoading,  setConstraintsLoading]  = useState(true)
 
   const studyName = studyDisplayName(studyType ?? '')
 
   useEffect(() => {
+    if (!studyType) return
     setLoading(true)
-    api.getQueryRows(studyType)
-      .then(data => {
-        if (data && data.length > 0) {
-          setQueries(data)
-        } else {
-          setQueries(MOCK_QUERIES)
-        }
+    setConstraintsLoading(true)
+
+    Promise.allSettled([
+      api.getQueryRows(studyType),
+      api.getQueryConstraints(),
+    ]).then(([queriesResult, constraintsResult]) => {
+      // Handle queries
+      if (
+        queriesResult.status === 'fulfilled' &&
+        queriesResult.value?.length > 0
+      ) {
+        setQueries(queriesResult.value)
         setStudy(MOCK_STUDY)
-      })
-      .catch(() => {
+      } else {
         setQueries(MOCK_QUERIES)
         setStudy(MOCK_STUDY)
-      })
-      .finally(() => setLoading(false))
+      }
+
+      // Handle constraints — graceful degradation if fetch fails
+      if (
+        constraintsResult.status === 'fulfilled' &&
+        constraintsResult.value
+      ) {
+        setConstraints(constraintsResult.value)
+      }
+
+      setLoading(false)
+      setConstraintsLoading(false)
+    })
   }, [studyType])
 
   const displayQueries = queries.length > 0 ? queries : MOCK_QUERIES
@@ -267,7 +315,7 @@ export default function StudyDetail({ studyType, onNavigate }) {
     const matchStage   = stageFilter       === 'All' || q.stage === stageFilter
     const matchSpec    = specificityFilter === 'All' || q.specificity === specificityFilter
     const matchPersona = personaFilter     === 'All' || q.persona === personaFilter
-    const matchStatus  = statusFilter      === 'All' || q.status?.toLowerCase() === statusFilter.toLowerCase()
+    const matchStatus  = statusFilter      === 'All' || q.status === statusFilter
     return matchStage && matchSpec && matchPersona && matchStatus
   })
 
@@ -291,7 +339,7 @@ export default function StudyDetail({ studyType, onNavigate }) {
       stage:       query.stage       ?? 'Research',
       specificity: query.specificity ?? 'Broad',
       persona:     query.persona     ?? '',
-      status:      query.status      ?? 'active',
+      status:      query.status      ?? 'Active',
     })
     setSaveError(null)
     setSlideOver({ mode: 'edit', query })
@@ -432,34 +480,33 @@ export default function StudyDetail({ studyType, onNavigate }) {
           {/* Filter bar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, color: T.slate }}>Filter by:</span>
-            {/* Stage — actual DB values: Research, Comparison, Ready to Buy */}
+            {/* Stage */}
             <select value={stageFilter} onChange={e => setStageFilter(e.target.value)} style={filterSelectStyle}>
               <option value="All">Stage: All</option>
-              <option value="Research">Research</option>
-              <option value="Comparison">Comparison</option>
-              <option value="Ready to Buy">Ready to Buy</option>
-            </select>
-            {/* Specificity — actual DB values: Broad, Mid, Narrow */}
-            <select value={specificityFilter} onChange={e => setSpecificityFilter(e.target.value)} style={filterSelectStyle}>
-              <option value="All">Specificity: All</option>
-              <option value="Broad">Broad</option>
-              <option value="Mid">Mid</option>
-              <option value="Narrow">Narrow</option>
-            </select>
-            {/* Persona — derived dynamically from loaded query data */}
-            <select value={personaFilter} onChange={e => setPersonaFilter(e.target.value)} style={filterSelectStyle}>
-              {personaOptions.map(p => (
-                <option key={p} value={p}>
-                  {p === 'All' ? 'Persona: All' : p}
-                </option>
+              {(constraints.stage || []).map(v => (
+                <option key={v} value={v}>{v}</option>
               ))}
             </select>
-            {/* Status — DB only has "Active"; include All for completeness */}
+            {/* Specificity */}
+            <select value={specificityFilter} onChange={e => setSpecificityFilter(e.target.value)} style={filterSelectStyle}>
+              <option value="All">Specificity: All</option>
+              {(constraints.specificity || []).map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+            {/* Persona */}
+            <select value={personaFilter} onChange={e => setPersonaFilter(e.target.value)} style={filterSelectStyle}>
+              <option value="All">Persona: All</option>
+              {(constraints.persona || []).map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+            {/* Status */}
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={filterSelectStyle}>
               <option value="All">Status: All</option>
-              <option value="Active">Active</option>
-              <option value="Pending">Pending</option>
-              <option value="Archived">Archived</option>
+              {(constraints.status || []).map(v => (
+                <option key={v} value={v}>{v}</option>
+              ))}
             </select>
           </div>
 
@@ -594,54 +641,65 @@ export default function StudyDetail({ studyType, onNavigate }) {
               {/* Category + Stage row */}
               <div style={{ display: 'flex', gap: 12 }}>
                 <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>CATEGORY</label>
-                  <input
-                    type="text"
+                  <ConstrainedSelect
+                    label="CATEGORY"
+                    field="category"
                     value={formData.category}
-                    onChange={e => setFormData(f => ({ ...f, category: e.target.value }))}
-                    placeholder="e.g. Oral Care"
-                    style={inputStyle}
+                    onChange={v => setFormData(f => ({ ...f, category: v }))}
+                    placeholder="Select category..."
+                    constraints={constraints}
+                    constraintsLoading={constraintsLoading}
                   />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>STAGE</label>
-                  <select
+                  <ConstrainedSelect
+                    label="STAGE"
+                    field="stage"
                     value={formData.stage}
-                    onChange={e => setFormData(f => ({ ...f, stage: e.target.value }))}
-                    style={selectStyle}
-                  >
-                    <option>Research</option>
-                    <option>Comparison</option>
-                    <option>Ready to Buy</option>
-                  </select>
+                    onChange={v => setFormData(f => ({ ...f, stage: v }))}
+                    placeholder="Select stage..."
+                    constraints={constraints}
+                    constraintsLoading={constraintsLoading}
+                  />
                 </div>
               </div>
 
               {/* Specificity + Persona row */}
               <div style={{ display: 'flex', gap: 12 }}>
                 <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>SPECIFICITY</label>
-                  <select
+                  <ConstrainedSelect
+                    label="SPECIFICITY"
+                    field="specificity"
                     value={formData.specificity}
-                    onChange={e => setFormData(f => ({ ...f, specificity: e.target.value }))}
-                    style={selectStyle}
-                  >
-                    <option>Broad</option>
-                    <option>Mid</option>
-                    <option>Narrow</option>
-                  </select>
+                    onChange={v => setFormData(f => ({ ...f, specificity: v }))}
+                    placeholder="Select specificity..."
+                    constraints={constraints}
+                    constraintsLoading={constraintsLoading}
+                  />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>PERSONA</label>
-                  <input
-                    type="text"
+                  <ConstrainedSelect
+                    label="PERSONA"
+                    field="persona"
                     value={formData.persona}
-                    onChange={e => setFormData(f => ({ ...f, persona: e.target.value }))}
-                    placeholder="e.g. Consumer"
-                    style={inputStyle}
+                    onChange={v => setFormData(f => ({ ...f, persona: v }))}
+                    placeholder="Select persona..."
+                    constraints={constraints}
+                    constraintsLoading={constraintsLoading}
                   />
                 </div>
               </div>
+
+              {/* Status */}
+              <ConstrainedSelect
+                label="STATUS"
+                field="status"
+                value={formData.status}
+                onChange={v => setFormData(f => ({ ...f, status: v }))}
+                placeholder="Select status..."
+                constraints={constraints}
+                constraintsLoading={constraintsLoading}
+              />
             </div>
 
             {/* Save error */}

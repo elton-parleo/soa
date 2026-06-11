@@ -1,5 +1,26 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
+from soa_shared.constants import QUERY_CONSTRAINTS
+
+# ─── Shared constraint validator ──────────────────────────────────────────────
+
+_CONSTRAINED_FIELDS = ('category', 'stage', 'specificity', 'persona', 'status', 'study_pattern')
+
+
+def _check_constraint(field_name: str, v):
+    """
+    Raise ValueError if v is a non-None value not in QUERY_CONSTRAINTS[field_name].
+    Used by field_validator in QueryCreate and QueryUpdate.
+    """
+    if v is None:
+        return v
+    allowed = QUERY_CONSTRAINTS.get(field_name, [])
+    if allowed and v not in allowed:
+        raise ValueError(
+            f"'{v}' is not a valid value for {field_name}."
+            f" Allowed values: {allowed}"
+        )
+    return v
 
 # ─── Studies ─────────────────────────
 
@@ -76,6 +97,12 @@ class QueryCreate(BaseModel):
     rationale:     Optional[str] = None
     status:        str = 'Active'
 
+    @field_validator(*_CONSTRAINED_FIELDS, mode='before')
+    @classmethod
+    def validate_constrained(cls, v, info):
+        return _check_constraint(info.field_name, v)
+
+
 class QueryUpdate(BaseModel):
     """Fields that can be updated on an existing query. All optional."""
     query_text:    Optional[str] = None
@@ -87,6 +114,11 @@ class QueryUpdate(BaseModel):
     soa_focus:     Optional[str] = None
     rationale:     Optional[str] = None
     status:        Optional[str] = None
+
+    @field_validator(*_CONSTRAINED_FIELDS, mode='before')
+    @classmethod
+    def validate_constrained(cls, v, info):
+        return _check_constraint(info.field_name, v)
 
 # ─── Type mappings ────────────────────
 

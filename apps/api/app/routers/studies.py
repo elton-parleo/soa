@@ -3,6 +3,7 @@ from typing import Optional
 from sqlalchemy import text
 from collections import defaultdict
 from soa_shared.database import engine
+from soa_shared.constants import QUERY_CONSTRAINTS
 from app.schemas import (
     StudyResponse,
     StudyQueryBreakdown,
@@ -13,6 +14,31 @@ from app.schemas import (
 )
 
 router = APIRouter()
+
+# Pre-computed at startup — constraints never change at runtime
+_CACHED_CONSTRAINTS = {k: list(v) for k, v in QUERY_CONSTRAINTS.items()}
+
+
+@router.get("/studies/constraints")
+def get_query_constraints():
+    """
+    Returns all allowed values for constrained soa_queries fields.
+
+    Used by the frontend to populate dropdown options dynamically.
+    Values are sourced from soa_shared.constants — the same source used by
+    SQLAlchemy CheckConstraints and Pydantic validators.
+
+    Response shape:
+    {
+      "category":      [...],
+      "stage":         [...],
+      "specificity":   [...],
+      "persona":       [...],
+      "status":        [...],
+      "study_pattern": [...]
+    }
+    """
+    return _CACHED_CONSTRAINTS
 
 
 @router.get("/studies", response_model=list[StudyResponse])
