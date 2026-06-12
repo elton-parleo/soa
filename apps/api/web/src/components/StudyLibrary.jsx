@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../api.js'
 import Sidebar from './Sidebar.jsx'
 
@@ -344,12 +344,15 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
   const [categoryFilter, setCategoryFilter] = useState('All Categories')
   const [statusFilter,   setStatusFilter]   = useState('active')
   const [dateFilter,     setDateFilter]     = useState('Last 30 Days')
+  const [uploading,      setUploading]      = useState(false)
+  const [uploadError,    setUploadError]    = useState(null)
+  const [uploadSuccess,  setUploadSuccess]  = useState(null)
+  const fileInputRef = useRef(null)
 
-  useEffect(() => {
+  function loadStudies() {
     api.getStudies()
       .then(data => {
         if (data && data.length > 0) {
-          // Map StudyResponse fields to our local shape
           setStudies(data.map(s => ({
             study_type:    s.id,
             name:          s.name,
@@ -365,7 +368,32 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
       })
       .catch(() => setStudies(MOCK_STUDIES))
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { loadStudies() }, [])
+
+  async function handleFileSelected(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadError(null)
+    setUploadSuccess(null)
+    try {
+      const result = await api.uploadStudyCsv(file)
+      setUploadSuccess(
+        `Imported ${result.inserted} quer${result.inserted === 1 ? 'y' : 'ies'} across `
+        + `${result.study_types.length} study type(s): ${result.study_types.join(', ')}`
+      )
+      // Refresh study list to reflect new data
+      setLoading(true)
+      loadStudies()
+    } catch (err) {
+      setUploadError(err.message)
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   const displayStudies = studies.length > 0 ? studies : MOCK_STUDIES
 
@@ -411,6 +439,15 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 32 }}>
 
+          {/* Hidden CSV file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            style={{ display: 'none' }}
+            onChange={handleFileSelected}
+          />
+
           {/* Page header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
             <div>
@@ -420,8 +457,8 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
               </p>
             </div>
             <button
-              disabled
-              title="Coming soon"
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
               style={{
                 padding: '10px 20px',
                 background: T.text,
@@ -430,16 +467,50 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
                 borderRadius: 8,
                 fontWeight: 700,
                 fontSize: 14,
-                cursor: 'not-allowed',
+                cursor: uploading ? 'not-allowed' : 'pointer',
                 whiteSpace: 'nowrap',
                 flexShrink: 0,
-                opacity: 0.45,
-                pointerEvents: 'none',
+                opacity: uploading ? 0.7 : 1,
               }}
             >
-              ⊕ Create Study
+              {uploading ? '⏳ Uploading...' : '⊕ Create Study with CSV'}
             </button>
           </div>
+
+          {/* Upload success banner */}
+          {uploadSuccess && (
+            <div style={{
+              background: '#DCFCE7', border: '1px solid #BBF7D0',
+              borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+              fontSize: 13, color: '#14532D',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              ✓ {uploadSuccess}
+              <button
+                onClick={() => setUploadSuccess(null)}
+                style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#14532D', fontSize: 14 }}
+              >×</button>
+            </div>
+          )}
+
+          {/* Upload error banner */}
+          {uploadError && (
+            <div style={{
+              background: '#FEE2E2', border: '1px solid #FECACA',
+              borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+              fontSize: 13, color: '#991B1B', whiteSpace: 'pre-line',
+            }}>
+              ✕ Upload failed:{'\n'}{uploadError}
+              <button
+                onClick={() => setUploadError(null)}
+                style={{
+                  display: 'block', marginTop: 8, background: '#FFFFFF',
+                  border: '1px solid #FECACA', borderRadius: 4,
+                  padding: '4px 10px', cursor: 'pointer', color: '#991B1B', fontSize: 12,
+                }}
+              >Dismiss</button>
+            </div>
+          )}
 
           {/* Filter bar */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>

@@ -80,6 +80,47 @@ export const api = {
   getQueryRows: (studyType) =>
     get(`/api/studies/${studyType}/query-rows`),
 
+  uploadStudyCsv: async (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const opts = {
+      method: 'POST',
+      headers: {
+        // Do NOT set Content-Type — the browser sets the correct
+        // multipart boundary automatically
+        ...(_accessToken
+          ? { 'Authorization': `Bearer ${_accessToken}` }
+          : {}),
+      },
+      body: formData,
+    }
+
+    const res = await fetch('/api/studies/upload-csv', opts)
+
+    if (!res.ok) {
+      if (res.status === 401) {
+        await supabase.auth.signOut()
+        window.location.reload()
+        return
+      }
+      let detail = `Upload failed (${res.status})`
+      try {
+        const err = await res.json()
+        if (err.detail) {
+          if (typeof err.detail === 'string') {
+            detail = err.detail
+          } else if (err.detail.errors) {
+            detail = err.detail.errors.join('\n')
+          }
+        }
+      } catch (_) {}
+      throw new Error(detail)
+    }
+
+    return res.json()
+  },
+
   // Entities
   getEntities: (params = {}) => {
     const qs = new URLSearchParams(

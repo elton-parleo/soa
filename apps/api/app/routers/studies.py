@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Query, HTTPException
+import csv
+import io
+from fastapi import APIRouter, Query, HTTPException, UploadFile, File
 from typing import Optional
 from sqlalchemy import text
 from collections import defaultdict
@@ -17,6 +19,63 @@ router = APIRouter()
 
 # Pre-computed at startup — constraints never change at runtime
 _CACHED_CONSTRAINTS = {k: list(v) for k, v in QUERY_CONSTRAINTS.items()}
+
+# ─── CSV upload constants ─────────────────────────────────────────────────────
+
+CSV_REQUIRED_COLUMNS = [
+    'query_text',
+    'category',
+    'stage',
+    'specificity',
+    'persona',
+    'study_type',
+    'study_pattern',
+    'status',
+]
+
+CSV_OPTIONAL_COLUMNS = [
+    'soa_focus',
+    'rationale',
+    'query_code',
+]
+
+
+def _validate_csv_row(
+    row: dict,
+    row_num: int,
+) -> tuple:
+    """
+    Validates one CSV row against soa_queries constraints.
+    Returns (cleaned_row, errors).
+    cleaned_row has None for empty optional fields.
+    errors is a list of human-readable messages, empty if valid.
+    """
+    errors = []
+    cleaned = {}
+
+    for col in CSV_REQUIRED_COLUMNS:
+        val = (row.get(col) or '').strip()
+        if not val:
+            errors.append(
+                f"Row {row_num}: '{col}' is required but empty"
+            )
+        cleaned[col] = val or None
+
+    for col in CSV_OPTIONAL_COLUMNS:
+        val = (row.get(col) or '').strip()
+        cleaned[col] = val or None
+
+    for field, allowed in QUERY_CONSTRAINTS.items():
+        val = cleaned.get(field)
+        if val is None:
+            continue
+        if val not in allowed:
+            errors.append(
+                f"Row {row_num}: '{field}' value '{val}' is not valid. "
+                f"Allowed: {', '.join(allowed)}"
+            )
+
+    return cleaned, errors
 
 
 @router.get("/studies/constraints")
@@ -39,6 +98,158 @@ def get_query_constraints():
     }
     """
     return _CACHED_CONSTRAINTS
+
+
+# ─── POST /studies/upload-csv — bulk CSV insert ───────────────────────────────
+
+@router.post("/studies/upload-csv")
+async def upload_study_csv(
+    file: UploadFile = File(...),
+):
+    """
+    Accepts a CSV file and bulk-inserts rows into soa_queries.
+
+    Required columns: query_text, category, stage, specificity,
+                      persona, study_type, study_pattern, status
+    Optional columns: soa_focus, rationale, query_code
+                      (query_code is auto-generated per study_type if blank)
+
+    All rows are validated before any insert — if any row fails,
+    zero rows are inserted (all-or-nothing).
+
+    Returns: { "inserted": N, "study_types": [...], "errors": [] }
+    On failure: 422 with { "errors": [...], "total_errors": N }
+    """
+    if not file.filename.lower().endswith('.csv'):
+        raise HTTPException(
+            status_code=400,
+            detail="File must be a .csv file.",
+        )
+
+    try:
+        raw = await file.read()
+        text_content = raw.decode('utf-8-sig')  # strips BOM from Excel exports
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not read file. Ensure it is UTF-8 encoded CSV.",
+        )
+
+    try:
+        reader = csv.DictReader(io.StringIO(text_content))
+        rows = list(reader)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not parse CSV: {e}")
+
+    if not rows:
+        raise HTTPException(status_code=400, detail="CSV file is empty.")
+
+    header_cols = set(reader.fieldnames or [])
+    missing_cols = [c for c in CSV_REQUIRED_COLUMNS if c not in header_cols]
+    if missing_cols:
+        raise HTTPException(
+            status_code=422,
+            detail={"errors": [
+                f"CSV is missing required column: '{c}'"
+                for c in missing_cols
+            ]},
+        )
+
+    # Validate every row before inserting anything
+    cleaned_rows = []
+    all_errors = []
+
+    for i, row in enumerate(rows, start=2):  # row 1 = header
+        cleaned, errors = _validate_csv_row(row, i)
+        if errors:
+            all_errors.extend(errors)
+        else:
+            cleaned_rows.append(cleaned)
+
+    if all_errors:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "errors":       all_errors[:50],
+                "total_errors": len(all_errors),
+            },
+        )
+
+    # All rows valid — insert
+    study_types_seen = set()
+    inserted = 0
+
+    with engine.connect() as conn:
+        # Pre-fetch existing query counts per study_type for code generation.
+        # Also track codes assigned in this batch to avoid within-batch collisions.
+        code_counters: dict = {}
+        batch_codes: set = set()
+
+        for row in cleaned_rows:
+            study_type = row['study_type']
+            study_types_seen.add(study_type)
+
+            query_code = row.get('query_code')
+
+            if not query_code:
+                if study_type not in code_counters:
+                    count_row = conn.execute(
+                        text("SELECT COUNT(*) FROM soa_queries WHERE study_type = :st"),
+                        {"st": study_type},
+                    ).fetchone()
+                    code_counters[study_type] = count_row[0] or 0
+
+                prefix = _query_code_prefix(study_type)
+                while True:
+                    code_counters[study_type] += 1
+                    candidate = f"{prefix}_{code_counters[study_type]:03d}"
+                    if candidate in batch_codes:
+                        continue
+                    exists = conn.execute(
+                        text("SELECT 1 FROM soa_queries WHERE query_code = :code"),
+                        {"code": candidate},
+                    ).fetchone()
+                    if not exists:
+                        query_code = candidate
+                        break
+
+            batch_codes.add(query_code)
+
+            conn.execute(
+                text("""
+                    INSERT INTO soa_queries (
+                        query_code, query_text, category, stage,
+                        specificity, persona, study_type, study_pattern,
+                        soa_focus, rationale, status, created_at
+                    ) VALUES (
+                        :query_code, :query_text, :category, :stage,
+                        :specificity, :persona, :study_type, :study_pattern,
+                        :soa_focus, :rationale, :status, NOW()
+                    )
+                """),
+                {
+                    "query_code":    query_code,
+                    "query_text":    row['query_text'],
+                    "category":      row['category'],
+                    "stage":         row['stage'],
+                    "specificity":   row['specificity'],
+                    "persona":       row['persona'],
+                    "study_type":    study_type,
+                    "study_pattern": row['study_pattern'],
+                    "soa_focus":     row.get('soa_focus'),
+                    "rationale":     row.get('rationale'),
+                    "status":        row['status'],
+                },
+            )
+            inserted += 1
+
+        conn.commit()
+
+    return {
+        "inserted":    inserted,
+        "study_types": sorted(study_types_seen),
+        "errors":      [],
+    }
 
 
 @router.get("/studies", response_model=list[StudyResponse])
