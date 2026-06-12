@@ -31,7 +31,7 @@ const T = {
 const PLATFORMS = [
   { id: 'chatgpt',    name: 'ChatGPT',    model: 'GPT-4o (Omni)',          costMin: 0.04, costMax: 0.06, icon: '🤖', color: '#10B981' },
   { id: 'gemini',     name: 'Gemini',     model: 'Gemini 1.5 Pro',         costMin: 0.02, costMax: 0.03, icon: '✦',  color: '#4F46E5' },
-  { id: 'perplexity', name: 'Perplexity', model: 'Sonar Large (Search)',   costMin: 0.05, costMax: 0.08, icon: '🔍', color: '#0EA5E9' },
+  { id: 'perplexity', name: 'Perplexity', model: 'Sonar Large (Search)',   costMin: 0.05, costMax: 0.08, icon: '🔍', color: '#0EA5E9', disabled: true },
   { id: 'claude',     name: 'Claude',     model: 'Claude 3.5 Sonnet',      costMin: 0.03, costMax: 0.05, icon: '◈',  color: '#F59E0B' },
 ]
 
@@ -502,14 +502,19 @@ function Step3({ state, setState, onNext, onBack, queryCount }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 32 }}>
           {PLATFORMS.map(p => {
             const sel = state.platforms.includes(p.id)
+            const isDisabled = p.disabled === true
             return (
-              <div key={p.id} onClick={() => togglePlatform(p.id)}
+              <div key={p.id}
+                onClick={isDisabled ? undefined : () => togglePlatform(p.id)}
                 style={{
-                  padding: 20, borderRadius: 12, cursor: 'pointer',
+                  padding: 20, borderRadius: 12,
+                  cursor: isDisabled ? 'not-allowed' : 'pointer',
                   border: `2px solid ${sel ? T.navy : T.border}`,
                   background: sel ? '#F0F4FF' : T.white,
                   position: 'relative',
                   transition: 'border-color 0.15s',
+                  opacity: isDisabled ? 0.4 : 1,
+                  pointerEvents: isDisabled ? 'none' : 'auto',
                 }}>
                 {sel && (
                   <div style={{
@@ -524,6 +529,17 @@ function Step3({ state, setState, onNext, onBack, queryCount }) {
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{p.name}</div>
                 <div style={{ fontSize: 11, color: T.slate, marginTop: 2 }}>{p.model}</div>
                 <div style={{ fontSize: 11, color: T.slate, marginTop: 6 }}>~${p.costMin}–${p.costMax}/run</div>
+                {isDisabled && (
+                  <div style={{
+                    display: 'inline-block',
+                    marginTop: 8,
+                    fontSize: 10,
+                    color: '#64748B',
+                    background: '#F1F5F9',
+                    borderRadius: 4,
+                    padding: '2px 6px',
+                  }}>Coming soon</div>
+                )}
               </div>
             )
           })}
@@ -714,7 +730,7 @@ function Step5({ state, setState, onBack, onGoTo, onSuccess }) {
       await api.createCycle({
         cycle_code:     state.cycleCode,
         study_type:     state.studyType.id,
-        platforms:      state.platforms,
+        platforms:      state.platforms.filter(p => p !== 'perplexity'),
         runs_per_query: state.runsPerQuery,
         notes:          state.notes || null,
         run_mode:       state.runMode,
