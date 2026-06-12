@@ -80,6 +80,12 @@ export const api = {
   getQueryRows: (studyType) =>
     get(`/api/studies/${studyType}/query-rows`),
 
+  generateStudy: (data) =>
+    post('/api/studies/generate', data),
+
+  getGenerationStatus: (studyType) =>
+    get(`/api/studies/${studyType}/generation-status`),
+
   uploadStudyCsv: async (file) => {
     const formData = new FormData()
     formData.append('file', file)

@@ -16,6 +16,7 @@ from sqlalchemy import (
     Index,
     Integer,
     JSON,
+    String,
     Text,
     UniqueConstraint,
     func,
@@ -554,3 +555,30 @@ class SoaMetricsResult(Base):
 
     cycle = relationship("SoaCycle", back_populates="metrics_results")
     entity = relationship("SoaEntity", back_populates="metrics_results")
+
+
+# ---------------------------------------------------------------------------
+# 9. soa_query_generation_jobs — AI-powered study generation jobs
+# ---------------------------------------------------------------------------
+
+class SoaQueryGenerationJob(Base):
+    __tablename__ = 'soa_query_generation_jobs'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    study_type = Column(String, nullable=False, unique=True)
+    study_name = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    target_count = Column(Integer, nullable=False)
+    created_count = Column(Integer, nullable=False, default=0)
+    status = Column(String, nullable=False, default='pending')
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'running', 'complete', 'failed')",
+            name='ck_generation_jobs_status',
+        ),
+        Index('ix_generation_jobs_status', 'status'),
+    )

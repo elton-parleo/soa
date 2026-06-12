@@ -88,6 +88,180 @@ async def execute_cycle(
     log.info(f"Pipeline done: {cycle_code}")
 
 
+def _mark_generation_failed(job_id: int, error: str):
+    with engine.connect() as conn:
+        conn.execute(text("""
+            UPDATE soa_query_generation_jobs
+            SET status = 'failed',
+                error_message = :err,
+                updated_at = NOW()
+            WHERE id = :id
+        """), {"id": job_id, "err": error[:1000]})
+        conn.commit()
+
+
+def _insert_generated_rows(rows: list, study_type: str):
+    """
+    Bulk inserts validated generated rows into soa_queries with
+    auto-generated query_codes. Uses _query_code_prefix logic.
+    """
+    name = study_type
+    for pfx in ('brand_', 'retailer_', 'sonic_', 'senso_'):
+        if name.startswith(pfx):
+            name = name[len(pfx):]
+            break
+    prefix = name.split('_')[0][:3].upper()
+
+    with engine.connect() as conn:
+        count_row = conn.execute(
+            text("SELECT COUNT(*) FROM soa_queries WHERE study_type = :st"),
+            {"st": study_type},
+        ).fetchone()
+        counter = count_row[0] or 0
+
+        for row in rows:
+            counter += 1
+            query_code = f"{prefix}_{counter:03d}"
+            # Collision check
+            while conn.execute(
+                text("SELECT 1 FROM soa_queries WHERE query_code = :code"),
+                {"code": query_code},
+            ).fetchone():
+                counter += 1
+                query_code = f"{prefix}_{counter:03d}"
+
+            conn.execute(text("""
+                INSERT INTO soa_queries (
+                    query_code, query_text, category, stage,
+                    specificity, persona, study_type, study_pattern,
+                    soa_focus, rationale, status, created_at
+                ) VALUES (
+                    :query_code, :query_text, :category, :stage,
+                    :specificity, :persona, :study_type, :study_pattern,
+                    :soa_focus, :rationale, :status, NOW()
+                )
+            """), {
+                "query_code":    query_code,
+                "query_text":    row['query_text'],
+                "category":      row['category'],
+                "stage":         row['stage'],
+                "specificity":   row['specificity'],
+                "persona":       row['persona'],
+                "study_type":    study_type,
+                "study_pattern": row['study_pattern'],
+                "soa_focus":     row.get('soa_focus'),
+                "rationale":     row.get('rationale'),
+                "status":        row['status'],
+            })
+        conn.commit()
+
+
+def process_generation_jobs():
+    """
+    Polls soa_query_generation_jobs for status='pending', processes one job
+    per call (one at a time to avoid OpenAI rate limits and DB contention
+    with cycle processing).
+    """
+    import os
+
+    with engine.connect() as conn:
+        row = conn.execute(text("""
+            SELECT id, study_type, study_name, description, target_count
+            FROM soa_query_generation_jobs
+            WHERE status = 'pending'
+            ORDER BY created_at ASC
+            LIMIT 1
+        """)).fetchone()
+
+        if not row:
+            return
+
+        job_id, study_type, study_name, description, target_count = row
+
+        # Mark running
+        conn.execute(text("""
+            UPDATE soa_query_generation_jobs
+            SET status = 'running', updated_at = NOW()
+            WHERE id = :id
+        """), {"id": job_id})
+        conn.commit()
+
+    log.info(
+        f"[generation] Starting job {job_id} for '{study_type}' "
+        f"({target_count} queries)"
+    )
+
+    from generation.query_generator import generate_query_batch, BATCH_SIZE
+
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        _mark_generation_failed(job_id, "OPENAI_API_KEY not set")
+        return
+
+    created_count = 0
+    generated_texts = []
+
+    try:
+        while created_count < target_count:
+            remaining = target_count - created_count
+            batch_size = min(BATCH_SIZE, remaining)
+
+            rows = generate_query_batch(
+                study_name=study_name,
+                description=description,
+                batch_size=batch_size,
+                already_generated=generated_texts,
+                api_key=api_key,
+            )
+
+            if not rows:
+                log.warning(
+                    f"[generation] job {job_id}: batch returned 0 valid rows — retrying once"
+                )
+                rows = generate_query_batch(
+                    study_name=study_name,
+                    description=description,
+                    batch_size=batch_size,
+                    already_generated=generated_texts,
+                    api_key=api_key,
+                )
+                if not rows:
+                    log.error(
+                        f"[generation] job {job_id}: second attempt also 0 rows — stopping early"
+                    )
+                    break
+
+            _insert_generated_rows(rows, study_type)
+            created_count += len(rows)
+            generated_texts.extend(r['query_text'] for r in rows)
+
+            # Update progress incrementally
+            with engine.connect() as conn:
+                conn.execute(text("""
+                    UPDATE soa_query_generation_jobs
+                    SET created_count = :cc, updated_at = NOW()
+                    WHERE id = :id
+                """), {"cc": created_count, "id": job_id})
+                conn.commit()
+
+            log.info(f"[generation] job {job_id}: {created_count}/{target_count}")
+
+        # Mark complete
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE soa_query_generation_jobs
+                SET status = 'complete', updated_at = NOW()
+                WHERE id = :id
+            """), {"id": job_id})
+            conn.commit()
+
+        log.info(f"[generation] job {job_id} complete: {created_count} queries")
+
+    except Exception as e:
+        log.exception(f"[generation] job {job_id} failed")
+        _mark_generation_failed(job_id, str(e))
+
+
 def main():
     log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     log.info("SoA Pipeline Worker started")
@@ -125,6 +299,15 @@ def main():
                     mark_failed(cycle_code, str(e))
             else:
                 log.debug("Queue empty.")
+
+            # Poll generation jobs in same loop iteration — isolated try/except
+            # so a generation failure never crashes cycle processing
+            try:
+                process_generation_jobs()
+            except Exception:
+                log.exception("[generation] poll iteration failed")
+
+            if not row:
                 time.sleep(POLL_INTERVAL)
 
         except KeyboardInterrupt:

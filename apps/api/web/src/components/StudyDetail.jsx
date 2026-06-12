@@ -46,63 +46,6 @@ const QUERY_STATUS = {
   },
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-const MOCK_STUDY = {
-  study_type:  'brand_oral_b',
-  name:        'Oral-B Brand Study',
-  description: 'Deep dive into competitive performance and search engine visibility for oral care.',
-  category:    'Oral Care',
-  status:      'active',
-}
-
-const MOCK_QUERIES = [
-  {
-    query_code:  'QRY-001',
-    query_text:  'What is the best electric toothbrush for whitening?',
-    category:    'Oral Care',
-    stage:       'Research',
-    specificity: 'Broad',
-    persona:     'Casual / Gift Buyer',
-    status:      'Active',
-  },
-  {
-    query_code:  'QRY-002',
-    query_text:  'Oral-B iO vs Sonicare 9900 Prestige comparison',
-    category:    'Oral Care',
-    stage:       'Comparison',
-    specificity: 'Mid',
-    persona:     'Beauty Enthusiast',
-    status:      'Active',
-  },
-  {
-    query_code:  'QRY-003',
-    query_text:  'Are electric toothbrushes worth the money?',
-    category:    'Oral Care',
-    stage:       'Research',
-    specificity: 'Broad',
-    persona:     'Value-Conscious',
-    status:      'Paused',
-  },
-  {
-    query_code:  'QRY-004',
-    query_text:  'Best soft bristle heads for sensitive gums',
-    category:    'Oral Care',
-    stage:       'Research',
-    specificity: 'Narrow',
-    persona:     'Oral Health Symptom Sufferer',
-    status:      'Active',
-  },
-  {
-    query_code:  'QRY-005',
-    query_text:  'How often should I replace electric toothbrush heads?',
-    category:    'Oral Care',
-    stage:       'Ready to Buy',
-    specificity: 'Mid',
-    persona:     'Eco-Conscious / Minimalist',
-    status:      'Retired',
-  },
-]
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 // Known study_type → display name map (mirrors backend STUDY_TYPE_NAMES)
 const STUDY_NAMES = {
@@ -251,7 +194,6 @@ function ConstrainedSelect({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function StudyDetail({ studyType, onNavigate }) {
-  const [study,               setStudy]               = useState(null)
   const [queries,             setQueries]             = useState([])
   const [loading,             setLoading]             = useState(true)
   const [slideOver,           setSlideOver]           = useState(null)
@@ -263,6 +205,7 @@ export default function StudyDetail({ studyType, onNavigate }) {
   const [formData,            setFormData]            = useState(EMPTY_FORM)
   const [saveError,           setSaveError]           = useState(null)
   const [toast,               setToast]               = useState(null)
+  const [genStatus,           setGenStatus]           = useState(null)
   const [constraints,         setConstraints]         = useState({})
   const [constraintsLoading,  setConstraintsLoading]  = useState(true)
 
@@ -277,16 +220,13 @@ export default function StudyDetail({ studyType, onNavigate }) {
       api.getQueryRows(studyType),
       api.getQueryConstraints(),
     ]).then(([queriesResult, constraintsResult]) => {
-      // Handle queries
-      if (
-        queriesResult.status === 'fulfilled' &&
-        queriesResult.value?.length > 0
-      ) {
-        setQueries(queriesResult.value)
-        setStudy(MOCK_STUDY)
+      // Always use the real API result — an empty array is valid
+      // (brand-new study mid-generation has zero queries so far)
+      if (queriesResult.status === 'fulfilled') {
+        setQueries(queriesResult.value || [])
       } else {
-        setQueries(MOCK_QUERIES)
-        setStudy(MOCK_STUDY)
+        setQueries([])
+        console.error('Failed to load study queries:', queriesResult.reason)
       }
 
       // Handle constraints — graceful degradation if fetch fails
@@ -302,16 +242,59 @@ export default function StudyDetail({ studyType, onNavigate }) {
     })
   }, [studyType])
 
-  const displayQueries = queries.length > 0 ? queries : MOCK_QUERIES
+  // Poll generation status every 3s while a job is active
+  useEffect(() => {
+    if (!studyType) return
+    let cancelled = false
+    let intervalId = null
+
+    async function checkStatus() {
+      try {
+        const status = await api.getGenerationStatus(studyType)
+        if (cancelled) return
+        setGenStatus(status)
+
+        if (status.status === 'running') {
+          // Refresh queries incrementally as rows are inserted
+          api.getQueryRows(studyType)
+            .then(data => { if (!cancelled && data?.length > 0) setQueries(data) })
+            .catch(() => {})
+        }
+
+        if (status.status === 'complete' || status.status === 'failed') {
+          clearInterval(intervalId)
+          if (status.status === 'complete') {
+            api.getQueryRows(studyType)
+              .then(data => { if (!cancelled && data?.length > 0) setQueries(data) })
+              .catch(() => {})
+          }
+        }
+      } catch (_) {
+        // 404 = no generation job (CSV study or older study) — not an error
+        if (!cancelled) {
+          setGenStatus(null)
+          clearInterval(intervalId)
+        }
+      }
+    }
+
+    checkStatus()
+    intervalId = setInterval(checkStatus, 3000)
+
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+    }
+  }, [studyType])
 
   // Derive unique persona values from loaded data for dynamic filter dropdown
   const personaOptions = [
     'All',
-    ...Array.from(new Set(displayQueries.map(q => q.persona).filter(Boolean))).sort(),
+    ...Array.from(new Set(queries.map(q => q.persona).filter(Boolean))).sort(),
   ]
 
   // Apply all active filters
-  const filteredQueries = displayQueries.filter(q => {
+  const filteredQueries = queries.filter(q => {
     const matchStage   = stageFilter       === 'All' || q.stage === stageFilter
     const matchSpec    = specificityFilter === 'All' || q.specificity === specificityFilter
     const matchPersona = personaFilter     === 'All' || q.persona === personaFilter
@@ -464,6 +447,52 @@ export default function StudyDetail({ studyType, onNavigate }) {
             </button>
           </div>
 
+          {/* Generation progress banner */}
+          {genStatus && genStatus.status !== 'complete' && (
+            genStatus.status === 'failed' ? (
+              <div style={{
+                background: '#FEE2E2', border: '1px solid #FECACA',
+                borderRadius: 8, padding: '12px 16px', marginBottom: 16,
+                fontSize: 13, color: '#991B1B', fontWeight: 600,
+              }}>
+                Question generation failed: {genStatus.error_message || 'Unknown error'}
+              </div>
+            ) : (
+              <>
+                <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+                <div style={{
+                  background: '#EFF6FF', border: '1px solid #BFDBFE',
+                  borderRadius: 8, padding: '12px 16px', marginBottom: 16,
+                  display: 'flex', alignItems: 'center', gap: 12,
+                }}>
+                  <div style={{
+                    width: 16, height: 16, borderRadius: '50%',
+                    border: '2px solid #BFDBFE', borderTopColor: '#2563EB',
+                    animation: 'spin 0.8s linear infinite', flexShrink: 0,
+                  }} />
+                  <span style={{ fontSize: 13, color: '#1E40AF', fontWeight: 600 }}>
+                    {genStatus.status === 'pending'
+                      ? 'Queued — question generation will begin shortly.'
+                      : `Generating questions... ${genStatus.created_count}/${genStatus.target_count} created`
+                    }
+                  </span>
+                  {genStatus.status === 'running' && (
+                    <div style={{
+                      marginLeft: 'auto', width: 120, height: 6,
+                      background: '#DBEAFE', borderRadius: 3, flexShrink: 0,
+                    }}>
+                      <div style={{
+                        height: '100%', borderRadius: 3, background: '#2563EB',
+                        width: `${(genStatus.created_count / genStatus.target_count) * 100}%`,
+                        transition: 'width 0.4s ease',
+                      }} />
+                    </div>
+                  )}
+                </div>
+              </>
+            )
+          )}
+
           {/* Tabs row */}
           <div style={{ display: 'flex', borderBottom: `1px solid ${T.border}`, marginBottom: 20 }}>
             <div style={{
@@ -543,8 +572,13 @@ export default function StudyDetail({ studyType, onNavigate }) {
                 Loading queries...
               </div>
             ) : filteredQueries.length === 0 ? (
-              <div style={{ padding: 32, textAlign: 'center', color: T.slate, fontSize: 13 }}>
-                No queries match the current filters.
+              <div style={{ padding: 40, textAlign: 'center', color: T.slate, fontSize: 13 }}>
+                {queries.length === 0 && (genStatus?.status === 'pending' || genStatus?.status === 'running')
+                  ? 'Questions will appear here as they are generated...'
+                  : queries.length === 0
+                  ? 'No queries yet. Add a query or upload a CSV to get started.'
+                  : 'No queries match the selected filters.'
+                }
               </div>
             ) : filteredQueries.map((query, idx) => (
               <QueryRow

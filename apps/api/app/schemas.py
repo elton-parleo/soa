@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import List, Optional
 from soa_shared.constants import QUERY_CONSTRAINTS
 
@@ -262,3 +262,33 @@ def normalize_rsi(value) -> Optional[float]:
     if value is None:
         return None
     return normalize_metric(value, min_val=0.0, max_val=3.0)
+
+
+# ─── AI Study Generation ───────────────────────────────────────────────────────
+
+class StudyGenerateRequest(BaseModel):
+    study_name:   str
+    description:  Optional[str] = None
+    target_count: int = 50
+
+    @field_validator('target_count')
+    @classmethod
+    def validate_count(cls, v):
+        if v < 1 or v > 100:
+            raise ValueError('target_count must be between 1 and 100')
+        return v
+
+
+class StudyGenerateResponse(BaseModel):
+    study_type: str
+    study_name: str
+    job_id:     int
+    status:     str
+
+
+class GenerationStatusResponse(BaseModel):
+    study_type:    str
+    status:        str
+    target_count:  int
+    created_count: int
+    error_message: Optional[str] = None

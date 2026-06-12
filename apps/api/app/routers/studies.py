@@ -1,5 +1,7 @@
 import csv
 import io
+import re
+import uuid
 from fastapi import APIRouter, Query, HTTPException, UploadFile, File
 from typing import Optional
 from sqlalchemy import text
@@ -11,6 +13,9 @@ from app.schemas import (
     StudyQueryBreakdown,
     QueryCreate,
     QueryUpdate,
+    StudyGenerateRequest,
+    StudyGenerateResponse,
+    GenerationStatusResponse,
     STUDY_TYPE_NAMES,
     PATTERN_DISPLAY,
 )
@@ -98,6 +103,101 @@ def get_query_constraints():
     }
     """
     return _CACHED_CONSTRAINTS
+
+
+# ─── AI generation helpers ────────────────────────────────────────────────────
+
+def _slugify_study_name(name: str) -> str:
+    """
+    Converts a study name to a unique study_type slug.
+    e.g. 'Brand Study' → 'brand_study_a1b2c3'
+    Appends a short uuid suffix to avoid collisions.
+    """
+    slug = re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
+    suffix = uuid.uuid4().hex[:6]
+    return f"{slug}_{suffix}"
+
+
+# ─── POST /studies/generate — create AI generation job ───────────────────────
+
+@router.post("/studies/generate", response_model=StudyGenerateResponse, status_code=201)
+def generate_study(data: StudyGenerateRequest):
+    """
+    Creates a generation job. The pipeline worker picks up pending jobs and
+    generates queries via OpenAI in the background.
+
+    Returns immediately with the new study_type so the frontend can redirect
+    to the (initially empty) study detail page and poll for progress.
+    """
+    study_type = _slugify_study_name(data.study_name)
+
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("""
+                INSERT INTO soa_query_generation_jobs (
+                    study_type, study_name, description,
+                    target_count, status, created_at
+                ) VALUES (
+                    :study_type, :study_name, :description,
+                    :target_count, 'pending', NOW()
+                )
+                RETURNING id, status
+            """),
+            {
+                "study_type":   study_type,
+                "study_name":   data.study_name,
+                "description":  data.description,
+                "target_count": data.target_count,
+            },
+        )
+        conn.commit()
+        row = result.fetchone()
+
+    return StudyGenerateResponse(
+        study_type=study_type,
+        study_name=data.study_name,
+        job_id=row[0],
+        status=row[1],
+    )
+
+
+# ─── GET /studies/{study_type}/generation-status ─────────────────────────────
+
+@router.get(
+    "/studies/{study_type}/generation-status",
+    response_model=GenerationStatusResponse,
+)
+def get_generation_status(study_type: str):
+    """
+    Returns the current status of a generation job for a study_type.
+    Frontend polls this while status is 'pending' or 'running'.
+    Returns 404 if no job exists for this study_type (e.g. CSV-uploaded
+    studies have no generation job — this is normal).
+    """
+    with engine.connect() as conn:
+        row = conn.execute(
+            text("""
+                SELECT study_type, status, target_count,
+                       created_count, error_message
+                FROM soa_query_generation_jobs
+                WHERE study_type = :st
+            """),
+            {"st": study_type},
+        ).fetchone()
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail="No generation job found for this study.",
+        )
+
+    return GenerationStatusResponse(
+        study_type=row[0],
+        status=row[1],
+        target_count=row[2],
+        created_count=row[3],
+        error_message=row[4],
+    )
 
 
 # ─── POST /studies/upload-csv — bulk CSV insert ───────────────────────────────
