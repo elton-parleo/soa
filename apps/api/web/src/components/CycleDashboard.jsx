@@ -66,50 +66,6 @@ const STATUS = {
   },
 }
 
-// ─── Mock data fallback ───────────────────────────────────────────────────────
-const MOCK_CYCLES = [
-  {
-    cycle_code:         '2026-05-oral-b',
-    study_type:         'brand_oral_b',
-    status:             'running',
-    total_runs_planned: 500,
-    completed_runs:     268,
-    created_at:         '2026-05-19T08:00:00',
-    updated_at:         null,
-    notes:              null,
-  },
-  {
-    cycle_code:         '2026-04-philips-sonicare',
-    study_type:         'sonic_baseline',
-    status:             'needs_review',
-    total_runs_planned: 500,
-    completed_runs:     500,
-    created_at:         '2026-04-28T09:00:00',
-    updated_at:         '2026-04-30T11:22:00',
-    notes:              'Coding complete. 42 responses flagged.',
-  },
-  {
-    cycle_code:         '2026-03-colgate',
-    study_type:         'colgate_comp',
-    status:             'complete',
-    total_runs_planned: 900,
-    completed_runs:     900,
-    created_at:         '2026-03-15T10:00:00',
-    updated_at:         '2026-03-15T12:34:52',
-    notes:              null,
-  },
-  {
-    cycle_code:         '2026-02-sensodyne',
-    study_type:         'senso_comp_v2',
-    status:             'failed',
-    total_runs_planned: 500,
-    completed_runs:     312,
-    created_at:         '2026-02-10T14:00:00',
-    updated_at:         '2026-02-10T15:12:33',
-    notes:              'Failed at: Metrics stage\nReason: API timeout on cross-reference validation.',
-  },
-]
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function calcElapsed(createdAt, updatedAt) {
@@ -488,8 +444,8 @@ export default function CycleDashboard({ onNewCycle, onViewCycle, onNavigate }) 
 
   const fetchCycles = () =>
     api.getCycles()
-      .then(data => { setCycles(data); setError(null) })
-      .catch(err  => setError(err.message))
+      .then(data => { setCycles(data || []); setError(null) })
+      .catch(err  => { setCycles([]); console.error('Failed to load cycles:', err); setError(err.message) })
 
   // Initial fetch
   useEffect(() => {
@@ -534,7 +490,7 @@ export default function CycleDashboard({ onNewCycle, onViewCycle, onNavigate }) 
     }
   }
 
-  const displayCycles = cycles.length > 0 ? cycles : MOCK_CYCLES
+  const displayCycles = cycles
 
   // Counts for filter pills
   const counts = {
@@ -634,13 +590,33 @@ export default function CycleDashboard({ onNewCycle, onViewCycle, onNavigate }) 
                 ? [0, 1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} delay={i * 0.1} />)
                 : (
                   <>
-                    {filtered.map(cycle => (
-                      <CycleCard key={cycle.cycle_code} cycle={cycle} onClick={() => onViewCycle && onViewCycle(cycle.cycle_code)}>
-                        {cardBody(cycle)}
-                      </CycleCard>
-                    ))}
-                    {activeFilter === 'all' && (
-                      <EmptySlotCard onNewCycle={onNewCycle} />
+                    {filtered.length === 0 ? (
+                      <div style={{
+                        gridColumn: '1 / -1',
+                        textAlign: 'center',
+                        padding: '60px 20px',
+                        color: T.slate,
+                        fontSize: '14px',
+                      }}>
+                        <div style={{ fontSize: '32px', marginBottom: '12px' }}>○</div>
+                        <div style={{ fontWeight: '600', fontSize: '15px', color: T.textMid, marginBottom: '8px' }}>
+                          No cycles yet
+                        </div>
+                        <div style={{ fontSize: '13px', color: T.slate }}>
+                          Create a new cycle to start collecting SoA data.
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {filtered.map(cycle => (
+                          <CycleCard key={cycle.cycle_code} cycle={cycle} onClick={() => onViewCycle && onViewCycle(cycle.cycle_code)}>
+                            {cardBody(cycle)}
+                          </CycleCard>
+                        ))}
+                        {activeFilter === 'all' && (
+                          <EmptySlotCard onNewCycle={onNewCycle} />
+                        )}
+                      </>
                     )}
                   </>
                 )

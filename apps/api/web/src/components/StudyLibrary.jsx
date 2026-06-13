@@ -55,73 +55,6 @@ const STUDY_STATUS = {
   },
 }
 
-// ─── Mock data fallback ───────────────────────────────────────────────────────
-const MOCK_STUDIES = [
-  {
-    study_type:    'brand_oral_b',
-    name:          'Oral-B Brand Study',
-    description:   'Deep dive into competitive performance and search engine visibility for oral care.',
-    category:      'Oral Care',
-    status:        'active',
-    query_count:   50,
-    study_pattern: 'Brand vs Brand',
-  },
-  {
-    study_type:    'nike_footwear_q3',
-    name:          'Nike Footwear Q3',
-    description:   'Seasonal footwear category analysis.',
-    category:      'Apparel',
-    status:        'active',
-    query_count:   128,
-    study_pattern: 'Brand vs Brand',
-  },
-  {
-    study_type:    'eco_label_audit',
-    name:          'Eco-Label Audit',
-    description:   'Cross-category sustainability study.',
-    category:      'Cross-Category',
-    status:        'paused',
-    query_count:   42,
-    study_pattern: 'Brand at Retail',
-  },
-  {
-    study_type:    'dyson_air',
-    name:          'Dyson Air Purifiers',
-    description:   'Home tech category study.',
-    category:      'Home Tech',
-    status:        'active',
-    query_count:   310,
-    study_pattern: 'Retail',
-  },
-  {
-    study_type:    'liquid_trends_2024',
-    name:          'Liquid Trends 2024',
-    description:   'FMCG beverage trends study.',
-    category:      'FMCG',
-    status:        'active',
-    query_count:   75,
-    study_pattern: 'Mixed',
-  },
-  {
-    study_type:    'tesla_charging_ux',
-    name:          'Tesla Charging UX',
-    description:   'Automotive UX and purchase intent.',
-    category:      'Automotive',
-    status:        'draft',
-    query_count:   15,
-    study_pattern: 'Brand at Retail',
-  },
-  {
-    study_type:    'samsung_galaxy_s24',
-    name:          'Samsung Galaxy S24',
-    description:   'Mobile tech competitive study.',
-    category:      'Mobile Tech',
-    status:        'active',
-    query_count:   240,
-    study_pattern: 'Brand vs Brand',
-  },
-]
-
 // ─── Topbar ───────────────────────────────────────────────────────────────────
 function Topbar() {
   return (
@@ -358,21 +291,20 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
   function loadStudies() {
     api.getStudies()
       .then(data => {
-        if (data && data.length > 0) {
-          setStudies(data.map(s => ({
-            study_type:    s.id,
-            name:          s.name,
-            description:   '',
-            category:      s.category,
-            status:        'active',
-            query_count:   s.queryCount,
-            study_pattern: s.patterns?.[0] ?? '—',
-          })))
-        } else {
-          setStudies(MOCK_STUDIES)
-        }
+        setStudies((data || []).map(s => ({
+          study_type:    s.id,
+          name:          s.name,
+          description:   '',
+          category:      s.category,
+          status:        'active',
+          query_count:   s.queryCount,
+          study_pattern: s.patterns?.[0] ?? '—',
+        })))
       })
-      .catch(() => setStudies(MOCK_STUDIES))
+      .catch(err => {
+        setStudies([])
+        console.error('Failed to load studies:', err)
+      })
       .finally(() => setLoading(false))
   }
 
@@ -401,12 +333,10 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
     }
   }
 
-  const displayStudies = studies.length > 0 ? studies : MOCK_STUDIES
-
   // Derive unique categories for filter dropdown
-  const categories = ['All Categories', ...new Set(displayStudies.map(s => s.category))]
+  const categories = ['All Categories', ...new Set(studies.map(s => s.category))]
 
-  const filtered = displayStudies.filter(s => {
+  const filtered = studies.filter(s => {
     const matchCat    = categoryFilter === 'All Categories' || s.category === categoryFilter
     const matchStatus = statusFilter === 'all' || s.status === statusFilter
     return matchCat && matchStatus
@@ -615,23 +545,36 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
           </div>
 
           {/* Card grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
-            {loading
-              ? [0, 1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} delay={i * 0.1} />)
-              : (
-                <>
-                  {filtered.map(study => (
-                    <StudyCard
-                      key={study.study_type}
-                      study={study}
-                      onClick={() => onSelectStudy && onSelectStudy(study.study_type)}
-                    />
-                  ))}
-                  <NewStudyCard />
-                </>
-              )
-            }
-          </div>
+          {loading ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+              {[0, 1, 2, 3, 4, 5].map(i => <SkeletonCard key={i} delay={i * 0.1} />)}
+            </div>
+          ) : studies.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+              <div style={{ fontSize: '32px', marginBottom: '12px' }}>○</div>
+              <div style={{ fontWeight: '600', fontSize: '15px', color: T.textMid, marginBottom: '8px' }}>
+                No studies yet
+              </div>
+              <div style={{ fontSize: '13px', color: T.slate, maxWidth: '280px', margin: '0 auto' }}>
+                Upload a CSV or use AI to create your first study.
+              </div>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: T.slate, fontSize: '13px' }}>
+              No studies match the selected filters.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+              {filtered.map(study => (
+                <StudyCard
+                  key={study.study_type}
+                  study={study}
+                  onClick={() => onSelectStudy && onSelectStudy(study.study_type)}
+                />
+              ))}
+              <NewStudyCard />
+            </div>
+          )}
 
         </div>
       </div>

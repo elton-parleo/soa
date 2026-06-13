@@ -39,32 +39,6 @@ const CHART_COLORS = [
   '#8B5CF6',  // M008: purple
 ]
 
-// ─── Mock data fallback ───────────────────────────────────────────────────────
-const buildMockData = (cycleCode) => {
-  const entities = [
-    { code: 'M001', name: 'Oral-B',          color: '#0F172A' },
-    { code: 'M002', name: 'Philips Sonicare', color: '#3B82F6' },
-    { code: 'M003', name: 'Colgate',          color: '#6B7280' },
-    { code: 'M004', name: 'Sensodyne',        color: '#F59E0B' },
-    { code: 'M005', name: 'Other',            color: '#94A3B8' },
-  ]
-  const slices = {
-    overall: {
-      M001: { mention_rate: 74.2, som: 88.4, rsi: 62.1, position_index: 81.5, pdi: 92.0, deal_citation_rate:  8.2 },
-      M002: { mention_rate: 58.1, som: 72.9, rsi: 76.4, position_index: 64.2, pdi: 45.5, deal_citation_rate: 12.4 },
-      M003: { mention_rate: 42.3, som: 55.2, rsi: 34.2, position_index: 70.1, pdi: 61.2, deal_citation_rate:  5.1 },
-      M004: { mention_rate: 29.8, som: 48.1, rsi: 52.8, position_index: 59.3, pdi: 31.4, deal_citation_rate:  3.8 },
-      M005: { mention_rate: 15.6, som: 21.0, rsi: 12.5, position_index: 44.8, pdi:  8.2, deal_citation_rate:  2.2 },
-    },
-  }
-  const positionData = {
-    M001: { top: 55, mid: 30, low: 15 },
-    M002: { top: 38, mid: 42, low: 20 },
-    M003: { top: 45, mid: 35, low: 20 },
-  }
-  return { entities, slices, positionData }
-}
-
 // ─── Scorecard metric definitions ─────────────────────────────────────────────
 const SCORECARD_METRICS = [
   { key: 'mention_rate',       label: 'Mention Rate'           },
@@ -156,6 +130,8 @@ function SkeletonCard({ height = 240, delay = 0 }) {
 
 // ─── Donut chart ──────────────────────────────────────────────────────────────
 function DonutChart({ entities, metrics, activeEntities }) {
+  if (activeEntities.length === 0 || metrics.length === 0) return <ChartEmptyState />
+
   const DONUT_SIZE    = 200
   const STROKE_WIDTH  = 32
   const R             = (DONUT_SIZE / 2) - STROKE_WIDTH
@@ -227,6 +203,8 @@ function DonutChart({ entities, metrics, activeEntities }) {
 
 // ─── Horizontal bar chart ─────────────────────────────────────────────────────
 function MentionRateChart({ entities, metrics, activeEntities }) {
+  if (activeEntities.length === 0 || metrics.length === 0) return <ChartEmptyState />
+
   const [animated, setAnimated] = useState(false)
   useEffect(() => {
     const t = setTimeout(() => setAnimated(true), 80)
@@ -273,6 +251,8 @@ function MentionRateChart({ entities, metrics, activeEntities }) {
 // full plot area regardless of their absolute metric values.
 // Tooltip preserves raw values (rawMr, rawRsi) for honest display.
 function ScatterChart({ entities, overall, activeEntities }) {
+  if (activeEntities.length === 0 || !overall || Object.keys(overall).length === 0) return <ChartEmptyState />
+
   const [animated, setAnimated] = useState(false)
   useEffect(() => {
     const t = setTimeout(() => setAnimated(true), 80)
@@ -339,24 +319,31 @@ function ScatterChart({ entities, overall, activeEntities }) {
   )
 }
 
+// ─── Chart empty state ────────────────────────────────────────────────────────
+const ChartEmptyState = () => (
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '200px',
+    color: T.slate,
+    fontSize: '13px',
+    border: '1px dashed ' + T.border,
+    borderRadius: '8px',
+    background: T.offWhite,
+  }}>
+    No data available for this cycle
+  </div>
+)
+
 // ─── Position Index stacked bar ───────────────────────────────────────────────
-const POSITION_MOCK = {
-  M001: { top: 55, mid: 30, low: 15 },
-  M002: { top: 38, mid: 42, low: 20 },
-  M003: { top: 45, mid: 35, low: 20 },
-  M004: { top: 28, mid: 38, low: 34 },
-  M005: { top: 18, mid: 32, low: 50 },
-}
-
 function PositionIndexChart({ entities, positionData, activeEntities }) {
-  const resolvedPositionData = positionData ?? POSITION_MOCK
-  const isLiveData           = positionData !== null
-
   const BAR_HEIGHT = 160
-  // Dynamic: only show active entities that have position data; max 5
   const showCodes = activeEntities
-    .filter(code => resolvedPositionData[code] != null)
+    .filter(code => positionData != null && positionData[code] != null)
     .slice(0, 5)
+
+  if (showCodes.length === 0) return <ChartEmptyState />
 
   const segments = [
     { key: 'top', label: 'TOP',              color: '#1E293B' },
@@ -366,22 +353,10 @@ function PositionIndexChart({ entities, positionData, activeEntities }) {
 
   return (
     <div>
-      {/* SAMPLE DATA badge — shown when falling back to mock */}
-      {!isLiveData && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-          <span style={{
-            fontSize: 9, fontWeight: 700, textTransform: 'uppercase',
-            background: '#FEF3C7', color: '#92400E',
-            borderRadius: 4, padding: '2px 6px',
-          }}>
-            SAMPLE DATA
-          </span>
-        </div>
-      )}
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-end', marginBottom: 12, justifyContent: 'center' }}>
         {showCodes.map(code => {
           const entity = entities.find(e => e.code === code)
-          const data   = resolvedPositionData[code]
+          const data   = positionData[code]
           return (
             <div key={code} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
               <div style={{ width: 80, height: BAR_HEIGHT, display: 'flex', flexDirection: 'column', borderRadius: 6, overflow: 'hidden' }}>
@@ -392,7 +367,7 @@ function PositionIndexChart({ entities, positionData, activeEntities }) {
               <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: T.slate, letterSpacing: '0.04em', textAlign: 'center' }}>
                 {abbrevName(entity?.name || code)}
               </span>
-              {isLiveData && data.mention_count != null && (
+              {data.mention_count != null && (
                 <span style={{ fontSize: 9, color: T.slateLight, textAlign: 'center' }}>
                   {data.mention_count} mentions
                 </span>
@@ -480,17 +455,15 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
   const [activeSlice,    setActiveSlice]    = useState('overall')
   const [activeEntities, setActiveEntities] = useState([])
   const [allCycles,      setAllCycles]      = useState([])
-  const [usingMock,      setUsingMock]      = useState(false)
   const [positionData,   setPositionData]   = useState(null)
 
-  // ── Data loading: parallel fetch with mock fallback ─────────────────────────
+  // ── Data loading ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!cycleCode) {
-      const mock = buildMockData(cycleCode)
-      setMetricsData(mock)
-      setEntities(mock.entities)
-      setActiveEntities(mock.entities.map(e => e.code))
-      setUsingMock(true)
+      setEntities([])
+      setActiveEntities([])
+      setMetricsData(null)
+      setPositionData(null)
       setLoading(false)
       return
     }
@@ -527,7 +500,7 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
         setAllCycles(cyclesResult.value)
       }
 
-      // Position data (graceful — chart falls back to POSITION_MOCK if absent)
+      // Position data
       if (
         posResult.status === 'fulfilled' &&
         posResult.value?.positions &&
@@ -539,7 +512,7 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
       }
 
       if (liveMetrics && liveEntities) {
-        // Live data path: assign CHART_COLORS by position
+        // Assign CHART_COLORS by position
         const palette = liveEntities.map((e, i) => ({
           ...e,
           color: CHART_COLORS[i % CHART_COLORS.length],
@@ -547,14 +520,12 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
         setEntities(palette)
         setActiveEntities(palette.map(e => e.code))
         setMetricsData(liveMetrics)
-        setUsingMock(false)
       } else {
-        // Mock fallback
-        const mock = buildMockData(cycleCode)
-        setEntities(mock.entities)
-        setActiveEntities(mock.entities.map(e => e.code))
-        setMetricsData(mock)
-        setUsingMock(true)
+        // Cycle exists but has no data yet
+        setEntities([])
+        setActiveEntities([])
+        setMetricsData(null)
+        console.error('Failed to load metrics data for cycle:', cycleCode)
       }
 
       setLoading(false)
@@ -718,23 +689,20 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
         {/* ── Content area ─────────────────────────────────────────────────── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', background: T.offWhite }}>
 
-          {/* Mock data banner */}
-          {usingMock && !loading && (
-            <div style={{
-              background: '#FEF3C7', border: '1px solid #FDE68A',
-              borderRadius: 8, padding: '8px 14px', marginBottom: 16,
-              display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: T.textMid,
-            }}>
-              <span style={{ color: '#D97706', fontSize: 16 }}>⚠</span>
-              Showing sample data. Run the metrics calculator to see real results:&nbsp;
-              <code style={{ fontFamily: 'monospace', fontSize: 12, color: T.text }}>
-                python main.py metrics --cycle {displayCode}
-              </code>
+          {/* Page-level empty state */}
+          {!loading && entities.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+              <div style={{ fontWeight: '600', fontSize: '15px', color: T.textMid, marginBottom: '8px' }}>
+                No data for this cycle yet
+              </div>
+              <div style={{ fontSize: '13px', color: T.slate }}>
+                Run the cycle to start collecting metrics.
+              </div>
             </div>
           )}
 
           {/* Non-overall slices */}
-          {activeSlice !== 'overall' && (
+          {!loading && entities.length > 0 && activeSlice !== 'overall' && (
             (() => {
               const currentSlice = SLICES.find(s => s.key === activeSlice)
               const isEnabled    = availableSliceKeys.includes(activeSlice)
@@ -765,7 +733,7 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
             })()
           )}
 
-          {activeSlice === 'overall' && (
+          {!loading && entities.length > 0 && activeSlice === 'overall' && (
             <>
               {/* Loading skeletons */}
               {loading && (
@@ -862,7 +830,6 @@ export default function MetricsDashboard({ cycleCode, onNavigate }) {
                     <ChartCard title="Position Index by Quintile">
                       <PositionIndexChart entities={entities} positionData={positionData} activeEntities={activeEntities} />
                     </ChartCard>
-                    {/* positionData is null → PositionIndexChart uses POSITION_MOCK fallback internally */}
                   </div>
                 </>
               )}
