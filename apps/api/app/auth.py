@@ -25,6 +25,7 @@ from cryptography.hazmat.backends\
 from fastapi import (
     HTTPException, Security, Depends,
 )
+from app.org_context import get_or_create_organization_id
 from fastapi.security import (
     HTTPBearer,
     HTTPAuthorizationCredentials,
@@ -364,7 +365,22 @@ def verify_token(
                 ),
             )
 
-    log.info(f'[auth] Granted: {email}')
+    # Extract Supabase user_id from 'sub' claim
+    user_id = payload.get('sub')
+
+    # Resolve (and auto-provision) organization membership
+    organization_id = get_or_create_organization_id(
+        user_id=user_id,
+        email=email,
+    )
+
+    # Return enriched payload so downstream
+    # dependencies can use organization_id and user_id
+    # without re-querying auth state
+    payload['user_id'] = user_id
+    payload['organization_id'] = organization_id
+
+    log.info(f'[auth] Granted: {email} org={organization_id}')
     return payload
 
 def get_current_user(

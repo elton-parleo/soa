@@ -169,6 +169,7 @@ class SoaQuery(Base):
         Index("ix_soa_queries_category_stage_status", "category", "stage", "status"),
         Index("ix_soa_queries_study_type", "study_type"),
         Index("ix_soa_queries_study_pattern", "study_pattern"),
+        Index("ix_soa_queries_organization_id", "organization_id"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -208,6 +209,13 @@ class SoaQuery(Base):
         ),
     )
 
+    organization_id = Column(
+        Integer,
+        ForeignKey('organizations.id'),
+        nullable=False,
+    )
+    created_by = Column(String, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -234,6 +242,7 @@ class SoaCycle(Base):
             name="ck_soa_cycles_study_pattern",
         ),
         Index("ix_soa_cycles_study_type", "study_type"),
+        Index("ix_soa_cycles_organization_id", "organization_id"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -274,6 +283,13 @@ class SoaCycle(Base):
             "the queries loaded for it. Drives coding rubric and report labeling."
         ),
     )
+
+    organization_id = Column(
+        Integer,
+        ForeignKey('organizations.id'),
+        nullable=False,
+    )
+    created_by = Column(String, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -572,6 +588,12 @@ class SoaQueryGenerationJob(Base):
     created_count = Column(Integer, nullable=False, default=0)
     status = Column(String, nullable=False, default='pending')
     error_message = Column(Text, nullable=True)
+    organization_id = Column(
+        Integer,
+        ForeignKey('organizations.id'),
+        nullable=False,
+    )
+    created_by = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -581,4 +603,48 @@ class SoaQueryGenerationJob(Base):
             name='ck_generation_jobs_status',
         ),
         Index('ix_generation_jobs_status', 'status'),
+        Index('ix_soa_query_generation_jobs_organization_id', 'organization_id'),
+    )
+
+
+# ---------------------------------------------------------------------------
+# 10. organizations — multi-tenant organization registry
+# ---------------------------------------------------------------------------
+
+class Organization(Base):
+    __tablename__ = 'organizations'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# ---------------------------------------------------------------------------
+# 11. organization_members — membership mapping (user_id → organization)
+# ---------------------------------------------------------------------------
+
+class OrganizationMember(Base):
+    __tablename__ = 'organization_members'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    organization_id = Column(
+        Integer,
+        ForeignKey('organizations.id'),
+        nullable=False,
+    )
+    user_id = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    role = Column(String, nullable=False, default='member')
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('owner', 'member')",
+            name='ck_org_members_role',
+        ),
+        UniqueConstraint(
+            'organization_id', 'user_id',
+            name='uq_org_members_org_user',
+        ),
+        Index('ix_org_members_user_id', 'user_id'),
     )
