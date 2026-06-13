@@ -1,9 +1,21 @@
 import { useState } from 'react'
 import { supabase } from '../supabase.js'
 
+const T = {
+  navy:   '#0D1829',
+  text:   '#0F172A',
+  slate:  '#64748B',
+  border: '#E2E8F0',
+}
+
 export default function LoginPage() {
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState(null)
+  const [loading,          setLoading]          = useState(false)
+  const [error,            setError]            = useState(null)
+  const [magicLinkEmail,   setMagicLinkEmail]   = useState('')
+  const [magicLinkSent,    setMagicLinkSent]    = useState(false)
+  const [sendingMagicLink, setSendingMagicLink] = useState(false)
+  const [magicLinkError,   setMagicLinkError]   = useState(null)
+  const [emailFocused,     setEmailFocused]     = useState(false)
 
   async function handleGoogleSignIn() {
     setLoading(true)
@@ -31,77 +43,177 @@ export default function LoginPage() {
     }
   }
 
-  return (
+  async function handleSendMagicLink() {
+    if (!magicLinkEmail.trim()) return
+    setSendingMagicLink(true)
+    setMagicLinkError(null)
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: magicLinkEmail.trim(),
+        options: {
+          // Redirect back to the app root after clicking the magic link
+          emailRedirectTo: window.location.origin,
+        },
+      })
+
+      if (error) {
+        setMagicLinkError(error.message)
+      } else {
+        setMagicLinkSent(true)
+      }
+    } catch (err) {
+      setMagicLinkError(
+        err.message || 'Something went wrong. Please try again.'
+      )
+    } finally {
+      setSendingMagicLink(false)
+    }
+  }
+
+  // ─── Shared outer layout ───────────────────────────────────────────────────
+
+  const outerStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '100vh',
+    background: '#F1F5F9',
+    fontFamily: "'DM Sans', sans-serif",
+  }
+
+  const cardStyle = {
+    background: '#FFFFFF',
+    borderRadius: 12,
+    padding: '40px 44px 44px',
+    width: 400,
+    boxSizing: 'border-box',
+    boxShadow: '0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+  }
+
+  // ─── Logo block (shared between both screens) ──────────────────────────────
+
+  const logoBlock = (
     <div style={{
       display: 'flex',
       alignItems: 'center',
+      gap: '8px',
+      marginBottom: '32px',
       justifyContent: 'center',
-      minHeight: '100vh',
-      background: '#F1F5F9',
-      fontFamily: "'DM Sans', sans-serif",
     }}>
-      {/* Card */}
-      <div style={{
-        background: '#FFFFFF',
-        borderRadius: 12,
-        padding: '40px 44px 44px',
-        width: 400,
-        boxShadow: '0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect x="2" y="2" width="8" height="20" rx="1.5" fill="hsl(213,99%,50%)" />
+        <rect x="14" y="6" width="8" height="12" rx="1.5" fill="hsl(213,99%,50%)" opacity="0.4" />
+      </svg>
+      <span style={{
+        fontSize: '22px',
+        fontWeight: '700',
+        color: '#0F172A',
+        letterSpacing: '0.04em',
+        fontFamily: "'DM Sans', sans-serif",
       }}>
+        PARLEO
+      </span>
+    </div>
+  )
 
-        {/* Parleo logo + wordmark */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          marginBottom: '32px',
-          justifyContent: 'center',
-        }}>
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-          >
-            <rect
-              x="2" y="2"
-              width="8" height="20"
-              rx="1.5"
-              fill="hsl(213,99%,50%)"
-            />
-            <rect
-              x="14" y="6"
-              width="8" height="12"
-              rx="1.5"
-              fill="hsl(213,99%,50%)"
-              opacity="0.4"
-            />
-          </svg>
-          <span style={{
-            fontSize: '22px',
-            fontWeight: '700',
-            color: '#0F172A',
-            letterSpacing: '0.04em',
-            fontFamily: "'DM Sans', sans-serif",
+  // ─── Screen 2: Confirmation ────────────────────────────────────────────────
+
+  if (magicLinkSent) {
+    return (
+      <div style={outerStyle}>
+        <div style={cardStyle}>
+          {logoBlock}
+
+          {/* Envelope + check icon */}
+          <div style={{ marginBottom: 20 }}>
+            <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+              {/* Dark navy rounded rect background */}
+              <rect width="56" height="56" rx="12" fill={T.navy} />
+              {/* Envelope body */}
+              <rect x="12" y="18" width="32" height="22" rx="3" fill="none" stroke="white" strokeWidth="2" />
+              {/* Envelope flap V */}
+              <path d="M12 21 L28 32 L44 21" stroke="white" strokeWidth="2" fill="none" />
+              {/* Check circle bottom-right */}
+              <circle cx="42" cy="38" r="8" fill="white" />
+              <path d="M38 38 L41 41 L46 35" stroke={T.navy} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+
+          {/* Heading */}
+          <div style={{
+            fontSize: 22,
+            fontWeight: 700,
+            color: T.text,
+            textAlign: 'center',
+            marginBottom: 12,
           }}>
-            PARLEO
-          </span>
-        </div>
+            Check your email
+          </div>
 
-        {/* Welcome text */}
+          {/* Body text */}
+          <div style={{
+            fontSize: 14,
+            color: T.slate,
+            textAlign: 'center',
+            lineHeight: 1.6,
+            marginBottom: 28,
+          }}>
+            <span>We've sent a magic sign-in link to </span>
+            <span style={{ fontWeight: 600, color: T.text }}>{magicLinkEmail.trim()}</span>
+            <span>.</span>
+            <br />
+            Click the link in the email to sign in instantly.
+          </div>
+
+          {/* Back to login */}
+          <button
+            onClick={() => {
+              setMagicLinkSent(false)
+              setMagicLinkEmail('')
+              setMagicLinkError(null)
+            }}
+            style={{
+              width: '100%',
+              height: 44,
+              background: '#FFFFFF',
+              border: `1px solid ${T.border}`,
+              borderRadius: 8,
+              fontSize: 14,
+              fontWeight: 600,
+              fontFamily: 'inherit',
+              color: T.text,
+              cursor: 'pointer',
+            }}
+          >
+            Back to login
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Screen 1: Login form ──────────────────────────────────────────────────
+
+  return (
+    <div style={outerStyle}>
+      <div style={cardStyle}>
+        {logoBlock}
+
+        {/* Welcome heading */}
         <div style={{
           textAlign: 'center',
-          marginBottom: 24,
+          marginBottom: 28,
         }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#0F172A' }}>
+          <div style={{ fontSize: 22, fontWeight: 700, color: T.text }}>
             Welcome back
           </div>
         </div>
 
-        {/* Sign in button */}
+        {/* Google button */}
         <button
           onClick={handleGoogleSignIn}
           disabled={loading}
@@ -122,19 +234,20 @@ export default function LoginPage() {
             opacity: loading ? 0.7 : 1,
             transition: 'background 0.15s, border-color 0.15s, box-shadow 0.15s',
             fontFamily: "'DM Sans', sans-serif",
+            marginBottom: 20,
           }}
           onMouseEnter={e => {
             if (!loading) {
-              e.currentTarget.style.background   = '#F8FAFC'
-              e.currentTarget.style.borderColor  = '#CBD5E1'
-              e.currentTarget.style.boxShadow    = '0 1px 4px rgba(0,0,0,0.06)'
+              e.currentTarget.style.background  = '#F8FAFC'
+              e.currentTarget.style.borderColor = '#CBD5E1'
+              e.currentTarget.style.boxShadow   = '0 1px 4px rgba(0,0,0,0.06)'
             }
           }}
           onMouseLeave={e => {
             if (!loading) {
-              e.currentTarget.style.background   = '#FFFFFF'
-              e.currentTarget.style.borderColor  = '#E2E8F0'
-              e.currentTarget.style.boxShadow    = 'none'
+              e.currentTarget.style.background  = '#FFFFFF'
+              e.currentTarget.style.borderColor = '#E2E8F0'
+              e.currentTarget.style.boxShadow   = 'none'
             }
           }}
         >
@@ -152,10 +265,10 @@ export default function LoginPage() {
           {loading ? 'Signing in…' : 'Sign in with Google'}
         </button>
 
-        {/* Error state */}
+        {/* Google error */}
         {error && (
           <div style={{
-            marginTop: 16,
+            marginBottom: 16,
             background: '#FEE2E2',
             border: '1px solid #FECACA',
             borderRadius: 6,
@@ -171,6 +284,90 @@ export default function LoginPage() {
           }}>
             <span style={{ color: '#DC2626', flexShrink: 0 }}>✕</span>
             {error}
+          </div>
+        )}
+
+        {/* OR divider */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          width: '100%',
+          marginBottom: 20,
+        }}>
+          <hr style={{ flex: 1, border: 'none', borderTop: `1px solid ${T.border}`, margin: 0 }} />
+          <span style={{ fontSize: 11, fontWeight: 700, color: T.slate, letterSpacing: '0.08em' }}>
+            OR
+          </span>
+          <hr style={{ flex: 1, border: 'none', borderTop: `1px solid ${T.border}`, margin: 0 }} />
+        </div>
+
+        {/* Email label */}
+        <div style={{
+          width: '100%',
+          fontSize: 13,
+          fontWeight: 600,
+          color: T.text,
+          marginBottom: 6,
+        }}>
+          Email address
+        </div>
+
+        {/* Email input */}
+        <input
+          type="email"
+          placeholder="Enter your email"
+          value={magicLinkEmail}
+          onChange={e => setMagicLinkEmail(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSendMagicLink() }}
+          onFocus={() => setEmailFocused(true)}
+          onBlur={() => setEmailFocused(false)}
+          style={{
+            width: '100%',
+            height: 44,
+            border: `1px solid ${emailFocused ? T.navy : T.border}`,
+            borderRadius: 8,
+            padding: '0 14px',
+            fontSize: 14,
+            fontFamily: 'inherit',
+            color: T.text,
+            outline: 'none',
+            marginBottom: 12,
+            boxSizing: 'border-box',
+            background: '#FFFFFF',
+          }}
+        />
+
+        {/* Send Magic Link button */}
+        <button
+          onClick={handleSendMagicLink}
+          disabled={sendingMagicLink}
+          style={{
+            width: '100%',
+            height: 44,
+            background: T.navy,
+            color: '#FFFFFF',
+            fontSize: 14,
+            fontWeight: 700,
+            fontFamily: 'inherit',
+            border: 'none',
+            borderRadius: 8,
+            cursor: sendingMagicLink ? 'not-allowed' : 'pointer',
+            opacity: sendingMagicLink ? 0.7 : 1,
+          }}
+        >
+          {sendingMagicLink ? 'Sending…' : 'Send Magic Link'}
+        </button>
+
+        {/* Magic link error */}
+        {magicLinkError && (
+          <div style={{
+            marginTop: 10,
+            fontSize: 13,
+            color: '#DC2626',
+            textAlign: 'center',
+          }}>
+            {magicLinkError}
           </div>
         )}
       </div>

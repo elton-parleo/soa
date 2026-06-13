@@ -348,22 +348,36 @@ def verify_token(
             detail='Token verification failed.',
         )
 
-    # Email domain restriction
     email = payload.get('email', '')
-    if ALLOWED_DOMAIN:
-        if not email.endswith(
-            f'@{ALLOWED_DOMAIN}'
-        ):
+
+    # Extract provider from app_metadata (set by Supabase for every token).
+    # 'google' → Google OAuth, 'email' → magic link / OTP.
+    provider = (
+        payload
+        .get('app_metadata', {})
+        .get('provider', 'email')
+    )
+
+    # Domain restriction only applies to Google OAuth.
+    # Magic link is open to any provisioned Supabase email — access is
+    # controlled by whether a Supabase account exists, not email domain.
+    if provider == 'google':
+        domain = os.getenv(
+            'ALLOWED_EMAIL_DOMAIN', 'parleo.io'
+        )
+        if not email.endswith(f'@{domain}'):
             log.warning(
-                f'[auth] Rejected: {email}'
+                f'[auth] Rejected (Google): {email}'
             )
             raise HTTPException(
                 status_code=403,
                 detail=(
-                    f'Access restricted to '
-                    f'@{ALLOWED_DOMAIN}.'
+                    f'Google sign-in is restricted to '
+                    f'@{domain} accounts.'
                 ),
             )
+
+    log.info(f'[auth] Granted: {email} provider={provider}')
 
     # Extract Supabase user_id from 'sub' claim
     user_id = payload.get('sub')
@@ -375,12 +389,12 @@ def verify_token(
     )
 
     # Return enriched payload so downstream
-    # dependencies can use organization_id and user_id
+    # dependencies can use organization_id, user_id, and provider
     # without re-querying auth state
     payload['user_id'] = user_id
     payload['organization_id'] = organization_id
+    payload['provider'] = provider
 
-    log.info(f'[auth] Granted: {email} org={organization_id}')
     return payload
 
 def get_current_user(
