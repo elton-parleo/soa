@@ -208,9 +208,9 @@ def process_generation_jobs():
 
     from generation.query_generator import generate_query_batch, BATCH_SIZE
 
-    api_key = os.environ.get("OPENAI_API_KEY")
+    api_key = os.environ.get("OPEN_AI_API_KEY")
     if not api_key:
-        _mark_generation_failed(job_id, "OPENAI_API_KEY not set")
+        _mark_generation_failed(job_id, "OPEN_AI_API_KEY not set")
         return
 
     created_count = 0
