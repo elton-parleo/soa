@@ -100,10 +100,17 @@ def _mark_generation_failed(job_id: int, error: str):
         conn.commit()
 
 
-def _insert_generated_rows(rows: list, study_type: str):
+def _insert_generated_rows(
+    rows: list,
+    study_type: str,
+    organization_id: int,
+    created_by: str | None,
+):
     """
     Bulk inserts validated generated rows into soa_queries with
     auto-generated query_codes. Uses _query_code_prefix logic.
+    organization_id and created_by are taken from the generation job row
+    so every inserted query is correctly scoped to the requesting org.
     """
     name = study_type
     for pfx in ('brand_', 'retailer_', 'sonic_', 'senso_'):
@@ -122,7 +129,7 @@ def _insert_generated_rows(rows: list, study_type: str):
         for row in rows:
             counter += 1
             query_code = f"{prefix}_{counter:03d}"
-            # Collision check
+            # Collision check (global — query_code must be globally unique)
             while conn.execute(
                 text("SELECT 1 FROM soa_queries WHERE query_code = :code"),
                 {"code": query_code},
@@ -134,24 +141,30 @@ def _insert_generated_rows(rows: list, study_type: str):
                 INSERT INTO soa_queries (
                     query_code, query_text, category, stage,
                     specificity, persona, study_type, study_pattern,
-                    soa_focus, rationale, status, created_at
+                    soa_focus, rationale, status,
+                    organization_id, created_by,
+                    created_at
                 ) VALUES (
                     :query_code, :query_text, :category, :stage,
                     :specificity, :persona, :study_type, :study_pattern,
-                    :soa_focus, :rationale, :status, NOW()
+                    :soa_focus, :rationale, :status,
+                    :organization_id, :created_by,
+                    NOW()
                 )
             """), {
-                "query_code":    query_code,
-                "query_text":    row['query_text'],
-                "category":      row['category'],
-                "stage":         row['stage'],
-                "specificity":   row['specificity'],
-                "persona":       row['persona'],
-                "study_type":    study_type,
-                "study_pattern": row['study_pattern'],
-                "soa_focus":     row.get('soa_focus'),
-                "rationale":     row.get('rationale'),
-                "status":        row['status'],
+                "query_code":      query_code,
+                "query_text":      row['query_text'],
+                "category":        row['category'],
+                "stage":           row['stage'],
+                "specificity":     row['specificity'],
+                "persona":         row['persona'],
+                "study_type":      study_type,
+                "study_pattern":   row['study_pattern'],
+                "soa_focus":       row.get('soa_focus'),
+                "rationale":       row.get('rationale'),
+                "status":          row['status'],
+                "organization_id": organization_id,
+                "created_by":      created_by,
             })
         conn.commit()
 
@@ -166,7 +179,8 @@ def process_generation_jobs():
 
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT id, study_type, study_name, description, target_count
+            SELECT id, study_type, study_name, description, target_count,
+                   organization_id, created_by
             FROM soa_query_generation_jobs
             WHERE status = 'pending'
             ORDER BY created_at ASC
@@ -176,7 +190,8 @@ def process_generation_jobs():
         if not row:
             return
 
-        job_id, study_type, study_name, description, target_count = row
+        (job_id, study_type, study_name, description, target_count,
+         organization_id, created_by) = row
 
         # Mark running
         conn.execute(text("""
@@ -231,7 +246,7 @@ def process_generation_jobs():
                     )
                     break
 
-            _insert_generated_rows(rows, study_type)
+            _insert_generated_rows(rows, study_type, organization_id, created_by)
             created_count += len(rows)
             generated_texts.extend(r['query_text'] for r in rows)
 
