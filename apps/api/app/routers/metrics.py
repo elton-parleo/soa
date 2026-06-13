@@ -13,9 +13,10 @@ Join strategy (confirmed by Phase 0 audit):
   deal_citation_rate, platform_dist_index) are 0.0-1.0 ratios
   normalized via normalize_metric() × 100.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import text
 from soa_shared.database import engine
+from app.auth import get_current_user
 from app.schemas import (
     CycleEntitiesResponse,
     CycleEntityInfo,
@@ -43,12 +44,19 @@ SLICE_TYPE_MAP = {
     "/cycles/{cycle_code}/entities",
     response_model=CycleEntitiesResponse,
 )
-def get_cycle_entities(cycle_code: str):
+def get_cycle_entities(
+    cycle_code: str,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Returns the comparison set for a cycle with entity names, slugs,
-    roles, and comparison codes.
+    roles, and comparison codes. Scoped to the caller's organization.
     Reads from soa_cycle_entities joined to soa_entities and soa_cycles.
+    soa_entities is unscoped (shared catalog) — org filter applies only
+    to soa_cycles.
     """
+    org_id = current_user['organization_id']
+
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT
@@ -64,8 +72,9 @@ def get_cycle_entities(cycle_code: str):
             JOIN soa_entities e
               ON e.id = ce.entity_id
             WHERE c.cycle_code = :code
+              AND c.organization_id = :org_id
             ORDER BY ce.comparison_code
-        """), {"code": cycle_code}).fetchall()
+        """), {"code": cycle_code, "org_id": org_id}).fetchall()
 
     if not rows:
         raise HTTPException(
@@ -97,7 +106,10 @@ def get_cycle_entities(cycle_code: str):
 # ─── GET /api/cycles/{cycle_code}/metrics ────────────────────────────────────
 
 @router.get("/cycles/{cycle_code}/metrics")
-def get_cycle_metrics(cycle_code: str):
+def get_cycle_metrics(
+    cycle_code: str,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Returns all metric values for a cycle organized by slice type and entity.
 
@@ -125,9 +137,12 @@ def get_cycle_metrics(cycle_code: str):
       }
     }
     """
+    org_id = current_user['organization_id']
+
     with engine.connect() as conn:
 
-        # Step 1: Get comparison set for this cycle
+        # Step 1: Get comparison set for this cycle — org-scoped via soa_cycles.
+        # soa_entities is unscoped (shared catalog), so no org filter on that table.
         entity_rows = conn.execute(text("""
             SELECT
               ce.comparison_code,
@@ -142,8 +157,9 @@ def get_cycle_metrics(cycle_code: str):
             JOIN soa_entities e
               ON e.id = ce.entity_id
             WHERE c.cycle_code = :code
+              AND c.organization_id = :org_id
             ORDER BY ce.comparison_code
-        """), {"code": cycle_code}).fetchall()
+        """), {"code": cycle_code, "org_id": org_id}).fetchall()
 
         if not entity_rows:
             raise HTTPException(
@@ -270,7 +286,10 @@ def get_cycle_metrics(cycle_code: str):
     "/cycles/{cycle_code}/positions",
     response_model=None,
 )
-def get_cycle_positions(cycle_code: str):
+def get_cycle_positions(
+    cycle_code: str,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Returns position distribution for each entity in the cycle.
 
@@ -293,11 +312,14 @@ def get_cycle_positions(cycle_code: str):
 
     with engine.connect() as conn:
 
-        # Verify cycle exists and get its ID
+        org_id = current_user['organization_id']
+
+        # Verify cycle exists and belongs to caller's org
         cycle = conn.execute(text("""
             SELECT id FROM soa_cycles
             WHERE cycle_code = :code
-        """), {"code": cycle_code}).fetchone()
+              AND organization_id = :org_id
+        """), {"code": cycle_code, "org_id": org_id}).fetchone()
 
         if not cycle:
             raise HTTPException(

@@ -2,12 +2,13 @@ import csv
 import io
 import re
 import uuid
-from fastapi import APIRouter, Query, HTTPException, UploadFile, File
+from fastapi import APIRouter, Query, HTTPException, UploadFile, File, Depends
 from typing import Optional
 from sqlalchemy import text
 from collections import defaultdict
 from soa_shared.database import engine
 from soa_shared.constants import QUERY_CONSTRAINTS
+from app.auth import get_current_user
 from app.schemas import (
     StudyResponse,
     StudyQueryBreakdown,
@@ -92,6 +93,9 @@ def get_query_constraints():
     Values are sourced from soa_shared.constants — the same source used by
     SQLAlchemy CheckConstraints and Pydantic validators.
 
+    No auth dependency — this endpoint returns static constraint metadata
+    (no org-scoped data).
+
     Response shape:
     {
       "category":      [...],
@@ -112,6 +116,10 @@ def _slugify_study_name(name: str) -> str:
     Converts a study name to a unique study_type slug.
     e.g. 'Brand Study' → 'brand_study_a1b2c3'
     Appends a short uuid suffix to avoid collisions.
+
+    The unique constraint on soa_query_generation_jobs.study_type is GLOBAL
+    (not per-org). This is safe because the uuid suffix makes cross-org
+    collision astronomically unlikely without needing a per-org constraint.
     """
     slug = re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_')
     suffix = uuid.uuid4().hex[:6]
@@ -121,7 +129,10 @@ def _slugify_study_name(name: str) -> str:
 # ─── POST /studies/generate — create AI generation job ───────────────────────
 
 @router.post("/studies/generate", response_model=StudyGenerateResponse, status_code=201)
-def generate_study(data: StudyGenerateRequest):
+def generate_study(
+    data: StudyGenerateRequest,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Creates a generation job. The pipeline worker picks up pending jobs and
     generates queries via OpenAI in the background.
@@ -129,6 +140,8 @@ def generate_study(data: StudyGenerateRequest):
     Returns immediately with the new study_type so the frontend can redirect
     to the (initially empty) study detail page and poll for progress.
     """
+    org_id  = current_user['organization_id']
+    user_id = current_user['user_id']
     study_type = _slugify_study_name(data.study_name)
 
     with engine.connect() as conn:
@@ -136,10 +149,14 @@ def generate_study(data: StudyGenerateRequest):
             text("""
                 INSERT INTO soa_query_generation_jobs (
                     study_type, study_name, description,
-                    target_count, status, created_at
+                    target_count, status,
+                    organization_id, created_by,
+                    created_at
                 ) VALUES (
                     :study_type, :study_name, :description,
-                    :target_count, 'pending', NOW()
+                    :target_count, 'pending',
+                    :org_id, :user_id,
+                    NOW()
                 )
                 RETURNING id, status
             """),
@@ -148,6 +165,8 @@ def generate_study(data: StudyGenerateRequest):
                 "study_name":   data.study_name,
                 "description":  data.description,
                 "target_count": data.target_count,
+                "org_id":       org_id,
+                "user_id":      user_id,
             },
         )
         conn.commit()
@@ -167,13 +186,19 @@ def generate_study(data: StudyGenerateRequest):
     "/studies/{study_type}/generation-status",
     response_model=GenerationStatusResponse,
 )
-def get_generation_status(study_type: str):
+def get_generation_status(
+    study_type: str,
+    current_user: dict = Depends(get_current_user),
+):
     """
     Returns the current status of a generation job for a study_type.
     Frontend polls this while status is 'pending' or 'running'.
-    Returns 404 if no job exists for this study_type (e.g. CSV-uploaded
-    studies have no generation job — this is normal).
+    Returns 404 if no job exists for this study_type in this org (e.g.
+    CSV-uploaded studies have no generation job — this is normal; also
+    returned when study_type exists in another org — avoids leaking existence).
     """
+    org_id = current_user['organization_id']
+
     with engine.connect() as conn:
         row = conn.execute(
             text("""
@@ -181,8 +206,9 @@ def get_generation_status(study_type: str):
                        created_count, error_message
                 FROM soa_query_generation_jobs
                 WHERE study_type = :st
+                  AND organization_id = :org_id
             """),
-            {"st": study_type},
+            {"st": study_type, "org_id": org_id},
         ).fetchone()
 
     if not row:
@@ -205,6 +231,7 @@ def get_generation_status(study_type: str):
 @router.post("/studies/upload-csv")
 async def upload_study_csv(
     file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Accepts a CSV file and bulk-inserts rows into soa_queries.
@@ -220,6 +247,9 @@ async def upload_study_csv(
     Returns: { "inserted": N, "study_types": [...], "errors": [] }
     On failure: 422 with { "errors": [...], "total_errors": N }
     """
+    org_id  = current_user['organization_id']
+    user_id = current_user['user_id']
+
     if not file.filename.lower().endswith('.csv'):
         raise HTTPException(
             status_code=400,
@@ -297,6 +327,8 @@ async def upload_study_csv(
                         text("SELECT COUNT(*) FROM soa_queries WHERE study_type = :st"),
                         {"st": study_type},
                     ).fetchone()
+                    # query_code counters are global — query_code is a globally
+                    # unique display identifier, not scoped per org
                     code_counters[study_type] = count_row[0] or 0
 
                 prefix = _query_code_prefix(study_type)
@@ -305,6 +337,7 @@ async def upload_study_csv(
                     candidate = f"{prefix}_{code_counters[study_type]:03d}"
                     if candidate in batch_codes:
                         continue
+                    # Uniqueness check is GLOBAL — query_code must be globally unique
                     exists = conn.execute(
                         text("SELECT 1 FROM soa_queries WHERE query_code = :code"),
                         {"code": candidate},
@@ -320,11 +353,15 @@ async def upload_study_csv(
                     INSERT INTO soa_queries (
                         query_code, query_text, category, stage,
                         specificity, persona, study_type, study_pattern,
-                        soa_focus, rationale, status, created_at
+                        soa_focus, rationale, status,
+                        organization_id, created_by,
+                        created_at
                     ) VALUES (
                         :query_code, :query_text, :category, :stage,
                         :specificity, :persona, :study_type, :study_pattern,
-                        :soa_focus, :rationale, :status, NOW()
+                        :soa_focus, :rationale, :status,
+                        :org_id, :user_id,
+                        NOW()
                     )
                 """),
                 {
@@ -339,6 +376,8 @@ async def upload_study_csv(
                     "soa_focus":     row.get('soa_focus'),
                     "rationale":     row.get('rationale'),
                     "status":        row['status'],
+                    "org_id":        org_id,
+                    "user_id":       user_id,
                 },
             )
             inserted += 1
@@ -353,16 +392,22 @@ async def upload_study_csv(
 
 
 @router.get("/studies", response_model=list[StudyResponse])
-def get_studies():
+def get_studies(
+    current_user: dict = Depends(get_current_user),
+):
     """
-    Returns all study types that have at least one Active query.
+    Returns all study types that have at least one Active query in the
+    caller's organization.
     Builds one StudyResponse per study_type with:
     - name from STUDY_TYPE_NAMES or title-cased from id
     - category from most common category value across queries
     - patterns deduplicated and mapped to display labels
     - queryCount total active queries
     - lastRun from most recent soa_run for any cycle of this study_type
+      (scoped to the caller's org)
     """
+    org_id = current_user['organization_id']
+
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT
@@ -372,16 +417,18 @@ def get_studies():
               COUNT(*) AS query_count
             FROM soa_queries q
             WHERE q.status = 'Active'
+              AND q.organization_id = :org_id
             GROUP BY q.study_type, q.category, q.study_pattern
             ORDER BY q.study_type
-        """)).fetchall()
+        """), {"org_id": org_id}).fetchall()
 
         last_runs = conn.execute(text("""
             SELECT c.study_type, MAX(r.run_at) AS last_run
             FROM soa_runs r
             JOIN soa_cycles c ON c.id = r.cycle_id
+            WHERE c.organization_id = :org_id
             GROUP BY c.study_type
-        """)).fetchall()
+        """), {"org_id": org_id}).fetchall()
 
     last_run_map = {
         row[0]: str(row[1])[:10] if row[1] else None
@@ -424,18 +471,26 @@ def get_studies():
 
 
 @router.get("/studies/{study_type}/queries", response_model=StudyQueryBreakdown)
-def get_study_queries(study_type: str):
+def get_study_queries(
+    study_type: str,
+    current_user: dict = Depends(get_current_user),
+):
     """
-    Returns query count and pattern breakdown for a specific study type.
+    Returns query count and pattern breakdown for a specific study type
+    within the caller's organization.
     Used by the wizard Step 5 review panel.
     """
+    org_id = current_user['organization_id']
+
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT study_pattern, COUNT(*) AS cnt
             FROM soa_queries
-            WHERE study_type = :st AND status = 'Active'
+            WHERE study_type = :st
+              AND status = 'Active'
+              AND organization_id = :org_id
             GROUP BY study_pattern
-        """), {"st": study_type}).fetchall()
+        """), {"st": study_type, "org_id": org_id}).fetchall()
 
     by_pattern = {PATTERN_DISPLAY.get(r[0], r[0]): r[1] for r in rows}
     total = sum(by_pattern.values())
@@ -454,15 +509,22 @@ def get_study_query_rows(
     specificity:  Optional[str] = Query(None),
     persona:      Optional[str] = Query(None),
     status:       Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user),
 ):
     """
-    Returns all individual query rows for a given study_type from soa_queries.
+    Returns all individual query rows for a given study_type within the
+    caller's organization.
     Supports optional server-side filtering by stage, specificity, persona, status.
     (Frontend also filters client-side, so server params are optional.)
     """
+    org_id = current_user['organization_id']
+
     with engine.connect() as conn:
-        conditions = ["study_type = :study_type"]
-        params = {"study_type": study_type}
+        conditions = [
+            "study_type = :study_type",
+            "organization_id = :org_id",
+        ]
+        params = {"study_type": study_type, "org_id": org_id}
 
         if stage and stage != "All":
             conditions.append("stage = :stage")
@@ -540,13 +602,23 @@ def _query_code_prefix(study_type: str) -> str:
 # ─── POST /studies/{study_type}/queries — create new query ────────────────────
 
 @router.post("/studies/{study_type}/queries", status_code=201)
-def create_query(study_type: str, data: QueryCreate):
+def create_query(
+    study_type: str,
+    data: QueryCreate,
+    current_user: dict = Depends(get_current_user),
+):
     """
-    Creates a new query in soa_queries for the given study_type.
-    Auto-generates query_code in the format PREFIX_NNN.
+    Creates a new query in soa_queries for the given study_type within the
+    caller's organization. Auto-generates query_code in the format PREFIX_NNN.
+    query_code uniqueness checks are GLOBAL — query_code is a display
+    identifier expected to be globally unique across all organizations.
     """
+    org_id  = current_user['organization_id']
+    user_id = current_user['user_id']
+
     with engine.connect() as conn:
         # Count existing queries for this study_type to generate next code
+        # (global — query_code must be globally unique, not per-org)
         count_row = conn.execute(
             text("SELECT COUNT(*) FROM soa_queries WHERE study_type = :st"),
             {"st": study_type},
@@ -556,7 +628,7 @@ def create_query(study_type: str, data: QueryCreate):
         prefix = _query_code_prefix(study_type)
         query_code = f"{prefix}_{next_num:03d}"
 
-        # Check uniqueness — increment on collision
+        # Uniqueness check is GLOBAL — query_code must not collide across orgs
         while True:
             exists = conn.execute(
                 text("SELECT 1 FROM soa_queries WHERE query_code = :code"),
@@ -567,17 +639,21 @@ def create_query(study_type: str, data: QueryCreate):
             next_num += 1
             query_code = f"{prefix}_{next_num:03d}"
 
-        # category/stage/specificity/persona are NOT NULL in the schema
+        # Insert with organization_id and created_by stamped
         result = conn.execute(
             text("""
                 INSERT INTO soa_queries (
                     query_code, query_text, category, stage,
                     specificity, persona, study_type, study_pattern,
-                    soa_focus, rationale, status, created_at
+                    soa_focus, rationale, status,
+                    organization_id, created_by,
+                    created_at
                 ) VALUES (
                     :query_code, :query_text, :category, :stage,
                     :specificity, :persona, :study_type, :study_pattern,
-                    :soa_focus, :rationale, :status, NOW()
+                    :soa_focus, :rationale, :status,
+                    :org_id, :user_id,
+                    NOW()
                 )
                 RETURNING
                     id, query_code, query_text, category, stage,
@@ -596,6 +672,8 @@ def create_query(study_type: str, data: QueryCreate):
                 "soa_focus":     data.soa_focus,
                 "rationale":     data.rationale,
                 "status":        data.status,
+                "org_id":        org_id,
+                "user_id":       user_id,
             },
         )
         conn.commit()
@@ -620,19 +698,31 @@ def create_query(study_type: str, data: QueryCreate):
 # ─── PATCH /studies/{study_type}/queries/{query_code} — update query ──────────
 
 @router.patch("/studies/{study_type}/queries/{query_code}")
-def update_query(study_type: str, query_code: str, data: QueryUpdate):
+def update_query(
+    study_type: str,
+    query_code: str,
+    data: QueryUpdate,
+    current_user: dict = Depends(get_current_user),
+):
     """
-    Updates an existing query by query_code within a study_type.
+    Updates an existing query by query_code within a study_type, scoped to
+    the caller's organization. Returns 404 if the query does not exist or
+    belongs to a different organization (avoids leaking existence via status
+    code differences).
     Only provided (non-None) fields are updated via a dynamic SET clause.
     Returns the updated query row.
     """
+    org_id = current_user['organization_id']
+
     with engine.connect() as conn:
         existing = conn.execute(
             text("""
                 SELECT id FROM soa_queries
-                WHERE query_code = :code AND study_type = :st
+                WHERE query_code = :code
+                  AND study_type = :st
+                  AND organization_id = :org_id
             """),
-            {"code": query_code, "st": study_type},
+            {"code": query_code, "st": study_type, "org_id": org_id},
         ).fetchone()
 
         if not existing:
@@ -655,13 +745,20 @@ def update_query(study_type: str, query_code: str, data: QueryUpdate):
             raise HTTPException(status_code=422, detail="No fields to update.")
 
         set_clause = ", ".join(f"{k} = :{k}" for k in updates)
-        params = {**updates, "code": query_code, "st": study_type}
+        params = {
+            **updates,
+            "code":   query_code,
+            "st":     study_type,
+            "org_id": org_id,
+        }
 
         result = conn.execute(
             text(f"""
                 UPDATE soa_queries
                 SET {set_clause}, updated_at = NOW()
-                WHERE query_code = :code AND study_type = :st
+                WHERE query_code = :code
+                  AND study_type = :st
+                  AND organization_id = :org_id
                 RETURNING
                     query_code, query_text, category, stage,
                     specificity, persona, study_type, study_pattern,
