@@ -96,7 +96,7 @@ def generate_query_batch(
     prompt = _build_prompt(study_name, description, batch_size, already_generated)
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-5.4-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.8,
     )
