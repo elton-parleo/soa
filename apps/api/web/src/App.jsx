@@ -4,8 +4,9 @@ import LoginPage        from './components/LoginPage.jsx'
 import CycleDashboard   from './components/CycleDashboard.jsx'
 import NewCycleWizard   from './components/NewCycleWizard.jsx'
 import EntityRegistry   from './components/EntityRegistry.jsx'
-import MetricsDashboard from './components/MetricsDashboard.jsx'
-import StudyLibrary     from './components/StudyLibrary.jsx'
+import MetricsDashboard  from './components/MetricsDashboard.jsx'
+import ResponseExplorer  from './components/ResponseExplorer.jsx'
+import StudyLibrary      from './components/StudyLibrary.jsx'
 import StudyDetail      from './components/StudyDetail.jsx'
 
 // ─── Read initial view from URL hash on page load ────────────────────────────
@@ -15,6 +16,7 @@ function getInitialView() {
     'dashboard', 'wizard',
     'entities', 'metrics',
     'studies', 'study-detail',
+    'responses',
   ]
   return validViews.includes(hash) ? hash : 'dashboard'
 }
@@ -125,6 +127,22 @@ function AppContent() {
             navigateTo('metrics', { cycleCode: params.cycleCode })
           } else {
             navigateTo(v)
+          }
+        }}
+        onViewResponses={() => navigateTo('responses', { cycleCode: selectedCycle })}
+      />
+    )
+  }
+
+  if (view === 'responses') {
+    return (
+      <ResponseExplorer
+        cycleCode={selectedCycle}
+        onNavigate={(v, params) => {
+          if (v === 'metrics') {
+            navigateTo('metrics', { cycleCode: params?.cycleCode || selectedCycle })
+          } else {
+            navigateTo(v, params)
           }
         }}
       />

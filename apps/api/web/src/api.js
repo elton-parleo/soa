@@ -171,4 +171,18 @@ export const api = {
 
   getPositions: (cycleCode) =>
     get(`/api/cycles/${cycleCode}/positions`),
+
+  getCycleRuns: (cycleCode, filters = {}) => {
+    const params = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(filters).filter(
+          ([, v]) => v !== null && v !== undefined && v !== '' && v !== 'all' && v !== false
+        )
+      )
+    ).toString()
+    return get(`/api/cycles/${cycleCode}/runs` + (params ? '?' + params : ''))
+  },
+
+  getRunMentions: (cycleCode, runId) =>
+    get(`/api/cycles/${cycleCode}/runs/${runId}/mentions`),
 }

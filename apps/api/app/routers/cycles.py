@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
+from typing import Optional
 from sqlalchemy import text
 from datetime import date
 import json
@@ -261,6 +262,149 @@ def resume_cycle(
             "The pipeline worker will "
             "pick it up within 30 seconds."
         ),
+    }
+
+
+@router.get("/cycles/{cycle_code}/runs")
+def get_cycle_runs(
+    cycle_code:   str,
+    platform:     Optional[str] = None,
+    stage:        Optional[str] = None,
+    entity:       Optional[str] = None,
+    deal_cited:   Optional[bool] = None,
+    needs_review: Optional[bool] = None,
+    limit:        int = 200,
+    offset:       int = 0,
+    current_user: dict = Depends(get_current_user),
+):
+    with engine.connect() as conn:
+        conditions = ["c.cycle_code = :cycle_code"]
+        params: dict = {"cycle_code": cycle_code}
+
+        if platform and platform != "all":
+            conditions.append("r.platform = :platform")
+            params["platform"] = platform
+
+        if stage and stage != "all":
+            conditions.append("q.stage = :stage")
+            params["stage"] = stage
+
+        if entity:
+            conditions.append("LOWER(q.query_text) LIKE :entity")
+            params["entity"] = f"%{entity.lower()}%"
+
+        if deal_cited is not None:
+            conditions.append(
+                "EXISTS (SELECT 1 FROM soa_coded_mentions cm2"
+                " WHERE cm2.run_id = r.id AND cm2.deal_cited = :dc)"
+            )
+            params["dc"] = deal_cited
+
+        if needs_review is not None:
+            conditions.append(
+                "EXISTS (SELECT 1 FROM soa_coded_mentions cm3"
+                " WHERE cm3.run_id = r.id AND cm3.needs_review = :nr)"
+            )
+            params["nr"] = needs_review
+
+        where = " AND ".join(conditions)
+
+        rows = conn.execute(text(f"""
+            SELECT
+              r.id            AS run_id,
+              q.query_code,
+              r.platform,
+              r.run_number,
+              c.runs_per_query,
+              r.raw_response,
+              r.status,
+              r.created_at,
+              q.query_text,
+              q.stage,
+              q.category
+            FROM soa_runs r
+            JOIN soa_cycles c ON c.id = r.cycle_id
+            LEFT JOIN soa_queries q ON q.id = r.query_id
+            WHERE {where}
+            ORDER BY q.query_code, r.run_number
+            LIMIT :limit OFFSET :offset
+        """), {**params, "limit": limit, "offset": offset}).fetchall()
+
+        count_row = conn.execute(text(f"""
+            SELECT COUNT(*)
+            FROM soa_runs r
+            JOIN soa_cycles c ON c.id = r.cycle_id
+            LEFT JOIN soa_queries q ON q.id = r.query_id
+            WHERE {where}
+        """), params).fetchone()
+        total = count_row[0] if count_row else 0
+
+    return {
+        "cycle_code": cycle_code,
+        "total": total,
+        "runs": [
+            {
+                "run_id":        row[0],
+                "query_code":    row[1],
+                "platform":      row[2],
+                "run_number":    row[3],
+                "runs_per_query": row[4] or 5,
+                "raw_response":  row[5],
+                "status":        row[6],
+                "created_at": str(row[7])[:19] if row[7] else None,
+                "query_text":    row[8],
+                "stage":         row[9],
+                "category":      row[10],
+            }
+            for row in rows
+        ],
+    }
+
+
+@router.get("/cycles/{cycle_code}/runs/{run_id}/mentions")
+def get_run_mentions(
+    cycle_code: str,
+    run_id:     int,
+    current_user: dict = Depends(get_current_user),
+):
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT
+              cm.id,
+              ce.comparison_code,
+              e.name        AS entity_name,
+              cm.position,
+              cm.strength,
+              cm.deal_cited,
+              cm.confidence,
+              cm.needs_review,
+              ce.role
+            FROM soa_coded_mentions cm
+            JOIN soa_cycles c ON c.cycle_code = :cycle_code
+            LEFT JOIN soa_cycle_entities ce
+              ON ce.cycle_id = c.id
+              AND ce.entity_id = cm.entity_id
+            LEFT JOIN soa_entities e ON e.id = cm.entity_id
+            WHERE cm.run_id = :run_id
+            ORDER BY cm.position NULLS LAST, ce.comparison_code
+        """), {"run_id": run_id, "cycle_code": cycle_code}).fetchall()
+
+    return {
+        "run_id": run_id,
+        "mentions": [
+            {
+                "id":               row[0],
+                "comparison_code":  row[1],
+                "entity_name":      row[2],
+                "position":         row[3],
+                "strength_label":   row[4],
+                "deal_cited":       row[5],
+                "confidence_score": row[6],
+                "needs_review":     row[7],
+                "role":             row[8],
+            }
+            for row in rows
+        ],
     }
 
 
