@@ -147,18 +147,18 @@ function Topbar({ stepName }) {
 
 // ─── Step 1: Select Study Type ────────────────────────────────────────────────
 
-function Step1({ state, setState, onNext }) {
-  const [studies, setStudies] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [filterCat, setFilterCat] = useState('')
-  const [filterPat, setFilterPat] = useState('')
+function Step1({ state, setState, onNext, onNavigate }) {
+  const [studies,        setStudies]        = useState([])
+  const [studiesLoading, setStudiesLoading] = useState(true)
+  const [search,         setSearch]         = useState('')
+  const [filterCat,      setFilterCat]      = useState('')
+  const [filterPat,      setFilterPat]      = useState('')
 
   useEffect(() => {
-    api.getStudies().then(data => {
-      setStudies(data)
-      setLoading(false)
-    }).catch(() => setLoading(false))
+    api.getStudies()
+      .then(data => { setStudies(data || []) })
+      .catch(() => { setStudies([]) })
+      .finally(() => { setStudiesLoading(false) })
   }, [])
 
   const categories = [...new Set(studies.map(s => s.category))].filter(Boolean)
@@ -196,10 +196,10 @@ function Step1({ state, setState, onNext }) {
         </select>
       </div>
 
-      {/* Study cards grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 32 }}>
-        {loading ? (
-          [1,2,3].map(i => (
+      {/* Study cards grid / empty state */}
+      {studiesLoading ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 32 }}>
+          {[1,2,3].map(i => (
             <div key={i} style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
               <Skeleton height={12} width="60%" />
               <div style={{ marginTop: 12 }}><Skeleton height={18} width="80%" /></div>
@@ -207,45 +207,129 @@ function Step1({ state, setState, onNext }) {
               <div style={{ marginTop: 16 }}><Skeleton height={12} /></div>
               <div style={{ marginTop: 6 }}><Skeleton height={12} width="70%" /></div>
             </div>
-          ))
-        ) : filtered.map(study => {
-          const selected = state.studyType?.id === study.id
-          return (
-            <div
-              key={study.id}
-              onClick={() => setState(s => ({ ...s, studyType: study }))}
-              style={{
-                background: T.white,
-                border: `2px solid ${selected ? T.navy : T.border}`,
-                borderRadius: 12, padding: 20,
-                cursor: 'pointer',
-                position: 'relative',
-                transition: 'border-color 0.15s',
-              }}
+          ))}
+        </div>
+      ) : studies.length === 0 ? (
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: T.offWhite,
+          border: `1px solid ${T.border}`,
+          borderRadius: 12,
+          padding: '60px 40px',
+          minHeight: 280,
+          marginBottom: 32,
+        }}>
+          {/* Flask icon */}
+          <div style={{
+            width: 56, height: 56,
+            background: T.white,
+            border: `1px solid ${T.border}`,
+            borderRadius: 12,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 20,
+          }}>
+            <svg
+              width="24" height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={T.slate}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              {selected && (
-                <div style={{
-                  position: 'absolute', top: 12, right: 12,
-                  width: 22, height: 22, borderRadius: '50%',
-                  background: T.navy, color: T.white,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, fontWeight: 700,
-                }}>✓</div>
-              )}
-              <div style={{ fontFamily: 'monospace', fontSize: 11, color: T.slate, marginBottom: 6 }}>{study.id}</div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: T.text, marginBottom: 6 }}>{study.name}</div>
-              <Badge color={T.teal} bg={T.tealLight}>{study.category}</Badge>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 10 }}>
-                {study.patterns.map(p => <Badge key={p} color={T.indigo} bg="#EEF2FF">{p}</Badge>)}
+              <path d="M9 3h6M9 3v8L4.5 17.5a2.121 2.121 0 001.5 3.5h12a2.121 2.121 0 001.5-3.5L15 11V3"/>
+              <path d="M6.5 17.5h11"/>
+            </svg>
+          </div>
+
+          {/* Heading */}
+          <div style={{
+            fontSize: 18,
+            fontWeight: 700,
+            color: T.text,
+            textAlign: 'center',
+            marginBottom: 10,
+          }}>
+            No studies yet
+          </div>
+
+          {/* Body text */}
+          <div style={{
+            fontSize: 13,
+            color: T.slate,
+            textAlign: 'center',
+            maxWidth: 340,
+            lineHeight: 1.6,
+            marginBottom: 20,
+          }}>
+            Launch your first cycle to start measuring how AI agents recommend your brand. You'll need to create or seed a study type first.
+          </div>
+
+          {/* Link */}
+          <span
+            onClick={() => onNavigate && onNavigate('studies')}
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: T.text,
+              textDecoration: 'none',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.textDecoration = 'underline' }}
+            onMouseLeave={e => { e.currentTarget.style.textDecoration = 'none' }}
+          >
+            Manage Studies in the Study Library →
+          </span>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 32 }}>
+          {filtered.map(study => {
+            const selected = state.studyType?.id === study.id
+            return (
+              <div
+                key={study.id}
+                onClick={() => setState(s => ({ ...s, studyType: study }))}
+                style={{
+                  background: T.white,
+                  border: `2px solid ${selected ? T.navy : T.border}`,
+                  borderRadius: 12, padding: 20,
+                  cursor: 'pointer',
+                  position: 'relative',
+                  transition: 'border-color 0.15s',
+                }}
+              >
+                {selected && (
+                  <div style={{
+                    position: 'absolute', top: 12, right: 12,
+                    width: 22, height: 22, borderRadius: '50%',
+                    background: T.navy, color: T.white,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 12, fontWeight: 700,
+                  }}>✓</div>
+                )}
+                <div style={{ fontFamily: 'monospace', fontSize: 11, color: T.slate, marginBottom: 6 }}>{study.id}</div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: T.text, marginBottom: 6 }}>{study.name}</div>
+                <Badge color={T.teal} bg={T.tealLight}>{study.category}</Badge>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 10 }}>
+                  {study.patterns.map(p => <Badge key={p} color={T.indigo} bg="#EEF2FF">{p}</Badge>)}
+                </div>
+                <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: T.slate }}>
+                  <span>{study.queryCount} queries</span>
+                  {study.lastRun && <span>Last: {study.lastRun}</span>}
+                </div>
               </div>
-              <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', fontSize: 12, color: T.slate }}>
-                <span>{study.queryCount} queries</span>
-                {study.lastRun && <span>Last: {study.lastRun}</span>}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button
@@ -932,7 +1016,7 @@ export default function NewCycleWizard({ onComplete, onCancel, onNavigate } = {}
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {step === 1 && (
-            <Step1 state={state} setState={setState} onNext={() => setStep(2)} />
+            <Step1 state={state} setState={setState} onNext={() => setStep(2)} onNavigate={onNavigate} />
           )}
           {step === 2 && (
             <Step2 state={state} setState={setState}
