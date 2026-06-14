@@ -145,6 +145,51 @@ function Topbar({ stepName }) {
   )
 }
 
+// ─── Add New Study card ───────────────────────────────────────────────────────
+
+function AddNewStudyCard({ onNavigate }) {
+  const [hovered, setHovered] = React.useState(false)
+  return (
+    <div
+      onClick={() => onNavigate && onNavigate('studies')}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background:    hovered ? T.offWhite : T.white,
+        border:        `2px dashed ${hovered ? T.text : T.border}`,
+        borderRadius:  12,
+        padding:       20,
+        cursor:        'pointer',
+        display:       'flex',
+        flexDirection: 'column',
+        alignItems:    'center',
+        justifyContent:'center',
+        transition:    'all 0.15s ease',
+      }}
+    >
+      <div style={{
+        width:          44,
+        height:         44,
+        background:     T.offWhite,
+        border:         `1px solid ${T.border}`,
+        borderRadius:   '50%',
+        display:        'flex',
+        alignItems:     'center',
+        justifyContent: 'center',
+        marginBottom:   14,
+      }}>
+        <span style={{ fontSize: 22, fontWeight: 300, color: T.slate, lineHeight: 1 }}>+</span>
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 600, color: T.text, textAlign: 'center', marginBottom: 4 }}>
+        Add New Study
+      </div>
+      <div style={{ fontSize: 12, color: T.slate, textAlign: 'center' }}>
+        Create a custom template
+      </div>
+    </div>
+  )
+}
+
 // ─── Step 1: Select Study Type ────────────────────────────────────────────────
 
 function Step1({ state, setState, onNext, onNavigate }) {
@@ -328,6 +373,8 @@ function Step1({ state, setState, onNext, onNavigate }) {
               </div>
             )
           })}
+          {/* Add New Study card */}
+          <AddNewStudyCard onNavigate={onNavigate} />
         </div>
       )}
 
