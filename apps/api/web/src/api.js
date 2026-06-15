@@ -185,4 +185,7 @@ export const api = {
 
   getRunMentions: (cycleCode, runId) =>
     get(`/api/cycles/${cycleCode}/runs/${runId}/mentions`),
+
+  updateRunMentions: (cycleCode, runId, updates) =>
+    request('PATCH', `/api/cycles/${cycleCode}/runs/${runId}/mentions`, updates),
 }

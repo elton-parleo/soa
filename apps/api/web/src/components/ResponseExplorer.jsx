@@ -206,12 +206,54 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
 
   const hasFilters = platformFilter !== 'all' || stageFilter !== 'all' || entitySearch || dealCited || needsReview
 
-  const avgConfidence = (() => {
-    if (mentionsLoading || mentions.length === 0) return null
-    const scores = mentions.map(m => m.confidence_score).filter(v => v != null)
-    if (scores.length === 0) return null
-    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
-  })()
+  // Edit Coding modal state
+  const [editCodingOpen, setEditCodingOpen] = useState(false)
+  const [editRows, setEditRows]             = useState([])
+  const [editSaving, setEditSaving]         = useState(false)
+  const [editError, setEditError]           = useState(null)
+
+  function openEditCoding() {
+    setEditRows(
+      mentions.map(m => ({
+        comparison_code:  m.comparison_code,
+        entity_name:      m.entity_name,
+        mentioned:        m.mentioned !== false,
+        strength_label:   m.strength_label || '',
+        position:         m.position || null,
+        deal_cited:       m.deal_cited || false,
+        confidence_score: m.confidence_score ?? 80,
+      }))
+    )
+    setEditError(null)
+    setEditCodingOpen(true)
+  }
+
+  async function handleSaveEdits() {
+    if (!selectedRun) return
+    setEditSaving(true)
+    setEditError(null)
+    try {
+      await api.updateRunMentions(
+        cycleCode,
+        selectedRun.run_id,
+        editRows.map(r => ({
+          comparison_code:  r.comparison_code,
+          mentioned:        r.mentioned,
+          strength_label:   r.strength_label,
+          position:         r.position,
+          deal_cited:       r.deal_cited,
+          confidence_score: r.confidence_score,
+        }))
+      )
+      const fresh = await api.getRunMentions(cycleCode, selectedRun.run_id)
+      setMentions(fresh.mentions || [])
+      setEditCodingOpen(false)
+    } catch (err) {
+      setEditError(err.message)
+    } finally {
+      setEditSaving(false)
+    }
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif", background: T.offWhite }}>
@@ -452,27 +494,15 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
 
                   {/* Card 2 — Raw Agent Response + Coded Mentions */}
                   <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: '20px 24px', marginTop: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <div style={{
-                          width: 28, height: 28, background: T.navy, borderRadius: 8,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 11, fontWeight: 700, color: T.white,
-                        }}>AI</div>
-                        <span style={{ fontSize: 16, fontWeight: 600, color: T.text, marginLeft: 10 }}>
-                          Raw Agent Response
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: T.slate }}>STRENGTH:</span>
-                        <span style={{
-                          background: '#FEF3C7', color: '#D97706',
-                          fontSize: 14, fontWeight: 700, padding: '4px 10px',
-                          borderRadius: 6, marginLeft: 6,
-                        }}>
-                          {mentionsLoading ? '...' : avgConfidence != null ? `${avgConfidence} / 100` : '—'}
-                        </span>
-                      </div>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <div style={{
+                        width: 28, height: 28, background: T.navy, borderRadius: 8,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 11, fontWeight: 700, color: T.white,
+                      }}>AI</div>
+                      <span style={{ fontSize: 16, fontWeight: 600, color: T.text, marginLeft: 10 }}>
+                        Raw Agent Response
+                      </span>
                     </div>
 
                     <div style={{ marginTop: 16 }}>
@@ -499,10 +529,10 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
                         )}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                           <span
-                            onClick={() => {}}
+                            onClick={openEditCoding}
                             style={{ fontSize: 13, color: T.slate, cursor: 'pointer', textDecoration: 'underline' }}
                           >
-                            ✎ Override Coding
+                            ✎ Edit Coding
                           </span>
                           <button
                             onClick={() => {}}
@@ -608,6 +638,206 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
           </div>
         )}
       </div>
+
+      {/* Edit Cycle Coding modal */}
+      {editCodingOpen && (
+        <div
+          onClick={() => { if (!editSaving) setEditCodingOpen(false) }}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+            zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: T.white, borderRadius: 12, width: 620, maxWidth: '90vw',
+              maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 8px 40px rgba(0,0,0,0.18)',
+            }}
+          >
+            {/* Modal header */}
+            <div style={{
+              padding: '20px 24px 16px', borderBottom: `1px solid ${T.border}`,
+              display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{
+                  width: 32, height: 32, background: T.navy, borderRadius: 8,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 16, color: T.white,
+                }}>📋</div>
+                <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>Edit Cycle Coding</span>
+              </div>
+              <div
+                onClick={() => { if (!editSaving) setEditCodingOpen(false) }}
+                style={{ width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: T.slate, cursor: 'pointer' }}
+              >×</div>
+            </div>
+
+            {/* Modal body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 24px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', margin: '4px 0' }}>
+                <thead>
+                  <tr style={{ background: T.white, borderBottom: `1px solid ${T.border}`, height: 36 }}>
+                    {[
+                      { label: 'ENTITY',      width: 180 },
+                      { label: 'MENTIONED',   width: 80 },
+                      { label: 'STRENGTH',    width: 110 },
+                      { label: 'POSITION',    width: 90 },
+                      { label: 'DEAL CITED',  width: 80 },
+                      { label: 'CONFIDENCE',  width: null },
+                    ].map(col => (
+                      <th key={col.label} style={{
+                        width: col.width, textAlign: 'left', padding: '0 8px',
+                        fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                        letterSpacing: '0.06em', color: T.slate,
+                      }}>
+                        {col.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {editRows.map(row => (
+                    <tr key={row.comparison_code} style={{ height: 60, borderBottom: `1px solid ${T.border}`, verticalAlign: 'middle' }}>
+                      {/* Entity */}
+                      <td style={{ padding: '0 8px' }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>{row.entity_name || '—'}</div>
+                        <div style={{ fontSize: 10, color: T.slate, fontFamily: 'monospace' }}>{row.comparison_code}</div>
+                      </td>
+                      {/* Mentioned */}
+                      <td style={{ padding: '0 8px', textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={row.mentioned}
+                          onChange={e => setEditRows(prev => prev.map(r =>
+                            r.comparison_code === row.comparison_code ? { ...r, mentioned: e.target.checked } : r
+                          ))}
+                          style={{ width: 18, height: 18, accentColor: T.navy, cursor: 'pointer' }}
+                        />
+                      </td>
+                      {/* Strength */}
+                      <td style={{ padding: '0 8px' }}>
+                        <input
+                          type="text"
+                          value={row.strength_label || ''}
+                          placeholder="Neutral"
+                          onChange={e => setEditRows(prev => prev.map(r =>
+                            r.comparison_code === row.comparison_code ? { ...r, strength_label: e.target.value } : r
+                          ))}
+                          style={{
+                            width: 90, padding: '5px 8px', border: `1px solid ${T.border}`,
+                            borderRadius: 6, fontSize: 13, fontFamily: 'inherit', textAlign: 'center',
+                          }}
+                        />
+                      </td>
+                      {/* Position */}
+                      <td style={{ padding: '0 8px' }}>
+                        <select
+                          value={row.position || ''}
+                          onChange={e => setEditRows(prev => prev.map(r =>
+                            r.comparison_code === row.comparison_code
+                              ? { ...r, position: e.target.value ? parseInt(e.target.value, 10) : null }
+                              : r
+                          ))}
+                          style={{
+                            width: 70, padding: '5px 6px', border: `1px solid ${T.border}`,
+                            borderRadius: 6, fontSize: 13, fontFamily: 'inherit',
+                          }}
+                        >
+                          <option value="">—</option>
+                          {[1,2,3,4,5,6,7,8,9,10].map(n => (
+                            <option key={n} value={n}>{ordinal(n)}</option>
+                          ))}
+                        </select>
+                      </td>
+                      {/* Deal Cited */}
+                      <td style={{ padding: '0 8px', textAlign: 'center' }}>
+                        <div
+                          onClick={() => setEditRows(prev => prev.map(r =>
+                            r.comparison_code === row.comparison_code ? { ...r, deal_cited: !r.deal_cited } : r
+                          ))}
+                          style={{
+                            position: 'relative', width: 36, height: 20, borderRadius: 10,
+                            background: row.deal_cited ? T.teal : T.border,
+                            cursor: 'pointer', display: 'inline-block',
+                          }}
+                        >
+                          <div style={{
+                            position: 'absolute', top: 2, left: row.deal_cited ? 16 : 2,
+                            width: 16, height: 16, borderRadius: '50%', background: T.white,
+                            transition: 'left 0.15s ease', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                          }} />
+                        </div>
+                      </td>
+                      {/* Confidence */}
+                      <td style={{ padding: '0 8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <input
+                            type="range"
+                            min={0} max={100} step={1}
+                            value={row.confidence_score ?? 80}
+                            onChange={e => setEditRows(prev => prev.map(r =>
+                              r.comparison_code === row.comparison_code
+                                ? { ...r, confidence_score: Number(e.target.value) }
+                                : r
+                            ))}
+                            style={{ flex: 1, accentColor: T.navy, cursor: 'pointer' }}
+                          />
+                          <span style={{ width: 36, fontSize: 13, fontWeight: 600, color: T.text, textAlign: 'right' }}>
+                            {row.confidence_score ?? 80}%
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {editError && (
+                <div style={{
+                  margin: '12px 0 0', padding: '10px 14px',
+                  background: '#FEE2E2', border: '1px solid #FECACA',
+                  borderRadius: 6, fontSize: 13, color: '#991B1B',
+                }}>
+                  ✕ {editError}
+                </div>
+              )}
+            </div>
+
+            {/* Modal footer */}
+            <div style={{
+              padding: '16px 24px', borderTop: `1px solid ${T.border}`,
+              display: 'flex', justifyContent: 'flex-end', gap: 12,
+            }}>
+              <button
+                onClick={() => { if (!editSaving) setEditCodingOpen(false) }}
+                disabled={editSaving}
+                style={{
+                  padding: '9px 20px', border: `1px solid ${T.border}`, borderRadius: 8,
+                  background: T.white, color: T.text, fontSize: 14, fontWeight: 600,
+                  fontFamily: 'inherit', cursor: editSaving ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdits}
+                disabled={editSaving}
+                style={{
+                  padding: '9px 20px', border: 'none', borderRadius: 8,
+                  background: T.navy, color: T.white, fontSize: 14, fontWeight: 700,
+                  fontFamily: 'inherit', cursor: editSaving ? 'not-allowed' : 'pointer',
+                  opacity: editSaving ? 0.7 : 1,
+                }}
+              >
+                {editSaving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

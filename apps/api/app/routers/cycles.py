@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy import text
 from datetime import date
 import json
@@ -406,6 +406,78 @@ def get_run_mentions(
             for row in rows
         ],
     }
+
+
+@router.patch("/cycles/{cycle_code}/runs/{run_id}/mentions")
+def update_run_mentions(
+    cycle_code: str,
+    run_id:     int,
+    updates:    List[dict],
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Batch updates coded mentions for one run. Each item must have
+    'comparison_code' identifying which row to update. Only provided
+    fields are written. Sets override_flag = TRUE on any updated row.
+
+    Maps frontend field names to actual DB column names:
+      strength_label   → strength
+      confidence_score → confidence
+    Looks up entity_id via soa_cycle_entities using comparison_code.
+    """
+    if not updates:
+        return {"updated": 0}
+
+    updated_count = 0
+
+    with engine.connect() as conn:
+        for item in updates:
+            code = item.get('comparison_code')
+            if not code:
+                continue
+
+            set_parts = [
+                "override_flag = TRUE",
+                "updated_at = NOW()",
+            ]
+            params: dict = {"run_id": run_id, "code": code, "cycle_code": cycle_code}
+
+            # Map frontend key → actual DB column name
+            field_map = {
+                "mentioned":        "mentioned",
+                "strength_label":   "strength",
+                "position":         "position",
+                "deal_cited":       "deal_cited",
+                "confidence_score": "confidence",
+            }
+
+            for key, col in field_map.items():
+                if key in item:
+                    set_parts.append(f"{col} = :{key}")
+                    params[key] = item[key]
+
+            if len(set_parts) <= 2:
+                continue
+
+            set_clause = ", ".join(set_parts)
+
+            result = conn.execute(text(f"""
+                UPDATE soa_coded_mentions
+                SET {set_clause}
+                WHERE run_id = :run_id
+                  AND entity_id = (
+                      SELECT ce.entity_id
+                      FROM soa_cycle_entities ce
+                      JOIN soa_cycles c ON c.id = ce.cycle_id
+                      WHERE c.cycle_code = :cycle_code
+                        AND ce.comparison_code = :code
+                  )
+            """), params)
+            updated_count += result.rowcount or 0
+
+        conn.commit()
+
+    return {"updated": updated_count}
 
 
 def _row_to_cycle(row) -> CycleStatusResponse:
