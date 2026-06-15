@@ -221,7 +221,7 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
         strength_label:   m.strength_label || '',
         position:         m.position || null,
         deal_cited:       m.deal_cited || false,
-        confidence_score: m.confidence_score ?? 80,
+        confidence_score: m.confidence_score ?? 0.8,
       }))
     )
     setEditError(null)
@@ -273,27 +273,22 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
           height: 56, background: T.white, borderBottom: `1px solid ${T.border}`,
           display: 'flex', alignItems: 'center', padding: '0 28px', flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontSize: 13, color: T.slate, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span
-                className="re-breadcrumb"
-                onClick={() => onNavigate && onNavigate('dashboard')}
-                style={{ cursor: 'pointer', color: T.slate, transition: 'color 0.1s' }}
-              >Cycles</span>
-              <span style={{ color: T.slateLight, margin: '0 2px' }}>›</span>
-              <span
-                className="re-breadcrumb"
-                onClick={() => onNavigate && onNavigate('metrics', { cycleCode })}
-                style={{ cursor: 'pointer', color: T.slate, transition: 'color 0.1s', fontFamily: 'monospace', fontSize: 12 }}
-              >{cycleCode}</span>
-              <span style={{ color: T.slateLight, margin: '0 2px' }}>›</span>
-              <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.textMid }}>
-                RESPONSE EXPLORER
-              </span>
-            </div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: T.text, marginTop: 2, lineHeight: 1 }}>
-              Response Explorer
-            </div>
+          <div style={{ fontSize: 13, color: T.slate, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span
+              className="re-breadcrumb"
+              onClick={() => onNavigate && onNavigate('dashboard')}
+              style={{ cursor: 'pointer', color: T.slate, transition: 'color 0.1s' }}
+            >Cycles</span>
+            <span style={{ color: T.slateLight, margin: '0 2px' }}>›</span>
+            <span
+              className="re-breadcrumb"
+              onClick={() => onNavigate && onNavigate('metrics', { cycleCode })}
+              style={{ cursor: 'pointer', color: T.slate, transition: 'color 0.1s', fontFamily: 'monospace', fontSize: 12 }}
+            >{cycleCode}</span>
+            <span style={{ color: T.slateLight, margin: '0 2px' }}>›</span>
+            <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.textMid }}>
+              RESPONSE EXPLORER
+            </span>
           </div>
         </div>
 
@@ -374,7 +369,7 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
 
         {/* Main content */}
         {!error && (
-          <div style={{ display: 'flex', flex: 1, overflow: 'hidden', borderTop: `1px solid ${T.border}` }}>
+          <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0, borderTop: `1px solid ${T.border}` }}>
 
             {/* Left panel */}
             <div style={{ width: 320, flexShrink: 0, background: T.white, borderRight: `1px solid ${T.border}`, overflowY: 'auto', height: '100%' }}>
@@ -616,14 +611,19 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
                                   }
                                 </td>
                                 <td style={{ padding: '0 8px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <div style={{ width: 80, height: 6, background: T.border, borderRadius: 3, overflow: 'hidden' }}>
-                                      <div style={{ width: `${m.confidence_score || 0}%`, height: '100%', background: T.navy, borderRadius: 3, transition: 'width 0.3s ease' }} />
-                                    </div>
-                                    <span style={{ fontSize: 11, color: T.slate }}>
-                                      {m.confidence_score != null ? `${m.confidence_score}%` : '—'}
-                                    </span>
-                                  </div>
+                                  {(() => {
+                                    const pct = Math.round((m.confidence_score || 0) * 100)
+                                    return (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <div style={{ width: 80, height: 6, background: T.border, borderRadius: 3, overflow: 'hidden' }}>
+                                          <div style={{ width: `${pct}%`, height: '100%', background: T.navy, borderRadius: 3, transition: 'width 0.3s ease' }} />
+                                        </div>
+                                        <span style={{ fontSize: 11, color: T.slate }}>
+                                          {m.confidence_score != null ? `${pct}%` : '—'}
+                                        </span>
+                                      </div>
+                                    )
+                                  })()}
                                 </td>
                               </tr>
                             ))}
@@ -773,22 +773,27 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
                       </td>
                       {/* Confidence */}
                       <td style={{ padding: '0 8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <input
-                            type="range"
-                            min={0} max={100} step={1}
-                            value={row.confidence_score ?? 80}
-                            onChange={e => setEditRows(prev => prev.map(r =>
-                              r.comparison_code === row.comparison_code
-                                ? { ...r, confidence_score: Number(e.target.value) }
-                                : r
-                            ))}
-                            style={{ flex: 1, accentColor: T.navy, cursor: 'pointer' }}
-                          />
-                          <span style={{ width: 36, fontSize: 13, fontWeight: 600, color: T.text, textAlign: 'right' }}>
-                            {row.confidence_score ?? 80}%
-                          </span>
-                        </div>
+                        {(() => {
+                          const sliderPct = Math.round((row.confidence_score ?? 0.8) * 100)
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <input
+                                type="range"
+                                min={0} max={100} step={1}
+                                value={sliderPct}
+                                onChange={e => setEditRows(prev => prev.map(r =>
+                                  r.comparison_code === row.comparison_code
+                                    ? { ...r, confidence_score: Number(e.target.value) / 100 }
+                                    : r
+                                ))}
+                                style={{ flex: 1, accentColor: T.navy, cursor: 'pointer' }}
+                              />
+                              <span style={{ width: 36, fontSize: 13, fontWeight: 600, color: T.text, textAlign: 'right' }}>
+                                {sliderPct}%
+                              </span>
+                            </div>
+                          )
+                        })()}
                       </td>
                     </tr>
                   ))}
