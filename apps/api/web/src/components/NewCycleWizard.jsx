@@ -190,6 +190,49 @@ function AddNewStudyCard({ onNavigate }) {
   )
 }
 
+// ─── Omni-search helpers ──────────────────────────────────────────────────────
+
+function matchesStudySearch(study, query) {
+  if (!query || !query.trim()) return true
+  const q = query.trim().toLowerCase()
+
+  const fields = [
+    study.name,
+    study.study_type || study.id,
+    study.category,
+  ]
+
+  const patterns = Array.isArray(study.patterns)
+    ? study.patterns
+    : study.study_pattern
+      ? [study.study_pattern]
+      : []
+
+  fields.push(...patterns)
+
+  return fields.some(f => f && String(f).toLowerCase().includes(q))
+}
+
+function matchesEntitySearch(entity, query) {
+  if (!query || !query.trim()) return true
+  const q = query.trim().toLowerCase()
+
+  const fields = [
+    entity.name,
+    entity.slug,
+    entity.type || entity.entity_type,
+    entity.category,
+  ]
+
+  let aliases = entity.aliases || []
+  if (typeof aliases === 'string') {
+    try { aliases = JSON.parse(aliases) } catch { aliases = [aliases] }
+  }
+  if (Array.isArray(aliases)) fields.push(...aliases)
+
+  return fields.some(f => f && String(f).toLowerCase().includes(q))
+}
+
 // ─── Step 1: Select Study Type ────────────────────────────────────────────────
 
 function Step1({ state, setState, onNext, onNavigate }) {
@@ -210,7 +253,7 @@ function Step1({ state, setState, onNext, onNavigate }) {
   const patterns   = [...new Set(studies.flatMap(s => s.patterns))].filter(Boolean)
 
   const filtered = studies.filter(s => {
-    if (search && !s.name.toLowerCase().includes(search.toLowerCase()) && !s.id.toLowerCase().includes(search.toLowerCase())) return false
+    if (!matchesStudySearch(s, search)) return false
     if (filterCat && s.category !== filterCat) return false
     if (filterPat && !s.patterns.includes(filterPat)) return false
     return true
@@ -224,10 +267,10 @@ function Step1({ state, setState, onNext, onNavigate }) {
       {/* Filter bar */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
         <input
-          placeholder="Search studies..."
+          placeholder="Search by name, category, or pattern..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ flex: 1, padding: '8px 12px', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: 'none' }}
+          style={{ flex: 1, minWidth: 280, padding: '8px 12px', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: 'none' }}
         />
         <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
           style={{ padding: '8px 12px', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, background: T.white }}>
@@ -409,9 +452,7 @@ function Step2({ state, setState, onNext, onBack }) {
     api.getEntities().then(setEntities).catch(() => {})
   }, [])
 
-  const filtered = entities.filter(e =>
-    !search || e.name.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = entities.filter(e => matchesEntitySearch(e, search))
 
   const addToSet = (entity) => {
     if (state.comparisonSet.find(c => c.entity_id === entity.id)) return
@@ -461,7 +502,7 @@ function Step2({ state, setState, onNext, onBack }) {
         <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}` }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>Available Entities</div>
           <input
-            placeholder="Search entities..."
+            placeholder="Search by name, type, or category..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{ width: '100%', padding: '8px 12px', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
