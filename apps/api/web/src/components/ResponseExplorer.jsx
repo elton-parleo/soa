@@ -256,7 +256,7 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'DM Sans', sans-serif", background: T.offWhite }}>
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', fontFamily: "'DM Sans', sans-serif", background: T.offWhite }}>
       <style>{`
         @keyframes rePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
         * { box-sizing: border-box; }
@@ -266,7 +266,7 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
 
       <Sidebar activeView="dashboard" onNavigate={onNavigate} />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', marginLeft: 200, overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', marginLeft: 200, overflow: 'hidden' }}>
 
         {/* Topbar */}
         <div style={{
