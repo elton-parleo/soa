@@ -372,7 +372,7 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
           <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0, borderTop: `1px solid ${T.border}` }}>
 
             {/* Left panel */}
-            <div style={{ width: 320, flexShrink: 0, background: T.white, borderRight: `1px solid ${T.border}`, overflowY: 'auto', height: '100%' }}>
+            <div style={{ width: 320, flexShrink: 0, background: T.white, borderRight: `1px solid ${T.border}`, overflowY: 'auto', minHeight: 0 }}>
               <div style={{
                 padding: '12px 16px', borderBottom: `1px solid ${T.border}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -456,7 +456,7 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
             </div>
 
             {/* Right panel */}
-            <div style={{ flex: 1, background: T.offWhite, overflowY: 'auto', height: '100%' }}>
+            <div style={{ flex: 1, background: T.offWhite, overflowY: 'auto', minHeight: 0 }}>
               {!selectedRun && !loading && (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: T.slate, gap: 10 }}>
                   <div style={{ fontSize: '28px' }}>←</div>
