@@ -53,6 +53,13 @@ class CreateEntityRequest(BaseModel):
     website_url: Optional[str] = None
     aliases: Optional[List[str]] = None
 
+class EntityUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    category: Optional[str] = None
+    website_url: Optional[str] = None
+    aliases: Optional[List[str]] = None
+
 # ─── Cycles ──────────────────────────
 
 class ComparisonEntityInput(BaseModel):

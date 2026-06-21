@@ -324,23 +324,16 @@ export default function EntityRegistry({ onNavigate }) {
         setEntities(prev => [...prev, created])
         setToast({ message: `${formData.name} added`, type: 'success' })
       } else {
-        try {
-          const updated = await api.updateEntity(slideOver.entity.id, {
-            name:        formData.name,
-            type:        formData.type,
-            category:    formData.category,
-            website_url: formData.website_url || null,
-            aliases:     formData.aliases,
-          })
-          setEntities(prev =>
-            prev.map(e => e.id === slideOver.entity.id ? updated : e)
-          )
-        } catch (_apiErr) {
-          // If update route not yet built, apply optimistically
-          setEntities(prev =>
-            prev.map(e => e.id === slideOver.entity.id ? { ...e, ...formData } : e)
-          )
-        }
+        const updated = await api.updateEntity(slideOver.entity.id, {
+          name:        formData.name,
+          type:        formData.type,
+          category:    formData.category,
+          website_url: formData.website_url || null,
+          aliases:     formData.aliases,
+        })
+        setEntities(prev =>
+          prev.map(e => e.id === slideOver.entity.id ? updated : e)
+        )
         setToast({ message: `${formData.name} updated`, type: 'success' })
       }
       setSlideOver(null)

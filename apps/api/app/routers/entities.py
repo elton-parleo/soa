@@ -4,6 +4,7 @@ from soa_shared.database import engine
 from app.schemas import (
     EntityResponse,
     CreateEntityRequest,
+    EntityUpdateRequest,
     ENTITY_TYPE_DISPLAY,
     ENTITY_TYPE_INTERNAL,
 )
@@ -94,6 +95,60 @@ def create_entity(data: CreateEntityRequest):
             "slug":    slug,
             "et":      internal_type,
             "cat":     data.category,
+            "url":     data.website_url,
+            "aliases": str(data.aliases) if data.aliases else None,
+        }).fetchone()
+
+    return EntityResponse(
+        id=result[0],
+        name=result[1],
+        slug=result[2],
+        type=ENTITY_TYPE_DISPLAY.get(result[3], result[3].title()),
+        category=result[4] or "",
+    )
+
+
+@router.put("/entities/{entity_id}", response_model=EntityResponse)
+def update_entity(entity_id: int, data: EntityUpdateRequest):
+    internal_type = ENTITY_TYPE_INTERNAL.get(data.type, data.type.lower()) if data.type else None
+
+    with engine.begin() as conn:
+        existing = conn.execute(text("""
+            SELECT id, name, slug, entity_type, category
+            FROM soa_entities WHERE id = :id
+        """), {"id": entity_id}).fetchone()
+
+        if not existing:
+            raise HTTPException(status_code=404, detail=f"Entity {entity_id} not found")
+
+        new_name = data.name if data.name is not None else existing[1]
+        new_et   = internal_type if internal_type is not None else existing[3]
+        new_cat  = data.category if data.category is not None else existing[4]
+
+        # Re-slug only if name changed
+        if data.name is not None and data.name != existing[1]:
+            base_slug = slugify(data.name)
+            new_slug  = unique_slug(conn, base_slug)
+        else:
+            new_slug = existing[2]
+
+        result = conn.execute(text("""
+            UPDATE soa_entities
+            SET name        = :name,
+                slug        = :slug,
+                entity_type = :et,
+                category    = :cat,
+                website_url = :url,
+                aliases     = :aliases,
+                updated_at  = NOW()
+            WHERE id = :id
+            RETURNING id, name, slug, entity_type, category
+        """), {
+            "id":      entity_id,
+            "name":    new_name,
+            "slug":    new_slug,
+            "et":      new_et,
+            "cat":     new_cat,
             "url":     data.website_url,
             "aliases": str(data.aliases) if data.aliases else None,
         }).fetchone()

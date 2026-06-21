@@ -141,7 +141,7 @@ export const api = {
     post('/api/entities', data),
 
   updateEntity: (id, data) =>
-    request('POST', `/api/entities/${id}`, data),
+    request('PUT', `/api/entities/${id}`, data),
 
   deleteEntity: (id) =>
     request('DELETE', `/api/entities/${id}`),
