@@ -71,6 +71,20 @@ ELIGIBILITY_CONDITIONING_ENABLED: bool = (
     os.environ.get("ELIGIBILITY_CONDITIONING_ENABLED", "false").lower() == "true"
 )
 
+# Grounded Gemini surface — gemini-2.5 with the google_search grounding tool,
+# as a separate "gemini_grounded" platform. Off by default; the existing
+# "gemini" platform/runner is never affected by this flag.
+ENABLE_GEMINI_GROUNDED: bool = (
+    os.environ.get("ENABLE_GEMINI_GROUNDED", "false").lower() == "true"
+)
+
+# Lifecycle-triggered sampling — schedules runs around Deal Engine incentive
+# windows (launch / mid-window / pre-expiry / post-expiry) instead of plain
+# cycle-based sampling. Off by default; does not affect cycle_manager.
+INCENTIVE_SCHEDULING_ENABLED: bool = (
+    os.environ.get("INCENTIVE_SCHEDULING_ENABLED", "false").lower() == "true"
+)
+
 # Pipeline
 SOA_PLATFORMS: str = os.environ.get("SOA_PLATFORMS", "chatgpt,perplexity,gemini,claude")
 SOA_RUNNER_ERROR_ABORT_THRESHOLD: float = float(os.environ.get("SOA_RUNNER_ERROR_ABORT_THRESHOLD", "0.50"))

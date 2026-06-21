@@ -26,6 +26,7 @@ from runners.base_runner import BasePlatformRunner
 from runners.claude_runner import ClaudeRunner
 from runners.cycle_summary import CycleSummary
 from runners.gemini_runner import GeminiRunner
+from runners.gemini_grounded_runner import GeminiGroundedRunner
 from runners.openai_runner import OpenAIRunner
 from runners.perplexity_runner import PerplexityRunner
 from runners.platform_response import PlatformResponse
@@ -53,6 +54,13 @@ _PLATFORM_MAX_CONCURRENT: Dict[str, int] = {
     "gemini":     config.SOA_GEMINI_MAX_CONCURRENT,
     "claude":     config.SOA_CLAUDE_MAX_CONCURRENT,
 }
+
+# Additive, flagged: "gemini_grounded" only becomes a valid/runnable platform
+# when ENABLE_GEMINI_GROUNDED is set. With the flag off, requesting it raises
+# the same "Unknown platforms" error as before this runner existed.
+if config.ENABLE_GEMINI_GROUNDED:
+    _RUNNER_CLASSES["gemini_grounded"] = GeminiGroundedRunner
+    _PLATFORM_MAX_CONCURRENT["gemini_grounded"] = config.SOA_GEMINI_MAX_CONCURRENT
 
 # Per-platform inter-run delays (claude needs a wider gap to avoid burst limits)
 _PLATFORM_INTER_RUN_DELAY: Dict[str, float] = {
@@ -395,6 +403,7 @@ class RunOrchestrator:
             run.status = response.status
             run.error_message = response.error
             run.search_triggered = response.search_triggered
+            run.retrieved_sources = response.retrieved_sources
 
             session.commit()
 

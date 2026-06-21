@@ -55,6 +55,8 @@ class OpenAIRunner(BasePlatformRunner):
             for item in response.output
         )
 
+        retrieved_sources = self._extract_retrieved_sources(response.output)
+
         usage = response.usage
         return PlatformResponse(
             response_text=response.output_text or "",
@@ -65,4 +67,29 @@ class OpenAIRunner(BasePlatformRunner):
             model=self.model,
             status="success",
             search_triggered=search_triggered,
+            retrieved_sources=retrieved_sources or None,
         )
+
+    @staticmethod
+    def _extract_retrieved_sources(output) -> list[str]:
+        """
+        Pulls source URLs from web_search_call items' action.sources (when
+        present) and from any url_citation annotations on output text, so
+        provenance is captured whenever the Responses API exposes it.
+        """
+        urls: list[str] = []
+        for item in output:
+            if getattr(item, "type", None) == "web_search_call":
+                action = getattr(item, "action", None)
+                for source in (getattr(action, "sources", None) or []):
+                    url = getattr(source, "url", None) or (
+                        source.get("url") if isinstance(source, dict) else None
+                    )
+                    if url:
+                        urls.append(url)
+            for annotation in (getattr(item, "annotations", None) or []):
+                if getattr(annotation, "type", None) == "url_citation":
+                    url = getattr(annotation, "url", None)
+                    if url:
+                        urls.append(url)
+        return urls

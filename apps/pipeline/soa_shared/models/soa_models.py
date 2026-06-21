@@ -413,7 +413,7 @@ class SoaRun(Base):
     __tablename__ = "soa_runs"
     __table_args__ = (
         CheckConstraint(
-            "platform IN ('chatgpt','perplexity','gemini','claude')",
+            "platform IN ('chatgpt','perplexity','gemini','claude','gemini_grounded')",
             name="ck_soa_runs_platform",
         ),
         CheckConstraint(
@@ -450,6 +450,15 @@ class SoaRun(Base):
             "Whether the LLM triggered a web search for this run. "
             "True/False for OpenAI Responses API runs. "
             "NULL for platforms that do not expose this signal."
+        ),
+    )
+    retrieved_sources = Column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Grounding/search source URLs where the platform exposes them — "
+            "OpenAI web_search items, Gemini grounding metadata, Perplexity "
+            "citations. NULL when not exposed or not used. Seeds M26."
         ),
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
