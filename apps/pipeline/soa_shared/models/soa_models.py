@@ -428,6 +428,7 @@ class SoaRun(Base):
     query = relationship("SoaQuery", back_populates="runs")
     coded_mentions = relationship("SoaCodedMention", back_populates="run")
     other_mentions = relationship("SoaOtherMention", back_populates="run")
+    incentive_scores = relationship("SoaIncentiveScore", back_populates="run")
 
 
 # ---------------------------------------------------------------------------
@@ -571,6 +572,68 @@ class SoaMetricsResult(Base):
 
     cycle = relationship("SoaCycle", back_populates="metrics_results")
     entity = relationship("SoaEntity", back_populates="metrics_results")
+
+
+# ---------------------------------------------------------------------------
+# 8b. soa_incentive_scores — Rung-0 incentive fidelity scoring vs Deal Engine
+# ---------------------------------------------------------------------------
+
+class SoaIncentiveScore(Base):
+    __tablename__ = "soa_incentive_scores"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('scored','ground_truth_unavailable','no_merchant_mapping','skipped')",
+            name="ck_soa_incentive_scores_status",
+        ),
+        Index("ix_soa_incentive_scores_run_id", "run_id"),
+        Index("ix_soa_incentive_scores_entity_id", "entity_id"),
+        Index("ix_soa_incentive_scores_status", "status"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, ForeignKey("soa_runs.id"), nullable=False, index=True)
+
+    entity_id = Column(
+        Integer,
+        ForeignKey("soa_entities.id"),
+        nullable=True,
+        index=True,
+        comment="FK to soa_entities. Null if the merchant could not be resolved.",
+    )
+
+    # Kept for read convenience, mirrors soa_coded_mentions.merchant_id pattern.
+    # No FK constraint — merchants is owned by /supply.
+    merchant_id = Column(Integer, nullable=True, index=True)
+
+    # Extracted from the agent's response by the coder (parser/coding_response.py).
+    stated_price = Column(Float, nullable=True)
+    claimed_net_price = Column(Float, nullable=True)
+    claimed_discount_value = Column(Float, nullable=True)
+    claimed_discount_pct = Column(Float, nullable=True)
+    claimed_terms = Column(JSON, nullable=True)
+    member_price_claimed = Column(Boolean, nullable=True)
+    subscription_offer_claimed = Column(Boolean, nullable=True)
+
+    # Ground truth from the Deal Engine.
+    ground_truth_true_cost = Column(Float, nullable=True)
+    ground_truth_applied_deals = Column(JSON, nullable=True)
+    ground_truth_confidence = Column(Float, nullable=True)
+    user_tier_name = Column(Text, nullable=True)
+
+    # Computed Rung-0 fidelity metrics.
+    net_price_reflected = Column(Boolean, nullable=True, comment="M2")
+    net_price_accuracy = Column(Boolean, nullable=True, comment="M12")
+    term_fidelity = Column(Float, nullable=True, comment="M13")
+    member_price_reflected = Column(Boolean, nullable=True, comment="M16")
+
+    status = Column(Text, nullable=False, default="scored", server_default="scored")
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    run = relationship("SoaRun", back_populates="incentive_scores")
+    entity = relationship("SoaEntity")
 
 
 # ---------------------------------------------------------------------------

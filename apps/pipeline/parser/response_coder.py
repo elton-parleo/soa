@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import joinedload
 
+import soa_shared.config as config
 from soa_shared.database import session_factory
 from soa_shared.models.soa_models import (
     SoaCycle,
@@ -19,6 +20,7 @@ from soa_shared.models.soa_models import (
 )
 from parser.coding_client import CodingClient
 from parser.validator import CodingValidator
+from scoring.incentive_scorer import IncentiveScorer
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +39,15 @@ class CodeRunResult:
 
 class ResponseCoder:
 
-    def __init__(self, coding_client: CodingClient, validator: CodingValidator) -> None:
+    def __init__(
+        self,
+        coding_client: CodingClient,
+        validator: CodingValidator,
+        incentive_scorer: Optional[IncentiveScorer] = None,
+    ) -> None:
         self.coding_client = coding_client
         self.validator = validator
+        self._incentive_scorer = incentive_scorer
 
     def _load_cycle_entities(self, cycle_id: int) -> Dict[str, int]:
         """
@@ -236,6 +244,26 @@ class ResponseCoder:
                 needs_review=False, merchants_coded=0, other_merchants_found=0,
                 error_message=str(exc),
             )
+
+        # 9. Rung-0 incentive scoring — additive, flagged, never fails the coding result.
+        if config.INCENTIVE_SCORING_ENABLED:
+            scorer = self._incentive_scorer or IncentiveScorer()
+            try:
+                with session_factory() as session:
+                    try:
+                        await scorer.score_run(
+                            session=session,
+                            run_id=run.id,
+                            merchants=coding.merchants,
+                            code_to_entity_id=code_to_entity_id,
+                            entity_id_to_merchant_id=entity_id_to_merchant_id,
+                        )
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                        raise
+            except Exception as exc:
+                logger.error("[coder] run_id=%d incentive_scoring_error: %s", run_id, exc)
 
         return CodeRunResult(
             run_id=run_id,

@@ -12,6 +12,14 @@ class MerchantCoding:
     deal_types: List[str]
     evidence: Optional[str]
     confidence: float
+    # Rung-0 incentive fields — additive, default empty/None when not stated.
+    stated_price: Optional[float] = None
+    claimed_net_price: Optional[float] = None
+    claimed_discount_value: Optional[float] = None
+    claimed_discount_pct: Optional[float] = None
+    claimed_terms: List[str] = field(default_factory=list)
+    member_price_claimed: Optional[bool] = None
+    subscription_offer_claimed: Optional[bool] = None
 
 
 @dataclass

@@ -43,6 +43,7 @@ SOA_TABLES = {
     "soa_coded_mentions",
     "soa_other_mentions",
     "soa_metrics_results",
+    "soa_incentive_scores",
 }
 
 

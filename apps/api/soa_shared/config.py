@@ -53,6 +53,17 @@ SOA_DEFAULT_INTER_RUN_DELAY: float = float(os.environ.get("SOA_DEFAULT_INTER_RUN
 SOA_CODING_MODEL: str = "gpt-5.4-nano-2026-03-17"
 SOA_MAX_CODING_CONCURRENT: int = int(os.environ.get("SOA_MAX_CODING_CONCURRENT", "5"))
 
+# Incentive scoring (Rung-0) — compares stated incentives against Deal Engine ground truth
+DEAL_ENGINE_BASE_URL: str = os.environ.get("DEAL_ENGINE_BASE_URL", "")
+INCENTIVE_SCORING_ENABLED: bool = os.environ.get("INCENTIVE_SCORING_ENABLED", "false").lower() == "true"
+SOA_INCENTIVE_PRICE_TOLERANCE_PCT: float = float(os.environ.get("SOA_INCENTIVE_PRICE_TOLERANCE_PCT", "0.01"))
+SOA_DEAL_ENGINE_TIMEOUT_SECONDS: float = float(os.environ.get("SOA_DEAL_ENGINE_TIMEOUT_SECONDS", "10.0"))
+SOA_DEAL_ENGINE_MAX_RETRIES: int = int(os.environ.get("SOA_DEAL_ENGINE_MAX_RETRIES", "2"))
+
+# Merchant slug fallback map — used when soa_entities/merchants has no slug for a
+# merchant_id. Format: "merchant_id:slug,merchant_id:slug".
+SOA_MERCHANT_SLUG_FALLBACK_MAP: str = os.environ.get("SOA_MERCHANT_SLUG_FALLBACK_MAP", "")
+
 # Pipeline
 SOA_PLATFORMS: str = os.environ.get("SOA_PLATFORMS", "chatgpt,perplexity,gemini,claude")
 SOA_RUNNER_ERROR_ABORT_THRESHOLD: float = float(os.environ.get("SOA_RUNNER_ERROR_ABORT_THRESHOLD", "0.50"))

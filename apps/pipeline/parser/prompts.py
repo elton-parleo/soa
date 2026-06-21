@@ -225,7 +225,36 @@ CALIBRATION RULES:
 - Set needs_review=true if confidence < 0.75 on any entity coding
 - Set needs_review=true if you coded Primary for an entity but are uncertain \
 whether the language truly singles them out
-- Include in coder_notes any ambiguity, unusual framing, or response quality issues\
+- Include in coder_notes any ambiguity, unusual framing, or response quality issues
+
+STATED INCENTIVE EXTRACTION (Rung-0 fidelity fields):
+In addition to the rubric above, extract any concrete numbers the agent stated
+about price or savings for this entity. These are separate from deal_cited/
+deal_types — extract them whenever the response states a number, even when
+deal_cited is false (e.g. a plain stated price with no deal).
+
+  stated_price: the plain price the agent quoted for the product at this
+    entity, before any discount the agent mentions. Null if no price stated.
+  claimed_net_price: the final price the agent says the buyer will actually
+    pay, after any discount/member price/promo is applied. Null if the agent
+    never gives a final post-discount number.
+  claimed_discount_value: the dollar amount of savings the agent states
+    (e.g. "save $15" → 15). Null if not stated as a dollar amount.
+  claimed_discount_pct: the percentage discount the agent states
+    (e.g. "20% off" → 20). Null if not stated as a percentage.
+  claimed_terms: short strings capturing any conditions the agent attaches to
+    the incentive (e.g. "orders over $50", "new customers only", "Rouge
+    members only", "ends Friday"). Empty list if no terms stated.
+  member_price_claimed: true if the agent explicitly states a price only
+    available to loyalty members or a named tier; false if the agent
+    explicitly states the price is NOT member-restricted; null if the agent
+    says nothing about membership restriction.
+  subscription_offer_claimed: true if the agent states a subscribe-and-save
+    or recurring-order discount; false if the agent explicitly says no such
+    offer exists; null if not mentioned.
+
+These fields are extracted independently per entity, only when the entity is
+mentioned. If the entity is not mentioned, leave all of these null/empty.\
 """
 
 
@@ -343,6 +372,16 @@ def build_coding_schema(comparison_codes: List[str]) -> dict:
                         "minimum": 0.0,
                         "maximum": 1.0,
                     },
+                    "stated_price": {"type": ["number", "null"]},
+                    "claimed_net_price": {"type": ["number", "null"]},
+                    "claimed_discount_value": {"type": ["number", "null"]},
+                    "claimed_discount_pct": {"type": ["number", "null"]},
+                    "claimed_terms": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "member_price_claimed": {"type": ["boolean", "null"]},
+                    "subscription_offer_claimed": {"type": ["boolean", "null"]},
                 },
                 "required": [
                     "mentioned",
@@ -352,6 +391,13 @@ def build_coding_schema(comparison_codes: List[str]) -> dict:
                     "deal_types",
                     "evidence",
                     "confidence",
+                    "stated_price",
+                    "claimed_net_price",
+                    "claimed_discount_value",
+                    "claimed_discount_pct",
+                    "claimed_terms",
+                    "member_price_claimed",
+                    "subscription_offer_claimed",
                 ],
                 "additionalProperties": False,
             },

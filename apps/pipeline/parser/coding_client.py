@@ -86,6 +86,13 @@ class CodingClient:
                         deal_types=data["deal_types"] or [],
                         evidence=data["evidence"],
                         confidence=data["confidence"],
+                        stated_price=data.get("stated_price"),
+                        claimed_net_price=data.get("claimed_net_price"),
+                        claimed_discount_value=data.get("claimed_discount_value"),
+                        claimed_discount_pct=data.get("claimed_discount_pct"),
+                        claimed_terms=data.get("claimed_terms") or [],
+                        member_price_claimed=data.get("member_price_claimed"),
+                        subscription_offer_claimed=data.get("subscription_offer_claimed"),
                     )
 
                 other_merchants = [
