@@ -87,6 +87,7 @@ class CycleStatusResponse(BaseModel):
     updated_at: Optional[str] = None
     platforms: Optional[List[str]] = None
     runs_per_query: Optional[int] = None
+    id: Optional[int] = None  # soa_cycles.id — needed by scope-SKU endpoints, which key on it
 
 class CycleCheckResponse(BaseModel):
     available: bool
@@ -298,4 +299,67 @@ class GenerationStatusResponse(BaseModel):
     status:        str
     target_count:  int
     created_count: int
+
+
+# ─── Scope SKUs ──────────────────────
+# Additive: optional SKU-level measurement scope nested under entities.
+
+class CreateScopeSkuRequest(BaseModel):
+    """
+    Accepts EITHER a picked listing (listing_id + the CatalogListing fields
+    the frontend already has from the search results) OR a bare product_url
+    (the server calls resolve_listing() first, then persists). entity_id is
+    optional in both cases — when omitted, the row is auto-linked by brand
+    match to an existing SoaEntity, else left null.
+    """
+    # Path A — picked listing (listing_id present; the rest are the
+    # CatalogListing fields the frontend already fetched via search).
+    listing_id: Optional[int] = None
+    catalog_product_id: Optional[int] = None
+    merchant_slug: Optional[str] = None
+    merchant_sku: Optional[str] = None
+    brand: Optional[str] = None
+    category: Optional[str] = None
+    product_url: Optional[str] = None
+    listed_price: Optional[float] = None
+    currency: Optional[str] = None
+    display_name: Optional[str] = None
+
+    # Path B — paste a product URL; resolve_listing() fills in everything
+    # above. user_tier_name only applies to this path.
+    user_tier_name: Optional[str] = None
+
+    # Common to both paths.
+    entity_id: Optional[int] = None
+    role: str = "target"
+
+    @model_validator(mode="after")
+    def check_one_path_provided(self):
+        if self.listing_id is None and not self.product_url:
+            raise ValueError(
+                "Either listing_id (a picked catalog listing) or product_url must be provided."
+            )
+        if self.role not in ("target", "competitor"):
+            raise ValueError("role must be 'target' or 'competitor'")
+        return self
+
+
+class ScopeSkuResponse(BaseModel):
+    id: int
+    cycle_id: Optional[int] = None
+    entity_id: Optional[int] = None
+    role: str
+    dealengine_listing_id: Optional[int] = None
+    dealengine_catalog_product_id: Optional[int] = None
+    merchant_slug: Optional[str] = None
+    merchant_sku: Optional[str] = None
+    brand: Optional[str] = None
+    category: Optional[str] = None
+    product_url: Optional[str] = None
+    listed_price: Optional[float] = None
+    currency: Optional[str] = None
+    display_name: Optional[str] = None
+    is_active: bool = True
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
     error_message: Optional[str] = None

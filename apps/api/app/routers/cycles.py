@@ -147,6 +147,7 @@ def create_cycle(
         created_at=str(created_at) if created_at else None,
         platforms=data.platforms,
         runs_per_query=data.runs_per_query,
+        id=cycle_id,
     )
 
 
@@ -160,7 +161,7 @@ def list_cycles(
             SELECT
               cycle_code, status, study_type, study_pattern,
               total_runs_planned, completed_runs, created_at,
-              updated_at, platforms, runs_per_query
+              updated_at, platforms, runs_per_query, id
             FROM soa_cycles
             WHERE organization_id = :org_id
             ORDER BY created_at DESC
@@ -179,7 +180,7 @@ def get_cycle(
             SELECT
               cycle_code, status, study_type, study_pattern,
               total_runs_planned, completed_runs, created_at,
-              updated_at, platforms, runs_per_query
+              updated_at, platforms, runs_per_query, id
             FROM soa_cycles
             WHERE cycle_code = :code
               AND organization_id = :org_id
@@ -492,4 +493,5 @@ def _row_to_cycle(row) -> CycleStatusResponse:
         updated_at=str(row[7])[:19] if row[7] else None,
         platforms=json.loads(row[8]) if isinstance(row[8], str) else row[8],
         runs_per_query=row[9],
+        id=row[10] if len(row) > 10 else None,
     )

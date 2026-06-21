@@ -30,6 +30,22 @@ class OtherMerchantCoding:
 
 
 @dataclass
+class ScopeSkuCoding:
+    """
+    Constrained-resolution coding for one soa_scope_skus row — only present
+    when the cycle has scope SKUs and SKU_SCOPE_ENABLED is on. Mirrors the
+    Rung-0 incentive fields on MerchantCoding, but scoped to an exact SKU
+    rather than a brand.
+    """
+    scope_sku_code: str
+    surfaced: bool
+    stated_price: Optional[float] = None
+    claimed_terms: List[str] = field(default_factory=list)
+    member_price_claimed: Optional[bool] = None
+    evidence: Optional[str] = None
+
+
+@dataclass
 class CodingResponse:
     run_id: int
     merchants: Dict[str, MerchantCoding]
@@ -39,3 +55,5 @@ class CodingResponse:
     coding_latency_ms: int
     input_tokens: int = 0
     output_tokens: int = 0
+    # SKU-scope fields — additive, empty when the cycle has no scope SKUs.
+    scope_sku_codings: List[ScopeSkuCoding] = field(default_factory=list)

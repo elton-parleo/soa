@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../api.js'
 import Sidebar from './Sidebar.jsx'
+import ScopeSkuManager from './ScopeSkuManager.jsx'
 
 // ─── Design tokens (verbatim from NewCycleWizard.jsx) ────────────────────────
 const T = {
@@ -323,6 +324,7 @@ function FailedBody({ cycle, onViewCycle, onResume, resuming }) {
 // ─── Planned card body ────────────────────────────────────────────────────────
 
 function PlannedBody({ cycle, onViewCycle }) {
+  const [showScope, setShowScope] = useState(false)
   return (
     <>
       <div style={{ background: T.offWhite, borderRadius: 6, padding: 12, fontSize: 13, color: T.slate }}>
@@ -334,6 +336,21 @@ function PlannedBody({ cycle, onViewCycle }) {
       >
         View Details
       </button>
+      {/* Optional SKU-level measurement scope — additive, only shown when
+          the cycle's numeric id is available (brand-only cycles don't need it). */}
+      {cycle.id != null && (
+        <button
+          onClick={e => { e.stopPropagation(); setShowScope(v => !v) }}
+          style={{ width: '100%', padding: '7px 0', background: 'none', border: `1px solid ${T.border}`, color: T.slate, borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}
+        >
+          {showScope ? 'Hide Scope SKUs' : 'Manage Scope SKUs'}
+        </button>
+      )}
+      {showScope && cycle.id != null && (
+        <div onClick={e => e.stopPropagation()}>
+          <ScopeSkuManager cycleId={cycle.id} />
+        </div>
+      )}
     </>
   )
 }

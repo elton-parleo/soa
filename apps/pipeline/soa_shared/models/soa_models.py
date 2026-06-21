@@ -16,6 +16,7 @@ from sqlalchemy import (
     Index,
     Integer,
     JSON,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -332,6 +333,7 @@ class SoaCycle(Base):
         order_by="SoaCycleEntity.comparison_code",
         cascade="all, delete-orphan",
     )
+    scope_skus = relationship("SoaScopeSku", back_populates="cycle")
 
 
 # ---------------------------------------------------------------------------
@@ -403,6 +405,78 @@ class SoaCycleEntity(Base):
 
     cycle = relationship("SoaCycle", back_populates="cycle_entities")
     entity = relationship("SoaEntity", back_populates="cycle_entities")
+
+
+# ---------------------------------------------------------------------------
+# 4b. soa_scope_skus — optional SKU-level measurement scope, nested under
+# entities. When a cycle has no scope SKUs, coding/scoring behave exactly
+# as they did before this table existed.
+# ---------------------------------------------------------------------------
+
+class SoaScopeSku(Base):
+    __tablename__ = "soa_scope_skus"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('target','competitor')",
+            name="ck_soa_scope_skus_role",
+        ),
+        Index("ix_soa_scope_skus_cycle_id", "cycle_id"),
+        Index("ix_soa_scope_skus_entity_id", "entity_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    cycle_id = Column(
+        Integer,
+        ForeignKey("soa_cycles.id"),
+        nullable=True,
+        index=True,
+        comment="Cycle this scope SKU applies to. Nullable so a SKU can be authored before being attached to a cycle.",
+    )
+
+    entity_id = Column(
+        Integer,
+        ForeignKey("soa_entities.id"),
+        nullable=True,
+        index=True,
+        comment="The brand/merchant entity this SKU belongs to. Null if not auto-linked or manually set.",
+    )
+
+    role = Column(
+        Text,
+        nullable=False,
+        default="target",
+        server_default="target",
+        comment="target — the SKU being measured. competitor — a comparison SKU.",
+    )
+
+    # Deal Engine reference BY VALUE — mirrors the merchant_ref.py pattern.
+    # No cross-DB FK to the supply app's catalog tables; these are a
+    # point-in-time snapshot of what the Deal Engine returned when the SKU
+    # was added to scope. All nullable.
+    dealengine_listing_id = Column(Integer, nullable=True, index=True)
+    dealengine_catalog_product_id = Column(Integer, nullable=True)
+    merchant_slug = Column(Text, nullable=True)
+    merchant_sku = Column(Text, nullable=True)
+    brand = Column(Text, nullable=True)
+    category = Column(Text, nullable=True)
+    product_url = Column(Text, nullable=True)
+    listed_price = Column(Numeric(10, 2), nullable=True)
+    currency = Column(Text, nullable=True)
+    display_name = Column(
+        Text,
+        nullable=True,
+        comment="Name shown in the coding prompt and UI. Falls back to brand + merchant_sku if null.",
+    )
+
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    cycle = relationship("SoaCycle", back_populates="scope_skus")
+    entity = relationship("SoaEntity")
+    incentive_scores = relationship("SoaIncentiveScore", back_populates="scope_sku")
 
 
 # ---------------------------------------------------------------------------
@@ -701,6 +775,20 @@ class SoaIncentiveScore(Base):
     # No FK constraint — merchants is owned by /supply.
     merchant_id = Column(Integer, nullable=True, index=True)
 
+    scope_sku_id = Column(
+        Integer,
+        ForeignKey("soa_scope_skus.id"),
+        nullable=True,
+        index=True,
+        comment="Set when this row scores a SKU-level scope coding instead of a brand x category one.",
+    )
+    dealengine_listing_id = Column(
+        Integer,
+        nullable=True,
+        index=True,
+        comment="Deal Engine listing id used for the true-cost call. Mirrors soa_scope_skus.dealengine_listing_id by value.",
+    )
+
     # Extracted from the agent's response by the coder (parser/coding_response.py).
     stated_price = Column(Float, nullable=True)
     claimed_net_price = Column(Float, nullable=True)
@@ -730,6 +818,7 @@ class SoaIncentiveScore(Base):
 
     run = relationship("SoaRun", back_populates="incentive_scores")
     entity = relationship("SoaEntity")
+    scope_sku = relationship("SoaScopeSku", back_populates="incentive_scores")
 
 
 # ---------------------------------------------------------------------------

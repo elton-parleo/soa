@@ -10,8 +10,8 @@ from unittest.mock import MagicMock
 import pytest
 
 import soa_shared.config as config
-from clients.deal_engine_client import TrueCostResult
-from parser.coding_response import MerchantCoding
+from clients.deal_engine_client import ListingTrueCostResult, TrueCostResult
+from parser.coding_response import MerchantCoding, ScopeSkuCoding
 from scoring.incentive_scorer import IncentiveScorer
 
 
@@ -201,3 +201,211 @@ def test_skips_merchants_with_no_signal():
     ))
 
     assert scores == []
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SKU-level scoring — score_scope_skus()
+# ─────────────────────────────────────────────────────────────────────────────
+
+class FakeListingClient:
+    def __init__(self, result: ListingTrueCostResult):
+        self.result = result
+        self.calls = []
+
+    async def listing_true_cost(self, listing_id, user_tier_name=None):
+        self.calls.append({"listing_id": listing_id, "user_tier_name": user_tier_name})
+        return self.result
+
+
+def _scope_sku(id=10, entity_id=5, dealengine_listing_id=7):
+    sku = MagicMock()
+    sku.id = id
+    sku.entity_id = entity_id
+    sku.dealengine_listing_id = dealengine_listing_id
+    return sku
+
+
+def _sku_coding(**overrides):
+    base = dict(
+        scope_sku_code="SKU001",
+        surfaced=True,
+        stated_price=19.80,
+        claimed_terms=["Rouge members only"],
+        member_price_claimed=True,
+        evidence="Soft Pinch Lip Oil is $19.80 for Rouge members",
+    )
+    base.update(overrides)
+    return ScopeSkuCoding(**base)
+
+
+def test_score_scope_skus_reflected_when_closer_to_true_cost_than_listed():
+    config.SOA_INCENTIVE_PRICE_TOLERANCE_PCT = 0.01
+    coding = _sku_coding(stated_price=19.80)
+    result = ListingTrueCostResult(
+        available=True, true_cost=19.80, listed_price=22.00,
+        applied_deals=[{"deal_type": "discount_pct", "terms": ["Rouge members only"]}],
+        confidence=1.0,
+    )
+    scorer = IncentiveScorer(deal_engine_client=FakeListingClient(result))
+    session = FakeSession()
+
+    scores = asyncio.run(scorer.score_scope_skus(
+        session=session, run_id=1,
+        scope_sku_codings=[coding],
+        code_to_scope_sku={"SKU001": _scope_sku()},
+    ))
+
+    assert len(scores) == 1
+    s = scores[0]
+    assert s.status == "scored"
+    assert s.scope_sku_id == 10
+    assert s.dealengine_listing_id == 7
+    assert s.entity_id == 5
+    assert s.net_price_reflected is True  # within tol AND closer to true_cost than listed
+    assert s.net_price_accuracy is True   # within tol of true_cost
+    assert s.term_fidelity == 1.0
+
+
+def test_score_scope_skus_not_reflected_when_no_discount_exists():
+    """
+    listed_price == true_cost (no actual discount) — stated_price matches
+    both equally, so it is NOT "closer to true_cost than to listed_price".
+    M2 should be False even though M12 (plain accuracy) is True.
+    """
+    config.SOA_INCENTIVE_PRICE_TOLERANCE_PCT = 0.01
+    coding = _sku_coding(stated_price=22.00, claimed_terms=[])
+    result = ListingTrueCostResult(available=True, true_cost=22.00, listed_price=22.00, applied_deals=[])
+    scorer = IncentiveScorer(deal_engine_client=FakeListingClient(result))
+    session = FakeSession()
+
+    scores = asyncio.run(scorer.score_scope_skus(
+        session=session, run_id=1,
+        scope_sku_codings=[coding],
+        code_to_scope_sku={"SKU001": _scope_sku()},
+    ))
+
+    assert scores[0].net_price_accuracy is True
+    assert scores[0].net_price_reflected is False
+
+
+def test_score_scope_skus_tolerance_boundary_exact_edge_is_accurate():
+    config.SOA_INCENTIVE_PRICE_TOLERANCE_PCT = 0.01
+    # true_cost=100, tol=1.0 -> stated_price=99.0 is exactly at boundary (<=)
+    coding = _sku_coding(stated_price=99.0, claimed_terms=[])
+    result = ListingTrueCostResult(available=True, true_cost=100.0, listed_price=120.0, applied_deals=[])
+    scorer = IncentiveScorer(deal_engine_client=FakeListingClient(result))
+    session = FakeSession()
+
+    scores = asyncio.run(scorer.score_scope_skus(
+        session=session, run_id=1,
+        scope_sku_codings=[coding],
+        code_to_scope_sku={"SKU001": _scope_sku()},
+    ))
+
+    assert scores[0].net_price_accuracy is True
+    assert scores[0].net_price_reflected is True
+
+
+def test_score_scope_skus_tolerance_boundary_just_outside_is_not_accurate():
+    config.SOA_INCENTIVE_PRICE_TOLERANCE_PCT = 0.01
+    # true_cost=100, tol=1.0 -> stated_price=98.99 is outside boundary
+    coding = _sku_coding(stated_price=98.99, claimed_terms=[])
+    result = ListingTrueCostResult(available=True, true_cost=100.0, listed_price=120.0, applied_deals=[])
+    scorer = IncentiveScorer(deal_engine_client=FakeListingClient(result))
+    session = FakeSession()
+
+    scores = asyncio.run(scorer.score_scope_skus(
+        session=session, run_id=1,
+        scope_sku_codings=[coding],
+        code_to_scope_sku={"SKU001": _scope_sku()},
+    ))
+
+    assert scores[0].net_price_accuracy is False
+    assert scores[0].net_price_reflected is False
+
+
+def test_score_scope_skus_ground_truth_unavailable_path_completes():
+    coding = _sku_coding()
+    unavailable_result = ListingTrueCostResult(available=False, error="timeout")
+    scorer = IncentiveScorer(deal_engine_client=FakeListingClient(unavailable_result))
+    session = FakeSession()
+
+    scores = asyncio.run(scorer.score_scope_skus(
+        session=session, run_id=1,
+        scope_sku_codings=[coding],
+        code_to_scope_sku={"SKU001": _scope_sku()},
+    ))
+
+    assert len(scores) == 1
+    assert scores[0].status == "ground_truth_unavailable"
+    assert scores[0].error_message == "timeout"
+    assert scores[0].net_price_reflected is None
+
+
+def test_score_scope_skus_no_listing_id_yields_no_merchant_mapping():
+    coding = _sku_coding()
+    scorer = IncentiveScorer(
+        deal_engine_client=FakeListingClient(ListingTrueCostResult(available=True, true_cost=1.0))
+    )
+    session = FakeSession()
+    sku_without_listing = _scope_sku(dealengine_listing_id=None)
+
+    scores = asyncio.run(scorer.score_scope_skus(
+        session=session, run_id=1,
+        scope_sku_codings=[coding],
+        code_to_scope_sku={"SKU001": sku_without_listing},
+    ))
+
+    assert scores[0].status == "no_merchant_mapping"
+
+
+def test_score_scope_skus_skips_non_surfaced_codings():
+    coding = _sku_coding(surfaced=False, stated_price=None)
+    scorer = IncentiveScorer(
+        deal_engine_client=FakeListingClient(ListingTrueCostResult(available=True, true_cost=1.0))
+    )
+    session = FakeSession()
+
+    scores = asyncio.run(scorer.score_scope_skus(
+        session=session, run_id=1,
+        scope_sku_codings=[coding],
+        code_to_scope_sku={"SKU001": _scope_sku()},
+    ))
+
+    assert scores == []
+
+
+def test_score_scope_skus_member_price_reflected():
+    coding = _sku_coding(member_price_claimed=True, claimed_terms=[])
+    result = ListingTrueCostResult(
+        available=True, true_cost=19.80, listed_price=22.0,
+        applied_deals=[{"deal_type": "member_price"}],
+    )
+    scorer = IncentiveScorer(deal_engine_client=FakeListingClient(result))
+    session = FakeSession()
+
+    scores = asyncio.run(scorer.score_scope_skus(
+        session=session, run_id=1,
+        scope_sku_codings=[coding],
+        code_to_scope_sku={"SKU001": _scope_sku()},
+        tier="Rouge",
+    ))
+
+    assert scores[0].member_price_reflected is True
+
+
+def test_score_scope_skus_passes_listing_id_and_tier_to_client():
+    coding = _sku_coding()
+    result = ListingTrueCostResult(available=True, true_cost=19.80, listed_price=22.0)
+    client = FakeListingClient(result)
+    scorer = IncentiveScorer(deal_engine_client=client)
+    session = FakeSession()
+
+    asyncio.run(scorer.score_scope_skus(
+        session=session, run_id=1,
+        scope_sku_codings=[coding],
+        code_to_scope_sku={"SKU001": _scope_sku(dealengine_listing_id=77)},
+        tier="Gold",
+    ))
+
+    assert client.calls == [{"listing_id": 77, "user_tier_name": "Gold"}]

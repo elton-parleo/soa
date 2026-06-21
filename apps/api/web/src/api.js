@@ -188,4 +188,23 @@ export const api = {
 
   updateRunMentions: (cycleCode, runId, updates) =>
     request('PATCH', `/api/cycles/${cycleCode}/runs/${runId}/mentions`, updates),
+
+  // Scope SKUs — optional SKU-level measurement scope nested under entities
+  searchScopeCatalog: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && v !== '')
+      )
+    ).toString()
+    return get(`/api/scope/catalog/search${qs ? '?' + qs : ''}`)
+  },
+
+  getScopeSkus: (cycleId) =>
+    get(`/api/cycles/${cycleId}/scope-skus`),
+
+  addScopeSku: (cycleId, data) =>
+    post(`/api/cycles/${cycleId}/scope-skus`, data),
+
+  deleteScopeSku: (scopeSkuId) =>
+    request('DELETE', `/api/scope-skus/${scopeSkuId}`),
 }

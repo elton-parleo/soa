@@ -102,3 +102,140 @@ def test_active_deals_success():
 
     assert result.available is True
     assert result.deals == [{"id": 1}]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SKU-scope client methods: search_catalog, resolve_listing, listing_true_cost
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_search_catalog_success():
+    client = DealEngineClient(base_url="http://deal-engine.test", max_retries=0)
+    listings = [{"listing_id": 1, "name": "Soft Pinch Lip Oil", "merchant_slug": "sephora"}]
+    cm = _mock_client(response=_mock_response(listings))
+
+    with patch("clients.deal_engine_client.httpx.AsyncClient", return_value=cm) as mock_cls:
+        result = asyncio.run(client.search_catalog(q="lip oil", brand="Rare Beauty"))
+
+    assert result.available is True
+    assert result.listings == listings
+
+
+def test_search_catalog_passes_only_provided_params():
+    client = DealEngineClient(base_url="http://deal-engine.test", max_retries=0)
+    instance = AsyncMock()
+    instance.request = AsyncMock(return_value=_mock_response([]))
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=instance)
+    cm.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("clients.deal_engine_client.httpx.AsyncClient", return_value=cm):
+        asyncio.run(client.search_catalog(q="serum"))
+
+    _, kwargs = instance.request.call_args
+    assert kwargs["params"] == {"q": "serum"}
+
+
+def test_search_catalog_unreachable_returns_unavailable_never_raises():
+    client = DealEngineClient(base_url="http://deal-engine.test", max_retries=0)
+    cm = _mock_client(raise_exc=ConnectionError("connection refused"))
+
+    with patch("clients.deal_engine_client.httpx.AsyncClient", return_value=cm):
+        result = asyncio.run(client.search_catalog(q="serum"))
+
+    assert result.available is False
+    assert result.listings == []
+    assert result.error is not None
+
+
+def test_resolve_listing_success():
+    client = DealEngineClient(base_url="http://deal-engine.test", max_retries=0)
+    listing = {
+        "listing_id": 7, "catalog_product_id": 3, "merchant_slug": "sephora",
+        "merchant_sku": "P123456", "brand": "Rare Beauty", "category": "lip",
+        "product_url": "https://www.sephora.com/product/x", "listed_price": 22.0,
+        "currency": "USD", "name": "Soft Pinch Lip Oil",
+    }
+    cm = _mock_client(response=_mock_response(listing))
+
+    with patch("clients.deal_engine_client.httpx.AsyncClient", return_value=cm):
+        result = asyncio.run(client.resolve_listing("https://www.sephora.com/product/x"))
+
+    assert result.available is True
+    assert result.listing == listing
+
+
+def test_resolve_listing_unreachable_returns_unavailable_never_raises():
+    client = DealEngineClient(base_url="http://deal-engine.test", max_retries=0)
+    cm = _mock_client(raise_exc=ConnectionError("connection refused"))
+
+    with patch("clients.deal_engine_client.httpx.AsyncClient", return_value=cm):
+        result = asyncio.run(client.resolve_listing("https://example.com/p"))
+
+    assert result.available is False
+    assert result.listing is None
+    assert result.error is not None
+
+
+def test_resolve_listing_no_base_url_configured():
+    client = DealEngineClient(base_url="", max_retries=0)
+    result = asyncio.run(client.resolve_listing("https://example.com/p"))
+    assert result.available is False
+    assert "not configured" in result.error
+
+
+def test_listing_true_cost_success():
+    client = DealEngineClient(base_url="http://deal-engine.test", max_retries=0)
+    payload = {
+        "true_cost_result": {
+            "true_cost": 19.80,
+            "total_savings": 2.20,
+            "total_points_earned": 66,
+            "applied_deals": [{"deal_type": "discount_pct"}],
+            "available_deals": [],
+            "confidence": 1.0,
+            "user_tier_name": None,
+        },
+        "listed_price": 22.0,
+        "currency": "USD",
+    }
+    cm = _mock_client(response=_mock_response(payload))
+
+    with patch("clients.deal_engine_client.httpx.AsyncClient", return_value=cm):
+        result = asyncio.run(client.listing_true_cost(listing_id=7))
+
+    assert result.available is True
+    assert result.true_cost == 19.80
+    assert result.listed_price == 22.0
+    assert result.currency == "USD"
+    assert result.total_savings == 2.20
+    assert result.applied_deals == [{"deal_type": "discount_pct"}]
+
+
+def test_listing_true_cost_unreachable_returns_unavailable_never_raises():
+    client = DealEngineClient(base_url="http://deal-engine.test", max_retries=0)
+    cm = _mock_client(raise_exc=ConnectionError("connection refused"))
+
+    with patch("clients.deal_engine_client.httpx.AsyncClient", return_value=cm):
+        result = asyncio.run(client.listing_true_cost(listing_id=7, user_tier_name="Rouge"))
+
+    assert result.available is False
+    assert result.true_cost is None
+    assert result.error is not None
+
+
+def test_listing_true_cost_uses_correct_path_and_tier_param():
+    client = DealEngineClient(base_url="http://deal-engine.test", max_retries=0)
+    instance = AsyncMock()
+    instance.request = AsyncMock(return_value=_mock_response({"true_cost_result": {}}))
+    cm = MagicMock()
+    cm.__aenter__ = AsyncMock(return_value=instance)
+    cm.__aexit__ = AsyncMock(return_value=False)
+
+    with patch("clients.deal_engine_client.httpx.AsyncClient", return_value=cm):
+        asyncio.run(client.listing_true_cost(listing_id=42, user_tier_name="Gold"))
+
+    args, kwargs = instance.request.call_args
+    method, url = args[0], args[1]
+    assert method == "GET"
+    assert url.endswith("/api/catalog/listings/42/true-cost")
+    assert kwargs["params"] == {"user_tier_name": "Gold"}

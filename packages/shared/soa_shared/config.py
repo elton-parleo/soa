@@ -85,6 +85,14 @@ INCENTIVE_SCHEDULING_ENABLED: bool = (
     os.environ.get("INCENTIVE_SCHEDULING_ENABLED", "false").lower() == "true"
 )
 
+# SKU-level measurement scope — gates the scope-aware coder prompt
+# (constrained resolution against soa_scope_skus) and the SKU-level scorer.
+# Off by default: the prompt, schema, and scoring path are byte-for-byte
+# unchanged even if a cycle happens to have scope SKUs rows.
+SKU_SCOPE_ENABLED: bool = (
+    os.environ.get("SKU_SCOPE_ENABLED", "false").lower() == "true"
+)
+
 # Pipeline
 SOA_PLATFORMS: str = os.environ.get("SOA_PLATFORMS", "chatgpt,perplexity,gemini,claude")
 SOA_RUNNER_ERROR_ABORT_THRESHOLD: float = float(os.environ.get("SOA_RUNNER_ERROR_ABORT_THRESHOLD", "0.50"))

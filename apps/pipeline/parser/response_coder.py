@@ -17,6 +17,7 @@ from soa_shared.models.soa_models import (
     SoaOtherMention,
     SoaQuery,
     SoaRun,
+    SoaScopeSku,
 )
 from parser.coding_client import CodingClient
 from parser.validator import CodingValidator
@@ -94,6 +95,24 @@ class ResponseCoder:
                 return "retailer"
             return cycle.study_pattern or "retailer"
 
+    def _load_scope_skus(self, cycle_id: int) -> Dict[str, SoaScopeSku]:
+        """
+        Returns active scope SKUs for this cycle keyed by a stable code
+        (e.g. "SKU001"), ordered by id so codes are deterministic across
+        calls. Empty dict if the cycle has no scope SKUs — callers treat
+        that exactly like SKU_SCOPE_ENABLED being off.
+        """
+        with session_factory() as session:
+            skus = (
+                session.query(SoaScopeSku)
+                .filter_by(cycle_id=cycle_id, is_active=True)
+                .order_by(SoaScopeSku.id)
+                .all()
+            )
+            for sku in skus:
+                session.expunge(sku)
+            return {f"SKU{i:03d}": sku for i, sku in enumerate(skus, start=1)}
+
     async def code_run(self, run_id: int) -> CodeRunResult:
         # 1. Load SoaRun
         with session_factory() as session:
@@ -130,6 +149,9 @@ class ResponseCoder:
                 )
             query_text = query.query_text
             query_study_pattern = query.study_pattern
+            # F3 persona-eligibility tier — also used by the SKU-level scorer
+            # to call listing_true_cost() with the right tier.
+            query_tier_name = getattr(query, "tier_name", None)
 
         # 3. Idempotency check
         with session_factory() as session:
@@ -157,11 +179,30 @@ class ResponseCoder:
                 error_message=str(exc),
             )
 
+        # 4b. Load scope SKUs — additive, flagged. Empty dict (and therefore
+        #     no scope_skus passed to the coder) when the flag is off or the
+        #     cycle has none, so the prompt/schema are byte-for-byte unchanged.
+        code_to_scope_sku: Dict[str, SoaScopeSku] = {}
+        if config.SKU_SCOPE_ENABLED:
+            code_to_scope_sku = self._load_scope_skus(run.cycle_id)
+
+        scope_skus_payload = [
+            {
+                "code": code,
+                "display_name": sku.display_name,
+                "brand": sku.brand,
+                "model": None,
+                "merchant_slug": sku.merchant_slug,
+            }
+            for code, sku in code_to_scope_sku.items()
+        ] or None
+
         # 5. Call CodingClient — pass query-level study_pattern so each run uses
         #    the rubric for its own query, not the cycle-level aggregate value.
         try:
             coding = await self.coding_client.code_response(
-                run, query_text, cycle_entities, query_study_pattern
+                run, query_text, cycle_entities, query_study_pattern,
+                scope_skus=scope_skus_payload,
             )
         except Exception as exc:
             logger.error("[coder] run_id=%d api_error: %s", run_id, exc)
@@ -264,6 +305,28 @@ class ResponseCoder:
                         raise
             except Exception as exc:
                 logger.error("[coder] run_id=%d incentive_scoring_error: %s", run_id, exc)
+
+        # 9b. SKU-level scoring — additive, flagged. Scores scope_sku_codings
+        # against listing_true_cost() instead of the brand x category path.
+        # No-op when the cycle has no scope SKUs.
+        if config.SKU_SCOPE_ENABLED and coding.scope_sku_codings:
+            scorer = self._incentive_scorer or IncentiveScorer()
+            try:
+                with session_factory() as session:
+                    try:
+                        await scorer.score_scope_skus(
+                            session=session,
+                            run_id=run.id,
+                            scope_sku_codings=coding.scope_sku_codings,
+                            code_to_scope_sku=code_to_scope_sku,
+                            tier=query_tier_name,
+                        )
+                        session.commit()
+                    except Exception:
+                        session.rollback()
+                        raise
+            except Exception as exc:
+                logger.error("[coder] run_id=%d sku_scoring_error: %s", run_id, exc)
 
         return CodeRunResult(
             run_id=run_id,

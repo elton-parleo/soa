@@ -45,6 +45,7 @@ SOA_TABLES = {
     "soa_metrics_results",
     "soa_incentive_scores",
     "soa_eligibility_metrics",
+    "soa_scope_skus",
 }
 
 
