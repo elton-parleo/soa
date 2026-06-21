@@ -2,14 +2,17 @@
 MetricsOrchestrator — coordinates calculator → writer → exporter
 for one complete metrics run. Synchronous (no async).
 """
+import asyncio
 import logging
 import time
 from typing import Optional
 
 from sqlalchemy import text
 
+import soa_shared.config as config
 from soa_shared.database import engine, session_factory
 from metrics.calculator import MetricsCalculator
+from metrics.eligibility_metrics import EligibilityMetricsCalculator
 from metrics.exporter import MetricsExporter
 from metrics.metric_result import MetricsSummary
 from metrics.writer import MetricsWriter
@@ -60,6 +63,19 @@ class MetricsOrchestrator:
 
         # 5. Refresh materialized view
         writer.refresh_materialized_view()
+
+        # 5b. Eligibility-conditioned metrics (M1, M3) — additive, flagged.
+        # Writes only to soa_eligibility_metrics; never touches the rows
+        # written above. Skipped entirely when the flag is off.
+        if config.ELIGIBILITY_CONDITIONING_ENABLED:
+            try:
+                eligibility_calculator = EligibilityMetricsCalculator(cycle_id=cycle.id)
+                eligibility_results = asyncio.run(eligibility_calculator.calculate())
+                writer.write_eligibility_metrics(eligibility_results)
+            except Exception as exc:
+                logger.error(
+                    "MetricsOrchestrator: eligibility-conditioned metrics failed: %s", exc
+                )
 
         # 6. Derive summary counts
         merchants_calculated = len({r.entity_id for r in results})

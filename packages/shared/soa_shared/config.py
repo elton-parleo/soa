@@ -64,6 +64,13 @@ SOA_DEAL_ENGINE_MAX_RETRIES: int = int(os.environ.get("SOA_DEAL_ENGINE_MAX_RETRI
 # merchant_id. Format: "merchant_id:slug,merchant_id:slug".
 SOA_MERCHANT_SLUG_FALLBACK_MAP: str = os.environ.get("SOA_MERCHANT_SLUG_FALLBACK_MAP", "")
 
+# Eligibility conditioning — conditions M1/M3 on "live AND eligible" per the
+# Deal Engine, using persona membership/tier state. Off by default so
+# existing metrics output is unchanged.
+ELIGIBILITY_CONDITIONING_ENABLED: bool = (
+    os.environ.get("ELIGIBILITY_CONDITIONING_ENABLED", "false").lower() == "true"
+)
+
 # Pipeline
 SOA_PLATFORMS: str = os.environ.get("SOA_PLATFORMS", "chatgpt,perplexity,gemini,claude")
 SOA_RUNNER_ERROR_ABORT_THRESHOLD: float = float(os.environ.get("SOA_RUNNER_ERROR_ABORT_THRESHOLD", "0.50"))

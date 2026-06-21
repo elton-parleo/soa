@@ -11,8 +11,8 @@ from typing import List
 from sqlalchemy import insert, text
 
 from soa_shared.database import engine
-from metrics.metric_result import MetricResult
-from soa_shared.models.soa_models import SoaMetricsResult
+from metrics.metric_result import EligibilityMetricResult, MetricResult
+from soa_shared.models.soa_models import SoaEligibilityMetricsResult, SoaMetricsResult
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,52 @@ class MetricsWriter:
 
         logger.info(
             "MetricsWriter: wrote %d rows for cycle_id=%d",
+            len(row_dicts),
+            self.cycle_id,
+        )
+        return len(row_dicts)
+
+    def write_eligibility_metrics(self, results: List[EligibilityMetricResult]) -> int:
+        """
+        Delete existing soa_eligibility_metrics rows for this cycle, then
+        bulk-insert all EligibilityMetricResult objects. Additive — never
+        touches soa_metrics_results. Returns the count of rows written.
+        """
+        if not results:
+            logger.warning("MetricsWriter.write_eligibility_metrics() called with empty results list.")
+            return 0
+
+        row_dicts = [
+            {
+                "cycle_id":                     r.cycle_id,
+                "entity_id":                    r.entity_id,
+                "slice_type":                   r.slice_type,
+                "slice_value":                  r.slice_value,
+                "total_eligible_runs":          r.total_eligible_runs,
+                "surfaced_eligible_count":      r.surfaced_eligible_count,
+                "considered_eligible_count":    r.considered_eligible_count,
+                "eligible_surfacing_rate":      r.eligible_surfacing_rate,
+                "incentive_consideration_rate": r.incentive_consideration_rate,
+                # calculated_at uses server_default = NOW()
+            }
+            for r in results
+        ]
+
+        with engine.connect() as conn:
+            deleted = conn.execute(
+                text("DELETE FROM soa_eligibility_metrics WHERE cycle_id = :cycle_id"),
+                {"cycle_id": self.cycle_id},
+            )
+            logger.debug(
+                "MetricsWriter: deleted %d existing eligibility rows for cycle_id=%d",
+                deleted.rowcount,
+                self.cycle_id,
+            )
+            conn.execute(insert(SoaEligibilityMetricsResult), row_dicts)
+            conn.commit()
+
+        logger.info(
+            "MetricsWriter: wrote %d eligibility rows for cycle_id=%d",
             len(row_dicts),
             self.cycle_id,
         )

@@ -23,6 +23,23 @@ class MetricResult:
 
 
 @dataclass
+class EligibilityMetricResult:
+    """
+    One eligibility-conditioned metric row (M1, M3), ready to be written to
+    soa_eligibility_metrics. Additive — separate table from MetricResult.
+    """
+    cycle_id: int
+    entity_id: int
+    slice_type: str
+    slice_value: str
+    total_eligible_runs: int
+    surfaced_eligible_count: int
+    considered_eligible_count: int
+    eligible_surfacing_rate: Optional[float]
+    incentive_consideration_rate: Optional[float]
+
+
+@dataclass
 class MetricsSummary:
     """Summary returned by MetricsOrchestrator.run_metrics()."""
     cycle_code: str

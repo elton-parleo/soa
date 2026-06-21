@@ -32,6 +32,7 @@ from soa_shared.constants import (
     QUERY_PERSONAS,
     QUERY_STATUSES,
     QUERY_STUDY_PATTERNS,
+    QUERY_SUBSCRIPTION_STATES,
 )
 
 
@@ -166,6 +167,10 @@ class SoaQuery(Base):
             f"study_pattern IN {_in_list(QUERY_STUDY_PATTERNS)}",
             name="ck_soa_queries_study_pattern",
         ),
+        CheckConstraint(
+            f"subscription_state IS NULL OR subscription_state IN {_in_list(QUERY_SUBSCRIPTION_STATES)}",
+            name="ck_soa_queries_subscription_state",
+        ),
         Index("ix_soa_queries_category_stage_status", "category", "stage", "status"),
         Index("ix_soa_queries_study_type", "study_type"),
         Index("ix_soa_queries_study_pattern", "study_pattern"),
@@ -215,6 +220,31 @@ class SoaQuery(Base):
         nullable=False,
     )
     created_by = Column(String, nullable=True)
+
+    # Persona eligibility state — additive, optional. Null on all four (the
+    # default) means "no eligibility constraint", i.e. today's behavior.
+    # Used only when ELIGIBILITY_CONDITIONING_ENABLED is true, to resolve
+    # whether a live deal is eligible for the persona running this query.
+    membership_program = Column(
+        Text,
+        nullable=True,
+        comment="Merchant-specific loyalty program name, e.g. 'Beauty Insider'. Free text.",
+    )
+    tier_name = Column(
+        Text,
+        nullable=True,
+        comment="Merchant-specific tier within the program, e.g. 'Rouge', 'VIB'. Free text.",
+    )
+    subscription_state = Column(
+        Text,
+        nullable=True,
+        comment="subscribed/not_subscribed for subscribe-and-save eligibility. Null = unconstrained.",
+    )
+    new_customer = Column(
+        Boolean,
+        nullable=True,
+        comment="True if this persona is a new/first-time customer. Null = unconstrained.",
+    )
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -572,6 +602,63 @@ class SoaMetricsResult(Base):
 
     cycle = relationship("SoaCycle", back_populates="metrics_results")
     entity = relationship("SoaEntity", back_populates="metrics_results")
+
+
+# ---------------------------------------------------------------------------
+# 8a. soa_eligibility_metrics — eligibility-conditioned Rung-0 metrics
+# ---------------------------------------------------------------------------
+
+class SoaEligibilityMetricsResult(Base):
+    """
+    M1 (incentive_consideration_rate) and M3 (eligible_surfacing_rate),
+    conditioned on the Deal Engine's "live AND eligible" deal set for the
+    persona running each query. Additive — does not touch
+    soa_metrics_results or any existing metric.
+    """
+    __tablename__ = "soa_eligibility_metrics"
+    __table_args__ = (
+        CheckConstraint(
+            "slice_type IN ('overall','category','stage','specificity','persona','platform')",
+            name="ck_soa_eligibility_metrics_slice_type",
+        ),
+        UniqueConstraint(
+            "cycle_id", "entity_id", "slice_type", "slice_value",
+            name="uq_soa_eligibility_metrics_slice",
+        ),
+        Index(
+            "ix_soa_eligibility_metrics_cycle_entity_slice_type",
+            "cycle_id", "entity_id", "slice_type",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    cycle_id = Column(Integer, ForeignKey("soa_cycles.id"), nullable=False, index=True)
+    entity_id = Column(Integer, ForeignKey("soa_entities.id"), nullable=False, index=True)
+    slice_type = Column(Text, nullable=False)
+    slice_value = Column(Text, nullable=False)
+
+    total_eligible_runs = Column(
+        Integer,
+        nullable=False,
+        comment="Denominator: runs where this entity had a live AND eligible deal.",
+    )
+    surfaced_eligible_count = Column(
+        Integer,
+        nullable=False,
+        comment="Numerator for M3: eligible runs where the entity was also mentioned.",
+    )
+    considered_eligible_count = Column(
+        Integer,
+        nullable=False,
+        comment="Numerator for M1: eligible runs where deal_cited was also true.",
+    )
+    eligible_surfacing_rate = Column(Float, nullable=True, comment="M3")
+    incentive_consideration_rate = Column(Float, nullable=True, comment="M1")
+
+    calculated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    cycle = relationship("SoaCycle")
+    entity = relationship("SoaEntity")
 
 
 # ---------------------------------------------------------------------------
