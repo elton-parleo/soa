@@ -93,6 +93,15 @@ SKU_SCOPE_ENABLED: bool = (
     os.environ.get("SKU_SCOPE_ENABLED", "false").lower() == "true"
 )
 
+# Entity-template / cycle-snapshot scope resolution (soa_shared/scope_resolution.py).
+# True (default): a Planned cycle that hasn't been customized tracks its
+# measured entities' template edits live until it starts running, then
+# freezes. False: the scope snapshot is materialized once at cycle
+# creation and never resyncs from templates while Planned.
+PLANNED_CYCLE_SCOPE_RESYNC: bool = (
+    os.environ.get("PLANNED_CYCLE_SCOPE_RESYNC", "true").lower() == "true"
+)
+
 # Pipeline
 SOA_PLATFORMS: str = os.environ.get("SOA_PLATFORMS", "chatgpt,perplexity,gemini,claude")
 SOA_RUNNER_ERROR_ABORT_THRESHOLD: float = float(os.environ.get("SOA_RUNNER_ERROR_ABORT_THRESHOLD", "0.50"))

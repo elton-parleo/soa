@@ -22,6 +22,7 @@ from typing import Dict, List, Optional, Tuple
 import soa_shared.config as config
 from soa_shared.database import session_factory
 from soa_shared.models.soa_models import SoaCycle, SoaQuery, SoaRun
+from soa_shared.scope_resolution import materialize_and_freeze
 from runners.base_runner import BasePlatformRunner
 from runners.claude_runner import ClaudeRunner
 from runners.cycle_summary import CycleSummary
@@ -96,6 +97,15 @@ class RunOrchestrator:
             )
             if self.cycle is None:
                 raise ValueError(f"Cycle '{cycle_code}' not found in soa_cycles.")
+
+            # Freeze SKU-level scope for this run — this is the single choke
+            # point common to both the standalone CLI runner command and
+            # PipelineOrchestrator's stage 1, so it's where "the cycle starts
+            # running" actually happens. Idempotent: a resumed/retried cycle
+            # that's already frozen is a no-op.
+            materialize_and_freeze(self.cycle, session, freeze=True)
+            session.commit()
+
             session.expunge(self.cycle)
 
         # Validate prerequisites before any API calls

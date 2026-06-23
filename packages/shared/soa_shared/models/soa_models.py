@@ -315,6 +315,27 @@ class SoaCycle(Base):
         ),
     )
 
+    scope_frozen_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment=(
+            "Set when this cycle's SKU-level scope (soa_scope_skus rows with "
+            "cycle_id=this) was materialized and frozen — at run start. Once set, "
+            "the scope is read-only; see soa_shared/scope_resolution.py."
+        ),
+    )
+    scope_is_custom = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment=(
+            "True once a user has explicitly edited this cycle's scope while "
+            "Planned — the cycle then stops resyncing from entity templates "
+            "even if PLANNED_CYCLE_SCOPE_RESYNC is on."
+        ),
+    )
+
     organization_id = Column(
         Integer,
         ForeignKey('organizations.id'),

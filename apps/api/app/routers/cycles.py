@@ -3,7 +3,10 @@ from typing import Optional, List
 from sqlalchemy import text
 from datetime import date
 import json
-from soa_shared.database import engine
+import soa_shared.config as config
+from soa_shared.database import engine, session_factory
+from soa_shared.models.soa_models import SoaCycle
+from soa_shared.scope_resolution import materialize_and_freeze
 from app.auth import get_current_user
 from app.schemas import (
     CreateCycleRequest,
@@ -136,6 +139,18 @@ def create_cycle(
                 "code": ce.comparison_code,
                 "role": ce.role,
             })
+
+    # 6. Scope snapshot — only when PLANNED_CYCLE_SCOPE_RESYNC is off.
+    # With it on (default), the Planned cycle inherits live from entity
+    # templates until it starts running (see scope_resolution.py); no rows
+    # are written here. Separate small ORM transaction since the insert
+    # above is raw SQL/Core.
+    if not config.PLANNED_CYCLE_SCOPE_RESYNC:
+        with session_factory() as session:
+            cycle_obj = session.get(SoaCycle, cycle_id)
+            if cycle_obj is not None:
+                materialize_and_freeze(cycle_obj, session, freeze=False)
+                session.commit()
 
     return CycleStatusResponse(
         cycle_code=data.cycle_code,

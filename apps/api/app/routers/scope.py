@@ -1,10 +1,14 @@
 """
 Scope-authoring API — lets a user designate specific SKUs (a catalog
-product at a specific retailer) as the measurement scope for a cycle.
+product at a specific retailer) as the measurement scope for a brand, and
+manage how a cycle's scope relates to that brand-level template.
 
-Additive: a brand-anchored cycle with no scope SKUs is completely
-unaffected by this router. soa_scope_skus rows are optional and nest
-under entities (entity_id may be null).
+Two kinds of soa_scope_skus rows (see soa_shared/scope_resolution.py):
+  - ENTITY TEMPLATE rows: entity_id set, cycle_id NULL. The brand's living,
+    editable measured-SKU set.
+  - CYCLE SNAPSHOT rows: cycle_id set, entity_id set. A copy of the
+    templates captured for a specific cycle (inherited live while Planned,
+    or materialized/frozen — see scope_resolution.get_effective_scope).
 
 Uses DealEngineClient (mirrored from apps/pipeline/clients/ — see that
 file's header) to browse and resolve catalog listings on the supply app's
@@ -12,15 +16,20 @@ Deal Engine. Catalog-Engine-reference columns are stored BY VALUE, the
 same pattern as soa_shared/models/merchant_ref.py — no cross-DB FK.
 """
 import asyncio
-import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 
-from soa_shared.database import engine
+from soa_shared.database import engine, session_factory
+from soa_shared.models.soa_models import SoaCycle, SoaScopeSku
+from soa_shared.scope_resolution import (
+    add_scope_sku_to_cycle,
+    get_effective_scope,
+    remove_scope_sku_from_cycle,
+)
 from app.auth import get_current_user
-from app.schemas import CreateScopeSkuRequest, ScopeSkuResponse
+from app.schemas import CreateScopeSkuRequest, CycleScopeResponse, ScopeSkuResponse
 from clients.deal_engine_client import DealEngineClient
 
 router = APIRouter()
@@ -57,7 +66,7 @@ def _auto_link_entity_id(brand: Optional[str]) -> Optional[int]:
     return row[0] if row else None
 
 
-def _row_to_scope_sku(row) -> ScopeSkuResponse:
+def _row_to_scope_sku(row: SoaScopeSku) -> ScopeSkuResponse:
     return ScopeSkuResponse(
         id=row.id,
         cycle_id=row.cycle_id,
@@ -76,6 +85,48 @@ def _row_to_scope_sku(row) -> ScopeSkuResponse:
         is_active=row.is_active,
         created_at=str(row.created_at)[:19] if row.created_at else None,
         updated_at=str(row.updated_at)[:19] if row.updated_at else None,
+    )
+
+
+async def _resolve_listing_fields(data: CreateScopeSkuRequest) -> dict:
+    """
+    Resolves the picked-listing-or-product-url request into the by-value
+    fields to persist. Path A (listing_id present) persists directly from
+    the payload. Path B calls resolve_listing() on the Deal Engine.
+    """
+    if data.listing_id is not None:
+        return dict(
+            dealengine_listing_id=data.listing_id,
+            dealengine_catalog_product_id=data.catalog_product_id,
+            merchant_slug=data.merchant_slug,
+            merchant_sku=data.merchant_sku,
+            brand=data.brand,
+            category=data.category,
+            product_url=data.product_url,
+            listed_price=data.listed_price,
+            currency=data.currency,
+            display_name=data.display_name,
+        )
+
+    client = DealEngineClient()
+    result = await client.resolve_listing(data.product_url, user_tier_name=data.user_tier_name)
+    if not result.available or result.listing is None:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not resolve product_url via the Deal Engine: {result.error}",
+        )
+    listing = result.listing
+    return dict(
+        dealengine_listing_id=listing.get("listing_id"),
+        dealengine_catalog_product_id=listing.get("catalog_product_id"),
+        merchant_slug=listing.get("merchant_slug"),
+        merchant_sku=listing.get("merchant_sku"),
+        brand=listing.get("brand"),
+        category=listing.get("category"),
+        product_url=listing.get("product_url") or data.product_url,
+        listed_price=listing.get("listed_price"),
+        currency=listing.get("currency"),
+        display_name=listing.get("name"),
     )
 
 
@@ -105,133 +156,51 @@ def search_catalog(
     return {"listings": result.listings}
 
 
-@router.post("/cycles/{cycle_id}/scope-skus", response_model=ScopeSkuResponse, status_code=201)
-def create_scope_sku(
-    cycle_id: int,
+# ─────────────────────────────────────────────────────────────────────────────
+# Entity template endpoints — the brand's living, editable measured-SKU set.
+# entity_id set, cycle_id NULL.
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.get("/entities/{entity_id}/scope-skus", response_model=list[ScopeSkuResponse])
+def list_entity_scope_skus(
+    entity_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    with session_factory() as session:
+        rows = (
+            session.query(SoaScopeSku)
+            .filter_by(entity_id=entity_id, cycle_id=None, is_active=True)
+            .order_by(SoaScopeSku.id)
+            .all()
+        )
+        return [_row_to_scope_sku(r) for r in rows]
+
+
+@router.post("/entities/{entity_id}/scope-skus", response_model=ScopeSkuResponse, status_code=201)
+def create_entity_scope_sku(
+    entity_id: int,
     data: CreateScopeSkuRequest,
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Creates a soa_scope_skus row for this cycle. Two input shapes:
-
-      Path A — a picked listing: listing_id + the CatalogListing fields the
-      frontend already has from /scope/catalog/search. No Deal Engine call
-      needed; persists directly from the payload (works even if the Deal
-      Engine is unreachable at write time).
-
-      Path B — { product_url, entity_id, role }: calls resolve_listing()
-      first (registers the SKU on the Deal Engine side), then persists the
-      returned listing fields. Raises 502 if the Deal Engine is unreachable
-      — there is no listing_id to fall back to.
+    Adds a SKU to a brand's measured-SKU template — independent of any
+    cycle. Picked-listing or product_url, same as the cycle-scoped
+    endpoint below. entity_id always comes from the path, never the body.
     """
-    org_id = _get_cycle_org_id(cycle_id)
-    if org_id is None:
-        raise HTTPException(status_code=404, detail=f"Cycle {cycle_id} not found")
-    if org_id != current_user["organization_id"]:
-        raise HTTPException(status_code=404, detail=f"Cycle {cycle_id} not found")
+    fields = _run_async(_resolve_listing_fields(data))
 
-    if data.listing_id is not None:
-        # Path A — picked listing, persist from the payload directly.
-        listing_id = data.listing_id
-        catalog_product_id = data.catalog_product_id
-        merchant_slug = data.merchant_slug
-        merchant_sku = data.merchant_sku
-        brand = data.brand
-        category = data.category
-        product_url = data.product_url
-        listed_price = data.listed_price
-        currency = data.currency
-        display_name = data.display_name
-    else:
-        # Path B — resolve from a bare product URL via the Deal Engine.
-        client = DealEngineClient()
-        result = _run_async(client.resolve_listing(
-            data.product_url, user_tier_name=data.user_tier_name,
-        ))
-        if not result.available or result.listing is None:
-            raise HTTPException(
-                status_code=502,
-                detail=f"Could not resolve product_url via the Deal Engine: {result.error}",
-            )
-        listing = result.listing
-        listing_id = listing.get("listing_id")
-        catalog_product_id = listing.get("catalog_product_id")
-        merchant_slug = listing.get("merchant_slug")
-        merchant_sku = listing.get("merchant_sku")
-        brand = listing.get("brand")
-        category = listing.get("category")
-        product_url = listing.get("product_url") or data.product_url
-        listed_price = listing.get("listed_price")
-        currency = listing.get("currency")
-        display_name = listing.get("name")
-
-    entity_id = data.entity_id
-    if entity_id is None:
-        entity_id = _auto_link_entity_id(brand)
-
-    with engine.begin() as conn:
-        row = conn.execute(text("""
-            INSERT INTO soa_scope_skus (
-                cycle_id, entity_id, role,
-                dealengine_listing_id, dealengine_catalog_product_id,
-                merchant_slug, merchant_sku, brand, category, product_url,
-                listed_price, currency, display_name, is_active
-            ) VALUES (
-                :cycle_id, :entity_id, :role,
-                :listing_id, :catalog_product_id,
-                :merchant_slug, :merchant_sku, :brand, :category, :product_url,
-                :listed_price, :currency, :display_name, TRUE
-            )
-            RETURNING
-                id, cycle_id, entity_id, role,
-                dealengine_listing_id, dealengine_catalog_product_id,
-                merchant_slug, merchant_sku, brand, category, product_url,
-                listed_price, currency, display_name, is_active,
-                created_at, updated_at
-        """), {
-            "cycle_id": cycle_id,
-            "entity_id": entity_id,
-            "role": data.role,
-            "listing_id": listing_id,
-            "catalog_product_id": catalog_product_id,
-            "merchant_slug": merchant_slug,
-            "merchant_sku": merchant_sku,
-            "brand": brand,
-            "category": category,
-            "product_url": product_url,
-            "listed_price": listed_price,
-            "currency": currency,
-            "display_name": display_name,
-        }).fetchone()
-
-    return _row_to_scope_sku(row)
-
-
-@router.get("/cycles/{cycle_id}/scope-skus", response_model=list[ScopeSkuResponse])
-def list_scope_skus(
-    cycle_id: int,
-    current_user: dict = Depends(get_current_user),
-):
-    org_id = _get_cycle_org_id(cycle_id)
-    if org_id is None:
-        raise HTTPException(status_code=404, detail=f"Cycle {cycle_id} not found")
-    if org_id != current_user["organization_id"]:
-        raise HTTPException(status_code=404, detail=f"Cycle {cycle_id} not found")
-
-    with engine.connect() as conn:
-        rows = conn.execute(text("""
-            SELECT
-                id, cycle_id, entity_id, role,
-                dealengine_listing_id, dealengine_catalog_product_id,
-                merchant_slug, merchant_sku, brand, category, product_url,
-                listed_price, currency, display_name, is_active,
-                created_at, updated_at
-            FROM soa_scope_skus
-            WHERE cycle_id = :cycle_id AND is_active = TRUE
-            ORDER BY id
-        """), {"cycle_id": cycle_id}).fetchall()
-
-    return [_row_to_scope_sku(r) for r in rows]
+    with session_factory() as session:
+        row = SoaScopeSku(
+            entity_id=entity_id,
+            cycle_id=None,
+            role=data.role,
+            is_active=True,
+            **fields,
+        )
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        return _row_to_scope_sku(row)
 
 
 @router.delete("/scope-skus/{scope_sku_id}", status_code=200)
@@ -240,9 +209,10 @@ def delete_scope_sku(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Soft-deletes (is_active = FALSE) a scope SKU. 404 if it doesn't exist
-    or its cycle belongs to a different organization. Scope SKUs with no
-    cycle_id yet (authored but not attached) have no organization to check
+    Soft-deletes (is_active = FALSE) a scope SKU by id — an entity
+    template row (cycle_id NULL) or a cycle snapshot row. 404 if it
+    doesn't exist or its cycle belongs to a different organization.
+    Template rows (and cycle-less rows) have no organization to check
     against and are deletable by any authenticated user.
     """
     with engine.connect() as conn:
@@ -268,3 +238,102 @@ def delete_scope_sku(
         conn.commit()
 
     return {"id": scope_sku_id, "deleted": True}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Cycle scope — read returns the resolved effective scope (frozen / custom /
+# inherited / materialized); write operates on cycle snapshot rows and
+# always goes through scope_resolution's materialize-on-first-edit helpers.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _load_cycle_for_org(session, cycle_id: int, org_id: int) -> SoaCycle:
+    cycle = session.get(SoaCycle, cycle_id)
+    if cycle is None or cycle.organization_id != org_id:
+        raise HTTPException(status_code=404, detail=f"Cycle {cycle_id} not found")
+    return cycle
+
+
+@router.get("/cycles/{cycle_id}/scope-skus", response_model=CycleScopeResponse)
+def get_cycle_scope(
+    cycle_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    with session_factory() as session:
+        cycle = _load_cycle_for_org(session, cycle_id, current_user["organization_id"])
+        effective = get_effective_scope(cycle, session)
+        return CycleScopeResponse(
+            cycle_id=cycle_id,
+            source=effective.source,
+            is_editable=effective.is_editable,
+            skus=[_row_to_scope_sku(r) for r in effective.skus],
+        )
+
+
+@router.post("/cycles/{cycle_id}/scope-skus", response_model=ScopeSkuResponse, status_code=201)
+def create_cycle_scope_sku(
+    cycle_id: int,
+    data: CreateScopeSkuRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Adds a SKU to this cycle's scope specifically. If the cycle was still
+    inheriting live from entity templates (or materialized-but-not-custom),
+    this is the cycle's first scope edit: the current effective scope is
+    materialized into cycle rows and scope_is_custom is set, before the new
+    row is added. 409 if the scope is already frozen — to change a frozen
+    cycle's scope, clone into a new cycle.
+    """
+    with session_factory() as session:
+        cycle = _load_cycle_for_org(session, cycle_id, current_user["organization_id"])
+        if cycle.scope_frozen_at is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="This cycle's scope is frozen. Clone into a new cycle to change it.",
+            )
+
+        fields = _run_async(_resolve_listing_fields(data))
+        entity_id = data.entity_id
+        if entity_id is None:
+            entity_id = _auto_link_entity_id(fields.get("brand"))
+
+        row = add_scope_sku_to_cycle(
+            cycle, session,
+            entity_id=entity_id, role=data.role, is_active=True, **fields,
+        )
+        session.commit()
+        session.refresh(row)
+        return _row_to_scope_sku(row)
+
+
+@router.delete("/cycles/{cycle_id}/scope-skus/{scope_sku_id}", status_code=200)
+def delete_cycle_scope_sku(
+    cycle_id: int,
+    scope_sku_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Removes a SKU from this cycle's scope. scope_sku_id may be the id of
+    an already-materialized cycle row, or — if the cycle is still
+    inheriting live — the id of the template row the UI is currently
+    displaying; see scope_resolution.remove_scope_sku_from_cycle for how
+    that's resolved without mutating the template. 409 if the scope is
+    already frozen.
+    """
+    with session_factory() as session:
+        cycle = _load_cycle_for_org(session, cycle_id, current_user["organization_id"])
+        if cycle.scope_frozen_at is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="This cycle's scope is frozen. Clone into a new cycle to change it.",
+            )
+
+        removed = remove_scope_sku_from_cycle(cycle, session, scope_sku_id)
+        session.commit()
+
+        if removed is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Scope SKU {scope_sku_id} not found in cycle {cycle_id}'s scope",
+            )
+
+    return {"id": removed.id, "deleted": True}

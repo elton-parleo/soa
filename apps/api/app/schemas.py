@@ -363,3 +363,18 @@ class ScopeSkuResponse(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     error_message: Optional[str] = None
+
+
+class CycleScopeResponse(BaseModel):
+    """
+    A cycle's effective scope (soa_shared.scope_resolution.get_effective_scope)
+    plus enough state for the UI to render read-only vs editable:
+      source: frozen | custom | inherited | materialized
+      is_editable: false once scope_frozen_at is set, true otherwise
+        (inherited/materialized/custom scopes are editable while the cycle
+        is Planned).
+    """
+    cycle_id: int
+    source: str
+    is_editable: bool
+    skus: List[ScopeSkuResponse]
