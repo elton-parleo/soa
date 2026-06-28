@@ -53,6 +53,12 @@ class PerplexityRunner(BasePlatformRunner):
             messages=[{"role": "user", "content": query_text}],
         )
         usage = response.usage
+        # Perplexity's OpenAI-compatible response includes a top-level
+        # "citations" list of source URLs when retrieval was used. Not part
+        # of the openai SDK's typed model, so it only appears via the raw
+        # parsed JSON — read tolerantly and never raise if absent.
+        retrieved_sources = list(getattr(response, "citations", None) or []) or None
+
         return PlatformResponse(
             response_text=response.choices[0].message.content or "",
             prompt_tokens=usage.prompt_tokens if usage else 0,
@@ -61,4 +67,5 @@ class PerplexityRunner(BasePlatformRunner):
             platform=self.platform,
             model=self.model,
             status="success",
+            retrieved_sources=retrieved_sources,
         )

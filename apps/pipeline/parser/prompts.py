@@ -2,7 +2,7 @@
 System prompt and JSON schema for the coding LLM call.
 Dynamic per-cycle via build_system_prompt() and build_coding_schema().
 """
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
     from soa_shared.models.soa_models import SoaCycleEntity
@@ -225,17 +225,87 @@ CALIBRATION RULES:
 - Set needs_review=true if confidence < 0.75 on any entity coding
 - Set needs_review=true if you coded Primary for an entity but are uncertain \
 whether the language truly singles them out
-- Include in coder_notes any ambiguity, unusual framing, or response quality issues\
+- Include in coder_notes any ambiguity, unusual framing, or response quality issues
+
+STATED INCENTIVE EXTRACTION (Rung-0 fidelity fields):
+In addition to the rubric above, extract any concrete numbers the agent stated
+about price or savings for this entity. These are separate from deal_cited/
+deal_types — extract them whenever the response states a number, even when
+deal_cited is false (e.g. a plain stated price with no deal).
+
+  stated_price: the plain price the agent quoted for the product at this
+    entity, before any discount the agent mentions. Null if no price stated.
+  claimed_net_price: the final price the agent says the buyer will actually
+    pay, after any discount/member price/promo is applied. Null if the agent
+    never gives a final post-discount number.
+  claimed_discount_value: the dollar amount of savings the agent states
+    (e.g. "save $15" → 15). Null if not stated as a dollar amount.
+  claimed_discount_pct: the percentage discount the agent states
+    (e.g. "20% off" → 20). Null if not stated as a percentage.
+  claimed_terms: short strings capturing any conditions the agent attaches to
+    the incentive (e.g. "orders over $50", "new customers only", "Rouge
+    members only", "ends Friday"). Empty list if no terms stated.
+  member_price_claimed: true if the agent explicitly states a price only
+    available to loyalty members or a named tier; false if the agent
+    explicitly states the price is NOT member-restricted; null if the agent
+    says nothing about membership restriction.
+  subscription_offer_claimed: true if the agent states a subscribe-and-save
+    or recurring-order discount; false if the agent explicitly says no such
+    offer exists; null if not mentioned.
+
+These fields are extracted independently per entity, only when the entity is
+mentioned. If the entity is not mentioned, leave all of these null/empty.\
+"""
+
+# Appended to SYSTEM_PROMPT only when the cycle has scope SKUs and
+# SKU_SCOPE_ENABLED is on. Absent otherwise — the base prompt above is
+# byte-for-byte unchanged when there is no SKU scope.
+SCOPE_SKU_PLACEHOLDER = "{{SCOPE_SKU_LIST}}"
+
+SCOPE_SKU_SECTION = """
+
+SKU-LEVEL SCOPE (constrained resolution):
+In addition to the entity-level coding above, the study has designated the
+exact SKUs below as in scope. For each one, determine whether the response
+surfaces THIS EXACT PRODUCT — not just the brand or retailer in general —
+and extract what the agent said about it specifically.
+
+SCOPE SKUs:
+{{SCOPE_SKU_LIST}}
+
+For each scope SKU, code:
+  surfaced: true only if the response refers to this specific product
+    (by name, model, or close enough description that a shopper would
+    recognize it as the same item) — not merely the brand or retailer.
+  stated_price: the price the agent quoted for this exact product. Null
+    if no price was stated for it specifically.
+  claimed_terms: any conditions the agent attached to this product's price
+    or availability (e.g. "while supplies last", "members only"). Empty
+    list if none.
+  member_price_claimed: true if the agent stated a member/loyalty-restricted
+    price for this product; false if explicitly stated as not restricted;
+    null if not mentioned.
+  evidence: the exact phrase identifying this product. Null if surfaced is
+    false.
+
+If surfaced is false, all other scope SKU fields must be null/empty — never
+invent details for a product that was not actually surfaced.\
 """
 
 
 def build_system_prompt(
     cycle_entities: "List[SoaCycleEntity]",
     study_pattern: str,
+    scope_skus: "Optional[List[dict]]" = None,
 ) -> str:
     """
     Builds the coding system prompt for a specific cycle.
     The entity list and rubric note are adjusted based on study_pattern.
+
+    scope_skus, when non-empty, appends the SKU-LEVEL SCOPE section. Each
+    dict must have: code, display_name, brand, model, merchant_slug. When
+    scope_skus is None/empty, the returned prompt is identical to before
+    this parameter existed.
     """
     lines = []
     for ce in sorted(cycle_entities, key=lambda x: x.comparison_code):
@@ -252,7 +322,26 @@ def build_system_prompt(
     rubric_note = _get_rubric_note(study_pattern)
 
     prompt = SYSTEM_PROMPT.replace(ENTITY_LIST_PLACEHOLDER, entity_list)
-    return prompt.replace(RUBRIC_NOTE_PLACEHOLDER, rubric_note)
+    prompt = prompt.replace(RUBRIC_NOTE_PLACEHOLDER, rubric_note)
+
+    if scope_skus:
+        sku_lines = []
+        for sku in scope_skus:
+            descriptor_parts = [
+                p for p in (sku.get("brand"), sku.get("model")) if p
+            ]
+            descriptor = f" ({', '.join(descriptor_parts)})" if descriptor_parts else ""
+            merchant_note = f" at {sku['merchant_slug']}" if sku.get("merchant_slug") else ""
+            sku_lines.append(
+                f"{sku['code']}: {sku.get('display_name') or sku['code']}"
+                f"{descriptor}{merchant_note}"
+            )
+        scope_section = SCOPE_SKU_SECTION.replace(
+            SCOPE_SKU_PLACEHOLDER, "\n".join(sku_lines)
+        )
+        prompt = prompt + scope_section
+
+    return prompt
 
 
 def _get_rubric_note(study_pattern: str) -> str:
@@ -276,44 +365,52 @@ def _get_rubric_note(study_pattern: str) -> str:
     return notes.get(study_pattern, notes["retailer"])
 
 
-def build_coding_schema(comparison_codes: List[str]) -> dict:
+def build_coding_schema(
+    comparison_codes: List[str],
+    scope_sku_codes: Optional[List[str]] = None,
+) -> dict:
     """
     Builds the JSON schema for the coding response dynamically
     based on the comparison codes for this cycle (e.g. ["M001","M002","M003"]).
+
+    scope_sku_codes, when non-empty, adds a required top-level "scope_skus"
+    property keyed by SKU code (e.g. ["SKU001","SKU002"]), each validated
+    against $defs/scope_sku_coding. When empty/None, the returned schema is
+    identical to before this parameter existed.
     """
     entity_ref = {"$ref": "#/$defs/entity_coding"}
-    return {
-        "type": "object",
-        "properties": {
-            "merchants": {
+    scope_sku_ref = {"$ref": "#/$defs/scope_sku_coding"}
+
+    properties = {
+        "merchants": {
+            "type": "object",
+            "properties": {code: entity_ref for code in comparison_codes},
+            "required": comparison_codes,
+            "additionalProperties": False,
+        },
+        "other_merchants": {
+            "type": "array",
+            "items": {
                 "type": "object",
-                "properties": {code: entity_ref for code in comparison_codes},
-                "required": comparison_codes,
+                "properties": {
+                    "merchant_name": {"type": "string"},
+                    "position": {"type": ["integer", "null"]},
+                    "strength": {
+                        "type": ["string", "null"],
+                        "enum": ["Primary", "Positive", "Neutral", "Negative", None],
+                    },
+                },
+                "required": ["merchant_name", "position", "strength"],
                 "additionalProperties": False,
             },
-            "other_merchants": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "merchant_name": {"type": "string"},
-                        "position": {"type": ["integer", "null"]},
-                        "strength": {
-                            "type": ["string", "null"],
-                            "enum": ["Primary", "Positive", "Neutral", "Negative", None],
-                        },
-                    },
-                    "required": ["merchant_name", "position", "strength"],
-                    "additionalProperties": False,
-                },
-            },
-            "needs_review": {"type": "boolean"},
-            "coder_notes": {"type": "string"},
         },
-        "required": ["merchants", "other_merchants", "needs_review", "coder_notes"],
-        "additionalProperties": False,
-        "$defs": {
-            "entity_coding": {
+        "needs_review": {"type": "boolean"},
+        "coder_notes": {"type": "string"},
+    }
+    required = ["merchants", "other_merchants", "needs_review", "coder_notes"]
+
+    defs = {
+        "entity_coding": {
                 "type": "object",
                 "properties": {
                     "mentioned": {"type": "boolean"},
@@ -343,6 +440,16 @@ def build_coding_schema(comparison_codes: List[str]) -> dict:
                         "minimum": 0.0,
                         "maximum": 1.0,
                     },
+                    "stated_price": {"type": ["number", "null"]},
+                    "claimed_net_price": {"type": ["number", "null"]},
+                    "claimed_discount_value": {"type": ["number", "null"]},
+                    "claimed_discount_pct": {"type": ["number", "null"]},
+                    "claimed_terms": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "member_price_claimed": {"type": ["boolean", "null"]},
+                    "subscription_offer_claimed": {"type": ["boolean", "null"]},
                 },
                 "required": [
                     "mentioned",
@@ -352,10 +459,55 @@ def build_coding_schema(comparison_codes: List[str]) -> dict:
                     "deal_types",
                     "evidence",
                     "confidence",
+                    "stated_price",
+                    "claimed_net_price",
+                    "claimed_discount_value",
+                    "claimed_discount_pct",
+                    "claimed_terms",
+                    "member_price_claimed",
+                    "subscription_offer_claimed",
                 ],
                 "additionalProperties": False,
             },
-        },
+    }
+
+    if scope_sku_codes:
+        properties["scope_skus"] = {
+            "type": "object",
+            "properties": {code: scope_sku_ref for code in scope_sku_codes},
+            "required": scope_sku_codes,
+            "additionalProperties": False,
+        }
+        required.append("scope_skus")
+
+        defs["scope_sku_coding"] = {
+            "type": "object",
+            "properties": {
+                "surfaced": {"type": "boolean"},
+                "stated_price": {"type": ["number", "null"]},
+                "claimed_terms": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "member_price_claimed": {"type": ["boolean", "null"]},
+                "evidence": {"type": ["string", "null"]},
+            },
+            "required": [
+                "surfaced",
+                "stated_price",
+                "claimed_terms",
+                "member_price_claimed",
+                "evidence",
+            ],
+            "additionalProperties": False,
+        }
+
+    return {
+        "type": "object",
+        "properties": properties,
+        "required": required,
+        "additionalProperties": False,
+        "$defs": defs,
     }
 
 

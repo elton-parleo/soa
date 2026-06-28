@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api.js'
 import Sidebar from './Sidebar.jsx'
+import ScopeSkuManager from './ScopeSkuManager.jsx'
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const T = {
@@ -35,7 +36,7 @@ const PLATFORMS = [
   { id: 'claude',     name: 'Claude',     model: 'Claude Sonnet 4.6',      costMin: 0.03, costMax: 0.05, icon: '◈',  color: '#F59E0B' },
 ]
 
-const STEP_LABELS = ['Study Type', 'Comparison Set', 'Platforms & Runs', 'Name & Schedule', 'Review & Launch']
+const STEP_LABELS = ['Study Type', 'Comparison Set', 'Scope', 'Platforms & Runs', 'Name & Schedule', 'Review & Launch']
 
 const INITIAL_STATE = {
   studyType:     null,
@@ -632,7 +633,7 @@ function Step2({ state, setState, onNext, onBack }) {
           </button>
           <button onClick={onNext} disabled={!isValid}
             style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: isValid ? T.navy : T.border, color: isValid ? T.white : T.slate, fontWeight: 600, fontSize: 14, cursor: isValid ? 'pointer' : 'not-allowed' }}>
-            Next: Platforms & Runs →
+            Next: Scope →
           </button>
         </div>
       </div>
@@ -640,7 +641,65 @@ function Step2({ state, setState, onNext, onBack }) {
   )
 }
 
-// ─── Step 3: Platforms & Runs ─────────────────────────────────────────────────
+// ─── Step 3: Scope (inherited-scope preview) ──────────────────────────────────
+
+function StepScope({ state, onNext, onBack }) {
+  const [byEntity, setByEntity] = useState({})  // entity_id -> { loading, skus, error }
+
+  useEffect(() => {
+    state.comparisonSet.forEach(c => {
+      setByEntity(prev => ({ ...prev, [c.entity_id]: { loading: true, skus: [], error: null } }))
+      api.getEntityScopeSkus(c.entity_id)
+        .then(skus => setByEntity(prev => ({ ...prev, [c.entity_id]: { loading: false, skus, error: null } })))
+        .catch(err => setByEntity(prev => ({ ...prev, [c.entity_id]: { loading: false, skus: [], error: err.message } })))
+    })
+  }, [state.comparisonSet])
+
+  return (
+    <div style={{ padding: 32, maxWidth: 700 }}>
+      <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700, color: T.text }}>Scope</h2>
+      <p style={{ margin: '0 0 24px', color: T.slate, fontSize: 14 }}>
+        This cycle inherits each entity's Measured SKUs automatically — no action needed.
+        You can trim or add SKUs for this cycle specifically right after launch, while it's
+        still Planned.
+      </p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 24 }}>
+        {state.comparisonSet.map(c => {
+          const entry = byEntity[c.entity_id] || { loading: true, skus: [], error: null }
+          return (
+            <div key={c.entity_id} style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 10, padding: '14px 18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 600, fontSize: 14, color: T.text }}>{c.entity.name}</span>
+                <span style={{ fontSize: 12, color: T.slate }}>
+                  {entry.loading ? 'Loading…' : entry.error ? '—' : `${entry.skus.length} SKU${entry.skus.length === 1 ? '' : 's'}`}
+                </span>
+              </div>
+              {!entry.loading && !entry.error && entry.skus.length === 0 && (
+                <div style={{ fontSize: 12, color: T.slateLight, marginTop: 6 }}>
+                  No Measured SKUs yet for this brand — cycle stays brand-level.
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <button onClick={onBack}
+          style={{ padding: '10px 20px', borderRadius: 8, border: `1px solid ${T.border}`, background: T.white, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+          ← Back
+        </button>
+        <button onClick={onNext}
+          style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: T.navy, color: T.white, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+          Next: Platforms & Runs →
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Step 4: Platforms & Runs ─────────────────────────────────────────────────
 
 function Step3({ state, setState, onNext, onBack, queryCount }) {
   const togglePlatform = (id) => {
@@ -883,6 +942,8 @@ function Step5({ state, setState, onBack, onGoTo, onSuccess }) {
   const [launching, setLaunching] = useState(false)
   const [launchError, setLaunchError] = useState(null)
   const [launched, setLaunched] = useState(false)
+  const [launchedCycleId, setLaunchedCycleId] = useState(null)
+  const [customizingScope, setCustomizingScope] = useState(false)
 
   useEffect(() => {
     if (state.studyType?.id) {
@@ -899,7 +960,7 @@ function Step5({ state, setState, onBack, onGoTo, onSuccess }) {
     setLaunchError(null)
     setLaunching(true)
     try {
-      await api.createCycle({
+      const created = await api.createCycle({
         cycle_code:     state.cycleCode,
         study_type:     state.studyType.id,
         platforms:      state.platforms.filter(p => p !== 'perplexity'),
@@ -913,6 +974,7 @@ function Step5({ state, setState, onBack, onGoTo, onSuccess }) {
         })),
       })
       setShowConfirm(false)
+      setLaunchedCycleId(created?.id ?? null)
       setLaunched(true)
     } catch (e) {
       setLaunchError(e.message)
@@ -922,6 +984,26 @@ function Step5({ state, setState, onBack, onGoTo, onSuccess }) {
   }
 
   if (launched) {
+    // Optional trim/add — the cycle is still Planned, so its scope is
+    // editable. Customizing here marks scope_is_custom and stops the
+    // cycle from resyncing with its entities' templates.
+    if (customizingScope && launchedCycleId != null) {
+      return (
+        <div style={{ padding: 64, maxWidth: 560, margin: '0 auto' }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: T.text, margin: '0 0 4px' }}>Customize Scope</h2>
+          <p style={{ color: T.slate, fontSize: 13, margin: '0 0 8px' }}>
+            Optional — trim or add SKUs for <strong>{state.cycleCode}</strong> specifically.
+            Leaving this as-is keeps it synced to each entity's template.
+          </p>
+          <ScopeSkuManager cycleId={launchedCycleId} />
+          <button onClick={onSuccess}
+            style={{ marginTop: 24, width: '100%', padding: '12px 0', background: T.navy, color: T.white, border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+            Done
+          </button>
+        </div>
+      )
+    }
+
     return (
       <div style={{ padding: 64, textAlign: 'center' }}>
         <div style={{ fontSize: 64, marginBottom: 16 }}>🚀</div>
@@ -930,10 +1012,18 @@ function Step5({ state, setState, onBack, onGoTo, onSuccess }) {
         <p style={{ color: T.slate, fontSize: 14, maxWidth: 400, margin: '0 auto 32px' }}>
           The pipeline worker will begin processing this cycle shortly.
         </p>
-        <button onClick={onSuccess}
-          style={{ padding: '12px 28px', background: T.navy, color: T.white, border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
-          Start New Cycle
-        </button>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+          {launchedCycleId != null && (
+            <button onClick={() => setCustomizingScope(true)}
+              style={{ padding: '12px 28px', background: T.white, color: T.text, border: `1px solid ${T.border}`, borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+              Customize Scope
+            </button>
+          )}
+          <button onClick={onSuccess}
+            style={{ padding: '12px 28px', background: T.navy, color: T.white, border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+            Start New Cycle
+          </button>
+        </div>
       </div>
     )
   }
@@ -981,7 +1071,14 @@ function Step5({ state, setState, onBack, onGoTo, onSuccess }) {
         </div>
       </SummaryPanel>
 
-      <SummaryPanel title="Platforms & Economics" step={3}>
+      <SummaryPanel title="Scope" step={3}>
+        <div style={{ fontSize: 13, color: T.textMid }}>
+          Inherits each entity's Measured SKUs automatically — editable from the cycle
+          detail page right after launch, while it's still Planned.
+        </div>
+      </SummaryPanel>
+
+      <SummaryPanel title="Platforms & Economics" step={4}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
           {platforms.map(p => <Badge key={p.id} color={T.navy}>{p.icon} {p.name}</Badge>)}
         </div>
@@ -996,7 +1093,7 @@ function Step5({ state, setState, onBack, onGoTo, onSuccess }) {
           <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 18, color: T.white }}>{state.cycleCode}</div>
           <div style={{ color: T.sidebarText, fontSize: 12, marginTop: 4 }}>Starts immediately on launch</div>
         </div>
-        <button onClick={() => onGoTo(4)}
+        <button onClick={() => onGoTo(5)}
           style={{ fontSize: 12, color: T.tealLight, fontWeight: 600, background: 'none', border: `1px solid ${T.navyBdr}`, borderRadius: 6, padding: '6px 12px', cursor: 'pointer' }}>EDIT</button>
       </div>
 
@@ -1111,16 +1208,20 @@ export default function NewCycleWizard({ onComplete, onCancel, onNavigate } = {}
               onNext={() => setStep(3)} onBack={() => setStep(1)} />
           )}
           {step === 3 && (
-            <Step3 state={state} setState={setState} queryCount={queryCount}
+            <StepScope state={state} setState={setState}
               onNext={() => setStep(4)} onBack={() => setStep(2)} />
           )}
           {step === 4 && (
-            <Step4 state={state} setState={setState}
+            <Step3 state={state} setState={setState} queryCount={queryCount}
               onNext={() => setStep(5)} onBack={() => setStep(3)} />
           )}
           {step === 5 && (
+            <Step4 state={state} setState={setState}
+              onNext={() => setStep(6)} onBack={() => setStep(4)} />
+          )}
+          {step === 6 && (
             <Step5 state={state} setState={setState}
-              onBack={() => setStep(4)}
+              onBack={() => setStep(5)}
               onGoTo={setStep}
               onSuccess={handleSuccess} />
           )}

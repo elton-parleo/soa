@@ -53,6 +53,55 @@ SOA_DEFAULT_INTER_RUN_DELAY: float = float(os.environ.get("SOA_DEFAULT_INTER_RUN
 SOA_CODING_MODEL: str = "gpt-5.4-nano-2026-03-17"
 SOA_MAX_CODING_CONCURRENT: int = int(os.environ.get("SOA_MAX_CODING_CONCURRENT", "5"))
 
+# Incentive scoring (Rung-0) — compares stated incentives against Deal Engine ground truth
+DEAL_ENGINE_BASE_URL: str = os.environ.get("DEAL_ENGINE_BASE_URL", "")
+INCENTIVE_SCORING_ENABLED: bool = os.environ.get("INCENTIVE_SCORING_ENABLED", "false").lower() == "true"
+SOA_INCENTIVE_PRICE_TOLERANCE_PCT: float = float(os.environ.get("SOA_INCENTIVE_PRICE_TOLERANCE_PCT", "0.01"))
+SOA_DEAL_ENGINE_TIMEOUT_SECONDS: float = float(os.environ.get("SOA_DEAL_ENGINE_TIMEOUT_SECONDS", "10.0"))
+SOA_DEAL_ENGINE_MAX_RETRIES: int = int(os.environ.get("SOA_DEAL_ENGINE_MAX_RETRIES", "2"))
+
+# Merchant slug fallback map — used when soa_entities/merchants has no slug for a
+# merchant_id. Format: "merchant_id:slug,merchant_id:slug".
+SOA_MERCHANT_SLUG_FALLBACK_MAP: str = os.environ.get("SOA_MERCHANT_SLUG_FALLBACK_MAP", "")
+
+# Eligibility conditioning — conditions M1/M3 on "live AND eligible" per the
+# Deal Engine, using persona membership/tier state. Off by default so
+# existing metrics output is unchanged.
+ELIGIBILITY_CONDITIONING_ENABLED: bool = (
+    os.environ.get("ELIGIBILITY_CONDITIONING_ENABLED", "false").lower() == "true"
+)
+
+# Grounded Gemini surface — gemini-2.5 with the google_search grounding tool,
+# as a separate "gemini_grounded" platform. Off by default; the existing
+# "gemini" platform/runner is never affected by this flag.
+ENABLE_GEMINI_GROUNDED: bool = (
+    os.environ.get("ENABLE_GEMINI_GROUNDED", "false").lower() == "true"
+)
+
+# Lifecycle-triggered sampling — schedules runs around Deal Engine incentive
+# windows (launch / mid-window / pre-expiry / post-expiry) instead of plain
+# cycle-based sampling. Off by default; does not affect cycle_manager.
+INCENTIVE_SCHEDULING_ENABLED: bool = (
+    os.environ.get("INCENTIVE_SCHEDULING_ENABLED", "false").lower() == "true"
+)
+
+# SKU-level measurement scope — gates the scope-aware coder prompt
+# (constrained resolution against soa_scope_skus) and the SKU-level scorer.
+# Off by default: the prompt, schema, and scoring path are byte-for-byte
+# unchanged even if a cycle happens to have scope SKUs rows.
+SKU_SCOPE_ENABLED: bool = (
+    os.environ.get("SKU_SCOPE_ENABLED", "false").lower() == "true"
+)
+
+# Entity-template / cycle-snapshot scope resolution (soa_shared/scope_resolution.py).
+# True (default): a Planned cycle that hasn't been customized tracks its
+# measured entities' template edits live until it starts running, then
+# freezes. False: the scope snapshot is materialized once at cycle
+# creation and never resyncs from templates while Planned.
+PLANNED_CYCLE_SCOPE_RESYNC: bool = (
+    os.environ.get("PLANNED_CYCLE_SCOPE_RESYNC", "true").lower() == "true"
+)
+
 # Pipeline
 SOA_PLATFORMS: str = os.environ.get("SOA_PLATFORMS", "chatgpt,perplexity,gemini,claude")
 SOA_RUNNER_ERROR_ABORT_THRESHOLD: float = float(os.environ.get("SOA_RUNNER_ERROR_ABORT_THRESHOLD", "0.50"))

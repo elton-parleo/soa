@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../api.js'
 import Sidebar from './Sidebar.jsx'
+import ScopeSkuManager from './ScopeSkuManager.jsx'
 
 // ─── Design tokens (verbatim from CycleDashboard.jsx) ────────────────────────
 const T = {
@@ -911,6 +912,14 @@ export default function EntityRegistry({ onNavigate }) {
                     </p>
                   </div>
                 </div>
+              )}
+
+              {/* Measured SKUs — the brand's living, editable measured-SKU
+                  set. Cycles that measure this entity inherit from this
+                  template (see scope_resolution.py). Edit mode only — a
+                  new entity has no id to attach SKUs to until it's saved. */}
+              {slideOver.mode === 'edit' && (
+                <ScopeSkuManager entityId={slideOver.entity.id} />
               )}
 
               {saveError && (

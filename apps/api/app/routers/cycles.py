@@ -3,7 +3,10 @@ from typing import Optional, List
 from sqlalchemy import text
 from datetime import date
 import json
-from soa_shared.database import engine
+import soa_shared.config as config
+from soa_shared.database import engine, session_factory
+from soa_shared.models.soa_models import SoaCycle
+from soa_shared.scope_resolution import materialize_and_freeze
 from app.auth import get_current_user
 from app.schemas import (
     CreateCycleRequest,
@@ -137,6 +140,18 @@ def create_cycle(
                 "role": ce.role,
             })
 
+    # 6. Scope snapshot — only when PLANNED_CYCLE_SCOPE_RESYNC is off.
+    # With it on (default), the Planned cycle inherits live from entity
+    # templates until it starts running (see scope_resolution.py); no rows
+    # are written here. Separate small ORM transaction since the insert
+    # above is raw SQL/Core.
+    if not config.PLANNED_CYCLE_SCOPE_RESYNC:
+        with session_factory() as session:
+            cycle_obj = session.get(SoaCycle, cycle_id)
+            if cycle_obj is not None:
+                materialize_and_freeze(cycle_obj, session, freeze=False)
+                session.commit()
+
     return CycleStatusResponse(
         cycle_code=data.cycle_code,
         status="planned",
@@ -147,6 +162,7 @@ def create_cycle(
         created_at=str(created_at) if created_at else None,
         platforms=data.platforms,
         runs_per_query=data.runs_per_query,
+        id=cycle_id,
     )
 
 
@@ -160,7 +176,7 @@ def list_cycles(
             SELECT
               cycle_code, status, study_type, study_pattern,
               total_runs_planned, completed_runs, created_at,
-              updated_at, platforms, runs_per_query
+              updated_at, platforms, runs_per_query, id
             FROM soa_cycles
             WHERE organization_id = :org_id
             ORDER BY created_at DESC
@@ -179,7 +195,7 @@ def get_cycle(
             SELECT
               cycle_code, status, study_type, study_pattern,
               total_runs_planned, completed_runs, created_at,
-              updated_at, platforms, runs_per_query
+              updated_at, platforms, runs_per_query, id
             FROM soa_cycles
             WHERE cycle_code = :code
               AND organization_id = :org_id
@@ -492,4 +508,5 @@ def _row_to_cycle(row) -> CycleStatusResponse:
         updated_at=str(row[7])[:19] if row[7] else None,
         platforms=json.loads(row[8]) if isinstance(row[8], str) else row[8],
         runs_per_query=row[9],
+        id=row[10] if len(row) > 10 else None,
     )

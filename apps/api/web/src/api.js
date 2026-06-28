@@ -188,4 +188,36 @@ export const api = {
 
   updateRunMentions: (cycleCode, runId, updates) =>
     request('PATCH', `/api/cycles/${cycleCode}/runs/${runId}/mentions`, updates),
+
+  // Scope SKUs — optional SKU-level measurement scope nested under entities
+  searchScopeCatalog: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(
+        Object.entries(params).filter(([, v]) => v != null && v !== '')
+      )
+    ).toString()
+    return get(`/api/scope/catalog/search${qs ? '?' + qs : ''}`)
+  },
+
+  // Cycle scope — read returns the resolved effective scope
+  // { skus, source, is_editable }; write operates on cycle snapshot rows.
+  getScopeSkus: (cycleId) =>
+    get(`/api/cycles/${cycleId}/scope-skus`),
+
+  addScopeSku: (cycleId, data) =>
+    post(`/api/cycles/${cycleId}/scope-skus`, data),
+
+  deleteCycleScopeSku: (cycleId, scopeSkuId) =>
+    request('DELETE', `/api/cycles/${cycleId}/scope-skus/${scopeSkuId}`),
+
+  // Entity templates — the brand's living, editable measured-SKU set,
+  // independent of any cycle.
+  getEntityScopeSkus: (entityId) =>
+    get(`/api/entities/${entityId}/scope-skus`),
+
+  addEntityScopeSku: (entityId, data) =>
+    post(`/api/entities/${entityId}/scope-skus`, data),
+
+  deleteScopeSku: (scopeSkuId) =>
+    request('DELETE', `/api/scope-skus/${scopeSkuId}`),
 }

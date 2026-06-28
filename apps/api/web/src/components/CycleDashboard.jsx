@@ -334,6 +334,9 @@ function PlannedBody({ cycle, onViewCycle }) {
       >
         View Details
       </button>
+      {/* Scope SKUs are managed from the entity's "Measured SKUs" tab
+          (EntityRegistry.jsx), the cycle-creation wizard's Scope step, and
+          the cycle detail Scope section (MetricsDashboard.jsx) — not here. */}
     </>
   )
 }

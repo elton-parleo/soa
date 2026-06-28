@@ -6,13 +6,18 @@ import asyncio
 import json
 import logging
 import time
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, List, Optional
 
 from openai import AsyncOpenAI
 
 import soa_shared.config as config
 from soa_shared.models.soa_models import SoaRun
-from parser.coding_response import CodingResponse, MerchantCoding, OtherMerchantCoding
+from parser.coding_response import (
+    CodingResponse,
+    MerchantCoding,
+    OtherMerchantCoding,
+    ScopeSkuCoding,
+)
 from parser.prompts import build_coding_schema, build_system_prompt
 
 if TYPE_CHECKING:
@@ -37,13 +42,24 @@ class CodingClient:
         query_text: str,
         cycle_entities: "List[SoaCycleEntity]",
         study_pattern: str,
+        scope_skus: Optional[List[dict]] = None,
     ) -> CodingResponse:
+        """
+        scope_skus, when non-empty, must be a list of dicts with keys: code,
+        display_name, brand, model, merchant_slug. Adds the SKU-LEVEL SCOPE
+        prompt section and a required "scope_skus" schema property; the
+        parsed scope_sku_codings are returned on CodingResponse. When
+        scope_skus is None/empty, behavior is identical to before this
+        parameter existed.
+        """
         system_prompt = build_system_prompt(
             cycle_entities=cycle_entities,
             study_pattern=study_pattern,
+            scope_skus=scope_skus,
         )
         comparison_codes = sorted(ce.comparison_code for ce in cycle_entities)
-        coding_schema = build_coding_schema(comparison_codes)
+        scope_sku_codes = sorted(sku["code"] for sku in scope_skus) if scope_skus else None
+        coding_schema = build_coding_schema(comparison_codes, scope_sku_codes)
 
         user_message = (
             f"Query submitted to agent: {query_text}\n"
@@ -86,6 +102,13 @@ class CodingClient:
                         deal_types=data["deal_types"] or [],
                         evidence=data["evidence"],
                         confidence=data["confidence"],
+                        stated_price=data.get("stated_price"),
+                        claimed_net_price=data.get("claimed_net_price"),
+                        claimed_discount_value=data.get("claimed_discount_value"),
+                        claimed_discount_pct=data.get("claimed_discount_pct"),
+                        claimed_terms=data.get("claimed_terms") or [],
+                        member_price_claimed=data.get("member_price_claimed"),
+                        subscription_offer_claimed=data.get("subscription_offer_claimed"),
                     )
 
                 other_merchants = [
@@ -96,6 +119,17 @@ class CodingClient:
                     )
                     for om in result["other_merchants"]
                 ]
+
+                scope_sku_codings: list[ScopeSkuCoding] = []
+                for sku_code, sku_data in (result.get("scope_skus") or {}).items():
+                    scope_sku_codings.append(ScopeSkuCoding(
+                        scope_sku_code=sku_code,
+                        surfaced=sku_data["surfaced"],
+                        stated_price=sku_data.get("stated_price"),
+                        claimed_terms=sku_data.get("claimed_terms") or [],
+                        member_price_claimed=sku_data.get("member_price_claimed"),
+                        evidence=sku_data.get("evidence"),
+                    ))
 
                 logger.info(
                     "[coding] run_id=%d model=%s latency=%dms attempt=%d",
@@ -111,6 +145,7 @@ class CodingClient:
                     coding_latency_ms=latency_ms,
                     input_tokens=usage.input_tokens if usage else 0,
                     output_tokens=usage.output_tokens if usage else 0,
+                    scope_sku_codings=scope_sku_codings,
                 )
 
             except Exception as exc:

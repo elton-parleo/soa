@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { api } from '../api.js'
 import Sidebar from './Sidebar.jsx'
+import ScopeSkuManager from './ScopeSkuManager.jsx'
 
 // ─── Design tokens (verbatim from CycleDashboard.jsx) ────────────────────────
 const T = {
@@ -456,6 +457,7 @@ export default function MetricsDashboard({ cycleCode, onNavigate, onViewResponse
   const [activeEntities, setActiveEntities] = useState([])
   const [allCycles,      setAllCycles]      = useState([])
   const [positionData,   setPositionData]   = useState(null)
+  const [showScope,      setShowScope]      = useState(false)
 
   // ── Data loading ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -700,6 +702,29 @@ export default function MetricsDashboard({ cycleCode, onNavigate, onViewResponse
 
         {/* ── Content area ─────────────────────────────────────────────────── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', background: T.offWhite }}>
+
+          {/* Scope section — this cycle's effective SKU-level scope.
+              Editable while Planned and not yet frozen; read-only once a
+              run has started (scope_frozen_at set). */}
+          {cycleData?.id != null && (
+            <div style={{ marginBottom: 20 }}>
+              <button
+                onClick={() => setShowScope(v => !v)}
+                style={{
+                  padding: '7px 14px', background: T.white, border: `1px solid ${T.border}`,
+                  color: T.textMid, borderRadius: 8, fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                }}
+              >
+                {showScope ? 'Hide Scope' : 'Scope'}
+              </button>
+              {showScope && (
+                <ScopeSkuManager
+                  cycleId={cycleData.id}
+                  readOnly={cycleData.status !== 'planned'}
+                />
+              )}
+            </div>
+          )}
 
           {/* Page-level empty state */}
           {!loading && entities.length === 0 && (

@@ -58,12 +58,23 @@ QUERY_STUDY_PATTERNS = [
     'brand_vs_brand',
 ]
 
+# Persona eligibility state — additive, optional columns on soa_queries.
+# Null on all four (the default) means "no eligibility constraint", i.e.
+# today's behavior is unchanged. Only subscription_state is constrained;
+# membership_program and tier_name are merchant-specific free text
+# (e.g. "Beauty Insider", "Rouge") and are not enumerable here.
+QUERY_SUBSCRIPTION_STATES = [
+    'subscribed',
+    'not_subscribed',
+]
+
 # Convenience dict used by the API endpoint and Pydantic validators
 QUERY_CONSTRAINTS = {
-    'category':      QUERY_CATEGORIES,
-    'stage':         QUERY_STAGES,
-    'specificity':   QUERY_SPECIFICITIES,
-    'persona':       QUERY_PERSONAS,
-    'status':        QUERY_STATUSES,
-    'study_pattern': QUERY_STUDY_PATTERNS,
+    'category':           QUERY_CATEGORIES,
+    'stage':              QUERY_STAGES,
+    'specificity':        QUERY_SPECIFICITIES,
+    'persona':            QUERY_PERSONAS,
+    'status':             QUERY_STATUSES,
+    'study_pattern':      QUERY_STUDY_PATTERNS,
+    'subscription_state': QUERY_SUBSCRIPTION_STATES,
 }

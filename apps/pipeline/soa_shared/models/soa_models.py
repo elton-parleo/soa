@@ -16,6 +16,7 @@ from sqlalchemy import (
     Index,
     Integer,
     JSON,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -32,6 +33,7 @@ from soa_shared.constants import (
     QUERY_PERSONAS,
     QUERY_STATUSES,
     QUERY_STUDY_PATTERNS,
+    QUERY_SUBSCRIPTION_STATES,
 )
 
 
@@ -166,6 +168,10 @@ class SoaQuery(Base):
             f"study_pattern IN {_in_list(QUERY_STUDY_PATTERNS)}",
             name="ck_soa_queries_study_pattern",
         ),
+        CheckConstraint(
+            f"subscription_state IS NULL OR subscription_state IN {_in_list(QUERY_SUBSCRIPTION_STATES)}",
+            name="ck_soa_queries_subscription_state",
+        ),
         Index("ix_soa_queries_category_stage_status", "category", "stage", "status"),
         Index("ix_soa_queries_study_type", "study_type"),
         Index("ix_soa_queries_study_pattern", "study_pattern"),
@@ -215,6 +221,31 @@ class SoaQuery(Base):
         nullable=False,
     )
     created_by = Column(String, nullable=True)
+
+    # Persona eligibility state — additive, optional. Null on all four (the
+    # default) means "no eligibility constraint", i.e. today's behavior.
+    # Used only when ELIGIBILITY_CONDITIONING_ENABLED is true, to resolve
+    # whether a live deal is eligible for the persona running this query.
+    membership_program = Column(
+        Text,
+        nullable=True,
+        comment="Merchant-specific loyalty program name, e.g. 'Beauty Insider'. Free text.",
+    )
+    tier_name = Column(
+        Text,
+        nullable=True,
+        comment="Merchant-specific tier within the program, e.g. 'Rouge', 'VIB'. Free text.",
+    )
+    subscription_state = Column(
+        Text,
+        nullable=True,
+        comment="subscribed/not_subscribed for subscribe-and-save eligibility. Null = unconstrained.",
+    )
+    new_customer = Column(
+        Boolean,
+        nullable=True,
+        comment="True if this persona is a new/first-time customer. Null = unconstrained.",
+    )
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -284,6 +315,27 @@ class SoaCycle(Base):
         ),
     )
 
+    scope_frozen_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment=(
+            "Set when this cycle's SKU-level scope (soa_scope_skus rows with "
+            "cycle_id=this) was materialized and frozen — at run start. Once set, "
+            "the scope is read-only; see soa_shared/scope_resolution.py."
+        ),
+    )
+    scope_is_custom = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment=(
+            "True once a user has explicitly edited this cycle's scope while "
+            "Planned — the cycle then stops resyncing from entity templates "
+            "even if PLANNED_CYCLE_SCOPE_RESYNC is on."
+        ),
+    )
+
     organization_id = Column(
         Integer,
         ForeignKey('organizations.id'),
@@ -302,6 +354,7 @@ class SoaCycle(Base):
         order_by="SoaCycleEntity.comparison_code",
         cascade="all, delete-orphan",
     )
+    scope_skus = relationship("SoaScopeSku", back_populates="cycle")
 
 
 # ---------------------------------------------------------------------------
@@ -376,6 +429,78 @@ class SoaCycleEntity(Base):
 
 
 # ---------------------------------------------------------------------------
+# 4b. soa_scope_skus — optional SKU-level measurement scope, nested under
+# entities. When a cycle has no scope SKUs, coding/scoring behave exactly
+# as they did before this table existed.
+# ---------------------------------------------------------------------------
+
+class SoaScopeSku(Base):
+    __tablename__ = "soa_scope_skus"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('target','competitor')",
+            name="ck_soa_scope_skus_role",
+        ),
+        Index("ix_soa_scope_skus_cycle_id", "cycle_id"),
+        Index("ix_soa_scope_skus_entity_id", "entity_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    cycle_id = Column(
+        Integer,
+        ForeignKey("soa_cycles.id"),
+        nullable=True,
+        index=True,
+        comment="Cycle this scope SKU applies to. Nullable so a SKU can be authored before being attached to a cycle.",
+    )
+
+    entity_id = Column(
+        Integer,
+        ForeignKey("soa_entities.id"),
+        nullable=True,
+        index=True,
+        comment="The brand/merchant entity this SKU belongs to. Null if not auto-linked or manually set.",
+    )
+
+    role = Column(
+        Text,
+        nullable=False,
+        default="target",
+        server_default="target",
+        comment="target — the SKU being measured. competitor — a comparison SKU.",
+    )
+
+    # Deal Engine reference BY VALUE — mirrors the merchant_ref.py pattern.
+    # No cross-DB FK to the supply app's catalog tables; these are a
+    # point-in-time snapshot of what the Deal Engine returned when the SKU
+    # was added to scope. All nullable.
+    dealengine_listing_id = Column(Integer, nullable=True, index=True)
+    dealengine_catalog_product_id = Column(Integer, nullable=True)
+    merchant_slug = Column(Text, nullable=True)
+    merchant_sku = Column(Text, nullable=True)
+    brand = Column(Text, nullable=True)
+    category = Column(Text, nullable=True)
+    product_url = Column(Text, nullable=True)
+    listed_price = Column(Numeric(10, 2), nullable=True)
+    currency = Column(Text, nullable=True)
+    display_name = Column(
+        Text,
+        nullable=True,
+        comment="Name shown in the coding prompt and UI. Falls back to brand + merchant_sku if null.",
+    )
+
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    cycle = relationship("SoaCycle", back_populates="scope_skus")
+    entity = relationship("SoaEntity")
+    incentive_scores = relationship("SoaIncentiveScore", back_populates="scope_sku")
+
+
+# ---------------------------------------------------------------------------
 # 5. soa_runs
 # ---------------------------------------------------------------------------
 
@@ -383,7 +508,7 @@ class SoaRun(Base):
     __tablename__ = "soa_runs"
     __table_args__ = (
         CheckConstraint(
-            "platform IN ('chatgpt','perplexity','gemini','claude')",
+            "platform IN ('chatgpt','perplexity','gemini','claude','gemini_grounded')",
             name="ck_soa_runs_platform",
         ),
         CheckConstraint(
@@ -422,12 +547,22 @@ class SoaRun(Base):
             "NULL for platforms that do not expose this signal."
         ),
     )
+    retrieved_sources = Column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Grounding/search source URLs where the platform exposes them — "
+            "OpenAI web_search items, Gemini grounding metadata, Perplexity "
+            "citations. NULL when not exposed or not used. Seeds M26."
+        ),
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     cycle = relationship("SoaCycle", back_populates="runs")
     query = relationship("SoaQuery", back_populates="runs")
     coded_mentions = relationship("SoaCodedMention", back_populates="run")
     other_mentions = relationship("SoaOtherMention", back_populates="run")
+    incentive_scores = relationship("SoaIncentiveScore", back_populates="run")
 
 
 # ---------------------------------------------------------------------------
@@ -571,6 +706,140 @@ class SoaMetricsResult(Base):
 
     cycle = relationship("SoaCycle", back_populates="metrics_results")
     entity = relationship("SoaEntity", back_populates="metrics_results")
+
+
+# ---------------------------------------------------------------------------
+# 8a. soa_eligibility_metrics — eligibility-conditioned Rung-0 metrics
+# ---------------------------------------------------------------------------
+
+class SoaEligibilityMetricsResult(Base):
+    """
+    M1 (incentive_consideration_rate) and M3 (eligible_surfacing_rate),
+    conditioned on the Deal Engine's "live AND eligible" deal set for the
+    persona running each query. Additive — does not touch
+    soa_metrics_results or any existing metric.
+    """
+    __tablename__ = "soa_eligibility_metrics"
+    __table_args__ = (
+        CheckConstraint(
+            "slice_type IN ('overall','category','stage','specificity','persona','platform')",
+            name="ck_soa_eligibility_metrics_slice_type",
+        ),
+        UniqueConstraint(
+            "cycle_id", "entity_id", "slice_type", "slice_value",
+            name="uq_soa_eligibility_metrics_slice",
+        ),
+        Index(
+            "ix_soa_eligibility_metrics_cycle_entity_slice_type",
+            "cycle_id", "entity_id", "slice_type",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    cycle_id = Column(Integer, ForeignKey("soa_cycles.id"), nullable=False, index=True)
+    entity_id = Column(Integer, ForeignKey("soa_entities.id"), nullable=False, index=True)
+    slice_type = Column(Text, nullable=False)
+    slice_value = Column(Text, nullable=False)
+
+    total_eligible_runs = Column(
+        Integer,
+        nullable=False,
+        comment="Denominator: runs where this entity had a live AND eligible deal.",
+    )
+    surfaced_eligible_count = Column(
+        Integer,
+        nullable=False,
+        comment="Numerator for M3: eligible runs where the entity was also mentioned.",
+    )
+    considered_eligible_count = Column(
+        Integer,
+        nullable=False,
+        comment="Numerator for M1: eligible runs where deal_cited was also true.",
+    )
+    eligible_surfacing_rate = Column(Float, nullable=True, comment="M3")
+    incentive_consideration_rate = Column(Float, nullable=True, comment="M1")
+
+    calculated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    cycle = relationship("SoaCycle")
+    entity = relationship("SoaEntity")
+
+
+# ---------------------------------------------------------------------------
+# 8b. soa_incentive_scores — Rung-0 incentive fidelity scoring vs Deal Engine
+# ---------------------------------------------------------------------------
+
+class SoaIncentiveScore(Base):
+    __tablename__ = "soa_incentive_scores"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('scored','ground_truth_unavailable','no_merchant_mapping','skipped')",
+            name="ck_soa_incentive_scores_status",
+        ),
+        Index("ix_soa_incentive_scores_run_id", "run_id"),
+        Index("ix_soa_incentive_scores_entity_id", "entity_id"),
+        Index("ix_soa_incentive_scores_status", "status"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, ForeignKey("soa_runs.id"), nullable=False, index=True)
+
+    entity_id = Column(
+        Integer,
+        ForeignKey("soa_entities.id"),
+        nullable=True,
+        index=True,
+        comment="FK to soa_entities. Null if the merchant could not be resolved.",
+    )
+
+    # Kept for read convenience, mirrors soa_coded_mentions.merchant_id pattern.
+    # No FK constraint — merchants is owned by /supply.
+    merchant_id = Column(Integer, nullable=True, index=True)
+
+    scope_sku_id = Column(
+        Integer,
+        ForeignKey("soa_scope_skus.id"),
+        nullable=True,
+        index=True,
+        comment="Set when this row scores a SKU-level scope coding instead of a brand x category one.",
+    )
+    dealengine_listing_id = Column(
+        Integer,
+        nullable=True,
+        index=True,
+        comment="Deal Engine listing id used for the true-cost call. Mirrors soa_scope_skus.dealengine_listing_id by value.",
+    )
+
+    # Extracted from the agent's response by the coder (parser/coding_response.py).
+    stated_price = Column(Float, nullable=True)
+    claimed_net_price = Column(Float, nullable=True)
+    claimed_discount_value = Column(Float, nullable=True)
+    claimed_discount_pct = Column(Float, nullable=True)
+    claimed_terms = Column(JSON, nullable=True)
+    member_price_claimed = Column(Boolean, nullable=True)
+    subscription_offer_claimed = Column(Boolean, nullable=True)
+
+    # Ground truth from the Deal Engine.
+    ground_truth_true_cost = Column(Float, nullable=True)
+    ground_truth_applied_deals = Column(JSON, nullable=True)
+    ground_truth_confidence = Column(Float, nullable=True)
+    user_tier_name = Column(Text, nullable=True)
+
+    # Computed Rung-0 fidelity metrics.
+    net_price_reflected = Column(Boolean, nullable=True, comment="M2")
+    net_price_accuracy = Column(Boolean, nullable=True, comment="M12")
+    term_fidelity = Column(Float, nullable=True, comment="M13")
+    member_price_reflected = Column(Boolean, nullable=True, comment="M16")
+
+    status = Column(Text, nullable=False, default="scored", server_default="scored")
+    error_message = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    run = relationship("SoaRun", back_populates="incentive_scores")
+    entity = relationship("SoaEntity")
+    scope_sku = relationship("SoaScopeSku", back_populates="incentive_scores")
 
 
 # ---------------------------------------------------------------------------
