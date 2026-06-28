@@ -34,7 +34,8 @@ POLL_INTERVAL = 30  # seconds when idle
 def get_next_planned_cycle():
     """
     Fetch the oldest planned cycle.
-    Returns a Row with (cycle_code, study_type, platforms, runs_per_query) or None.
+    Returns a Row with (cycle_code, study_type, platforms, runs_per_query,
+    cycle_mode) or None.
     """
     with engine.connect() as conn:
         row = conn.execute(text("""
@@ -42,7 +43,8 @@ def get_next_planned_cycle():
               cycle_code,
               study_type,
               platforms,
-              runs_per_query
+              runs_per_query,
+              cycle_mode
             FROM soa_cycles
             WHERE status = 'planned'
             ORDER BY created_at ASC
@@ -68,12 +70,51 @@ def mark_failed(cycle_code: str, error: str):
     log.error(f"Marked {cycle_code} as failed: {error}")
 
 
+async def execute_truecost_sweep(cycle_code: str):
+    """
+    cycle_mode='truecost' path — sweeps the cycle's scoped SKUs through the
+    Deal Engine instead of running LLM queries. No soa_runs, no coder.
+    """
+    from sqlalchemy import text as _text
+    from soa_shared.models.soa_models import SoaCycle
+    from soa_shared.database import session_factory
+    from sweep.truecost_sweep import run_truecost_sweep
+
+    log.info(f"Starting truecost sweep for {cycle_code}")
+    with session_factory() as session:
+        cycle = session.query(SoaCycle).filter_by(cycle_code=cycle_code).first()
+        cycle.status = "running"
+        session.commit()
+
+    summary = await run_truecost_sweep(cycle_code)
+
+    with session_factory() as session:
+        cycle = session.query(SoaCycle).filter_by(cycle_code=cycle_code).first()
+        cycle.status = "complete"
+        cycle.total_runs_planned = summary.total_planned
+        cycle.completed_runs = summary.captured + summary.unavailable
+        cycle.end_date = datetime.now(timezone.utc).date()
+        session.commit()
+
+    log.info(
+        f"Truecost sweep done: {cycle_code} — "
+        f"captured={summary.captured} unavailable={summary.unavailable} "
+        f"skipped={summary.skipped_already_done} "
+        f"({summary.sku_count} SKUs x {summary.tier_count} tiers)"
+    )
+
+
 async def execute_cycle(
     cycle_code: str,
     study_type: str,
     platforms: list,
     runs_per_query: int,
+    cycle_mode: str = "query",
 ):
+    if cycle_mode == "truecost":
+        await execute_truecost_sweep(cycle_code)
+        return
+
     from orchestrator.pipeline import PipelineOrchestrator
     log.info(f"Starting pipeline for {cycle_code} ({study_type})")
     log.info(f"Platforms: {platforms}")
@@ -292,23 +333,26 @@ def main():
                 study_type     = row[1]
                 platforms      = row[2]
                 runs_per_query = row[3]
+                cycle_mode     = row[4] or "query"
 
                 # Fallback for pre-migration cycles with NULL columns
-                if not platforms:
+                if cycle_mode != "truecost" and not platforms:
                     log.warning(
                         f"{cycle_code}: platforms is NULL — using default [chatgpt, gemini]"
                     )
                     platforms = ['chatgpt', 'gemini']
 
-                if not runs_per_query:
+                if cycle_mode != "truecost" and not runs_per_query:
                     log.warning(
                         f"{cycle_code}: runs_per_query is NULL — using default 5"
                     )
                     runs_per_query = 5
 
-                log.info(f"Dequeued: {cycle_code}")
+                log.info(f"Dequeued: {cycle_code} (cycle_mode={cycle_mode})")
                 try:
-                    asyncio.run(execute_cycle(cycle_code, study_type, platforms, runs_per_query))
+                    asyncio.run(
+                        execute_cycle(cycle_code, study_type, platforms, runs_per_query, cycle_mode)
+                    )
                 except Exception as e:
                     log.exception(f"Cycle {cycle_code} failed: {e}")
                     mark_failed(cycle_code, str(e))

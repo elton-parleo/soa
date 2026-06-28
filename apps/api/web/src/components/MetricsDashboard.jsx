@@ -447,6 +447,228 @@ function SliceTable({ sliceData, entities, activeEntities, sliceLabel }) {
   )
 }
 
+// ─── Truecost grid (SKU x retailer x tier) ────────────────────────────────────
+// Renders the read-only results grid for cycle_mode='truecost' cycles, backed
+// by GET /api/cycles/{code}/truecost-snapshots. One row per scope SKU, one
+// column-group per swept tier.
+export function TruecostGrid({ cycleCode, cycleData, onRunSweep, running }) {
+  const [data,    setData]    = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState(null)
+  const [expanded, setExpanded] = useState(null) // `${scope_sku_id}:${tier}` of the open deals popover
+
+  const load = () =>
+    api.getCycleTruecostSnapshots(cycleCode)
+      .then(res => { setData(res); setError(null) })
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false))
+
+  useEffect(() => {
+    setLoading(true)
+    load()
+    // Poll while the sweep is still running so the grid fills in live.
+    if (cycleData?.status === 'running' || cycleData?.status === 'planned') {
+      const id = setInterval(load, 10_000)
+      return () => clearInterval(id)
+    }
+  }, [cycleCode, cycleData?.status])
+
+  const tierKey = (t) => t.user_tier_name == null ? '__baseline__' : t.user_tier_name
+  const tierLabel = (name) => name == null ? 'Non-member (baseline)' : name
+
+  // Union of every tier name swept across all SKUs, baseline first, so the
+  // grid has consistent columns even if a SKU is missing a tier (e.g. it's
+  // still in progress, or unavailable for that tier only).
+  const allTierKeys = []
+  ;(data?.skus || []).forEach(sku => sku.tiers.forEach(t => {
+    const k = tierKey(t)
+    if (!allTierKeys.includes(k)) allTierKeys.push(k)
+  }))
+  allTierKeys.sort((a, b) => (a === '__baseline__' ? -1 : b === '__baseline__' ? 1 : 0))
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <SkeletonCard height={48} delay={0} />
+        <SkeletonCard height={48} delay={0.1} />
+        <SkeletonCard height={48} delay={0.2} />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: '64px 32px', textAlign: 'center' }}>
+        <p style={{ margin: 0, fontSize: 14, color: T.red }}>Could not load truecost results: {error}</p>
+      </div>
+    )
+  }
+
+  const skus = data?.skus || []
+  const isPlanned = cycleData?.status === 'planned'
+  const isRunning = cycleData?.status === 'running'
+
+  if (skus.length === 0) {
+    return (
+      <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, padding: '64px 32px', textAlign: 'center' }}>
+        <div style={{ fontSize: 32, marginBottom: 16 }}>{isPlanned ? '◷' : '📊'}</div>
+        <h3 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 700, color: T.text }}>
+          {isPlanned ? 'Sweep not started yet' : isRunning ? 'Sweep in progress…' : 'No results yet'}
+        </h3>
+        <p style={{ margin: '0 auto 20px', fontSize: 14, color: T.slate, maxWidth: 420 }}>
+          {isPlanned
+            ? 'The pipeline worker will sweep each selected brand\'s Measured SKUs through the Deal Engine within 30 seconds, or trigger it now.'
+            : 'Results will appear here as each SKU is scraped and priced.'}
+        </p>
+        {isPlanned && (
+          <button
+            onClick={onRunSweep}
+            disabled={running}
+            style={{
+              padding: '10px 24px', background: T.navy, color: T.white, border: 'none',
+              borderRadius: 8, fontWeight: 700, fontSize: 14,
+              cursor: running ? 'not-allowed' : 'pointer', opacity: running ? 0.7 : 1,
+            }}
+          >
+            {running ? 'Starting…' : '▶ Run Sweep Now'}
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {(isPlanned || isRunning) && (
+        <div style={{ background: T.offWhite, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: T.textMid }}>
+          <span>◷ {isRunning ? 'Sweep in progress — this grid updates automatically.' : 'Sweep queued.'}</span>
+          {isPlanned && (
+            <button onClick={onRunSweep} disabled={running}
+              style={{ padding: '6px 14px', background: T.navy, color: T.white, border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: running ? 'not-allowed' : 'pointer', opacity: running ? 0.7 : 1 }}>
+              {running ? 'Starting…' : '▶ Run Sweep Now'}
+            </button>
+          )}
+        </div>
+      )}
+
+      <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: 'hidden', overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: T.offWhite }}>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: T.slate, borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap' }}>SKU</th>
+              <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: T.slate, borderBottom: `1px solid ${T.border}`, whiteSpace: 'nowrap' }}>Retailer</th>
+              {allTierKeys.map(k => (
+                <th key={k} colSpan={allTierKeys.length > 1 && k !== '__baseline__' ? 4 : 3}
+                  style={{ padding: '10px 16px', textAlign: 'center', fontSize: 11, fontWeight: 700, color: T.slate, borderBottom: `1px solid ${T.border}`, borderLeft: `1px solid ${T.border}`, whiteSpace: 'nowrap' }}>
+                  {tierLabel(k === '__baseline__' ? null : k)}
+                </th>
+              ))}
+            </tr>
+            <tr style={{ background: T.offWhite }}>
+              <th style={{ borderBottom: `1px solid ${T.border}` }} />
+              <th style={{ borderBottom: `1px solid ${T.border}` }} />
+              {allTierKeys.map(k => (
+                <React.Fragment key={k}>
+                  <th style={{ padding: '6px 10px', textAlign: 'right', fontSize: 10, fontWeight: 600, color: T.slateLight, borderBottom: `1px solid ${T.border}`, borderLeft: `1px solid ${T.border}` }}>Listed</th>
+                  <th style={{ padding: '6px 10px', textAlign: 'right', fontSize: 10, fontWeight: 600, color: T.slateLight, borderBottom: `1px solid ${T.border}` }}>True Cost</th>
+                  <th style={{ padding: '6px 10px', textAlign: 'right', fontSize: 10, fontWeight: 600, color: T.slateLight, borderBottom: `1px solid ${T.border}` }}>Savings</th>
+                  {allTierKeys.length > 1 && k !== '__baseline__' && (
+                    <th style={{ padding: '6px 10px', textAlign: 'right', fontSize: 10, fontWeight: 600, color: T.slateLight, borderBottom: `1px solid ${T.border}` }}>Δ vs baseline</th>
+                  )}
+                </React.Fragment>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {skus.map(sku => {
+              const tiersByKey = Object.fromEntries(sku.tiers.map(t => [tierKey(t), t]))
+              return (
+                <tr key={sku.scope_sku_id} style={{ borderBottom: `1px solid ${T.border}` }}>
+                  <td style={{ padding: '10px 16px', fontWeight: 600 }}>
+                    {sku.display_name || sku.brand || `SKU ${sku.scope_sku_id}`}
+                  </td>
+                  <td style={{ padding: '10px 16px', color: T.slate, fontFamily: 'monospace', fontSize: 12 }}>
+                    {sku.merchant_slug || '—'}
+                  </td>
+                  {allTierKeys.map(k => {
+                    const t = tiersByKey[k]
+                    const cellKey = `${sku.scope_sku_id}:${k}`
+                    if (!t) {
+                      return (
+                        <React.Fragment key={k}>
+                          <td colSpan={allTierKeys.length > 1 && k !== '__baseline__' ? 4 : 3}
+                            style={{ padding: '10px 16px', textAlign: 'center', color: T.slateLight, borderLeft: `1px solid ${T.border}` }}>
+                            pending
+                          </td>
+                        </React.Fragment>
+                      )
+                    }
+                    if (t.status === 'ground_truth_unavailable') {
+                      return (
+                        <React.Fragment key={k}>
+                          <td colSpan={allTierKeys.length > 1 && k !== '__baseline__' ? 4 : 3}
+                            style={{ padding: '10px 16px', textAlign: 'center', borderLeft: `1px solid ${T.border}` }}
+                            title={t.error_message || 'Deal Engine unavailable for this SKU/tier'}
+                          >
+                            <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, color: '#991B1B', background: '#FEE2E2' }}>
+                              ⚠ Unavailable
+                            </span>
+                          </td>
+                        </React.Fragment>
+                      )
+                    }
+                    const delta = sku.member_vs_baseline_delta?.[k]
+                    return (
+                      <React.Fragment key={k}>
+                        <td style={{ padding: '10px 10px', textAlign: 'right', borderLeft: `1px solid ${T.border}` }}>
+                          {t.listed_price != null ? `$${t.listed_price.toFixed(2)}` : '—'}
+                          {t.price_was_refreshed && <span title="Price freshly scraped for this sweep" style={{ marginLeft: 4, fontSize: 10, color: T.teal }}>●</span>}
+                        </td>
+                        <td style={{ padding: '10px 10px', textAlign: 'right', fontWeight: 700 }}>
+                          {t.true_cost != null ? `$${t.true_cost.toFixed(2)}` : '—'}
+                        </td>
+                        <td style={{ padding: '10px 10px', textAlign: 'right' }}>
+                          <span
+                            onMouseEnter={() => setExpanded(cellKey)}
+                            onMouseLeave={() => setExpanded(null)}
+                            style={{ position: 'relative', cursor: (t.applied_deals || []).length > 0 ? 'help' : 'default', color: t.total_savings > 0 ? T.green : T.slate }}
+                          >
+                            {t.total_savings != null ? `$${t.total_savings.toFixed(2)}` : '$0.00'}
+                            {(t.applied_deals || []).length > 0 && ' ⓘ'}
+                            {expanded === cellKey && (t.applied_deals || []).length > 0 && (
+                              <div style={{
+                                position: 'absolute', right: 0, top: '100%', zIndex: 10,
+                                background: T.navy, color: T.white, borderRadius: 8, padding: '10px 12px',
+                                fontSize: 11, fontWeight: 400, textAlign: 'left', width: 220, marginTop: 4,
+                                boxShadow: '0 8px 20px rgba(0,0,0,0.25)',
+                              }}>
+                                {t.applied_deals.map((d, i) => (
+                                  <div key={i} style={{ marginBottom: i < t.applied_deals.length - 1 ? 4 : 0 }}>
+                                    {d.title || d.deal_type || JSON.stringify(d)}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </span>
+                        </td>
+                        {allTierKeys.length > 1 && k !== '__baseline__' && (
+                          <td style={{ padding: '10px 10px', textAlign: 'right', fontWeight: 600, color: delta == null ? T.slateLight : delta > 0 ? T.green : delta < 0 ? T.red : T.slate }}>
+                            {delta == null ? '—' : `${delta > 0 ? '+' : ''}$${delta.toFixed(2)}`}
+                          </td>
+                        )}
+                      </React.Fragment>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function MetricsDashboard({ cycleCode, onNavigate, onViewResponses }) {
   const [cycleData,      setCycleData]      = useState(null)
@@ -458,6 +680,7 @@ export default function MetricsDashboard({ cycleCode, onNavigate, onViewResponse
   const [allCycles,      setAllCycles]      = useState([])
   const [positionData,   setPositionData]   = useState(null)
   const [showScope,      setShowScope]      = useState(false)
+  const [runningSweep,   setRunningSweep]   = useState(false)
 
   // ── Data loading ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -564,6 +787,24 @@ export default function MetricsDashboard({ cycleCode, onNavigate, onViewResponse
   ]
 
   const displayCode = cycleCode || '—'
+  const isTruecost = cycleData?.cycle_mode === 'truecost'
+
+  // ── Run sweep — reuses the existing resume-cycle trigger (sets status
+  // back to 'planned' so the pipeline worker's existing cycle_mode branch
+  // picks it up within 30s; no new run path is introduced here). ──────────
+  async function handleRunSweep() {
+    if (!cycleCode) return
+    setRunningSweep(true)
+    try {
+      await api.resumeCycle(cycleCode)
+      setCycleData(c => c ? { ...c, status: 'planned' } : c)
+    } catch (err) {
+      console.error('Could not start sweep:', err.message)
+      alert(`Could not start sweep: ${err.message}`)
+    } finally {
+      setRunningSweep(false)
+    }
+  }
 
   // ─── RENDER ──────────────────────────────────────────────────────────────────
   return (
@@ -634,71 +875,75 @@ export default function MetricsDashboard({ cycleCode, onNavigate, onViewResponse
           </div>
         </div>
 
-        {/* ── Entity filter row ────────────────────────────────────────────── */}
-        <div style={{
-          background: T.white, borderBottom: `1px solid ${T.border}`,
-          padding: '12px 28px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flexShrink: 0,
-        }}>
-          <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.slate, marginRight: 4 }}>
-            ENTITIES
-          </span>
-          {entities.map(entity => {
-            const isActive = activeEntities.includes(entity.code)
-            return (
-              <button
-                key={entity.code}
-                className="md-entity-pill"
-                onClick={() => toggleEntity(entity.code)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '6px 14px', borderRadius: 20,
-                  border: isActive ? 'none' : `1px solid ${T.border}`,
-                  background: isActive ? T.navy : T.white,
-                  color: isActive ? T.white : T.textMid,
-                  fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
-                }}
-              >
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: isActive ? entity.color : T.slateLight, flexShrink: 0 }} />
-                {entity.name}
-                <span style={{ fontSize: 10 }}>▾</span>
-              </button>
-            )
-          })}
-        </div>
+        {/* ── Entity filter row (query cycles only) ────────────────────────── */}
+        {!isTruecost && (
+          <div style={{
+            background: T.white, borderBottom: `1px solid ${T.border}`,
+            padding: '12px 28px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flexShrink: 0,
+          }}>
+            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.slate, marginRight: 4 }}>
+              ENTITIES
+            </span>
+            {entities.map(entity => {
+              const isActive = activeEntities.includes(entity.code)
+              return (
+                <button
+                  key={entity.code}
+                  className="md-entity-pill"
+                  onClick={() => toggleEntity(entity.code)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '6px 14px', borderRadius: 20,
+                    border: isActive ? 'none' : `1px solid ${T.border}`,
+                    background: isActive ? T.navy : T.white,
+                    color: isActive ? T.white : T.textMid,
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+                  }}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: isActive ? entity.color : T.slateLight, flexShrink: 0 }} />
+                  {entity.name}
+                  <span style={{ fontSize: 10 }}>▾</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
 
-        {/* ── Slice tabs ───────────────────────────────────────────────────── */}
-        <div style={{
-          background: T.white, borderBottom: `1px solid ${T.border}`,
-          padding: '0 28px', display: 'flex', alignItems: 'center', flexShrink: 0,
-        }}>
-          {SLICES.map(slice => {
-            const isActive  = activeSlice === slice.key
-            const isEnabled = slice.key === 'overall' || availableSliceKeys.includes(slice.key)
-            return (
-              <div
-                key={slice.key}
-                className="md-tab-hover"
-                title={!isEnabled ? 'Coming soon' : undefined}
-                onClick={() => setActiveSlice(slice.key)}
-                style={{
-                  padding: '14px 4px', marginRight: 28,
-                  fontSize: 14,
-                  fontWeight: isActive ? 700 : 500,
-                  color: isActive ? T.text : T.slate,
-                  borderBottom: isActive ? `2px solid ${T.text}` : '2px solid transparent',
-                  marginBottom: -1, cursor: 'pointer',
-                  opacity: !isEnabled ? 0.45 : 1,
-                  transition: 'color 0.1s', userSelect: 'none', whiteSpace: 'nowrap',
-                }}
-              >
-                {slice.label}
-                {isEnabled && slice.key !== 'overall' && (
-                  <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 600, color: T.teal }}>✓</span>
-                )}
-              </div>
-            )
-          })}
-        </div>
+        {/* ── Slice tabs (query cycles only) ───────────────────────────────── */}
+        {!isTruecost && (
+          <div style={{
+            background: T.white, borderBottom: `1px solid ${T.border}`,
+            padding: '0 28px', display: 'flex', alignItems: 'center', flexShrink: 0,
+          }}>
+            {SLICES.map(slice => {
+              const isActive  = activeSlice === slice.key
+              const isEnabled = slice.key === 'overall' || availableSliceKeys.includes(slice.key)
+              return (
+                <div
+                  key={slice.key}
+                  className="md-tab-hover"
+                  title={!isEnabled ? 'Coming soon' : undefined}
+                  onClick={() => setActiveSlice(slice.key)}
+                  style={{
+                    padding: '14px 4px', marginRight: 28,
+                    fontSize: 14,
+                    fontWeight: isActive ? 700 : 500,
+                    color: isActive ? T.text : T.slate,
+                    borderBottom: isActive ? `2px solid ${T.text}` : '2px solid transparent',
+                    marginBottom: -1, cursor: 'pointer',
+                    opacity: !isEnabled ? 0.45 : 1,
+                    transition: 'color 0.1s', userSelect: 'none', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {slice.label}
+                  {isEnabled && slice.key !== 'overall' && (
+                    <span style={{ marginLeft: 4, fontSize: 10, fontWeight: 600, color: T.teal }}>✓</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* ── Content area ─────────────────────────────────────────────────── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', background: T.offWhite }}>
@@ -726,8 +971,14 @@ export default function MetricsDashboard({ cycleCode, onNavigate, onViewResponse
             </div>
           )}
 
-          {/* Page-level empty state */}
-          {!loading && entities.length === 0 && (
+          {/* Truecost cycles: SKU x retailer x tier results grid instead of
+              the query pipeline's entity/metrics/charts below. */}
+          {isTruecost && cycleCode && (
+            <TruecostGrid cycleCode={cycleCode} cycleData={cycleData} onRunSweep={handleRunSweep} running={runningSweep} />
+          )}
+
+          {/* Page-level empty state (query cycles only) */}
+          {!isTruecost && !loading && entities.length === 0 && (
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
               <div style={{ fontWeight: '600', fontSize: '15px', color: T.textMid, marginBottom: '8px' }}>
                 No data for this cycle yet

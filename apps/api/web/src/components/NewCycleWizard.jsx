@@ -37,8 +37,15 @@ const PLATFORMS = [
 ]
 
 const STEP_LABELS = ['Study Type', 'Comparison Set', 'Scope', 'Platforms & Runs', 'Name & Schedule', 'Review & Launch']
+const TRUECOST_STEP_LABELS = ['Brands & Tiers', 'Name & Schedule', 'Review & Launch']
+
+// Sentinel for the non-member baseline tier in UI state (HTML <input> values
+// must be strings — converted back to `null` when building the createCycle
+// payload truecost_tiers list).
+const BASELINE_TIER_VALUE = '__baseline__'
 
 const INITIAL_STATE = {
+  mode:          'query', // 'query' | 'truecost'
   studyType:     null,
   comparisonSet: [],
   platforms:     ['chatgpt'],
@@ -46,6 +53,7 @@ const INITIAL_STATE = {
   cycleCode:     '',
   notes:         '',
   runMode:       'immediate',
+  truecostTiers: [BASELINE_TIER_VALUE],
 }
 
 // ─── Shared UI primitives ─────────────────────────────────────────────────────
@@ -81,10 +89,10 @@ function Skeleton({ width = '100%', height = 16, radius = 6 }) {
 
 // ─── Step Indicator ───────────────────────────────────────────────────────────
 
-function StepIndicator({ current }) {
+function StepIndicator({ current, labels = STEP_LABELS }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '20px 32px', background: T.white, borderBottom: `1px solid ${T.border}` }}>
-      {STEP_LABELS.map((label, i) => {
+      {labels.map((label, i) => {
         const step = i + 1
         const done = step < current
         const active = step === current
@@ -107,12 +115,49 @@ function StepIndicator({ current }) {
                 {label}
               </span>
             </div>
-            {i < STEP_LABELS.length - 1 && (
+            {i < labels.length - 1 && (
               <div style={{ flex: 1, height: 2, background: done ? T.navy : T.border, margin: '0 8px', marginBottom: 22 }} />
             )}
           </React.Fragment>
         )
       })}
+    </div>
+  )
+}
+
+// ─── Mode toggle ──────────────────────────────────────────────────────────────
+
+function ModeToggle({ mode, onChange }) {
+  const Option = ({ value, label, desc }) => {
+    const active = mode === value
+    return (
+      <div
+        onClick={() => onChange(value)}
+        style={{
+          flex: 1, padding: '14px 18px', borderRadius: 10, cursor: 'pointer',
+          border: `2px solid ${active ? T.navy : T.border}`,
+          background: active ? '#F0F4FF' : T.white,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{
+            width: 16, height: 16, borderRadius: '50%',
+            border: `2px solid ${active ? T.navy : T.border}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>
+            {active && <div style={{ width: 8, height: 8, borderRadius: '50%', background: T.navy }} />}
+          </div>
+          <span style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{label}</span>
+        </div>
+        <div style={{ fontSize: 12, color: T.slate, marginTop: 4, marginLeft: 24 }}>{desc}</div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '20px 32px 0', display: 'flex', gap: 12 }}>
+      <Option value="query" label="Query study" desc="Ask AI platforms questions and code their responses." />
+      <Option value="truecost" label="True-cost sweep" desc="Sweep selected brands' Measured SKUs through the Deal Engine — no LLMs." />
     </div>
   )
 }
@@ -1143,6 +1188,378 @@ function Step5({ state, setState, onBack, onGoTo, onSuccess }) {
   )
 }
 
+// ─── Truecost Step 1: Brands & Tiers ──────────────────────────────────────────
+
+function TruecostStep1({ state, setState, onNext, onBack }) {
+  const [entities, setEntities] = useState([])
+  const [search, setSearch] = useState('')
+  const [tierOptions, setTierOptions] = useState([])
+  const [tiersLoading, setTiersLoading] = useState(true)
+  const [tiersError, setTiersError] = useState(null)
+
+  useEffect(() => {
+    api.getEntities().then(setEntities).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    api.getScopeTiers()
+      .then(res => setTierOptions(res?.tiers || []))
+      .catch(err => setTiersError(err.message))
+      .finally(() => setTiersLoading(false))
+  }, [])
+
+  const filtered = entities.filter(e => matchesEntitySearch(e, search))
+
+  const toggleEntity = (entity) => {
+    setState(s => {
+      const exists = s.comparisonSet.find(c => c.entity_id === entity.id)
+      if (exists) {
+        return { ...s, comparisonSet: s.comparisonSet.filter(c => c.entity_id !== entity.id) }
+      }
+      const idx = s.comparisonSet.length
+      const code = `M${String(idx + 1).padStart(3, '0')}`
+      const role = idx === 0 ? 'primary' : 'competitor'
+      return { ...s, comparisonSet: [...s.comparisonSet, { entity_id: entity.id, entity, code, role }] }
+    })
+  }
+
+  const toggleTier = (value) => {
+    if (value === BASELINE_TIER_VALUE) return // baseline is always included
+    setState(s => ({
+      ...s,
+      truecostTiers: s.truecostTiers.includes(value)
+        ? s.truecostTiers.filter(t => t !== value)
+        : [...s.truecostTiers, value],
+    }))
+  }
+
+  const isValid = state.comparisonSet.length >= 1 && state.truecostTiers.length >= 1
+
+  return (
+    <div style={{ padding: 32, display: 'flex', gap: 24 }}>
+      {/* Left: entity multi-select */}
+      <div style={{ flex: 1, background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}` }}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Brands</div>
+          <p style={{ margin: '0 0 12px', fontSize: 12, color: T.slate }}>
+            Each selected brand's Measured SKUs (authored on the brand's Scope page) will be swept.
+          </p>
+          <input
+            placeholder="Search by name, type, or category..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ width: '100%', padding: '8px 12px', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+          />
+        </div>
+        <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+          {filtered.map(e => {
+            const selected = !!state.comparisonSet.find(c => c.entity_id === e.id)
+            return (
+              <div
+                key={e.id}
+                onClick={() => toggleEntity(e)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '10px 20px', cursor: 'pointer',
+                  borderBottom: `1px solid ${T.border}`,
+                  background: selected ? '#F0F4FF' : T.white,
+                }}
+              >
+                <input type="checkbox" checked={selected} readOnly />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{e.name}</div>
+                  <div style={{ fontSize: 11, color: T.slate }}>{e.category}</div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Right: tier multi-select */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: `1px solid ${T.border}` }}>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Tiers to sweep</div>
+            <p style={{ margin: 0, fontSize: 12, color: T.slate }}>
+              Non-member baseline is always included.
+            </p>
+          </div>
+          <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+            {tiersLoading ? (
+              <div style={{ padding: 20 }}><Skeleton height={14} /></div>
+            ) : tiersError ? (
+              <div style={{ padding: 20, color: T.red, fontSize: 13 }}>Could not load tiers: {tiersError}</div>
+            ) : (
+              tierOptions.map(opt => {
+                const value = opt.value == null ? BASELINE_TIER_VALUE : opt.value
+                const isBaseline = value === BASELINE_TIER_VALUE
+                const checked = isBaseline || state.truecostTiers.includes(value)
+                return (
+                  <label
+                    key={value}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '10px 20px', cursor: isBaseline ? 'default' : 'pointer',
+                      borderBottom: `1px solid ${T.border}`,
+                      opacity: isBaseline ? 0.85 : 1,
+                    }}
+                  >
+                    <input type="checkbox" checked={checked} disabled={isBaseline} onChange={() => toggleTier(value)} />
+                    <span style={{ fontSize: 13, fontWeight: isBaseline ? 700 : 500 }}>{opt.label}</span>
+                  </label>
+                )
+              })
+            )}
+          </div>
+        </div>
+
+        <div style={{ background: T.offWhite, border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 16px', fontSize: 12, color: T.textMid }}>
+          Sweeps each selected brand's Measured SKUs through the Deal Engine; no LLMs are run.
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <button onClick={onBack}
+            style={{ padding: '10px 20px', borderRadius: 8, border: `1px solid ${T.border}`, background: T.white, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+            ← Back
+          </button>
+          <button onClick={onNext} disabled={!isValid}
+            style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: isValid ? T.navy : T.border, color: isValid ? T.white : T.slate, fontWeight: 600, fontSize: 14, cursor: isValid ? 'pointer' : 'not-allowed' }}>
+            Next: Name & Schedule →
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Truecost Step 2: Name & Schedule ─────────────────────────────────────────
+
+function TruecostStep2({ state, setState, onNext, onBack }) {
+  const [availability, setAvailability] = useState(null)
+  const debounceRef = useRef(null)
+
+  const today = new Date()
+  const defaultCode = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-truecost-sweep`
+
+  useEffect(() => {
+    if (!state.cycleCode) {
+      setState(s => ({ ...s, cycleCode: defaultCode }))
+    }
+  }, [])
+
+  const checkAvailability = useCallback((code) => {
+    if (!code) { setAvailability(null); return }
+    setAvailability('checking')
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await api.checkCycleCode(code)
+        setAvailability(res.available ? 'available' : 'taken')
+      } catch {
+        setAvailability(null)
+      }
+    }, 500)
+  }, [])
+
+  const handleCodeChange = (val) => {
+    const clean = val.toLowerCase().replace(/[^a-z0-9-]/g, '')
+    setState(s => ({ ...s, cycleCode: clean }))
+    checkAvailability(clean)
+  }
+
+  const isValid = state.cycleCode && availability === 'available'
+
+  return (
+    <div style={{ padding: 32, maxWidth: 560 }}>
+      <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700, color: T.text }}>Name & Schedule</h2>
+      <p style={{ margin: '0 0 28px', color: T.slate, fontSize: 14 }}>Give this sweep a unique code and set when it should run.</p>
+
+      <div style={{ marginBottom: 24 }}>
+        <label style={{ fontWeight: 600, fontSize: 13, display: 'block', marginBottom: 8 }}>Cycle Code</label>
+        <div style={{ position: 'relative' }}>
+          <input
+            value={state.cycleCode}
+            onChange={e => handleCodeChange(e.target.value)}
+            placeholder={defaultCode}
+            style={{
+              width: '100%', padding: '10px 140px 10px 12px',
+              border: `1px solid ${availability === 'taken' ? T.red : availability === 'available' ? T.green : T.border}`,
+              borderRadius: 8, fontSize: 14, fontFamily: 'monospace',
+              outline: 'none', boxSizing: 'border-box',
+            }}
+          />
+          <div style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 12, fontWeight: 600 }}>
+            {availability === 'checking' && <span style={{ color: T.slate }}>Checking...</span>}
+            {availability === 'available' && <span style={{ color: T.green }}>AVAILABLE ✓</span>}
+            {availability === 'taken' && <span style={{ color: T.red }}>TAKEN ✗</span>}
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: T.slate, marginTop: 6 }}>Lowercase letters, numbers, and hyphens only.</div>
+      </div>
+
+      <div style={{ marginBottom: 32 }}>
+        <label style={{ fontWeight: 600, fontSize: 13, display: 'block', marginBottom: 8 }}>Notes (optional)</label>
+        <textarea
+          value={state.notes}
+          onChange={e => setState(s => ({ ...s, notes: e.target.value }))}
+          rows={3}
+          placeholder="Any notes about this sweep..."
+          style={{ width: '100%', padding: '10px 12px', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
+        />
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <button onClick={onBack}
+          style={{ padding: '10px 20px', borderRadius: 8, border: `1px solid ${T.border}`, background: T.white, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+          ← Back
+        </button>
+        <button onClick={onNext} disabled={!isValid}
+          style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: isValid ? T.navy : T.border, color: isValid ? T.white : T.slate, fontWeight: 600, fontSize: 14, cursor: isValid ? 'pointer' : 'not-allowed' }}>
+          Next: Review & Launch →
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Truecost Step 3: Review & Launch ─────────────────────────────────────────
+
+function TruecostStep3({ state, onBack, onGoTo, onSuccess }) {
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [launching, setLaunching] = useState(false)
+  const [launchError, setLaunchError] = useState(null)
+  const [launched, setLaunched] = useState(false)
+
+  const tierLabels = state.truecostTiers.map(t => t === BASELINE_TIER_VALUE ? 'Non-member (baseline)' : t)
+
+  const handleLaunch = async () => {
+    setLaunchError(null)
+    setLaunching(true)
+    try {
+      await api.createCycle({
+        cycle_code:      state.cycleCode,
+        cycle_mode:      'truecost',
+        notes:           state.notes || null,
+        run_mode:        state.runMode,
+        comparison_set:  state.comparisonSet.map(c => ({
+          entity_id:       c.entity_id,
+          comparison_code: c.code,
+          role:            c.role,
+        })),
+        truecost_tiers:  state.truecostTiers.map(t => t === BASELINE_TIER_VALUE ? null : t),
+      })
+      setShowConfirm(false)
+      setLaunched(true)
+    } catch (e) {
+      setLaunchError(e.message)
+    } finally {
+      setLaunching(false)
+    }
+  }
+
+  if (launched) {
+    return (
+      <div style={{ padding: 64, textAlign: 'center' }}>
+        <div style={{ fontSize: 64, marginBottom: 16 }}>🚀</div>
+        <h2 style={{ fontSize: 28, fontWeight: 700, color: T.text, margin: '0 0 8px' }}>Sweep Launched</h2>
+        <div style={{ fontFamily: 'monospace', fontSize: 18, color: T.navy, fontWeight: 700, marginBottom: 16 }}>{state.cycleCode}</div>
+        <p style={{ color: T.slate, fontSize: 14, maxWidth: 400, margin: '0 auto 32px' }}>
+          The pipeline worker will sweep each brand's Measured SKUs through the Deal Engine shortly.
+        </p>
+        <button onClick={onSuccess}
+          style={{ padding: '12px 28px', background: T.navy, color: T.white, border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+          Start New Cycle
+        </button>
+      </div>
+    )
+  }
+
+  const SummaryPanel = ({ title, step, children }) => (
+    <div style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+      <div style={{ padding: '14px 20px', borderBottom: `1px solid ${T.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>{title}</div>
+        <button onClick={() => onGoTo(step)}
+          style={{ fontSize: 12, color: T.indigo, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}>EDIT</button>
+      </div>
+      <div style={{ padding: '16px 20px' }}>{children}</div>
+    </div>
+  )
+
+  return (
+    <div style={{ padding: 32, maxWidth: 700 }}>
+      <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700, color: T.text }}>Review & Launch</h2>
+      <p style={{ margin: '0 0 24px', color: T.slate, fontSize: 14 }}>Confirm all settings before launching.</p>
+
+      <SummaryPanel title="Brands & Tiers" step={1}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+          {state.comparisonSet.map(c => (
+            <div key={c.entity_id} style={{ fontSize: 13, fontWeight: 600 }}>{c.entity.name}</div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {tierLabels.map(label => <Badge key={label} color={T.indigo} bg="#EEF2FF">{label}</Badge>)}
+        </div>
+      </SummaryPanel>
+
+      <div style={{ background: T.offWhite, border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 12, color: T.textMid }}>
+        Sweeps each selected brand's Measured SKUs through the Deal Engine; no LLMs are run.
+      </div>
+
+      <div style={{ background: T.navy, borderRadius: 12, padding: '16px 20px', marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <div style={{ color: T.slateLight, fontSize: 11, marginBottom: 4 }}>CYCLE CODE</div>
+          <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 18, color: T.white }}>{state.cycleCode}</div>
+          <div style={{ color: T.sidebarText, fontSize: 12, marginTop: 4 }}>Starts immediately on launch</div>
+        </div>
+        <button onClick={() => onGoTo(2)}
+          style={{ fontSize: 12, color: T.tealLight, fontWeight: 600, background: 'none', border: `1px solid ${T.navyBdr}`, borderRadius: 6, padding: '6px 12px', cursor: 'pointer' }}>EDIT</button>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <button onClick={onBack}
+          style={{ padding: '10px 20px', borderRadius: 8, border: `1px solid ${T.border}`, background: T.white, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+          ← Back
+        </button>
+        <button onClick={() => setShowConfirm(true)}
+          style={{ padding: '12px 28px', background: T.navy, color: T.white, border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 15, cursor: 'pointer' }}>
+          Launch Sweep 🚀
+        </button>
+      </div>
+
+      {showConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+          <div style={{ background: T.white, borderRadius: 16, padding: 32, maxWidth: 440, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700 }}>Confirm Launch</h3>
+            <p style={{ fontSize: 14, color: T.textMid, lineHeight: 1.6, margin: '0 0 16px' }}>
+              You are about to sweep <strong>{state.comparisonSet.length}</strong> brand{state.comparisonSet.length > 1 ? 's' : ''} across <strong>{tierLabels.length}</strong> tier{tierLabels.length > 1 ? 's' : ''}. This cannot be undone.
+            </p>
+            {launchError && (
+              <div style={{ background: T.redLight, border: `1px solid ${T.red}22`, borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: T.red, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <span>{launchError}</span>
+                <button onClick={() => setLaunchError(null)} style={{ background: 'none', border: 'none', color: T.red, cursor: 'pointer', flexShrink: 0, fontSize: 16 }}>✕</button>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => { setShowConfirm(false); setLaunchError(null) }} disabled={launching}
+                style={{ padding: '10px 20px', background: T.offWhite, border: `1px solid ${T.border}`, borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={handleLaunch} disabled={launching}
+                style={{ padding: '10px 24px', background: T.navy, color: T.white, border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: launching ? 'wait' : 'pointer', opacity: launching ? 0.7 : 1 }}>
+                {launching ? 'Launching...' : 'Confirm Launch'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Root Wizard ──────────────────────────────────────────────────────────────
 
 export default function NewCycleWizard({ onComplete, onCancel, onNavigate } = {}) {
@@ -1162,6 +1579,15 @@ export default function NewCycleWizard({ onComplete, onCancel, onNavigate } = {}
   const handleSuccess = () => {
     reset()
     if (onComplete) onComplete()
+  }
+
+  const isTruecost = state.mode === 'truecost'
+  const labels = isTruecost ? TRUECOST_STEP_LABELS : STEP_LABELS
+
+  const setMode = (mode) => {
+    if (mode === state.mode) return
+    setStep(1)
+    setState(s => ({ ...INITIAL_STATE, mode }))
   }
 
   return (
@@ -1186,8 +1612,9 @@ export default function NewCycleWizard({ onComplete, onCancel, onNavigate } = {}
       />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh', marginLeft: 200 }}>
-        <Topbar stepName={STEP_LABELS[step - 1]} />
-        <StepIndicator current={step} />
+        <Topbar stepName={labels[step - 1]} />
+        {step === 1 && <ModeToggle mode={state.mode} onChange={setMode} />}
+        <StepIndicator current={step} labels={labels} />
 
         {/* Cancel setup link */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 32px 0', borderBottom: `1px solid ${T.border}`, paddingBottom: 8 }}>
@@ -1200,30 +1627,51 @@ export default function NewCycleWizard({ onComplete, onCancel, onNavigate } = {}
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {step === 1 && (
-            <Step1 state={state} setState={setState} onNext={() => setStep(2)} onNavigate={onNavigate} />
-          )}
-          {step === 2 && (
-            <Step2 state={state} setState={setState}
-              onNext={() => setStep(3)} onBack={() => setStep(1)} />
-          )}
-          {step === 3 && (
-            <StepScope state={state} setState={setState}
-              onNext={() => setStep(4)} onBack={() => setStep(2)} />
-          )}
-          {step === 4 && (
-            <Step3 state={state} setState={setState} queryCount={queryCount}
-              onNext={() => setStep(5)} onBack={() => setStep(3)} />
-          )}
-          {step === 5 && (
-            <Step4 state={state} setState={setState}
-              onNext={() => setStep(6)} onBack={() => setStep(4)} />
-          )}
-          {step === 6 && (
-            <Step5 state={state} setState={setState}
-              onBack={() => setStep(5)}
-              onGoTo={setStep}
-              onSuccess={handleSuccess} />
+          {isTruecost ? (
+            <>
+              {step === 1 && (
+                <TruecostStep1 state={state} setState={setState}
+                  onNext={() => setStep(2)} onBack={() => setStep(1)} />
+              )}
+              {step === 2 && (
+                <TruecostStep2 state={state} setState={setState}
+                  onNext={() => setStep(3)} onBack={() => setStep(1)} />
+              )}
+              {step === 3 && (
+                <TruecostStep3 state={state}
+                  onBack={() => setStep(2)}
+                  onGoTo={setStep}
+                  onSuccess={handleSuccess} />
+              )}
+            </>
+          ) : (
+            <>
+              {step === 1 && (
+                <Step1 state={state} setState={setState} onNext={() => setStep(2)} onNavigate={onNavigate} />
+              )}
+              {step === 2 && (
+                <Step2 state={state} setState={setState}
+                  onNext={() => setStep(3)} onBack={() => setStep(1)} />
+              )}
+              {step === 3 && (
+                <StepScope state={state} setState={setState}
+                  onNext={() => setStep(4)} onBack={() => setStep(2)} />
+              )}
+              {step === 4 && (
+                <Step3 state={state} setState={setState} queryCount={queryCount}
+                  onNext={() => setStep(5)} onBack={() => setStep(3)} />
+              )}
+              {step === 5 && (
+                <Step4 state={state} setState={setState}
+                  onNext={() => setStep(6)} onBack={() => setStep(4)} />
+              )}
+              {step === 6 && (
+                <Step5 state={state} setState={setState}
+                  onBack={() => setStep(5)}
+                  onGoTo={setStep}
+                  onSuccess={handleSuccess} />
+              )}
+            </>
           )}
         </div>
       </div>

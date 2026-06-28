@@ -162,6 +162,13 @@ export const api = {
   resumeCycle: (cycleCode) =>
     post(`/api/cycles/${cycleCode}/resume`, {}),
 
+  // Truecost sweep cycles
+  getCycleTruecostSnapshots: (cycleCode) =>
+    get(`/api/cycles/${cycleCode}/truecost-snapshots`),
+
+  getScopeTiers: () =>
+    get('/api/scope/tiers'),
+
   // Metrics
   getMetrics: (cycleCode) =>
     get(`/api/cycles/${cycleCode}/metrics`),

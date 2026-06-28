@@ -46,6 +46,7 @@ SOA_TABLES = {
     "soa_incentive_scores",
     "soa_eligibility_metrics",
     "soa_scope_skus",
+    "soa_truecost_snapshots",
 }
 
 

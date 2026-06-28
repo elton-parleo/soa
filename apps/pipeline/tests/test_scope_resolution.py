@@ -58,6 +58,7 @@ def session():
                 study_type TEXT, study_pattern TEXT,
                 scope_frozen_at TIMESTAMP, scope_is_custom BOOLEAN,
                 organization_id INTEGER, created_by TEXT,
+                cycle_mode TEXT DEFAULT 'query', truecost_tiers TEXT,
                 created_at TIMESTAMP, updated_at TIMESTAMP
             )
         """)
