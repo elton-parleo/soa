@@ -213,6 +213,25 @@ async def _pipeline(args: argparse.Namespace) -> None:
     if getattr(args, "verbose", False):
         logging.getLogger().setLevel(logging.DEBUG)
 
+    from soa_shared.database import session_factory
+    from soa_shared.models.soa_models import SoaCycle
+
+    with session_factory() as session:
+        cycle = session.query(SoaCycle).filter_by(cycle_code=args.cycle).first()
+        cycle_mode = cycle.cycle_mode if cycle else "query"
+
+    if cycle_mode == "truecost":
+        from sweep.truecost_sweep import run_truecost_sweep
+
+        summary = await run_truecost_sweep(args.cycle)
+        print(
+            f"\nTruecost sweep complete for {args.cycle}: "
+            f"captured={summary.captured} unavailable={summary.unavailable} "
+            f"skipped={summary.skipped_already_done} "
+            f"({summary.sku_count} SKUs x {summary.tier_count} tiers)\n"
+        )
+        return
+
     from orchestrator.pipeline import PipelineOrchestrator
 
     platforms = (

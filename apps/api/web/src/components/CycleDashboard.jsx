@@ -161,7 +161,14 @@ function CycleCard({ cycle, children, onClick }) {
           <div style={{ fontFamily: 'monospace', fontSize: 11, color: T.slate, marginBottom: 4 }}>{cycle.cycle_code}</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>{cycleDisplayName(cycle.cycle_code)}</div>
         </div>
-        <StatusBadge status={cycle.status} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {cycle.cycle_mode === 'truecost' && (
+            <span style={{ padding: '4px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, color: T.indigo, background: '#EEF2FF', whiteSpace: 'nowrap' }}>
+              TRUE-COST
+            </span>
+          )}
+          <StatusBadge status={cycle.status} />
+        </div>
       </div>
       {children}
     </div>

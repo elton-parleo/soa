@@ -60,6 +60,13 @@ class ResolveListingResult:
 
 
 @dataclass
+class MerchantProgramsResult:
+    available: bool
+    merchants: List[Dict[str, Any]] = field(default_factory=list)
+    error: Optional[str] = None
+
+
+@dataclass
 class ListingTrueCostResult:
     available: bool
     true_cost: Optional[float] = None
@@ -71,6 +78,8 @@ class ListingTrueCostResult:
     available_deals: List[Dict[str, Any]] = field(default_factory=list)
     confidence: Optional[float] = None
     user_tier_name: Optional[str] = None
+    price_was_refreshed: bool = False
+    price_refreshed_at: Optional[str] = None
     error: Optional[str] = None
 
 
@@ -82,7 +91,9 @@ class DealEngineClient:
         timeout_seconds: Optional[float] = None,
         max_retries: Optional[int] = None,
     ) -> None:
-        self.base_url = (base_url or config.DEAL_ENGINE_BASE_URL).rstrip("/")
+        self.base_url = (
+            config.DEAL_ENGINE_BASE_URL if base_url is None else base_url
+        ).rstrip("/")
         self.timeout_seconds = (
             timeout_seconds
             if timeout_seconds is not None
@@ -202,22 +213,48 @@ class DealEngineClient:
 
         return ResolveListingResult(available=True, listing=data)
 
+    async def merchant_programs(self) -> MerchantProgramsResult:
+        """
+        GET /api/merchants/programs — all merchants with their loyalty
+        programs and tiers. Used to populate the truecost-sweep wizard's
+        tier multi-select (each tier.name is a valid user_tier_name).
+        """
+        if not self.base_url:
+            return MerchantProgramsResult(available=False, error="DEAL_ENGINE_BASE_URL not configured")
+
+        data, error = await self._request("GET", "/api/merchants/programs")
+        if data is None:
+            return MerchantProgramsResult(available=False, error=error)
+
+        return MerchantProgramsResult(available=True, merchants=data or [])
+
     async def listing_true_cost(
         self,
         listing_id: int,
         user_tier_name: Optional[str] = None,
+        refresh_price: bool = False,
     ) -> ListingTrueCostResult:
         """
         GET /api/catalog/listings/{id}/true-cost — ground truth for a known
         listing. Used by the SKU-level scorer instead of true_cost() once a
         scope SKU has a dealengine_listing_id.
+
+        refresh_price=True asks the Deal Engine to re-scrape the listing's
+        current price before computing true cost (used once per SKU by the
+        truecost sweep executor). Default False keeps every existing caller
+        unchanged.
         """
         if not self.base_url:
             return ListingTrueCostResult(available=False, error="DEAL_ENGINE_BASE_URL not configured")
 
-        params = {"user_tier_name": user_tier_name} if user_tier_name else None
+        params: Dict[str, Any] = {}
+        if user_tier_name:
+            params["user_tier_name"] = user_tier_name
+        if refresh_price:
+            params["refresh_price"] = refresh_price
+
         data, error = await self._request(
-            "GET", f"/api/catalog/listings/{listing_id}/true-cost", params=params
+            "GET", f"/api/catalog/listings/{listing_id}/true-cost", params=params or None
         )
         if data is None:
             return ListingTrueCostResult(available=False, error=error)
@@ -234,6 +271,8 @@ class DealEngineClient:
             available_deals=true_cost_result.get("available_deals") or [],
             confidence=true_cost_result.get("confidence"),
             user_tier_name=true_cost_result.get("user_tier_name"),
+            price_was_refreshed=data.get("price_was_refreshed") or False,
+            price_refreshed_at=data.get("price_refreshed_at"),
         )
 
     async def _request(

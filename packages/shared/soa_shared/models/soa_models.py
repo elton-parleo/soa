@@ -272,6 +272,10 @@ class SoaCycle(Base):
             "study_pattern IN ('retailer','brand_at_retail','brand_vs_brand','mixed')",
             name="ck_soa_cycles_study_pattern",
         ),
+        CheckConstraint(
+            "cycle_mode IN ('query','truecost')",
+            name="ck_soa_cycles_cycle_mode",
+        ),
         Index("ix_soa_cycles_study_type", "study_type"),
         Index("ix_soa_cycles_organization_id", "organization_id"),
     )
@@ -343,6 +347,29 @@ class SoaCycle(Base):
     )
     created_by = Column(String, nullable=True)
 
+    cycle_mode = Column(
+        String,
+        nullable=False,
+        default="query",
+        server_default="query",
+        comment=(
+            "'query' — the existing LLM query/coding pipeline. "
+            "'truecost' — sweeps the cycle's scoped SKUs through the Deal "
+            "Engine instead of running LLM queries; see "
+            "apps/pipeline/sweep/truecost_sweep.py."
+        ),
+    )
+    truecost_tiers = Column(
+        JSON,
+        nullable=True,
+        comment=(
+            "List of loyalty tier names to sweep for a 'truecost' cycle. "
+            "A null entry in the list means the non-member baseline. "
+            "Ignored for cycle_mode='query'. Defaults to [null] (baseline "
+            "only) at sweep time when empty/None."
+        ),
+    )
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -355,6 +382,7 @@ class SoaCycle(Base):
         cascade="all, delete-orphan",
     )
     scope_skus = relationship("SoaScopeSku", back_populates="cycle")
+    truecost_snapshots = relationship("SoaTruecostSnapshot", back_populates="cycle")
 
 
 # ---------------------------------------------------------------------------
@@ -498,6 +526,81 @@ class SoaScopeSku(Base):
     cycle = relationship("SoaCycle", back_populates="scope_skus")
     entity = relationship("SoaEntity")
     incentive_scores = relationship("SoaIncentiveScore", back_populates="scope_sku")
+    truecost_snapshots = relationship("SoaTruecostSnapshot", back_populates="scope_sku")
+
+
+# ---------------------------------------------------------------------------
+# 4c. soa_truecost_snapshots — one row per (scope SKU x tier) captured by a
+# 'truecost' cycle's Deal Engine sweep. Additive; never populated by the
+# query pipeline.
+# ---------------------------------------------------------------------------
+
+class SoaTruecostSnapshot(Base):
+    __tablename__ = "soa_truecost_snapshots"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('captured','ground_truth_unavailable')",
+            name="ck_soa_truecost_snapshots_status",
+        ),
+        Index("ix_soa_truecost_snapshots_cycle_id", "cycle_id"),
+        Index("ix_soa_truecost_snapshots_scope_sku_id", "scope_sku_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    cycle_id = Column(
+        Integer,
+        ForeignKey("soa_cycles.id"),
+        nullable=False,
+        index=True,
+    )
+    scope_sku_id = Column(
+        Integer,
+        ForeignKey("soa_scope_skus.id"),
+        nullable=False,
+        index=True,
+    )
+    entity_id = Column(Integer, ForeignKey("soa_entities.id"), nullable=True)
+
+    # Deal Engine reference / response fields — mirrors scope_sku at sweep
+    # time, by value (no cross-DB FK).
+    dealengine_listing_id = Column(Integer, nullable=True, index=True)
+    merchant_slug = Column(Text, nullable=True)
+    brand = Column(Text, nullable=True)
+    category = Column(Text, nullable=True)
+
+    user_tier_name = Column(
+        Text,
+        nullable=True,
+        comment="Loyalty tier swept for this row. Null means the non-member baseline.",
+    )
+
+    listed_price = Column(Numeric(10, 2), nullable=True)
+    currency = Column(Text, nullable=True)
+    true_cost = Column(Numeric(10, 2), nullable=True)
+    total_savings = Column(Numeric(10, 2), nullable=True)
+    total_points_earned = Column(Integer, nullable=True)
+    applied_deals = Column(JSON, nullable=True)
+    available_deals = Column(JSON, nullable=True)
+    confidence = Column(Float, nullable=True)
+
+    price_was_refreshed = Column(Boolean, nullable=False, default=False, server_default="false")
+    price_refreshed_at = Column(DateTime(timezone=True), nullable=True)
+
+    status = Column(
+        Text,
+        nullable=False,
+        default="captured",
+        server_default="captured",
+        comment="'captured' — true-cost computed. 'ground_truth_unavailable' — Deal Engine call failed.",
+    )
+    error_message = Column(Text, nullable=True)
+
+    captured_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    cycle = relationship("SoaCycle", back_populates="truecost_snapshots")
+    scope_sku = relationship("SoaScopeSku", back_populates="truecost_snapshots")
+    entity = relationship("SoaEntity")
 
 
 # ---------------------------------------------------------------------------

@@ -29,7 +29,13 @@ from soa_shared.scope_resolution import (
     remove_scope_sku_from_cycle,
 )
 from app.auth import get_current_user
-from app.schemas import CreateScopeSkuRequest, CycleScopeResponse, ScopeSkuResponse
+from app.schemas import (
+    CreateScopeSkuRequest,
+    CycleScopeResponse,
+    ScopeSkuResponse,
+    ScopeTiersResponse,
+    TierOption,
+)
 from clients.deal_engine_client import DealEngineClient
 
 router = APIRouter()
@@ -154,6 +160,42 @@ def search_catalog(
             detail=f"Deal Engine catalog search unavailable: {result.error}",
         )
     return {"listings": result.listings}
+
+
+@router.get("/scope/tiers", response_model=ScopeTiersResponse)
+def get_scope_tiers(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Proxies the Deal Engine's GET /api/merchants/programs to list every
+    loyalty tier name across all merchants, for the truecost-sweep wizard's
+    tier multi-select. Always prepends a "Non-member (baseline)" option
+    (value=None) — every truecost cycle implicitly sweeps the baseline.
+
+    Tier names are deduped and sorted; a tier may appear at multiple
+    merchants (the underlying value is just the tier's display name, which
+    is matched case-insensitively against the Deal Engine's tier.name — see
+    deal_engine/loyalty_eligibility.py).
+    """
+    client = DealEngineClient()
+    result = _run_async(client.merchant_programs())
+    if not result.available:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Deal Engine unavailable: {result.error}",
+        )
+
+    names = set()
+    for merchant in result.merchants:
+        for program in merchant.get("programs") or []:
+            for tier in program.get("tiers") or []:
+                name = tier.get("name")
+                if name:
+                    names.add(name)
+
+    tiers = [TierOption(value=None, label="Non-member (baseline)")]
+    tiers += [TierOption(value=name, label=name) for name in sorted(names)]
+    return ScopeTiersResponse(tiers=tiers)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

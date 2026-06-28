@@ -69,24 +69,60 @@ class ComparisonEntityInput(BaseModel):
 
 class CreateCycleRequest(BaseModel):
     cycle_code: str
-    study_type: str
-    platforms: List[str]
-    runs_per_query: int
+    # 'query' (default) is the existing LLM query/coding pipeline, unchanged.
+    # 'truecost' sweeps the selected entities' Measured SKUs through the Deal
+    # Engine instead — study_type/platforms/runs_per_query are not required
+    # for it (see the conditional validation in create_cycle()).
+    cycle_mode: str = "query"
+    study_type: Optional[str] = None
+    platforms: Optional[List[str]] = None
+    runs_per_query: Optional[int] = None
     notes: Optional[str] = None
     run_mode: str = "immediate"
     comparison_set: List[ComparisonEntityInput]
+    # Tier names to sweep for cycle_mode='truecost'. A null entry means the
+    # non-member baseline. Ignored for cycle_mode='query'.
+    truecost_tiers: Optional[List[Optional[str]]] = None
+
+    @field_validator("cycle_mode")
+    @classmethod
+    def validate_cycle_mode(cls, v):
+        if v not in ("query", "truecost"):
+            raise ValueError("cycle_mode must be 'query' or 'truecost'")
+        return v
+
+    @model_validator(mode="after")
+    def check_mode_requirements(self):
+        if self.cycle_mode == "query":
+            if not self.study_type:
+                raise ValueError("study_type is required for cycle_mode='query'")
+            if not self.platforms:
+                raise ValueError("platforms is required for cycle_mode='query'")
+            if not self.runs_per_query:
+                raise ValueError("runs_per_query is required for cycle_mode='query'")
+        else:  # truecost
+            if not self.comparison_set:
+                raise ValueError("at least one entity is required for cycle_mode='truecost'")
+            if not self.truecost_tiers:
+                raise ValueError(
+                    "at least one tier is required for cycle_mode='truecost' "
+                    "(include null for the non-member baseline)"
+                )
+        return self
 
 class CycleStatusResponse(BaseModel):
     cycle_code: str
     status: str
-    study_type: str
-    study_pattern: str
-    total_runs_planned: int
+    cycle_mode: str = "query"
+    study_type: Optional[str] = None
+    study_pattern: Optional[str] = None
+    total_runs_planned: Optional[int] = None
     completed_runs: int
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     platforms: Optional[List[str]] = None
     runs_per_query: Optional[int] = None
+    truecost_tiers: Optional[List[Optional[str]]] = None
     id: Optional[int] = None  # soa_cycles.id — needed by scope-SKU endpoints, which key on it
 
 class CycleCheckResponse(BaseModel):
@@ -378,3 +414,57 @@ class CycleScopeResponse(BaseModel):
     source: str
     is_editable: bool
     skus: List[ScopeSkuResponse]
+
+
+# ─── Truecost sweep cycles ───────────────────────────────────────────────────
+
+class TruecostTierResult(BaseModel):
+    """One captured (or unavailable) tier cell for a scope SKU."""
+    user_tier_name: Optional[str] = None  # None = non-member baseline
+    listed_price: Optional[float] = None
+    currency: Optional[str] = None
+    true_cost: Optional[float] = None
+    total_savings: Optional[float] = None
+    total_points_earned: Optional[int] = None
+    applied_deals: Optional[List[dict]] = None
+    available_deals: Optional[List[dict]] = None
+    confidence: Optional[float] = None
+    price_was_refreshed: bool = False
+    price_refreshed_at: Optional[str] = None
+    status: str
+    error_message: Optional[str] = None
+    captured_at: Optional[str] = None
+
+
+class TruecostSkuRow(BaseModel):
+    """One row of the SKU x retailer x tier grid."""
+    scope_sku_id: int
+    entity_id: Optional[int] = None
+    merchant_slug: Optional[str] = None
+    brand: Optional[str] = None
+    category: Optional[str] = None
+    display_name: Optional[str] = None
+    dealengine_listing_id: Optional[int] = None
+    tiers: List[TruecostTierResult]
+    # Per-tier true_cost delta vs the non-member baseline (baseline - tier),
+    # i.e. positive means the tier is cheaper than baseline. Only populated
+    # when both the baseline and that tier were captured, and only present
+    # at all when more than one tier was swept for this SKU.
+    member_vs_baseline_delta: dict[str, float] = {}
+
+
+class CycleTruecostSnapshotsResponse(BaseModel):
+    cycle_id: int
+    cycle_code: str
+    skus: List[TruecostSkuRow]
+
+
+class TierOption(BaseModel):
+    """One selectable tier in the truecost-sweep wizard's tier multi-select.
+    value=None is the always-present non-member baseline option."""
+    value: Optional[str] = None
+    label: str
+
+
+class ScopeTiersResponse(BaseModel):
+    tiers: List[TierOption]

@@ -60,6 +60,9 @@ SOA_INCENTIVE_PRICE_TOLERANCE_PCT: float = float(os.environ.get("SOA_INCENTIVE_P
 SOA_DEAL_ENGINE_TIMEOUT_SECONDS: float = float(os.environ.get("SOA_DEAL_ENGINE_TIMEOUT_SECONDS", "10.0"))
 SOA_DEAL_ENGINE_MAX_RETRIES: int = int(os.environ.get("SOA_DEAL_ENGINE_MAX_RETRIES", "2"))
 
+# Truecost sweep cycles — bounded concurrency for the Deal Engine sweep executor
+SOA_TRUECOST_MAX_CONCURRENT: int = int(os.environ.get("SOA_TRUECOST_MAX_CONCURRENT", "3"))
+
 # Merchant slug fallback map — used when soa_entities/merchants has no slug for a
 # merchant_id. Format: "merchant_id:slug,merchant_id:slug".
 SOA_MERCHANT_SLUG_FALLBACK_MAP: str = os.environ.get("SOA_MERCHANT_SLUG_FALLBACK_MAP", "")
