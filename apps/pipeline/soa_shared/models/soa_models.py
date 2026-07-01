@@ -34,6 +34,7 @@ from soa_shared.constants import (
     QUERY_STATUSES,
     QUERY_STUDY_PATTERNS,
     QUERY_SUBSCRIPTION_STATES,
+    QUERY_EXPECTED_INCENTIVES,
 )
 
 
@@ -172,6 +173,10 @@ class SoaQuery(Base):
             f"subscription_state IS NULL OR subscription_state IN {_in_list(QUERY_SUBSCRIPTION_STATES)}",
             name="ck_soa_queries_subscription_state",
         ),
+        CheckConstraint(
+            f"expected_incentive IS NULL OR expected_incentive IN {_in_list(QUERY_EXPECTED_INCENTIVES)}",
+            name="ck_soa_queries_expected_incentive",
+        ),
         Index("ix_soa_queries_category_stage_status", "category", "stage", "status"),
         Index("ix_soa_queries_study_type", "study_type"),
         Index("ix_soa_queries_study_pattern", "study_pattern"),
@@ -240,6 +245,11 @@ class SoaQuery(Base):
         Text,
         nullable=True,
         comment="subscribed/not_subscribed for subscribe-and-save eligibility. Null = unconstrained.",
+    )
+    expected_incentive = Column(
+        Text,
+        nullable=True,
+        comment="Low/Mixed/High — whether a consumer at this stage/persona expects price/promo info in a good answer. Set by curation/seed.",
     )
     new_customer = Column(
         Boolean,
