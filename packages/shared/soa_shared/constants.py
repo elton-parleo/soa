@@ -23,9 +23,11 @@ QUERY_CATEGORIES = [
     'Cross-Category',
     'Grooming',
     'Oral Care',
+    'Baby Care',
 ]
 
 QUERY_STAGES = [
+    'Awareness',
     'Research',
     'Comparison',
     'Ready to Buy',
@@ -44,6 +46,12 @@ QUERY_PERSONAS = [
     'Problem-Skin Sufferer',
     'Eco-Conscious / Minimalist',
     'Oral Health Symptom Sufferer',
+    # Baby Care (first non-beauty vertical) — future verticals follow this additive pattern
+    'New / First-Time Parent',
+    'Value-Conscious Parent',
+    'Sensitive-Skin Baby Parent',
+    'Subscription / Replenishment Parent',
+    'Eco-Conscious Parent',
 ]
 
 QUERY_STATUSES = [
@@ -57,6 +65,12 @@ QUERY_STUDY_PATTERNS = [
     'brand_at_retail',
     'brand_vs_brand',
 ]
+
+# expected_incentive is NOT in QUERY_CONSTRAINTS intentionally: it is set by
+# curation/seed, not by API submission or AI query generation. Keeping it out
+# of that dict avoids making it a required field for generated rows (same
+# rationale as membership_program / tier_name).
+QUERY_EXPECTED_INCENTIVES = ['Low', 'Mixed', 'High']
 
 # Persona eligibility state — additive, optional columns on soa_queries.
 # Null on all four (the default) means "no eligibility constraint", i.e.

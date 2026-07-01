@@ -166,6 +166,11 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
   const [entitySearch, setEntitySearch]     = useState('')
   const [dealCited, setDealCited]           = useState(false)
   const [needsReview, setNeedsReview]       = useState(false)
+  const [stageOptions, setStageOptions]     = useState([])
+
+  useEffect(() => {
+    api.getQueryConstraints().then(c => setStageOptions(c.stage || [])).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!cycleCode) return
@@ -311,10 +316,8 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
           <SelectControl
             label="STAGE" value={stageFilter} onChange={setStageFilter} width={140}
             options={[
-              { value: 'all',          label: 'All Stages' },
-              { value: 'Research',     label: 'Research' },
-              { value: 'Comparison',   label: 'Comparison' },
-              { value: 'Ready to Buy', label: 'Ready to Buy' },
+              { value: 'all', label: 'All Stages' },
+              ...stageOptions.map(s => ({ value: s, label: s })),
             ]}
           />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
