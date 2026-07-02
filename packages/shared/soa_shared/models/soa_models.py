@@ -393,6 +393,8 @@ class SoaCycle(Base):
     )
     scope_skus = relationship("SoaScopeSku", back_populates="cycle")
     truecost_snapshots = relationship("SoaTruecostSnapshot", back_populates="cycle")
+    findings = relationship("SoaFinding", back_populates="cycle")
+    recommendations = relationship("SoaRecommendation", back_populates="cycle")
 
 
 # ---------------------------------------------------------------------------
@@ -1030,3 +1032,143 @@ class OrganizationMember(Base):
         ),
         Index('ix_org_members_user_id', 'user_id'),
     )
+
+
+# ---------------------------------------------------------------------------
+# 12. soa_playbook — curated remediation library backing the Actions feature.
+# Global reference table, not organization-scoped. Seeded from
+# docs/playbook_v1.md; see apps/pipeline/scripts/seed_playbook.py.
+# ---------------------------------------------------------------------------
+
+class SoaPlaybook(Base):
+    __tablename__ = "soa_playbook"
+    __table_args__ = (
+        CheckConstraint(
+            "owner IN ('brand','retailer','joint')",
+            name="ck_soa_playbook_owner",
+        ),
+        CheckConstraint(
+            "effort IN ('low','medium','high')",
+            name="ck_soa_playbook_effort",
+        ),
+        CheckConstraint(
+            "detector_status IN ('implemented','not_implemented')",
+            name="ck_soa_playbook_detector_status",
+        ),
+        Index("ix_soa_playbook_pillar", "pillar"),
+    )
+
+    play_id = Column(
+        Text,
+        primary_key=True,
+        comment="Stable key referenced by soa_findings/soa_recommendations. e.g. 'TVD-02'",
+    )
+    pillar = Column(Text, nullable=False, comment="Visibility | Accessibility | True Value Delivery | Fidelity")
+    failure_mode = Column(Text, nullable=False)
+    detection_trigger = Column(
+        Text,
+        nullable=False,
+        comment="Human-readable rule from the playbook doc. The machine-enforced version lives in detector_thresholds.yaml.",
+    )
+    dimensions = Column(JSON, nullable=False, comment="List of SoA dimension names this play moves, e.g. ['Presence']")
+    owner = Column(Text, nullable=False)
+    play_text = Column(Text, nullable=False)
+    mechanism_text = Column(Text, nullable=False)
+    effort = Column(Text, nullable=False)
+    expected_impact_text = Column(Text, nullable=False)
+    evidence_spec = Column(Text, nullable=False)
+    detector_status = Column(
+        Text,
+        nullable=False,
+        default="not_implemented",
+        server_default="not_implemented",
+        comment="'implemented' — a detector function exists for this play_id. 'not_implemented' — seeded but skipped by the detector.",
+    )
+    active = Column(Boolean, nullable=False, default=True, server_default="true")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    findings = relationship("SoaFinding", back_populates="play")
+    recommendations = relationship("SoaRecommendation", back_populates="play")
+
+
+# ---------------------------------------------------------------------------
+# 13. soa_findings — deterministic detector output for a completed cycle.
+# Read-only over existing metrics/run tables; the detector only ever writes
+# here. See apps/pipeline/services/finding_detector.py.
+# ---------------------------------------------------------------------------
+
+class SoaFinding(Base):
+    __tablename__ = "soa_findings"
+    __table_args__ = (
+        CheckConstraint(
+            "severity >= 0.0 AND severity <= 1.0",
+            name="ck_soa_findings_severity_range",
+        ),
+        Index("ix_soa_findings_cycle_id", "cycle_id"),
+        Index("ix_soa_findings_cycle_play", "cycle_id", "play_id"),
+        Index("ix_soa_findings_entity_id", "entity_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    cycle_id = Column(Integer, ForeignKey("soa_cycles.id"), nullable=False, index=True)
+    entity_id = Column(
+        Integer,
+        ForeignKey("soa_entities.id"),
+        nullable=True,
+        comment="Null for retailer-level / cycle-level findings (e.g. ACC-04).",
+    )
+    play_id = Column(Text, ForeignKey("soa_playbook.play_id"), nullable=False)
+    dimension = Column(Text, nullable=False)
+    surface = Column(Text, nullable=True, comment="Platform value, e.g. 'chatgpt'. Null when the finding is not surface-sliced.")
+    persona = Column(Text, nullable=True)
+    stage = Column(Text, nullable=True)
+    severity = Column(Float, nullable=False, comment="Normalized distance past threshold, clamped 0-1.")
+    cells_affected = Column(Integer, nullable=False, comment="Count of entity x surface x persona cells where the play fired.")
+    metric_snapshot = Column(JSON, nullable=False, comment="Exact metric values that tripped the rule.")
+    evidence_run_ids = Column(JSON, nullable=False, default=list, comment="Run IDs backing metric_snapshot. Empty list if no linkage exists for this metric.")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    cycle = relationship("SoaCycle", back_populates="findings")
+    entity = relationship("SoaEntity")
+    play = relationship("SoaPlaybook", back_populates="findings")
+
+
+# ---------------------------------------------------------------------------
+# 14. soa_recommendations — findings grouped and prioritized by play, one
+# per (cycle, play). See apps/pipeline/services/recommendation_mapper.py.
+# ---------------------------------------------------------------------------
+
+class SoaRecommendation(Base):
+    __tablename__ = "soa_recommendations"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('proposed','accepted','in_progress','done','dismissed')",
+            name="ck_soa_recommendations_status",
+        ),
+        UniqueConstraint(
+            "cycle_id", "play_id",
+            name="uq_soa_recommendations_cycle_play",
+        ),
+        Index("ix_soa_recommendations_cycle_id", "cycle_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    cycle_id = Column(Integer, ForeignKey("soa_cycles.id"), nullable=False, index=True)
+    play_id = Column(Text, ForeignKey("soa_playbook.play_id"), nullable=False)
+    finding_ids = Column(JSON, nullable=False, comment="List of soa_findings.id aggregated into this recommendation.")
+    priority_score = Column(Float, nullable=False)
+    status = Column(Text, nullable=False, default="proposed", server_default="proposed")
+    suppressed = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="True for composite plays (e.g. TVD-07) suppressed in favor of their constituent plays.",
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    cycle = relationship("SoaCycle", back_populates="recommendations")
+    play = relationship("SoaPlaybook", back_populates="recommendations")

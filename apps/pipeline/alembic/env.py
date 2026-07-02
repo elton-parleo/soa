@@ -47,6 +47,9 @@ SOA_TABLES = {
     "soa_eligibility_metrics",
     "soa_scope_skus",
     "soa_truecost_snapshots",
+    "soa_playbook",
+    "soa_findings",
+    "soa_recommendations",
 }
 
 
