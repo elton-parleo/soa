@@ -468,3 +468,67 @@ class TierOption(BaseModel):
 
 class ScopeTiersResponse(BaseModel):
     tiers: List[TierOption]
+
+
+# ─── Actions (AC3 recommendation engine) ────────────────────────────────────
+
+RECOMMENDATION_STATUSES = ('proposed', 'accepted', 'in_progress', 'done', 'dismissed')
+
+
+class GenerateActionsResponse(BaseModel):
+    cycle_id: int
+    findings_by_play: dict
+    recommendations_by_play: dict
+    total_findings: int
+    total_recommendations: int
+
+
+class FindingResponse(BaseModel):
+    id: int
+    cycle_id: int
+    entity_id: Optional[int] = None
+    entity_name: Optional[str] = None
+    play_id: str
+    dimension: str
+    surface: Optional[str] = None
+    persona: Optional[str] = None
+    stage: Optional[str] = None
+    severity: float
+    cells_affected: int
+    metric_snapshot: dict
+    evidence_run_ids: List[int]
+    created_at: Optional[str] = None
+
+
+class RecommendationResponse(BaseModel):
+    id: int
+    cycle_id: int
+    play_id: str
+    pillar: str
+    owner: str
+    effort: str
+    detector_status: str
+    play_text: str
+    mechanism_text: str
+    expected_impact_text: str
+    evidence_spec: str
+    dimensions: List[str]
+    finding_count: int
+    cells_affected: int
+    evidence_run_ids: List[int]
+    priority_score: float
+    status: str
+    suppressed: bool
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class RecommendationStatusUpdate(BaseModel):
+    status: str
+
+    @field_validator('status')
+    @classmethod
+    def validate_status(cls, v):
+        if v not in RECOMMENDATION_STATUSES:
+            raise ValueError(f"status must be one of {RECOMMENDATION_STATUSES}")
+        return v
