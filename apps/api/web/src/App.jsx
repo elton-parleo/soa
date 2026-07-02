@@ -6,6 +6,7 @@ import NewCycleWizard   from './components/NewCycleWizard.jsx'
 import EntityRegistry   from './components/EntityRegistry.jsx'
 import MetricsDashboard  from './components/MetricsDashboard.jsx'
 import ResponseExplorer  from './components/ResponseExplorer.jsx'
+import ActionsPage       from './components/ActionsPage.jsx'
 import StudyLibrary      from './components/StudyLibrary.jsx'
 import StudyDetail      from './components/StudyDetail.jsx'
 
@@ -16,7 +17,7 @@ function getInitialView() {
     'dashboard', 'wizard',
     'entities', 'metrics',
     'studies', 'study-detail',
-    'responses',
+    'responses', 'actions',
   ]
   return validViews.includes(hash) ? hash : 'dashboard'
 }
@@ -27,6 +28,7 @@ function AppContent() {
   const [view,          setView]          = useState(getInitialView)
   const [selectedCycle, setSelectedCycle] = useState(null)
   const [selectedStudy, setSelectedStudy] = useState(null)
+  const [selectedRunId, setSelectedRunId] = useState(null)
 
   // Replace the initial history entry with a proper state object so
   // popstate fires correctly on the first back press.
@@ -49,6 +51,7 @@ function AppContent() {
         if (event.state.studyType !== undefined) {
           setSelectedStudy(event.state.studyType)
         }
+        setSelectedRunId(event.state.runId ?? null)
       } else {
         // No state — at the initial history entry: go to dashboard.
         setView('dashboard')
@@ -74,6 +77,7 @@ function AppContent() {
     if (params.studyType !== undefined) {
       setSelectedStudy(params.studyType)
     }
+    setSelectedRunId(params.runId ?? null)
   }
 
   // Still loading session from storage — prevent flash of login page
@@ -130,6 +134,7 @@ function AppContent() {
           }
         }}
         onViewResponses={() => navigateTo('responses', { cycleCode: selectedCycle })}
+        onViewActions={() => navigateTo('actions', { cycleCode: selectedCycle })}
       />
     )
   }
@@ -138,9 +143,25 @@ function AppContent() {
     return (
       <ResponseExplorer
         cycleCode={selectedCycle}
+        initialRunId={selectedRunId}
         onNavigate={(v, params) => {
           if (v === 'metrics') {
             navigateTo('metrics', { cycleCode: params?.cycleCode || selectedCycle })
+          } else {
+            navigateTo(v, params)
+          }
+        }}
+      />
+    )
+  }
+
+  if (view === 'actions') {
+    return (
+      <ActionsPage
+        cycleCode={selectedCycle}
+        onNavigate={(v, params) => {
+          if (v === 'metrics' || v === 'responses') {
+            navigateTo(v, { cycleCode: params?.cycleCode || selectedCycle, ...params })
           } else {
             navigateTo(v, params)
           }

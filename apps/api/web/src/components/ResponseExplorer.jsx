@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api.js'
 import Sidebar from './Sidebar.jsx'
 
@@ -152,7 +152,7 @@ function SelectControl({ label, value, onChange, options, width }) {
   )
 }
 
-export default function ResponseExplorer({ cycleCode, onNavigate }) {
+export default function ResponseExplorer({ cycleCode, onNavigate, initialRunId }) {
   const [runs, setRuns]                   = useState([])
   const [total, setTotal]                 = useState(0)
   const [loading, setLoading]             = useState(true)
@@ -167,10 +167,18 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
   const [dealCited, setDealCited]           = useState(false)
   const [needsReview, setNeedsReview]       = useState(false)
   const [stageOptions, setStageOptions]     = useState([])
+  // initialRunId is a one-shot deep link (from Actions' "View evidence") —
+  // only honored on the first runs load for a given cycleCode, so it
+  // doesn't fight the user's own selections on subsequent filter changes.
+  const initialRunIdConsumed = useRef(false)
 
   useEffect(() => {
     api.getQueryConstraints().then(c => setStageOptions(c.stage || [])).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    initialRunIdConsumed.current = false
+  }, [cycleCode])
 
   useEffect(() => {
     if (!cycleCode) return
@@ -190,7 +198,13 @@ export default function ResponseExplorer({ cycleCode, onNavigate }) {
         const runsData = data.runs || []
         setRuns(runsData)
         setTotal(data.total || 0)
-        if (runsData.length > 0) setSelectedRun(runsData[0])
+        if (runsData.length > 0) {
+          const deepLinked = !initialRunIdConsumed.current && initialRunId != null
+            ? runsData.find(r => r.run_id === initialRunId)
+            : null
+          initialRunIdConsumed.current = true
+          setSelectedRun(deepLinked || runsData[0])
+        }
       })
       .catch(err => {
         setError(err.message)

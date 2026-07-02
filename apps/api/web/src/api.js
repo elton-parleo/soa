@@ -227,4 +227,18 @@ export const api = {
 
   deleteScopeSku: (scopeSkuId) =>
     request('DELETE', `/api/scope-skus/${scopeSkuId}`),
+
+  // Actions — AC3 recommendation engine. Keyed by cycle_id (numeric,
+  // cycleData.id), same convention as the scope-SKU endpoints above.
+  generateActions: (cycleId) =>
+    post(`/api/cycles/${cycleId}/actions/generate`, {}),
+
+  getRecommendations: (cycleId, { includeSuppressed = false } = {}) =>
+    get(`/api/cycles/${cycleId}/recommendations${includeSuppressed ? '?include_suppressed=true' : ''}`),
+
+  getFindings: (cycleId, playId) =>
+    get(`/api/cycles/${cycleId}/findings${playId ? '?play_id=' + encodeURIComponent(playId) : ''}`),
+
+  updateRecommendation: (recommendationId, status) =>
+    request('PATCH', `/api/recommendations/${recommendationId}`, { status }),
 }

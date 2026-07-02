@@ -670,7 +670,7 @@ export function TruecostGrid({ cycleCode, cycleData, onRunSweep, running }) {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
-export default function MetricsDashboard({ cycleCode, onNavigate, onViewResponses }) {
+export default function MetricsDashboard({ cycleCode, onNavigate, onViewResponses, onViewActions }) {
   const [cycleData,      setCycleData]      = useState(null)
   const [metricsData,    setMetricsData]    = useState(null)
   const [entities,       setEntities]       = useState([])
@@ -852,6 +852,18 @@ export default function MetricsDashboard({ cycleCode, onNavigate, onViewResponse
               }}
             >
               ⊙ View Responses
+            </button>
+            <button
+              onClick={onViewActions}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '8px 16px', borderRadius: '8px',
+                border: `1px solid ${T.border}`, background: T.white,
+                color: T.text, fontSize: '13px', fontWeight: '600',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              ⚡ View Actions
             </button>
             <div style={{ position: 'relative' }}>
               <select
