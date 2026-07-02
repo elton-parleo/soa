@@ -1,0 +1,76 @@
+# Detector thresholds for the AC3 Actions finding detector
+# (apps/api/app/services/finding_detector.py).
+#
+# Starting values are transcribed from docs/playbook_v1.md's detection
+# triggers. They are starting values only — tune per category after the
+# first cycle. Never hardcode a threshold in Python; add it here instead.
+#
+# Only plays with detector_status='implemented' in soa_playbook have a
+# section below — see docs/playbook_v1.md and the seed
+# (apps/pipeline/seeds/playbook_v1.json) for why the rest are
+# not_implemented (missing citation extraction, contradiction flags,
+# launch/supersession fields, link-resolution data, or Deal Engine
+# basket/subscription/expiry signals).
+
+_defaults:
+  # Minimum qualifying runs backing a rate before a play is allowed to
+  # fire on it. Guards against noisy findings from tiny cell sizes.
+  min_sample_size: 3
+
+VIS-01:
+  # "Presence rate < 30% for an entity across >=2 surfaces on
+  # purchase-stage intents, while >=1 competitor exceeds 70% on the same
+  # cells."
+  # QUERY_STAGES has no literal "Purchase" value; 'Ready to Buy' is the
+  # closest stage to the playbook's "purchase-stage" language.
+  stage: "Ready to Buy"
+  presence_rate_max: 0.30
+  min_deficient_surfaces: 2
+  competitor_presence_min: 0.70
+  min_sample_size: 3
+
+VIS-05:
+  # "Presence rate on Awareness-stage queries < 50% of the same entity's
+  # presence rate on Purchase-stage queries."
+  awareness_stage: "Awareness"
+  purchase_stage: "Ready to Buy"
+  awareness_to_purchase_ratio_max: 0.50
+  min_sample_size: 3
+
+VIS-06:
+  # "Presence rate variance across personas > 40 points for the same
+  # entity and stage."
+  # Simplification (see finding_detector.py docstring): soa_metrics_results
+  # persona slices are not additionally cross-sliced by stage, so this
+  # compares presence rate across the persona slice only (all stages
+  # combined), not "same entity and stage" as written.
+  persona_variance_max_points: 0.40
+  min_sample_size: 3
+
+VIS-07:
+  # "Presence >= 60% but mean rank position >= 2 positions behind category
+  # leader across >=3 surfaces."
+  # soa_metrics_results.position_index is a normalized 0-1 score, not a
+  # raw rank number (see finding_detector.py::detect_vis_07 docstring), so
+  # "2 positions" cannot be transcribed literally. 0.15 is a starting
+  # guess for "a clearly, consistently worse rank" — tune against observed
+  # gap distributions once >=2 entities clear presence_min in the same
+  # cycle (cycle 55's Phase 7 run had only one entity above 60% presence
+  # on any platform, so this play could not be exercised against real
+  # gap values yet).
+  presence_min: 0.60
+  position_gap_min: 0.15
+  min_deficient_surfaces: 3
+  min_sample_size: 3
+
+TVD-01:
+  # "Agent-quoted price exceeds validated true price by >5% on runs where
+  # a SKU-level promo was active (per true-cost engine)."
+  price_gap_pct_min: 0.05
+  min_sample_size: 3
+
+TVD-03:
+  # "Member-value mentions = 0 on account-linked surfaces where loyalty
+  # benefits were active for the test account."
+  # "Account-linked" = soa_queries.tier_name or membership_program set.
+  min_sample_size: 3
