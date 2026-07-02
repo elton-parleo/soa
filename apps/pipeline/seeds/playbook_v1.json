@@ -1,0 +1,368 @@
+[
+  {
+    "play_id": "VIS-01",
+    "pillar": "Visibility",
+    "failure_mode": "Entity absent from agent responses for in-category queries despite active distribution.",
+    "detection_trigger": "Presence rate < 30% for an entity across \u22652 surfaces on purchase-stage intents, while \u22651 competitor exceeds 70% on the same cells.",
+    "dimensions": [
+      "Presence"
+    ],
+    "owner": "joint",
+    "play_text": "Audit and complete schema.org Product markup (name, GTIN, brand, offers, aggregateRating) on brand-site and top-retailer PDPs; validate against Merchant Center / rich-results tooling.",
+    "mechanism_text": "Agents ground shopping answers in structured product entities; malformed or missing markup makes the product unparseable even when the page ranks.",
+    "effort": "low",
+    "expected_impact_text": "Moderate presence lift on retrieval-grounded surfaces (Perplexity, Google AI Mode, Copilot); weaker on model-memory-heavy surfaces.",
+    "evidence_spec": "Runs where the entity was absent but the PDP existed; competitor responses on identical queries.",
+    "detector_status": "implemented"
+  },
+  {
+    "play_id": "VIS-02",
+    "pillar": "Visibility",
+    "failure_mode": "Agent answers are grounded in third-party sources (forums, review sites, category publishers) where the entity has no meaningful presence.",
+    "detection_trigger": "\u226540% of responses on an intent cluster cite sources in which the entity appears in <10% of cited pages (requires citation extraction in the coding stage).",
+    "dimensions": [
+      "Presence",
+      "Prominence"
+    ],
+    "owner": "brand",
+    "play_text": "Map the top cited domains per intent from the cycle's citation data; invest in earned/owned presence there \u2014 expert reviews, community engagement, category-publisher inclusion. For Baby Care: parenting communities and pediatric-adjacent publishers dominate awareness-stage citations.",
+    "mechanism_text": "Retrieval-based agents synthesize from what they cite. Being absent from the citation graph is invisibility regardless of PDP quality.",
+    "effort": "high",
+    "expected_impact_text": "High on awareness/consideration stages; compounding over cycles as content indexes.",
+    "evidence_spec": "Citation frequency table per surface; example responses citing sources that omit the entity.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "VIS-03",
+    "pillar": "Visibility",
+    "failure_mode": "Entity missing from a surface's native shopping integration (product carousels, shopping units) while appearing in its prose answers, or vice versa.",
+    "detection_trigger": "Presence in structured shopping units = 0 on a surface where the retailer participates in that surface's merchant program.",
+    "dimensions": [
+      "Presence",
+      "Accessibility"
+    ],
+    "owner": "retailer",
+    "play_text": "Verify feed submission status, feed field completeness, and eligibility rules for the surface's merchant program; escalate exclusions through the retailer's integration owner.",
+    "mechanism_text": "Shopping units are populated from feeds, not crawls. Feed gaps are binary invisibility in the highest-converting response format.",
+    "effort": "medium",
+    "expected_impact_text": "High and fast \u2014 feed fixes propagate in days, not indexing cycles.",
+    "evidence_spec": "Side-by-side runs showing competitor products in shopping units on identical queries.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "VIS-04",
+    "pillar": "Visibility",
+    "failure_mode": "Agent conflates sub-lines within the brand's portfolio (e.g., attributes of one line ascribed to another, or lines treated as interchangeable).",
+    "detection_trigger": "Coding stage flags cross-entity attribute contamination in \u226515% of responses mentioning either entity.",
+    "dimensions": [
+      "Presence",
+      "Fidelity"
+    ],
+    "owner": "brand",
+    "play_text": "Enforce canonical, consistently distinct naming across PDPs, brand site, and feeds; give each sub-line differentiated attribute content (distinct use cases, distinct claims); avoid shared boilerplate copy across sub-line PDPs.",
+    "mechanism_text": "Agents build entity representations from co-occurring text. Near-identical copy across sub-lines teaches the model they are the same product.",
+    "effort": "medium",
+    "expected_impact_text": "Moderate; also protects premium sub-lines from being price-anchored to value sub-lines.",
+    "evidence_spec": "Responses showing conflation, with the contaminated attributes highlighted.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "VIS-05",
+    "pillar": "Visibility",
+    "failure_mode": "Entity present on purchase-intent queries but absent from awareness/educational queries in the same category.",
+    "detection_trigger": "Presence rate on Awareness-stage queries < 50% of the same entity's presence rate on Purchase-stage queries.",
+    "dimensions": [
+      "Presence (stage-sliced)"
+    ],
+    "owner": "brand",
+    "play_text": "Build educational content mapped to the awareness intents where the gap was measured (for Pampers: newborn prep, sizing guidance, sensitive-skin education), published on owned properties and the cited-source domains from VIS-02.",
+    "mechanism_text": "Agents answer educational queries from educational content. Brands with only transactional content enter the consideration set late or never.",
+    "effort": "medium",
+    "expected_impact_text": "High on awareness stage; the entity enters the agent's consideration narrative before price comparison begins.",
+    "evidence_spec": "Stage-by-stage presence chart; awareness responses where only competitors are named.",
+    "detector_status": "implemented"
+  },
+  {
+    "play_id": "VIS-06",
+    "pillar": "Visibility",
+    "failure_mode": "Entity surfaces for some personas but is invisible for others (e.g., strong for value-seeker, absent for sensitive-skin parent).",
+    "detection_trigger": "Presence rate variance across personas > 40 points for the same entity and stage.",
+    "dimensions": [
+      "Presence",
+      "Offer Relevance by Persona"
+    ],
+    "owner": "brand",
+    "play_text": "Add persona-relevant attributes and substantiated claims to PDP and structured data (hypoallergenic certifications, dermatologist endorsements, eco-materials); seed reviews and Q&A content addressing that persona's decision criteria.",
+    "mechanism_text": "Agents match persona-framed queries to persona-relevant attributes. If the attribute isn't machine-legible, the product doesn't match the persona.",
+    "effort": "medium",
+    "expected_impact_text": "Moderate-to-high on the deficient persona cells; measurable within 1\u20132 cycles.",
+    "evidence_spec": "Persona \u00d7 presence heatmap; responses for the weak persona naming competitors' persona-matched claims.",
+    "detector_status": "implemented"
+  },
+  {
+    "play_id": "VIS-07",
+    "pillar": "Visibility",
+    "failure_mode": "Entity consistently present but ranked below competitors in agent responses.",
+    "detection_trigger": "Presence \u2265 60% but mean rank position \u2265 2 positions behind category leader across \u22653 surfaces.",
+    "dimensions": [
+      "Prominence"
+    ],
+    "owner": "brand",
+    "play_text": "Close the social-proof gap the agent is weighting: review volume and recency programs on top retailers, third-party comparison content, category-authority content (guides, expert roundups) on cited domains.",
+    "mechanism_text": "Rank within an agent answer correlates with strength and recency of corroborating signals \u2014 review mass, expert consensus, citation frequency \u2014 not just relevance.",
+    "effort": "high",
+    "expected_impact_text": "Gradual; prominence is the slowest dimension to move. Set expectations at 2\u20133 cycles.",
+    "evidence_spec": "Rank-position trend per surface; the corroborating sources agents cite for the leading competitor.",
+    "detector_status": "implemented"
+  },
+  {
+    "play_id": "VIS-08",
+    "pillar": "Visibility",
+    "failure_mode": "Recently launched SKU rarely or never surfaces, even on queries it is purpose-built for.",
+    "detection_trigger": "Entity flagged `launch` in Entity Registry with presence < 15% after two cycles post-launch.",
+    "dimensions": [
+      "Presence",
+      "Offer Freshness"
+    ],
+    "owner": "brand",
+    "play_text": "Launch-sequence checklist: structured data and retailer PDPs live before announcement; early-review program in week one; press and authoritative-publisher coverage to seed the citation graph; explicit linkage content connecting the new SKU to the established intent (\"X, now with Y\").",
+    "mechanism_text": "New products have zero training-data footprint; they exist to agents only through fresh retrieval. Every retrievable signal must be in place at launch, not after.",
+    "effort": "medium",
+    "expected_impact_text": "High \u2014 launch visibility is the purest zero-baseline case; correct sequencing routinely takes presence from ~0 to competitive within 2\u20133 cycles.",
+    "evidence_spec": "Launch SKU presence trend vs. incumbent SKUs on the same intents.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "ACC-01",
+    "pillar": "Accessibility",
+    "failure_mode": "Agent recommends the entity but routes to out-of-stock listings or third-party marketplace sellers instead of the primary listing.",
+    "detection_trigger": "\u226520% of routed links resolve to OOS or non-first-party seller PDPs at scoring time.",
+    "dimensions": [
+      "Accessibility"
+    ],
+    "owner": "joint",
+    "play_text": "Audit buy-box ownership and inventory-feed freshness on affected retailers; ensure availability signals (`availability` in offer markup) are accurate and updated at feed cadence, not batch-weekly.",
+    "mechanism_text": "Agents increasingly verify availability before recommending; stale availability data either kills the recommendation or routes the buyer somewhere the brand doesn't control price or presentation.",
+    "effort": "low",
+    "expected_impact_text": "High on accessibility score; also protects fidelity (third-party sellers often carry wrong content and prices).",
+    "evidence_spec": "Routed-link audit table with resolution status per run.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "ACC-02",
+    "pillar": "Accessibility",
+    "failure_mode": "Agent surfaces broken, redirected, or non-canonical URLs for the entity.",
+    "detection_trigger": "\u226510% of surfaced URLs return non-200 or resolve to a different product.",
+    "dimensions": [
+      "Accessibility"
+    ],
+    "owner": "retailer",
+    "play_text": "Stabilize canonical PDP URLs; maintain permanent redirects through re-platforms and SKU migrations; deprecate legacy URLs with proper 301 chains rather than 404s.",
+    "mechanism_text": "Agents cache and cite URLs with long memory. A retailer re-platform without redirect discipline erases accumulated agent-legibility.",
+    "effort": "low",
+    "expected_impact_text": "Moderate; prevents silent decay more than it lifts scores.",
+    "evidence_spec": "Broken-link inventory from cycle runs.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "ACC-03",
+    "pillar": "Accessibility",
+    "failure_mode": "Agents route all purchase intent to marketplaces; the brand's owned channel never appears as a purchase destination.",
+    "detection_trigger": "D2C domain share of routed links < 5% while the domain is in the Entity Registry as an owned channel.",
+    "dimensions": [
+      "Accessibility",
+      "Net Price Accuracy (D2C-exclusive offers invisible)"
+    ],
+    "owner": "brand",
+    "play_text": "Bring the D2C channel to feed-parity with marketplaces: complete offer markup, merchant-program participation per surface, and adoption of emerging agentic checkout rails where available; expose D2C-exclusive offers (bundles, subscriptions) in machine-readable form.",
+    "mechanism_text": "Agents route where they can verify price, availability, and increasingly transact. A D2C site that is content-rich but feed-poor loses routing to marketplaces by default.",
+    "effort": "high",
+    "expected_impact_text": "Moderate initially; strategic \u2014 every routed D2C purchase carries margin and first-party data the marketplace route forfeits.",
+    "evidence_spec": "Routing-share breakdown by destination domain.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "ACC-04",
+    "pillar": "Accessibility",
+    "failure_mode": "A retailer partner has no presence in a surface's shopping integration at all, capping every downstream score on that surface.",
+    "detection_trigger": "Zero structured shopping results for all of the retailer's SKUs on a surface where competitor retailers appear.",
+    "dimensions": [
+      "Accessibility",
+      "Presence"
+    ],
+    "owner": "retailer",
+    "play_text": "Retailer-level recommendation: evaluate and join the surface's merchant/agent program. For brand-side engagements, this becomes escalation ammunition \u2014 quantify the SoA ceiling the retailer's absence imposes on the brand's portfolio.",
+    "mechanism_text": "Integration presence is a prerequisite, not an optimization. No feed, no shopping unit, no routing.",
+    "effort": "high",
+    "expected_impact_text": "Unlocking; removes a structural cap rather than moving a dial.",
+    "evidence_spec": "Cross-retailer surface-coverage matrix.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "TVD-01",
+    "pillar": "True Value Delivery",
+    "failure_mode": "Agent quotes list price while a SKU-level promotion is live.",
+    "detection_trigger": "Net Price Accuracy gap: agent-quoted price exceeds validated true price by >5% on runs where a SKU-level promo was active (per true-cost engine).",
+    "dimensions": [
+      "Net Price Accuracy"
+    ],
+    "owner": "retailer",
+    "play_text": "Expose sale price and validity window in offer markup (`price`, `priceValidUntil`) and merchant feeds; align promo start/end with feed refresh cadence so agents never see the pre-promo price during the promo window.",
+    "mechanism_text": "Agents quote the most machine-legible price. If the promo lives only in on-page banners or checkout logic, the agent quotes list and the funded discount buys nothing at the recommendation moment.",
+    "effort": "low",
+    "expected_impact_text": "High and fast on Net Price Accuracy for the affected retailer-surface cells.",
+    "evidence_spec": "Price-delta table: agent-quoted vs. validated true price per run, with active promo identified.",
+    "detector_status": "implemented"
+  },
+  {
+    "play_id": "TVD-02",
+    "pillar": "True Value Delivery",
+    "failure_mode": "Basket-threshold deals, BOGO, and gift-with-purchase never appear in agent responses; only SKU-level pricing flows through.",
+    "detection_trigger": "Offer Completeness: zero agent mentions of active basket-level mechanics across all runs for a retailer, while true-cost validation confirms they were live.",
+    "dimensions": [
+      "Offer Completeness",
+      "Net Price Accuracy",
+      "Competitive Value Position"
+    ],
+    "owner": "joint",
+    "play_text": "Two paths, presented as a decision: (a) expose basket-level mechanics through machine-readable deal rails (structured deal feeds, MCP-style connectors) so agents can compute conditional value; or (b) restructure trade funding toward SKU-level mechanics agents already parse. Path (a) preserves the incentive design; path (b) trades sophistication for guaranteed legibility.",
+    "mechanism_text": "This is the structural gap: agent integrations parse per-SKU offer objects, and basket math requires deal logic no current integration evaluates from page content. Unexposed basket promos are trade spend that is invisible at the moment of recommendation.",
+    "effort": "medium",
+    "expected_impact_text": "High \u2014 typically the single largest recoverable gap in the True Value pillar for promo-heavy categories.",
+    "evidence_spec": "Funded-vs-delivered value table: each active basket mechanic, its validated value, and its zero surfacing rate.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "TVD-03",
+    "pillar": "True Value Delivery",
+    "failure_mode": "Member pricing, points accrual, and tier benefits absent from agent responses even on surfaces where the retailer has an account-linked integration.",
+    "detection_trigger": "Offer Completeness: member-value mentions = 0 on account-linked surfaces where loyalty benefits were active for the test account.",
+    "dimensions": [
+      "Offer Completeness",
+      "Net Price Accuracy"
+    ],
+    "owner": "retailer",
+    "play_text": "Extend the account-linked integration payload to include member price and accrual value, not just identity; where no account linking exists, expose the loyalty-inclusive price tier as a labeled alternate offer in the feed.",
+    "mechanism_text": "Account linking without value payload is authentication theater \u2014 the agent knows who the shopper is but not what that membership is worth on this SKU.",
+    "effort": "medium",
+    "expected_impact_text": "High for loyalty-heavy retailers; differentiating, since few integrations do this today.",
+    "evidence_spec": "Account-linked runs where member value was live but unsurfaced.",
+    "detector_status": "implemented"
+  },
+  {
+    "play_id": "TVD-04",
+    "pillar": "True Value Delivery",
+    "failure_mode": "Subscribe-and-save or replenishment pricing never surfaces; agent compares one-time prices only.",
+    "detection_trigger": "Zero subscription-price mentions for entities with active subscription offers, on \u22652 surfaces.",
+    "dimensions": [
+      "Net Price Accuracy",
+      "TCO Clarity"
+    ],
+    "owner": "joint",
+    "play_text": "Publish subscription price as a distinct machine-readable offer variant; on brand D2C, make replenishment pricing the structured default offer for consumable categories.",
+    "mechanism_text": "For replenishable categories (diapers are the canonical case), the subscription price *is* the real price for the core buyer; agents comparing one-time prices misrank every brand with strong subscription economics.",
+    "effort": "low",
+    "expected_impact_text": "High for consumables; directly moves the price-promo expectation-vs-delivery gap.",
+    "evidence_spec": "One-time vs. subscription price comparison per run.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "TVD-05",
+    "pillar": "True Value Delivery",
+    "failure_mode": "Agent cites expired promotions or stale prices.",
+    "detection_trigger": "Offer Freshness: \u226510% of quoted offers were expired at run time per true-cost validation.",
+    "dimensions": [
+      "Offer Freshness",
+      "Net Price Accuracy"
+    ],
+    "owner": "retailer",
+    "play_text": "Add explicit validity metadata to every offer; increase feed refresh cadence to match promo cadence; retire promo landing pages on expiry rather than leaving them indexed.",
+    "mechanism_text": "Stale offers cut both ways \u2014 a phantom discount creates a broken expectation at checkout (the exact expectation-vs-delivery gap), and it erodes agent trust signals for the domain.",
+    "effort": "low",
+    "expected_impact_text": "Moderate; primarily protects conversion integrity rather than lifting share.",
+    "evidence_spec": "Expired-offer citations with expiry timestamps.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "TVD-06",
+    "pillar": "True Value Delivery",
+    "failure_mode": "Agent compares headline prices across different pack sizes; per-unit value never enters the comparison.",
+    "detection_trigger": "In comparison-intent runs, agent price comparisons omit per-unit normalization while compared SKUs differ in count/size by >25%.",
+    "dimensions": [
+      "Competitive Value Position",
+      "TCO Clarity"
+    ],
+    "owner": "joint",
+    "play_text": "Publish per-unit price in structured data (UnitPriceSpecification); normalize pack-size attributes in feeds; where the brand wins on per-unit economics, add comparison content that frames the category in per-unit terms.",
+    "mechanism_text": "Larger-pack value plays lose to smaller headline prices when the agent lacks unit math inputs. Making the per-unit figure machine-legible lets the agent do the math that favors the value pack.",
+    "effort": "low",
+    "expected_impact_text": "Moderate-to-high for brands whose strategy is bulk value (again, diapers are the canonical case).",
+    "evidence_spec": "Comparison runs where headline-price framing reversed the true per-unit ranking.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "TVD-07",
+    "pillar": "True Value Delivery",
+    "failure_mode": "Agent asserts a competitor is cheaper or better value when validated true cost shows otherwise.",
+    "detection_trigger": "Competitive Value Position: agent value-ranking contradicts true-cost ranking in \u226515% of comparison runs.",
+    "dimensions": [
+      "Competitive Value Position"
+    ],
+    "owner": "brand",
+    "play_text": "Composite play \u2014 this finding is usually downstream of TVD-01/02/04/06; bundle the applicable upstream fixes and add authoritative comparison content presenting the true-cost math. Re-measure before further action; do not treat as a standalone fixable.",
+    "mechanism_text": "Agents don't misrank out of malice; they rank the legible subset of value. Fix legibility and the ranking follows.",
+    "effort": "medium",
+    "expected_impact_text": "This is the headline metric clients care about; frame it as the outcome the pillar's other plays move.",
+    "evidence_spec": "True-cost ranking vs. agent ranking, per comparison run.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "TVD-08",
+    "pillar": "True Value Delivery",
+    "failure_mode": "Shipping costs, thresholds, and fees absent from agent price framing, distorting cross-retailer comparisons.",
+    "detection_trigger": "TCO Clarity: shipping/fee mentions = 0 in cross-retailer comparison runs where validated delivered costs differ by >8%.",
+    "dimensions": [
+      "TCO Clarity"
+    ],
+    "owner": "retailer",
+    "play_text": "Expose shipping cost and free-shipping thresholds in offer markup (shippingDetails); ensure fee structures are stated in machine-parseable form on PDP rather than revealed at checkout.",
+    "mechanism_text": "A $2 item-price win that hides a $6 shipping loss is a value misrepresentation the agent propagates. Retailers with genuinely better delivered economics are subsidizing opaque competitors.",
+    "effort": "low",
+    "expected_impact_text": "Moderate; strongest for retailers whose delivered-cost position beats their item-price position.",
+    "evidence_spec": "Delivered-cost comparison table vs. agent-quoted framing.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "FID-01",
+    "pillar": "Fidelity",
+    "failure_mode": "Agent states incorrect specs, ingredients, sizes, or claims for the entity.",
+    "detection_trigger": "Coding stage flags factual contradictions between agent response and Entity Registry ground truth in \u226510% of runs mentioning the entity.",
+    "dimensions": [
+      "Fidelity"
+    ],
+    "owner": "brand",
+    "play_text": "Trace each error class to its source (retailer PDP, third-party content, stale brand site) using the citation data from the runs; correct at source; syndicate the corrected canonical content to all retailer PDPs.",
+    "mechanism_text": "Agents propagate the most-corroborated version of a fact. Correcting the canonical source without syndication leaves the wrong version winning on corroboration count.",
+    "effort": "medium",
+    "expected_impact_text": "Moderate; critical for regulated or safety-adjacent claims where errors carry risk beyond SoA.",
+    "evidence_spec": "Error inventory: claimed vs. actual, with the citing source per error.",
+    "detector_status": "not_implemented"
+  },
+  {
+    "play_id": "FID-02",
+    "pillar": "Fidelity",
+    "failure_mode": "Agent describes discontinued formulations, old packaging, or superseded product generations.",
+    "detection_trigger": "Coding stage flags version-mismatch content in \u226510% of runs; entity has a `superseded_by` or revision record in the Entity Registry.",
+    "dimensions": [
+      "Fidelity",
+      "Offer Freshness"
+    ],
+    "owner": "brand",
+    "play_text": "Deprecation hygiene for the old version: redirect or clearly mark legacy PDPs and content as superseded; publish transition content explicitly linking old to new; refresh third-party content (reviews, guides) that anchors the stale version.",
+    "mechanism_text": "The old product usually has years of accumulated corroboration; the new one has months. Without explicit supersession signals, agents rationally prefer the better-attested stale version.",
+    "effort": "medium",
+    "expected_impact_text": "Moderate; compounds with VIS-08 for launch scenarios.",
+    "evidence_spec": "Stale-representation runs annotated against the current product record.",
+    "detector_status": "not_implemented"
+  }
+]
