@@ -40,6 +40,32 @@ const EFFORT_BADGE = {
   high:   { label: 'High effort',   bg: T.redLight,   fg: T.red },
 }
 
+const TIER_BADGE = {
+  Critical: { label: 'Critical', bg: T.redLight,   fg: T.red },
+  High:     { label: 'High',     bg: T.amberLight, fg: T.amber },
+  Moderate: { label: 'Moderate', bg: T.tealLight,  fg: T.teal },
+}
+
+// Percentile-of-priority_score tier, computed per cycle among that cycle's
+// non-suppressed recommendations only — top 25% -> Critical, middle 50% ->
+// High, bottom 25% -> Moderate. Returns a Map(recommendation.id -> tier);
+// suppressed recommendations get no entry (they already carry their own
+// "Suppressed" badge and aren't part of the ranked set).
+export function computeTiers(recommendations) {
+  const ranked = recommendations
+    .filter(r => !r.suppressed)
+    .slice()
+    .sort((a, b) => b.priority_score - a.priority_score)
+
+  const tiers = new Map()
+  ranked.forEach((rec, i) => {
+    const percentile = i / ranked.length
+    const tier = percentile < 0.25 ? 'Critical' : percentile < 0.75 ? 'High' : 'Moderate'
+    tiers.set(rec.id, tier)
+  })
+  return tiers
+}
+
 function Badge({ label, bg, fg }) {
   return (
     <span style={{
@@ -135,6 +161,7 @@ export default function ActionsPage({ cycleCode, onNavigate }) {
 
   const visible = recommendations.filter(r => showSuppressed || !r.suppressed)
   const sorted = [...visible].sort((a, b) => b.priority_score - a.priority_score)
+  const tiers = computeTiers(recommendations)
   const displayCode = cycleCode || '—'
 
   return (
@@ -259,6 +286,8 @@ export default function ActionsPage({ cycleCode, onNavigate }) {
                 {sorted.map(rec => {
                   const owner = OWNER_BADGE[rec.owner] || OWNER_BADGE.brand
                   const effort = EFFORT_BADGE[rec.effort] || EFFORT_BADGE.medium
+                  const tierName = tiers.get(rec.id)
+                  const tier = tierName && TIER_BADGE[tierName]
                   const isExpanded = !!expanded[rec.id]
                   const isEvidenceOpen = !!evidenceOpen[rec.id]
                   const evidenceIds = rec.evidence_run_ids || []
@@ -285,10 +314,14 @@ export default function ActionsPage({ cycleCode, onNavigate }) {
                             {rec.play_text.split('.')[0]}.
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            {tier && <Badge {...tier} />}
                             <Badge {...owner} />
                             <Badge {...effort} />
-                            <span style={{ fontSize: 12, color: T.slate }}>
-                              Priority <b style={{ color: T.text }}>{rec.priority_score.toFixed(2)}</b>
+                            <span
+                              style={{ fontSize: 12, color: T.slateLight, cursor: 'default' }}
+                              title={`priority_score = ${rec.priority_score.toFixed(4)}`}
+                            >
+                              score {rec.priority_score.toFixed(2)}
                             </span>
                             <span style={{ fontSize: 12, color: T.slate }}>
                               {rec.cells_affected} cell{rec.cells_affected === 1 ? '' : 's'} affected
