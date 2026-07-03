@@ -763,6 +763,134 @@ class SoaCodedMention(Base):
 
 
 # ---------------------------------------------------------------------------
+# 6b. soa_price_observations — pass-2 output, observation grain (one row per
+# extracted price/offer observation, not one per entity — a response citing
+# one entity's price at three retailers yields three rows). Additive: pass
+# 1's soa_coded_mentions is never touched, and pass 2 does not re-extract
+# mentioned/position/strength/deal_cited at all (separate, narrower prompt —
+# see parser/prompts_v2.py) so there is nothing for those fields to drift
+# from, by construction. See apps/pipeline/scripts/recode_cycle_pass2.py.
+#
+# Supersedes an earlier, wrongly-scoped soa_coded_mentions_v2 table (one
+# scalar price/merchant pair per entity per run) from the same session —
+# that table is left in place, orphaned/unused, rather than dropped.
+# ---------------------------------------------------------------------------
+
+class SoaPriceObservation(Base):
+    __tablename__ = "soa_price_observations"
+    __table_args__ = (
+        CheckConstraint(
+            "attribution_status IN ('mapped','unmapped','unattributed','brand_self_reference')",
+            name="ck_soa_price_observations_attribution_status",
+        ),
+        Index("ix_soa_price_observations_run_entity", "run_id", "entity_id"),
+        Index("ix_soa_price_observations_entity_id", "entity_id"),
+        Index("ix_soa_price_observations_attribution_status", "attribution_status"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, ForeignKey("soa_runs.id"), nullable=False, index=True)
+    entity_id = Column(Integer, ForeignKey("soa_entities.id"), nullable=False, index=True)
+
+    stated_price = Column(Float, nullable=True)
+    claimed_net_price = Column(Float, nullable=True)
+    claimed_discount_value = Column(Float, nullable=True)
+    claimed_discount_pct = Column(Float, nullable=True)
+    claimed_terms = Column(JSON, nullable=True)
+    member_price_claimed = Column(Boolean, nullable=True)
+    subscription_offer_claimed = Column(Boolean, nullable=True)
+
+    merchant_name = Column(
+        Text,
+        nullable=True,
+        comment="Retailer/seller name as stated by the agent, verbatim. Null if this observation names no seller.",
+    )
+    merchant_slug = Column(
+        Text,
+        nullable=True,
+        comment="merchant_name resolved against merchants.slug. Only set when attribution_status='mapped'.",
+    )
+    attribution_status = Column(
+        Text,
+        nullable=False,
+        comment=(
+            "'mapped' — resolved to a known, trustworthy merchant. "
+            "'unmapped' — merchant_name set but not a known merchant. "
+            "'unattributed' — no merchant_name at all, no retailer signal in the response. "
+            "'brand_self_reference' — merchant_name resolved to the entity's OWN brand's "
+            "merchant slug (e.g. Pampers entity -> 'pampers') without an explicit D2C signal "
+            "in the response — likely the coder confusing the discussed brand for a retailer. "
+            "merchant_slug is null for this status; the raw merchant_name is kept for audit."
+        ),
+    )
+
+    evidence = Column(Text, nullable=True)
+    coding_pass_version = Column(Integer, nullable=False, default=2, server_default="2")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    run = relationship("SoaRun")
+    entity = relationship("SoaEntity")
+
+
+# ---------------------------------------------------------------------------
+# 6c. soa_pass2_coding_log — sentinel marking a run as pass-2-processed,
+# independent of whether that run produced any soa_price_observations /
+# soa_citations rows. A run with zero price observations and zero
+# citations is a legitimate, common result (e.g. a pure ingredient-
+# comparison response) — without this marker, ResponseCoderV2's
+# idempotency check has nothing to find and re-queries the API on every
+# re-run of the same run_id.
+# ---------------------------------------------------------------------------
+
+class SoaPass2CodingLog(Base):
+    __tablename__ = "soa_pass2_coding_log"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "coding_pass_version",
+            name="uq_soa_pass2_coding_log_run_version",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, ForeignKey("soa_runs.id"), nullable=False, index=True)
+    coding_pass_version = Column(Integer, nullable=False, default=2, server_default="2")
+    observations_written = Column(Integer, nullable=False, default=0, server_default="0")
+    citations_written = Column(Integer, nullable=False, default=0, server_default="0")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    run = relationship("SoaRun")
+
+
+# ---------------------------------------------------------------------------
+# 6d. soa_citations — per-run cited/linked sources extracted from
+# raw_response text at coding time. No fetching of the cited URLs; the
+# domain and context are derived from the response text alone. Raw
+# material for a future VIS-02 detector.
+# ---------------------------------------------------------------------------
+
+class SoaCitation(Base):
+    __tablename__ = "soa_citations"
+    __table_args__ = (
+        Index("ix_soa_citations_run_id", "run_id"),
+        Index("ix_soa_citations_domain", "domain"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, ForeignKey("soa_runs.id"), nullable=False, index=True)
+    url = Column(Text, nullable=False)
+    domain = Column(Text, nullable=False)
+    context = Column(
+        Text,
+        nullable=True,
+        comment="Short phrase describing which claim/product this source is attached to, when the response structure supports it.",
+    )
+    coding_pass_version = Column(Integer, nullable=False, default=2, server_default="2")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    run = relationship("SoaRun")
+
+
+# ---------------------------------------------------------------------------
 # 7. soa_other_mentions
 # ---------------------------------------------------------------------------
 
@@ -891,9 +1019,14 @@ class SoaIncentiveScore(Base):
             "status IN ('scored','ground_truth_unavailable','no_merchant_mapping','skipped')",
             name="ck_soa_incentive_scores_status",
         ),
+        CheckConstraint(
+            "scoring_grain IN ('legacy','observation')",
+            name="ck_soa_incentive_scores_scoring_grain",
+        ),
         Index("ix_soa_incentive_scores_run_id", "run_id"),
         Index("ix_soa_incentive_scores_entity_id", "entity_id"),
         Index("ix_soa_incentive_scores_status", "status"),
+        Index("ix_soa_incentive_scores_scoring_grain", "scoring_grain"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -908,8 +1041,28 @@ class SoaIncentiveScore(Base):
     )
 
     # Kept for read convenience, mirrors soa_coded_mentions.merchant_id pattern.
-    # No FK constraint — merchants is owned by /supply.
+    # No FK constraint — merchants is owned by /supply. For scoring_grain=
+    # 'observation' rows this is resolved from the coded merchant_slug, not
+    # defaulted from soa_entities.merchant_id (see scoring/observation_scorer.py).
     merchant_id = Column(Integer, nullable=True, index=True)
+
+    # New for observation-grain scoring — additive, null on the 485 legacy
+    # rows (scoring_grain='legacy').
+    merchant_slug = Column(Text, nullable=True, comment="Real resolved retailer slug, e.g. 'target'. Null on legacy rows.")
+    price_observation_id = Column(
+        Integer,
+        ForeignKey("soa_price_observations.id"),
+        nullable=True,
+        index=True,
+        comment="Traces back to the coding-stage observation this row scored. Null on legacy rows.",
+    )
+    scoring_grain = Column(
+        Text,
+        nullable=False,
+        default="legacy",
+        server_default="legacy",
+        comment="'legacy' — pre-observation-grain rows (brand x category, one per entity per run). 'observation' — one row per (entity, merchant, run, observation).",
+    )
 
     scope_sku_id = Column(
         Integer,
@@ -954,6 +1107,7 @@ class SoaIncentiveScore(Base):
 
     run = relationship("SoaRun", back_populates="incentive_scores")
     entity = relationship("SoaEntity")
+    price_observation = relationship("SoaPriceObservation")
     scope_sku = relationship("SoaScopeSku", back_populates="incentive_scores")
 
 

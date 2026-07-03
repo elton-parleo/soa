@@ -50,7 +50,14 @@ SOA_TABLES = {
     "soa_playbook",
     "soa_findings",
     "soa_recommendations",
+    "soa_citations",
+    "soa_price_observations",
+    "soa_pass2_coding_log",
 }
+# soa_coded_mentions_v2 is deliberately excluded — an orphaned table from an
+# earlier, superseded design in this same branch (see soa_price_observations'
+# docstring). Left out of autogenerate's management entirely rather than
+# dropped, so this include_object filter neither alters nor destroys it.
 
 
 def include_object(object, name, type_, reflected, compare_to):
