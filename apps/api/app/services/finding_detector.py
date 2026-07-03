@@ -441,47 +441,60 @@ def detect_tvd_01(cycle_id: int, session: Session, thresholds: dict) -> List[Fin
     validated true price (ground_truth_true_cost) by more than
     price_gap_pct_min, on runs where a promo was active (ground truth
     has >=1 applied deal).
+
+    Reads scoring_grain='observation' rows only — one row per (entity,
+    merchant, run, observation), from real coded merchant attribution
+    (parser/response_coder_v2.py) rather than the always-null
+    soa_entities.merchant_id default the legacy grain used. Findings are
+    grouped by (entity, merchant) — a genuine retailer, not an assumed
+    one — with a per-surface (platform) breakdown in metric_snapshot.
     """
     gap_min = thresholds["price_gap_pct_min"]
     min_sample = thresholds["min_sample_size"]
 
     rows = (
-        session.query(SoaIncentiveScore)
+        session.query(SoaIncentiveScore, SoaRun.platform)
         .join(SoaRun, SoaRun.id == SoaIncentiveScore.run_id)
         .filter(
             SoaRun.cycle_id == cycle_id,
+            SoaIncentiveScore.scoring_grain == "observation",
             SoaIncentiveScore.status == "scored",
             SoaIncentiveScore.entity_id.isnot(None),
+            SoaIncentiveScore.merchant_slug.isnot(None),
             SoaIncentiveScore.stated_price.isnot(None),
             SoaIncentiveScore.ground_truth_true_cost.isnot(None),
         )
         .all()
     )
 
-    by_entity: Dict[int, List[SoaIncentiveScore]] = {}
-    for score in rows:
+    by_cell: Dict[tuple, List[tuple]] = {}
+    for score, platform in rows:
         if not score.ground_truth_applied_deals:
-            continue  # no promo active on this run — not in scope for TVD-01
-        by_entity.setdefault(score.entity_id, []).append(score)
+            continue  # no promo active on this observation — not in scope for TVD-01
+        by_cell.setdefault((score.entity_id, score.merchant_slug), []).append((score, platform))
 
     drafts: List[FindingDraft] = []
-    for entity_id in sorted(by_entity.keys()):
-        scores = by_entity[entity_id]
-        if len(scores) < min_sample:
+    for entity_id, merchant_slug in sorted(by_cell.keys()):
+        cell_rows = by_cell[(entity_id, merchant_slug)]
+        if len(cell_rows) < min_sample:
             continue
 
         overpriced = []
-        for s in scores:
+        for s, platform in cell_rows:
             if s.ground_truth_true_cost <= 0:
                 continue
             gap = (s.stated_price - s.ground_truth_true_cost) / s.ground_truth_true_cost
             if gap > gap_min:
-                overpriced.append((s, gap))
+                overpriced.append((s, platform, gap))
         if not overpriced:
             continue
 
-        overpriced_rate = len(overpriced) / len(scores)
+        overpriced_rate = len(overpriced) / len(cell_rows)
         severity = _clamp01(overpriced_rate)
+
+        by_surface: Dict[str, int] = {}
+        for _, platform, _ in overpriced:
+            by_surface[platform] = by_surface.get(platform, 0) + 1
 
         drafts.append(FindingDraft(
             entity_id=entity_id,
@@ -490,13 +503,15 @@ def detect_tvd_01(cycle_id: int, session: Session, thresholds: dict) -> List[Fin
             severity=severity,
             cells_affected=len(overpriced),
             metric_snapshot={
-                "n_active_promo_scored_runs": len(scores),
+                "merchant_slug": merchant_slug,
+                "n_active_promo_scored_observations": len(cell_rows),
                 "n_overpriced": len(overpriced),
                 "overpriced_rate": round(overpriced_rate, 4),
                 "price_gap_pct_min": gap_min,
-                "mean_gap_pct": round(statistics.mean(g for _, g in overpriced), 4),
+                "mean_gap_pct": round(statistics.mean(g for _, _, g in overpriced), 4),
+                "surfaces": by_surface,
             },
-            evidence_run_ids=sorted({s.run_id for s, _ in overpriced})[:MAX_EVIDENCE_RUN_IDS],
+            evidence_run_ids=sorted({s.run_id for s, _, _ in overpriced})[:MAX_EVIDENCE_RUN_IDS],
         ))
     return drafts
 
@@ -511,46 +526,58 @@ def detect_tvd_03(cycle_id: int, session: Session, thresholds: dict) -> List[Fin
     never true) on account-linked runs (soa_queries.tier_name or
     membership_program set) where the fidelity scorer could evaluate
     member pricing.
+
+    Reads scoring_grain='observation' rows only. Findings are grouped by
+    (entity, merchant) with a per-surface (platform) breakdown in
+    metric_snapshot — see detect_tvd_01's docstring for why.
     """
     min_sample = thresholds["min_sample_size"]
 
     rows = (
-        session.query(SoaIncentiveScore)
+        session.query(SoaIncentiveScore, SoaRun.platform)
         .join(SoaRun, SoaRun.id == SoaIncentiveScore.run_id)
         .join(SoaQuery, SoaQuery.id == SoaRun.query_id)
         .filter(
             SoaRun.cycle_id == cycle_id,
+            SoaIncentiveScore.scoring_grain == "observation",
             SoaIncentiveScore.status == "scored",
             SoaIncentiveScore.entity_id.isnot(None),
+            SoaIncentiveScore.merchant_slug.isnot(None),
             SoaIncentiveScore.member_price_reflected.isnot(None),
             or_(SoaQuery.tier_name.isnot(None), SoaQuery.membership_program.isnot(None)),
         )
         .all()
     )
 
-    by_entity: Dict[int, List[SoaIncentiveScore]] = {}
-    for score in rows:
-        by_entity.setdefault(score.entity_id, []).append(score)
+    by_cell: Dict[tuple, List[tuple]] = {}
+    for score, platform in rows:
+        by_cell.setdefault((score.entity_id, score.merchant_slug), []).append((score, platform))
 
     drafts: List[FindingDraft] = []
-    for entity_id in sorted(by_entity.keys()):
-        scores = by_entity[entity_id]
-        if len(scores) < min_sample:
+    for entity_id, merchant_slug in sorted(by_cell.keys()):
+        cell_rows = by_cell[(entity_id, merchant_slug)]
+        if len(cell_rows) < min_sample:
             continue
-        if any(s.member_price_reflected for s in scores):
+        if any(s.member_price_reflected for s, _ in cell_rows):
             continue  # trigger requires member-value mentions = 0
+
+        by_surface: Dict[str, int] = {}
+        for _, platform in cell_rows:
+            by_surface[platform] = by_surface.get(platform, 0) + 1
 
         drafts.append(FindingDraft(
             entity_id=entity_id,
             play_id="TVD-03",
             dimension="Offer Completeness",
             severity=1.0,
-            cells_affected=len(scores),
+            cells_affected=len(cell_rows),
             metric_snapshot={
-                "n_account_linked_scored_runs": len(scores),
+                "merchant_slug": merchant_slug,
+                "n_account_linked_scored_observations": len(cell_rows),
                 "n_member_value_reflected": 0,
+                "surfaces": by_surface,
             },
-            evidence_run_ids=sorted({s.run_id for s in scores})[:MAX_EVIDENCE_RUN_IDS],
+            evidence_run_ids=sorted({s.run_id for s, _ in cell_rows})[:MAX_EVIDENCE_RUN_IDS],
         ))
     return drafts
 

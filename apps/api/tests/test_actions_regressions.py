@@ -98,7 +98,9 @@ def Session():
         conn.exec_driver_sql("""
             CREATE TABLE soa_incentive_scores (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
-                merchant_id INTEGER, scope_sku_id INTEGER, dealengine_listing_id INTEGER,
+                merchant_id INTEGER, merchant_slug TEXT, price_observation_id INTEGER,
+                scoring_grain TEXT DEFAULT 'legacy',
+                scope_sku_id INTEGER, dealengine_listing_id INTEGER,
                 stated_price FLOAT, claimed_net_price FLOAT, claimed_discount_value FLOAT,
                 claimed_discount_pct FLOAT, claimed_terms TEXT, member_price_claimed BOOLEAN,
                 subscription_offer_claimed BOOLEAN, ground_truth_true_cost FLOAT,
