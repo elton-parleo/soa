@@ -1,6 +1,6 @@
 # SoA Remediation Playbook — v1
 
-Version: 1.0-draft · 20 plays
+Version: 1.0-draft · 22 plays
 Purpose: curated library backing the AC3 Actions feature. Each play is keyed to a
 failure mode the finding detector can identify deterministically from cycle metrics.
 
