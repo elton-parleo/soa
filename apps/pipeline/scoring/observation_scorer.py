@@ -23,6 +23,7 @@ Merchant resolution order per observation:
      — implemented for entities that do have one configured.)
 """
 import logging
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -243,12 +244,36 @@ class ObservationScorer:
         )
 
 
-async def check_attribution_rate(session: Session, cycle_id: int) -> Tuple[float, Dict[str, int]]:
+@dataclass
+class AttributionAssertion:
+    resolution_rate: float  # mapped / (mapped + unmapped) — the gate
+    raw_mapped_share: float  # mapped / total — logged for transparency only
+    status_counts: Dict[str, int]
+
+
+async def check_attribution_rate(session: Session, cycle_id: int) -> AttributionAssertion:
     """
-    Pre-flight assertion check: fraction of this cycle's price observations
-    that resolved a merchant (attribution_status='mapped'). Returns
-    (rate, status_counts) — the caller decides whether to proceed with
-    scoring or stop and report.
+    Pre-flight assertion check, run before score_cycle(). The caller
+    compares .resolution_rate against a threshold (0.80 in practice) and
+    decides whether to proceed with scoring or stop and report.
+
+    resolution_rate = mapped / (mapped + unmapped) — deliberately excludes
+    'unattributed' and 'brand_self_reference' from the denominator:
+      - 'unattributed' observations carry no retailer signal in the
+        response at all. Skipping them is the coder correctly declining
+        to guess, not an attribution failure to be measured against.
+      - 'brand_self_reference' is a deliberate exclusion (the homonym
+        guard catching the entity's own brand name masquerading as a
+        retailer) — also not a failure to resolve a real retailer.
+    'mapped' and 'unmapped' are the only two statuses where the response
+    DID name a retailer; the question this assertion answers is "of the
+    retailers actually named, how many do we recognize" — which is what
+    determines whether scoring is worth running at all.
+
+    raw_mapped_share (mapped / total, all four statuses) is reported
+    alongside for transparency — it's the more pessimistic, "what
+    fraction of all observations end up scored" number, useful context
+    even though it isn't the gate.
     """
     observations = (
         session.query(SoaPriceObservation)
@@ -262,5 +287,20 @@ async def check_attribution_rate(session: Session, cycle_id: int) -> Tuple[float
 
     total = len(observations)
     mapped = counts.get("mapped", 0)
-    rate = mapped / total if total else 0.0
-    return rate, counts
+    unmapped = counts.get("unmapped", 0)
+
+    resolution_rate = mapped / (mapped + unmapped) if (mapped + unmapped) else 0.0
+    raw_mapped_share = mapped / total if total else 0.0
+
+    logger.info(
+        "[observation_scorer] cycle=%s attribution: resolution_rate=%.1f%% (mapped=%d/%d of named-retailer "
+        "observations) raw_mapped_share=%.1f%% (mapped=%d/%d of all observations) counts=%s",
+        cycle_id, resolution_rate * 100, mapped, mapped + unmapped,
+        raw_mapped_share * 100, mapped, total, counts,
+    )
+
+    return AttributionAssertion(
+        resolution_rate=resolution_rate,
+        raw_mapped_share=raw_mapped_share,
+        status_counts=counts,
+    )
