@@ -1023,10 +1023,15 @@ class SoaIncentiveScore(Base):
             "scoring_grain IN ('legacy','observation')",
             name="ck_soa_incentive_scores_scoring_grain",
         ),
+        CheckConstraint(
+            "measurement_status IS NULL OR measurement_status IN ('measured','unmeasured')",
+            name="ck_soa_incentive_scores_measurement_status",
+        ),
         Index("ix_soa_incentive_scores_run_id", "run_id"),
         Index("ix_soa_incentive_scores_entity_id", "entity_id"),
         Index("ix_soa_incentive_scores_status", "status"),
         Index("ix_soa_incentive_scores_scoring_grain", "scoring_grain"),
+        Index("ix_soa_incentive_scores_measurement_status", "measurement_status"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -1090,8 +1095,27 @@ class SoaIncentiveScore(Base):
     # Ground truth from the Deal Engine.
     ground_truth_true_cost = Column(Float, nullable=True)
     ground_truth_applied_deals = Column(JSON, nullable=True)
+    ground_truth_available_deals = Column(
+        JSON,
+        nullable=True,
+        comment="result.available_deals — the not-applied candidate deals. Together with ground_truth_applied_deals this is a complete partition of every deal the engine evaluated; both empty means the engine had none at all (see measurement_status).",
+    )
     ground_truth_confidence = Column(Float, nullable=True)
     user_tier_name = Column(Text, nullable=True)
+
+    measurement_status = Column(
+        Text,
+        nullable=True,
+        comment=(
+            "'measured' — the engine evaluated >=SOA_MEASUREMENT_MIN_DEALS_EVALUATED deals "
+            "(applied_deals + available_deals) for this merchant/category, so ground_truth_true_cost "
+            "carries independent signal. 'unmeasured' — the engine had no deal data at all and echoed "
+            "the input price back as true_cost, which would otherwise look like a perfect 0% gap. "
+            "Null on rows where status != 'scored' (no ground truth was ever fetched) and on legacy-grain "
+            "rows scored before this gate existed. Net Price Accuracy / Offer Completeness and "
+            "TVD-01/TVD-03 must read measured rows only — see finding_detector.py."
+        ),
+    )
 
     # Computed Rung-0 fidelity metrics.
     net_price_reflected = Column(Boolean, nullable=True, comment="M2")

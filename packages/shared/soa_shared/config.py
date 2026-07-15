@@ -60,6 +60,20 @@ SOA_INCENTIVE_PRICE_TOLERANCE_PCT: float = float(os.environ.get("SOA_INCENTIVE_P
 SOA_DEAL_ENGINE_TIMEOUT_SECONDS: float = float(os.environ.get("SOA_DEAL_ENGINE_TIMEOUT_SECONDS", "10.0"))
 SOA_DEAL_ENGINE_MAX_RETRIES: int = int(os.environ.get("SOA_DEAL_ENGINE_MAX_RETRIES", "2"))
 
+# Validity gate (scoring/observation_scorer.py) — a scored row is
+# 'measured' only when the Deal Engine actually evaluated >=N candidate
+# deals for that merchant/category (applied_deals + available_deals is a
+# clean partition of every deal considered — see
+# deal_engine/calculator.py::calculate() in /supply). When the engine has
+# no deal data for a merchant at all, both lists are empty and it echoes
+# the input price back as true_cost — a 0% "gap" that looks like perfect
+# accuracy but is actually no measurement. Preferred over the response's
+# confidence value, which stays a flat, uninformative default (0.51) in
+# the exact same no-data case rather than a purpose-built coverage
+# signal — see soa/apps/pipeline scoring/observation_scorer.py's
+# measurement_status assignment.
+SOA_MEASUREMENT_MIN_DEALS_EVALUATED: int = int(os.environ.get("SOA_MEASUREMENT_MIN_DEALS_EVALUATED", "1"))
+
 # Truecost sweep cycles — bounded concurrency for the Deal Engine sweep executor
 SOA_TRUECOST_MAX_CONCURRENT: int = int(os.environ.get("SOA_TRUECOST_MAX_CONCURRENT", "3"))
 

@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from soa_shared.database import session_factory
 from soa_shared.models.soa_models import SoaCycle, SoaEntity, SoaFinding, SoaPlaybook, SoaRecommendation
 from app.auth import get_current_user
-from app.services.finding_detector import detect_findings
+from app.services.finding_detector import detect_findings, get_coverage_gaps
 from app.services.recommendation_mapper import generate_recommendations
 from app.schemas import (
     FindingResponse,
@@ -68,6 +68,7 @@ def generate_actions(
         raise HTTPException(status_code=400, detail=str(e))
 
     recommendations_by_play = generate_recommendations(cycle_id)
+    coverage_gaps = get_coverage_gaps(cycle_id)
 
     return GenerateActionsResponse(
         cycle_id=cycle_id,
@@ -75,6 +76,7 @@ def generate_actions(
         recommendations_by_play=recommendations_by_play,
         total_findings=sum(findings_by_play.values()),
         total_recommendations=len(recommendations_by_play),
+        coverage_gaps=coverage_gaps,
     )
 
 

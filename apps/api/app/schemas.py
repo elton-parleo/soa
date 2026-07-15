@@ -475,12 +475,25 @@ class ScopeTiersResponse(BaseModel):
 RECOMMENDATION_STATUSES = ('proposed', 'accepted', 'in_progress', 'done', 'dismissed')
 
 
+class CoverageGap(BaseModel):
+    """An (entity, merchant) cell where scoring reached the Deal Engine but
+    every attempt came back unmeasured (no deal data at all for that
+    merchant) — distinct from a compliant/measured cell, never 100% accuracy,
+    never silently absent from the response."""
+    entity_id: Optional[int] = None
+    merchant_slug: str
+    scored_rows: int
+    measured_rows: int
+    status: str
+
+
 class GenerateActionsResponse(BaseModel):
     cycle_id: int
     findings_by_play: dict
     recommendations_by_play: dict
     total_findings: int
     total_recommendations: int
+    coverage_gaps: List[CoverageGap] = []
 
 
 class FindingResponse(BaseModel):

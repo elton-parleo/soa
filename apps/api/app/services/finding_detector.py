@@ -448,6 +448,14 @@ def detect_tvd_01(cycle_id: int, session: Session, thresholds: dict) -> List[Fin
     soa_entities.merchant_id default the legacy grain used. Findings are
     grouped by (entity, merchant) — a genuine retailer, not an assumed
     one — with a per-surface (platform) breakdown in metric_snapshot.
+
+    Only measurement_status='measured' rows are read: 'unmeasured' rows
+    are cases where the Deal Engine had no deal data at all and echoed
+    the input price back as ground_truth_true_cost, which would compute
+    as a perfect 0% gap rather than a real measurement. Cells that have
+    scored rows but none measured are surfaced separately by
+    compute_coverage_gaps() rather than silently treated as 0% gap /
+    compliant.
     """
     gap_min = thresholds["price_gap_pct_min"]
     min_sample = thresholds["min_sample_size"]
@@ -459,6 +467,7 @@ def detect_tvd_01(cycle_id: int, session: Session, thresholds: dict) -> List[Fin
             SoaRun.cycle_id == cycle_id,
             SoaIncentiveScore.scoring_grain == "observation",
             SoaIncentiveScore.status == "scored",
+            SoaIncentiveScore.measurement_status == "measured",
             SoaIncentiveScore.entity_id.isnot(None),
             SoaIncentiveScore.merchant_slug.isnot(None),
             SoaIncentiveScore.stated_price.isnot(None),
@@ -530,6 +539,12 @@ def detect_tvd_03(cycle_id: int, session: Session, thresholds: dict) -> List[Fin
     Reads scoring_grain='observation' rows only. Findings are grouped by
     (entity, merchant) with a per-surface (platform) breakdown in
     metric_snapshot — see detect_tvd_01's docstring for why.
+
+    Only measurement_status='measured' rows are read — see
+    detect_tvd_01's docstring for why an 'unmeasured' echoed-price row
+    must not be read as a real member-pricing observation. Cells with
+    scored rows but none measured are surfaced separately by
+    compute_coverage_gaps().
     """
     min_sample = thresholds["min_sample_size"]
 
@@ -541,6 +556,7 @@ def detect_tvd_03(cycle_id: int, session: Session, thresholds: dict) -> List[Fin
             SoaRun.cycle_id == cycle_id,
             SoaIncentiveScore.scoring_grain == "observation",
             SoaIncentiveScore.status == "scored",
+            SoaIncentiveScore.measurement_status == "measured",
             SoaIncentiveScore.entity_id.isnot(None),
             SoaIncentiveScore.merchant_slug.isnot(None),
             SoaIncentiveScore.member_price_reflected.isnot(None),
@@ -580,6 +596,64 @@ def detect_tvd_03(cycle_id: int, session: Session, thresholds: dict) -> List[Fin
             evidence_run_ids=sorted({s.run_id for s, _ in cell_rows})[:MAX_EVIDENCE_RUN_IDS],
         ))
     return drafts
+
+
+# ---------------------------------------------------------------------------
+# Coverage gaps — cells with ground-truth attempts but zero measured rows
+# ---------------------------------------------------------------------------
+
+def compute_coverage_gaps(cycle_id: int, session: Session) -> List[dict]:
+    """
+    For every (entity, merchant) cell with >=1 scoring_grain='observation'
+    row that reached a Deal Engine ground-truth attempt this cycle
+    (ground_truth_true_cost is not null), reports scored_rows vs
+    measured_rows.
+
+    A cell with scored_rows > 0 and measured_rows == 0 means the Deal
+    Engine had zero deal data for that merchant every time it was asked
+    — TVD-01/TVD-03 correctly skip it (see their measurement_status
+    filter) rather than reading the engine's echoed-price non-measurement
+    as a 0% gap / compliant cell, but that skip must not look like
+    silence: this is the distinct 'insufficient ground-truth coverage'
+    signal the API surfaces alongside findings so the UI never renders a
+    coverage gap as "no news" or, worse, as 100% accuracy.
+    """
+    rows = (
+        session.query(
+            SoaIncentiveScore.entity_id,
+            SoaIncentiveScore.merchant_slug,
+            SoaIncentiveScore.measurement_status,
+        )
+        .join(SoaRun, SoaRun.id == SoaIncentiveScore.run_id)
+        .filter(
+            SoaRun.cycle_id == cycle_id,
+            SoaIncentiveScore.scoring_grain == "observation",
+            SoaIncentiveScore.status == "scored",
+            SoaIncentiveScore.entity_id.isnot(None),
+            SoaIncentiveScore.merchant_slug.isnot(None),
+            SoaIncentiveScore.ground_truth_true_cost.isnot(None),
+        )
+        .all()
+    )
+
+    by_cell: Dict[tuple, Dict[str, int]] = {}
+    for entity_id, merchant_slug, measurement_status in rows:
+        cell = by_cell.setdefault((entity_id, merchant_slug), {"scored_rows": 0, "measured_rows": 0})
+        cell["scored_rows"] += 1
+        if measurement_status == "measured":
+            cell["measured_rows"] += 1
+
+    gaps: List[dict] = []
+    for (entity_id, merchant_slug), counts in sorted(by_cell.items()):
+        if counts["measured_rows"] == 0:
+            gaps.append({
+                "entity_id": entity_id,
+                "merchant_slug": merchant_slug,
+                "scored_rows": counts["scored_rows"],
+                "measured_rows": 0,
+                "status": "insufficient_ground_truth_coverage",
+            })
+    return gaps
 
 
 DETECTORS: Dict[str, Callable[[int, Session, dict], List[FindingDraft]]] = {
@@ -644,5 +718,14 @@ def detect_findings(cycle_id: int) -> Dict[str, int]:
 
         session.commit()
         return summary
+    finally:
+        session.close()
+
+
+def get_coverage_gaps(cycle_id: int) -> List[dict]:
+    """Session-owning wrapper around compute_coverage_gaps() for API callers."""
+    session = session_factory()
+    try:
+        return compute_coverage_gaps(cycle_id, session)
     finally:
         session.close()

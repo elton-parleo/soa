@@ -104,9 +104,11 @@ def Session():
                 stated_price FLOAT, claimed_net_price FLOAT, claimed_discount_value FLOAT,
                 claimed_discount_pct FLOAT, claimed_terms TEXT, member_price_claimed BOOLEAN,
                 subscription_offer_claimed BOOLEAN, ground_truth_true_cost FLOAT,
-                ground_truth_applied_deals TEXT, ground_truth_confidence FLOAT,
+                ground_truth_applied_deals TEXT, ground_truth_available_deals TEXT,
+                ground_truth_confidence FLOAT,
                 user_tier_name TEXT, net_price_reflected BOOLEAN, net_price_accuracy BOOLEAN,
                 term_fidelity FLOAT, member_price_reflected BOOLEAN, status TEXT,
+                measurement_status TEXT,
                 error_message TEXT, created_at TIMESTAMP, updated_at TIMESTAMP
             )
         """)

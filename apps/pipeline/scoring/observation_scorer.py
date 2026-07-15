@@ -213,9 +213,20 @@ class ObservationScorer:
         tol_pct = config.SOA_INCENTIVE_PRICE_TOLERANCE_PCT
         true_cost = result.true_cost
 
+        # Validity gate: applied_deals + available_deals is a clean
+        # partition of every deal the engine evaluated for this
+        # merchant/category (deal_engine/calculator.py::calculate() in
+        # /supply). When both are empty the engine had nothing at all and
+        # true_cost is just an echo of the input price — not a
+        # measurement. See config.SOA_MEASUREMENT_MIN_DEALS_EVALUATED.
+        deals_evaluated = len(result.applied_deals or []) + len(result.available_deals or [])
+        measurement_status = (
+            "measured" if deals_evaluated >= config.SOA_MEASUREMENT_MIN_DEALS_EVALUATED else "unmeasured"
+        )
+
         net_price_reflected = None
         net_price_accuracy = None
-        if obs.claimed_net_price is not None and true_cost is not None:
+        if measurement_status == "measured" and obs.claimed_net_price is not None and true_cost is not None:
             tol = tol_pct * true_cost
             within_tol = abs(obs.claimed_net_price - true_cost) <= tol
             net_price_reflected = within_tol
@@ -237,7 +248,9 @@ class ObservationScorer:
             subscription_offer_claimed=obs.subscription_offer_claimed,
             ground_truth_true_cost=true_cost,
             ground_truth_applied_deals=result.applied_deals,
+            ground_truth_available_deals=result.available_deals,
             ground_truth_confidence=result.confidence,
+            measurement_status=measurement_status,
             net_price_reflected=net_price_reflected,
             net_price_accuracy=net_price_accuracy,
             status="scored",
