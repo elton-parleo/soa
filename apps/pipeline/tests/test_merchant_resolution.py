@@ -13,6 +13,9 @@ MERCHANTS = [
     KnownMerchant(id=36, name="Costco Wholesale", slug="costco", domain="costco.com"),
     KnownMerchant(id=89, name="CVS", slug="cvs", domain="cvs.com"),
     KnownMerchant(id=4, name="Walgreens", slug="walgreens", domain="walgreens.com"),
+    KnownMerchant(id=96, name="Sam's Club", slug="sams-club", domain="samsclub.com"),
+    KnownMerchant(id=97, name="Kroger", slug="kroger", domain="kroger.com"),
+    KnownMerchant(id=98, name="eBay", slug="ebay", domain="ebay.com"),
 ]
 
 
@@ -35,9 +38,10 @@ def test_substring_match_against_longer_merchant_name():
 
 
 def test_unmapped_merchant_returns_none():
-    # Real example from cycle 55: "Costco" is mapped, but a name outside the
-    # known set (e.g. a merchant not yet added) must not silently match.
-    assert resolve_merchant_slug("Kroger", MERCHANTS) is None
+    # Real example from cycle 55: rite-aid was never onboarded engine-side
+    # (confirmed 404 on the Deal Engine) — a name outside the known set
+    # must not silently match.
+    assert resolve_merchant_slug("Rite Aid", MERCHANTS) is None
 
 
 def test_none_input_returns_none():
@@ -63,7 +67,7 @@ def test_classify_unattributed_when_no_merchant_name():
 
 
 def test_classify_unmapped_when_merchant_not_known():
-    slug, status = classify_attribution("Luvs", "Kroger", MERCHANTS)
+    slug, status = classify_attribution("Luvs", "Rite Aid", MERCHANTS)
     assert slug is None
     assert status == "unmapped"
 
@@ -109,3 +113,32 @@ def test_classify_self_reference_guard_is_specific_to_the_matching_brand():
     slug, status = classify_attribution("Huggies", "Pampers", MERCHANTS)
     assert slug == "pampers"
     assert status == "mapped"
+
+
+# --- apostrophe / trailing-punctuation normalization (Task 1) -----------
+# Real cycle-55 data: "Sam's Club" (straight apostrophe, 24 occurrences)
+# and "Sam's Club" (curly ’, 22 occurrences) were both landing in
+# 'unmapped' before this normalization, despite sams-club now existing
+# as a known merchant.
+
+def test_resolves_straight_apostrophe_variant():
+    assert resolve_merchant_slug("Sam's Club", MERCHANTS) == "sams-club"
+
+
+def test_resolves_curly_apostrophe_variant():
+    assert resolve_merchant_slug("Sam’s Club", MERCHANTS) == "sams-club"
+
+
+def test_resolves_no_apostrophe_variant():
+    assert resolve_merchant_slug("Sams Club", MERCHANTS) == "sams-club"
+
+
+def test_resolves_with_trailing_punctuation_and_whitespace():
+    assert resolve_merchant_slug("  Kroger.  ", MERCHANTS) == "kroger"
+    assert resolve_merchant_slug("eBay,", MERCHANTS) == "ebay"
+
+
+def test_hyphenated_slug_matches_space_separated_name_variant():
+    # merchant_name text is unlikely to contain the literal hyphenated
+    # slug "sams-club" verbatim — the space-separated form must match too.
+    assert resolve_merchant_slug("shop at Sam's Club for bulk diapers", MERCHANTS) == "sams-club"

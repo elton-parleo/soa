@@ -5,10 +5,12 @@ each price observation's attribution status for pass-2 coding
 (soa_price_observations.attribution_status).
 
 Deliberately simple name resolution: case-insensitive exact match first,
-then substring containment either direction. No fuzzy matching, no
-guessing — a name that doesn't match any known merchant stays unresolved
-(the 'unmapped' bucket), which is the signal for which merchants to add
-next.
+then substring containment either direction, after normalizing
+apostrophe variants (curly '/'  vs straight ' vs dropped entirely, e.g.
+"Sam's Club" / "Sam's Club" / "Sams Club") and trailing punctuation/
+whitespace. No fuzzy matching beyond that, no guessing — a name that
+doesn't match any known merchant stays unresolved (the 'unmapped'
+bucket), which is the signal for which merchants to add next.
 
 classify_attribution additionally guards against a real failure mode
 found in validation: the coder sometimes fills merchant_name with the
@@ -20,6 +22,7 @@ there's an explicit D2C signal (domain wording, or a citation to that
 merchant's own domain in the same run) — otherwise it's downgraded to
 the distinct 'brand_self_reference' status.
 """
+import re
 from dataclasses import dataclass
 from typing import Iterable, List, Optional, Tuple
 from urllib.parse import urlparse
@@ -52,19 +55,36 @@ def load_known_merchants(session: Session) -> List[KnownMerchant]:
     ]
 
 
+_APOSTROPHES = ("’", "‘", "'", "`")
+
+
+def _normalize(s: str) -> str:
+    """Case, apostrophe-variant, and trailing-punctuation/whitespace
+    normalization — "Sam's Club", "Sam's Club", and "Sams Club." all
+    reduce to the same key."""
+    s = s.strip().lower()
+    for ch in _APOSTROPHES:
+        s = s.replace(ch, "")
+    s = s.rstrip(".,;:!?")
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+
 def resolve_merchant_slug(merchant_name: Optional[str], known_merchants: List[KnownMerchant]) -> Optional[str]:
     if not merchant_name:
         return None
-    needle = merchant_name.strip().lower()
+    needle = _normalize(merchant_name)
     if not needle:
         return None
 
     for m in known_merchants:
-        if needle == m.slug.lower() or needle == m.name.lower():
+        if needle == _normalize(m.slug.replace("-", " ")) or needle == _normalize(m.name):
             return m.slug
 
     for m in known_merchants:
-        if m.slug.lower() in needle or m.name.lower() in needle:
+        norm_slug = _normalize(m.slug.replace("-", " "))
+        norm_name = _normalize(m.name)
+        if norm_slug in needle or norm_name in needle:
             return m.slug
 
     return None
