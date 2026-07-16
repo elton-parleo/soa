@@ -24,6 +24,9 @@ QUERY_CATEGORIES = [
     'Grooming',
     'Oral Care',
     'Baby Care',
+    # SoA Lite submissions can be arbitrary brands outside the curated
+    # verticals above — 'General' is their catch-all category.
+    'General',
 ]
 
 QUERY_STAGES = [
