@@ -393,6 +393,8 @@ class SoaCycle(Base):
     )
     scope_skus = relationship("SoaScopeSku", back_populates="cycle")
     truecost_snapshots = relationship("SoaTruecostSnapshot", back_populates="cycle")
+    findings = relationship("SoaFinding", back_populates="cycle")
+    recommendations = relationship("SoaRecommendation", back_populates="cycle")
 
 
 # ---------------------------------------------------------------------------
@@ -761,6 +763,134 @@ class SoaCodedMention(Base):
 
 
 # ---------------------------------------------------------------------------
+# 6b. soa_price_observations — pass-2 output, observation grain (one row per
+# extracted price/offer observation, not one per entity — a response citing
+# one entity's price at three retailers yields three rows). Additive: pass
+# 1's soa_coded_mentions is never touched, and pass 2 does not re-extract
+# mentioned/position/strength/deal_cited at all (separate, narrower prompt —
+# see parser/prompts_v2.py) so there is nothing for those fields to drift
+# from, by construction. See apps/pipeline/scripts/recode_cycle_pass2.py.
+#
+# Supersedes an earlier, wrongly-scoped soa_coded_mentions_v2 table (one
+# scalar price/merchant pair per entity per run) from the same session —
+# that table is left in place, orphaned/unused, rather than dropped.
+# ---------------------------------------------------------------------------
+
+class SoaPriceObservation(Base):
+    __tablename__ = "soa_price_observations"
+    __table_args__ = (
+        CheckConstraint(
+            "attribution_status IN ('mapped','unmapped','unattributed','brand_self_reference')",
+            name="ck_soa_price_observations_attribution_status",
+        ),
+        Index("ix_soa_price_observations_run_entity", "run_id", "entity_id"),
+        Index("ix_soa_price_observations_entity_id", "entity_id"),
+        Index("ix_soa_price_observations_attribution_status", "attribution_status"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, ForeignKey("soa_runs.id"), nullable=False, index=True)
+    entity_id = Column(Integer, ForeignKey("soa_entities.id"), nullable=False, index=True)
+
+    stated_price = Column(Float, nullable=True)
+    claimed_net_price = Column(Float, nullable=True)
+    claimed_discount_value = Column(Float, nullable=True)
+    claimed_discount_pct = Column(Float, nullable=True)
+    claimed_terms = Column(JSON, nullable=True)
+    member_price_claimed = Column(Boolean, nullable=True)
+    subscription_offer_claimed = Column(Boolean, nullable=True)
+
+    merchant_name = Column(
+        Text,
+        nullable=True,
+        comment="Retailer/seller name as stated by the agent, verbatim. Null if this observation names no seller.",
+    )
+    merchant_slug = Column(
+        Text,
+        nullable=True,
+        comment="merchant_name resolved against merchants.slug. Only set when attribution_status='mapped'.",
+    )
+    attribution_status = Column(
+        Text,
+        nullable=False,
+        comment=(
+            "'mapped' — resolved to a known, trustworthy merchant. "
+            "'unmapped' — merchant_name set but not a known merchant. "
+            "'unattributed' — no merchant_name at all, no retailer signal in the response. "
+            "'brand_self_reference' — merchant_name resolved to the entity's OWN brand's "
+            "merchant slug (e.g. Pampers entity -> 'pampers') without an explicit D2C signal "
+            "in the response — likely the coder confusing the discussed brand for a retailer. "
+            "merchant_slug is null for this status; the raw merchant_name is kept for audit."
+        ),
+    )
+
+    evidence = Column(Text, nullable=True)
+    coding_pass_version = Column(Integer, nullable=False, default=2, server_default="2")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    run = relationship("SoaRun")
+    entity = relationship("SoaEntity")
+
+
+# ---------------------------------------------------------------------------
+# 6c. soa_pass2_coding_log — sentinel marking a run as pass-2-processed,
+# independent of whether that run produced any soa_price_observations /
+# soa_citations rows. A run with zero price observations and zero
+# citations is a legitimate, common result (e.g. a pure ingredient-
+# comparison response) — without this marker, ResponseCoderV2's
+# idempotency check has nothing to find and re-queries the API on every
+# re-run of the same run_id.
+# ---------------------------------------------------------------------------
+
+class SoaPass2CodingLog(Base):
+    __tablename__ = "soa_pass2_coding_log"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id", "coding_pass_version",
+            name="uq_soa_pass2_coding_log_run_version",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, ForeignKey("soa_runs.id"), nullable=False, index=True)
+    coding_pass_version = Column(Integer, nullable=False, default=2, server_default="2")
+    observations_written = Column(Integer, nullable=False, default=0, server_default="0")
+    citations_written = Column(Integer, nullable=False, default=0, server_default="0")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    run = relationship("SoaRun")
+
+
+# ---------------------------------------------------------------------------
+# 6d. soa_citations — per-run cited/linked sources extracted from
+# raw_response text at coding time. No fetching of the cited URLs; the
+# domain and context are derived from the response text alone. Raw
+# material for a future VIS-02 detector.
+# ---------------------------------------------------------------------------
+
+class SoaCitation(Base):
+    __tablename__ = "soa_citations"
+    __table_args__ = (
+        Index("ix_soa_citations_run_id", "run_id"),
+        Index("ix_soa_citations_domain", "domain"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(Integer, ForeignKey("soa_runs.id"), nullable=False, index=True)
+    url = Column(Text, nullable=False)
+    domain = Column(Text, nullable=False)
+    context = Column(
+        Text,
+        nullable=True,
+        comment="Short phrase describing which claim/product this source is attached to, when the response structure supports it.",
+    )
+    coding_pass_version = Column(Integer, nullable=False, default=2, server_default="2")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    run = relationship("SoaRun")
+
+
+# ---------------------------------------------------------------------------
 # 7. soa_other_mentions
 # ---------------------------------------------------------------------------
 
@@ -889,9 +1019,19 @@ class SoaIncentiveScore(Base):
             "status IN ('scored','ground_truth_unavailable','no_merchant_mapping','skipped')",
             name="ck_soa_incentive_scores_status",
         ),
+        CheckConstraint(
+            "scoring_grain IN ('legacy','observation')",
+            name="ck_soa_incentive_scores_scoring_grain",
+        ),
+        CheckConstraint(
+            "measurement_status IS NULL OR measurement_status IN ('measured','unmeasured')",
+            name="ck_soa_incentive_scores_measurement_status",
+        ),
         Index("ix_soa_incentive_scores_run_id", "run_id"),
         Index("ix_soa_incentive_scores_entity_id", "entity_id"),
         Index("ix_soa_incentive_scores_status", "status"),
+        Index("ix_soa_incentive_scores_scoring_grain", "scoring_grain"),
+        Index("ix_soa_incentive_scores_measurement_status", "measurement_status"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -906,8 +1046,28 @@ class SoaIncentiveScore(Base):
     )
 
     # Kept for read convenience, mirrors soa_coded_mentions.merchant_id pattern.
-    # No FK constraint — merchants is owned by /supply.
+    # No FK constraint — merchants is owned by /supply. For scoring_grain=
+    # 'observation' rows this is resolved from the coded merchant_slug, not
+    # defaulted from soa_entities.merchant_id (see scoring/observation_scorer.py).
     merchant_id = Column(Integer, nullable=True, index=True)
+
+    # New for observation-grain scoring — additive, null on the 485 legacy
+    # rows (scoring_grain='legacy').
+    merchant_slug = Column(Text, nullable=True, comment="Real resolved retailer slug, e.g. 'target'. Null on legacy rows.")
+    price_observation_id = Column(
+        Integer,
+        ForeignKey("soa_price_observations.id"),
+        nullable=True,
+        index=True,
+        comment="Traces back to the coding-stage observation this row scored. Null on legacy rows.",
+    )
+    scoring_grain = Column(
+        Text,
+        nullable=False,
+        default="legacy",
+        server_default="legacy",
+        comment="'legacy' — pre-observation-grain rows (brand x category, one per entity per run). 'observation' — one row per (entity, merchant, run, observation).",
+    )
 
     scope_sku_id = Column(
         Integer,
@@ -935,8 +1095,27 @@ class SoaIncentiveScore(Base):
     # Ground truth from the Deal Engine.
     ground_truth_true_cost = Column(Float, nullable=True)
     ground_truth_applied_deals = Column(JSON, nullable=True)
+    ground_truth_available_deals = Column(
+        JSON,
+        nullable=True,
+        comment="result.available_deals — the not-applied candidate deals. Together with ground_truth_applied_deals this is a complete partition of every deal the engine evaluated; both empty means the engine had none at all (see measurement_status).",
+    )
     ground_truth_confidence = Column(Float, nullable=True)
     user_tier_name = Column(Text, nullable=True)
+
+    measurement_status = Column(
+        Text,
+        nullable=True,
+        comment=(
+            "'measured' — the engine evaluated >=SOA_MEASUREMENT_MIN_DEALS_EVALUATED deals "
+            "(applied_deals + available_deals) for this merchant/category, so ground_truth_true_cost "
+            "carries independent signal. 'unmeasured' — the engine had no deal data at all and echoed "
+            "the input price back as true_cost, which would otherwise look like a perfect 0% gap. "
+            "Null on rows where status != 'scored' (no ground truth was ever fetched) and on legacy-grain "
+            "rows scored before this gate existed. Net Price Accuracy / Offer Completeness and "
+            "TVD-01/TVD-03 must read measured rows only — see finding_detector.py."
+        ),
+    )
 
     # Computed Rung-0 fidelity metrics.
     net_price_reflected = Column(Boolean, nullable=True, comment="M2")
@@ -952,6 +1131,7 @@ class SoaIncentiveScore(Base):
 
     run = relationship("SoaRun", back_populates="incentive_scores")
     entity = relationship("SoaEntity")
+    price_observation = relationship("SoaPriceObservation")
     scope_sku = relationship("SoaScopeSku", back_populates="incentive_scores")
 
 
@@ -1030,3 +1210,143 @@ class OrganizationMember(Base):
         ),
         Index('ix_org_members_user_id', 'user_id'),
     )
+
+
+# ---------------------------------------------------------------------------
+# 12. soa_playbook — curated remediation library backing the Actions feature.
+# Global reference table, not organization-scoped. Seeded from
+# docs/playbook_v1.md; see apps/pipeline/scripts/seed_playbook.py.
+# ---------------------------------------------------------------------------
+
+class SoaPlaybook(Base):
+    __tablename__ = "soa_playbook"
+    __table_args__ = (
+        CheckConstraint(
+            "owner IN ('brand','retailer','joint')",
+            name="ck_soa_playbook_owner",
+        ),
+        CheckConstraint(
+            "effort IN ('low','medium','high')",
+            name="ck_soa_playbook_effort",
+        ),
+        CheckConstraint(
+            "detector_status IN ('implemented','not_implemented')",
+            name="ck_soa_playbook_detector_status",
+        ),
+        Index("ix_soa_playbook_pillar", "pillar"),
+    )
+
+    play_id = Column(
+        Text,
+        primary_key=True,
+        comment="Stable key referenced by soa_findings/soa_recommendations. e.g. 'TVD-02'",
+    )
+    pillar = Column(Text, nullable=False, comment="Visibility | Accessibility | True Value Delivery | Fidelity")
+    failure_mode = Column(Text, nullable=False)
+    detection_trigger = Column(
+        Text,
+        nullable=False,
+        comment="Human-readable rule from the playbook doc. The machine-enforced version lives in detector_thresholds.yaml.",
+    )
+    dimensions = Column(JSON, nullable=False, comment="List of SoA dimension names this play moves, e.g. ['Presence']")
+    owner = Column(Text, nullable=False)
+    play_text = Column(Text, nullable=False)
+    mechanism_text = Column(Text, nullable=False)
+    effort = Column(Text, nullable=False)
+    expected_impact_text = Column(Text, nullable=False)
+    evidence_spec = Column(Text, nullable=False)
+    detector_status = Column(
+        Text,
+        nullable=False,
+        default="not_implemented",
+        server_default="not_implemented",
+        comment="'implemented' — a detector function exists for this play_id. 'not_implemented' — seeded but skipped by the detector.",
+    )
+    active = Column(Boolean, nullable=False, default=True, server_default="true")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    findings = relationship("SoaFinding", back_populates="play")
+    recommendations = relationship("SoaRecommendation", back_populates="play")
+
+
+# ---------------------------------------------------------------------------
+# 13. soa_findings — deterministic detector output for a completed cycle.
+# Read-only over existing metrics/run tables; the detector only ever writes
+# here. See apps/pipeline/services/finding_detector.py.
+# ---------------------------------------------------------------------------
+
+class SoaFinding(Base):
+    __tablename__ = "soa_findings"
+    __table_args__ = (
+        CheckConstraint(
+            "severity >= 0.0 AND severity <= 1.0",
+            name="ck_soa_findings_severity_range",
+        ),
+        Index("ix_soa_findings_cycle_id", "cycle_id"),
+        Index("ix_soa_findings_cycle_play", "cycle_id", "play_id"),
+        Index("ix_soa_findings_entity_id", "entity_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    cycle_id = Column(Integer, ForeignKey("soa_cycles.id"), nullable=False, index=True)
+    entity_id = Column(
+        Integer,
+        ForeignKey("soa_entities.id"),
+        nullable=True,
+        comment="Null for retailer-level / cycle-level findings (e.g. ACC-04).",
+    )
+    play_id = Column(Text, ForeignKey("soa_playbook.play_id"), nullable=False)
+    dimension = Column(Text, nullable=False)
+    surface = Column(Text, nullable=True, comment="Platform value, e.g. 'chatgpt'. Null when the finding is not surface-sliced.")
+    persona = Column(Text, nullable=True)
+    stage = Column(Text, nullable=True)
+    severity = Column(Float, nullable=False, comment="Normalized distance past threshold, clamped 0-1.")
+    cells_affected = Column(Integer, nullable=False, comment="Count of entity x surface x persona cells where the play fired.")
+    metric_snapshot = Column(JSON, nullable=False, comment="Exact metric values that tripped the rule.")
+    evidence_run_ids = Column(JSON, nullable=False, default=list, comment="Run IDs backing metric_snapshot. Empty list if no linkage exists for this metric.")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    cycle = relationship("SoaCycle", back_populates="findings")
+    entity = relationship("SoaEntity")
+    play = relationship("SoaPlaybook", back_populates="findings")
+
+
+# ---------------------------------------------------------------------------
+# 14. soa_recommendations — findings grouped and prioritized by play, one
+# per (cycle, play). See apps/pipeline/services/recommendation_mapper.py.
+# ---------------------------------------------------------------------------
+
+class SoaRecommendation(Base):
+    __tablename__ = "soa_recommendations"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('proposed','accepted','in_progress','done','dismissed')",
+            name="ck_soa_recommendations_status",
+        ),
+        UniqueConstraint(
+            "cycle_id", "play_id",
+            name="uq_soa_recommendations_cycle_play",
+        ),
+        Index("ix_soa_recommendations_cycle_id", "cycle_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    cycle_id = Column(Integer, ForeignKey("soa_cycles.id"), nullable=False, index=True)
+    play_id = Column(Text, ForeignKey("soa_playbook.play_id"), nullable=False)
+    finding_ids = Column(JSON, nullable=False, comment="List of soa_findings.id aggregated into this recommendation.")
+    priority_score = Column(Float, nullable=False)
+    status = Column(Text, nullable=False, default="proposed", server_default="proposed")
+    suppressed = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="True for composite plays (e.g. TVD-07) suppressed in favor of their constituent plays.",
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    cycle = relationship("SoaCycle", back_populates="recommendations")
+    play = relationship("SoaPlaybook", back_populates="recommendations")

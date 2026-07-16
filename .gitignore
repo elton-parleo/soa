@@ -26,6 +26,9 @@ apps/api/web/dist/
 *.swp
 *.swo
 
+# Claude Code local tooling config
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
