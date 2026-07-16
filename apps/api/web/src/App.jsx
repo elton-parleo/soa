@@ -9,6 +9,7 @@ import ResponseExplorer  from './components/ResponseExplorer.jsx'
 import ActionsPage       from './components/ActionsPage.jsx'
 import StudyLibrary      from './components/StudyLibrary.jsx'
 import StudyDetail      from './components/StudyDetail.jsx'
+import LiteWidget        from './lite/LiteWidget.jsx'
 
 // ─── Read initial view from URL hash on page load ────────────────────────────
 function getInitialView() {
@@ -209,6 +210,14 @@ function AppContent() {
 
 // ─── Root — wraps everything in AuthProvider ─────────────────────────────────
 export default function App() {
+  // SoA Lite: a public, unauthenticated widget iframed/linked from the
+  // marketing site. Checked before AuthProvider mounts so this path never
+  // touches Supabase session state, the login gate, or any authed-app
+  // global state — see lite/LiteWidget.jsx's module docstring.
+  if (window.location.pathname === '/lite') {
+    return <LiteWidget />
+  }
+
   return (
     <AuthProvider>
       <AppContent />
