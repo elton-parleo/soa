@@ -1,3 +1,4 @@
+import re
 from pydantic import BaseModel, field_validator, model_validator
 from typing import List, Optional
 from soa_shared.constants import QUERY_CONSTRAINTS
@@ -544,4 +545,119 @@ class RecommendationStatusUpdate(BaseModel):
     def validate_status(cls, v):
         if v not in RECOMMENDATION_STATUSES:
             raise ValueError(f"status must be one of {RECOMMENDATION_STATUSES}")
+        return v
+
+
+# ─── SoA Lite (public, unauthenticated) ─────────────────────────────────────
+# Every class below is a PUBLIC response/request shape consumed by the
+# marketing-site widget (see app/routers/public_lite.py). Changing field
+# names or types is a breaking change for that widget — coordinate before
+# editing. None of these ever carry a DB primary key (cycle_id, entity_id,
+# organization_id, soa_lite_requests.id) — token is the only key.
+
+_URL_PATTERN = re.compile(r'(https?://|www\.)|([a-z0-9-]+\.[a-z]{2,}(/|\s|$))', re.IGNORECASE)
+_EMAIL_PATTERN = re.compile(r'[^\s@]+@[^\s@]+\.[^\s@]+')
+# Letters (incl. accented), digits, spaces, and the punctuation real brand
+# names use. Deliberately excludes @ / < > { } ` ; and similar — the
+# allowlist alone blocks most injection-shaped input; _URL_PATTERN/
+# _EMAIL_PATTERN exist mainly to give a clearer, specific error message for
+# those two common cases (e.g. a bare domain like "rival.com" would
+# otherwise pass the allowlist since '.' is a legitimate name character).
+_ALLOWED_NAME_PATTERN = re.compile(r"^[A-Za-zÀ-ÿ0-9' &.,\-]+$")
+
+
+def _validate_public_name(v: str, field_name: str) -> str:
+    v = (v or '').strip()
+    if not (2 <= len(v) <= 80):
+        raise ValueError(f"{field_name} must be 2-80 characters")
+    if _EMAIL_PATTERN.search(v):
+        raise ValueError(f"{field_name} must not be an email address")
+    if _URL_PATTERN.search(v):
+        raise ValueError(f"{field_name} must not be a URL or web address")
+    if not _ALLOWED_NAME_PATTERN.match(v):
+        raise ValueError(f"{field_name} contains disallowed characters")
+    return v
+
+
+class PublicLiteSubmitRequest(BaseModel):
+    brand_name: str
+    competitor_names: List[str] = []
+    captcha_token: str
+
+    @field_validator('brand_name')
+    @classmethod
+    def validate_brand_name(cls, v):
+        return _validate_public_name(v, 'brand_name')
+
+    @field_validator('competitor_names')
+    @classmethod
+    def validate_competitor_names(cls, v):
+        if len(v) > 2:
+            raise ValueError('competitor_names accepts at most 2 entries')
+        return [_validate_public_name(name, 'competitor_names') for name in v]
+
+    @model_validator(mode='after')
+    def check_names_distinct(self):
+        seen = {self.brand_name.lower()}
+        for name in self.competitor_names:
+            key = name.lower()
+            if key in seen:
+                raise ValueError(
+                    'Competitor names must be distinct from the brand and from each other.'
+                )
+            seen.add(key)
+        return self
+
+
+class PublicLiteSubmitResponse(BaseModel):
+    token: str
+    status: str
+
+
+class PublicLiteProgress(BaseModel):
+    completed_runs: int
+    total_runs: int
+
+
+class PublicLiteStatusResponse(BaseModel):
+    status: str
+    phase: str
+    progress: Optional[PublicLiteProgress] = None
+
+
+class PublicLiteEntityMetrics(BaseModel):
+    """Full-report shape for one entity — reuses EntityMetrics' fields."""
+    name: str
+    role: str
+    metrics: EntityMetrics
+
+
+class PublicLiteReportResponse(BaseModel):
+    status: str
+    locked: bool = False
+    overall: List[PublicLiteEntityMetrics] = []
+    by_stage: dict = {}  # Dict[stage_name, List[PublicLiteEntityMetrics]]
+
+
+class PublicLiteTeaserEntity(BaseModel):
+    name: str
+    role: str
+    som: Optional[float] = None
+
+
+class PublicLiteTeaserResponse(BaseModel):
+    status: str
+    locked: bool = True
+    overall: List[PublicLiteTeaserEntity] = []
+
+
+class PublicLiteEmailRequest(BaseModel):
+    email: str
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v):
+        v = (v or '').strip()
+        if not _EMAIL_PATTERN.fullmatch(v):
+            raise ValueError('email must be a valid email address')
         return v
