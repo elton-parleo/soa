@@ -8,10 +8,18 @@ through PipelineOrchestrator.
 The API (Vercel) writes status='planned' when a user launches a cycle in
 the UI. This worker picks it up and runs it. The two services communicate
 only through the database — no direct coupling.
+
+Also polls soa_lite_requests (status='pending') for SoA Lite, the public
+unauthenticated lead-gen flow: process_lite_requests resolves entities,
+generates a fixed 12-query study, and creates a cycle for it, which then
+flows through the SAME planned-cycle poll/execute_cycle path as any other
+cycle (prioritized — see get_next_planned_cycle). _sweep_lite_completions
+mirrors that cycle's terminal state back onto soa_lite_requests.
 """
 import os
 import sys
 import time
+import json
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -36,6 +44,11 @@ def get_next_planned_cycle():
     Fetch the oldest planned cycle.
     Returns a Row with (cycle_code, study_type, platforms, runs_per_query,
     cycle_mode) or None.
+
+    SoA Lite cycles (cycle_code prefix 'lite-') jump the queue ahead of
+    everything else: they run in ~2 minutes (1 platform, 1 run/query, 12
+    queries) versus hours for a full client cycle, and a lead-gen visitor
+    is waiting live on the result. Within each priority tier, oldest first.
     """
     with engine.connect() as conn:
         row = conn.execute(text("""
@@ -47,7 +60,7 @@ def get_next_planned_cycle():
               cycle_mode
             FROM soa_cycles
             WHERE status = 'planned'
-            ORDER BY created_at ASC
+            ORDER BY (CASE WHEN cycle_code LIKE 'lite-%' THEN 0 ELSE 1 END), created_at ASC
             LIMIT 1
         """)).fetchone()
     return row
@@ -318,6 +331,194 @@ def process_generation_jobs():
         _mark_generation_failed(job_id, str(e))
 
 
+LITE_CREATED_BY = "soa-lite"
+
+
+def _mark_lite_failed(request_id: int, error: str):
+    with engine.connect() as conn:
+        conn.execute(text("""
+            UPDATE soa_lite_requests
+            SET status = 'failed',
+                error_message = :err,
+                updated_at = NOW()
+            WHERE id = :id
+        """), {"id": request_id, "err": error[:1000]})
+        conn.commit()
+    log.error(f"[lite] request {request_id} failed: {error}")
+
+
+def process_lite_requests():
+    """
+    Polls soa_lite_requests for status='pending', processes one row per
+    call — same one-at-a-time, oldest-first semantics as
+    process_generation_jobs (avoids OpenAI rate limits and DB contention
+    with cycle processing).
+
+    State machine: pending -> generating -> running. The cycle this
+    creates is picked up and executed by the existing planned-cycle poll
+    unchanged (get_next_planned_cycle/execute_cycle) — running -> complete/
+    failed is mirrored onto this row by _sweep_lite_completions once the
+    cycle finishes, not written here. Any exception while resolving
+    entities, generating queries, or creating the cycle marks this row
+    'failed' directly (mirrors _mark_generation_failed).
+    """
+    with engine.connect() as conn:
+        row = conn.execute(text("""
+            SELECT id, token, brand_name, competitor_names
+            FROM soa_lite_requests
+            WHERE status = 'pending'
+            ORDER BY created_at ASC
+            LIMIT 1
+        """)).fetchone()
+
+        if not row:
+            return
+
+        request_id, token, brand_name, competitor_names = row
+
+        conn.execute(text("""
+            UPDATE soa_lite_requests
+            SET status = 'generating', updated_at = NOW()
+            WHERE id = :id
+        """), {"id": request_id})
+        conn.commit()
+
+    log.info(f"[lite] Starting request {request_id} for brand '{brand_name}'")
+
+    # JSON columns normally come back already-decoded (psycopg2 parses
+    # json/jsonb natively); defensively handle a driver that returns the
+    # raw string instead, same idiom as cycles.py::_row_to_cycle.
+    if isinstance(competitor_names, str):
+        competitor_names = json.loads(competitor_names)
+    competitor_names = competitor_names or []
+    token8 = token[:8]
+    study_type = f"lite-{token8}"
+    cycle_code = f"lite-{token8}"
+
+    try:
+        api_key = os.environ.get("OPEN_AI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPEN_AI_API_KEY not set")
+
+        from soa_shared.database import session_factory
+        from soa_shared.org_helpers import get_or_create_leadgen_org
+        from soa_shared.entity_helpers import get_or_create_entity_by_slug
+        from soa_shared.cycle_creation import create_cycle_with_comparison_set
+        from generation.query_generator import generate_lite_queries
+
+        with session_factory() as session:
+            org_id = get_or_create_leadgen_org(session)
+            session.commit()
+
+        # b. Resolve entities — upsert-by-slug so repeat submissions of the
+        # same brand reuse the existing soa_entities row.
+        with engine.begin() as conn:
+            brand_entity_id = get_or_create_entity_by_slug(conn, brand_name, "brand")
+            competitor_entity_ids = [
+                get_or_create_entity_by_slug(conn, name, "brand")
+                for name in competitor_names
+            ]
+            conn.execute(text("""
+                UPDATE soa_lite_requests
+                SET brand_entity_id = :bid,
+                    competitor_entity_ids = :cids,
+                    updated_at = NOW()
+                WHERE id = :id
+            """), {
+                "bid":  brand_entity_id,
+                "cids": json.dumps(competitor_entity_ids),
+                "id":   request_id,
+            })
+
+        # c. Generate the fixed 12-query study and insert into soa_queries.
+        # _insert_generated_rows' query_code prefixing (first 3 chars up to
+        # the first underscore) naturally yields 'LIT' for study_type
+        # 'lite-{token8}' — no lite-specific insert logic needed.
+        rows = generate_lite_queries(brand_name, competitor_names, api_key)
+
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE soa_lite_requests
+                SET study_type = :st, updated_at = NOW()
+                WHERE id = :id
+            """), {"st": study_type, "id": request_id})
+            conn.commit()
+
+        _insert_generated_rows(rows, study_type, org_id, LITE_CREATED_BY)
+
+        # d. Create the cycle + comparison set (brand=M001 primary,
+        # competitors M002.. competitor) via the helper shared with
+        # apps/api/app/routers/cycles.py::create_cycle.
+        comparison_set = [
+            {"entity_id": brand_entity_id, "comparison_code": "M001", "role": "primary"},
+        ] + [
+            {"entity_id": eid, "comparison_code": f"M{i + 2:03d}", "role": "competitor"}
+            for i, eid in enumerate(competitor_entity_ids)
+        ]
+
+        with engine.begin() as conn:
+            cycle_id, _ = create_cycle_with_comparison_set(
+                conn,
+                cycle_code=cycle_code,
+                study_type=study_type,
+                study_pattern="brand_vs_brand",
+                cycle_mode="query",
+                truecost_tiers=None,
+                total_runs_planned=len(rows),  # 1 platform x 1 run/query
+                start_date=datetime.now(timezone.utc).date(),
+                platforms=json.dumps(["chatgpt"]),
+                runs_per_query=1,
+                organization_id=org_id,
+                created_by=LITE_CREATED_BY,
+                notes=None,
+                comparison_set=comparison_set,
+            )
+
+            conn.execute(text("""
+                UPDATE soa_lite_requests
+                SET cycle_id = :cid, status = 'running', updated_at = NOW()
+                WHERE id = :id
+            """), {"cid": cycle_id, "id": request_id})
+
+        log.info(f"[lite] request {request_id}: cycle {cycle_code} queued (id={cycle_id})")
+
+    except Exception as e:
+        log.exception(f"[lite] request {request_id} failed")
+        _mark_lite_failed(request_id, str(e))
+
+
+def _sweep_lite_completions():
+    """
+    Lite rows in status='running' track their cycle's terminal state —
+    the existing planned-cycle poll executes the cycle unchanged, so this
+    just mirrors the outcome back onto soa_lite_requests once it lands.
+    """
+    with engine.begin() as conn:
+        rows = conn.execute(text("""
+            SELECT lr.id, c.status
+            FROM soa_lite_requests lr
+            JOIN soa_cycles c ON c.id = lr.cycle_id
+            WHERE lr.status = 'running'
+              AND c.status IN ('complete', 'failed')
+        """)).fetchall()
+
+        for lite_id, cycle_status in rows:
+            if cycle_status == 'complete':
+                conn.execute(text("""
+                    UPDATE soa_lite_requests
+                    SET status = 'complete', updated_at = NOW()
+                    WHERE id = :id
+                """), {"id": lite_id})
+            else:
+                conn.execute(text("""
+                    UPDATE soa_lite_requests
+                    SET status = 'failed',
+                        error_message = 'Cycle failed during execution.',
+                        updated_at = NOW()
+                    WHERE id = :id
+                """), {"id": lite_id})
+
+
 def main():
     log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     log.info("SoA Pipeline Worker started")
@@ -365,6 +566,18 @@ def main():
                 process_generation_jobs()
             except Exception:
                 log.exception("[generation] poll iteration failed")
+
+            # Same isolation for SoA Lite: claiming a pending request, and
+            # sweeping running requests whose cycle has finished.
+            try:
+                process_lite_requests()
+            except Exception:
+                log.exception("[lite] poll iteration failed")
+
+            try:
+                _sweep_lite_completions()
+            except Exception:
+                log.exception("[lite] completion sweep failed")
 
             if not row:
                 time.sleep(POLL_INTERVAL)

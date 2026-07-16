@@ -7,6 +7,7 @@ import soa_shared.config as config
 from soa_shared.database import engine, session_factory
 from soa_shared.models.soa_models import SoaCycle, SoaScopeSku, SoaTruecostSnapshot
 from soa_shared.scope_resolution import materialize_and_freeze
+from soa_shared.cycle_creation import create_cycle_with_comparison_set
 from app.auth import get_current_user
 from app.schemas import (
     CreateCycleRequest,
@@ -117,53 +118,28 @@ def create_cycle(
             platforms_json = json.dumps(data.platforms)
             runs_per_query = data.runs_per_query
 
-        # 4. Create cycle — stamp organization_id and created_by
-        cycle_row = conn.execute(text("""
-            INSERT INTO soa_cycles (
-                cycle_code, study_type, study_pattern, status,
-                cycle_mode, truecost_tiers,
-                total_runs_planned, completed_runs, start_date, notes,
-                platforms, runs_per_query,
-                organization_id, created_by
-            ) VALUES (
-                :code, :st, :sp, 'planned',
-                :cycle_mode, :truecost_tiers,
-                :total, 0, :today, :notes,
-                :platforms, :runs_per_query,
-                :org_id, :user_id
-            )
-            RETURNING id, created_at
-        """), {
-            "code":          data.cycle_code,
-            "st":            data.study_type if not is_truecost else "truecost",
-            "sp":            study_pattern,
-            "cycle_mode":    data.cycle_mode,
-            "truecost_tiers": json.dumps(data.truecost_tiers) if data.truecost_tiers is not None else None,
-            "total":         total_runs,
-            "today":         date.today(),
-            "notes":         data.notes,
-            "platforms":     platforms_json,
-            "runs_per_query": runs_per_query,
-            "org_id":        org_id,
-            "user_id":       user_id,
-        }).fetchone()
-
-        cycle_id   = cycle_row[0]
-        created_at = cycle_row[1]
-
-        # 5. Create comparison set
-        for ce in data.comparison_set:
-            conn.execute(text("""
-                INSERT INTO soa_cycle_entities
-                  (cycle_id, entity_id, comparison_code, role)
-                VALUES
-                  (:cid, :eid, :code, :role)
-            """), {
-                "cid":  cycle_id,
-                "eid":  ce.entity_id,
-                "code": ce.comparison_code,
-                "role": ce.role,
-            })
+        # 4-5. Create cycle (stamp organization_id and created_by) plus its
+        # comparison set — shared with the SoA Lite worker, see
+        # soa_shared/cycle_creation.py.
+        cycle_id, created_at = create_cycle_with_comparison_set(
+            conn,
+            cycle_code=data.cycle_code,
+            study_type=data.study_type if not is_truecost else "truecost",
+            study_pattern=study_pattern,
+            cycle_mode=data.cycle_mode,
+            truecost_tiers=json.dumps(data.truecost_tiers) if data.truecost_tiers is not None else None,
+            total_runs_planned=total_runs,
+            start_date=date.today(),
+            platforms=platforms_json,
+            runs_per_query=runs_per_query,
+            organization_id=org_id,
+            created_by=user_id,
+            notes=data.notes,
+            comparison_set=[
+                {"entity_id": ce.entity_id, "comparison_code": ce.comparison_code, "role": ce.role}
+                for ce in data.comparison_set
+            ],
+        )
 
     # 6. Scope snapshot — only when PLANNED_CYCLE_SCOPE_RESYNC is off.
     # With it on (default), the Planned cycle inherits live from entity
