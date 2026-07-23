@@ -13,8 +13,13 @@ Also polls soa_lite_requests (status='pending') for SoA Lite, the public
 unauthenticated lead-gen flow: process_lite_requests resolves entities,
 generates a fixed 12-query study, and creates a cycle for it, which then
 flows through the SAME planned-cycle poll/execute_cycle path as any other
-cycle (prioritized — see get_next_planned_cycle). _sweep_lite_completions
-mirrors that cycle's terminal state back onto soa_lite_requests.
+cycle (prioritized — see get_next_planned_cycle). Once the cycle is
+queued, process_lite_requests also runs the Agent Scan (scan/engine.py)
+synchronously against the request's store_url and records the result on
+soa_lite_scan_results — never delaying the cycle, and never able to fail
+the lite request itself (see _run_lite_scan). _sweep_lite_completions
+mirrors both the cycle's and the scan's terminal state back onto
+soa_lite_requests.
 """
 import os
 import sys
@@ -22,7 +27,7 @@ import time
 import json
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 # Add pipeline root to path so local modules resolve correctly
 sys.path.insert(0, os.path.dirname(__file__))
@@ -364,7 +369,7 @@ def process_lite_requests():
     """
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT id, token, brand_name, competitor_names
+            SELECT id, token, brand_name, competitor_names, store_url
             FROM soa_lite_requests
             WHERE status = 'pending'
             ORDER BY created_at ASC
@@ -374,7 +379,7 @@ def process_lite_requests():
         if not row:
             return
 
-        request_id, token, brand_name, competitor_names = row
+        request_id, token, brand_name, competitor_names, store_url = row
 
         conn.execute(text("""
             UPDATE soa_lite_requests
@@ -480,29 +485,142 @@ def process_lite_requests():
                 WHERE id = :id
             """), {"cid": cycle_id, "id": request_id})
 
+            # Created atomically with the running transition — not in a
+            # separate transaction — so there is no window where this
+            # lite request is 'running' but has no scan row for
+            # _sweep_lite_completions to join against.
+            conn.execute(text("""
+                INSERT INTO soa_lite_scan_results (lite_request_id, input_url, status, updated_at)
+                VALUES (:rid, :url, 'running', NOW())
+            """), {"rid": request_id, "url": store_url})
+
         log.info(f"[lite] request {request_id}: cycle {cycle_code} queued (id={cycle_id})")
+
+        # Runs after the cycle is queued so a slow/unreachable store never
+        # delays the LLM path. Isolated in its own try/except: a bug here
+        # must never flip this already-queued request to 'failed' via the
+        # except below, which is for entity/query/cycle failures only
+        # (rule 7 — the scan never blocks the report).
+        try:
+            _run_lite_scan(request_id, store_url)
+        except Exception:
+            log.exception(f"[lite] request {request_id}: scan orchestration failed unexpectedly")
 
     except Exception as e:
         log.exception(f"[lite] request {request_id} failed")
         _mark_lite_failed(request_id, str(e))
 
 
+def _run_lite_scan(request_id: int, store_url: str | None):
+    """
+    Runs the Agent Scan for this lite request and updates the
+    soa_lite_scan_results row already created (status='running') in the
+    same transaction that queued the cycle — see process_lite_requests.
+
+    store_url is None -> 'skipped': guessing a domain server-side risks
+    scanning the wrong store, which is worse than no scan at all. The
+    API/widget owns collecting a real URL from the visitor.
+
+    run_scan itself never raises (scan/engine.py) — it always returns a
+    ScanResult with a terminal or 'skipped' status — so this function
+    only ever writes one final update to the scan row.
+    """
+    if not store_url:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                UPDATE soa_lite_scan_results
+                SET status = 'skipped', updated_at = NOW()
+                WHERE lite_request_id = :rid
+            """), {"rid": request_id})
+        log.info(f"[lite] request {request_id}: no store_url — scan skipped")
+        return
+
+    from scan.engine import run_scan
+
+    result = run_scan(store_url)
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE soa_lite_scan_results
+            SET status = :status,
+                total_score = :total_score,
+                integrity_capped = :integrity_capped,
+                dimensions = :dimensions,
+                pages_fetched = :pages_fetched,
+                error = :error,
+                updated_at = NOW()
+            WHERE lite_request_id = :rid
+        """), {
+            "rid":               request_id,
+            "status":            result.status,
+            "total_score":       result.total_score,
+            "integrity_capped":  result.integrity_capped,
+            "dimensions":        json.dumps(result.dimensions),
+            "pages_fetched":     json.dumps(result.pages_fetched),
+            "error":             result.error,
+        })
+
+    log.info(f"[lite] request {request_id}: scan {result.status} (score={result.total_score})")
+
+
+SCAN_TERMINAL_STATUSES = ("complete", "blocked", "failed", "skipped")
+SCAN_TIMEOUT_MINUTES = 10
+
+
+def _as_utc_datetime(value):
+    """Normalizes soa_lite_scan_results.updated_at across dialects — a real
+    datetime from Postgres, or the ISO string the SQLite NOW() UDF returns
+    in tests (see test_process_lite_requests.py::db)."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return datetime.fromisoformat(value)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
+
+
 def _sweep_lite_completions():
     """
-    Lite rows in status='running' track their cycle's terminal state —
-    the existing planned-cycle poll executes the cycle unchanged, so this
-    just mirrors the outcome back onto soa_lite_requests once it lands.
+    Lite rows in status='running' become 'complete'/'failed' only once
+    BOTH their cycle and their scan have reached a terminal state. The
+    existing planned-cycle poll executes the cycle unchanged; the scan
+    runs synchronously inside process_lite_requests, so by the time the
+    cycle finishes the scan row is normally already terminal too — this
+    join is a guard, not a wait loop.
+
+    The one case that needs active recovery: the scan row is still
+    'running' because the worker died mid-scan (see
+    process_lite_requests -> _run_lite_scan). A lite request must never
+    be stuck 'running' forever because of the scan (rule 7), so a scan
+    row stuck 'running' for >= SCAN_TIMEOUT_MINUTES is force-marked
+    'failed' here before the completion check proceeds.
     """
+    now = datetime.now(timezone.utc)
+
     with engine.begin() as conn:
         rows = conn.execute(text("""
-            SELECT lr.id, c.status
+            SELECT lr.id, c.status, sr.id, sr.status, sr.updated_at
             FROM soa_lite_requests lr
             JOIN soa_cycles c ON c.id = lr.cycle_id
+            JOIN soa_lite_scan_results sr ON sr.lite_request_id = lr.id
             WHERE lr.status = 'running'
               AND c.status IN ('complete', 'failed')
         """)).fetchall()
 
-        for lite_id, cycle_status in rows:
+        for lite_id, cycle_status, scan_id, scan_status, scan_updated_at in rows:
+            if scan_status not in SCAN_TERMINAL_STATUSES:
+                scan_age = _as_utc_datetime(scan_updated_at)
+                stuck = scan_age is not None and (now - scan_age) >= timedelta(minutes=SCAN_TIMEOUT_MINUTES)
+                if not stuck:
+                    continue  # scan legitimately still running — check again next pass
+
+                conn.execute(text("""
+                    UPDATE soa_lite_scan_results
+                    SET status = 'failed', error = 'scan timed out', updated_at = NOW()
+                    WHERE id = :id
+                """), {"id": scan_id})
+
             if cycle_status == 'complete':
                 conn.execute(text("""
                     UPDATE soa_lite_requests
