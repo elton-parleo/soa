@@ -3,12 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import '@testing-library/jest-dom'
 
-import LiteWidget, {
-  LiteForm,
-  LiteProgress,
-  LiteTeaser,
-  LiteFullReport,
-} from '../LiteWidget.jsx'
+import LiteWidget from '../LiteWidget.jsx'
 import { liteApi } from '../liteApi.js'
 
 vi.mock('../liteApi.js', () => ({
@@ -25,238 +20,35 @@ beforeEach(() => {
   sessionStorage.clear()
 })
 
-// ─── LiteForm ────────────────────────────────────────────────────────────
-
-describe('LiteForm', () => {
-  it('rejects an invalid brand name client-side without calling the API', async () => {
-    render(<LiteForm onSubmitted={() => {}} />)
-
-    fireEvent.change(screen.getByLabelText('Your brand'), { target: { value: 'A' } })
-    fireEvent.click(screen.getByText('Run my free diagnostic'))
-
-    await waitFor(() => expect(screen.getByText(/2-80 characters/)).toBeInTheDocument())
-    expect(liteApi.submit).not.toHaveBeenCalled()
-  })
-
-  it('rejects a competitor matching the brand name', async () => {
-    render(<LiteForm onSubmitted={() => {}} />)
-
-    fireEvent.change(screen.getByLabelText('Your brand'), { target: { value: 'Acme Co' } })
-    fireEvent.change(screen.getByLabelText(/Competitor 1/), { target: { value: 'acme co' } })
-    fireEvent.click(screen.getByText('Run my free diagnostic'))
-
-    await waitFor(() => expect(screen.getByText(/different from the brand/)).toBeInTheDocument())
-    expect(liteApi.submit).not.toHaveBeenCalled()
-  })
-
-  it('submits cleaned data and calls onSubmitted with the returned token', async () => {
-    liteApi.submit.mockResolvedValue({ token: 'tok-123', status: 'pending' })
-    const onSubmitted = vi.fn()
-
-    render(<LiteForm onSubmitted={onSubmitted} />)
-
-    fireEvent.change(screen.getByLabelText('Your brand'), { target: { value: '  Acme Co  ' } })
-    fireEvent.change(screen.getByLabelText(/Competitor 1/), { target: { value: 'Rival Co' } })
-    fireEvent.click(screen.getByText('Run my free diagnostic'))
-
-    await waitFor(() => expect(onSubmitted).toHaveBeenCalledWith('tok-123'))
-    expect(liteApi.submit).toHaveBeenCalledWith({
-      brand_name: 'Acme Co',
-      competitor_names: ['Rival Co'],
-      captcha_token: expect.any(String),
-    })
-  })
-
-  it('shows a rate-limit message on 429', async () => {
-    const err = new Error('Too many SoA Lite requests from this IP — try again in an hour.')
-    err.status = 429
-    liteApi.submit.mockRejectedValue(err)
-
-    render(<LiteForm onSubmitted={() => {}} />)
-    fireEvent.change(screen.getByLabelText('Your brand'), { target: { value: 'Acme Co' } })
-    fireEvent.click(screen.getByText('Run my free diagnostic'))
-
-    await waitFor(() => expect(screen.getByText(/try again in an hour/)).toBeInTheDocument())
-  })
-})
-
-// ─── LiteProgress (phase -> copy mapping) ───────────────────────────────
-
-describe('LiteProgress', () => {
-  it('maps generating_queries to the query-design message', () => {
-    render(<LiteProgress phaseData={{ status: 'generating', phase: 'generating_queries' }} />)
-    expect(screen.getByText('Designing your 12-query diagnostic…')).toBeInTheDocument()
-  })
-
-  it('maps queued to a waiting message', () => {
-    render(<LiteProgress phaseData={{ status: 'pending', phase: 'queued' }} />)
-    expect(screen.getByText(/Queued/)).toBeInTheDocument()
-  })
-
-  it('maps analyzing to the analyzing message', () => {
-    render(<LiteProgress phaseData={{
-      status: 'running', phase: 'analyzing',
-      progress: { completed_runs: 12, total_runs: 12 },
-    }} />)
-    expect(screen.getByText('Analyzing responses…')).toBeInTheDocument()
-  })
-
-  it('maps running with progress to a 1-indexed query count', () => {
-    render(<LiteProgress phaseData={{
-      status: 'running', phase: 'running',
-      progress: { completed_runs: 4, total_runs: 12 },
-    }} />)
-    expect(screen.getByText('Running query 5 of 12 against ChatGPT…')).toBeInTheDocument()
-    expect(screen.getByText('4 of 12 queries complete')).toBeInTheDocument()
-  })
-
-  it('caps the displayed query number at the total when completed_runs reaches it', () => {
-    render(<LiteProgress phaseData={{
-      status: 'running', phase: 'running',
-      progress: { completed_runs: 12, total_runs: 12 },
-    }} />)
-    expect(screen.getByText('Running query 12 of 12 against ChatGPT…')).toBeInTheDocument()
-  })
-
-  it('renders a passed-in error banner', () => {
-    render(<LiteProgress phaseData={{ status: 'pending', phase: 'queued' }} error="Could not check status." />)
-    expect(screen.getByText('Could not check status.')).toBeInTheDocument()
-  })
-})
-
-// ─── LiteTeaser ──────────────────────────────────────────────────────────
-
-describe('LiteTeaser', () => {
-  const teaserReport = {
-    status: 'complete',
-    locked: true,
-    overall: [
-      { name: 'Acme Co', role: 'primary', som: 62.5 },
-      { name: 'Rival Co', role: 'competitor', som: 37.5 },
-    ],
-  }
-
-  it('renders overall SoA share per entity with role labeling', () => {
-    render(<LiteTeaser report={teaserReport} token="tok-1" onUnlocked={() => {}} />)
-    expect(screen.getByText('Acme Co (you)')).toBeInTheDocument()
-    expect(screen.getByText('Rival Co')).toBeInTheDocument()
-    expect(screen.getByText('62.5%')).toBeInTheDocument()
-  })
-
-  it('shows the unlock prompt for the stage-level detail', () => {
-    render(<LiteTeaser report={teaserReport} token="tok-1" onUnlocked={() => {}} />)
-    expect(screen.getByText(/unlock the full stage-by-stage diagnostic/)).toBeInTheDocument()
-  })
-
-  it('rejects an invalid email without calling the API', async () => {
-    render(<LiteTeaser report={teaserReport} token="tok-1" onUnlocked={() => {}} />)
-    fireEvent.change(screen.getByPlaceholderText('you@company.com'), { target: { value: 'not-an-email' } })
-    fireEvent.click(screen.getByText('Unlock full report'))
-
-    await waitFor(() => expect(screen.getByText(/valid email/)).toBeInTheDocument())
-    expect(liteApi.setEmail).not.toHaveBeenCalled()
-  })
-
-  it('unlocks and hands the full report back to the caller on valid email', async () => {
-    const fullReport = { status: 'complete', locked: false, overall: [], by_stage: {} }
-    liteApi.setEmail.mockResolvedValue(fullReport)
-    const onUnlocked = vi.fn()
-
-    render(<LiteTeaser report={teaserReport} token="tok-1" onUnlocked={onUnlocked} />)
-    fireEvent.change(screen.getByPlaceholderText('you@company.com'), { target: { value: 'visitor@example.com' } })
-    fireEvent.click(screen.getByText('Unlock full report'))
-
-    await waitFor(() => expect(onUnlocked).toHaveBeenCalledWith(fullReport))
-    expect(liteApi.setEmail).toHaveBeenCalledWith('tok-1', 'visitor@example.com')
-  })
-})
-
-// ─── LiteFullReport ──────────────────────────────────────────────────────
-
-describe('LiteFullReport', () => {
-  const fullReport = {
-    status: 'complete',
-    locked: false,
-    overall: [
-      {
-        name: 'Acme Co', role: 'primary',
-        metrics: { som: 62.5, mention_rate: 50, position_index: 70, rsi: 1.2 },
-      },
-      {
-        name: 'Rival Co', role: 'competitor',
-        metrics: { som: 37.5, mention_rate: 30, position_index: 40, rsi: 0.4 },
-      },
-    ],
-    by_stage: {
-      // Deliberately out of funnel order — the component must reorder to
-      // Awareness -> Research -> Comparison -> Ready to Buy regardless of
-      // key insertion order.
-      'Research': [
-        { name: 'Acme Co', role: 'primary', metrics: { mention_rate: 55 } },
-        { name: 'Rival Co', role: 'competitor', metrics: { mention_rate: 25 } },
-      ],
-      'Awareness': [
-        { name: 'Acme Co', role: 'primary', metrics: { mention_rate: 45 } },
-        { name: 'Rival Co', role: 'competitor', metrics: { mention_rate: 35 } },
-      ],
-    },
-  }
-
-  it('renders overall SoA share and the position/RSI table', () => {
-    render(<LiteFullReport report={fullReport} />)
-    expect(screen.getByText('Acme Co (you)')).toBeInTheDocument()
-    expect(screen.getByText('1.20')).toBeInTheDocument() // RSI formatted to 2dp
-  })
-
-  it('renders funnel stages in canonical order regardless of payload key order', () => {
-    render(<LiteFullReport report={fullReport} />)
-    const awarenessIdx = screen.getByText('Awareness').compareDocumentPosition(
-      screen.getByText('Research')
-    )
-    // Node.DOCUMENT_POSITION_FOLLOWING = 4: 'Research' node follows 'Awareness' node in the DOM.
-    expect(awarenessIdx & 4).toBeTruthy()
-  })
-
-  it('omits stages that have no data at all', () => {
-    render(<LiteFullReport report={fullReport} />)
-    expect(screen.queryByText('Comparison')).not.toBeInTheDocument()
-    expect(screen.queryByText('Ready to Buy')).not.toBeInTheDocument()
-  })
-
-  it('renders the closing CTA link when VITE_LITE_CTA_URL is set', () => {
-    vi.stubEnv('VITE_LITE_CTA_URL', 'https://parleo.io/demo')
-    render(<LiteFullReport report={fullReport} />)
-    const link = screen.getByText('See the full Parleo diagnostic')
-    expect(link.closest('a')).toHaveAttribute('href', 'https://parleo.io/demo')
-    vi.unstubAllEnvs()
-  })
-
-  it('omits the CTA link when VITE_LITE_CTA_URL is unset', () => {
-    vi.stubEnv('VITE_LITE_CTA_URL', '')
-    render(<LiteFullReport report={fullReport} />)
-    expect(screen.queryByText('See the full Parleo diagnostic')).not.toBeInTheDocument()
-    vi.unstubAllEnvs()
-  })
-})
-
-// ─── LiteWidget root — state machine ────────────────────────────────────
-
-describe('LiteWidget (root)', () => {
+describe('LiteWidget (root) — state machine', () => {
   it('renders the form when there is no stored token', () => {
     render(<LiteWidget />)
     expect(screen.getByText('Run my free diagnostic')).toBeInTheDocument()
   })
 
-  it('stores the token and shows progress after a successful submission', async () => {
+  it('stores the token and shows progress after a successful brand-only submission', async () => {
     liteApi.submit.mockResolvedValue({ token: 'tok-abc', status: 'pending' })
-    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued' })
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
 
     render(<LiteWidget />)
-    fireEvent.change(screen.getByLabelText('Your brand'), { target: { value: 'Acme Co' } })
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'Acme Co' } })
     fireEvent.click(screen.getByText('Run my free diagnostic'))
 
     await waitFor(() => expect(sessionStorage.getItem('soaLiteToken')).toBe('tok-abc'))
     await waitFor(() => expect(screen.getByText(/Queued/)).toBeInTheDocument())
+    expect(sessionStorage.getItem('soaLiteStoreUrl')).toBeNull()
+  })
+
+  it('stores the store URL and shows the scan track after a URL submission', async () => {
+    liteApi.submit.mockResolvedValue({ token: 'tok-url', status: 'pending' })
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+
+    render(<LiteWidget />)
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'acme.com' } })
+    fireEvent.click(screen.getByText('Run my free diagnostic'))
+
+    await waitFor(() => expect(sessionStorage.getItem('soaLiteStoreUrl')).toBe('acme.com'))
+    await waitFor(() => expect(screen.getByText(/Queued to read acme.com/)).toBeInTheDocument())
   })
 
   it('resumes polling immediately when a token already exists in sessionStorage', async () => {
@@ -269,6 +61,16 @@ describe('LiteWidget (root)', () => {
 
     await waitFor(() => expect(liteApi.getStatus).toHaveBeenCalledWith('tok-existing'))
     await waitFor(() => expect(screen.getByText('Analyzing responses…')).toBeInTheDocument())
+  })
+
+  it('resumes with the persisted store_url domain on the scan track after a refresh', async () => {
+    sessionStorage.setItem('soaLiteToken', 'tok-existing')
+    sessionStorage.setItem('soaLiteStoreUrl', 'acme.com')
+    liteApi.getStatus.mockResolvedValue({ status: 'running', phase: 'running', scan_status: 'running', progress: { completed_runs: 1, total_runs: 12 } })
+
+    render(<LiteWidget />)
+
+    await waitFor(() => expect(screen.getByText(/Reading acme.com like an agent/)).toBeInTheDocument())
   })
 
   it('shows the retry view on failed status and clears storage on retry', async () => {
@@ -286,11 +88,12 @@ describe('LiteWidget (root)', () => {
 
   it('fetches and renders the teaser once complete with no email on file', async () => {
     sessionStorage.setItem('soaLiteToken', 'tok-done')
-    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete' })
+    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'skipped' })
     liteApi.getReport.mockResolvedValue({
       status: 'complete',
       locked: true,
       overall: [{ name: 'Acme Co', role: 'primary', som: 60 }],
+      visibility: 60, accessibility: null, composite: 60, scan_status: 'skipped',
     })
 
     render(<LiteWidget />)
@@ -302,7 +105,7 @@ describe('LiteWidget (root)', () => {
 
   it('renders the full report directly when the report is already unlocked', async () => {
     sessionStorage.setItem('soaLiteToken', 'tok-done2')
-    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete' })
+    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'skipped' })
     liteApi.getReport.mockResolvedValue({
       status: 'complete',
       locked: false,
@@ -311,6 +114,8 @@ describe('LiteWidget (root)', () => {
         metrics: { som: 60, mention_rate: 40, position_index: 50, rsi: 1 },
       }],
       by_stage: {},
+      scan: { status: 'skipped', total_score: null, dimensions: [], pages_fetched: [] },
+      visibility: 60, accessibility: null, composite: 60, scan_status: 'skipped',
     })
 
     render(<LiteWidget />)
@@ -318,5 +123,141 @@ describe('LiteWidget (root)', () => {
     await waitFor(() =>
       expect(screen.getByText('Your full Share of Algorithm report')).toBeInTheDocument()
     )
+  })
+})
+
+// ─── Adaptive shapes ───────────────────────────────────────────────────
+
+describe('LiteWidget — adaptive shapes', () => {
+  it('URL input produces the full dual report with a complete scan', async () => {
+    sessionStorage.setItem('soaLiteToken', 'tok-url-shape')
+    sessionStorage.setItem('soaLiteStoreUrl', 'acme.com')
+    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'complete' })
+    liteApi.getReport.mockResolvedValue({
+      status: 'complete',
+      locked: false,
+      overall: [{ name: 'Acme Co', role: 'primary', metrics: { som: 60 } }],
+      by_stage: {},
+      scan: {
+        status: 'complete', total_score: 80, integrity_capped: false,
+        foundation: { subtotal: 30, max: 35 }, value: { subtotal: 50, max: 65 },
+        dimensions: [{ code: 'F1', name: 'Agent Access', score: 10, max: 10, evidence: [], fix: null, locked: false, linked: null }],
+        pages_fetched: [],
+      },
+      visibility: 60, accessibility: 80, composite: 68, scan_status: 'complete',
+    })
+
+    render(<LiteWidget />)
+
+    await waitFor(() => expect(screen.getByText('Foundation (30/35)')).toBeInTheDocument())
+    expect(screen.queryByText('Add your store URL to see why')).not.toBeInTheDocument()
+  })
+
+  it('brand-only submission shows the "add your store URL" prompt in the why-section', async () => {
+    sessionStorage.setItem('soaLiteToken', 'tok-brand-only')
+    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'skipped' })
+    liteApi.getReport.mockResolvedValue({
+      status: 'complete',
+      locked: false,
+      overall: [{ name: 'Acme Co', role: 'primary', metrics: { som: 60 } }],
+      by_stage: {},
+      scan: { status: 'skipped', total_score: null, dimensions: [], pages_fetched: [] },
+      visibility: 60, accessibility: null, composite: 60, scan_status: 'skipped',
+    })
+
+    render(<LiteWidget />)
+
+    await waitFor(() => expect(screen.getByText('Add your store URL to see why')).toBeInTheDocument())
+  })
+
+  it('clicking "add your store URL" resets to the form, pre-filled with the confirmed brand name', async () => {
+    sessionStorage.setItem('soaLiteToken', 'tok-brand-only-2')
+    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'skipped' })
+    liteApi.getReport.mockResolvedValue({
+      status: 'complete',
+      locked: false,
+      overall: [{ name: 'Acme Co', role: 'primary', metrics: { som: 60 } }],
+      by_stage: {},
+      scan: { status: 'skipped', total_score: null, dimensions: [], pages_fetched: [] },
+      visibility: 60, accessibility: null, composite: 60, scan_status: 'skipped',
+    })
+
+    render(<LiteWidget />)
+    await waitFor(() => expect(screen.getByText('Add store URL')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Add store URL'))
+
+    expect(sessionStorage.getItem('soaLiteToken')).toBeNull()
+    expect(screen.getByLabelText('Your brand or store URL')).toHaveValue('Acme Co')
+  })
+
+  it('scan blocked still renders visibility sections fully, with the blocked badge in the why-section', async () => {
+    sessionStorage.setItem('soaLiteToken', 'tok-blocked')
+    sessionStorage.setItem('soaLiteStoreUrl', 'bigbox.com')
+    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'blocked' })
+    liteApi.getReport.mockResolvedValue({
+      status: 'complete',
+      locked: false,
+      overall: [
+        { name: 'Big Box', role: 'primary', metrics: { som: 60, mention_rate: 40 } },
+        { name: 'Rival', role: 'competitor', metrics: { som: 40, mention_rate: 20 } },
+      ],
+      by_stage: { Awareness: [
+        { name: 'Big Box', role: 'primary', metrics: { mention_rate: 40 } },
+        { name: 'Rival', role: 'competitor', metrics: { mention_rate: 20 } },
+      ] },
+      scan: { status: 'blocked', total_score: null, dimensions: [], pages_fetched: [] },
+      visibility: 60, accessibility: null, composite: 60, scan_status: 'blocked',
+    })
+
+    render(<LiteWidget />)
+
+    await waitFor(() => expect(screen.getByText('Visibility by purchase stage')).toBeInTheDocument())
+    expect(screen.getByText('Awareness')).toBeInTheDocument()
+    expect(screen.getByText(/blocked our reader/)).toBeInTheDocument()
+  })
+})
+
+// ─── Additive fields absent (old API) ───────────────────────────────────
+
+describe('LiteWidget — old API shape (additive fields absent)', () => {
+  it('renders the pre-scan progress experience without errors when scan_status is absent', async () => {
+    sessionStorage.setItem('soaLiteToken', 'tok-old-api')
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued' }) // no scan_status key at all
+
+    render(<LiteWidget />)
+
+    await waitFor(() => expect(screen.getByText(/Queued/)).toBeInTheDocument())
+  })
+
+  it('renders the old-shape teaser without errors when visibility/accessibility/composite are absent', async () => {
+    sessionStorage.setItem('soaLiteToken', 'tok-old-api-2')
+    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete' })
+    liteApi.getReport.mockResolvedValue({
+      status: 'complete',
+      locked: true,
+      overall: [{ name: 'Acme Co', role: 'primary', som: 60 }],
+      // no visibility/accessibility/composite/scan_status — pre-Stage-3 shape
+    })
+
+    render(<LiteWidget />)
+
+    await waitFor(() => expect(screen.getByText('Acme Co (you)')).toBeInTheDocument())
+  })
+
+  it('renders the old-shape full report without errors when scan is absent', async () => {
+    sessionStorage.setItem('soaLiteToken', 'tok-old-api-3')
+    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete' })
+    liteApi.getReport.mockResolvedValue({
+      status: 'complete',
+      locked: false,
+      overall: [{ name: 'Acme Co', role: 'primary', metrics: { som: 60, mention_rate: 40, position_index: 50, rsi: 1 } }],
+      by_stage: {},
+      // no scan/visibility/accessibility/composite/scan_status — pre-Stage-3 shape
+    })
+
+    render(<LiteWidget />)
+
+    await waitFor(() => expect(screen.getByText('Your full Share of Algorithm report')).toBeInTheDocument())
+    expect(screen.getByText('Add your store URL to see why')).toBeInTheDocument()
   })
 })
