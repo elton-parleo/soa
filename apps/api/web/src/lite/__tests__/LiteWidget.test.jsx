@@ -99,7 +99,7 @@ describe('LiteWidget (root) — state machine', () => {
     render(<LiteWidget />)
 
     await waitFor(() =>
-      expect(screen.getByText(/unlock the full stage-by-stage diagnostic/)).toBeInTheDocument()
+      expect(screen.getByText('Want the full report?')).toBeInTheDocument()
     )
   })
 
@@ -120,8 +120,10 @@ describe('LiteWidget (root) — state machine', () => {
 
     render(<LiteWidget />)
 
+    // The full report has no separate page title — the executive tiles
+    // (composite score) are the first thing distinguishing it from the teaser.
     await waitFor(() =>
-      expect(screen.getByText('Your full Share of Algorithm report')).toBeInTheDocument()
+      expect(screen.getByText('Composite score')).toBeInTheDocument()
     )
   })
 })
@@ -149,7 +151,7 @@ describe('LiteWidget — adaptive shapes', () => {
 
     render(<LiteWidget />)
 
-    await waitFor(() => expect(screen.getByText('Foundation (30/35)')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('FOUNDATION · 30/35')).toBeInTheDocument())
     expect(screen.queryByText('Add your store URL to see why')).not.toBeInTheDocument()
   })
 
@@ -211,8 +213,8 @@ describe('LiteWidget — adaptive shapes', () => {
 
     render(<LiteWidget />)
 
-    await waitFor(() => expect(screen.getByText('Visibility by purchase stage')).toBeInTheDocument())
-    expect(screen.getByText('Awareness')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('Where you disappear in the funnel')).toBeInTheDocument())
+    expect(screen.getByText('AWARENESS')).toBeInTheDocument()
     expect(screen.getByText(/blocked our reader/)).toBeInTheDocument()
   })
 })
@@ -257,7 +259,7 @@ describe('LiteWidget — old API shape (additive fields absent)', () => {
 
     render(<LiteWidget />)
 
-    await waitFor(() => expect(screen.getByText('Your full Share of Algorithm report')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Composite score')).toBeInTheDocument())
     expect(screen.getByText('Add your store URL to see why')).toBeInTheDocument()
   })
 })

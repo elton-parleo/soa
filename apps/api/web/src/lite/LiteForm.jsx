@@ -4,12 +4,17 @@
  * product spec). URL mode shows an editable, auto-derived brand-name
  * confirmation field; the visitor's edit (if any) always wins over
  * further auto-derivation, tracked via brandManuallyEdited.
+ *
+ * No screenshot in design-refs/ shows an input form (the reference
+ * captures are all completed reports) — this applies the same tokens
+ * (paper background, card shape, pill button, mono micro-copy) for
+ * visual consistency with the rest of the widget.
  */
 import { useEffect, useState } from 'react'
 import { liteApi } from './liteApi.js'
 import { validateSubmission } from './validation.js'
 import { looksLikeUrl, deriveBrandFromUrl } from './liteDerive.js'
-import { T, outerStyle, cardStyle, LogoHeader, ErrorBanner } from './liteTheme.jsx'
+import { LogoHeader, ErrorBanner, LightCard } from './liteTheme.jsx'
 
 export function LiteForm({ onSubmitted, initialBrandName = '' }) {
   const [primaryInput, setPrimaryInput] = useState(initialBrandName)
@@ -82,121 +87,92 @@ export function LiteForm({ onSubmitted, initialBrandName = '' }) {
     }
   }
 
-  const inputStyle = {
-    width: '100%',
-    height: 42,
-    border: `1px solid ${T.border}`,
-    borderRadius: 8,
-    padding: '0 12px',
-    fontSize: 14,
-    fontFamily: 'inherit',
-    color: T.text,
-    outline: 'none',
-    boxSizing: 'border-box',
-    marginBottom: 4,
-  }
-
-  const labelStyle = { fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 6, display: 'block' }
-  const fieldErrorStyle = { fontSize: 12, color: T.red, marginBottom: 10 }
+  const fieldErrorStyle = { fontSize: 12, color: 'var(--bad-ink)', marginBottom: 10, minHeight: 16 }
+  const labelStyle = { fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 6, display: 'block' }
 
   return (
-    <div style={outerStyle}>
-      <div style={cardStyle}>
-        <LogoHeader />
-        <div style={{ fontSize: 20, fontWeight: 700, color: T.text, marginBottom: 6 }}>
-          See your brand's Share of Algorithm
-        </div>
-        <div style={{ fontSize: 13, color: T.slate, marginBottom: 20, lineHeight: 1.5 }}>
-          Enter your brand or store URL and up to 2 competitors — we'll run a
-          free 12-query diagnostic against ChatGPT and, if you give us a URL,
-          read your store the way an AI shopping agent does.
-        </div>
-
-        <ErrorBanner message={submitError} />
-
-        <form onSubmit={handleSubmit}>
-          <label style={labelStyle} htmlFor="lite-primary">Your brand or store URL</label>
-          <input
-            id="lite-primary"
-            type="text"
-            placeholder="e.g. Drunk Elephant or drunkelephant.com"
-            value={primaryInput}
-            onChange={(e) => handlePrimaryChange(e.target.value)}
-            style={inputStyle}
-          />
-          {isUrlMode ? (
-            <div style={{ fontSize: 12, color: T.slate, marginBottom: 10 }}>
-              Looks like a URL — we'll read it the way an AI shopping agent does.
-            </div>
-          ) : (
-            <div style={fieldErrorStyle}>{errors.brandName || ' '}</div>
-          )}
-
-          {isUrlMode && (
-            <div>
-              <label style={labelStyle} htmlFor="lite-confirmed-brand">
-                Confirm your brand name
-              </label>
-              <input
-                id="lite-confirmed-brand"
-                type="text"
-                placeholder="e.g. Drunk Elephant"
-                value={confirmedBrand}
-                onChange={(e) => handleConfirmedBrandChange(e.target.value)}
-                style={inputStyle}
-              />
-              <div style={fieldErrorStyle}>{errors.brandName || ' '}</div>
-            </div>
-          )}
-
-          {[0, 1].map((i) => (
-            <div key={i}>
-              <label style={labelStyle} htmlFor={`lite-competitor-${i}`}>
-                Competitor {i + 1} <span style={{ fontWeight: 400, color: T.slateLight }}>(optional)</span>
-              </label>
-              <input
-                id={`lite-competitor-${i}`}
-                type="text"
-                placeholder="e.g. Glossier"
-                value={competitors[i]}
-                onChange={(e) => handleCompetitorChange(i, e.target.value)}
-                style={inputStyle}
-              />
-              <div style={fieldErrorStyle}>{errors.competitors[i] || ' '}</div>
-            </div>
-          ))}
-
-          <div style={{
-            fontSize: 11,
-            color: T.slateLight,
-            marginBottom: 16,
-            padding: '8px 10px',
-            background: T.offWhite,
-            borderRadius: 6,
-          }}>
-            Protected against automated submissions.
+    <div className="lite-root">
+      <div className="lite-shell" style={{ maxWidth: 480 }}>
+        <LightCard>
+          <LogoHeader />
+          <div className="lite-headline" style={{ fontSize: 20, marginBottom: 6 }}>
+            See your brand's Share of Algorithm
+          </div>
+          <div className="lite-body lite-muted" style={{ marginBottom: 20 }}>
+            Enter your brand or store URL and up to 2 competitors — we'll run a
+            free 12-query diagnostic against ChatGPT and, if you give us a URL,
+            read your store the way an AI shopping agent does.
           </div>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            style={{
-              width: '100%',
-              height: 46,
-              background: T.navy,
-              color: T.white,
-              fontSize: 14,
-              fontWeight: 700,
-              fontFamily: 'inherit',
-              border: 'none',
-              borderRadius: 8,
-              cursor: submitting ? 'not-allowed' : 'pointer',
-              opacity: submitting ? 0.7 : 1,
-            }}
-          >
-            {submitting ? 'Starting…' : 'Run my free diagnostic'}
-          </button>
-        </form>
+          <ErrorBanner message={submitError} />
+
+          <form onSubmit={handleSubmit}>
+            <label style={labelStyle} htmlFor="lite-primary">Your brand or store URL</label>
+            <input
+              id="lite-primary"
+              type="text"
+              className="lite-input"
+              placeholder="e.g. Drunk Elephant or drunkelephant.com"
+              value={primaryInput}
+              onChange={(e) => handlePrimaryChange(e.target.value)}
+              style={{ marginBottom: 4 }}
+            />
+            {isUrlMode ? (
+              <div className="lite-muted" style={{ fontSize: 12, marginBottom: 10 }}>
+                Looks like a URL — we'll read it the way an AI shopping agent does.
+              </div>
+            ) : (
+              <div style={fieldErrorStyle}>{errors.brandName || ' '}</div>
+            )}
+
+            {isUrlMode && (
+              <div>
+                <label style={labelStyle} htmlFor="lite-confirmed-brand">
+                  Confirm your brand name
+                </label>
+                <input
+                  id="lite-confirmed-brand"
+                  type="text"
+                  className="lite-input"
+                  placeholder="e.g. Drunk Elephant"
+                  value={confirmedBrand}
+                  onChange={(e) => handleConfirmedBrandChange(e.target.value)}
+                  style={{ marginBottom: 4 }}
+                />
+                <div style={fieldErrorStyle}>{errors.brandName || ' '}</div>
+              </div>
+            )}
+
+            {[0, 1].map((i) => (
+              <div key={i}>
+                <label style={labelStyle} htmlFor={`lite-competitor-${i}`}>
+                  Competitor {i + 1} <span className="lite-muted" style={{ fontWeight: 400 }}>(optional)</span>
+                </label>
+                <input
+                  id={`lite-competitor-${i}`}
+                  type="text"
+                  className="lite-input"
+                  placeholder="e.g. Glossier"
+                  value={competitors[i]}
+                  onChange={(e) => handleCompetitorChange(i, e.target.value)}
+                  style={{ marginBottom: 4 }}
+                />
+                <div style={fieldErrorStyle}>{errors.competitors[i] || ' '}</div>
+              </div>
+            ))}
+
+            <div className="lite-label" style={{
+              marginBottom: 16, padding: '8px 10px', background: 'var(--paper)', borderRadius: 6,
+              textTransform: 'none', letterSpacing: 'normal', fontSize: 11,
+            }}>
+              Protected against automated submissions.
+            </div>
+
+            <button type="submit" disabled={submitting} className="lite-pill lite-pill--solid" style={{ width: '100%', height: 46, fontSize: 14 }}>
+              {submitting ? 'Starting…' : 'Run my free diagnostic'}
+            </button>
+          </form>
+        </LightCard>
       </div>
     </div>
   )

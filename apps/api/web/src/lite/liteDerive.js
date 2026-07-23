@@ -129,6 +129,45 @@ export function accessibilityBadgeText(scanStatus) {
   }
 }
 
+// ─── Score bands (hero) ─────────────────────────────────────────────────
+
+export const SCORE_BANDS = [
+  { max: 40, name: 'Invisible', range: '<40', shortLabel: 'Invisible <40', tone: 'bad' },
+  { max: 60, name: 'Partially readable', range: '40-59', shortLabel: 'Partially readable 40-59', tone: 'warn' },
+  { max: 80, name: 'Readable but not countable', range: '60-79', shortLabel: 'Readable but not countable 60-79', tone: 'neutral' },
+  { max: Infinity, name: 'Value visible', range: '80+', shortLabel: 'Value visible 80+', tone: 'good' },
+]
+
+/**
+ * Maps a 0-100 composite score to its band — the same 4-tier scale used
+ * by the Parleo Scan report (see design-refs/). Bands are <40, 40-59,
+ * 60-79, 80+; a missing score is treated as 0 (Invisible) rather than
+ * hiding the band entirely, since the pill is always shown once a
+ * composite score exists at all.
+ */
+export function getScoreBand(score) {
+  const s = score === null || score === undefined ? 0 : Number(score)
+  return SCORE_BANDS.find((band) => s < band.max) || SCORE_BANDS[SCORE_BANDS.length - 1]
+}
+
+// One line per band tier — honest and generic (derived from the band the
+// composite score already falls in), never a fabricated specific claim.
+// A real per-report verdict (report.verdict) always wins when present;
+// no backend stage emits one yet, so this fallback is what actually
+// renders today.
+const BAND_VERDICT_FALLBACK = {
+  bad: "Agents mostly can't find or price you yet.",
+  warn: 'Agents see fragments — most of your value stays invisible.',
+  neutral: "Agents can read your store, but can't yet count what it's worth.",
+  good: 'Agents can find, read, and price your store end to end.',
+}
+
+export function getVerdictLine(report) {
+  if (report?.verdict) return report.verdict
+  const band = getScoreBand(report?.composite)
+  return BAND_VERDICT_FALLBACK[band.tone] || BAND_VERDICT_FALLBACK.bad
+}
+
 // ─── Misc formatting ────────────────────────────────────────────────────
 
 export function formatDateStamp(date = new Date()) {

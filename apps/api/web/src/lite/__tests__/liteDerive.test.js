@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   looksLikeUrl, deriveBrandFromUrl, domainFromStoreUrl, accessibilityBadgeText,
   groupDimensionsByFamily, rankDimensionsByGap, computeExposure, formatCurrency,
+  getScoreBand,
 } from '../liteDerive.js'
 
 describe('looksLikeUrl', () => {
@@ -154,6 +155,33 @@ describe('computeExposure', () => {
 
   it('returns 0 when visibility is 100 (no mention gap)', () => {
     expect(computeExposure({ revenue: 1_000_000, aiSharePct: 50, visibility: 100 })).toBe(0)
+  })
+})
+
+describe('getScoreBand', () => {
+  it.each([
+    [0, 'Invisible'],
+    [39, 'Invisible'],
+    [40, 'Partially readable'],
+    [59, 'Partially readable'],
+    [60, 'Readable but not countable'],
+    [79, 'Readable but not countable'],
+    [80, 'Value visible'],
+    [100, 'Value visible'],
+  ])('maps score %d to band %s', (score, expectedName) => {
+    expect(getScoreBand(score).name).toBe(expectedName)
+  })
+
+  it('treats a missing score as Invisible rather than throwing', () => {
+    expect(getScoreBand(null).name).toBe('Invisible')
+    expect(getScoreBand(undefined).name).toBe('Invisible')
+  })
+
+  it('carries a tone for each band, used for the pill color', () => {
+    expect(getScoreBand(10).tone).toBe('bad')
+    expect(getScoreBand(50).tone).toBe('warn')
+    expect(getScoreBand(70).tone).toBe('neutral')
+    expect(getScoreBand(90).tone).toBe('good')
   })
 })
 

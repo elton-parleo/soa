@@ -1,47 +1,65 @@
 /**
- * Locked teaser: composite score, visibility + accessibility dials
- * (accessibility dims with an honest badge until the scan completes),
- * a rival share-of-voice bar (the pre-Stage-4 teaser content, reused
- * as-is), and one verbatim worst-answer excerpt when the API provides
- * one. worst_mention_excerpt is a forward-looking, optional field — no
- * backend stage emits it yet, so it's read defensively and simply
- * omitted when absent, same as every other additive field here.
- * Everything below the fold stays blurred behind the existing email
- * gate (PATCH /email) — that mechanic is unchanged.
+ * Locked teaser: the dark "agent commerce score" hero card (screenshot
+ * 1 — composite numeral, band pill, verdict, Score-by-family bars, band
+ * scale), a rival share-of-voice card, and a verbatim worst-answer
+ * excerpt when the API provides one (worst_mention_excerpt is a
+ * forward-looking, optional field — no backend stage emits it yet, so
+ * it's read defensively and simply omitted when absent, same as every
+ * other additive field here). Email gate is the dark band from
+ * screenshot 6, replacing Stage 4's blur-overlay treatment — same
+ * placement (still gates the teaser), same PATCH /email flow, restyled.
  */
 import { useState } from 'react'
 import { liteApi } from './liteApi.js'
 import { validateEmail } from './validation.js'
-import { accessibilityBadgeText } from './liteDerive.js'
+import { accessibilityBadgeText, getScoreBand, getVerdictLine } from './liteDerive.js'
 import {
-  T, BRAND_COLORS, STAGE_ORDER, outerStyle, cardStyle, LogoHeader, ErrorBanner,
-  BarRow, ScoreDial, useAnimateOnMount,
+  ENTITY_COLORS, LightCard, DarkCard, BandPill, BandScale, FamilyBar, ErrorBanner, Chip,
 } from './liteTheme.jsx'
 
 function WorstAnswer({ excerpt }) {
   if (!excerpt || !excerpt.text) return null
   return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: T.slate, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
-        A real agent answer
-      </div>
-      <div style={{
-        background: T.offWhite, border: `1px solid ${T.border}`, borderRadius: 8,
-        padding: '12px 14px', fontSize: 13, color: T.textMid, lineHeight: 1.6, fontStyle: 'italic',
-      }}>
+    <div style={{ marginBottom: 24 }}>
+      <div className="lite-label" style={{ marginBottom: 10 }}>A real agent answer</div>
+      <div style={{ fontSize: 15, lineHeight: 1.6, color: 'var(--text)', marginBottom: 8 }}>
         "{excerpt.text}"
       </div>
-      {(excerpt.platform || excerpt.stage) && (
-        <div style={{ fontSize: 11, color: T.slateLight, marginTop: 6 }}>
-          {[excerpt.platform, excerpt.stage].filter(Boolean).join(' · ')}
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+        {excerpt.annotation && <Chip tone="bad">{excerpt.annotation}</Chip>}
+        {(excerpt.platform || excerpt.stage) && (
+          <span className="lite-mono lite-muted" style={{ fontSize: 11 }}>
+            {[excerpt.platform, excerpt.stage].filter(Boolean).join(' · ').toUpperCase()}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function RivalShareOfVoice({ entities }) {
+  return (
+    <div>
+      <div className="lite-label" style={{ marginBottom: 12 }}>Rival share of voice</div>
+      {entities.map((entity, i) => (
+        <div key={entity.name} style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12, fontWeight: 600 }}>
+            <span>{entity.name}{entity.role === 'primary' ? ' (you)' : ''}</span>
+            <span className="lite-mono">{entity.som === null || entity.som === undefined ? '—' : `${entity.som.toFixed(1)}%`}</span>
+          </div>
+          <div className="lite-bar-track">
+            <div className="lite-bar-fill" style={{
+              width: `${Math.max(0, Math.min(100, entity.som || 0))}%`,
+              background: ENTITY_COLORS[i % ENTITY_COLORS.length],
+            }} />
+          </div>
         </div>
-      )}
+      ))}
     </div>
   )
 }
 
 export function LiteTeaser({ report, token, onUnlocked }) {
-  const animated = useAnimateOnMount()
   const [email, setEmail] = useState('')
   const [emailError, setEmailError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
@@ -49,6 +67,8 @@ export function LiteTeaser({ report, token, onUnlocked }) {
 
   const entities = report.overall || []
   const accessBadge = accessibilityBadgeText(report.scan_status)
+  const band = getScoreBand(report.composite)
+  const verdict = getVerdictLine(report)
 
   async function handleUnlock(e) {
     e.preventDefault()
@@ -69,118 +89,81 @@ export function LiteTeaser({ report, token, onUnlocked }) {
   }
 
   return (
-    <div style={outerStyle}>
-      <div style={cardStyle}>
-        <LogoHeader />
-        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 4 }}>
-          Your Share of Algorithm
-        </div>
-        <div style={{ fontSize: 12, color: T.slate, marginBottom: 20 }}>
-          Composite score
-          <span style={{ fontSize: 28, fontWeight: 700, color: T.text, marginLeft: 8, fontFamily: 'monospace' }}>
-            {report.composite === null || report.composite === undefined ? '—' : Math.round(report.composite)}
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 28, marginBottom: 24 }}>
-          <ScoreDial label="Visibility" value={report.visibility} color={T.indigo} />
-          <ScoreDial
-            label="Accessibility"
-            value={report.accessibility}
-            color={T.green}
-            dimmed={!!accessBadge}
-            badge={accessBadge}
-          />
-        </div>
-
-        <WorstAnswer excerpt={report.worst_mention_excerpt} />
-
-        <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 8 }}>
-          Rival share of voice
-        </div>
-        {entities.map((entity, i) => (
-          <BarRow
-            key={entity.name}
-            label={`${entity.name}${entity.role === 'primary' ? ' (you)' : ''}`}
-            value={entity.som}
-            color={BRAND_COLORS[i % BRAND_COLORS.length]}
-            delay={i * 0.1}
-            animated={animated}
-          />
-        ))}
-
-        {/* Blurred stand-in for the stage-by-stage breakdown, locked behind email */}
-        <div style={{ position: 'relative', marginTop: 20 }}>
-          <div style={{ filter: 'blur(4px)', pointerEvents: 'none', userSelect: 'none' }} aria-hidden="true">
-            {STAGE_ORDER.map((stage) => (
-              <BarRow key={stage} label={stage} value={50} color={T.slateLight} animated={true} />
-            ))}
-          </div>
-          <div style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(255,255,255,0.85)',
-            borderRadius: 8,
-            padding: 16,
-            boxSizing: 'border-box',
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: T.text, textAlign: 'center', marginBottom: 12 }}>
-              Enter your work email to unlock the full stage-by-stage diagnostic.
-            </div>
-            <ErrorBanner message={submitError} />
-            {/* noValidate: we run our own validateEmail() and render its
-                message inline — the browser's native email-input
-                validation would otherwise silently block submission
-                before handleUnlock ever runs. */}
-            <form onSubmit={handleUnlock} noValidate style={{ width: '100%' }}>
-              <input
-                type="email"
-                placeholder="you@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                style={{
-                  width: '100%',
-                  height: 40,
-                  border: `1px solid ${T.border}`,
-                  borderRadius: 8,
-                  padding: '0 12px',
-                  fontSize: 13,
-                  fontFamily: 'inherit',
-                  outline: 'none',
-                  boxSizing: 'border-box',
-                  marginBottom: 4,
-                  background: T.white,
-                }}
-              />
-              <div style={{ fontSize: 12, color: T.red, marginBottom: 8, minHeight: 16 }}>
-                {emailError || ' '}
+    <div className="lite-root">
+      <div className="lite-shell" style={{ maxWidth: 640 }}>
+        <DarkCard>
+          <div className="lite-cols-2">
+            <div>
+              <div className="lite-label lite-label--inv">Agent commerce score</div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 6 }}>
+                <span className="lite-numeral lite-numeral--inv lite-numeral--hero">
+                  {report.composite === null || report.composite === undefined ? '—' : Math.round(report.composite)}
+                </span>
+                <span className="lite-muted--inv" style={{ fontSize: 18 }}>/100</span>
               </div>
-              <button
-                type="submit"
-                disabled={submitting}
-                style={{
-                  width: '100%',
-                  height: 42,
-                  background: T.navy,
-                  color: T.white,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  fontFamily: 'inherit',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: submitting ? 'not-allowed' : 'pointer',
-                  opacity: submitting ? 0.7 : 1,
-                }}
-              >
-                {submitting ? 'Unlocking…' : 'Unlock full report'}
-              </button>
-            </form>
+              <div style={{ margin: '10px 0 14px' }}>
+                <BandPill band={band} />
+              </div>
+              <div className="lite-body--inv" style={{ maxWidth: 320 }}>{verdict}</div>
+            </div>
+            <div>
+              <div className="lite-label lite-label--inv" style={{ marginBottom: 16 }}>
+                Score by family
+              </div>
+              <FamilyBar label="Visibility" value={report.visibility} color="var(--accent)" />
+              <FamilyBar
+                label="Accessibility"
+                value={report.accessibility}
+                color="var(--foundation-on-dark)"
+                badge={accessBadge}
+              />
+            </div>
           </div>
-        </div>
+          <BandScale score={report.composite} />
+        </DarkCard>
+
+        <LightCard>
+          <WorstAnswer excerpt={report.worst_mention_excerpt} />
+          <RivalShareOfVoice entities={entities} />
+        </LightCard>
+
+        <DarkCard>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <div style={{ maxWidth: 320 }}>
+              <div className="lite-headline lite-headline--inv" style={{ fontSize: 19, marginBottom: 8 }}>
+                Want the full report?
+              </div>
+              <div className="lite-body--inv">
+                Unlock the stage-by-stage breakdown, the full why-section, and your ranked fixes.
+              </div>
+            </div>
+            <div style={{ flex: '1 1 260px', minWidth: 240 }}>
+              <ErrorBanner message={submitError} />
+              {/* noValidate: we run our own validateEmail() and render its
+                  message inline — the browser's native email-input
+                  validation would otherwise silently block submission
+                  before handleUnlock ever runs. */}
+              <form onSubmit={handleUnlock} noValidate>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <input
+                    type="email"
+                    placeholder="you@company.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="lite-input lite-input--pill lite-input--inv lite-mono"
+                    style={{ flex: '1 1 200px' }}
+                  />
+                  <button type="submit" disabled={submitting} className="lite-pill lite-pill--solid">
+                    {submitting ? 'Unlocking…' : 'Unlock the full report'}
+                  </button>
+                </div>
+                <div className="lite-muted--inv" style={{ fontSize: 12, marginTop: 8, minHeight: 16 }}>
+                  {emailError || 'One email. No sequence unless you ask for one.'}
+                </div>
+              </form>
+            </div>
+          </div>
+        </DarkCard>
       </div>
     </div>
   )

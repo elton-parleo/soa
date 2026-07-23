@@ -27,7 +27,7 @@ const baseTeaser = {
   scan_status: null,
 }
 
-describe('LiteTeaser — pre-Stage-4 content, unchanged', () => {
+describe('LiteTeaser — email gate flow, unchanged behavior', () => {
   it('renders rival share of voice per entity with role labeling', () => {
     render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
     expect(screen.getByText('Acme Co (you)')).toBeInTheDocument()
@@ -35,15 +35,15 @@ describe('LiteTeaser — pre-Stage-4 content, unchanged', () => {
     expect(screen.getByText('62.5%')).toBeInTheDocument()
   })
 
-  it('shows the unlock prompt for the stage-level detail', () => {
+  it('shows the unlock prompt gating the full report', () => {
     render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
-    expect(screen.getByText(/unlock the full stage-by-stage diagnostic/)).toBeInTheDocument()
+    expect(screen.getByText('Want the full report?')).toBeInTheDocument()
   })
 
   it('rejects an invalid email without calling the API', async () => {
     render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
     fireEvent.change(screen.getByPlaceholderText('you@company.com'), { target: { value: 'not-an-email' } })
-    fireEvent.click(screen.getByText('Unlock full report'))
+    fireEvent.click(screen.getByText('Unlock the full report'))
 
     await waitFor(() => expect(screen.getByText(/valid email/)).toBeInTheDocument())
     expect(liteApi.setEmail).not.toHaveBeenCalled()
@@ -56,37 +56,52 @@ describe('LiteTeaser — pre-Stage-4 content, unchanged', () => {
 
     render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={onUnlocked} />)
     fireEvent.change(screen.getByPlaceholderText('you@company.com'), { target: { value: 'visitor@example.com' } })
-    fireEvent.click(screen.getByText('Unlock full report'))
+    fireEvent.click(screen.getByText('Unlock the full report'))
 
     await waitFor(() => expect(onUnlocked).toHaveBeenCalledWith(fullReport))
     expect(liteApi.setEmail).toHaveBeenCalledWith('tok-1', 'visitor@example.com')
   })
 })
 
-describe('LiteTeaser — Stage 4 additions', () => {
+describe('LiteTeaser — hero score card', () => {
   it('renders the composite score', () => {
     render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
-    // Math.round(62.5) -> 63, scoped to the "Composite score" line since the
-    // Visibility dial can independently round to the same displayed number.
-    expect(screen.getByText('Composite score').textContent).toContain('63')
+    // Math.round(62.5) -> 63, scoped to the "Agent commerce score" label
+    // since other numbers (visibility etc.) can independently render 63 too.
+    expect(screen.getByText('Agent commerce score').parentElement.textContent).toContain('63')
   })
 
-  it('renders visibility and accessibility dials', () => {
+  it('renders a band pill matching the composite score', () => {
+    render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
+    // 62.5 rounds display-wise but the band itself is computed on the raw value (62.5 -> Readable but not countable, 60-79).
+    expect(screen.getByText(/Readable but not countable/)).toBeInTheDocument()
+  })
+
+  it('renders visibility and accessibility family bars', () => {
     render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
     expect(screen.getByText('Visibility')).toBeInTheDocument()
     expect(screen.getByText('Accessibility')).toBeInTheDocument()
   })
 
-  it('dims the accessibility dial with a badge when the scan is not complete', () => {
+  it('shows a badge instead of a bar for accessibility when the scan is not complete', () => {
     render(<LiteTeaser report={{ ...baseTeaser, scan_status: 'running' }} token="tok-1" onUnlocked={() => {}} />)
     expect(screen.getByText('scanning…')).toBeInTheDocument()
   })
 
-  it('shows no badge and the real value when the scan is complete', () => {
+  it('shows the real value and no badge when the scan is complete', () => {
     const report = { ...baseTeaser, scan_status: 'complete', accessibility: 74 }
     render(<LiteTeaser report={report} token="tok-1" onUnlocked={() => {}} />)
     expect(screen.queryByText('scanning…')).not.toBeInTheDocument()
-    expect(screen.getByText('74')).toBeInTheDocument()
+    const matches = screen.getAllByText((_, node) => (
+      node?.classList?.contains('lite-mono') && node.textContent === '74/100'
+    ))
+    expect(matches.length).toBeGreaterThan(0)
+  })
+
+  it('renders the 4-segment band scale', () => {
+    render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
+    expect(screen.getByText('INVISIBLE <40')).toBeInTheDocument()
+    expect(screen.getByText('VALUE VISIBLE 80+')).toBeInTheDocument()
   })
 
   it('renders a verbatim worst-answer excerpt when the API provides one', () => {

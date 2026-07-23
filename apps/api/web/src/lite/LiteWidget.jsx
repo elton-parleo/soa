@@ -26,6 +26,7 @@
  * working for every existing caller and test.
  */
 import { useEffect, useState } from 'react'
+import './theme.css'
 import { liteApi } from './liteApi.js'
 import { LiteForm } from './LiteForm.jsx'
 import { LiteProgress, LiteFailed } from './LiteProgress.jsx'

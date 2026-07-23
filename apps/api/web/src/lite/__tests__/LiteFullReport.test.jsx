@@ -52,33 +52,33 @@ const baseReport = {
   scan_status: 'complete',
 }
 
-describe('LiteFullReport — pre-Stage-4 content, unchanged', () => {
-  it('renders the report heading and entity names', () => {
+describe('LiteFullReport — page frame + visibility', () => {
+  it('renders the report header bar with the primary entity and the legend/entities', () => {
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.getByText('Your full Share of Algorithm report')).toBeInTheDocument()
-    expect(screen.getByText('Acme Co (you)')).toBeInTheDocument()
+    expect(screen.getByText('Acme Co')).toBeInTheDocument() // header bar brand
+    expect(screen.getByText('Acme Co (you)')).toBeInTheDocument() // stage-grid legend
     expect(screen.getByText('Rival Co')).toBeInTheDocument()
   })
 
   it('renders visibility-by-stage in canonical order regardless of payload key order', () => {
     render(<LiteFullReport report={baseReport} />)
-    const awarenessIdx = screen.getByText('Awareness').compareDocumentPosition(
-      screen.getByText('Research')
+    const awarenessIdx = screen.getByText('AWARENESS').compareDocumentPosition(
+      screen.getByText('RESEARCH')
     )
-    // Node.DOCUMENT_POSITION_FOLLOWING = 4: 'Research' node follows 'Awareness' node in the DOM.
+    // Node.DOCUMENT_POSITION_FOLLOWING = 4: 'RESEARCH' node follows 'AWARENESS' node in the DOM.
     expect(awarenessIdx & 4).toBeTruthy()
   })
 
   it('omits stages that have no data at all', () => {
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.queryByText('Comparison')).not.toBeInTheDocument()
-    expect(screen.queryByText('Ready to Buy')).not.toBeInTheDocument()
+    expect(screen.queryByText('COMPARISON')).not.toBeInTheDocument()
+    expect(screen.queryByText('READY TO BUY')).not.toBeInTheDocument()
   })
 
   it('renders the working-session CTA link when VITE_LITE_CTA_URL is set', () => {
     vi.stubEnv('VITE_LITE_CTA_URL', 'https://parleo.io/demo')
     render(<LiteFullReport report={baseReport} />)
-    const link = screen.getByText('Book a working session')
+    const link = screen.getByText('Request a working session')
     expect(link.closest('a')).toHaveAttribute('href', 'https://parleo.io/demo')
     vi.unstubAllEnvs()
   })
@@ -86,7 +86,7 @@ describe('LiteFullReport — pre-Stage-4 content, unchanged', () => {
   it('omits the CTA link when VITE_LITE_CTA_URL is unset', () => {
     vi.stubEnv('VITE_LITE_CTA_URL', '')
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.queryByText('Book a working session')).not.toBeInTheDocument()
+    expect(screen.queryByText('Request a working session')).not.toBeInTheDocument()
     vi.unstubAllEnvs()
   })
 })
@@ -102,26 +102,24 @@ describe('LiteFullReport — executive tiles', () => {
 })
 
 describe('LiteFullReport — why-section, all 8 dimensions', () => {
-  it('renders all 8 dimensions grouped Foundation/Value with correct subtotals', () => {
+  it('renders all 8 dimension code+name headers grouped Foundation/Value with correct subtotals', () => {
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.getByText('Foundation (27/35)')).toBeInTheDocument()
-    expect(screen.getByText('Value (32/65)')).toBeInTheDocument()
-    // Each dimension's name legitimately renders twice — once in the
-    // why-section score row, once in the ranked-fixes list.
+    expect(screen.getByText('FOUNDATION · 27/35')).toBeInTheDocument()
+    expect(screen.getByText('VALUE · 32/65')).toBeInTheDocument()
     EIGHT_DIMENSIONS.forEach((d) => {
-      expect(screen.getAllByText(d.name).length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText(`${d.code} · ${d.name.toUpperCase()}`)).toBeInTheDocument()
     })
   })
 
-  it('renders an integrity-cap banner when integrity_capped is true', () => {
+  it('renders an integrity-cap footnote when integrity_capped is true', () => {
     const report = { ...baseReport, scan: { ...baseReport.scan, integrity_capped: true } }
     render(<LiteFullReport report={report} />)
-    expect(screen.getByText(/capped this store's total score at 59/)).toBeInTheDocument()
+    expect(screen.getByText(/the score cannot pass 59/)).toBeInTheDocument()
   })
 
-  it('omits the integrity-cap banner when false', () => {
+  it('omits the integrity-cap footnote when false', () => {
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.queryByText(/capped this store's total score/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/the score cannot pass 59/)).not.toBeInTheDocument()
   })
 
   it('renders a linked-reason chip on the matching dimension', () => {
@@ -130,7 +128,7 @@ describe('LiteFullReport — why-section, all 8 dimensions', () => {
     )
     const report = { ...baseReport, scan: { ...baseReport.scan, dimensions: dims } }
     render(<LiteFullReport report={report} />)
-    expect(screen.getByText('Linked: mentioned but no price surfaced')).toBeInTheDocument()
+    expect(screen.getByText('LINKED · MENTIONED BUT NO PRICE SURFACED')).toBeInTheDocument()
   })
 
   it('shows the "add your store URL" prompt when scan is skipped (brand-only submission)', () => {
@@ -156,8 +154,8 @@ describe('LiteFullReport — why-section, all 8 dimensions', () => {
     expect(screen.getByText(/blocked our reader — that's itself a finding/)).toBeInTheDocument()
     expect(screen.getByText(/Agent Access \(F1\)/)).toBeInTheDocument()
     // Visibility sections still render fully.
-    expect(screen.getByText('Visibility by purchase stage')).toBeInTheDocument()
-    expect(screen.getByText('Awareness')).toBeInTheDocument()
+    expect(screen.getByText('Where you disappear in the funnel')).toBeInTheDocument()
+    expect(screen.getByText('AWARENESS')).toBeInTheDocument()
   })
 
   it('shows an honest explanation when scan failed', () => {
@@ -168,28 +166,34 @@ describe('LiteFullReport — why-section, all 8 dimensions', () => {
 })
 
 describe('LiteFullReport — ranked fixes', () => {
-  it('shows a code block for unlocked fixes', () => {
+  it('shows the fix text for unlocked fixes', () => {
     render(<LiteFullReport report={baseReport} />)
     expect(screen.getByText('add priceCurrency')).toBeInTheDocument()
   })
 
-  it('shows a lock icon and no fix text for locked dimensions', () => {
+  it('shows "Unlocks with your email" and no fix text for locked dimensions', () => {
     render(<LiteFullReport report={baseReport} />)
     expect(screen.queryByText('stop fake was-prices')).not.toBeInTheDocument()
-    expect(screen.getAllByText(/Full diagnostic/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Unlocks with your email').length).toBe(2) // V4 and V5 are locked
+    expect(screen.getAllByText('Locked').length).toBe(2) // snippet column for the same 2 rows
+  })
+
+  it('shows a footer sentence with the unlocked/total fix count', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getByText('Showing 6 of 8 fixes. The rest unlock with your email below.')).toBeInTheDocument()
   })
 
   it('renders nothing when the scan is not complete', () => {
     const report = { ...baseReport, scan: { status: 'skipped', total_score: null, dimensions: [], pages_fetched: [] } }
     render(<LiteFullReport report={report} />)
-    expect(screen.queryByText('Free fix')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Showing \d+ of \d+ fixes/)).not.toBeInTheDocument()
   })
 })
 
 describe('LiteFullReport — evidence gallery (speculative field)', () => {
   it('renders nothing when evidence_examples is absent (todays real API)', () => {
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.queryByText('Evidence')).not.toBeInTheDocument()
+    expect(screen.queryByText('What agents actually said')).not.toBeInTheDocument()
   })
 
   it('renders entries when evidence_examples is present', () => {
@@ -198,8 +202,32 @@ describe('LiteFullReport — evidence gallery (speculative field)', () => {
       evidence_examples: [{ excerpt: 'Acme Co was not mentioned in this answer.', platform: 'chatgpt', stage: 'Research' }],
     }
     render(<LiteFullReport report={report} />)
-    expect(screen.getByText('Evidence')).toBeInTheDocument()
+    expect(screen.getByText('What agents actually said')).toBeInTheDocument()
     expect(screen.getByText(/Acme Co was not mentioned/)).toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — diagnosis card (speculative field)', () => {
+  it('renders nothing when report.diagnosis is absent (todays real API)', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.queryByText('Diagnosis')).not.toBeInTheDocument()
+  })
+
+  it('renders the crawl summary, headline, body, and start-here callout when present', () => {
+    const report = {
+      ...baseReport,
+      diagnosis: {
+        crawlSummary: 'From 12 queries + a crawl of acme.com',
+        headline: '5 incentives found. Agents can price 1 of them.',
+        body: 'Today an agent sees one crawlable mention.',
+        startHere: { title: 'Start here', body: 'Add structured MemberProgram markup.' },
+      },
+    }
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText('From 12 queries + a crawl of acme.com')).toBeInTheDocument()
+    expect(screen.getByText('5 incentives found. Agents can price 1 of them.')).toBeInTheDocument()
+    expect(screen.getByText('Today an agent sees one crawlable mention.')).toBeInTheDocument()
+    expect(screen.getByText('Add structured MemberProgram markup.')).toBeInTheDocument()
   })
 })
 
@@ -208,30 +236,33 @@ describe('LiteFullReport — exposure calculator', () => {
     render(<LiteFullReport report={baseReport} />)
     expect(screen.getByLabelText('Monthly revenue')).toBeInTheDocument()
     expect(screen.getByLabelText('AI-assisted share of purchases')).toBeInTheDocument()
-    expect(screen.getByText(/Modeled, not measured/)).toBeInTheDocument()
+    expect(screen.getByText('Modeled, not measured.')).toBeInTheDocument()
   })
 
   it('updates the modeled exposure figure when a slider moves', () => {
-    render(<LiteFullReport report={baseReport} />)
+    const { container } = render(<LiteFullReport report={baseReport} />)
     const revenueSlider = screen.getByLabelText('Monthly revenue')
-    const before = screen.getByText('Modeled monthly exposure').parentElement.textContent
-    revenueSlider.dispatchEvent(new Event('change', { bubbles: true }))
+    const numeral = () => container.querySelector('.lite-numeral--calc').textContent
+    const before = numeral()
     Object.defineProperty(revenueSlider, 'value', { value: '10000000', configurable: true })
     revenueSlider.dispatchEvent(new Event('change', { bubbles: true }))
-    const after = screen.getByText('Modeled monthly exposure').parentElement.textContent
-    expect(after).not.toBe(before)
+    expect(numeral()).not.toBe(before)
   })
 })
 
-describe('LiteFullReport — locked panels grid', () => {
-  it('renders all 6 locked panels', () => {
+describe('LiteFullReport — diagnostic-tier cliff', () => {
+  it('renders the 3 highlighted upsell panels, remaining locked topics, and platform chips', () => {
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.getByText(/3 more AI platforms/)).toBeInTheDocument()
-    expect(screen.getByText(/Full category run/)).toBeInTheDocument()
-    expect(screen.getByText(/Net price accuracy/)).toBeInTheDocument()
+    expect(screen.getByText('3 more AI platforms')).toBeInTheDocument()
+    expect(screen.getByText('Full category run')).toBeInTheDocument()
+    expect(screen.getByText('Net price accuracy')).toBeInTheDocument()
     expect(screen.getByText(/Persona-level breakdowns/)).toBeInTheDocument()
     expect(screen.getByText(/Trend over time/)).toBeInTheDocument()
     expect(screen.getByText(/Retail shelf comparison/)).toBeInTheDocument()
+    expect(screen.getByText('ChatGPT')).toBeInTheDocument()
+    expect(screen.getByText('Gemini')).toBeInTheDocument()
+    expect(screen.getByText('Perplexity')).toBeInTheDocument()
+    expect(screen.getByText('Claude')).toBeInTheDocument()
   })
 })
 
@@ -239,7 +270,7 @@ describe('LiteFullReport — footer', () => {
   it('renders the re-run cadence line and methodology stamp', () => {
     render(<LiteFullReport report={baseReport} />)
     expect(screen.getByText(/re-run this diagnostic monthly/)).toBeInTheDocument()
-    expect(screen.getByText(/12 queries · 1 platform · 1 run each/)).toBeInTheDocument()
-    expect(screen.getByText(/sample, not a category study/)).toBeInTheDocument()
+    expect(screen.getByText(/12 QUERIES · 1 PLATFORM · 1 RUN EACH/)).toBeInTheDocument()
+    expect(screen.getByText(/SAMPLE, NOT A CATEGORY STUDY/)).toBeInTheDocument()
   })
 })

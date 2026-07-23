@@ -1,16 +1,23 @@
 /**
- * Full (unlocked) report. Section order is the product — see the Stage 4
- * spec — and must not be reshuffled: executive tiles, visibility by
- * purchase stage, evidence gallery, why-section (all 8 scan dimensions),
- * ranked fixes, exposure calculator, locked panels grid, footer.
+ * Full (unlocked) report. Section order is the product (Stage 4) and
+ * must not be reshuffled — this stage only restyles each section to
+ * the Parleo Scan report design language (see design-refs/): executive
+ * tiles, visibility by purchase stage, evidence gallery, why-section
+ * (all 8 scan dimensions), an optional diagnosis card, ranked fixes,
+ * exposure calculator, the diagnostic-tier "cliff" card, footer.
  *
- * Adaptive by report.scan.status: 'skipped' (or no scan row at all) means
- * no store_url was ever submitted — the why-section becomes a prompt to
- * add one, since there is no API to attach a URL after the fact and no
- * per-dimension data to show either way. 'blocked'/'failed' show an
- * honest, static explanation (Stage 3 returns an empty dimensions array
- * for any non-'complete' scan, so this can't be data-driven). 'complete'
- * renders the full 8-dimension breakdown.
+ * Adaptive by report.scan.status: 'skipped' (or no scan row at all)
+ * means no store_url was ever submitted — the why-section becomes a
+ * prompt to add one, since there is no API to attach a URL after the
+ * fact and no per-dimension data to show either way. 'blocked'/'failed'
+ * show an honest, static explanation (Stage 3 returns an empty
+ * dimensions array for any non-'complete' scan, so this can't be
+ * data-driven). 'complete' renders the full 8-dimension breakdown.
+ *
+ * report.diagnosis and report.evidence_examples are forward-looking,
+ * optional fields — no backend stage emits them yet, so both are read
+ * defensively and simply omitted when absent, same pattern as Stage 4's
+ * worst_mention_excerpt.
  */
 import { useState } from 'react'
 import {
@@ -18,54 +25,43 @@ import {
   groupDimensionsByFamily, rankDimensionsByGap,
 } from './liteDerive.js'
 import {
-  T, BRAND_COLORS, STAGE_ORDER, outerStyle, wideCardStyle, LogoHeader, InfoBadge,
-  ScoreDial, useAnimateOnMount, formatPct, formatScore,
+  STAGE_ORDER, ENTITY_COLORS, LightCard, DarkCard, SectionHeader, ReportHeaderBar,
+  InfoBadge, Chip, useAnimateOnMount, formatPct, formatScore,
 } from './liteTheme.jsx'
 
 const DEFAULT_REVENUE = 1_000_000
 const DEFAULT_AI_SHARE_PCT = 20
 
-// ─── Section heading ────────────────────────────────────────────────────
+// ─── Executive tiles ────────────────────────────────────────────────────
 
-function SectionHeading({ children }) {
+function Tile({ label, value, badge }) {
   return (
-    <div style={{
-      fontSize: 15, fontWeight: 700, color: T.text,
-      margin: '28px 0 12px', paddingTop: 20, borderTop: `1px solid ${T.border}`,
-    }}>
-      {children}
+    <div style={{ textAlign: 'center', minWidth: 96 }}>
+      {badge ? (
+        <span className="lite-pill" style={{ fontSize: 11, padding: '5px 12px', cursor: 'default' }}>{badge}</span>
+      ) : (
+        <div className="lite-numeral lite-numeral--tile">{value}</div>
+      )}
+      <div className="lite-label" style={{ marginTop: 8 }}>{label}</div>
     </div>
   )
 }
-
-// ─── Executive tiles ────────────────────────────────────────────────────
 
 function ExecutiveTiles({ report, exposure }) {
   const accessBadge = accessibilityBadgeText(report.scan_status)
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, justifyContent: 'center' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 32, fontWeight: 700, color: T.text, fontFamily: 'monospace' }}>
-          {report.composite === null || report.composite === undefined ? '—' : Math.round(report.composite)}
-        </div>
-        <div style={{ fontSize: 12, color: T.slate, fontWeight: 600 }}>Composite score</div>
+    <LightCard>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 28, justifyContent: 'center' }}>
+        <Tile label="Composite score" value={formatScore(report.composite)} />
+        <Tile label="Visibility" value={formatScore(report.visibility)} />
+        <Tile label="Accessibility" value={formatScore(report.accessibility)} badge={accessBadge} />
+        <Tile label="Modeled exposure/mo" value={formatCurrency(exposure)} />
       </div>
-      <ScoreDial label="Visibility" value={report.visibility} color={T.indigo} />
-      <ScoreDial
-        label="Accessibility" value={report.accessibility} color={T.green}
-        dimmed={!!accessBadge} badge={accessBadge}
-      />
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: T.text, fontFamily: 'monospace' }}>
-          {formatCurrency(exposure)}
-        </div>
-        <div style={{ fontSize: 12, color: T.slate, fontWeight: 600 }}>Modeled exposure/mo</div>
-      </div>
-    </div>
+    </LightCard>
   )
 }
 
-// ─── Visibility by purchase stage (4-stage you-vs-rival grid) ──────────
+// ─── Visibility by purchase stage ───────────────────────────────────────
 
 function VisibilityByStage({ byStage, entities }) {
   const stages = STAGE_ORDER.filter((s) => byStage[s])
@@ -73,14 +69,15 @@ function VisibilityByStage({ byStage, entities }) {
   if (stages.length === 0) return null
 
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 14, marginBottom: 10, flexWrap: 'wrap' }}>
+    <LightCard>
+      <SectionHeader label="VISIBILITY · 4 PURCHASE STAGES" annotation="12 queries · ChatGPT" headline="Where you disappear in the funnel" />
+      <div style={{ display: 'flex', gap: 14, marginBottom: 16, flexWrap: 'wrap' }}>
         {entities.map((entity, ei) => (
-          <div key={entity.name} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: T.textMid }}>
+          <div key={entity.name} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-2)' }}>
             <span style={{
               width: 8, height: 8, borderRadius: 2, display: 'inline-block',
-              background: BRAND_COLORS[ei % BRAND_COLORS.length],
-            }} />
+              background: ENTITY_COLORS[ei % ENTITY_COLORS.length],
+            }} aria-hidden="true" />
             {entity.name}{entity.role === 'primary' ? ' (you)' : ''}
           </div>
         ))}
@@ -88,29 +85,35 @@ function VisibilityByStage({ byStage, entities }) {
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
         {stages.map((stage, si) => (
           <div key={stage} style={{ flex: '1 1 0', minWidth: 90 }}>
-            <div style={{
-              fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-              color: T.slate, letterSpacing: '0.04em', marginBottom: 8, textAlign: 'center',
-            }}>
-              {stage}
-              {si < stages.length - 1 && <span style={{ color: T.slateLight }}> →</span>}
+            <div className="lite-label" style={{ marginBottom: 8, textAlign: 'center' }}>
+              {stage.toUpperCase()}{si < stages.length - 1 && <span className="lite-muted"> →</span>}
             </div>
             {entities.map((entity, ei) => {
               const value = byStage[stage]?.[entity.name]?.mention_rate ?? 0
+              const isZero = value === 0
               return (
                 <div key={entity.name} style={{ marginBottom: 8 }}>
                   <div style={{
-                    height: 60, width: '100%', background: T.border, borderRadius: 4,
-                    display: 'flex', alignItems: 'flex-end', overflow: 'hidden',
+                    height: 60, width: '100%', background: 'var(--track)', borderRadius: 4,
+                    display: 'flex', alignItems: 'flex-end', overflow: 'hidden', position: 'relative',
                   }}>
+                    {isZero && (
+                      <span style={{
+                        position: 'absolute', left: 0, bottom: 0, top: 0, width: 3,
+                        background: 'var(--bad)', borderRadius: 2,
+                      }} aria-hidden="true" />
+                    )}
                     <div style={{
                       width: '100%',
                       height: animated ? `${value}%` : '0%',
-                      background: BRAND_COLORS[ei % BRAND_COLORS.length],
+                      background: ENTITY_COLORS[ei % ENTITY_COLORS.length],
                       transition: `height 0.8s ease ${(si * entities.length + ei) * 0.05}s`,
                     }} />
                   </div>
-                  <div style={{ fontSize: 10, color: T.textMid, textAlign: 'center', marginTop: 2 }}>
+                  <div
+                    className="lite-mono"
+                    style={{ fontSize: 11, textAlign: 'center', marginTop: 4, color: isZero ? 'var(--bad-ink)' : 'var(--text-2)', fontWeight: isZero ? 700 : 400 }}
+                  >
                     {formatPct(value)}
                   </div>
                 </div>
@@ -119,49 +122,42 @@ function VisibilityByStage({ byStage, entities }) {
           </div>
         ))}
       </div>
-    </div>
+    </LightCard>
   )
 }
 
 // ─── Evidence gallery (speculative field, hidden when absent) ──────────
 
-function Chip({ label, muted }) {
-  return (
-    <span style={{
-      fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
-      background: muted ? T.offWhite : T.amberLight,
-      color: muted ? T.slate : '#92400E',
-      border: `1px solid ${muted ? T.border : '#FDE68A'}`,
-    }}>
-      {label}
-    </span>
-  )
+function annotationTone(annotation) {
+  const a = (annotation || '').toLowerCase()
+  if (/omit|invisible|never|absent|missing/.test(a)) return 'bad'
+  if (/quote|partial|list price|described/.test(a)) return 'warn'
+  return 'accent'
 }
 
 function EvidenceGallery({ examples }) {
   if (!examples || examples.length === 0) return null
   return (
-    <div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 10 }}>
-        Evidence
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <LightCard>
+      <SectionHeader label="EVIDENCE" headline="What agents actually said" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {examples.map((ex, i) => (
-          <div key={i} style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: 12 }}>
-            {ex.excerpt && (
-              <div style={{ fontSize: 12, color: T.textMid, fontStyle: 'italic', marginBottom: 6 }}>
-                "{ex.excerpt}"
+          <div key={i}>
+            {ex.annotation && (
+              <div style={{ marginBottom: 8 }}>
+                <Chip tone={annotationTone(ex.annotation)}>{ex.annotation}</Chip>
               </div>
             )}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {ex.annotation && <Chip label={ex.annotation} />}
-              {ex.platform && <Chip label={ex.platform} muted />}
-              {ex.stage && <Chip label={ex.stage} muted />}
-            </div>
+            {ex.excerpt && <div style={{ fontSize: 16, lineHeight: 1.6, color: 'var(--text)', marginBottom: 6 }}>"{ex.excerpt}"</div>}
+            {(ex.platform || ex.stage) && (
+              <div className="lite-mono lite-muted" style={{ fontSize: 11 }}>
+                {[ex.platform, ex.stage && `${ex.stage} stage`].filter(Boolean).join(' · ').toUpperCase()}
+              </div>
+            )}
           </div>
         ))}
       </div>
-    </div>
+    </LightCard>
   )
 }
 
@@ -170,28 +166,19 @@ function EvidenceGallery({ examples }) {
 function AddStoreUrlPrompt({ onAddStoreUrl }) {
   return (
     <div style={{
-      background: T.offWhite, border: `1px dashed ${T.border}`, borderRadius: 8,
-      padding: 20, textAlign: 'center',
+      background: 'var(--paper)', border: `1px dashed var(--line)`, borderRadius: 12,
+      padding: 24, textAlign: 'center',
     }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 8 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 8 }}>
         Add your store URL to see why
       </div>
-      <div style={{ fontSize: 12, color: T.slate, marginBottom: 14, lineHeight: 1.5 }}>
+      <div className="lite-body lite-muted" style={{ marginBottom: 16, maxWidth: 420, marginLeft: 'auto', marginRight: 'auto' }}>
         We can only score how an AI shopping agent reads your storefront with
         a URL to read. Run a fresh diagnostic with your store URL included to
         unlock the full breakdown.
       </div>
       {onAddStoreUrl && (
-        <button
-          onClick={onAddStoreUrl}
-          style={{
-            background: T.navy, color: T.white, fontSize: 13, fontWeight: 700,
-            fontFamily: 'inherit', border: 'none', borderRadius: 8,
-            padding: '10px 18px', cursor: 'pointer',
-          }}
-        >
-          Add store URL
-        </button>
+        <button onClick={onAddStoreUrl} className="lite-pill lite-pill--solid">Add store URL</button>
       )}
     </div>
   )
@@ -204,7 +191,7 @@ function ScanDegradedExplanation({ status }) {
   return (
     <div>
       <InfoBadge message={message} />
-      <div style={{ fontSize: 12, color: T.textMid, lineHeight: 1.6, marginTop: 12 }}>
+      <div className="lite-body" style={{ marginTop: 14 }}>
         This affects <strong>Agent Access (F1)</strong>, one of the 8 dimensions
         we score: whether an AI shopping agent can even reach your product
         pages at all — robots.txt rules, bot-detection, and sitemap
@@ -215,20 +202,62 @@ function ScanDegradedExplanation({ status }) {
   )
 }
 
-function DimensionRow({ dimension }) {
-  const pct = dimension.max ? (dimension.score / dimension.max) * 100 : 0
+function DimensionRow({ dimension, sharedMax }) {
+  const trackPct = sharedMax ? (dimension.max / sharedMax) * 100 : 0
+  const fillPct = sharedMax ? (dimension.score / sharedMax) * 100 : 0
+  const isZero = dimension.score === 0
+  const barColor = dimension.code.startsWith('F') ? 'var(--foundation)' : 'var(--accent)'
+  const gridlines = []
+  for (let v = 0; v <= sharedMax; v += 5) gridlines.push(v)
+  if (gridlines[gridlines.length - 1] !== sharedMax) gridlines.push(sharedMax)
+
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: T.textMid }}>{dimension.name}</span>
-        <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace', color: T.textMid }}>
+    <div className="lite-dim-row">
+      <div className="lite-dim-label lite-mono">{dimension.code} · {dimension.name.toUpperCase()}</div>
+      <div className="lite-dim-bar-cell">
+        <div className="lite-dim-track">
+          <div className="lite-dim-fill" style={{ width: `${trackPct}%` }} />
+          {!isZero && <div className="lite-dim-fill" style={{ width: `${fillPct}%`, background: barColor }} />}
+          {isZero && <span className="lite-dim-zero-tick" aria-hidden="true" />}
+          {gridlines.map((v) => (
+            <span key={v} className="lite-dim-gridline" style={{ left: `${(v / sharedMax) * 100}%` }} aria-hidden="true" />
+          ))}
+        </div>
+      </div>
+      <div className="lite-dim-score-cell">
+        <span className="lite-mono" style={{ fontSize: 12, fontWeight: 700, color: isZero ? 'var(--bad-ink)' : 'var(--text)' }}>
           {formatScore(dimension.score)}/{dimension.max}
         </span>
+        {dimension.linked && <Chip tone="accent">LINKED · {dimension.linked.reason.toUpperCase()}</Chip>}
       </div>
-      <div style={{ height: 6, background: T.border, borderRadius: 3, overflow: 'hidden', marginBottom: 6 }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: T.indigo, borderRadius: 3 }} />
+    </div>
+  )
+}
+
+function DimensionChart({ dimensions }) {
+  const sharedMax = Math.max(...dimensions.map((d) => d.max || 0), 1)
+  const axisValues = []
+  for (let v = 0; v <= sharedMax; v += 5) axisValues.push(v)
+  if (axisValues[axisValues.length - 1] !== sharedMax) axisValues.push(sharedMax)
+
+  return (
+    <div>
+      {dimensions.map((d) => <DimensionRow key={d.code} dimension={d} sharedMax={sharedMax} />)}
+      <div className="lite-dim-row" aria-hidden="true" style={{ paddingTop: 4, marginTop: 2, borderTop: '1px solid var(--line)' }}>
+        <div className="lite-dim-label" />
+        <div className="lite-dim-bar-cell lite-dim-axis-track">
+          {axisValues.map((v) => (
+            <span
+              key={v}
+              className="lite-mono lite-muted"
+              style={{ position: 'absolute', left: `${(v / sharedMax) * 100}%`, transform: 'translateX(-50%)', fontSize: 11 }}
+            >
+              {v}
+            </span>
+          ))}
+        </div>
+        <div className="lite-dim-score-cell" />
       </div>
-      {dimension.linked && <Chip label={`Linked: ${dimension.linked.reason}`} />}
     </div>
   )
 }
@@ -236,11 +265,9 @@ function DimensionRow({ dimension }) {
 function DimensionFamily({ title, subtotal, max, dimensions }) {
   if (dimensions.length === 0) return null
   return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 10 }}>
-        {title} ({formatScore(subtotal)}/{max})
-      </div>
-      {dimensions.map((d) => <DimensionRow key={d.code} dimension={d} />)}
+    <div style={{ marginBottom: 24 }}>
+      <div className="lite-label" style={{ marginBottom: 6, fontSize: 12 }}>{title.toUpperCase()} · {formatScore(subtotal)}/{max}</div>
+      <DimensionChart dimensions={dimensions} />
     </div>
   )
 }
@@ -260,8 +287,8 @@ function WhySection({ report, onAddStoreUrl }) {
   return (
     <div>
       {scan.integrity_capped && (
-        <div style={{ marginBottom: 16 }}>
-          <InfoBadge message="Dishonest pricing signals (a fake 'was' price) capped this store's total score at 59 — see Offer Integrity (V5) below." />
+        <div className="lite-body lite-muted" style={{ marginBottom: 20 }}>
+          One more rule: until offers carry honest machine-readable prices, the score cannot pass 59.
         </div>
       )}
       <DimensionFamily title="Foundation" subtotal={scan.foundation?.subtotal} max={scan.foundation?.max ?? 35} dimensions={foundation} />
@@ -270,32 +297,95 @@ function WhySection({ report, onAddStoreUrl }) {
   )
 }
 
+function FamilyLegend() {
+  return (
+    <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span className="lite-mono lite-muted" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+        <span style={{ width: 10, height: 10, background: 'var(--foundation)', display: 'inline-block', borderRadius: 2 }} aria-hidden="true" />
+        FOUNDATION
+      </span>
+      <span className="lite-mono lite-muted" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+        <span style={{ width: 10, height: 10, background: 'var(--accent)', display: 'inline-block', borderRadius: 2 }} aria-hidden="true" />
+        VALUE
+      </span>
+    </div>
+  )
+}
+
+function WhySectionCard({ report, onAddStoreUrl }) {
+  const status = report.scan?.status
+  const showLegend = status === 'complete'
+  return (
+    <LightCard>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <SectionHeader
+          label="SCORE COMPOSITION · 8 DIMENSIONS"
+          headline={report.composite === null || report.composite === undefined ? 'Why' : `Where ${formatScore(report.composite)} comes from`}
+        />
+        {showLegend && <FamilyLegend />}
+      </div>
+      <WhySection report={report} onAddStoreUrl={onAddStoreUrl} />
+    </LightCard>
+  )
+}
+
+// ─── Combined diagnosis (speculative — omitted unless report.diagnosis exists) ──
+
+function DiagnosisCard({ diagnosis }) {
+  if (!diagnosis) return null
+  return (
+    <DarkCard>
+      <div className="lite-cols-2">
+        <div>
+          {diagnosis.crawlSummary && (
+            <div className="lite-label lite-label--inv" style={{ marginBottom: 12 }}>{diagnosis.crawlSummary}</div>
+          )}
+          <div className="lite-headline lite-headline--inv lite-headline--hero">{diagnosis.headline}</div>
+        </div>
+        <div>
+          <div className="lite-label lite-label--inv" style={{ marginBottom: 12 }}>Diagnosis</div>
+          <div className="lite-body--inv" style={{ marginBottom: 16 }}>{diagnosis.body}</div>
+          {diagnosis.startHere && (
+            <div className="lite-callout">
+              <div style={{ color: 'var(--text-inv)', fontWeight: 700, fontSize: 13, marginBottom: 6 }}>Start here</div>
+              <div className="lite-body--inv">{diagnosis.startHere.body}</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </DarkCard>
+  )
+}
+
 // ─── Ranked fixes ────────────────────────────────────────────────────────
 
-function FixRow({ dimension }) {
+function FixRow({ dimension, rank, maxGap }) {
+  const gap = (dimension.max || 0) - (dimension.score || 0)
+  const impactPct = maxGap ? Math.max(0, Math.min(100, (gap / maxGap) * 100)) : 0
+  const hasSnippet = !dimension.locked && /[{<]/.test(dimension.fix || '')
+
   return (
-    <div style={{ marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${T.border}` }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: T.text }}>{dimension.name}</span>
-        {dimension.locked ? (
-          <span style={{ fontSize: 11, color: T.slate }}>🔒 Full diagnostic</span>
-        ) : (
-          <span style={{ fontSize: 11, color: T.green, fontWeight: 700 }}>Free fix</span>
+    <div className="lite-fix-row" style={dimension.locked ? { color: 'var(--text-2)' } : undefined}>
+      <div className="lite-mono lite-muted" style={{ fontSize: 12 }}>{String(rank).padStart(2, '0')}</div>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: dimension.locked ? 'var(--text-2)' : 'var(--text)' }}>
+          {dimension.locked ? 'Unlocks with your email' : dimension.fix || 'No issue found here.'}
+        </div>
+      </div>
+      <div className="lite-muted" style={{ fontSize: 13 }}>{dimension.locked ? '—' : dimension.name}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span className="lite-mono" style={{ fontSize: 12, fontWeight: 700, color: dimension.locked ? 'var(--text-2)' : 'var(--text)' }}>
+          {dimension.locked ? '+?' : `+${gap}`}
+        </span>
+        {!dimension.locked && (
+          <span className="lite-bar-track" style={{ width: 44, height: 5 }}>
+            <span className="lite-bar-fill" style={{ width: `${impactPct}%`, background: 'var(--foundation)' }} />
+          </span>
         )}
       </div>
-      {dimension.locked ? (
-        <div style={{ fontSize: 12, color: T.slateLight, fontStyle: 'italic' }}>
-          Unlock the full Parleo diagnostic to see exactly what to change.
-        </div>
-      ) : dimension.fix ? (
-        <pre style={{
-          background: T.navy, color: '#E2E8F0', fontSize: 11, borderRadius: 6,
-          padding: '10px 12px', overflowX: 'auto', margin: 0,
-          fontFamily: 'monospace', lineHeight: 1.5, whiteSpace: 'pre-wrap',
-        }}>{dimension.fix}</pre>
-      ) : (
-        <div style={{ fontSize: 12, color: T.slateLight }}>No issue found here.</div>
-      )}
+      <div className="lite-mono lite-muted" style={{ fontSize: 12 }}>
+        {dimension.locked ? 'Locked' : hasSnippet ? 'Included in fix' : 'No snippet needed'}
+      </div>
     </div>
   )
 }
@@ -303,9 +393,22 @@ function FixRow({ dimension }) {
 function FixList({ scan }) {
   if (!scan || scan.status !== 'complete') return null
   const ranked = rankDimensionsByGap(scan.dimensions)
+  const maxGap = ranked.length ? (ranked[0].max || 0) - (ranked[0].score || 0) : 0
+  const unlockedCount = ranked.filter((d) => !d.locked).length
+
   return (
     <div>
-      {ranked.map((d) => <FixRow key={d.code} dimension={d} />)}
+      <div className="lite-fix-table-header lite-label" style={{ fontSize: 11 }}>
+        <span />
+        <span>Fix</span>
+        <span>Dimension</span>
+        <span>Impact</span>
+        <span>Snippet</span>
+      </div>
+      {ranked.map((d, i) => <FixRow key={d.code} dimension={d} rank={i + 1} maxGap={maxGap} />)}
+      <div className="lite-body" style={{ marginTop: 16, fontWeight: 600 }}>
+        Showing {unlockedCount} of {ranked.length} fixes. The rest unlock with your email below.
+      </div>
     </div>
   )
 }
@@ -315,91 +418,79 @@ function FixList({ scan }) {
 function ExposureCalculator({ revenue, onRevenueChange, aiSharePct, onAiShareChange, exposure }) {
   return (
     <div>
-      <div style={{ fontSize: 11, color: T.slateLight, marginBottom: 14 }}>
-        Modeled, not measured — a rough estimate, not an audited figure.
-      </div>
-
-      <label style={{ fontSize: 12, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>
+      <label className="lite-label" style={{ display: 'block', marginBottom: 8 }}>
         Monthly revenue: {formatCurrency(revenue)}
       </label>
       <input
         type="range" min={10000} max={10000000} step={10000} value={revenue}
         onChange={(e) => onRevenueChange(Number(e.target.value))}
-        style={{ width: '100%', marginBottom: 16 }}
+        className="lite-slider" style={{ marginBottom: 22 }}
         aria-label="Monthly revenue"
       />
 
-      <label style={{ fontSize: 12, fontWeight: 600, color: T.textMid, display: 'block', marginBottom: 4 }}>
+      <label className="lite-label" style={{ display: 'block', marginBottom: 8 }}>
         AI-assisted share of purchases: {aiSharePct}%
       </label>
       <input
         type="range" min={0} max={100} step={1} value={aiSharePct}
         onChange={(e) => onAiShareChange(Number(e.target.value))}
-        style={{ width: '100%', marginBottom: 16 }}
+        className="lite-slider" style={{ marginBottom: 26 }}
         aria-label="AI-assisted share of purchases"
       />
 
-      <div style={{ background: T.offWhite, borderRadius: 8, padding: 14, textAlign: 'center' }}>
-        <div style={{ fontSize: 11, color: T.slate, marginBottom: 4 }}>Modeled monthly exposure</div>
-        <div style={{ fontSize: 24, fontWeight: 700, color: T.text, fontFamily: 'monospace' }}>
+      <div style={{ background: 'var(--paper)', borderRadius: 12, padding: 22, textAlign: 'center' }}>
+        <div className="lite-numeral lite-numeral--calc">
           {formatCurrency(exposure)}
+          <span className="lite-mono lite-muted" style={{ fontSize: 14, fontWeight: 400, marginLeft: 6 }}>/ mo</span>
         </div>
+        <div className="lite-mono lite-muted" style={{ fontSize: 11, marginTop: 8 }}>Modeled, not measured.</div>
       </div>
     </div>
   )
 }
 
-// ─── Locked panels + CTA ────────────────────────────────────────────────
+// ─── Diagnostic-tier cliff ───────────────────────────────────────────────
 
-const LOCKED_PANELS = [
-  '3 more AI platforms (Gemini, Perplexity, Claude)',
-  'Full category run (hundreds of queries)',
-  'Net price accuracy vs. your live catalog',
-  'Persona-level breakdowns',
-  'Trend over time',
-  'Retail shelf comparison',
+const PLATFORM_LABELS = ['ChatGPT', 'Gemini', 'Perplexity', 'Claude']
+const HIGHLIGHT_PANELS = [
+  { title: '3 more AI platforms', body: 'See how Gemini, Perplexity, and Claude answer the same 12 queries.' },
+  { title: 'Full category run', body: 'Hundreds of queries across your whole category, not a 12-query sample.' },
+  { title: 'Net price accuracy', body: 'The gap between list price and true member price across your catalog.' },
 ]
+const REMAINING_LOCKED_TOPICS = ['Persona-level breakdowns', 'Trend over time', 'Retail shelf comparison']
 
-function LockedPanelsGrid({ ctaUrl }) {
+function DiagnosticCliff({ ctaUrl }) {
   return (
-    <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 16 }}>
-        {LOCKED_PANELS.map((label) => (
-          <div key={label} style={{
-            border: `1px dashed ${T.border}`, borderRadius: 8, padding: 12,
-            fontSize: 11, color: T.slate, textAlign: 'center', lineHeight: 1.4,
-          }}>
-            🔒 {label}
+    <DarkCard>
+      <div style={{ marginBottom: 22 }}>
+        <div className="lite-label lite-label--inv" style={{ marginBottom: 10 }}>Live agent answers across</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {PLATFORM_LABELS.map((p) => <span key={p} className="lite-platform-chip">{p}</span>)}
+        </div>
+      </div>
+      <div className="lite-cols-3" style={{ marginBottom: 20 }}>
+        {HIGHLIGHT_PANELS.map((panel) => (
+          <div key={panel.title}>
+            <div style={{ color: 'var(--text-inv)', fontWeight: 700, fontSize: 14, marginBottom: 6 }}>{panel.title}</div>
+            <div className="lite-body--inv">{panel.body}</div>
           </div>
         ))}
       </div>
-      <div style={{ background: T.navy, borderRadius: 10, padding: 18, color: T.white }}>
-        <div style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 12 }}>
-          This is 12 queries on one platform. The full Parleo diagnostic runs
-          hundreds across ChatGPT, Gemini, Perplexity and Claude — and reads
-          your whole catalog, not one page.
-        </div>
+      <div className="lite-mono lite-muted--inv" style={{ fontSize: 12, marginBottom: 20 }}>
+        Also in the full diagnostic: {REMAINING_LOCKED_TOPICS.join(' · ')}
+      </div>
+      <div className="lite-divider lite-divider--inv" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginTop: 20 }}>
         {ctaUrl && (
-          <a
-            href={ctaUrl}
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              display: 'inline-block',
-              background: T.white,
-              color: T.navy,
-              fontSize: 13,
-              fontWeight: 700,
-              padding: '10px 16px',
-              borderRadius: 8,
-              textDecoration: 'none',
-            }}
-          >
-            Book a working session
+          <a href={ctaUrl} target="_blank" rel="noreferrer" className="lite-pill lite-pill--solid">
+            Request a working session
           </a>
         )}
+        <span className="lite-body--inv" style={{ fontSize: 13 }}>
+          45 minutes with your report. We bring live agent answers for two of your categories. No integration, nothing to install.
+        </span>
       </div>
-    </div>
+    </DarkCard>
   )
 }
 
@@ -407,14 +498,13 @@ function LockedPanelsGrid({ ctaUrl }) {
 
 function Footer() {
   return (
-    <div style={{
-      marginTop: 24, paddingTop: 16, borderTop: `1px solid ${T.border}`,
-      fontSize: 11, color: T.slateLight, lineHeight: 1.6,
-    }}>
-      <div>We'll re-run this diagnostic monthly if you keep your report link.</div>
-      <div style={{ marginTop: 4 }}>
-        12 queries · 1 platform · 1 run each · {formatDateStamp()} · sample, not a category study.
-      </div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+      <span className="lite-mono lite-muted" style={{ fontSize: 11 }}>
+        We'll re-run this diagnostic monthly if you keep your report link.
+      </span>
+      <span className="lite-mono lite-muted" style={{ fontSize: 11 }}>
+        12 QUERIES · 1 PLATFORM · 1 RUN EACH · {formatDateStamp().toUpperCase()} · SAMPLE, NOT A CATEGORY STUDY
+      </span>
     </div>
   )
 }
@@ -429,6 +519,8 @@ export function LiteFullReport({ report, onAddStoreUrl }) {
   const [aiSharePct, setAiSharePct] = useState(DEFAULT_AI_SHARE_PCT)
   const exposure = computeExposure({ revenue, aiSharePct, visibility: report.visibility })
 
+  const primaryEntity = entities.find((e) => e.role === 'primary')
+
   // by_stage is keyed by stage name -> list of {name, role, metrics}; index
   // by entity name for O(1) lookup in VisibilityByStage.
   const byStageByName = {}
@@ -440,35 +532,39 @@ export function LiteFullReport({ report, onAddStoreUrl }) {
   })
 
   return (
-    <div style={outerStyle}>
-      <div style={wideCardStyle}>
-        <LogoHeader />
-        <div style={{ fontSize: 18, fontWeight: 700, color: T.text, marginBottom: 16 }}>
-          Your full Share of Algorithm report
-        </div>
+    <div className="lite-root">
+      <div className="lite-shell" style={{ maxWidth: 720 }}>
+        <ReportHeaderBar
+          brandOrDomain={primaryEntity?.name || 'Your brand'}
+          scannedDateLabel={formatDateStamp()}
+          scanStatus={report.scan_status}
+        />
 
         <ExecutiveTiles report={report} exposure={exposure} />
 
-        <SectionHeading>Visibility by purchase stage</SectionHeading>
         <VisibilityByStage byStage={byStageByName} entities={entities} />
 
         <EvidenceGallery examples={report.evidence_examples} />
 
-        <SectionHeading>Why</SectionHeading>
-        <WhySection report={report} onAddStoreUrl={onAddStoreUrl} />
+        <WhySectionCard report={report} onAddStoreUrl={onAddStoreUrl} />
 
-        <SectionHeading>Ranked fixes</SectionHeading>
-        <FixList scan={report.scan} />
+        <DiagnosisCard diagnosis={report.diagnosis} />
 
-        <SectionHeading>Exposure calculator</SectionHeading>
-        <ExposureCalculator
-          revenue={revenue} onRevenueChange={setRevenue}
-          aiSharePct={aiSharePct} onAiShareChange={setAiSharePct}
-          exposure={exposure}
-        />
+        <LightCard>
+          <SectionHeader label="RECOMMENDATIONS" annotation="Ordered by modeled impact" headline="Ranked fixes" />
+          <FixList scan={report.scan} />
+        </LightCard>
 
-        <SectionHeading>Go deeper</SectionHeading>
-        <LockedPanelsGrid ctaUrl={ctaUrl} />
+        <LightCard>
+          <SectionHeader label="EXPOSURE · MODELED" headline="What this could be costing you" />
+          <ExposureCalculator
+            revenue={revenue} onRevenueChange={setRevenue}
+            aiSharePct={aiSharePct} onAiShareChange={setAiSharePct}
+            exposure={exposure}
+          />
+        </LightCard>
+
+        <DiagnosticCliff ctaUrl={ctaUrl} />
 
         <Footer />
       </div>
