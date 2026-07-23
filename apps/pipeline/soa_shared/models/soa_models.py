@@ -1424,6 +1424,16 @@ class SoaLiteRequest(Base):
         ),
     )
 
+    store_url = Column(
+        Text,
+        nullable=True,
+        comment=(
+            "Visitor-supplied (or derived) storefront URL, used as input to the "
+            "Agent Scan crawl. Null for submissions that don't include one — the "
+            "scan is degraded/skipped in that case, never blocking the report."
+        ),
+    )
+
     cycle_id = Column(
         Integer,
         ForeignKey("soa_cycles.id"),
@@ -1459,3 +1469,88 @@ class SoaLiteRequest(Base):
 
     brand_entity = relationship("SoaEntity", foreign_keys=[brand_entity_id])
     cycle = relationship("SoaCycle")
+    scan_result = relationship(
+        "SoaLiteScanResult", back_populates="lite_request", uselist=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 16. soa_lite_scan_results — Agent Scan crawl output for a SoA Lite
+# request. One row per soa_lite_requests row (1:1, optional — a request
+# with no store_url never gets one). Written by the pure, self-contained
+# apps/pipeline/scan/ engine (see engine.py::run_scan); nothing in this
+# table blocks Lite completion — see worker.py's terminal-state handling.
+# ---------------------------------------------------------------------------
+
+class SoaLiteScanResult(Base):
+    __tablename__ = "soa_lite_scan_results"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','running','complete','blocked','failed','skipped')",
+            name="ck_soa_lite_scan_results_status",
+        ),
+        UniqueConstraint(
+            "lite_request_id",
+            name="uq_soa_lite_scan_results_lite_request_id",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    lite_request_id = Column(
+        Integer,
+        ForeignKey("soa_lite_requests.id"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    input_url = Column(
+        Text,
+        nullable=True,
+        comment="Storefront URL as submitted/derived — mirrors soa_lite_requests.store_url at scan time.",
+    )
+
+    status = Column(
+        Text,
+        nullable=False,
+        default="pending",
+        server_default="pending",
+        comment=(
+            "pending -> running -> complete, or blocked/failed/skipped. Terminal "
+            "states are complete/blocked/failed/skipped — see engine.py::run_scan."
+        ),
+    )
+
+    total_score = Column(
+        Integer,
+        nullable=True,
+        comment="0-100. Null until status='complete'.",
+    )
+
+    integrity_capped = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="True when dishonest pricing signals (fake 'was' prices) capped total_score at 59.",
+    )
+
+    dimensions = Column(
+        JSON,
+        nullable=True,
+        comment="{code: {score, max, evidence: [...], fix}} for all 8 dimensions. Null until complete.",
+    )
+
+    pages_fetched = Column(
+        JSON,
+        nullable=True,
+        comment="[{url, status}] — every page the scan attempted to fetch.",
+    )
+
+    error = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    lite_request = relationship("SoaLiteRequest", back_populates="scan_result")
