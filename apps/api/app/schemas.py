@@ -1,4 +1,7 @@
+import ipaddress
 import re
+from urllib.parse import urlparse
+
 from pydantic import BaseModel, field_validator, model_validator
 from typing import List, Optional
 from soa_shared.constants import QUERY_CONSTRAINTS
@@ -579,10 +582,54 @@ def _validate_public_name(v: str, field_name: str) -> str:
     return v
 
 
+# store_url is UX-level validation only — reject obviously-wrong input
+# (IP literals, non-domain garbage) with a clear 422 before it ever
+# reaches the pipeline. It is NOT the SSRF defense: apps/pipeline/scan
+# resolves the hostname at fetch time and is the authoritative guard
+# against a domain that merely *resolves* to a private/metadata address.
+MAX_STORE_URL_LENGTH = 500
+_DOMAIN_LABEL_PATTERN = re.compile(r'^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$', re.IGNORECASE)
+
+
+def _validate_store_url(v: Optional[str]) -> Optional[str]:
+    v = (v or '').strip()
+    if not v:
+        return None
+    if len(v) > MAX_STORE_URL_LENGTH:
+        raise ValueError(f'store_url must be at most {MAX_STORE_URL_LENGTH} characters')
+
+    candidate = v if '://' in v else f'https://{v}'
+    parsed = urlparse(candidate)
+    if parsed.scheme not in ('http', 'https'):
+        raise ValueError('store_url must use http or https')
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError('store_url must include a hostname')
+
+    try:
+        ipaddress.ip_address(hostname)
+        is_ip_literal = True
+    except ValueError:
+        is_ip_literal = False
+    if is_ip_literal:
+        raise ValueError('store_url must be a domain name, not an IP address')
+
+    labels = hostname.rstrip('.').split('.')
+    if len(labels) < 2 or not all(_DOMAIN_LABEL_PATTERN.match(label) for label in labels):
+        raise ValueError('store_url must have a valid domain, e.g. example.com')
+    if labels[-1].isdigit():
+        raise ValueError('store_url must have a valid domain, e.g. example.com')
+
+    netloc = hostname if not parsed.port else f'{hostname}:{parsed.port}'
+    return f'{parsed.scheme}://{netloc}'
+
+
 class PublicLiteSubmitRequest(BaseModel):
     brand_name: str
     competitor_names: List[str] = []
     captcha_token: str
+    store_url: Optional[str] = None
 
     @field_validator('brand_name')
     @classmethod
@@ -595,6 +642,11 @@ class PublicLiteSubmitRequest(BaseModel):
         if len(v) > 2:
             raise ValueError('competitor_names accepts at most 2 entries')
         return [_validate_public_name(name, 'competitor_names') for name in v]
+
+    @field_validator('store_url')
+    @classmethod
+    def validate_store_url(cls, v):
+        return _validate_store_url(v)
 
     @model_validator(mode='after')
     def check_names_distinct(self):
@@ -623,6 +675,7 @@ class PublicLiteStatusResponse(BaseModel):
     status: str
     phase: str
     progress: Optional[PublicLiteProgress] = None
+    scan_status: Optional[str] = None  # null until soa_lite_scan_results exists for this request
 
 
 class PublicLiteEntityMetrics(BaseModel):
@@ -632,11 +685,55 @@ class PublicLiteEntityMetrics(BaseModel):
     metrics: EntityMetrics
 
 
+class PublicLiteScanFamily(BaseModel):
+    subtotal: float
+    max: float
+
+
+class PublicLiteScanDimension(BaseModel):
+    """
+    One Agent Scan dimension row. fix is null (with locked=True) for any
+    dimension ranked below the top 3 by opportunity size (max - score) —
+    the full fix list is paid-diagnostic material. linked is null unless
+    apps/api/app/services/lite_crosswalk.py matched this dimension to a
+    query-level signal for the primary entity.
+    """
+    code: str
+    name: str
+    score: float
+    max: float
+    evidence: List[str] = []
+    fix: Optional[str] = None
+    locked: bool = False
+    linked: Optional[dict] = None  # {"reason": "..."} or None
+
+
+class PublicLiteScan(BaseModel):
+    """
+    Agent Scan summary for the report. status mirrors
+    soa_lite_scan_results.status honestly — complete/blocked/failed/
+    skipped are all valid and never block the report itself (rule 7).
+    foundation/value/dimensions are only populated when status='complete'.
+    """
+    status: str
+    total_score: Optional[int] = None
+    integrity_capped: bool = False
+    foundation: Optional[PublicLiteScanFamily] = None
+    value: Optional[PublicLiteScanFamily] = None
+    dimensions: List[PublicLiteScanDimension] = []
+    pages_fetched: List[dict] = []
+
+
 class PublicLiteReportResponse(BaseModel):
     status: str
     locked: bool = False
     overall: List[PublicLiteEntityMetrics] = []
     by_stage: dict = {}  # Dict[stage_name, List[PublicLiteEntityMetrics]]
+    scan: Optional[PublicLiteScan] = None
+    visibility: Optional[float] = None
+    accessibility: Optional[float] = None
+    composite: Optional[float] = None
+    scan_status: Optional[str] = None
 
 
 class PublicLiteTeaserEntity(BaseModel):
@@ -649,6 +746,10 @@ class PublicLiteTeaserResponse(BaseModel):
     status: str
     locked: bool = True
     overall: List[PublicLiteTeaserEntity] = []
+    visibility: Optional[float] = None
+    accessibility: Optional[float] = None
+    composite: Optional[float] = None
+    scan_status: Optional[str] = None
 
 
 class PublicLiteEmailRequest(BaseModel):

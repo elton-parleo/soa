@@ -28,6 +28,11 @@ def db(monkeypatch):
                 completed_runs INTEGER, total_runs_planned INTEGER
             )
         """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_lite_scan_results (
+                id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, status TEXT
+            )
+        """)
     monkeypatch.setattr(public_lite, "engine", engine)
     return engine
 
@@ -43,6 +48,13 @@ def _insert_cycle(conn, cycle_id, status, completed_runs=None, total_runs_planne
     conn.exec_driver_sql(
         "INSERT INTO soa_cycles (id, status, completed_runs, total_runs_planned) VALUES (?, ?, ?, ?)",
         (cycle_id, status, completed_runs, total_runs_planned),
+    )
+
+
+def _insert_scan(conn, lite_request_id, status):
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_scan_results (lite_request_id, status) VALUES (?, ?)",
+        (lite_request_id, status),
     )
 
 
@@ -140,6 +152,44 @@ def test_running_lite_with_failed_cycle_is_failed(db):
         _insert_lite(conn, "t1", "running", cycle_id=1)
     result = public_lite.get_lite_status("t1")
     assert result.phase == "failed"
+
+
+# ─── scan_status ─────────────────────────────────────────────────────────
+
+def test_scan_status_null_when_no_scan_row_exists(db):
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "running")
+    result = public_lite.get_lite_status("t1")
+    assert result.scan_status is None
+
+
+@pytest.mark.parametrize("scan_status", ["running", "complete", "blocked", "failed", "skipped"])
+def test_scan_status_mirrors_scan_row(db, scan_status):
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "running")
+        lite_id = conn.exec_driver_sql(
+            "SELECT id FROM soa_lite_requests WHERE token = 't1'"
+        ).fetchone()[0]
+        _insert_scan(conn, lite_id, scan_status)
+
+    result = public_lite.get_lite_status("t1")
+    assert result.scan_status == scan_status
+
+
+def test_scan_status_does_not_affect_lite_phase(db):
+    """The lite phase is still driven by lite/cycle status alone — the
+    scan reaching a terminal state never changes it (rule 7)."""
+    with db.begin() as conn:
+        _insert_cycle(conn, 1, "running", completed_runs=6, total_runs_planned=12)
+        _insert_lite(conn, "t1", "running", cycle_id=1)
+        lite_id = conn.exec_driver_sql(
+            "SELECT id FROM soa_lite_requests WHERE token = 't1'"
+        ).fetchone()[0]
+        _insert_scan(conn, lite_id, "failed")
+
+    result = public_lite.get_lite_status("t1")
+    assert result.phase == "running"
+    assert result.scan_status == "failed"
 
 
 # ─── _derive_phase unit coverage (direct, no DB) ────────────────────────

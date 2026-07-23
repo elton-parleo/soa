@@ -46,7 +46,7 @@ def db(monkeypatch):
             CREATE TABLE soa_lite_requests (
                 id INTEGER PRIMARY KEY, token TEXT UNIQUE, email TEXT, brand_name TEXT,
                 competitor_names TEXT, brand_entity_id INTEGER, competitor_entity_ids TEXT,
-                study_type TEXT, cycle_id INTEGER, status TEXT DEFAULT 'pending',
+                study_type TEXT, store_url TEXT, cycle_id INTEGER, status TEXT DEFAULT 'pending',
                 error_message TEXT, ip_hash TEXT, organization_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
             )
@@ -128,6 +128,26 @@ def test_persists_brand_and_competitors_and_org(db):
     assert row[2] == "pending"
     assert org_name == "Parleo Lead Gen"
     assert row[4] is not None  # ip_hash stored, never the raw IP
+
+
+def test_store_url_persisted_when_given(db):
+    result = public_lite.submit_lite_request(
+        _submit_data(store_url="acme.com"), FakeRequest(ip="203.0.113.9"),
+    )
+    with db.connect() as conn:
+        stored = conn.exec_driver_sql(
+            "SELECT store_url FROM soa_lite_requests WHERE token = ?", (result.token,)
+        ).fetchone()[0]
+    assert stored == "https://acme.com"
+
+
+def test_store_url_null_when_omitted(db):
+    result = public_lite.submit_lite_request(_submit_data(), FakeRequest(ip="203.0.113.10"))
+    with db.connect() as conn:
+        stored = conn.exec_driver_sql(
+            "SELECT store_url FROM soa_lite_requests WHERE token = ?", (result.token,)
+        ).fetchone()[0]
+    assert stored is None
 
 
 def test_reuses_leadgen_org_across_submissions(db):

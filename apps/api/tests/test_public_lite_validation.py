@@ -118,3 +118,76 @@ def test_email_request_accepts_valid_email():
 def test_email_request_rejects_invalid_format(bad_email):
     with pytest.raises(ValidationError):
         PublicLiteEmailRequest(email=bad_email)
+
+
+# ─── store_url ────────────────────────────────────────────────────────────
+
+def test_store_url_omitted_defaults_to_none():
+    req = _submit()
+    assert req.store_url is None
+
+
+def test_store_url_blank_string_becomes_none():
+    req = _submit(store_url="   ")
+    assert req.store_url is None
+
+
+def test_store_url_accepts_bare_domain_and_adds_scheme():
+    req = _submit(store_url="acme.com")
+    assert req.store_url == "https://acme.com"
+
+
+def test_store_url_accepts_https_and_preserves_scheme():
+    req = _submit(store_url="http://shop.acme.com")
+    assert req.store_url == "http://shop.acme.com"
+
+
+def test_store_url_strips_path_and_query():
+    req = _submit(store_url="https://acme.com/products/widget?ref=ad")
+    assert req.store_url == "https://acme.com"
+
+
+def test_store_url_strips_credentials():
+    req = _submit(store_url="https://user:pass@acme.com/")
+    assert req.store_url == "https://acme.com"
+
+
+def test_store_url_preserves_non_default_port():
+    req = _submit(store_url="https://acme.com:8443/")
+    assert req.store_url == "https://acme.com:8443"
+
+
+@pytest.mark.parametrize("bad_scheme", ["ftp://acme.com", "javascript://acme.com"])
+def test_store_url_rejects_disallowed_scheme(bad_scheme):
+    with pytest.raises(ValidationError):
+        _submit(store_url=bad_scheme)
+
+
+@pytest.mark.parametrize("ip_url", [
+    "http://10.0.0.5",
+    "http://172.16.5.5",
+    "http://192.168.1.1",
+    "http://127.0.0.1",
+    "http://169.254.169.254",       # cloud metadata endpoint
+    "http://93.184.216.34",         # a public IP is still rejected — must be a domain
+    "http://[::1]",
+    "http://[fc00::1]",
+])
+def test_store_url_rejects_ip_literal_hosts(ip_url):
+    with pytest.raises(ValidationError):
+        _submit(store_url=ip_url)
+
+
+@pytest.mark.parametrize("bad_domain", [
+    "https://localhost",
+    "https://not-a-real-tld-single-label",
+    "https://bad_domain!.com",
+])
+def test_store_url_rejects_non_domain_shaped_hosts(bad_domain):
+    with pytest.raises(ValidationError):
+        _submit(store_url=bad_domain)
+
+
+def test_store_url_too_long_rejected():
+    with pytest.raises(ValidationError):
+        _submit(store_url="https://acme.com/" + "a" * 500)

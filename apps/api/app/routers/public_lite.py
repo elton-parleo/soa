@@ -30,12 +30,16 @@ from sqlalchemy import text
 from soa_shared.database import engine, session_factory
 from soa_shared.org_helpers import get_or_create_leadgen_org
 from app.routers.metrics import build_entity_metrics
+from app.services.lite_crosswalk import RunSignal, link_dimensions
 from app.schemas import (
     EntityMetrics,
     PublicLiteEmailRequest,
     PublicLiteEntityMetrics,
     PublicLiteProgress,
     PublicLiteReportResponse,
+    PublicLiteScan,
+    PublicLiteScanDimension,
+    PublicLiteScanFamily,
     PublicLiteStatusResponse,
     PublicLiteSubmitRequest,
     PublicLiteSubmitResponse,
@@ -174,6 +178,187 @@ def _derive_phase(lite_status, cycle_status, completed_runs, total_runs_planned)
     return 'running', progress
 
 
+# ─── Agent Scan shaping ──────────────────────────────────────────────────
+
+DIMENSION_ORDER = ("F1", "F2", "F3", "V1", "V2", "V3", "V4", "V5")
+DIMENSION_NAMES = {
+    "F1": "Agent Access",
+    "F2": "Catalog Context",
+    "F3": "Transaction Rails",
+    "V1": "Offer Legibility",
+    "V2": "Loyalty Surface",
+    "V3": "Member Value",
+    "V4": "Value Rails",
+    "V5": "Offer Integrity",
+}
+FOUNDATION_CODES = {"F1", "F2", "F3"}
+FOUNDATION_MAX = 35
+VALUE_MAX = 65
+FREE_FIX_RANK = 3  # top 3 opportunities (by score gap) get their fix text for free
+
+
+def _decode_json_field(value, default):
+    """JSON columns come back already-decoded via psycopg2; defensively
+    handle a driver (or SQLite test) that returns the raw string instead —
+    same idiom as worker.py::process_lite_requests."""
+    if isinstance(value, str):
+        return json.loads(value) if value else default
+    return value if value is not None else default
+
+
+def _fetch_scan_row(conn, lite_request_id: int):
+    return conn.execute(text("""
+        SELECT status, total_score, integrity_capped, dimensions, pages_fetched
+        FROM soa_lite_scan_results
+        WHERE lite_request_id = :rid
+    """), {"rid": lite_request_id}).fetchone()
+
+
+def _fetch_run_signals(conn, cycle_id: int, primary_entity_id: int) -> list:
+    """
+    One RunSignal (apps/api/app/services/lite_crosswalk.py) per successful
+    run in the cycle. Every query joins through r.cycle_id/r.id rather
+    than an explicit run-id list, so this reads identically against
+    SQLite (tests) and Postgres (production) — no IN-list expansion.
+    """
+    run_rows = conn.execute(text("""
+        SELECT r.id, q.stage
+        FROM soa_runs r
+        JOIN soa_queries q ON q.id = r.query_id
+        WHERE r.cycle_id = :cid AND r.status = 'success'
+    """), {"cid": cycle_id}).fetchall()
+    if not run_rows:
+        return []
+    stage_by_run = {row[0]: row[1] for row in run_rows}
+
+    primary_rows = conn.execute(text("""
+        SELECT r.id, cm.mentioned, cm.deal_cited, cm.deal_types
+        FROM soa_runs r
+        LEFT JOIN soa_coded_mentions cm ON cm.run_id = r.id AND cm.entity_id = :eid
+        WHERE r.cycle_id = :cid AND r.status = 'success'
+    """), {"cid": cycle_id, "eid": primary_entity_id}).fetchall()
+    primary_by_run = {row[0]: (row[1], row[2], row[3]) for row in primary_rows}
+
+    price_rows = conn.execute(text("""
+        SELECT r.id,
+               MAX(CASE WHEN po.stated_price IS NOT NULL OR po.claimed_net_price IS NOT NULL THEN 1 ELSE 0 END),
+               MAX(CASE WHEN po.member_price_claimed THEN 1 ELSE 0 END)
+        FROM soa_runs r
+        LEFT JOIN soa_price_observations po ON po.run_id = r.id AND po.entity_id = :eid
+        WHERE r.cycle_id = :cid AND r.status = 'success'
+        GROUP BY r.id
+    """), {"cid": cycle_id, "eid": primary_entity_id}).fetchall()
+    price_by_run = {row[0]: (bool(row[1]), bool(row[2])) for row in price_rows}
+
+    competitor_rows = conn.execute(text("""
+        SELECT r.id,
+               MAX(CASE WHEN cm.mentioned THEN 1 ELSE 0 END),
+               MAX(CASE WHEN cm.mentioned AND cm.deal_cited THEN 1 ELSE 0 END)
+        FROM soa_runs r
+        JOIN soa_cycle_entities ce ON ce.cycle_id = r.cycle_id AND ce.role = 'competitor'
+        LEFT JOIN soa_coded_mentions cm ON cm.run_id = r.id AND cm.entity_id = ce.entity_id
+        WHERE r.cycle_id = :cid AND r.status = 'success'
+        GROUP BY r.id
+    """), {"cid": cycle_id}).fetchall()
+    competitor_by_run = {row[0]: (bool(row[1]), bool(row[2])) for row in competitor_rows}
+
+    signals = []
+    for run_id, stage in stage_by_run.items():
+        mentioned, deal_cited, deal_types = primary_by_run.get(run_id, (False, False, None))
+        deal_types = _decode_json_field(deal_types, [])
+        price_quoted, member_price_claimed = price_by_run.get(run_id, (False, False))
+        competitor_mentioned, competitor_deal_cited = competitor_by_run.get(run_id, (False, False))
+
+        signals.append(RunSignal(
+            stage=stage,
+            primary_mentioned=bool(mentioned),
+            primary_deal_cited=bool(deal_cited),
+            primary_deal_types=tuple(deal_types or []),
+            primary_price_quoted=price_quoted,
+            primary_member_price_claimed=member_price_claimed,
+            competitor_mentioned=competitor_mentioned,
+            competitor_deal_cited=competitor_deal_cited,
+        ))
+    return signals
+
+
+def _build_scan_payload(scan_row, linked: dict) -> dict | None:
+    """
+    Shapes one soa_lite_scan_results row into the public 'scan' object.
+    Never blocks the report (rule 7): any non-'complete' status — or no
+    row at all — degrades to a status-only/absent object rather than
+    raising or omitting the honest status badge.
+    """
+    if not scan_row:
+        return None
+
+    status, total_score, integrity_capped, dimensions, pages_fetched = scan_row
+    pages_fetched = _decode_json_field(pages_fetched, [])
+
+    if status != 'complete':
+        return PublicLiteScan(
+            status=status,
+            total_score=total_score,
+            integrity_capped=bool(integrity_capped),
+            pages_fetched=pages_fetched,
+        ).model_dump()
+
+    dimensions = _decode_json_field(dimensions, {})
+
+    # Rank by opportunity size (max - score) descending — biggest gaps
+    # first — deterministic tiebreak by code. Only the top FREE_FIX_RANK
+    # dimensions' fix text is given away free; the rest are locked.
+    ranked_codes = sorted(
+        DIMENSION_ORDER,
+        key=lambda code: (
+            -(dimensions.get(code, {}).get('max', 0) - dimensions.get(code, {}).get('score', 0)),
+            code,
+        ),
+    )
+    rank_by_code = {code: i + 1 for i, code in enumerate(ranked_codes)}
+
+    dim_rows = []
+    foundation_subtotal = 0.0
+    value_subtotal = 0.0
+    for code in DIMENSION_ORDER:
+        d = dimensions.get(code, {})
+        score = d.get('score', 0)
+        max_ = d.get('max', 0)
+        fix = d.get('fix')
+        evidence = d.get('evidence', [])
+
+        locked = fix is not None and rank_by_code[code] > FREE_FIX_RANK
+        if locked:
+            fix = None
+
+        if code in FOUNDATION_CODES:
+            foundation_subtotal += score
+        else:
+            value_subtotal += score
+
+        reason = linked.get(code)
+        dim_rows.append(PublicLiteScanDimension(
+            code=code,
+            name=DIMENSION_NAMES[code],
+            score=score,
+            max=max_,
+            evidence=evidence,
+            fix=fix,
+            locked=locked,
+            linked={"reason": reason} if reason else None,
+        ).model_dump())
+
+    return PublicLiteScan(
+        status=status,
+        total_score=total_score,
+        integrity_capped=bool(integrity_capped),
+        foundation=PublicLiteScanFamily(subtotal=round(foundation_subtotal, 1), max=FOUNDATION_MAX).model_dump(),
+        value=PublicLiteScanFamily(subtotal=round(value_subtotal, 1), max=VALUE_MAX).model_dump(),
+        dimensions=dim_rows,
+        pages_fetched=pages_fetched,
+    ).model_dump()
+
+
 # ─── Report shaping ──────────────────────────────────────────────────────
 
 def _fetch_metrics_rows(conn, cycle_id: int):
@@ -200,22 +385,41 @@ def _fetch_metrics_rows(conn, cycle_id: int):
     """), {"cid": cycle_id}).fetchall()
 
 
-def _build_report_payload(conn, cycle_id: int, email: str | None) -> dict:
+def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str | None) -> dict:
     rows = _fetch_metrics_rows(conn, cycle_id)
 
     entity_info: dict = {}    # comparison_code -> {"name":, "role":} (internal grouping key only)
     overall_metrics: dict = {}
     by_stage: dict = {}
+    primary_code = None
 
     for row in rows:
         name, role, comp_code = row[1], row[12], row[13]
         entity_info.setdefault(comp_code, {"name": name, "role": role})
+        if role == 'primary':
+            primary_code = comp_code
 
         metrics_dict = build_entity_metrics(row)
         if row[2] == 'overall':
             overall_metrics[comp_code] = metrics_dict
         elif row[2] == 'stage':
             by_stage.setdefault(row[3], {})[comp_code] = metrics_dict
+
+    # visibility reuses the same share-of-voice metric already computed
+    # for the report (build_entity_metrics' 'som') — no second metrics path.
+    visibility = overall_metrics.get(primary_code, {}).get("som") if primary_code else None
+
+    scan_row = _fetch_scan_row(conn, lite_request_id)
+    scan_status = scan_row[0] if scan_row else None
+    accessibility = scan_row[1] if scan_row and scan_row[0] == 'complete' else None
+
+    composite = None
+    if visibility is not None:
+        composite = (
+            round(0.6 * visibility + 0.4 * accessibility)
+            if accessibility is not None
+            else visibility
+        )
 
     if not email:
         overall = [
@@ -226,7 +430,11 @@ def _build_report_payload(conn, cycle_id: int, email: str | None) -> dict:
             ).model_dump()
             for code, info in entity_info.items()
         ]
-        return PublicLiteTeaserResponse(status="complete", locked=True, overall=overall).model_dump()
+        return PublicLiteTeaserResponse(
+            status="complete", locked=True, overall=overall,
+            visibility=visibility, accessibility=accessibility, composite=composite,
+            scan_status=scan_status,
+        ).model_dump()
 
     overall = [
         PublicLiteEntityMetrics(
@@ -247,8 +455,24 @@ def _build_report_payload(conn, cycle_id: int, email: str | None) -> dict:
         ]
         for stage, stage_metrics in by_stage.items()
     }
+
+    linked: dict = {}
+    if scan_row and scan_row[0] == 'complete':
+        primary_entity_row = conn.execute(text("""
+            SELECT entity_id FROM soa_cycle_entities WHERE cycle_id = :cid AND role = 'primary'
+        """), {"cid": cycle_id}).fetchone()
+        if primary_entity_row:
+            dimensions_raw = _decode_json_field(scan_row[3], {})
+            run_signals = _fetch_run_signals(conn, cycle_id, primary_entity_row[0])
+            linked = link_dimensions(run_signals, dimensions_raw)
+
+    scan_payload = _build_scan_payload(scan_row, linked)
+
     return PublicLiteReportResponse(
         status="complete", locked=False, overall=overall, by_stage=by_stage_public,
+        scan=scan_payload,
+        visibility=visibility, accessibility=accessibility, composite=composite,
+        scan_status=scan_status,
     ).model_dump()
 
 
@@ -273,13 +497,14 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
     with engine.begin() as conn:
         conn.execute(text("""
             INSERT INTO soa_lite_requests
-              (token, brand_name, competitor_names, status, ip_hash, organization_id)
+              (token, brand_name, competitor_names, store_url, status, ip_hash, organization_id)
             VALUES
-              (:token, :brand, :competitors, 'pending', :ip_hash, :org_id)
+              (:token, :brand, :competitors, :store_url, 'pending', :ip_hash, :org_id)
         """), {
             "token":       token,
             "brand":       data.brand_name,
             "competitors": json.dumps(data.competitor_names),
+            "store_url":   data.store_url,
             "ip_hash":     ip_hash,
             "org_id":      org_id,
         })
@@ -293,19 +518,20 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
 def get_lite_status(token: str):
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT lr.status, c.status, c.completed_runs, c.total_runs_planned
+            SELECT lr.status, c.status, c.completed_runs, c.total_runs_planned, sr.status
             FROM soa_lite_requests lr
             LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
+            LEFT JOIN soa_lite_scan_results sr ON sr.lite_request_id = lr.id
             WHERE lr.token = :token
         """), {"token": token}).fetchone()
 
     if not row:
         raise HTTPException(status_code=404, detail="Not found.")
 
-    lite_status, cycle_status, completed_runs, total_runs_planned = row
+    lite_status, cycle_status, completed_runs, total_runs_planned, scan_status = row
     phase, progress = _derive_phase(lite_status, cycle_status, completed_runs, total_runs_planned)
 
-    return PublicLiteStatusResponse(status=lite_status, phase=phase, progress=progress)
+    return PublicLiteStatusResponse(status=lite_status, phase=phase, progress=progress, scan_status=scan_status)
 
 
 # ─── GET /api/public/soa-lite/{token}/report ─────────────────────────────
@@ -314,17 +540,17 @@ def get_lite_status(token: str):
 def get_lite_report(token: str):
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT status, email, cycle_id FROM soa_lite_requests WHERE token = :token
+            SELECT id, status, email, cycle_id FROM soa_lite_requests WHERE token = :token
         """), {"token": token}).fetchone()
 
         if not row:
             raise HTTPException(status_code=404, detail="Not found.")
 
-        lite_status, email, cycle_id = row
+        lite_request_id, lite_status, email, cycle_id = row
         if lite_status != 'complete':
             raise HTTPException(status_code=409, detail="Report is not ready yet.")
 
-        return _build_report_payload(conn, cycle_id, email)
+        return _build_report_payload(conn, lite_request_id, cycle_id, email)
 
 
 # ─── PATCH /api/public/soa-lite/{token}/email ────────────────────────────
@@ -340,7 +566,7 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
     """
     with engine.begin() as conn:
         row = conn.execute(text("""
-            SELECT lr.status, lr.cycle_id, c.status, c.completed_runs, c.total_runs_planned
+            SELECT lr.id, lr.status, lr.cycle_id, c.status, c.completed_runs, c.total_runs_planned
             FROM soa_lite_requests lr
             LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
             WHERE lr.token = :token
@@ -349,7 +575,7 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
         if not row:
             raise HTTPException(status_code=404, detail="Not found.")
 
-        lite_status, cycle_id, cycle_status, completed_runs, total_runs_planned = row
+        lite_request_id, lite_status, cycle_id, cycle_status, completed_runs, total_runs_planned = row
 
         conn.execute(text("""
             UPDATE soa_lite_requests SET email = :email, updated_at = NOW() WHERE token = :token
@@ -359,4 +585,4 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
             phase, progress = _derive_phase(lite_status, cycle_status, completed_runs, total_runs_planned)
             return PublicLiteStatusResponse(status=lite_status, phase=phase, progress=progress).model_dump()
 
-        return _build_report_payload(conn, cycle_id, data.email)
+        return _build_report_payload(conn, lite_request_id, cycle_id, data.email)

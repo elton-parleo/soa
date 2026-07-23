@@ -53,6 +53,12 @@ def db(monkeypatch):
                 deal_citation_rate FLOAT, platform_dist_index FLOAT
             )
         """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_lite_scan_results (
+                id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, status TEXT,
+                total_score INTEGER, integrity_capped BOOLEAN, dimensions TEXT, pages_fetched TEXT
+            )
+        """)
     monkeypatch.setattr(public_lite, "engine", engine)
     return engine
 
