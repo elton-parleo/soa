@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from app.routers import studies, entities, cycles, metrics, scope, actions
+from app.routers import studies, entities, cycles, metrics, scope, actions, public_lite
 from app.auth import verify_token
 
 app = FastAPI(
@@ -15,12 +15,20 @@ app = FastAPI(
     version="1.0.0",
 )
 
+_cors_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
+# SoA Lite's public endpoints are also called cross-origin from the
+# marketing site, which lives on its own domain outside this app's
+# frontend — add it without touching the authed-app origins above.
+_lite_origin = os.getenv("LITE_ALLOWED_ORIGIN")
+if _lite_origin:
+    _cors_origins.append(_lite_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-    ],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,6 +65,13 @@ app.include_router(
     actions.router,
     prefix="/api",
     dependencies=[Depends(verify_token)],
+)
+
+# Public, unauthenticated — SoA Lite. Deliberately NO verify_token
+# dependency; see app/routers/public_lite.py's module docstring.
+app.include_router(
+    public_lite.router,
+    prefix="/api/public",
 )
 
 

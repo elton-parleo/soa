@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Query, HTTPException
 from sqlalchemy import text
 from soa_shared.database import engine
+from soa_shared.entity_helpers import slugify, unique_slug
 from app.schemas import (
     EntityResponse,
     CreateEntityRequest,
@@ -8,29 +9,8 @@ from app.schemas import (
     ENTITY_TYPE_DISPLAY,
     ENTITY_TYPE_INTERNAL,
 )
-import re
 
 router = APIRouter()
-
-
-def slugify(name: str) -> str:
-    s = name.lower()
-    s = re.sub(r"['\(\)]", "", s)
-    s = re.sub(r"[^a-z0-9]+", "-", s)
-    return s.strip("-")
-
-
-def unique_slug(conn, base_slug: str) -> str:
-    slug = base_slug
-    n = 2
-    while True:
-        row = conn.execute(text("""
-            SELECT 1 FROM soa_entities WHERE slug = :s
-        """), {"s": slug}).fetchone()
-        if not row:
-            return slug
-        slug = f"{base_slug}-{n}"
-        n += 1
 
 
 @router.get("/entities", response_model=list[EntityResponse])

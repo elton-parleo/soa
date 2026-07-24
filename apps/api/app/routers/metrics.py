@@ -38,6 +38,38 @@ SLICE_TYPE_MAP = {
 }
 
 
+def build_entity_metrics(row) -> dict:
+    """
+    Normalize one soa_dashboard_summary-shaped row — same column order as
+    that materialized view (merchant_slug, merchant_name, slice_type,
+    slice_value, total_runs, total_mentions, mention_rate, soa_pct,
+    position_index, rsi_score, deal_citation_rate, platform_dist_index).
+    Also used by app/routers/public_lite.py against soa_metrics_results
+    rows selected in the same column order — the view is just that table
+    joined to soa_cycles/soa_entities, so the shape matches exactly.
+
+    mention_rate, soa_pct, position_index, deal_citation_rate,
+    platform_dist_index are 0.0-1.0 → normalize_metric() × 100.
+    rsi_score is sent as the raw DB value (-1.0 to +3.0) — no scaling.
+    The frontend applies relative min-max normalization for chart layout
+    and displays the raw value in the scorecard.
+    """
+    return {
+        "mention_rate":       normalize_metric(row[6]),
+        "som":                normalize_metric(row[7]),
+        "position_index":     normalize_metric(row[8]),
+        "rsi":                (
+            round(float(row[9]), 2)
+            if row[9] is not None
+            else None
+        ),
+        "deal_citation_rate": normalize_metric(row[10]),
+        "pdi":                normalize_metric(row[11]),  # often None
+        "total_runs":         row[4],
+        "total_mentions":     row[5],
+    }
+
+
 # ─── GET /api/cycles/{cycle_code}/entities ────────────────────────────────────
 
 @router.get(
@@ -217,30 +249,6 @@ def get_cycle_metrics(
                 f"python main.py metrics --cycle {cycle_code}"
             ),
         )
-
-    def build_entity_metrics(row) -> dict:
-        """
-        Normalize one soa_dashboard_summary row.
-        mention_rate, soa_pct, position_index, deal_citation_rate,
-        platform_dist_index are 0.0-1.0 → normalize_metric() × 100.
-        rsi_score is sent as the raw DB value (-1.0 to +3.0) — no scaling.
-        The frontend applies relative min-max normalization for chart layout
-        and displays the raw value in the scorecard.
-        """
-        return {
-            "mention_rate":       normalize_metric(row[6]),
-            "som":                normalize_metric(row[7]),
-            "position_index":     normalize_metric(row[8]),
-            "rsi":                (
-                round(float(row[9]), 2)
-                if row[9] is not None
-                else None
-            ),
-            "deal_citation_rate": normalize_metric(row[10]),
-            "pdi":                normalize_metric(row[11]),  # often None
-            "total_runs":         row[4],
-            "total_mentions":     row[5],
-        }
 
     # Step 3: Organize rows into slices dict
     slices: dict = {}

@@ -1,0 +1,552 @@
+"""
+Tests for worker.py::process_lite_requests and _sweep_lite_completions —
+the SoA Lite state machine: pending -> generating -> running, then swept to
+complete/failed once BOTH the cycle it created and the Agent Scan it
+triggers (soa_lite_scan_results) reach a terminal state.
+
+Uses a real in-memory SQLite database for every table process_lite_requests
+touches (organizations, soa_entities, soa_lite_requests, soa_queries,
+soa_cycles, soa_cycle_entities, soa_lite_scan_results) via worker.engine,
+same convention as test_scope_resolution.py — only generate_lite_queries
+(the OpenAI call) and scan.engine.run_scan (the store crawl) are mocked.
+SQLite has no NOW(); a connect-time SQL function fills the gap since
+production code (worker.py, entity_helpers.py, cycle_creation.py) issues
+raw NOW() calls throughout.
+
+session_factory is patched via a fresh importlib.import_module() call
+inside the fixture (not a module-level import) because test_pampers_seed.py
+permanently swaps sys.modules['soa_shared.database'] for a stub with no
+teardown — resolving the module at fixture-execution time, rather than at
+this file's collection time, patches whichever object is actually live in
+sys.modules when worker.py's own `from soa_shared.database import
+session_factory` runs, regardless of test file ordering.
+"""
+import importlib
+import json
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
+
+import pytest
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
+
+import worker
+from generation.query_generator import LiteGenerationError
+from soa_shared.constants import QUERY_STAGES
+
+
+def _lite_row(stage, i):
+    return {
+        'query_text': f"{stage} question {i}",
+        'category': 'General',
+        'stage': stage,
+        'specificity': 'Broad',
+        'persona': 'Casual / Gift Buyer',
+        'study_pattern': 'brand_vs_brand',
+        'status': 'Active',
+        'subscription_state': 'not_subscribed',
+        'soa_focus': 'Mention Rate',
+        'rationale': 'test',
+    }
+
+
+def _twelve_rows():
+    return [_lite_row(stage, i) for stage in QUERY_STAGES for i in range(3)]
+
+
+@pytest.fixture
+def db(monkeypatch):
+    engine = create_engine("sqlite:///:memory:")
+
+    @event.listens_for(engine, "connect")
+    def _register_now(dbapi_conn, _):
+        dbapi_conn.create_function("NOW", 0, lambda: datetime.now(timezone.utc).isoformat())
+
+    with engine.begin() as conn:
+        conn.exec_driver_sql("""
+            CREATE TABLE organizations (
+                id INTEGER PRIMARY KEY, name TEXT UNIQUE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_entities (
+                id INTEGER PRIMARY KEY, name TEXT, slug TEXT UNIQUE, entity_type TEXT,
+                category TEXT, merchant_id INTEGER, website_url TEXT, aliases TEXT,
+                created_at TIMESTAMP, updated_at TIMESTAMP
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_lite_requests (
+                id INTEGER PRIMARY KEY, token TEXT UNIQUE, email TEXT, brand_name TEXT,
+                competitor_names TEXT, brand_entity_id INTEGER, competitor_entity_ids TEXT,
+                study_type TEXT, store_url TEXT, cycle_id INTEGER, status TEXT DEFAULT 'pending',
+                error_message TEXT, ip_hash TEXT, organization_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_lite_scan_results (
+                id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, input_url TEXT,
+                status TEXT DEFAULT 'pending', total_score INTEGER,
+                integrity_capped BOOLEAN DEFAULT 0, dimensions TEXT, pages_fetched TEXT,
+                error TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_cycles (
+                id INTEGER PRIMARY KEY, cycle_code TEXT UNIQUE, study_type TEXT,
+                study_pattern TEXT, status TEXT, cycle_mode TEXT, truecost_tiers TEXT,
+                total_runs_planned INTEGER, completed_runs INTEGER, start_date DATE,
+                notes TEXT, platforms TEXT, runs_per_query INTEGER,
+                organization_id INTEGER, created_by TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_cycle_entities (
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, entity_id INTEGER,
+                comparison_code TEXT, role TEXT
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_queries (
+                id INTEGER PRIMARY KEY, query_code TEXT UNIQUE, query_text TEXT, category TEXT,
+                stage TEXT, specificity TEXT, persona TEXT, study_type TEXT, study_pattern TEXT,
+                soa_focus TEXT, rationale TEXT, status TEXT, organization_id INTEGER,
+                created_by TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+    monkeypatch.setattr(worker, "engine", engine)
+    db_module = importlib.import_module("soa_shared.database")
+    monkeypatch.setattr(db_module, "session_factory", sessionmaker(bind=engine))
+    monkeypatch.setenv("OPEN_AI_API_KEY", "test-key")
+    return engine
+
+
+def _insert_pending(conn, token="a1b2c3d4e5f6", brand="Acme", competitors=None, store_url=None):
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_requests (token, brand_name, competitor_names, store_url, status) "
+        "VALUES (?, ?, ?, ?, 'pending')",
+        (token, brand, json.dumps(competitors if competitors is not None else ["Rival"]), store_url),
+    )
+
+
+def _lite_row_by_token(conn, token):
+    return conn.exec_driver_sql(
+        "SELECT status, brand_entity_id, competitor_entity_ids, study_type, cycle_id, error_message "
+        "FROM soa_lite_requests WHERE token = ?", (token,),
+    ).fetchone()
+
+
+def _scan_row_by_token(conn, token):
+    return conn.exec_driver_sql(
+        "SELECT status, total_score, integrity_capped, dimensions, pages_fetched, error, input_url "
+        "FROM soa_lite_scan_results "
+        "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = ?)",
+        (token,),
+    ).fetchone()
+
+
+def _age_scan_row(conn, token, minutes_ago):
+    old = (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).isoformat()
+    conn.exec_driver_sql(
+        "UPDATE soa_lite_scan_results SET updated_at = ? "
+        "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = ?)",
+        (old, token),
+    )
+
+
+def _make_scan_result(**overrides):
+    from scan.engine import ScanResult
+
+    defaults = dict(
+        status="complete",
+        total_score=82,
+        integrity_capped=False,
+        dimensions={"F1": {"score": 8.0, "max": 10, "evidence": ["ok"], "fix": None}},
+        pages_fetched=[{"url": "https://acme.example.com", "status": "fetched"}],
+        started_at="2026-07-22T00:00:00+00:00",
+        finished_at="2026-07-22T00:00:05+00:00",
+        error=None,
+    )
+    defaults.update(overrides)
+    return ScanResult(**defaults)
+
+
+# ── happy path ───────────────────────────────────────────────────────────
+
+def test_full_happy_path_reaches_running_with_cycle(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    status, brand_entity_id, competitor_entity_ids, study_type, cycle_id, error = _lite_row_by_token(
+        db.connect(), "a1b2c3d4e5f6"
+    )
+    assert status == "running"
+    assert study_type == "lite-a1b2c3d4"
+    assert cycle_id is not None
+    assert error is None
+
+    with db.connect() as conn:
+        brand = conn.exec_driver_sql(
+            "SELECT name, slug, entity_type FROM soa_entities WHERE id = ?", (brand_entity_id,)
+        ).fetchone()
+        rival_id = conn.exec_driver_sql(
+            "SELECT id FROM soa_entities WHERE slug = 'rival'"
+        ).fetchone()[0]
+    assert brand == ("Acme", "acme", "brand")
+    assert json.loads(competitor_entity_ids) == [rival_id]
+
+
+def test_entities_resolved_and_reused_across_requests(db):
+    with db.begin() as conn:
+        _insert_pending(conn, token="req1", brand="Acme", competitors=["Rival"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    with db.begin() as conn:
+        _insert_pending(conn, token="req2", brand="Acme", competitors=["OtherCo"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        acme_count = conn.exec_driver_sql(
+            "SELECT COUNT(*) FROM soa_entities WHERE slug = 'acme'"
+        ).fetchone()[0]
+    assert acme_count == 1
+
+
+def test_creates_cycle_with_correct_comparison_set(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        cycle = conn.exec_driver_sql(
+            "SELECT cycle_code, status, cycle_mode, study_pattern, platforms, runs_per_query, total_runs_planned "
+            "FROM soa_cycles"
+        ).fetchone()
+        comparison_set = conn.exec_driver_sql(
+            "SELECT comparison_code, role FROM soa_cycle_entities ORDER BY comparison_code"
+        ).fetchall()
+
+    assert cycle[0] == "lite-a1b2c3d4"
+    assert cycle[1] == "planned"
+    assert cycle[2] == "query"
+    assert cycle[3] == "brand_vs_brand"
+    assert json.loads(cycle[4]) == ["chatgpt"]
+    assert cycle[5] == 1
+    assert cycle[6] == 12
+    assert comparison_set == [("M001", "primary"), ("M002", "competitor")]
+
+
+def test_inserts_twelve_queries_with_lite_study_type(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=[])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        count = conn.exec_driver_sql(
+            "SELECT COUNT(*) FROM soa_queries WHERE study_type = 'lite-a1b2c3d4'"
+        ).fetchone()[0]
+        created_by = conn.exec_driver_sql(
+            "SELECT DISTINCT created_by FROM soa_queries WHERE study_type = 'lite-a1b2c3d4'"
+        ).fetchone()[0]
+    assert count == 12
+    assert created_by == "soa-lite"
+
+
+def test_no_competitors_yields_primary_only_comparison_set(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=[])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        comparison_set = conn.exec_driver_sql(
+            "SELECT comparison_code, role FROM soa_cycle_entities"
+        ).fetchall()
+    assert comparison_set == [("M001", "primary")]
+
+
+def test_processes_only_one_pending_row_per_call(db):
+    with db.begin() as conn:
+        _insert_pending(conn, token="req1", brand="Acme")
+        _insert_pending(conn, token="req2", brand="Beta")
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        statuses = dict(conn.exec_driver_sql(
+            "SELECT token, status FROM soa_lite_requests"
+        ).fetchall())
+    assert statuses["req1"] == "running"
+    assert statuses["req2"] == "pending"
+
+
+def test_no_pending_rows_is_a_noop(db):
+    worker.process_lite_requests()  # should not raise with an empty table
+
+
+# ── failure paths ────────────────────────────────────────────────────────
+
+def test_generation_failure_marks_request_failed(db):
+    with db.begin() as conn:
+        _insert_pending(conn)
+
+    with patch(
+        "generation.query_generator.generate_lite_queries",
+        side_effect=LiteGenerationError("stage shortfall"),
+    ):
+        worker.process_lite_requests()
+
+    status, _, _, _, cycle_id, error = _lite_row_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert status == "failed"
+    assert cycle_id is None
+    assert "stage shortfall" in error
+
+
+def test_missing_api_key_marks_request_failed(db, monkeypatch):
+    monkeypatch.delenv("OPEN_AI_API_KEY", raising=False)
+    with db.begin() as conn:
+        _insert_pending(conn)
+
+    worker.process_lite_requests()
+
+    status, _, _, _, _, error = _lite_row_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert status == "failed"
+    assert "OPEN_AI_API_KEY" in error
+
+
+def test_failed_request_leaves_no_cycle_row(db):
+    with db.begin() as conn:
+        _insert_pending(conn)
+
+    with patch(
+        "generation.query_generator.generate_lite_queries",
+        side_effect=LiteGenerationError("boom"),
+    ):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        count = conn.exec_driver_sql("SELECT COUNT(*) FROM soa_cycles").fetchone()[0]
+    assert count == 0
+
+
+# ── completion sweep ─────────────────────────────────────────────────────
+
+def _insert_running_lite_with_cycle(conn, token, cycle_status, scan_status="complete"):
+    """
+    scan_status defaults to 'complete' — in production a 'running' lite
+    row always has a scan row (they're created atomically, see
+    process_lite_requests), so every pre-existing sweep test that doesn't
+    care about the scan gets one that's already terminal and out of the
+    way.
+    """
+    conn.exec_driver_sql(
+        "INSERT INTO soa_cycles (cycle_code, status) VALUES (?, ?)",
+        (f"lite-{token}", cycle_status),
+    )
+    cycle_id = conn.exec_driver_sql(
+        "SELECT id FROM soa_cycles WHERE cycle_code = ?", (f"lite-{token}",)
+    ).fetchone()[0]
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_requests (token, brand_name, status, cycle_id) VALUES (?, 'Acme', 'running', ?)",
+        (token, cycle_id),
+    )
+    lite_id = conn.exec_driver_sql(
+        "SELECT id FROM soa_lite_requests WHERE token = ?", (token,)
+    ).fetchone()[0]
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_scan_results (lite_request_id, status, updated_at) VALUES (?, ?, ?)",
+        (lite_id, scan_status, datetime.now(timezone.utc).isoformat()),
+    )
+
+
+def test_sweep_marks_complete_when_cycle_completes(db):
+    with db.begin() as conn:
+        _insert_running_lite_with_cycle(conn, "done0001", "complete")
+
+    worker._sweep_lite_completions()
+
+    status, *_ = _lite_row_by_token(db.connect(), "done0001")
+    assert status == "complete"
+
+
+def test_sweep_marks_failed_when_cycle_fails(db):
+    with db.begin() as conn:
+        _insert_running_lite_with_cycle(conn, "fail0001", "failed")
+
+    worker._sweep_lite_completions()
+
+    status, _, _, _, _, error = _lite_row_by_token(db.connect(), "fail0001")
+    assert status == "failed"
+    assert error is not None
+
+
+def test_sweep_leaves_still_running_cycles_alone(db):
+    with db.begin() as conn:
+        _insert_running_lite_with_cycle(conn, "run00001", "running")
+
+    worker._sweep_lite_completions()
+
+    status, *_ = _lite_row_by_token(db.connect(), "run00001")
+    assert status == "running"
+
+
+# ── Agent Scan integration ──────────────────────────────────────────────
+
+def test_store_url_creates_scan_row_and_persists_result(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    scan_result = _make_scan_result()
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+         patch("scan.engine.run_scan", return_value=scan_result) as mock_scan:
+        worker.process_lite_requests()
+
+    mock_scan.assert_called_once_with("https://acme.example.com")
+
+    status, *_ = _lite_row_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert status == "running"  # scan result never affects the lite request's own status
+
+    scan_status, total_score, integrity_capped, dimensions, pages_fetched, scan_error, input_url = (
+        _scan_row_by_token(db.connect(), "a1b2c3d4e5f6")
+    )
+    assert scan_status == "complete"
+    assert total_score == 82
+    assert bool(integrity_capped) is False
+    assert json.loads(dimensions) == scan_result.dimensions
+    assert json.loads(pages_fetched) == scan_result.pages_fetched
+    assert scan_error is None
+    assert input_url == "https://acme.example.com"
+
+
+def test_without_store_url_scan_is_skipped_and_flow_unchanged(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])  # no store_url
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+         patch("scan.engine.run_scan") as mock_scan:
+        worker.process_lite_requests()
+
+    mock_scan.assert_not_called()
+
+    status, brand_entity_id, competitor_entity_ids, study_type, cycle_id, error = _lite_row_by_token(
+        db.connect(), "a1b2c3d4e5f6"
+    )
+    assert status == "running"
+    assert study_type == "lite-a1b2c3d4"
+    assert cycle_id is not None
+    assert error is None
+
+    scan_status, total_score, *_ = _scan_row_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert scan_status == "skipped"
+    assert total_score is None
+
+
+@pytest.mark.parametrize("scan_status", ["blocked", "failed"])
+def test_degraded_scan_result_persisted_and_request_still_completes(db, scan_status):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://blocked.example.com")
+
+    scan_result = _make_scan_result(
+        status=scan_status, total_score=None, dimensions={}, pages_fetched=[],
+        error="site blocked automated access",
+    )
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+         patch("scan.engine.run_scan", return_value=scan_result):
+        worker.process_lite_requests()
+
+    recorded_status, *_ = _scan_row_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert recorded_status == scan_status
+
+    # The scan already reached a terminal state, so the cycle completing
+    # alone is now enough to complete the lite request.
+    with db.begin() as conn:
+        conn.exec_driver_sql("UPDATE soa_cycles SET status = 'complete' WHERE cycle_code = 'lite-a1b2c3d4'")
+
+    worker._sweep_lite_completions()
+
+    status, *_ = _lite_row_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert status == "complete"
+
+
+def test_sweep_waits_when_scan_still_running_within_window(db):
+    with db.begin() as conn:
+        _insert_running_lite_with_cycle(conn, "wait0001", "complete", scan_status="running")
+
+    worker._sweep_lite_completions()
+
+    status, *_ = _lite_row_by_token(db.connect(), "wait0001")
+    assert status == "running"  # cycle is done, but the scan hasn't reached a terminal state yet
+
+    scan_status, *_ = _scan_row_by_token(db.connect(), "wait0001")
+    assert scan_status == "running"  # untouched — not stuck long enough to force-fail
+
+
+def test_sweep_recovers_scan_stuck_running_past_ten_minutes(db):
+    with db.begin() as conn:
+        _insert_running_lite_with_cycle(conn, "stuck0001", "complete", scan_status="running")
+        _age_scan_row(conn, "stuck0001", minutes_ago=15)
+
+    worker._sweep_lite_completions()
+
+    status, *_ = _lite_row_by_token(db.connect(), "stuck0001")
+    assert status == "complete"
+
+    scan_status, _, _, _, _, scan_error, _ = _scan_row_by_token(db.connect(), "stuck0001")
+    assert scan_status == "failed"
+    assert scan_error == "scan timed out"
+
+
+def test_worker_crash_mid_scan_does_not_reprocess_and_sweep_recovers(db):
+    """
+    Simulates the worker dying mid-scan: the cycle is queued and the scan
+    row created (both atomic, per process_lite_requests), but run_scan
+    itself never returns — mirrored here by raising instead of returning,
+    since a real worker crash means no result is ever written. The next
+    poll must not reprocess this row (it already left 'pending'), and the
+    sweep's 10-minute rule is what eventually recovers it.
+    """
+    with db.begin() as conn:
+        _insert_pending(conn, token="crash001", store_url="https://acme.example.com")
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+         patch("scan.engine.run_scan", side_effect=RuntimeError("worker died mid-scan")):
+        worker.process_lite_requests()
+
+    status, *_ = _lite_row_by_token(db.connect(), "crash001")
+    assert status == "running"  # cycle queued; the scan crash must not affect it
+
+    scan_status, *_ = _scan_row_by_token(db.connect(), "crash001")
+    assert scan_status == "running"  # stuck, as if the worker died before writing a result
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()) as mock_gen:
+        worker.process_lite_requests()
+    mock_gen.assert_not_called()  # no longer 'pending' — must not be reprocessed
+
+    with db.begin() as conn:
+        conn.exec_driver_sql("UPDATE soa_cycles SET status = 'complete' WHERE cycle_code = 'lite-crash001'")
+        _age_scan_row(conn, "crash001", minutes_ago=15)
+
+    worker._sweep_lite_completions()
+
+    status, *_ = _lite_row_by_token(db.connect(), "crash001")
+    assert status == "complete"
+
+    scan_status, _, _, _, _, scan_error, _ = _scan_row_by_token(db.connect(), "crash001")
+    assert scan_status == "failed"
+    assert scan_error == "scan timed out"

@@ -1,0 +1,802 @@
+/**
+ * Design tokens + shared utility classes for the SoA Lite combined
+ * report — matches the Parleo Scan report design language (see
+ * design-refs/ screenshots, studied for Stage 5).
+ *
+ * Custom properties are scoped to .lite-root (not :root) and every
+ * class is prefixed lite- so nothing here can collide with the authed
+ * app, which has no stylesheets of its own today. Imported once from
+ * LiteWidget.jsx; .lite-root must be the outermost class on every
+ * top-level view (LiteForm/LiteProgress/LiteTeaser/LiteFullReport) so
+ * the custom properties resolve wherever the widget mounts.
+ *
+ * --sans reuses the app's existing DM Sans (already CDN-loaded in
+ * index.html before this stage) — not a new font. --mono is a system
+ * stack; no monospace webfont exists or is added.
+ */
+
+.lite-root {
+  --ink: #12161F;
+  --ink-2: #1A2030;
+  --paper: #F2F1ED;
+  --card: #FFFFFF;
+  --line: #E5E3DC;
+  --line-dark: #2A3040;
+  --text: #171A21;
+  /* #6B7180 as originally specified measures 4.32:1 on --paper — just
+     under AA's 4.5:1 for normal text, and this token is used
+     everywhere (labels, muted body copy). Darkened ~9% (imperceptible)
+     to clear AA on --paper/--track/--card; see the accessibility pass
+     in Stage 5's commit for the computed ratios. */
+  --text-2: #616774;
+  --text-inv: #F5F6F8;
+  --text-inv-2: #9AA1B0;
+  --track: #E9E7E0;
+  /* Stage 8 — pale layer for the incentive-citation card's layered bars
+     (mention-rate width in --track-darker, cited-answers overlay on top
+     in the entity's ENTITY_COLORS shade). Non-text fill, no AA gate. */
+  --track-darker: #D9DCE3;
+  /* #2F6BFF as originally specified carries white pill-button text
+     (the primary CTA everywhere in the widget) at 4.4988:1 — a hair
+     under AA's 4.5:1. Darkened ~1% (imperceptible) to clear it with a
+     safety margin (4.65:1). */
+  --accent: #2E69FA;
+  --accent-tint: #E5EDFF;
+  --good: #1F9D5B;
+  --warn: #C8871B;
+  --warn-tint: #F5EAD4;
+  --bad: #C5442E;
+  --bad-tint: #F7E4E0;
+  --foundation: #343A48;
+  --foundation-on-dark: #C9CDD6;
+
+  /* AA-safe TEXT variants for the semantic colors above. --bad/--warn/
+     --accent/--good stay exactly as specified for fills, borders, and
+     other non-text decoration (WCAG 1.4.11 non-text contrast is only
+     3:1, which they all clear) — these -ink/-on-dark variants exist
+     because using the base color as small (11-13px) TEXT on top of its
+     matching -tint background, or on --ink, falls short of the 4.5:1
+     text-contrast gate: --bad on --bad-tint is 4.04:1, --warn on
+     --warn-tint is 2.54:1, --accent on --accent-tint is 3.83:1, --bad
+     on --ink is 3.65:1. --warn and --good pass AA directly on --ink
+     (5.98:1 / 5.20:1) so they have no -on-dark variant. */
+  --bad-ink: #B73F2B;
+  --warn-ink: #8E6013;
+  --accent-ink: #2A60E6;
+  --bad-on-dark: #CD5E4B;
+  /* --good as TEXT on light backgrounds (Stage 6 landing findings tags)
+     is 3.48:1 on white — under AA. Darkened ~14% to clear it (4.55:1),
+     same treatment as the other -ink variants above. --good itself is
+     unchanged for fills/dots/on-dark text, which all already clear AA. */
+  --good-ink: #1A874E;
+
+  --sans: 'DM Sans', sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* Landing page only (Stage 6) — italic display accents in headlines.
+     System-stack serif, no webfont added. */
+  --serif: Georgia, 'Times New Roman', serif;
+
+  width: 100%;
+  box-sizing: border-box;
+  padding: 24px 16px;
+  background: var(--paper);
+  font-family: var(--sans);
+  color: var(--text);
+  display: flex;
+  justify-content: center;
+}
+
+.lite-root *,
+.lite-root *::before,
+.lite-root *::after {
+  box-sizing: border-box;
+}
+
+.lite-shell {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Typography ──────────────────────────────────────────────────── */
+
+.lite-mono { font-family: var(--mono); }
+
+.lite-label {
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+  color: var(--text-2);
+  margin: 0;
+}
+.lite-label--inv { color: var(--text-inv-2); }
+
+.lite-headline {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: clamp(20px, 4vw, 26px);
+  color: var(--text);
+  margin: 4px 0 0;
+}
+.lite-headline--inv { color: var(--text-inv); }
+.lite-headline--hero { font-size: clamp(22px, 5vw, 32px); }
+
+.lite-numeral {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1;
+}
+.lite-numeral--inv { color: var(--text-inv); }
+.lite-numeral--hero { font-size: clamp(56px, 14vw, 110px); }
+.lite-numeral--tile { font-size: clamp(28px, 8vw, 56px); }
+.lite-numeral--calc { font-size: 40px; }
+
+.lite-muted { color: var(--text-2); }
+.lite-muted--inv { color: var(--text-inv-2); }
+
+.lite-body { font-size: 14px; line-height: 1.6; color: var(--text); }
+.lite-body--inv { color: var(--text-inv-2); }
+
+.lite-visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Cards ───────────────────────────────────────────────────────── */
+
+.lite-card {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 24px;
+}
+@media (min-width: 480px) { .lite-card { padding: 32px; } }
+
+.lite-card-dark {
+  position: relative;
+  background: var(--ink);
+  border-radius: 24px;
+  padding: 24px;
+  color: var(--text-inv);
+}
+@media (min-width: 480px) { .lite-card-dark { padding: 32px; } }
+
+/* Corner registration marks — decorative only, aria-hidden in markup. */
+.lite-corner {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  pointer-events: none;
+}
+.lite-corner::before, .lite-corner::after {
+  content: '';
+  position: absolute;
+  background: var(--line);
+}
+.lite-corner::before { top: 4px; left: 0; width: 100%; height: 1px; }
+.lite-corner::after { top: 0; left: 4px; width: 1px; height: 100%; }
+.lite-corner--tl { top: -5px; left: -5px; }
+.lite-corner--tr { top: -5px; right: -5px; }
+.lite-corner--bl { bottom: -5px; left: -5px; }
+.lite-corner--br { bottom: -5px; right: -5px; }
+
+/* ── Section header pattern ──────────────────────────────────────── */
+
+.lite-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.lite-section-header-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lite-section-header-rule {
+  display: inline-block;
+  width: 24px;
+  height: 1px;
+  background: var(--text-2);
+  flex-shrink: 0;
+}
+
+.lite-section-annotation {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.lite-section-annotation--inv { color: var(--text-inv-2); }
+
+/* ── Pills, chips, badges ────────────────────────────────────────── */
+
+.lite-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 9px 18px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  line-height: 1;
+}
+.lite-pill--inv { border-color: var(--line-dark); color: var(--text-inv); }
+.lite-pill--solid { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lite-pill--solid:hover { background: #2558d6; }
+.lite-pill--solid-ink { background: var(--ink); border-color: var(--ink); color: #fff; }
+.lite-pill--solid-ink:hover { background: var(--ink-2); }
+.lite-pill:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.lite-chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 5px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+.lite-chip--bad { background: var(--bad-tint); color: var(--bad-ink); }
+.lite-chip--warn { background: var(--warn-tint); color: var(--warn-ink); }
+.lite-chip--accent { background: var(--accent-tint); color: var(--accent-ink); }
+.lite-chip--neutral { background: var(--track); color: var(--text-2); }
+
+.lite-badge-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  display: inline-block;
+  background: var(--good);
+  flex-shrink: 0;
+}
+.lite-badge-dot--warn { background: var(--warn); }
+.lite-badge-dot--bad { background: var(--bad); }
+
+/* ── Focus visibility ────────────────────────────────────────────── */
+
+.lite-root a:focus-visible,
+.lite-root button:focus-visible,
+.lite-root input:focus-visible,
+.lite-root [tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Bars ────────────────────────────────────────────────────────── */
+
+.lite-bar-track {
+  height: 8px;
+  background: var(--track);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.lite-bar-track--inv { background: rgba(255, 255, 255, 0.14); }
+.lite-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.8s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lite-bar-fill { transition: none; }
+}
+
+/* Global reduced-motion override — covers every animated bar-fill in
+ * the widget, including VisibilityByStage's inline `transition:
+ * height ...` styles (an author-stylesheet !important rule is one of
+ * the few things that legitimately overrides an inline style). */
+@media (prefers-reduced-motion: reduce) {
+  .lite-root *, .lite-root *::before, .lite-root *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ── Dimension chart (why-section, 8 dimensions on a shared scale) ───
+ * Fixed (non-percentage) flex-basis on the label/score columns
+ * guarantees the middle bar column is pixel-identical across every
+ * sibling row — including the trailing axis row — without needing a
+ * shared CSS Grid + absolutely-positioned overlay spanning all rows. */
+
+.lite-dim-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 9px 0;
+}
+.lite-dim-label { flex: 0 0 170px; font-size: 12px; color: var(--text-2); }
+.lite-dim-bar-cell { flex: 1 1 auto; min-width: 60px; }
+.lite-dim-score-cell {
+  flex: 0 0 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+@media (max-width: 480px) {
+  .lite-dim-row { flex-wrap: wrap; padding: 12px 0; }
+  .lite-dim-label { flex: 1 1 100%; }
+  .lite-dim-bar-cell { flex: 1 1 100%; order: 3; margin-top: 4px; }
+  .lite-dim-score-cell { flex: 0 0 auto; margin-left: auto; }
+}
+
+.lite-dim-track { position: relative; height: 8px; }
+.lite-dim-fill {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  border-radius: 4px;
+  background: var(--track);
+}
+.lite-dim-gridline {
+  position: absolute;
+  top: -3px; bottom: -3px;
+  width: 1px;
+  background: var(--line);
+}
+.lite-dim-zero-tick {
+  position: absolute;
+  top: -2px; bottom: -2px;
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--bad);
+}
+.lite-dim-axis-track { position: relative; height: 14px; }
+
+/* ── Fix table ───────────────────────────────────────────────────── */
+
+.lite-fix-table-header {
+  display: grid;
+  grid-template-columns: 28px minmax(160px, 2fr) 1fr 110px 1fr;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.lite-fix-row {
+  display: grid;
+  grid-template-columns: 28px minmax(160px, 2fr) 1fr 110px 1fr;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+@media (max-width: 640px) {
+  .lite-fix-table-header { display: none; }
+  .lite-fix-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+/* ── Sliders ─────────────────────────────────────────────────────── */
+
+.lite-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--track);
+  outline-offset: 4px;
+}
+.lite-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--card);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.lite-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--card);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* ── Start-here callout ─────────────────────────────────────────── */
+
+.lite-callout {
+  background: var(--ink-2);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  padding: 14px 16px;
+}
+
+/* ── Platform chip (diagnostic-tier cliff) ──────────────────────── */
+
+.lite-platform-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-dark);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--text-inv);
+}
+
+/* ── Inputs ──────────────────────────────────────────────────────── */
+
+.lite-input {
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 14px;
+  height: 44px;
+  width: 100%;
+}
+.lite-input--pill { border-radius: 999px; }
+.lite-input--inv {
+  background: var(--ink-2);
+  border-color: var(--line-dark);
+  color: var(--text-inv);
+}
+.lite-input--inv::placeholder { color: var(--text-inv-2); font-family: var(--mono); }
+
+/* ── Layout helpers ──────────────────────────────────────────────── */
+
+.lite-cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+@media (max-width: 640px) { .lite-cols-2 { grid-template-columns: 1fr; } }
+
+.lite-cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+@media (max-width: 640px) { .lite-cols-3 { grid-template-columns: 1fr; } }
+.lite-cols-3 > *:not(:first-child) { border-left: 1px solid var(--line-dark); padding-left: 20px; }
+@media (max-width: 640px) {
+  .lite-cols-3 > *:not(:first-child) { border-left: none; padding-left: 0; }
+}
+
+/* Grid items default to min-width:auto, sizing to their content's
+   min-content — which can exceed the track and overflow the page on
+   narrow viewports. Let every column grid's items shrink to fit. */
+.lite-cols-2 > *, .lite-cols-3 > *, .lite-cols-4 > * { min-width: 0; }
+
+.lite-divider { height: 1px; background: var(--line); border: none; margin: 20px 0; }
+.lite-divider--inv { background: var(--line-dark); }
+
+.lite-divider-v { width: 1px; align-self: stretch; background: var(--line-dark); }
+
+/* ══════════════════════════════════════════════════════════════════
+   Landing page (Stage 6) — scan.parleo.io design language.
+   Everything below is additive; nothing above is touched by it.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Display headline (large hero/section headlines, distinct from
+   the report's .lite-headline which tops out at 32px) ─────────────── */
+
+.lite-display-headline {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: clamp(34px, 6vw, 72px);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  margin: 10px 0 0;
+}
+.lite-display-headline--inv { color: var(--text-inv); }
+.lite-serif-italic {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* ── Landing section rhythm + pattern ───────────────────────────── */
+
+.lite-landing-section {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 64px 20px;
+}
+@media (min-width: 768px) {
+  .lite-landing-section { padding: 120px 32px; }
+}
+.lite-landing-section--tight { padding-top: 0; }
+
+/* ── Nav ─────────────────────────────────────────────────────────── */
+
+.lite-landing-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+@media (min-width: 768px) { .lite-landing-nav { padding: 16px 32px; } }
+.lite-landing-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.lite-landing-nav-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.lite-landing-nav-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+}
+.lite-landing-nav-link:hover { color: var(--accent); }
+
+/* ── Trust chips (outlined pill, small icon + text) ─────────────── */
+
+.lite-trust-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+/* ── Privacy note (bordered rounded card, lock glyph) ───────────── */
+
+.lite-privacy-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+.lite-privacy-note > span:last-child { flex: 1; min-width: 0; }
+
+/* ── Sample-teaser card ──────────────────────────────────────────── */
+
+.lite-teaser-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+}
+.lite-teaser-score-tile {
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  background: var(--ink);
+  color: var(--text-inv);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+}
+.lite-teaser-arrow-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--text-inv);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+}
+
+/* ── Report preview mock (hero right — real DOM, faux browser chrome) ─ */
+
+.lite-browser-chrome {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.lite-chrome-dots { display: flex; gap: 5px; }
+.lite-chrome-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--line);
+}
+.lite-chrome-url-pill {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-2);
+  background: var(--paper);
+  border-radius: 999px;
+  padding: 4px 12px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lite-sample-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--warn-ink);
+  border: 1px solid var(--warn);
+  border-radius: 5px;
+  padding: 3px 7px;
+  white-space: nowrap;
+}
+.lite-preview-findings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 420px) {
+  .lite-preview-findings-grid { grid-template-columns: 1fr; }
+}
+.lite-preview-finding {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+.lite-preview-finding-tag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+.lite-preview-finding-tag--good { color: var(--good-ink); }
+.lite-preview-finding-tag--bad { color: var(--bad-ink); }
+.lite-preview-finding-swatch {
+  width: 7px; height: 7px; border-radius: 2px;
+  display: inline-block;
+}
+.lite-preview-finding-swatch--good { background: var(--good); }
+.lite-preview-finding-swatch--bad { background: var(--bad); }
+
+/* ── Weights bar (methodology) ──────────────────────────────────── */
+
+.lite-weights-bar {
+  display: flex;
+  width: 100%;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  gap: 2px;
+}
+.lite-weights-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+.lite-weights-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 24px;
+}
+@media (max-width: 560px) {
+  .lite-weights-legend { grid-template-columns: 1fr; }
+}
+.lite-weights-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+.lite-weights-swatch {
+  width: 10px; height: 10px; border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Slim strip (score cap) ──────────────────────────────────────── */
+
+.lite-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 18px;
+}
+
+/* ── Path columns (4-up, collapses 2x2 then 1-col) ──────────────── */
+
+.lite-cols-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+@media (max-width: 860px) { .lite-cols-4 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 480px) { .lite-cols-4 { grid-template-columns: 1fr; } }
+.lite-cols-4 > *:not(:first-child) { border-left: 1px solid var(--line); padding-left: 20px; }
+@media (max-width: 860px) {
+  .lite-cols-4 > * { border-left: none !important; padding-left: 0 !important; }
+}
+
+.lite-kicker-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+/* ── Platform / brand chip row (hero + methodology stamp) ───────── */
+
+.lite-brand-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--card);
+}
+.lite-brand-chip-glyph {
+  width: 16px; height: 16px; border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--foundation);
+  flex-shrink: 0;
+}

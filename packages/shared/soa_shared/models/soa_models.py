@@ -1350,3 +1350,207 @@ class SoaRecommendation(Base):
 
     cycle = relationship("SoaCycle", back_populates="recommendations")
     play = relationship("SoaPlaybook", back_populates="recommendations")
+
+
+# ---------------------------------------------------------------------------
+# 15. soa_lite_requests — SoA Lite orchestration state machine and
+# lead-capture record. Backs the public, unauthenticated "enter a brand,
+# get a report" flow: one row per visitor submission, driving generation
+# and run of a 12-query study through the existing pipeline, then gating
+# the resulting report behind `token`. All rows live under the dedicated
+# 'Parleo Lead Gen' organization — see soa_shared/org_helpers.py.
+# ---------------------------------------------------------------------------
+
+class SoaLiteRequest(Base):
+    __tablename__ = "soa_lite_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','generating','running','complete','failed')",
+            name="ck_soa_lite_requests_status",
+        ),
+        Index("ix_soa_lite_requests_status", "status"),
+        Index("ix_soa_lite_requests_ip_hash_created_at", "ip_hash", "created_at"),
+        Index("ix_soa_lite_requests_organization_id", "organization_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    token = Column(
+        Text,
+        unique=True,
+        nullable=False,
+        comment=(
+            "Unguessable public access key (uuid4 hex, generated app-side). "
+            "Used to fetch the gated report with no auth."
+        ),
+    )
+
+    email = Column(
+        Text,
+        nullable=True,
+        comment=(
+            "Lead capture. Null until the visitor submits their email to "
+            "unlock the full report."
+        ),
+    )
+
+    brand_name = Column(Text, nullable=False, comment="Raw visitor input, unresolved.")
+
+    competitor_names = Column(
+        JSON,
+        nullable=True,
+        comment="List of 0-2 raw competitor name strings as entered by the visitor.",
+    )
+
+    brand_entity_id = Column(
+        Integer,
+        ForeignKey("soa_entities.id"),
+        nullable=True,
+        comment="Resolved during processing. Null until entity resolution runs.",
+    )
+
+    competitor_entity_ids = Column(
+        JSON,
+        nullable=True,
+        comment="List of resolved soa_entities.id values, parallel to competitor_names.",
+    )
+
+    study_type = Column(
+        Text,
+        nullable=True,
+        comment=(
+            "'lite-{first 8 chars of token}'. Stamped when generation starts; "
+            "matches study_type on the generated soa_queries/soa_cycles rows."
+        ),
+    )
+
+    store_url = Column(
+        Text,
+        nullable=True,
+        comment=(
+            "Visitor-supplied (or derived) storefront URL, used as input to the "
+            "Agent Scan crawl. Null for submissions that don't include one — the "
+            "scan is degraded/skipped in that case, never blocking the report."
+        ),
+    )
+
+    cycle_id = Column(
+        Integer,
+        ForeignKey("soa_cycles.id"),
+        nullable=True,
+        comment="Set once the cycle row is created for this request.",
+    )
+
+    status = Column(
+        Text,
+        nullable=False,
+        default="pending",
+        server_default="pending",
+        comment="pending -> generating -> running -> complete, or failed at any step.",
+    )
+
+    error_message = Column(Text, nullable=True)
+
+    ip_hash = Column(
+        Text,
+        nullable=True,
+        comment="sha256 of the client IP, for rate limiting. Raw IP is never stored.",
+    )
+
+    organization_id = Column(
+        Integer,
+        ForeignKey("organizations.id"),
+        nullable=False,
+        comment="Always the dedicated 'Parleo Lead Gen' organization.",
+    )
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    brand_entity = relationship("SoaEntity", foreign_keys=[brand_entity_id])
+    cycle = relationship("SoaCycle")
+    scan_result = relationship(
+        "SoaLiteScanResult", back_populates="lite_request", uselist=False,
+    )
+
+
+# ---------------------------------------------------------------------------
+# 16. soa_lite_scan_results — Agent Scan crawl output for a SoA Lite
+# request. One row per soa_lite_requests row (1:1, optional — a request
+# with no store_url never gets one). Written by the pure, self-contained
+# apps/pipeline/scan/ engine (see engine.py::run_scan); nothing in this
+# table blocks Lite completion — see worker.py's terminal-state handling.
+# ---------------------------------------------------------------------------
+
+class SoaLiteScanResult(Base):
+    __tablename__ = "soa_lite_scan_results"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','running','complete','blocked','failed','skipped')",
+            name="ck_soa_lite_scan_results_status",
+        ),
+        UniqueConstraint(
+            "lite_request_id",
+            name="uq_soa_lite_scan_results_lite_request_id",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    lite_request_id = Column(
+        Integer,
+        ForeignKey("soa_lite_requests.id"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    input_url = Column(
+        Text,
+        nullable=True,
+        comment="Storefront URL as submitted/derived — mirrors soa_lite_requests.store_url at scan time.",
+    )
+
+    status = Column(
+        Text,
+        nullable=False,
+        default="pending",
+        server_default="pending",
+        comment=(
+            "pending -> running -> complete, or blocked/failed/skipped. Terminal "
+            "states are complete/blocked/failed/skipped — see engine.py::run_scan."
+        ),
+    )
+
+    total_score = Column(
+        Integer,
+        nullable=True,
+        comment="0-100. Null until status='complete'.",
+    )
+
+    integrity_capped = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="True when dishonest pricing signals (fake 'was' prices) capped total_score at 59.",
+    )
+
+    dimensions = Column(
+        JSON,
+        nullable=True,
+        comment="{code: {score, max, evidence: [...], fix}} for all 8 dimensions. Null until complete.",
+    )
+
+    pages_fetched = Column(
+        JSON,
+        nullable=True,
+        comment="[{url, status}] — every page the scan attempted to fetch.",
+    )
+
+    error = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    lite_request = relationship("SoaLiteRequest", back_populates="scan_result")
