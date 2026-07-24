@@ -1,7 +1,7 @@
 /**
  * Locked teaser: the dark "agent commerce score" hero card (screenshot
  * 1 — composite numeral, band pill, verdict, Score-by-family bars, band
- * scale), a rival share-of-voice card, and a verbatim worst-answer
+ * scale), a rival share-of-mentions card, and a verbatim worst-answer
  * excerpt when the API provides one (worst_mention_excerpt is a
  * forward-looking, optional field — no backend stage emits it yet, so
  * it's read defensively and simply omitted when absent, same as every
@@ -40,7 +40,7 @@ function WorstAnswer({ excerpt }) {
 function RivalShareOfVoice({ entities }) {
   return (
     <div>
-      <div className="lite-label" style={{ marginBottom: 12 }}>Rival share of voice</div>
+      <div className="lite-label" style={{ marginBottom: 12 }}>Rival share of mentions</div>
       {entities.map((entity, i) => (
         <div key={entity.name} style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12, fontWeight: 600 }}>
