@@ -15,7 +15,7 @@ describe('looksLikeUrl', () => {
   })
 
   it('rejects a plain brand name with no dot', () => {
-    expect(looksLikeUrl('Drunk Elephant')).toBe(false)
+    expect(looksLikeUrl('Allbirds')).toBe(false)
   })
 
   it('rejects text containing a dot but also a space', () => {
@@ -46,7 +46,10 @@ describe('deriveBrandFromUrl', () => {
   })
 
   it('title-cases hyphenated labels', () => {
-    expect(deriveBrandFromUrl('drunk-elephant.com')).toBe('Drunk Elephant')
+    // Allbirds (the demo placeholder) has no natural hyphenated domain,
+    // so this uses a synthetic multi-word example purely to exercise the
+    // hyphen-to-title-case mechanic, not a real or demo brand.
+    expect(deriveBrandFromUrl('multi-word-brand.com')).toBe('Multi Word Brand')
   })
 
   it('returns empty string for unparseable input', () => {

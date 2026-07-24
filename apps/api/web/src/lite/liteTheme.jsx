@@ -71,14 +71,24 @@ function scanStatusTone(scanStatus) {
   return 'warn'
 }
 
-export function ReportHeaderBar({ brandOrDomain, scannedDateLabel, scanStatus }) {
+export function ReportHeaderBar({ brandOrDomain, scannedDateLabel, scanStatus, token }) {
   const [copied, setCopied] = useState(false)
   const statusText = SCAN_STATUS_COPY[scanStatus] || 'Scanning…'
   const tone = scanStatusTone(scanStatus)
 
   async function handleCopyLink() {
+    // Stage 9 (U3): the canonical /report/{token} URL, built explicitly
+    // rather than trusting window.location.href — this bar can render
+    // while the page is still at the legacy /lite path (sessionStorage-
+    // resumed), where location.href would copy an unshareable URL that
+    // means nothing to anyone else. Falls back to location.href only if
+    // no token was threaded down (shouldn't happen on the full report,
+    // which always has one by the time it renders).
+    const url = token
+      ? `${window.location.origin}/report/${encodeURIComponent(token)}`
+      : window.location.href
     try {
-      await navigator.clipboard.writeText(window.location.href)
+      await navigator.clipboard.writeText(url)
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     } catch (_) {

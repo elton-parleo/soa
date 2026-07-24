@@ -3,7 +3,7 @@ import { validateEmail, validateName, validateSubmission } from '../validation.j
 
 describe('validateName', () => {
   it('accepts a normal brand name', () => {
-    expect(validateName('Drunk Elephant', 'Brand name')).toBeNull()
+    expect(validateName('Allbirds', 'Brand name')).toBeNull()
   })
 
   it('accepts ampersands, apostrophes, and accents', () => {

@@ -776,7 +776,7 @@ function Footer() {
 
 // ─── Root ────────────────────────────────────────────────────────────────
 
-export function LiteFullReport({ report, onAddStoreUrl }) {
+export function LiteFullReport({ report, onAddStoreUrl, token }) {
   const entities = report.overall || []
   const ctaUrl = import.meta.env.VITE_LITE_CTA_URL
 
@@ -793,6 +793,7 @@ export function LiteFullReport({ report, onAddStoreUrl }) {
           brandOrDomain={primaryEntity?.name || 'Your brand'}
           scannedDateLabel={formatDateStamp()}
           scanStatus={report.scan_status}
+          token={token}
         />
 
         <ExecutiveTiles report={report} exposure={exposure} />

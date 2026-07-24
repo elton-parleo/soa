@@ -278,3 +278,120 @@ describe('LiteWidget — old API shape (additive fields absent)', () => {
     expect(screen.getByText('Add your store URL to see why')).toBeInTheDocument()
   })
 })
+
+// ─── Stage 9: /report/{token} — urlToken, navigate, not-found ──────────
+
+function queryNoindexMeta() {
+  return document.head.querySelector('meta[name="robots"][content="noindex"]')
+}
+
+describe('LiteWidget — Stage 9: urlToken seeds the token from the URL', () => {
+  it('polls immediately using urlToken, without requiring a sessionStorage token', async () => {
+    liteApi.getStatus.mockResolvedValue({
+      status: 'running', phase: 'analyzing', progress: { completed_runs: 12, total_runs: 12 },
+    })
+
+    render(<LiteWidget urlToken="tok-from-url" />)
+
+    await waitFor(() => expect(liteApi.getStatus).toHaveBeenCalledWith('tok-from-url'))
+    await waitFor(() => expect(screen.getByText('Analyzing responses…')).toBeInTheDocument())
+  })
+
+  it('persists the URL token to sessionStorage so a later /lite visit resumes it', async () => {
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+
+    render(<LiteWidget urlToken="tok-from-url-2" />)
+
+    await waitFor(() => expect(sessionStorage.getItem('soaLiteToken')).toBe('tok-from-url-2'))
+  })
+
+  it('renders the not-found state immediately for an empty urlToken, without polling', async () => {
+    render(<LiteWidget urlToken="" />)
+
+    expect(screen.getByText("We couldn't find this report")).toBeInTheDocument()
+    expect(liteApi.getStatus).not.toHaveBeenCalled()
+  })
+
+  it('renders the not-found state on a 404 from getStatus, and stops polling', async () => {
+    const err = new Error('Not found.')
+    err.status = 404
+    liteApi.getStatus.mockRejectedValue(err)
+
+    render(<LiteWidget urlToken="tok-unknown" />)
+
+    await waitFor(() => expect(screen.getByText("We couldn't find this report")).toBeInTheDocument())
+    const callsAtNotFound = liteApi.getStatus.mock.calls.length
+    // No further polling once terminal — same idiom as the 'failed' status check.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(liteApi.getStatus.mock.calls.length).toBe(callsAtNotFound)
+  })
+
+  it('scrubs the dead token from sessionStorage on a 404, so it cannot poison a later /lite or /report visit', async () => {
+    const err = new Error('Not found.')
+    err.status = 404
+    liteApi.getStatus.mockRejectedValue(err)
+
+    render(<LiteWidget urlToken="tok-unknown-2" />)
+
+    // The mount-time persist effect writes it optimistically; the 404 must
+    // scrub it back out rather than leaving a dead token behind.
+    await waitFor(() => expect(sessionStorage.getItem('soaLiteToken')).toBe('tok-unknown-2'))
+    await waitFor(() => expect(screen.getByText("We couldn't find this report")).toBeInTheDocument())
+    expect(sessionStorage.getItem('soaLiteToken')).toBeNull()
+  })
+
+  it('the not-found "Start a new scan" button calls navigate when provided', () => {
+    const navigate = vi.fn()
+    render(<LiteWidget urlToken="" navigate={navigate} />)
+
+    fireEvent.click(screen.getByText('Start a new scan'))
+    expect(navigate).toHaveBeenCalledWith('/scan')
+  })
+})
+
+describe('LiteWidget — Stage 9: navigate after submit', () => {
+  it('calls navigate with /report/{token} after a successful submission', async () => {
+    liteApi.submit.mockResolvedValue({ token: 'tok-nav', status: 'pending' })
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+    const navigate = vi.fn()
+
+    render(<LiteWidget navigate={navigate} />)
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'Acme Co' } })
+    fireEvent.click(screen.getByText('Run my free diagnostic'))
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/report/tok-nav'))
+  })
+
+  it('does not throw when navigate is omitted (today\'s exact /lite behavior)', async () => {
+    liteApi.submit.mockResolvedValue({ token: 'tok-no-nav', status: 'pending' })
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+
+    render(<LiteWidget />)
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'Acme Co' } })
+    fireEvent.click(screen.getByText('Run my free diagnostic'))
+
+    await waitFor(() => expect(sessionStorage.getItem('soaLiteToken')).toBe('tok-no-nav'))
+    expect(screen.queryByText(/is not a function/)).not.toBeInTheDocument()
+  })
+})
+
+describe('LiteWidget — Stage 9: noindex meta (U4)', () => {
+  it('adds <meta name="robots" content="noindex"> once a token exists', async () => {
+    sessionStorage.setItem('soaLiteToken', 'tok-noindex')
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+
+    render(<LiteWidget />)
+
+    await waitFor(() => expect(queryNoindexMeta()).not.toBeNull())
+  })
+
+  it('does not add a noindex meta for the bare form (no token, not a report route)', () => {
+    render(<LiteWidget />)
+    expect(queryNoindexMeta()).toBeNull()
+  })
+
+  it('adds noindex for the not-found state on an empty urlToken (still a report route)', () => {
+    render(<LiteWidget urlToken="" />)
+    expect(queryNoindexMeta()).not.toBeNull()
+  })
+})

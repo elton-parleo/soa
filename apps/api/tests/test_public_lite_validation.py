@@ -16,8 +16,8 @@ def _submit(**overrides):
 
 
 def test_valid_submission_passes():
-    req = _submit(brand_name="Drunk Elephant", competitor_names=["Glossier", "The Ordinary"])
-    assert req.brand_name == "Drunk Elephant"
+    req = _submit(brand_name="Allbirds", competitor_names=["Glossier", "The Ordinary"])
+    assert req.brand_name == "Allbirds"
     assert req.competitor_names == ["Glossier", "The Ordinary"]
 
 

@@ -209,20 +209,57 @@ function AppContent() {
   )
 }
 
+// ─── Pathname routing for the public lite/scan/report surfaces ───────────────
+// Stage 9: unlike AppContent's hash-based view state (unaffected, reads
+// the hash independently), the public pages need real pathname changes
+// so a submit on /scan can land on /report/{token} without a full
+// reload (U2) — pushState alone doesn't re-render React, so this pairs
+// it with a pathname state + a popstate listener for back/forward.
+function useLitePathname() {
+  const [pathname, setPathname] = useState(window.location.pathname)
+
+  useEffect(() => {
+    function onPopState() {
+      setPathname(window.location.pathname)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  function navigate(path) {
+    window.history.pushState({}, '', path)
+    setPathname(path)
+  }
+
+  return [pathname, navigate]
+}
+
 // ─── Root — wraps everything in AuthProvider ─────────────────────────────────
 export default function App() {
+  const [pathname, navigate] = useLitePathname()
+
   // SoA Lite: a public, unauthenticated widget iframed/linked from the
   // marketing site. Checked before AuthProvider mounts so this path never
   // touches Supabase session state, the login gate, or any authed-app
   // global state — see lite/LiteWidget.jsx's module docstring.
-  if (window.location.pathname === '/lite') {
-    return <LiteWidget />
+  if (pathname === '/lite') {
+    return <LiteWidget navigate={navigate} />
   }
 
   // Parleo Scan landing page — same pre-auth, standalone treatment as
   // /lite (see above); /lite itself is untouched for existing embeds.
-  if (window.location.pathname === '/scan') {
-    return <LandingPage />
+  if (pathname === '/scan') {
+    return <LandingPage navigate={navigate} />
+  }
+
+  // Stage 9: unique, revisitable report URLs. /report alone (no token
+  // segment) still renders LiteWidget with an empty urlToken so it goes
+  // straight to the not-found state (U1) rather than falling through to
+  // the authed login gate, which would be a confusing experience for a
+  // visitor following a broken public link.
+  if (pathname === '/report' || pathname.startsWith('/report/')) {
+    const token = pathname === '/report' ? '' : decodeURIComponent(pathname.slice('/report/'.length))
+    return <LiteWidget urlToken={token} navigate={navigate} />
   }
 
   return (

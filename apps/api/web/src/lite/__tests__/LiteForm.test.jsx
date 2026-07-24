@@ -76,10 +76,10 @@ describe('LiteForm — URL auto-detect mode', () => {
   it('detects a URL and shows an editable derived brand-name confirmation field', () => {
     render(<LiteForm onSubmitted={() => {}} />)
 
-    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'drunk-elephant.com' } })
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'allbirds.com' } })
 
     expect(screen.getByText(/Looks like a URL/)).toBeInTheDocument()
-    expect(screen.getByLabelText('Confirm your brand name')).toHaveValue('Drunk Elephant')
+    expect(screen.getByLabelText('Confirm your brand name')).toHaveValue('Allbirds')
   })
 
   it('keeps re-deriving the brand name as the URL changes until the user edits it', () => {

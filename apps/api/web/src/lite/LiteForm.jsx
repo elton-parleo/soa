@@ -24,7 +24,7 @@ export function LiteForm({
   compact = false,
   inv = false,
   submitLabel = 'Run my free diagnostic',
-  placeholder = 'e.g. Drunk Elephant or drunkelephant.com',
+  placeholder = 'e.g. Allbirds or allbirds.com',
 }) {
   const idPrefix = useId()
   const [primaryInput, setPrimaryInput] = useState(initialBrandName)
@@ -142,7 +142,7 @@ export function LiteForm({
                 id={`${idPrefix}-confirmed-brand`}
                 type="text"
                 className="lite-input lite-input--pill"
-                placeholder="e.g. Drunk Elephant"
+                placeholder="e.g. Allbirds"
                 value={confirmedBrand}
                 onChange={(e) => handleConfirmedBrandChange(e.target.value)}
               />
@@ -231,7 +231,7 @@ export function LiteForm({
                   id="lite-confirmed-brand"
                   type="text"
                   className="lite-input"
-                  placeholder="e.g. Drunk Elephant"
+                  placeholder="e.g. Allbirds"
                   value={confirmedBrand}
                   onChange={(e) => handleConfirmedBrandChange(e.target.value)}
                   style={{ marginBottom: 4 }}

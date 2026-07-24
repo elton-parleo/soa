@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import '@testing-library/jest-dom'
 
@@ -64,6 +64,17 @@ describe('LiteFullReport — page frame', () => {
   it('renders the report header bar with the primary entity', () => {
     render(<LiteFullReport report={baseReport} />)
     expect(screen.getByText('Acme Co')).toBeInTheDocument() // header bar brand
+  })
+
+  it('Stage 9 (U3): Copy link writes the canonical /report/{token} URL to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+
+    render(<LiteFullReport report={baseReport} token="tok-copy-123" />)
+    fireEvent.click(screen.getByText('Copy link'))
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/report/tok-copy-123`))
+    await waitFor(() => expect(screen.getByText('Copied')).toBeInTheDocument())
   })
 
   it('renders the working-session CTA link in both the funnel teaser and the diagnostic cliff when VITE_LITE_CTA_URL is set', () => {
