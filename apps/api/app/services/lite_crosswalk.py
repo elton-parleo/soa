@@ -85,3 +85,52 @@ def link_dimensions(run_signals: list, scan_dimensions: Dict[str, dict]) -> Dict
         linked.setdefault("V5", "competitor cited with deal, primary never is")
 
     return linked
+
+
+TRAILING_RIVAL_THRESHOLD = 25  # points; primary must trail EVERY rival with a defined rate by at least this much
+ZERO_RATE_MIN_MENTIONS = 2     # a rate of 0 with only 1 mention is too thin a sample to link
+
+
+def link_incentive_citation(incentive_citation: list, scan_dimensions: Dict[str, dict]) -> Dict[str, str]:
+    """
+    Stage 8 (A4): the primary's incentive-citation rate is 0 (with
+    ZERO_RATE_MIN_MENTIONS+ mentions) — or trails every rival that has a
+    defined rate by TRAILING_RIVAL_THRESHOLD+ points — AND the scan's V2
+    or V3 dimension is scoring below half its max -> link the
+    lower-scoring of V2/V3. Returns at most one {code: reason} entry, in
+    the same {dimension_code: reason} shape as link_dimensions() so the
+    caller can merge them (see apps/api/app/routers/public_lite.py).
+
+    incentive_citation: the same list serialized into the public
+    payload (apps/api/app/services/lite_incentive_citation.py's output:
+    [{entity, is_primary, mentions, cited_answers, rate_pct}, ...]) —
+    reused, not recomputed. Rivals with rate_pct=None (zero mentions)
+    are excluded from the "every rival" trailing check — an undefined
+    rate can't be "beaten by 25 points".
+    """
+    primary = next((e for e in incentive_citation if e.get("is_primary")), None)
+    if not primary or primary.get("rate_pct") is None:
+        return {}
+
+    rivals_with_rate = [
+        e for e in incentive_citation if not e.get("is_primary") and e.get("rate_pct") is not None
+    ]
+
+    zero_condition = primary["rate_pct"] == 0 and primary["mentions"] >= ZERO_RATE_MIN_MENTIONS
+    trailing_condition = bool(rivals_with_rate) and all(
+        r["rate_pct"] >= primary["rate_pct"] + TRAILING_RIVAL_THRESHOLD for r in rivals_with_rate
+    )
+    if not (zero_condition or trailing_condition):
+        return {}
+
+    v2_gap = _dimension_gap_below_half(scan_dimensions, "V2")
+    v3_gap = _dimension_gap_below_half(scan_dimensions, "V3")
+    if not (v2_gap or v3_gap):
+        return {}
+
+    candidates = [code for code, has_gap in (("V2", v2_gap), ("V3", v3_gap)) if has_gap]
+    # Lower-scoring of the two — deterministic tiebreak by code when scores tie.
+    target = min(candidates, key=lambda c: (scan_dimensions.get(c, {}).get("score", 0), c))
+
+    reason = "value never cited" if zero_condition else "value rarely cited"
+    return {target: reason}

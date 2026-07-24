@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   looksLikeUrl, deriveBrandFromUrl, domainFromStoreUrl, accessibilityBadgeText,
   groupDimensionsByFamily, rankDimensionsByGap, computeExposure, formatCurrency,
-  getScoreBand, getVerdictLine, getDominantRivalPayoff,
+  getScoreBand, getVerdictLine, getDominantRivalPayoff, getIncentiveCitationPayoff,
 } from '../liteDerive.js'
 
 describe('looksLikeUrl', () => {
@@ -291,5 +291,64 @@ describe('getDominantRivalPayoff', () => {
 
   it('returns null when visibility_breakdown is absent', () => {
     expect(getDominantRivalPayoff(undefined)).toBeNull()
+  })
+})
+
+describe('getIncentiveCitationPayoff', () => {
+  it('returns the payoff line when primary rate is 0 (>=2 mentions) and a rival is >=25%', () => {
+    const ic = [
+      { entity: 'Acme Co', is_primary: true, mentions: 6, cited_answers: 0, rate_pct: 0 },
+      { entity: 'Rival Co', is_primary: false, mentions: 4, cited_answers: 2, rate_pct: 50 },
+    ]
+    expect(getIncentiveCitationPayoff(ic)).toBe(
+      "Agents mention you without your value: 0 of 6 mentions cited a deal or offer. Rival Co's mentions carried one 50% of the time."
+    )
+  })
+
+  it('picks the highest-rate rival when there are several', () => {
+    const ic = [
+      { entity: 'Acme Co', is_primary: true, mentions: 6, cited_answers: 0, rate_pct: 0 },
+      { entity: 'Rival A', is_primary: false, mentions: 4, cited_answers: 1, rate_pct: 25 },
+      { entity: 'Rival B', is_primary: false, mentions: 4, cited_answers: 3, rate_pct: 75 },
+    ]
+    expect(getIncentiveCitationPayoff(ic)).toContain("Rival B's mentions carried one 75%")
+  })
+
+  it('returns null when primary rate is nonzero', () => {
+    const ic = [
+      { entity: 'Acme Co', is_primary: true, mentions: 6, cited_answers: 1, rate_pct: 17 },
+      { entity: 'Rival Co', is_primary: false, mentions: 4, cited_answers: 2, rate_pct: 50 },
+    ]
+    expect(getIncentiveCitationPayoff(ic)).toBeNull()
+  })
+
+  it('returns null when primary has fewer than 2 mentions (thin sample)', () => {
+    const ic = [
+      { entity: 'Acme Co', is_primary: true, mentions: 1, cited_answers: 0, rate_pct: 0 },
+      { entity: 'Rival Co', is_primary: false, mentions: 4, cited_answers: 2, rate_pct: 50 },
+    ]
+    expect(getIncentiveCitationPayoff(ic)).toBeNull()
+  })
+
+  it('returns null when no rival reaches 25% (no fabricated drama)', () => {
+    const ic = [
+      { entity: 'Acme Co', is_primary: true, mentions: 6, cited_answers: 0, rate_pct: 0 },
+      { entity: 'Rival Co', is_primary: false, mentions: 4, cited_answers: 0, rate_pct: 10 },
+    ]
+    expect(getIncentiveCitationPayoff(ic)).toBeNull()
+  })
+
+  it('excludes rivals with a null rate (zero mentions) from the comparison', () => {
+    const ic = [
+      { entity: 'Acme Co', is_primary: true, mentions: 6, cited_answers: 0, rate_pct: 0 },
+      { entity: 'Rival A', is_primary: false, mentions: 0, cited_answers: null, rate_pct: null },
+      { entity: 'Rival B', is_primary: false, mentions: 4, cited_answers: 2, rate_pct: 50 },
+    ]
+    expect(getIncentiveCitationPayoff(ic)).toContain("Rival B's")
+  })
+
+  it('returns null when incentive_citation is absent/empty', () => {
+    expect(getIncentiveCitationPayoff(undefined)).toBeNull()
+    expect(getIncentiveCitationPayoff([])).toBeNull()
   })
 })

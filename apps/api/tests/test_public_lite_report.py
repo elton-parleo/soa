@@ -101,21 +101,26 @@ def _seed_complete_cycle(conn, token="t1", email=None):
         "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) "
         "VALUES (1, 102, 'M002', 'competitor')"
     )
-    for entity_id, soa_pct, mention_rate in [(101, 0.6, 0.5), (102, 0.3, 0.2)]:
+    # deal_citation_rate: Acme 50% (3 of 6 mentions cited), Rival Co 0%
+    # (mentioned 6 times, never with a qualifying incentive) — a realistic
+    # shape for the Stage 8 incentive_citation tests below.
+    for entity_id, soa_pct, mention_rate, deal_citation_rate in [
+        (101, 0.6, 0.5, 0.5), (102, 0.3, 0.2, 0.0),
+    ]:
         conn.exec_driver_sql(
             "INSERT INTO soa_metrics_results "
             "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
-            " mention_rate, soa_pct, position_index, rsi_score) "
-            "VALUES (1, ?, 'overall', 'overall', 12, 6, ?, ?, 0.4, 1.2)",
-            (entity_id, mention_rate, soa_pct),
+            " mention_rate, soa_pct, position_index, rsi_score, deal_citation_rate) "
+            "VALUES (1, ?, 'overall', 'overall', 12, 6, ?, ?, 0.4, 1.2, ?)",
+            (entity_id, mention_rate, soa_pct, deal_citation_rate),
         )
         for stage in ("Awareness", "Research", "Comparison", "Ready to Buy"):
             conn.exec_driver_sql(
                 "INSERT INTO soa_metrics_results "
                 "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
-                " mention_rate, soa_pct, position_index, rsi_score) "
-                "VALUES (1, ?, 'stage', ?, 3, 2, ?, ?, 0.4, 1.0)",
-                (entity_id, stage, mention_rate, soa_pct),
+                " mention_rate, soa_pct, position_index, rsi_score, deal_citation_rate) "
+                "VALUES (1, ?, 'stage', ?, 3, 2, ?, ?, 0.4, 1.0, ?)",
+                (entity_id, stage, mention_rate, soa_pct, deal_citation_rate),
             )
 
 
@@ -228,9 +233,13 @@ _STAGE_NAMES = ("awareness", "research", "comparison", "ready to buy")
 def _seed_cycle_with_rich_stage_variance(conn, token="t1", email="visitor@example.com"):
     """
     Same primary/competitor pair as _seed_complete_cycle, but every stage
-    gets a genuinely different mention_rate/soa_pct per entity (not the
-    same value repeated) — a real per-stage leak would surface as one of
-    these distinctive numbers appearing somewhere in the response.
+    gets a genuinely different mention_rate/soa_pct/deal_citation_rate per
+    entity (not the same value repeated) — a real per-stage leak would
+    surface as one of these distinctive numbers appearing somewhere in
+    the response. deal_citation_rate is included here (Stage 8, A2) to
+    re-assert Stage 7's stage nulling is slice-wide, not field-specific —
+    it was never fetched by field name, so any metric column gets the
+    same protection for free.
     """
     conn.exec_driver_sql(
         "INSERT INTO soa_lite_requests (token, email, status, cycle_id) VALUES (?, ?, 'complete', 1)",
@@ -253,14 +262,14 @@ def _seed_cycle_with_rich_stage_variance(conn, token="t1", email="visitor@exampl
     conn.exec_driver_sql(
         "INSERT INTO soa_metrics_results "
         "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
-        " mention_rate, soa_pct, position_index, rsi_score) "
-        "VALUES (1, 101, 'overall', 'overall', 12, 6, 0.5, 0.6, 0.4, 1.2)"
+        " mention_rate, soa_pct, position_index, rsi_score, deal_citation_rate) "
+        "VALUES (1, 101, 'overall', 'overall', 12, 6, 0.5, 0.6, 0.4, 1.2, 0.5)"
     )
     conn.exec_driver_sql(
         "INSERT INTO soa_metrics_results "
         "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
-        " mention_rate, soa_pct, position_index, rsi_score) "
-        "VALUES (1, 102, 'overall', 'overall', 12, 3, 0.25, 0.3, 0.3, 0.5)"
+        " mention_rate, soa_pct, position_index, rsi_score, deal_citation_rate) "
+        "VALUES (1, 102, 'overall', 'overall', 12, 3, 0.25, 0.3, 0.3, 0.5, 0.2)"
     )
     # Distinct, easily-fingerprinted stage-level rates — none of these
     # numbers (or their *100 percent forms) may appear anywhere below.
@@ -270,22 +279,31 @@ def _seed_cycle_with_rich_stage_variance(conn, token="t1", email="visitor@exampl
         "Comparison":   (0.4567, 0.6789),
         "Ready to Buy": (0.7531, 0.2468),
     }
+    # A separate fingerprint set for deal_citation_rate so a leak there
+    # is unambiguous (not confusable with a mention_rate leak).
+    stage_deal_citation_rates = {
+        "Awareness":    (0.1357, 0.9642),
+        "Research":     (0.8642, 0.1357),
+        "Comparison":   (0.2589, 0.7413),
+        "Ready to Buy": (0.6314, 0.3697),
+    }
     for stage, (primary_rate, rival_rate) in stage_rates.items():
+        primary_deal_rate, rival_deal_rate = stage_deal_citation_rates[stage]
         conn.exec_driver_sql(
             "INSERT INTO soa_metrics_results "
             "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
-            " mention_rate, soa_pct, position_index, rsi_score) "
-            "VALUES (1, 101, 'stage', ?, 3, 2, ?, ?, 0.4, 1.0)",
-            (stage, primary_rate, primary_rate),
+            " mention_rate, soa_pct, position_index, rsi_score, deal_citation_rate) "
+            "VALUES (1, 101, 'stage', ?, 3, 2, ?, ?, 0.4, 1.0, ?)",
+            (stage, primary_rate, primary_rate, primary_deal_rate),
         )
         conn.exec_driver_sql(
             "INSERT INTO soa_metrics_results "
             "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
-            " mention_rate, soa_pct, position_index, rsi_score) "
-            "VALUES (1, 102, 'stage', ?, 3, 2, ?, ?, 0.4, 1.0)",
-            (stage, rival_rate, rival_rate),
+            " mention_rate, soa_pct, position_index, rsi_score, deal_citation_rate) "
+            "VALUES (1, 102, 'stage', ?, 3, 2, ?, ?, 0.4, 1.0, ?)",
+            (stage, rival_rate, rival_rate, rival_deal_rate),
         )
-    return stage_rates
+    return stage_rates, stage_deal_citation_rates
 
 
 def _flatten_leaf_values(obj, out):
@@ -301,7 +319,9 @@ def _flatten_leaf_values(obj, out):
 
 def test_full_report_never_leaks_stage_level_mention_data(db):
     with db.begin() as conn:
-        stage_rates = _seed_cycle_with_rich_stage_variance(conn, token="t1", email="visitor@example.com")
+        stage_rates, stage_deal_citation_rates = _seed_cycle_with_rich_stage_variance(
+            conn, token="t1", email="visitor@example.com"
+        )
 
     result = public_lite.get_lite_report("t1")
 
@@ -316,12 +336,18 @@ def test_full_report_never_leaks_stage_level_mention_data(db):
     # ...and none of the distinctive per-stage rate values leaked through
     # as a bare number either (guards against a future refactor that
     # drops the stage *key* but still serializes the stage *values*).
+    # Slice-wide, not field-specific (Stage 8 A2): both mention_rate's
+    # and deal_citation_rate's stage fingerprints are checked here.
     leaves = []
     _flatten_leaf_values(result, leaves)
     numeric_leaves = {round(float(v), 4) for v in leaves if isinstance(v, (int, float))}
     for primary_rate, rival_rate in stage_rates.values():
         for rate in (primary_rate, rival_rate):
             assert round(rate, 4) not in numeric_leaves
+            assert round(rate * 100, 1) not in {round(n, 1) for n in numeric_leaves}
+    for primary_deal_rate, rival_deal_rate in stage_deal_citation_rates.values():
+        for rate in (primary_deal_rate, rival_deal_rate):
+            assert round(rate, 4) not in numeric_leaves, f"stage-sliced deal_citation_rate {rate} leaked"
             assert round(rate * 100, 1) not in {round(n, 1) for n in numeric_leaves}
 
 
@@ -490,6 +516,54 @@ def test_report_attaches_linked_reason_from_crosswalk(db):
     assert by_code["F1"]["linked"] is None
 
 
+def test_report_attaches_incentive_citation_linked_reason_end_to_end(db):
+    """
+    Stage 8 (A4), integration-level: proves the router actually merges
+    link_incentive_citation's result into scan.dimensions[].linked, not
+    just that the pure function returns the right dict in isolation
+    (see test_lite_crosswalk.py for that).
+    """
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, email, status, cycle_id) VALUES ('t1', 'visitor@example.com', 'complete', 1)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (101, 'Acme Co', 'acme-co', 'brand')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (102, 'Rival Co', 'rival-co', 'brand')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (1, 101, 'M001', 'primary')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (1, 102, 'M002', 'competitor')"
+        )
+        # Acme: 2 mentions, 0% incentive citation. Rival: 4 mentions, 50%
+        # citation rate -> Acme's 0% trails the rival by 50pts (>=25).
+        conn.exec_driver_sql(
+            "INSERT INTO soa_metrics_results "
+            "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+            " mention_rate, soa_pct, position_index, rsi_score, deal_citation_rate) "
+            "VALUES (1, 101, 'overall', 'overall', 12, 2, 0.17, 0.3, 0.4, 1.0, 0.0)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_metrics_results "
+            "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+            " mention_rate, soa_pct, position_index, rsi_score, deal_citation_rate) "
+            "VALUES (1, 102, 'overall', 'overall', 12, 4, 0.33, 0.7, 0.4, 1.0, 0.5)"
+        )
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="complete", total_score=59, dimensions=_FULL_DIMENSIONS)
+
+    result = public_lite.get_lite_report("t1")
+    by_code = {d["code"]: d for d in result["scan"]["dimensions"]}
+
+    # V2 (score 6/14) and V3 (score 7/14) both have gaps; V2 scores lower
+    # -> V2 wins. Acme's rate is literally 0 with 2 mentions -> zero_condition.
+    assert by_code["V2"]["linked"] == {"reason": "value never cited"}
+
+
 # ─── visibility / accessibility / composite subscores ───────────────────
 
 def test_teaser_visibility_present_without_scan(db):
@@ -549,6 +623,76 @@ def test_teaser_never_includes_visibility_breakdown(db):
     assert "visibility_breakdown" not in result
 
 
+# ─── Stage 8 (A1): visibility_breakdown.incentive_citation ───────────────
+
+def test_full_report_has_incentive_citation_shaped_correctly(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+
+    result = public_lite.get_lite_report("t1")
+    ic = result["visibility_breakdown"]["incentive_citation"]
+
+    by_entity = {r["entity"]: r for r in ic}
+    assert by_entity["Acme Co"]["is_primary"] is True
+    assert by_entity["Acme Co"]["mentions"] == 6
+    assert by_entity["Acme Co"]["rate_pct"] == 50.0
+    assert by_entity["Acme Co"]["cited_answers"] == 3  # round(0.5 * 6)
+
+    assert by_entity["Rival Co"]["is_primary"] is False
+    assert by_entity["Rival Co"]["mentions"] == 6
+    assert by_entity["Rival Co"]["rate_pct"] == 0.0
+    assert by_entity["Rival Co"]["cited_answers"] == 0
+
+    # primary-first ordering, same convention as mention_rate/share_of_mentions.
+    assert [r["entity"] for r in ic] == ["Acme Co", "Rival Co"]
+
+
+def test_incentive_citation_null_rate_for_zero_mention_entity(db):
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, email, status, cycle_id) VALUES ('t1', 'visitor@example.com', 'complete', 1)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (101, 'Acme Co', 'acme-co', 'brand')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (102, 'Rival Co', 'rival-co', 'brand')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (1, 101, 'M001', 'primary')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (1, 102, 'M002', 'competitor')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_metrics_results "
+            "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+            " mention_rate, soa_pct, position_index, rsi_score, deal_citation_rate) "
+            "VALUES (1, 101, 'overall', 'overall', 12, 0, 0.0, 0.0, NULL, NULL, NULL)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_metrics_results "
+            "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+            " mention_rate, soa_pct, position_index, rsi_score, deal_citation_rate) "
+            "VALUES (1, 102, 'overall', 'overall', 12, 4, 0.33, 1.0, 0.4, 1.0, 0.5)"
+        )
+
+    result = public_lite.get_lite_report("t1")
+    ic = {r["entity"]: r for r in result["visibility_breakdown"]["incentive_citation"]}
+
+    assert ic["Acme Co"]["mentions"] == 0
+    assert ic["Acme Co"]["rate_pct"] is None
+    assert ic["Acme Co"]["cited_answers"] is None
+
+
+def test_teaser_never_includes_incentive_citation(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email=None)
+
+    result = public_lite.get_lite_report("t1")
+    assert "visibility_breakdown" not in result  # whole object absent, incentive_citation included
+
+
 def test_full_report_carries_same_subscores_as_teaser(db):
     with db.begin() as conn:
         _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
@@ -591,3 +735,9 @@ def test_full_report_response_is_additive_over_pre_stage3_shape(db):
     assert result["by_stage"] is None
     for entity in result["overall"]:
         assert {"name", "role", "metrics"}.issubset(entity.keys())
+    # Stage 8: incentive_citation is additive on visibility_breakdown —
+    # present, non-empty, and every row has the full field set.
+    ic = result["visibility_breakdown"]["incentive_citation"]
+    assert len(ic) == 2
+    for row in ic:
+        assert {"entity", "is_primary", "mentions", "cited_answers", "rate_pct"}.issubset(row.keys())

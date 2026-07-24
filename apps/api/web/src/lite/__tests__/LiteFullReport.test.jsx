@@ -30,6 +30,10 @@ const VISIBILITY_BREAKDOWN = {
     { entity: 'Rival Co', is_primary: false, mentions: 9, share_pct: 60.0 },
   ],
   totals: { total_mentions: 15, total_queries: 12 },
+  incentive_citation: [
+    { entity: 'Acme Co', is_primary: true, mentions: 6, cited_answers: 2, rate_pct: 33.3 },
+    { entity: 'Rival Co', is_primary: false, mentions: 3, cited_answers: 1, rate_pct: 33.3 },
+  ],
 }
 
 const baseReport = {
@@ -83,7 +87,7 @@ describe('LiteFullReport — visibility section (Stage 7)', () => {
   it('renders the W1 section header', () => {
     render(<LiteFullReport report={baseReport} />)
     expect(screen.getByText('VISIBILITY · 12 QUERIES · CHATGPT')).toBeInTheDocument()
-    expect(screen.getByText('How often agents mention you')).toBeInTheDocument()
+    expect(screen.getByText('How often agents mention you — and your value')).toBeInTheDocument()
   })
 
   it('renders one mention-rate row per entity with the NN% · n/12 format', () => {
@@ -132,6 +136,137 @@ describe('LiteFullReport — visibility section (Stage 7)', () => {
     const { visibility_breakdown, ...report } = baseReport
     render(<LiteFullReport report={report} />)
     expect(screen.getByText("Visibility data isn't available for this report yet.")).toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — incentive citation card (Stage 8)', () => {
+  it('renders the card title, rubric-honest subtitle, and one row per entity', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getByText('Incentive citation rate')).toBeInTheDocument()
+    expect(screen.getByText(
+      'When an answer names the brand, how often it also cites a live, actionable deal or member offer'
+    )).toBeInTheDocument()
+    expect(screen.getByText('33% · 2 of 6 mentions')).toBeInTheDocument()
+    expect(screen.getByText('33% · 1 of 3 mentions')).toBeInTheDocument()
+  })
+
+  it('renders the MENTIONED / WITH AN INCENTIVE CITED legend', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getByText('Mentioned')).toBeInTheDocument()
+    expect(screen.getByText('With an incentive cited')).toBeInTheDocument()
+  })
+
+  it('shows "— · no mentions" for a zero-mention entity, never 0%', () => {
+    const report = {
+      ...baseReport,
+      visibility_breakdown: {
+        ...VISIBILITY_BREAKDOWN,
+        incentive_citation: [
+          { entity: 'Acme Co', is_primary: true, mentions: 6, cited_answers: 2, rate_pct: 33.3 },
+          { entity: 'Rival Co', is_primary: false, mentions: 0, cited_answers: null, rate_pct: null },
+        ],
+      },
+    }
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText('— · no mentions')).toBeInTheDocument()
+    expect(screen.queryByText('0% · 0 of 0 mentions')).not.toBeInTheDocument()
+  })
+
+  it('renders zero-rate primary numerals in --bad (via inline style)', () => {
+    const report = {
+      ...baseReport,
+      visibility_breakdown: {
+        ...VISIBILITY_BREAKDOWN,
+        incentive_citation: [
+          { entity: 'Acme Co', is_primary: true, mentions: 6, cited_answers: 0, rate_pct: 0 },
+          { entity: 'Rival Co', is_primary: false, mentions: 3, cited_answers: 1, rate_pct: 33.3 },
+        ],
+      },
+    }
+    render(<LiteFullReport report={report} />)
+    const label = screen.getByText('0% · 0 of 6 mentions')
+    expect(label).toHaveStyle({ color: 'var(--bad-ink)' })
+  })
+
+  it('renders the LINKED chip only when the crosswalk fired, sourced from scan.dimensions', () => {
+    const report = {
+      ...baseReport,
+      scan: {
+        ...baseReport.scan,
+        dimensions: EIGHT_DIMENSIONS.map((d) =>
+          d.code === 'V2' ? { ...d, linked: { reason: 'value never cited' } } : d
+        ),
+      },
+    }
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText('LINKED · V2 LOYALTY SURFACE 6/14')).toBeInTheDocument()
+  })
+
+  it('omits the chip when the crosswalk did not fire', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.queryByText(/^LINKED ·/)).not.toBeInTheDocument()
+  })
+
+  it('ignores a linked reason on V2/V3 that is not one of the incentive-citation reasons', () => {
+    // "loyalty program never mentioned" is a real, pre-existing
+    // link_dimensions() reason — it renders its own DimensionRow chip in
+    // the why-section, which is expected. What must NOT happen is the
+    // incentive-citation card mistaking it for one of its own reasons.
+    const report = {
+      ...baseReport,
+      scan: {
+        ...baseReport.scan,
+        dimensions: EIGHT_DIMENSIONS.map((d) =>
+          d.code === 'V2' ? { ...d, linked: { reason: 'loyalty program never mentioned' } } : d
+        ),
+      },
+    }
+    render(<LiteFullReport report={report} />)
+    expect(screen.queryByText(/^LINKED · V2 LOYALTY SURFACE/)).not.toBeInTheDocument()
+  })
+
+  it('shows the W5 payoff sentence only when the primary rate is 0 and a rival is >=25%', () => {
+    const report = {
+      ...baseReport,
+      visibility_breakdown: {
+        ...VISIBILITY_BREAKDOWN,
+        incentive_citation: [
+          { entity: 'Acme Co', is_primary: true, mentions: 6, cited_answers: 0, rate_pct: 0 },
+          { entity: 'Rival Co', is_primary: false, mentions: 3, cited_answers: 2, rate_pct: 67 },
+        ],
+      },
+    }
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(
+      "Agents mention you without your value: 0 of 6 mentions cited a deal or offer. Rival Co's mentions carried one 67% of the time."
+    )).toBeInTheDocument()
+  })
+
+  it('omits the payoff sentence for the default (nonzero-rate) fixture', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.queryByText(/Agents mention you without your value/)).not.toBeInTheDocument()
+  })
+
+  it('does not render the card at all when incentive_citation is empty (missing metrics rows)', () => {
+    const report = {
+      ...baseReport,
+      visibility_breakdown: { ...VISIBILITY_BREAKDOWN, incentive_citation: [] },
+    }
+    render(<LiteFullReport report={report} />)
+    expect(screen.queryByText('Incentive citation rate')).not.toBeInTheDocument()
+  })
+
+  it('does not render the card when visibility_breakdown is absent entirely (old API shape)', () => {
+    const { visibility_breakdown, ...report } = baseReport
+    render(<LiteFullReport report={report} />)
+    expect(screen.queryByText('Incentive citation rate')).not.toBeInTheDocument()
+  })
+
+  it('gives each entity row an accessible aria-label with both numbers', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getByRole('img', {
+      name: 'Acme Co: 6 mentions, 2 of those cited a live, actionable incentive',
+    })).toBeInTheDocument()
   })
 })
 

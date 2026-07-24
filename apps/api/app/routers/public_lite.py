@@ -30,7 +30,8 @@ from sqlalchemy import text
 from soa_shared.database import engine, session_factory
 from soa_shared.org_helpers import get_or_create_leadgen_org
 from app.routers.metrics import build_entity_metrics
-from app.services.lite_crosswalk import RunSignal, link_dimensions
+from app.services.lite_crosswalk import RunSignal, link_dimensions, link_incentive_citation
+from app.services.lite_incentive_citation import build_incentive_citation_payload
 from app.services.lite_visibility import build_visibility_payload
 from app.schemas import (
     EntityMetrics,
@@ -398,6 +399,13 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
 
     entity_info: dict = {}    # comparison_code -> {"name":, "role":} (internal grouping key only)
     overall_metrics: dict = {}
+    # Stage 8 (A1): the raw, unnormalized 0.0-1.0 deal_citation_rate
+    # (row[10]) — kept separate from overall_metrics' *100-normalized
+    # copy (build_entity_metrics' 'deal_citation_rate') because
+    # lite_incentive_citation.py needs the un-rounded-to-1dp original to
+    # recover deal_cited_count exactly. Instrument itself (row[10]'s
+    # source column) is unmodified this stage.
+    raw_deal_citation_rate: dict = {}
     primary_code = None
 
     for row in rows:
@@ -406,6 +414,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
         if role == 'primary':
             primary_code = comp_code
         overall_metrics[comp_code] = build_entity_metrics(row)
+        raw_deal_citation_rate[comp_code] = row[10]
 
     # visibility reuses the same share-of-voice metric already computed
     # for the report (build_entity_metrics' 'som') — no second metrics
@@ -466,6 +475,22 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
     ]
     visibility_breakdown = build_visibility_payload(visibility_entities)
 
+    # Stage 8 (A1): incentive_citation reshapes the same overall_metrics
+    # rows above (no second query) — deal_citation_rate is a pre-existing,
+    # already-computed column (H1: the coding/metrics instrument is
+    # frozen this stage).
+    incentive_citation_entities = [
+        {
+            "name": info["name"],
+            "is_primary": info["role"] == "primary",
+            "mentions": overall_metrics.get(code, {}).get("total_mentions") or 0,
+            "deal_citation_rate_raw": raw_deal_citation_rate.get(code),
+        }
+        for code, info in entity_info.items()
+    ]
+    incentive_citation = build_incentive_citation_payload(incentive_citation_entities)
+    visibility_breakdown["incentive_citation"] = incentive_citation
+
     linked: dict = {}
     if scan_row and scan_row[0] == 'complete':
         primary_entity_row = conn.execute(text("""
@@ -475,6 +500,11 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
             dimensions_raw = _decode_json_field(scan_row[3], {})
             run_signals = _fetch_run_signals(conn, cycle_id, primary_entity_row[0])
             linked = link_dimensions(run_signals, dimensions_raw)
+
+            # Stage 8 (A4): merged via setdefault so an existing Stage-7
+            # rule's reason on V2/V3 always wins if one already fired.
+            for code, reason in link_incentive_citation(incentive_citation, dimensions_raw).items():
+                linked.setdefault(code, reason)
 
     scan_payload = _build_scan_payload(scan_row, linked)
 

@@ -2,7 +2,7 @@
 Tests for app/services/lite_crosswalk.py — pure fixture tests, no DB.
 One test per rule, plus a couple of no-false-positive checks.
 """
-from app.services.lite_crosswalk import RunSignal, link_dimensions
+from app.services.lite_crosswalk import RunSignal, link_dimensions, link_incentive_citation
 
 
 def _gap(score, max_=10.0):
@@ -191,6 +191,97 @@ def test_no_linked_reason_string_names_a_funnel_stage():
     linked = link_dimensions(signals, scan_dimensions)
 
     assert linked  # sanity: the fixture actually exercises multiple rules
+    for code, reason in linked.items():
+        lowered = reason.lower()
+        for stage_name in _STAGE_NAMES:
+            assert stage_name not in lowered, f"{code}'s reason '{reason}' names stage '{stage_name}'"
+
+
+# ─── Stage 8 (A4): link_incentive_citation ────────────────────────────
+
+def _ic(entity, is_primary, mentions, rate_pct):
+    return {"entity": entity, "is_primary": is_primary, "mentions": mentions, "rate_pct": rate_pct}
+
+
+def test_zero_rate_with_v2_low_links_value_never_cited():
+    incentive_citation = [
+        _ic("Acme Co", True, 6, 0),
+        _ic("Rival Co", False, 4, 30),
+    ]
+    scan_dimensions = {"V2": _gap(4.0, 14), "V3": _gap(10.0, 14)}  # V2 gap, V3 no gap
+    linked = link_incentive_citation(incentive_citation, scan_dimensions)
+    assert linked == {"V2": "value never cited"}
+
+
+def test_zero_rate_with_too_few_mentions_does_not_fire():
+    incentive_citation = [_ic("Acme Co", True, 1, 0)]
+    scan_dimensions = {"V2": _gap(4.0, 14)}
+    assert link_incentive_citation(incentive_citation, scan_dimensions) == {}
+
+
+def test_trailing_every_rival_by_25_links_value_rarely_cited():
+    incentive_citation = [
+        _ic("Acme Co", True, 8, 10),
+        _ic("Rival A", False, 5, 40),
+        _ic("Rival B", False, 3, 35),
+    ]
+    scan_dimensions = {"V3": _gap(5.0, 14)}
+    linked = link_incentive_citation(incentive_citation, scan_dimensions)
+    assert linked == {"V3": "value rarely cited"}
+
+
+def test_rival_below_25_gap_prevents_trailing_condition():
+    incentive_citation = [
+        _ic("Acme Co", True, 8, 10),
+        _ic("Rival A", False, 5, 30),  # only 20pts ahead — not enough
+    ]
+    scan_dimensions = {"V3": _gap(5.0, 14)}
+    assert link_incentive_citation(incentive_citation, scan_dimensions) == {}
+
+
+def test_zero_mention_rival_excluded_from_trailing_check():
+    incentive_citation = [
+        _ic("Acme Co", True, 8, 10),
+        _ic("Rival A", False, 5, 40),   # trails by 30 — qualifies
+        _ic("Rival B", False, 0, None),  # zero mentions — must not block the rule
+    ]
+    scan_dimensions = {"V2": _gap(4.0, 14)}
+    linked = link_incentive_citation(incentive_citation, scan_dimensions)
+    assert linked == {"V2": "value rarely cited"}
+
+
+def test_does_not_fire_when_scan_incomplete_or_dimensions_absent():
+    # A blocked/skipped scan yields an empty scan_dimensions dict —
+    # _dimension_gap_below_half returns False for every code, so the
+    # rule can't fire regardless of the citation data.
+    incentive_citation = [_ic("Acme Co", True, 6, 0), _ic("Rival Co", False, 4, 40)]
+    assert link_incentive_citation(incentive_citation, {}) == {}
+
+
+def test_does_not_fire_when_v2_and_v3_both_score_at_or_above_half_max():
+    incentive_citation = [_ic("Acme Co", True, 6, 0), _ic("Rival Co", False, 4, 40)]
+    scan_dimensions = {"V2": _gap(7.0, 14), "V3": _gap(7.0, 14)}  # exactly half — not below
+    assert link_incentive_citation(incentive_citation, scan_dimensions) == {}
+
+
+def test_no_primary_rate_does_not_fire():
+    incentive_citation = [_ic("Acme Co", True, 0, None), _ic("Rival Co", False, 4, 40)]
+    scan_dimensions = {"V2": _gap(4.0, 14)}
+    assert link_incentive_citation(incentive_citation, scan_dimensions) == {}
+
+
+def test_picks_the_lower_scoring_of_v2_and_v3_when_both_have_gaps():
+    incentive_citation = [_ic("Acme Co", True, 6, 0)]
+    scan_dimensions = {"V2": _gap(6.0, 14), "V3": _gap(2.0, 14)}  # V3 scores lower
+    linked = link_incentive_citation(incentive_citation, scan_dimensions)
+    assert linked == {"V3": "value never cited"}
+
+
+def test_incentive_citation_reasons_never_name_a_funnel_stage():
+    incentive_citation = [_ic("Acme Co", True, 6, 0), _ic("Rival Co", False, 4, 40)]
+    scan_dimensions = {"V2": _gap(4.0, 14)}
+    linked = link_incentive_citation(incentive_citation, scan_dimensions)
+    assert linked
     for code, reason in linked.items():
         lowered = reason.lower()
         for stage_name in _STAGE_NAMES:

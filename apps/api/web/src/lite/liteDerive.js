@@ -224,6 +224,28 @@ export function getDominantRivalPayoff(visibilityBreakdown) {
   return `${totalMentions} brand mentions across ${totalQueries} answers. Half went to one rival.`
 }
 
+/**
+ * Stage 8 (W5) — the incentive-citation card's footer payoff line. Only
+ * when the primary's rate is literally 0 (with >=2 mentions, so it's not
+ * a thin sample) AND some rival's rate is >=25%; omitted otherwise (no
+ * fabricated drama). incentiveCitation is
+ * report.visibility_breakdown.incentive_citation.
+ */
+export function getIncentiveCitationPayoff(incentiveCitation) {
+  const primary = (incentiveCitation || []).find((e) => e.is_primary)
+  if (!primary || primary.rate_pct !== 0 || primary.mentions < 2) return null
+
+  const topRival = (incentiveCitation || [])
+    .filter((e) => !e.is_primary && e.rate_pct !== null && e.rate_pct !== undefined)
+    .sort((a, b) => b.rate_pct - a.rate_pct)[0]
+  if (!topRival || topRival.rate_pct < 25) return null
+
+  return (
+    `Agents mention you without your value: 0 of ${primary.mentions} mentions cited a ` +
+    `deal or offer. ${topRival.entity}'s mentions carried one ${Math.round(topRival.rate_pct)}% of the time.`
+  )
+}
+
 // ─── Misc formatting ────────────────────────────────────────────────────
 
 export function formatDateStamp(date = new Date()) {

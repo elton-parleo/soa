@@ -223,7 +223,7 @@ describe('LiteWidget — adaptive shapes', () => {
 
     // The real, unlocked visibility section (W1/W2) still renders in full —
     // a blocked scan degrades the why-section only, per rule 7.
-    await waitFor(() => expect(screen.getByText('How often agents mention you')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('How often agents mention you — and your value')).toBeInTheDocument())
     expect(screen.getByText('42% · 5/12')).toBeInTheDocument()
     expect(screen.getByText(/blocked our reader/)).toBeInTheDocument()
 

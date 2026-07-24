@@ -22,7 +22,7 @@
 import { useState } from 'react'
 import {
   accessibilityBadgeText, computeExposure, formatCurrency, formatDateStamp,
-  getDominantRivalPayoff, groupDimensionsByFamily, rankDimensionsByGap,
+  getDominantRivalPayoff, getIncentiveCitationPayoff, groupDimensionsByFamily, rankDimensionsByGap,
 } from './liteDerive.js'
 import {
   ENTITY_COLORS, LightCard, DarkCard, SectionHeader, ReportHeaderBar,
@@ -243,6 +243,117 @@ function FunnelTeaserCard({ ctaUrl }) {
   )
 }
 
+// ─── Incentive citation rate (Stage 8 — full-width, between the donut
+// and the funnel teaser) ────────────────────────────────────────────
+// Powered entirely by the existing, unmodified deal_cited ->
+// deal_citation_rate pipeline (H1: the instrument is frozen this
+// stage) — this card only renders it.
+
+// Reasons emitted by lite_crosswalk.py::link_incentive_citation — used
+// to find which scan dimension (if any) the crosswalk linked, so the
+// header chip is always sourced from crosswalk data, never hard-coded.
+const INCENTIVE_LINKED_REASONS = new Set(['value never cited', 'value rarely cited'])
+
+function findIncentiveCitationChip(scan) {
+  const dim = (scan?.dimensions || []).find((d) => d.linked && INCENTIVE_LINKED_REASONS.has(d.linked.reason))
+  if (!dim) return null
+  return `LINKED · ${dim.code} ${dim.name.toUpperCase()} ${formatScore(dim.score)}/${dim.max}`
+}
+
+function IncentiveCitationRow({ entity, mentionRateEntry, color }) {
+  const hasMentions = entity.mentions > 0
+  const isZeroPrimary = entity.is_primary && entity.rate_pct === 0
+  const totalQueries = mentionRateEntry?.total_queries ?? 12
+  const mentionRateWidth = mentionRateEntry?.rate_pct ?? 0
+  const citedWidth = hasMentions ? ((entity.cited_answers || 0) / totalQueries) * 100 : 0
+  const animated = useAnimateOnMount()
+
+  const label = hasMentions
+    ? `${formatScore(entity.rate_pct)}% · ${entity.cited_answers} of ${entity.mentions} mentions`
+    : '— · no mentions'
+  const ariaLabel = hasMentions
+    ? `${entity.entity}: ${entity.mentions} mentions, ${entity.cited_answers} of those cited a live, actionable incentive`
+    : `${entity.entity}: no mentions, incentive citation rate not applicable`
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+        <span style={{ color: isZeroPrimary ? 'var(--bad-ink)' : 'var(--text)' }}>
+          {entity.entity}{entity.is_primary ? ' (you)' : ''}
+        </span>
+        <span className="lite-mono" style={{ fontWeight: 700, color: isZeroPrimary ? 'var(--bad-ink)' : 'var(--text)' }}>
+          {label}
+        </span>
+      </div>
+      <div
+        role="img"
+        aria-label={ariaLabel}
+        style={{ position: 'relative', height: 8, borderRadius: 4, overflow: 'hidden', background: 'var(--track)' }}
+      >
+        {hasMentions && (
+          <>
+            <div style={{ position: 'absolute', inset: 0, width: `${mentionRateWidth}%`, background: 'var(--track-darker)' }} />
+            <div
+              style={{
+                position: 'absolute', top: 0, left: 0, bottom: 0,
+                width: animated ? `${citedWidth}%` : '0%',
+                background: isZeroPrimary ? 'var(--bad)' : color,
+                transition: 'width 0.8s ease',
+              }}
+            />
+            {isZeroPrimary && (
+              <span
+                aria-hidden="true"
+                style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 2, background: 'var(--bad)' }}
+              />
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function IncentiveCitationCard({ mentionRate, incentiveCitation, scan }) {
+  if (!incentiveCitation || incentiveCitation.length === 0) return null
+
+  const chipText = findIncentiveCitationChip(scan)
+  const payoff = getIncentiveCitationPayoff(incentiveCitation)
+  const mentionRateByEntity = {}
+  ;(mentionRate || []).forEach((r) => { mentionRateByEntity[r.entity] = r })
+
+  return (
+    <div style={{ marginTop: 28, paddingTop: 28, borderTop: '1px solid var(--line)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>Incentive citation rate</div>
+        {chipText && <Chip tone="accent">{chipText}</Chip>}
+      </div>
+      <div className="lite-body lite-muted" style={{ fontSize: 12.5, marginBottom: 18 }}>
+        When an answer names the brand, how often it also cites a live, actionable deal or member offer
+      </div>
+
+      {incentiveCitation.map((entity, i) => (
+        <IncentiveCitationRow
+          key={entity.entity}
+          entity={entity}
+          mentionRateEntry={mentionRateByEntity[entity.entity]}
+          color={ENTITY_COLORS[i % ENTITY_COLORS.length]}
+        />
+      ))}
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 16 }}>
+          <LegendDot color="var(--track-darker)" label="Mentioned" />
+          <LegendDot color={ENTITY_COLORS[0]} label="With an incentive cited" />
+        </div>
+        {payoff && (
+          <div className="lite-body" style={{ fontWeight: 600, textAlign: 'right', maxWidth: 360 }}>{payoff}</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function VisibilitySection({ report, ctaUrl }) {
   const vb = report.visibility_breakdown
   return (
@@ -250,7 +361,7 @@ function VisibilitySection({ report, ctaUrl }) {
       <SectionHeader
         label="VISIBILITY · 12 QUERIES · CHATGPT"
         annotation={formatDateStamp()}
-        headline="How often agents mention you"
+        headline="How often agents mention you — and your value"
       />
       {vb ? (
         <div className="lite-cols-2" style={{ marginTop: 20 }}>
@@ -262,6 +373,11 @@ function VisibilitySection({ report, ctaUrl }) {
           Visibility data isn't available for this report yet.
         </div>
       )}
+      <IncentiveCitationCard
+        mentionRate={vb?.mention_rate}
+        incentiveCitation={vb?.incentive_citation}
+        scan={report.scan}
+      />
       <FunnelTeaserCard ctaUrl={ctaUrl} />
     </LightCard>
   )

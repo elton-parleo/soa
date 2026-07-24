@@ -749,10 +749,31 @@ class PublicLiteVisibilityTotals(BaseModel):
     total_queries: int
 
 
+class PublicLiteIncentiveCitation(BaseModel):
+    """
+    Stage 8 — CONDITIONAL metric, not unconditional: of the answers that
+    mention this entity, the share whose mention carried a concrete,
+    currently-active, attributed incentive. Powered by the existing,
+    unmodified deal_cited -> deal_citation_rate pipeline (see the DEAL
+    CITATION RULES in apps/pipeline/parser/prompts.py for the full pass-1
+    rubric — a stated price, program-existence mention ("they have a
+    rewards program"), or permanent policy ("free shipping over $50")
+    does NOT qualify as a citation). cited_answers/rate_pct are null,
+    never 0, when the entity has zero mentions — an undefined rate, not
+    a zero one.
+    """
+    entity: str
+    is_primary: bool
+    mentions: int
+    cited_answers: Optional[int] = None
+    rate_pct: Optional[float] = None
+
+
 class PublicLiteVisibilityBreakdown(BaseModel):
     mention_rate: List[PublicLiteVisibilityMentionRate] = []
     share_of_mentions: List[PublicLiteVisibilityShare] = []
     totals: PublicLiteVisibilityTotals
+    incentive_citation: List[PublicLiteIncentiveCitation] = []
 
 
 class PublicLiteReportResponse(BaseModel):
@@ -766,7 +787,11 @@ class PublicLiteReportResponse(BaseModel):
     visibility_breakdown: Stage 7 addition. Named _breakdown rather than
     reusing `visibility` because that field name is already taken by the
     scalar SoM subscore below — reshaping an existing field would break
-    the additive-only contract.
+    the additive-only contract. Stage 8 adds visibility_breakdown.
+    incentive_citation (see PublicLiteIncentiveCitation) — same object,
+    additive field, no shape change to mention_rate/share_of_mentions/
+    totals. Present on the full (unlocked) report only — the teaser
+    stays share-of-mentions-only, unchanged.
     """
     status: str
     locked: bool = False

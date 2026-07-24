@@ -32,6 +32,10 @@
   --text-inv: #F5F6F8;
   --text-inv-2: #9AA1B0;
   --track: #E9E7E0;
+  /* Stage 8 — pale layer for the incentive-citation card's layered bars
+     (mention-rate width in --track-darker, cited-answers overlay on top
+     in the entity's ENTITY_COLORS shade). Non-text fill, no AA gate. */
+  --track-darker: #D9DCE3;
   /* #2F6BFF as originally specified carries white pill-button text
      (the primary CTA everywhere in the widget) at 4.4988:1 — a hair
      under AA's 4.5:1. Darkened ~1% (imperceptible) to clear it with a

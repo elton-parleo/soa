@@ -63,6 +63,14 @@ export function FieldEvidence() {
         </div>
 
         <div className="lite-card">
+          {/* TODO(Stage 8, R1): "3.2%"/"1.8%" read as this exact metric
+             (deal_citation_rate — see IncentiveCitationCard in
+             LiteFullReport.jsx), but these were authored as illustrative
+             copy-deck numbers in Stage 6, before deal_citation_rate was
+             exposed anywhere in the product. There is no source cycle in
+             this repo to verify which denominator actually produced
+             them. Per R1: left unchanged rather than guessed — do not
+             adjust without a verified source. */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <Monogram text="G/H" />
