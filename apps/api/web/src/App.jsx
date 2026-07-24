@@ -10,6 +10,7 @@ import ActionsPage       from './components/ActionsPage.jsx'
 import StudyLibrary      from './components/StudyLibrary.jsx'
 import StudyDetail      from './components/StudyDetail.jsx'
 import LiteWidget        from './lite/LiteWidget.jsx'
+import LandingPage       from './lite/LandingPage.jsx'
 
 // ─── Read initial view from URL hash on page load ────────────────────────────
 function getInitialView() {
@@ -216,6 +217,12 @@ export default function App() {
   // global state — see lite/LiteWidget.jsx's module docstring.
   if (window.location.pathname === '/lite') {
     return <LiteWidget />
+  }
+
+  // Parleo Scan landing page — same pre-auth, standalone treatment as
+  // /lite (see above); /lite itself is untouched for existing embeds.
+  if (window.location.pathname === '/scan') {
+    return <LandingPage />
   }
 
   return (

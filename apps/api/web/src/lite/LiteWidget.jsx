@@ -35,8 +35,11 @@ import { LiteFullReport } from './LiteFullReport.jsx'
 
 export { LiteForm, LiteProgress, LiteFailed, LiteTeaser, LiteFullReport }
 
-const STORAGE_KEY = 'soaLiteToken'
-const STORAGE_KEY_STORE_URL = 'soaLiteStoreUrl'
+// Exported so the landing page (Stage 6) can hand off a submission to
+// this widget's resume-from-sessionStorage behavior without duplicating
+// the state machine.
+export const STORAGE_KEY = 'soaLiteToken'
+export const STORAGE_KEY_STORE_URL = 'soaLiteStoreUrl'
 const POLL_INTERVAL_MS = 5000
 
 function readSession(key) {

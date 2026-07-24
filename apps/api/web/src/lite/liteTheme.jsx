@@ -49,7 +49,7 @@ export function LogoHeader() {
         <rect x="2" y="2" width="8" height="20" rx="1.5" style={{ fill: 'var(--accent)' }} />
         <rect x="14" y="6" width="8" height="12" rx="1.5" style={{ fill: 'var(--accent)' }} opacity="0.4" />
       </svg>
-      <span className="lite-label" style={{ fontSize: 12 }}>SoA Lite</span>
+      <span className="lite-label" style={{ fontSize: 12 }}>Parleo Scan</span>
     </div>
   )
 }

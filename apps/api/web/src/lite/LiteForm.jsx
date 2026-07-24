@@ -5,22 +5,33 @@
  * confirmation field; the visitor's edit (if any) always wins over
  * further auto-derivation, tracked via brandManuallyEdited.
  *
- * No screenshot in design-refs/ shows an input form (the reference
- * captures are all completed reports) — this applies the same tokens
- * (paper background, card shape, pill button, mono micro-copy) for
- * visual consistency with the rest of the widget.
+ * `compact` (Stage 6) renders the identical state machine and submit
+ * path as an inline pill input + button — no LogoHeader/card chrome,
+ * competitors tucked behind a disclosure toggle — for embedding in the
+ * scan.parleo.io landing page's hero and final-CTA bands. It changes
+ * markup only: every hook, validation call, and liteApi.submit call
+ * below is shared between both render modes untouched.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { liteApi } from './liteApi.js'
 import { validateSubmission } from './validation.js'
 import { looksLikeUrl, deriveBrandFromUrl } from './liteDerive.js'
 import { LogoHeader, ErrorBanner, LightCard } from './liteTheme.jsx'
 
-export function LiteForm({ onSubmitted, initialBrandName = '' }) {
+export function LiteForm({
+  onSubmitted,
+  initialBrandName = '',
+  compact = false,
+  inv = false,
+  submitLabel = 'Run my free diagnostic',
+  placeholder = 'e.g. Drunk Elephant or drunkelephant.com',
+}) {
+  const idPrefix = useId()
   const [primaryInput, setPrimaryInput] = useState(initialBrandName)
   const [confirmedBrand, setConfirmedBrand] = useState('')
   const [brandManuallyEdited, setBrandManuallyEdited] = useState(false)
   const [competitors, setCompetitors] = useState(['', ''])
+  const [showCompetitors, setShowCompetitors] = useState(false)
   const [errors, setErrors] = useState({ brandName: null, competitors: {} })
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
@@ -90,6 +101,92 @@ export function LiteForm({ onSubmitted, initialBrandName = '' }) {
   const fieldErrorStyle = { fontSize: 12, color: 'var(--bad-ink)', marginBottom: 10, minHeight: 16 }
   const labelStyle = { fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 6, display: 'block' }
 
+  if (compact) {
+    // Dark bands (final-CTA) need inverse text/error colors and the
+    // accent (blue) button; the light hero uses the ink (dark) button —
+    // see the Stage 6 design language addendum.
+    const compactFieldErrorStyle = { ...fieldErrorStyle, color: inv ? 'var(--bad-on-dark)' : 'var(--bad-ink)' }
+    return (
+      <div>
+        <ErrorBanner message={submitError} />
+        <form onSubmit={handleSubmit}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <label className="lite-visually-hidden" htmlFor={`${idPrefix}-primary`}>Your brand or store URL</label>
+            <input
+              id={`${idPrefix}-primary`}
+              type="text"
+              className="lite-input lite-input--pill"
+              placeholder={placeholder}
+              value={primaryInput}
+              onChange={(e) => handlePrimaryChange(e.target.value)}
+              style={{ flex: '1 1 220px' }}
+            />
+            <button
+              type="submit"
+              disabled={submitting}
+              className={`lite-pill ${inv ? 'lite-pill--solid' : 'lite-pill--solid-ink'}`}
+              style={{ flex: '0 0 auto', height: 44, padding: '0 22px' }}
+            >
+              {submitting ? 'Starting…' : submitLabel}
+            </button>
+          </div>
+          {!isUrlMode && (
+            <div style={compactFieldErrorStyle}>{errors.brandName || ' '}</div>
+          )}
+          {isUrlMode && (
+            <div style={{ marginTop: 10 }}>
+              <label className={inv ? 'lite-muted--inv' : 'lite-muted'} style={{ fontSize: 12, marginBottom: 6, display: 'block' }} htmlFor={`${idPrefix}-confirmed-brand`}>
+                Confirm your brand name
+              </label>
+              <input
+                id={`${idPrefix}-confirmed-brand`}
+                type="text"
+                className="lite-input lite-input--pill"
+                placeholder="e.g. Drunk Elephant"
+                value={confirmedBrand}
+                onChange={(e) => handleConfirmedBrandChange(e.target.value)}
+              />
+              <div style={compactFieldErrorStyle}>{errors.brandName || ' '}</div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="lite-mono"
+            onClick={() => setShowCompetitors((v) => !v)}
+            style={{
+              background: 'none', border: 'none', padding: 0, marginTop: 4, marginBottom: showCompetitors ? 10 : 0,
+              fontSize: 12, color: inv ? 'var(--text-inv-2)' : 'var(--text-2)', cursor: 'pointer', textDecoration: 'underline',
+            }}
+          >
+            {showCompetitors ? 'Hide competitors' : 'Compare against — optional, up to two rivals'}
+          </button>
+
+          {showCompetitors && (
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              {[0, 1].map((i) => (
+                <div key={i} style={{ flex: '1 1 160px' }}>
+                  <label className="lite-visually-hidden" htmlFor={`${idPrefix}-competitor-${i}`}>
+                    Competitor {i + 1} (optional)
+                  </label>
+                  <input
+                    id={`${idPrefix}-competitor-${i}`}
+                    type="text"
+                    className="lite-input lite-input--pill"
+                    placeholder={`Competitor ${i + 1} (optional)`}
+                    value={competitors[i]}
+                    onChange={(e) => handleCompetitorChange(i, e.target.value)}
+                  />
+                  <div style={compactFieldErrorStyle}>{errors.competitors[i] || ' '}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </form>
+      </div>
+    )
+  }
+
   return (
     <div className="lite-root">
       <div className="lite-shell" style={{ maxWidth: 480 }}>
@@ -112,7 +209,7 @@ export function LiteForm({ onSubmitted, initialBrandName = '' }) {
               id="lite-primary"
               type="text"
               className="lite-input"
-              placeholder="e.g. Drunk Elephant or drunkelephant.com"
+              placeholder={placeholder}
               value={primaryInput}
               onChange={(e) => handlePrimaryChange(e.target.value)}
               style={{ marginBottom: 4 }}
@@ -169,7 +266,7 @@ export function LiteForm({ onSubmitted, initialBrandName = '' }) {
             </div>
 
             <button type="submit" disabled={submitting} className="lite-pill lite-pill--solid" style={{ width: '100%', height: 46, fontSize: 14 }}>
-              {submitting ? 'Starting…' : 'Run my free diagnostic'}
+              {submitting ? 'Starting…' : submitLabel}
             </button>
           </form>
         </LightCard>
