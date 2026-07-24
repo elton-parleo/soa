@@ -179,9 +179,7 @@ def test_full_report_returned_when_email_is_set(db):
         assert set(entity["metrics"].keys()) >= {
             "mention_rate", "som", "rsi", "position_index",
         }
-    assert set(result["by_stage"].keys()) == {"Awareness", "Research", "Comparison", "Ready to Buy"}
-    for stage_entities in result["by_stage"].values():
-        assert len(stage_entities) == 2
+    assert result["by_stage"] is None  # deprecated Stage 7 — see test_full_report_never_leaks_stage_level_mention_data
 
 
 def test_full_report_metric_values_correct(db):
@@ -220,6 +218,123 @@ def test_full_report_payload_has_no_internal_ids(db):
         _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
     result = public_lite.get_lite_report("t1")
     _scan_for_internal_ids(result)
+
+
+# ─── G3: stage-level mention data must never leak into the public report ──
+
+_STAGE_NAMES = ("awareness", "research", "comparison", "ready to buy")
+
+
+def _seed_cycle_with_rich_stage_variance(conn, token="t1", email="visitor@example.com"):
+    """
+    Same primary/competitor pair as _seed_complete_cycle, but every stage
+    gets a genuinely different mention_rate/soa_pct per entity (not the
+    same value repeated) — a real per-stage leak would surface as one of
+    these distinctive numbers appearing somewhere in the response.
+    """
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_requests (token, email, status, cycle_id) VALUES (?, ?, 'complete', 1)",
+        (token, email),
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (101, 'Acme Co', 'acme-co', 'brand')"
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (102, 'Rival Co', 'rival-co', 'brand')"
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) "
+        "VALUES (1, 101, 'M001', 'primary')"
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) "
+        "VALUES (1, 102, 'M002', 'competitor')"
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_metrics_results "
+        "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+        " mention_rate, soa_pct, position_index, rsi_score) "
+        "VALUES (1, 101, 'overall', 'overall', 12, 6, 0.5, 0.6, 0.4, 1.2)"
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_metrics_results "
+        "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+        " mention_rate, soa_pct, position_index, rsi_score) "
+        "VALUES (1, 102, 'overall', 'overall', 12, 3, 0.25, 0.3, 0.3, 0.5)"
+    )
+    # Distinct, easily-fingerprinted stage-level rates — none of these
+    # numbers (or their *100 percent forms) may appear anywhere below.
+    stage_rates = {
+        "Awareness":    (0.9166, 0.0833),
+        "Research":     (0.1234, 0.8765),
+        "Comparison":   (0.4567, 0.6789),
+        "Ready to Buy": (0.7531, 0.2468),
+    }
+    for stage, (primary_rate, rival_rate) in stage_rates.items():
+        conn.exec_driver_sql(
+            "INSERT INTO soa_metrics_results "
+            "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+            " mention_rate, soa_pct, position_index, rsi_score) "
+            "VALUES (1, 101, 'stage', ?, 3, 2, ?, ?, 0.4, 1.0)",
+            (stage, primary_rate, primary_rate),
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_metrics_results "
+            "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+            " mention_rate, soa_pct, position_index, rsi_score) "
+            "VALUES (1, 102, 'stage', ?, 3, 2, ?, ?, 0.4, 1.0)",
+            (stage, rival_rate, rival_rate),
+        )
+    return stage_rates
+
+
+def _flatten_leaf_values(obj, out):
+    if isinstance(obj, dict):
+        for v in obj.values():
+            _flatten_leaf_values(v, out)
+    elif isinstance(obj, list):
+        for item in obj:
+            _flatten_leaf_values(item, out)
+    else:
+        out.append(obj)
+
+
+def test_full_report_never_leaks_stage_level_mention_data(db):
+    with db.begin() as conn:
+        stage_rates = _seed_cycle_with_rich_stage_variance(conn, token="t1", email="visitor@example.com")
+
+    result = public_lite.get_lite_report("t1")
+
+    # The deprecated key is kept (additive-contract) but always null.
+    assert result["by_stage"] is None
+
+    # No stage name anywhere in the payload...
+    serialized = json.dumps(result).lower()
+    for stage_name in _STAGE_NAMES:
+        assert stage_name not in serialized, f"stage name '{stage_name}' leaked into the report"
+
+    # ...and none of the distinctive per-stage rate values leaked through
+    # as a bare number either (guards against a future refactor that
+    # drops the stage *key* but still serializes the stage *values*).
+    leaves = []
+    _flatten_leaf_values(result, leaves)
+    numeric_leaves = {round(float(v), 4) for v in leaves if isinstance(v, (int, float))}
+    for primary_rate, rival_rate in stage_rates.values():
+        for rate in (primary_rate, rival_rate):
+            assert round(rate, 4) not in numeric_leaves
+            assert round(rate * 100, 1) not in {round(n, 1) for n in numeric_leaves}
+
+
+def test_teaser_never_leaks_stage_level_mention_data(db):
+    with db.begin() as conn:
+        _seed_cycle_with_rich_stage_variance(conn, token="t1", email=None)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert "by_stage" not in result  # teaser never had this key at all
+    serialized = json.dumps(result).lower()
+    for stage_name in _STAGE_NAMES:
+        assert stage_name not in serialized
 
 
 # ─── Agent Scan: dimensions, locking, degraded statuses ─────────────────
@@ -401,6 +516,39 @@ def test_teaser_composite_blends_visibility_and_accessibility_when_scan_complete
     assert result["scan_status"] == "complete"
 
 
+# ─── visibility_breakdown (Stage 7, A1) ──────────────────────────────────
+
+def test_full_report_has_visibility_breakdown_shaped_correctly(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+
+    result = public_lite.get_lite_report("t1")
+    vb = result["visibility_breakdown"]
+
+    # _seed_complete_cycle gives both entities total_mentions=6, total_runs=12.
+    assert {r["entity"]: r["rate_pct"] for r in vb["mention_rate"]} == {
+        "Acme Co": 50.0, "Rival Co": 50.0,
+    }
+    acme_rate = next(r for r in vb["mention_rate"] if r["entity"] == "Acme Co")
+    assert acme_rate["is_primary"] is True
+    assert acme_rate["mentioned_queries"] == 6
+    assert acme_rate["total_queries"] == 12
+
+    # 6 + 6 = 12 total mentions -> 50/50 share.
+    assert {r["entity"]: r["share_pct"] for r in vb["share_of_mentions"]} == {
+        "Acme Co": 50.0, "Rival Co": 50.0,
+    }
+    assert vb["totals"] == {"total_mentions": 12, "total_queries": 12}
+
+
+def test_teaser_never_includes_visibility_breakdown(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email=None)
+
+    result = public_lite.get_lite_report("t1")
+    assert "visibility_breakdown" not in result
+
+
 def test_full_report_carries_same_subscores_as_teaser(db):
     with db.begin() as conn:
         _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
@@ -437,6 +585,9 @@ def test_full_report_response_is_additive_over_pre_stage3_shape(db):
 
     result = public_lite.get_lite_report("t1")
     assert _PRE_STAGE3_REPORT_KEYS.issubset(result.keys())
-    assert isinstance(result["by_stage"], dict)
+    # by_stage is kept (key present, additive contract) but deprecated as
+    # of Stage 7 — always null, never a dict, now that per-stage mention
+    # data is paid-diagnostic material.
+    assert result["by_stage"] is None
     for entity in result["overall"]:
         assert {"name", "role", "metrics"}.issubset(entity.keys())

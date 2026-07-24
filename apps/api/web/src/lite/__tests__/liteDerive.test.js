@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   looksLikeUrl, deriveBrandFromUrl, domainFromStoreUrl, accessibilityBadgeText,
   groupDimensionsByFamily, rankDimensionsByGap, computeExposure, formatCurrency,
-  getScoreBand,
+  getScoreBand, getVerdictLine, getDominantRivalPayoff,
 } from '../liteDerive.js'
 
 describe('looksLikeUrl', () => {
@@ -192,5 +192,104 @@ describe('formatCurrency', () => {
 
   it('treats non-numeric input as zero', () => {
     expect(formatCurrency(undefined)).toBe('$0')
+  })
+})
+
+describe('getVerdictLine', () => {
+  it('prefers an explicit report.verdict over everything else', () => {
+    const report = { verdict: 'Custom verdict.', visibility_breakdown: { mention_rate: [] } }
+    expect(getVerdictLine(report)).toBe('Custom verdict.')
+  })
+
+  it('derives from visibility_breakdown when present (full report)', () => {
+    const report = {
+      visibility_breakdown: {
+        mention_rate: [{ entity: 'Acme Co', is_primary: true, mentioned_queries: 5, total_queries: 12, rate_pct: 41.7 }],
+        share_of_mentions: [
+          { entity: 'Acme Co', is_primary: true, mentions: 5, share_pct: 40 },
+          { entity: 'Rival Co', is_primary: false, mentions: 7, share_pct: 60 },
+        ],
+      },
+    }
+    expect(getVerdictLine(report)).toBe('Named in 5 of 12 answers. Rival Co took 60% of all mentions.')
+  })
+
+  it('omits the rival clause when there is no rival share data', () => {
+    const report = {
+      visibility_breakdown: {
+        mention_rate: [{ entity: 'Acme Co', is_primary: true, mentioned_queries: 5, total_queries: 12 }],
+        share_of_mentions: [{ entity: 'Acme Co', is_primary: true, mentions: 5, share_pct: 100 }],
+      },
+    }
+    expect(getVerdictLine(report)).toBe('Named in 5 of 12 answers.')
+  })
+
+  it('falls back to a share-only line from report.overall when visibility_breakdown is absent (pre-gate teaser)', () => {
+    const report = {
+      overall: [
+        { name: 'Acme Co', role: 'primary', som: 40 },
+        { name: 'Rival Co', role: 'competitor', som: 60 },
+      ],
+    }
+    expect(getVerdictLine(report)).toBe('Rival Co took 60% of all mentions.')
+  })
+
+  it('reads som from the nested metrics shape too (full-report entity shape)', () => {
+    const report = {
+      overall: [
+        { name: 'Acme Co', role: 'primary', metrics: { som: 40 } },
+        { name: 'Rival Co', role: 'competitor', metrics: { som: 60 } },
+      ],
+    }
+    expect(getVerdictLine(report)).toBe('Rival Co took 60% of all mentions.')
+  })
+
+  it('falls back to the generic band-based verdict when there is no rival data at all', () => {
+    const report = { composite: 90, overall: [{ name: 'Acme Co', role: 'primary', som: 40 }] }
+    expect(getVerdictLine(report)).toBe('Agents can find, read, and price your store end to end.')
+  })
+
+  it('never mentions a funnel stage', () => {
+    const reports = [
+      { visibility_breakdown: {
+        mention_rate: [{ entity: 'Acme Co', is_primary: true, mentioned_queries: 5, total_queries: 12 }],
+        share_of_mentions: [{ entity: 'Rival Co', is_primary: false, mentions: 7, share_pct: 70 }],
+      } },
+      { overall: [{ name: 'Rival Co', role: 'competitor', som: 70 }] },
+      { composite: 10 },
+    ]
+    const stageWords = ['awareness', 'research', 'comparison', 'ready to buy']
+    reports.forEach((report) => {
+      const line = getVerdictLine(report).toLowerCase()
+      stageWords.forEach((w) => expect(line).not.toContain(w))
+    })
+  })
+})
+
+describe('getDominantRivalPayoff', () => {
+  it('returns the payoff line when a rival holds >=50% of all mentions', () => {
+    const vb = {
+      share_of_mentions: [
+        { entity: 'Acme Co', is_primary: true, mentions: 4, share_pct: 40 },
+        { entity: 'Rival Co', is_primary: false, mentions: 6, share_pct: 60 },
+      ],
+      totals: { total_mentions: 10, total_queries: 12 },
+    }
+    expect(getDominantRivalPayoff(vb)).toBe('10 brand mentions across 12 answers. Half went to one rival.')
+  })
+
+  it('returns null (no fabricated drama) when no rival reaches 50%', () => {
+    const vb = {
+      share_of_mentions: [
+        { entity: 'Acme Co', is_primary: true, mentions: 6, share_pct: 60 },
+        { entity: 'Rival Co', is_primary: false, mentions: 4, share_pct: 40 },
+      ],
+      totals: { total_mentions: 10, total_queries: 12 },
+    }
+    expect(getDominantRivalPayoff(vb)).toBeNull()
+  })
+
+  it('returns null when visibility_breakdown is absent', () => {
+    expect(getDominantRivalPayoff(undefined)).toBeNull()
   })
 })

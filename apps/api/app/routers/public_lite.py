@@ -31,6 +31,7 @@ from soa_shared.database import engine, session_factory
 from soa_shared.org_helpers import get_or_create_leadgen_org
 from app.routers.metrics import build_entity_metrics
 from app.services.lite_crosswalk import RunSignal, link_dimensions
+from app.services.lite_visibility import build_visibility_payload
 from app.schemas import (
     EntityMetrics,
     PublicLiteEmailRequest,
@@ -368,6 +369,13 @@ def _fetch_metrics_rows(conn, cycle_id: int):
     that function's docstring. role/comparison_code are appended after,
     used here for grouping/ordering only; comparison_code is never
     returned to the caller.
+
+    Only the 'overall' slice is fetched — per-stage rows are no longer
+    assembled into the public payload at all (Stage 7, G1: stage-level
+    mention data is paid-diagnostic material and must never reach this
+    router's response). soa_metrics_results still has 'stage' rows for
+    every cycle; a future internal-only table can query them directly
+    without this router touching them.
     """
     return conn.execute(text("""
         SELECT
@@ -380,8 +388,8 @@ def _fetch_metrics_rows(conn, cycle_id: int):
         JOIN soa_cycle_entities ce
           ON ce.cycle_id = mr.cycle_id AND ce.entity_id = mr.entity_id
         WHERE mr.cycle_id = :cid
-          AND mr.slice_type IN ('overall', 'stage')
-        ORDER BY ce.comparison_code, mr.slice_type, mr.slice_value
+          AND mr.slice_type = 'overall'
+        ORDER BY ce.comparison_code, mr.slice_value
     """), {"cid": cycle_id}).fetchall()
 
 
@@ -390,7 +398,6 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
 
     entity_info: dict = {}    # comparison_code -> {"name":, "role":} (internal grouping key only)
     overall_metrics: dict = {}
-    by_stage: dict = {}
     primary_code = None
 
     for row in rows:
@@ -398,15 +405,12 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
         entity_info.setdefault(comp_code, {"name": name, "role": role})
         if role == 'primary':
             primary_code = comp_code
-
-        metrics_dict = build_entity_metrics(row)
-        if row[2] == 'overall':
-            overall_metrics[comp_code] = metrics_dict
-        elif row[2] == 'stage':
-            by_stage.setdefault(row[3], {})[comp_code] = metrics_dict
+        overall_metrics[comp_code] = build_entity_metrics(row)
 
     # visibility reuses the same share-of-voice metric already computed
-    # for the report (build_entity_metrics' 'som') — no second metrics path.
+    # for the report (build_entity_metrics' 'som') — no second metrics
+    # path. Already stage-agnostic (only ever reads the 'overall' slice),
+    # so no rebasing was needed for Stage 7 (A2).
     visibility = overall_metrics.get(primary_code, {}).get("som") if primary_code else None
 
     scan_row = _fetch_scan_row(conn, lite_request_id)
@@ -444,17 +448,23 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
         ).model_dump()
         for code, info in entity_info.items()
     ]
-    by_stage_public = {
-        stage: [
-            PublicLiteEntityMetrics(
-                name=entity_info[code]["name"],
-                role=entity_info[code]["role"],
-                metrics=EntityMetrics(**m),
-            ).model_dump()
-            for code, m in stage_metrics.items()
-        ]
-        for stage, stage_metrics in by_stage.items()
-    }
+
+    # Stage 7 (A1): reshapes the SAME overall_metrics values already
+    # built above — mentioned_queries/mentions both read total_mentions
+    # (mention_rate's numerator and share_of_mentions' numerator are the
+    # same count in this system; see lite_visibility.py's docstring) —
+    # no second counting path.
+    visibility_entities = [
+        {
+            "name": info["name"],
+            "is_primary": info["role"] == "primary",
+            "mentioned_queries": overall_metrics.get(code, {}).get("total_mentions") or 0,
+            "total_queries": overall_metrics.get(code, {}).get("total_runs") or 0,
+            "mentions": overall_metrics.get(code, {}).get("total_mentions") or 0,
+        }
+        for code, info in entity_info.items()
+    ]
+    visibility_breakdown = build_visibility_payload(visibility_entities)
 
     linked: dict = {}
     if scan_row and scan_row[0] == 'complete':
@@ -469,10 +479,11 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
     scan_payload = _build_scan_payload(scan_row, linked)
 
     return PublicLiteReportResponse(
-        status="complete", locked=False, overall=overall, by_stage=by_stage_public,
+        status="complete", locked=False, overall=overall, by_stage=None,
         scan=scan_payload,
         visibility=visibility, accessibility=accessibility, composite=composite,
         scan_status=scan_status,
+        visibility_breakdown=visibility_breakdown,
     ).model_dump()
 
 

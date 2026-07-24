@@ -21,8 +21,8 @@ def test_absent_in_half_or_more_research_comparison_queries_links_f1_f2():
         RunSignal(stage="Comparison", primary_mentioned=True),
     ]
     linked = link_dimensions(signals, {})
-    assert linked["F1"] == "absent at research"
-    assert linked["F2"] == "absent at research"
+    assert linked["F1"] == "absent from most answers"
+    assert linked["F2"] == "absent from most answers"
 
 
 def test_absent_in_under_half_research_comparison_queries_does_not_link():
@@ -168,3 +168,30 @@ def test_multiple_rules_fire_independently():
     ]
     linked = link_dimensions(signals, {})
     assert set(linked.keys()) == {"F1", "F2", "V4", "V5"}
+
+
+# ─── A3: emitted display strings must never name a funnel stage ──────────
+# (the RULES still compute over stage-tagged run_signals server-side —
+# only the copy shown in the public report is de-staged.)
+
+_STAGE_NAMES = ("awareness", "research", "comparison", "ready to buy")
+
+
+def test_no_linked_reason_string_names_a_funnel_stage():
+    signals = [
+        RunSignal(stage="Awareness", primary_mentioned=False),
+        RunSignal(stage="Research", primary_mentioned=False),
+        RunSignal(stage="Comparison", primary_mentioned=True, primary_price_quoted=False),
+        RunSignal(
+            stage="Comparison", competitor_mentioned=True, competitor_deal_cited=True,
+            primary_mentioned=True, primary_deal_cited=False, primary_price_quoted=True,
+        ),
+    ]
+    scan_dimensions = {"V2": _gap(1.0, 14), "V3": _gap(1.0, 14)}
+    linked = link_dimensions(signals, scan_dimensions)
+
+    assert linked  # sanity: the fixture actually exercises multiple rules
+    for code, reason in linked.items():
+        lowered = reason.lower()
+        for stage_name in _STAGE_NAMES:
+            assert stage_name not in lowered, f"{code}'s reason '{reason}' names stage '{stage_name}'"

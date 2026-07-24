@@ -118,3 +118,24 @@ describe('LiteTeaser — hero score card', () => {
     expect(screen.queryByText('A real agent answer')).not.toBeInTheDocument()
   })
 })
+
+describe('LiteTeaser — Stage 7: data-driven verdict, never stage-based', () => {
+  it('derives a share-based verdict from overall[].som when a rival is present', () => {
+    render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
+    // Rival Co's som is 37.5 -> rounds to 38%.
+    expect(screen.getByText('Rival Co took 38% of all mentions.')).toBeInTheDocument()
+  })
+
+  it('never mentions a funnel stage anywhere on the pre-gate teaser', () => {
+    const { container } = render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
+    const text = container.textContent.toLowerCase()
+    ;['awareness', 'research', 'comparison', 'ready to buy', 'stage-by-stage'].forEach((word) => {
+      expect(text).not.toContain(word)
+    })
+  })
+
+  it('does not promise a stage-by-stage breakdown in the email-gate copy', () => {
+    render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
+    expect(screen.getByText('Unlock the full why-section and your ranked fixes.')).toBeInTheDocument()
+  })
+})

@@ -20,6 +20,18 @@ const EIGHT_DIMENSIONS = [
   dim('V5', 'Offer Integrity', 9, 12, { fix: 'stop fake was-prices', locked: true }),
 ]
 
+const VISIBILITY_BREAKDOWN = {
+  mention_rate: [
+    { entity: 'Acme Co', is_primary: true, mentioned_queries: 6, total_queries: 12, rate_pct: 50.0 },
+    { entity: 'Rival Co', is_primary: false, mentioned_queries: 3, total_queries: 12, rate_pct: 25.0 },
+  ],
+  share_of_mentions: [
+    { entity: 'Acme Co', is_primary: true, mentions: 6, share_pct: 40.0 },
+    { entity: 'Rival Co', is_primary: false, mentions: 9, share_pct: 60.0 },
+  ],
+  totals: { total_mentions: 15, total_queries: 12 },
+}
+
 const baseReport = {
   status: 'complete',
   locked: false,
@@ -27,16 +39,8 @@ const baseReport = {
     { name: 'Acme Co', role: 'primary', metrics: { som: 62.5, mention_rate: 50, position_index: 70, rsi: 1.2 } },
     { name: 'Rival Co', role: 'competitor', metrics: { som: 37.5, mention_rate: 30, position_index: 40, rsi: 0.4 } },
   ],
-  by_stage: {
-    'Research': [
-      { name: 'Acme Co', role: 'primary', metrics: { mention_rate: 55 } },
-      { name: 'Rival Co', role: 'competitor', metrics: { mention_rate: 25 } },
-    ],
-    'Awareness': [
-      { name: 'Acme Co', role: 'primary', metrics: { mention_rate: 45 } },
-      { name: 'Rival Co', role: 'competitor', metrics: { mention_rate: 35 } },
-    ],
-  },
+  by_stage: null, // deprecated Stage 7 — always null on the real API
+  visibility_breakdown: VISIBILITY_BREAKDOWN,
   scan: {
     status: 'complete',
     total_score: 59,
@@ -52,42 +56,118 @@ const baseReport = {
   scan_status: 'complete',
 }
 
-describe('LiteFullReport — page frame + visibility', () => {
-  it('renders the report header bar with the primary entity and the legend/entities', () => {
+describe('LiteFullReport — page frame', () => {
+  it('renders the report header bar with the primary entity', () => {
     render(<LiteFullReport report={baseReport} />)
     expect(screen.getByText('Acme Co')).toBeInTheDocument() // header bar brand
-    expect(screen.getByText('Acme Co (you)')).toBeInTheDocument() // stage-grid legend
-    expect(screen.getByText('Rival Co')).toBeInTheDocument()
   })
 
-  it('renders visibility-by-stage in canonical order regardless of payload key order', () => {
-    render(<LiteFullReport report={baseReport} />)
-    const awarenessIdx = screen.getByText('AWARENESS').compareDocumentPosition(
-      screen.getByText('RESEARCH')
-    )
-    // Node.DOCUMENT_POSITION_FOLLOWING = 4: 'RESEARCH' node follows 'AWARENESS' node in the DOM.
-    expect(awarenessIdx & 4).toBeTruthy()
-  })
-
-  it('omits stages that have no data at all', () => {
-    render(<LiteFullReport report={baseReport} />)
-    expect(screen.queryByText('COMPARISON')).not.toBeInTheDocument()
-    expect(screen.queryByText('READY TO BUY')).not.toBeInTheDocument()
-  })
-
-  it('renders the working-session CTA link when VITE_LITE_CTA_URL is set', () => {
+  it('renders the working-session CTA link in both the funnel teaser and the diagnostic cliff when VITE_LITE_CTA_URL is set', () => {
     vi.stubEnv('VITE_LITE_CTA_URL', 'https://parleo.io/demo')
     render(<LiteFullReport report={baseReport} />)
-    const link = screen.getByText('Request a working session')
-    expect(link.closest('a')).toHaveAttribute('href', 'https://parleo.io/demo')
+    const links = screen.getAllByText('Request a working session')
+    expect(links).toHaveLength(2)
+    links.forEach((link) => expect(link.closest('a')).toHaveAttribute('href', 'https://parleo.io/demo'))
     vi.unstubAllEnvs()
   })
 
-  it('omits the CTA link when VITE_LITE_CTA_URL is unset', () => {
+  it('omits both CTA links when VITE_LITE_CTA_URL is unset', () => {
     vi.stubEnv('VITE_LITE_CTA_URL', '')
     render(<LiteFullReport report={baseReport} />)
     expect(screen.queryByText('Request a working session')).not.toBeInTheDocument()
     vi.unstubAllEnvs()
+  })
+})
+
+describe('LiteFullReport — visibility section (Stage 7)', () => {
+  it('renders the W1 section header', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getByText('VISIBILITY · 12 QUERIES · CHATGPT')).toBeInTheDocument()
+    expect(screen.getByText('How often agents mention you')).toBeInTheDocument()
+  })
+
+  it('renders one mention-rate row per entity with the NN% · n/12 format', () => {
+    render(<LiteFullReport report={baseReport} />)
+    // "Acme Co (you)" / "Rival Co" also appear in the share-of-mentions
+    // legend, so this scopes to the rate/count pairs, which are unique
+    // to the mention-rate card.
+    expect(screen.getByText('50% · 6/12')).toBeInTheDocument()
+    expect(screen.getByText('25% · 3/12')).toBeInTheDocument()
+  })
+
+  it('renders the mention-rate subtitle and You/Rivals legend', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getByText(/How many of the 12 shopper questions named each brand/)).toBeInTheDocument()
+    expect(screen.getByText('You')).toBeInTheDocument()
+    expect(screen.getByText('Rivals')).toBeInTheDocument()
+  })
+
+  it('renders the share-of-mentions donut with a text-alternative aria-label', () => {
+    render(<LiteFullReport report={baseReport} />)
+    const donut = screen.getByRole('img', { name: /Acme Co 40% of mentions, Rival Co 60% of mentions/ })
+    expect(donut).toBeInTheDocument()
+  })
+
+  it('shows the dominant-rival payoff line when a rival holds >=50% of all mentions', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getByText('15 brand mentions across 12 answers. Half went to one rival.')).toBeInTheDocument()
+  })
+
+  it('omits the payoff line when no rival reaches 50% (no fabricated drama)', () => {
+    const report = {
+      ...baseReport,
+      visibility_breakdown: {
+        ...VISIBILITY_BREAKDOWN,
+        share_of_mentions: [
+          { entity: 'Acme Co', is_primary: true, mentions: 8, share_pct: 60 },
+          { entity: 'Rival Co', is_primary: false, mentions: 5, share_pct: 40 },
+        ],
+      },
+    }
+    render(<LiteFullReport report={report} />)
+    expect(screen.queryByText(/Half went to one rival/)).not.toBeInTheDocument()
+  })
+
+  it('degrades gracefully without crashing when visibility_breakdown is absent (old API shape)', () => {
+    const { visibility_breakdown, ...report } = baseReport
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText("Visibility data isn't available for this report yet.")).toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — funnel teaser (G2: decorative, never real data)', () => {
+  it('renders the locked framing: title, subtitle, and FULL ANALYSIS tag', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getByText('Where you disappear in the funnel')).toBeInTheDocument()
+    expect(screen.getByText('Full analysis')).toBeInTheDocument()
+  })
+
+  it('renders fixed decorative stage cells, aria-hidden, regardless of the API payload', () => {
+    render(<LiteFullReport report={baseReport} />)
+    ;['AWARENESS', 'RESEARCH', 'COMPARISON', 'READY TO BUY'].forEach((label) => {
+      const el = screen.getByText(label)
+      expect(el).toBeInTheDocument()
+      // aria-hidden lives on an ancestor wrapper, not the label itself.
+      expect(el.closest('[aria-hidden="true"]')).not.toBeNull()
+    })
+  })
+
+  it('renders the overlay copy and CTA, with no email language anywhere in this card', () => {
+    vi.stubEnv('VITE_LITE_CTA_URL', 'https://parleo.io/demo')
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getByText('See which stage you vanish from')).toBeInTheDocument()
+    expect(screen.getByText('Stage-by-stage rates are measured in the full diagnostic.')).toBeInTheDocument()
+    const cta = screen.getByText('Where you disappear in the funnel').closest('.lite-card')
+    expect(cta.textContent.toLowerCase()).not.toMatch(/email|unlock with your/)
+    vi.unstubAllEnvs()
+  })
+
+  it('renders identically (fixed constants) whether or not the API sends visibility data', () => {
+    const { visibility_breakdown, ...reportWithout } = baseReport
+    const { container: withoutVb } = render(<LiteFullReport report={reportWithout} />)
+    const { container: withVb } = render(<LiteFullReport report={baseReport} />)
+    const decorative = (c) => c.querySelector('[aria-hidden="true"] > div').textContent
+    expect(decorative(withoutVb)).toBe(decorative(withVb))
   })
 })
 

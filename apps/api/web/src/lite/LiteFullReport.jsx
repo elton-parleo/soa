@@ -22,11 +22,11 @@
 import { useState } from 'react'
 import {
   accessibilityBadgeText, computeExposure, formatCurrency, formatDateStamp,
-  groupDimensionsByFamily, rankDimensionsByGap,
+  getDominantRivalPayoff, groupDimensionsByFamily, rankDimensionsByGap,
 } from './liteDerive.js'
 import {
-  STAGE_ORDER, ENTITY_COLORS, LightCard, DarkCard, SectionHeader, ReportHeaderBar,
-  InfoBadge, Chip, useAnimateOnMount, formatPct, formatScore,
+  ENTITY_COLORS, LightCard, DarkCard, SectionHeader, ReportHeaderBar,
+  InfoBadge, Chip, useAnimateOnMount, formatScore,
 } from './liteTheme.jsx'
 
 const DEFAULT_REVENUE = 1_000_000
@@ -61,72 +61,218 @@ function ExecutiveTiles({ report, exposure }) {
   )
 }
 
-// ─── Visibility by purchase stage ───────────────────────────────────────
+// ─── Visibility section (Stage 7 — replaces the old per-stage bars) ────
+// G1: no per-stage aggregate ever reaches this component — the API
+// stopped serializing them (public_lite.py's by_stage is always null).
+// The two cards below render only visibility_breakdown's stage-agnostic
+// mention_rate/share_of_mentions aggregates; the funnel teaser (W4)
+// shows fixed DECORATIVE_* constants, never real data.
 
-function VisibilityByStage({ byStage, entities }) {
-  const stages = STAGE_ORDER.filter((s) => byStage[s])
+function LegendDot({ color, label }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-2)' }}>
+      <span style={{ width: 8, height: 8, borderRadius: 2, background: color, display: 'inline-block' }} aria-hidden="true" />
+      {label}
+    </span>
+  )
+}
+
+function MentionRateCard({ mentionRate }) {
   const animated = useAnimateOnMount()
-  if (stages.length === 0) return null
+  return (
+    <div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Mention rate</div>
+      <div className="lite-body lite-muted" style={{ fontSize: 12.5, marginBottom: 16 }}>
+        How many of the 12 shopper questions named each brand at least once
+      </div>
+      {mentionRate.map((r, i) => (
+        <div key={r.entity} style={{ marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text)', marginBottom: 4 }}>
+            <span>{r.entity}{r.is_primary ? ' (you)' : ''}</span>
+            <span className="lite-mono" style={{ fontWeight: 700 }}>
+              {formatScore(r.rate_pct)}% · {r.mentioned_queries}/{r.total_queries}
+            </span>
+          </div>
+          <div className="lite-bar-track">
+            <div
+              className="lite-bar-fill"
+              style={{ width: animated ? `${r.rate_pct}%` : '0%', background: ENTITY_COLORS[i % ENTITY_COLORS.length] }}
+            />
+          </div>
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 16, marginTop: 12 }}>
+        <LegendDot color={ENTITY_COLORS[0]} label="You" />
+        <LegendDot color={ENTITY_COLORS[1]} label="Rivals" />
+      </div>
+    </div>
+  )
+}
+
+function ShareDonut({ shares }) {
+  const size = 116
+  const strokeWidth = 16
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  let cumulativePct = 0
+  const segments = shares.map((s, i) => {
+    const pct = Math.max(0, Math.min(100, s.share_pct || 0))
+    const dash = (pct / 100) * circumference
+    const seg = {
+      key: s.entity,
+      color: ENTITY_COLORS[i % ENTITY_COLORS.length],
+      dasharray: `${dash} ${Math.max(0, circumference - dash)}`,
+      dashoffset: -((cumulativePct / 100) * circumference),
+    }
+    cumulativePct += pct
+    return seg
+  })
+  const primaryShare = shares.find((s) => s.is_primary)
+  const label = shares
+    .map((s) => `${s.entity} ${formatScore(s.share_pct)}% of mentions`)
+    .join(', ')
 
   return (
-    <LightCard>
-      <SectionHeader label="VISIBILITY · 4 PURCHASE STAGES" annotation="12 queries · ChatGPT" headline="Where you disappear in the funnel" />
-      <div style={{ display: 'flex', gap: 14, marginBottom: 16, flexWrap: 'wrap' }}>
-        {entities.map((entity, ei) => (
-          <div key={entity.name} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-2)' }}>
-            <span style={{
-              width: 8, height: 8, borderRadius: 2, display: 'inline-block',
-              background: ENTITY_COLORS[ei % ENTITY_COLORS.length],
-            }} aria-hidden="true" />
-            {entity.name}{entity.role === 'primary' ? ' (you)' : ''}
-          </div>
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }} role="img" aria-label={label || 'Share of mentions'}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--track)" strokeWidth={strokeWidth} />
+        {segments.map((seg) => (
+          <circle
+            key={seg.key}
+            cx={size / 2} cy={size / 2} r={radius} fill="none"
+            stroke={seg.color} strokeWidth={strokeWidth}
+            strokeDasharray={seg.dasharray} strokeDashoffset={seg.dashoffset}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
         ))}
+      </svg>
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <span className="lite-numeral" style={{ fontSize: 22 }}>
+          {primaryShare ? formatScore(primaryShare.share_pct) : '—'}%
+        </span>
+        <span className="lite-label" style={{ fontSize: 9 }}>Your share</span>
       </div>
-      <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
-        {stages.map((stage, si) => (
-          <div key={stage} style={{ flex: '1 1 0', minWidth: 90 }}>
-            <div className="lite-label" style={{ marginBottom: 8, textAlign: 'center' }}>
-              {stage.toUpperCase()}{si < stages.length - 1 && <span className="lite-muted"> →</span>}
+    </div>
+  )
+}
+
+function ShareOfMentionsCard({ shareOfMentions, totals }) {
+  const payoff = getDominantRivalPayoff({ share_of_mentions: shareOfMentions, totals })
+  return (
+    <div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Share of mentions</div>
+      <div className="lite-body lite-muted" style={{ fontSize: 12.5, marginBottom: 16 }}>
+        Of every brand mention across all answers, how many were yours
+      </div>
+      <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+        <ShareDonut shares={shareOfMentions} />
+        <div style={{ flex: '1 1 160px' }}>
+          {shareOfMentions.map((s, i) => (
+            <div key={s.entity} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 8 }}>
+              <LegendDot color={ENTITY_COLORS[i % ENTITY_COLORS.length]} label={`${s.entity}${s.is_primary ? ' (you)' : ''}`} />
+              <span className="lite-mono" style={{ fontWeight: 700 }}>{formatScore(s.share_pct)}% · {s.mentions}</span>
             </div>
-            {entities.map((entity, ei) => {
-              const value = byStage[stage]?.[entity.name]?.mention_rate ?? 0
-              const isZero = value === 0
-              return (
-                <div key={entity.name} style={{ marginBottom: 8 }}>
-                  <div style={{
-                    height: 60, width: '100%', background: 'var(--track)', borderRadius: 4,
-                    display: 'flex', alignItems: 'flex-end', overflow: 'hidden', position: 'relative',
-                  }}>
-                    {isZero && (
-                      <span style={{
-                        position: 'absolute', left: 0, bottom: 0, top: 0, width: 3,
-                        background: 'var(--bad)', borderRadius: 2,
-                      }} aria-hidden="true" />
-                    )}
-                    <div style={{
-                      width: '100%',
-                      height: animated ? `${value}%` : '0%',
-                      background: ENTITY_COLORS[ei % ENTITY_COLORS.length],
-                      transition: `height 0.8s ease ${(si * entities.length + ei) * 0.05}s`,
-                    }} />
-                  </div>
-                  <div
-                    className="lite-mono"
-                    style={{ fontSize: 11, textAlign: 'center', marginTop: 4, color: isZero ? 'var(--bad-ink)' : 'var(--text-2)', fontWeight: isZero ? 700 : 400 }}
-                  >
-                    {formatPct(value)}
-                  </div>
-                </div>
-              )
-            })}
+          ))}
+        </div>
+      </div>
+      {payoff && (
+        <div className="lite-body" style={{ marginTop: 14, fontWeight: 600 }}>{payoff}</div>
+      )}
+    </div>
+  )
+}
+
+// Fixed, illustrative constants — never derived from report data (G2).
+// A blurred REAL number in the DOM would be a leak, not a gate; these
+// are the only values this card ever renders.
+const DECORATIVE_STAGE_LABELS = ['Awareness', 'Research', 'Comparison', 'Ready to Buy']
+const DECORATIVE_BAR_HEIGHT_PCT = [62, 41, 27, 14]
+
+function FunnelTeaserCard({ ctaUrl }) {
+  return (
+    <div style={{ marginTop: 28 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div>
+          <div className="lite-headline" style={{ fontSize: 16, marginBottom: 4 }}>Where you disappear in the funnel</div>
+          <div className="lite-body lite-muted" style={{ fontSize: 13 }}>Stage-by-stage mention rates, from awareness to ready-to-buy.</div>
+        </div>
+        <span
+          className="lite-chip lite-mono"
+          style={{ border: '1px solid var(--warn)', color: 'var(--warn-ink)', background: 'transparent' }}
+        >
+          Full analysis
+        </span>
+      </div>
+
+      <div
+        aria-hidden="true"
+        style={{ display: 'flex', gap: 8, marginBottom: 20, filter: 'blur(3px)', opacity: 0.55, pointerEvents: 'none' }}
+      >
+        {DECORATIVE_STAGE_LABELS.map((label, i) => (
+          <div key={label} style={{ flex: 1 }}>
+            <div style={{ height: 56, background: 'var(--track)', borderRadius: 4, display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
+              <div style={{ width: '100%', height: `${DECORATIVE_BAR_HEIGHT_PCT[i]}%`, background: 'var(--foundation)' }} />
+            </div>
+            <div className="lite-mono" style={{ fontSize: 9, textAlign: 'center', marginTop: 4, color: 'var(--text-2)' }}>
+              {label.toUpperCase()}
+            </div>
           </div>
         ))}
       </div>
+
+      <DarkCard style={{ textAlign: 'center' }}>
+        <div style={{ color: 'var(--text-inv)', fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
+          See which stage you vanish from
+        </div>
+        <div className="lite-body--inv" style={{ marginBottom: 14, fontSize: 13 }}>
+          Stage-by-stage rates are measured in the full diagnostic.
+        </div>
+        {ctaUrl && (
+          <a href={ctaUrl} target="_blank" rel="noreferrer" className="lite-pill lite-pill--solid">
+            Request a working session
+          </a>
+        )}
+      </DarkCard>
+    </div>
+  )
+}
+
+function VisibilitySection({ report, ctaUrl }) {
+  const vb = report.visibility_breakdown
+  return (
+    <LightCard>
+      <SectionHeader
+        label="VISIBILITY · 12 QUERIES · CHATGPT"
+        annotation={formatDateStamp()}
+        headline="How often agents mention you"
+      />
+      {vb ? (
+        <div className="lite-cols-2" style={{ marginTop: 20 }}>
+          <MentionRateCard mentionRate={vb.mention_rate} />
+          <ShareOfMentionsCard shareOfMentions={vb.share_of_mentions} totals={vb.totals} />
+        </div>
+      ) : (
+        <div className="lite-body lite-muted" style={{ marginTop: 20 }}>
+          Visibility data isn't available for this report yet.
+        </div>
+      )}
+      <FunnelTeaserCard ctaUrl={ctaUrl} />
     </LightCard>
   )
 }
 
 // ─── Evidence gallery (speculative field, hidden when absent) ──────────
+// V6: per-quote stage tags ("Q7 · COMPARISON STAGE") stay here on purpose.
+// A single verbatim quote's stage is evidence for that one answer, not
+// the stage-rate ANALYSIS (aggregated mention rates across the funnel)
+// that Stage 7 moved behind the paid gate — see FunnelTeaserCard below.
+// Never add stage tags anywhere beyond these existing up-to-3 free quotes.
 
 function annotationTone(annotation) {
   const a = (annotation || '').toLowerCase()
@@ -457,7 +603,10 @@ const HIGHLIGHT_PANELS = [
   { title: 'Full category run', body: 'Hundreds of queries across your whole category, not a 12-query sample.' },
   { title: 'Net price accuracy', body: 'The gap between list price and true member price across your catalog.' },
 ]
-const REMAINING_LOCKED_TOPICS = ['Persona-level breakdowns', 'Trend over time', 'Retail shelf comparison']
+const REMAINING_LOCKED_TOPICS = [
+  'Funnel stage analysis — where you vanish, stage by stage',
+  'Persona-level breakdowns', 'Trend over time', 'Retail shelf comparison',
+]
 
 function DiagnosticCliff({ ctaUrl }) {
   return (
@@ -521,16 +670,6 @@ export function LiteFullReport({ report, onAddStoreUrl }) {
 
   const primaryEntity = entities.find((e) => e.role === 'primary')
 
-  // by_stage is keyed by stage name -> list of {name, role, metrics}; index
-  // by entity name for O(1) lookup in VisibilityByStage.
-  const byStageByName = {}
-  Object.entries(report.by_stage || {}).forEach(([stage, entityList]) => {
-    byStageByName[stage] = {}
-    entityList.forEach((e) => {
-      byStageByName[stage][e.name] = e.metrics
-    })
-  })
-
   return (
     <div className="lite-root">
       <div className="lite-shell" style={{ maxWidth: 720 }}>
@@ -542,7 +681,7 @@ export function LiteFullReport({ report, onAddStoreUrl }) {
 
         <ExecutiveTiles report={report} exposure={exposure} />
 
-        <VisibilityByStage byStage={byStageByName} entities={entities} />
+        <VisibilitySection report={report} ctaUrl={ctaUrl} />
 
         <EvidenceGallery examples={report.evidence_examples} />
 

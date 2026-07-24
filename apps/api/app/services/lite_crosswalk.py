@@ -50,12 +50,16 @@ def link_dimensions(run_signals: list, scan_dimensions: Dict[str, dict]) -> Dict
     """
     linked: Dict[str, str] = {}
 
+    # The rule still computes over stage-tagged run_signals (funnel stage
+    # data is legitimate server-side signal) — only the emitted display
+    # string is de-staged, since linked reasons surface in the public
+    # report and per-stage detail is now paid-diagnostic material.
     research_comparison = [r for r in run_signals if r.stage in RESEARCH_COMPARISON_STAGES]
     if research_comparison:
         absent_count = sum(1 for r in research_comparison if not r.primary_mentioned)
         if (absent_count / len(research_comparison)) >= ABSENCE_THRESHOLD:
-            linked.setdefault("F1", "absent at research")
-            linked.setdefault("F2", "absent at research")
+            linked.setdefault("F1", "absent from most answers")
+            linked.setdefault("F2", "absent from most answers")
 
     mentioned_runs = [r for r in run_signals if r.primary_mentioned]
     if mentioned_runs and not any(r.primary_price_quoted for r in mentioned_runs):

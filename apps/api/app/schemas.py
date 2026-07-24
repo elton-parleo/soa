@@ -724,16 +724,60 @@ class PublicLiteScan(BaseModel):
     pages_fetched: List[dict] = []
 
 
+class PublicLiteVisibilityMentionRate(BaseModel):
+    """mentioned_queries / total_queries — how many of the 12 shopper
+    questions named this entity at least once."""
+    entity: str
+    is_primary: bool
+    mentioned_queries: int
+    total_queries: int
+    rate_pct: float
+
+
+class PublicLiteVisibilityShare(BaseModel):
+    """mentions / totals.total_mentions — this entity's share of every
+    brand mention across all answers (primary + rivals combined).
+    Shares across the array sum to ~100 (rounding)."""
+    entity: str
+    is_primary: bool
+    mentions: int
+    share_pct: float
+
+
+class PublicLiteVisibilityTotals(BaseModel):
+    total_mentions: int
+    total_queries: int
+
+
+class PublicLiteVisibilityBreakdown(BaseModel):
+    mention_rate: List[PublicLiteVisibilityMentionRate] = []
+    share_of_mentions: List[PublicLiteVisibilityShare] = []
+    totals: PublicLiteVisibilityTotals
+
+
 class PublicLiteReportResponse(BaseModel):
+    """
+    by_stage: DEPRECATED (Stage 7) — always null. Per-stage mention data
+    is now paid-diagnostic material and must never be serialized into
+    this public payload; see visibility_breakdown for the stage-agnostic
+    aggregates the free report shows instead. The key is kept (not
+    deleted) per the additive-contract rule so an already-deployed
+    widget reading `report.by_stage || {}` keeps working mid-deploy.
+    visibility_breakdown: Stage 7 addition. Named _breakdown rather than
+    reusing `visibility` because that field name is already taken by the
+    scalar SoM subscore below — reshaping an existing field would break
+    the additive-only contract.
+    """
     status: str
     locked: bool = False
     overall: List[PublicLiteEntityMetrics] = []
-    by_stage: dict = {}  # Dict[stage_name, List[PublicLiteEntityMetrics]]
+    by_stage: Optional[dict] = None  # DEPRECATED — always null, see docstring
     scan: Optional[PublicLiteScan] = None
     visibility: Optional[float] = None
     accessibility: Optional[float] = None
     composite: Optional[float] = None
     scan_status: Optional[str] = None
+    visibility_breakdown: Optional[PublicLiteVisibilityBreakdown] = None
 
 
 class PublicLiteTeaserEntity(BaseModel):

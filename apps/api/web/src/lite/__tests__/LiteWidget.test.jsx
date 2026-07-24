@@ -192,7 +192,7 @@ describe('LiteWidget — adaptive shapes', () => {
     expect(screen.getByLabelText('Your brand or store URL')).toHaveValue('Acme Co')
   })
 
-  it('scan blocked still renders visibility sections fully, with the blocked badge in the why-section', async () => {
+  it('scan blocked still renders the visibility section fully, with the blocked badge in the why-section', async () => {
     sessionStorage.setItem('soaLiteToken', 'tok-blocked')
     sessionStorage.setItem('soaLiteStoreUrl', 'bigbox.com')
     liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'blocked' })
@@ -203,19 +203,34 @@ describe('LiteWidget — adaptive shapes', () => {
         { name: 'Big Box', role: 'primary', metrics: { som: 60, mention_rate: 40 } },
         { name: 'Rival', role: 'competitor', metrics: { som: 40, mention_rate: 20 } },
       ],
-      by_stage: { Awareness: [
-        { name: 'Big Box', role: 'primary', metrics: { mention_rate: 40 } },
-        { name: 'Rival', role: 'competitor', metrics: { mention_rate: 20 } },
-      ] },
+      by_stage: null, // deprecated Stage 7 — always null on the real API
+      visibility_breakdown: {
+        mention_rate: [
+          { entity: 'Big Box', is_primary: true, mentioned_queries: 5, total_queries: 12, rate_pct: 42 },
+          { entity: 'Rival', is_primary: false, mentioned_queries: 2, total_queries: 12, rate_pct: 17 },
+        ],
+        share_of_mentions: [
+          { entity: 'Big Box', is_primary: true, mentions: 5, share_pct: 71.4 },
+          { entity: 'Rival', is_primary: false, mentions: 2, share_pct: 28.6 },
+        ],
+        totals: { total_mentions: 7, total_queries: 12 },
+      },
       scan: { status: 'blocked', total_score: null, dimensions: [], pages_fetched: [] },
       visibility: 60, accessibility: null, composite: 60, scan_status: 'blocked',
     })
 
     render(<LiteWidget />)
 
-    await waitFor(() => expect(screen.getByText('Where you disappear in the funnel')).toBeInTheDocument())
-    expect(screen.getByText('AWARENESS')).toBeInTheDocument()
+    // The real, unlocked visibility section (W1/W2) still renders in full —
+    // a blocked scan degrades the why-section only, per rule 7.
+    await waitFor(() => expect(screen.getByText('How often agents mention you')).toBeInTheDocument())
+    expect(screen.getByText('42% · 5/12')).toBeInTheDocument()
     expect(screen.getByText(/blocked our reader/)).toBeInTheDocument()
+
+    // The funnel teaser (W4) still renders as a locked, decorative tease —
+    // its stage cells are fixed constants, not the real data above.
+    expect(screen.getByText('Where you disappear in the funnel')).toBeInTheDocument()
+    expect(screen.getByText('AWARENESS')).toBeInTheDocument()
   })
 })
 

@@ -162,10 +162,66 @@ const BAND_VERDICT_FALLBACK = {
   good: 'Agents can find, read, and price your store end to end.',
 }
 
+/** Best rival's share_pct, from either report shape: the teaser's flat
+ * entity.som or the full report's entity.metrics.som. */
+function _topRivalSom(entities) {
+  return (entities || [])
+    .filter((e) => e.role !== 'primary')
+    .map((e) => ({ name: e.name, som: e.som ?? e.metrics?.som ?? null }))
+    .filter((e) => e.som !== null && e.som !== undefined)
+    .sort((a, b) => b.som - a.som)[0] || null
+}
+
+/**
+ * Stage 7 (W5): data-driven, never stage-based, pre- or post-gate.
+ * Priority: an explicit report.verdict (unchanged) -> the full report's
+ * richer visibility_breakdown (mention-rate gap + top rival's share) ->
+ * a share-only line from report.overall (all that's available pre-gate,
+ * since the teaser never receives visibility_breakdown) -> the generic
+ * band-based fallback (old API shape, or no rival data at all).
+ */
 export function getVerdictLine(report) {
   if (report?.verdict) return report.verdict
+
+  const vb = report?.visibility_breakdown
+  if (vb) {
+    const primaryRate = (vb.mention_rate || []).find((r) => r.is_primary)
+    const topRivalShare = [...(vb.share_of_mentions || [])]
+      .filter((s) => !s.is_primary)
+      .sort((a, b) => (b.share_pct || 0) - (a.share_pct || 0))[0]
+    if (primaryRate) {
+      let line = `Named in ${primaryRate.mentioned_queries} of ${primaryRate.total_queries} answers.`
+      if (topRivalShare) {
+        line += ` ${topRivalShare.entity} took ${Math.round(topRivalShare.share_pct)}% of all mentions.`
+      }
+      return line
+    }
+  }
+
+  const topRival = _topRivalSom(report?.overall)
+  if (topRival) {
+    return `${topRival.name} took ${Math.round(topRival.som)}% of all mentions.`
+  }
+
   const band = getScoreBand(report?.composite)
   return BAND_VERDICT_FALLBACK[band.tone] || BAND_VERDICT_FALLBACK.bad
+}
+
+/**
+ * W3's payoff line — only when a single rival holds >=50% of all
+ * mentions; omitted otherwise (no fabricated drama). visibilityBreakdown
+ * is report.visibility_breakdown (undefined/null-safe).
+ */
+export function getDominantRivalPayoff(visibilityBreakdown) {
+  const shares = visibilityBreakdown?.share_of_mentions || []
+  const topRival = [...shares]
+    .filter((s) => !s.is_primary)
+    .sort((a, b) => (b.share_pct || 0) - (a.share_pct || 0))[0]
+  if (!topRival || (topRival.share_pct || 0) < 50) return null
+
+  const totalMentions = visibilityBreakdown?.totals?.total_mentions ?? 0
+  const totalQueries = visibilityBreakdown?.totals?.total_queries ?? 12
+  return `${totalMentions} brand mentions across ${totalQueries} answers. Half went to one rival.`
 }
 
 // ─── Misc formatting ────────────────────────────────────────────────────

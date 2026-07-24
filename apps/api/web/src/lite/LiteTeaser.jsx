@@ -134,7 +134,7 @@ export function LiteTeaser({ report, token, onUnlocked }) {
                 Want the full report?
               </div>
               <div className="lite-body--inv">
-                Unlock the stage-by-stage breakdown, the full why-section, and your ranked fixes.
+                Unlock the full why-section and your ranked fixes.
               </div>
             </div>
             <div style={{ flex: '1 1 260px', minWidth: 240 }}>
