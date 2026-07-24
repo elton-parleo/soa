@@ -35,3 +35,5 @@ Thumbs.db
 
 # Alembic compiled
 apps/pipeline/alembic/versions/*.pyc
+
+design-refs

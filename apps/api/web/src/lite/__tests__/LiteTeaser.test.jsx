@@ -28,7 +28,7 @@ const baseTeaser = {
 }
 
 describe('LiteTeaser — email gate flow, unchanged behavior', () => {
-  it('renders rival share of voice per entity with role labeling', () => {
+  it('renders rival share of mentions per entity with role labeling', () => {
     render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
     expect(screen.getByText('Acme Co (you)')).toBeInTheDocument()
     expect(screen.getByText('Rival Co')).toBeInTheDocument()
