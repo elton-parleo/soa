@@ -1,9 +1,9 @@
 """
 structured_data.py — JSON-LD + microdata extraction for the Agent Scan
 engine. Pulls Product/ProductGroup/Offer/PriceSpecification/
-Organization data plus loyalty and "was price" (compare-at/
-strikethrough) signals out of a page's HTML; scorer.py turns these into
-dimension scores.
+Organization data plus loyalty, "was price" (compare-at/strikethrough),
+identifier (gtin/mpn/sku/brand), and agentic-protocol markup signals out
+of a page's HTML; scorer.py turns these into dimension scores.
 """
 import json
 import logging
@@ -28,6 +28,22 @@ MEMBER_PRICE_JSON_HINTS = (
     "memberprice", "member price", "loyaltyprice",
     "eligiblecustomertype", "membershippointsearned",
 )
+# Stage 10 (D3): V4's CONCRETE/ACTIONABLE sub-checks mirror the deal_cited
+# rubric's own CONCRETE/ACTIONABLE tests (apps/pipeline/parser/prompts.py,
+# "DEAL CITATION RULES" — frozen per Stage 8 H1, read-only reference here).
+CONCRETE_DISCOUNT_JSON_HINTS = (
+    "discount", "% off", "percentoff", "bogo", "buy one", "save $", "savingsamount",
+)
+ACTIONABLE_JSON_HINTS = (
+    "eligib", "promo code", "promocode", "coupon", "stackable", "combinable",
+)
+# Stage 10 (D2): no universal registry for these declarations exists to
+# probe — these are same-origin, crawl-observable heuristics only (never
+# a third-party lookup). Evidence strings always name the exact match.
+AGENTIC_PROTOCOL_LINK_HINTS = ("mcp", "ucp", "uip")
+AGENTIC_PROTOCOL_JSON_HINTS = (
+    "mcp", "ucp", "uip", "agentic-commerce", "agent-discount", "machine-payable",
+)
 
 
 @dataclass
@@ -43,6 +59,12 @@ class ProductData:
     name: Optional[str] = None
     offers: list = field(default_factory=list)  # list[OfferData]
     has_member_price_hint: bool = False
+    has_concrete_discount_hint: bool = False
+    has_actionable_hint: bool = False
+    gtin: Optional[str] = None
+    mpn: Optional[str] = None
+    sku: Optional[str] = None
+    brand: Optional[str] = None
 
 
 @dataclass
@@ -52,9 +74,11 @@ class ExtractedData:
     has_jsonld: bool = False
     has_microdata: bool = False
     was_price_signals: list = field(default_factory=list)       # list[str] evidence
+    was_price_numeric: Optional[float] = None                   # best-effort was-price value
     loyalty_text_hits: list = field(default_factory=list)       # list[str]
     shipping_returns_text_hits: list = field(default_factory=list)  # list[str]
     raw_jsonld_types: list = field(default_factory=list)        # list[str]
+    agentic_protocol_hints: list = field(default_factory=list)  # list[str] evidence
 
 
 def _coerce_price(value) -> Optional[float]:
@@ -89,6 +113,25 @@ def _extract_offer(node: dict) -> OfferData:
     )
 
 
+def _first_str(value) -> Optional[str]:
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    if isinstance(value, list) and value:
+        return _first_str(value[0])
+    return None
+
+
+def _parse_money(text: str) -> Optional[float]:
+    """Best-effort numeric parse of a price-looking text fragment — never
+    raises; returns None for anything that isn't recognizably a number."""
+    if not text:
+        return None
+    match = re.search(r"[\d,]+\.?\d*", text)
+    if not match:
+        return None
+    return _coerce_price(match.group(0))
+
+
 def _walk_jsonld_node(node, extracted: ExtractedData) -> None:
     if isinstance(node, list):
         for item in node:
@@ -112,11 +155,24 @@ def _walk_jsonld_node(node, extracted: ExtractedData) -> None:
             if isinstance(offer_node, dict):
                 product.offers.append(_extract_offer(offer_node))
 
+        product.gtin = _first_str(node.get("gtin") or node.get("gtin13") or node.get("gtin12") or node.get("gtin8"))
+        product.mpn = _first_str(node.get("mpn"))
+        product.sku = _first_str(node.get("sku"))
+        brand = node.get("brand")
+        if isinstance(brand, dict):
+            brand = brand.get("name")
+        product.brand = _first_str(brand)
+
         try:
             blob = json.dumps(node).lower()
         except (TypeError, ValueError):
             blob = ""
         product.has_member_price_hint = any(kw in blob for kw in MEMBER_PRICE_JSON_HINTS)
+        product.has_concrete_discount_hint = any(kw in blob for kw in CONCRETE_DISCOUNT_JSON_HINTS)
+        product.has_actionable_hint = any(kw in blob for kw in ACTIONABLE_JSON_HINTS)
+        if any(kw in blob for kw in AGENTIC_PROTOCOL_JSON_HINTS):
+            matched = sorted(kw for kw in AGENTIC_PROTOCOL_JSON_HINTS if kw in blob)
+            extracted.agentic_protocol_hints.append(f"structured data mentions: {matched}")
 
         extracted.products.append(product)
 
@@ -162,19 +218,47 @@ def extract(html: str) -> ExtractedData:
 
     try:
         was_price_matches = set()
+        was_price_texts = []
         for el in soup.find_all(["del", "s", "strike"]):
             text = el.get_text(strip=True)
             if text:
                 was_price_matches.add(f"strikethrough element: {text!r}")
+                was_price_texts.append(text)
         for el in soup.find_all(class_=True):
             classes = " ".join(el.get("class", [])).lower()
             if any(hint in classes for hint in WAS_PRICE_CSS_HINTS):
                 text = el.get_text(strip=True)
                 if text:
                     was_price_matches.add(f"class={classes!r}: {text!r}")
+                    was_price_texts.append(text)
         extracted.was_price_signals = sorted(was_price_matches)
+        # Stage 10 (D4): best-effort numeric value of a was-price signal,
+        # needed to compute discount depth against the current offer price.
+        # Never raises — an unparseable fragment just leaves this None.
+        for text in was_price_texts:
+            parsed = _parse_money(text)
+            if parsed is not None:
+                extracted.was_price_numeric = parsed
+                break
     except Exception:
         log.exception("[scan.structured_data] failed to scan for was-price signals")
+
+    try:
+        # "link markup" (D2) means an explicit <link>/<meta> declaration,
+        # e.g. <link rel="mcp-manifest" href="...">  — deliberately NOT
+        # scanning <a> hrefs/text, which would false-positive on ordinary
+        # navigation links far too easily for a 3-letter substring match.
+        for tag in soup.find_all(["link", "meta"]):
+            rel = " ".join(tag.get("rel", []) if isinstance(tag.get("rel"), list) else [tag.get("rel") or ""])
+            name_attr = tag.get("name") or ""
+            haystack = f"{rel} {name_attr}".lower()
+            matched = [kw for kw in AGENTIC_PROTOCOL_LINK_HINTS if kw in haystack]
+            if matched:
+                extracted.agentic_protocol_hints.append(
+                    f"<{tag.name}> markup mentions: {sorted(set(matched))}"
+                )
+    except Exception:
+        log.exception("[scan.structured_data] failed to scan for agentic-protocol link markup")
 
     try:
         body_text = soup.get_text(" ", strip=True).lower()

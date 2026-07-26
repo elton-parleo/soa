@@ -10,7 +10,7 @@ import { WeightsBar } from './landingTheme.jsx'
 const FOUNDATION_SEGMENTS = [
   { label: 'Agent Access', weight: 10, color: 'var(--foundation)' },
   { label: 'Catalog & Context', weight: 15, color: 'var(--foundation)' },
-  { label: 'Transaction Rails', weight: 10, color: 'var(--foundation)' },
+  { label: 'Protocol & Feed Presence', weight: 10, color: 'var(--foundation)' },
 ]
 const VALUE_SEGMENTS = [
   { label: 'Offer Legibility', weight: 15, color: 'var(--accent)' },

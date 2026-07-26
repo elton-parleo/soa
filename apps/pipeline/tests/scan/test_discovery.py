@@ -115,3 +115,21 @@ def test_no_loyalty_link_means_no_loyalty_candidate(monkeypatch):
 
     result = discover_pages("https://no-loyalty.example.com", FetchBudget())
     assert not [c for c in result.candidates if c.kind == "loyalty"]
+
+
+def test_llms_txt_and_mcp_well_known_are_always_added_as_candidates(monkeypatch):
+    """Stage 10 (D2): every scan probes these two same-origin,
+    protocol-presence paths regardless of what else discovery finds."""
+    pages = {
+        "/robots.txt": (404, ""),
+        "/sitemap.xml": (404, ""),
+        "": (200, "<html><body></body></html>"),
+    }
+    monkeypatch.setattr(httpx.Client, "get", _serve(pages))
+
+    result = discover_pages("https://plain.example.com", FetchBudget())
+
+    llms_txt = [c for c in result.candidates if c.kind == "llms_txt"]
+    mcp = [c for c in result.candidates if c.kind == "mcp_well_known"]
+    assert llms_txt and llms_txt[0].url == "https://plain.example.com/llms.txt"
+    assert mcp and mcp[0].url == "https://plain.example.com/.well-known/mcp.json"

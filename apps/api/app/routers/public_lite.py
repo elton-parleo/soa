@@ -186,7 +186,7 @@ DIMENSION_ORDER = ("F1", "F2", "F3", "V1", "V2", "V3", "V4", "V5")
 DIMENSION_NAMES = {
     "F1": "Agent Access",
     "F2": "Catalog Context",
-    "F3": "Transaction Rails",
+    "F3": "Protocol & Feed Presence",  # was "Transaction Rails" (Stage 10, scorer_version "2")
     "V1": "Offer Legibility",
     "V2": "Loyalty Surface",
     "V3": "Member Value",
@@ -290,6 +290,21 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
     Never blocks the report (rule 7): any non-'complete' status — or no
     row at all — degrades to a status-only/absent object rather than
     raising or omitting the honest status badge.
+
+    Stage 10 (A2): a dimension's 'coverage' is 'na' when it's inapplicable
+    to this site type (Stage 10 D5) — those dimensions are excluded from
+    fix-ranking and from each family's applicable_max entirely, not
+    scored as zero. A pre-Stage-10 row has no coverage/deferred_items/
+    cap_basis/scorer_version keys at all; every one of those defaults to
+    its Stage-1 meaning ('full' coverage, scorer_version "1") so an old
+    row renders exactly as it always has, no crash, no stray tags.
+
+    Family `max` stays the nominal 35/65 always (rule 6 — an existing
+    field's meaning never changes); `applicable_max` is the new, additive
+    ceiling to use instead when something in that family is 'na' (W2).
+    subtotal itself is left as the raw sum over applicable dimensions
+    (not independently re-projected onto /35) so it always reads
+    correctly against whichever denominator the UI chooses.
     """
     if not scan_row:
         return None
@@ -306,12 +321,21 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
         ).model_dump()
 
     dimensions = _decode_json_field(dimensions, {})
+    scorer_version = dimensions.get('scorer_version') or '1'
+
+    def _coverage(code: str) -> str:
+        return dimensions.get(code, {}).get('coverage') or 'full'
+
+    applicable_codes = [c for c in DIMENSION_ORDER if _coverage(c) != 'na']
 
     # Rank by opportunity size (max - score) descending — biggest gaps
-    # first — deterministic tiebreak by code. Only the top FREE_FIX_RANK
-    # dimensions' fix text is given away free; the rest are locked.
+    # first — deterministic tiebreak by code. 'na' dimensions have no
+    # fixable gap and are excluded entirely so they can't crowd a real
+    # dimension out of the free top-3 (Stage 10). Only the top
+    # FREE_FIX_RANK dimensions' fix text is given away free; the rest
+    # are locked.
     ranked_codes = sorted(
-        DIMENSION_ORDER,
+        applicable_codes,
         key=lambda code: (
             -(dimensions.get(code, {}).get('max', 0) - dimensions.get(code, {}).get('score', 0)),
             code,
@@ -322,21 +346,29 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
     dim_rows = []
     foundation_subtotal = 0.0
     value_subtotal = 0.0
+    foundation_applicable_max = 0.0
+    value_applicable_max = 0.0
     for code in DIMENSION_ORDER:
         d = dimensions.get(code, {})
         score = d.get('score', 0)
         max_ = d.get('max', 0)
         fix = d.get('fix')
         evidence = d.get('evidence', [])
+        coverage = _coverage(code)
+        is_applicable = coverage != 'na'
 
-        locked = fix is not None and rank_by_code[code] > FREE_FIX_RANK
+        rank = rank_by_code.get(code)
+        locked = fix is not None and rank is not None and rank > FREE_FIX_RANK
         if locked:
             fix = None
 
-        if code in FOUNDATION_CODES:
-            foundation_subtotal += score
-        else:
-            value_subtotal += score
+        if is_applicable:
+            if code in FOUNDATION_CODES:
+                foundation_subtotal += score
+                foundation_applicable_max += max_
+            else:
+                value_subtotal += score
+                value_applicable_max += max_
 
         reason = linked.get(code)
         dim_rows.append(PublicLiteScanDimension(
@@ -348,14 +380,24 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
             fix=fix,
             locked=locked,
             linked={"reason": reason} if reason else None,
+            coverage=coverage,
+            deferred_items=d.get('deferred_items') or [],
+            cap_basis=d.get('cap_basis') or [],
         ).model_dump())
 
     return PublicLiteScan(
         status=status,
         total_score=total_score,
         integrity_capped=bool(integrity_capped),
-        foundation=PublicLiteScanFamily(subtotal=round(foundation_subtotal, 1), max=FOUNDATION_MAX).model_dump(),
-        value=PublicLiteScanFamily(subtotal=round(value_subtotal, 1), max=VALUE_MAX).model_dump(),
+        scorer_version=scorer_version,
+        foundation=PublicLiteScanFamily(
+            subtotal=round(foundation_subtotal, 1), max=FOUNDATION_MAX,
+            applicable_max=round(foundation_applicable_max, 1),
+        ).model_dump(),
+        value=PublicLiteScanFamily(
+            subtotal=round(value_subtotal, 1), max=VALUE_MAX,
+            applicable_max=round(value_applicable_max, 1),
+        ).model_dump(),
         dimensions=dim_rows,
         pages_fetched=pages_fetched,
     ).model_dump()

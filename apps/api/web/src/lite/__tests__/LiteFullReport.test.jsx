@@ -12,7 +12,9 @@ function dim(code, name, score, max, overrides = {}) {
 const EIGHT_DIMENSIONS = [
   dim('F1', 'Agent Access', 8, 10),
   dim('F2', 'Catalog Context', 10, 15),
-  dim('F3', 'Transaction Rails', 9, 10),
+  dim('F3', 'Protocol & Feed Presence', 9, 10, { coverage: 'partial', deferred_items: [
+    { label: 'Merchant Center / Deal Directory participation', reason: 'not crawl-observable' },
+  ] }),
   dim('V1', 'Offer Legibility', 6, 15, { fix: 'add priceCurrency', locked: false }),
   dim('V2', 'Loyalty Surface', 6, 14, { fix: 'publish a rewards page', locked: false }),
   dim('V3', 'Member Value', 7, 14, { fix: 'expose member pricing', locked: false }),
@@ -388,6 +390,67 @@ describe('LiteFullReport — why-section, all 8 dimensions', () => {
     const report = { ...baseReport, scan: { status: 'failed', total_score: null, dimensions: [], pages_fetched: [] }, scan_status: 'failed' }
     render(<LiteFullReport report={report} />)
     expect(screen.getByText(/couldn't finish reading your store this time/)).toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — Stage 10: partial coverage + deferred items', () => {
+  it('shows the PARTIAL tag only on coverage=partial dimensions (F3), not full ones', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getAllByText('Partial · full analysis')).toHaveLength(1)
+  })
+
+  it('lists deferred items under a partial dimension with a lock glyph, no email wording in the item copy itself', () => {
+    render(<LiteFullReport report={baseReport} />)
+    const deferredLine = screen.getByText(/Merchant Center \/ Deal Directory participation — verified in the full analysis/)
+    expect(deferredLine).toBeInTheDocument()
+    expect(deferredLine.textContent).not.toMatch(/email|unlock/i)
+  })
+
+  it('renders a NOT APPLICABLE row for coverage=na dimensions, excluded from the bar fill', () => {
+    const dims = EIGHT_DIMENSIONS.map((d) =>
+      d.code === 'V3'
+        ? { ...d, score: 0, coverage: 'na', evidence: ['no Offer markup found — member pricing is not applicable'] }
+        : d
+    )
+    const report = { ...baseReport, scan: { ...baseReport.scan, dimensions: dims } }
+    render(<LiteFullReport report={report} />)
+
+    expect(screen.getByText('— · NOT APPLICABLE')).toBeInTheDocument()
+    expect(screen.getByText(/member pricing is not applicable/)).toBeInTheDocument()
+  })
+
+  it('switches the family header to "n/{applicable_max} applicable" only when a dimension is na', () => {
+    const dims = EIGHT_DIMENSIONS.map((d) => (d.code === 'V3' ? { ...d, score: 0, coverage: 'na' } : d))
+    const report = {
+      ...baseReport,
+      scan: { ...baseReport.scan, dimensions: dims, value: { subtotal: 25, max: 65, applicable_max: 51 } },
+    }
+    render(<LiteFullReport report={report} />)
+
+    expect(screen.getByText('VALUE · 25/51 APPLICABLE')).toBeInTheDocument()
+    expect(screen.getByText('FOUNDATION · 27/35')).toBeInTheDocument() // unaffected family: familiar /35
+  })
+
+  it('appends cap_basis evidence lines under the integrity-cap footnote when capped', () => {
+    const dims = EIGHT_DIMENSIONS.map((d) =>
+      d.code === 'V5' ? { ...d, cap_basis: ['was-price signal on 2/2 sampled pages, sitewide', 'no priceValidUntil found on any sampled product page'] } : d
+    )
+    const report = { ...baseReport, scan: { ...baseReport.scan, integrity_capped: true, dimensions: dims } }
+    render(<LiteFullReport report={report} />)
+
+    expect(screen.getByText(/the score cannot pass 59/)).toBeInTheDocument()
+    expect(screen.getByText('was-price signal on 2/2 sampled pages, sitewide')).toBeInTheDocument()
+    expect(screen.getByText('no priceValidUntil found on any sampled product page')).toBeInTheDocument()
+  })
+
+  it('renders a pre-Stage-10 (scorer_version "1") row with no coverage tags and no crash', () => {
+    const oldShapeDims = EIGHT_DIMENSIONS.map(({ coverage, deferred_items, cap_basis, ...rest }) => rest)
+    const report = { ...baseReport, scan: { ...baseReport.scan, dimensions: oldShapeDims } }
+    render(<LiteFullReport report={report} />)
+
+    expect(screen.queryByText('Partial · full analysis')).not.toBeInTheDocument()
+    expect(screen.queryByText('— · NOT APPLICABLE')).not.toBeInTheDocument()
+    expect(screen.getByText('FOUNDATION · 27/35')).toBeInTheDocument()
   })
 })
 

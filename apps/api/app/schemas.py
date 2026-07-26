@@ -688,6 +688,19 @@ class PublicLiteEntityMetrics(BaseModel):
 class PublicLiteScanFamily(BaseModel):
     subtotal: float
     max: float
+    # Stage 10 (A2): sum of nominal maxes over non-'na' dimensions in
+    # this family only — equal to `max` unless a dimension in this
+    # family is 'na', in which case the UI renders "n/{applicable_max}
+    # applicable" instead of pretending the full /35 or /65 (W2).
+    applicable_max: float = 0.0
+
+
+class PublicLiteScanDeferredItem(BaseModel):
+    """One crawl-unverifiable item (S2) — never scored, never subtracted;
+    surfaced so the report is honest about what a single crawl can't
+    check rather than silently omitting it."""
+    label: str
+    reason: str
 
 
 class PublicLiteScanDimension(BaseModel):
@@ -697,6 +710,13 @@ class PublicLiteScanDimension(BaseModel):
     the full fix list is paid-diagnostic material. linked is null unless
     apps/api/app/services/lite_crosswalk.py matched this dimension to a
     query-level signal for the primary entity.
+
+    Stage 10: coverage is 'full' (default — also what a pre-Stage-10
+    scorer_version "1" row implies), 'partial' (some of its scored basis
+    is crawl-unverifiable — see deferred_items — but nothing here ever
+    subtracts a point for a deferred item), or 'na' (inapplicable to this
+    site type — excluded from every family/total sum, not scored as
+    zero). cap_basis is populated only for V5 when integrity_capped.
     """
     code: str
     name: str
@@ -706,6 +726,9 @@ class PublicLiteScanDimension(BaseModel):
     fix: Optional[str] = None
     locked: bool = False
     linked: Optional[dict] = None  # {"reason": "..."} or None
+    coverage: str = "full"  # full | partial | na
+    deferred_items: List[PublicLiteScanDeferredItem] = []
+    cap_basis: List[str] = []
 
 
 class PublicLiteScan(BaseModel):
@@ -714,10 +737,15 @@ class PublicLiteScan(BaseModel):
     soa_lite_scan_results.status honestly — complete/blocked/failed/
     skipped are all valid and never block the report itself (rule 7).
     foundation/value/dimensions are only populated when status='complete'.
+
+    scorer_version defaults to "1" — the value implied for any row
+    scanned before Stage 10 introduced the field (stored as a sibling
+    key inside the dimensions jsonb, not a new column; see engine.py).
     """
     status: str
     total_score: Optional[int] = None
     integrity_capped: bool = False
+    scorer_version: str = "1"
     foundation: Optional[PublicLiteScanFamily] = None
     value: Optional[PublicLiteScanFamily] = None
     dimensions: List[PublicLiteScanDimension] = []

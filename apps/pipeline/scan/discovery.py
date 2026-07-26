@@ -3,9 +3,18 @@ discovery.py — page discovery for the Agent Scan engine.
 
 Finds robots.txt, resolves declared (or conventional) sitemaps, and
 ranks candidate pages to fetch: the homepage, 1-2 product pages, a
-loyalty/rewards page, and a shipping/returns page. Product pages are
-recognized by URL shape (/products/, /p/, /dp/) against sitemap and
-homepage links; loyalty/shipping pages by nav/footer link text.
+loyalty/rewards page, a shipping/returns page, and (Stage 10, D2) two
+same-origin protocol-presence candidates: /llms.txt and a well-known MCP
+manifest path. Product pages are recognized by URL shape (/products/,
+/p/, /dp/) against sitemap and homepage links; loyalty/shipping pages by
+nav/footer link text.
+
+Stage 10 (D2) picks a single canonical well-known MCP path
+(/.well-known/mcp.json) since no universal registry/convention exists
+yet to check against — this is a same-origin, crawl-observable heuristic
+only, never a third-party lookup (rule 8). A miss here isn't penalized
+beyond F3's own scored weight; scorer.py's F3 also checks homepage
+<link>/<meta> markup as a second, independent signal.
 """
 import logging
 import re
@@ -34,12 +43,14 @@ SHIPPING_LINK_KEYWORDS = (
 )
 
 MAX_PRODUCT_PAGES = 2
+LLMS_TXT_PATH = "/llms.txt"
+MCP_WELL_KNOWN_PATH = "/.well-known/mcp.json"
 
 
 @dataclass
 class PageCandidate:
     url: str
-    kind: str  # homepage | product | loyalty | shipping_returns
+    kind: str  # homepage | product | loyalty | shipping_returns | llms_txt | mcp_well_known
 
 
 @dataclass
@@ -182,6 +193,9 @@ def discover_pages(base_url: str, budget: FetchBudget) -> DiscoveryResult:
             shipping_links = _find_links_by_keyword(homepage_html, base_url, SHIPPING_LINK_KEYWORDS)
             if shipping_links:
                 candidates.append(PageCandidate(url=shipping_links[0], kind="shipping_returns"))
+
+        candidates.append(PageCandidate(url=urljoin(base_url, LLMS_TXT_PATH), kind="llms_txt"))
+        candidates.append(PageCandidate(url=urljoin(base_url, MCP_WELL_KNOWN_PATH), kind="mcp_well_known"))
 
         return DiscoveryResult(
             robots_fetch=robots_fetch,

@@ -205,10 +205,11 @@ def test_per_ip_hourly_limit_ignores_requests_older_than_an_hour(db):
 def test_per_ip_daily_limit_enforced_across_the_hourly_window(db):
     ip_hash = public_lite._hash_ip("203.0.113.42")
     now = datetime.now(timezone.utc)
-    # 5 requests spread across the day (outside the 1-hour window, inside the 1-day window)
+    # RATE_LIMIT_PER_IP_DAY requests spread across the day (outside the
+    # 1-hour window, inside the 1-day window).
     with db.begin() as conn:
-        for i in range(5):
-            _insert_lite_row(conn, ip_hash, now - timedelta(hours=2 + i * 3))
+        for i in range(public_lite.RATE_LIMIT_PER_IP_DAY):
+            _insert_lite_row(conn, ip_hash, now - timedelta(hours=2 + i))
 
     with pytest.raises(HTTPException) as exc_info:
         public_lite.submit_lite_request(_submit_data(), FakeRequest(ip="203.0.113.42"))

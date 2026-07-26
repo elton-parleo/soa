@@ -149,7 +149,7 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         dim_scores = {
             "F1": scorer.score_f1_agent_access(discovery, pages),
             "F2": scorer.score_f2_catalog_context(pages),
-            "F3": scorer.score_f3_transaction_rails(pages),
+            "F3": scorer.score_f3_protocol_feed_presence(pages),
             "V1": scorer.score_v1_offer_legibility(pages),
             "V2": scorer.score_v2_loyalty_surface(pages),
             "V3": scorer.score_v3_member_value(pages),
@@ -158,14 +158,29 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         v5_score, integrity_capped = scorer.score_v5_offer_integrity(pages)
         dim_scores["V5"] = v5_score
 
-        raw_total = sum(d.score for d in dim_scores.values())
-        capped_total = min(raw_total, scorer.INTEGRITY_CAP) if integrity_capped else raw_total
-        total_score = int(round(capped_total))
+        # Stage 10 (A2/S3): total_score is rescaled over APPLICABLE
+        # (non-'na') dimensions only — 'na' dimensions drop out of the
+        # denominator entirely rather than counting as zero. When nothing
+        # is 'na', every weight sums to 100 exactly, so this reduces to
+        # the pre-Stage-10 raw sum (scorer_version "1" is unaffected).
+        applicable = {code: d for code, d in dim_scores.items() if d.coverage != "na"}
+        applicable_score = sum(d.score for d in applicable.values())
+        applicable_max = sum(d.max for d in applicable.values())
+        raw_total_pct = (applicable_score / applicable_max * 100) if applicable_max else 0.0
+        capped_total_pct = min(raw_total_pct, scorer.INTEGRITY_CAP) if integrity_capped else raw_total_pct
+        total_score = int(round(capped_total_pct))
 
         dimensions = {
-            code: {"score": d.score, "max": d.max, "evidence": d.evidence, "fix": d.fix}
+            code: {
+                "score": d.score, "max": d.max, "evidence": d.evidence, "fix": d.fix,
+                "coverage": d.coverage, "deferred_items": d.deferred_items, "cap_basis": d.cap_basis,
+            }
             for code, d in dim_scores.items()
         }
+        # Stage 10 (S4): sibling key, not a per-dimension one — no
+        # migration needed (JSON column); absence on older rows means
+        # scorer_version "1" is implied.
+        dimensions["scorer_version"] = "2"
 
         return ScanResult(
             status=STATUS_COMPLETE,

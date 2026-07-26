@@ -135,6 +135,16 @@ describe('rankDimensionsByGap', () => {
     rankDimensionsByGap(dims)
     expect(dims).toEqual(original)
   })
+
+  it('Stage 10: excludes coverage=na dimensions entirely, even when their gap would rank first', () => {
+    const dims = [
+      { code: 'V1', score: 0, max: 15, coverage: 'na' },  // gap 15 — biggest, but not applicable
+      { code: 'F1', score: 8, max: 10 },                  // gap 2
+      { code: 'F3', score: 0, max: 10 },                  // gap 10
+    ]
+    const ranked = rankDimensionsByGap(dims)
+    expect(ranked.map((d) => d.code)).toEqual(['F3', 'F1'])
+  })
 })
 
 describe('computeExposure', () => {

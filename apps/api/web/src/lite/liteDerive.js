@@ -86,14 +86,19 @@ export function groupDimensionsByFamily(dimensions) {
 /** Ranks dimensions by opportunity size (max - score) descending — the
  * same rule the API uses to decide which 3 fixes are unlocked, so a
  * dimension's `locked` flag lines up with its position here. Deterministic
- * tiebreak by code. */
+ * tiebreak by code. Stage 10: 'na' dimensions are excluded entirely —
+ * there's no fixable gap on a dimension that isn't applicable to this
+ * site type, and the server never ranks them either (see
+ * public_lite.py::_build_scan_payload). */
 export function rankDimensionsByGap(dimensions) {
-  return [...(dimensions || [])].sort((a, b) => {
-    const gapA = (a.max || 0) - (a.score || 0)
-    const gapB = (b.max || 0) - (b.score || 0)
-    if (gapB !== gapA) return gapB - gapA
-    return (a.code || '').localeCompare(b.code || '')
-  })
+  return [...(dimensions || [])]
+    .filter((d) => d.coverage !== 'na')
+    .sort((a, b) => {
+      const gapA = (a.max || 0) - (a.score || 0)
+      const gapB = (b.max || 0) - (b.score || 0)
+      if (gapB !== gapA) return gapB - gapA
+      return (a.code || '').localeCompare(b.code || '')
+    })
 }
 
 // ─── Exposure calculator ────────────────────────────────────────────────
