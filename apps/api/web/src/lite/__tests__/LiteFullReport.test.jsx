@@ -12,7 +12,9 @@ function dim(code, name, score, max, overrides = {}) {
 const EIGHT_DIMENSIONS = [
   dim('F1', 'Agent Access', 8, 10),
   dim('F2', 'Catalog Context', 10, 15),
-  dim('F3', 'Transaction Rails', 9, 10),
+  dim('F3', 'Protocol & Feed Presence', 9, 10, { coverage: 'partial', deferred_items: [
+    { label: 'Merchant Center / Deal Directory participation', reason: 'not crawl-observable' },
+  ] }),
   dim('V1', 'Offer Legibility', 6, 15, { fix: 'add priceCurrency', locked: false }),
   dim('V2', 'Loyalty Surface', 6, 14, { fix: 'publish a rewards page', locked: false }),
   dim('V3', 'Member Value', 7, 14, { fix: 'expose member pricing', locked: false }),
@@ -147,6 +149,51 @@ describe('LiteFullReport — visibility section (Stage 7)', () => {
     const { visibility_breakdown, ...report } = baseReport
     render(<LiteFullReport report={report} />)
     expect(screen.getByText("Visibility data isn't available for this report yet.")).toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — Stage 13 (W4/W5): competitor_source-driven visibility section', () => {
+  const soloReport = {
+    ...baseReport,
+    competitor_source: 'none',
+    overall: [{ name: 'Acme Co', role: 'primary', metrics: { som: 100, mention_rate: 50, position_index: 70, rsi: 1.2 } }],
+    visibility_breakdown: {
+      mention_rate: [{ entity: 'Acme Co', is_primary: true, mentioned_queries: 6, total_queries: 12, rate_pct: 50.0 }],
+      share_of_mentions: [{ entity: 'Acme Co', is_primary: true, mentions: 6, share_pct: 100.0 }],
+      totals: { total_mentions: 6, total_queries: 12 },
+      incentive_citation: [{ entity: 'Acme Co', is_primary: true, mentions: 6, cited_answers: 2, rate_pct: 33.3 }],
+    },
+  }
+
+  it('solo run (competitor_source none): still shows mention rate, but no donut and no incentive-citation card', () => {
+    render(<LiteFullReport report={soloReport} />)
+
+    expect(screen.getByText('50% · 6/12')).toBeInTheDocument()
+    expect(screen.getByText('Competitor comparison unavailable for this run.')).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: /of mentions/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('Incentive citation rate')).not.toBeInTheDocument()
+  })
+
+  it('solo run never shows the auto-selected provenance line', () => {
+    render(<LiteFullReport report={soloReport} />)
+    expect(screen.queryByText('Competitors auto-selected by ChatGPT')).not.toBeInTheDocument()
+  })
+
+  it('competitor_source generated: shows the provenance line and the normal comparison visuals', () => {
+    render(<LiteFullReport report={{ ...baseReport, competitor_source: 'generated' }} />)
+    expect(screen.getByText('Competitors auto-selected by ChatGPT')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /of mentions/ })).toBeInTheDocument()
+  })
+
+  it('competitor_source mixed: also shows the provenance line', () => {
+    render(<LiteFullReport report={{ ...baseReport, competitor_source: 'mixed' }} />)
+    expect(screen.getByText('Competitors auto-selected by ChatGPT')).toBeInTheDocument()
+  })
+
+  it('competitor_source manual: no provenance line, normal comparison visuals', () => {
+    render(<LiteFullReport report={{ ...baseReport, competitor_source: 'manual' }} />)
+    expect(screen.queryByText('Competitors auto-selected by ChatGPT')).not.toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /of mentions/ })).toBeInTheDocument()
   })
 })
 
@@ -388,6 +435,67 @@ describe('LiteFullReport — why-section, all 8 dimensions', () => {
     const report = { ...baseReport, scan: { status: 'failed', total_score: null, dimensions: [], pages_fetched: [] }, scan_status: 'failed' }
     render(<LiteFullReport report={report} />)
     expect(screen.getByText(/couldn't finish reading your store this time/)).toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — Stage 10: partial coverage + deferred items', () => {
+  it('shows the PARTIAL tag only on coverage=partial dimensions (F3), not full ones', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getAllByText('Partial · full analysis')).toHaveLength(1)
+  })
+
+  it('lists deferred items under a partial dimension with a lock glyph, no email wording in the item copy itself', () => {
+    render(<LiteFullReport report={baseReport} />)
+    const deferredLine = screen.getByText(/Merchant Center \/ Deal Directory participation — verified in the full analysis/)
+    expect(deferredLine).toBeInTheDocument()
+    expect(deferredLine.textContent).not.toMatch(/email|unlock/i)
+  })
+
+  it('renders a NOT APPLICABLE row for coverage=na dimensions, excluded from the bar fill', () => {
+    const dims = EIGHT_DIMENSIONS.map((d) =>
+      d.code === 'V3'
+        ? { ...d, score: 0, coverage: 'na', evidence: ['no Offer markup found — member pricing is not applicable'] }
+        : d
+    )
+    const report = { ...baseReport, scan: { ...baseReport.scan, dimensions: dims } }
+    render(<LiteFullReport report={report} />)
+
+    expect(screen.getByText('— · NOT APPLICABLE')).toBeInTheDocument()
+    expect(screen.getByText(/member pricing is not applicable/)).toBeInTheDocument()
+  })
+
+  it('switches the family header to "n/{applicable_max} applicable" only when a dimension is na', () => {
+    const dims = EIGHT_DIMENSIONS.map((d) => (d.code === 'V3' ? { ...d, score: 0, coverage: 'na' } : d))
+    const report = {
+      ...baseReport,
+      scan: { ...baseReport.scan, dimensions: dims, value: { subtotal: 25, max: 65, applicable_max: 51 } },
+    }
+    render(<LiteFullReport report={report} />)
+
+    expect(screen.getByText('VALUE · 25/51 APPLICABLE')).toBeInTheDocument()
+    expect(screen.getByText('FOUNDATION · 27/35')).toBeInTheDocument() // unaffected family: familiar /35
+  })
+
+  it('appends cap_basis evidence lines under the integrity-cap footnote when capped', () => {
+    const dims = EIGHT_DIMENSIONS.map((d) =>
+      d.code === 'V5' ? { ...d, cap_basis: ['was-price signal on 2/2 sampled pages, sitewide', 'no priceValidUntil found on any sampled product page'] } : d
+    )
+    const report = { ...baseReport, scan: { ...baseReport.scan, integrity_capped: true, dimensions: dims } }
+    render(<LiteFullReport report={report} />)
+
+    expect(screen.getByText(/the score cannot pass 59/)).toBeInTheDocument()
+    expect(screen.getByText('was-price signal on 2/2 sampled pages, sitewide')).toBeInTheDocument()
+    expect(screen.getByText('no priceValidUntil found on any sampled product page')).toBeInTheDocument()
+  })
+
+  it('renders a pre-Stage-10 (scorer_version "1") row with no coverage tags and no crash', () => {
+    const oldShapeDims = EIGHT_DIMENSIONS.map(({ coverage, deferred_items, cap_basis, ...rest }) => rest)
+    const report = { ...baseReport, scan: { ...baseReport.scan, dimensions: oldShapeDims } }
+    render(<LiteFullReport report={report} />)
+
+    expect(screen.queryByText('Partial · full analysis')).not.toBeInTheDocument()
+    expect(screen.queryByText('— · NOT APPLICABLE')).not.toBeInTheDocument()
+    expect(screen.getByText('FOUNDATION · 27/35')).toBeInTheDocument()
   })
 })
 

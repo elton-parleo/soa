@@ -23,7 +23,8 @@ def db(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_lite_requests (
                 id INTEGER PRIMARY KEY, token TEXT UNIQUE, email TEXT,
-                status TEXT, cycle_id INTEGER
+                status TEXT, cycle_id INTEGER,
+                competitor_names TEXT, competitor_source TEXT
             )
         """)
         conn.exec_driver_sql("""
@@ -77,15 +78,16 @@ def db(monkeypatch):
     return engine
 
 
-def _seed_complete_cycle(conn, token="t1", email=None):
+def _seed_complete_cycle(conn, token="t1", email=None, competitor_source=None):
     """
     One brand (M001/primary, entity_id=101, id=1001) + one competitor
     (M002/competitor, entity_id=102, id=1002) for cycle_id=1, with overall
     and two stage-slice metrics rows each.
     """
     conn.exec_driver_sql(
-        "INSERT INTO soa_lite_requests (token, email, status, cycle_id) VALUES (?, ?, 'complete', 1)",
-        (token, email),
+        "INSERT INTO soa_lite_requests (token, email, status, cycle_id, competitor_source) "
+        "VALUES (?, ?, 'complete', 1, ?)",
+        (token, email, competitor_source),
     )
     conn.exec_driver_sql(
         "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (101, 'Acme Co', 'acme-co', 'brand')"
@@ -170,6 +172,14 @@ def test_teaser_primary_role_present(db):
     assert roles["Rival Co"] == "competitor"
 
 
+def test_teaser_carries_competitor_source(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email=None, competitor_source="generated")
+
+    result = public_lite.get_lite_report("t1")
+    assert result["competitor_source"] == "generated"
+
+
 # ─── full report (email set) ─────────────────────────────────────────────
 
 def test_full_report_returned_when_email_is_set(db):
@@ -194,6 +204,22 @@ def test_full_report_metric_values_correct(db):
     result = public_lite.get_lite_report("t1")
     acme = next(e for e in result["overall"] if e["name"] == "Acme Co")
     assert acme["metrics"]["som"] == 60.0  # normalize_metric(0.6) -> 0-100 scale
+
+
+def test_full_report_carries_competitor_source(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com", competitor_source="mixed")
+
+    result = public_lite.get_lite_report("t1")
+    assert result["competitor_source"] == "mixed"
+
+
+def test_report_competitor_source_null_when_not_yet_generated(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com", competitor_source=None)
+
+    result = public_lite.get_lite_report("t1")
+    assert result["competitor_source"] is None
 
 
 # ─── no internal ids anywhere in either payload ─────────────────────────
@@ -465,8 +491,96 @@ def test_scan_foundation_and_value_subtotals(db):
         _seed_scan_row(conn, rid, status="complete", total_score=59, dimensions=_FULL_DIMENSIONS)
 
     result = public_lite.get_lite_report("t1")
-    assert result["scan"]["foundation"] == {"subtotal": 27.0, "max": 35}
-    assert result["scan"]["value"] == {"subtotal": 32.0, "max": 65}
+    # Stage 10: applicable_max equals the nominal max here since none of
+    # _FULL_DIMENSIONS is 'na' (no coverage key at all -> defaults to 'full').
+    assert result["scan"]["foundation"] == {"subtotal": 27.0, "max": 35, "applicable_max": 35.0}
+    assert result["scan"]["value"] == {"subtotal": 32.0, "max": 65, "applicable_max": 65.0}
+
+
+# ─── Stage 10: scorer_version, coverage/na, deferred_items, cap_basis ────
+
+def test_pre_stage10_row_has_no_scorer_version_or_coverage_keys_and_still_renders(db):
+    """A row scanned before Stage 10 has no 'scorer_version' sibling key
+    and no per-dimension 'coverage'/'deferred_items'/'cap_basis' keys at
+    all — everything must default sanely (scorer_version '1', coverage
+    'full', empty lists) rather than crash or leave a stray key missing."""
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="complete", total_score=59, dimensions=_FULL_DIMENSIONS)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert result["scan"]["scorer_version"] == "1"
+    for d in result["scan"]["dimensions"]:
+        assert d["coverage"] == "full"
+        assert d["deferred_items"] == []
+        assert d["cap_basis"] == []
+
+
+def test_scorer_version_2_is_serialized_when_present(db):
+    dimensions = dict(_FULL_DIMENSIONS)
+    dimensions["scorer_version"] = "2"
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="complete", total_score=59, dimensions=dimensions)
+
+    result = public_lite.get_lite_report("t1")
+    assert result["scan"]["scorer_version"] == "2"
+
+
+def test_na_dimension_excluded_from_applicable_max_and_never_locked(db):
+    dimensions = {
+        **_FULL_DIMENSIONS,
+        "F3": {
+            "score": 0, "max": 10, "evidence": ["not applicable"], "fix": None,
+            "coverage": "na", "deferred_items": [], "cap_basis": [],
+        },
+        "scorer_version": "2",
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="complete", total_score=59, dimensions=dimensions)
+
+    result = public_lite.get_lite_report("t1")
+    by_code = {d["code"]: d for d in result["scan"]["dimensions"]}
+
+    assert by_code["F3"]["coverage"] == "na"
+    assert by_code["F3"]["locked"] is False
+    # F3's nominal max (10) is dropped from Foundation's applicable_max
+    # (35 - 10 = 25), but the family `max` field itself stays 35 (rule 6).
+    assert result["scan"]["foundation"]["max"] == 35
+    assert result["scan"]["foundation"]["applicable_max"] == 25.0
+
+
+def test_na_dimension_never_occupies_a_free_fix_slot(db):
+    """Mechanism check: marking the single biggest-gap dimension (V1) as
+    'na' must reallocate its free-fix slot to the next real dimension by
+    gap (V4) rather than leaving only 2 dimensions unlocked or crashing
+    on a missing rank. (Spec only ever marks F3/V3 na in practice — this
+    exercises the ranking mechanism in isolation.)"""
+    dimensions = {
+        **_FULL_DIMENSIONS,
+        "V1": {
+            "score": 0, "max": 15, "evidence": ["not applicable"], "fix": None,
+            "coverage": "na", "deferred_items": [], "cap_basis": [],
+        },
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="complete", total_score=59, dimensions=dimensions)
+
+    result = public_lite.get_lite_report("t1")
+    by_code = {d["code"]: d for d in result["scan"]["dimensions"]}
+
+    assert by_code["V1"]["locked"] is False  # na dims are never "locked"
+    for code in ("V2", "V3", "V4"):  # V1's slot reallocates to V4 (next biggest gap)
+        assert by_code[code]["locked"] is False
+    for code in ("F1", "F2", "F3", "V5"):
+        assert by_code[code]["locked"] is True
 
 
 @pytest.mark.parametrize("scan_status", ["blocked", "failed", "skipped", "running"])

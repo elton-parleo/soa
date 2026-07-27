@@ -1,9 +1,25 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
-import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
 
 import { LiteProgress, LiteFailed } from '../LiteProgress.jsx'
+import { liteApi } from '../liteApi.js'
+
+vi.mock('../liteApi.js', () => ({
+  liteApi: { setEmail: vi.fn() },
+}))
+
+function mockMatchMedia(matches) {
+  const listeners = []
+  window.matchMedia = vi.fn().mockImplementation((query) => ({
+    matches,
+    media: query,
+    addEventListener: (_, cb) => listeners.push(cb),
+    removeEventListener: vi.fn(),
+  }))
+  return listeners
+}
 
 describe('LiteProgress — LLM query track (unchanged behavior)', () => {
   it('maps generating_queries to the query-design message', () => {
@@ -90,5 +106,194 @@ describe('LiteFailed', () => {
     render(<LiteFailed onRetry={onRetry} />)
     screen.getByText('Try again').click()
     expect(onRetry).toHaveBeenCalled()
+  })
+})
+
+describe('LiteProgress — Stage 12: running indicator (R1)', () => {
+  afterEach(() => {
+    delete window.matchMedia
+  })
+
+  it('shows a pulsing live-status dot and mono phase label while active', () => {
+    render(<LiteProgress phaseData={{
+      status: 'running', phase: 'running',
+      progress: { completed_runs: 4, total_runs: 12 },
+    }} />)
+    expect(screen.getByTestId('lite-live-dot')).toBeInTheDocument()
+    expect(screen.getByText('ASKING CHATGPT — QUERY 5 OF 12')).toBeInTheDocument()
+  })
+
+  it('shows a phase-specific mono label for coding and metrics', () => {
+    render(<LiteProgress phaseData={{ status: 'running', phase: 'coding', progress: { completed_runs: 12, total_runs: 12 } }} />)
+    expect(screen.getByText('CODING RESPONSES')).toBeInTheDocument()
+  })
+
+  it('omits the live-status line once the run is complete or failed', () => {
+    render(<LiteProgress phaseData={{ status: 'complete', phase: 'complete' }} />)
+    expect(screen.queryByTestId('lite-live-dot')).not.toBeInTheDocument()
+  })
+
+  it('reduced motion: replaces the pulsing dot with a static glyph and RUNNING text', () => {
+    mockMatchMedia(true)
+    render(<LiteProgress phaseData={{
+      status: 'running', phase: 'running',
+      progress: { completed_runs: 4, total_runs: 12 },
+    }} />)
+    expect(screen.queryByTestId('lite-live-dot')).not.toBeInTheDocument()
+    expect(screen.getByText('RUNNING')).toBeInTheDocument()
+    expect(screen.queryByText('ASKING CHATGPT — QUERY 5 OF 12')).not.toBeInTheDocument()
+  })
+
+  it('full motion (default, no matchMedia mock): shows the animated dot, not the static fallback', () => {
+    render(<LiteProgress phaseData={{
+      status: 'running', phase: 'running',
+      progress: { completed_runs: 4, total_runs: 12 },
+    }} />)
+    expect(screen.getByTestId('lite-live-dot')).toBeInTheDocument()
+    expect(screen.queryByText('RUNNING')).not.toBeInTheDocument()
+  })
+})
+
+describe('LiteProgress — Stage 12: elapsed time counter', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('ticks up from 0:00 as time passes while active', async () => {
+    render(<LiteProgress phaseData={{
+      status: 'running', phase: 'running', progress: { completed_runs: 1, total_runs: 12 },
+    }} />)
+    expect(screen.getByTestId('lite-elapsed')).toHaveTextContent('0:00')
+    await act(async () => { vi.advanceTimersByTime(3000) })
+    expect(screen.getByTestId('lite-elapsed')).toHaveTextContent('0:03')
+  })
+})
+
+describe('LiteProgress — Stage 12: stalled-state honesty (R2)', () => {
+  beforeEach(() => { vi.useFakeTimers() })
+  afterEach(() => { vi.useRealTimers() })
+
+  const running = { status: 'running', phase: 'running', progress: { completed_runs: 4, total_runs: 12 } }
+
+  it('shows a quiet stalled line after 90s with no progress change', async () => {
+    const { rerender } = render(<LiteProgress phaseData={running} />)
+    expect(screen.queryByText(/Still working/)).not.toBeInTheDocument()
+
+    await act(async () => { vi.advanceTimersByTime(91_000) })
+    rerender(<LiteProgress phaseData={{ ...running }} />)
+    expect(screen.getByText('Still working — long queries can take a while.')).toBeInTheDocument()
+  })
+
+  it('clears the stalled line once progress actually changes', async () => {
+    const { rerender } = render(<LiteProgress phaseData={running} />)
+    await act(async () => { vi.advanceTimersByTime(91_000) })
+    rerender(<LiteProgress phaseData={{ ...running }} />)
+    expect(screen.getByText(/Still working/)).toBeInTheDocument()
+
+    rerender(<LiteProgress phaseData={{
+      status: 'running', phase: 'running', progress: { completed_runs: 5, total_runs: 12 },
+    }} />)
+    expect(screen.queryByText(/Still working/)).not.toBeInTheDocument()
+  })
+
+  it('never shows the stalled line before the 90s threshold', async () => {
+    const { rerender } = render(<LiteProgress phaseData={running} />)
+    await act(async () => { vi.advanceTimersByTime(60_000) })
+    rerender(<LiteProgress phaseData={{ ...running }} />)
+    expect(screen.queryByText(/Still working/)).not.toBeInTheDocument()
+  })
+
+  it('a failed request never shows the running affordances — LiteFailed takes over instead of an eternal spinner', () => {
+    // LiteWidget.jsx never even mounts LiteProgress for status='failed' in
+    // production (it renders LiteFailed instead) — this asserts the same
+    // boundary directly on LiteProgress itself, in case it's ever reached.
+    render(<LiteProgress phaseData={{ status: 'failed', phase: 'failed' }} />)
+    expect(screen.queryByTestId('lite-live-dot')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('lite-elapsed')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Still working/)).not.toBeInTheDocument()
+  })
+})
+
+describe('LiteProgress — Stage 12: status-page email card (E1)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('is omitted entirely when no token is available yet', () => {
+    render(<LiteProgress phaseData={{ status: 'pending', phase: 'queued' }} />)
+    expect(screen.queryByText('This takes a few minutes.')).not.toBeInTheDocument()
+  })
+
+  it('is omitted once the run is complete or failed', () => {
+    render(<LiteProgress phaseData={{ status: 'complete', phase: 'complete' }} token="tok-1" />)
+    expect(screen.queryByText('This takes a few minutes.')).not.toBeInTheDocument()
+  })
+
+  it('renders the ask, submits via the existing PATCH /email endpoint, and collapses to a masked confirmation', async () => {
+    liteApi.setEmail.mockResolvedValue({ status: 'running', phase: 'running' })
+    render(<LiteProgress
+      phaseData={{ status: 'running', phase: 'running', progress: { completed_runs: 1, total_runs: 12 } }}
+      token="tok-1"
+    />)
+
+    expect(screen.getByText('This takes a few minutes.')).toBeInTheDocument()
+    fireEvent.change(screen.getByPlaceholderText('you@company.com'), { target: { value: 'visitor@example.com' } })
+    fireEvent.click(screen.getByText('Email me the report'))
+
+    await waitFor(() => expect(liteApi.setEmail).toHaveBeenCalledWith('tok-1', 'visitor@example.com'))
+    await waitFor(() => expect(screen.getByText(/We'll email your report to v\*\*\*@example\.com/)).toBeInTheDocument())
+    expect(screen.getByText(/You can also keep watching here/)).toBeInTheDocument()
+  })
+
+  it('shows a validation error for an invalid email and never calls the API', async () => {
+    render(<LiteProgress phaseData={{ status: 'running', phase: 'running' }} token="tok-1" />)
+    fireEvent.change(screen.getByPlaceholderText('you@company.com'), { target: { value: 'not-an-email' } })
+    fireEvent.click(screen.getByText('Email me the report'))
+    await waitFor(() => expect(screen.getByText('Enter a valid email address')).toBeInTheDocument())
+    expect(liteApi.setEmail).not.toHaveBeenCalled()
+  })
+
+  it('shows an inline error and stays on the form when the API call fails', async () => {
+    liteApi.setEmail.mockRejectedValue(new Error('Something went wrong. Please try again.'))
+    render(<LiteProgress phaseData={{ status: 'running', phase: 'running' }} token="tok-1" />)
+    fireEvent.change(screen.getByPlaceholderText('you@company.com'), { target: { value: 'visitor@example.com' } })
+    fireEvent.click(screen.getByText('Email me the report'))
+    await waitFor(() => expect(screen.getByText('Something went wrong. Please try again.')).toBeInTheDocument())
+    expect(screen.getByText('This takes a few minutes.')).toBeInTheDocument()
+  })
+})
+
+describe('LiteProgress — Stage 13: identifying_competitors phase (F3)', () => {
+  it('shows the identifying-competitors message and live label', () => {
+    render(<LiteProgress phaseData={{ status: 'identifying_competitors', phase: 'identifying_competitors' }} />)
+    expect(screen.getByText('Identifying your closest competitors…')).toBeInTheDocument()
+    expect(screen.getByText('IDENTIFYING COMPETITORS')).toBeInTheDocument()
+  })
+})
+
+describe('LiteProgress — Stage 13: competitor chips (W2)', () => {
+  it('is omitted when the status payload carries no competitors yet', () => {
+    render(<LiteProgress phaseData={{ status: 'identifying_competitors', phase: 'identifying_competitors' }} />)
+    expect(screen.queryByText('Comparing against')).not.toBeInTheDocument()
+  })
+
+  it('is omitted when competitors is an empty array (solo run)', () => {
+    render(<LiteProgress phaseData={{
+      status: 'running', phase: 'running',
+      progress: { completed_runs: 1, total_runs: 12 }, competitors: [],
+    }} />)
+    expect(screen.queryByText('Comparing against')).not.toBeInTheDocument()
+  })
+
+  it('renders one outlined chip per competitor once populated', () => {
+    render(<LiteProgress phaseData={{
+      status: 'running', phase: 'running',
+      progress: { completed_runs: 1, total_runs: 12 },
+      competitors: ['Rival Co', 'Gen One', 'Gen Two'],
+    }} />)
+
+    expect(screen.getByText('Comparing against')).toBeInTheDocument()
+    expect(screen.getByText('Rival Co')).toBeInTheDocument()
+    expect(screen.getByText('Gen One')).toBeInTheDocument()
+    expect(screen.getByText('Gen Two')).toBeInTheDocument()
   })
 })

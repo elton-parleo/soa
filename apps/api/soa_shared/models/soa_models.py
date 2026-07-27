@@ -1361,11 +1361,34 @@ class SoaRecommendation(Base):
 # 'Parleo Lead Gen' organization — see soa_shared/org_helpers.py.
 # ---------------------------------------------------------------------------
 
+# Stage 14 (S2): single source of truth for soa_lite_requests.status —
+# the CheckConstraint below is built FROM this tuple, and worker.py/
+# public_lite.py import the named constants for every status WRITE, so
+# a status the code writes but the DB constraint doesn't allow (the
+# Stage 13 incident: 'identifying_competitors' shipped in code before
+# the constraint was updated to match, crash-looping the same stuck
+# row on every poll) fails a CI parity test instead of reaching prod.
+LITE_STATUS_PENDING = "pending"
+LITE_STATUS_IDENTIFYING_COMPETITORS = "identifying_competitors"
+LITE_STATUS_GENERATING = "generating"
+LITE_STATUS_RUNNING = "running"
+LITE_STATUS_COMPLETE = "complete"
+LITE_STATUS_FAILED = "failed"
+LITE_STATUSES = (
+    LITE_STATUS_PENDING,
+    LITE_STATUS_IDENTIFYING_COMPETITORS,
+    LITE_STATUS_GENERATING,
+    LITE_STATUS_RUNNING,
+    LITE_STATUS_COMPLETE,
+    LITE_STATUS_FAILED,
+)
+
+
 class SoaLiteRequest(Base):
     __tablename__ = "soa_lite_requests"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending','generating','running','complete','failed')",
+            "status IN (" + ", ".join(f"'{s}'" for s in LITE_STATUSES) + ")",
             name="ck_soa_lite_requests_status",
         ),
         Index("ix_soa_lite_requests_status", "status"),
@@ -1399,7 +1422,23 @@ class SoaLiteRequest(Base):
     competitor_names = Column(
         JSON,
         nullable=True,
-        comment="List of 0-2 raw competitor name strings as entered by the visitor.",
+        comment=(
+            "List of raw competitor name strings — up to 2 as entered by the "
+            "visitor, topped up to 5 by Stage 13 worker-side auto-generation. "
+            "See competitor_source for provenance."
+        ),
+    )
+
+    competitor_source = Column(
+        Text,
+        nullable=True,
+        comment=(
+            "Stage 13: provenance of competitor_names — 'generated' (all "
+            "from ChatGPT), 'manual' (all visitor-entered), 'mixed' (both), "
+            "or 'none' (no competitors at all). Null until competitor "
+            "generation runs (process_lite_requests, ahead of query "
+            "generation)."
+        ),
     )
 
     brand_entity_id = Column(
@@ -1450,6 +1489,19 @@ class SoaLiteRequest(Base):
     )
 
     error_message = Column(Text, nullable=True)
+
+    report_email_sent_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment=(
+            "Stage 12 (E3): set once the 'your report is ready' email has "
+            "been sent. Null means not sent yet — checked alongside "
+            "status='complete' and email IS NOT NULL by "
+            "_sweep_lite_completions on every pass, so a request that "
+            "completes before an email is on file, or a transient send "
+            "failure, is retried on a later pass rather than lost."
+        ),
+    )
 
     ip_hash = Column(
         Text,

@@ -252,6 +252,7 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
       phaseData={phaseData || { status: 'pending', phase: 'queued' }}
       storeUrl={storeUrl}
       error={pollError}
+      token={token}
     />
   )
 }

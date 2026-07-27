@@ -25,13 +25,24 @@ def db(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_lite_requests (
                 id INTEGER PRIMARY KEY, token TEXT UNIQUE, email TEXT,
-                status TEXT, cycle_id INTEGER, updated_at TIMESTAMP
+                status TEXT, cycle_id INTEGER, updated_at TIMESTAMP,
+                competitor_names TEXT, competitor_source TEXT
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_cycles (
                 id INTEGER PRIMARY KEY, status TEXT,
                 completed_runs INTEGER, total_runs_planned INTEGER
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_runs (
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, status TEXT
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_coded_mentions (
+                id INTEGER PRIMARY KEY, run_id INTEGER
             )
         """)
         conn.exec_driver_sql("""
@@ -98,16 +109,33 @@ def test_stores_email_when_running_and_returns_progress_phase(db):
     with db.begin() as conn:
         conn.exec_driver_sql(
             "INSERT INTO soa_cycles (id, status, completed_runs, total_runs_planned) "
-            "VALUES (1, 'running', 6, 12)"
+            "VALUES (1, 'running', 0, 12)"
         )
         conn.exec_driver_sql(
             "INSERT INTO soa_lite_requests (token, status, cycle_id) VALUES ('t1', 'running', 1)"
         )
+        # Stage 12: progress is now derived live from soa_runs, not the
+        # (stale, once-written) soa_cycles.completed_runs column.
+        for _ in range(6):
+            conn.exec_driver_sql("INSERT INTO soa_runs (cycle_id, status) VALUES (1, 'success')")
 
     result = public_lite.set_lite_email("t1", _email())
 
     assert result["phase"] == "running"
     assert result["progress"]["completed_runs"] == 6
+
+
+def test_stores_email_and_returns_competitors_when_already_populated(db):
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, status, competitor_names, competitor_source) "
+            "VALUES ('t1', 'generating', '[\"Rival\", \"Gen One\"]', 'mixed')"
+        )
+
+    result = public_lite.set_lite_email("t1", _email())
+
+    assert result["competitors"] == ["Rival", "Gen One"]
+    assert result["competitor_source"] == "mixed"
 
 
 def test_does_not_return_report_shape_when_not_complete(db):
@@ -124,7 +152,8 @@ def test_does_not_return_report_shape_when_not_complete(db):
 
 def _seed_complete_cycle(conn):
     conn.exec_driver_sql(
-        "INSERT INTO soa_lite_requests (token, status, cycle_id) VALUES ('t1', 'complete', 1)"
+        "INSERT INTO soa_lite_requests (token, status, cycle_id, competitor_source) "
+        "VALUES ('t1', 'complete', 1, 'generated')"
     )
     conn.exec_driver_sql(
         "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (101, 'Acme Co', 'acme-co', 'brand')"
@@ -149,6 +178,7 @@ def test_returns_full_unlocked_report_when_already_complete(db):
     assert result["locked"] is False
     assert result["overall"][0]["name"] == "Acme Co"
     assert "metrics" in result["overall"][0]
+    assert result["competitor_source"] == "generated"
 
 
 def test_email_persisted_when_complete(db):

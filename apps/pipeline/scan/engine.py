@@ -1,17 +1,22 @@
 """
 engine.py — public entry point for the Agent Scan.
 
-run_scan() never raises. Every internal step (discovery, fetching,
-extraction, scoring) is itself defensive, and this function wraps the
-whole pipeline in a final try/except so an unanticipated bug degrades
-to status='failed' with an error message instead of propagating out of
-the only function callers are meant to use.
+run_scan() never raises. Every internal step (canonical-host
+resolution, discovery, fetching, extraction, scoring) is itself
+defensive, and this function wraps the whole pipeline in a final
+try/except so an unanticipated bug degrades to status='failed' with an
+error message instead of propagating out of the only function callers
+are meant to use.
 
 Terminal statuses: complete | blocked | failed | skipped. 'skipped' is
 returned only when no input was given at all — an unknown-but-reachable
 DTC store always produces a score (status='complete', however low), and
 a store that actively blocks automated access produces status='blocked'
 rather than an exception.
+
+Stage 11 (H1/H2): the canonical origin is resolved ONCE, before
+discovery ever runs — every subsequent URL discover_pages() builds uses
+that one resolved origin, never a mix of apex and www.
 """
 import logging
 from dataclasses import dataclass, field
@@ -19,8 +24,8 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
-from . import scorer
-from .discovery import DiscoveryResult, discover_pages
+from . import scorer, site_typing
+from .discovery import DiscoveryResult, discover_pages, resolve_canonical_origin
 from .fetcher import FetchBudget, fetch
 from .structured_data import ExtractedData, extract
 
@@ -49,6 +54,7 @@ class ScanResult:
     started_at: Optional[str] = None
     finished_at: Optional[str] = None
     error: Optional[str] = None
+    cross_domain_redirect: Optional[str] = None  # Stage 11 (H3): set whenever a redirect hop stopped at a different domain
 
 
 def _now() -> str:
@@ -75,11 +81,19 @@ def _gather_pages(discovery: DiscoveryResult, budget: FetchBudget) -> list:
     for candidate in discovery.candidates:
         if candidate.kind == "homepage" and discovery.homepage_fetch is not None:
             result = discovery.homepage_fetch
+        elif candidate.kind == "llms_txt" and discovery.llms_txt_fetch is not None:
+            result = discovery.llms_txt_fetch
+        elif candidate.kind == "mcp_well_known" and discovery.mcp_well_known_fetch is not None:
+            result = discovery.mcp_well_known_fetch
         elif not budget.has_capacity():
             continue
         else:
             budget.consume()
-            result = fetch(candidate.url, robot_parser=discovery.robot_parser)
+            # Stage 11 (F2): the <100-char "blocked" heuristic only makes
+            # sense for real content pages — llms_txt/mcp_well_known are
+            # infrastructure probes that legitimately come back short/empty.
+            check_short_body = candidate.kind in ("homepage", "product", "loyalty", "shipping_returns")
+            result = fetch(candidate.url, robot_parser=discovery.robot_parser, check_short_body=check_short_body)
 
         extracted = None
         if result.status == "fetched" and result.html:
@@ -87,6 +101,18 @@ def _gather_pages(discovery: DiscoveryResult, budget: FetchBudget) -> list:
 
         pages.append(PageScanData(candidate=candidate, fetch_result=result, extracted=extracted))
     return pages
+
+
+def _fetch_entry(fr) -> dict:
+    """Stage 11 (F3): one pages_fetched row — every fetch the scan
+    performed, including robots.txt/sitemap/well-known probes that were
+    previously invisible."""
+    return {
+        "url": fr.url,
+        "final_url": fr.final_url,
+        "status": fr.status,
+        "http_status": fr.http_status,
+    }
 
 
 def _derive_status(discovery: DiscoveryResult, pages: list) -> str:
@@ -116,8 +142,8 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
                 finished_at=_now(),
             )
 
-        base_url = _normalize_input(input_url_or_domain)
-        if base_url is None:
+        input_origin = _normalize_input(input_url_or_domain)
+        if input_origin is None:
             return ScanResult(
                 status=STATUS_FAILED,
                 error="could not parse a usable URL/domain from input",
@@ -126,12 +152,20 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
             )
 
         budget = FetchBudget()
-        discovery = discover_pages(base_url, budget)
+
+        # Stage 11 (H1): resolve the canonical origin ONCE, following
+        # redirects — this one homepage fetch is charged against the
+        # content-page budget, matching pre-Stage-11 cost accounting.
+        resolution = resolve_canonical_origin(input_origin)
+        budget.consume()
+        canonical_origin = resolution.origin or input_origin
+
+        discovery = discover_pages(canonical_origin, budget, homepage_fetch=resolution.homepage_fetch)
         pages = _gather_pages(discovery, budget)
 
-        pages_fetched = [
-            {"url": p.fetch_result.url, "status": p.fetch_result.status} for p in pages
-        ]
+        pages_fetched = [_fetch_entry(fr) for fr in discovery.all_fetches]
+        pages_fetched.extend(_fetch_entry(p.fetch_result) for p in pages)
+
         status = _derive_status(discovery, pages)
 
         if status != STATUS_COMPLETE:
@@ -140,32 +174,50 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
                 pages_fetched=pages_fetched,
                 started_at=started_at,
                 finished_at=_now(),
+                cross_domain_redirect=resolution.cross_domain_flag,
                 error=(
                     "site blocked automated access" if status == STATUS_BLOCKED
                     else "no pages could be fetched"
                 ),
             )
 
+        site_type_result = site_typing.classify_site(pages, discovery)
+
         dim_scores = {
             "F1": scorer.score_f1_agent_access(discovery, pages),
-            "F2": scorer.score_f2_catalog_context(pages),
-            "F3": scorer.score_f3_transaction_rails(pages),
-            "V1": scorer.score_v1_offer_legibility(pages),
+            "F2": scorer.score_f2_catalog_context(pages, site_type_result),
+            "F3": scorer.score_f3_protocol_feed_presence(pages, site_type_result),
+            "V1": scorer.score_v1_offer_legibility(pages, site_type_result),
             "V2": scorer.score_v2_loyalty_surface(pages),
-            "V3": scorer.score_v3_member_value(pages),
-            "V4": scorer.score_v4_value_rails(pages),
+            "V3": scorer.score_v3_member_value(pages, site_type_result),
+            "V4": scorer.score_v4_value_rails(pages, site_type_result),
         }
         v5_score, integrity_capped = scorer.score_v5_offer_integrity(pages)
         dim_scores["V5"] = v5_score
 
-        raw_total = sum(d.score for d in dim_scores.values())
-        capped_total = min(raw_total, scorer.INTEGRITY_CAP) if integrity_capped else raw_total
-        total_score = int(round(capped_total))
+        # Stage 10 (A2/S3): total_score is rescaled over APPLICABLE
+        # (non-'na') dimensions only — 'na' dimensions drop out of the
+        # denominator entirely rather than counting as zero. When nothing
+        # is 'na', every weight sums to 100 exactly, so this reduces to
+        # the pre-Stage-10 raw sum (scorer_version "1" is unaffected).
+        applicable = {code: d for code, d in dim_scores.items() if d.coverage != "na"}
+        applicable_score = sum(d.score for d in applicable.values())
+        applicable_max = sum(d.max for d in applicable.values())
+        raw_total_pct = (applicable_score / applicable_max * 100) if applicable_max else 0.0
+        capped_total_pct = min(raw_total_pct, scorer.INTEGRITY_CAP) if integrity_capped else raw_total_pct
+        total_score = int(round(capped_total_pct))
 
         dimensions = {
-            code: {"score": d.score, "max": d.max, "evidence": d.evidence, "fix": d.fix}
+            code: {
+                "score": d.score, "max": d.max, "evidence": d.evidence, "fix": d.fix,
+                "coverage": d.coverage, "deferred_items": d.deferred_items, "cap_basis": d.cap_basis,
+            }
             for code, d in dim_scores.items()
         }
+        # Stage 10 (S4): sibling key, not a per-dimension one — no
+        # migration needed (JSON column); absence on older rows means
+        # scorer_version "1" is implied.
+        dimensions["scorer_version"] = "2"
 
         return ScanResult(
             status=STATUS_COMPLETE,
@@ -175,6 +227,7 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
             pages_fetched=pages_fetched,
             started_at=started_at,
             finished_at=_now(),
+            cross_domain_redirect=resolution.cross_domain_flag,
         )
 
     except Exception as e:

@@ -18,6 +18,14 @@
  * optional fields — no backend stage emits them yet, so both are read
  * defensively and simply omitted when absent, same pattern as Stage 4's
  * worst_mention_excerpt.
+ *
+ * Stage 13 (W3/W4/W5): report.competitor_source drives three things in
+ * VisibilitySection — a solo run ('none') never shows a fake 100%-share
+ * donut or a single-entity incentive-citation "comparison" (both
+ * collapse into SoloComparisonNote); a 'generated'/'mixed' run shows
+ * CompetitorProvenanceNote; ENTITY_COLORS (liteTheme.jsx) now has 5
+ * rival tones so a comparison of up to 6 entities (1 primary + 5
+ * auto-generated/manual competitors) stays visually distinguishable.
  */
 import { useState } from 'react'
 import {
@@ -354,8 +362,33 @@ function IncentiveCitationCard({ mentionRate, incentiveCitation, scan }) {
   )
 }
 
+// Stage 13 (W4): solo runs (no competitors at all — competitor_source
+// 'none') never show a fake 100%-share donut or a single-entity
+// incentive-citation "comparison" — both collapse into this one quiet
+// note instead. Mention rate still renders (primary-only) above it.
+function SoloComparisonNote() {
+  return (
+    <div className="lite-body lite-muted" style={{ marginTop: 16 }}>
+      Competitor comparison unavailable for this run.
+    </div>
+  )
+}
+
+// Stage 13 (W5): the tool now CHOOSES which brands it publicly compares
+// you against when competitor_source is 'generated'/'mixed' — this
+// provenance line is non-negotiable wherever that comparison appears.
+function CompetitorProvenanceNote() {
+  return (
+    <div className="lite-mono lite-muted" style={{ fontSize: 11, marginTop: 8, marginBottom: 4 }}>
+      Competitors auto-selected by ChatGPT
+    </div>
+  )
+}
+
 function VisibilitySection({ report, ctaUrl }) {
   const vb = report.visibility_breakdown
+  const isSolo = report.competitor_source === 'none'
+  const isAutoSelected = report.competitor_source === 'generated' || report.competitor_source === 'mixed'
   return (
     <LightCard>
       <SectionHeader
@@ -363,21 +396,31 @@ function VisibilitySection({ report, ctaUrl }) {
         annotation={formatDateStamp()}
         headline="How often agents mention you — and your value"
       />
+      {isAutoSelected && <CompetitorProvenanceNote />}
       {vb ? (
-        <div className="lite-cols-2" style={{ marginTop: 20 }}>
-          <MentionRateCard mentionRate={vb.mention_rate} />
-          <ShareOfMentionsCard shareOfMentions={vb.share_of_mentions} totals={vb.totals} />
-        </div>
+        isSolo ? (
+          <div style={{ marginTop: 20 }}>
+            <MentionRateCard mentionRate={vb.mention_rate} />
+            <SoloComparisonNote />
+          </div>
+        ) : (
+          <div className="lite-cols-2" style={{ marginTop: 20 }}>
+            <MentionRateCard mentionRate={vb.mention_rate} />
+            <ShareOfMentionsCard shareOfMentions={vb.share_of_mentions} totals={vb.totals} />
+          </div>
+        )
       ) : (
         <div className="lite-body lite-muted" style={{ marginTop: 20 }}>
           Visibility data isn't available for this report yet.
         </div>
       )}
-      <IncentiveCitationCard
-        mentionRate={vb?.mention_rate}
-        incentiveCitation={vb?.incentive_citation}
-        scan={report.scan}
-      />
+      {!isSolo && (
+        <IncentiveCitationCard
+          mentionRate={vb?.mention_rate}
+          incentiveCitation={vb?.incentive_citation}
+          scan={report.scan}
+        />
+      )}
       <FunnelTeaserCard ctaUrl={ctaUrl} />
     </LightCard>
   )
@@ -464,7 +507,26 @@ function ScanDegradedExplanation({ status }) {
   )
 }
 
+// Stage 10 (W1): deferred items are never a gate — amber + working-session
+// language only, no email-unlock wording anywhere near them (consistent
+// with the Stage 7 funnel teaser: full analysis = the paid diagnostic).
+function DeferredItemsList({ items }) {
+  if (!items || items.length === 0) return null
+  return (
+    <div style={{ paddingLeft: 4, marginTop: 2, marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {items.map((item) => (
+        <div key={item.label} className="lite-mono lite-muted" style={{ fontSize: 11, display: 'flex', gap: 6 }}>
+          <span aria-hidden="true">🔒</span>
+          <span>{item.label} — verified in the full analysis</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function DimensionRow({ dimension, sharedMax }) {
+  const isNa = dimension.coverage === 'na'
+  const isPartial = dimension.coverage === 'partial'
   const trackPct = sharedMax ? (dimension.max / sharedMax) * 100 : 0
   const fillPct = sharedMax ? (dimension.score / sharedMax) * 100 : 0
   const isZero = dimension.score === 0
@@ -474,24 +536,46 @@ function DimensionRow({ dimension, sharedMax }) {
   if (gridlines[gridlines.length - 1] !== sharedMax) gridlines.push(sharedMax)
 
   return (
-    <div className="lite-dim-row">
-      <div className="lite-dim-label lite-mono">{dimension.code} · {dimension.name.toUpperCase()}</div>
-      <div className="lite-dim-bar-cell">
-        <div className="lite-dim-track">
-          <div className="lite-dim-fill" style={{ width: `${trackPct}%` }} />
-          {!isZero && <div className="lite-dim-fill" style={{ width: `${fillPct}%`, background: barColor }} />}
-          {isZero && <span className="lite-dim-zero-tick" aria-hidden="true" />}
-          {gridlines.map((v) => (
-            <span key={v} className="lite-dim-gridline" style={{ left: `${(v / sharedMax) * 100}%` }} aria-hidden="true" />
-          ))}
+    <div>
+      <div className="lite-dim-row">
+        <div className="lite-dim-label lite-mono">{dimension.code} · {dimension.name.toUpperCase()}</div>
+        <div className="lite-dim-bar-cell">
+          <div className="lite-dim-track" style={isNa ? { opacity: 0.35 } : undefined}>
+            {!isNa && <div className="lite-dim-fill" style={{ width: `${trackPct}%` }} />}
+            {!isNa && !isZero && <div className="lite-dim-fill" style={{ width: `${fillPct}%`, background: barColor }} />}
+            {!isNa && isZero && <span className="lite-dim-zero-tick" aria-hidden="true" />}
+            {gridlines.map((v) => (
+              <span key={v} className="lite-dim-gridline" style={{ left: `${(v / sharedMax) * 100}%` }} aria-hidden="true" />
+            ))}
+          </div>
+        </div>
+        <div className="lite-dim-score-cell">
+          {isNa ? (
+            <span className="lite-mono lite-muted" style={{ fontSize: 12, fontWeight: 700 }}>— · NOT APPLICABLE</span>
+          ) : (
+            <>
+              <span className="lite-mono" style={{ fontSize: 12, fontWeight: 700, color: isZero ? 'var(--bad-ink)' : 'var(--text)' }}>
+                {formatScore(dimension.score)}/{dimension.max}
+              </span>
+              {isPartial && (
+                <span
+                  className="lite-chip lite-mono"
+                  style={{ border: '1px solid var(--warn)', color: 'var(--warn-ink)', background: 'transparent' }}
+                >
+                  Partial · full analysis
+                </span>
+              )}
+              {dimension.linked && <Chip tone="accent">LINKED · {dimension.linked.reason.toUpperCase()}</Chip>}
+            </>
+          )}
         </div>
       </div>
-      <div className="lite-dim-score-cell">
-        <span className="lite-mono" style={{ fontSize: 12, fontWeight: 700, color: isZero ? 'var(--bad-ink)' : 'var(--text)' }}>
-          {formatScore(dimension.score)}/{dimension.max}
-        </span>
-        {dimension.linked && <Chip tone="accent">LINKED · {dimension.linked.reason.toUpperCase()}</Chip>}
-      </div>
+      {isNa && dimension.evidence?.[0] && (
+        <div className="lite-mono lite-muted" style={{ fontSize: 11, paddingLeft: 4, marginTop: 2, marginBottom: 8 }}>
+          {dimension.evidence[0]}
+        </div>
+      )}
+      {isPartial && <DeferredItemsList items={dimension.deferred_items} />}
     </div>
   )
 }
@@ -524,11 +608,18 @@ function DimensionChart({ dimensions }) {
   )
 }
 
-function DimensionFamily({ title, subtotal, max, dimensions }) {
+function DimensionFamily({ title, subtotal, max, applicableMax, dimensions }) {
   if (dimensions.length === 0) return null
+  // Stage 10 (W2): "n/{applicable_max} applicable" only when this family
+  // actually has a 'na' dimension — otherwise the familiar /35 · /65.
+  const hasNa = dimensions.some((d) => d.coverage === 'na')
+  const denominator = hasNa && applicableMax ? applicableMax : max
+  const suffix = hasNa && applicableMax ? ' APPLICABLE' : ''
   return (
     <div style={{ marginBottom: 24 }}>
-      <div className="lite-label" style={{ marginBottom: 6, fontSize: 12 }}>{title.toUpperCase()} · {formatScore(subtotal)}/{max}</div>
+      <div className="lite-label" style={{ marginBottom: 6, fontSize: 12 }}>
+        {title.toUpperCase()} · {formatScore(subtotal)}/{formatScore(denominator)}{suffix}
+      </div>
       <DimensionChart dimensions={dimensions} />
     </div>
   )
@@ -546,15 +637,30 @@ function WhySection({ report, onAddStoreUrl }) {
   }
 
   const { foundation, value } = groupDimensionsByFamily(scan.dimensions)
+  const v5 = (scan.dimensions || []).find((d) => d.code === 'V5')
+
   return (
     <div>
       {scan.integrity_capped && (
         <div className="lite-body lite-muted" style={{ marginBottom: 20 }}>
-          One more rule: until offers carry honest machine-readable prices, the score cannot pass 59.
+          <div>One more rule: until offers carry honest machine-readable prices, the score cannot pass 59.</div>
+          {v5?.cap_basis?.length > 0 && (
+            <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
+              {v5.cap_basis.map((line) => (
+                <li key={line} className="lite-mono" style={{ fontSize: 11 }}>{line}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
-      <DimensionFamily title="Foundation" subtotal={scan.foundation?.subtotal} max={scan.foundation?.max ?? 35} dimensions={foundation} />
-      <DimensionFamily title="Value" subtotal={scan.value?.subtotal} max={scan.value?.max ?? 65} dimensions={value} />
+      <DimensionFamily
+        title="Foundation" subtotal={scan.foundation?.subtotal} max={scan.foundation?.max ?? 35}
+        applicableMax={scan.foundation?.applicable_max} dimensions={foundation}
+      />
+      <DimensionFamily
+        title="Value" subtotal={scan.value?.subtotal} max={scan.value?.max ?? 65}
+        applicableMax={scan.value?.applicable_max} dimensions={value}
+      />
     </div>
   )
 }
@@ -722,6 +828,8 @@ const HIGHLIGHT_PANELS = [
 const REMAINING_LOCKED_TOPICS = [
   'Funnel stage analysis — where you vanish, stage by stage',
   'Persona-level breakdowns', 'Trend over time', 'Retail shelf comparison',
+  'Feed & protocol verification — Merchant Center, Deal Directory, ACP',
+  'Price-history integrity — was-prices verified over time',
 ]
 
 function DiagnosticCliff({ ctaUrl }) {

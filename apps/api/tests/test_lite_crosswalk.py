@@ -5,10 +5,14 @@ One test per rule, plus a couple of no-false-positive checks.
 from app.services.lite_crosswalk import RunSignal, link_dimensions, link_incentive_citation
 
 
-def _gap(score, max_=10.0):
+def _gap(score, max_=10.0, coverage=None):
     """A scan dimension dict with the given score/max — used to control
-    whether a rule's 'gap below half max' condition is met."""
-    return {"score": score, "max": max_}
+    whether a rule's 'gap below half max' condition is met. Stage 10:
+    coverage='na' must short-circuit to "no gap" regardless of score/max."""
+    d = {"score": score, "max": max_}
+    if coverage is not None:
+        d["coverage"] = coverage
+    return d
 
 
 # ─── absent at research/comparison -> F1, F2 ───────────────────────────────
@@ -82,6 +86,15 @@ def test_list_price_quoted_with_v3_gap_links_v3():
 def test_list_price_quoted_without_v3_gap_does_not_link_v3():
     signals = [RunSignal(stage="Awareness", primary_mentioned=True, primary_price_quoted=True)]
     linked = link_dimensions(signals, {"V3": _gap(12.0, 14)})  # 12/14 >= 50%
+    assert "V3" not in linked
+
+
+def test_v3_marked_na_does_not_link_even_at_a_zero_score():
+    """Stage 10 (A3): a brand-only site's V3 is coverage='na' with
+    score=0/14 — that's "not applicable", not a 100%-gap, so it must
+    never fire the crosswalk chip."""
+    signals = [RunSignal(stage="Awareness", primary_mentioned=True, primary_price_quoted=True)]
+    linked = link_dimensions(signals, {"V3": _gap(0.0, 14, coverage="na")})
     assert "V3" not in linked
 
 
@@ -211,6 +224,18 @@ def test_zero_rate_with_v2_low_links_value_never_cited():
     scan_dimensions = {"V2": _gap(4.0, 14), "V3": _gap(10.0, 14)}  # V2 gap, V3 no gap
     linked = link_incentive_citation(incentive_citation, scan_dimensions)
     assert linked == {"V2": "value never cited"}
+
+
+def test_v2_and_v3_both_na_means_no_chip_even_at_zero_rate():
+    """Stage 10 (A3): both candidate dimensions are 'na' (e.g. a
+    brand-only site) — there's nothing to link to, so the rule must not
+    fall back to picking one anyway."""
+    incentive_citation = [
+        _ic("Acme Co", True, 6, 0),
+        _ic("Rival Co", False, 4, 30),
+    ]
+    scan_dimensions = {"V2": _gap(0.0, 14, coverage="na"), "V3": _gap(0.0, 14, coverage="na")}
+    assert link_incentive_citation(incentive_citation, scan_dimensions) == {}
 
 
 def test_zero_rate_with_too_few_mentions_does_not_fire():

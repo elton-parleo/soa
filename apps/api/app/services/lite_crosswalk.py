@@ -35,8 +35,16 @@ class RunSignal:
 
 
 def _dimension_gap_below_half(scan_dimensions: Dict[str, dict], code: str) -> bool:
+    """
+    Stage 10 (A3): a dimension marked coverage='na' can never be "gapped"
+    — it's excluded from scoring entirely, not scored low, so V2/V3-
+    linking rules must treat it as "cannot link" rather than reading its
+    (nominal, non-excluded) max/score as a real deficiency.
+    """
     dim = scan_dimensions.get(code)
     if not dim or not dim.get("max"):
+        return False
+    if dim.get("coverage") == "na":
         return False
     return dim.get("score", 0) < GAP_THRESHOLD * dim["max"]
 

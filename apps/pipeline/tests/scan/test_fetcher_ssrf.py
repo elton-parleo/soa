@@ -98,14 +98,16 @@ def test_dns_resolution_failure_never_raises(monkeypatch):
 
 def test_public_ip_allowed_through_to_http(monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: _fake_addrinfo("93.184.216.34"))
+    # A real page body, well over the Stage 11 <100-char "blocked" heuristic.
+    body = "<html><body><h1>Example</h1><p>" + "This is a genuine page. " * 5 + "</p></body></html>"
 
     def fake_get(self, url, headers=None):
-        return httpx.Response(200, text="<html>ok</html>", request=httpx.Request("GET", url))
+        return httpx.Response(200, text=body, request=httpx.Request("GET", url))
 
     monkeypatch.setattr(httpx.Client, "get", fake_get)
     result = fetcher.fetch("https://example.com/")
     assert result.status == fetcher.FETCHED
-    assert result.html == "<html>ok</html>"
+    assert result.html == body
 
 
 def test_redirect_to_private_ip_is_rejected_on_revalidation(monkeypatch):
@@ -153,3 +155,123 @@ def test_too_many_redirects_fails_without_looping_forever(monkeypatch):
     result = fetcher.fetch("https://example.com/")
     assert result.status == fetcher.FAILED
     assert "redirect" in result.error
+
+
+# ─── Stage 11: redirect-following, status taxonomy, cross-domain stop ──────
+
+def test_apex_redirects_to_www_and_is_followed(monkeypatch):
+    """F1/H3: apex -> www is the SAME registrable domain, so the redirect
+    is followed to completion — final_url, http_status, and the
+    redirect_chain are all recorded, and the result is never 'blocked'."""
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: _fake_addrinfo("93.184.216.34"))
+    body = "<html><body><h1>Allbirds</h1><p>" + "Shoes made from wool. " * 6 + "</p></body></html>"
+
+    def fake_get(self, url, headers=None):
+        if url == "https://allbirds.com/":
+            return httpx.Response(301, headers={"location": "https://www.allbirds.com/"}, request=httpx.Request("GET", url))
+        return httpx.Response(200, text=body, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    result = fetcher.fetch("https://allbirds.com/", check_short_body=True)
+
+    assert result.status == fetcher.FETCHED
+    assert result.url == "https://allbirds.com/"
+    assert result.final_url == "https://www.allbirds.com/"
+    assert result.http_status == 200
+    assert result.redirect_chain == ["https://allbirds.com/"]
+
+
+def test_ssrf_abort_on_a_later_hop_not_just_the_first(monkeypatch):
+    """The guard re-validates on EVERY hop — a chain that's fine for its
+    first two hops and only turns private on the third must still be
+    caught, not just a first-hop check."""
+    call_count = {"n": 0}
+
+    def fake_getaddrinfo(host, *a, **k):
+        call_count["n"] += 1
+        if host == "hop3.example.com":
+            return _fake_addrinfo("169.254.169.254")
+        return _fake_addrinfo("93.184.216.34")
+
+    monkeypatch.setattr(socket, "getaddrinfo", fake_getaddrinfo)
+
+    def fake_get(self, url, headers=None):
+        if "hop1" in url:
+            return httpx.Response(302, headers={"location": "https://hop2.example.com/"}, request=httpx.Request("GET", url))
+        if "hop2" in url:
+            return httpx.Response(302, headers={"location": "https://hop3.example.com/"}, request=httpx.Request("GET", url))
+        raise AssertionError("must not fetch the private-range hop")
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    result = fetcher.fetch("https://hop1.example.com/")
+
+    assert result.status == fetcher.FAILED
+    assert call_count["n"] == 3
+
+
+def test_cross_domain_redirect_stops_and_is_flagged(monkeypatch):
+    """H3: a brand redirecting to an unrelated retailer is a finding,
+    not a crawl target — the chain stops, the retailer domain is NEVER
+    actually fetched, and the error names the stop."""
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: _fake_addrinfo("93.184.216.34"))
+
+    def fake_get(self, url, headers=None):
+        if url == "https://brand.example/":
+            return httpx.Response(302, headers={"location": "https://retailer.example/"}, request=httpx.Request("GET", url))
+        raise AssertionError("must never fetch the cross-domain redirect target")
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    result = fetcher.fetch("https://brand.example/")
+
+    assert result.status == fetcher.FAILED
+    assert "cross-domain redirect stopped" in result.error
+    assert "retailer.example" in result.error
+
+
+def test_www_and_apex_are_the_same_registrable_domain():
+    assert fetcher._registrable_domain("www.allbirds.com") == fetcher._registrable_domain("allbirds.com")
+    assert fetcher._registrable_domain("brand.example") != fetcher._registrable_domain("retailer.example")
+
+
+def test_404_is_not_found_not_blocked_or_failed(monkeypatch):
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: _fake_addrinfo("93.184.216.34"))
+
+    def fake_get(self, url, headers=None):
+        return httpx.Response(404, text="Not Found", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    result = fetcher.fetch("https://example.com/gone")
+    assert result.status == fetcher.NOT_FOUND
+    assert result.http_status == 404
+
+
+def test_short_body_only_flagged_as_blocked_when_caller_opts_in(monkeypatch):
+    """The <100-char heuristic is opt-in (check_short_body) — a short
+    body from an infrastructure fetch (robots.txt, llms.txt) is normal
+    and must not be flagged unless the caller asks for the check."""
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: _fake_addrinfo("93.184.216.34"))
+
+    def fake_get(self, url, headers=None):
+        return httpx.Response(200, text="User-agent: *\nDisallow: /admin\n", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+
+    default_result = fetcher.fetch("https://example.com/robots.txt")
+    assert default_result.status == fetcher.FETCHED
+
+    opted_in_result = fetcher.fetch("https://example.com/", check_short_body=True)
+    assert opted_in_result.status == fetcher.BLOCKED
+    assert "short body" in opted_in_result.error
+
+
+def test_challenge_page_markers_flagged_as_blocked_regardless_of_check_short_body(monkeypatch):
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **k: _fake_addrinfo("93.184.216.34"))
+    challenge_body = "<html><body>Checking your browser before accessing example.com. " + ("Please wait. " * 10) + "</body></html>"
+
+    def fake_get(self, url, headers=None):
+        return httpx.Response(200, text=challenge_body, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    result = fetcher.fetch("https://example.com/robots.txt")  # check_short_body left at default False
+    assert result.status == fetcher.BLOCKED
+    assert "challenge-page" in result.error

@@ -10,17 +10,20 @@ shape here is a PUBLIC CONTRACT the widget depends on directly (see the
 docstring block in schemas.py above PublicLiteSubmitRequest).
 
 State machine (written by apps/pipeline/worker.py::process_lite_requests
-and _sweep_lite_completions): pending -> generating -> running -> complete
-| failed. This router only ever reads that machine (GET endpoints) or
-performs the two writes visitors are allowed to trigger themselves:
-creating a request (POST) and attaching an email to unlock the report
-(PATCH) — it never advances the pipeline state itself.
+and _sweep_lite_completions): pending -> identifying_competitors ->
+generating -> running -> complete | failed. The full set of valid values
+is LITE_STATUSES (soa_shared/models/soa_models.py), enforced by
+ck_soa_lite_requests_status. This router only ever reads that machine
+(GET endpoints) or performs the two writes visitors are allowed to
+trigger themselves: creating a request (POST) and attaching an email to
+unlock the report (PATCH) — it never advances the pipeline state itself.
 """
 import hashlib
 import json
 import logging
 import os
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -28,6 +31,7 @@ from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import text
 
 from soa_shared.database import engine, session_factory
+from soa_shared.models.soa_models import LITE_STATUS_PENDING
 from soa_shared.org_helpers import get_or_create_leadgen_org
 from app.routers.metrics import build_entity_metrics
 from app.services.lite_crosswalk import RunSignal, link_dimensions, link_incentive_citation
@@ -139,25 +143,87 @@ def _enforce_rate_limits(conn, ip_hash: str, now: datetime) -> None:
 
 # ─── Phase derivation ────────────────────────────────────────────────────
 
-def _derive_phase(lite_status, cycle_status, completed_runs, total_runs_planned):
+@dataclass
+class _LiveProgressCounts:
     """
-    Maps (lite_status, cycle_status, completed_runs, total_runs_planned)
-    to the public phase enum. completed_runs is only written once, at the
-    end of the Runner stage (see RunOrchestrator._finalize_cycle) — not
-    incrementally — and stays at that value through Coding/Metrics while
-    cycle_status remains 'running' the whole time. So
-    completed_runs >= total_runs_planned while still 'running' reliably
-    means "runs done, coding/metrics still in progress" -> 'analyzing'.
+    Stage 12 (P1): soa_cycles.completed_runs is written exactly ONCE, at
+    the very end of the Runner stage (see RunOrchestrator._finalize_cycle)
+    — never incrementally — which is why the status page used to sit at
+    "0 of 12" the entire time queries were actually running, then jump
+    straight to done. Each of the 12 runs IS persisted individually as it
+    completes (RunOrchestrator._upsert_run writes to soa_runs immediately),
+    so progress is derived here by counting those rows live instead —
+    a pure read, so there's no crash-consistency risk of its own: a
+    worker restart mid-phase can't double-count or regress a count that's
+    never written incrementally in the first place.
+    """
+    resolved_runs: int   # success + error + timeout — "attempted", regardless of outcome
+    success_runs: int    # only successes are eligible for coding
+    coded_runs: int      # distinct soa_runs.id with at least one soa_coded_mentions row
+
+
+def _fetch_live_progress_counts(conn, cycle_id: int) -> _LiveProgressCounts:
+    """SUM(CASE WHEN...) rather than Postgres-only FILTER(WHERE...) so this
+    runs identically against SQLite in tests."""
+    row = conn.execute(text("""
+        SELECT
+            SUM(CASE WHEN status IN ('success', 'error', 'timeout') THEN 1 ELSE 0 END),
+            SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)
+        FROM soa_runs WHERE cycle_id = :cid
+    """), {"cid": cycle_id}).fetchone()
+    resolved_runs = int(row[0] or 0) if row else 0
+    success_runs = int(row[1] or 0) if row else 0
+
+    coded_runs = 0
+    if success_runs:
+        coded_row = conn.execute(text("""
+            SELECT COUNT(DISTINCT cm.run_id)
+            FROM soa_coded_mentions cm
+            JOIN soa_runs r ON r.id = cm.run_id
+            WHERE r.cycle_id = :cid
+        """), {"cid": cycle_id}).fetchone()
+        coded_runs = int(coded_row[0] or 0) if coded_row else 0
+
+    return _LiveProgressCounts(resolved_runs=resolved_runs, success_runs=success_runs, coded_runs=coded_runs)
+
+
+def _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts: "_LiveProgressCounts | None"):
+    """
+    Maps (lite_status, cycle_status, total_runs_planned, live_counts) to
+    the public phase enum: queued -> generating_queries -> running ->
+    coding -> metrics -> complete (or failed at any point). live_counts is
+    None whenever there's no cycle yet to count against (see
+    _fetch_live_progress_counts) — callers only compute it when cycle_id
+    is set. The Agent Scan is intentionally NOT one of these phases: it
+    runs in parallel and is already surfaced on its own scan_status field
+    (rule 7 — never blocks the report), so folding it into this sequence
+    would misrepresent it as a blocking stage.
+
+    Stage 14 (P1): this dispatch is exhaustive over every value in
+    LITE_STATUSES (soa_shared/models/soa_models.py) — every non-'running'
+    status gets its own explicit branch above, and anything that isn't
+    'running' either falls through to the guard just below rather than
+    being silently treated as if it were. Before this stage, an
+    unmapped status (e.g. 'identifying_competitors' during the window
+    where the DB constraint didn't yet allow it) would fall all the way
+    through to the cycle-status logic and be guessed at as 'running' —
+    logged and safely degraded here instead.
+
     Returns (phase: str, progress: PublicLiteProgress | None).
     """
     if lite_status == 'pending':
         return 'queued', None
+    if lite_status == 'identifying_competitors':
+        return 'identifying_competitors', None
     if lite_status == 'generating':
         return 'generating_queries', None
     if lite_status == 'complete':
         return 'complete', None
     if lite_status == 'failed':
         return 'failed', None
+    if lite_status != 'running':
+        log.error(f"[lite] _derive_phase: unexpected lite_status {lite_status!r} — degrading to 'running'")
+        return 'running', None
 
     # lite_status == 'running' — cycle_id is set; derive from the cycle.
     # cycle_status can briefly lag lite_status right after
@@ -170,14 +236,19 @@ def _derive_phase(lite_status, cycle_status, completed_runs, total_runs_planned)
     if cycle_status == 'complete':
         return 'complete', None
 
-    progress = None
-    if total_runs_planned:
-        progress = PublicLiteProgress(
-            completed_runs=completed_runs or 0, total_runs=total_runs_planned,
-        )
-        if (completed_runs or 0) >= total_runs_planned:
-            return 'analyzing', progress
-    return 'running', progress
+    if not total_runs_planned or live_counts is None:
+        return 'running', None
+
+    progress = PublicLiteProgress(completed_runs=live_counts.resolved_runs, total_runs=total_runs_planned)
+
+    if live_counts.resolved_runs < total_runs_planned:
+        return 'running', progress
+    if live_counts.success_runs > 0 and live_counts.coded_runs < live_counts.success_runs:
+        return 'coding', progress
+    # Every resolved run that could be coded, is — either genuinely in
+    # Metrics now, or the cycle just hasn't flipped to 'complete' yet
+    # (the brief window before _sweep_lite_completions catches up).
+    return 'metrics', progress
 
 
 # ─── Agent Scan shaping ──────────────────────────────────────────────────
@@ -186,7 +257,7 @@ DIMENSION_ORDER = ("F1", "F2", "F3", "V1", "V2", "V3", "V4", "V5")
 DIMENSION_NAMES = {
     "F1": "Agent Access",
     "F2": "Catalog Context",
-    "F3": "Transaction Rails",
+    "F3": "Protocol & Feed Presence",  # was "Transaction Rails" (Stage 10, scorer_version "2")
     "V1": "Offer Legibility",
     "V2": "Loyalty Surface",
     "V3": "Member Value",
@@ -290,6 +361,21 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
     Never blocks the report (rule 7): any non-'complete' status — or no
     row at all — degrades to a status-only/absent object rather than
     raising or omitting the honest status badge.
+
+    Stage 10 (A2): a dimension's 'coverage' is 'na' when it's inapplicable
+    to this site type (Stage 10 D5) — those dimensions are excluded from
+    fix-ranking and from each family's applicable_max entirely, not
+    scored as zero. A pre-Stage-10 row has no coverage/deferred_items/
+    cap_basis/scorer_version keys at all; every one of those defaults to
+    its Stage-1 meaning ('full' coverage, scorer_version "1") so an old
+    row renders exactly as it always has, no crash, no stray tags.
+
+    Family `max` stays the nominal 35/65 always (rule 6 — an existing
+    field's meaning never changes); `applicable_max` is the new, additive
+    ceiling to use instead when something in that family is 'na' (W2).
+    subtotal itself is left as the raw sum over applicable dimensions
+    (not independently re-projected onto /35) so it always reads
+    correctly against whichever denominator the UI chooses.
     """
     if not scan_row:
         return None
@@ -306,12 +392,21 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
         ).model_dump()
 
     dimensions = _decode_json_field(dimensions, {})
+    scorer_version = dimensions.get('scorer_version') or '1'
+
+    def _coverage(code: str) -> str:
+        return dimensions.get(code, {}).get('coverage') or 'full'
+
+    applicable_codes = [c for c in DIMENSION_ORDER if _coverage(c) != 'na']
 
     # Rank by opportunity size (max - score) descending — biggest gaps
-    # first — deterministic tiebreak by code. Only the top FREE_FIX_RANK
-    # dimensions' fix text is given away free; the rest are locked.
+    # first — deterministic tiebreak by code. 'na' dimensions have no
+    # fixable gap and are excluded entirely so they can't crowd a real
+    # dimension out of the free top-3 (Stage 10). Only the top
+    # FREE_FIX_RANK dimensions' fix text is given away free; the rest
+    # are locked.
     ranked_codes = sorted(
-        DIMENSION_ORDER,
+        applicable_codes,
         key=lambda code: (
             -(dimensions.get(code, {}).get('max', 0) - dimensions.get(code, {}).get('score', 0)),
             code,
@@ -322,21 +417,29 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
     dim_rows = []
     foundation_subtotal = 0.0
     value_subtotal = 0.0
+    foundation_applicable_max = 0.0
+    value_applicable_max = 0.0
     for code in DIMENSION_ORDER:
         d = dimensions.get(code, {})
         score = d.get('score', 0)
         max_ = d.get('max', 0)
         fix = d.get('fix')
         evidence = d.get('evidence', [])
+        coverage = _coverage(code)
+        is_applicable = coverage != 'na'
 
-        locked = fix is not None and rank_by_code[code] > FREE_FIX_RANK
+        rank = rank_by_code.get(code)
+        locked = fix is not None and rank is not None and rank > FREE_FIX_RANK
         if locked:
             fix = None
 
-        if code in FOUNDATION_CODES:
-            foundation_subtotal += score
-        else:
-            value_subtotal += score
+        if is_applicable:
+            if code in FOUNDATION_CODES:
+                foundation_subtotal += score
+                foundation_applicable_max += max_
+            else:
+                value_subtotal += score
+                value_applicable_max += max_
 
         reason = linked.get(code)
         dim_rows.append(PublicLiteScanDimension(
@@ -348,14 +451,24 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
             fix=fix,
             locked=locked,
             linked={"reason": reason} if reason else None,
+            coverage=coverage,
+            deferred_items=d.get('deferred_items') or [],
+            cap_basis=d.get('cap_basis') or [],
         ).model_dump())
 
     return PublicLiteScan(
         status=status,
         total_score=total_score,
         integrity_capped=bool(integrity_capped),
-        foundation=PublicLiteScanFamily(subtotal=round(foundation_subtotal, 1), max=FOUNDATION_MAX).model_dump(),
-        value=PublicLiteScanFamily(subtotal=round(value_subtotal, 1), max=VALUE_MAX).model_dump(),
+        scorer_version=scorer_version,
+        foundation=PublicLiteScanFamily(
+            subtotal=round(foundation_subtotal, 1), max=FOUNDATION_MAX,
+            applicable_max=round(foundation_applicable_max, 1),
+        ).model_dump(),
+        value=PublicLiteScanFamily(
+            subtotal=round(value_subtotal, 1), max=VALUE_MAX,
+            applicable_max=round(value_applicable_max, 1),
+        ).model_dump(),
         dimensions=dim_rows,
         pages_fetched=pages_fetched,
     ).model_dump()
@@ -426,6 +539,13 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
     scan_status = scan_row[0] if scan_row else None
     accessibility = scan_row[1] if scan_row and scan_row[0] == 'complete' else None
 
+    # Stage 13 (W4/W5): drives the widget's solo-comparison fallback and
+    # the "auto-selected by ChatGPT" methodology stamp.
+    competitor_source_row = conn.execute(text("""
+        SELECT competitor_source FROM soa_lite_requests WHERE id = :rid
+    """), {"rid": lite_request_id}).fetchone()
+    competitor_source = competitor_source_row[0] if competitor_source_row else None
+
     composite = None
     if visibility is not None:
         composite = (
@@ -446,7 +566,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
         return PublicLiteTeaserResponse(
             status="complete", locked=True, overall=overall,
             visibility=visibility, accessibility=accessibility, composite=composite,
-            scan_status=scan_status,
+            scan_status=scan_status, competitor_source=competitor_source,
         ).model_dump()
 
     overall = [
@@ -514,6 +634,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
         visibility=visibility, accessibility=accessibility, composite=composite,
         scan_status=scan_status,
         visibility_breakdown=visibility_breakdown,
+        competitor_source=competitor_source,
     ).model_dump()
 
 
@@ -540,12 +661,13 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
             INSERT INTO soa_lite_requests
               (token, brand_name, competitor_names, store_url, status, ip_hash, organization_id)
             VALUES
-              (:token, :brand, :competitors, :store_url, 'pending', :ip_hash, :org_id)
+              (:token, :brand, :competitors, :store_url, :status, :ip_hash, :org_id)
         """), {
             "token":       token,
             "brand":       data.brand_name,
             "competitors": json.dumps(data.competitor_names),
             "store_url":   data.store_url,
+            "status":      LITE_STATUS_PENDING,
             "ip_hash":     ip_hash,
             "org_id":      org_id,
         })
@@ -559,20 +681,27 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
 def get_lite_status(token: str):
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT lr.status, c.status, c.completed_runs, c.total_runs_planned, sr.status
+            SELECT lr.status, c.id, c.status, c.total_runs_planned, sr.status,
+                   lr.competitor_names, lr.competitor_source
             FROM soa_lite_requests lr
             LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
             LEFT JOIN soa_lite_scan_results sr ON sr.lite_request_id = lr.id
             WHERE lr.token = :token
         """), {"token": token}).fetchone()
 
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found.")
+        if not row:
+            raise HTTPException(status_code=404, detail="Not found.")
 
-    lite_status, cycle_status, completed_runs, total_runs_planned, scan_status = row
-    phase, progress = _derive_phase(lite_status, cycle_status, completed_runs, total_runs_planned)
+        (lite_status, cycle_id, cycle_status, total_runs_planned, scan_status,
+         competitor_names, competitor_source) = row
+        live_counts = _fetch_live_progress_counts(conn, cycle_id) if cycle_id else None
 
-    return PublicLiteStatusResponse(status=lite_status, phase=phase, progress=progress, scan_status=scan_status)
+    phase, progress = _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts)
+
+    return PublicLiteStatusResponse(
+        status=lite_status, phase=phase, progress=progress, scan_status=scan_status,
+        competitors=_decode_json_field(competitor_names, None), competitor_source=competitor_source,
+    )
 
 
 # ─── GET /api/public/soa-lite/{token}/report ─────────────────────────────
@@ -607,7 +736,8 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
     """
     with engine.begin() as conn:
         row = conn.execute(text("""
-            SELECT lr.id, lr.status, lr.cycle_id, c.status, c.completed_runs, c.total_runs_planned
+            SELECT lr.id, lr.status, lr.cycle_id, c.status, c.total_runs_planned,
+                   lr.competitor_names, lr.competitor_source
             FROM soa_lite_requests lr
             LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
             WHERE lr.token = :token
@@ -616,14 +746,19 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
         if not row:
             raise HTTPException(status_code=404, detail="Not found.")
 
-        lite_request_id, lite_status, cycle_id, cycle_status, completed_runs, total_runs_planned = row
+        (lite_request_id, lite_status, cycle_id, cycle_status, total_runs_planned,
+         competitor_names, competitor_source) = row
 
         conn.execute(text("""
             UPDATE soa_lite_requests SET email = :email, updated_at = NOW() WHERE token = :token
         """), {"email": data.email, "token": token})
 
         if lite_status != 'complete':
-            phase, progress = _derive_phase(lite_status, cycle_status, completed_runs, total_runs_planned)
-            return PublicLiteStatusResponse(status=lite_status, phase=phase, progress=progress).model_dump()
+            live_counts = _fetch_live_progress_counts(conn, cycle_id) if cycle_id else None
+            phase, progress = _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts)
+            return PublicLiteStatusResponse(
+                status=lite_status, phase=phase, progress=progress,
+                competitors=_decode_json_field(competitor_names, None), competitor_source=competitor_source,
+            ).model_dump()
 
         return _build_report_payload(conn, lite_request_id, cycle_id, data.email)

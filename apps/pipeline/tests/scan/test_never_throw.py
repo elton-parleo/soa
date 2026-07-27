@@ -128,6 +128,50 @@ def test_timeout_never_raises(monkeypatch):
     assert result.status in TERMINAL_STATUSES
 
 
+def test_cross_domain_redirect_never_raises_and_flags(monkeypatch):
+    """Stage 11 (H3): a brand redirecting entirely to an unrelated
+    domain must still produce a terminal ScanResult, with the stop
+    recorded on cross_domain_redirect — never an exception, never a
+    silent scan of the other domain."""
+    _mock_public_dns(monkeypatch)
+
+    def fake_get(self, url, headers=None):
+        # _normalize_input strips the trailing slash before this is ever
+        # requested — the canonical-resolution fetch hits the bare origin.
+        if url == "https://acquired-brand.example":
+            return httpx.Response(302, headers={"location": "https://parent-retailer.example/"}, request=httpx.Request("GET", url))
+        if url.startswith("https://parent-retailer.example"):
+            raise AssertionError("must never fetch the cross-domain redirect target")
+        # Discovery still attempts robots.txt/sitemap/well-known probes
+        # against the (fallback) original origin after the stop.
+        return httpx.Response(404, text="", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    result = engine.run_scan("https://acquired-brand.example/")
+    assert result.status in TERMINAL_STATUSES
+    assert result.cross_domain_redirect is not None
+    assert "parent-retailer.example" in result.cross_domain_redirect
+
+
+def test_malformed_sitemapindex_never_raises(monkeypatch):
+    """A sitemap.xml claiming to be a <sitemapindex> but with garbage
+    child entries must degrade gracefully, not crash discovery."""
+    _mock_public_dns(monkeypatch)
+
+    def fake_get(self, url, headers=None):
+        if url.endswith("/sitemap.xml"):
+            return httpx.Response(
+                200,
+                text="<sitemapindex><sitemap><loc>not a url!!! <<<</loc></sitemap></sitemapindex>",
+                request=httpx.Request("GET", url),
+            )
+        return httpx.Response(200, text="<html><body>Home page content here, plenty of it.</body></html>", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    result = engine.run_scan("https://malformed-sitemap.example.com")
+    assert result.status in TERMINAL_STATUSES
+
+
 def test_unexpected_exception_inside_pipeline_never_raises(monkeypatch):
     """
     Belt-and-suspenders: even a bug deep inside scoring must not escape

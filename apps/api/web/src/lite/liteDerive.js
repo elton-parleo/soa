@@ -86,14 +86,19 @@ export function groupDimensionsByFamily(dimensions) {
 /** Ranks dimensions by opportunity size (max - score) descending — the
  * same rule the API uses to decide which 3 fixes are unlocked, so a
  * dimension's `locked` flag lines up with its position here. Deterministic
- * tiebreak by code. */
+ * tiebreak by code. Stage 10: 'na' dimensions are excluded entirely —
+ * there's no fixable gap on a dimension that isn't applicable to this
+ * site type, and the server never ranks them either (see
+ * public_lite.py::_build_scan_payload). */
 export function rankDimensionsByGap(dimensions) {
-  return [...(dimensions || [])].sort((a, b) => {
-    const gapA = (a.max || 0) - (a.score || 0)
-    const gapB = (b.max || 0) - (b.score || 0)
-    if (gapB !== gapA) return gapB - gapA
-    return (a.code || '').localeCompare(b.code || '')
-  })
+  return [...(dimensions || [])]
+    .filter((d) => d.coverage !== 'na')
+    .sort((a, b) => {
+      const gapA = (a.max || 0) - (a.score || 0)
+      const gapB = (b.max || 0) - (b.score || 0)
+      if (gapB !== gapA) return gapB - gapA
+      return (a.code || '').localeCompare(b.code || '')
+    })
 }
 
 // ─── Exposure calculator ────────────────────────────────────────────────
@@ -250,6 +255,27 @@ export function getIncentiveCitationPayoff(incentiveCitation) {
 
 export function formatDateStamp(date = new Date()) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+/** Stage 12 (E4): display-only masking for the status-page email
+ * confirmation ("a***@company.com") — the address itself is never put
+ * in a URL; this is purely so the on-screen confirmation doesn't show
+ * the visitor's own input back in full for anyone glancing at the
+ * screen. Never used for the value actually sent to the API. */
+export function maskEmail(email) {
+  const value = (email || '').trim()
+  if (!value.includes('@')) return value
+  const [local, domain] = value.split('@')
+  const maskedLocal = local.length <= 1 ? `${local}***` : `${local[0]}***`
+  return `${maskedLocal}@${domain}`
+}
+
+/** Stage 12: formats whole seconds as "m:ss" for the elapsed-time counter. */
+export function formatElapsed(totalSeconds) {
+  const safe = Math.max(0, Math.floor(totalSeconds || 0))
+  const m = Math.floor(safe / 60)
+  const s = safe % 60
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 export function formatCurrency(value) {

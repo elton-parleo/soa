@@ -63,6 +63,37 @@ describe('LiteTeaser — email gate flow, unchanged behavior', () => {
   })
 })
 
+describe('LiteTeaser — Stage 13 (W4/W5): competitor_source-driven rival card', () => {
+  const soloTeaser = {
+    ...baseTeaser,
+    competitor_source: 'none',
+    overall: [{ name: 'Acme Co', role: 'primary', som: 100 }],
+  }
+
+  it('solo run (competitor_source none): shows the quiet note, no rival bars', () => {
+    render(<LiteTeaser report={soloTeaser} token="tok-1" onUnlocked={() => {}} />)
+    expect(screen.getByText('Competitor comparison unavailable for this run.')).toBeInTheDocument()
+    expect(screen.queryByText('Acme Co (you)')).not.toBeInTheDocument()
+  })
+
+  it('competitor_source generated: shows the provenance line above the rival bars', () => {
+    render(<LiteTeaser report={{ ...baseTeaser, competitor_source: 'generated' }} token="tok-1" onUnlocked={() => {}} />)
+    expect(screen.getByText('Competitors auto-selected by ChatGPT')).toBeInTheDocument()
+    expect(screen.getByText('Acme Co (you)')).toBeInTheDocument()
+  })
+
+  it('competitor_source manual: no provenance line', () => {
+    render(<LiteTeaser report={{ ...baseTeaser, competitor_source: 'manual' }} token="tok-1" onUnlocked={() => {}} />)
+    expect(screen.queryByText('Competitors auto-selected by ChatGPT')).not.toBeInTheDocument()
+  })
+
+  it('competitor_source absent (pre-Stage-13 report): behaves exactly like manual — no crash, no provenance line', () => {
+    render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
+    expect(screen.queryByText('Competitors auto-selected by ChatGPT')).not.toBeInTheDocument()
+    expect(screen.getByText('Acme Co (you)')).toBeInTheDocument()
+  })
+})
+
 describe('LiteTeaser — hero score card', () => {
   it('renders the composite score', () => {
     render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)

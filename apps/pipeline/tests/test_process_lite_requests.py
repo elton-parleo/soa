@@ -31,6 +31,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 import worker
+from generation.competitor_generator import CompetitorCandidate
 from generation.query_generator import LiteGenerationError
 from soa_shared.constants import QUERY_STAGES
 
@@ -81,6 +82,7 @@ def db(monkeypatch):
                 competitor_names TEXT, brand_entity_id INTEGER, competitor_entity_ids TEXT,
                 study_type TEXT, store_url TEXT, cycle_id INTEGER, status TEXT DEFAULT 'pending',
                 error_message TEXT, ip_hash TEXT, organization_id INTEGER,
+                report_email_sent_at TIMESTAMP, competitor_source TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
             )
         """)
@@ -122,6 +124,21 @@ def db(monkeypatch):
     monkeypatch.setattr(db_module, "session_factory", sessionmaker(bind=engine))
     monkeypatch.setenv("OPEN_AI_API_KEY", "test-key")
     return engine
+
+
+@pytest.fixture(autouse=True)
+def _no_generated_competitors(monkeypatch):
+    """
+    Stage 13: process_lite_requests now always calls
+    generation.competitor_generator.generate_competitors ahead of query
+    generation. Defaulting it to [] (as if the API found nothing) keeps
+    every pre-Stage-13 test's entity/query-count assertions exactly as
+    they were — the manual competitor list, if any, passes through
+    select_competitors unchanged since there's nothing to top up with.
+    Tests that care about auto-generated competitors override this
+    per-test (see the Stage 13 section below).
+    """
+    monkeypatch.setattr("generation.competitor_generator.generate_competitors", lambda *a, **k: [])
 
 
 def _insert_pending(conn, token="a1b2c3d4e5f6", brand="Acme", competitors=None, store_url=None):
@@ -396,6 +413,46 @@ def test_sweep_marks_failed_when_cycle_fails(db):
     assert error is not None
 
 
+def test_sweep_isolates_one_bad_row_from_others_in_the_same_pass(db):
+    """
+    Stage 14 (W2): two rows are both eligible to complete in the same
+    sweep pass; badrow's completion UPDATE is made to fail at the DB
+    level (a before_cursor_execute hook, simulating e.g. a constraint
+    violation) while goodrow's is not. Before Stage 14, both rows'
+    writes shared one engine.begin() transaction, so badrow's failure
+    would roll back goodrow's write too and raise past
+    _sweep_lite_completions entirely. Now each row gets its own
+    connection/transaction + try/except: goodrow must still complete,
+    badrow must be left untouched (still 'running', to retry next
+    pass — never marked 'failed' just because this pass's write broke),
+    and the call itself must not raise.
+    """
+    from sqlalchemy import event
+
+    with db.begin() as conn:
+        _insert_running_lite_with_cycle(conn, "badrow0", "complete")
+        _insert_running_lite_with_cycle(conn, "goodrow", "complete")
+        bad_lite_id = conn.exec_driver_sql(
+            "SELECT id FROM soa_lite_requests WHERE token = 'badrow0'"
+        ).fetchone()[0]
+
+    def _fail_badrow_completion_write(conn, cursor, statement, parameters, context, executemany):
+        if "UPDATE soa_lite_requests" in statement and bad_lite_id in (parameters or ()):
+            raise RuntimeError("simulated DB failure for badrow's completion write")
+
+    event.listen(db, "before_cursor_execute", _fail_badrow_completion_write)
+    try:
+        worker._sweep_lite_completions()  # must not raise
+    finally:
+        event.remove(db, "before_cursor_execute", _fail_badrow_completion_write)
+
+    bad_status, *_ = _lite_row_by_token(db.connect(), "badrow0")
+    assert bad_status == "running"  # untouched — will retry next pass, not marked failed
+
+    good_status, *_ = _lite_row_by_token(db.connect(), "goodrow")
+    assert good_status == "complete"  # unaffected by badrow's failure
+
+
 def test_sweep_leaves_still_running_cycles_alone(db):
     with db.begin() as conn:
         _insert_running_lite_with_cycle(conn, "run00001", "running")
@@ -550,3 +607,301 @@ def test_worker_crash_mid_scan_does_not_reprocess_and_sweep_recovers(db):
     scan_status, _, _, _, _, scan_error, _ = _scan_row_by_token(db.connect(), "crash001")
     assert scan_status == "failed"
     assert scan_error == "scan timed out"
+
+
+# ── Stage 12 (E3): report-ready email delivery ──────────────────────────
+
+def _insert_complete_lite(conn, token, email=None, brand="Acme"):
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_requests (token, brand_name, email, status) "
+        "VALUES (?, ?, ?, 'complete')",
+        (token, brand, email),
+    )
+
+
+def _sent_at_by_token(conn, token):
+    return conn.exec_driver_sql(
+        "SELECT report_email_sent_at FROM soa_lite_requests WHERE token = ?", (token,)
+    ).fetchone()[0]
+
+
+class _FakeSender:
+    """Records every call and returns a scripted True/False per call, so
+    tests can assert exactly how many times send was attempted."""
+
+    def __init__(self, results):
+        self._results = list(results)
+        self.calls = []
+
+    def send_report_ready(self, to, report_url, brand_name):
+        self.calls.append((to, report_url, brand_name))
+        return self._results.pop(0) if self._results else True
+
+
+def test_sweep_sends_report_ready_email_exactly_once(db):
+    with db.begin() as conn:
+        _insert_complete_lite(conn, "mail0001", email="visitor@example.com", brand="Acme")
+
+    fake = _FakeSender([True])
+    with patch("email_sender.get_email_sender", return_value=fake):
+        worker._sweep_lite_completions()
+        worker._sweep_lite_completions()  # second pass must not resend
+
+    assert len(fake.calls) == 1
+    to, report_url, brand_name = fake.calls[0]
+    assert to == "visitor@example.com"
+    assert report_url.endswith("/report/mail0001")
+    assert brand_name == "Acme"
+    assert _sent_at_by_token(db.connect(), "mail0001") is not None
+
+
+def test_sweep_retries_send_failure_on_next_pass_and_completion_unaffected(db):
+    with db.begin() as conn:
+        _insert_complete_lite(conn, "retry001", email="visitor@example.com")
+
+    fake = _FakeSender([False, True])
+    with patch("email_sender.get_email_sender", return_value=fake):
+        worker._sweep_lite_completions()
+        assert _sent_at_by_token(db.connect(), "retry001") is None
+        status, *_ = _lite_row_by_token(db.connect(), "retry001")
+        assert status == "complete"  # a send failure never blocks/reverts completion
+
+        worker._sweep_lite_completions()
+
+    assert len(fake.calls) == 2
+    assert _sent_at_by_token(db.connect(), "retry001") is not None
+
+
+def test_sweep_skips_requests_with_no_email_on_file(db):
+    with db.begin() as conn:
+        _insert_complete_lite(conn, "noemail1", email=None)
+
+    fake = _FakeSender([True])
+    with patch("email_sender.get_email_sender", return_value=fake):
+        worker._sweep_lite_completions()
+
+    assert fake.calls == []
+
+
+def test_sweep_does_not_send_before_request_completes(db):
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, brand_name, email, status) "
+            "VALUES (?, ?, ?, 'running')",
+            ("stillrun", "Acme", "visitor@example.com"),
+        )
+
+    fake = _FakeSender([True])
+    with patch("email_sender.get_email_sender", return_value=fake):
+        worker._sweep_lite_completions()
+
+    assert fake.calls == []
+
+
+def test_sweep_uses_logsender_by_default_and_masks_email_in_logs(db, monkeypatch, caplog):
+    monkeypatch.delenv("RESEND_API_KEY", raising=False)
+    monkeypatch.delenv("EMAIL_FROM", raising=False)
+    with db.begin() as conn:
+        _insert_complete_lite(conn, "logmail1", email="visitor@example.com", brand="Acme")
+
+    with caplog.at_level("INFO"):
+        worker._sweep_lite_completions()
+
+    assert _sent_at_by_token(db.connect(), "logmail1") is not None
+    assert "visitor@example.com" not in caplog.text
+    assert "v***@example.com" in caplog.text
+
+
+def test_email_body_contains_report_url_and_no_score_language():
+    from email_sender import _email_html, _email_text
+
+    report_url = "https://parleo.io/report/abc123token"
+    text = _email_text(report_url, "Acme")
+    html = _email_html(report_url, "Acme")
+
+    assert report_url in text
+    assert report_url in html
+    assert "score" not in text.lower()
+    assert "score" not in html.lower()
+
+
+# ── Stage 13: worker-side competitor auto-generation ─────────────────────
+
+def _competitor_fields_by_token(conn, token):
+    row = conn.exec_driver_sql(
+        "SELECT competitor_names, competitor_source, status FROM soa_lite_requests WHERE token = ?",
+        (token,),
+    ).fetchone()
+    names = json.loads(row[0]) if row[0] else []
+    return names, row[1], row[2]
+
+
+def test_generated_competitors_top_up_manual_ones_and_persist_mixed_source(db, monkeypatch):
+    monkeypatch.setattr(
+        "generation.competitor_generator.generate_competitors",
+        lambda *a, **k: [CompetitorCandidate(name="Gen One"), CompetitorCandidate(name="Gen Two")],
+    )
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()) as mock_gen:
+        worker.process_lite_requests()
+
+    names, source, status = _competitor_fields_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert names == ["Rival", "Gen One", "Gen Two"]
+    assert source == "mixed"
+    assert status == "running"
+
+    # F1: generation must precede (and feed) query generation — the
+    # final, topped-up list is what the prompt embeds competitor names
+    # from, not the original manual-only list.
+    mock_gen.assert_called_once_with("Acme", ["Rival", "Gen One", "Gen Two"], "test-key")
+
+
+def test_generated_competitors_get_entities_created_alongside_manual_ones(db, monkeypatch):
+    monkeypatch.setattr(
+        "generation.competitor_generator.generate_competitors",
+        lambda *a, **k: [CompetitorCandidate(name="Gen One")],
+    )
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        gen_entity = conn.exec_driver_sql(
+            "SELECT id FROM soa_entities WHERE slug = 'gen-one'"
+        ).fetchone()
+        comparison_roles = conn.exec_driver_sql(
+            "SELECT comparison_code, role FROM soa_cycle_entities ORDER BY comparison_code"
+        ).fetchall()
+
+    assert gen_entity is not None  # entity created exactly once for the generated candidate
+    assert comparison_roles == [("M001", "primary"), ("M002", "competitor"), ("M003", "competitor")]
+
+
+def test_no_manual_competitors_and_generation_finds_none_yields_none_source(db):
+    # The autouse _no_generated_competitors fixture already returns [].
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=[])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    names, source, status = _competitor_fields_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert names == []
+    assert source == "none"
+    assert status == "running"
+
+
+def test_competitor_generation_failure_never_blocks_the_run(db, monkeypatch):
+    def _raise(*a, **k):
+        raise RuntimeError("OpenAI is down")
+
+    # generate_competitors itself never raises (see test_competitor_generator.py),
+    # but this proves process_lite_requests survives even if that
+    # contract were somehow violated — never-throw is enforced at both
+    # layers, not assumed.
+    monkeypatch.setattr("generation.competitor_generator.generate_competitors", _raise)
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    status, *_ , error = _lite_row_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert status == "failed"
+    assert error is not None
+
+
+def test_crash_after_persisting_competitors_leaves_generated_set_intact(db, monkeypatch):
+    """
+    F1/G4: competitor_names/competitor_source are persisted in their own
+    transaction BEFORE entity resolution/query generation/cycle
+    queueing. If something downstream then fails, the already-persisted
+    competitor set must not be lost or reset — _mark_lite_failed only
+    ever touches status/error_message, never competitor_names/source.
+    """
+    monkeypatch.setattr(
+        "generation.competitor_generator.generate_competitors",
+        lambda *a, **k: [CompetitorCandidate(name="Gen One")],
+    )
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])
+
+    with patch(
+        "soa_shared.cycle_creation.create_cycle_with_comparison_set",
+        side_effect=RuntimeError("crash during cycle creation"),
+    ), patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    names, source, status = _competitor_fields_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert status == "failed"
+    assert names == ["Rival", "Gen One"]  # not lost or regenerated
+    assert source == "mixed"
+
+
+# ── Stage 14 (T3): poll-loop isolation — one bad row must never block ───
+
+def test_first_request_failure_does_not_block_second_in_next_poll(db, monkeypatch):
+    """
+    Two pending requests; the oldest (req1) fails partway through
+    processing (simulated by making generate_competitors raise on its
+    first call only). process_lite_requests only ever claims the
+    single oldest pending row per call (by design — same rate-limit/
+    contention-avoiding semantics as process_generation_jobs), so "the
+    same iteration" here means two back-to-back calls, mirroring two
+    consecutive ticks of main()'s poll loop: the first call must mark
+    req1 'failed' (with the error recorded) rather than raising past
+    process_lite_requests, and the second call must then pick up req2
+    and process it normally — proving req1 no longer occupies the
+    "oldest pending" slot and blocks req2 forever.
+    """
+    call_count = {"n": 0}
+
+    def _flaky_generate_competitors(*a, **k):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise RuntimeError("simulated crash on first request")
+        return []
+
+    monkeypatch.setattr("generation.competitor_generator.generate_competitors", _flaky_generate_competitors)
+
+    with db.begin() as conn:
+        _insert_pending(conn, token="req1first", brand="Acme", competitors=["Rival"])
+        _insert_pending(conn, token="req2second", brand="Beta", competitors=["Rival2"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()  # claims req1 (oldest) -> raises -> marked failed
+        worker.process_lite_requests()  # claims req2 (now oldest pending) -> succeeds
+
+    status1, *_, error1 = _lite_row_by_token(db.connect(), "req1first")
+    assert status1 == "failed"
+    assert error1 is not None and "simulated crash on first request" in error1
+
+    status2, *_ = _lite_row_by_token(db.connect(), "req2second")
+    assert status2 == "running"  # processed normally, unaffected by req1's failure
+
+    assert call_count["n"] == 2  # both requests were actually attempted
+
+
+def test_failed_request_is_not_re_picked_on_a_third_poll(db, monkeypatch):
+    """Re-poll fixture: once req1 is marked 'failed' it has left
+    'pending' for good — a third call finds nothing left to do rather
+    than re-claiming and re-failing the same row forever (the exact
+    Stage 13 crash-loop shape)."""
+    monkeypatch.setattr(
+        "generation.competitor_generator.generate_competitors",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("always fails")),
+    )
+    with db.begin() as conn:
+        _insert_pending(conn, token="alwaysfail", brand="Acme", competitors=["Rival"])
+
+    worker.process_lite_requests()  # claims + fails the only pending row
+    status, *_ = _lite_row_by_token(db.connect(), "alwaysfail")
+    assert status == "failed"
+
+    with patch("generation.query_generator.generate_lite_queries") as mock_gen:
+        worker.process_lite_requests()  # nothing pending left — must be a clean no-op
+    mock_gen.assert_not_called()
