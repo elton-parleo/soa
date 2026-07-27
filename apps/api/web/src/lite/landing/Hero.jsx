@@ -55,8 +55,8 @@ export function Hero({ onSubmitted }) {
 
           <PrivacyNote>
             The scan reads only your public pages, the same ones agents see,
-            and only asks ChatGPT about brands you name. Your report link is
-            private until you share it.
+            and only asks ChatGPT about your brand and its closest
+            competitors. Your report link is private until you share it.
           </PrivacyNote>
 
           <div style={{ marginTop: 24, marginBottom: 16 }}>

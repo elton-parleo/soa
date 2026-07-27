@@ -142,3 +142,30 @@ describe('LiteForm — URL auto-detect mode', () => {
     expect(liteApi.submit).not.toHaveBeenCalled()
   })
 })
+
+// ─── Stage 13 (W1): compact mode no longer collects competitor names ────
+
+describe('LiteForm — compact mode (Stage 6 hero/final-CTA)', () => {
+  it('shows the auto-identify note instead of competitor inputs', () => {
+    render(<LiteForm onSubmitted={() => {}} compact />)
+
+    expect(screen.getByText(/We'll identify your closest competitors automatically\./)).toBeInTheDocument()
+    expect(screen.queryByPlaceholderText(/Competitor 1/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Compare against/)).not.toBeInTheDocument()
+  })
+
+  it('submits with an empty competitor_names list — auto-generation happens worker-side', async () => {
+    liteApi.submit.mockResolvedValue({ token: 'tok1', status: 'pending' })
+    const onSubmitted = vi.fn()
+    render(<LiteForm onSubmitted={onSubmitted} compact />)
+
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'Acme Co' } })
+    fireEvent.click(screen.getByText('Run my free diagnostic'))
+
+    await waitFor(() => expect(liteApi.submit).toHaveBeenCalledWith({
+      brand_name: 'Acme Co',
+      competitor_names: [],
+      captcha_token: expect.any(String),
+    }))
+  })
+})

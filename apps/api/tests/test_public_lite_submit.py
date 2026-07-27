@@ -48,6 +48,7 @@ def db(monkeypatch):
                 competitor_names TEXT, brand_entity_id INTEGER, competitor_entity_ids TEXT,
                 study_type TEXT, store_url TEXT, cycle_id INTEGER, status TEXT DEFAULT 'pending',
                 error_message TEXT, ip_hash TEXT, organization_id INTEGER,
+                competitor_source TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
             )
         """)

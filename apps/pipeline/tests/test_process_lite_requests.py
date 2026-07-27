@@ -31,6 +31,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 import worker
+from generation.competitor_generator import CompetitorCandidate
 from generation.query_generator import LiteGenerationError
 from soa_shared.constants import QUERY_STAGES
 
@@ -81,7 +82,7 @@ def db(monkeypatch):
                 competitor_names TEXT, brand_entity_id INTEGER, competitor_entity_ids TEXT,
                 study_type TEXT, store_url TEXT, cycle_id INTEGER, status TEXT DEFAULT 'pending',
                 error_message TEXT, ip_hash TEXT, organization_id INTEGER,
-                report_email_sent_at TIMESTAMP,
+                report_email_sent_at TIMESTAMP, competitor_source TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
             )
         """)
@@ -123,6 +124,21 @@ def db(monkeypatch):
     monkeypatch.setattr(db_module, "session_factory", sessionmaker(bind=engine))
     monkeypatch.setenv("OPEN_AI_API_KEY", "test-key")
     return engine
+
+
+@pytest.fixture(autouse=True)
+def _no_generated_competitors(monkeypatch):
+    """
+    Stage 13: process_lite_requests now always calls
+    generation.competitor_generator.generate_competitors ahead of query
+    generation. Defaulting it to [] (as if the API found nothing) keeps
+    every pre-Stage-13 test's entity/query-count assertions exactly as
+    they were — the manual competitor list, if any, passes through
+    select_competitors unchanged since there's nothing to top up with.
+    Tests that care about auto-generated competitors override this
+    per-test (see the Stage 13 section below).
+    """
+    monkeypatch.setattr("generation.competitor_generator.generate_competitors", lambda *a, **k: [])
 
 
 def _insert_pending(conn, token="a1b2c3d4e5f6", brand="Acme", competitors=None, store_url=None):
@@ -667,3 +683,120 @@ def test_email_body_contains_report_url_and_no_score_language():
     assert report_url in html
     assert "score" not in text.lower()
     assert "score" not in html.lower()
+
+
+# ── Stage 13: worker-side competitor auto-generation ─────────────────────
+
+def _competitor_fields_by_token(conn, token):
+    row = conn.exec_driver_sql(
+        "SELECT competitor_names, competitor_source, status FROM soa_lite_requests WHERE token = ?",
+        (token,),
+    ).fetchone()
+    names = json.loads(row[0]) if row[0] else []
+    return names, row[1], row[2]
+
+
+def test_generated_competitors_top_up_manual_ones_and_persist_mixed_source(db, monkeypatch):
+    monkeypatch.setattr(
+        "generation.competitor_generator.generate_competitors",
+        lambda *a, **k: [CompetitorCandidate(name="Gen One"), CompetitorCandidate(name="Gen Two")],
+    )
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()) as mock_gen:
+        worker.process_lite_requests()
+
+    names, source, status = _competitor_fields_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert names == ["Rival", "Gen One", "Gen Two"]
+    assert source == "mixed"
+    assert status == "running"
+
+    # F1: generation must precede (and feed) query generation — the
+    # final, topped-up list is what the prompt embeds competitor names
+    # from, not the original manual-only list.
+    mock_gen.assert_called_once_with("Acme", ["Rival", "Gen One", "Gen Two"], "test-key")
+
+
+def test_generated_competitors_get_entities_created_alongside_manual_ones(db, monkeypatch):
+    monkeypatch.setattr(
+        "generation.competitor_generator.generate_competitors",
+        lambda *a, **k: [CompetitorCandidate(name="Gen One")],
+    )
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        gen_entity = conn.exec_driver_sql(
+            "SELECT id FROM soa_entities WHERE slug = 'gen-one'"
+        ).fetchone()
+        comparison_roles = conn.exec_driver_sql(
+            "SELECT comparison_code, role FROM soa_cycle_entities ORDER BY comparison_code"
+        ).fetchall()
+
+    assert gen_entity is not None  # entity created exactly once for the generated candidate
+    assert comparison_roles == [("M001", "primary"), ("M002", "competitor"), ("M003", "competitor")]
+
+
+def test_no_manual_competitors_and_generation_finds_none_yields_none_source(db):
+    # The autouse _no_generated_competitors fixture already returns [].
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=[])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    names, source, status = _competitor_fields_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert names == []
+    assert source == "none"
+    assert status == "running"
+
+
+def test_competitor_generation_failure_never_blocks_the_run(db, monkeypatch):
+    def _raise(*a, **k):
+        raise RuntimeError("OpenAI is down")
+
+    # generate_competitors itself never raises (see test_competitor_generator.py),
+    # but this proves process_lite_requests survives even if that
+    # contract were somehow violated — never-throw is enforced at both
+    # layers, not assumed.
+    monkeypatch.setattr("generation.competitor_generator.generate_competitors", _raise)
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    status, *_ , error = _lite_row_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert status == "failed"
+    assert error is not None
+
+
+def test_crash_after_persisting_competitors_leaves_generated_set_intact(db, monkeypatch):
+    """
+    F1/G4: competitor_names/competitor_source are persisted in their own
+    transaction BEFORE entity resolution/query generation/cycle
+    queueing. If something downstream then fails, the already-persisted
+    competitor set must not be lost or reset — _mark_lite_failed only
+    ever touches status/error_message, never competitor_names/source.
+    """
+    monkeypatch.setattr(
+        "generation.competitor_generator.generate_competitors",
+        lambda *a, **k: [CompetitorCandidate(name="Gen One")],
+    )
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])
+
+    with patch(
+        "soa_shared.cycle_creation.create_cycle_with_comparison_set",
+        side_effect=RuntimeError("crash during cycle creation"),
+    ), patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()
+
+    names, source, status = _competitor_fields_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert status == "failed"
+    assert names == ["Rival", "Gen One"]  # not lost or regenerated
+    assert source == "mixed"

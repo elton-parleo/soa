@@ -1399,7 +1399,23 @@ class SoaLiteRequest(Base):
     competitor_names = Column(
         JSON,
         nullable=True,
-        comment="List of 0-2 raw competitor name strings as entered by the visitor.",
+        comment=(
+            "List of raw competitor name strings — up to 2 as entered by the "
+            "visitor, topped up to 5 by Stage 13 worker-side auto-generation. "
+            "See competitor_source for provenance."
+        ),
+    )
+
+    competitor_source = Column(
+        Text,
+        nullable=True,
+        comment=(
+            "Stage 13: provenance of competitor_names — 'generated' (all "
+            "from ChatGPT), 'manual' (all visitor-entered), 'mixed' (both), "
+            "or 'none' (no competitors at all). Null until competitor "
+            "generation runs (process_lite_requests, ahead of query "
+            "generation)."
+        ),
     )
 
     brand_entity_id = Column(

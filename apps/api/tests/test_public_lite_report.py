@@ -23,7 +23,8 @@ def db(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_lite_requests (
                 id INTEGER PRIMARY KEY, token TEXT UNIQUE, email TEXT,
-                status TEXT, cycle_id INTEGER
+                status TEXT, cycle_id INTEGER,
+                competitor_names TEXT, competitor_source TEXT
             )
         """)
         conn.exec_driver_sql("""
@@ -77,15 +78,16 @@ def db(monkeypatch):
     return engine
 
 
-def _seed_complete_cycle(conn, token="t1", email=None):
+def _seed_complete_cycle(conn, token="t1", email=None, competitor_source=None):
     """
     One brand (M001/primary, entity_id=101, id=1001) + one competitor
     (M002/competitor, entity_id=102, id=1002) for cycle_id=1, with overall
     and two stage-slice metrics rows each.
     """
     conn.exec_driver_sql(
-        "INSERT INTO soa_lite_requests (token, email, status, cycle_id) VALUES (?, ?, 'complete', 1)",
-        (token, email),
+        "INSERT INTO soa_lite_requests (token, email, status, cycle_id, competitor_source) "
+        "VALUES (?, ?, 'complete', 1, ?)",
+        (token, email, competitor_source),
     )
     conn.exec_driver_sql(
         "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (101, 'Acme Co', 'acme-co', 'brand')"
@@ -170,6 +172,14 @@ def test_teaser_primary_role_present(db):
     assert roles["Rival Co"] == "competitor"
 
 
+def test_teaser_carries_competitor_source(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email=None, competitor_source="generated")
+
+    result = public_lite.get_lite_report("t1")
+    assert result["competitor_source"] == "generated"
+
+
 # ─── full report (email set) ─────────────────────────────────────────────
 
 def test_full_report_returned_when_email_is_set(db):
@@ -194,6 +204,22 @@ def test_full_report_metric_values_correct(db):
     result = public_lite.get_lite_report("t1")
     acme = next(e for e in result["overall"] if e["name"] == "Acme Co")
     assert acme["metrics"]["som"] == 60.0  # normalize_metric(0.6) -> 0-100 scale
+
+
+def test_full_report_carries_competitor_source(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com", competitor_source="mixed")
+
+    result = public_lite.get_lite_report("t1")
+    assert result["competitor_source"] == "mixed"
+
+
+def test_report_competitor_source_null_when_not_yet_generated(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com", competitor_source=None)
+
+    result = public_lite.get_lite_report("t1")
+    assert result["competitor_source"] is None
 
 
 # ─── no internal ids anywhere in either payload ─────────────────────────

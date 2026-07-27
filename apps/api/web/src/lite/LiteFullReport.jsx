@@ -18,6 +18,14 @@
  * optional fields — no backend stage emits them yet, so both are read
  * defensively and simply omitted when absent, same pattern as Stage 4's
  * worst_mention_excerpt.
+ *
+ * Stage 13 (W3/W4/W5): report.competitor_source drives three things in
+ * VisibilitySection — a solo run ('none') never shows a fake 100%-share
+ * donut or a single-entity incentive-citation "comparison" (both
+ * collapse into SoloComparisonNote); a 'generated'/'mixed' run shows
+ * CompetitorProvenanceNote; ENTITY_COLORS (liteTheme.jsx) now has 5
+ * rival tones so a comparison of up to 6 entities (1 primary + 5
+ * auto-generated/manual competitors) stays visually distinguishable.
  */
 import { useState } from 'react'
 import {
@@ -354,8 +362,33 @@ function IncentiveCitationCard({ mentionRate, incentiveCitation, scan }) {
   )
 }
 
+// Stage 13 (W4): solo runs (no competitors at all — competitor_source
+// 'none') never show a fake 100%-share donut or a single-entity
+// incentive-citation "comparison" — both collapse into this one quiet
+// note instead. Mention rate still renders (primary-only) above it.
+function SoloComparisonNote() {
+  return (
+    <div className="lite-body lite-muted" style={{ marginTop: 16 }}>
+      Competitor comparison unavailable for this run.
+    </div>
+  )
+}
+
+// Stage 13 (W5): the tool now CHOOSES which brands it publicly compares
+// you against when competitor_source is 'generated'/'mixed' — this
+// provenance line is non-negotiable wherever that comparison appears.
+function CompetitorProvenanceNote() {
+  return (
+    <div className="lite-mono lite-muted" style={{ fontSize: 11, marginTop: 8, marginBottom: 4 }}>
+      Competitors auto-selected by ChatGPT
+    </div>
+  )
+}
+
 function VisibilitySection({ report, ctaUrl }) {
   const vb = report.visibility_breakdown
+  const isSolo = report.competitor_source === 'none'
+  const isAutoSelected = report.competitor_source === 'generated' || report.competitor_source === 'mixed'
   return (
     <LightCard>
       <SectionHeader
@@ -363,21 +396,31 @@ function VisibilitySection({ report, ctaUrl }) {
         annotation={formatDateStamp()}
         headline="How often agents mention you — and your value"
       />
+      {isAutoSelected && <CompetitorProvenanceNote />}
       {vb ? (
-        <div className="lite-cols-2" style={{ marginTop: 20 }}>
-          <MentionRateCard mentionRate={vb.mention_rate} />
-          <ShareOfMentionsCard shareOfMentions={vb.share_of_mentions} totals={vb.totals} />
-        </div>
+        isSolo ? (
+          <div style={{ marginTop: 20 }}>
+            <MentionRateCard mentionRate={vb.mention_rate} />
+            <SoloComparisonNote />
+          </div>
+        ) : (
+          <div className="lite-cols-2" style={{ marginTop: 20 }}>
+            <MentionRateCard mentionRate={vb.mention_rate} />
+            <ShareOfMentionsCard shareOfMentions={vb.share_of_mentions} totals={vb.totals} />
+          </div>
+        )
       ) : (
         <div className="lite-body lite-muted" style={{ marginTop: 20 }}>
           Visibility data isn't available for this report yet.
         </div>
       )}
-      <IncentiveCitationCard
-        mentionRate={vb?.mention_rate}
-        incentiveCitation={vb?.incentive_citation}
-        scan={report.scan}
-      />
+      {!isSolo && (
+        <IncentiveCitationCard
+          mentionRate={vb?.mention_rate}
+          incentiveCitation={vb?.incentive_citation}
+          scan={report.scan}
+        />
+      )}
       <FunnelTeaserCard ctaUrl={ctaUrl} />
     </LightCard>
   )

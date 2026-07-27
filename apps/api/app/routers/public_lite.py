@@ -199,6 +199,8 @@ def _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts: "_
     """
     if lite_status == 'pending':
         return 'queued', None
+    if lite_status == 'identifying_competitors':
+        return 'identifying_competitors', None
     if lite_status == 'generating':
         return 'generating_queries', None
     if lite_status == 'complete':
@@ -520,6 +522,13 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
     scan_status = scan_row[0] if scan_row else None
     accessibility = scan_row[1] if scan_row and scan_row[0] == 'complete' else None
 
+    # Stage 13 (W4/W5): drives the widget's solo-comparison fallback and
+    # the "auto-selected by ChatGPT" methodology stamp.
+    competitor_source_row = conn.execute(text("""
+        SELECT competitor_source FROM soa_lite_requests WHERE id = :rid
+    """), {"rid": lite_request_id}).fetchone()
+    competitor_source = competitor_source_row[0] if competitor_source_row else None
+
     composite = None
     if visibility is not None:
         composite = (
@@ -540,7 +549,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
         return PublicLiteTeaserResponse(
             status="complete", locked=True, overall=overall,
             visibility=visibility, accessibility=accessibility, composite=composite,
-            scan_status=scan_status,
+            scan_status=scan_status, competitor_source=competitor_source,
         ).model_dump()
 
     overall = [
@@ -608,6 +617,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
         visibility=visibility, accessibility=accessibility, composite=composite,
         scan_status=scan_status,
         visibility_breakdown=visibility_breakdown,
+        competitor_source=competitor_source,
     ).model_dump()
 
 
@@ -653,7 +663,8 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
 def get_lite_status(token: str):
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT lr.status, c.id, c.status, c.total_runs_planned, sr.status
+            SELECT lr.status, c.id, c.status, c.total_runs_planned, sr.status,
+                   lr.competitor_names, lr.competitor_source
             FROM soa_lite_requests lr
             LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
             LEFT JOIN soa_lite_scan_results sr ON sr.lite_request_id = lr.id
@@ -663,12 +674,16 @@ def get_lite_status(token: str):
         if not row:
             raise HTTPException(status_code=404, detail="Not found.")
 
-        lite_status, cycle_id, cycle_status, total_runs_planned, scan_status = row
+        (lite_status, cycle_id, cycle_status, total_runs_planned, scan_status,
+         competitor_names, competitor_source) = row
         live_counts = _fetch_live_progress_counts(conn, cycle_id) if cycle_id else None
 
     phase, progress = _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts)
 
-    return PublicLiteStatusResponse(status=lite_status, phase=phase, progress=progress, scan_status=scan_status)
+    return PublicLiteStatusResponse(
+        status=lite_status, phase=phase, progress=progress, scan_status=scan_status,
+        competitors=_decode_json_field(competitor_names, None), competitor_source=competitor_source,
+    )
 
 
 # ─── GET /api/public/soa-lite/{token}/report ─────────────────────────────
@@ -703,7 +718,8 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
     """
     with engine.begin() as conn:
         row = conn.execute(text("""
-            SELECT lr.id, lr.status, lr.cycle_id, c.status, c.total_runs_planned
+            SELECT lr.id, lr.status, lr.cycle_id, c.status, c.total_runs_planned,
+                   lr.competitor_names, lr.competitor_source
             FROM soa_lite_requests lr
             LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
             WHERE lr.token = :token
@@ -712,7 +728,8 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
         if not row:
             raise HTTPException(status_code=404, detail="Not found.")
 
-        lite_request_id, lite_status, cycle_id, cycle_status, total_runs_planned = row
+        (lite_request_id, lite_status, cycle_id, cycle_status, total_runs_planned,
+         competitor_names, competitor_source) = row
 
         conn.execute(text("""
             UPDATE soa_lite_requests SET email = :email, updated_at = NOW() WHERE token = :token
@@ -721,6 +738,9 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
         if lite_status != 'complete':
             live_counts = _fetch_live_progress_counts(conn, cycle_id) if cycle_id else None
             phase, progress = _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts)
-            return PublicLiteStatusResponse(status=lite_status, phase=phase, progress=progress).model_dump()
+            return PublicLiteStatusResponse(
+                status=lite_status, phase=phase, progress=progress,
+                competitors=_decode_json_field(competitor_names, None), competitor_source=competitor_source,
+            ).model_dump()
 
         return _build_report_payload(conn, lite_request_id, cycle_id, data.email)

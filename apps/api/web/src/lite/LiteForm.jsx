@@ -6,11 +6,21 @@
  * further auto-derivation, tracked via brandManuallyEdited.
  *
  * `compact` (Stage 6) renders the identical state machine and submit
- * path as an inline pill input + button — no LogoHeader/card chrome,
- * competitors tucked behind a disclosure toggle — for embedding in the
- * scan.parleo.io landing page's hero and final-CTA bands. It changes
- * markup only: every hook, validation call, and liteApi.submit call
- * below is shared between both render modes untouched.
+ * path as an inline pill input + button — no LogoHeader/card chrome —
+ * for embedding in the scan.parleo.io landing page's hero and final-CTA
+ * bands. It changes markup only: every hook, validation call, and
+ * liteApi.submit call below is shared between both render modes
+ * untouched.
+ *
+ * Stage 13 (W1): the compact form no longer collects competitor names —
+ * the worker now auto-generates them (see
+ * apps/pipeline/generation/competitor_generator.py) — so its markup
+ * shows a one-line note instead of the old disclosure toggle + two
+ * inputs. `competitors` state still exists (submitted as [] from this
+ * branch) so the shared handleSubmit/validateSubmission path needs no
+ * change. The non-compact card (the older /lite embed) is unchanged and
+ * still exposes manual competitor entry — that path remains valid as
+ * the override input feeding the worker's select_competitors top-up.
  */
 import { useEffect, useId, useState } from 'react'
 import { liteApi } from './liteApi.js'
@@ -31,7 +41,6 @@ export function LiteForm({
   const [confirmedBrand, setConfirmedBrand] = useState('')
   const [brandManuallyEdited, setBrandManuallyEdited] = useState(false)
   const [competitors, setCompetitors] = useState(['', ''])
-  const [showCompetitors, setShowCompetitors] = useState(false)
   const [errors, setErrors] = useState({ brandName: null, competitors: {} })
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
@@ -150,38 +159,12 @@ export function LiteForm({
             </div>
           )}
 
-          <button
-            type="button"
-            className="lite-mono"
-            onClick={() => setShowCompetitors((v) => !v)}
-            style={{
-              background: 'none', border: 'none', padding: 0, marginTop: 4, marginBottom: showCompetitors ? 10 : 0,
-              fontSize: 12, color: inv ? 'var(--text-inv-2)' : 'var(--text-2)', cursor: 'pointer', textDecoration: 'underline',
-            }}
+          <div
+            className={inv ? 'lite-muted--inv' : 'lite-muted'}
+            style={{ fontSize: 12, marginTop: 8 }}
           >
-            {showCompetitors ? 'Hide competitors' : 'Compare against — optional, up to two rivals'}
-          </button>
-
-          {showCompetitors && (
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              {[0, 1].map((i) => (
-                <div key={i} style={{ flex: '1 1 160px' }}>
-                  <label className="lite-visually-hidden" htmlFor={`${idPrefix}-competitor-${i}`}>
-                    Competitor {i + 1} (optional)
-                  </label>
-                  <input
-                    id={`${idPrefix}-competitor-${i}`}
-                    type="text"
-                    className="lite-input lite-input--pill"
-                    placeholder={`Competitor ${i + 1} (optional)`}
-                    value={competitors[i]}
-                    onChange={(e) => handleCompetitorChange(i, e.target.value)}
-                  />
-                  <div style={compactFieldErrorStyle}>{errors.competitors[i] || ' '}</div>
-                </div>
-              ))}
-            </div>
-          )}
+            We'll identify your closest competitors automatically.
+          </div>
         </form>
       </div>
     )

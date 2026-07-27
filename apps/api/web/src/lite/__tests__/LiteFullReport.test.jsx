@@ -152,6 +152,51 @@ describe('LiteFullReport — visibility section (Stage 7)', () => {
   })
 })
 
+describe('LiteFullReport — Stage 13 (W4/W5): competitor_source-driven visibility section', () => {
+  const soloReport = {
+    ...baseReport,
+    competitor_source: 'none',
+    overall: [{ name: 'Acme Co', role: 'primary', metrics: { som: 100, mention_rate: 50, position_index: 70, rsi: 1.2 } }],
+    visibility_breakdown: {
+      mention_rate: [{ entity: 'Acme Co', is_primary: true, mentioned_queries: 6, total_queries: 12, rate_pct: 50.0 }],
+      share_of_mentions: [{ entity: 'Acme Co', is_primary: true, mentions: 6, share_pct: 100.0 }],
+      totals: { total_mentions: 6, total_queries: 12 },
+      incentive_citation: [{ entity: 'Acme Co', is_primary: true, mentions: 6, cited_answers: 2, rate_pct: 33.3 }],
+    },
+  }
+
+  it('solo run (competitor_source none): still shows mention rate, but no donut and no incentive-citation card', () => {
+    render(<LiteFullReport report={soloReport} />)
+
+    expect(screen.getByText('50% · 6/12')).toBeInTheDocument()
+    expect(screen.getByText('Competitor comparison unavailable for this run.')).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: /of mentions/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('Incentive citation rate')).not.toBeInTheDocument()
+  })
+
+  it('solo run never shows the auto-selected provenance line', () => {
+    render(<LiteFullReport report={soloReport} />)
+    expect(screen.queryByText('Competitors auto-selected by ChatGPT')).not.toBeInTheDocument()
+  })
+
+  it('competitor_source generated: shows the provenance line and the normal comparison visuals', () => {
+    render(<LiteFullReport report={{ ...baseReport, competitor_source: 'generated' }} />)
+    expect(screen.getByText('Competitors auto-selected by ChatGPT')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /of mentions/ })).toBeInTheDocument()
+  })
+
+  it('competitor_source mixed: also shows the provenance line', () => {
+    render(<LiteFullReport report={{ ...baseReport, competitor_source: 'mixed' }} />)
+    expect(screen.getByText('Competitors auto-selected by ChatGPT')).toBeInTheDocument()
+  })
+
+  it('competitor_source manual: no provenance line, normal comparison visuals', () => {
+    render(<LiteFullReport report={{ ...baseReport, competitor_source: 'manual' }} />)
+    expect(screen.queryByText('Competitors auto-selected by ChatGPT')).not.toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /of mentions/ })).toBeInTheDocument()
+  })
+})
+
 describe('LiteFullReport — incentive citation card (Stage 8)', () => {
   it('renders the card title, rubric-honest subtitle, and one row per entity', () => {
     render(<LiteFullReport report={baseReport} />)

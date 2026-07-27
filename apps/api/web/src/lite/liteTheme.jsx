@@ -9,10 +9,17 @@ import { SCORE_BANDS } from './liteDerive.js'
 
 export const STAGE_ORDER = ['Awareness', 'Research', 'Comparison', 'Ready to Buy']
 
-// Primary entity vs up to two competitors — semantic accent/neutral duo
-// rather than a rotating categorical palette, matching the reference
-// design's "you vs rival" framing.
-export const ENTITY_COLORS = ['var(--accent)', 'var(--foundation)', '#8890A0']
+// Primary entity vs up to 5 competitors (Stage 13: auto-generated
+// competitors can bring the comparison set to 6 total). Index 0 is
+// always --accent, kept visually dominant per the reference design's
+// "you vs rivals" framing; indices 1-5 are the muted, colorblind-safe
+// rival tones (theme.css --rival-1..5) — a 1-2 rival report renders
+// pixel-identical to before this stage since --rival-1/2 reuse the
+// original two colors.
+export const ENTITY_COLORS = [
+  'var(--accent)',
+  'var(--rival-1)', 'var(--rival-2)', 'var(--rival-3)', 'var(--rival-4)', 'var(--rival-5)',
+]
 
 export function formatRsi(v) {
   if (v === null || v === undefined) return '—'

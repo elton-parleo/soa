@@ -359,13 +359,14 @@ def process_lite_requests():
     process_generation_jobs (avoids OpenAI rate limits and DB contention
     with cycle processing).
 
-    State machine: pending -> generating -> running. The cycle this
-    creates is picked up and executed by the existing planned-cycle poll
-    unchanged (get_next_planned_cycle/execute_cycle) — running -> complete/
-    failed is mirrored onto this row by _sweep_lite_completions once the
-    cycle finishes, not written here. Any exception while resolving
-    entities, generating queries, or creating the cycle marks this row
-    'failed' directly (mirrors _mark_generation_failed).
+    State machine: pending -> identifying_competitors -> generating ->
+    running. The cycle this creates is picked up and executed by the
+    existing planned-cycle poll unchanged (get_next_planned_cycle/
+    execute_cycle) — running -> complete/failed is mirrored onto this row
+    by _sweep_lite_completions once the cycle finishes, not written here.
+    Any exception while resolving entities, generating queries, or
+    creating the cycle marks this row 'failed' directly (mirrors
+    _mark_generation_failed).
     """
     with engine.connect() as conn:
         row = conn.execute(text("""
@@ -383,7 +384,7 @@ def process_lite_requests():
 
         conn.execute(text("""
             UPDATE soa_lite_requests
-            SET status = 'generating', updated_at = NOW()
+            SET status = 'identifying_competitors', updated_at = NOW()
             WHERE id = :id
         """), {"id": request_id})
         conn.commit()
@@ -395,7 +396,7 @@ def process_lite_requests():
     # raw string instead, same idiom as cycles.py::_row_to_cycle.
     if isinstance(competitor_names, str):
         competitor_names = json.loads(competitor_names)
-    competitor_names = competitor_names or []
+    manual_competitor_names = competitor_names or []
     token8 = token[:8]
     study_type = f"lite-{token8}"
     cycle_code = f"lite-{token8}"
@@ -410,10 +411,45 @@ def process_lite_requests():
         from soa_shared.entity_helpers import get_or_create_entity_by_slug
         from soa_shared.cycle_creation import create_cycle_with_comparison_set
         from generation.query_generator import generate_lite_queries
+        from generation.competitor_generator import generate_competitors, select_competitors
 
         with session_factory() as session:
             org_id = get_or_create_leadgen_org(session)
             session.commit()
+
+        # a2. Stage 13: auto-generate up to 5 competitors, topping up
+        # whatever the visitor named manually. generate_competitors()
+        # never raises (rule 4's never-throw philosophy extended here —
+        # this is a lookup, not something that may block the run), so
+        # this always proceeds to a well-defined competitor_names/
+        # competitor_source pair, even on total API failure ([] in ->
+        # 'manual' or 'none' out). Persisted in its own transaction,
+        # BEFORE entity resolution/query generation/cycle queueing below
+        # — so a crash partway through the rest of this function still
+        # leaves the generated set on the row rather than losing it to a
+        # future re-generation.
+        candidates = generate_competitors(brand_name, api_key, store_url=store_url)
+        competitor_names, competitor_source = select_competitors(
+            manual_competitor_names, candidates, brand_name,
+        )
+
+        with engine.begin() as conn:
+            conn.execute(text("""
+                UPDATE soa_lite_requests
+                SET competitor_names = :names,
+                    competitor_source = :source,
+                    status = 'generating',
+                    updated_at = NOW()
+                WHERE id = :id
+            """), {
+                "names":  json.dumps(competitor_names),
+                "source": competitor_source,
+                "id":     request_id,
+            })
+
+        log.info(
+            f"[lite] request {request_id}: competitors={competitor_names} source={competitor_source}"
+        )
 
         # b. Resolve entities — upsert-by-slug so repeat submissions of the
         # same brand reuse the existing soa_entities row.

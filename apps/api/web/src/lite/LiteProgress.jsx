@@ -25,15 +25,22 @@
  * No screenshot in design-refs/ shows a progress view (the reference
  * captures are all completed reports) — this applies the same card/
  * label tokens as the rest of the widget for consistency.
+ *
+ * Stage 13 (W2): a new 'identifying_competitors' phase (worker-side
+ * competitor auto-generation, ahead of query generation) gets its own
+ * phase copy, and once phaseData.competitors populates, CompetitorChips
+ * renders "COMPARING AGAINST" + one outlined chip per name — the run's
+ * one visible moment of the tool deciding who to compare against.
  */
 import { useEffect, useRef, useState } from 'react'
-import { LogoHeader, ErrorBanner, InfoBadge, LightCard, DarkCard } from './liteTheme.jsx'
+import { LogoHeader, ErrorBanner, InfoBadge, LightCard, DarkCard, Chip } from './liteTheme.jsx'
 import { domainFromStoreUrl, formatElapsed, maskEmail } from './liteDerive.js'
 import { liteApi } from './liteApi.js'
 import { validateEmail } from './validation.js'
 
 const PHASE_COPY = {
   queued: 'Queued — starting shortly…',
+  identifying_competitors: 'Identifying your closest competitors…',
   generating_queries: 'Designing your 12-query diagnostic…',
   running: 'Running query {n} of {total} against ChatGPT…',
   coding: 'Reading and coding every answer…',
@@ -43,6 +50,7 @@ const PHASE_COPY = {
 
 const LIVE_LABEL_COPY = {
   queued: 'QUEUED',
+  identifying_competitors: 'IDENTIFYING COMPETITORS',
   generating_queries: 'DESIGNING YOUR DIAGNOSTIC',
   coding: 'CODING RESPONSES',
   metrics: 'CALCULATING YOUR SCORE',
@@ -143,6 +151,25 @@ function LiveStatusLine({ phaseData }) {
         ? <span aria-hidden="true">●</span>
         : <span className="lite-live-dot" aria-hidden="true" data-testid="lite-live-dot" />}
       <span>{label}</span>
+    </div>
+  )
+}
+
+// ─── Competitor chips (Stage 13, W2) ─────────────────────────────────────
+// Renders once competitors first populate on the status payload — the
+// run's one visible moment of the tool deciding who to compare against.
+// The lite-chip-row--enter fade-in (theme.css) fires naturally on this
+// block's first mount, since it's absent from the tree until then.
+function CompetitorChips({ competitors }) {
+  if (!competitors || competitors.length === 0) return null
+  return (
+    <div className="lite-chip-row--enter" style={{ marginTop: 14, marginBottom: 2 }}>
+      <div className="lite-label" style={{ marginBottom: 8 }}>Comparing against</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {competitors.map((name) => (
+          <Chip key={name} tone="outline">{name}</Chip>
+        ))}
+      </div>
     </div>
   )
 }
@@ -288,6 +315,7 @@ export function LiteProgress({ phaseData, storeUrl, error, token }) {
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 12 }}>
             {phaseMessage(phaseData)}
           </div>
+          <CompetitorChips competitors={phaseData?.competitors} />
           <div className="lite-bar-track">
             <div
               className={`lite-bar-fill${isActive ? ' lite-bar-fill--shimmer' : ''}`}

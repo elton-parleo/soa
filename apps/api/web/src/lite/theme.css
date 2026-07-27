@@ -50,6 +50,21 @@
   --foundation: #343A48;
   --foundation-on-dark: #C9CDD6;
 
+  /* Stage 13 (W3): rival palette for up to 5 auto-generated competitors
+     (ENTITY_COLORS in liteTheme.jsx — index 0 is always --accent, kept
+     visually dominant; these five are the rival slots 1-5). Muted and
+     desaturated to match the report's subdued aesthetic, and varied in
+     LIGHTNESS as well as hue so they stay distinguishable under the
+     common forms of color-blindness and in grayscale printouts, not
+     just by hue alone. --rival-1/2 reuse the original two-rival colors
+     (--foundation, and the old #8890A0 literal) so a 1-2 rival report
+     renders pixel-identical to before this stage. */
+  --rival-1: #343A48;
+  --rival-2: #8890A0;
+  --rival-3: #6B7A99;
+  --rival-4: #9C8AA0;
+  --rival-5: #A9906E;
+
   /* AA-safe TEXT variants for the semantic colors above. --bad/--warn/
      --accent/--good stay exactly as specified for fills, borders, and
      other non-text decoration (WCAG 1.4.11 non-text contrast is only
@@ -266,6 +281,22 @@
 .lite-chip--warn { background: var(--warn-tint); color: var(--warn-ink); }
 .lite-chip--accent { background: var(--accent-tint); color: var(--accent-ink); }
 .lite-chip--neutral { background: var(--track); color: var(--text-2); }
+/* Stage 13 (W2): lighter-weight than the filled tones above — for the
+   progress page's "COMPARING AGAINST" competitor chips, where a solid
+   fill would read as a status/finding rather than a plain label. */
+.lite-chip--outline { background: transparent; color: var(--text-2); border: 1px solid var(--line); }
+
+/* Stage 13 (W2): one-shot entrance for the "COMPARING AGAINST" chip row
+   the moment competitors first populate on the status payload — this
+   is the run's one visible moment of the tool "deciding" who to
+   compare against. Neutralized for prefers-reduced-motion by the
+   blanket animation-duration override above (same mechanic as Stage
+   12's live dot/shimmer). */
+@keyframes lite-chip-row-enter {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.lite-chip-row--enter { animation: lite-chip-row-enter 0.4s ease-out; }
 
 .lite-badge-dot {
   width: 7px; height: 7px; border-radius: 50%;

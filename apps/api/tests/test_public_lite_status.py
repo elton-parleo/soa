@@ -9,6 +9,7 @@ soa_cycles.completed_runs column — and the phase sequence now
 distinguishes querying -> coding -> metrics (previously all collapsed
 into one 'analyzing' bucket).
 """
+import json
 from datetime import datetime, timezone
 
 import pytest
@@ -25,7 +26,8 @@ def db(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_lite_requests (
                 id INTEGER PRIMARY KEY, token TEXT UNIQUE, status TEXT,
-                cycle_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                cycle_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                competitor_names TEXT, competitor_source TEXT
             )
         """)
         conn.exec_driver_sql("""
@@ -53,10 +55,11 @@ def db(monkeypatch):
     return engine
 
 
-def _insert_lite(conn, token, status, cycle_id=None):
+def _insert_lite(conn, token, status, cycle_id=None, competitor_names=None, competitor_source=None):
     conn.exec_driver_sql(
-        "INSERT INTO soa_lite_requests (token, status, cycle_id) VALUES (?, ?, ?)",
-        (token, status, cycle_id),
+        "INSERT INTO soa_lite_requests (token, status, cycle_id, competitor_names, competitor_source) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (token, status, cycle_id, json.dumps(competitor_names) if competitor_names is not None else None, competitor_source),
     )
 
 
@@ -115,11 +118,30 @@ def test_pending_maps_to_queued(db):
     assert result.progress is None
 
 
+def test_identifying_competitors_maps_to_identifying_competitors_phase(db):
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "identifying_competitors")
+    result = public_lite.get_lite_status("t1")
+    assert result.phase == "identifying_competitors"
+    assert result.competitors is None  # Stage 13 (F3): null until generation completes
+
+
 def test_generating_maps_to_generating_queries(db):
     with db.begin() as conn:
         _insert_lite(conn, "t1", "generating")
     result = public_lite.get_lite_status("t1")
     assert result.phase == "generating_queries"
+
+
+def test_status_carries_competitors_once_generation_completes(db):
+    with db.begin() as conn:
+        _insert_lite(
+            conn, "t1", "generating",
+            competitor_names=["Rival", "Gen One"], competitor_source="mixed",
+        )
+    result = public_lite.get_lite_status("t1")
+    assert result.competitors == ["Rival", "Gen One"]
+    assert result.competitor_source == "mixed"
 
 
 def test_failed_maps_to_failed(db):
@@ -319,6 +341,7 @@ def test_scan_status_does_not_affect_lite_phase(db):
 
 @pytest.mark.parametrize("lite_status,expected_phase", [
     ("pending", "queued"),
+    ("identifying_competitors", "identifying_competitors"),
     ("generating", "generating_queries"),
     ("complete", "complete"),
     ("failed", "failed"),

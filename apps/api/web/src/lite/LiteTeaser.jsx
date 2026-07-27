@@ -8,6 +8,11 @@
  * other additive field here). Email gate is the dark band from
  * screenshot 6, replacing Stage 4's blur-overlay treatment — same
  * placement (still gates the teaser), same PATCH /email flow, restyled.
+ *
+ * Stage 13 (W4/W5): RivalShareOfVoice degrades honestly when
+ * report.competitor_source is 'none' (solo run — no fake single-bar
+ * comparison) and discloses "auto-selected by ChatGPT" when it's
+ * 'generated'/'mixed'.
  */
 import { useState } from 'react'
 import { liteApi } from './liteApi.js'
@@ -37,10 +42,28 @@ function WorstAnswer({ excerpt }) {
   )
 }
 
-function RivalShareOfVoice({ entities }) {
+// Stage 13 (W4/W5): competitor_source === 'none' means a solo run — no
+// fake single-bar "comparison"; drops straight to the same quiet note
+// used in the full report. 'generated'/'mixed' get the provenance line
+// since the tool chose who's being publicly compared here.
+function RivalShareOfVoice({ entities, competitorSource }) {
+  if (competitorSource === 'none') {
+    return (
+      <div>
+        <div className="lite-label" style={{ marginBottom: 12 }}>Rival share of mentions</div>
+        <div className="lite-body lite-muted">Competitor comparison unavailable for this run.</div>
+      </div>
+    )
+  }
+  const isAutoSelected = competitorSource === 'generated' || competitorSource === 'mixed'
   return (
     <div>
       <div className="lite-label" style={{ marginBottom: 12 }}>Rival share of mentions</div>
+      {isAutoSelected && (
+        <div className="lite-mono lite-muted" style={{ fontSize: 11, marginBottom: 10 }}>
+          Competitors auto-selected by ChatGPT
+        </div>
+      )}
       {entities.map((entity, i) => (
         <div key={entity.name} style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 12, fontWeight: 600 }}>
@@ -124,7 +147,7 @@ export function LiteTeaser({ report, token, onUnlocked }) {
 
         <LightCard>
           <WorstAnswer excerpt={report.worst_mention_excerpt} />
-          <RivalShareOfVoice entities={entities} />
+          <RivalShareOfVoice entities={entities} competitorSource={report.competitor_source} />
         </LightCard>
 
         <DarkCard>

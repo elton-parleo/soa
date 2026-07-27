@@ -676,6 +676,12 @@ class PublicLiteStatusResponse(BaseModel):
     phase: str
     progress: Optional[PublicLiteProgress] = None
     scan_status: Optional[str] = None  # null until soa_lite_scan_results exists for this request
+    # Stage 13 (F3): both null until competitor generation completes
+    # (process_lite_requests, ahead of query generation) — not tied to
+    # phase/status otherwise, so the widget can render the chips the
+    # moment they're ready rather than waiting for the whole run.
+    competitors: Optional[List[str]] = None
+    competitor_source: Optional[str] = None
 
 
 class PublicLiteEntityMetrics(BaseModel):
@@ -831,6 +837,9 @@ class PublicLiteReportResponse(BaseModel):
     composite: Optional[float] = None
     scan_status: Optional[str] = None
     visibility_breakdown: Optional[PublicLiteVisibilityBreakdown] = None
+    # Stage 13 (W4/W5): drives the widget's solo-comparison fallback and
+    # the "auto-selected by ChatGPT" methodology stamp.
+    competitor_source: Optional[str] = None
 
 
 class PublicLiteTeaserEntity(BaseModel):
@@ -847,6 +856,9 @@ class PublicLiteTeaserResponse(BaseModel):
     accessibility: Optional[float] = None
     composite: Optional[float] = None
     scan_status: Optional[str] = None
+    # Stage 13 (W4/W5): same fallback/methodology-stamp signal as the
+    # full report (see PublicLiteReportResponse).
+    competitor_source: Optional[str] = None
 
 
 class PublicLiteEmailRequest(BaseModel):

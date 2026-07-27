@@ -261,3 +261,39 @@ describe('LiteProgress — Stage 12: status-page email card (E1)', () => {
     expect(screen.getByText('This takes a few minutes.')).toBeInTheDocument()
   })
 })
+
+describe('LiteProgress — Stage 13: identifying_competitors phase (F3)', () => {
+  it('shows the identifying-competitors message and live label', () => {
+    render(<LiteProgress phaseData={{ status: 'identifying_competitors', phase: 'identifying_competitors' }} />)
+    expect(screen.getByText('Identifying your closest competitors…')).toBeInTheDocument()
+    expect(screen.getByText('IDENTIFYING COMPETITORS')).toBeInTheDocument()
+  })
+})
+
+describe('LiteProgress — Stage 13: competitor chips (W2)', () => {
+  it('is omitted when the status payload carries no competitors yet', () => {
+    render(<LiteProgress phaseData={{ status: 'identifying_competitors', phase: 'identifying_competitors' }} />)
+    expect(screen.queryByText('Comparing against')).not.toBeInTheDocument()
+  })
+
+  it('is omitted when competitors is an empty array (solo run)', () => {
+    render(<LiteProgress phaseData={{
+      status: 'running', phase: 'running',
+      progress: { completed_runs: 1, total_runs: 12 }, competitors: [],
+    }} />)
+    expect(screen.queryByText('Comparing against')).not.toBeInTheDocument()
+  })
+
+  it('renders one outlined chip per competitor once populated', () => {
+    render(<LiteProgress phaseData={{
+      status: 'running', phase: 'running',
+      progress: { completed_runs: 1, total_runs: 12 },
+      competitors: ['Rival Co', 'Gen One', 'Gen Two'],
+    }} />)
+
+    expect(screen.getByText('Comparing against')).toBeInTheDocument()
+    expect(screen.getByText('Rival Co')).toBeInTheDocument()
+    expect(screen.getByText('Gen One')).toBeInTheDocument()
+    expect(screen.getByText('Gen Two')).toBeInTheDocument()
+  })
+})
