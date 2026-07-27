@@ -21,6 +21,7 @@ import httpx
 import pytest
 
 from scan import engine, fetcher
+from scan.site_typing import BRAND_ONLY_REASON, DISCOVERY_FAILURE_REASON
 
 ROBOTS_TXT = "User-agent: *\nSitemap: https://rich.example.com/sitemap.xml\n"
 
@@ -461,6 +462,84 @@ def test_brand_only_site_marks_f3_and_v3_na_and_rescales_total(monkeypatch):
     expected_total = int(round(applicable_score / applicable_max * 100))
     assert result.total_score == expected_total
     assert 0 <= result.total_score <= 100
+    assert result.dimensions["F3"]["evidence"][0] == f"protocol & feed presence is not applicable — {BRAND_ONLY_REASON}"
+    assert result.dimensions["V3"]["evidence"][0] == f"no product pages sampled — {BRAND_ONLY_REASON}"
+
+
+# ─── Stage 11 (T2): discovery failure — commerce signals, no PDPs ───────
+
+def test_commerce_signals_without_pdps_is_a_discovery_failure_never_brand_only(monkeypatch):
+    """Commerce signals present (a cart link) but no product pages
+    discoverable from sitemap or navigation — must degrade to
+    coverage='partial' with the honest reason, never a brand-only or
+    'not applicable' claim anywhere in the full serialized report."""
+    cart_homepage = """
+    <html><body>
+      <nav>
+        <a href="/cart">Cart (0)</a>
+        <a href="/rewards">Rewards</a>
+        <a href="/shipping-returns">Shipping &amp; Returns</a>
+      </nav>
+      <main>We sell things, but the crawl can't find the catalog this run.</main>
+    </body></html>
+    """
+    pages = {
+        "/robots.txt": ROBOTS_TXT,
+        "/sitemap.xml": "<?xml version=\"1.0\"?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"></urlset>",
+        "/rewards": LOYALTY_HTML,
+        "/shipping-returns": SHIPPING_HTML,
+        "rich.example.com": cart_homepage,
+    }
+    monkeypatch.setattr(httpx.Client, "get", _serve(pages))
+
+    result = engine.run_scan("https://rich.example.com")
+
+    assert result.status == "complete"
+    for code in ("F2", "V1", "V4"):
+        assert result.dimensions[code]["coverage"] == "partial"
+        assert result.dimensions[code]["evidence"] == [DISCOVERY_FAILURE_REASON]
+    # F3 is decoupled from PDP discovery (T3) — still scored normally,
+    # never na, regardless of the failed product-page sample.
+    assert result.dimensions["F3"]["coverage"] == "partial"
+    assert result.dimensions["F3"]["score"] >= 0
+
+    serialized = _json.dumps(result.dimensions).lower()
+    assert "brand-only" not in serialized
+    assert "brand_only" not in serialized
+    assert "not applicable" not in serialized
+
+
+# ─── Stage 11 (T4): not_found vs failed on /.well-known/mcp.json ────────
+
+def test_mcp_not_found_scores_absent_but_network_failure_excludes_the_subcheck(monkeypatch):
+    pages_404 = _base_pages()  # mcp.json not declared -> default_status 404 -> not_found
+
+    monkeypatch.setattr(httpx.Client, "get", _serve(pages_404))
+    result_404 = engine.run_scan("https://rich.example.com")
+    f3_404 = result_404.dimensions["F3"]
+    assert any("no MCP endpoint declaration found" in e for e in f3_404["evidence"])
+    assert not any("excluded from scoring" in e for e in f3_404["evidence"])
+
+    def fake_get_network_failure(self, url, headers=None):
+        if url.endswith("/.well-known/mcp.json"):
+            raise httpx.TimeoutException("timed out")
+        return _serve(_base_pages())(self, url, headers)
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get_network_failure)
+    result_failed = engine.run_scan("https://rich.example.com")
+    f3_failed = result_failed.dimensions["F3"]
+    assert any("could not verify MCP endpoint" in e for e in f3_failed["evidence"])
+    assert any("excluded from scoring" in e for e in f3_failed["evidence"])
+
+    # The excluded (unverifiable) check must not have been scored as
+    # absent — the remaining verifiable checks' weight rescales to fill
+    # the gap rather than losing points to an unknown.
+    other_checks_present = sum(
+        1 for e in f3_failed["evidence"]
+        if e in ("/llms.txt present and non-empty", "UCP/UIP capability markup present", "agentic-commerce hints present in structured data")
+    )
+    if other_checks_present:
+        assert f3_failed["score"] > 0
 
 
 # ─── A2 rescaling arithmetic (na-exclusion exact, total always in [0,100]) ──
@@ -485,3 +564,66 @@ def test_a2_total_score_matches_applicable_rescale_formula(monkeypatch, member_p
     expected = int(round(min(raw_pct, 59))) if result.integrity_capped else int(round(raw_pct))
     assert result.total_score == expected
     assert 0 <= result.total_score <= 100
+
+
+# ─── Stage 11 acceptance: allbirds-like end-to-end fixture ──────────────
+# A real network call to a third-party production domain isn't something
+# to make from an automated test — this fixture models allbirds.com's
+# actual observed shape instead (apex->www redirect, Shopify sitemapindex,
+# Shopify platform markers), exercising every Stage 11 layer together.
+
+def test_allbirds_like_fixture_resolves_www_and_scores_normally(monkeypatch):
+    product_html = _product_page_html("Wool Runner", "98.00", gtin="00012345678905", brand="Allbirds")
+
+    def fake_get(self, url, headers=None):
+        if url == "https://allbirds.com":
+            return httpx.Response(301, headers={"location": "https://www.allbirds.com/"}, request=httpx.Request("GET", url))
+        if url.endswith("/robots.txt"):
+            return httpx.Response(200, text="User-agent: *\nSitemap: https://www.allbirds.com/sitemap.xml\n", request=httpx.Request("GET", url))
+        if url.endswith("/sitemap.xml"):
+            return httpx.Response(200, text=(
+                '<?xml version="1.0"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                '<sitemap><loc>https://www.allbirds.com/sitemap_products_1.xml</loc></sitemap>'
+                '</sitemapindex>'
+            ), request=httpx.Request("GET", url))
+        if url.endswith("/sitemap_products_1.xml"):
+            return httpx.Response(200, text=(
+                '<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                '<url><loc>https://www.allbirds.com/products/wool-runner</loc></url>'
+                '</urlset>'
+            ), request=httpx.Request("GET", url))
+        if url == "https://www.allbirds.com/" or url == "https://www.allbirds.com":
+            return httpx.Response(200, text=(
+                '<html><head><link href="https://cdn.shopify.com/s/files/1/theme.css"></head>'
+                '<body><nav><a href="/cart">Cart</a><a href="/rewards">Rewards</a>'
+                '<a href="/shipping-returns">Shipping</a></nav></body></html>'
+            ), request=httpx.Request("GET", url))
+        if url.endswith("/products/wool-runner"):
+            return httpx.Response(200, text=product_html, request=httpx.Request("GET", url))
+        if url.endswith("/rewards"):
+            return httpx.Response(200, text=LOYALTY_HTML, request=httpx.Request("GET", url))
+        if url.endswith("/shipping-returns"):
+            return httpx.Response(200, text=SHIPPING_HTML, request=httpx.Request("GET", url))
+        return httpx.Response(404, text="", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    result = engine.run_scan("allbirds.com")
+
+    assert result.status == "complete"
+    # Canonical host resolved to www — every fetch after the initial
+    # apex redirect targets www, never a mix of the two.
+    non_initial_fetches = [f for f in result.pages_fetched if f["url"] != "https://allbirds.com"]
+    assert non_initial_fetches
+    assert all("www.allbirds.com" in f["url"] for f in non_initial_fetches)
+
+    initial_fetch = next(f for f in result.pages_fetched if f["url"] == "https://allbirds.com")
+    assert initial_fetch["final_url"] == "https://www.allbirds.com/"
+    assert initial_fetch["status"] != "blocked"
+    assert all(f["status"] != "blocked" for f in result.pages_fetched)
+
+    # Product pages were discovered via the sitemap and scored normally
+    # — F3/V3 never claim brand-only/not-applicable despite this being a
+    # real commerce catalog reached through index recursion.
+    assert result.dimensions["F3"]["coverage"] != "na"
+    assert result.dimensions["V3"]["coverage"] != "na"
+    assert "1/1 product pages expose machine-readable price" in result.dimensions["V1"]["evidence"]

@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
+from . import site_typing
+
 WEIGHTS = {
     "F1": 10, "F2": 15, "F3": 10,
     "V1": 15, "V2": 14, "V3": 14, "V4": 10, "V5": 12,
@@ -68,6 +70,37 @@ class DimensionScore:
 
 def _product_pages(pages):
     return [p for p in pages if p.candidate.kind == "product"]
+
+
+def _no_product_pages_score(
+    weight: float, site_type_result, fix: Optional[str], *, na_on_brand_only: bool = False,
+) -> DimensionScore:
+    """
+    Stage 11 (T2): a dimension whose scoring depends on sampled product
+    pages, when none were found, is scored differently depending on
+    WHY none were found — never as a blanket "not applicable" claim
+    (Stage 10 D5's old behavior, which conflated the two):
+      brand_only                 -> na_on_brand_only picks the coverage:
+                                     'na' for a dimension that was already
+                                     na-eligible under Stage 10 (V3), or
+                                     honestly zero at coverage='full' for
+                                     one that never was (F2/V1/V4) — a
+                                     non-commerce site just has nothing
+                                     for those to score, not "n/a".
+      commerce_discovery_failure  -> coverage='partial' with the honest
+                                     discovery-failure reason — the site
+                                     IS commerce, the crawl just couldn't
+                                     find its products this run.
+    """
+    if site_type_result.site_type == site_typing.SITE_TYPE_BRAND_ONLY:
+        return DimensionScore(
+            score=0.0, max=weight, coverage="na" if na_on_brand_only else "full",
+            evidence=[f"no product pages sampled — {site_type_result.reason}"],
+        )
+    return DimensionScore(
+        score=0.0, max=weight, coverage="partial",
+        evidence=[site_type_result.reason], fix=fix,
+    )
 
 
 def _parse_date(value) -> Optional[datetime]:
@@ -133,25 +166,27 @@ def score_f1_agent_access(discovery, pages) -> DimensionScore:
     return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix)
 
 
-def score_f2_catalog_context(pages) -> DimensionScore:
+def score_f2_catalog_context(pages, site_type_result) -> DimensionScore:
     """
     Stage 10 (D1): three sub-checks — completeness (name/price/
     availability, 40%), shipping/returns terms (absorbed from the old
     F3, 20%), and identifier presence + cross-page brand consistency
     (gtin/mpn/sku/brand, 40%) — identifiers are now a weighted sub-check
     comparable to name/price completeness, not an afterthought.
+
+    Stage 11 (T2): zero product pages sampled is scored differently
+    depending on why — see _no_product_pages_score.
     """
     weight = WEIGHTS["F2"]
     product_pages = _product_pages(pages)
-    evidence = []
 
     if not product_pages:
-        evidence.append("no product pages sampled")
-        return DimensionScore(
-            score=0.0, max=weight, evidence=evidence,
+        return _no_product_pages_score(
+            weight, site_type_result,
             fix="Publish Product+Offer JSON-LD on product pages so agents can read name, price, availability, and identifiers directly.",
         )
 
+    evidence = []
     completeness_weight = weight * 0.4
     shipping_weight = weight * 0.2
     identifier_weight = weight * 0.4
@@ -220,7 +255,7 @@ def score_f2_catalog_context(pages) -> DimensionScore:
     return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix)
 
 
-def score_f3_protocol_feed_presence(pages) -> DimensionScore:
+def score_f3_protocol_feed_presence(pages, site_type_result) -> DimensionScore:
     """
     Stage 10 (D2): rescoped from "Transaction Rails" to Protocol & Feed
     Presence. Scored, crawl-observable checks only: /llms.txt, an MCP
@@ -230,66 +265,81 @@ def score_f3_protocol_feed_presence(pages) -> DimensionScore:
     crawl-verifiable at all — always recorded as deferred_items (S2),
     never scored.
 
-    na for a brand-only site (D5): with no product pages found anywhere,
-    there is nothing here to check a protocol against.
+    Stage 11 (T3): na ONLY on a positively-typed non-commerce site —
+    completely decoupled from whether PDP sampling succeeded. A
+    discovery failure (commerce site, no product pages found this run)
+    still runs every one of these checks against the canonical origin.
+
+    Stage 11 (T4): llms.txt and the MCP well-known path each carry
+    their own fetch status — 'not_found' is checked-and-absent (scores
+    zero for that sub-check, still counts in the denominator);
+    'failed' (network/timeout/SSRF-abort) is unverified and is EXCLUDED
+    from the scored basis entirely, with an evidence note, rather than
+    scoring as absent. UCP and the agentic-commerce hint are markup-
+    derived from already-fetched pages with no fetch status of their
+    own, so they stay simple present/absent checks.
     """
     weight = WEIGHTS["F3"]
-    product_pages = _product_pages(pages)
 
-    if not product_pages:
+    if site_type_result.site_type == site_typing.SITE_TYPE_BRAND_ONLY:
         return DimensionScore(
             score=0.0, max=weight, coverage="na",
-            evidence=["no product pages found — protocol & feed presence is not applicable to a brand-only site"],
+            evidence=[f"protocol & feed presence is not applicable — {site_type_result.reason}"],
         )
 
-    llms_txt_present = any(
-        p.fetch_result.status == "fetched" and p.fetch_result.html and p.fetch_result.html.strip()
-        for p in pages if p.candidate.kind == "llms_txt"
-    )
-    mcp_well_known_present = any(
-        p.fetch_result.status == "fetched" and p.fetch_result.html and p.fetch_result.html.strip()
-        for p in pages if p.candidate.kind == "mcp_well_known"
-    )
+    llms_txt_page = next((p for p in pages if p.candidate.kind == "llms_txt"), None)
+    mcp_page = next((p for p in pages if p.candidate.kind == "mcp_well_known"), None)
 
     all_hints = [h for p in pages if p.extracted for h in p.extracted.agentic_protocol_hints]
     mcp_link_hint = any("mcp" in h.lower() for h in all_hints)
-    mcp_present = mcp_well_known_present or mcp_link_hint
     ucp_hint = any("ucp" in h.lower() or "uip" in h.lower() for h in all_hints)
     agentic_hint = any(
         any(kw in h.lower() for kw in ("agentic-commerce", "agent-discount", "machine-payable"))
         for h in all_hints
     )
 
-    per_check = weight / 4
-    points = 0.0
-    evidence = []
+    # Each check tuple: (verifiable, present, evidence string).
+    checks = []
 
-    if llms_txt_present:
-        points += per_check
-        evidence.append("/llms.txt present and non-empty")
+    if llms_txt_page is None:
+        checks.append((False, False, "could not verify /llms.txt — not attempted"))
     else:
-        evidence.append("/llms.txt not found or empty")
+        status = llms_txt_page.fetch_result.status
+        if status == "fetched":
+            present = bool(llms_txt_page.fetch_result.html and llms_txt_page.fetch_result.html.strip())
+            checks.append((True, present, "/llms.txt present and non-empty" if present else "/llms.txt fetched but empty"))
+        elif status == "not_found":
+            checks.append((True, False, "/llms.txt not found (404)"))
+        else:
+            checks.append((False, False, f"could not verify /llms.txt — {status}"))
 
-    if mcp_present:
-        points += per_check
+    if mcp_link_hint:
+        checks.append((True, True, "MCP endpoint declaration discoverable (link/meta markup)"))
+    elif mcp_page is None:
+        checks.append((False, False, "could not verify MCP endpoint — not attempted; no link markup found"))
+    else:
+        status = mcp_page.fetch_result.status
+        mcp_body_present = bool(mcp_page.fetch_result.html and mcp_page.fetch_result.html.strip())
+        if status == "fetched" and mcp_body_present:
+            checks.append((True, True, "MCP endpoint declaration discoverable (well-known path)"))
+        elif status in ("fetched", "not_found"):
+            checks.append((True, False, "no MCP endpoint declaration found (well-known path checked, absent; no link markup)"))
+        else:
+            checks.append((False, False, f"could not verify MCP endpoint — well-known path {status}; no link markup found"))
+
+    checks.append((True, ucp_hint, "UCP/UIP capability markup present" if ucp_hint else "no UCP/UIP capability markup found"))
+    checks.append((True, agentic_hint, "agentic-commerce hints present in structured data" if agentic_hint else "no agentic-commerce hints found in structured data"))
+
+    verifiable_checks = [c for c in checks if c[0]]
+    unverifiable_count = len(checks) - len(verifiable_checks)
+
+    per_check = weight / len(verifiable_checks) if verifiable_checks else 0.0
+    points = sum(per_check for c in verifiable_checks if c[1])
+    evidence = [c[2] for c in checks]
+    if unverifiable_count:
         evidence.append(
-            "MCP endpoint declaration discoverable"
-            + (" (well-known path)" if mcp_well_known_present else " (link/meta markup)")
+            f"{unverifiable_count} sub-check(s) excluded from scoring — network error, not counted as absent"
         )
-    else:
-        evidence.append("no MCP endpoint declaration found (well-known path or link markup)")
-
-    if ucp_hint:
-        points += per_check
-        evidence.append("UCP/UIP capability markup present")
-    else:
-        evidence.append("no UCP/UIP capability markup found")
-
-    if agentic_hint:
-        points += per_check
-        evidence.append("agentic-commerce hints present in structured data")
-    else:
-        evidence.append("no agentic-commerce hints found in structured data")
 
     fix = None
     if points < weight - 0.01:
@@ -304,13 +354,13 @@ def score_f3_protocol_feed_presence(pages) -> DimensionScore:
     )
 
 
-def score_v1_offer_legibility(pages) -> DimensionScore:
+def score_v1_offer_legibility(pages, site_type_result) -> DimensionScore:
     weight = WEIGHTS["V1"]
     product_pages = _product_pages(pages)
 
     if not product_pages:
-        return DimensionScore(
-            score=0.0, max=weight, evidence=["no product pages sampled"],
+        return _no_product_pages_score(
+            weight, site_type_result,
             fix="Publish machine-readable prices with declared currency on product pages.",
         )
 
@@ -376,17 +426,27 @@ def score_v2_loyalty_surface(pages) -> DimensionScore:
     return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix)
 
 
-def score_v3_member_value(pages) -> DimensionScore:
-    """na (D5) when no product pages were found at all, or when none of
-    the sampled product pages carry any Offer markup whatsoever — member
-    pricing has nothing to be encoded on for either kind of site."""
+def score_v3_member_value(pages, site_type_result) -> DimensionScore:
+    """
+    Stage 11 (T3): na when no product pages were found ONLY on a
+    positively-typed brand-only site (site_type_result) — a discovery
+    failure (commerce signals present, PDP sampling still came up
+    empty) instead gets coverage='partial' with the honest reason, via
+    _no_product_pages_score.
+
+    na unconditionally (unrelated to site typing, unchanged from Stage
+    10) when product pages WERE sampled but none of them carry any
+    Offer markup whatsoever — member pricing has nothing to be encoded
+    on regardless of why.
+    """
     weight = WEIGHTS["V3"]
     product_pages = _product_pages(pages)
 
     if not product_pages:
-        return DimensionScore(
-            score=0.0, max=weight, coverage="na",
-            evidence=["no product pages found — member pricing is not applicable to a brand-only site"],
+        return _no_product_pages_score(
+            weight, site_type_result,
+            fix="Expose member/tier pricing in structured data on product pages.",
+            na_on_brand_only=True,
         )
 
     any_offer_markup = any(
@@ -420,7 +480,7 @@ def score_v3_member_value(pages) -> DimensionScore:
     return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix)
 
 
-def score_v4_value_rails(pages) -> DimensionScore:
+def score_v4_value_rails(pages, site_type_result) -> DimensionScore:
     """
     Stage 10 (D3): three sub-checks, each 1/3 of the weight, mirroring
     the deal_cited rubric's own CONCRETE/ACTIVE/ACTIONABLE tests
@@ -435,8 +495,8 @@ def score_v4_value_rails(pages) -> DimensionScore:
     product_pages = _product_pages(pages)
 
     if not product_pages:
-        return DimensionScore(
-            score=0.0, max=weight, evidence=["no product pages sampled"],
+        return _no_product_pages_score(
+            weight, site_type_result,
             fix="Declare discounts/bundles as Offers with priceValidUntil, eligibility, and stackability terms.",
         )
 
