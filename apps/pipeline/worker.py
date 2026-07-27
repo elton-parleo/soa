@@ -636,6 +636,63 @@ def _sweep_lite_completions():
                     WHERE id = :id
                 """), {"id": lite_id})
 
+    # Isolated in its own try/except: a bug or outage in email delivery
+    # must never prevent the completion-transition logic above (rule 7
+    # in spirit — nothing about notifying the visitor may block the
+    # pipeline's own state machine).
+    try:
+        _send_pending_report_emails()
+    except Exception:
+        log.exception("[lite] report-ready email sweep failed unexpectedly")
+
+
+LITE_REPORT_BASE_URL = os.environ.get("LITE_REPORT_BASE_URL", "https://parleo.io")
+
+
+def _send_pending_report_emails():
+    """
+    Stage 12 (E3): sends the "your report is ready" email for every
+    completed lite request that has an email on file but hasn't been
+    sent yet. Runs on EVERY sweep pass (not just the completion
+    transition above), so it naturally covers both orderings — email
+    set before completion, or after — and retries a transient send
+    failure on the next pass rather than losing it. Never raises: a
+    send failure is logged and simply left for the next pass to retry.
+    """
+    from email_sender import get_email_sender
+
+    with engine.begin() as conn:
+        rows = conn.execute(text("""
+            SELECT id, token, email, brand_name
+            FROM soa_lite_requests
+            WHERE status = 'complete'
+              AND email IS NOT NULL
+              AND report_email_sent_at IS NULL
+        """)).fetchall()
+
+        if not rows:
+            return
+
+        sender = get_email_sender()
+        for lite_id, token, email, brand_name in rows:
+            report_url = f"{LITE_REPORT_BASE_URL}/report/{token}"
+            try:
+                sent = sender.send_report_ready(email, report_url, brand_name)
+            except Exception:
+                log.exception(f"[lite] request {lite_id}: unexpected error sending report-ready email")
+                sent = False
+
+            if sent:
+                conn.execute(text("""
+                    UPDATE soa_lite_requests
+                    SET report_email_sent_at = NOW()
+                    WHERE id = :id
+                """), {"id": lite_id})
+            else:
+                log.warning(
+                    f"[lite] request {lite_id}: report-ready email send failed — will retry next sweep pass"
+                )
+
 
 def main():
     log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")

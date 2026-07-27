@@ -257,6 +257,27 @@ export function formatDateStamp(date = new Date()) {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+/** Stage 12 (E4): display-only masking for the status-page email
+ * confirmation ("a***@company.com") — the address itself is never put
+ * in a URL; this is purely so the on-screen confirmation doesn't show
+ * the visitor's own input back in full for anyone glancing at the
+ * screen. Never used for the value actually sent to the API. */
+export function maskEmail(email) {
+  const value = (email || '').trim()
+  if (!value.includes('@')) return value
+  const [local, domain] = value.split('@')
+  const maskedLocal = local.length <= 1 ? `${local}***` : `${local[0]}***`
+  return `${maskedLocal}@${domain}`
+}
+
+/** Stage 12: formats whole seconds as "m:ss" for the elapsed-time counter. */
+export function formatElapsed(totalSeconds) {
+  const safe = Math.max(0, Math.floor(totalSeconds || 0))
+  const m = Math.floor(safe / 60)
+  const s = safe % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 export function formatCurrency(value) {
   const n = Number(value) || 0
   return `$${Math.round(n).toLocaleString('en-US')}`

@@ -81,6 +81,7 @@ def db(monkeypatch):
                 competitor_names TEXT, brand_entity_id INTEGER, competitor_entity_ids TEXT,
                 study_type TEXT, store_url TEXT, cycle_id INTEGER, status TEXT DEFAULT 'pending',
                 error_message TEXT, ip_hash TEXT, organization_id INTEGER,
+                report_email_sent_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
             )
         """)
@@ -550,3 +551,119 @@ def test_worker_crash_mid_scan_does_not_reprocess_and_sweep_recovers(db):
     scan_status, _, _, _, _, scan_error, _ = _scan_row_by_token(db.connect(), "crash001")
     assert scan_status == "failed"
     assert scan_error == "scan timed out"
+
+
+# ── Stage 12 (E3): report-ready email delivery ──────────────────────────
+
+def _insert_complete_lite(conn, token, email=None, brand="Acme"):
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_requests (token, brand_name, email, status) "
+        "VALUES (?, ?, ?, 'complete')",
+        (token, brand, email),
+    )
+
+
+def _sent_at_by_token(conn, token):
+    return conn.exec_driver_sql(
+        "SELECT report_email_sent_at FROM soa_lite_requests WHERE token = ?", (token,)
+    ).fetchone()[0]
+
+
+class _FakeSender:
+    """Records every call and returns a scripted True/False per call, so
+    tests can assert exactly how many times send was attempted."""
+
+    def __init__(self, results):
+        self._results = list(results)
+        self.calls = []
+
+    def send_report_ready(self, to, report_url, brand_name):
+        self.calls.append((to, report_url, brand_name))
+        return self._results.pop(0) if self._results else True
+
+
+def test_sweep_sends_report_ready_email_exactly_once(db):
+    with db.begin() as conn:
+        _insert_complete_lite(conn, "mail0001", email="visitor@example.com", brand="Acme")
+
+    fake = _FakeSender([True])
+    with patch("email_sender.get_email_sender", return_value=fake):
+        worker._sweep_lite_completions()
+        worker._sweep_lite_completions()  # second pass must not resend
+
+    assert len(fake.calls) == 1
+    to, report_url, brand_name = fake.calls[0]
+    assert to == "visitor@example.com"
+    assert report_url.endswith("/report/mail0001")
+    assert brand_name == "Acme"
+    assert _sent_at_by_token(db.connect(), "mail0001") is not None
+
+
+def test_sweep_retries_send_failure_on_next_pass_and_completion_unaffected(db):
+    with db.begin() as conn:
+        _insert_complete_lite(conn, "retry001", email="visitor@example.com")
+
+    fake = _FakeSender([False, True])
+    with patch("email_sender.get_email_sender", return_value=fake):
+        worker._sweep_lite_completions()
+        assert _sent_at_by_token(db.connect(), "retry001") is None
+        status, *_ = _lite_row_by_token(db.connect(), "retry001")
+        assert status == "complete"  # a send failure never blocks/reverts completion
+
+        worker._sweep_lite_completions()
+
+    assert len(fake.calls) == 2
+    assert _sent_at_by_token(db.connect(), "retry001") is not None
+
+
+def test_sweep_skips_requests_with_no_email_on_file(db):
+    with db.begin() as conn:
+        _insert_complete_lite(conn, "noemail1", email=None)
+
+    fake = _FakeSender([True])
+    with patch("email_sender.get_email_sender", return_value=fake):
+        worker._sweep_lite_completions()
+
+    assert fake.calls == []
+
+
+def test_sweep_does_not_send_before_request_completes(db):
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, brand_name, email, status) "
+            "VALUES (?, ?, ?, 'running')",
+            ("stillrun", "Acme", "visitor@example.com"),
+        )
+
+    fake = _FakeSender([True])
+    with patch("email_sender.get_email_sender", return_value=fake):
+        worker._sweep_lite_completions()
+
+    assert fake.calls == []
+
+
+def test_sweep_uses_logsender_by_default_and_masks_email_in_logs(db, monkeypatch, caplog):
+    monkeypatch.delenv("RESEND_API_KEY", raising=False)
+    monkeypatch.delenv("EMAIL_FROM", raising=False)
+    with db.begin() as conn:
+        _insert_complete_lite(conn, "logmail1", email="visitor@example.com", brand="Acme")
+
+    with caplog.at_level("INFO"):
+        worker._sweep_lite_completions()
+
+    assert _sent_at_by_token(db.connect(), "logmail1") is not None
+    assert "visitor@example.com" not in caplog.text
+    assert "v***@example.com" in caplog.text
+
+
+def test_email_body_contains_report_url_and_no_score_language():
+    from email_sender import _email_html, _email_text
+
+    report_url = "https://parleo.io/report/abc123token"
+    text = _email_text(report_url, "Acme")
+    html = _email_html(report_url, "Acme")
+
+    assert report_url in text
+    assert report_url in html
+    assert "score" not in text.lower()
+    assert "score" not in html.lower()

@@ -1451,6 +1451,19 @@ class SoaLiteRequest(Base):
 
     error_message = Column(Text, nullable=True)
 
+    report_email_sent_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment=(
+            "Stage 12 (E3): set once the 'your report is ready' email has "
+            "been sent. Null means not sent yet — checked alongside "
+            "status='complete' and email IS NOT NULL by "
+            "_sweep_lite_completions on every pass, so a request that "
+            "completes before an email is on file, or a transient send "
+            "failure, is retried on a later pass rather than lost."
+        ),
+    )
+
     ip_hash = Column(
         Text,
         nullable=True,

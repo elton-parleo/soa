@@ -35,6 +35,16 @@ def db(monkeypatch):
             )
         """)
         conn.exec_driver_sql("""
+            CREATE TABLE soa_runs (
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, status TEXT
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_coded_mentions (
+                id INTEGER PRIMARY KEY, run_id INTEGER
+            )
+        """)
+        conn.exec_driver_sql("""
             CREATE TABLE soa_entities (
                 id INTEGER PRIMARY KEY, name TEXT, slug TEXT UNIQUE, entity_type TEXT
             )
@@ -98,11 +108,15 @@ def test_stores_email_when_running_and_returns_progress_phase(db):
     with db.begin() as conn:
         conn.exec_driver_sql(
             "INSERT INTO soa_cycles (id, status, completed_runs, total_runs_planned) "
-            "VALUES (1, 'running', 6, 12)"
+            "VALUES (1, 'running', 0, 12)"
         )
         conn.exec_driver_sql(
             "INSERT INTO soa_lite_requests (token, status, cycle_id) VALUES ('t1', 'running', 1)"
         )
+        # Stage 12: progress is now derived live from soa_runs, not the
+        # (stale, once-written) soa_cycles.completed_runs column.
+        for _ in range(6):
+            conn.exec_driver_sql("INSERT INTO soa_runs (cycle_id, status) VALUES (1, 'success')")
 
     result = public_lite.set_lite_email("t1", _email())
 

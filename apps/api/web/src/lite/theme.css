@@ -276,6 +276,46 @@
 .lite-badge-dot--warn { background: var(--warn); }
 .lite-badge-dot--bad { background: var(--bad); }
 
+/* ── Stage 12 (R1): running indicator — pulsing dot + bar shimmer ───
+ * Pure CSS, no animation library. The existing blanket
+ * prefers-reduced-motion rule below (transition/animation-duration:
+ * 0.01ms) already neutralizes the timing for these; LiteProgress.jsx
+ * additionally swaps to a static "●" glyph via a JS media-query check
+ * so the fallback is a real, assertable markup difference, not just an
+ * imperceptibly-fast animation. */
+@keyframes lite-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.lite-live-dot {
+  display: inline-block;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent);
+  animation: lite-pulse 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes lite-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.lite-bar-fill--shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.lite-bar-fill--shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 100%
+  );
+  animation: lite-shimmer 1.6s ease-in-out infinite;
+}
+
 /* ── Focus visibility ────────────────────────────────────────────── */
 
 .lite-root a:focus-visible,

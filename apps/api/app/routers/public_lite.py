@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -139,15 +140,61 @@ def _enforce_rate_limits(conn, ip_hash: str, now: datetime) -> None:
 
 # ─── Phase derivation ────────────────────────────────────────────────────
 
-def _derive_phase(lite_status, cycle_status, completed_runs, total_runs_planned):
+@dataclass
+class _LiveProgressCounts:
     """
-    Maps (lite_status, cycle_status, completed_runs, total_runs_planned)
-    to the public phase enum. completed_runs is only written once, at the
-    end of the Runner stage (see RunOrchestrator._finalize_cycle) — not
-    incrementally — and stays at that value through Coding/Metrics while
-    cycle_status remains 'running' the whole time. So
-    completed_runs >= total_runs_planned while still 'running' reliably
-    means "runs done, coding/metrics still in progress" -> 'analyzing'.
+    Stage 12 (P1): soa_cycles.completed_runs is written exactly ONCE, at
+    the very end of the Runner stage (see RunOrchestrator._finalize_cycle)
+    — never incrementally — which is why the status page used to sit at
+    "0 of 12" the entire time queries were actually running, then jump
+    straight to done. Each of the 12 runs IS persisted individually as it
+    completes (RunOrchestrator._upsert_run writes to soa_runs immediately),
+    so progress is derived here by counting those rows live instead —
+    a pure read, so there's no crash-consistency risk of its own: a
+    worker restart mid-phase can't double-count or regress a count that's
+    never written incrementally in the first place.
+    """
+    resolved_runs: int   # success + error + timeout — "attempted", regardless of outcome
+    success_runs: int    # only successes are eligible for coding
+    coded_runs: int      # distinct soa_runs.id with at least one soa_coded_mentions row
+
+
+def _fetch_live_progress_counts(conn, cycle_id: int) -> _LiveProgressCounts:
+    """SUM(CASE WHEN...) rather than Postgres-only FILTER(WHERE...) so this
+    runs identically against SQLite in tests."""
+    row = conn.execute(text("""
+        SELECT
+            SUM(CASE WHEN status IN ('success', 'error', 'timeout') THEN 1 ELSE 0 END),
+            SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END)
+        FROM soa_runs WHERE cycle_id = :cid
+    """), {"cid": cycle_id}).fetchone()
+    resolved_runs = int(row[0] or 0) if row else 0
+    success_runs = int(row[1] or 0) if row else 0
+
+    coded_runs = 0
+    if success_runs:
+        coded_row = conn.execute(text("""
+            SELECT COUNT(DISTINCT cm.run_id)
+            FROM soa_coded_mentions cm
+            JOIN soa_runs r ON r.id = cm.run_id
+            WHERE r.cycle_id = :cid
+        """), {"cid": cycle_id}).fetchone()
+        coded_runs = int(coded_row[0] or 0) if coded_row else 0
+
+    return _LiveProgressCounts(resolved_runs=resolved_runs, success_runs=success_runs, coded_runs=coded_runs)
+
+
+def _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts: "_LiveProgressCounts | None"):
+    """
+    Maps (lite_status, cycle_status, total_runs_planned, live_counts) to
+    the public phase enum: queued -> generating_queries -> running ->
+    coding -> metrics -> complete (or failed at any point). live_counts is
+    None whenever there's no cycle yet to count against (see
+    _fetch_live_progress_counts) — callers only compute it when cycle_id
+    is set. The Agent Scan is intentionally NOT one of these phases: it
+    runs in parallel and is already surfaced on its own scan_status field
+    (rule 7 — never blocks the report), so folding it into this sequence
+    would misrepresent it as a blocking stage.
     Returns (phase: str, progress: PublicLiteProgress | None).
     """
     if lite_status == 'pending':
@@ -170,14 +217,19 @@ def _derive_phase(lite_status, cycle_status, completed_runs, total_runs_planned)
     if cycle_status == 'complete':
         return 'complete', None
 
-    progress = None
-    if total_runs_planned:
-        progress = PublicLiteProgress(
-            completed_runs=completed_runs or 0, total_runs=total_runs_planned,
-        )
-        if (completed_runs or 0) >= total_runs_planned:
-            return 'analyzing', progress
-    return 'running', progress
+    if not total_runs_planned or live_counts is None:
+        return 'running', None
+
+    progress = PublicLiteProgress(completed_runs=live_counts.resolved_runs, total_runs=total_runs_planned)
+
+    if live_counts.resolved_runs < total_runs_planned:
+        return 'running', progress
+    if live_counts.success_runs > 0 and live_counts.coded_runs < live_counts.success_runs:
+        return 'coding', progress
+    # Every resolved run that could be coded, is — either genuinely in
+    # Metrics now, or the cycle just hasn't flipped to 'complete' yet
+    # (the brief window before _sweep_lite_completions catches up).
+    return 'metrics', progress
 
 
 # ─── Agent Scan shaping ──────────────────────────────────────────────────
@@ -601,18 +653,20 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
 def get_lite_status(token: str):
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT lr.status, c.status, c.completed_runs, c.total_runs_planned, sr.status
+            SELECT lr.status, c.id, c.status, c.total_runs_planned, sr.status
             FROM soa_lite_requests lr
             LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
             LEFT JOIN soa_lite_scan_results sr ON sr.lite_request_id = lr.id
             WHERE lr.token = :token
         """), {"token": token}).fetchone()
 
-    if not row:
-        raise HTTPException(status_code=404, detail="Not found.")
+        if not row:
+            raise HTTPException(status_code=404, detail="Not found.")
 
-    lite_status, cycle_status, completed_runs, total_runs_planned, scan_status = row
-    phase, progress = _derive_phase(lite_status, cycle_status, completed_runs, total_runs_planned)
+        lite_status, cycle_id, cycle_status, total_runs_planned, scan_status = row
+        live_counts = _fetch_live_progress_counts(conn, cycle_id) if cycle_id else None
+
+    phase, progress = _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts)
 
     return PublicLiteStatusResponse(status=lite_status, phase=phase, progress=progress, scan_status=scan_status)
 
@@ -649,7 +703,7 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
     """
     with engine.begin() as conn:
         row = conn.execute(text("""
-            SELECT lr.id, lr.status, lr.cycle_id, c.status, c.completed_runs, c.total_runs_planned
+            SELECT lr.id, lr.status, lr.cycle_id, c.status, c.total_runs_planned
             FROM soa_lite_requests lr
             LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
             WHERE lr.token = :token
@@ -658,14 +712,15 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
         if not row:
             raise HTTPException(status_code=404, detail="Not found.")
 
-        lite_request_id, lite_status, cycle_id, cycle_status, completed_runs, total_runs_planned = row
+        lite_request_id, lite_status, cycle_id, cycle_status, total_runs_planned = row
 
         conn.execute(text("""
             UPDATE soa_lite_requests SET email = :email, updated_at = NOW() WHERE token = :token
         """), {"email": data.email, "token": token})
 
         if lite_status != 'complete':
-            phase, progress = _derive_phase(lite_status, cycle_status, completed_runs, total_runs_planned)
+            live_counts = _fetch_live_progress_counts(conn, cycle_id) if cycle_id else None
+            phase, progress = _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts)
             return PublicLiteStatusResponse(status=lite_status, phase=phase, progress=progress).model_dump()
 
         return _build_report_payload(conn, lite_request_id, cycle_id, data.email)
