@@ -17,6 +17,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 
 import app.routers.public_lite as public_lite
+from soa_shared.models.soa_models import LITE_STATUSES
 
 
 @pytest.fixture
@@ -357,3 +358,24 @@ def test_derive_phase_no_total_runs_planned_is_running_with_no_progress():
     phase, progress = public_lite._derive_phase("running", "running", None, counts)
     assert phase == "running"
     assert progress is None
+
+
+# ─── Stage 14 (P1/T2): exhaustive dispatch — no LITE_STATUSES value may
+# hit the unexpected-status fallback (the Stage 13 incident's blast
+# radius: an unmapped lite_status silently guessed at as 'running'
+# instead of being logged) ──────────────────────────────────────────────
+
+@pytest.mark.parametrize("lite_status", LITE_STATUSES)
+def test_derive_phase_never_hits_unexpected_fallback_for_a_known_status(lite_status, caplog):
+    with caplog.at_level("ERROR"):
+        phase, _ = public_lite._derive_phase(lite_status, "planned", None, None)
+    assert phase is not None
+    assert not any("unexpected lite_status" in r.message for r in caplog.records)
+
+
+def test_derive_phase_unknown_status_logs_and_degrades_safely(caplog):
+    with caplog.at_level("ERROR"):
+        phase, progress = public_lite._derive_phase("reticulating_splines", None, None, None)
+    assert phase == "running"
+    assert progress is None
+    assert any("unexpected lite_status" in r.message and "reticulating_splines" in r.message for r in caplog.records)

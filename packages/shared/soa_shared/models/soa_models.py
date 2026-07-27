@@ -1361,11 +1361,34 @@ class SoaRecommendation(Base):
 # 'Parleo Lead Gen' organization — see soa_shared/org_helpers.py.
 # ---------------------------------------------------------------------------
 
+# Stage 14 (S2): single source of truth for soa_lite_requests.status —
+# the CheckConstraint below is built FROM this tuple, and worker.py/
+# public_lite.py import the named constants for every status WRITE, so
+# a status the code writes but the DB constraint doesn't allow (the
+# Stage 13 incident: 'identifying_competitors' shipped in code before
+# the constraint was updated to match, crash-looping the same stuck
+# row on every poll) fails a CI parity test instead of reaching prod.
+LITE_STATUS_PENDING = "pending"
+LITE_STATUS_IDENTIFYING_COMPETITORS = "identifying_competitors"
+LITE_STATUS_GENERATING = "generating"
+LITE_STATUS_RUNNING = "running"
+LITE_STATUS_COMPLETE = "complete"
+LITE_STATUS_FAILED = "failed"
+LITE_STATUSES = (
+    LITE_STATUS_PENDING,
+    LITE_STATUS_IDENTIFYING_COMPETITORS,
+    LITE_STATUS_GENERATING,
+    LITE_STATUS_RUNNING,
+    LITE_STATUS_COMPLETE,
+    LITE_STATUS_FAILED,
+)
+
+
 class SoaLiteRequest(Base):
     __tablename__ = "soa_lite_requests"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending','generating','running','complete','failed')",
+            "status IN (" + ", ".join(f"'{s}'" for s in LITE_STATUSES) + ")",
             name="ck_soa_lite_requests_status",
         ),
         Index("ix_soa_lite_requests_status", "status"),

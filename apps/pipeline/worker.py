@@ -33,6 +33,13 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(__file__))
 
 from soa_shared.database import engine
+from soa_shared.models.soa_models import (
+    LITE_STATUS_COMPLETE,
+    LITE_STATUS_FAILED,
+    LITE_STATUS_GENERATING,
+    LITE_STATUS_IDENTIFYING_COMPETITORS,
+    LITE_STATUS_RUNNING,
+)
 from sqlalchemy import text
 
 logging.basicConfig(
@@ -340,16 +347,28 @@ LITE_CREATED_BY = "soa-lite"
 
 
 def _mark_lite_failed(request_id: int, error: str):
-    with engine.connect() as conn:
-        conn.execute(text("""
-            UPDATE soa_lite_requests
-            SET status = 'failed',
-                error_message = :err,
-                updated_at = NOW()
-            WHERE id = :id
-        """), {"id": request_id, "err": error[:1000]})
-        conn.commit()
-    log.error(f"[lite] request {request_id} failed: {error}")
+    """
+    Stage 14 (W3): never raises. This is the last-resort failure path —
+    a worker that can crash while recording a crash is the same bug one
+    level down — so any failure here (DB unreachable, etc.) is caught
+    and logged at CRITICAL rather than propagating.
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE soa_lite_requests
+                SET status = :status,
+                    error_message = :err,
+                    updated_at = NOW()
+                WHERE id = :id
+            """), {"status": LITE_STATUS_FAILED, "id": request_id, "err": error[:1000]})
+            conn.commit()
+        log.error(f"[lite] request {request_id} failed: {error}")
+    except Exception:
+        log.critical(
+            f"[lite] request {request_id}: FAILED TO RECORD FAILURE (original error: {error!r}) — giving up",
+            exc_info=True,
+        )
 
 
 def process_lite_requests():
@@ -364,9 +383,17 @@ def process_lite_requests():
     existing planned-cycle poll unchanged (get_next_planned_cycle/
     execute_cycle) — running -> complete/failed is mirrored onto this row
     by _sweep_lite_completions once the cycle finishes, not written here.
-    Any exception while resolving entities, generating queries, or
-    creating the cycle marks this row 'failed' directly (mirrors
-    _mark_generation_failed).
+
+    Stage 14 (W1): the ENTIRE per-request body — including the very
+    first status write — runs inside one try/except, so ANY failure
+    marks this row 'failed' via _mark_lite_failed (its own, fresh
+    connection) rather than leaving it 'pending'. A row stuck 'pending'
+    poisons every future poll: the SELECT below is oldest-first with no
+    offset, so it re-picks the SAME row forever, permanently blocking
+    every request submitted after it. This is exactly what happened
+    when the 'identifying_competitors' status write (added ahead of
+    the DB constraint that allowed it) landed outside this try block —
+    see LITE_STATUSES in soa_shared/models/soa_models.py.
     """
     with engine.connect() as conn:
         row = conn.execute(text("""
@@ -377,31 +404,31 @@ def process_lite_requests():
             LIMIT 1
         """)).fetchone()
 
-        if not row:
-            return
+    if not row:
+        return
 
-        request_id, token, brand_name, competitor_names, store_url = row
-
-        conn.execute(text("""
-            UPDATE soa_lite_requests
-            SET status = 'identifying_competitors', updated_at = NOW()
-            WHERE id = :id
-        """), {"id": request_id})
-        conn.commit()
-
-    log.info(f"[lite] Starting request {request_id} for brand '{brand_name}'")
-
-    # JSON columns normally come back already-decoded (psycopg2 parses
-    # json/jsonb natively); defensively handle a driver that returns the
-    # raw string instead, same idiom as cycles.py::_row_to_cycle.
-    if isinstance(competitor_names, str):
-        competitor_names = json.loads(competitor_names)
-    manual_competitor_names = competitor_names or []
-    token8 = token[:8]
-    study_type = f"lite-{token8}"
-    cycle_code = f"lite-{token8}"
+    request_id, token, brand_name, competitor_names, store_url = row
 
     try:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                UPDATE soa_lite_requests
+                SET status = :status, updated_at = NOW()
+                WHERE id = :id
+            """), {"status": LITE_STATUS_IDENTIFYING_COMPETITORS, "id": request_id})
+
+        log.info(f"[lite] Starting request {request_id} for brand '{brand_name}'")
+
+        # JSON columns normally come back already-decoded (psycopg2 parses
+        # json/jsonb natively); defensively handle a driver that returns the
+        # raw string instead, same idiom as cycles.py::_row_to_cycle.
+        if isinstance(competitor_names, str):
+            competitor_names = json.loads(competitor_names)
+        manual_competitor_names = competitor_names or []
+        token8 = token[:8]
+        study_type = f"lite-{token8}"
+        cycle_code = f"lite-{token8}"
+
         api_key = os.environ.get("OPEN_AI_API_KEY")
         if not api_key:
             raise RuntimeError("OPEN_AI_API_KEY not set")
@@ -438,12 +465,13 @@ def process_lite_requests():
                 UPDATE soa_lite_requests
                 SET competitor_names = :names,
                     competitor_source = :source,
-                    status = 'generating',
+                    status = :status,
                     updated_at = NOW()
                 WHERE id = :id
             """), {
                 "names":  json.dumps(competitor_names),
                 "source": competitor_source,
+                "status": LITE_STATUS_GENERATING,
                 "id":     request_id,
             })
 
@@ -517,9 +545,9 @@ def process_lite_requests():
 
             conn.execute(text("""
                 UPDATE soa_lite_requests
-                SET cycle_id = :cid, status = 'running', updated_at = NOW()
+                SET cycle_id = :cid, status = :status, updated_at = NOW()
                 WHERE id = :id
-            """), {"cid": cycle_id, "id": request_id})
+            """), {"cid": cycle_id, "status": LITE_STATUS_RUNNING, "id": request_id})
 
             # Created atomically with the running transition — not in a
             # separate transaction — so there is no window where this
@@ -631,10 +659,17 @@ def _sweep_lite_completions():
     be stuck 'running' forever because of the scan (rule 7), so a scan
     row stuck 'running' for >= SCAN_TIMEOUT_MINUTES is force-marked
     'failed' here before the completion check proceeds.
+
+    Stage 14 (W2): the SELECT is read-only, run once; each matched
+    row's transition then gets its own connection/transaction AND its
+    own try/except, so one bad row (a constraint violation, or any
+    other DB error) can't roll back or block every other row's
+    completion in the same sweep pass — it's simply logged and retried
+    on the next pass.
     """
     now = datetime.now(timezone.utc)
 
-    with engine.begin() as conn:
+    with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT lr.id, c.status, sr.id, sr.status, sr.updated_at
             FROM soa_lite_requests lr
@@ -644,33 +679,37 @@ def _sweep_lite_completions():
               AND c.status IN ('complete', 'failed')
         """)).fetchall()
 
-        for lite_id, cycle_status, scan_id, scan_status, scan_updated_at in rows:
-            if scan_status not in SCAN_TERMINAL_STATUSES:
-                scan_age = _as_utc_datetime(scan_updated_at)
-                stuck = scan_age is not None and (now - scan_age) >= timedelta(minutes=SCAN_TIMEOUT_MINUTES)
-                if not stuck:
-                    continue  # scan legitimately still running — check again next pass
+    for lite_id, cycle_status, scan_id, scan_status, scan_updated_at in rows:
+        try:
+            with engine.begin() as conn:
+                if scan_status not in SCAN_TERMINAL_STATUSES:
+                    scan_age = _as_utc_datetime(scan_updated_at)
+                    stuck = scan_age is not None and (now - scan_age) >= timedelta(minutes=SCAN_TIMEOUT_MINUTES)
+                    if not stuck:
+                        continue  # scan legitimately still running — check again next pass
 
-                conn.execute(text("""
-                    UPDATE soa_lite_scan_results
-                    SET status = 'failed', error = 'scan timed out', updated_at = NOW()
-                    WHERE id = :id
-                """), {"id": scan_id})
+                    conn.execute(text("""
+                        UPDATE soa_lite_scan_results
+                        SET status = 'failed', error = 'scan timed out', updated_at = NOW()
+                        WHERE id = :id
+                    """), {"id": scan_id})
 
-            if cycle_status == 'complete':
-                conn.execute(text("""
-                    UPDATE soa_lite_requests
-                    SET status = 'complete', updated_at = NOW()
-                    WHERE id = :id
-                """), {"id": lite_id})
-            else:
-                conn.execute(text("""
-                    UPDATE soa_lite_requests
-                    SET status = 'failed',
-                        error_message = 'Cycle failed during execution.',
-                        updated_at = NOW()
-                    WHERE id = :id
-                """), {"id": lite_id})
+                if cycle_status == 'complete':
+                    conn.execute(text("""
+                        UPDATE soa_lite_requests
+                        SET status = :status, updated_at = NOW()
+                        WHERE id = :id
+                    """), {"status": LITE_STATUS_COMPLETE, "id": lite_id})
+                else:
+                    conn.execute(text("""
+                        UPDATE soa_lite_requests
+                        SET status = :status,
+                            error_message = 'Cycle failed during execution.',
+                            updated_at = NOW()
+                        WHERE id = :id
+                    """), {"status": LITE_STATUS_FAILED, "id": lite_id})
+        except Exception:
+            log.exception(f"[lite] request {lite_id}: completion sweep failed for this row — will retry next pass")
 
     # Isolated in its own try/except: a bug or outage in email delivery
     # must never prevent the completion-transition logic above (rule 7
@@ -694,10 +733,15 @@ def _send_pending_report_emails():
     set before completion, or after — and retries a transient send
     failure on the next pass rather than losing it. Never raises: a
     send failure is logged and simply left for the next pass to retry.
+
+    Stage 14 (W2): the SELECT is read-only, run once; each row's send
+    attempt (already isolated) and its report_email_sent_at write
+    (newly isolated here, its own connection/transaction) can no longer
+    take down or roll back any other row in the same pass.
     """
     from email_sender import get_email_sender
 
-    with engine.begin() as conn:
+    with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT id, token, email, brand_name
             FROM soa_lite_requests
@@ -706,28 +750,35 @@ def _send_pending_report_emails():
               AND report_email_sent_at IS NULL
         """)).fetchall()
 
-        if not rows:
-            return
+    if not rows:
+        return
 
-        sender = get_email_sender()
-        for lite_id, token, email, brand_name in rows:
-            report_url = f"{LITE_REPORT_BASE_URL}/report/{token}"
-            try:
-                sent = sender.send_report_ready(email, report_url, brand_name)
-            except Exception:
-                log.exception(f"[lite] request {lite_id}: unexpected error sending report-ready email")
-                sent = False
+    sender = get_email_sender()
+    for lite_id, token, email, brand_name in rows:
+        report_url = f"{LITE_REPORT_BASE_URL}/report/{token}"
+        try:
+            sent = sender.send_report_ready(email, report_url, brand_name)
+        except Exception:
+            log.exception(f"[lite] request {lite_id}: unexpected error sending report-ready email")
+            sent = False
 
-            if sent:
+        if not sent:
+            log.warning(
+                f"[lite] request {lite_id}: report-ready email send failed — will retry next sweep pass"
+            )
+            continue
+
+        try:
+            with engine.begin() as conn:
                 conn.execute(text("""
                     UPDATE soa_lite_requests
                     SET report_email_sent_at = NOW()
                     WHERE id = :id
                 """), {"id": lite_id})
-            else:
-                log.warning(
-                    f"[lite] request {lite_id}: report-ready email send failed — will retry next sweep pass"
-                )
+        except Exception:
+            log.exception(
+                f"[lite] request {lite_id}: failed to record report_email_sent_at — will retry next sweep pass"
+            )
 
 
 def main():

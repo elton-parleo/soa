@@ -10,11 +10,13 @@ shape here is a PUBLIC CONTRACT the widget depends on directly (see the
 docstring block in schemas.py above PublicLiteSubmitRequest).
 
 State machine (written by apps/pipeline/worker.py::process_lite_requests
-and _sweep_lite_completions): pending -> generating -> running -> complete
-| failed. This router only ever reads that machine (GET endpoints) or
-performs the two writes visitors are allowed to trigger themselves:
-creating a request (POST) and attaching an email to unlock the report
-(PATCH) — it never advances the pipeline state itself.
+and _sweep_lite_completions): pending -> identifying_competitors ->
+generating -> running -> complete | failed. The full set of valid values
+is LITE_STATUSES (soa_shared/models/soa_models.py), enforced by
+ck_soa_lite_requests_status. This router only ever reads that machine
+(GET endpoints) or performs the two writes visitors are allowed to
+trigger themselves: creating a request (POST) and attaching an email to
+unlock the report (PATCH) — it never advances the pipeline state itself.
 """
 import hashlib
 import json
@@ -29,6 +31,7 @@ from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import text
 
 from soa_shared.database import engine, session_factory
+from soa_shared.models.soa_models import LITE_STATUS_PENDING
 from soa_shared.org_helpers import get_or_create_leadgen_org
 from app.routers.metrics import build_entity_metrics
 from app.services.lite_crosswalk import RunSignal, link_dimensions, link_incentive_citation
@@ -195,6 +198,17 @@ def _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts: "_
     runs in parallel and is already surfaced on its own scan_status field
     (rule 7 — never blocks the report), so folding it into this sequence
     would misrepresent it as a blocking stage.
+
+    Stage 14 (P1): this dispatch is exhaustive over every value in
+    LITE_STATUSES (soa_shared/models/soa_models.py) — every non-'running'
+    status gets its own explicit branch above, and anything that isn't
+    'running' either falls through to the guard just below rather than
+    being silently treated as if it were. Before this stage, an
+    unmapped status (e.g. 'identifying_competitors' during the window
+    where the DB constraint didn't yet allow it) would fall all the way
+    through to the cycle-status logic and be guessed at as 'running' —
+    logged and safely degraded here instead.
+
     Returns (phase: str, progress: PublicLiteProgress | None).
     """
     if lite_status == 'pending':
@@ -207,6 +221,9 @@ def _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts: "_
         return 'complete', None
     if lite_status == 'failed':
         return 'failed', None
+    if lite_status != 'running':
+        log.error(f"[lite] _derive_phase: unexpected lite_status {lite_status!r} — degrading to 'running'")
+        return 'running', None
 
     # lite_status == 'running' — cycle_id is set; derive from the cycle.
     # cycle_status can briefly lag lite_status right after
@@ -644,12 +661,13 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
             INSERT INTO soa_lite_requests
               (token, brand_name, competitor_names, store_url, status, ip_hash, organization_id)
             VALUES
-              (:token, :brand, :competitors, :store_url, 'pending', :ip_hash, :org_id)
+              (:token, :brand, :competitors, :store_url, :status, :ip_hash, :org_id)
         """), {
             "token":       token,
             "brand":       data.brand_name,
             "competitors": json.dumps(data.competitor_names),
             "store_url":   data.store_url,
+            "status":      LITE_STATUS_PENDING,
             "ip_hash":     ip_hash,
             "org_id":      org_id,
         })

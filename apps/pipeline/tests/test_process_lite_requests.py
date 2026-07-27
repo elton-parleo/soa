@@ -413,6 +413,46 @@ def test_sweep_marks_failed_when_cycle_fails(db):
     assert error is not None
 
 
+def test_sweep_isolates_one_bad_row_from_others_in_the_same_pass(db):
+    """
+    Stage 14 (W2): two rows are both eligible to complete in the same
+    sweep pass; badrow's completion UPDATE is made to fail at the DB
+    level (a before_cursor_execute hook, simulating e.g. a constraint
+    violation) while goodrow's is not. Before Stage 14, both rows'
+    writes shared one engine.begin() transaction, so badrow's failure
+    would roll back goodrow's write too and raise past
+    _sweep_lite_completions entirely. Now each row gets its own
+    connection/transaction + try/except: goodrow must still complete,
+    badrow must be left untouched (still 'running', to retry next
+    pass — never marked 'failed' just because this pass's write broke),
+    and the call itself must not raise.
+    """
+    from sqlalchemy import event
+
+    with db.begin() as conn:
+        _insert_running_lite_with_cycle(conn, "badrow0", "complete")
+        _insert_running_lite_with_cycle(conn, "goodrow", "complete")
+        bad_lite_id = conn.exec_driver_sql(
+            "SELECT id FROM soa_lite_requests WHERE token = 'badrow0'"
+        ).fetchone()[0]
+
+    def _fail_badrow_completion_write(conn, cursor, statement, parameters, context, executemany):
+        if "UPDATE soa_lite_requests" in statement and bad_lite_id in (parameters or ()):
+            raise RuntimeError("simulated DB failure for badrow's completion write")
+
+    event.listen(db, "before_cursor_execute", _fail_badrow_completion_write)
+    try:
+        worker._sweep_lite_completions()  # must not raise
+    finally:
+        event.remove(db, "before_cursor_execute", _fail_badrow_completion_write)
+
+    bad_status, *_ = _lite_row_by_token(db.connect(), "badrow0")
+    assert bad_status == "running"  # untouched — will retry next pass, not marked failed
+
+    good_status, *_ = _lite_row_by_token(db.connect(), "goodrow")
+    assert good_status == "complete"  # unaffected by badrow's failure
+
+
 def test_sweep_leaves_still_running_cycles_alone(db):
     with db.begin() as conn:
         _insert_running_lite_with_cycle(conn, "run00001", "running")
@@ -800,3 +840,68 @@ def test_crash_after_persisting_competitors_leaves_generated_set_intact(db, monk
     assert status == "failed"
     assert names == ["Rival", "Gen One"]  # not lost or regenerated
     assert source == "mixed"
+
+
+# ── Stage 14 (T3): poll-loop isolation — one bad row must never block ───
+
+def test_first_request_failure_does_not_block_second_in_next_poll(db, monkeypatch):
+    """
+    Two pending requests; the oldest (req1) fails partway through
+    processing (simulated by making generate_competitors raise on its
+    first call only). process_lite_requests only ever claims the
+    single oldest pending row per call (by design — same rate-limit/
+    contention-avoiding semantics as process_generation_jobs), so "the
+    same iteration" here means two back-to-back calls, mirroring two
+    consecutive ticks of main()'s poll loop: the first call must mark
+    req1 'failed' (with the error recorded) rather than raising past
+    process_lite_requests, and the second call must then pick up req2
+    and process it normally — proving req1 no longer occupies the
+    "oldest pending" slot and blocks req2 forever.
+    """
+    call_count = {"n": 0}
+
+    def _flaky_generate_competitors(*a, **k):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise RuntimeError("simulated crash on first request")
+        return []
+
+    monkeypatch.setattr("generation.competitor_generator.generate_competitors", _flaky_generate_competitors)
+
+    with db.begin() as conn:
+        _insert_pending(conn, token="req1first", brand="Acme", competitors=["Rival"])
+        _insert_pending(conn, token="req2second", brand="Beta", competitors=["Rival2"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+        worker.process_lite_requests()  # claims req1 (oldest) -> raises -> marked failed
+        worker.process_lite_requests()  # claims req2 (now oldest pending) -> succeeds
+
+    status1, *_, error1 = _lite_row_by_token(db.connect(), "req1first")
+    assert status1 == "failed"
+    assert error1 is not None and "simulated crash on first request" in error1
+
+    status2, *_ = _lite_row_by_token(db.connect(), "req2second")
+    assert status2 == "running"  # processed normally, unaffected by req1's failure
+
+    assert call_count["n"] == 2  # both requests were actually attempted
+
+
+def test_failed_request_is_not_re_picked_on_a_third_poll(db, monkeypatch):
+    """Re-poll fixture: once req1 is marked 'failed' it has left
+    'pending' for good — a third call finds nothing left to do rather
+    than re-claiming and re-failing the same row forever (the exact
+    Stage 13 crash-loop shape)."""
+    monkeypatch.setattr(
+        "generation.competitor_generator.generate_competitors",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("always fails")),
+    )
+    with db.begin() as conn:
+        _insert_pending(conn, token="alwaysfail", brand="Acme", competitors=["Rival"])
+
+    worker.process_lite_requests()  # claims + fails the only pending row
+    status, *_ = _lite_row_by_token(db.connect(), "alwaysfail")
+    assert status == "failed"
+
+    with patch("generation.query_generator.generate_lite_queries") as mock_gen:
+        worker.process_lite_requests()  # nothing pending left — must be a clean no-op
+    mock_gen.assert_not_called()
