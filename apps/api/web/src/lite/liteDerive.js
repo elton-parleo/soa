@@ -89,13 +89,18 @@ export function groupDimensionsByFamily(dimensions) {
  * tiebreak by code. Stage 10: 'na' dimensions are excluded entirely —
  * there's no fixable gap on a dimension that isn't applicable to this
  * site type, and the server never ranks them either (see
- * public_lite.py::_build_scan_payload). */
+ * public_lite.py::_build_scan_payload).
+ *
+ * Stage 19: also accepts v3 pillar dimension rows, which use `earned`
+ * and a boolean `na` instead of `score`/`coverage` — the same top-3-
+ * by-gap ranking rule the server applies in lite_pillars.py's
+ * _rank_and_lock_fixes, so a v3 row's `locked` flag lines up here too. */
 export function rankDimensionsByGap(dimensions) {
   return [...(dimensions || [])]
-    .filter((d) => d.coverage !== 'na')
+    .filter((d) => d.coverage !== 'na' && !d.na)
     .sort((a, b) => {
-      const gapA = (a.max || 0) - (a.score || 0)
-      const gapB = (b.max || 0) - (b.score || 0)
+      const gapA = (a.max || 0) - (a.score ?? a.earned ?? 0)
+      const gapB = (b.max || 0) - (b.score ?? b.earned ?? 0)
       if (gapB !== gapA) return gapB - gapA
       return (a.code || '').localeCompare(b.code || '')
     })

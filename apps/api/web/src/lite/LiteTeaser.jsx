@@ -92,6 +92,13 @@ export function LiteTeaser({ report, token, onUnlocked }) {
   const accessBadge = accessibilityBadgeText(report.scan_status)
   const band = getScoreBand(report.composite)
   const verdict = getVerdictLine(report)
+  // Stage 19 (R6): the teaser has no scan/pillars object to detect this
+  // from itself — scorer_version is its only signal. composite/visibility/
+  // accessibility are already correct either way (see public_lite.py's
+  // version branch); this is purely the same disclosure the full report
+  // gives, so a visitor isn't left assuming the current methodology scored
+  // an old row.
+  const scoredUnderPreviousMethodology = report.scan_status === 'complete' && report.scorer_version !== '3'
 
   async function handleUnlock(e) {
     e.preventDefault()
@@ -128,6 +135,11 @@ export function LiteTeaser({ report, token, onUnlocked }) {
                 <BandPill band={band} />
               </div>
               <div className="lite-body--inv" style={{ maxWidth: 320 }}>{verdict}</div>
+              {scoredUnderPreviousMethodology && (
+                <div className="lite-mono lite-muted--inv" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', marginTop: 10 }}>
+                  SCORED UNDER A PREVIOUS METHODOLOGY
+                </div>
+              )}
             </div>
             <div>
               <div className="lite-label lite-label--inv" style={{ marginBottom: 16 }}>

@@ -232,6 +232,34 @@ def member_value_applicable(probe_result: Optional[str], seen_score: float) -> b
 _ACCESSIBILITY_CODES = ("agent_access", "catalog_context", "protocol_feed")
 _TRUE_VALUE_CODES = ("price_truth", "member_value", "deal_citability")
 
+# Top FREE_FIX_RANK dimensions by opportunity size (max - earned) across
+# the combined accessibility + True Value pool keep their fix text; the
+# rest are nulled and locked=True — the same top-3-free-by-gap convention
+# public_lite.py::_build_scan_payload already uses for v1/v2 rows, now
+# the v3 report's only source of fix text (see build_pillars_payload's
+# docstring — scan.dimensions is v1/v2-keyed and unusable for a v3 row).
+FREE_FIX_RANK = 3
+
+
+def _rank_and_lock_fixes(dims: List[Dict]) -> None:
+    """Mutates dims in place: na rows are never ranked (no fixable gap,
+    same as public_lite.py's applicable_codes exclusion); non-na rows
+    outside the top FREE_FIX_RANK by gap have their fix nulled and
+    locked set — paid-diagnostic fix text never leaves the process for
+    a locked dimension."""
+    ranked = sorted(
+        (d for d in dims if not d["na"]),
+        key=lambda d: (-(d["max"] - d["earned"]), d["code"]),
+    )
+    free_codes = {d["code"] for d in ranked[:FREE_FIX_RANK]}
+    for d in dims:
+        if d["na"]:
+            d["locked"] = False
+            continue
+        d["locked"] = d["code"] not in free_codes
+        if d["locked"]:
+            d["fix"] = None
+
 
 def _crawl_dim_row(code: str, crawl_dimensions: Dict[str, dict]) -> Dict:
     d = crawl_dimensions.get(code) or {}
@@ -241,6 +269,7 @@ def _crawl_dim_row(code: str, crawl_dimensions: Dict[str, dict]) -> Dict:
         "earned": d.get("score") or 0.0, "max": d.get("max") or 0.0,
         "na": coverage == "na", "evidence": d.get("evidence") or [],
         "seen": None, "said": None,
+        "fix": d.get("fix"), "locked": False,
     }
 
 
@@ -270,6 +299,7 @@ def build_pillars_payload(
     crawl_dimensions: Dict[str, dict],
     run_signals: List[RunSignal],
     membership_probe_result: Optional[str],
+    membership_probe_evidence: Optional[str] = None,
 ) -> Dict:
     """
     Assembles the full v3 pillar/composite payload from already-fetched
@@ -336,9 +366,15 @@ def build_pillars_payload(
         said_row = _sub_lens(said["earned"], said["max"], said["na"], said.get("evidence") or [])
 
         if code == "member_value" and member_value_na:
+            # Stage 19 (R2): the probe's own verbatim answer, quoted
+            # as-is — the report's only evidence for an otherwise
+            # silent exclusion. Omitted (not a fabricated "no evidence
+            # found") when the probe never ran or returned nothing.
+            na_evidence = [f"probe: '{membership_probe_evidence}'"] if membership_probe_evidence else []
             true_value_dims.append({
                 "code": code, "name": dim.name, "earned": 0.0, "max": 0.0,
-                "na": True, "evidence": [], "seen": seen_row, "said": said_row,
+                "na": True, "evidence": na_evidence, "seen": seen_row, "said": said_row,
+                "fix": None, "locked": False,
             })
             continue
 
@@ -349,7 +385,14 @@ def build_pillars_payload(
         true_value_dims.append({
             "code": code, "name": dim.name, "earned": earned, "max": dim_max,
             "na": False, "evidence": [], "seen": seen_row, "said": said_row,
+            "fix": seen.get("fix"), "locked": False,
         })
+
+    # Fix text only exists on the 6 crawl-derived dimensions above
+    # (accessibility's 3 + True Value's 3 seen-halves) — visibility's
+    # mention-derived dimensions have nothing crawl-fixable to offer, so
+    # they're outside the ranking pool entirely (see _rank_and_lock_fixes).
+    _rank_and_lock_fixes(accessibility_dims + true_value_dims)
 
     total_earned = visibility_earned + accessibility_earned + true_value_earned
     composite = compute_composite(total_earned, member_value_na=member_value_na)

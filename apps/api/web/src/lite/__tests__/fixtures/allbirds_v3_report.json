@@ -1,0 +1,620 @@
+{
+  "status": "complete",
+  "locked": false,
+  "overall": [
+    {
+      "name": "Allbirds",
+      "role": "primary",
+      "metrics": {
+        "mention_rate": 58.3,
+        "som": 35.0,
+        "rsi": 0.86,
+        "position_index": 38.3,
+        "pdi": null,
+        "deal_citation_rate": 0.0,
+        "total_runs": 12,
+        "total_mentions": 7
+      }
+    },
+    {
+      "name": "Rothy's",
+      "role": "competitor",
+      "metrics": {
+        "mention_rate": 33.3,
+        "som": 20.0,
+        "rsi": 0.75,
+        "position_index": 20.0,
+        "pdi": null,
+        "deal_citation_rate": 0.0,
+        "total_runs": 12,
+        "total_mentions": 4
+      }
+    },
+    {
+      "name": "Veja",
+      "role": "competitor",
+      "metrics": {
+        "mention_rate": 8.3,
+        "som": 5.0,
+        "rsi": 1.0,
+        "position_index": 8.3,
+        "pdi": null,
+        "deal_citation_rate": 0.0,
+        "total_runs": 12,
+        "total_mentions": 1
+      }
+    },
+    {
+      "name": "Cariuma",
+      "role": "competitor",
+      "metrics": {
+        "mention_rate": 25.0,
+        "som": 15.0,
+        "rsi": 1.67,
+        "position_index": 20.0,
+        "pdi": null,
+        "deal_citation_rate": 0.0,
+        "total_runs": 12,
+        "total_mentions": 3
+      }
+    },
+    {
+      "name": "Skechers",
+      "role": "competitor",
+      "metrics": {
+        "mention_rate": 25.0,
+        "som": 15.0,
+        "rsi": 1.67,
+        "position_index": 18.3,
+        "pdi": null,
+        "deal_citation_rate": 0.0,
+        "total_runs": 12,
+        "total_mentions": 3
+      }
+    },
+    {
+      "name": "Cole Haan",
+      "role": "competitor",
+      "metrics": {
+        "mention_rate": 16.7,
+        "som": 10.0,
+        "rsi": 1.0,
+        "position_index": 5.0,
+        "pdi": null,
+        "deal_citation_rate": 0.0,
+        "total_runs": 12,
+        "total_mentions": 2
+      }
+    }
+  ],
+  "by_stage": null,
+  "scan": {
+    "status": "complete",
+    "total_score": 15,
+    "integrity_capped": false,
+    "scorer_version": "3",
+    "foundation": {
+      "subtotal": 0.0,
+      "max": 35.0,
+      "applicable_max": 0.0
+    },
+    "value": {
+      "subtotal": 0.0,
+      "max": 65.0,
+      "applicable_max": 0.0
+    },
+    "dimensions": [
+      {
+        "code": "F1",
+        "name": "Agent Access",
+        "score": 0.0,
+        "max": 0.0,
+        "evidence": [],
+        "fix": null,
+        "locked": false,
+        "linked": {
+          "reason": "absent from most answers"
+        },
+        "coverage": "full",
+        "deferred_items": [],
+        "cap_basis": []
+      },
+      {
+        "code": "F2",
+        "name": "Catalog Context",
+        "score": 0.0,
+        "max": 0.0,
+        "evidence": [],
+        "fix": null,
+        "locked": false,
+        "linked": {
+          "reason": "absent from most answers"
+        },
+        "coverage": "full",
+        "deferred_items": [],
+        "cap_basis": []
+      },
+      {
+        "code": "F3",
+        "name": "Protocol & Feed Presence",
+        "score": 0.0,
+        "max": 0.0,
+        "evidence": [],
+        "fix": null,
+        "locked": false,
+        "linked": null,
+        "coverage": "full",
+        "deferred_items": [],
+        "cap_basis": []
+      },
+      {
+        "code": "V1",
+        "name": "Offer Legibility",
+        "score": 0.0,
+        "max": 0.0,
+        "evidence": [],
+        "fix": null,
+        "locked": false,
+        "linked": {
+          "reason": "mentioned but no price surfaced"
+        },
+        "coverage": "full",
+        "deferred_items": [],
+        "cap_basis": []
+      },
+      {
+        "code": "V2",
+        "name": "Loyalty Surface",
+        "score": 0.0,
+        "max": 0.0,
+        "evidence": [],
+        "fix": null,
+        "locked": false,
+        "linked": null,
+        "coverage": "full",
+        "deferred_items": [],
+        "cap_basis": []
+      },
+      {
+        "code": "V3",
+        "name": "Member Value",
+        "score": 0.0,
+        "max": 0.0,
+        "evidence": [],
+        "fix": null,
+        "locked": false,
+        "linked": null,
+        "coverage": "full",
+        "deferred_items": [],
+        "cap_basis": []
+      },
+      {
+        "code": "V4",
+        "name": "Value Rails",
+        "score": 0.0,
+        "max": 0.0,
+        "evidence": [],
+        "fix": null,
+        "locked": false,
+        "linked": null,
+        "coverage": "full",
+        "deferred_items": [],
+        "cap_basis": []
+      },
+      {
+        "code": "V5",
+        "name": "Offer Integrity",
+        "score": 0.0,
+        "max": 0.0,
+        "evidence": [],
+        "fix": null,
+        "locked": false,
+        "linked": null,
+        "coverage": "full",
+        "deferred_items": [],
+        "cap_basis": []
+      }
+    ],
+    "pages_fetched": [
+      {
+        "url": "https://allbirds.com/robots.txt",
+        "final_url": "https://www.allbirds.com/robots.txt",
+        "status": "fetched",
+        "http_status": 200
+      },
+      {
+        "url": "https://www.allbirds.com/sitemap.xml",
+        "final_url": "https://www.allbirds.com/sitemap.xml",
+        "status": "fetched",
+        "http_status": 200
+      },
+      {
+        "url": "https://www.allbirds.com/sitemap_products_1.xml?from=1878194389061&to=7369944137808",
+        "final_url": "https://www.allbirds.com/sitemap_products_1.xml?from=1878194389061&to=7369944137808",
+        "status": "fetched",
+        "http_status": 200
+      },
+      {
+        "url": "https://www.allbirds.com/sitemap_collections_1.xml?from=423410055&to=278964895824",
+        "final_url": "https://www.allbirds.com/sitemap_collections_1.xml?from=423410055&to=278964895824",
+        "status": "fetched",
+        "http_status": 200
+      },
+      {
+        "url": "https://www.allbirds.com/sitemap_agentic_discovery.xml",
+        "final_url": "https://www.allbirds.com/sitemap_agentic_discovery.xml",
+        "status": "fetched",
+        "http_status": 200
+      },
+      {
+        "url": "https://www.allbirds.com/sitemap_pages_1.xml?from=248230535&to=94637621328",
+        "final_url": "https://www.allbirds.com/sitemap_pages_1.xml?from=248230535&to=94637621328",
+        "status": "fetched",
+        "http_status": 200
+      },
+      {
+        "url": "https://allbirds.com",
+        "final_url": "https://allbirds.com",
+        "status": "blocked",
+        "http_status": 429
+      },
+      {
+        "url": "https://www.allbirds.com/products/mens-wool-runners-natural-white",
+        "final_url": "https://www.allbirds.com/products/mens-wool-runners-natural-white",
+        "status": "blocked",
+        "http_status": 429
+      },
+      {
+        "url": "https://www.allbirds.com/products/womens-wool-runners-natural-black",
+        "final_url": "https://www.allbirds.com/products/womens-wool-runners-natural-black",
+        "status": "blocked",
+        "http_status": 429
+      },
+      {
+        "url": "https://allbirds.com/llms.txt",
+        "final_url": "https://www.allbirds.com/llms.txt",
+        "status": "fetched",
+        "http_status": 200
+      },
+      {
+        "url": "https://allbirds.com/.well-known/mcp.json",
+        "final_url": "https://www.allbirds.com/.well-known/mcp.json",
+        "status": "not_found",
+        "http_status": 404
+      }
+    ]
+  },
+  "visibility": 62.0,
+  "accessibility": 32.0,
+  "composite": 31.0,
+  "scan_status": "complete",
+  "visibility_breakdown": {
+    "mention_rate": [
+      {
+        "entity": "Allbirds",
+        "is_primary": true,
+        "mentioned_queries": 7,
+        "total_queries": 12,
+        "rate_pct": 58.3
+      },
+      {
+        "entity": "Rothy's",
+        "is_primary": false,
+        "mentioned_queries": 4,
+        "total_queries": 12,
+        "rate_pct": 33.3
+      },
+      {
+        "entity": "Veja",
+        "is_primary": false,
+        "mentioned_queries": 1,
+        "total_queries": 12,
+        "rate_pct": 8.3
+      },
+      {
+        "entity": "Cariuma",
+        "is_primary": false,
+        "mentioned_queries": 3,
+        "total_queries": 12,
+        "rate_pct": 25.0
+      },
+      {
+        "entity": "Skechers",
+        "is_primary": false,
+        "mentioned_queries": 3,
+        "total_queries": 12,
+        "rate_pct": 25.0
+      },
+      {
+        "entity": "Cole Haan",
+        "is_primary": false,
+        "mentioned_queries": 2,
+        "total_queries": 12,
+        "rate_pct": 16.7
+      }
+    ],
+    "share_of_mentions": [
+      {
+        "entity": "Allbirds",
+        "is_primary": true,
+        "mentions": 7,
+        "share_pct": 35.0
+      },
+      {
+        "entity": "Rothy's",
+        "is_primary": false,
+        "mentions": 4,
+        "share_pct": 20.0
+      },
+      {
+        "entity": "Veja",
+        "is_primary": false,
+        "mentions": 1,
+        "share_pct": 5.0
+      },
+      {
+        "entity": "Cariuma",
+        "is_primary": false,
+        "mentions": 3,
+        "share_pct": 15.0
+      },
+      {
+        "entity": "Skechers",
+        "is_primary": false,
+        "mentions": 3,
+        "share_pct": 15.0
+      },
+      {
+        "entity": "Cole Haan",
+        "is_primary": false,
+        "mentions": 2,
+        "share_pct": 10.0
+      }
+    ],
+    "totals": {
+      "total_mentions": 20,
+      "total_queries": 12
+    },
+    "incentive_citation": [
+      {
+        "entity": "Allbirds",
+        "is_primary": true,
+        "mentions": 7,
+        "cited_answers": 0,
+        "rate_pct": 0.0
+      },
+      {
+        "entity": "Rothy's",
+        "is_primary": false,
+        "mentions": 4,
+        "cited_answers": 0,
+        "rate_pct": 0.0
+      },
+      {
+        "entity": "Veja",
+        "is_primary": false,
+        "mentions": 1,
+        "cited_answers": 0,
+        "rate_pct": 0.0
+      },
+      {
+        "entity": "Cariuma",
+        "is_primary": false,
+        "mentions": 3,
+        "cited_answers": 0,
+        "rate_pct": 0.0
+      },
+      {
+        "entity": "Skechers",
+        "is_primary": false,
+        "mentions": 3,
+        "cited_answers": 0,
+        "rate_pct": 0.0
+      },
+      {
+        "entity": "Cole Haan",
+        "is_primary": false,
+        "mentions": 2,
+        "cited_answers": 0,
+        "rate_pct": 0.0
+      }
+    ]
+  },
+  "pillars": {
+    "visibility": {
+      "score": 62.0,
+      "max": 100.0,
+      "dimensions": [
+        {
+          "code": "share_of_mentions",
+          "name": "Share of Mentions",
+          "earned": 18.0,
+          "max": 25.0,
+          "na": false,
+          "evidence": [
+            "35.0% share of mentions across all tracked brands"
+          ],
+          "seen": null,
+          "said": null,
+          "fix": null,
+          "locked": false,
+          "linked": null
+        },
+        {
+          "code": "recommendation_strength",
+          "name": "Recommendation Strength",
+          "earned": 7.0,
+          "max": 15.0,
+          "na": false,
+          "evidence": [
+            "rsi_score 0.86 (scale -1 to +3)"
+          ],
+          "seen": null,
+          "said": null,
+          "fix": null,
+          "locked": false,
+          "linked": null
+        }
+      ]
+    },
+    "accessibility": {
+      "score": 32.0,
+      "max": 100.0,
+      "dimensions": [
+        {
+          "code": "agent_access",
+          "name": "Agent Access",
+          "earned": 4.8,
+          "max": 6.0,
+          "na": false,
+          "evidence": [
+            "robots.txt is fetchable",
+            "robots.txt allows product paths",
+            "3 page(s) returned bot-blocked responses",
+            "sitemap present (1813 URLs)"
+          ],
+          "seen": null,
+          "said": null,
+          "fix": null,
+          "locked": true,
+          "linked": {
+            "reason": "absent from most answers"
+          }
+        },
+        {
+          "code": "catalog_context",
+          "name": "Catalog & Context",
+          "earned": 0.0,
+          "max": 8.0,
+          "na": false,
+          "evidence": [
+            "https://www.allbirds.com/products/mens-wool-runners-natural-white: missing/incomplete Product+Offer JSON-LD",
+            "https://www.allbirds.com/products/womens-wool-runners-natural-black: missing/incomplete Product+Offer JSON-LD",
+            "no discoverable shipping/returns terms",
+            "0/2 product pages expose a gtin/mpn/sku identifier"
+          ],
+          "seen": null,
+          "said": null,
+          "fix": "Add complete Product JSON-LD (name, offers[].price, offers[].priceCurrency, offers[].availability), a crawlable shipping/returns page, and product identifiers (gtin/mpn/sku) with a consistent brand name across every product page, e.g. {\"@type\":\"Product\",\"name\":\"...\",\"brand\":{\"@type\":\"Brand\",\"name\":\"Acme\"},\"gtin13\":\"...\",\"offers\":{\"@type\":\"Offer\",\"price\":\"29.99\",\"priceCurrency\":\"USD\",\"availability\":\"https://schema.org/InStock\"}}.",
+          "locked": false,
+          "linked": {
+            "reason": "absent from most answers"
+          }
+        },
+        {
+          "code": "protocol_feed",
+          "name": "Protocol & Feed Presence",
+          "earned": 1.5,
+          "max": 6.0,
+          "na": false,
+          "evidence": [
+            "/llms.txt present and non-empty",
+            "no MCP endpoint declaration found (well-known path checked, absent; no link markup)",
+            "no UCP/UIP capability markup found",
+            "no agentic-commerce hints found in structured data"
+          ],
+          "seen": null,
+          "said": null,
+          "fix": null,
+          "locked": true,
+          "linked": null
+        }
+      ]
+    },
+    "true_value": {
+      "score": 0.0,
+      "max": 100.0,
+      "dimensions": [
+        {
+          "code": "price_truth",
+          "name": "Price Truth",
+          "earned": 0.0,
+          "max": 14.0,
+          "na": false,
+          "evidence": [],
+          "seen": {
+            "earned": 0.0,
+            "max": 6.0,
+            "na": false,
+            "evidence": [
+              "0/2 product pages expose machine-readable price",
+              "0/2 product pages declare priceCurrency"
+            ]
+          },
+          "said": {
+            "earned": 0.0,
+            "max": 8.0,
+            "na": false,
+            "evidence": [
+              "0/7 mentions (0%) cited a price"
+            ]
+          },
+          "fix": "Expose price and priceCurrency in Offer JSON-LD, e.g. \"offers\": {\"@type\": \"Offer\", \"price\": \"29.99\", \"priceCurrency\": \"USD\"} \u2014 not just in an image or JS-rendered banner.",
+          "locked": false,
+          "linked": {
+            "reason": "mentioned but no price surfaced"
+          }
+        },
+        {
+          "code": "member_value",
+          "name": "Member Value",
+          "earned": 0.0,
+          "max": 19.0,
+          "na": false,
+          "evidence": [],
+          "seen": {
+            "earned": 0.0,
+            "max": 12.0,
+            "na": false,
+            "evidence": [
+              "no loyalty/rewards page found in nav/footer",
+              "no Offer markup found on any sampled product page \u2014 member pricing is not applicable"
+            ]
+          },
+          "said": {
+            "earned": 0.0,
+            "max": 7.0,
+            "na": false,
+            "evidence": [
+              "0/5 purchase-intent mentions (0%) cited member value"
+            ]
+          },
+          "fix": "Add a discoverable loyalty/rewards page linked from the nav or footer (e.g. link text containing 'Rewards' or 'Loyalty').",
+          "locked": false,
+          "linked": null
+        },
+        {
+          "code": "deal_citability",
+          "name": "Deal Citability",
+          "earned": 0.0,
+          "max": 7.0,
+          "na": false,
+          "evidence": [],
+          "seen": {
+            "earned": 0.0,
+            "max": 4.0,
+            "na": false,
+            "evidence": [
+              "0/2 product pages state a concrete amount or discount mechanic",
+              "0/2 product pages declare a currently-active validity window",
+              "0/2 product pages expose eligibility/code/stackability terms"
+            ]
+          },
+          "said": {
+            "earned": 0.0,
+            "max": 3.0,
+            "na": false,
+            "evidence": [
+              "0 of 5 purchase-intent mentions cited a deal"
+            ]
+          },
+          "fix": null,
+          "locked": true,
+          "linked": null
+        }
+      ]
+    },
+    "member_value_na": false
+  },
+  "competitor_source": "generated"
+}

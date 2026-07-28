@@ -32,7 +32,7 @@ describe('App — /report/{token} routing renders each U1 state', () => {
 
     render(<App />)
 
-    await waitFor(() => expect(screen.getByText(/Queued/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('No store URL was provided this run.')).toBeInTheDocument())
     expect(liteApi.submit).not.toHaveBeenCalled()
   })
 
@@ -131,7 +131,7 @@ describe('App — post-submit navigation lands on /report/{token} (U2)', () => {
     fireEvent.click(submitButtons[0])
 
     await waitFor(() => expect(window.location.pathname).toBe('/report/tok-scan-submitted'))
-    await waitFor(() => expect(screen.getByText(/Queued/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('No store URL was provided this run.')).toBeInTheDocument())
   })
 })
 

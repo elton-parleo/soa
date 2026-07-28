@@ -1,9 +1,17 @@
 import React from 'react'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import '@testing-library/jest-dom'
 
 import { LiteFullReport } from '../LiteFullReport.jsx'
+import { DIMENSIONS, DIMENSIONS_BY_CODE } from '../landing/scanDimensionsRegistry.js'
+import ALLBIRDS_V3_REPORT from './fixtures/allbirds_v3_report.json'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const COMPONENT_SRC = fs.readFileSync(path.join(__dirname, '../LiteFullReport.jsx'), 'utf8')
 
 function dim(code, name, score, max, overrides = {}) {
   return { code, name, score, max, evidence: [], fix: null, locked: false, linked: null, ...overrides }
@@ -606,5 +614,390 @@ describe('LiteFullReport — footer', () => {
     expect(screen.getByText(/re-run this diagnostic monthly/)).toBeInTheDocument()
     expect(screen.getByText(/12 QUERIES · 1 PLATFORM · 1 RUN EACH/)).toBeInTheDocument()
     expect(screen.getByText(/SAMPLE, NOT A CATEGORY STUDY/)).toBeInTheDocument()
+  })
+})
+
+// ─── Stage 19: v3 report UX rendered from the pillars payload ─────────────
+// report.pillars is the real API shape build_pillars_payload produces
+// (apps/api/app/services/lite_pillars.py) — present only for a
+// scorer_version "3" scan. This is the exact shape that used to render
+// as zeros/an empty fixes table before this stage (scan.dimensions is
+// v1/v2-keyed and unusable for a v3 row).
+
+function subLens(earned, max, na, evidence = []) {
+  return { earned, max, na, evidence }
+}
+
+function pillarDim(code, name, earned, max, overrides = {}) {
+  return { code, name, earned, max, na: false, evidence: [], seen: null, said: null, ...overrides }
+}
+
+function buildV3Pillars({ dealCitabilitySeen, dealCitabilitySaid, memberValueNa = true } = {}) {
+  return {
+    visibility: {
+      score: 90, max: 100,
+      dimensions: [
+        pillarDim('share_of_mentions', 'Share of Mentions', 20, 25, {
+          evidence: ['42.0% share of mentions across all tracked brands'],
+        }),
+        pillarDim('recommendation_strength', 'Recommendation Strength', 14, 15, {
+          evidence: ['rsi_score 2.80 (scale -1 to +3)'],
+        }),
+      ],
+    },
+    accessibility: {
+      score: 78, max: 100,
+      dimensions: [
+        pillarDim('agent_access', 'Agent Access', 6, 6, {
+          evidence: ['robots.txt allows crawling'], fix: null, locked: false,
+        }),
+        pillarDim('catalog_context', 'Catalog & Context', 5, 8, {
+          evidence: ['partial schema.org markup'], fix: 'add GTIN to product schema', locked: false,
+        }),
+        pillarDim('protocol_feed', 'Protocol & Feed Presence', 3, 6, {
+          evidence: ['no llms.txt found'], fix: 'publish an llms.txt file', locked: true,
+        }),
+      ],
+    },
+    true_value: {
+      score: 70, max: 100,
+      dimensions: [
+        pillarDim('price_truth', 'Price Truth', 10, 14, {
+          seen: subLens(6, 6, false, ['machine-readable price found in Offer schema']),
+          said: subLens(4, 8, false, ['5/6 mentions (83%) cited a price']),
+          fix: 'add priceCurrency to Offer schema', locked: false,
+        }),
+        memberValueNa
+          ? pillarDim('member_value', 'Member Value', 0, 0, {
+            na: true,
+            evidence: ["probe: 'No, we do not have a member pricing program.'"],
+            seen: subLens(0, 12, false, ['no loyalty page found']),
+            said: subLens(0, 7, true, ['fewer than 2 mentions in the relevant opportunity set']),
+            fix: null, locked: false,
+          })
+          : pillarDim('member_value', 'Member Value', 15, 19, {
+            seen: subLens(12, 12, false, ['loyalty page found']),
+            said: subLens(3, 7, false, ['2/4 purchase-intent mentions (50%) cited member value']),
+            fix: null, locked: true,
+          }),
+        pillarDim('deal_citability', 'Deal Citability', 5, 7, {
+          seen: dealCitabilitySeen || subLens(4, 4, false, ['active discount encoded with priceValidUntil']),
+          said: dealCitabilitySaid || subLens(1, 3, false, ['1 of 6 purchase-intent mentions cited a deal']),
+          fix: 'add priceValidUntil to the Offer', locked: true,
+        }),
+      ],
+    },
+    member_value_na: memberValueNa,
+  }
+}
+
+const V3_VISIBILITY_BREAKDOWN = {
+  mention_rate: [
+    { entity: 'Allbirds', is_primary: true, mentioned_queries: 8, total_queries: 12, rate_pct: 66.7 },
+    { entity: 'Rothy\'s', is_primary: false, mentioned_queries: 5, total_queries: 12, rate_pct: 41.7 },
+  ],
+  share_of_mentions: [
+    { entity: 'Allbirds', is_primary: true, mentions: 8, share_pct: 62 },
+    { entity: "Rothy's", is_primary: false, mentions: 5, share_pct: 38 },
+  ],
+  totals: { total_mentions: 13, total_queries: 12 },
+  incentive_citation: [
+    { entity: 'Allbirds', is_primary: true, mentions: 8, cited_answers: 1, rate_pct: 12.5 },
+    { entity: "Rothy's", is_primary: false, mentions: 5, cited_answers: 2, rate_pct: 40.0 },
+  ],
+}
+
+function buildV3Report(overrides = {}) {
+  return {
+    status: 'complete',
+    locked: false,
+    overall: [
+      { name: 'Allbirds', role: 'primary', metrics: { som: 62, mention_rate: 66.7, position_index: 70, rsi: 2.8 } },
+      { name: "Rothy's", role: 'competitor', metrics: { som: 38, mention_rate: 41.7, position_index: 40, rsi: 0.4 } },
+    ],
+    by_stage: null,
+    visibility_breakdown: V3_VISIBILITY_BREAKDOWN,
+    scan: { status: 'complete', total_score: 82, integrity_capped: false, scorer_version: '3', dimensions: [], pages_fetched: [] },
+    visibility: 90, accessibility: 78, composite: 84,
+    scan_status: 'complete',
+    pillars: buildV3Pillars(),
+    ...overrides,
+  }
+}
+
+describe('LiteFullReport — v3 executive tiles (Stage 19, R1)', () => {
+  it('renders three pillar tiles with earned/max from the pillars payload, and the composite', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.getByText('Visibility')).toBeInTheDocument()
+    expect(screen.getByText('Accessibility')).toBeInTheDocument()
+    expect(screen.getByText('True Value')).toBeInTheDocument()
+    expect(screen.getByText('34')).toBeInTheDocument() // visibility earned (20+14)
+    expect(screen.getByText('14')).toBeInTheDocument() // accessibility earned (6+5+3)
+    expect(screen.getByText('84')).toBeInTheDocument() // composite tile
+  })
+
+  it('shows the normalized-81-applicable caption when member_value is N/A', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.getByText(/NORMALIZED · 81 PTS APPLICABLE/)).toBeInTheDocument()
+  })
+
+  it('omits the normalized caption when member_value is applicable', () => {
+    const report = buildV3Report({ pillars: buildV3Pillars({ memberValueNa: false }) })
+    render(<LiteFullReport report={report} />)
+    expect(screen.queryByText(/NORMALIZED/)).not.toBeInTheDocument()
+  })
+
+  it('never renders the old two-dial layout (Visibility/Accessibility with no third tile) for a v3 row', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    // The v3 tiles always render alongside True Value — a bare two-dial
+    // pair (the pre-Stage-19 layout) never appears without it.
+    expect(screen.getByText('Visibility')).toBeInTheDocument()
+    expect(screen.getByText('Accessibility')).toBeInTheDocument()
+    expect(screen.getByText('True Value')).toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — True Value section (Stage 19, R2)', () => {
+  it('renders all three dual-lens dimensions with SEEN/SAID tiles', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.getByText('The value only we score')).toBeInTheDocument()
+    expect(screen.getAllByText('WHAT YOU ENCODE').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('WHAT AGENTS SAID').length).toBeGreaterThan(0)
+    expect(screen.getByText('machine-readable price found in Offer schema')).toBeInTheDocument()
+    expect(screen.getByText('5/6 mentions (83%) cited a price')).toBeInTheDocument()
+  })
+
+  it('renders member_value N/A as NOT APPLICABLE with the probe quote as evidence, no bars', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.getByText('NOT APPLICABLE')).toBeInTheDocument()
+    expect(screen.getByText("probe: 'No, we do not have a member pricing program.'")).toBeInTheDocument()
+    expect(screen.queryByText('0/0')).not.toBeInTheDocument()
+  })
+
+  it('renders an outcome-guard N/A said sub-lens as "not enough mentions to measure", never 0%', () => {
+    const pillars = buildV3Pillars({ dealCitabilitySaid: subLens(0, 3, true, ['fewer than 2 mentions in the relevant opportunity set']) })
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('— · not enough mentions to measure')).toBeInTheDocument()
+    expect(screen.queryByText('0%')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['working', subLens(3, 4, false), subLens(2, 3, false), 'Encoded and cited — this is working.'],
+    ['distribution gap', subLens(4, 4, false), subLens(0, 3, false), 'Encoded, but agents rarely cite it — a distribution gap, not an encoding gap.'],
+    ['encoding gap', subLens(0, 4, false), subLens(0, 3, false), "Little encoded to cite, and agents aren't citing it."],
+    ['cited elsewhere', subLens(0, 4, false), subLens(2, 3, false), 'Agents cite a deal despite little encoded on the page — likely sourced from elsewhere.'],
+  ])('deal citability quadrant verdict: %s', (_label, seen, said, expectedText) => {
+    const pillars = buildV3Pillars({ dealCitabilitySeen: seen, dealCitabilitySaid: said })
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText(expectedText)).toBeInTheDocument()
+  })
+
+  it('absorbs the incentive-citation rows into the True Value section and drops the standalone card', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    // The old standalone card's own title/subtitle must be gone...
+    expect(screen.queryByText('Incentive citation rate')).not.toBeInTheDocument()
+    // ...but its per-entity rows (reused inside Deal Citability) still render.
+    expect(screen.getByText('13% · 1 of 8 mentions')).toBeInTheDocument()
+    expect(screen.getByText('40% · 2 of 5 mentions')).toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — v3 visibility section (Stage 19, R3)', () => {
+  it('shows Recommendation Strength and Share of Mentions cards carrying scored points', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.getByText('Recommendation Strength')).toBeInTheDocument()
+    expect(screen.getByText('14/15 pts')).toBeInTheDocument()
+    expect(screen.getByText('20/25 pts')).toBeInTheDocument()
+  })
+
+  it('renders mention rate as context inside the Share of Mentions card, not its own scored panel', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.queryByText('Mention rate')).not.toBeInTheDocument() // old standalone card title, gone
+    expect(screen.getByText('MENTION RATE')).toBeInTheDocument() // context label inside the SoM card
+    expect(screen.getByText(/67% · 8\/12/)).toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — v3 accessibility + methodology (Stage 19, R4)', () => {
+  it('regroups accessibility under an Accessibility · n/20 header with the three v3 dimensions', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.getByText('ACCESSIBILITY · 14/20')).toBeInTheDocument()
+    expect(screen.getByText('AGENT ACCESS')).toBeInTheDocument()
+    expect(screen.getByText('CATALOG & CONTEXT')).toBeInTheDocument()
+    expect(screen.getByText('PROTOCOL & FEED PRESENCE')).toBeInTheDocument()
+  })
+
+  it('renders the three-pillar methodology legend with registry weights summing to 100', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.getByText('VISIBILITY 40')).toBeInTheDocument()
+    expect(screen.getByText('ACCESSIBILITY 20')).toBeInTheDocument()
+    expect(screen.getByText('TRUE VALUE 40')).toBeInTheDocument()
+    expect(screen.getByText('= 100')).toBeInTheDocument()
+  })
+
+  it('maps a crosswalk chip on a retired code onto its v3 dimension, never rendering the old code', () => {
+    const pillars = buildV3Pillars()
+    pillars.accessibility.dimensions[0] = {
+      ...pillars.accessibility.dimensions[0],
+      linked: { reason: 'absent from most answers' },
+    }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('LINKED · ABSENT FROM MOST ANSWERS')).toBeInTheDocument()
+    expect(screen.queryByText(/^F1/)).not.toBeInTheDocument()
+  })
+
+  it('never renders a crosswalk chip on an na dimension', () => {
+    const pillars = buildV3Pillars()
+    pillars.accessibility.dimensions[2] = {
+      ...pillars.accessibility.dimensions[2],
+      na: true,
+      linked: { reason: 'absent from most answers' },
+    }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.queryByText(/^LINKED ·/)).not.toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — v3 ranked fixes (Stage 19, R5)', () => {
+  it('populates the fixes table from the pillars payload with v3 dimension labels', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.getByText('add GTIN to product schema')).toBeInTheDocument()
+    expect(screen.getByText('add priceCurrency to Offer schema')).toBeInTheDocument()
+    expect(screen.getByText('Catalog & Context')).toBeInTheDocument()
+    expect(screen.getAllByText('Price Truth').length).toBeGreaterThan(0)
+  })
+
+  it('shows locked rows as "Unlocks with your email", no fix text, ordering by gap intact', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    // protocol_feed (locked, gap 3) and deal_citability (locked, gap 2) are locked.
+    expect(screen.queryByText('publish an llms.txt file')).not.toBeInTheDocument()
+    expect(screen.queryByText('add priceValidUntil to the Offer')).not.toBeInTheDocument()
+    expect(screen.getAllByText('Unlocks with your email').length).toBe(2)
+  })
+})
+
+describe('LiteFullReport — R6 honest version fallback (Stage 19)', () => {
+  it('shows the previous-methodology notice for a v2 row and renders its real (non-zero) composite/pillar scores', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getByText('SCORED UNDER A PREVIOUS METHODOLOGY')).toBeInTheDocument()
+    expect(screen.getByText('Re-run for the current three-pillar score')).toBeInTheDocument()
+    // baseReport's real, non-zero v2 values (never masked to 0).
+    expect(screen.getByText('61')).toBeInTheDocument() // composite
+    expect(screen.getByText('63')).toBeInTheDocument() // visibility, rounded from 62.5
+    expect(screen.getByText('59')).toBeInTheDocument() // accessibility
+    expect(screen.getByText('FOUNDATION · 27/35')).toBeInTheDocument() // stored v2 data renders faithfully
+  })
+
+  it('never shows the notice for a v3 row', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.queryByText('SCORED UNDER A PREVIOUS METHODOLOGY')).not.toBeInTheDocument()
+  })
+
+  it('never shows the notice when there is no scan at all (nothing to be "previous" about)', () => {
+    const report = { ...baseReport, scan: { status: 'skipped', total_score: null, dimensions: [], pages_fetched: [] }, scan_status: 'skipped' }
+    render(<LiteFullReport report={report} />)
+    expect(screen.queryByText('SCORED UNDER A PREVIOUS METHODOLOGY')).not.toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — copy sweep (Stage 19)', () => {
+  it('a v3 report never renders the retired Foundation/Value two-family labels', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    // "TRUE VALUE · ..." (the new pillar section) legitimately contains
+    // the word VALUE — the retired label was the standalone "VALUE ·
+    // {subtotal}/65" two-family subtotal, which must be gone.
+    expect(screen.queryByText(/^FOUNDATION ·/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^VALUE ·/)).not.toBeInTheDocument()
+    expect(screen.queryByText('FOUNDATION')).not.toBeInTheDocument()
+  })
+
+  it('a v2 report still legitimately shows Foundation/Value grouping (unchanged legacy path)', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getByText('FOUNDATION · 27/35')).toBeInTheDocument()
+    expect(screen.getByText('VALUE · 32/65')).toBeInTheDocument()
+  })
+
+  it('the composite stays named "Agent Commerce Score" territory only via existing labels — never "Store Value Score"', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.queryByText(/Store Value Score/)).not.toBeInTheDocument()
+  })
+})
+
+// ─── Stage 19 acceptance artifact: the real, previously-broken allbirds
+// v3 row ────────────────────────────────────────────────────────────────
+// apps/api/web/src/lite/__tests__/fixtures/allbirds_v3_report.json is a
+// verbatim GET /report response captured from public_lite.get_lite_report
+// against the production allbirds token (98d234...) — the exact row that
+// used to render as zeros with an empty fixes table (its scan.dimensions
+// array is still all F1-V5-coded zeros in this fixture, proving the old
+// bug's root cause; the widget must never touch it for this row).
+describe('LiteFullReport — acceptance artifact: real allbirds v3 row', () => {
+  it('renders without crashing and shows the real, non-zero composite', () => {
+    render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
+    expect(screen.getByText('Allbirds')).toBeInTheDocument()
+    expect(screen.getByText('31')).toBeInTheDocument() // real composite
+  })
+
+  it('never shows the previous-methodology notice (this row IS v3)', () => {
+    render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
+    expect(screen.queryByText('SCORED UNDER A PREVIOUS METHODOLOGY')).not.toBeInTheDocument()
+  })
+
+  it('renders real, non-zero accessibility dimension scores from pillars, not the broken zeroed scan.dimensions', () => {
+    render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
+    // scan.dimensions has F1 at score 0/max 0 (the old bug) — the v3
+    // accessibility row for the same underlying dimension is 4.8/6.
+    expect(screen.getByText('5/6')).toBeInTheDocument() // agent_access, rounded
+  })
+
+  it('remaps this real row\'s crosswalk reasons (originally F1/F2) onto their v3 dimensions', () => {
+    render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
+    expect(screen.getAllByText('LINKED · ABSENT FROM MOST ANSWERS').length).toBe(2) // agent_access + catalog_context
+  })
+
+  it('populates the ranked-fixes table for this row (the empty-table bug is fixed)', () => {
+    render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
+    expect(screen.queryByText(/Showing 0 of/)).not.toBeInTheDocument()
+    expect(screen.getByText(/Add a discoverable loyalty\/rewards page/)).toBeInTheDocument()
+  })
+
+  it('renders the True Value section with real seen/said evidence for all three dimensions', () => {
+    render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
+    expect(screen.getByText('0/7 mentions (0%) cited a price')).toBeInTheDocument()
+    expect(screen.getByText('0/5 purchase-intent mentions (0%) cited member value')).toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — v3 registry-drivenness (Stage 19)', () => {
+  it('component source contains no v3 dimension-name literals', () => {
+    for (const dim of DIMENSIONS) {
+      expect(COMPONENT_SRC).not.toContain(`'${dim.name}'`)
+      expect(COMPONENT_SRC).not.toContain(`"${dim.name}"`)
+      expect(COMPONENT_SRC).not.toContain(`>${dim.name}<`)
+    }
+  })
+
+  it('the v3 PillarTile call sites read PILLAR_NAMES, never a literal pillar-name string', () => {
+    // Scoped to ExecutiveTilesV3's <PillarTile> call sites specifically —
+    // ExecutiveTilesLegacy's plain <Tile label="Visibility" .../> predates
+    // the registry entirely and is a separate, intentionally-static path.
+    for (const literal of ['<PillarTile label="Visibility"', '<PillarTile label="Accessibility"', '<PillarTile label="True Value"']) {
+      expect(COMPONENT_SRC).not.toContain(literal)
+    }
+  })
+
+  it('perturbing a dimension weight moves the rendered methodology-legend pillar total', () => {
+    // MethodologyLegend sums DIMENSIONS live on every render (never a
+    // cached export) — same discipline as AnatomyOfAnAnswer's PillarCard.
+    const original = DIMENSIONS_BY_CODE.catalog_context.weight
+    DIMENSIONS_BY_CODE.catalog_context.weight = 41 // was 8 -> accessibility total 6+41+6=53
+    try {
+      render(<LiteFullReport report={buildV3Report()} />)
+      expect(screen.getByText('ACCESSIBILITY 53')).toBeInTheDocument()
+      expect(screen.getByText('= 133')).toBeInTheDocument() // 40 (visibility) + 53 + 40 (true_value)
+      expect(screen.queryByText('ACCESSIBILITY 20')).not.toBeInTheDocument()
+    } finally {
+      DIMENSIONS_BY_CODE.catalog_context.weight = original
+    }
   })
 })

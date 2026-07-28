@@ -682,6 +682,21 @@ class PublicLiteStatusResponse(BaseModel):
     # moment they're ready rather than waiting for the whole run.
     competitors: Optional[List[str]] = None
     competitor_source: Optional[str] = None
+    # Stage 20: the run-manifest status page's two additive fields — both
+    # sourced from data _run_lite_scan/_run_membership_probe already write
+    # to soa_lite_scan_results, not new computation.
+    #
+    # membership_check mirrors member_value_applicable() (app.services.
+    # lite_pillars — reused, not redefined): "applies" the instant the
+    # probe says 'yes' (no need to wait on the scan); "na" only once the
+    # scan has ALSO reached a terminal status (member_value's crawl-side
+    # credit isn't known until then); "pending" otherwise, including
+    # while the probe hasn't run/returned yet.
+    membership_check: Optional[str] = None  # "pending" | "applies" | "na"
+    # scan_pages_read: length of the scan row's pages_fetched — available
+    # the instant the scan row exists, in any status (blocked/failed/
+    # skipped rows still carry whatever was fetched before stopping).
+    scan_pages_read: Optional[int] = None
 
 
 class PublicLiteEntityMetrics(BaseModel):
@@ -840,6 +855,13 @@ class PublicLitePillarDimension(BaseModel):
     populated for True Value dimensions (price_truth, member_value,
     deal_citability) — null for visibility/accessibility dimensions,
     which have no seen/said split at all.
+
+    fix/locked (Stage 19): only ever populated for the 6 crawl-derived
+    dimensions (accessibility's 3 + True Value's 3) — visibility's
+    mention-derived dimensions have nothing crawl-fixable to offer, so
+    both stay at their defaults (None/False) there. locked=True means
+    this dimension fell outside the top-3-by-gap free tier; fix is
+    always None when locked (paid-diagnostic text never serialized).
     """
     code: str
     name: str
@@ -849,6 +871,9 @@ class PublicLitePillarDimension(BaseModel):
     evidence: List[str] = []
     seen: Optional[PublicLiteSubLens] = None
     said: Optional[PublicLiteSubLens] = None
+    fix: Optional[str] = None
+    locked: bool = False
+    linked: Optional[dict] = None  # {"reason": "..."} or None — see public_lite.py's v3 crosswalk remap
 
 
 class PublicLitePillar(BaseModel):
@@ -931,6 +956,11 @@ class PublicLiteTeaserResponse(BaseModel):
     # Stage 13 (W4/W5): same fallback/methodology-stamp signal as the
     # full report (see PublicLiteReportResponse).
     competitor_source: Optional[str] = None
+    # Stage 19 (R6): the teaser has no `scan` object to read a scorer_
+    # version off of (unlike the full report), so this is its only
+    # signal for the "scored under a previous methodology" notice —
+    # defaults to "1", same convention as PublicLiteScan.scorer_version.
+    scorer_version: str = "1"
 
 
 class PublicLiteEmailRequest(BaseModel):
