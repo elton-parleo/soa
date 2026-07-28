@@ -17,7 +17,7 @@ import './theme.css'
 import { STORAGE_KEY, STORAGE_KEY_STORE_URL } from './LiteWidget.jsx'
 import { LandingNav } from './landing/LandingNav.jsx'
 import { Hero } from './landing/Hero.jsx'
-import { Methodology } from './landing/Methodology.jsx'
+import { AnatomyOfAnAnswer } from './landing/AnatomyOfAnAnswer.jsx'
 import { WhatYouGet } from './landing/WhatYouGet.jsx'
 import { FieldEvidence } from './landing/FieldEvidence.jsx'
 import { Stakes } from './landing/Stakes.jsx'
@@ -46,7 +46,7 @@ export default function LandingPage({ navigate }) {
     <div className="lite-root" style={{ display: 'block', padding: 0 }}>
       <LandingNav />
       <Hero onSubmitted={handleSubmitted} />
-      <Methodology />
+      <AnatomyOfAnAnswer />
       <WhatYouGet />
       <FieldEvidence />
       <Stakes />

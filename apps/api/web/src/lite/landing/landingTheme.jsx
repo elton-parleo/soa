@@ -56,7 +56,7 @@ export function SampleTeaserCard({ href = '#', score, label, linkText, meta }) {
 // Real DOM, not an image. Illustrative placeholder content (no real scan
 // has produced these numbers — see the Stage 6 diagnosis re: T5).
 
-export function ReportPreviewMock({ domain = 'yourstore.com', score = 57, foundation = { value: 24, max: 35 }, value = { value: 33, max: 65 } }) {
+export function ReportPreviewMock({ domain = 'yourstore.com', score = 57, accessibility = { value: 14, max: 20 }, trueValue = { value: 26, max: 40 } }) {
   const findings = [
     { tone: 'good', text: 'Products readable: price, stock, and brand parse cleanly.' },
     { tone: 'good', text: 'All four agent platforms can reach the site.' },
@@ -84,8 +84,8 @@ export function ReportPreviewMock({ domain = 'yourstore.com', score = 57, founda
         <BandScale score={score} />
       </div>
       <div style={{ padding: 24 }}>
-        <FamilyBar label="Foundation" description="Can agents find and transact with your store?" value={foundation.value} max={foundation.max} color="var(--foundation)" inv={false} />
-        <FamilyBar label="Value" description="Can agents see what customers actually pay?" value={value.value} max={value.max} color="var(--accent)" inv={false} />
+        <FamilyBar label="Accessibility" description="Can agents find and read your store?" value={accessibility.value} max={accessibility.max} color="var(--foundation)" inv={false} />
+        <FamilyBar label="True Value" description="Can agents see what customers actually pay?" value={trueValue.value} max={trueValue.max} color="var(--accent)" inv={false} />
         <div className="lite-body lite-muted" style={{ fontSize: 12.5, marginBottom: 14 }}>
           9 incentives found. Agents can price 0 of them.
         </div>
@@ -116,35 +116,6 @@ export function BrandChip({ label, glyph }) {
       <span className="lite-brand-chip-glyph">{glyph || label.charAt(0)}</span>
       {label}
     </span>
-  )
-}
-
-// ─── Weights bar (methodology) ─────────────────────────────────────────
-
-export function WeightsBar({ segments }) {
-  const total = segments.reduce((sum, s) => sum + s.weight, 0)
-  return (
-    <div>
-      <div className="lite-weights-bar" role="img" aria-label={`Score weighting: ${segments.map((s) => `${s.label} ${s.weight} points`).join(', ')}`}>
-        {segments.map((s) => (
-          <div
-            key={s.label}
-            className="lite-weights-segment"
-            style={{ flexBasis: `${(s.weight / total) * 100}%`, background: s.color }}
-          >
-            {s.weight}
-          </div>
-        ))}
-      </div>
-      <div className="lite-weights-legend" style={{ marginTop: 16 }}>
-        {segments.map((s) => (
-          <div key={s.label} className="lite-weights-legend-item">
-            <span className="lite-weights-swatch" style={{ background: s.color }} />
-            {s.label} {s.weight}
-          </div>
-        ))}
-      </div>
-    </div>
   )
 }
 
