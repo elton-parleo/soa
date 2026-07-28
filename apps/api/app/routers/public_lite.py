@@ -36,6 +36,7 @@ from soa_shared.org_helpers import get_or_create_leadgen_org
 from app.routers.metrics import build_entity_metrics
 from app.services.lite_crosswalk import RunSignal, link_dimensions, link_incentive_citation
 from app.services.lite_incentive_citation import build_incentive_citation_payload
+from app.services.lite_pillars import build_pillars_payload
 from app.services.lite_visibility import build_visibility_payload
 from app.schemas import (
     EntityMetrics,
@@ -281,7 +282,7 @@ def _decode_json_field(value, default):
 
 def _fetch_scan_row(conn, lite_request_id: int):
     return conn.execute(text("""
-        SELECT status, total_score, integrity_capped, dimensions, pages_fetched
+        SELECT status, total_score, integrity_capped, dimensions, pages_fetched, membership_probe
         FROM soa_lite_scan_results
         WHERE lite_request_id = :rid
     """), {"rid": lite_request_id}).fetchone()
@@ -305,12 +306,12 @@ def _fetch_run_signals(conn, cycle_id: int, primary_entity_id: int) -> list:
     stage_by_run = {row[0]: row[1] for row in run_rows}
 
     primary_rows = conn.execute(text("""
-        SELECT r.id, cm.mentioned, cm.deal_cited, cm.deal_types
+        SELECT r.id, cm.mentioned, cm.deal_cited, cm.deal_types, cm.member_value_cited
         FROM soa_runs r
         LEFT JOIN soa_coded_mentions cm ON cm.run_id = r.id AND cm.entity_id = :eid
         WHERE r.cycle_id = :cid AND r.status = 'success'
     """), {"cid": cycle_id, "eid": primary_entity_id}).fetchall()
-    primary_by_run = {row[0]: (row[1], row[2], row[3]) for row in primary_rows}
+    primary_by_run = {row[0]: (row[1], row[2], row[3], row[4]) for row in primary_rows}
 
     price_rows = conn.execute(text("""
         SELECT r.id,
@@ -337,7 +338,9 @@ def _fetch_run_signals(conn, cycle_id: int, primary_entity_id: int) -> list:
 
     signals = []
     for run_id, stage in stage_by_run.items():
-        mentioned, deal_cited, deal_types = primary_by_run.get(run_id, (False, False, None))
+        mentioned, deal_cited, deal_types, member_value_cited = primary_by_run.get(
+            run_id, (False, False, None, False),
+        )
         deal_types = _decode_json_field(deal_types, [])
         price_quoted, member_price_claimed = price_by_run.get(run_id, (False, False))
         competitor_mentioned, competitor_deal_cited = competitor_by_run.get(run_id, (False, False))
@@ -349,6 +352,7 @@ def _fetch_run_signals(conn, cycle_id: int, primary_entity_id: int) -> list:
             primary_deal_types=tuple(deal_types or []),
             primary_price_quoted=price_quoted,
             primary_member_price_claimed=member_price_claimed,
+            primary_member_value_cited=bool(member_value_cited),
             competitor_mentioned=competitor_mentioned,
             competitor_deal_cited=competitor_deal_cited,
         ))
@@ -380,7 +384,7 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
     if not scan_row:
         return None
 
-    status, total_score, integrity_capped, dimensions, pages_fetched = scan_row
+    status, total_score, integrity_capped, dimensions, pages_fetched, _membership_probe = scan_row
     pages_fetched = _decode_json_field(pages_fetched, [])
 
     if status != 'complete':
@@ -529,15 +533,11 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
         overall_metrics[comp_code] = build_entity_metrics(row)
         raw_deal_citation_rate[comp_code] = row[10]
 
-    # visibility reuses the same share-of-voice metric already computed
-    # for the report (build_entity_metrics' 'som') — no second metrics
-    # path. Already stage-agnostic (only ever reads the 'overall' slice),
-    # so no rebasing was needed for Stage 7 (A2).
-    visibility = overall_metrics.get(primary_code, {}).get("som") if primary_code else None
-
     scan_row = _fetch_scan_row(conn, lite_request_id)
     scan_status = scan_row[0] if scan_row else None
-    accessibility = scan_row[1] if scan_row and scan_row[0] == 'complete' else None
+    scan_complete = bool(scan_row and scan_row[0] == 'complete')
+    dimensions_raw = _decode_json_field(scan_row[3], {}) if scan_complete else {}
+    scorer_version = dimensions_raw.get('scorer_version') or '1'
 
     # Stage 13 (W4/W5): drives the widget's solo-comparison fallback and
     # the "auto-selected by ChatGPT" methodology stamp.
@@ -546,13 +546,59 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
     """), {"rid": lite_request_id}).fetchone()
     competitor_source = competitor_source_row[0] if competitor_source_row else None
 
-    composite = None
-    if visibility is not None:
-        composite = (
-            round(0.6 * visibility + 0.4 * accessibility)
-            if accessibility is not None
-            else visibility
+    # Stage 16 (Part 7): primary_entity_id/run_signals are fetched once,
+    # ahead of the teaser/report branch, because BOTH need them for a
+    # scorer_version "3" pillars computation (not just the crosswalk
+    # 'linked' step below, which reuses the same run_signals — no
+    # second query).
+    primary_entity_id = None
+    if primary_code:
+        primary_entity_row = conn.execute(text("""
+            SELECT entity_id FROM soa_cycle_entities WHERE cycle_id = :cid AND role = 'primary'
+        """), {"cid": cycle_id}).fetchone()
+        primary_entity_id = primary_entity_row[0] if primary_entity_row else None
+
+    run_signals: list = []
+    if scan_complete and primary_entity_id is not None:
+        run_signals = _fetch_run_signals(conn, cycle_id, primary_entity_id)
+
+    # Stage 16 (Part 7): the ONE composite function — a scorer_version
+    # "3" scan computes visibility/accessibility/composite from the
+    # registry-driven pillars breakdown (build_pillars_payload); every
+    # other case (older scan, no scan, no primary entity) falls back to
+    # the pre-Stage-16 formula byte-identically, so historical rows keep
+    # rendering exactly as they always have (Stage 10 W6 precedent).
+    pillars_payload = None
+    if scan_complete and scorer_version == "3" and primary_entity_id is not None:
+        primary_metrics = overall_metrics.get(primary_code) or {}
+        membership_probe_result = _decode_json_field(scan_row[5], {}).get("result")
+        pillars_payload = build_pillars_payload(
+            som_pct=primary_metrics.get("som"),
+            rsi_score=primary_metrics.get("rsi"),
+            total_mentions=primary_metrics.get("total_mentions") or 0,
+            crawl_dimensions=dimensions_raw,
+            run_signals=run_signals,
+            membership_probe_result=membership_probe_result,
         )
+
+    if pillars_payload is not None:
+        visibility = pillars_payload["visibility"]["score"]
+        accessibility = pillars_payload["accessibility"]["score"]
+        composite = pillars_payload["composite"]
+    else:
+        # visibility reuses the same share-of-voice metric already
+        # computed for the report (build_entity_metrics' 'som') — no
+        # second metrics path. Already stage-agnostic (only ever reads
+        # the 'overall' slice), so no rebasing was needed for Stage 7 (A2).
+        visibility = overall_metrics.get(primary_code, {}).get("som") if primary_code else None
+        accessibility = scan_row[1] if scan_complete else None
+        composite = None
+        if visibility is not None:
+            composite = (
+                round(0.6 * visibility + 0.4 * accessibility)
+                if accessibility is not None
+                else visibility
+            )
 
     if not email:
         overall = [
@@ -611,20 +657,17 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
     incentive_citation = build_incentive_citation_payload(incentive_citation_entities)
     visibility_breakdown["incentive_citation"] = incentive_citation
 
+    # Stage 16 (Part 7): reuses dimensions_raw/run_signals/primary_
+    # entity_id already fetched above for the pillars computation — no
+    # second query for either.
     linked: dict = {}
-    if scan_row and scan_row[0] == 'complete':
-        primary_entity_row = conn.execute(text("""
-            SELECT entity_id FROM soa_cycle_entities WHERE cycle_id = :cid AND role = 'primary'
-        """), {"cid": cycle_id}).fetchone()
-        if primary_entity_row:
-            dimensions_raw = _decode_json_field(scan_row[3], {})
-            run_signals = _fetch_run_signals(conn, cycle_id, primary_entity_row[0])
-            linked = link_dimensions(run_signals, dimensions_raw)
+    if scan_complete and primary_entity_id is not None:
+        linked = link_dimensions(run_signals, dimensions_raw)
 
-            # Stage 8 (A4): merged via setdefault so an existing Stage-7
-            # rule's reason on V2/V3 always wins if one already fired.
-            for code, reason in link_incentive_citation(incentive_citation, dimensions_raw).items():
-                linked.setdefault(code, reason)
+        # Stage 8 (A4): merged via setdefault so an existing Stage-7
+        # rule's reason on V2/V3 always wins if one already fired.
+        for code, reason in link_incentive_citation(incentive_citation, dimensions_raw).items():
+            linked.setdefault(code, reason)
 
     scan_payload = _build_scan_payload(scan_row, linked)
 
@@ -635,6 +678,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
         scan_status=scan_status,
         visibility_breakdown=visibility_breakdown,
         competitor_source=competitor_source,
+        pillars=pillars_payload,
     ).model_dump()
 
 

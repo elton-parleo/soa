@@ -100,6 +100,7 @@ class CodingClient:
                         strength=data["strength"],
                         deal_cited=data["deal_cited"],
                         deal_types=data["deal_types"] or [],
+                        member_value_cited=data["member_value_cited"],
                         evidence=data["evidence"],
                         confidence=data["confidence"],
                         stated_price=data.get("stated_price"),

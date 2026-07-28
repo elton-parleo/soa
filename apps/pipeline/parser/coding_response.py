@@ -10,6 +10,7 @@ class MerchantCoding:
     strength: Optional[str]
     deal_cited: bool
     deal_types: List[str]
+    member_value_cited: bool
     evidence: Optional[str]
     confidence: float
     # Rung-0 incentive fields — additive, default empty/None when not stated.

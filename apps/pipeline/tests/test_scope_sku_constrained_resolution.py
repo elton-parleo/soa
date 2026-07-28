@@ -63,6 +63,20 @@ def test_build_coding_schema_unchanged_without_scope_sku_codes():
     assert "scope_sku_coding" not in no_arg["$defs"]
 
 
+def test_build_coding_schema_entity_coding_has_member_value_cited():
+    """Stage 16 (Part 5): member_value_cited is a required boolean on
+    every entity_coding, independent of deal_cited/deal_types."""
+    schema = build_coding_schema(["M001"])
+    entity_def = schema["$defs"]["entity_coding"]
+    assert entity_def["properties"]["member_value_cited"] == {"type": "boolean"}
+    assert "member_value_cited" in entity_def["required"]
+
+
+def test_system_prompt_defines_member_value_citation_rules():
+    assert "MEMBER VALUE CITATION RULES" in SYSTEM_PROMPT
+    assert "member_value_cited" in SYSTEM_PROMPT
+
+
 def test_build_coding_schema_adds_scope_skus_property_when_present():
     schema = build_coding_schema(["M001"], ["SKU001", "SKU002"])
     assert "scope_skus" in schema["properties"]
@@ -101,7 +115,7 @@ def _base_result(scope_skus=None):
         "merchants": {
             "M001": {
                 "mentioned": True, "position": 1, "strength": "Positive",
-                "deal_cited": False, "deal_types": [], "evidence": "ev",
+                "deal_cited": False, "deal_types": [], "member_value_cited": False, "evidence": "ev",
                 "confidence": 0.9, "stated_price": None, "claimed_net_price": None,
                 "claimed_discount_value": None, "claimed_discount_pct": None,
                 "claimed_terms": [], "member_price_claimed": None,

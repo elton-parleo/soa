@@ -67,7 +67,8 @@ def db(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_lite_scan_results (
                 id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, status TEXT,
-                total_score INTEGER, integrity_capped BOOLEAN, dimensions TEXT, pages_fetched TEXT
+                total_score INTEGER, integrity_capped BOOLEAN, dimensions TEXT, pages_fetched TEXT,
+                membership_probe TEXT
             )
         """)
     monkeypatch.setattr(public_lite, "engine", engine)
