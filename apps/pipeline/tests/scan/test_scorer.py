@@ -16,6 +16,7 @@ tightens to sitewide-only evidence, and a brand-only site drops F3/V3 to
 """
 import json as _json
 import socket
+from pathlib import Path
 
 import httpx
 import pytest
@@ -162,15 +163,22 @@ def test_rich_dtc_store_scores_high_on_value_family(monkeypatch):
     assert result.integrity_capped is False
     assert result.total_score is not None and result.total_score > 70
 
-    v_family_total = sum(result.dimensions[c]["score"] for c in ("V1", "V2", "V3", "V4"))
-    v_family_max = sum(result.dimensions[c]["max"] for c in ("V1", "V2", "V3", "V4"))
-    assert v_family_total / v_family_max > 0.7
+    true_value_total = sum(
+        result.dimensions[c]["score"] for c in ("price_truth_seen", "member_value_seen", "deal_citability_seen")
+    )
+    true_value_max = sum(
+        result.dimensions[c]["max"] for c in ("price_truth_seen", "member_value_seen", "deal_citability_seen")
+    )
+    assert true_value_total / true_value_max > 0.7
 
-    assert result.dimensions["V3"]["score"] == result.dimensions["V3"]["max"]
-    assert result.dimensions["scorer_version"] == "2"
+    # member_value_seen combines v2 loyalty_surface (program surface,
+    # present in every _base_pages fixture) + member_value (member
+    # pricing, present here) — both signals are present, so full marks.
+    assert result.dimensions["member_value_seen"]["score"] == result.dimensions["member_value_seen"]["max"]
+    assert result.dimensions["scorer_version"] == "3"
 
 
-def test_same_store_minus_member_price_drops_v3(monkeypatch):
+def test_same_store_minus_member_price_drops_member_value_seen(monkeypatch):
     with_member = _base_pages(member_price=True)
     without_member = _base_pages(member_price=False)
     monkeypatch.setattr(httpx.Client, "get", _serve(with_member))
@@ -179,10 +187,17 @@ def test_same_store_minus_member_price_drops_v3(monkeypatch):
     without_result = engine.run_scan("https://rich.example.com")
 
     assert without_result.status == "complete"
-    assert without_result.dimensions["V3"]["score"] == 0.0
-    # V1/V2/V4 depend only on price/currency/validity/actionability, not
-    # member pricing, so removing memberPrice must not move them at all.
-    for code in ("V1", "V2", "V4"):
+    # member_value_seen = loyalty_surface (unchanged, still present) +
+    # member_value (drops to 0 without memberPrice) — the combined
+    # sub-lens drops, but not to zero, since the loyalty half is intact.
+    assert (
+        without_result.dimensions["member_value_seen"]["score"]
+        < with_result.dimensions["member_value_seen"]["score"]
+    )
+    # price_truth_seen/deal_citability_seen depend only on price/
+    # currency/validity/actionability, not member pricing, so removing
+    # memberPrice must not move them at all.
+    for code in ("price_truth_seen", "deal_citability_seen"):
         assert without_result.dimensions[code]["score"] == with_result.dimensions[code]["score"]
 
 
@@ -199,61 +214,32 @@ def test_bot_blocked_store_returns_blocked_status(monkeypatch):
     assert result.dimensions == {}
 
 
-def test_fake_was_price_with_no_validity_anywhere_triggers_59_cap(monkeypatch):
+def test_fake_was_price_with_no_validity_anywhere_is_advisory_only_never_caps(monkeypatch):
+    """Stage 16 (Part 6): the same egregious was-price pattern that used
+    to trigger the 59-point cap under v2 now has ZERO score effect under
+    v3 — integrity_capped is always False, total_score is never capped,
+    and the finding surfaces only as an unscored advisory."""
     pages = _base_pages(member_price=True, was_price=True, valid_through=False)
     monkeypatch.setattr(httpx.Client, "get", _serve(pages))
 
     result = engine.run_scan("https://rich.example.com")
 
     assert result.status == "complete"
-    assert result.integrity_capped is True
-    assert result.total_score <= 59
-    assert result.dimensions["V5"]["score"] == 0.0
-    cap_basis = result.dimensions["V5"]["cap_basis"]
-    assert any("sitewide" in line for line in cap_basis)
-    assert any("priceValidUntil" in line for line in cap_basis)
-
-
-def test_was_price_with_a_genuine_validity_window_only_deducts_no_cap(monkeypatch):
-    """A was-price signal present sitewide, but WITH a genuine validity
-    window and a modest (non-implausible) discount depth, deducts V5
-    points without capping — this used to trigger the Stage-1 cap; Stage
-    10's cap is deliberately narrower (D4)."""
-    pages = _base_pages(member_price=True, was_price=True, valid_through=True)
-    monkeypatch.setattr(httpx.Client, "get", _serve(pages))
-
-    result = engine.run_scan("https://rich.example.com")
-
-    assert result.status == "complete"
     assert result.integrity_capped is False
-    assert 0 < result.dimensions["V5"]["score"] < result.dimensions["V5"]["max"]
-    assert result.dimensions["V5"]["cap_basis"] == []
+    advisory = result.dimensions["price_honesty_advisory"]
+    assert advisory["scored"] is False
+    assert advisory["would_have_capped"] is True
+    assert any("sitewide" in line for line in advisory["cap_basis"])
+    assert any("priceValidUntil" in line for line in advisory["cap_basis"])
+    # No dimension named after price honesty in the scored set at all.
+    assert "price_truth" not in result.dimensions
+    assert "offer_integrity" not in result.dimensions
 
 
-def test_one_bad_pdp_alone_deducts_but_does_not_cap(monkeypatch):
-    pages = {
-        "/robots.txt": ROBOTS_TXT,
-        "/sitemap.xml": SITEMAP_XML,
-        "/rewards": LOYALTY_HTML,
-        "/shipping-returns": SHIPPING_HTML,
-        "/products/blue-widget": _product_page_html("Blue Widget", "29.99", was_price=True, valid_through=False),
-        "/products/red-widget": _product_page_html("Red Widget", "34.99", was_price=False),
-        "rich.example.com": HOMEPAGE_HTML,
-    }
-    monkeypatch.setattr(httpx.Client, "get", _serve(pages))
-
-    result = engine.run_scan("https://rich.example.com")
-
-    assert result.status == "complete"
-    assert result.integrity_capped is False
-    assert result.dimensions["V5"]["cap_basis"] == []
-    assert 0 < result.dimensions["V5"]["score"] < result.dimensions["V5"]["max"]
-
-
-def test_implausible_discount_depth_caps_even_with_a_validity_window(monkeypatch):
-    """>=70% discount depth sitewide is its own cap trigger (D4), even
-    when every page also carries a priceValidUntil — a genuinely deep
-    "sale" on every single sampled page reads as fabricated regardless."""
+def test_implausible_discount_depth_is_advisory_only_never_caps(monkeypatch):
+    """>=70% discount depth sitewide would have triggered the v2 cap
+    (D4) even with a validity window present — under v3 this is still
+    flagged (would_have_capped=True) but has no score effect."""
     pages = {
         "/robots.txt": ROBOTS_TXT,
         "/sitemap.xml": SITEMAP_XML,
@@ -268,24 +254,65 @@ def test_implausible_discount_depth_caps_even_with_a_validity_window(monkeypatch
     result = engine.run_scan("https://rich.example.com")
 
     assert result.status == "complete"
-    assert result.integrity_capped is True
-    cap_basis = result.dimensions["V5"]["cap_basis"]
-    assert any("discount depth" in line for line in cap_basis)
+    assert result.integrity_capped is False
+    advisory = result.dimensions["price_honesty_advisory"]
+    assert advisory["would_have_capped"] is True
+    assert any("discount depth" in line for line in advisory["cap_basis"])
 
 
-def test_v5_deferred_price_history_item_never_lowers_score(monkeypatch):
-    """S2: a deferred item never subtracts — a clean store with no
-    dishonest signal at all still scores V5 at full marks even though
-    the price-history deferred item is always present (D4)."""
+def test_clean_store_advisory_finds_nothing_and_never_scores(monkeypatch):
+    """A clean store (no was-price signal at all) still gets an
+    advisory entry, unscored, with no cap flag and no cap_basis —
+    matches the old V5-at-full-marks case, just relabeled as advisory."""
     pages = _base_pages(member_price=True, was_price=False)
     monkeypatch.setattr(httpx.Client, "get", _serve(pages))
 
     result = engine.run_scan("https://rich.example.com")
 
-    assert result.dimensions["V5"]["score"] == result.dimensions["V5"]["max"]
-    assert result.dimensions["V5"]["coverage"] == "partial"
-    labels = [item["label"] for item in result.dimensions["V5"]["deferred_items"]]
-    assert "Price-history integrity" in labels
+    advisory = result.dimensions["price_honesty_advisory"]
+    assert advisory["scored"] is False
+    assert advisory["would_have_capped"] is False
+    assert advisory["cap_basis"] == []
+
+
+_FORBIDDEN_CAP_PHRASES = ("score cap", "59-point", "59 point", "capped the score", "score is capped")
+
+
+@pytest.mark.parametrize("was_price,valid_through", [(True, False), (True, True), (False, True)])
+def test_no_score_cap_language_in_v3_evidence_or_fix_text(monkeypatch, was_price, valid_through):
+    """Stage 16 (Part 6) grep-test: sweep every dimension's evidence/fix
+    strings (including the price_honesty_advisory) across the would-
+    have-capped, discount-flagged, and clean cases — none may ever use
+    'cap'-the-score language, since v3 has no cap to describe."""
+    pages = _base_pages(member_price=True, was_price=was_price, valid_through=valid_through)
+    monkeypatch.setattr(httpx.Client, "get", _serve(pages))
+
+    result = engine.run_scan("https://rich.example.com")
+
+    blob_parts = []
+    for value in result.dimensions.values():
+        if not isinstance(value, dict):
+            continue
+        blob_parts.extend(str(e) for e in (value.get("evidence") or []))
+        if value.get("fix"):
+            blob_parts.append(str(value["fix"]))
+    blob = " ".join(blob_parts).lower()
+    for phrase in _FORBIDDEN_CAP_PHRASES:
+        assert phrase not in blob
+
+
+def test_no_score_cap_language_anywhere_in_scan_module_source():
+    """Static grep over apps/pipeline/scan/*.py — a regression guard
+    against reintroducing cap-the-score copy anywhere in the module,
+    not just the fixtures exercised above."""
+    scan_dir = Path(__file__).resolve().parents[2] / "scan"
+    offenders = []
+    for path in scan_dir.glob("*.py"):
+        text = path.read_text().lower()
+        for phrase in _FORBIDDEN_CAP_PHRASES:
+            if phrase in text:
+                offenders.append((path.name, phrase))
+    assert offenders == []
 
 
 # ─── F2: identifiers + cross-page brand consistency (Stage 10, D1) ──────
@@ -305,8 +332,8 @@ def test_f2_identifiers_present_and_brand_consistent_scores_high(monkeypatch):
     result = engine.run_scan("https://rich.example.com")
 
     assert result.status == "complete"
-    assert result.dimensions["F2"]["score"] == result.dimensions["F2"]["max"]
-    assert any("2/2 product pages expose a gtin/mpn/sku identifier" in e for e in result.dimensions["F2"]["evidence"])
+    assert result.dimensions["catalog_context"]["score"] == result.dimensions["catalog_context"]["max"]
+    assert any("2/2 product pages expose a gtin/mpn/sku identifier" in e for e in result.dimensions["catalog_context"]["evidence"])
 
 
 def test_f2_inconsistent_brand_across_pages_is_penalized(monkeypatch):
@@ -330,8 +357,8 @@ def test_f2_inconsistent_brand_across_pages_is_penalized(monkeypatch):
     monkeypatch.setattr(httpx.Client, "get", _serve(consistent_pages))
     result_consistent = engine.run_scan("https://rich.example.com")
 
-    assert result_inconsistent.dimensions["F2"]["score"] < result_consistent.dimensions["F2"]["score"]
-    assert any("inconsistent" in e for e in result_inconsistent.dimensions["F2"]["evidence"])
+    assert result_inconsistent.dimensions["catalog_context"]["score"] < result_consistent.dimensions["catalog_context"]["score"]
+    assert any("inconsistent" in e for e in result_inconsistent.dimensions["catalog_context"]["evidence"])
 
 
 # ─── F3: Protocol & Feed Presence (Stage 10, D2) ─────────────────────────
@@ -364,14 +391,14 @@ def test_f3_llms_txt_mcp_ucp_fixture_scores_the_scored_portion(monkeypatch):
     result = engine.run_scan("https://rich.example.com")
 
     assert result.status == "complete"
-    f3 = result.dimensions["F3"]
+    f3 = result.dimensions["protocol_feed"]
     assert f3["coverage"] == "partial"
     assert f3["score"] == f3["max"]
     assert "/llms.txt present and non-empty" in f3["evidence"]
     assert any("MCP endpoint declaration discoverable" in e for e in f3["evidence"])
     assert "UCP/UIP capability markup present" in f3["evidence"]
-    # Deferred items are always present at scorer_version "2" and never
-    # reduce the scored portion (S2) — this fixture still hits max.
+    # Deferred items are always present and never reduce the scored
+    # portion (S2) — this fixture still hits max.
     labels = {item["label"] for item in f3["deferred_items"]}
     assert labels == {
         "Merchant Center / Deal Directory participation",
@@ -386,10 +413,10 @@ def test_f3_with_no_protocol_markup_scores_zero_but_stays_applicable(monkeypatch
 
     result = engine.run_scan("https://rich.example.com")
 
-    f3 = result.dimensions["F3"]
+    f3 = result.dimensions["protocol_feed"]
     assert f3["coverage"] == "partial"
     assert f3["score"] == 0.0
-    assert f3["max"] == 10
+    assert f3["max"] == 6
 
 
 # ─── V4: CONCRETE / ACTIVE / ACTIONABLE (Stage 10, D3) ──────────────────
@@ -410,7 +437,7 @@ def test_v4_concrete_but_expired_offer_fails_active_only(monkeypatch):
     result = engine.run_scan("https://rich.example.com")
 
     assert result.status == "complete"
-    v4 = result.dimensions["V4"]
+    v4 = result.dimensions["deal_citability_seen"]
     assert "1/1 product pages state a concrete amount or discount mechanic" in v4["evidence"]
     assert "0/1 product pages declare a currently-active validity window" in v4["evidence"]
     assert "0/1 product pages expose eligibility/code/stackability terms" in v4["evidence"]
@@ -432,12 +459,12 @@ def test_v4_full_concrete_active_actionable_scores_max(monkeypatch):
 
     result = engine.run_scan("https://rich.example.com")
 
-    assert result.dimensions["V4"]["score"] == result.dimensions["V4"]["max"]
+    assert result.dimensions["deal_citability_seen"]["score"] == result.dimensions["deal_citability_seen"]["max"]
 
 
 # ─── D5: brand-only site (F3/V3 -> na, A2 rescaling) ─────────────────────
 
-def test_brand_only_site_marks_f3_and_v3_na_and_rescales_total(monkeypatch):
+def test_brand_only_site_marks_protocol_feed_na_and_rescales_total(monkeypatch):
     pages = {
         "/robots.txt": ROBOTS_TXT,
         "/sitemap.xml": "<?xml version=\"1.0\"?><urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"></urlset>",
@@ -449,21 +476,29 @@ def test_brand_only_site_marks_f3_and_v3_na_and_rescales_total(monkeypatch):
     result = engine.run_scan("https://rich.example.com")
 
     assert result.status == "complete"
-    assert result.dimensions["F3"]["coverage"] == "na"
-    assert result.dimensions["V3"]["coverage"] == "na"
-    # V5 has nothing to check without a product page — full marks, not a
-    # degenerate zero, and still 'partial' (not 'na') per D5.
-    assert result.dimensions["V5"]["score"] == result.dimensions["V5"]["max"]
-    assert result.dimensions["V5"]["coverage"] == "partial"
+    assert result.dimensions["protocol_feed"]["coverage"] == "na"
+    # Stage 16: member_value_seen combines loyalty-surface (never
+    # product-page-dependent — always checkable) with member-price
+    # encoding (na on a brand-only site). Because loyalty is always
+    # applicable, the COMBINED sub-lens is no longer 'na' the way v2's
+    # standalone V3 was — it degrades to loyalty-surface-only, rescaled
+    # onto the full seen_max, and stays 'full' coverage. This is an
+    # intentional consequence of the merge (T1), not a regression.
+    member_value_seen = result.dimensions["member_value_seen"]
+    assert member_value_seen["coverage"] == "full"
+    assert member_value_seen["max"] == 12
 
-    applicable = {c: d for c, d in result.dimensions.items() if isinstance(d, dict) and d.get("coverage") != "na"}
+    advisory = result.dimensions["price_honesty_advisory"]
+    assert advisory["scored"] is False
+    assert advisory["would_have_capped"] is False
+
+    applicable = {c: d for c, d in result.dimensions.items() if isinstance(d, dict) and d.get("coverage") not in ("na",) and "score" in d}
     applicable_score = sum(d["score"] for d in applicable.values())
     applicable_max = sum(d["max"] for d in applicable.values())
     expected_total = int(round(applicable_score / applicable_max * 100))
     assert result.total_score == expected_total
     assert 0 <= result.total_score <= 100
-    assert result.dimensions["F3"]["evidence"][0] == f"protocol & feed presence is not applicable — {BRAND_ONLY_REASON}"
-    assert result.dimensions["V3"]["evidence"][0] == f"no product pages sampled — {BRAND_ONLY_REASON}"
+    assert result.dimensions["protocol_feed"]["evidence"][0] == f"protocol & feed presence is not applicable — {BRAND_ONLY_REASON}"
 
 
 # ─── Stage 11 (T2): discovery failure — commerce signals, no PDPs ───────
@@ -495,13 +530,21 @@ def test_commerce_signals_without_pdps_is_a_discovery_failure_never_brand_only(m
     result = engine.run_scan("https://rich.example.com")
 
     assert result.status == "complete"
-    for code in ("F2", "V1", "V4"):
+    for code in ("catalog_context", "price_truth_seen", "deal_citability_seen"):
         assert result.dimensions[code]["coverage"] == "partial"
         assert result.dimensions[code]["evidence"] == [DISCOVERY_FAILURE_REASON]
-    # F3 is decoupled from PDP discovery (T3) — still scored normally,
-    # never na, regardless of the failed product-page sample.
-    assert result.dimensions["F3"]["coverage"] == "partial"
-    assert result.dimensions["F3"]["score"] >= 0
+    # member_value_seen combines loyalty (always applicable, found here)
+    # with member-price encoding (partial — discovery failure, same
+    # reason as the single-check dimensions above). 'partial' wins per
+    # _combine_coverage, and the discovery-failure reason is still
+    # surfaced honestly alongside the loyalty evidence.
+    member_value_seen = result.dimensions["member_value_seen"]
+    assert member_value_seen["coverage"] == "partial"
+    assert DISCOVERY_FAILURE_REASON in member_value_seen["evidence"]
+    # protocol_feed is decoupled from PDP discovery (T3) — still scored
+    # normally, never na, regardless of the failed product-page sample.
+    assert result.dimensions["protocol_feed"]["coverage"] == "partial"
+    assert result.dimensions["protocol_feed"]["score"] >= 0
 
     serialized = _json.dumps(result.dimensions).lower()
     assert "brand-only" not in serialized
@@ -516,7 +559,7 @@ def test_mcp_not_found_scores_absent_but_network_failure_excludes_the_subcheck(m
 
     monkeypatch.setattr(httpx.Client, "get", _serve(pages_404))
     result_404 = engine.run_scan("https://rich.example.com")
-    f3_404 = result_404.dimensions["F3"]
+    f3_404 = result_404.dimensions["protocol_feed"]
     assert any("no MCP endpoint declaration found" in e for e in f3_404["evidence"])
     assert not any("excluded from scoring" in e for e in f3_404["evidence"])
 
@@ -527,7 +570,7 @@ def test_mcp_not_found_scores_absent_but_network_failure_excludes_the_subcheck(m
 
     monkeypatch.setattr(httpx.Client, "get", fake_get_network_failure)
     result_failed = engine.run_scan("https://rich.example.com")
-    f3_failed = result_failed.dimensions["F3"]
+    f3_failed = result_failed.dimensions["protocol_feed"]
     assert any("could not verify MCP endpoint" in e for e in f3_failed["evidence"])
     assert any("excluded from scoring" in e for e in f3_failed["evidence"])
 
@@ -543,6 +586,9 @@ def test_mcp_not_found_scores_absent_but_network_failure_excludes_the_subcheck(m
 
 
 # ─── A2 rescaling arithmetic (na-exclusion exact, total always in [0,100]) ──
+# Stage 16 (Part 6): the integrity cap no longer exists under v3 — every
+# case asserts result.integrity_capped is False and total_score is the
+# plain na-exclusion rescale, with no cap branch to prove.
 
 @pytest.mark.parametrize("member_price,was_price,valid_through", [
     (True, False, True),
@@ -557,11 +603,14 @@ def test_a2_total_score_matches_applicable_rescale_formula(monkeypatch, member_p
     result = engine.run_scan("https://rich.example.com")
 
     assert result.status == "complete"
-    applicable = {c: d for c, d in result.dimensions.items() if isinstance(d, dict) and d.get("coverage") != "na"}
+    assert result.integrity_capped is False
+    applicable = {
+        c: d for c, d in result.dimensions.items()
+        if isinstance(d, dict) and "score" in d and d.get("coverage") != "na"
+    }
     applicable_score = sum(d["score"] for d in applicable.values())
     applicable_max = sum(d["max"] for d in applicable.values())
-    raw_pct = applicable_score / applicable_max * 100
-    expected = int(round(min(raw_pct, 59))) if result.integrity_capped else int(round(raw_pct))
+    expected = int(round(applicable_score / applicable_max * 100))
     assert result.total_score == expected
     assert 0 <= result.total_score <= 100
 
@@ -622,8 +671,9 @@ def test_allbirds_like_fixture_resolves_www_and_scores_normally(monkeypatch):
     assert all(f["status"] != "blocked" for f in result.pages_fetched)
 
     # Product pages were discovered via the sitemap and scored normally
-    # — F3/V3 never claim brand-only/not-applicable despite this being a
-    # real commerce catalog reached through index recursion.
-    assert result.dimensions["F3"]["coverage"] != "na"
-    assert result.dimensions["V3"]["coverage"] != "na"
-    assert "1/1 product pages expose machine-readable price" in result.dimensions["V1"]["evidence"]
+    # — protocol_feed/member_value_seen never claim brand-only/not-
+    # applicable despite this being a real commerce catalog reached
+    # through index recursion.
+    assert result.dimensions["protocol_feed"]["coverage"] != "na"
+    assert result.dimensions["member_value_seen"]["coverage"] != "na"
+    assert "1/1 product pages expose machine-readable price" in result.dimensions["price_truth_seen"]["evidence"]

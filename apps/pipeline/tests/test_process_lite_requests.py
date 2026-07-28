@@ -91,6 +91,7 @@ def db(monkeypatch):
                 id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, input_url TEXT,
                 status TEXT DEFAULT 'pending', total_score INTEGER,
                 integrity_capped BOOLEAN DEFAULT 0, dimensions TEXT, pages_fetched TEXT,
+                membership_probe TEXT,
                 error TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
             )
         """)
@@ -141,6 +142,22 @@ def _no_generated_competitors(monkeypatch):
     monkeypatch.setattr("generation.competitor_generator.generate_competitors", lambda *a, **k: [])
 
 
+@pytest.fixture(autouse=True)
+def _no_membership_probe_call(monkeypatch):
+    """
+    Stage 16 (Part 4): process_lite_requests now always calls
+    generation.membership_probe.probe_membership after the scan.
+    Defaulting it to a benign 'unknown' result keeps every pre-Stage-16
+    test's assertions unaffected — no real OpenAI call is made. Tests
+    that care about the probe's result override this per-test (see the
+    Stage 16 section below).
+    """
+    monkeypatch.setattr(
+        "generation.membership_probe.probe_membership",
+        lambda *a, **k: {"result": "unknown", "raw_evidence": None},
+    )
+
+
 def _insert_pending(conn, token="a1b2c3d4e5f6", brand="Acme", competitors=None, store_url=None):
     conn.exec_driver_sql(
         "INSERT INTO soa_lite_requests (token, brand_name, competitor_names, store_url, status) "
@@ -163,6 +180,15 @@ def _scan_row_by_token(conn, token):
         "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = ?)",
         (token,),
     ).fetchone()
+
+
+def _membership_probe_by_token(conn, token):
+    row = conn.exec_driver_sql(
+        "SELECT membership_probe FROM soa_lite_scan_results "
+        "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = ?)",
+        (token,),
+    ).fetchone()
+    return json.loads(row[0]) if row and row[0] else None
 
 
 def _age_scan_row(conn, token, minutes_ago):
@@ -539,6 +565,60 @@ def test_degraded_scan_result_persisted_and_request_still_completes(db, scan_sta
 
     status, *_ = _lite_row_by_token(db.connect(), "a1b2c3d4e5f6")
     assert status == "complete"
+
+
+# ── Stage 16 (Part 4): membership probe ─────────────────────────────────
+
+def test_membership_probe_result_persisted_on_scan_row(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    probe_result = {"result": "yes", "raw_evidence": "Acme Rewards is a free loyalty program."}
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+         patch("scan.engine.run_scan", return_value=_make_scan_result()), \
+         patch("generation.membership_probe.probe_membership", return_value=probe_result) as mock_probe:
+        worker.process_lite_requests()
+
+    mock_probe.assert_called_once_with("Acme", "test-key", store_url="https://acme.example.com")
+    assert _membership_probe_by_token(db.connect(), "a1b2c3d4e5f6") == probe_result
+
+
+def test_membership_probe_runs_even_without_store_url(db):
+    """probe_membership asks about the brand generally, not the crawl —
+    it must still run when there's no store_url to scan (scan itself
+    gets skipped, see test_without_store_url_scan_is_skipped_and_flow_
+    unchanged)."""
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])  # no store_url
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+         patch("generation.membership_probe.probe_membership",
+               return_value={"result": "no", "raw_evidence": None}) as mock_probe:
+        worker.process_lite_requests()
+
+    mock_probe.assert_called_once_with("Acme", "test-key", store_url=None)
+    assert _membership_probe_by_token(db.connect(), "a1b2c3d4e5f6") == {"result": "no", "raw_evidence": None}
+
+
+def test_membership_probe_failure_never_blocks_the_run(db):
+    """probe_membership itself never raises (see test_membership_probe.py),
+    but this isolation must hold even if it somehow did — same rule-4
+    discipline as the scan orchestration try/except right above it in
+    process_lite_requests."""
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    def _raise(*a, **k):
+        raise RuntimeError("boom")
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+         patch("scan.engine.run_scan", return_value=_make_scan_result()), \
+         patch("generation.membership_probe.probe_membership", _raise):
+        worker.process_lite_requests()
+
+    status, *_ = _lite_row_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert status == "running"  # request itself still succeeded
+    assert _membership_probe_by_token(db.connect(), "a1b2c3d4e5f6") is None  # never written
 
 
 def test_sweep_waits_when_scan_still_running_within_window(db):

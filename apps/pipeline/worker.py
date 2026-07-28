@@ -570,6 +570,16 @@ def process_lite_requests():
         except Exception:
             log.exception(f"[lite] request {request_id}: scan orchestration failed unexpectedly")
 
+        # Stage 16 (Part 4): a single out-of-band OpenAI call, isolated
+        # exactly like the scan above — a bug here must never flip this
+        # already-queued request to 'failed'. Independent of store_url
+        # (asks about the brand generally, not the crawl), so it runs
+        # unconditionally.
+        try:
+            _run_membership_probe(request_id, brand_name, store_url, api_key)
+        except Exception:
+            log.exception(f"[lite] request {request_id}: membership probe failed unexpectedly")
+
     except Exception as e:
         log.exception(f"[lite] request {request_id} failed")
         _mark_lite_failed(request_id, str(e))
@@ -625,6 +635,30 @@ def _run_lite_scan(request_id: int, store_url: str | None):
         })
 
     log.info(f"[lite] request {request_id}: scan {result.status} (score={result.total_score})")
+
+
+def _run_membership_probe(request_id: int, brand_name: str, store_url: str | None, api_key: str):
+    """
+    Stage 16 (Part 4): runs the membership probe and writes its result
+    onto the soa_lite_scan_results row already created (status='running'
+    or later) when the cycle was queued — see process_lite_requests.
+
+    probe_membership itself never raises (generation/membership_probe.py)
+    — it always returns a well-defined {result, raw_evidence} dict, so
+    this function only ever writes one update to the scan row.
+    """
+    from generation.membership_probe import probe_membership
+
+    result = probe_membership(brand_name, api_key, store_url=store_url)
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE soa_lite_scan_results
+            SET membership_probe = :probe, updated_at = NOW()
+            WHERE lite_request_id = :rid
+        """), {"rid": request_id, "probe": json.dumps(result)})
+
+    log.info(f"[lite] request {request_id}: membership probe result={result['result']}")
 
 
 SCAN_TERMINAL_STATUSES = ("complete", "blocked", "failed", "skipped")

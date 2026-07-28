@@ -73,7 +73,8 @@ def Session():
             CREATE TABLE soa_coded_mentions (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
                 merchant_id INTEGER, mentioned BOOLEAN, position INTEGER,
-                strength TEXT, deal_cited BOOLEAN, deal_types TEXT, evidence TEXT,
+                strength TEXT, deal_cited BOOLEAN, deal_types TEXT,
+                member_value_cited BOOLEAN, evidence TEXT,
                 coded_by TEXT, confidence FLOAT, needs_review BOOLEAN,
                 reviewed_by TEXT, reviewed_at TIMESTAMP,
                 created_at TIMESTAMP, updated_at TIMESTAMP

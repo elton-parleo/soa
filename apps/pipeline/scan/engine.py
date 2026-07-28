@@ -24,6 +24,8 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
+from soa_shared.scan_dimensions import SCORER_VERSION
+
 from . import scorer, site_typing
 from .discovery import DiscoveryResult, discover_pages, resolve_canonical_origin
 from .fetcher import FetchBudget, fetch
@@ -183,29 +185,40 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
 
         site_type_result = site_typing.classify_site(pages, discovery)
 
+        # Stage 16: v3 crawl-derived dimensions — the Accessibility
+        # pillar in full, plus the SEEN half of each True Value
+        # dimension. The SAID half needs the 12-query coded/metrics data
+        # this crawl-only engine never sees — that's computed at report-
+        # build time instead (apps/api/app/services/lite_pillars.py) and
+        # combined with these seen scores there. Dict keys use the
+        # *_seen suffix for the split dimensions so a partial (seen-only)
+        # result is never mistaken for a final combined dimension score.
         dim_scores = {
-            "F1": scorer.score_f1_agent_access(discovery, pages),
-            "F2": scorer.score_f2_catalog_context(pages, site_type_result),
-            "F3": scorer.score_f3_protocol_feed_presence(pages, site_type_result),
-            "V1": scorer.score_v1_offer_legibility(pages, site_type_result),
-            "V2": scorer.score_v2_loyalty_surface(pages),
-            "V3": scorer.score_v3_member_value(pages, site_type_result),
-            "V4": scorer.score_v4_value_rails(pages, site_type_result),
+            "agent_access": scorer.score_agent_access(discovery, pages),
+            "catalog_context": scorer.score_catalog_context(pages, site_type_result),
+            "protocol_feed": scorer.score_protocol_feed(pages, site_type_result),
+            "price_truth_seen": scorer.score_price_truth_seen(pages, site_type_result),
+            "member_value_seen": scorer.score_member_value_seen(pages, site_type_result),
+            "deal_citability_seen": scorer.score_deal_citability_seen(pages, site_type_result),
         }
-        v5_score, integrity_capped = scorer.score_v5_offer_integrity(pages)
-        dim_scores["V5"] = v5_score
 
-        # Stage 10 (A2/S3): total_score is rescaled over APPLICABLE
-        # (non-'na') dimensions only — 'na' dimensions drop out of the
-        # denominator entirely rather than counting as zero. When nothing
-        # is 'na', every weight sums to 100 exactly, so this reduces to
-        # the pre-Stage-10 raw sum (scorer_version "1" is unaffected).
+        # Stage 16 (Part 6): price-honesty checks are UNSCORED under v3
+        # — no cap, no contribution to total_score or the dimensions
+        # sum below. Still run (same crawl logic, byte-identical) and
+        # recorded as an advisory finding for the fixes/evidence path.
+        v5_result, v5_would_have_capped = scorer.score_v5_offer_integrity(pages)
+
+        # Same rescale-over-applicable-dimensions pattern as v2 (A2/S3):
+        # 'na' dimensions are excluded from both numerator and
+        # denominator, never scored as zero. This total_score is the
+        # CRAWL-ONLY portion of the v3 rubric (Accessibility + True
+        # Value's seen halves) — not the public composite, which also
+        # needs the Visibility pillar and True Value's said halves and
+        # is assembled fresh at the report layer, never read from here.
         applicable = {code: d for code, d in dim_scores.items() if d.coverage != "na"}
         applicable_score = sum(d.score for d in applicable.values())
         applicable_max = sum(d.max for d in applicable.values())
-        raw_total_pct = (applicable_score / applicable_max * 100) if applicable_max else 0.0
-        capped_total_pct = min(raw_total_pct, scorer.INTEGRITY_CAP) if integrity_capped else raw_total_pct
-        total_score = int(round(capped_total_pct))
+        total_score = int(round(applicable_score / applicable_max * 100)) if applicable_max else 0
 
         dimensions = {
             code: {
@@ -214,15 +227,22 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
             }
             for code, d in dim_scores.items()
         }
-        # Stage 10 (S4): sibling key, not a per-dimension one — no
-        # migration needed (JSON column); absence on older rows means
-        # scorer_version "1" is implied.
-        dimensions["scorer_version"] = "2"
+        # Stage 10 (S4) precedent, still followed: a sibling key, not a
+        # per-dimension one — no migration needed (JSON column); absence
+        # on older rows means scorer_version "1" is implied.
+        dimensions["scorer_version"] = SCORER_VERSION
+        dimensions["price_honesty_advisory"] = {
+            "scored": False,
+            "would_have_capped": v5_would_have_capped,
+            "evidence": v5_result.evidence,
+            "fix": v5_result.fix,
+            "cap_basis": v5_result.cap_basis,
+        }
 
         return ScanResult(
             status=STATUS_COMPLETE,
             total_score=total_score,
-            integrity_capped=integrity_capped,
+            integrity_capped=False,  # Part 6: the cap no longer exists under v3 — always False
             dimensions=dimensions,
             pages_fetched=pages_fetched,
             started_at=started_at,

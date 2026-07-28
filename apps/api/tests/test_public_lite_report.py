@@ -8,6 +8,7 @@ visibility/accessibility/composite subscores, and the crosswalk 'linked'
 attachment.
 """
 import json
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -49,7 +50,8 @@ def db(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_lite_scan_results (
                 id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, status TEXT,
-                total_score INTEGER, integrity_capped BOOLEAN, dimensions TEXT, pages_fetched TEXT
+                total_score INTEGER, integrity_capped BOOLEAN, dimensions TEXT, pages_fetched TEXT,
+                membership_probe TEXT
             )
         """)
         conn.exec_driver_sql("""
@@ -65,7 +67,8 @@ def db(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_coded_mentions (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
-                mentioned BOOLEAN, deal_cited BOOLEAN, deal_types TEXT
+                mentioned BOOLEAN, deal_cited BOOLEAN, deal_types TEXT,
+                member_value_cited BOOLEAN
             )
         """)
         conn.exec_driver_sql("""
@@ -389,6 +392,62 @@ def test_teaser_never_leaks_stage_level_mention_data(db):
         assert stage_name not in serialized
 
 
+def _seed_v3_scan_with_stage_tagged_mentions(conn, cycle_id=1, primary_entity_id=101, token="t1"):
+    """Stage 16 (Part 7 leak check): a scorer_version '3' scan plus one
+    coded mention PER STAGE for the primary entity — build_pillars_
+    payload's said sub-lenses filter run_signals BY stage internally
+    (PURCHASE_INTENT_STAGES) to compute opportunity sets; this proves
+    that filtering never lets a stage name or a stage-keyed breakdown
+    escape into the serialized pillars block."""
+    rid = _lite_request_id(conn, token)
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_scan_results "
+        "(lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe) "
+        "VALUES (?, 'complete', 88, 0, ?, ?)",
+        (rid, json.dumps(_V3_CRAWL_DIMENSIONS), json.dumps({"result": "yes", "raw_evidence": None})),
+    )
+    for i, stage in enumerate(("Awareness", "Research", "Comparison", "Ready to Buy")):
+        qid = 8100 + i
+        conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (?, ?)", (qid, stage))
+        conn.exec_driver_sql(
+            "INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (?, ?, ?, 'success')",
+            (qid, cycle_id, qid),
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_coded_mentions (run_id, entity_id, mentioned, deal_cited, deal_types, member_value_cited) "
+            "VALUES (?, ?, 1, 1, ?, 1)",
+            (qid, primary_entity_id, json.dumps(["member_price"])),
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_price_observations (run_id, entity_id, stated_price, member_price_claimed) "
+            "VALUES (?, ?, 10.0, 1)",
+            (qid, primary_entity_id),
+        )
+
+
+def test_v3_pillars_block_never_leaks_stage_names(db):
+    with db.begin() as conn:
+        _seed_cycle_with_rich_stage_variance(conn, token="t1", email="visitor@example.com")
+        _seed_v3_scan_with_stage_tagged_mentions(conn)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert result["scan"]["scorer_version"] == "3"
+    assert result["pillars"] is not None
+    serialized = json.dumps(result).lower()
+    for stage_name in _STAGE_NAMES:
+        assert stage_name not in serialized, f"stage name '{stage_name}' leaked into the v3 pillars report"
+
+
+def test_v3_pillars_block_has_no_internal_ids(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn)
+
+    result = public_lite.get_lite_report("v3full")
+    assert result["pillars"] is not None
+    _scan_for_internal_ids(result)
+
+
 # ─── Agent Scan: dimensions, locking, degraded statuses ─────────────────
 
 def _lite_request_id(conn, token):
@@ -528,6 +587,229 @@ def test_scorer_version_2_is_serialized_when_present(db):
 
     result = public_lite.get_lite_report("t1")
     assert result["scan"]["scorer_version"] == "2"
+
+
+def test_scorer_version_3_row_has_deprecated_always_empty_cap_fields(db):
+    """Stage 16 (Part 6): integrity_capped/cap_basis are deprecated for
+    scorer_version '3' — v3 never caps, so integrity_capped stays False
+    and cap_basis stays empty regardless of whatever v3-shaped dimension
+    codes (price_truth_seen, price_honesty_advisory, ...) are on the row.
+    This locks in that deprecated-always-empty contract as an explicit
+    regression guard, independent of the full v3 payload shape landing
+    (Part 7)."""
+    v3_dimensions = {
+        "scorer_version": "3",
+        "agent_access": {"score": 5, "max": 6, "evidence": ["e"], "fix": None},
+        "price_truth_seen": {"score": 4, "max": 6, "evidence": ["e"], "fix": None},
+        "price_honesty_advisory": {
+            "scored": False, "would_have_capped": True,
+            "evidence": ["was-price signal present"], "fix": None,
+            "cap_basis": ["discount depth averaging 80.0% across pages with a was-price signal"],
+        },
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(
+            conn, rid, status="complete", total_score=72,
+            integrity_capped=False, dimensions=v3_dimensions,
+        )
+
+    result = public_lite.get_lite_report("t1")
+
+    assert result["scan"]["scorer_version"] == "3"
+    assert result["scan"]["integrity_capped"] is False
+    for d in result["scan"]["dimensions"]:
+        assert d["cap_basis"] == []
+
+
+_FORBIDDEN_CAP_PHRASES = ("score cap", "59-point", "59 point", "capped the score", "score is capped")
+
+
+def test_no_score_cap_language_anywhere_in_api_app_source():
+    """Stage 16 (Part 6) grep-test: static sweep over apps/api/app/*.py
+    (routers + schemas) — a regression guard against reintroducing
+    cap-the-score copy anywhere in the API layer."""
+    app_dir = Path(__file__).resolve().parents[1] / "app"
+    offenders = []
+    for path in app_dir.rglob("*.py"):
+        text = path.read_text().lower()
+        for phrase in _FORBIDDEN_CAP_PHRASES:
+            if phrase in text:
+                offenders.append((str(path.relative_to(app_dir)), phrase))
+    assert offenders == []
+
+
+# ─── Stage 16 (Part 7): pillars block + composite versioning ────────────
+
+_V3_CRAWL_DIMENSIONS = {
+    "scorer_version": "3",
+    "agent_access": {"score": 6, "max": 6, "coverage": "full", "evidence": []},
+    "catalog_context": {"score": 8, "max": 8, "coverage": "full", "evidence": []},
+    "protocol_feed": {"score": 6, "max": 6, "coverage": "full", "evidence": []},
+    "price_truth_seen": {"score": 6, "max": 6, "coverage": "full", "evidence": []},
+    "member_value_seen": {"score": 12, "max": 12, "coverage": "full", "evidence": []},
+    "deal_citability_seen": {"score": 4, "max": 4, "coverage": "full", "evidence": []},
+}
+
+
+def _seed_v3_full_credit_scan(conn, token="v3full", email="visitor@example.com"):
+    """A scorer_version '3' scan + 2 purchase-intent mentions that cite
+    everything — mirrors test_lite_pillars.py's 'full credit' fixture,
+    so the resulting composite/pillars are exactly known (100 across
+    every pillar) without re-deriving the arithmetic here."""
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_requests (token, email, status, cycle_id) VALUES (?, ?, 'complete', 5)",
+        (token, email),
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (201, 'V3 Brand', 'v3-brand', 'brand')"
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (5, 201, 'M001', 'primary')"
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_metrics_results "
+        "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+        " mention_rate, soa_pct, position_index, rsi_score) "
+        "VALUES (5, 201, 'overall', 'overall', 2, 2, 1.0, 1.0, 1.0, 3.0)"
+    )
+    rid = _lite_request_id(conn, token)
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_scan_results (lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe) "
+        "VALUES (?, 'complete', 90, 0, ?, ?)",
+        (rid, json.dumps(_V3_CRAWL_DIMENSIONS), json.dumps({"result": "yes", "raw_evidence": None})),
+    )
+    conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (901, 'Comparison')")
+    conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (902, 'Ready to Buy')")
+    conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (901, 5, 901, 'success')")
+    conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (902, 5, 902, 'success')")
+    for run_id in (901, 902):
+        conn.exec_driver_sql(
+            "INSERT INTO soa_coded_mentions (run_id, entity_id, mentioned, deal_cited, deal_types, member_value_cited) "
+            "VALUES (?, 201, 1, 1, ?, 1)",
+            (run_id, json.dumps(["member_price"])),
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_price_observations (run_id, entity_id, stated_price, member_price_claimed) "
+            "VALUES (?, 201, 10.0, 1)",
+            (run_id,),
+        )
+    return token
+
+
+def test_v3_full_report_composite_uses_pillars_not_the_old_blend(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn)
+
+    result = public_lite.get_lite_report("v3full")
+
+    assert result["scan"]["scorer_version"] == "3"
+    assert result["visibility"] == 100
+    assert result["accessibility"] == 100
+    assert result["composite"] == 100
+    assert result["pillars"]["visibility"]["score"] == 100
+    assert result["pillars"]["accessibility"]["score"] == 100
+    assert result["pillars"]["true_value"]["score"] == 100
+    assert result["pillars"]["member_value_na"] is False
+
+
+def test_v3_teaser_gets_new_composite_but_no_pillars_block(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="v3teaser", email=None)
+
+    result = public_lite.get_lite_report("v3teaser")
+
+    assert result["locked"] is True
+    assert result["visibility"] == 100
+    assert result["accessibility"] == 100
+    assert result["composite"] == 100
+    assert "pillars" not in result
+
+
+def test_v1_row_composite_still_uses_the_pre_stage16_blend(db):
+    """Regression guard: a non-v3 scan must render byte-identically to
+    before Part 7 — no pillars block, old 0.6/0.4 blend formula."""
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="complete", total_score=80, dimensions=_FULL_DIMENSIONS)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert result["scan"]["scorer_version"] == "1"
+    assert result["visibility"] == 60.0
+    assert result["accessibility"] == 80
+    assert result["composite"] == round(0.6 * 60.0 + 0.4 * 80)
+    assert result["pillars"] is None
+
+
+def test_v3_program_less_store_normalizes_member_value_na_onto_81(db):
+    """Acceptance fixture: a program-less store — the crawl found no
+    loyalty surface at all (member_value_seen score 0) and the
+    membership probe came back 'no' — so member_value is N/A end to
+    end. price_truth/deal_citability still earn full credit, so
+    true_value's 21 applicable points (of the normal 40) are all
+    earned, and the /81 composite normalization (Part 4 P4) still
+    reaches 100 — proving a program-less store isn't penalized for a
+    dimension that was correctly excluded, not scored as zero."""
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, email, status, cycle_id) "
+            "VALUES ('v3na', 'visitor@example.com', 'complete', 6)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (301, 'Program-less Store', 'programless', 'brand')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (6, 301, 'M001', 'primary')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_metrics_results "
+            "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+            " mention_rate, soa_pct, position_index, rsi_score) "
+            "VALUES (6, 301, 'overall', 'overall', 2, 2, 1.0, 1.0, 1.0, 3.0)"
+        )
+        no_program_dimensions = dict(_V3_CRAWL_DIMENSIONS)
+        no_program_dimensions["member_value_seen"] = {
+            "score": 0, "max": 12, "coverage": "full",
+            "evidence": ["no loyalty/rewards page found in nav/footer"],
+        }
+        rid = _lite_request_id(conn, "v3na")
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_scan_results "
+            "(lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe) "
+            "VALUES (?, 'complete', 81, 0, ?, ?)",
+            (rid, json.dumps(no_program_dimensions), json.dumps({"result": "no", "raw_evidence": None})),
+        )
+        conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (911, 'Comparison')")
+        conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (912, 'Ready to Buy')")
+        conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (911, 6, 911, 'success')")
+        conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (912, 6, 912, 'success')")
+        for run_id in (911, 912):
+            # deal_cited/deal_types drive price_truth/deal_citability's said
+            # halves; nothing here claims member value, so member_value_
+            # said would be N/A on its own too — moot, since P3 already
+            # excludes the whole dimension.
+            conn.exec_driver_sql(
+                "INSERT INTO soa_coded_mentions (run_id, entity_id, mentioned, deal_cited, deal_types, member_value_cited) "
+                "VALUES (?, 301, 1, 1, '[]', 0)",
+                (run_id,),
+            )
+            conn.exec_driver_sql(
+                "INSERT INTO soa_price_observations (run_id, entity_id, stated_price, member_price_claimed) "
+                "VALUES (?, 301, 10.0, 0)",
+                (run_id,),
+            )
+
+    result = public_lite.get_lite_report("v3na")
+
+    assert result["pillars"]["member_value_na"] is True
+    member_value_row = next(d for d in result["pillars"]["true_value"]["dimensions"] if d["code"] == "member_value")
+    assert member_value_row["na"] is True
+    assert member_value_row["max"] == 0.0
+    assert result["pillars"]["true_value"]["score"] == 100  # 21/21 applicable points
+    assert result["composite"] == 100  # 81/81 applicable points, not penalized for the na dimension
 
 
 def test_na_dimension_excluded_from_applicable_max_and_never_locked(db):

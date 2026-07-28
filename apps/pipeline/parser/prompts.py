@@ -213,6 +213,33 @@ CALIBRATION RULES FOR DEAL CITATION:
     positives. Over-counting deals inflates Deal Citation Rate and misrepresents
     how often agents surface actionable promotions.
 
+MEMBER VALUE CITATION RULES:
+member_value_cited is true whenever the response indicates this entity offers
+ANY form of member-exclusive or loyalty-program value — even if it is not
+concrete/active/actionable enough to qualify as deal_cited above. This is a
+broader, separate signal from deal_cited: every deal_cited=true mention with
+deal_types containing "member_price" or "loyalty_points" should also have
+member_value_cited=true, but member_value_cited also covers vaguer mentions
+that deal_cited intentionally excludes.
+
+member_value_cited is TRUE for:
+  - Any concrete member-price/loyalty-points mention (same examples as
+    member_price/loyalty_points above)
+  - General program existence: "they have a rewards program", "Beauty
+    Insider members earn points on purchases", "loyalty members get
+    exclusive perks", "there are member-only prices"
+  - Named tier/program mentions with no specific number: "Rouge members
+    get extra benefits", "VIB members enjoy perks"
+
+member_value_cited is FALSE for:
+  - No mention of any loyalty/membership program or member-specific value
+    for this entity at all
+  - A generic, non-member-restricted price or discount ("20% off for
+    everyone", "sitewide sale") with no loyalty/membership framing
+
+Code member_value_cited independently from deal_cited — do not infer one
+field from the other.
+
 CALIBRATION RULES:
 - Primary requires BOTH recommendation language AND singularity. If the agent
   recommends multiple entities — even with strong language — the maximum any of
@@ -434,6 +461,7 @@ def build_coding_schema(
                             ],
                         },
                     },
+                    "member_value_cited": {"type": "boolean"},
                     "evidence": {"type": ["string", "null"]},
                     "confidence": {
                         "type": "number",
@@ -457,6 +485,7 @@ def build_coding_schema(
                     "strength",
                     "deal_cited",
                     "deal_types",
+                    "member_value_cited",
                     "evidence",
                     "confidence",
                     "stated_price",

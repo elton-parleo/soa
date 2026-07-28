@@ -258,6 +258,7 @@ class ResponseCoder:
                             strength=mc.strength if mc.mentioned else None,
                             deal_cited=mc.deal_cited if mc.mentioned else False,
                             deal_types=mc.deal_types if mc.deal_types else None,
+                            member_value_cited=mc.member_value_cited if mc.mentioned else False,
                             evidence=mc.evidence,
                             coded_by="llm_auto",
                             confidence=mc.confidence,

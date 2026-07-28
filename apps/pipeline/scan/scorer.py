@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 
+from soa_shared.scan_dimensions import DIMENSIONS_BY_CODE
+
 from . import site_typing
 
 WEIGHTS = {
@@ -635,4 +637,140 @@ def score_v5_offer_integrity(pages):
             evidence=["no dishonest pricing signals detected"],
         ),
         False,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Stage 16: v3 crawl-derived dimensions (SCORER_VERSION "3").
+#
+# T1: these are NOT new crawl logic — every check above (score_f1_*
+# through score_v4_*) is called unchanged and its output is rescaled
+# onto the v3 registry's seen_max/weight. The v2 functions themselves
+# are untouched (still used to render existing scorer_version "2" scan
+# rows — rule 6, no cross-version blending, Stage 10 W6) and their
+# check-level evidence/pass-fail is byte-identical before and after —
+# see test_scorer.py's v3 regression tests.
+#
+# score_v5_offer_integrity (was-price honesty + the legacy score-
+# capping behavior) is deliberately NOT wrapped here — Part 6 removes
+# it from the scored set
+# entirely. engine.py still calls it, but only to emit an unscored
+# advisory finding (see engine.py's Stage 16 comments).
+# ─────────────────────────────────────────────────────────────────────────
+
+def _rescale_dimension_score(v2_score: DimensionScore, new_max: float) -> DimensionScore:
+    """1:1 rescale of an unmodified v2 DimensionScore onto a new max —
+    same evidence, fix, coverage, and deferred_items; only score/max
+    move, proportionally."""
+    ratio = (new_max / v2_score.max) if v2_score.max else 0.0
+    return DimensionScore(
+        score=round(v2_score.score * ratio, 1),
+        max=new_max,
+        evidence=list(v2_score.evidence),
+        fix=v2_score.fix,
+        coverage=v2_score.coverage,
+        deferred_items=list(v2_score.deferred_items),
+        cap_basis=list(v2_score.cap_basis),
+    )
+
+
+def _combine_coverage(*scores: DimensionScore) -> str:
+    """'partial' wins over 'full' when combining two components into one
+    sub-lens — an honest signal that part of the combined check
+    couldn't be fully verified. Callers exclude 'na' components from
+    `scores` before calling this (see score_member_value_seen)."""
+    return "partial" if any(s.coverage == "partial" for s in scores) else "full"
+
+
+def score_agent_access(discovery, pages) -> DimensionScore:
+    """Stage 16: v2's score_f1_agent_access, rescaled onto the v3
+    agent_access dimension's weight."""
+    return _rescale_dimension_score(
+        score_f1_agent_access(discovery, pages),
+        DIMENSIONS_BY_CODE["agent_access"].weight,
+    )
+
+
+def score_catalog_context(pages, site_type_result) -> DimensionScore:
+    """Stage 16: v2's score_f2_catalog_context, rescaled onto the v3
+    catalog_context dimension's weight."""
+    return _rescale_dimension_score(
+        score_f2_catalog_context(pages, site_type_result),
+        DIMENSIONS_BY_CODE["catalog_context"].weight,
+    )
+
+
+def score_protocol_feed(pages, site_type_result) -> DimensionScore:
+    """Stage 16: v2's score_f3_protocol_feed_presence, rescaled onto the
+    v3 protocol_feed dimension's weight."""
+    return _rescale_dimension_score(
+        score_f3_protocol_feed_presence(pages, site_type_result),
+        DIMENSIONS_BY_CODE["protocol_feed"].weight,
+    )
+
+
+def score_price_truth_seen(pages, site_type_result) -> DimensionScore:
+    """Stage 16 (T1): price_truth.seen (6) = v2's score_v1_offer_legibility
+    (price/currency legibility checks), rescaled onto the seen sub-max."""
+    return _rescale_dimension_score(
+        score_v1_offer_legibility(pages, site_type_result),
+        DIMENSIONS_BY_CODE["price_truth"].seen_max,
+    )
+
+
+def score_deal_citability_seen(pages, site_type_result) -> DimensionScore:
+    """Stage 16 (T1): deal_citability.seen (4) = v2's score_v4_value_rails
+    (CONCRETE/ACTIVE/ACTIONABLE, weighted equally), rescaled onto the
+    seen sub-max."""
+    return _rescale_dimension_score(
+        score_v4_value_rails(pages, site_type_result),
+        DIMENSIONS_BY_CODE["deal_citability"].seen_max,
+    )
+
+
+def score_member_value_seen(pages, site_type_result) -> DimensionScore:
+    """
+    Stage 16 (T1): member_value.seen (12) = v2's score_v2_loyalty_surface
+    (program surface discoverability, unconditional) PLUS v2's
+    score_v3_member_value (member/tier price encoding, conditional on
+    product pages carrying Offer markup at all), combined and rescaled
+    onto the seen sub-max.
+
+    Both v2 checks run byte-identical. When member_value's own crawl
+    result is 'na' (no Offer markup anywhere, or a brand-only site — the
+    existing Stage 10/11 na rules), it's excluded from the combined
+    raw_score/raw_max entirely (matches the existing na-exclusion
+    convention — never scored as zero) and the sub-lens reduces to
+    JUST loyalty-surface discoverability, rescaled onto the full 12.
+    Its evidence is still surfaced (honest, not silent) even though it
+    contributes no points.
+    """
+    new_max = DIMENSIONS_BY_CODE["member_value"].seen_max
+
+    loyalty = score_v2_loyalty_surface(pages)
+    member_price = score_v3_member_value(pages, site_type_result)
+
+    components = [loyalty] if member_price.coverage == "na" else [loyalty, member_price]
+    raw_max = sum(c.max for c in components)
+    raw_score = sum(c.score for c in components)
+    ratio = (new_max / raw_max) if raw_max else 0.0
+
+    evidence = []
+    deferred_items = []
+    fix = None
+    for c in components:
+        evidence.extend(c.evidence)
+        deferred_items.extend(c.deferred_items)
+        fix = fix or c.fix
+    if member_price.coverage == "na":
+        evidence.extend(member_price.evidence)
+
+    return DimensionScore(
+        score=round(raw_score * ratio, 1),
+        max=new_max,
+        evidence=evidence,
+        fix=fix,
+        coverage=_combine_coverage(*components),
+        deferred_items=deferred_items,
+        cap_basis=[],
     )

@@ -749,6 +749,19 @@ class SoaCodedMention(Base):
             "alone does not constitute a deal."
         ),
     )
+    member_value_cited = Column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment=(
+            "Stage 16 (Part 5): true whenever the response indicates ANY "
+            "member-exclusive/loyalty-program value for this entity, concrete "
+            "or not — broader than deal_cited/deal_types, which deliberately "
+            "exclude vague program-existence mentions. Coded independently "
+            "from deal_cited by the same pass-1 LLM call (parser/prompts.py)."
+        ),
+    )
     evidence = Column(Text, nullable=True)
     coded_by = Column(Text, nullable=False)
     confidence = Column(Float, nullable=True)
@@ -1598,6 +1611,19 @@ class SoaLiteScanResult(Base):
         JSON,
         nullable=True,
         comment="[{url, status}] — every page the scan attempted to fetch.",
+    )
+
+    membership_probe = Column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Stage 16 (Part 4): {result: 'yes'|'no'|'unknown', raw_evidence: str|null} "
+            "from a single out-of-band OpenAI call (apps/pipeline/generation/"
+            "membership_probe.py). Metrically invisible — not one of the 12 tracked "
+            "queries, excluded from every mention/citation denominator. Feeds P3's "
+            "member_value applicability decision only (apps/api/app/services/"
+            "lite_pillars.py::member_value_applicable)."
+        ),
     )
 
     error = Column(Text, nullable=True)

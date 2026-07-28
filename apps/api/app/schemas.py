@@ -722,7 +722,15 @@ class PublicLiteScanDimension(BaseModel):
     is crawl-unverifiable — see deferred_items — but nothing here ever
     subtracts a point for a deferred item), or 'na' (inapplicable to this
     site type — excluded from every family/total sum, not scored as
-    zero). cap_basis is populated only for V5 when integrity_capped.
+    zero). cap_basis is populated only for V5 when integrity_capped, on
+    scorer_version "1"/"2" rows.
+
+    Stage 16 (Part 6): scorer_version "3" retired the legacy score-
+    capping behavior entirely — was-price findings are now an UNSCORED
+    advisory only (see engine.py's price_honesty_advisory, not exposed
+    on this model). cap_basis is deprecated for v3: kept serialized
+    (rule 6, additive-only) but always empty, since no v3 row's raw
+    dimensions carry the old V5 code this field was populated from.
     """
     code: str
     name: str
@@ -747,6 +755,11 @@ class PublicLiteScan(BaseModel):
     scorer_version defaults to "1" — the value implied for any row
     scanned before Stage 10 introduced the field (stored as a sibling
     key inside the dimensions jsonb, not a new column; see engine.py).
+
+    Stage 16 (Part 6): integrity_capped is deprecated for scorer_version
+    "3" — always False, since v3 never caps total_score (engine.py
+    hardcodes it). Kept serialized only for rule 6 (additive-only); a
+    v1/v2 row's historical True value still renders exactly as before.
     """
     status: str
     total_score: Optional[int] = None
@@ -810,6 +823,58 @@ class PublicLiteVisibilityBreakdown(BaseModel):
     incentive_citation: List[PublicLiteIncentiveCitation] = []
 
 
+class PublicLiteSubLens(BaseModel):
+    """One half (seen or said) of a True Value dimension. na=True means
+    this half didn't contribute (crawl coverage='na', or said's own
+    opportunity set had fewer than 2 mentions) — the dimension's earned/
+    max already reflect the na-rescale onto whichever half did apply."""
+    earned: float
+    max: float
+    na: bool = False
+    evidence: List[str] = []
+
+
+class PublicLitePillarDimension(BaseModel):
+    """
+    One dimension row inside a pillar block. seen/said are only
+    populated for True Value dimensions (price_truth, member_value,
+    deal_citability) — null for visibility/accessibility dimensions,
+    which have no seen/said split at all.
+    """
+    code: str
+    name: str
+    earned: float
+    max: float
+    na: bool = False
+    evidence: List[str] = []
+    seen: Optional[PublicLiteSubLens] = None
+    said: Optional[PublicLiteSubLens] = None
+
+
+class PublicLitePillar(BaseModel):
+    """score is this pillar's own 0-100 rescale (earned / applicable_max
+    * 100, na-dimensions excluded) — independent of composite, which
+    blends all three pillars' raw earned points via soa_shared.
+    scan_dimensions.compute_composite."""
+    score: float
+    max: float = 100.0
+    dimensions: List[PublicLitePillarDimension] = []
+
+
+class PublicLitePillars(BaseModel):
+    """
+    Stage 16 (Part 7): the three-pillar breakdown behind a scorer_
+    version "3" scan's visibility/accessibility/composite scalars.
+    Additive — present on the full report only, and only when the scan
+    row is scorer_version "3" (older rows have no v3-shaped crawl
+    dimensions to build this from; see public_lite.py's version branch).
+    """
+    visibility: PublicLitePillar
+    accessibility: PublicLitePillar
+    true_value: PublicLitePillar
+    member_value_na: bool = False
+
+
 class PublicLiteReportResponse(BaseModel):
     """
     by_stage: DEPRECATED (Stage 7) — always null. Per-stage mention data
@@ -826,6 +891,12 @@ class PublicLiteReportResponse(BaseModel):
     additive field, no shape change to mention_rate/share_of_mentions/
     totals. Present on the full (unlocked) report only — the teaser
     stays share-of-mentions-only, unchanged.
+    pillars (Stage 16, Part 7): additive, full report only, scorer_
+    version "3" only. visibility/accessibility/composite above are
+    unchanged fields but — for a v3 scan — are now computed FROM this
+    same pillars breakdown (build_pillars_payload, the one composite
+    function) rather than the pre-Stage-16 0.6/0.4 blend; older scan
+    rows keep rendering via that original formula untouched.
     """
     status: str
     locked: bool = False
@@ -837,6 +908,7 @@ class PublicLiteReportResponse(BaseModel):
     composite: Optional[float] = None
     scan_status: Optional[str] = None
     visibility_breakdown: Optional[PublicLiteVisibilityBreakdown] = None
+    pillars: Optional[PublicLitePillars] = None
     # Stage 13 (W4/W5): drives the widget's solo-comparison fallback and
     # the "auto-selected by ChatGPT" methodology stamp.
     competitor_source: Optional[str] = None

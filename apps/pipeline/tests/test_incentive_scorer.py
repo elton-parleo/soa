@@ -40,6 +40,7 @@ def _mc(**overrides):
         strength="Positive",
         deal_cited=True,
         deal_types=["member_price"],
+        member_value_cited=True,
         evidence="ev",
         confidence=0.9,
         stated_price=89.0,

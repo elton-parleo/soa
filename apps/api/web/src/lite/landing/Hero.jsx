@@ -83,9 +83,9 @@ export function Hero({ onSubmitted }) {
           <ReportPreviewMock domain="yourstore.com" score={57} />
           <p className="lite-visually-hidden">
             Sample report preview: an Agent Commerce Score of 57 out of 100
-            for yourstore.com, with a Foundation subscore of 24 out of 35 and
-            a Value subscore of 33 out of 65. Nine incentives were found;
-            agents can price none of them.
+            for yourstore.com, with an Accessibility subscore of 14 out of 20
+            and a True Value subscore of 26 out of 40. Nine incentives were
+            found; agents can price none of them.
           </p>
         </div>
       </div>

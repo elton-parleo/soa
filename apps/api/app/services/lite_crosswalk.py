@@ -30,6 +30,7 @@ class RunSignal:
     primary_deal_types: tuple = ()
     primary_price_quoted: bool = False           # any stated/net price observed for primary
     primary_member_price_claimed: bool = False
+    primary_member_value_cited: bool = False      # Stage 16 (Part 5): soa_coded_mentions.member_value_cited
     competitor_mentioned: bool = False
     competitor_deal_cited: bool = False
 
