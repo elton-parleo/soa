@@ -170,3 +170,28 @@ describe('LiteTeaser — Stage 7: data-driven verdict, never stage-based', () =>
     expect(screen.getByText('Unlock the full why-section and your ranked fixes.')).toBeInTheDocument()
   })
 })
+
+describe('LiteTeaser — R6 honest version fallback (Stage 19)', () => {
+  it('shows the previous-methodology notice for a completed scan with no scorer_version (implicit v1)', () => {
+    const report = { ...baseTeaser, scan_status: 'complete' }
+    render(<LiteTeaser report={report} token="tok-1" onUnlocked={() => {}} />)
+    expect(screen.getByText('SCORED UNDER A PREVIOUS METHODOLOGY')).toBeInTheDocument()
+  })
+
+  it('shows the notice for an explicit scorer_version "2" row', () => {
+    const report = { ...baseTeaser, scan_status: 'complete', scorer_version: '2' }
+    render(<LiteTeaser report={report} token="tok-1" onUnlocked={() => {}} />)
+    expect(screen.getByText('SCORED UNDER A PREVIOUS METHODOLOGY')).toBeInTheDocument()
+  })
+
+  it('never shows the notice for a scorer_version "3" row', () => {
+    const report = { ...baseTeaser, scan_status: 'complete', scorer_version: '3' }
+    render(<LiteTeaser report={report} token="tok-1" onUnlocked={() => {}} />)
+    expect(screen.queryByText('SCORED UNDER A PREVIOUS METHODOLOGY')).not.toBeInTheDocument()
+  })
+
+  it('never shows the notice when there is no scan at all (nothing to be "previous" about)', () => {
+    render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
+    expect(screen.queryByText('SCORED UNDER A PREVIOUS METHODOLOGY')).not.toBeInTheDocument()
+  })
+})

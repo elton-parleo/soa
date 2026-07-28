@@ -163,6 +163,9 @@ def test_teaser_returned_when_email_is_null(db):
     for entity in result["overall"]:
         assert set(entity.keys()) == {"name", "role", "som"}
     assert "by_stage" not in result
+    # Stage 19 (R6): no scan row at all defaults to scorer_version "1" —
+    # same convention as PublicLiteScan.scorer_version.
+    assert result["scorer_version"] == "1"
 
 
 def test_teaser_primary_role_present(db):
@@ -644,12 +647,12 @@ def test_no_score_cap_language_anywhere_in_api_app_source():
 
 _V3_CRAWL_DIMENSIONS = {
     "scorer_version": "3",
-    "agent_access": {"score": 6, "max": 6, "coverage": "full", "evidence": []},
-    "catalog_context": {"score": 8, "max": 8, "coverage": "full", "evidence": []},
-    "protocol_feed": {"score": 6, "max": 6, "coverage": "full", "evidence": []},
-    "price_truth_seen": {"score": 6, "max": 6, "coverage": "full", "evidence": []},
-    "member_value_seen": {"score": 12, "max": 12, "coverage": "full", "evidence": []},
-    "deal_citability_seen": {"score": 4, "max": 4, "coverage": "full", "evidence": []},
+    "agent_access": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": "fix agent_access"},
+    "catalog_context": {"score": 8, "max": 8, "coverage": "full", "evidence": [], "fix": "fix catalog_context"},
+    "protocol_feed": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": "fix protocol_feed"},
+    "price_truth_seen": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": "fix price_truth"},
+    "member_value_seen": {"score": 12, "max": 12, "coverage": "full", "evidence": [], "fix": "fix member_value"},
+    "deal_citability_seen": {"score": 4, "max": 4, "coverage": "full", "evidence": [], "fix": "fix deal_citability"},
 }
 
 
@@ -714,6 +717,44 @@ def test_v3_full_report_composite_uses_pillars_not_the_old_blend(db):
     assert result["pillars"]["member_value_na"] is False
 
 
+def test_v3_pillars_fix_text_reaches_the_full_report(db):
+    """Stage 19 (R5): scan.dimensions is unusable for a v3 row (F1-V5
+    keys never match a v3-keyed dimensions dict) — fix text for the
+    ranked-fixes table has to travel through pillars instead. This just
+    proves it's wired end to end; test_lite_pillars.py covers the
+    ranking rules themselves."""
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn)
+
+    result = public_lite.get_lite_report("v3full")
+
+    all_dims = result["pillars"]["accessibility"]["dimensions"] + result["pillars"]["true_value"]["dimensions"]
+    assert any(d["fix"] is not None for d in all_dims)
+    assert any(d["locked"] for d in all_dims)
+
+
+def test_v3_crosswalk_reason_remaps_onto_the_v3_dimension(db):
+    """Stage 19 (R4): lite_crosswalk.py still reasons in v1/v2 codes
+    (V1 'mentioned but no price surfaced') — a v3 row's report must
+    show that chip on price_truth, the v3 dimension a visitor actually
+    sees, not on a retired code that appears nowhere in the payload."""
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="v3link")
+        # No soa_price_observations rows at all -> primary_price_quoted
+        # is False for every run -> link_dimensions() sets V1.
+        conn.exec_driver_sql("DELETE FROM soa_price_observations")
+
+    result = public_lite.get_lite_report("v3link")
+
+    price_truth_row = next(d for d in result["pillars"]["true_value"]["dimensions"] if d["code"] == "price_truth")
+    assert price_truth_row["linked"] == {"reason": "mentioned but no price surfaced"}
+    # The retired code itself must never leak into the pillars block —
+    # scan.dimensions (the v1/v2-keyed fallback array, unused by a v3
+    # report) is a separate, pre-existing part of the payload and is
+    # out of scope for this remap.
+    assert '"V1"' not in json.dumps(result["pillars"])
+
+
 def test_v3_teaser_gets_new_composite_but_no_pillars_block(db):
     with db.begin() as conn:
         _seed_v3_full_credit_scan(conn, token="v3teaser", email=None)
@@ -725,6 +766,7 @@ def test_v3_teaser_gets_new_composite_but_no_pillars_block(db):
     assert result["accessibility"] == 100
     assert result["composite"] == 100
     assert "pillars" not in result
+    assert result["scorer_version"] == "3"
 
 
 def test_v1_row_composite_still_uses_the_pre_stage16_blend(db):
@@ -810,6 +852,48 @@ def test_v3_program_less_store_normalizes_member_value_na_onto_81(db):
     assert member_value_row["max"] == 0.0
     assert result["pillars"]["true_value"]["score"] == 100  # 21/21 applicable points
     assert result["composite"] == 100  # 81/81 applicable points, not penalized for the na dimension
+
+
+def test_v3_member_value_na_row_quotes_the_probe_as_evidence(db):
+    """Stage 19 (R2): when member_value is N/A, its evidence is the
+    probe's own verbatim answer (`probe: '...'`), not fabricated or
+    silently empty — reusing the same program-less fixture as the /81
+    normalization test above, just with a real raw_evidence string."""
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, email, status, cycle_id) "
+            "VALUES ('v3naquote', 'visitor@example.com', 'complete', 7)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (302, 'Quote Store', 'quotestore', 'brand')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (7, 302, 'M001', 'primary')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_metrics_results "
+            "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+            " mention_rate, soa_pct, position_index, rsi_score) "
+            "VALUES (7, 302, 'overall', 'overall', 0, 0, 0.0, 0.0, 0.0, NULL)"
+        )
+        no_program_dimensions = dict(_V3_CRAWL_DIMENSIONS)
+        no_program_dimensions["member_value_seen"] = {"score": 0, "max": 12, "coverage": "full", "evidence": []}
+        rid = _lite_request_id(conn, "v3naquote")
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_scan_results "
+            "(lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe) "
+            "VALUES (?, 'complete', 60, 0, ?, ?)",
+            (rid, json.dumps(no_program_dimensions),
+             json.dumps({"result": "no", "raw_evidence": "No, we do not have a loyalty or membership program."})),
+        )
+
+    result = public_lite.get_lite_report("v3naquote")
+
+    member_value_row = next(d for d in result["pillars"]["true_value"]["dimensions"] if d["code"] == "member_value")
+    assert member_value_row["na"] is True
+    assert member_value_row["evidence"] == [
+        "probe: 'No, we do not have a loyalty or membership program.'"
+    ]
 
 
 def test_na_dimension_excluded_from_applicable_max_and_never_locked(db):

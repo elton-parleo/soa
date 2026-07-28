@@ -254,6 +254,43 @@ def _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts: "_
 
 # ─── Agent Scan shaping ──────────────────────────────────────────────────
 
+# Stage 19 (R4): lite_crosswalk.py still reasons in v1/v2 dimension
+# codes (its rules predate the v3 registry) — this maps its output onto
+# the v3 dimension a visitor actually sees a chip on. Reflects the same
+# conceptual regrouping the v3 registry itself made (V1 Offer
+# Legibility -> price_truth; V2 Loyalty Surface + V3 Member Value ->
+# member_value; V4 Value Rails + V5 Offer Integrity -> deal_citability;
+# F1/F2 map straight across). Not exhaustive over every old code —
+# F3 never appears in link_dimensions()' output today.
+_CROSSWALK_CODE_TO_V3 = {
+    "F1": "agent_access", "F2": "catalog_context",
+    "V1": "price_truth", "V2": "member_value", "V3": "member_value",
+    "V4": "deal_citability", "V5": "deal_citability",
+}
+
+
+def _attach_v3_linked_reasons(pillars_payload: dict | None, linked: dict) -> None:
+    """Mutates pillars_payload in place, adding a {"reason": ...} onto
+    the matching v3 dimension row — same {"reason": ...} shape
+    _build_scan_payload already puts on v1/v2 rows, so the widget's
+    existing chip-rendering logic needs no new shape to handle. Never
+    fires on an 'na' dimension (R4) since there's no fixable/citable
+    gap to explain there."""
+    if not pillars_payload or not linked:
+        return
+    v3_linked: dict = {}
+    for old_code, reason in linked.items():
+        v3_code = _CROSSWALK_CODE_TO_V3.get(old_code)
+        if v3_code:
+            v3_linked.setdefault(v3_code, reason)
+    if not v3_linked:
+        return
+    for pillar_key in ("accessibility", "true_value"):
+        for dim in pillars_payload[pillar_key]["dimensions"]:
+            if dim["code"] in v3_linked and not dim["na"]:
+                dim["linked"] = {"reason": v3_linked[dim["code"]]}
+
+
 DIMENSION_ORDER = ("F1", "F2", "F3", "V1", "V2", "V3", "V4", "V5")
 DIMENSION_NAMES = {
     "F1": "Agent Access",
@@ -571,14 +608,15 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
     pillars_payload = None
     if scan_complete and scorer_version == "3" and primary_entity_id is not None:
         primary_metrics = overall_metrics.get(primary_code) or {}
-        membership_probe_result = _decode_json_field(scan_row[5], {}).get("result")
+        membership_probe = _decode_json_field(scan_row[5], {})
         pillars_payload = build_pillars_payload(
             som_pct=primary_metrics.get("som"),
             rsi_score=primary_metrics.get("rsi"),
             total_mentions=primary_metrics.get("total_mentions") or 0,
             crawl_dimensions=dimensions_raw,
             run_signals=run_signals,
-            membership_probe_result=membership_probe_result,
+            membership_probe_result=membership_probe.get("result"),
+            membership_probe_evidence=membership_probe.get("raw_evidence"),
         )
 
     if pillars_payload is not None:
@@ -613,6 +651,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
             status="complete", locked=True, overall=overall,
             visibility=visibility, accessibility=accessibility, composite=composite,
             scan_status=scan_status, competitor_source=competitor_source,
+            scorer_version=scorer_version,
         ).model_dump()
 
     overall = [
@@ -669,6 +708,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
         for code, reason in link_incentive_citation(incentive_citation, dimensions_raw).items():
             linked.setdefault(code, reason)
 
+    _attach_v3_linked_reasons(pillars_payload, linked)
     scan_payload = _build_scan_payload(scan_row, linked)
 
     return PublicLiteReportResponse(

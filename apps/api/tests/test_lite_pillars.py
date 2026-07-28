@@ -274,12 +274,12 @@ def test_member_value_applicable_handles_none_seen_score_defensively():
 # ─── build_pillars_payload (Stage 16, Part 7) ─────────────────────────────
 
 _FULL_CRAWL_DIMS = {
-    "agent_access": {"score": 6, "max": 6, "coverage": "full", "evidence": ["e"]},
-    "catalog_context": {"score": 8, "max": 8, "coverage": "full", "evidence": ["e"]},
-    "protocol_feed": {"score": 6, "max": 6, "coverage": "full", "evidence": ["e"]},
-    "price_truth_seen": {"score": 6, "max": 6, "coverage": "full", "evidence": ["e"]},
-    "member_value_seen": {"score": 12, "max": 12, "coverage": "full", "evidence": ["e"]},
-    "deal_citability_seen": {"score": 4, "max": 4, "coverage": "full", "evidence": ["e"]},
+    "agent_access": {"score": 6, "max": 6, "coverage": "full", "evidence": ["e"], "fix": "fix agent_access"},
+    "catalog_context": {"score": 8, "max": 8, "coverage": "full", "evidence": ["e"], "fix": "fix catalog_context"},
+    "protocol_feed": {"score": 6, "max": 6, "coverage": "full", "evidence": ["e"], "fix": "fix protocol_feed"},
+    "price_truth_seen": {"score": 6, "max": 6, "coverage": "full", "evidence": ["e"], "fix": "fix price_truth"},
+    "member_value_seen": {"score": 12, "max": 12, "coverage": "full", "evidence": ["e"], "fix": "fix member_value"},
+    "deal_citability_seen": {"score": 4, "max": 4, "coverage": "full", "evidence": ["e"], "fix": "fix deal_citability"},
 }
 
 
@@ -401,3 +401,100 @@ def test_build_pillars_payload_delegates_composite_to_the_registry_function(monk
     )
     assert result["composite"] == 42
     assert len(calls) == 1
+
+
+# ─── fix/locked ranking (Stage 19, R5) ────────────────────────────────────
+#
+# scan.dimensions is v1/v2-keyed and unusable for a v3 row (see
+# public_lite.py::_build_scan_payload's DIMENSION_ORDER) — the v3 report's
+# ranked-fix list has to come from here instead. All 6 crawl-derived
+# dimensions (accessibility's 3 + True Value's 3 seen-halves) carry a
+# 'fix' string in crawl_dimensions in these fixtures; visibility's two
+# mention-derived dimensions never do.
+
+def _dims_by_code(result):
+    return {
+        d["code"]: d
+        for d in result["accessibility"]["dimensions"] + result["true_value"]["dimensions"]
+    }
+
+
+def test_fix_text_flows_through_for_crawl_derived_dimensions():
+    # All 6 dimensions are at zero gap in this fixture, so the top-3-
+    # by-gap ranking falls back to its alphabetical tiebreak — asserting
+    # on agent_access/catalog_context (both land in that free top 3)
+    # keeps this test independent of the ranking behavior itself, which
+    # test_top_three_by_gap_stay_free_rest_are_locked covers directly.
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=_FULL_CRAWL_DIMS, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    dims = _dims_by_code(result)
+    assert dims["agent_access"]["fix"] == "fix agent_access"
+    assert dims["catalog_context"]["fix"] == "fix catalog_context"
+
+
+def test_visibility_dimensions_never_carry_fix():
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=_FULL_CRAWL_DIMS, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    for d in result["visibility"]["dimensions"]:
+        assert d.get("fix") is None
+        assert d.get("locked", False) is False
+
+
+def test_top_three_by_gap_stay_free_rest_are_locked():
+    # Distinct, unambiguous gaps: protocol_feed(6) and price_truth(4) and
+    # deal_citability(2) are the three biggest opportunities; the other
+    # three are fully earned (gap 0) and should end up locked.
+    crawl = {
+        "agent_access": {"score": 6, "max": 6, "coverage": "full", "fix": "f-aa"},
+        "catalog_context": {"score": 8, "max": 8, "coverage": "full", "fix": "f-cc"},
+        "protocol_feed": {"score": 0, "max": 6, "coverage": "full", "fix": "f-pf"},
+        "price_truth_seen": {"score": 2, "max": 6, "coverage": "full", "fix": "f-pt"},
+        "member_value_seen": {"score": 12, "max": 12, "coverage": "full", "fix": "f-mv"},
+        "deal_citability_seen": {"score": 2, "max": 4, "coverage": "full", "fix": "f-dc"},
+    }
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    dims = _dims_by_code(result)
+
+    for code in ("protocol_feed", "price_truth", "deal_citability"):
+        assert dims[code]["locked"] is False, code
+        assert dims[code]["fix"] is not None, code
+
+    for code in ("agent_access", "catalog_context", "member_value"):
+        assert dims[code]["locked"] is True, code
+        assert dims[code]["fix"] is None, code
+
+
+def test_na_dimension_is_never_locked_and_excluded_from_ranking():
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["protocol_feed"] = {"score": 0, "max": 6, "coverage": "na", "fix": "f-pf"}
+    result = build_pillars_payload(
+        som_pct=0.0, rsi_score=None, total_mentions=0,
+        crawl_dimensions=crawl, run_signals=[], membership_probe_result="unknown",
+    )
+    dims = _dims_by_code(result)
+    assert dims["protocol_feed"]["na"] is True
+    assert dims["protocol_feed"]["locked"] is False
+
+
+def test_member_value_na_dimension_has_no_fix_and_is_not_locked():
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["member_value_seen"] = {"score": 0, "max": 12, "coverage": "full", "fix": "f-mv"}
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="no",
+    )
+    dims = _dims_by_code(result)
+    assert dims["member_value"]["na"] is True
+    assert dims["member_value"]["fix"] is None
+    assert dims["member_value"]["locked"] is False

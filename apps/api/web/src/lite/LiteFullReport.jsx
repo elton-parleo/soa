@@ -36,9 +36,41 @@ import {
   ENTITY_COLORS, LightCard, DarkCard, SectionHeader, ReportHeaderBar,
   InfoBadge, Chip, useAnimateOnMount, formatScore,
 } from './liteTheme.jsx'
+import {
+  DIMENSIONS, DIMENSIONS_BY_CODE, PILLAR_ACCESSIBILITY, PILLAR_NAMES, PILLAR_ORDER,
+  PILLAR_TRUE_VALUE, PILLAR_VISIBILITY, TOTAL_MAX,
+} from './landing/scanDimensionsRegistry.js'
 
 const DEFAULT_REVENUE = 1_000_000
 const DEFAULT_AI_SHARE_PCT = 20
+
+// ─── v3 pillar helpers (Stage 19) ───────────────────────────────────────
+// report.pillars is the single source of truth for a scorer_version "3"
+// row's report rendering — present only when the scan itself was v3
+// (see public_lite.py::_build_report_payload); every v3-only component
+// below keys off it, never off report.scan.dimensions (F1-V5-keyed,
+// unusable for a v3 row — see build_pillars_payload's docstring).
+
+function isV3Report(report) {
+  return Boolean(report.pillars)
+}
+
+// earned = sum over every dimension row (an na dimension's earned/max
+// are already zeroed server-side — see lite_pillars.py); max = sum over
+// non-na rows only, since an na dimension's *nominal* max (e.g.
+// protocol_feed's crawl-side 6) is NOT pre-zeroed the way member_value's
+// is — filtering here, uniformly, handles both cases correctly without
+// special-casing either.
+function pillarEarnedMax(pillar) {
+  const dims = pillar?.dimensions || []
+  const earned = dims.reduce((sum, d) => sum + (d.earned || 0), 0)
+  const max = dims.filter((d) => !d.na).reduce((sum, d) => sum + (d.max || 0), 0)
+  return { earned, max }
+}
+
+function dimByCode(dims, code) {
+  return (dims || []).find((d) => d.code === code) || null
+}
 
 // ─── Executive tiles ────────────────────────────────────────────────────
 
@@ -55,10 +87,33 @@ function Tile({ label, value, badge }) {
   )
 }
 
-function ExecutiveTiles({ report, exposure }) {
+// Stage 19 (R6): a row scored under a pre-v3 methodology (report.pillars
+// absent, but the scan itself genuinely completed — not skipped/blocked/
+// failed) must say so plainly rather than silently rendering the old
+// two-family layout with no explanation. No re-run endpoint exists yet,
+// so the affordance just starts a fresh submission.
+function PreviousMethodologyNotice() {
+  return (
+    <div style={{ textAlign: 'center', marginBottom: 18 }}>
+      <div className="lite-mono lite-muted" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em' }}>
+        SCORED UNDER A PREVIOUS METHODOLOGY
+      </div>
+      <div className="lite-body lite-muted" style={{ fontSize: 12.5, marginTop: 4 }}>
+        This report predates the current three-pillar score.{' '}
+        <a href="/" className="lite-mono" style={{ color: 'var(--accent-ink)', fontWeight: 700 }}>
+          Re-run for the current three-pillar score
+        </a>
+      </div>
+    </div>
+  )
+}
+
+function ExecutiveTilesLegacy({ report, exposure }) {
   const accessBadge = accessibilityBadgeText(report.scan_status)
+  const showNotice = report.scan?.status === 'complete'
   return (
     <LightCard>
+      {showNotice && <PreviousMethodologyNotice />}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 28, justifyContent: 'center' }}>
         <Tile label="Composite score" value={formatScore(report.composite)} />
         <Tile label="Visibility" value={formatScore(report.visibility)} />
@@ -67,6 +122,61 @@ function ExecutiveTiles({ report, exposure }) {
       </div>
     </LightCard>
   )
+}
+
+function PillarTile({ label, earned, max, tone }) {
+  const wrapperStyle = tone === 'tv'
+    ? { background: 'var(--accent)', color: '#fff', borderRadius: 12, padding: '10px 16px', textAlign: 'center', minWidth: 96 }
+    : { textAlign: 'center', minWidth: 96 }
+  return (
+    <div style={wrapperStyle}>
+      <div className="lite-numeral lite-numeral--tile" style={tone === 'tv' ? { color: '#fff' } : undefined}>
+        {formatScore(earned)}<span style={{ fontSize: '0.5em', fontWeight: 500 }}>/{formatScore(max)}</span>
+      </div>
+      <div className="lite-label" style={{ marginTop: 8, color: tone === 'tv' ? '#fff' : undefined }}>{label}</div>
+    </div>
+  )
+}
+
+function ExecutiveTilesV3({ report, exposure }) {
+  const pillars = report.pillars
+  const visibility = pillarEarnedMax(pillars.visibility)
+  const accessibility = pillarEarnedMax(pillars.accessibility)
+  const trueValue = pillarEarnedMax(pillars.true_value)
+  // Registry-driven, computed fresh (never the cached PILLAR_WEIGHTS-
+  // style export) so a perturbed member_value weight moves this caption —
+  // same "no cross-version blending" precedent as compute_composite's
+  // own applicable_max() (soa_shared/scan_dimensions.py).
+  const applicableTotal = pillars.member_value_na
+    ? TOTAL_MAX - DIMENSIONS_BY_CODE.member_value.weight
+    : TOTAL_MAX
+
+  return (
+    <LightCard>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 28, justifyContent: 'center', alignItems: 'center' }}>
+        <PillarTile label={PILLAR_NAMES[PILLAR_VISIBILITY]} earned={visibility.earned} max={visibility.max} />
+        <PillarTile label={PILLAR_NAMES[PILLAR_ACCESSIBILITY]} earned={accessibility.earned} max={accessibility.max} />
+        <PillarTile label={PILLAR_NAMES[PILLAR_TRUE_VALUE]} earned={trueValue.earned} max={trueValue.max} tone="tv" />
+        <div style={{ textAlign: 'center', minWidth: 96 }}>
+          <div className="lite-numeral lite-numeral--tile">{formatScore(report.composite)}</div>
+          <div className="lite-label" style={{ marginTop: 8 }}>Composite score</div>
+          {pillars.member_value_na && (
+            <div className="lite-mono lite-muted" style={{ fontSize: 10, marginTop: 4 }}>
+              NORMALIZED · {formatScore(applicableTotal)} PTS APPLICABLE
+            </div>
+          )}
+        </div>
+        <Tile label="Modeled exposure/mo" value={formatCurrency(exposure)} />
+      </div>
+    </LightCard>
+  )
+}
+
+function ExecutiveTiles({ report, exposure }) {
+  if (isV3Report(report)) {
+    return <ExecutiveTilesV3 report={report} exposure={exposure} />
+  }
+  return <ExecutiveTilesLegacy report={report} exposure={exposure} />
 }
 
 // ─── Visibility section (Stage 7 — replaces the old per-stage bars) ────
@@ -170,11 +280,44 @@ function ShareDonut({ shares }) {
   )
 }
 
-function ShareOfMentionsCard({ shareOfMentions, totals }) {
+// Stage 19 (R3): folds the old standalone MentionRateCard's bars in as
+// secondary context underneath the (now scored) Share of Mentions card,
+// rather than presenting mention rate as its own scored-looking panel —
+// the mention-rate metric itself isn't a v3-scored dimension.
+function MentionRateContextRows({ mentionRate }) {
+  if (!mentionRate || mentionRate.length === 0) return null
+  const animated = useAnimateOnMount()
+  return (
+    <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--line)' }}>
+      <div className="lite-mono lite-muted" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 10 }}>
+        MENTION RATE
+      </div>
+      {mentionRate.map((r, i) => (
+        <div key={r.entity} style={{ marginBottom: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, color: 'var(--text-2)', marginBottom: 3 }}>
+            <span>{r.entity}{r.is_primary ? ' (you)' : ''}</span>
+            <span className="lite-mono">{formatScore(r.rate_pct)}% · {r.mentioned_queries}/{r.total_queries}</span>
+          </div>
+          <div className="lite-bar-track" style={{ height: 5 }}>
+            <div
+              className="lite-bar-fill"
+              style={{ width: animated ? `${r.rate_pct}%` : '0%', background: ENTITY_COLORS[i % ENTITY_COLORS.length] }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ShareOfMentionsCard({ shareOfMentions, totals, scoredPoints, mentionRate, title }) {
   const payoff = getDominantRivalPayoff({ share_of_mentions: shareOfMentions, totals })
   return (
     <div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Share of mentions</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{title || 'Share of mentions'}</div>
+        {scoredPoints && <span className="lite-mono" style={{ fontSize: 12, fontWeight: 700 }}>{scoredPoints}</span>}
+      </div>
       <div className="lite-body lite-muted" style={{ fontSize: 12.5, marginBottom: 16 }}>
         Of every brand mention across all answers, how many were yours
       </div>
@@ -191,6 +334,30 @@ function ShareOfMentionsCard({ shareOfMentions, totals }) {
       </div>
       {payoff && (
         <div className="lite-body" style={{ marginTop: 14, fontWeight: 600 }}>{payoff}</div>
+      )}
+      {mentionRate && <MentionRateContextRows mentionRate={mentionRate} />}
+    </div>
+  )
+}
+
+// Stage 19 (R3): recommendation_strength has no bars of its own (it's a
+// -1..+3 rescale, not a %-based rate) — a scored panel with its points
+// in the header and the registry evidence sentence underneath.
+function RecommendationStrengthCard({ dimension }) {
+  if (!dimension) return null
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{dimension.name}</div>
+        <span className="lite-mono" style={{ fontSize: 12, fontWeight: 700 }}>
+          {formatScore(dimension.earned)}/{formatScore(dimension.max)} pts
+        </span>
+      </div>
+      <div className="lite-body lite-muted" style={{ fontSize: 12.5, marginBottom: 16 }}>
+        Whether agents single you out as the best pick, or just list you among others
+      </div>
+      {dimension.evidence?.[0] && (
+        <div className="lite-body" style={{ fontSize: 13 }}>{dimension.evidence[0]}</div>
       )}
     </div>
   )
@@ -389,6 +556,11 @@ function VisibilitySection({ report, ctaUrl }) {
   const vb = report.visibility_breakdown
   const isSolo = report.competitor_source === 'none'
   const isAutoSelected = report.competitor_source === 'generated' || report.competitor_source === 'mixed'
+  const isV3 = isV3Report(report)
+  const rsiDim = isV3 ? dimByCode(report.pillars.visibility.dimensions, 'recommendation_strength') : null
+  const somDim = isV3 ? dimByCode(report.pillars.visibility.dimensions, 'share_of_mentions') : null
+  const somScoredPoints = somDim ? `${formatScore(somDim.earned)}/${formatScore(somDim.max)} pts` : null
+
   return (
     <LightCard>
       <SectionHeader
@@ -400,13 +572,19 @@ function VisibilitySection({ report, ctaUrl }) {
       {vb ? (
         isSolo ? (
           <div style={{ marginTop: 20 }}>
-            <MentionRateCard mentionRate={vb.mention_rate} />
+            {isV3 ? <RecommendationStrengthCard dimension={rsiDim} /> : <MentionRateCard mentionRate={vb.mention_rate} />}
+            {isV3 && <MentionRateContextRows mentionRate={vb.mention_rate} />}
             <SoloComparisonNote />
           </div>
         ) : (
           <div className="lite-cols-2" style={{ marginTop: 20 }}>
-            <MentionRateCard mentionRate={vb.mention_rate} />
-            <ShareOfMentionsCard shareOfMentions={vb.share_of_mentions} totals={vb.totals} />
+            {isV3 ? <RecommendationStrengthCard dimension={rsiDim} /> : <MentionRateCard mentionRate={vb.mention_rate} />}
+            <ShareOfMentionsCard
+              shareOfMentions={vb.share_of_mentions} totals={vb.totals}
+              scoredPoints={isV3 ? somScoredPoints : null}
+              mentionRate={isV3 ? vb.mention_rate : null}
+              title={somDim?.name}
+            />
           </div>
         )
       ) : (
@@ -414,7 +592,7 @@ function VisibilitySection({ report, ctaUrl }) {
           Visibility data isn't available for this report yet.
         </div>
       )}
-      {!isSolo && (
+      {!isSolo && !isV3 && (
         <IncentiveCitationCard
           mentionRate={vb?.mention_rate}
           incentiveCitation={vb?.incentive_citation}
@@ -422,6 +600,142 @@ function VisibilitySection({ report, ctaUrl }) {
         />
       )}
       <FunnelTeaserCard ctaUrl={ctaUrl} />
+    </LightCard>
+  )
+}
+
+// ─── True Value section (Stage 19, R2) — the report's centerpiece ──────
+// The three dual-lens dimensions (price_truth, member_value,
+// deal_citability), each split into what the crawl found encoded
+// ("what you encode") vs. what agents actually said back ("what agents
+// said") — reusing the landing page's SEEN/SAID framing. Deal
+// Citability's outcome half absorbs the old standalone incentive-
+// citation card entirely (its layered-bar visual + competitor
+// comparison move here; VisibilitySection no longer renders it for a
+// v3 report — see VisibilitySection above).
+
+function SubLensTile({ label, subLens }) {
+  if (!subLens) return null
+  return (
+    <div>
+      <div className="lite-mono lite-muted" style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.04em' }}>{label}</div>
+      {subLens.na ? (
+        <div className="lite-mono lite-muted" style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>
+          — · not enough mentions to measure
+        </div>
+      ) : (
+        <>
+          <div className="lite-mono" style={{ fontSize: 15, fontWeight: 700, marginTop: 4 }}>
+            {formatScore(subLens.earned)}/{formatScore(subLens.max)}
+          </div>
+          {subLens.evidence?.[0] && (
+            <div className="lite-body lite-muted" style={{ fontSize: 11.5, marginTop: 4 }}>{subLens.evidence[0]}</div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// Working / distribution gap / encoding gap / cited-from-elsewhere —
+// each sub-lens's own earned/max ratio (payload-derived, not a fixed
+// point threshold, so it holds up under a registry weight change)
+// decides which quadrant applies. A guard-na said sub-lens has no
+// outcome to classify at all — its tile above already says so.
+const DEAL_CITABILITY_QUADRANT_COPY = {
+  working: 'Encoded and cited — this is working.',
+  distribution_gap: 'Encoded, but agents rarely cite it — a distribution gap, not an encoding gap.',
+  encoding_gap: "Little encoded to cite, and agents aren't citing it.",
+  cited_elsewhere: 'Agents cite a deal despite little encoded on the page — likely sourced from elsewhere.',
+}
+
+function classifyDealCitability(seen, said) {
+  const seenHigh = seen && seen.max > 0 && seen.earned / seen.max >= 0.5
+  const saidHigh = said && said.max > 0 && said.earned / said.max >= 0.5
+  if (seenHigh && saidHigh) return 'working'
+  if (seenHigh && !saidHigh) return 'distribution_gap'
+  if (!seenHigh && saidHigh) return 'cited_elsewhere'
+  return 'encoding_gap'
+}
+
+function DealCitabilityOutcome({ dimension, report }) {
+  const { seen, said } = dimension
+  const vb = report.visibility_breakdown
+  const incentiveCitation = vb?.incentive_citation
+  const mentionRateByEntity = {}
+  ;(vb?.mention_rate || []).forEach((r) => { mentionRateByEntity[r.entity] = r })
+  const verdictText = said && !said.na ? DEAL_CITABILITY_QUADRANT_COPY[classifyDealCitability(seen, said)] : null
+
+  return (
+    <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--line)' }}>
+      {verdictText && <div className="lite-body" style={{ fontWeight: 600, marginBottom: 14 }}>{verdictText}</div>}
+      {incentiveCitation && incentiveCitation.length > 0 && (
+        <>
+          {incentiveCitation.map((entity, i) => (
+            <IncentiveCitationRow
+              key={entity.entity}
+              entity={entity}
+              mentionRateEntry={mentionRateByEntity[entity.entity]}
+              color={ENTITY_COLORS[i % ENTITY_COLORS.length]}
+            />
+          ))}
+          <div style={{ display: 'flex', gap: 16 }}>
+            <LegendDot color="var(--track-darker)" label="Mentioned" />
+            <LegendDot color={ENTITY_COLORS[0]} label="With an incentive cited" />
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function TrueValueDimensionRow({ dimension, report }) {
+  if (dimension.code === 'member_value' && dimension.na) {
+    return (
+      <div style={{ opacity: 0.7, marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>{dimension.name}</span>
+          <span className="lite-mono lite-muted" style={{ fontSize: 12, fontWeight: 700 }}>NOT APPLICABLE</span>
+        </div>
+        <div className="lite-body lite-muted" style={{ marginTop: 6 }}>
+          No loyalty or membership program found — neither the site crawl nor a direct model probe located one.
+        </div>
+        {dimension.evidence?.[0] && (
+          <div className="lite-mono lite-muted" style={{ fontSize: 11.5, marginTop: 6 }}>{dimension.evidence[0]}</div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+        <span style={{ fontWeight: 700, fontSize: 14 }}>{dimension.name}</span>
+        <span className="lite-mono" style={{ fontSize: 13, fontWeight: 700 }}>
+          {formatScore(dimension.earned)}/{formatScore(dimension.max)}
+        </span>
+      </div>
+      <div className="lite-cols-2">
+        <SubLensTile label="WHAT YOU ENCODE" subLens={dimension.seen} />
+        <SubLensTile label="WHAT AGENTS SAID" subLens={dimension.said} />
+      </div>
+      {dimension.code === 'deal_citability' && <DealCitabilityOutcome dimension={dimension} report={report} />}
+    </div>
+  )
+}
+
+function TrueValueSection({ report }) {
+  const trueValue = report.pillars?.true_value
+  if (!trueValue) return null
+  return (
+    <LightCard>
+      <SectionHeader
+        label={`${PILLAR_NAMES[PILLAR_TRUE_VALUE].toUpperCase()} · WHAT YOU ENCODE VS. WHAT AGENTS SAID`}
+        headline="The value only we score"
+      />
+      {trueValue.dimensions.map((d) => (
+        <TrueValueDimensionRow key={d.code} dimension={d} report={report} />
+      ))}
     </LightCard>
   )
 }
@@ -625,6 +939,130 @@ function DimensionFamily({ title, subtotal, max, applicableMax, dimensions }) {
   )
 }
 
+// ─── v3 accessibility section + methodology explainer (Stage 19, R4) ──
+// True Value's own three dimensions now live in the dedicated section
+// above (TrueValueSection) — this "why" chart only carries accessibility
+// going forward for a v3 row.
+
+function DimensionRowV3({ dimension, sharedMax }) {
+  const isNa = dimension.na
+  const trackPct = sharedMax ? (dimension.max / sharedMax) * 100 : 0
+  const fillPct = sharedMax ? (dimension.earned / sharedMax) * 100 : 0
+  const isZero = dimension.earned === 0
+  const gridlines = []
+  for (let v = 0; v <= sharedMax; v += 5) gridlines.push(v)
+  if (gridlines[gridlines.length - 1] !== sharedMax) gridlines.push(sharedMax)
+
+  return (
+    <div>
+      <div className="lite-dim-row">
+        <div className="lite-dim-label lite-mono">{dimension.name.toUpperCase()}</div>
+        <div className="lite-dim-bar-cell">
+          <div className="lite-dim-track" style={isNa ? { opacity: 0.35 } : undefined}>
+            {!isNa && <div className="lite-dim-fill" style={{ width: `${trackPct}%` }} />}
+            {!isNa && !isZero && <div className="lite-dim-fill" style={{ width: `${fillPct}%`, background: 'var(--accent)' }} />}
+            {!isNa && isZero && <span className="lite-dim-zero-tick" aria-hidden="true" />}
+            {gridlines.map((v) => (
+              <span key={v} className="lite-dim-gridline" style={{ left: `${(v / sharedMax) * 100}%` }} aria-hidden="true" />
+            ))}
+          </div>
+        </div>
+        <div className="lite-dim-score-cell">
+          {isNa ? (
+            <span className="lite-mono lite-muted" style={{ fontSize: 12, fontWeight: 700 }}>— · NOT APPLICABLE</span>
+          ) : (
+            <>
+              <span className="lite-mono" style={{ fontSize: 12, fontWeight: 700, color: isZero ? 'var(--bad-ink)' : 'var(--text)' }}>
+                {formatScore(dimension.earned)}/{dimension.max}
+              </span>
+              {dimension.linked && <Chip tone="accent">LINKED · {dimension.linked.reason.toUpperCase()}</Chip>}
+            </>
+          )}
+        </div>
+      </div>
+      {isNa && dimension.evidence?.[0] && (
+        <div className="lite-mono lite-muted" style={{ fontSize: 11, paddingLeft: 4, marginTop: 2, marginBottom: 8 }}>
+          {dimension.evidence[0]}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DimensionChartV3({ dimensions }) {
+  const sharedMax = Math.max(...dimensions.map((d) => d.max || 0), 1)
+  const axisValues = []
+  for (let v = 0; v <= sharedMax; v += 5) axisValues.push(v)
+  if (axisValues[axisValues.length - 1] !== sharedMax) axisValues.push(sharedMax)
+
+  return (
+    <div>
+      {dimensions.map((d) => <DimensionRowV3 key={d.code} dimension={d} sharedMax={sharedMax} />)}
+      <div className="lite-dim-row" aria-hidden="true" style={{ paddingTop: 4, marginTop: 2, borderTop: '1px solid var(--line)' }}>
+        <div className="lite-dim-label" />
+        <div className="lite-dim-bar-cell lite-dim-axis-track">
+          {axisValues.map((v) => (
+            <span
+              key={v}
+              className="lite-mono lite-muted"
+              style={{ position: 'absolute', left: `${(v / sharedMax) * 100}%`, transform: 'translateX(-50%)', fontSize: 11 }}
+            >
+              {v}
+            </span>
+          ))}
+        </div>
+        <div className="lite-dim-score-cell" />
+      </div>
+    </div>
+  )
+}
+
+function AccessibilitySectionV3({ accessibility }) {
+  const dims = accessibility?.dimensions || []
+  if (dims.length === 0) return null
+  const { earned, max } = pillarEarnedMax(accessibility)
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <div className="lite-label" style={{ marginBottom: 6, fontSize: 12 }}>
+        {PILLAR_NAMES[PILLAR_ACCESSIBILITY].toUpperCase()} · {formatScore(earned)}/{formatScore(max)}
+      </div>
+      <DimensionChartV3 dimensions={dims} />
+    </div>
+  )
+}
+
+function WhySectionV3({ report }) {
+  return (
+    <div>
+      <AccessibilitySectionV3 accessibility={report.pillars.accessibility} />
+      <div className="lite-body lite-muted" style={{ fontSize: 12.5 }}>
+        Price Truth, Member Value, and Deal Citability have their own section above — see "The value only we score."
+      </div>
+    </div>
+  )
+}
+
+// Three-pillar totals, computed live from the registry's own per-
+// dimension weights (never a cached export) so a perturbed weight moves
+// this line — composite is their straight sum, no separate blend.
+function MethodologyLegend() {
+  const totals = PILLAR_ORDER.map((pillar) => ({
+    pillar,
+    total: DIMENSIONS.filter((d) => d.pillar === pillar).reduce((sum, d) => sum + d.weight, 0),
+  }))
+  const grandTotal = totals.reduce((sum, t) => sum + t.total, 0)
+  return (
+    <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+      {totals.map(({ pillar, total }) => (
+        <span key={pillar} className="lite-mono lite-muted" style={{ fontSize: 11 }}>
+          {PILLAR_NAMES[pillar].toUpperCase()} {total}
+        </span>
+      ))}
+      <span className="lite-mono" style={{ fontSize: 11, fontWeight: 700 }}>= {grandTotal}</span>
+    </div>
+  )
+}
+
 function WhySection({ report, onAddStoreUrl }) {
   const scan = report.scan
   const status = scan?.status
@@ -683,16 +1121,17 @@ function FamilyLegend() {
 function WhySectionCard({ report, onAddStoreUrl }) {
   const status = report.scan?.status
   const showLegend = status === 'complete'
+  const isV3 = isV3Report(report)
   return (
     <LightCard>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
         <SectionHeader
-          label="SCORE COMPOSITION · 8 DIMENSIONS"
+          label={isV3 ? 'SCORE COMPOSITION · 3 PILLARS' : 'SCORE COMPOSITION · 8 DIMENSIONS'}
           headline={report.composite === null || report.composite === undefined ? 'Why' : `Where ${formatScore(report.composite)} comes from`}
         />
-        {showLegend && <FamilyLegend />}
+        {showLegend && (isV3 ? <MethodologyLegend /> : <FamilyLegend />)}
       </div>
-      <WhySection report={report} onAddStoreUrl={onAddStoreUrl} />
+      {isV3 ? <WhySectionV3 report={report} /> : <WhySection report={report} onAddStoreUrl={onAddStoreUrl} />}
     </LightCard>
   )
 }
@@ -728,7 +1167,10 @@ function DiagnosisCard({ diagnosis }) {
 // ─── Ranked fixes ────────────────────────────────────────────────────────
 
 function FixRow({ dimension, rank, maxGap }) {
-  const gap = (dimension.max || 0) - (dimension.score || 0)
+  // Stage 19: dimension is either a legacy scan.dimensions row (`score`)
+  // or a v3 pillars.dimensions row (`earned`) — see rankDimensionsByGap.
+  const earned = dimension.score ?? dimension.earned ?? 0
+  const gap = (dimension.max || 0) - earned
   const impactPct = maxGap ? Math.max(0, Math.min(100, (gap / maxGap) * 100)) : 0
   const hasSnippet = !dimension.locked && /[{<]/.test(dimension.fix || '')
 
@@ -758,10 +1200,24 @@ function FixRow({ dimension, rank, maxGap }) {
   )
 }
 
-function FixList({ scan }) {
-  if (!scan || scan.status !== 'complete') return null
-  const ranked = rankDimensionsByGap(scan.dimensions)
-  const maxGap = ranked.length ? (ranked[0].max || 0) - (ranked[0].score || 0) : 0
+function FixList({ report }) {
+  const isV3 = isV3Report(report)
+  let ranked
+  if (isV3) {
+    // Stage 19 (R5): scan.dimensions is unusable for a v3 row (F1-V5
+    // keys never match a v3-keyed dimensions dict — see
+    // build_pillars_payload's docstring) — fix text and ranking come
+    // from pillars instead, already computed server-side.
+    ranked = rankDimensionsByGap([
+      ...(report.pillars.accessibility?.dimensions || []),
+      ...(report.pillars.true_value?.dimensions || []),
+    ])
+  } else {
+    const scan = report.scan
+    if (!scan || scan.status !== 'complete') return null
+    ranked = rankDimensionsByGap(scan.dimensions)
+  }
+  const maxGap = ranked.length ? (ranked[0].max || 0) - (ranked[0].score ?? ranked[0].earned ?? 0) : 0
   const unlockedCount = ranked.filter((d) => !d.locked).length
 
   return (
@@ -908,6 +1364,8 @@ export function LiteFullReport({ report, onAddStoreUrl, token }) {
 
         <VisibilitySection report={report} ctaUrl={ctaUrl} />
 
+        <TrueValueSection report={report} />
+
         <EvidenceGallery examples={report.evidence_examples} />
 
         <WhySectionCard report={report} onAddStoreUrl={onAddStoreUrl} />
@@ -916,7 +1374,7 @@ export function LiteFullReport({ report, onAddStoreUrl, token }) {
 
         <LightCard>
           <SectionHeader label="RECOMMENDATIONS" annotation="Ordered by modeled impact" headline="Ranked fixes" />
-          <FixList scan={report.scan} />
+          <FixList report={report} />
         </LightCard>
 
         <LightCard>

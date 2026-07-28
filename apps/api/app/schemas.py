@@ -840,6 +840,13 @@ class PublicLitePillarDimension(BaseModel):
     populated for True Value dimensions (price_truth, member_value,
     deal_citability) — null for visibility/accessibility dimensions,
     which have no seen/said split at all.
+
+    fix/locked (Stage 19): only ever populated for the 6 crawl-derived
+    dimensions (accessibility's 3 + True Value's 3) — visibility's
+    mention-derived dimensions have nothing crawl-fixable to offer, so
+    both stay at their defaults (None/False) there. locked=True means
+    this dimension fell outside the top-3-by-gap free tier; fix is
+    always None when locked (paid-diagnostic text never serialized).
     """
     code: str
     name: str
@@ -849,6 +856,9 @@ class PublicLitePillarDimension(BaseModel):
     evidence: List[str] = []
     seen: Optional[PublicLiteSubLens] = None
     said: Optional[PublicLiteSubLens] = None
+    fix: Optional[str] = None
+    locked: bool = False
+    linked: Optional[dict] = None  # {"reason": "..."} or None — see public_lite.py's v3 crosswalk remap
 
 
 class PublicLitePillar(BaseModel):
@@ -931,6 +941,11 @@ class PublicLiteTeaserResponse(BaseModel):
     # Stage 13 (W4/W5): same fallback/methodology-stamp signal as the
     # full report (see PublicLiteReportResponse).
     competitor_source: Optional[str] = None
+    # Stage 19 (R6): the teaser has no `scan` object to read a scorer_
+    # version off of (unlike the full report), so this is its only
+    # signal for the "scored under a previous methodology" notice —
+    # defaults to "1", same convention as PublicLiteScan.scorer_version.
+    scorer_version: str = "1"
 
 
 class PublicLiteEmailRequest(BaseModel):
