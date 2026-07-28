@@ -682,6 +682,21 @@ class PublicLiteStatusResponse(BaseModel):
     # moment they're ready rather than waiting for the whole run.
     competitors: Optional[List[str]] = None
     competitor_source: Optional[str] = None
+    # Stage 20: the run-manifest status page's two additive fields — both
+    # sourced from data _run_lite_scan/_run_membership_probe already write
+    # to soa_lite_scan_results, not new computation.
+    #
+    # membership_check mirrors member_value_applicable() (app.services.
+    # lite_pillars — reused, not redefined): "applies" the instant the
+    # probe says 'yes' (no need to wait on the scan); "na" only once the
+    # scan has ALSO reached a terminal status (member_value's crawl-side
+    # credit isn't known until then); "pending" otherwise, including
+    # while the probe hasn't run/returned yet.
+    membership_check: Optional[str] = None  # "pending" | "applies" | "na"
+    # scan_pages_read: length of the scan row's pages_fetched — available
+    # the instant the scan row exists, in any status (blocked/failed/
+    # skipped rows still carry whatever was fetched before stopping).
+    scan_pages_read: Optional[int] = None
 
 
 class PublicLiteEntityMetrics(BaseModel):

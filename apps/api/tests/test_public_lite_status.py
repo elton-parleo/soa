@@ -49,7 +49,8 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_lite_scan_results (
-                id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, status TEXT
+                id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, status TEXT,
+                dimensions TEXT, pages_fetched TEXT, membership_probe TEXT
             )
         """)
     monkeypatch.setattr(public_lite, "engine", engine)
@@ -93,10 +94,16 @@ def _code_n_runs(conn, cycle_id, n):
         conn.exec_driver_sql("INSERT INTO soa_coded_mentions (run_id) VALUES (?)", (rid,))
 
 
-def _insert_scan(conn, lite_request_id, status):
+def _insert_scan(conn, lite_request_id, status, dimensions=None, pages_fetched=None, membership_probe=None):
     conn.exec_driver_sql(
-        "INSERT INTO soa_lite_scan_results (lite_request_id, status) VALUES (?, ?)",
-        (lite_request_id, status),
+        "INSERT INTO soa_lite_scan_results (lite_request_id, status, dimensions, pages_fetched, membership_probe) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (
+            lite_request_id, status,
+            json.dumps(dimensions) if dimensions is not None else None,
+            json.dumps(pages_fetched) if pages_fetched is not None else None,
+            json.dumps(membership_probe) if membership_probe is not None else None,
+        ),
     )
 
 
@@ -379,3 +386,146 @@ def test_derive_phase_unknown_status_logs_and_degrades_safely(caplog):
     assert phase == "running"
     assert progress is None
     assert any("unexpected lite_status" in r.message and "reticulating_splines" in r.message for r in caplog.records)
+
+
+# ─── Stage 20: membership_check + scan_pages_read (run-manifest fields) ──
+
+def test_membership_check_pending_when_probe_has_not_run(db):
+    """membership_probe column is NULL — probe hasn't returned at all —
+    stays 'pending' regardless of scan status."""
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "running")
+        lite_id = conn.exec_driver_sql("SELECT id FROM soa_lite_requests WHERE token = 't1'").fetchone()[0]
+        _insert_scan(conn, lite_id, "complete", dimensions={"member_value_seen": {"score": 0}})
+
+    result = public_lite.get_lite_status("t1")
+    assert result.membership_check == "pending"
+
+
+def test_membership_check_applies_immediately_when_probe_says_yes_even_mid_scan(db):
+    """A 'yes' probe result is sufficient on its own — no need to wait
+    for the scan to reach a terminal status."""
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "running")
+        lite_id = conn.exec_driver_sql("SELECT id FROM soa_lite_requests WHERE token = 't1'").fetchone()[0]
+        _insert_scan(conn, lite_id, "running", membership_probe={"result": "yes", "raw_evidence": "..."})
+
+    result = public_lite.get_lite_status("t1")
+    assert result.membership_check == "applies"
+
+
+@pytest.mark.parametrize("probe_result", ["no", "unknown"])
+def test_membership_check_stays_pending_while_scan_not_yet_terminal(db, probe_result):
+    """A non-'yes' probe result can't resolve to 'na' until the scan is
+    also terminal — the crawl might still find loyalty-surface credit."""
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "running")
+        lite_id = conn.exec_driver_sql("SELECT id FROM soa_lite_requests WHERE token = 't1'").fetchone()[0]
+        _insert_scan(conn, lite_id, "running", membership_probe={"result": probe_result})
+
+    result = public_lite.get_lite_status("t1")
+    assert result.membership_check == "pending"
+
+
+@pytest.mark.parametrize("scan_status", ["complete", "blocked", "failed", "skipped"])
+def test_membership_check_resolves_na_once_scan_terminal_with_no_credit(db, scan_status):
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "running")
+        lite_id = conn.exec_driver_sql("SELECT id FROM soa_lite_requests WHERE token = 't1'").fetchone()[0]
+        _insert_scan(
+            conn, lite_id, scan_status,
+            dimensions={"member_value_seen": {"score": 0}},
+            membership_probe={"result": "no"},
+        )
+
+    result = public_lite.get_lite_status("t1")
+    assert result.membership_check == "na"
+
+
+def test_membership_check_applies_when_scan_terminal_and_crawl_found_credit(db):
+    """Probe said 'no'/'unknown' but the crawl itself earned real
+    member_value_seen credit — still applies (member_value_applicable's
+    'either signal' rule)."""
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "running")
+        lite_id = conn.exec_driver_sql("SELECT id FROM soa_lite_requests WHERE token = 't1'").fetchone()[0]
+        _insert_scan(
+            conn, lite_id, "complete",
+            dimensions={"member_value_seen": {"score": 4}},
+            membership_probe={"result": "unknown"},
+        )
+
+    result = public_lite.get_lite_status("t1")
+    assert result.membership_check == "applies"
+
+
+def test_membership_check_null_when_no_scan_row_at_all(db):
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "queued")
+
+    result = public_lite.get_lite_status("t1")
+    assert result.membership_check == "pending"
+
+
+def test_scan_pages_read_null_before_pages_fetched_is_written(db):
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "running")
+        lite_id = conn.exec_driver_sql("SELECT id FROM soa_lite_requests WHERE token = 't1'").fetchone()[0]
+        _insert_scan(conn, lite_id, "running")
+
+    result = public_lite.get_lite_status("t1")
+    assert result.scan_pages_read is None
+
+
+def test_scan_pages_read_counts_pages_fetched_once_written(db):
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "running")
+        lite_id = conn.exec_driver_sql("SELECT id FROM soa_lite_requests WHERE token = 't1'").fetchone()[0]
+        _insert_scan(conn, lite_id, "complete", pages_fetched=[
+            {"url": "https://acme.com", "status": "fetched"},
+            {"url": "https://acme.com/products/1", "status": "fetched"},
+        ])
+
+    result = public_lite.get_lite_status("t1")
+    assert result.scan_pages_read == 2
+
+
+def test_scan_pages_read_null_when_no_scan_row_at_all(db):
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "queued")
+
+    result = public_lite.get_lite_status("t1")
+    assert result.scan_pages_read is None
+
+
+# ─── _derive_membership_check unit coverage (direct, no DB) ──────────────
+
+def test_derive_membership_check_probe_result_none_is_pending():
+    assert public_lite._derive_membership_check("complete", {"member_value_seen": {"score": 0}}, None) == "pending"
+
+
+def test_derive_membership_check_yes_applies_even_with_scan_running():
+    assert public_lite._derive_membership_check("running", {}, "yes") == "applies"
+
+
+def test_derive_membership_check_no_with_nonterminal_scan_is_pending():
+    assert public_lite._derive_membership_check("running", {}, "no") == "pending"
+
+
+def test_derive_membership_check_no_with_terminal_scan_and_zero_credit_is_na():
+    assert public_lite._derive_membership_check("complete", {"member_value_seen": {"score": 0}}, "no") == "na"
+
+
+def test_status_response_is_additive_over_pre_stage20_shape(db):
+    """A widget build that only reads the pre-Stage-20 fields (rule 6)
+    keeps working unchanged — the two new fields are additive-only."""
+    with db.begin() as conn:
+        _insert_cycle(conn, 1, "running", total_runs_planned=12)
+        _insert_lite(conn, "t1", "running", cycle_id=1)
+        _insert_runs(conn, 1, success=6)
+
+    result = public_lite.get_lite_status("t1")
+    pre_stage20_fields = {"status", "phase", "progress", "scan_status", "competitors", "competitor_source"}
+    assert pre_stage20_fields.issubset(set(result.model_dump().keys()))
+    assert result.status == "running"
+    assert result.phase == "running"

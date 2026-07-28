@@ -36,7 +36,7 @@ from soa_shared.org_helpers import get_or_create_leadgen_org
 from app.routers.metrics import build_entity_metrics
 from app.services.lite_crosswalk import RunSignal, link_dimensions, link_incentive_citation
 from app.services.lite_incentive_citation import build_incentive_citation_payload
-from app.services.lite_pillars import build_pillars_payload
+from app.services.lite_pillars import build_pillars_payload, member_value_applicable
 from app.services.lite_visibility import build_visibility_payload
 from app.schemas import (
     EntityMetrics,
@@ -761,12 +761,45 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
 
 # ─── GET /api/public/soa-lite/{token}/status ─────────────────────────────
 
+_SCAN_TERMINAL_STATUSES = ("complete", "blocked", "failed", "skipped")
+
+
+def _derive_membership_check(scan_status: str | None, dimensions_raw: dict, probe_result: str | None) -> str | None:
+    """
+    "pending" | "applies" | "na" for the run-manifest's membership-check
+    row (Stage 20). Mirrors member_value_applicable() (app.services.
+    lite_pillars — reused, never a second definition of applicability).
+
+    probe_result is None exactly when soa_lite_scan_results.
+    membership_probe hasn't been written yet (probe_membership() itself
+    always returns a real {result: ...} dict, never leaves this
+    ambiguous — see apps/pipeline/generation/membership_probe.py) — that
+    case always stays "pending", distinct from a returned 'unknown'.
+
+    "applies" fires the instant the probe says 'yes', independent of
+    the scan (a probe finding alone is sufficient — see
+    member_value_applicable's own docstring). Otherwise stays "pending"
+    until the scan ALSO reaches a terminal status: member_value's
+    crawl-side credit isn't known before then, and resolving to "na"
+    early could be reversed once the crawl finds a loyalty page.
+    """
+    if probe_result is None:
+        return "pending"
+    if probe_result == "yes":
+        return "applies"
+    if scan_status not in _SCAN_TERMINAL_STATUSES:
+        return "pending"
+    seen = dimensions_raw.get("member_value_seen") or {}
+    return "applies" if member_value_applicable(probe_result, seen.get("score") or 0.0) else "na"
+
+
 @router.get("/soa-lite/{token}/status", response_model=PublicLiteStatusResponse)
 def get_lite_status(token: str):
     with engine.connect() as conn:
         row = conn.execute(text("""
             SELECT lr.status, c.id, c.status, c.total_runs_planned, sr.status,
-                   lr.competitor_names, lr.competitor_source
+                   lr.competitor_names, lr.competitor_source,
+                   sr.dimensions, sr.pages_fetched, sr.membership_probe
             FROM soa_lite_requests lr
             LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
             LEFT JOIN soa_lite_scan_results sr ON sr.lite_request_id = lr.id
@@ -777,14 +810,23 @@ def get_lite_status(token: str):
             raise HTTPException(status_code=404, detail="Not found.")
 
         (lite_status, cycle_id, cycle_status, total_runs_planned, scan_status,
-         competitor_names, competitor_source) = row
+         competitor_names, competitor_source,
+         dimensions_raw, pages_fetched_raw, membership_probe_raw) = row
         live_counts = _fetch_live_progress_counts(conn, cycle_id) if cycle_id else None
 
     phase, progress = _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts)
 
+    pages_fetched = _decode_json_field(pages_fetched_raw, None)
+    scan_pages_read = len(pages_fetched) if pages_fetched is not None else None
+    probe_result = _decode_json_field(membership_probe_raw, {}).get("result")
+    membership_check = _derive_membership_check(
+        scan_status, _decode_json_field(dimensions_raw, {}), probe_result,
+    )
+
     return PublicLiteStatusResponse(
         status=lite_status, phase=phase, progress=progress, scan_status=scan_status,
         competitors=_decode_json_field(competitor_names, None), competitor_source=competitor_source,
+        membership_check=membership_check, scan_pages_read=scan_pages_read,
     )
 
 

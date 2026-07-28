@@ -347,6 +347,57 @@
   animation: lite-shimmer 1.6s ease-in-out infinite;
 }
 
+/* ── Run manifest — status page (Stage 20) ──────────────────────────
+ * Six fixed-order rows, each independently pending/active/done/na —
+ * see LiteProgress.jsx's deriveManifestRows(). Glyph column + name +
+ * stamp on one line, detail spans the remaining width on the next —
+ * same grid shape as design-refs/status-page-run-manifest-mock.html,
+ * adapted to sit inside the existing LightCard rather than its own
+ * bordered card (avoids double-bordering). Reuses lite-pulse
+ * (Stage 12) rather than a second keyframe for the active glyph. */
+.lite-manifest-row {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 13px 0;
+  border-top: 1px solid var(--line);
+}
+.lite-manifest-row:first-child { border-top: none; }
+.lite-manifest-glyph {
+  font-family: var(--mono);
+  font-size: 14px;
+  text-align: center;
+}
+.lite-manifest-glyph--pulse { animation: lite-pulse 1.2s ease-in-out infinite; }
+.lite-manifest-detail {
+  grid-column: 2 / 4;
+  font-size: 12.5px;
+  color: var(--text-2);
+  min-height: 17px;
+  line-height: 1.5;
+}
+.lite-manifest-qbar {
+  display: inline-block;
+  width: 110px;
+  height: 5px;
+  background: var(--track);
+  border-radius: 3px;
+  vertical-align: middle;
+  margin: 0 8px 2px 0;
+  overflow: hidden;
+}
+.lite-manifest-qbar > span {
+  display: block;
+  height: 5px;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lite-manifest-qbar > span { transition: none; }
+}
+
 /* ── Focus visibility ────────────────────────────────────────────── */
 
 .lite-root a:focus-visible,

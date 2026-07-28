@@ -35,20 +35,22 @@ describe('LiteWidget (root) — state machine', () => {
     fireEvent.click(screen.getByText('Run my free diagnostic'))
 
     await waitFor(() => expect(sessionStorage.getItem('soaLiteToken')).toBe('tok-abc'))
-    await waitFor(() => expect(screen.getByText(/Queued/)).toBeInTheDocument())
+    // Brand-only (no store_url): the reading-your-store row resolves na
+    // immediately — there's nothing to wait for.
+    await waitFor(() => expect(screen.getByText('No store URL was provided this run.')).toBeInTheDocument())
     expect(sessionStorage.getItem('soaLiteStoreUrl')).toBeNull()
   })
 
   it('stores the store URL and shows the scan track after a URL submission', async () => {
     liteApi.submit.mockResolvedValue({ token: 'tok-url', status: 'pending' })
-    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: 'running' })
 
     render(<LiteWidget />)
     fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'acme.com' } })
     fireEvent.click(screen.getByText('Run my free diagnostic'))
 
     await waitFor(() => expect(sessionStorage.getItem('soaLiteStoreUrl')).toBe('acme.com'))
-    await waitFor(() => expect(screen.getByText(/Queued to read acme.com/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('fetching pages…')).toBeInTheDocument())
   })
 
   it('resumes polling immediately when a token already exists in sessionStorage', async () => {
@@ -60,7 +62,8 @@ describe('LiteWidget (root) — state machine', () => {
     render(<LiteWidget />)
 
     await waitFor(() => expect(liteApi.getStatus).toHaveBeenCalledWith('tok-existing'))
-    await waitFor(() => expect(screen.getByText('Analyzing responses…')).toBeInTheDocument())
+    // Legacy 'analyzing' phase maps onto the scoring-the-answers row.
+    await waitFor(() => expect(screen.getByText('coding mentions, prices, and incentives…')).toBeInTheDocument())
   })
 
   it('resumes with the persisted store_url domain on the scan track after a refresh', async () => {
@@ -70,7 +73,7 @@ describe('LiteWidget (root) — state machine', () => {
 
     render(<LiteWidget />)
 
-    await waitFor(() => expect(screen.getByText(/Reading acme.com like an agent/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('fetching pages…')).toBeInTheDocument())
   })
 
   it('shows the retry view on failed status and clears storage on retry', async () => {
@@ -243,7 +246,7 @@ describe('LiteWidget — old API shape (additive fields absent)', () => {
 
     render(<LiteWidget />)
 
-    await waitFor(() => expect(screen.getByText(/Queued/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Reading your store')).toBeInTheDocument())
   })
 
   it('renders the old-shape teaser without errors when visibility/accessibility/composite are absent', async () => {
@@ -294,7 +297,7 @@ describe('LiteWidget — Stage 9: urlToken seeds the token from the URL', () => 
     render(<LiteWidget urlToken="tok-from-url" />)
 
     await waitFor(() => expect(liteApi.getStatus).toHaveBeenCalledWith('tok-from-url'))
-    await waitFor(() => expect(screen.getByText('Analyzing responses…')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('coding mentions, prices, and incentives…')).toBeInTheDocument())
   })
 
   it('persists the URL token to sessionStorage so a later /lite visit resumes it', async () => {
