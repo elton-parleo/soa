@@ -57,6 +57,24 @@ def score_share_of_mentions(som_pct: Optional[float], total_mentions: int) -> Di
     }
 
 
+def _recommendation_strength_band(ratio: float) -> str:
+    """
+    Stage 21 (bug fix 2): plain-language, user-facing line — the raw
+    rsi_score and its internal -1..+3 scale must never reach a visitor
+    (a grep test over rendered report output asserts neither "rsi" nor
+    "scale" ever appears). Banded off the dimension's own earned/max
+    ratio, the same number the report already shows the visitor
+    alongside this line, not a second, invisible metric.
+    """
+    if ratio >= 0.75:
+        return "Consistently the top pick."
+    if ratio >= 0.4:
+        return "Often listed, rarely singled out as the pick."
+    if ratio > 0:
+        return "Mentioned, but rarely recommended outright."
+    return "Named, but never actually recommended."
+
+
 def score_recommendation_strength(rsi_score: Optional[float], total_mentions: int) -> Dict:
     """
     Stage 16 (Part 2, V2): a linear rescale of rsi_score's own bounded
@@ -79,7 +97,7 @@ def score_recommendation_strength(rsi_score: Optional[float], total_mentions: in
     earned = max(0, min(weight, round(raw)))
     return {
         "code": "recommendation_strength", "earned": earned, "max": weight,
-        "evidence": [f"rsi_score {rsi_score:.2f} (scale -1 to +3)"],
+        "evidence": [_recommendation_strength_band(earned / weight if weight else 0)],
     }
 
 
@@ -377,6 +395,20 @@ def build_pillars_payload(
                 "fix": None, "locked": False,
             })
             continue
+
+        if code == "member_value" and membership_probe_result == "yes" and not (seen.get("score") or 0):
+            # Stage 21 (bug fix 3): the probe found a program but the
+            # crawl found no surface to encode it — surface BOTH signals
+            # on the applicable path. Stage 19 only threaded the probe's
+            # evidence into the na branch above; the applicable path's
+            # seen evidence was crawl-only, silently dropping the very
+            # signal that made this dimension applicable in the first
+            # place.
+            probe_note = "program exists (probe) · not discoverable on site"
+            seen_row = _sub_lens(
+                seen_row["earned"], seen_row["max"], seen_row["na"],
+                [probe_note] + seen_row["evidence"],
+            )
 
         dim_max = dimension_max(dim, said_na=said["na"])
         earned = (seen.get("score") or 0.0) + (0.0 if said["na"] else said["earned"])

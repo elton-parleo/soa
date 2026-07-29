@@ -107,12 +107,95 @@
   box-sizing: border-box;
 }
 
+/* Stage 22: sole child of .lite-root, stacking the full-width mini-nav
+   above the centered .lite-shell. .lite-root itself keeps its original
+   single-child-centering CSS untouched (every other view — LiteForm,
+   LiteProgress, LiteTeaser, LiteFailed — still mounts one child directly
+   under it), so this wrapper is what actually centers .lite-shell now. */
+.lite-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .lite-shell {
   width: 100%;
   max-width: 720px;
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* Stage 21 (F3), restructured Stage 22: sticky mini-nav — additive to
+   ReportHeaderBar, not a replacement (that keeps Copy-link/scan-status).
+   Two-layer like the mock: .lite-mini-nav is a full-bleed sticky strip
+   (fixes Stage 22's nav-beside-content bug — it used to be capped at
+   max-width:720px and centered as a row-flex sibling of .lite-shell
+   inside .lite-root); .lite-mini-nav-inner is the 720px-capped row that
+   actually holds the brand/composite + pills, matching the report body's
+   width. Scrollable pill row on mobile rather than wrapping, so it stays
+   a single unobtrusive line. */
+.lite-mini-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  width: 100%;
+  margin-bottom: 20px;
+  background: rgba(242, 241, 237, 0.92);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line);
+}
+.lite-mini-nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 10px 20px;
+}
+.lite-mini-nav-pills {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.lite-mini-nav-pills::-webkit-scrollbar { display: none; }
+.lite-mini-nav-pill {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--text-2);
+  text-decoration: none;
+  padding: 5px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.lite-mini-nav-pill:hover { background: var(--card); color: var(--text); }
+
+/* Stage 22 (F2): with a sticky mini-nav, jumping to an in-page anchor
+   must not hide the section header underneath the bar. ~64px bar height
+   (44px inner row + ~20px padding/border) plus a little air. Scoped to
+   the .lite-card[id] elements the mini-nav actually points at, not every
+   element with an id. */
+.lite-card[id],
+.lite-card-dark[id] {
+  scroll-margin-top: 76px;
+}
+
+/* Stage 22 (F3): reports get printed/exported to PDF. The mini-nav's
+   anchors are useless on paper and its sticky/backdrop styling would
+   otherwise leave a dead strip at the top of every page, so it's hidden
+   outright rather than rendered static. .lite-page/.lite-root are reset
+   defensively in case any future child ever reintroduces a row layout
+   here; .lite-shell loses its max-width so the report uses the full
+   printable width. */
+@media print {
+  .lite-mini-nav { display: none; }
+  .lite-page { display: block; width: 100%; }
+  .lite-root { display: block; width: 100%; }
+  .lite-shell { max-width: none; width: 100%; }
 }
 
 /* ── Typography ──────────────────────────────────────────────────── */
@@ -514,6 +597,32 @@
   }
 }
 
+/* Stage 21 (F1): collapsible snippet toggle — keyboard-accessible
+   (a real <button>, aria-expanded), independent per row (no accordion
+   coupling — several can be open at once). */
+.lite-snippet-toggle {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.lite-snippet-toggle:hover { color: var(--text); border-color: var(--text-2); }
+.lite-snippet-pre {
+  display: block;
+  background: var(--paper);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 11px;
+  overflow-x: auto;
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ── Sliders ─────────────────────────────────────────────────────── */
 
 .lite-slider {
@@ -605,6 +714,12 @@
    min-content — which can exceed the track and overflow the page on
    narrow viewports. Let every column grid's items shrink to fit. */
 .lite-cols-2 > *, .lite-cols-3 > *, .lite-cols-4 > * { min-width: 0; }
+
+/* Stage 21 (A): three accessibility tiles, each its own bordered box —
+   no column divider (unlike .lite-cols-3, meant for divider-separated
+   panels), collapses to one column on narrow viewports. */
+.lite-acc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 560px) { .lite-acc-grid { grid-template-columns: 1fr; } }
 
 .lite-divider { height: 1px; background: var(--line); border: none; margin: 20px 0; }
 .lite-divider--inv { background: var(--line-dark); }

@@ -34,7 +34,7 @@ from soa_shared.database import engine, session_factory
 from soa_shared.models.soa_models import LITE_STATUS_PENDING
 from soa_shared.org_helpers import get_or_create_leadgen_org
 from app.routers.metrics import build_entity_metrics
-from app.services.lite_crosswalk import RunSignal, link_dimensions, link_incentive_citation
+from app.services.lite_crosswalk import GAP_THRESHOLD, RunSignal, link_dimensions, link_incentive_citation
 from app.services.lite_incentive_citation import build_incentive_citation_payload
 from app.services.lite_pillars import build_pillars_payload, member_value_applicable
 from app.services.lite_visibility import build_visibility_payload
@@ -275,7 +275,17 @@ def _attach_v3_linked_reasons(pillars_payload: dict | None, linked: dict) -> Non
     _build_scan_payload already puts on v1/v2 rows, so the widget's
     existing chip-rendering logic needs no new shape to handle. Never
     fires on an 'na' dimension (R4) since there's no fixable/citable
-    gap to explain there."""
+    gap to explain there.
+
+    Stage 21 (bug fix 1): the source rule (e.g. F1/F2's "absent from
+    most answers") fires on MENTION absence, not on the dimension's own
+    crawl score — so remapping it blindly could attach an alarm chip to
+    a dimension that's actually scoring well (real case: agent_access at
+    4.8/6 = 80%). A chip only means something next to a dimension that's
+    ALSO failing — same GAP_THRESHOLD (lite_crosswalk.py) every other
+    linking rule in this codebase already uses to decide "is this
+    dimension actually a gap," not a second threshold definition.
+    """
     if not pillars_payload or not linked:
         return
     v3_linked: dict = {}
@@ -287,7 +297,10 @@ def _attach_v3_linked_reasons(pillars_payload: dict | None, linked: dict) -> Non
         return
     for pillar_key in ("accessibility", "true_value"):
         for dim in pillars_payload[pillar_key]["dimensions"]:
-            if dim["code"] in v3_linked and not dim["na"]:
+            if dim["code"] not in v3_linked or dim["na"]:
+                continue
+            is_failing = dim["max"] > 0 and dim["earned"] < GAP_THRESHOLD * dim["max"]
+            if is_failing:
                 dim["linked"] = {"reason": v3_linked[dim["code"]]}
 
 

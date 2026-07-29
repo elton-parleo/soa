@@ -447,7 +447,7 @@
           "max": 15.0,
           "na": false,
           "evidence": [
-            "rsi_score 0.86 (scale -1 to +3)"
+            "Often listed, rarely singled out as the pick."
           ],
           "seen": null,
           "said": null,
@@ -477,9 +477,7 @@
           "said": null,
           "fix": null,
           "locked": true,
-          "linked": {
-            "reason": "absent from most answers"
-          }
+          "linked": null
         },
         {
           "code": "catalog_context",
@@ -567,6 +565,7 @@
             "max": 12.0,
             "na": false,
             "evidence": [
+              "program exists (probe) \u00b7 not discoverable on site",
               "no loyalty/rewards page found in nav/footer",
               "no Offer markup found on any sampled product page \u2014 member pricing is not applicable"
             ]
