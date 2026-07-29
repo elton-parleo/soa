@@ -755,6 +755,95 @@ def test_v3_crosswalk_reason_remaps_onto_the_v3_dimension(db):
     assert '"V1"' not in json.dumps(result["pillars"])
 
 
+def test_v3_crosswalk_never_attaches_a_chip_to_a_dimension_that_is_not_failing(db):
+    """Stage 21 (bug fix 1) regression fixture: the real allbirds row's
+    exact shape — agent_access scoring 4.8/6 (80%, genuinely fine) while
+    research/comparison absence is high enough to fire F1's crosswalk
+    rule. The old remap attached the chip anyway because it only checked
+    "is this dimension na", never "is it actually failing" — a
+    misleading alarm next to a dimension that's doing well. No mentions
+    of the primary at all (0 of 12) is what fires F1/F2's absence rule
+    here, matching the real row (primary was named in some but not most
+    research/comparison-stage answers)."""
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, email, status, cycle_id) "
+            "VALUES ('v3nochip', 'visitor@example.com', 'complete', 8)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (401, 'Good Access Co', 'good-access', 'brand')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (8, 401, 'M001', 'primary')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_metrics_results "
+            "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+            " mention_rate, soa_pct, position_index, rsi_score) "
+            "VALUES (8, 401, 'overall', 'overall', 12, 0, 0.0, 0.0, 0.0, NULL)"
+        )
+        crawl = dict(_V3_CRAWL_DIMENSIONS)
+        crawl["agent_access"] = {"score": 4.8, "max": 6, "coverage": "full", "evidence": []}
+        rid = _lite_request_id(conn, 'v3nochip')
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_scan_results (lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe) "
+            "VALUES (?, 'complete', 60, 0, ?, ?)",
+            (rid, json.dumps(crawl), json.dumps({"result": "no", "raw_evidence": None})),
+        )
+        # Every run's the primary entity absent (0 mentions total) ->
+        # link_dimensions() fires "absent from most answers" on both F1/F2.
+        for i, stage in enumerate(("Research", "Comparison")):
+            qid = 950 + i
+            conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (?, ?)", (qid, stage))
+            conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (?, 8, ?, 'success')", (qid, qid))
+
+    result = public_lite.get_lite_report("v3nochip")
+
+    agent_access_row = next(d for d in result["pillars"]["accessibility"]["dimensions"] if d["code"] == "agent_access")
+    assert agent_access_row["earned"] == 4.8
+    assert agent_access_row["linked"] is None
+
+
+def test_v3_crosswalk_attaches_a_chip_when_the_keyed_dimension_is_genuinely_failing(db):
+    """Same absence-firing scenario as above, but catalog_context (F2's
+    v3 target) is actually failing (0/8) — the chip belongs there."""
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, email, status, cycle_id) "
+            "VALUES ('v3haschip', 'visitor@example.com', 'complete', 9)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (402, 'Bad Catalog Co', 'bad-catalog', 'brand')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (9, 402, 'M001', 'primary')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_metrics_results "
+            "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+            " mention_rate, soa_pct, position_index, rsi_score) "
+            "VALUES (9, 402, 'overall', 'overall', 12, 0, 0.0, 0.0, 0.0, NULL)"
+        )
+        crawl = dict(_V3_CRAWL_DIMENSIONS)
+        crawl["catalog_context"] = {"score": 0, "max": 8, "coverage": "full", "evidence": []}
+        rid = _lite_request_id(conn, 'v3haschip')
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_scan_results (lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe) "
+            "VALUES (?, 'complete', 60, 0, ?, ?)",
+            (rid, json.dumps(crawl), json.dumps({"result": "no", "raw_evidence": None})),
+        )
+        for i, stage in enumerate(("Research", "Comparison")):
+            qid = 960 + i
+            conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (?, ?)", (qid, stage))
+            conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (?, 9, ?, 'success')", (qid, qid))
+
+    result = public_lite.get_lite_report("v3haschip")
+
+    catalog_row = next(d for d in result["pillars"]["accessibility"]["dimensions"] if d["code"] == "catalog_context")
+    assert catalog_row["earned"] == 0
+    assert catalog_row["linked"] == {"reason": "absent from most answers"}
+
+
 def test_v3_teaser_gets_new_composite_but_no_pillars_block(db):
     with db.begin() as conn:
         _seed_v3_full_credit_scan(conn, token="v3teaser", email=None)

@@ -21,6 +21,15 @@ export const ENTITY_COLORS = [
   'var(--rival-1)', 'var(--rival-2)', 'var(--rival-3)', 'var(--rival-4)', 'var(--rival-5)',
 ]
 
+// Stage 21 (V1): a monochrome ramp for the visualization-first report's
+// mention-rate/share-of-mentions charts — you in --accent (with an
+// inline "YOU" tag) against a slate-to-light-grey ramp for rivals,
+// de-emphasizing individual rival identity by hue (doesn't scale as
+// cleanly as a rank ramp once there are 5-6 of them) in favor of a
+// clean "you vs. the field" read. --foundation is the same hex the
+// design mock calls --slate; cycles by index like ENTITY_COLORS.
+export const RIVAL_SLATE_RAMP = ['var(--foundation)', '#8890A0', '#B9BEC9']
+
 export function formatRsi(v) {
   if (v === null || v === undefined) return '—'
   return v.toFixed(2)
@@ -153,9 +162,9 @@ export function SectionHeader({ label, headline, annotation, inv }) {
 
 // ─── Cards ────────────────────────────────────────────────────────────
 
-export function LightCard({ children, style }) {
+export function LightCard({ children, style, id }) {
   return (
-    <div className="lite-card" style={style}>
+    <div className="lite-card" style={style} id={id}>
       <span className="lite-corner lite-corner--tl" aria-hidden="true" />
       <span className="lite-corner lite-corner--tr" aria-hidden="true" />
       <span className="lite-corner lite-corner--bl" aria-hidden="true" />
@@ -165,8 +174,8 @@ export function LightCard({ children, style }) {
   )
 }
 
-export function DarkCard({ children, style }) {
-  return <div className="lite-card-dark" style={style}>{children}</div>
+export function DarkCard({ children, style, id }) {
+  return <div className="lite-card-dark" style={style} id={id}>{children}</div>
 }
 
 // ─── Pills & chips ────────────────────────────────────────────────────

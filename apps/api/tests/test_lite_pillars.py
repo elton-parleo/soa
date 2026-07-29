@@ -95,7 +95,28 @@ def test_recommendation_strength_clamps_above_theoretical_max():
 def test_recommendation_strength_evidence_present():
     result = score_recommendation_strength(rsi_score=1.44, total_mentions=4)
     assert result["evidence"]
-    assert "1.44" in result["evidence"][0]
+
+
+# Stage 21 (bug fix 2): the raw rsi_score and its internal -1..+3 scale
+# must never reach a visitor — evidence is a banded plain-language line
+# keyed off the earned/max ratio the visitor already sees numerically.
+@pytest.mark.parametrize("rsi_score,expected_line", [
+    (3.0, "Consistently the top pick."),            # 15/15 = 100%
+    (1.44, "Often listed, rarely singled out as the pick."),  # 9/15 = 60%
+    (-0.6, "Mentioned, but rarely recommended outright."),    # earned 2/15 ~ 13%
+    (-1.0, "Named, but never actually recommended."),         # 0/15 = 0%
+])
+def test_recommendation_strength_evidence_is_banded_plain_language(rsi_score, expected_line):
+    result = score_recommendation_strength(rsi_score=rsi_score, total_mentions=4)
+    assert result["evidence"] == [expected_line]
+
+
+def test_recommendation_strength_evidence_never_leaks_the_raw_metric_or_its_scale():
+    for rsi_score in (-1.0, -0.6, 0.17, 1.44, 2.12, 3.0):
+        result = score_recommendation_strength(rsi_score=rsi_score, total_mentions=4)
+        evidence_text = " ".join(result["evidence"]).lower()
+        assert "rsi" not in evidence_text
+        assert "scale" not in evidence_text
 
 
 # ─── True Value 'said' sub-lenses (Stage 16, Part 3 T2) ──────────────────
@@ -363,6 +384,38 @@ def test_member_value_na_excludes_it_entirely_from_true_value_and_composite():
     # composite: visibility(40) + accessibility(20) + true_value(21) = 81
     # earned out of applicable_max(member_value_na=True) = 81 -> 100.
     assert result["composite"] == 100
+
+
+# Stage 21 (bug fix 3): the applicable path only ever showed crawl
+# evidence, silently dropping the probe finding that made the dimension
+# applicable in the first place when the crawl itself found nothing.
+
+def test_member_value_applicable_with_probe_yes_and_empty_crawl_surfaces_both_signals():
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["member_value_seen"] = {"score": 0, "max": 12, "coverage": "full", "evidence": ["no loyalty page found"]}
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    assert result["member_value_na"] is False
+    member_value_row = next(d for d in result["true_value"]["dimensions"] if d["code"] == "member_value")
+    assert member_value_row["na"] is False
+    assert member_value_row["seen"]["evidence"][0] == "program exists (probe) · not discoverable on site"
+    assert "no loyalty page found" in member_value_row["seen"]["evidence"]
+
+
+def test_member_value_applicable_via_crawl_credit_does_not_add_the_probe_line():
+    """Applicable via real crawl credit (score > 0) — no probe finding
+    to surface, so evidence stays crawl-only."""
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=_FULL_CRAWL_DIMS, run_signals=_full_credit_signals(),
+        membership_probe_result="no",
+    )
+    member_value_row = next(d for d in result["true_value"]["dimensions"] if d["code"] == "member_value")
+    assert member_value_row["na"] is False
+    assert "program exists (probe)" not in " ".join(member_value_row["seen"]["evidence"])
 
 
 def test_said_na_thin_opportunity_set_rescales_dimension_onto_seen_only():

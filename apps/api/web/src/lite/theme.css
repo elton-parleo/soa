@@ -115,6 +115,43 @@
   gap: 20px;
 }
 
+/* Stage 21 (F3): sticky mini-nav — additive to ReportHeaderBar, not a
+   replacement (that keeps Copy-link/scan-status). Scrollable row on
+   mobile rather than wrapping, so it stays a single unobtrusive line. */
+.lite-mini-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 20px;
+  margin: 0 auto 20px;
+  width: 100%;
+  max-width: 720px;
+  background: rgba(242, 241, 237, 0.92);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line);
+}
+.lite-mini-nav-pills {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.lite-mini-nav-pills::-webkit-scrollbar { display: none; }
+.lite-mini-nav-pill {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--text-2);
+  text-decoration: none;
+  padding: 5px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.lite-mini-nav-pill:hover { background: var(--card); color: var(--text); }
+
 /* ── Typography ──────────────────────────────────────────────────── */
 
 .lite-mono { font-family: var(--mono); }
@@ -514,6 +551,32 @@
   }
 }
 
+/* Stage 21 (F1): collapsible snippet toggle — keyboard-accessible
+   (a real <button>, aria-expanded), independent per row (no accordion
+   coupling — several can be open at once). */
+.lite-snippet-toggle {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.lite-snippet-toggle:hover { color: var(--text); border-color: var(--text-2); }
+.lite-snippet-pre {
+  display: block;
+  background: var(--paper);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 11px;
+  overflow-x: auto;
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ── Sliders ─────────────────────────────────────────────────────── */
 
 .lite-slider {
@@ -605,6 +668,12 @@
    min-content — which can exceed the track and overflow the page on
    narrow viewports. Let every column grid's items shrink to fit. */
 .lite-cols-2 > *, .lite-cols-3 > *, .lite-cols-4 > * { min-width: 0; }
+
+/* Stage 21 (A): three accessibility tiles, each its own bordered box —
+   no column divider (unlike .lite-cols-3, meant for divider-separated
+   panels), collapses to one column on narrow viewports. */
+.lite-acc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 560px) { .lite-acc-grid { grid-template-columns: 1fr; } }
 
 .lite-divider { height: 1px; background: var(--line); border: none; margin: 20px 0; }
 .lite-divider--inv { background: var(--line-dark); }
