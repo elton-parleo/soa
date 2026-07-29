@@ -107,6 +107,18 @@
   box-sizing: border-box;
 }
 
+/* Stage 22: sole child of .lite-root, stacking the full-width mini-nav
+   above the centered .lite-shell. .lite-root itself keeps its original
+   single-child-centering CSS untouched (every other view — LiteForm,
+   LiteProgress, LiteTeaser, LiteFailed — still mounts one child directly
+   under it), so this wrapper is what actually centers .lite-shell now. */
+.lite-page {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .lite-shell {
   width: 100%;
   max-width: 720px;
@@ -115,24 +127,34 @@
   gap: 20px;
 }
 
-/* Stage 21 (F3): sticky mini-nav — additive to ReportHeaderBar, not a
-   replacement (that keeps Copy-link/scan-status). Scrollable row on
-   mobile rather than wrapping, so it stays a single unobtrusive line. */
+/* Stage 21 (F3), restructured Stage 22: sticky mini-nav — additive to
+   ReportHeaderBar, not a replacement (that keeps Copy-link/scan-status).
+   Two-layer like the mock: .lite-mini-nav is a full-bleed sticky strip
+   (fixes Stage 22's nav-beside-content bug — it used to be capped at
+   max-width:720px and centered as a row-flex sibling of .lite-shell
+   inside .lite-root); .lite-mini-nav-inner is the 720px-capped row that
+   actually holds the brand/composite + pills, matching the report body's
+   width. Scrollable pill row on mobile rather than wrapping, so it stays
+   a single unobtrusive line. */
 .lite-mini-nav {
   position: sticky;
   top: 0;
   z-index: 5;
+  width: 100%;
+  margin-bottom: 20px;
+  background: rgba(242, 241, 237, 0.92);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--line);
+}
+.lite-mini-nav-inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 10px 20px;
-  margin: 0 auto 20px;
   width: 100%;
   max-width: 720px;
-  background: rgba(242, 241, 237, 0.92);
-  backdrop-filter: blur(6px);
-  border-bottom: 1px solid var(--line);
+  margin: 0 auto;
+  padding: 10px 20px;
 }
 .lite-mini-nav-pills {
   display: flex;
@@ -151,6 +173,30 @@
   white-space: nowrap;
 }
 .lite-mini-nav-pill:hover { background: var(--card); color: var(--text); }
+
+/* Stage 22 (F2): with a sticky mini-nav, jumping to an in-page anchor
+   must not hide the section header underneath the bar. ~64px bar height
+   (44px inner row + ~20px padding/border) plus a little air. Scoped to
+   the .lite-card[id] elements the mini-nav actually points at, not every
+   element with an id. */
+.lite-card[id],
+.lite-card-dark[id] {
+  scroll-margin-top: 76px;
+}
+
+/* Stage 22 (F3): reports get printed/exported to PDF. The mini-nav's
+   anchors are useless on paper and its sticky/backdrop styling would
+   otherwise leave a dead strip at the top of every page, so it's hidden
+   outright rather than rendered static. .lite-page/.lite-root are reset
+   defensively in case any future child ever reintroduces a row layout
+   here; .lite-shell loses its max-width so the report uses the full
+   printable width. */
+@media print {
+  .lite-mini-nav { display: none; }
+  .lite-page { display: block; width: 100%; }
+  .lite-root { display: block; width: 100%; }
+  .lite-shell { max-width: none; width: 100%; }
+}
 
 /* ── Typography ──────────────────────────────────────────────────── */
 

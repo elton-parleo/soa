@@ -1649,13 +1649,15 @@ const MINI_NAV_ANCHORS = [
 function MiniNav({ brandOrDomain, composite }) {
   return (
     <nav className="lite-mini-nav" aria-label="Report sections">
-      <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap' }}>
-        {brandOrDomain} <span className="lite-muted" style={{ fontWeight: 400 }}>· {formatScore(composite)}/100</span>
-      </span>
-      <div className="lite-mini-nav-pills">
-        {MINI_NAV_ANCHORS.map((a) => (
-          <a key={a.href} href={a.href} className="lite-mono lite-mini-nav-pill">{a.label}</a>
-        ))}
+      <div className="lite-mini-nav-inner">
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap' }}>
+          {brandOrDomain} <span className="lite-muted" style={{ fontWeight: 400 }}>· {formatScore(composite)}/100</span>
+        </span>
+        <div className="lite-mini-nav-pills">
+          {MINI_NAV_ANCHORS.map((a) => (
+            <a key={a.href} href={a.href} className="lite-mono lite-mini-nav-pill">{a.label}</a>
+          ))}
+        </div>
       </div>
     </nav>
   )
@@ -1675,10 +1677,11 @@ export function LiteFullReport({ report, onAddStoreUrl, token }) {
 
   return (
     <div className="lite-root">
-      {isV3Report(report) && (
-        <MiniNav brandOrDomain={primaryEntity?.name || 'Your brand'} composite={report.composite} />
-      )}
-      <div className="lite-shell" style={{ maxWidth: 720 }}>
+      <div className="lite-page">
+        {isV3Report(report) && (
+          <MiniNav brandOrDomain={primaryEntity?.name || 'Your brand'} composite={report.composite} />
+        )}
+        <div className="lite-shell" style={{ maxWidth: 720 }}>
         <ReportHeaderBar
           brandOrDomain={primaryEntity?.name || 'Your brand'}
           scannedDateLabel={formatDateStamp()}
@@ -1711,6 +1714,7 @@ export function LiteFullReport({ report, onAddStoreUrl, token }) {
         <DiagnosticCliff ctaUrl={ctaUrl} />
 
         <Footer />
+        </div>
       </div>
     </div>
   )

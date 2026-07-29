@@ -1286,4 +1286,97 @@ describe('LiteFullReport — mobile render at 360px (Stage 21)', () => {
     expect(screen.getByText('WHAT AGENTS SAID')).toBeInTheDocument()
     expect(screen.getAllByText('Price Truth').length).toBeGreaterThan(0)
   })
+
+  it('mobile: the mini-nav pill row stays a single scrollable line, not a wrapped column (Stage 22, F4)', () => {
+    Object.defineProperty(window, 'innerWidth', { value: 360, configurable: true })
+    const { container } = render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
+    // The structural fix is viewport-independent (it's not a media query
+    // toggling flex-direction), so the same single-row nav DOM renders at
+    // 360px as at desktop width — the horizontal scroll comes from
+    // .lite-mini-nav-pills{overflow-x:auto}, not from a layout change.
+    const pills = container.querySelector('.lite-mini-nav-pills')
+    expect(pills).toBeInTheDocument()
+    expect(pills.children.length).toBe(5)
+  })
+})
+
+describe('LiteFullReport — Stage 22: full-width sticky mini-nav layout fix', () => {
+  const THEME_CSS = fs.readFileSync(path.join(__dirname, '../theme.css'), 'utf8')
+
+  function cssBlock(css, selector) {
+    const re = new RegExp(selector.replace(/[.[\]]/g, '\\$&') + '\\s*\\{([^}]*)\\}')
+    const match = css.match(re)
+    return match ? match[1] : null
+  }
+
+  it('the mini-nav is NOT a row-flex sibling of the report content inside .lite-root — it is nested with .lite-shell under one .lite-page wrapper', () => {
+    const { container } = render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
+    const root = container.querySelector('.lite-root')
+    // .lite-root must keep exactly one direct child (every other view —
+    // LiteForm/LiteProgress/LiteTeaser/LiteFailed — also mounts a single
+    // child under it, and its CSS custom properties are scoped here) or
+    // the old row-flex bug (nav left, content right) reappears.
+    expect(root.children.length).toBe(1)
+    const page = root.querySelector(':scope > .lite-page')
+    expect(page).toBeInTheDocument()
+
+    const pageChildren = Array.from(page.children)
+    const nav = page.querySelector(':scope > .lite-mini-nav')
+    const shell = page.querySelector(':scope > .lite-shell')
+    expect(nav).toBeInTheDocument()
+    expect(shell).toBeInTheDocument()
+    // Nav renders above (before, in DOM order) the content wrapper —
+    // stacked, not beside it.
+    expect(pageChildren.indexOf(nav)).toBeLessThan(pageChildren.indexOf(shell))
+  })
+
+  it('the mini-nav has a two-layer structure: a full-width outer bar and a 720px-capped inner row matching the content width', () => {
+    const { container } = render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
+    const nav = container.querySelector('.lite-mini-nav')
+    const inner = nav.querySelector(':scope > .lite-mini-nav-inner')
+    expect(inner).toBeInTheDocument()
+    // Brand/composite + pills live in the inner row, not directly on the
+    // full-width outer <nav>.
+    expect(inner.querySelector('.lite-mini-nav-pills')).toBeInTheDocument()
+  })
+
+  it('every mini-nav anchor href resolves to a rendered section id in the document', () => {
+    const { container } = render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
+    const pills = container.querySelectorAll('.lite-mini-nav-pill')
+    expect(pills.length).toBe(5)
+    pills.forEach((pill) => {
+      const id = pill.getAttribute('href').slice(1)
+      expect(container.querySelector(`#${id}`)).toBeInTheDocument()
+    })
+  })
+
+  it('CSS: .lite-page centers a single full-width child in column direction, leaving .lite-root itself unchanged', () => {
+    expect(cssBlock(THEME_CSS, '.lite-root')).toMatch(/display:\s*flex/)
+    expect(cssBlock(THEME_CSS, '.lite-root')).toMatch(/justify-content:\s*center/)
+    const page = cssBlock(THEME_CSS, '.lite-page')
+    expect(page).toMatch(/display:\s*flex/)
+    expect(page).toMatch(/flex-direction:\s*column/)
+  })
+
+  it('CSS: .lite-mini-nav spans the full outer width (no max-width cap); .lite-mini-nav-inner is capped at 720px like .lite-shell', () => {
+    const nav = cssBlock(THEME_CSS, '.lite-mini-nav')
+    expect(nav).toMatch(/width:\s*100%/)
+    expect(nav).not.toMatch(/max-width/)
+    const inner = cssBlock(THEME_CSS, '.lite-mini-nav-inner')
+    expect(inner).toMatch(/max-width:\s*720px/)
+  })
+
+  it('CSS (F2): anchor targets get scroll-margin-top so a jump does not hide the section header under the sticky bar', () => {
+    const rule = THEME_CSS.match(/\.lite-card\[id\],\s*\n?\s*\.lite-card-dark\[id\]\s*\{([^}]*)\}/)
+    expect(rule).not.toBeNull()
+    expect(rule[1]).toMatch(/scroll-margin-top:\s*\d+px/)
+  })
+
+  it('CSS (F3): a print stylesheet hides the mini-nav and removes the report-wrapper max-width, with no row-layout leaking through', () => {
+    const printBlock = THEME_CSS.match(/@media print\s*\{([\s\S]*?)\n\}/)
+    expect(printBlock).not.toBeNull()
+    const body = printBlock[1]
+    expect(body).toMatch(/\.lite-mini-nav\s*\{[^}]*display:\s*none/)
+    expect(body).toMatch(/\.lite-shell\s*\{[^}]*max-width:\s*none/)
+  })
 })
