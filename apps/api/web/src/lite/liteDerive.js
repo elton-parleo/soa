@@ -94,7 +94,13 @@ export function groupDimensionsByFamily(dimensions) {
  * Stage 19: also accepts v3 pillar dimension rows, which use `earned`
  * and a boolean `na` instead of `score`/`coverage` — the same top-3-
  * by-gap ranking rule the server applies in lite_pillars.py's
- * _rank_and_lock_fixes, so a v3 row's `locked` flag lines up here too. */
+ * _rank_and_lock_fixes, so a v3 row's `locked` flag lines up here too.
+ *
+ * Part 3: the v3 fixes list itself no longer uses this function — it
+ * reads the server-computed report.pillars.fixes (top 2, see
+ * lite_pillars.py::_build_fixes_section) directly. This stays in use
+ * for the legacy (pre-v3) fix table only, where scan.dimensions' own
+ * top-3-free convention is unchanged. */
 export function rankDimensionsByGap(dimensions) {
   return [...(dimensions || [])]
     .filter((d) => d.coverage !== 'na' && !d.na)
@@ -109,6 +115,27 @@ export function rankDimensionsByGap(dimensions) {
 // ─── Exposure calculator ────────────────────────────────────────────────
 
 export const EXPOSURE_HAIRCUT = 0.85
+
+// The revenue slider's own range (LiteFullReport.jsx's ExposureCalculator
+// <input type="range">) — shared with seedMonthlyRevenue below so a
+// probe-seeded estimate is clamped to exactly what the control can
+// represent, not a second, driftable copy of the same two numbers.
+export const REVENUE_SLIDER_MIN = 10000
+export const REVENUE_SLIDER_MAX = 10000000
+
+/**
+ * Part 5 (R3): converts the revenue probe's annual USD estimate to the
+ * calculator's monthly unit and clamps it to the slider's own range.
+ * Null/undefined (probe never ran, or came back unparseable/absurd —
+ * see revenue_probe.py) returns null so the caller falls back to its
+ * existing static default, unchanged.
+ */
+export function seedMonthlyRevenue(annualRevenueUsd) {
+  if (annualRevenueUsd === null || annualRevenueUsd === undefined) return null
+  const monthly = Number(annualRevenueUsd) / 12
+  if (!Number.isFinite(monthly)) return null
+  return Math.max(REVENUE_SLIDER_MIN, Math.min(REVENUE_SLIDER_MAX, monthly))
+}
 
 /**
  * Modeled, not measured: revenue * AI-assisted share of purchases *

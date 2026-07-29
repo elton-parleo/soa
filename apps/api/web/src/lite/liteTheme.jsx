@@ -178,6 +178,52 @@ export function DarkCard({ children, style, id }) {
   return <div className="lite-card-dark" style={style} id={id}>{children}</div>
 }
 
+// ─── Full Diagnostic gate (Part 1) ─────────────────────────────────────
+// The ONE standardized paid-tier overlay pattern in the report — Part 1
+// (M1) consolidates what used to be bespoke per-section overlays (the
+// funnel teaser, the fixes list's locked tail) into this single module,
+// so the report makes ONE offer with ONE label everywhere it appears
+// (M2). `children` must be decorative-only data (fixed DECORATIVE_*
+// constants a caller defines itself) — never real gated data blurred,
+// which would be a leak dressed up as a gate. No email language lives
+// here, ever: this module's vocabulary is exclusively paid-tier.
+export const FULL_DIAGNOSTIC_CTA_LABEL = 'Contact us for a free custom Full Diagnostic'
+
+export function FullDiagnosticGate({ message, subMessage, cta = FULL_DIAGNOSTIC_CTA_LABEL, ctaUrl, children }) {
+  return (
+    <div style={{ marginTop: 24 }}>
+      <div style={{ marginBottom: 16 }}>
+        <span
+          className="lite-chip lite-mono"
+          style={{ border: '1px solid var(--warn)', color: 'var(--warn-ink)', background: 'transparent' }}
+        >
+          Full analysis
+        </span>
+      </div>
+      {children && (
+        <div aria-hidden="true" style={{ marginBottom: 20, filter: 'blur(3px)', opacity: 0.55, pointerEvents: 'none' }}>
+          {children}
+        </div>
+      )}
+      <DarkCard style={{ textAlign: 'center' }}>
+        <div style={{ color: 'var(--text-inv)', fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
+          {message}
+        </div>
+        {subMessage && (
+          <div className="lite-mono lite-muted--inv" style={{ marginBottom: 14, fontSize: 12 }}>
+            {subMessage}
+          </div>
+        )}
+        {ctaUrl && (
+          <a href={ctaUrl} target="_blank" rel="noreferrer" className="lite-pill lite-pill--solid">
+            {cta}
+          </a>
+        )}
+      </DarkCard>
+    </div>
+  )
+}
+
 // ─── Pills & chips ────────────────────────────────────────────────────
 
 export function Pill({ solid, inv, as: As = 'button', className = '', children, ...rest }) {

@@ -65,6 +65,12 @@ class DimensionScore:
     max: float
     evidence: list = field(default_factory=list)
     fix: Optional[str] = None
+    # Part 5 (H1): plain-language, outcome-first rewrite of `fix` — no
+    # markup, no schema vocabulary. `fix` itself stays the exact-markup
+    # version and becomes Full Diagnostic deliverable material only
+    # (never serialized to the free report — see public_lite.py's
+    # fixes-list builder); fix_human is what the free report shows.
+    fix_human: Optional[str] = None
     coverage: str = "full"  # full | partial | na
     deferred_items: list = field(default_factory=list)  # [{label, reason}]
     cap_basis: list = field(default_factory=list)  # V5 only — evidence lines that justified a cap
@@ -75,7 +81,8 @@ def _product_pages(pages):
 
 
 def _no_product_pages_score(
-    weight: float, site_type_result, fix: Optional[str], *, na_on_brand_only: bool = False,
+    weight: float, site_type_result, fix: Optional[str], *,
+    fix_human: Optional[str] = None, na_on_brand_only: bool = False,
 ) -> DimensionScore:
     """
     Stage 11 (T2): a dimension whose scoring depends on sampled product
@@ -101,7 +108,7 @@ def _no_product_pages_score(
         )
     return DimensionScore(
         score=0.0, max=weight, coverage="partial",
-        evidence=[site_type_result.reason], fix=fix,
+        evidence=[site_type_result.reason], fix=fix, fix_human=fix_human,
     )
 
 
@@ -160,12 +167,14 @@ def score_f1_agent_access(discovery, pages) -> DimensionScore:
         evidence.append("no sitemap found")
 
     fix = None
+    fix_human = None
     if points < weight - 0.01:
         fix = (
             "Ensure robots.txt allows crawler access to product pages and "
             "publish a sitemap.xml with <loc> entries for every product."
         )
-    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix)
+        fix_human = "Make sure your site allows AI shopping agents to crawl your product pages, and publish a sitemap so they can find them."
+    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix, fix_human=fix_human)
 
 
 def score_f2_catalog_context(pages, site_type_result) -> DimensionScore:
@@ -186,6 +195,7 @@ def score_f2_catalog_context(pages, site_type_result) -> DimensionScore:
         return _no_product_pages_score(
             weight, site_type_result,
             fix="Publish Product+Offer JSON-LD on product pages so agents can read name, price, availability, and identifiers directly.",
+            fix_human="Add complete structured product data to your product pages so agents can read what you sell.",
         )
 
     evidence = []
@@ -245,6 +255,7 @@ def score_f2_catalog_context(pages, site_type_result) -> DimensionScore:
     )
 
     fix = None
+    fix_human = None
     if points < weight - 0.01:
         fix = (
             'Add complete Product JSON-LD (name, offers[].price, offers[].priceCurrency, '
@@ -254,7 +265,8 @@ def score_f2_catalog_context(pages, site_type_result) -> DimensionScore:
             '"offers":{"@type":"Offer","price":"29.99","priceCurrency":"USD",'
             '"availability":"https://schema.org/InStock"}}.'
         )
-    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix)
+        fix_human = "Add complete structured product data to your product pages so agents can read what you sell."
+    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix, fix_human=fix_human)
 
 
 def score_f3_protocol_feed_presence(pages, site_type_result) -> DimensionScore:
@@ -344,14 +356,16 @@ def score_f3_protocol_feed_presence(pages, site_type_result) -> DimensionScore:
         )
 
     fix = None
+    fix_human = None
     if points < weight - 0.01:
         fix = (
             "Publish /llms.txt, declare an MCP endpoint (well-known manifest or <link> markup), "
             "expose UCP/UIP capability markup, and mark agentic-commerce capabilities in structured "
             "data so agent checkout protocols can discover your store."
         )
+        fix_human = "Publish the files that let AI agents and checkout protocols discover and interact with your store directly."
     return DimensionScore(
-        score=round(points, 1), max=weight, evidence=evidence, fix=fix,
+        score=round(points, 1), max=weight, evidence=evidence, fix=fix, fix_human=fix_human,
         coverage="partial", deferred_items=list(PROTOCOL_FEED_DEFERRED_ITEMS),
     )
 
@@ -364,6 +378,7 @@ def score_v1_offer_legibility(pages, site_type_result) -> DimensionScore:
         return _no_product_pages_score(
             weight, site_type_result,
             fix="Publish machine-readable prices with declared currency on product pages.",
+            fix_human="Show your prices in a format agents can read directly from the page, not just as text or an image.",
         )
 
     with_price = [
@@ -384,13 +399,15 @@ def score_v1_offer_legibility(pages, site_type_result) -> DimensionScore:
         f"{len(with_currency)}/{len(product_pages)} product pages declare priceCurrency",
     ]
     fix = None
+    fix_human = None
     if points < weight - 0.01:
         fix = (
             'Expose price and priceCurrency in Offer JSON-LD, e.g. '
             '"offers": {"@type": "Offer", "price": "29.99", "priceCurrency": "USD"} '
             '— not just in an image or JS-rendered banner.'
         )
-    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix)
+        fix_human = "Show your prices in a format agents can read directly from the page, not just as text or an image."
+    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix, fix_human=fix_human)
 
 
 def score_v2_loyalty_surface(pages) -> DimensionScore:
@@ -401,6 +418,7 @@ def score_v2_loyalty_surface(pages) -> DimensionScore:
         return DimensionScore(
             score=0.0, max=weight, evidence=["no loyalty/rewards page found in nav/footer"],
             fix="Add a discoverable loyalty/rewards page linked from the nav or footer (e.g. link text containing 'Rewards' or 'Loyalty').",
+            fix_human="Publish a rewards page agents can find from your menu or footer.",
         )
 
     evidence = []
@@ -420,12 +438,14 @@ def score_v2_loyalty_surface(pages) -> DimensionScore:
         evidence.append(f"loyalty page found but not fetchable (status={lp.fetch_result.status})")
 
     fix = None
+    fix_human = None
     if points < weight - 0.01:
         fix = (
             "Publish loyalty program terms (tiers, points, benefits) as crawlable text or "
             "structured data on the rewards page, not behind login/JS."
         )
-    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix)
+        fix_human = "Describe your loyalty program's tiers, points, and perks in plain text agents can read, not hidden behind login or JavaScript."
+    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix, fix_human=fix_human)
 
 
 def score_v3_member_value(pages, site_type_result) -> DimensionScore:
@@ -448,6 +468,7 @@ def score_v3_member_value(pages, site_type_result) -> DimensionScore:
         return _no_product_pages_score(
             weight, site_type_result,
             fix="Expose member/tier pricing in structured data on product pages.",
+            fix_human="Attach your member price to each product's listing data, not just in marketing copy.",
             na_on_brand_only=True,
         )
 
@@ -473,13 +494,15 @@ def score_v3_member_value(pages, site_type_result) -> DimensionScore:
         evidence = ["no structured member/tier pricing found on sampled product pages"]
 
     fix = None
+    fix_human = None
     if ratio < 0.99:
         fix = (
             'Add member pricing as structured data, not just marketing copy — e.g. a second '
             'Offer with "eligibleCustomerType": "https://schema.org/LoyaltyProgramMember" or a '
             "memberPrice field."
         )
-    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix)
+        fix_human = "Attach your member price to each product's listing data, not just in marketing copy."
+    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix, fix_human=fix_human)
 
 
 def score_v4_value_rails(pages, site_type_result) -> DimensionScore:
@@ -500,6 +523,7 @@ def score_v4_value_rails(pages, site_type_result) -> DimensionScore:
         return _no_product_pages_score(
             weight, site_type_result,
             fix="Declare discounts/bundles as Offers with priceValidUntil, eligibility, and stackability terms.",
+            fix_human="Make your current deals and bundles readable to agents, with clear terms and an end date.",
         )
 
     now = datetime.now(timezone.utc)
@@ -534,6 +558,7 @@ def score_v4_value_rails(pages, site_type_result) -> DimensionScore:
         f"{actionable_count}/{n} product pages expose eligibility/code/stackability terms",
     ]
     fix = None
+    fix_human = None
     if points < weight - 0.01:
         fix = (
             'Declare offers as CONCRETE (a stated amount or mechanic), ACTIVE (a "priceValidUntil" '
@@ -541,7 +566,8 @@ def score_v4_value_rails(pages, site_type_result) -> DimensionScore:
             "agent can read) — the same three checks used to judge whether an agent's answer cites "
             "a deal."
         )
-    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix)
+        fix_human = "Make your current deals and bundles readable to agents, with clear terms and an end date."
+    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix, fix_human=fix_human)
 
 
 def score_v5_offer_integrity(pages):
@@ -612,9 +638,10 @@ def score_v5_offer_integrity(pages):
             "limited time — a compare-at price shown on every visit, or a discount depth this "
             "steep sitewide, reads as fabricated to a price-integrity check."
         )
+        fix_human = "Only advertise a discount when it reflects a real, time-limited price drop — a permanent \"was\" price reads as dishonest to agents checking value."
         return (
             DimensionScore(
-                score=0.0, max=weight, evidence=evidence, fix=fix, coverage="partial",
+                score=0.0, max=weight, evidence=evidence, fix=fix, fix_human=fix_human, coverage="partial",
                 deferred_items=deferred_items, cap_basis=cap_basis,
             ),
             True,
@@ -660,14 +687,15 @@ def score_v5_offer_integrity(pages):
 
 def _rescale_dimension_score(v2_score: DimensionScore, new_max: float) -> DimensionScore:
     """1:1 rescale of an unmodified v2 DimensionScore onto a new max —
-    same evidence, fix, coverage, and deferred_items; only score/max
-    move, proportionally."""
+    same evidence, fix, fix_human, coverage, and deferred_items; only
+    score/max move, proportionally."""
     ratio = (new_max / v2_score.max) if v2_score.max else 0.0
     return DimensionScore(
         score=round(v2_score.score * ratio, 1),
         max=new_max,
         evidence=list(v2_score.evidence),
         fix=v2_score.fix,
+        fix_human=v2_score.fix_human,
         coverage=v2_score.coverage,
         deferred_items=list(v2_score.deferred_items),
         cap_basis=list(v2_score.cap_basis),
@@ -758,10 +786,12 @@ def score_member_value_seen(pages, site_type_result) -> DimensionScore:
     evidence = []
     deferred_items = []
     fix = None
+    fix_human = None
     for c in components:
         evidence.extend(c.evidence)
         deferred_items.extend(c.deferred_items)
         fix = fix or c.fix
+        fix_human = fix_human or c.fix_human
     if member_price.coverage == "na":
         evidence.extend(member_price.evidence)
 
@@ -770,6 +800,7 @@ def score_member_value_seen(pages, site_type_result) -> DimensionScore:
         max=new_max,
         evidence=evidence,
         fix=fix,
+        fix_human=fix_human,
         coverage=_combine_coverage(*components),
         deferred_items=deferred_items,
         cap_basis=[],

@@ -5,6 +5,8 @@ score_recommendation_strength) and True Value's 'said' outcome sub-
 lenses (score_price_truth_said, score_member_value_said,
 score_deal_citability_said).
 """
+import json
+
 import pytest
 
 from app.services.lite_crosswalk import RunSignal
@@ -551,3 +553,95 @@ def test_member_value_na_dimension_has_no_fix_and_is_not_locked():
     assert dims["member_value"]["na"] is True
     assert dims["member_value"]["fix"] is None
     assert dims["member_value"]["locked"] is False
+
+
+# ─── Part 3 (F1): report.fixes — top 2 free, rest a bare count ───────────
+#
+# Deliberately separate from pillars.*.dimensions (unchanged above,
+# still needed by the True Value butterfly/Accessibility tiles) — this
+# section is its own additive field, computed by _build_fixes_section.
+
+# Six distinct gaps (1-6), all crawl-derived, so the ranking is
+# unambiguous with no tiebreak needed: member_value(6) > price_truth(5)
+# > deal_citability(4) > protocol_feed(3) > catalog_context(2) >
+# agent_access(1). True Value gaps come entirely from each dimension's
+# seen half — run_signals (_full_credit_signals) maxes out said for all
+# three, same convention as test_top_three_by_gap_stay_free_rest_are_locked.
+_SIX_FIX_CRAWL_DIMS = {
+    "agent_access": {"score": 5, "max": 6, "coverage": "full", "fix": "fix-aa", "fix_human": "human-aa"},
+    "catalog_context": {"score": 6, "max": 8, "coverage": "full", "fix": "fix-cc", "fix_human": "human-cc"},
+    "protocol_feed": {"score": 3, "max": 6, "coverage": "full", "fix": "fix-pf", "fix_human": "human-pf"},
+    "price_truth_seen": {"score": 1, "max": 6, "coverage": "full", "fix": "fix-pt", "fix_human": "human-pt"},
+    "member_value_seen": {"score": 6, "max": 12, "coverage": "full", "fix": "fix-mv", "fix_human": "human-mv"},
+    "deal_citability_seen": {"score": 0, "max": 4, "coverage": "full", "fix": "fix-dc", "fix_human": "human-dc"},
+}
+
+
+def _build_six_fix_result(**overrides):
+    kwargs = dict(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=_SIX_FIX_CRAWL_DIMS, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    kwargs.update(overrides)
+    return build_pillars_payload(**kwargs)
+
+
+def test_fixes_visible_is_the_top_2_by_gap():
+    result = _build_six_fix_result()
+    assert [v["code"] for v in result["fixes"]["visible"]] == ["member_value", "price_truth"]
+
+
+def test_fixes_visible_entries_carry_only_plain_language_fix_human_and_impact():
+    result = _build_six_fix_result()
+    top = result["fixes"]["visible"][0]
+    assert top == {"code": "member_value", "name": "Member Value", "fix_human": "human-mv", "impact": 6.0}
+    # No 'fix' (markup) key anywhere on a visible entry — H2's no-markup
+    # rule holds at the schema level, not just by convention.
+    assert "fix" not in top
+
+
+def test_fixes_remaining_count_is_the_rest():
+    result = _build_six_fix_result()
+    assert result["fixes"]["remaining_count"] == 4
+
+
+def test_fixes_leak_test_ranks_beyond_2_are_absent_entirely():
+    """F1's leak test: serialize the fixes field for a 6-fix fixture and
+    assert ranks 3+ are absent entirely — no code, no fix_human title,
+    anywhere in the serialized object, only a bare count."""
+    result = _build_six_fix_result()
+    serialized = json.dumps(result["fixes"])
+
+    for code, human in [
+        ("deal_citability", "human-dc"), ("protocol_feed", "human-pf"),
+        ("catalog_context", "human-cc"), ("agent_access", "human-aa"),
+    ]:
+        assert code not in serialized
+        assert human not in serialized
+
+
+def test_fixes_excludes_dimensions_with_no_fix_human_even_if_ranked_high():
+    # A dimension at a large gap but with NO fix_human (crawl scorer
+    # found nothing to recommend) must never occupy a free slot or count
+    # toward remaining_count — it has nothing to show.
+    crawl = dict(_SIX_FIX_CRAWL_DIMS)
+    crawl["member_value_seen"] = {**crawl["member_value_seen"], "fix": None, "fix_human": None}
+    result = _build_six_fix_result(crawl_dimensions=crawl)
+    codes = [v["code"] for v in result["fixes"]["visible"]]
+    assert "member_value" not in codes
+    assert codes == ["price_truth", "deal_citability"]
+    assert result["fixes"]["remaining_count"] == 3  # protocol_feed, catalog_context, agent_access
+
+
+def test_fixes_na_dimension_excluded_from_ranking_and_count():
+    # protocol_feed(gap 3) turns na, leaving 5 fixable dims: member_value(6)
+    # and price_truth(5) still visible; catalog_context(2), agent_access(1),
+    # and deal_citability(4) make up the remaining 3 — protocol_feed itself
+    # contributes to neither the visible list nor the count.
+    crawl = dict(_SIX_FIX_CRAWL_DIMS)
+    crawl["protocol_feed"] = {**crawl["protocol_feed"], "coverage": "na"}
+    result = _build_six_fix_result(crawl_dimensions=crawl)
+
+    assert [v["code"] for v in result["fixes"]["visible"]] == ["member_value", "price_truth"]
+    assert result["fixes"]["remaining_count"] == 3

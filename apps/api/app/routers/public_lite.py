@@ -332,7 +332,8 @@ def _decode_json_field(value, default):
 
 def _fetch_scan_row(conn, lite_request_id: int):
     return conn.execute(text("""
-        SELECT status, total_score, integrity_capped, dimensions, pages_fetched, membership_probe
+        SELECT status, total_score, integrity_capped, dimensions, pages_fetched,
+               membership_probe, revenue_probe
         FROM soa_lite_scan_results
         WHERE lite_request_id = :rid
     """), {"rid": lite_request_id}).fetchone()
@@ -434,7 +435,7 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
     if not scan_row:
         return None
 
-    status, total_score, integrity_capped, dimensions, pages_fetched, _membership_probe = scan_row
+    status, total_score, integrity_capped, dimensions, pages_fetched, _membership_probe, _revenue_probe = scan_row
     pages_fetched = _decode_json_field(pages_fetched, [])
 
     if status != 'complete':
@@ -478,6 +479,7 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
         score = d.get('score', 0)
         max_ = d.get('max', 0)
         fix = d.get('fix')
+        fix_human = d.get('fix_human')
         evidence = d.get('evidence', [])
         coverage = _coverage(code)
         is_applicable = coverage != 'na'
@@ -486,6 +488,7 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
         locked = fix is not None and rank is not None and rank > FREE_FIX_RANK
         if locked:
             fix = None
+            fix_human = None
 
         if is_applicable:
             if code in FOUNDATION_CODES:
@@ -503,6 +506,7 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
             max=max_,
             evidence=evidence,
             fix=fix,
+            fix_human=fix_human,
             locked=locked,
             linked={"reason": reason} if reason else None,
             coverage=coverage,
@@ -588,6 +592,12 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
     scan_complete = bool(scan_row and scan_row[0] == 'complete')
     dimensions_raw = _decode_json_field(scan_row[3], {}) if scan_complete else {}
     scorer_version = dimensions_raw.get('scorer_version') or '1'
+
+    # Part 5 (R3): independent of scan_complete/scorer_version — the
+    # revenue probe is a brand-level OpenAI call, same as the membership
+    # probe, not gated on the crawl succeeding.
+    revenue_probe = _decode_json_field(scan_row[6], {}) if scan_row else {}
+    revenue_estimate_usd = revenue_probe.get('annual_revenue_usd')
 
     # Stage 13 (W4/W5): drives the widget's solo-comparison fallback and
     # the "auto-selected by ChatGPT" methodology stamp.
@@ -732,6 +742,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
         visibility_breakdown=visibility_breakdown,
         competitor_source=competitor_source,
         pillars=pillars_payload,
+        revenue_estimate_usd=revenue_estimate_usd,
     ).model_dump()
 
 

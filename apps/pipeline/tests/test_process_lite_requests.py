@@ -91,7 +91,7 @@ def db(monkeypatch):
                 id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, input_url TEXT,
                 status TEXT DEFAULT 'pending', total_score INTEGER,
                 integrity_capped BOOLEAN DEFAULT 0, dimensions TEXT, pages_fetched TEXT,
-                membership_probe TEXT,
+                membership_probe TEXT, revenue_probe TEXT,
                 error TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
             )
         """)
@@ -158,6 +158,22 @@ def _no_membership_probe_call(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _no_revenue_probe_call(monkeypatch):
+    """
+    Part 5 (R1): process_lite_requests now always calls
+    generation.revenue_probe.probe_revenue after the membership probe.
+    Defaulting it to a benign all-None result keeps every pre-Part-5
+    test's assertions unaffected — no real OpenAI call is made. Tests
+    that care about the probe's result override this per-test (see the
+    Part 5 section below).
+    """
+    monkeypatch.setattr(
+        "generation.revenue_probe.probe_revenue",
+        lambda *a, **k: {"annual_revenue_usd": None, "basis": None, "quote": None},
+    )
+
+
 def _insert_pending(conn, token="a1b2c3d4e5f6", brand="Acme", competitors=None, store_url=None):
     conn.exec_driver_sql(
         "INSERT INTO soa_lite_requests (token, brand_name, competitor_names, store_url, status) "
@@ -189,6 +205,19 @@ def _membership_probe_by_token(conn, token):
         (token,),
     ).fetchone()
     return json.loads(row[0]) if row and row[0] else None
+
+
+def _revenue_probe_by_token(conn, token):
+    row = conn.exec_driver_sql(
+        "SELECT revenue_probe FROM soa_lite_scan_results "
+        "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = ?)",
+        (token,),
+    ).fetchone()
+    return json.loads(row[0]) if row and row[0] else None
+
+
+def _query_count(conn):
+    return conn.exec_driver_sql("SELECT COUNT(*) FROM soa_queries").fetchone()[0]
 
 
 def _age_scan_row(conn, token, minutes_ago):
@@ -619,6 +648,76 @@ def test_membership_probe_failure_never_blocks_the_run(db):
     status, *_ = _lite_row_by_token(db.connect(), "a1b2c3d4e5f6")
     assert status == "running"  # request itself still succeeded
     assert _membership_probe_by_token(db.connect(), "a1b2c3d4e5f6") is None  # never written
+
+
+# ── Part 5 (R1): revenue probe ───────────────────────────────────────────
+
+def test_revenue_probe_result_persisted_on_scan_row(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    probe_result = {"annual_revenue_usd": 12_000_000.0, "basis": "estimated DTC apparel brand", "quote": "estimated DTC apparel brand"}
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+         patch("scan.engine.run_scan", return_value=_make_scan_result()), \
+         patch("generation.revenue_probe.probe_revenue", return_value=probe_result) as mock_probe:
+        worker.process_lite_requests()
+
+    mock_probe.assert_called_once_with("Acme", "test-key", store_url="https://acme.example.com")
+    assert _revenue_probe_by_token(db.connect(), "a1b2c3d4e5f6") == probe_result
+
+
+def test_revenue_probe_runs_even_without_store_url(db):
+    """probe_revenue asks about the brand generally, not the crawl — it
+    must still run when there's no store_url to scan (scan itself gets
+    skipped, see test_without_store_url_scan_is_skipped_and_flow_
+    unchanged)."""
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])  # no store_url
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+         patch("generation.revenue_probe.probe_revenue",
+               return_value={"annual_revenue_usd": None, "basis": None, "quote": None}) as mock_probe:
+        worker.process_lite_requests()
+
+    mock_probe.assert_called_once_with("Acme", "test-key", store_url=None)
+    assert _revenue_probe_by_token(db.connect(), "a1b2c3d4e5f6") == {"annual_revenue_usd": None, "basis": None, "quote": None}
+
+
+def test_revenue_probe_failure_never_blocks_the_run(db):
+    """probe_revenue itself never raises (see test_revenue_probe.py), but
+    this isolation must hold even if it somehow did — same rule-4
+    discipline as the membership probe's own isolation right above it in
+    process_lite_requests."""
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    def _raise(*a, **k):
+        raise RuntimeError("boom")
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+         patch("scan.engine.run_scan", return_value=_make_scan_result()), \
+         patch("generation.revenue_probe.probe_revenue", _raise):
+        worker.process_lite_requests()
+
+    status, *_ = _lite_row_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert status == "running"  # request itself still succeeded
+    assert _revenue_probe_by_token(db.connect(), "a1b2c3d4e5f6") is None  # never written
+
+
+def test_revenue_probe_is_metrically_invisible_query_count_unaffected(db):
+    """The revenue probe is not one of the 12 tracked queries — it never
+    touches soa_queries/soa_runs, so soa_queries' row count is exactly
+    the fixed 12-query study regardless of what the probe returns."""
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+         patch("scan.engine.run_scan", return_value=_make_scan_result()), \
+         patch("generation.revenue_probe.probe_revenue",
+               return_value={"annual_revenue_usd": 9_000_000.0, "basis": "guess", "quote": "guess"}):
+        worker.process_lite_requests()
+
+    assert _query_count(db.connect()) == 12
 
 
 def test_sweep_waits_when_scan_still_running_within_window(db):

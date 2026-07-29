@@ -111,6 +111,7 @@
         "max": 0.0,
         "evidence": [],
         "fix": null,
+        "fix_human": null,
         "locked": false,
         "linked": {
           "reason": "absent from most answers"
@@ -126,6 +127,7 @@
         "max": 0.0,
         "evidence": [],
         "fix": null,
+        "fix_human": null,
         "locked": false,
         "linked": {
           "reason": "absent from most answers"
@@ -141,6 +143,7 @@
         "max": 0.0,
         "evidence": [],
         "fix": null,
+        "fix_human": null,
         "locked": false,
         "linked": null,
         "coverage": "full",
@@ -154,6 +157,7 @@
         "max": 0.0,
         "evidence": [],
         "fix": null,
+        "fix_human": null,
         "locked": false,
         "linked": {
           "reason": "mentioned but no price surfaced"
@@ -169,6 +173,7 @@
         "max": 0.0,
         "evidence": [],
         "fix": null,
+        "fix_human": null,
         "locked": false,
         "linked": null,
         "coverage": "full",
@@ -182,6 +187,7 @@
         "max": 0.0,
         "evidence": [],
         "fix": null,
+        "fix_human": null,
         "locked": false,
         "linked": null,
         "coverage": "full",
@@ -195,6 +201,7 @@
         "max": 0.0,
         "evidence": [],
         "fix": null,
+        "fix_human": null,
         "locked": false,
         "linked": null,
         "coverage": "full",
@@ -208,6 +215,7 @@
         "max": 0.0,
         "evidence": [],
         "fix": null,
+        "fix_human": null,
         "locked": false,
         "linked": null,
         "coverage": "full",
@@ -437,6 +445,7 @@
           "seen": null,
           "said": null,
           "fix": null,
+          "fix_human": null,
           "locked": false,
           "linked": null
         },
@@ -452,6 +461,7 @@
           "seen": null,
           "said": null,
           "fix": null,
+          "fix_human": null,
           "locked": false,
           "linked": null
         }
@@ -476,6 +486,7 @@
           "seen": null,
           "said": null,
           "fix": null,
+          "fix_human": "Make sure your site allows AI shopping agents to crawl your product pages, and publish a sitemap so they can find them.",
           "locked": true,
           "linked": null
         },
@@ -494,6 +505,7 @@
           "seen": null,
           "said": null,
           "fix": "Add complete Product JSON-LD (name, offers[].price, offers[].priceCurrency, offers[].availability), a crawlable shipping/returns page, and product identifiers (gtin/mpn/sku) with a consistent brand name across every product page, e.g. {\"@type\":\"Product\",\"name\":\"...\",\"brand\":{\"@type\":\"Brand\",\"name\":\"Acme\"},\"gtin13\":\"...\",\"offers\":{\"@type\":\"Offer\",\"price\":\"29.99\",\"priceCurrency\":\"USD\",\"availability\":\"https://schema.org/InStock\"}}.",
+          "fix_human": "Add complete structured product data to your product pages so agents can read what you sell.",
           "locked": false,
           "linked": {
             "reason": "absent from most answers"
@@ -514,6 +526,7 @@
           "seen": null,
           "said": null,
           "fix": null,
+          "fix_human": "Publish the files that let AI agents and checkout protocols discover and interact with your store directly.",
           "locked": true,
           "linked": null
         }
@@ -548,6 +561,7 @@
             ]
           },
           "fix": "Expose price and priceCurrency in Offer JSON-LD, e.g. \"offers\": {\"@type\": \"Offer\", \"price\": \"29.99\", \"priceCurrency\": \"USD\"} \u2014 not just in an image or JS-rendered banner.",
+          "fix_human": "Show your prices in a format agents can read directly from the page, not just as text or an image.",
           "locked": false,
           "linked": {
             "reason": "mentioned but no price surfaced"
@@ -579,6 +593,7 @@
             ]
           },
           "fix": "Add a discoverable loyalty/rewards page linked from the nav or footer (e.g. link text containing 'Rewards' or 'Loyalty').",
+          "fix_human": "Publish a rewards page agents can find from your menu or footer.",
           "locked": false,
           "linked": null
         },
@@ -608,12 +623,31 @@
             ]
           },
           "fix": null,
+          "fix_human": "Make your current deals and bundles readable to agents, with clear terms and an end date.",
           "locked": true,
           "linked": null
         }
       ]
     },
-    "member_value_na": false
+    "member_value_na": false,
+    "fixes": {
+      "visible": [
+        {
+          "code": "member_value",
+          "name": "Member Value",
+          "fix_human": "Publish a rewards page agents can find from your menu or footer.",
+          "impact": 19.0
+        },
+        {
+          "code": "price_truth",
+          "name": "Price Truth",
+          "fix_human": "Show your prices in a format agents can read directly from the page, not just as text or an image.",
+          "impact": 14.0
+        }
+      ],
+      "remaining_count": 4
+    }
   },
-  "competitor_source": "generated"
+  "competitor_source": "generated",
+  "revenue_estimate_usd": null
 }

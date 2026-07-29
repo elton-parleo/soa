@@ -165,9 +165,11 @@ describe('LiteTeaser — Stage 7: data-driven verdict, never stage-based', () =>
     })
   })
 
-  it('does not promise a stage-by-stage breakdown in the email-gate copy', () => {
+  it('does not promise a stage-by-stage breakdown, or a fix-unlock, in the email-gate copy (Part 4, F4)', () => {
     render(<LiteTeaser report={baseTeaser} token="tok-1" onUnlocked={() => {}} />)
-    expect(screen.getByText('Unlock the full why-section and your ranked fixes.')).toBeInTheDocument()
+    expect(screen.getByText('Get your private report link sent to your inbox, with a monthly re-run included.')).toBeInTheDocument()
+    expect(screen.queryByText(/ranked fixes/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/why-section/)).not.toBeInTheDocument()
   })
 })
 

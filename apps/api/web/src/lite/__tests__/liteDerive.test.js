@@ -3,6 +3,7 @@ import {
   looksLikeUrl, deriveBrandFromUrl, domainFromStoreUrl, accessibilityBadgeText,
   groupDimensionsByFamily, rankDimensionsByGap, computeExposure, formatCurrency,
   getScoreBand, getVerdictLine, getDominantRivalPayoff, getIncentiveCitationPayoff,
+  seedMonthlyRevenue, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX,
 } from '../liteDerive.js'
 
 describe('looksLikeUrl', () => {
@@ -168,6 +169,25 @@ describe('computeExposure', () => {
 
   it('returns 0 when visibility is 100 (no mention gap)', () => {
     expect(computeExposure({ revenue: 1_000_000, aiSharePct: 50, visibility: 100 })).toBe(0)
+  })
+})
+
+describe('seedMonthlyRevenue (Part 5, R3)', () => {
+  it('converts an annual estimate to the monthly slider unit', () => {
+    expect(seedMonthlyRevenue(12_000_000)).toBeCloseTo(1_000_000, 5)
+  })
+
+  it('clamps below the slider minimum', () => {
+    expect(seedMonthlyRevenue(100)).toBe(REVENUE_SLIDER_MIN)
+  })
+
+  it('clamps above the slider maximum', () => {
+    expect(seedMonthlyRevenue(999_000_000_000)).toBe(REVENUE_SLIDER_MAX)
+  })
+
+  it('returns null when the probe never ran (null/undefined) — caller falls back to its own default', () => {
+    expect(seedMonthlyRevenue(null)).toBeNull()
+    expect(seedMonthlyRevenue(undefined)).toBeNull()
   })
 })
 
