@@ -589,9 +589,19 @@
   padding: 14px 0;
   border-bottom: 1px solid var(--line);
 }
+/* Part 3 (F2): v3's fix table has no Snippet column — the free report
+   never serializes markup to have one (H2) — so it's one column
+   narrower than the legacy 5-column layout above, which LegacyFixRow
+   still uses untouched. */
+.lite-fix-table-header--v3,
+.lite-fix-row--v3 {
+  grid-template-columns: 28px minmax(160px, 2fr) 1fr 90px;
+}
 @media (max-width: 640px) {
-  .lite-fix-table-header { display: none; }
-  .lite-fix-row {
+  .lite-fix-table-header,
+  .lite-fix-table-header--v3 { display: none; }
+  .lite-fix-row,
+  .lite-fix-row--v3 {
     grid-template-columns: 1fr;
     gap: 4px;
   }

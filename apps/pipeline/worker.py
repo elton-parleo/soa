@@ -580,6 +580,15 @@ def process_lite_requests():
         except Exception:
             log.exception(f"[lite] request {request_id}: membership probe failed unexpectedly")
 
+        # Part 5 (R1): same isolation as the membership probe above — a
+        # bug here must never flip this already-queued request to
+        # 'failed'. Independent of store_url/scan outcome (asks about
+        # the brand generally), so it runs unconditionally.
+        try:
+            _run_revenue_probe(request_id, brand_name, store_url, api_key)
+        except Exception:
+            log.exception(f"[lite] request {request_id}: revenue probe failed unexpectedly")
+
     except Exception as e:
         log.exception(f"[lite] request {request_id} failed")
         _mark_lite_failed(request_id, str(e))
@@ -659,6 +668,31 @@ def _run_membership_probe(request_id: int, brand_name: str, store_url: str | Non
         """), {"rid": request_id, "probe": json.dumps(result)})
 
     log.info(f"[lite] request {request_id}: membership probe result={result['result']}")
+
+
+def _run_revenue_probe(request_id: int, brand_name: str, store_url: str | None, api_key: str):
+    """
+    Part 5 (R1): runs the revenue probe and writes its result onto the
+    soa_lite_scan_results row already created (status='running' or
+    later) when the cycle was queued — same row/pattern as
+    _run_membership_probe above.
+
+    probe_revenue itself never raises (generation/revenue_probe.py) — it
+    always returns a well-defined {annual_revenue_usd, basis, quote}
+    dict, so this function only ever writes one update to the scan row.
+    """
+    from generation.revenue_probe import probe_revenue
+
+    result = probe_revenue(brand_name, api_key, store_url=store_url)
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE soa_lite_scan_results
+            SET revenue_probe = :probe, updated_at = NOW()
+            WHERE lite_request_id = :rid
+        """), {"rid": request_id, "probe": json.dumps(result)})
+
+    log.info(f"[lite] request {request_id}: revenue probe result={result['annual_revenue_usd']}")
 
 
 SCAN_TERMINAL_STATUSES = ("complete", "blocked", "failed", "skipped")

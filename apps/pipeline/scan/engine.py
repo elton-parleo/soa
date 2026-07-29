@@ -223,6 +223,7 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         dimensions = {
             code: {
                 "score": d.score, "max": d.max, "evidence": d.evidence, "fix": d.fix,
+                "fix_human": d.fix_human,
                 "coverage": d.coverage, "deferred_items": d.deferred_items, "cap_basis": d.cap_basis,
             }
             for code, d in dim_scores.items()

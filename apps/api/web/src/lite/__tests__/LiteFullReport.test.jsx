@@ -87,10 +87,10 @@ describe('LiteFullReport — page frame', () => {
     await waitFor(() => expect(screen.getByText('Copied')).toBeInTheDocument())
   })
 
-  it('renders the working-session CTA link in both the funnel teaser and the diagnostic cliff when VITE_LITE_CTA_URL is set', () => {
+  it('renders the ONE Full Diagnostic CTA label in both the funnel teaser and the diagnostic cliff when VITE_LITE_CTA_URL is set (Part 1, M2: one offer, not two)', () => {
     vi.stubEnv('VITE_LITE_CTA_URL', 'https://parleo.io/demo')
     render(<LiteFullReport report={baseReport} />)
-    const links = screen.getAllByText('Request a working session')
+    const links = screen.getAllByText('Contact us for a free custom Full Diagnostic')
     expect(links).toHaveLength(2)
     links.forEach((link) => expect(link.closest('a')).toHaveAttribute('href', 'https://parleo.io/demo'))
     vi.unstubAllEnvs()
@@ -99,7 +99,7 @@ describe('LiteFullReport — page frame', () => {
   it('omits both CTA links when VITE_LITE_CTA_URL is unset', () => {
     vi.stubEnv('VITE_LITE_CTA_URL', '')
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.queryByText('Request a working session')).not.toBeInTheDocument()
+    expect(screen.queryByText('Contact us for a free custom Full Diagnostic')).not.toBeInTheDocument()
     vi.unstubAllEnvs()
   })
 })
@@ -353,12 +353,15 @@ describe('LiteFullReport — funnel teaser (G2: decorative, never real data)', (
     })
   })
 
-  it('renders the overlay copy and CTA, with no email language anywhere in this card', () => {
+  it('renders the overlay copy and CTA (Part 1/2: via the FullDiagnosticGate module), with no email language anywhere in this card', () => {
     vi.stubEnv('VITE_LITE_CTA_URL', 'https://parleo.io/demo')
     render(<LiteFullReport report={baseReport} />)
     expect(screen.getByText('See which stage you vanish from')).toBeInTheDocument()
-    expect(screen.getByText('Stage-by-stage rates are measured in the full diagnostic.')).toBeInTheDocument()
+    // Also rendered by the diagnostic cliff (M2: one offer, not two) — at
+    // least one instance lives inside the funnel card itself.
+    expect(screen.getAllByText('Contact us for a free custom Full Diagnostic').length).toBeGreaterThan(0)
     const cta = screen.getByText('Where you disappear in the funnel').closest('.lite-card')
+    expect(cta.textContent).toContain('Contact us for a free custom Full Diagnostic')
     expect(cta.textContent.toLowerCase()).not.toMatch(/email|unlock with your/)
     vi.unstubAllEnvs()
   })
@@ -608,6 +611,49 @@ describe('LiteFullReport — exposure calculator (Stage 21, F2: collapsed by def
   })
 })
 
+describe('LiteFullReport — exposure revenue seeding (Part 5, R3)', () => {
+  it('seeds the monthly revenue from the annual estimate (÷12) and shows the ESTIMATED provenance label', () => {
+    const report = { ...baseReport, revenue_estimate_usd: 12_000_000 }
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/\$1,000,000 monthly revenue/)).toBeInTheDocument()
+    expect(screen.getByText('revenue estimated by ChatGPT · adjust')).toBeInTheDocument()
+  })
+
+  it('clamps an estimate below the slider minimum', () => {
+    const report = { ...baseReport, revenue_estimate_usd: 5000 } // /12 well under the $10,000 floor
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/\$10,000 monthly revenue/)).toBeInTheDocument()
+  })
+
+  it('falls back to the existing static default, with no provenance label, when the probe never ran (revenue_estimate_usd absent)', () => {
+    render(<LiteFullReport report={baseReport} />)
+    expect(screen.getByText(/\$1,000,000 monthly revenue/)).toBeInTheDocument()
+    expect(screen.getByText('adjust')).toBeInTheDocument()
+    expect(screen.queryByText(/estimated by ChatGPT/)).not.toBeInTheDocument()
+  })
+
+  it('falls back to the default, no label, when the probe ran but found nothing (revenue_estimate_usd null)', () => {
+    const report = { ...baseReport, revenue_estimate_usd: null }
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/\$1,000,000 monthly revenue/)).toBeInTheDocument()
+    expect(screen.queryByText(/estimated by ChatGPT/)).not.toBeInTheDocument()
+  })
+
+  it('user adjustment overrides the estimate for that session and drops the provenance label', () => {
+    const report = { ...baseReport, revenue_estimate_usd: 12_000_000 }
+    render(<LiteFullReport report={report} />)
+    fireEvent.click(screen.getByText('revenue estimated by ChatGPT · adjust'))
+    const revenueSlider = screen.getByLabelText('Monthly revenue')
+    Object.defineProperty(revenueSlider, 'value', { value: '2000000', configurable: true })
+    revenueSlider.dispatchEvent(new Event('change', { bubbles: true }))
+    fireEvent.click(screen.getByText('COLLAPSE'))
+
+    expect(screen.getByText(/\$2,000,000 monthly revenue/)).toBeInTheDocument()
+    expect(screen.queryByText(/estimated by ChatGPT/)).not.toBeInTheDocument()
+    expect(screen.getByText('adjust')).toBeInTheDocument()
+  })
+})
+
 describe('LiteFullReport — diagnostic-tier cliff', () => {
   it('renders the 3 highlighted upsell panels, remaining locked topics, and platform chips', () => {
     render(<LiteFullReport report={baseReport} />)
@@ -648,7 +694,66 @@ function pillarDim(code, name, earned, max, overrides = {}) {
   return { code, name, earned, max, na: false, evidence: [], seen: null, said: null, ...overrides }
 }
 
+// Part 3: mirrors lite_pillars.py::_build_fixes_section's ranking rule
+// (opportunity size descending, tiebreak by code, only dims with a
+// fix_human, top 2 visible) so test fixtures don't hand-maintain a
+// second, driftable copy of report.pillars.fixes.
+function computeFixesSection(accessibilityDims, trueValueDims) {
+  const ranked = [...accessibilityDims, ...trueValueDims]
+    .filter((d) => !d.na && d.fix_human)
+    .sort((a, b) => {
+      const gapA = (a.max || 0) - (a.earned || 0)
+      const gapB = (b.max || 0) - (b.earned || 0)
+      if (gapB !== gapA) return gapB - gapA
+      return a.code.localeCompare(b.code)
+    })
+  const visible = ranked.slice(0, 2).map((d) => ({
+    code: d.code, name: d.name, fix_human: d.fix_human, impact: (d.max || 0) - (d.earned || 0),
+  }))
+  return { visible, remaining_count: Math.max(0, ranked.length - 2) }
+}
+
 function buildV3Pillars({ dealCitabilitySeen, dealCitabilitySaid, memberValueNa = true, visibilityShareEarned = 20 } = {}) {
+  const accessibilityDims = [
+    pillarDim('agent_access', 'Agent Access', 6, 6, {
+      evidence: ['robots.txt allows crawling'], fix: null, fix_human: null, locked: false,
+    }),
+    pillarDim('catalog_context', 'Catalog & Context', 5, 8, {
+      evidence: ['partial schema.org markup'], fix: 'add GTIN to product schema',
+      fix_human: 'Add product identifiers so agents can match your listings.', locked: false,
+    }),
+    pillarDim('protocol_feed', 'Protocol & Feed Presence', 3, 6, {
+      evidence: ['no llms.txt found'], fix: 'publish an llms.txt file',
+      fix_human: 'Publish an llms.txt file so agents can find you.', locked: true,
+    }),
+  ]
+  const trueValueDims = [
+    pillarDim('price_truth', 'Price Truth', 10, 14, {
+      seen: subLens(6, 6, false, ['machine-readable price found in Offer schema']),
+      said: subLens(4, 8, false, ['5/6 mentions (83%) cited a price']),
+      fix: 'add priceCurrency to Offer schema',
+      fix_human: 'Add currency to your prices so agents can read them correctly.', locked: false,
+    }),
+    memberValueNa
+      ? pillarDim('member_value', 'Member Value', 0, 0, {
+        na: true,
+        evidence: ["probe: 'No, we do not have a member pricing program.'"],
+        seen: subLens(0, 12, false, ['no loyalty page found']),
+        said: subLens(0, 7, true, ['fewer than 2 mentions in the relevant opportunity set']),
+        fix: null, fix_human: null, locked: false,
+      })
+      : pillarDim('member_value', 'Member Value', 15, 19, {
+        seen: subLens(12, 12, false, ['loyalty page found']),
+        said: subLens(3, 7, false, ['2/4 purchase-intent mentions (50%) cited member value']),
+        fix: null, fix_human: null, locked: true,
+      }),
+    pillarDim('deal_citability', 'Deal Citability', 5, 7, {
+      seen: dealCitabilitySeen || subLens(4, 4, false, ['active discount encoded with priceValidUntil']),
+      said: dealCitabilitySaid || subLens(1, 3, false, ['1 of 6 purchase-intent mentions cited a deal']),
+      fix: 'add priceValidUntil to the Offer',
+      fix_human: "Add an end date to your deals so agents can tell they're still active.", locked: true,
+    }),
+  ]
   return {
     visibility: {
       score: 90, max: 100,
@@ -661,49 +766,10 @@ function buildV3Pillars({ dealCitabilitySeen, dealCitabilitySaid, memberValueNa 
         }),
       ],
     },
-    accessibility: {
-      score: 78, max: 100,
-      dimensions: [
-        pillarDim('agent_access', 'Agent Access', 6, 6, {
-          evidence: ['robots.txt allows crawling'], fix: null, locked: false,
-        }),
-        pillarDim('catalog_context', 'Catalog & Context', 5, 8, {
-          evidence: ['partial schema.org markup'], fix: 'add GTIN to product schema', locked: false,
-        }),
-        pillarDim('protocol_feed', 'Protocol & Feed Presence', 3, 6, {
-          evidence: ['no llms.txt found'], fix: 'publish an llms.txt file', locked: true,
-        }),
-      ],
-    },
-    true_value: {
-      score: 70, max: 100,
-      dimensions: [
-        pillarDim('price_truth', 'Price Truth', 10, 14, {
-          seen: subLens(6, 6, false, ['machine-readable price found in Offer schema']),
-          said: subLens(4, 8, false, ['5/6 mentions (83%) cited a price']),
-          fix: 'add priceCurrency to Offer schema', locked: false,
-        }),
-        memberValueNa
-          ? pillarDim('member_value', 'Member Value', 0, 0, {
-            na: true,
-            evidence: ["probe: 'No, we do not have a member pricing program.'"],
-            seen: subLens(0, 12, false, ['no loyalty page found']),
-            said: subLens(0, 7, true, ['fewer than 2 mentions in the relevant opportunity set']),
-            fix: null, locked: false,
-          })
-          : pillarDim('member_value', 'Member Value', 15, 19, {
-            seen: subLens(12, 12, false, ['loyalty page found']),
-            said: subLens(3, 7, false, ['2/4 purchase-intent mentions (50%) cited member value']),
-            fix: null, locked: true,
-          }),
-        pillarDim('deal_citability', 'Deal Citability', 5, 7, {
-          seen: dealCitabilitySeen || subLens(4, 4, false, ['active discount encoded with priceValidUntil']),
-          said: dealCitabilitySaid || subLens(1, 3, false, ['1 of 6 purchase-intent mentions cited a deal']),
-          fix: 'add priceValidUntil to the Offer', locked: true,
-        }),
-      ],
-    },
+    accessibility: { score: 78, max: 100, dimensions: accessibilityDims },
+    true_value: { score: 70, max: 100, dimensions: trueValueDims },
     member_value_na: memberValueNa,
+    fixes: computeFixesSection(accessibilityDims, trueValueDims),
   }
 }
 
@@ -867,10 +933,14 @@ describe('LiteFullReport — v3 True Value pillar verdict + footer (Stage 21, T3
     expect(pointer.textContent).toMatch(/^FIXE?S? \d{2}(, \d{2})* TARGET THIS PILLAR ↓$/)
   })
 
-  it('omits the fix pointer when no unlocked top fix is True-Value-coded', () => {
+  it('omits the fix pointer when no visible fix (report.pillars.fixes.visible) is True-Value-coded', () => {
     const pillars = buildV3Pillars()
-    // Lock every True Value dimension's fix and leave only accessibility ones free.
-    pillars.true_value.dimensions = pillars.true_value.dimensions.map((d) => ({ ...d, fix: null, locked: true }))
+    // Part 3: the pointer now reads pillars.fixes.visible directly (the
+    // same list FixListV3 renders), not dimensions[].fix/.locked.
+    pillars.fixes = {
+      visible: [{ code: 'catalog_context', name: 'Catalog & Context', fix_human: 'x', impact: 3 }],
+      remaining_count: 3,
+    }
     render(<LiteFullReport report={buildV3Report({ pillars })} />)
     expect(screen.queryByText(/TARGET THIS PILLAR/)).not.toBeInTheDocument()
   })
@@ -991,21 +1061,40 @@ describe('LiteFullReport — v3 accessibility tiles (Stage 21, A)', () => {
   })
 })
 
-describe('LiteFullReport — v3 ranked fixes (Stage 19, R5)', () => {
-  it('populates the fixes table from the pillars payload with v3 dimension labels', () => {
+describe('LiteFullReport — v3 ranked fixes (Part 3, F1/F2)', () => {
+  it('renders the top 2 visible fixes with plain-language fix_human text and their dimension labels', () => {
     render(<LiteFullReport report={buildV3Report()} />)
-    expect(screen.getByText('add GTIN to product schema')).toBeInTheDocument()
-    expect(screen.getByText('add priceCurrency to Offer schema')).toBeInTheDocument()
-    expect(screen.getAllByText('Catalog & Context').length).toBeGreaterThan(0)
+    // Ranked by gap: price_truth(4), catalog_context(3) — see computeFixesSection.
+    expect(screen.getByText('Add currency to your prices so agents can read them correctly.')).toBeInTheDocument()
+    expect(screen.getByText('Add product identifiers so agents can match your listings.')).toBeInTheDocument()
     expect(screen.getAllByText('Price Truth').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Catalog & Context').length).toBeGreaterThan(0)
   })
 
-  it('shows locked rows as "Unlocks with your email", no fix text, ordering by gap intact', () => {
+  it('omits ranks beyond 2 entirely — no markup fix, no plain-language fix, no dimension title reaches the DOM for a locked fix — only a bare remaining count', () => {
     render(<LiteFullReport report={buildV3Report()} />)
-    // protocol_feed (locked, gap 3) and deal_citability (locked, gap 2) are locked.
+    // protocol_feed (gap 3, tiebreak loses to catalog_context) and
+    // deal_citability (gap 2) are the two ranks beyond the free top 2.
     expect(screen.queryByText('publish an llms.txt file')).not.toBeInTheDocument()
     expect(screen.queryByText('add priceValidUntil to the Offer')).not.toBeInTheDocument()
-    expect(screen.getAllByText('Unlocks with your email').length).toBe(2)
+    expect(screen.queryByText('Publish an llms.txt file so agents can find you.')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Add an end date to your deals/)).not.toBeInTheDocument()
+    expect(screen.getByText('2 more fixes identified')).toBeInTheDocument()
+  })
+
+  it('renders the Full Diagnostic gate under the fixes list when fixes remain, one offer, no email language', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.getByText(/Two fixes get you started/)).toBeInTheDocument()
+    const fixCard = screen.getByText('2 more fixes identified').closest('.lite-card')
+    expect(fixCard.textContent.toLowerCase()).not.toMatch(/email/)
+  })
+
+  it('omits the gate entirely when no fixes remain beyond the visible 2', () => {
+    const pillars = buildV3Pillars()
+    pillars.fixes = { visible: pillars.fixes.visible, remaining_count: 0 }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.queryByText(/more fixes? identified/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Two fixes get you started/)).not.toBeInTheDocument()
   })
 })
 
@@ -1090,10 +1179,11 @@ describe('LiteFullReport — acceptance artifact: real allbirds v3 row', () => {
     expect(screen.getAllByText('LINKED · ABSENT FROM MOST ANSWERS').length).toBe(1) // catalog_context only
   })
 
-  it('populates the ranked-fixes table for this row (the empty-table bug is fixed)', () => {
+  it('populates the ranked-fixes table for this row with plain-language fixes and the remaining-fixes count (Part 3)', () => {
     render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
-    expect(screen.queryByText(/Showing 0 of/)).not.toBeInTheDocument()
-    expect(screen.getByText(/Add a discoverable loyalty\/rewards page/)).toBeInTheDocument()
+    expect(screen.getByText('Publish a rewards page agents can find from your menu or footer.')).toBeInTheDocument()
+    expect(screen.getByText('Show your prices in a format agents can read directly from the page, not just as text or an image.')).toBeInTheDocument()
+    expect(screen.getByText('4 more fixes identified')).toBeInTheDocument()
   })
 
   it('renders the True Value section with real seen/said evidence for all three dimensions', () => {
@@ -1181,46 +1271,42 @@ describe('LiteFullReport — v3 registry-drivenness (Stage 19)', () => {
   })
 })
 
-describe('LiteFullReport — v3 fixes: headline + snippet toggle (Stage 21, F1)', () => {
-  it('computes "N moves recover up to X points" from the unlocked fixes\' impacts, on the real allbirds fixture', () => {
+describe('LiteFullReport — v3 fixes: headline (Part 3, F1/F2)', () => {
+  it('computes "N moves recover up to X points" from the visible (top 2) fixes\' impacts, on the real allbirds fixture', () => {
     render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
-    // 3 unlocked fixes (top-3-free): catalog_context +8, price_truth +14,
-    // member_value +19 -> 41 points, matching the design mock exactly.
-    expect(screen.getByText('Three moves recover up to 41 points')).toBeInTheDocument()
+    // Visible: member_value +19, price_truth +14 -> 33 points.
+    expect(screen.getByText('Two moves recover up to 33 points')).toBeInTheDocument()
   })
 
-  it('pluralizes and sums correctly for a single unlocked fix', () => {
-    const pillars = buildV3Pillars({ memberValueNa: false })
-    pillars.accessibility.dimensions = pillars.accessibility.dimensions.map((d) => ({ ...d, fix: null, locked: true }))
-    pillars.true_value.dimensions = pillars.true_value.dimensions.map((d, i) => (
-      i === 0 ? d : { ...d, fix: null, locked: true }
-    ))
+  it('pluralizes and sums correctly for a single visible fix', () => {
+    const pillars = buildV3Pillars()
+    pillars.fixes = { visible: [pillars.fixes.visible[0]], remaining_count: 3 }
     render(<LiteFullReport report={buildV3Report({ pillars })} />)
     expect(screen.getByText(/^One move recovers? up to \d+ points$/)).toBeInTheDocument()
   })
 
-  it('renders a VIEW SNIPPET toggle for a fix with an embedded snippet, keyboard-accessible and independently toggle-able per row', () => {
-    render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
-    const toggles = screen.getAllByText('VIEW SNIPPET')
-    expect(toggles.length).toBeGreaterThan(1) // more than one row has a snippet
-    const button = toggles[0]
-    expect(button.tagName).toBe('BUTTON')
-    expect(button).toHaveAttribute('aria-expanded', 'false')
-
-    fireEvent.click(button)
-    expect(button).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText('HIDE SNIPPET')).toBeInTheDocument()
-
-    // A second row's toggle is unaffected — opening one doesn't close others.
-    const secondToggle = screen.getAllByText(/VIEW SNIPPET|HIDE SNIPPET/)[1]
-    expect(secondToggle).toHaveTextContent('VIEW SNIPPET')
+  it('sums to zero and reads "Zero moves" when there are no visible fixes at all', () => {
+    const pillars = buildV3Pillars()
+    pillars.fixes = { visible: [], remaining_count: 0 }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('Zero moves recover up to 0 points')).toBeInTheDocument()
   })
 
-  it('shows "No snippet needed" for an unlocked fix with no embedded snippet, "No issue found here." for a zero-gap unlocked row', () => {
-    const pillars = buildV3Pillars({ memberValueNa: false })
-    pillars.accessibility.dimensions[0] = { ...pillars.accessibility.dimensions[0], fix: 'Just fix it, no code needed.', locked: false, earned: 6, max: 6 }
-    render(<LiteFullReport report={buildV3Report({ pillars })} />)
-    expect(screen.getAllByText('No snippet needed').length).toBeGreaterThan(0)
+  it('H2: no VIEW SNIPPET affordance and no markup/code ever renders in the v3 fixes section', () => {
+    render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
+    expect(screen.queryByText('VIEW SNIPPET')).not.toBeInTheDocument()
+    expect(screen.queryByText('HIDE SNIPPET')).not.toBeInTheDocument()
+    const fixCard = screen.getByText('RANKED FIXES · ORDERED BY MODELED IMPACT').closest('.lite-card')
+    expect(fixCard.querySelector('pre')).toBeNull()
+  })
+
+  it('H2 grep: no schema.org/JSON-LD vocabulary anywhere in the rendered fixes card', () => {
+    render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
+    const fixCard = screen.getByText('RANKED FIXES · ORDERED BY MODELED IMPACT').closest('.lite-card')
+    const text = fixCard.textContent
+    for (const marker of ['@type', 'JSON-LD', '{', '<', 'schema.org', 'priceCurrency', 'Offer"']) {
+      expect(text).not.toContain(marker)
+    }
   })
 })
 

@@ -31,10 +31,11 @@ import { useState } from 'react'
 import {
   accessibilityBadgeText, computeExposure, formatCurrency, formatDateStamp,
   getDominantRivalPayoff, getIncentiveCitationPayoff, groupDimensionsByFamily, rankDimensionsByGap,
+  seedMonthlyRevenue, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX,
 } from './liteDerive.js'
 import {
   ENTITY_COLORS, RIVAL_SLATE_RAMP, LightCard, DarkCard, SectionHeader, ReportHeaderBar,
-  InfoBadge, Chip, useAnimateOnMount, formatScore,
+  InfoBadge, Chip, useAnimateOnMount, formatScore, FullDiagnosticGate, FULL_DIAGNOSTIC_CTA_LABEL,
 } from './liteTheme.jsx'
 import {
   DIMENSIONS, DIMENSIONS_BY_CODE, PILLAR_ACCESSIBILITY, PILLAR_NAMES,
@@ -558,48 +559,25 @@ const DECORATIVE_BAR_HEIGHT_PCT = [62, 41, 27, 14]
 function FunnelTeaserCard({ ctaUrl }) {
   return (
     <div style={{ marginTop: 28 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        <div>
-          <div className="lite-headline" style={{ fontSize: 16, marginBottom: 4 }}>Where you disappear in the funnel</div>
-          <div className="lite-body lite-muted" style={{ fontSize: 13 }}>Stage-by-stage mention rates, from awareness to ready-to-buy.</div>
-        </div>
-        <span
-          className="lite-chip lite-mono"
-          style={{ border: '1px solid var(--warn)', color: 'var(--warn-ink)', background: 'transparent' }}
-        >
-          Full analysis
-        </span>
+      <div style={{ marginBottom: 16 }}>
+        <div className="lite-headline" style={{ fontSize: 16, marginBottom: 4 }}>Where you disappear in the funnel</div>
+        <div className="lite-body lite-muted" style={{ fontSize: 13 }}>Stage-by-stage mention rates, from awareness to ready-to-buy.</div>
       </div>
 
-      <div
-        aria-hidden="true"
-        style={{ display: 'flex', gap: 8, marginBottom: 20, filter: 'blur(3px)', opacity: 0.55, pointerEvents: 'none' }}
-      >
-        {DECORATIVE_STAGE_LABELS.map((label, i) => (
-          <div key={label} style={{ flex: 1 }}>
-            <div style={{ height: 56, background: 'var(--track)', borderRadius: 4, display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
-              <div style={{ width: '100%', height: `${DECORATIVE_BAR_HEIGHT_PCT[i]}%`, background: 'var(--foundation)' }} />
+      <FullDiagnosticGate ctaUrl={ctaUrl} message="See which stage you vanish from">
+        <div style={{ display: 'flex', gap: 8 }}>
+          {DECORATIVE_STAGE_LABELS.map((label, i) => (
+            <div key={label} style={{ flex: 1 }}>
+              <div style={{ height: 56, background: 'var(--track)', borderRadius: 4, display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
+                <div style={{ width: '100%', height: `${DECORATIVE_BAR_HEIGHT_PCT[i]}%`, background: 'var(--foundation)' }} />
+              </div>
+              <div className="lite-mono" style={{ fontSize: 9, textAlign: 'center', marginTop: 4, color: 'var(--text-2)' }}>
+                {label.toUpperCase()}
+              </div>
             </div>
-            <div className="lite-mono" style={{ fontSize: 9, textAlign: 'center', marginTop: 4, color: 'var(--text-2)' }}>
-              {label.toUpperCase()}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <DarkCard style={{ textAlign: 'center' }}>
-        <div style={{ color: 'var(--text-inv)', fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
-          See which stage you vanish from
+          ))}
         </div>
-        <div className="lite-body--inv" style={{ marginBottom: 14, fontSize: 13 }}>
-          Stage-by-stage rates are measured in the full diagnostic.
-        </div>
-        {ctaUrl && (
-          <a href={ctaUrl} target="_blank" rel="noreferrer" className="lite-pill lite-pill--solid">
-            Request a working session
-          </a>
-        )}
-      </DarkCard>
+      </FullDiagnosticGate>
     </div>
   )
 }
@@ -935,17 +913,19 @@ function trueValueFooterPayoff(report) {
   return `${topRival.entity} cites value in ${Math.round(topRival.rate_pct)}% of mentions — the pace to beat.`
 }
 
-// T4: computed from the SAME ranked-fix ordering the Fixes section
-// itself renders (fix->dimension keys), never a hard-coded "01-03" —
-// only the ranks that are (a) unlocked and (b) True-Value-coded appear.
+// T4: computed from the SAME visible-fixes list the Fixes section
+// itself renders (report.pillars.fixes.visible — Part 3), never a
+// hard-coded "01-03" — only ranks that are ACTUALLY shown there (top 2,
+// since Part 3) and True-Value-coded appear. Reading the same server-
+// computed list FixListV3 renders (rather than re-deriving locked/
+// unlocked from pillars.*.dimensions, which still uses the older top-3
+// threshold kept only for rule-6 back-compat) keeps this pointer from
+// citing a fix rank the visitor can no longer actually see.
 function trueValueFixPointer(report) {
-  const ranked = rankDimensionsByGap([
-    ...(report.pillars.accessibility?.dimensions || []),
-    ...(report.pillars.true_value?.dimensions || []),
-  ])
-  const matchingRanks = ranked
-    .map((d, i) => ({ code: d.code, rank: i + 1, locked: d.locked }))
-    .filter((d) => !d.locked && TRUE_VALUE_CODES.includes(d.code))
+  const visible = report.pillars.fixes?.visible || []
+  const matchingRanks = visible
+    .map((entry, i) => ({ code: entry.code, rank: i + 1 }))
+    .filter((d) => TRUE_VALUE_CODES.includes(d.code))
   if (matchingRanks.length === 0) return null
   const label = matchingRanks.map((d) => String(d.rank).padStart(2, '0')).join(', ')
   return `${matchingRanks.length > 1 ? 'FIXES' : 'FIX'} ${label} TARGET THIS PILLAR ↓`
@@ -1360,13 +1340,23 @@ function DiagnosisCard({ diagnosis }) {
   )
 }
 
-// ─── Stage 21 (F1): ranked fixes ─────────────────────────────────────────
+// ─── Ranked fixes ─────────────────────────────────────────────────────
+// Part 3/5: v3 reports read the server-computed, plain-language-only
+// report.pillars.fixes (top 2 free, rest a bare count — see
+// lite_pillars.py::_build_fixes_section) instead of re-deriving ranking
+// client-side from pillars.*.dimensions, which is how ranks 3+ genuinely
+// never reach this component at all, not just get styled as "locked".
+//
+// Legacy (pre-v3) reports keep their original scan.dimensions-driven
+// rendering untouched below (LegacyFixRow) — those are frozen historical
+// rows, same "renders exactly as it always has" precedent used
+// throughout this codebase for pre-v3 data.
 
 // A fix string sometimes carries an inline "e.g. {snippet}" clause
 // (see lite_pillars.py's crawl-derived fix text) — split it so the
 // snippet can collapse behind its own toggle instead of always showing
 // inline. No snippet marker found -> the whole string is the title,
-// nothing to collapse.
+// nothing to collapse. Legacy-only (see module comment above).
 function splitFixSnippet(fix) {
   if (!fix) return { title: '', snippet: null }
   const idx = fix.search(/[{<]/)
@@ -1376,10 +1366,8 @@ function splitFixSnippet(fix) {
   return { title: title || fix, snippet }
 }
 
-function FixRow({ dimension, rank, maxGap }) {
+function LegacyFixRow({ dimension, rank, maxGap }) {
   const [snippetOpen, setSnippetOpen] = useState(false)
-  // Stage 19: dimension is either a legacy scan.dimensions row (`score`)
-  // or a v3 pillars.dimensions row (`earned`) — see rankDimensionsByGap.
   const earned = dimension.score ?? dimension.earned ?? 0
   const gap = (dimension.max || 0) - earned
   const impactPct = maxGap ? Math.max(0, Math.min(100, (gap / maxGap) * 100)) : 0
@@ -1426,34 +1414,10 @@ function FixRow({ dimension, rank, maxGap }) {
 
 const IMPACT_COUNT_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six']
 
-// Headline computed from the SAME ranked list the table renders — the
-// unlocked rows' impacts summed, spelled out for small counts to match
-// the design mock's voice ("Three moves recover up to 41 points").
-function fixesHeadline(ranked) {
-  const unlocked = ranked.filter((d) => !d.locked)
-  const sum = unlocked.reduce((total, d) => total + ((d.max || 0) - (d.score ?? d.earned ?? 0)), 0)
-  const count = unlocked.length
-  const word = IMPACT_COUNT_WORDS[count] || String(count)
-  return `${word} move${count === 1 ? '' : 's'} recover up to ${formatScore(sum)} points`
-}
-
-function FixList({ report }) {
-  const isV3 = isV3Report(report)
-  let ranked
-  if (isV3) {
-    // Stage 19 (R5): scan.dimensions is unusable for a v3 row (F1-V5
-    // keys never match a v3-keyed dimensions dict — see
-    // build_pillars_payload's docstring) — fix text and ranking come
-    // from pillars instead, already computed server-side.
-    ranked = rankDimensionsByGap([
-      ...(report.pillars.accessibility?.dimensions || []),
-      ...(report.pillars.true_value?.dimensions || []),
-    ])
-  } else {
-    const scan = report.scan
-    if (!scan || scan.status !== 'complete') return null
-    ranked = rankDimensionsByGap(scan.dimensions)
-  }
+function LegacyFixList({ report }) {
+  const scan = report.scan
+  if (!scan || scan.status !== 'complete') return null
+  const ranked = rankDimensionsByGap(scan.dimensions)
   const maxGap = ranked.length ? (ranked[0].max || 0) - (ranked[0].score ?? ranked[0].earned ?? 0) : 0
   const unlockedCount = ranked.filter((d) => !d.locked).length
 
@@ -1470,12 +1434,117 @@ function FixList({ report }) {
         <span>Impact</span>
         <span>Snippet</span>
       </div>
-      {ranked.map((d, i) => <FixRow key={d.code} dimension={d} rank={i + 1} maxGap={maxGap} />)}
+      {ranked.map((d, i) => <LegacyFixRow key={d.code} dimension={d} rank={i + 1} maxGap={maxGap} />)}
       <div className="lite-body" style={{ marginTop: 16, fontWeight: 600 }}>
         Showing {unlockedCount} of {ranked.length} fixes. The rest unlock with your email below.
       </div>
     </LightCard>
   )
+}
+
+// Headline computed from the SAME ranked list the table renders — the
+// unlocked rows' impacts summed, spelled out for small counts to match
+// the design mock's voice ("Three moves recover up to 41 points").
+// Legacy-only — see fixesHeadlineV3 below for the v3 equivalent.
+function fixesHeadline(ranked) {
+  const unlocked = ranked.filter((d) => !d.locked)
+  const sum = unlocked.reduce((total, d) => total + ((d.max || 0) - (d.score ?? d.earned ?? 0)), 0)
+  const count = unlocked.length
+  const word = IMPACT_COUNT_WORDS[count] || String(count)
+  return `${word} move${count === 1 ? '' : 's'} recover up to ${formatScore(sum)} points`
+}
+
+// Part 3 (F2): headline recomputed over just the visible (top 2) fixes
+// — never over remaining_count, which carries no impact data at all.
+function fixesHeadlineV3(visible) {
+  const sum = visible.reduce((total, f) => total + (f.impact || 0), 0)
+  const count = visible.length
+  const word = IMPACT_COUNT_WORDS[count] || String(count)
+  return `${word} move${count === 1 ? '' : 's'} recover up to ${formatScore(sum)} points`
+}
+
+function FixRow({ entry, rank, maxImpact }) {
+  const impactPct = maxImpact ? Math.max(0, Math.min(100, (entry.impact / maxImpact) * 100)) : 0
+  return (
+    <div className="lite-fix-row lite-fix-row--v3">
+      <div className="lite-mono lite-muted" style={{ fontSize: 12 }}>{String(rank).padStart(2, '0')}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{entry.fix_human}</div>
+      <div className="lite-muted" style={{ fontSize: 13 }}>{entry.name}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span className="lite-mono" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+          +{formatScore(entry.impact)}
+        </span>
+        <span className="lite-bar-track" style={{ width: 44, height: 5 }}>
+          <span className="lite-bar-fill" style={{ width: `${impactPct}%`, background: 'var(--foundation)' }} />
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// Fixed, illustrative rows — never derived from real dimension data
+// (same G2 discipline as the funnel teaser's DECORATIVE_* constants).
+const DECORATIVE_FIX_ROWS = [
+  { label: 'Catalog data', impactPct: 78 },
+  { label: 'Deal terms', impactPct: 52 },
+  { label: 'Feed presence', impactPct: 31 },
+]
+
+function DecorativeFixRows() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {DECORATIVE_FIX_ROWS.map((row) => (
+        <div key={row.label} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span className="lite-mono" style={{ fontSize: 12, color: 'var(--text-2)', minWidth: 90 }}>{row.label}</span>
+          <span className="lite-bar-track" style={{ flex: 1, height: 6 }}>
+            <span className="lite-bar-fill" style={{ width: `${row.impactPct}%`, background: 'var(--foundation)' }} />
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function FixListV3({ report, ctaUrl }) {
+  const fixes = report.pillars.fixes
+  if (!fixes) return null
+  const { visible, remaining_count: remainingCount } = fixes
+  const maxImpact = visible.length ? Math.max(...visible.map((f) => f.impact || 0)) : 0
+
+  return (
+    <LightCard id="fix">
+      <SectionHeader
+        label="RANKED FIXES · ORDERED BY MODELED IMPACT"
+        headline={fixesHeadlineV3(visible)}
+      />
+      {visible.length > 0 && (
+        <>
+          <div className="lite-fix-table-header lite-fix-table-header--v3 lite-label" style={{ fontSize: 11 }}>
+            <span />
+            <span>Fix</span>
+            <span>Dimension</span>
+            <span>Impact</span>
+          </div>
+          {visible.map((entry, i) => (
+            <FixRow key={entry.code} entry={entry} rank={i + 1} maxImpact={maxImpact} />
+          ))}
+        </>
+      )}
+      {remainingCount > 0 && (
+        <FullDiagnosticGate
+          ctaUrl={ctaUrl}
+          message="Two fixes get you started. The full ranked list — every fix, quantified and sequenced for your store — comes with a custom Full Diagnostic."
+          subMessage={`${remainingCount} more fix${remainingCount === 1 ? '' : 'es'} identified`}
+        >
+          <DecorativeFixRows />
+        </FullDiagnosticGate>
+      )}
+    </LightCard>
+  )
+}
+
+function FixList({ report, ctaUrl }) {
+  return isV3Report(report) ? <FixListV3 report={report} ctaUrl={ctaUrl} /> : <LegacyFixList report={report} />
 }
 
 // ─── Exposure calculator ────────────────────────────────────────────────
@@ -1487,7 +1556,7 @@ function ExposureCalculator({ revenue, onRevenueChange, aiSharePct, onAiShareCha
         Monthly revenue: {formatCurrency(revenue)}
       </label>
       <input
-        type="range" min={10000} max={10000000} step={10000} value={revenue}
+        type="range" min={REVENUE_SLIDER_MIN} max={REVENUE_SLIDER_MAX} step={10000} value={revenue}
         onChange={(e) => onRevenueChange(Number(e.target.value))}
         className="lite-slider" style={{ marginBottom: 22 }}
         aria-label="Monthly revenue"
@@ -1518,7 +1587,7 @@ function ExposureCalculator({ revenue, onRevenueChange, aiSharePct, onAiShareCha
 // summary + a mono "full analysis" note) — the interactive calculator
 // stays exactly as it was, just collapsed behind an "Adjust" toggle
 // rather than always open.
-function ExposureCard({ revenue, onRevenueChange, aiSharePct, onAiShareChange, exposure }) {
+function ExposureCard({ revenue, onRevenueChange, aiSharePct, onAiShareChange, exposure, isEstimated }) {
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -1539,7 +1608,7 @@ function ExposureCard({ revenue, onRevenueChange, aiSharePct, onAiShareChange, e
                 className="lite-mono"
                 style={{ background: 'none', border: 'none', padding: 0, color: 'var(--accent-ink)', fontWeight: 700, cursor: 'pointer', fontSize: 12 }}
               >
-                adjust
+                {isEstimated ? 'revenue estimated by ChatGPT · adjust' : 'adjust'}
               </button>
             </div>
           </div>
@@ -1607,7 +1676,7 @@ function DiagnosticCliff({ ctaUrl }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginTop: 20 }}>
         {ctaUrl && (
           <a href={ctaUrl} target="_blank" rel="noreferrer" className="lite-pill lite-pill--solid">
-            Request a working session
+            {FULL_DIAGNOSTIC_CTA_LABEL}
           </a>
         )}
         <span className="lite-body--inv" style={{ fontSize: 13 }}>
@@ -1669,9 +1738,23 @@ export function LiteFullReport({ report, onAddStoreUrl, token }) {
   const entities = report.overall || []
   const ctaUrl = import.meta.env.VITE_LITE_CTA_URL
 
-  const [revenue, setRevenue] = useState(DEFAULT_REVENUE)
+  // Part 5 (R3): seeds from the revenue probe's annual estimate
+  // (converted to this slider's monthly unit, clamped) when present;
+  // falls back to the existing static default otherwise, unchanged.
+  // revenueTouched flips the instant the visitor drags the slider
+  // themselves — "user adjustment overrides the estimate for that
+  // session" — which also drops the ESTIMATED provenance label, since
+  // the value on screen is no longer the estimate.
+  const [revenue, setRevenue] = useState(() => seedMonthlyRevenue(report.revenue_estimate_usd) ?? DEFAULT_REVENUE)
+  const [revenueTouched, setRevenueTouched] = useState(false)
   const [aiSharePct, setAiSharePct] = useState(DEFAULT_AI_SHARE_PCT)
   const exposure = computeExposure({ revenue, aiSharePct, visibility: report.visibility })
+  const revenueIsEstimated = report.revenue_estimate_usd != null && !revenueTouched
+
+  function handleRevenueChange(value) {
+    setRevenueTouched(true)
+    setRevenue(value)
+  }
 
   const primaryEntity = entities.find((e) => e.role === 'primary')
 
@@ -1703,12 +1786,13 @@ export function LiteFullReport({ report, onAddStoreUrl, token }) {
 
         <DiagnosisCard diagnosis={report.diagnosis} />
 
-        <FixList report={report} />
+        <FixList report={report} ctaUrl={ctaUrl} />
 
         <ExposureCard
-          revenue={revenue} onRevenueChange={setRevenue}
+          revenue={revenue} onRevenueChange={handleRevenueChange}
           aiSharePct={aiSharePct} onAiShareChange={setAiSharePct}
           exposure={exposure}
+          isEstimated={revenueIsEstimated}
         />
 
         <DiagnosticCliff ctaUrl={ctaUrl} />

@@ -178,6 +178,61 @@ def test_rich_dtc_store_scores_high_on_value_family(monkeypatch):
     assert result.dimensions["scorer_version"] == "3"
 
 
+# ─── Part 5 (H1): fix_human — plain-language fix text ────────────────────
+
+CRAWL_DIM_CODES = (
+    "agent_access", "catalog_context", "protocol_feed",
+    "price_truth_seen", "member_value_seen", "deal_citability_seen",
+)
+
+
+def test_fix_human_present_whenever_fix_is_and_absent_whenever_it_isnt(monkeypatch):
+    """Every crawl-derived dimension either has both fix and fix_human, or
+    neither — fix_human is never a second, independent signal that could
+    drift out of sync with whether a fix actually exists."""
+    pages = _base_pages()  # no llms.txt/mcp markup -> protocol_feed definitely has a fix
+    monkeypatch.setattr(httpx.Client, "get", _serve(pages))
+
+    result = engine.run_scan("https://rich.example.com")
+
+    for code in CRAWL_DIM_CODES:
+        dim = result.dimensions[code]
+        assert ("fix" in dim) and ("fix_human" in dim)
+        assert (dim["fix"] is None) == (dim["fix_human"] is None), code
+
+
+def test_protocol_feed_fix_human_is_plain_language_no_markup(monkeypatch):
+    pages = _base_pages()  # no llms.txt/mcp -> protocol_feed scores low, carries a fix
+    monkeypatch.setattr(httpx.Client, "get", _serve(pages))
+
+    result = engine.run_scan("https://rich.example.com")
+    dim = result.dimensions["protocol_feed"]
+
+    assert dim["fix"] is not None  # sanity: this fixture really does have a gap here
+    fix_human = dim["fix_human"]
+    assert fix_human is not None
+    for marker in ("{", "<", "@type", "schema.org", "json-ld", "well-known"):
+        assert marker.lower() not in fix_human.lower(), marker
+    # H3: a single, plain sentence — not a semicolon/bullet-joined list.
+    assert fix_human.count(".") <= 1
+
+
+def test_no_markup_in_any_populated_fix_human_across_every_crawl_dimension(monkeypatch):
+    """H2: whatever fix_human strings this run actually populates, none
+    of them ever leak markup vocabulary — the technical version stays in
+    `fix` only."""
+    pages = _base_pages()
+    monkeypatch.setattr(httpx.Client, "get", _serve(pages))
+    result = engine.run_scan("https://rich.example.com")
+
+    for code in CRAWL_DIM_CODES:
+        fix_human = result.dimensions[code]["fix_human"]
+        if fix_human is None:
+            continue
+        for marker in ("{", "}", "<", ">", "@type", "json-ld", "schema.org"):
+            assert marker.lower() not in fix_human.lower(), (code, marker)
+
+
 def test_same_store_minus_member_price_drops_member_value_seen(monkeypatch):
     with_member = _base_pages(member_price=True)
     without_member = _base_pages(member_price=False)

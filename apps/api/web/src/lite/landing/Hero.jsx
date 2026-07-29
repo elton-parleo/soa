@@ -65,7 +65,7 @@ export function Hero({ onSubmitted }) {
               score={57}
               label="Sample report"
               linkText="See a sample of the full report"
-              meta="9 incentives · 8 dimensions · ranked fixes with markup"
+              meta="9 incentives · 8 dimensions · ranked fixes in plain language"
             />
           </div>
 

@@ -15,8 +15,8 @@ export function FinalCta({ onSubmitted }) {
         </div>
 
         <p className="lite-body--inv" style={{ fontSize: 13 }}>
-          Your score streams live in a few minutes. The full report, with
-          every fix, unlocks with your email.
+          Your score streams live in a few minutes. Your private report link
+          lands at your email, with a monthly re-run included.
         </p>
       </div>
     </section>

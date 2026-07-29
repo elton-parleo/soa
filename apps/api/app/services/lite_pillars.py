@@ -279,6 +279,50 @@ def _rank_and_lock_fixes(dims: List[Dict]) -> None:
             d["fix"] = None
 
 
+# Part 3 (F1): the free report's ranked-fixes list gives away only the
+# top 2 (tightened from the pre-existing FREE_FIX_RANK=3 used above for
+# pillars.*.dimensions[].fix/locked, which stays unchanged for rule-6
+# back-compat — nothing currently reads it except the fixes list itself,
+# which now reads _build_fixes_section's output instead).
+FREE_FIX_VISIBLE_RANK = 2
+
+
+def _build_fixes_section(dims: List[Dict]) -> Dict:
+    """
+    Builds the report's `fixes` field: {visible: [...], remaining_count}.
+    This is a SEPARATE, purely additive payload field from `dims` itself
+    — `dims` (accessibility_dims + true_value_dims) keeps carrying every
+    dimension's earned/max/evidence unconditionally, because the True
+    Value butterfly and Accessibility tiles need real scores for all 6
+    dimensions regardless of fix-lock status. Only THIS field enforces
+    the "top 2 fixes free, rest is a bare count" rule — ranks beyond
+    FREE_FIX_VISIBLE_RANK never have their code/name/impact serialized
+    anywhere in it (Part 3's leak test).
+
+    Same ranking rule as _rank_and_lock_fixes (opportunity size, max -
+    earned, descending; deterministic tiebreak by code), but additionally
+    excludes any dimension with no fix_human at all — a dimension already
+    scoring its full max has nothing to fix and must not count toward
+    remaining_count or occupy a free slot.
+    """
+    ranked = sorted(
+        (d for d in dims if not d["na"] and d.get("fix_human")),
+        key=lambda d: (-(d["max"] - d["earned"]), d["code"]),
+    )
+    visible = [
+        {
+            "code": d["code"], "name": d["name"],
+            "fix_human": d["fix_human"],
+            "impact": round(d["max"] - d["earned"], 1),
+        }
+        for d in ranked[:FREE_FIX_VISIBLE_RANK]
+    ]
+    return {
+        "visible": visible,
+        "remaining_count": max(0, len(ranked) - FREE_FIX_VISIBLE_RANK),
+    }
+
+
 def _crawl_dim_row(code: str, crawl_dimensions: Dict[str, dict]) -> Dict:
     d = crawl_dimensions.get(code) or {}
     coverage = d.get("coverage") or "full"
@@ -287,7 +331,7 @@ def _crawl_dim_row(code: str, crawl_dimensions: Dict[str, dict]) -> Dict:
         "earned": d.get("score") or 0.0, "max": d.get("max") or 0.0,
         "na": coverage == "na", "evidence": d.get("evidence") or [],
         "seen": None, "said": None,
-        "fix": d.get("fix"), "locked": False,
+        "fix": d.get("fix"), "fix_human": d.get("fix_human"), "locked": False,
     }
 
 
@@ -392,7 +436,7 @@ def build_pillars_payload(
             true_value_dims.append({
                 "code": code, "name": dim.name, "earned": 0.0, "max": 0.0,
                 "na": True, "evidence": na_evidence, "seen": seen_row, "said": said_row,
-                "fix": None, "locked": False,
+                "fix": None, "fix_human": None, "locked": False,
             })
             continue
 
@@ -417,14 +461,16 @@ def build_pillars_payload(
         true_value_dims.append({
             "code": code, "name": dim.name, "earned": earned, "max": dim_max,
             "na": False, "evidence": [], "seen": seen_row, "said": said_row,
-            "fix": seen.get("fix"), "locked": False,
+            "fix": seen.get("fix"), "fix_human": seen.get("fix_human"), "locked": False,
         })
 
     # Fix text only exists on the 6 crawl-derived dimensions above
     # (accessibility's 3 + True Value's 3 seen-halves) — visibility's
     # mention-derived dimensions have nothing crawl-fixable to offer, so
     # they're outside the ranking pool entirely (see _rank_and_lock_fixes).
-    _rank_and_lock_fixes(accessibility_dims + true_value_dims)
+    fixable_dims = accessibility_dims + true_value_dims
+    _rank_and_lock_fixes(fixable_dims)
+    fixes = _build_fixes_section(fixable_dims)
 
     total_earned = visibility_earned + accessibility_earned + true_value_earned
     composite = compute_composite(total_earned, member_value_na=member_value_na)
@@ -435,4 +481,5 @@ def build_pillars_payload(
         "true_value": _pillar(true_value_earned, true_value_applicable_max, true_value_dims),
         "composite": composite,
         "member_value_na": member_value_na,
+        "fixes": fixes,
     }

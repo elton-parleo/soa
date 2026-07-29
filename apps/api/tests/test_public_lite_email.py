@@ -4,6 +4,7 @@ Tests for PATCH /api/public/soa-lite/{token}/email
 even before the report is ready; returns the full report inline once
 complete, else {status, phase} (same shape as GET /status).
 """
+import json
 import pytest
 from datetime import datetime, timezone
 from fastapi import HTTPException
@@ -36,13 +37,25 @@ def db(monkeypatch):
             )
         """)
         conn.exec_driver_sql("""
+            CREATE TABLE soa_queries (
+                id INTEGER PRIMARY KEY, stage TEXT
+            )
+        """)
+        conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
-                id INTEGER PRIMARY KEY, cycle_id INTEGER, status TEXT
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_coded_mentions (
-                id INTEGER PRIMARY KEY, run_id INTEGER
+                id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
+                mentioned BOOLEAN, deal_cited BOOLEAN, deal_types TEXT, member_value_cited BOOLEAN
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_price_observations (
+                id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
+                stated_price FLOAT, claimed_net_price FLOAT, member_price_claimed BOOLEAN
             )
         """)
         conn.exec_driver_sql("""
@@ -68,7 +81,7 @@ def db(monkeypatch):
             CREATE TABLE soa_lite_scan_results (
                 id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, status TEXT,
                 total_score INTEGER, integrity_capped BOOLEAN, dimensions TEXT, pages_fetched TEXT,
-                membership_probe TEXT
+                membership_probe TEXT, revenue_probe TEXT
             )
         """)
     monkeypatch.setattr(public_lite, "engine", engine)
@@ -203,3 +216,56 @@ def test_subsequent_get_report_is_unlocked_after_email_patch(db):
     report = public_lite.get_lite_report("t1")
 
     assert report["locked"] is False
+
+
+# ─── Part 3 (F4): email PATCH no longer changes fix serialization ────────
+# The email gate mechanism (this PATCH) is unchanged — it still unlocks
+# the report at all. What it does NOT do (and never specially did) is
+# serialize a different `pillars.fixes` shape than a plain GET /report
+# would for the same token: both routes share _build_report_payload,
+# with no separate fix-unlock branch keyed off the PATCH itself.
+
+def _seed_v3_cycle_with_a_fix(conn):
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_requests (token, status, cycle_id, competitor_source) "
+        "VALUES ('v3fix', 'complete', 7, 'generated')"
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (301, 'Fixture Co', 'fixture-co', 'brand')"
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (7, 301, 'M001', 'primary')"
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_metrics_results "
+        "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, mention_rate, soa_pct, rsi_score) "
+        "VALUES (7, 301, 'overall', 'overall', 12, 6, 0.5, 0.6, 1.0)"
+    )
+    dimensions = {
+        "scorer_version": "3",
+        "agent_access": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+        "catalog_context": {
+            "score": 2, "max": 8, "coverage": "full", "evidence": [],
+            "fix": "fix catalog_context", "fix_human": "Add product identifiers so agents can match your listings.",
+        },
+        "protocol_feed": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+        "price_truth_seen": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+        "member_value_seen": {"score": 12, "max": 12, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+        "deal_citability_seen": {"score": 4, "max": 4, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+    }
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_scan_results (lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe) "
+        "VALUES ((SELECT id FROM soa_lite_requests WHERE token = 'v3fix'), 'complete', 90, 0, ?, ?)",
+        (json.dumps(dimensions), json.dumps({"result": "no", "raw_evidence": None})),
+    )
+
+
+def test_email_patch_and_get_report_serialize_the_same_fixes_shape(db):
+    with db.begin() as conn:
+        _seed_v3_cycle_with_a_fix(conn)
+
+    patch_result = public_lite.set_lite_email("v3fix", _email("visitor@example.com"))
+    get_result = public_lite.get_lite_report("v3fix")
+
+    assert patch_result["pillars"]["fixes"] == get_result["pillars"]["fixes"]
+    assert patch_result["pillars"]["fixes"]["visible"][0]["code"] == "catalog_context"

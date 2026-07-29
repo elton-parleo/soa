@@ -51,7 +51,7 @@ def db(monkeypatch):
             CREATE TABLE soa_lite_scan_results (
                 id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, status TEXT,
                 total_score INTEGER, integrity_capped BOOLEAN, dimensions TEXT, pages_fetched TEXT,
-                membership_probe TEXT
+                membership_probe TEXT, revenue_probe TEXT
             )
         """)
         conn.exec_driver_sql("""
@@ -656,7 +656,7 @@ _V3_CRAWL_DIMENSIONS = {
 }
 
 
-def _seed_v3_full_credit_scan(conn, token="v3full", email="visitor@example.com"):
+def _seed_v3_full_credit_scan(conn, token="v3full", email="visitor@example.com", dimensions=None, revenue_probe=None):
     """A scorer_version '3' scan + 2 purchase-intent mentions that cite
     everything — mirrors test_lite_pillars.py's 'full credit' fixture,
     so the resulting composite/pillars are exactly known (100 across
@@ -679,9 +679,13 @@ def _seed_v3_full_credit_scan(conn, token="v3full", email="visitor@example.com")
     )
     rid = _lite_request_id(conn, token)
     conn.exec_driver_sql(
-        "INSERT INTO soa_lite_scan_results (lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe) "
-        "VALUES (?, 'complete', 90, 0, ?, ?)",
-        (rid, json.dumps(_V3_CRAWL_DIMENSIONS), json.dumps({"result": "yes", "raw_evidence": None})),
+        "INSERT INTO soa_lite_scan_results (lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe, revenue_probe) "
+        "VALUES (?, 'complete', 90, 0, ?, ?, ?)",
+        (
+            rid, json.dumps(dimensions if dimensions is not None else _V3_CRAWL_DIMENSIONS),
+            json.dumps({"result": "yes", "raw_evidence": None}),
+            json.dumps(revenue_probe) if revenue_probe is not None else None,
+        ),
     )
     conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (901, 'Comparison')")
     conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (902, 'Ready to Buy')")
@@ -731,6 +735,73 @@ def test_v3_pillars_fix_text_reaches_the_full_report(db):
     all_dims = result["pillars"]["accessibility"]["dimensions"] + result["pillars"]["true_value"]["dimensions"]
     assert any(d["fix"] is not None for d in all_dims)
     assert any(d["locked"] for d in all_dims)
+
+
+# ─── Part 3 (F1): report.pillars.fixes end to end ────────────────────────
+
+_V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN = {
+    "scorer_version": "3",
+    "agent_access": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+    "catalog_context": {
+        "score": 3, "max": 8, "coverage": "full", "evidence": [],
+        "fix": "fix catalog_context", "fix_human": "Add product identifiers so agents can match your listings.",
+    },
+    "protocol_feed": {
+        "score": 0, "max": 6, "coverage": "full", "evidence": [],
+        "fix": "fix protocol_feed", "fix_human": "Publish the files that let AI agents discover your store.",
+    },
+    "price_truth_seen": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+    "member_value_seen": {"score": 12, "max": 12, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+    "deal_citability_seen": {"score": 4, "max": 4, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+}
+
+
+def test_v3_report_fixes_field_reaches_the_full_report_end_to_end(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, dimensions=_V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN)
+
+    result = public_lite.get_lite_report("v3full")
+
+    fixes = result["pillars"]["fixes"]
+    # Only two dims have a gap here — both visible, nothing left over.
+    assert [v["code"] for v in fixes["visible"]] == ["protocol_feed", "catalog_context"]
+    assert fixes["remaining_count"] == 0
+    assert fixes["visible"][0]["fix_human"] == "Publish the files that let AI agents discover your store."
+    assert "fix" not in fixes["visible"][0]  # no markup key on a visible entry
+
+
+def test_v3_teaser_never_includes_pillars_fixes(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, email=None, dimensions=_V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN)
+
+    result = public_lite.get_lite_report("v3full")
+    assert "pillars" not in result or result.get("pillars") is None
+
+
+# ─── Part 5 (R3): revenue_estimate_usd end to end ────────────────────────
+
+def test_revenue_estimate_usd_reaches_the_full_report_when_probe_ran(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, revenue_probe={"annual_revenue_usd": 24_000_000.0, "basis": "b", "quote": "b"})
+
+    result = public_lite.get_lite_report("v3full")
+    assert result["revenue_estimate_usd"] == 24_000_000.0
+
+
+def test_revenue_estimate_usd_is_null_when_probe_never_ran(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn)  # no revenue_probe passed -> column stays NULL
+
+    result = public_lite.get_lite_report("v3full")
+    assert result["revenue_estimate_usd"] is None
+
+
+def test_revenue_estimate_usd_is_null_when_probe_ran_but_found_nothing(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, revenue_probe={"annual_revenue_usd": None, "basis": None, "quote": None})
+
+    result = public_lite.get_lite_report("v3full")
+    assert result["revenue_estimate_usd"] is None
 
 
 def test_v3_crosswalk_reason_remaps_onto_the_v3_dimension(db):

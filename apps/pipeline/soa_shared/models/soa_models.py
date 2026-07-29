@@ -1626,6 +1626,20 @@ class SoaLiteScanResult(Base):
         ),
     )
 
+    revenue_probe = Column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Part 5 (R1/R2): {annual_revenue_usd: number|null, basis: str|null, "
+            "quote: str|null} from a single out-of-band OpenAI call (apps/pipeline/"
+            "generation/revenue_probe.py), same never-throw/one-retry pattern as "
+            "membership_probe above. Metrically invisible — not one of the 12 "
+            "tracked queries, excluded from every mention/citation denominator. "
+            "Feeds ONLY the exposure calculator's default revenue seed (apps/api/"
+            "app/routers/public_lite.py); never affects any score."
+        ),
+    )
+
     error = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

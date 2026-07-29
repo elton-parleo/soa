@@ -753,6 +753,11 @@ class PublicLiteScanDimension(BaseModel):
     max: float
     evidence: List[str] = []
     fix: Optional[str] = None
+    # Part 5 (H1): plain-language rewrite of `fix` — no markup, no schema
+    # vocabulary. `fix` (the exact-markup version) is now Full Diagnostic
+    # deliverable material; the free report's fixes list (see `fixes` on
+    # PublicLiteReportResponse) only ever serializes this field.
+    fix_human: Optional[str] = None
     locked: bool = False
     linked: Optional[dict] = None  # {"reason": "..."} or None
     coverage: str = "full"  # full | partial | na
@@ -872,6 +877,9 @@ class PublicLitePillarDimension(BaseModel):
     seen: Optional[PublicLiteSubLens] = None
     said: Optional[PublicLiteSubLens] = None
     fix: Optional[str] = None
+    # Part 5 (H1): plain-language rewrite of `fix` — see the matching
+    # comment on PublicLiteScanDimension.fix_human above.
+    fix_human: Optional[str] = None
     locked: bool = False
     linked: Optional[dict] = None  # {"reason": "..."} or None — see public_lite.py's v3 crosswalk remap
 
@@ -886,6 +894,32 @@ class PublicLitePillar(BaseModel):
     dimensions: List[PublicLitePillarDimension] = []
 
 
+class PublicLiteFixEntry(BaseModel):
+    """One of the top-2 free fixes (Part 3, F1) — plain-language only,
+    no markup (see PublicLitePillarDimension.fix_human). impact is the
+    dimension's own max - earned, the same points a locked fix's slot
+    would have granted."""
+    code: str
+    name: str
+    fix_human: str
+    impact: float
+
+
+class PublicLiteFixesSection(BaseModel):
+    """
+    Part 3 (F1): the free report's ranked-fixes list. `visible` never has
+    more than 2 entries; everything beyond rank 2 is reduced to
+    `remaining_count` — no title, dimension, or impact for a locked fix
+    is ever serialized anywhere in this object. Deliberately separate
+    from pillars.accessibility/true_value.dimensions, which keep
+    reporting every dimension's real earned/max/evidence unconditionally
+    (needed by the True Value butterfly and Accessibility tiles,
+    independent of fix-lock status).
+    """
+    visible: List[PublicLiteFixEntry] = []
+    remaining_count: int = 0
+
+
 class PublicLitePillars(BaseModel):
     """
     Stage 16 (Part 7): the three-pillar breakdown behind a scorer_
@@ -898,6 +932,9 @@ class PublicLitePillars(BaseModel):
     accessibility: PublicLitePillar
     true_value: PublicLitePillar
     member_value_na: bool = False
+    # Part 3 (F1): additive, same v3-only availability as the rest of
+    # this object — see PublicLiteFixesSection's own docstring.
+    fixes: Optional[PublicLiteFixesSection] = None
 
 
 class PublicLiteReportResponse(BaseModel):
@@ -937,6 +974,12 @@ class PublicLiteReportResponse(BaseModel):
     # Stage 13 (W4/W5): drives the widget's solo-comparison fallback and
     # the "auto-selected by ChatGPT" methodology stamp.
     competitor_source: Optional[str] = None
+    # Part 5 (R3): annual USD estimate from the revenue probe (apps/
+    # pipeline/generation/revenue_probe.py), null when the probe never
+    # ran or came back unparseable/absurd. Feeds ONLY the exposure
+    # calculator's default seed (converted to its monthly unit,
+    # clamped) — never a score input.
+    revenue_estimate_usd: Optional[float] = None
 
 
 class PublicLiteTeaserEntity(BaseModel):
