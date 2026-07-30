@@ -7,7 +7,10 @@ import { describe, it, expect, vi } from 'vitest'
 import '@testing-library/jest-dom'
 
 import { LiteFullReport } from '../LiteFullReport.jsx'
-import { DIMENSIONS, DIMENSIONS_BY_CODE, PILLAR_NAMES } from '../landing/scanDimensionsRegistry.js'
+import {
+  DIMENSIONS, DIMENSIONS_BY_CODE, PILLAR_NAMES, LITE_QUERY_COUNT,
+  VERDICT_AGENT_READY, VERDICT_NOT_AGENT_READY,
+} from '../landing/scanDimensionsRegistry.js'
 import ALLBIRDS_V3_REPORT from './fixtures/allbirds_v3_report.json'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -107,7 +110,7 @@ describe('LiteFullReport — page frame', () => {
 describe('LiteFullReport — visibility section (Stage 7)', () => {
   it('renders the W1 section header', () => {
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.getByText('VISIBILITY · 12 QUERIES · CHATGPT')).toBeInTheDocument()
+    expect(screen.getByText(`VISIBILITY · ${LITE_QUERY_COUNT} QUERIES · CHATGPT`)).toBeInTheDocument()
     expect(screen.getByText('How often agents mention you — and your value')).toBeInTheDocument()
   })
 
@@ -122,7 +125,7 @@ describe('LiteFullReport — visibility section (Stage 7)', () => {
 
   it('renders the mention-rate subtitle and You/Rivals legend', () => {
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.getByText(/How many of the 12 shopper questions named each brand/)).toBeInTheDocument()
+    expect(screen.getByText(new RegExp(`How many of the ${LITE_QUERY_COUNT} shopper questions named each brand`))).toBeInTheDocument()
     expect(screen.getByText('You')).toBeInTheDocument()
     expect(screen.getByText('Rivals')).toBeInTheDocument()
   })
@@ -340,24 +343,24 @@ describe('LiteFullReport — funnel teaser (G2: decorative, never real data)', (
   it('renders the locked framing: title, subtitle, and FULL ANALYSIS tag', () => {
     render(<LiteFullReport report={baseReport} />)
     expect(screen.getByText('Where you disappear in the funnel')).toBeInTheDocument()
-    expect(screen.getByText('Full analysis')).toBeInTheDocument()
+    expect(screen.getAllByText('FULL ANALYSIS').length).toBeGreaterThan(0)
   })
 
-  it('renders fixed decorative stage cells, aria-hidden, regardless of the API payload', () => {
-    render(<LiteFullReport report={baseReport} />)
-    ;['AWARENESS', 'RESEARCH', 'COMPARISON', 'READY TO BUY'].forEach((label) => {
-      const el = screen.getByText(label)
-      expect(el).toBeInTheDocument()
-      // aria-hidden lives on an ancestor wrapper, not the label itself.
-      expect(el.closest('[aria-hidden="true"]')).not.toBeNull()
+  it('renders redacted glyph blocks, aria-hidden, never the real purchase-stage names (Part 6, G2)', () => {
+    const { container } = render(<LiteFullReport report={baseReport} />)
+    const decorative = container.querySelector('.lite-funnel-decor')
+    expect(decorative).not.toBeNull()
+    expect(decorative.textContent).toMatch(/▮/)
+    ;['Awareness', 'Research', 'Comparison', 'Ready to Buy', 'AWARENESS', 'RESEARCH', 'COMPARISON', 'READY TO BUY'].forEach((label) => {
+      expect(decorative.textContent).not.toContain(label)
     })
   })
 
-  it('renders the overlay copy and CTA (Part 1/2: via the FullDiagnosticGate module), with no email language anywhere in this card', () => {
+  it('renders the overlay copy and CTA (Part 1/2, restyled Part 6 G1: via the inline FullDiagnosticGate variant), with no email language anywhere in this card', () => {
     vi.stubEnv('VITE_LITE_CTA_URL', 'https://parleo.io/demo')
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.getByText('See which stage you vanish from')).toBeInTheDocument()
-    // Also rendered by the diagnostic cliff (M2: one offer, not two) — at
+    expect(screen.getByText(/See which stage you vanish from/)).toBeInTheDocument()
+    // Also rendered by the closing module (M2: one offer, not two) — at
     // least one instance lives inside the funnel card itself.
     expect(screen.getAllByText('Contact us for a free custom Full Diagnostic').length).toBeGreaterThan(0)
     const cta = screen.getByText('Where you disappear in the funnel').closest('.lite-card')
@@ -439,7 +442,7 @@ describe('LiteFullReport — why-section, all 8 dimensions', () => {
     expect(screen.getByText(/Agent Access \(F1\)/)).toBeInTheDocument()
     // Visibility sections still render fully.
     expect(screen.getByText('Where you disappear in the funnel')).toBeInTheDocument()
-    expect(screen.getByText('AWARENESS')).toBeInTheDocument()
+    expect(screen.getAllByText('FULL ANALYSIS').length).toBeGreaterThan(0)
   })
 
   it('shows an honest explanation when scan failed', () => {
@@ -576,17 +579,17 @@ describe('LiteFullReport — diagnosis card (speculative field)', () => {
   })
 })
 
-describe('LiteFullReport — exposure calculator (Stage 21, F2: collapsed by default)', () => {
+describe('LiteFullReport — exposure calculator (Stage 21, F2: collapsed by default; annual units Report redesign Part 7)', () => {
   it('renders a compact summary by default, sliders collapsed behind "adjust"', () => {
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.queryByLabelText('Monthly revenue')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Annual revenue')).not.toBeInTheDocument()
     expect(screen.getByText('adjust')).toBeInTheDocument()
   })
 
   it('reveals the sliders and modeled-exposure disclaimer after clicking adjust', () => {
     render(<LiteFullReport report={baseReport} />)
     fireEvent.click(screen.getByText('adjust'))
-    expect(screen.getByLabelText('Monthly revenue')).toBeInTheDocument()
+    expect(screen.getByLabelText('Annual revenue')).toBeInTheDocument()
     expect(screen.getByLabelText('AI-assisted share of purchases')).toBeInTheDocument()
     expect(screen.getByText('Modeled, not measured.')).toBeInTheDocument()
   })
@@ -594,10 +597,10 @@ describe('LiteFullReport — exposure calculator (Stage 21, F2: collapsed by def
   it('updates the modeled exposure figure when a slider moves', () => {
     const { container } = render(<LiteFullReport report={baseReport} />)
     fireEvent.click(screen.getByText('adjust'))
-    const revenueSlider = screen.getByLabelText('Monthly revenue')
+    const revenueSlider = screen.getByLabelText('Annual revenue')
     const numeral = () => container.querySelector('.lite-numeral--calc').textContent
     const before = numeral()
-    Object.defineProperty(revenueSlider, 'value', { value: '10000000', configurable: true })
+    Object.defineProperty(revenueSlider, 'value', { value: '100000000', configurable: true })
     revenueSlider.dispatchEvent(new Event('change', { bubbles: true }))
     expect(numeral()).not.toBe(before)
   })
@@ -605,29 +608,37 @@ describe('LiteFullReport — exposure calculator (Stage 21, F2: collapsed by def
   it('collapses back after clicking COLLAPSE', () => {
     render(<LiteFullReport report={baseReport} />)
     fireEvent.click(screen.getByText('adjust'))
-    expect(screen.getByLabelText('Monthly revenue')).toBeInTheDocument()
+    expect(screen.getByLabelText('Annual revenue')).toBeInTheDocument()
     fireEvent.click(screen.getByText('COLLAPSE'))
-    expect(screen.queryByLabelText('Monthly revenue')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Annual revenue')).not.toBeInTheDocument()
+  })
+
+  it('never renders "/mo" or "monthly" anywhere in the exposure card (Part 7 grep test)', () => {
+    const { container } = render(<LiteFullReport report={baseReport} />)
+    fireEvent.click(screen.getByText('adjust'))
+    const expCard = container.querySelector('#exp')
+    expect(expCard.textContent).not.toMatch(/\/\s*mo\b/i)
+    expect(expCard.textContent.toLowerCase()).not.toContain('monthly')
   })
 })
 
-describe('LiteFullReport — exposure revenue seeding (Part 5, R3)', () => {
-  it('seeds the monthly revenue from the annual estimate (÷12) and shows the ESTIMATED provenance label', () => {
+describe('LiteFullReport — exposure revenue seeding (Part 5, R3; annual units Report redesign Part 7)', () => {
+  it('seeds the annual revenue straight from the probe estimate (no conversion) and shows the ESTIMATED provenance label', () => {
     const report = { ...baseReport, revenue_estimate_usd: 12_000_000 }
     render(<LiteFullReport report={report} />)
-    expect(screen.getByText(/\$1,000,000 monthly revenue/)).toBeInTheDocument()
+    expect(screen.getByText(/\$12,000,000 annual revenue/)).toBeInTheDocument()
     expect(screen.getByText('revenue estimated by ChatGPT · adjust')).toBeInTheDocument()
   })
 
   it('clamps an estimate below the slider minimum', () => {
-    const report = { ...baseReport, revenue_estimate_usd: 5000 } // /12 well under the $10,000 floor
+    const report = { ...baseReport, revenue_estimate_usd: 5000 } // well under the $120,000 floor
     render(<LiteFullReport report={report} />)
-    expect(screen.getByText(/\$10,000 monthly revenue/)).toBeInTheDocument()
+    expect(screen.getByText(/\$120,000 annual revenue/)).toBeInTheDocument()
   })
 
   it('falls back to the existing static default, with no provenance label, when the probe never ran (revenue_estimate_usd absent)', () => {
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.getByText(/\$1,000,000 monthly revenue/)).toBeInTheDocument()
+    expect(screen.getByText(/\$12,000,000 annual revenue/)).toBeInTheDocument()
     expect(screen.getByText('adjust')).toBeInTheDocument()
     expect(screen.queryByText(/estimated by ChatGPT/)).not.toBeInTheDocument()
   })
@@ -635,7 +646,7 @@ describe('LiteFullReport — exposure revenue seeding (Part 5, R3)', () => {
   it('falls back to the default, no label, when the probe ran but found nothing (revenue_estimate_usd null)', () => {
     const report = { ...baseReport, revenue_estimate_usd: null }
     render(<LiteFullReport report={report} />)
-    expect(screen.getByText(/\$1,000,000 monthly revenue/)).toBeInTheDocument()
+    expect(screen.getByText(/\$12,000,000 annual revenue/)).toBeInTheDocument()
     expect(screen.queryByText(/estimated by ChatGPT/)).not.toBeInTheDocument()
   })
 
@@ -643,20 +654,21 @@ describe('LiteFullReport — exposure revenue seeding (Part 5, R3)', () => {
     const report = { ...baseReport, revenue_estimate_usd: 12_000_000 }
     render(<LiteFullReport report={report} />)
     fireEvent.click(screen.getByText('revenue estimated by ChatGPT · adjust'))
-    const revenueSlider = screen.getByLabelText('Monthly revenue')
-    Object.defineProperty(revenueSlider, 'value', { value: '2000000', configurable: true })
+    const revenueSlider = screen.getByLabelText('Annual revenue')
+    Object.defineProperty(revenueSlider, 'value', { value: '24000000', configurable: true })
     revenueSlider.dispatchEvent(new Event('change', { bubbles: true }))
     fireEvent.click(screen.getByText('COLLAPSE'))
 
-    expect(screen.getByText(/\$2,000,000 monthly revenue/)).toBeInTheDocument()
+    expect(screen.getByText(/\$24,000,000 annual revenue/)).toBeInTheDocument()
     expect(screen.queryByText(/estimated by ChatGPT/)).not.toBeInTheDocument()
     expect(screen.getByText('adjust')).toBeInTheDocument()
   })
 })
 
-describe('LiteFullReport — diagnostic-tier cliff', () => {
-  it('renders the 3 highlighted upsell panels, remaining locked topics, and platform chips', () => {
+describe('LiteFullReport — closing diagnostic module (restyled Report redesign Part 6, G4: block-variant FullDiagnosticGate replacing the old cliff card)', () => {
+  it('renders the exact heading, the 3 highlighted upsell panels, remaining locked topics, and platform chips', () => {
     render(<LiteFullReport report={baseReport} />)
+    expect(screen.getByText(`This report is a ${LITE_QUERY_COUNT}-question sample. The full picture is bigger.`)).toBeInTheDocument()
     expect(screen.getByText('3 more AI platforms')).toBeInTheDocument()
     expect(screen.getByText('Full category run')).toBeInTheDocument()
     expect(screen.getByText('Net price accuracy')).toBeInTheDocument()
@@ -668,13 +680,23 @@ describe('LiteFullReport — diagnostic-tier cliff', () => {
     expect(screen.getByText('Perplexity')).toBeInTheDocument()
     expect(screen.getByText('Claude')).toBeInTheDocument()
   })
+
+  it('renders as a block-variant gate: FULL ANALYSIS pill + CTA, real (non-blurred) content', () => {
+    vi.stubEnv('VITE_LITE_CTA_URL', 'https://parleo.io/demo')
+    render(<LiteFullReport report={baseReport} />)
+    const heading = screen.getByText(`This report is a ${LITE_QUERY_COUNT}-question sample. The full picture is bigger.`)
+    expect(heading.closest('[aria-hidden="true"]')).toBeNull()
+    const links = screen.getAllByText('Contact us for a free custom Full Diagnostic')
+    expect(links.length).toBeGreaterThan(0)
+    vi.unstubAllEnvs()
+  })
 })
 
 describe('LiteFullReport — footer', () => {
   it('renders the re-run cadence line and methodology stamp', () => {
     render(<LiteFullReport report={baseReport} />)
     expect(screen.getByText(/re-run this diagnostic monthly/)).toBeInTheDocument()
-    expect(screen.getByText(/12 QUERIES · 1 PLATFORM · 1 RUN EACH/)).toBeInTheDocument()
+    expect(screen.getByText(new RegExp(`${LITE_QUERY_COUNT} QUERIES · 1 PLATFORM · 1 RUN EACH`))).toBeInTheDocument()
     expect(screen.getByText(/SAMPLE, NOT A CATEGORY STUDY/)).toBeInTheDocument()
   })
 })
@@ -807,6 +829,22 @@ function buildV3Report(overrides = {}) {
   }
 }
 
+describe('LiteFullReport — email de-gating (Report redesign, Part 8, E1)', () => {
+  it('never renders unlock/email-gate language anywhere in a v3/v4 report, regardless of report.locked', () => {
+    const { container } = render(<LiteFullReport report={buildV3Report({ locked: true })} />)
+    const text = container.textContent.toLowerCase()
+    expect(text).not.toMatch(/unlock/)
+    expect(text).not.toMatch(/enter your email/)
+    expect(text).not.toMatch(/sign up to (see|view|unlock)/)
+  })
+
+  it('renders full content identically whether report.locked is true or false (the field is vestigial for a v3/v4 row)', () => {
+    const { container: lockedTrue } = render(<LiteFullReport report={buildV3Report({ locked: true })} />)
+    const { container: lockedFalse } = render(<LiteFullReport report={buildV3Report({ locked: false })} />)
+    expect(lockedTrue.textContent).toBe(lockedFalse.textContent)
+  })
+})
+
 describe('LiteFullReport — v3 hero: segmented bar + verdict (Stage 21, H1/H2)', () => {
   it('renders the composite number and one segmented bar with all three pillar captions', () => {
     render(<LiteFullReport report={buildV3Report()} />)
@@ -818,7 +856,7 @@ describe('LiteFullReport — v3 hero: segmented bar + verdict (Stage 21, H1/H2)'
 
   it('shows the normalized-applicable caption when member_value is N/A', () => {
     render(<LiteFullReport report={buildV3Report()} />)
-    expect(screen.getByText(/NORMALIZED · 81 PTS APPLICABLE/)).toBeInTheDocument()
+    expect(screen.getByText(/\*MEMBER VALUE NOT APPLICABLE — SCORED ON 81 POINTS, SHOWN OUT OF 100/)).toBeInTheDocument()
   })
 
   it('omits the normalized caption when member_value is applicable', () => {
@@ -849,41 +887,151 @@ describe('LiteFullReport — v3 hero verdict template table', () => {
     ['weak visibility overrides everything else', buildV3Pillars({ visibilityShareEarned: 5 }), /Agents barely know you exist/],
     ['strong visibility + zero True Value', zeroTrueValuePillars(), /they never talk about your value\./],
     ['strong visibility + True Value N/A', buildV3Pillars({ memberValueNa: true, dealCitabilitySeen: subLens(0, 4, false), dealCitabilitySaid: subLens(0, 3, false) }), /your value score is normalized/],
-    ['strong visibility + True Value nearly full', buildV3Pillars({ memberValueNa: false, dealCitabilitySeen: subLens(4, 4, false), dealCitabilitySaid: subLens(3, 3, false) }), /and they get your value right\./],
+    ['strong visibility + True Value nearly full, no verdict field (pre-G1 report)', buildV3Pillars({ memberValueNa: false, dealCitabilitySeen: subLens(4, 4, false), dealCitabilitySaid: subLens(3, 3, false) }), /and they get your value right\./],
+    ['strong visibility + True Value nearly full, verdict AGENT-READY', { ...buildV3Pillars({ memberValueNa: false, dealCitabilitySeen: subLens(4, 4, false), dealCitabilitySaid: subLens(3, 3, false) }), verdict: VERDICT_AGENT_READY }, /and they get your value right\./],
   ])('verdict template: %s', (_label, pillars, expected) => {
     render(<LiteFullReport report={buildV3Report({ pillars })} />)
     expect(screen.getByText(expected)).toBeInTheDocument()
   })
+
+  it('Stage 25 (G2): strong visibility + True Value nearly full but verdict is NOT-AGENT-READY (e.g. weak Accessibility) never claims the unqualified win', () => {
+    const pillars = {
+      ...buildV3Pillars({ memberValueNa: false, dealCitabilitySeen: subLens(4, 4, false), dealCitabilitySaid: subLens(3, 3, false) }),
+      verdict: VERDICT_NOT_AGENT_READY,
+    }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.queryByText(/and they get your value right\./)).not.toBeInTheDocument()
+    expect(screen.getByText(/your value comes through/)).toBeInTheDocument()
+    expect(screen.getByText(/still keeps you short of agent-ready/)).toBeInTheDocument()
+  })
+
+  it('Report redesign (Part 2): the weak-visibility branch also reads the verdict, not just the two True-Value-strong branches', () => {
+    const pillars = { ...buildV3Pillars({ visibilityShareEarned: 5 }), verdict: VERDICT_NOT_AGENT_READY }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText(/Agents barely know you exist/)).toBeInTheDocument()
+    expect(screen.getByText(/Below the agent-ready bar\./)).toBeInTheDocument()
+  })
+
+  it('Report redesign (Part 2): the zero-True-Value branch appends the readiness line', () => {
+    const pillars = { ...zeroTrueValuePillars(), verdict: VERDICT_NOT_AGENT_READY }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText(/they never talk about your value\./)).toBeInTheDocument()
+    expect(screen.getByText(/Below the agent-ready bar\./)).toBeInTheDocument()
+  })
+
+  it('Report redesign (Part 2): a pre-G1 report (no verdict field at all) appends no readiness clause anywhere', () => {
+    const pillars = buildV3Pillars({ visibilityShareEarned: 5 })
+    delete pillars.verdict
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.queryByText(/agent-ready bar/)).not.toBeInTheDocument()
+  })
+
+  it('Report redesign (Part 2): an AGENT-READY verdict appends the affirmative readiness clause', () => {
+    const pillars = { ...buildV3Pillars({ memberValueNa: true }), verdict: VERDICT_AGENT_READY }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText(/your value score is normalized/)).toBeInTheDocument()
+    expect(screen.getByText(/You clear the agent-ready bar\./)).toBeInTheDocument()
+  })
 })
 
-describe('LiteFullReport — True Value section (Stage 19, R2)', () => {
-  it('renders all three dual-lens dimensions with SEEN/SAID tiles', () => {
+describe('LiteFullReport — v3 hero verdict chip (Stage 25, Part 5/6, G1/A2)', () => {
+  it('renders the AGENT-READY chip next to the composite score', () => {
+    const pillars = { ...buildV3Pillars(), verdict: VERDICT_AGENT_READY }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText(VERDICT_AGENT_READY)).toBeInTheDocument()
+  })
+
+  it('renders the NOT AGENT-READY chip next to the composite score', () => {
+    const pillars = { ...buildV3Pillars(), verdict: VERDICT_NOT_AGENT_READY }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText(VERDICT_NOT_AGENT_READY)).toBeInTheDocument()
+  })
+
+  it('renders no verdict chip at all for a pre-G1 report with no verdict field', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.queryByText(VERDICT_AGENT_READY)).not.toBeInTheDocument()
+    expect(screen.queryByText(VERDICT_NOT_AGENT_READY)).not.toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — True Value section (Stage 19, R2; restyled Report redesign Part 3/4)', () => {
+  it('renders all three dual-lens dimensions with live seen/said bars', () => {
     render(<LiteFullReport report={buildV3Report()} />)
     expect(screen.getByText('The value only we score')).toBeInTheDocument()
-    expect(screen.getAllByText('WHAT YOU ENCODE').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('WHAT AGENTS SAID').length).toBeGreaterThan(0)
-    expect(screen.getByText('machine-readable price found in Offer schema')).toBeInTheDocument()
+    expect(screen.getAllByText(/ON YOUR SITE/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/IN ANSWERS/).length).toBeGreaterThan(0)
+    // Row summary is the said outcome's own evidence line (Part 4).
     expect(screen.getByText('5/6 mentions (83%) cited a price')).toBeInTheDocument()
   })
 
-  it('renders member_value N/A as NOT APPLICABLE with the probe quote as evidence, no bars', () => {
+  it('renders member_value N/A as a compact NOT APPLICABLE line with a WHY panel containing the probe quote, no bars', () => {
     render(<LiteFullReport report={buildV3Report()} />)
-    expect(screen.getByText('NOT APPLICABLE')).toBeInTheDocument()
-    expect(screen.getByText("probe: 'No, we do not have a member pricing program.'")).toBeInTheDocument()
+    expect(screen.getByText(/NOT APPLICABLE · no loyalty program found/)).toBeInTheDocument()
+    expect(screen.getByText('WHY')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('WHY'))
+    expect(screen.getByText('"No, we do not have a member pricing program."')).toBeInTheDocument()
     expect(screen.queryByText('0/0')).not.toBeInTheDocument()
   })
 
   it('renders an outcome-guard N/A said sub-lens as "not enough mentions to measure", never 0%', () => {
     const pillars = buildV3Pillars({ dealCitabilitySaid: subLens(0, 3, true, ['fewer than 2 mentions in the relevant opportunity set']) })
     render(<LiteFullReport report={buildV3Report({ pillars })} />)
-    expect(screen.getByText('— · not enough mentions to measure')).toBeInTheDocument()
+    expect(screen.getByText('not enough mentions to measure')).toBeInTheDocument()
     expect(screen.queryByText('0%')).not.toBeInTheDocument()
+  })
+
+  it('Report redesign (Part 3, M2): only one dimension row\'s panel stays open at a time within the card — opening a second closes the first', () => {
+    const { container } = render(<LiteFullReport report={buildV3Report()} />)
+    const hows = container.querySelectorAll('#tv .lite-v4-how')
+    expect(hows.length).toBeGreaterThanOrEqual(2)
+
+    fireEvent.click(hows[0])
+    expect(hows[0]).toHaveAttribute('aria-expanded', 'true')
+    expect(hows[1]).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.click(hows[1])
+    expect(hows[0]).toHaveAttribute('aria-expanded', 'false')
+    expect(hows[1]).toHaveAttribute('aria-expanded', 'true')
   })
 
   it('never renders the standalone incentive-citation card inside True Value (Stage 21 replaced its bars with the footer line)', () => {
     render(<LiteFullReport report={buildV3Report()} />)
     expect(screen.queryByText('Incentive citation rate')).not.toBeInTheDocument()
     expect(screen.queryByText('13% · 1 of 8 mentions')).not.toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — value_protocols single-wing row (Stage 25 Part 6 A1; restyled Report redesign Part 4 T3)', () => {
+  function pillarsWithValueProtocols(vpOverrides = {}) {
+    const base = buildV3Pillars()
+    const vpDim = pillarDim('value_protocols', 'Value Protocols', 7, 7, {
+      seen: subLens(7, 7, false, ['declares a UCP shopping-discount capability']),
+      said: null,
+      fix: null, fix_human: null, locked: false,
+      ...vpOverrides,
+    })
+    return {
+      ...base,
+      true_value: { ...base.true_value, dimensions: [...base.true_value.dimensions, vpDim] },
+    }
+  }
+
+  it('renders a SITE ONLY tag and its seen evidence, no answer-side bar', () => {
+    const pillars = pillarsWithValueProtocols()
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('Value Protocols')).toBeInTheDocument()
+    expect(screen.getByText('SITE ONLY')).toBeInTheDocument()
+    expect(screen.getByText('declares a UCP shopping-discount capability')).toBeInTheDocument()
+    // price_truth/deal_citability each show an IN ANSWERS bar (member_
+    // value is na by default in this fixture, so it shows none) —
+    // value_protocols must not add a bar of its own.
+    expect(screen.getAllByText(/IN ANSWERS/).length).toBe(2)
+  })
+
+  it('shows the earned/max score next to the dimension name, same as the other three dimensions', () => {
+    const pillars = pillarsWithValueProtocols()
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('7/7')).toBeInTheDocument()
   })
 })
 
@@ -949,7 +1097,7 @@ describe('LiteFullReport — v3 True Value pillar verdict + footer (Stage 21, T3
 describe('LiteFullReport — v3 visibility: comparative bars + donut + RS gauge (Stage 21, V1/V2)', () => {
   it('restores mention rate as its own comparative bars, sorted with YOU tagged', () => {
     render(<LiteFullReport report={buildV3Report()} />)
-    expect(screen.getByText('Mention rate · of 12 answers')).toBeInTheDocument()
+    expect(screen.getByText(`Mention rate · of ${LITE_QUERY_COUNT} answers`)).toBeInTheDocument()
     expect(screen.getByText('YOU')).toBeInTheDocument()
     expect(screen.getByText('67% · 8/12')).toBeInTheDocument()
     expect(screen.getByText('42% · 5/12')).toBeInTheDocument()
@@ -961,9 +1109,10 @@ describe('LiteFullReport — v3 visibility: comparative bars + donut + RS gauge 
     expect(screen.getByText('20/25 pts')).toBeInTheDocument()
   })
 
-  it('renders the Recommendation Strength gauge with points and a plain-language line, never the raw metric', () => {
+  it('renders the Recommendation Strength row with its points and a plain-language line, never the raw metric', () => {
     render(<LiteFullReport report={buildV3Report()} />)
-    expect(screen.getByText('Recommendation Strength · 14/15')).toBeInTheDocument()
+    expect(screen.getByText('Recommendation Strength')).toBeInTheDocument()
+    expect(screen.getByText('14/15')).toBeInTheDocument()
     expect(screen.getByText('Consistently the top pick.')).toBeInTheDocument()
   })
 
@@ -1015,26 +1164,12 @@ describe('LiteFullReport — v3 accessibility tiles (Stage 21, A)', () => {
     expect(screen.getAllByText('Protocol & Feed Presence').length).toBeGreaterThan(0)
   })
 
-  it.each([
-    ['good (>=80%)', 6, 6, 'var(--good)'],
-    ['warn (0% < ratio < 80%)', 3, 6, 'var(--warn)'],
-  ])('colors the tile bar %s', (_label, earned, max, expectedColor) => {
-    const pillars = buildV3Pillars()
-    pillars.accessibility.dimensions[0] = { ...pillars.accessibility.dimensions[0], earned, max }
-    render(<LiteFullReport report={buildV3Report({ pillars })} />)
-    const label = screen.getAllByText('Agent Access')[0]
-    const tile = label.parentElement.parentElement
-    const fill = tile.querySelector('.lite-bar-fill')
-    expect(fill).toHaveStyle({ background: expectedColor })
-  })
-
-  it('renders no bar fill at all for a 0% (bad) tile — an empty track, not a colored sliver', () => {
-    const pillars = buildV3Pillars()
-    pillars.accessibility.dimensions[0] = { ...pillars.accessibility.dimensions[0], earned: 0 }
-    render(<LiteFullReport report={buildV3Report({ pillars })} />)
-    const label = screen.getAllByText('Agent Access')[0]
-    const tile = label.parentElement.parentElement
-    expect(tile.querySelector('.lite-bar-fill')).toBeNull()
+  it('Report redesign (Part 5): each tile renders the shared DimensionRowV4 — live pips, and a HOW IT\'S SCORED expander', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    const hows = screen.getAllByText("HOW IT'S SCORED")
+    expect(hows.length).toBeGreaterThanOrEqual(3) // one per accessibility tile, at minimum
+    expect(document.querySelectorAll('.lite-v4-pip').length).toBeGreaterThan(0)
+    expect(document.querySelectorAll('.lite-v4-grid4 i').length).toBeGreaterThan(0)
   })
 
   it('maps a crosswalk chip on a retired code onto its v3 dimension, never rendering the old code', () => {
@@ -1079,13 +1214,13 @@ describe('LiteFullReport — v3 ranked fixes (Part 3, F1/F2)', () => {
     expect(screen.queryByText('add priceValidUntil to the Offer')).not.toBeInTheDocument()
     expect(screen.queryByText('Publish an llms.txt file so agents can find you.')).not.toBeInTheDocument()
     expect(screen.queryByText(/Add an end date to your deals/)).not.toBeInTheDocument()
-    expect(screen.getByText('2 more fixes identified')).toBeInTheDocument()
+    expect(screen.getByText('2 MORE FIXES IDENTIFIED')).toBeInTheDocument()
   })
 
   it('renders the Full Diagnostic gate under the fixes list when fixes remain, one offer, no email language', () => {
     render(<LiteFullReport report={buildV3Report()} />)
     expect(screen.getByText(/Two fixes get you started/)).toBeInTheDocument()
-    const fixCard = screen.getByText('2 more fixes identified').closest('.lite-card')
+    const fixCard = screen.getByText('2 MORE FIXES IDENTIFIED').closest('.lite-card')
     expect(fixCard.textContent.toLowerCase()).not.toMatch(/email/)
   })
 
@@ -1093,7 +1228,7 @@ describe('LiteFullReport — v3 ranked fixes (Part 3, F1/F2)', () => {
     const pillars = buildV3Pillars()
     pillars.fixes = { visible: pillars.fixes.visible, remaining_count: 0 }
     render(<LiteFullReport report={buildV3Report({ pillars })} />)
-    expect(screen.queryByText(/more fixes? identified/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/more fixes? identified/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Two fixes get you started/)).not.toBeInTheDocument()
   })
 })
@@ -1119,6 +1254,17 @@ describe('LiteFullReport — R6 honest version fallback (Stage 19)', () => {
     const report = { ...baseReport, scan: { status: 'skipped', total_score: null, dimensions: [], pages_fetched: [] }, scan_status: 'skipped' }
     render(<LiteFullReport report={report} />)
     expect(screen.queryByText('SCORED UNDER A PREVIOUS METHODOLOGY')).not.toBeInTheDocument()
+  })
+
+  it('Stage 25: shows the notice for a genuine scorer_version "3" row (pillars absent, retired under the v4 registry bump) and still renders its real, non-zero legacy scores', () => {
+    const v3Report = {
+      ...baseReport,
+      pillars: undefined,
+      scan: { ...baseReport.scan, scorer_version: '3' },
+    }
+    render(<LiteFullReport report={v3Report} />)
+    expect(screen.getByText('SCORED UNDER A PREVIOUS METHODOLOGY')).toBeInTheDocument()
+    expect(screen.getByText('61')).toBeInTheDocument() // composite, real not zeroed
   })
 })
 
@@ -1183,7 +1329,7 @@ describe('LiteFullReport — acceptance artifact: real allbirds v3 row', () => {
     render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
     expect(screen.getByText('Publish a rewards page agents can find from your menu or footer.')).toBeInTheDocument()
     expect(screen.getByText('Show your prices in a format agents can read directly from the page, not just as text or an image.')).toBeInTheDocument()
-    expect(screen.getByText('4 more fixes identified')).toBeInTheDocument()
+    expect(screen.getByText('4 MORE FIXES IDENTIFIED')).toBeInTheDocument()
   })
 
   it('renders the True Value section with real seen/said evidence for all three dimensions', () => {
@@ -1192,13 +1338,13 @@ describe('LiteFullReport — acceptance artifact: real allbirds v3 row', () => {
     expect(screen.getByText('0/5 purchase-intent mentions (0%) cited member value')).toBeInTheDocument()
   })
 
-  it('butterfly zero-state: all six wings (3 dimensions x seen/said) render an empty track + zero tick, and the pillar verdict is ENCODING GAP', () => {
+  it('zero-state: all six bar-halves (3 dimensions x seen/said) render an empty track + zero tick, and the pillar verdict is ENCODING GAP', () => {
     // Real allbirds row: every True Value sub-lens (seen and said, across
     // all three dimensions) earned exactly 0 — none are na (member_value
-    // is applicable via the probe), so this is six real zero-state wings,
-    // not six N/A wings.
+    // is applicable via the probe), so this is six real zero-state halves,
+    // not six N/A halves.
     const { container } = render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
-    expect(container.querySelectorAll('.lite-butterfly-zero-tick').length).toBe(6)
+    expect(container.querySelectorAll('.lite-v4-duo-zero').length).toBe(6)
     expect(screen.getByText('VERDICT · ENCODING GAP')).toBeInTheDocument()
     expect(screen.queryByText('0%')).not.toBeInTheDocument() // never a bare 0%, always n/max or the tick
   })
@@ -1365,11 +1511,11 @@ describe('LiteFullReport — mobile render at 360px (Stage 21)', () => {
   it('renders the full v3 report without throwing at a 360px viewport', () => {
     Object.defineProperty(window, 'innerWidth', { value: 360, configurable: true })
     expect(() => render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)).not.toThrow()
-    // The butterfly's three-column grid is CSS-driven (theme.css), not
-    // conditionally rendered — its column headers and every dimension
-    // name still render in the DOM regardless of viewport width.
-    expect(screen.getByText('WHAT YOU ENCODE')).toBeInTheDocument()
-    expect(screen.getByText('WHAT AGENTS SAID')).toBeInTheDocument()
+    // The v4 dimension row's duo-bar grid is CSS-driven (theme.css), not
+    // conditionally rendered — its labels and every dimension name still
+    // render in the DOM regardless of viewport width.
+    expect(screen.getAllByText(/ON YOUR SITE/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/IN ANSWERS/).length).toBeGreaterThan(0)
     expect(screen.getAllByText('Price Truth').length).toBeGreaterThan(0)
   })
 
@@ -1399,7 +1545,7 @@ describe('LiteFullReport — Stage 22: full-width sticky mini-nav layout fix', (
     const { container } = render(<LiteFullReport report={ALLBIRDS_V3_REPORT} />)
     const root = container.querySelector('.lite-root')
     // .lite-root must keep exactly one direct child (every other view —
-    // LiteForm/LiteProgress/LiteTeaser/LiteFailed — also mounts a single
+    // LiteForm/LiteProgress/LiteFailed — also mounts a single
     // child under it, and its CSS custom properties are scoped here) or
     // the old row-flex bug (nav left, content right) reappears.
     expect(root.children.length).toBe(1)

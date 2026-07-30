@@ -36,19 +36,20 @@ describe('App — /report/{token} routing renders each U1 state', () => {
     expect(liteApi.submit).not.toHaveBeenCalled()
   })
 
-  it('complete + email not yet provided -> teaser + email gate', async () => {
-    setPath('/report/tok-teaser')
+  it('complete, no email on file -> the full report renders directly (Report redesign, Part 8, E1: never gated on email)', async () => {
+    setPath('/report/tok-noemail')
     liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'skipped' })
     liteApi.getReport.mockResolvedValue({
       status: 'complete',
-      locked: true,
-      overall: [{ name: 'Acme Co', role: 'primary', som: 60 }],
+      locked: false,
+      overall: [{ name: 'Acme Co', role: 'primary', metrics: { som: 60 } }],
       visibility: 60, accessibility: null, composite: 60, scan_status: 'skipped',
     })
 
     render(<App />)
 
-    await waitFor(() => expect(screen.getByText('Want the full report?')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Composite score')).toBeInTheDocument())
+    expect(screen.queryByText('Want the full report?')).not.toBeInTheDocument()
   })
 
   it('complete + unlocked -> the full report', async () => {

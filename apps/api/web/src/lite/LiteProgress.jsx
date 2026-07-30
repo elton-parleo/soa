@@ -32,10 +32,10 @@ import { LogoHeader, ErrorBanner, LightCard, DarkCard, Chip } from './liteTheme.
 import { domainFromStoreUrl, formatElapsed, maskEmail } from './liteDerive.js'
 import { liteApi } from './liteApi.js'
 import { validateEmail } from './validation.js'
-import { PILLAR_NAMES, PILLAR_ORDER } from './landing/scanDimensionsRegistry.js'
+import { PILLAR_NAMES, PILLAR_ORDER, LITE_QUERY_COUNT } from './landing/scanDimensionsRegistry.js'
 
 const STALL_THRESHOLD_MS = 90_000
-const DEFAULT_TOTAL_QUERIES = 12 // fixed query count for every SoA Lite run, not registry data
+const DEFAULT_TOTAL_QUERIES = LITE_QUERY_COUNT // fixed query count for every SoA Lite run
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(() => (
@@ -184,7 +184,7 @@ function deriveQuestionsRow(phaseData) {
   }
   if (QUESTIONS_DONE_PHASES.has(phase)) {
     const total = progress?.total_runs || DEFAULT_TOTAL_QUERIES
-    return { state: 'done', stamp: `${total} OF ${total}`, detail: 'All 12 answers collected', fraction: 1 }
+    return { state: 'done', stamp: `${total} OF ${total}`, detail: `All ${total} answers collected`, fraction: 1 }
   }
   return { state: 'pending', detail: '', stamp: null, fraction: 0 }
 }
@@ -311,9 +311,12 @@ function ManifestRow({ row, reducedMotion }) {
 }
 
 // ─── Status-page email card (Stage 12, E1) — unchanged ──────────────────
-// The primary ask, moved earlier — not a replacement for LiteTeaser's
-// post-run gate, which is unchanged (E2: no previously-gated content
-// becomes visible any earlier; only the ASK moves earlier in time).
+// Report redesign (Part 8, E2): this stays exactly what it always was —
+// a notification-capture address only. The report itself is no longer
+// gated on email at all (Part 8, E1 deleted that gate entirely), so this
+// card was never "the same ask, moved earlier" in the sense of unlocking
+// anything sooner — it never gated content in the first place, only
+// requested where to send a completion notice.
 function StatusEmailCard({ token }) {
   const [email, setEmail] = useState('')
   const [emailError, setEmailError] = useState(null)
@@ -360,8 +363,8 @@ function StatusEmailCard({ token }) {
         Leave your email and we'll send your report the moment it's ready — no need to keep this tab open.
       </div>
       <ErrorBanner message={submitError} />
-      {/* noValidate: validateEmail()'s message renders inline, same
-          reasoning as LiteTeaser's unlock form. */}
+      {/* noValidate: validateEmail()'s message renders inline instead of
+          relying on the browser's native email-input validation. */}
       <form onSubmit={handleSubmit} noValidate>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <input

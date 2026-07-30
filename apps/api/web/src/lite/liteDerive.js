@@ -4,6 +4,7 @@
  * client-side "modeled exposure" estimate. No DOM, no fetch — unit
  * tested directly.
  */
+import { LITE_QUERY_COUNT } from './landing/scanDimensionsRegistry.js'
 
 // ─── Input routing (LiteForm) ──────────────────────────────────────────────
 
@@ -117,24 +118,29 @@ export function rankDimensionsByGap(dimensions) {
 export const EXPOSURE_HAIRCUT = 0.85
 
 // The revenue slider's own range (LiteFullReport.jsx's ExposureCalculator
-// <input type="range">) — shared with seedMonthlyRevenue below so a
-// probe-seeded estimate is clamped to exactly what the control can
-// represent, not a second, driftable copy of the same two numbers.
-export const REVENUE_SLIDER_MIN = 10000
-export const REVENUE_SLIDER_MAX = 10000000
+// <input type="range">) — annual units (Report redesign, Part 7): was
+// monthly (10,000-10,000,000); the ×12 scale-up keeps the same real
+// revenue ceiling the control could always represent, just in the unit
+// the report now displays everywhere. Shared with seedAnnualRevenue
+// below so a probe-seeded estimate is clamped to exactly what the
+// control can represent, not a second, driftable copy of the same two
+// numbers.
+export const REVENUE_SLIDER_MIN = 120000
+export const REVENUE_SLIDER_MAX = 120000000
 
 /**
- * Part 5 (R3): converts the revenue probe's annual USD estimate to the
- * calculator's monthly unit and clamps it to the slider's own range.
- * Null/undefined (probe never ran, or came back unparseable/absurd —
- * see revenue_probe.py) returns null so the caller falls back to its
- * existing static default, unchanged.
+ * Report redesign (Part 7): the revenue probe's own annual USD estimate,
+ * clamped to the slider's range — no /12 conversion anymore, since the
+ * calculator's unit is now annual throughout. Null/undefined (probe
+ * never ran, or came back unparseable/absurd — see revenue_probe.py)
+ * returns null so the caller falls back to its existing static default,
+ * unchanged.
  */
-export function seedMonthlyRevenue(annualRevenueUsd) {
+export function seedAnnualRevenue(annualRevenueUsd) {
   if (annualRevenueUsd === null || annualRevenueUsd === undefined) return null
-  const monthly = Number(annualRevenueUsd) / 12
-  if (!Number.isFinite(monthly)) return null
-  return Math.max(REVENUE_SLIDER_MIN, Math.min(REVENUE_SLIDER_MAX, monthly))
+  const annual = Number(annualRevenueUsd)
+  if (!Number.isFinite(annual)) return null
+  return Math.max(REVENUE_SLIDER_MIN, Math.min(REVENUE_SLIDER_MAX, annual))
 }
 
 /**
@@ -143,7 +149,9 @@ export function seedMonthlyRevenue(annualRevenueUsd) {
  * account for (attribution, seasonality, funnel leakage). Mention gap
  * is 1 - visibility/100 — visibility already is the primary entity's
  * share-of-voice metric, so its complement is how often an AI answer
- * is estimated to miss the brand entirely.
+ * is estimated to miss the brand entirely. Report redesign (Part 7):
+ * revenue is now annual, so the result is annual exposure — same
+ * formula, no separate monthly/annual branch to keep in sync.
  */
 export function computeExposure({ revenue, aiSharePct, visibility }) {
   const rev = Number(revenue) || 0
@@ -153,8 +161,8 @@ export function computeExposure({ revenue, aiSharePct, visibility }) {
   return rev * share * mentionGap * EXPOSURE_HAIRCUT
 }
 
-/** Shared by LiteTeaser's and LiteFullReport's accessibility dial — null
- * when the dial should show at full opacity with no badge (scan complete). */
+/** LiteFullReport's accessibility dial — null when the dial should show
+ * at full opacity with no badge (scan complete). */
 export function accessibilityBadgeText(scanStatus) {
   switch (scanStatus) {
     case 'complete': return null
@@ -257,7 +265,7 @@ export function getDominantRivalPayoff(visibilityBreakdown) {
   if (!topRival || (topRival.share_pct || 0) < 50) return null
 
   const totalMentions = visibilityBreakdown?.totals?.total_mentions ?? 0
-  const totalQueries = visibilityBreakdown?.totals?.total_queries ?? 12
+  const totalQueries = visibilityBreakdown?.totals?.total_queries ?? LITE_QUERY_COUNT
   return `${totalMentions} brand mentions across ${totalQueries} answers. Half went to one rival.`
 }
 

@@ -1,8 +1,10 @@
 """
 scorer.py — the 8-dimension Agent Scan rubric. Deterministic and
 rule-based (no LLM calls in this stage). Each dimension function takes
-the scan's collected page data and returns a DimensionScore; engine.py
-sums them into ScanResult.total_score and applies the V5 integrity cap.
+the scan's collected page data and returns a DimensionScore; engine.py sums
+them into ScanResult.total_score. The V5 integrity cap itself no longer
+exists (Stage 16, Part 6) — score_v5_offer_integrity's output is now an
+unscored advisory finding only.
 
 Weights (Foundation 35 / Value 65) — numerically unchanged since Stage 1;
 Stage 10 changed rubric semantics only (scorer_version "2"):
@@ -23,6 +25,7 @@ sum by engine.py/public_lite.py, not scored as zero). F3 and V5 are
 "partial" by definition under scorer_version "2": each always carries at
 least one deferred_item.
 """
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
@@ -737,23 +740,141 @@ def score_protocol_feed(pages, site_type_result) -> DimensionScore:
     )
 
 
+def _price_consistency_mismatch(page) -> bool:
+    """
+    Stage 25 (Part 2, P1): conservative-by-construction price-consistency
+    check — flags a product page only when we're confident its structured
+    Offer price disagrees with the price the page's own visible text
+    shows. Four guards keep this from ever false-flagging an honest page:
+      1. skip unless at least one structured Offer price exists to compare
+      2. skip unless the page has EXACTLY one distinct visible price —
+         zero (no-text-price) or more than one (variant-priced pages,
+         where different sizes/colors legitimately price differently)
+         are both too ambiguous to call
+      3. skip if a was-price/strikethrough signal is present (a sale-pair
+         page shows two prices by design; we don't know which the
+         structured price should match)
+      4. skip differences within a small rounding/formatting tolerance
+    A page counts as mismatched only if ALL of its structured offer
+    prices disagree with the single visible price — if any one variant's
+    price matches, that's a legitimate variant selection, not dishonesty.
+    A confident mismatch degrades that page to the same state as having
+    no machine-readable price at all — never a separate, harsher penalty
+    (Part 0 clarification)."""
+    if not page.extracted:
+        return False
+    structured_prices = [
+        o.price for prod in page.extracted.products for o in prod.offers
+        if o.price is not None
+    ]
+    if not structured_prices:
+        return False
+    visible = page.extracted.visible_prices
+    if len(visible) != 1:
+        return False
+    if page.extracted.was_price_signals:
+        return False
+    visible_price = visible[0]
+    tolerance = max(0.02, 0.01 * visible_price)
+    return all(abs(sp - visible_price) > tolerance for sp in structured_prices)
+
+
 def score_price_truth_seen(pages, site_type_result) -> DimensionScore:
-    """Stage 16 (T1): price_truth.seen (6) = v2's score_v1_offer_legibility
-    (price/currency legibility checks), rescaled onto the seen sub-max."""
-    return _rescale_dimension_score(
-        score_v1_offer_legibility(pages, site_type_result),
-        DIMENSIONS_BY_CODE["price_truth"].seen_max,
-    )
+    """
+    Stage 25 (Part 2, P1): the v4 price_truth.seen check. Built directly
+    against price_truth's own seen_max rather than rescaling v2's
+    score_v1_offer_legibility (Stage 16's approach) — the price-
+    consistency guard below needs to affect only the price component, not
+    currency legibility, and v1/v2 stay byte-identical/frozen for old scan
+    rows (rule 6, no cross-version blending). Same 60/40 price/currency
+    weighting v1 used.
+    """
+    weight = DIMENSIONS_BY_CODE["price_truth"].seen_max
+    product_pages = _product_pages(pages)
+
+    if not product_pages:
+        return _no_product_pages_score(
+            weight, site_type_result,
+            fix="Publish machine-readable prices with declared currency on product pages.",
+            fix_human="Show your prices in a format agents can read directly from the page, not just as text or an image.",
+        )
+
+    with_currency = [
+        p for p in product_pages
+        if p.extracted and any(o.price_currency for prod in p.extracted.products for o in prod.offers)
+    ]
+
+    with_price = []
+    mismatched_pages = []
+    login_gated_pages = []
+    for p in product_pages:
+        has_price = p.extracted and any(
+            o.price is not None for prod in p.extracted.products for o in prod.offers
+        )
+        if not has_price:
+            # Stage 25 (Part 2, P3): evidence-only — a page whose price
+            # is behind a login wall still scores exactly like any other
+            # page with no crawlable price (no scoring change); this only
+            # makes the evidence honest about WHY, instead of silently
+            # implying no price exists on the site at all.
+            if p.extracted and p.extracted.login_gated_price_text_hits:
+                login_gated_pages.append(p)
+            continue
+        if _price_consistency_mismatch(p):
+            mismatched_pages.append(p)
+            continue
+        with_price.append(p)
+
+    price_ratio = len(with_price) / len(product_pages)
+    currency_ratio = len(with_currency) / len(product_pages)
+    points = weight * 0.6 * price_ratio + weight * 0.4 * currency_ratio
+
+    evidence = [
+        f"{len(with_price)}/{len(product_pages)} product pages expose a machine-readable price consistent with the page's own text",
+        f"{len(with_currency)}/{len(product_pages)} product pages declare priceCurrency",
+    ]
+    if mismatched_pages:
+        evidence.append(
+            f"{len(mismatched_pages)} product page(s) show a structured price that disagrees with the page's own visible price text"
+        )
+    if login_gated_pages:
+        evidence.append(
+            f"{len(login_gated_pages)} product page(s) show a login-gated price rather than no price at all"
+        )
+
+    fix = None
+    fix_human = None
+    if points < weight - 0.01:
+        fix = (
+            'Expose price and priceCurrency in Offer JSON-LD, e.g. '
+            '"offers": {"@type": "Offer", "price": "29.99", "priceCurrency": "USD"} '
+            '— not just in an image or JS-rendered banner — and make sure it matches the price shown on the page.'
+        )
+        fix_human = "Show your prices in a format agents can read directly from the page, and make sure it matches what shoppers actually see."
+    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix, fix_human=fix_human)
 
 
 def score_deal_citability_seen(pages, site_type_result) -> DimensionScore:
     """Stage 16 (T1): deal_citability.seen (4) = v2's score_v4_value_rails
     (CONCRETE/ACTIVE/ACTIONABLE, weighted equally), rescaled onto the
     seen sub-max."""
-    return _rescale_dimension_score(
+    result = _rescale_dimension_score(
         score_v4_value_rails(pages, site_type_result),
         DIMENSIONS_BY_CODE["deal_citability"].seen_max,
     )
+    # Stage 25 (Part 2, P3): evidence-only — a deal gated behind an
+    # email/signup popup still scores exactly like any other page with no
+    # crawlable deal (no scoring change, score/max untouched above); this
+    # only makes the evidence honest about WHY nothing was found.
+    gated_pages = [
+        p for p in _product_pages(pages)
+        if p.extracted and p.extracted.email_gated_deal_text_hits
+    ]
+    if gated_pages:
+        result.evidence.append(
+            f"{len(gated_pages)} product page(s) show a deal gated behind an email/signup popup rather than shown outright"
+        )
+    return result
 
 
 def score_member_value_seen(pages, site_type_result) -> DimensionScore:
@@ -805,3 +926,138 @@ def score_member_value_seen(pages, site_type_result) -> DimensionScore:
         deferred_items=deferred_items,
         cap_basis=[],
     )
+
+
+# ─── Value Protocols (Stage 25, Part 3, V1-V4) ───────────────────────────
+#
+# V1: reuses F3's already-fetched MCP well-known page (score_protocol_feed
+# above discovers/fetches it via discovery.py's candidate list) — never a
+# second fetch. Absent or unparseable manifest scores 0, "no protocol
+# profile found" — never-throw, and never 'na' (unlike protocol_feed's
+# brand-only na rule): an agent-checkout protocol declaration either
+# exists or it doesn't, on every site type, so this dimension always
+# scores rather than excluding itself (see lite_pillars.py's Stage 25
+# comment on why value_protocols has no member_value-style na branch).
+#
+# V2: no real public UCP/MCP capability-list schema exists yet (Part 0's
+# explicit call) — the manifest shape below is INVENTED, documented here
+# as the one place this scorer's expectations live, not derived from any
+# external spec:
+#   {
+#     "capabilities": ["dev.ucp.shopping.discount", "dev.ucp.shopping.loyalty", "dev.acp.promotions"],
+#     "specVersion": "2025-01"
+#   }
+# "capabilities" is a flat list of exact namespaced strings, matched
+# EXACTLY (V2's "conservative exact-namespace match") — never by prefix
+# or substring, so a differently-shaped or future-versioned capability
+# string never silently counts as today's.
+#
+# V4: "version currency & schema integrity" is scored from the manifest
+# content already in hand — no new network call. An earlier design
+# considered a live HEAD request against a declared spec URL, but that
+# URL would come from crawled (store-controlled) content, and adding a
+# second unaudited network path for a single point isn't worth the SSRF
+# surface; every fetch in this codebase goes through fetcher.py's
+# guarded, redirect-validated fetch() specifically, and a bespoke HEAD
+# call would either duplicate that guard or bypass it, undoing rule 5.
+#
+# Wording discipline: every evidence/fix string says a store "declares" a
+# capability, never that it "supports" one — this dimension scores what a
+# manifest declares, not verified live checkout behavior (grep-tested,
+# see test_value_protocols.py's wording test).
+UCP_DISCOUNT_CAPABILITY = "dev.ucp.shopping.discount"
+UCP_LOYALTY_CAPABILITY = "dev.ucp.shopping.loyalty"
+ACP_PROMOTIONS_CAPABILITY = "dev.acp.promotions"
+CURRENT_SPEC_VERSIONS = {"2025-01"}
+
+VALUE_PROTOCOLS_POINTS = {
+    "ucp_discount": 3,
+    "loyalty_extension": 2,
+    "acp_promotions": 1,
+    "version_schema": 1,
+}
+
+
+def _parse_protocol_manifest(mcp_page) -> Optional[dict]:
+    """Never raises: a missing page, an unfetched status, an empty body,
+    or unparseable/non-object JSON all return None — the caller treats
+    every one of these identically to "no protocol profile found"."""
+    if mcp_page is None or mcp_page.fetch_result.status != "fetched":
+        return None
+    html = mcp_page.fetch_result.html
+    if not html or not html.strip():
+        return None
+    try:
+        manifest = json.loads(html)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    return manifest if isinstance(manifest, dict) else None
+
+
+def score_value_protocols(pages) -> DimensionScore:
+    """
+    Stage 25 (Part 3, V1-V4): value_protocols.seen — whether a store
+    DECLARES agent-checkout protocol capabilities. Encode-only: there is
+    no said half (an agent's answer has no way to state whether a store
+    "declares" a checkout protocol), so unlike price_truth/member_value/
+    deal_citability there's nothing here corresponding to a said sub-lens
+    — see lite_pillars.py for how the seen-only result is combined into
+    True Value.
+    """
+    weight = DIMENSIONS_BY_CODE["value_protocols"].weight
+    mcp_page = next((p for p in pages if p.candidate.kind == "mcp_well_known"), None)
+    manifest = _parse_protocol_manifest(mcp_page)
+
+    if manifest is None:
+        return DimensionScore(score=0.0, max=weight, evidence=["no protocol profile found"])
+
+    capabilities = manifest.get("capabilities")
+    capabilities = capabilities if isinstance(capabilities, list) else []
+
+    has_ucp_discount = UCP_DISCOUNT_CAPABILITY in capabilities
+    has_loyalty = UCP_LOYALTY_CAPABILITY in capabilities
+    has_acp_promotions = ACP_PROMOTIONS_CAPABILITY in capabilities
+
+    spec_version = manifest.get("specVersion")
+    schema_valid_and_current = isinstance(spec_version, str) and spec_version in CURRENT_SPEC_VERSIONS
+
+    points = 0.0
+    evidence = []
+
+    if has_ucp_discount:
+        points += VALUE_PROTOCOLS_POINTS["ucp_discount"]
+        evidence.append(f"declares a UCP shopping-discount capability ({UCP_DISCOUNT_CAPABILITY!r})")
+    else:
+        evidence.append("does not declare a UCP shopping-discount capability")
+
+    if has_loyalty:
+        points += VALUE_PROTOCOLS_POINTS["loyalty_extension"]
+        evidence.append(f"declares a loyalty/member protocol extension ({UCP_LOYALTY_CAPABILITY!r})")
+    else:
+        evidence.append("does not declare a loyalty/member protocol extension")
+
+    if has_acp_promotions:
+        points += VALUE_PROTOCOLS_POINTS["acp_promotions"]
+        evidence.append(f"declares an ACP promotions capability ({ACP_PROMOTIONS_CAPABILITY!r})")
+    else:
+        evidence.append("does not declare an ACP promotions capability")
+
+    if schema_valid_and_current:
+        points += VALUE_PROTOCOLS_POINTS["version_schema"]
+        evidence.append(f"declared protocol manifest version is current ({spec_version!r})")
+    else:
+        evidence.append("declared protocol manifest version is missing, unrecognized, or out of date")
+
+    fix = None
+    fix_human = None
+    if points < weight - 0.01:
+        fix = (
+            "Declare agent-checkout protocol capabilities in your MCP well-known manifest, e.g. "
+            f'"capabilities": ["{UCP_DISCOUNT_CAPABILITY}", "{UCP_LOYALTY_CAPABILITY}", "{ACP_PROMOTIONS_CAPABILITY}"], '
+            "with a current specVersion."
+        )
+        fix_human = (
+            "Declare which agent-checkout capabilities your store offers — discounts, member pricing, "
+            "promotions — in your protocol manifest, so agents can see what's declared before checkout."
+        )
+    return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix, fix_human=fix_human)

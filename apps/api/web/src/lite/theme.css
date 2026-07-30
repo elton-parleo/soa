@@ -7,7 +7,7 @@
  * class is prefixed lite- so nothing here can collide with the authed
  * app, which has no stylesheets of its own today. Imported once from
  * LiteWidget.jsx; .lite-root must be the outermost class on every
- * top-level view (LiteForm/LiteProgress/LiteTeaser/LiteFullReport) so
+ * top-level view (LiteForm/LiteProgress/LiteFullReport) so
  * the custom properties resolve wherever the widget mounts.
  *
  * --sans reuses the app's existing DM Sans (already CDN-loaded in
@@ -19,6 +19,11 @@
   --ink: #12161F;
   --ink-2: #1A2030;
   --paper: #F2F1ED;
+  /* Stage 26: the methodology exhibit's recessed background — one shade
+     darker than --paper, for the dashed-border "this is an example, not
+     live data" card. No other surface in this app needs a second paper
+     shade, so this is scoped to that one use. */
+  --paper-2: #EAE8E1;
   --card: #FFFFFF;
   --line: #E5E3DC;
   --line-dark: #2A3040;
@@ -110,7 +115,7 @@
 /* Stage 22: sole child of .lite-root, stacking the full-width mini-nav
    above the centered .lite-shell. .lite-root itself keeps its original
    single-child-centering CSS untouched (every other view — LiteForm,
-   LiteProgress, LiteTeaser, LiteFailed — still mounts one child directly
+   LiteProgress, LiteFailed — still mounts one child directly
    under it), so this wrapper is what actually centers .lite-shell now. */
 .lite-page {
   width: 100%;
@@ -949,290 +954,526 @@
 .lite-preview-finding-swatch--good { background: var(--good); }
 .lite-preview-finding-swatch--bad { background: var(--bad); }
 
-/* ── Anatomy of an Answer (landing methodology section, Stage 17) ──
-   Chat-thread layout: shopper question -> browser-chrome markup card
-   -> transition seam -> dark answer bubble with inline marks -> a
-   sticky pillar ledger. One activation model (data-dim keyed) drives
-   every highlight; see AnatomyOfAnAnswer.jsx. */
+/* ── Methodology: exhibit + framework tabs (Stage 26) ──────────────
+   Replaces the Stage 17-25 chat-thread walkthrough. THE EXAMPLE: a
+   dashed-border recessed exhibit (seen/said cards + arrow). THE
+   FRAMEWORK: one card whose header is the score equation as a tab bar,
+   opening into per-pillar accordion rows (visual_kind-driven), closing
+   with a static verdict-gate demo. See AnatomyOfAnAnswer.jsx. */
 
-.lite-anatomy-grid {
-  display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
-  gap: 40px;
-  align-items: start;
-}
-@media (max-width: 860px) {
-  .lite-anatomy-grid { grid-template-columns: 1fr; }
-}
+/* — THE EXAMPLE — */
 
-.lite-anatomy-question {
-  display: inline-block;
+.lite-anatomy-exhibit {
+  position: relative;
+  background: var(--paper-2);
+  border: 1.5px dashed var(--line-dark);
+  border-radius: 20px;
+  padding: 34px 18px 18px;
+  margin-bottom: 34px;
+}
+.lite-anatomy-ex-tab {
+  position: absolute;
+  top: -12px;
+  left: 18px;
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+.lite-anatomy-ex-q {
+  position: absolute;
+  top: -12px;
+  right: 18px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 16px 16px 16px 4px;
-  padding: 12px 16px;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--text);
-  margin-bottom: 18px;
-}
-
-.lite-anatomy-seam {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: 11.5px;
   color: var(--text-2);
-  margin: 22px 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-style: italic;
 }
-.lite-anatomy-seam::before,
-.lite-anatomy-seam::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--line);
+.lite-anatomy-ex-grid {
+  display: grid;
+  grid-template-columns: 1fr 46px 1fr;
+  gap: 0;
+  align-items: stretch;
 }
-
-.lite-anatomy-answer {
+@media (max-width: 700px) {
+  .lite-anatomy-ex-grid { grid-template-columns: 1fr; }
+  .lite-anatomy-ex-mid { transform: rotate(90deg); margin: 2px 0; }
+}
+.lite-anatomy-seen,
+.lite-anatomy-said {
+  border-radius: 14px;
+  padding: 15px 17px;
+}
+.lite-anatomy-seen {
+  background: var(--card);
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.95;
+  color: #3d4250;
+}
+.lite-anatomy-ex-hd {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.13em;
+  color: var(--text-2);
+  display: block;
+  margin-bottom: 7px;
+}
+.lite-anatomy-said {
   background: var(--ink);
   color: var(--text-inv);
-  border-radius: 4px 16px 16px 16px;
-  padding: 20px 22px;
-  font-size: 14.5px;
-  line-height: 2;
+  font-size: 13.5px;
+  line-height: 2.05;
 }
-
-.lite-anatomy-mark {
-  display: inline;
-  border: none;
-  background: none;
-  padding: 1px 3px;
-  margin: 0 -1px;
-  border-radius: 4px;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-.lite-anatomy-mark--visibility {
-  text-decoration: underline;
-  text-decoration-color: var(--text-inv-2);
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 3px;
-}
-.lite-anatomy-mark--true-value {
-  background: rgba(94, 143, 255, 0.28);
-}
-.lite-anatomy-mark--active {
-  background: rgba(94, 143, 255, 0.55);
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.lite-anatomy-mark:focus-visible {
-  outline: 2px solid var(--text-inv);
-  outline-offset: 2px;
-}
-
-.lite-anatomy-flag {
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 700;
-  vertical-align: text-top;
-  margin-left: 1px;
-  opacity: 0.8;
-}
-
-.lite-anatomy-ghost {
-  display: block;
-  margin-top: 12px;
-  border: 1px dashed var(--text-inv-2);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-style: italic;
+.lite-anatomy-said .lite-anatomy-ex-hd {
   color: var(--text-inv-2);
-  background: none;
-  font-family: inherit;
-  font-size: inherit;
-  text-align: left;
-  width: 100%;
-  cursor: pointer;
 }
-.lite-anatomy-ghost--active {
-  border-color: var(--accent);
-  color: var(--text-inv);
+.lite-anatomy-seen .lite-anatomy-kv b {
+  color: var(--text);
+  font-weight: 600;
 }
-.lite-anatomy-ghost:focus-visible {
-  outline: 2px solid var(--text-inv);
-  outline-offset: 2px;
-}
-.lite-anatomy-ghost-skip-flag {
-  font-family: var(--mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--warn);
-  margin-left: 8px;
-  font-style: normal;
-}
-
-.lite-anatomy-code-panel {
-  background: var(--ink-2);
-  color: var(--text-inv);
-  border-radius: 10px;
-  padding: 16px 18px;
-  font-family: var(--mono);
-  font-size: 12px;
-  line-height: 1.8;
-  overflow-x: auto;
-}
-.lite-anatomy-code-line {
+.lite-anatomy-kv {
   display: block;
-  white-space: pre;
-  border: none;
-  background: none;
-  border-radius: 4px;
-  padding: 0 6px;
-  margin: 0 -6px;
-  font: inherit;
-  color: var(--text-inv-2);
-  text-align: left;
-  width: 100%;
-  cursor: pointer;
+  border-radius: 5px;
+  padding: 0 4px;
+  transition: background 0.25s;
 }
-.lite-anatomy-code-line--active-cc {
-  background: rgba(255, 255, 255, 0.14);
-  color: var(--text-inv);
+.lite-anatomy-badges {
+  display: block;
+  margin-top: 6px;
+  border-radius: 5px;
+  padding: 0 4px;
+  transition: background 0.25s;
 }
-.lite-anatomy-code-line--active-tv {
-  background: rgba(94, 143, 255, 0.35);
-  color: var(--text-inv);
+.lite-anatomy-x-badge {
+  display: inline-block;
+  font-size: 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin: 0 3px 0 0;
+  color: var(--text-2);
 }
-.lite-anatomy-code-line:focus-visible {
-  outline: 2px solid var(--text-inv);
-  outline-offset: 1px;
-}
-
-.lite-anatomy-ledger {
+.lite-anatomy-x-badge i { font-style: normal; }
+.lite-anatomy-x-badge-ok { color: var(--good); }
+.lite-anatomy-ex-mid {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-@media (min-width: 768px) {
-  .lite-anatomy-ledger { position: sticky; top: 88px; }
-}
-
-/* Pillar cards (Stage 18, Change 1): one card per pillar, mono header
-   row (name + point total) followed by its member dimension rows,
-   separated by hairlines rather than each being its own bordered box. */
-
-.lite-anatomy-pillar-card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 4px 16px 8px;
-}
-
-.lite-anatomy-pillar-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-2);
-  padding: 11px 0 6px;
-}
-
-.lite-anatomy-ledger-row {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  border-top: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 10px 0;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-.lite-anatomy-ledger-row--active {
-  background: rgba(46, 105, 250, 0.08);
-  margin: 0 -10px;
-  padding: 10px 10px;
-}
-.lite-anatomy-ledger-row:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.lite-anatomy-ledger-row-head {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: center;
+  gap: 4px;
 }
-.lite-anatomy-ledger-desc {
-  margin-top: 8px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--text-2);
-}
-.lite-anatomy-seen-said {
+.lite-anatomy-ex-mid svg { overflow: visible; }
+.lite-anatomy-ex-mid-label {
   font-family: var(--mono);
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--accent-ink);
-  margin-top: 6px;
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  color: var(--text-2);
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
 }
-
-/* True Value card (Stage 18, Change 2): ink -> accent blue. White text
-   throughout (both tiers) — white on --accent (#2E69FA, already
-   darkened ~1% from the nominal #2F6BFF for exactly this reason — see
-   --accent's own definition comment above) is ~4.65:1, clearing AA
-   with margin. Even so, no tint dimmer than white reaches 4.5:1 on
-   this background (white is the ceiling; anything closer to the
-   background only lowers it), so there is no room for a second,
-   dimmer color for secondary text — see AnatomyOfAnAnswer.test.jsx's
-   contrast test for the exact computed ratio. */
-.lite-anatomy-pillar-card--tv {
-  background: var(--accent);
-  border-color: transparent;
+@media (max-width: 700px) {
+  .lite-anatomy-ex-mid-label { writing-mode: horizontal-tb; }
+}
+.lite-anatomy-said mark {
+  background: rgba(46, 105, 250, 0.3);
   color: #fff;
-  position: relative;
+  border-radius: 4px;
+  padding: 1px 4px;
+  box-shadow: inset 0 -2px 0 var(--accent);
+  transition: background 0.25s;
 }
-.lite-anatomy-pillar-card--tv .lite-anatomy-pillar-header {
-  color: #fff;
+.lite-anatomy-mark-v {
+  background: none;
+  color: var(--text-inv);
+  box-shadow: inset 0 -2px 0 var(--text-inv-2);
 }
-.lite-anatomy-pillar-card--tv .lite-anatomy-ledger-row {
-  border-top-color: rgba(0, 0, 0, 0.18);
-  color: #fff;
+.lite-anatomy-ghost {
+  display: inline;
+  color: var(--text-inv-2);
+  font-style: italic;
+  border-bottom: 1.5px dashed var(--text-inv-2);
 }
-.lite-anatomy-pillar-card--tv .lite-anatomy-ledger-row--active {
-  background: rgba(255, 255, 255, 0.16);
+.lite-anatomy-pulse { animation: lite-anatomy-pulse-kf 1s ease-in-out 2; }
+.lite-anatomy-seen .lite-anatomy-kv.lite-anatomy-pulse,
+.lite-anatomy-seen .lite-anatomy-badges.lite-anatomy-pulse {
+  background: rgba(46, 105, 250, 0.16);
 }
-.lite-anatomy-pillar-card--tv .lite-anatomy-ledger-desc {
-  color: #fff;
+@keyframes lite-anatomy-pulse-kf {
+  50% { background: rgba(46, 105, 250, 0.55); }
 }
-.lite-anatomy-pillar-card--tv .lite-anatomy-seen-said {
-  color: #fff;
+@media (prefers-reduced-motion: reduce) {
+  .lite-anatomy-pulse { animation: none; }
 }
-.lite-anatomy-float-tag {
-  position: absolute;
-  top: -11px;
-  right: 16px;
-  background: #fff;
-  color: var(--accent);
+.lite-anatomy-ex-cap {
+  text-align: center;
   font-family: var(--mono);
   font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  padding: 4px 10px;
+  letter-spacing: 0.13em;
+  color: var(--text-2);
+  margin-top: 12px;
+}
+.lite-anatomy-ex-cap b { color: var(--accent); }
+
+/* — THE FRAMEWORK — */
+
+.lite-anatomy-fw-wrap {
+  position: relative;
+  margin-top: 12px;
+}
+.lite-anatomy-fw-tab {
+  position: absolute;
+  top: -12px;
+  left: 18px;
+  background: var(--ink);
+  color: #fff;
+  z-index: 2;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  padding: 5px 12px;
   border-radius: 999px;
+}
+.lite-anatomy-fw {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  overflow: hidden;
+  position: relative;
+  padding-top: 12px;
+}
+
+.lite-anatomy-eq {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  background: #FAF9F6;
+}
+.lite-anatomy-eq-btn {
+  flex: 1;
+  border: none;
+  cursor: pointer;
+  padding: 16px 10px 13px;
+  background: none;
+  position: relative;
+  font-family: var(--sans);
+  text-align: center;
+  border-bottom: 3px solid transparent;
+}
+.lite-anatomy-eq-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}
+.lite-anatomy-eq-t {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: var(--text-2);
+  display: block;
+}
+.lite-anatomy-eq-n { font-size: 24px; font-weight: 700; line-height: 1.15; }
+.lite-anatomy-eq-q { font-size: 10.5px; color: var(--text-2); }
+.lite-anatomy-eq-plus {
+  flex: 0 0 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-2);
+  font-size: 16px;
+  font-weight: 300;
+}
+.lite-anatomy-eq-btn--on { background: #fff; }
+.lite-anatomy-eq-btn--on:not(.lite-anatomy-eq-btn--tv) { border-bottom-color: var(--foundation); }
+.lite-anatomy-eq-btn--tv .lite-anatomy-eq-n { color: var(--accent); }
+.lite-anatomy-eq-btn--tv.lite-anatomy-eq-btn--on { border-bottom-color: var(--accent); }
+.lite-anatomy-eq-total {
+  flex: 0 0 120px;
+  background: var(--ink);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  cursor: default;
+}
+.lite-anatomy-eq-total .lite-anatomy-eq-t,
+.lite-anatomy-eq-total .lite-anatomy-eq-q { color: var(--text-inv-2); }
+@media (max-width: 640px) {
+  .lite-anatomy-eq-q { display: none; }
+  .lite-anatomy-eq-total { flex-basis: 82px; }
+}
+
+.lite-anatomy-panel { padding: 8px 18px 6px; }
+.lite-anatomy-panel--tv { background: linear-gradient(180deg, #F4F7FF, #fff); }
+
+.lite-anatomy-dim { border-top: 1px solid var(--line); }
+.lite-anatomy-dim:first-child { border-top: none; }
+.lite-anatomy-dim-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: none;
+  font-family: var(--sans);
+  color: inherit;
+  cursor: pointer;
+  padding: 13px 2px;
+  text-align: left;
+}
+.lite-anatomy-dim-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+.lite-anatomy-dim-nm { font-size: 14px; font-weight: 600; flex: 1; }
+.lite-anatomy-dim-one { font-size: 11.5px; color: var(--text-2); flex: 2; }
+@media (max-width: 640px) { .lite-anatomy-dim-one { display: none; } }
+.lite-anatomy-dim-pt { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.lite-anatomy-dim-car { font-size: 11px; color: var(--text-2); width: 12px; text-align: center; }
+.lite-anatomy-dbody {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 2px 2px 16px;
+  animation: lite-anatomy-fade 0.25s ease;
+}
+@media (max-width: 640px) { .lite-anatomy-dbody { grid-template-columns: 1fr; } }
+@keyframes lite-anatomy-fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lite-anatomy-dbody { animation: none; }
+}
+.lite-anatomy-cell-k {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.13em;
+  color: var(--text-2);
+  display: block;
+  margin-bottom: 7px;
+}
+
+.lite-anatomy-sig { display: flex; flex-wrap: wrap; }
+.lite-anatomy-chip {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin: 0 4px 5px 0;
+  background: #FAF9F6;
+}
+.lite-anatomy-chip--advisory {
+  border-style: dashed;
+  color: var(--warn);
+  background: none;
+}
+
+.lite-anatomy-meter {
+  height: 10px;
+  background: var(--track);
+  border-radius: 5px;
+  position: relative;
+  margin: 6px 0 4px;
+}
+.lite-anatomy-meter-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+  border-radius: 5px;
+  width: 0;
+  transition: width 0.7s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lite-anatomy-meter-fill { transition: none; }
+}
+.lite-anatomy-meter-tick {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 16px;
+  background: var(--text);
+}
+.lite-anatomy-meter-tlab {
+  position: absolute;
+  top: -16px;
+  transform: translateX(-50%);
+  font-family: var(--mono);
+  font-size: 8px;
+  color: var(--text-2);
+}
+.lite-anatomy-mcap { font-size: 11px; color: var(--text-2); }
+.lite-anatomy-mcap b { color: var(--text); }
+
+.lite-anatomy-duo {
+  display: grid;
+  grid-template-columns: 1fr 14px 1fr;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0 6px;
+}
+.lite-anatomy-duo-l,
+.lite-anatomy-duo-r {
+  height: 10px;
+  background: var(--track);
+  border-radius: 5px;
+  position: relative;
+  overflow: hidden;
+  display: block;
+}
+.lite-anatomy-duo-l div {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--foundation);
+  border-radius: 5px;
+  width: 0;
+  transition: width 0.7s ease;
+}
+.lite-anatomy-duo-r div {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+  border-radius: 5px;
+  width: 0;
+  transition: width 0.7s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lite-anatomy-duo-l div,
+  .lite-anatomy-duo-r div { transition: none; }
+}
+.lite-anatomy-duo-mid { font-family: var(--mono); font-size: 9px; color: var(--text-2); text-align: center; }
+.lite-anatomy-duolab {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  color: var(--text-2);
+}
+.lite-anatomy-duolab b:first-child { color: var(--foundation); }
+.lite-anatomy-duolab b:last-child { color: var(--accent); }
+
+.lite-anatomy-ladder { display: flex; gap: 10px; margin: 5px 0; flex-wrap: wrap; }
+.lite-anatomy-ladder-band {
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  color: var(--text-2);
+}
+.lite-anatomy-ladder-band i {
+  display: block;
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-2);
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  margin-bottom: 3px;
+}
+.lite-anatomy-ladder-band--hot i {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.lite-anatomy-pips { display: flex; gap: 10px; margin: 5px 0; }
+.lite-anatomy-pip { text-align: center; font-family: var(--mono); font-size: 8.5px; color: var(--text-2); }
+.lite-anatomy-pip i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  margin: 0 auto 4px;
+  font-style: normal;
+  font-size: 13px;
+  color: #fff;
+  background: var(--good);
+}
+.lite-anatomy-pip--off i { background: var(--track); color: var(--text-2); }
+
+.lite-anatomy-grid4 { display: flex; gap: 5px; margin: 6px 0; }
+.lite-anatomy-grid4 i { width: 22px; height: 28px; border-radius: 5px; background: var(--track); display: block; }
+.lite-anatomy-grid4-ok { background: var(--foundation); }
+
+.lite-anatomy-vtag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  background: var(--accent-tint);
+  color: var(--accent);
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin-left: 8px;
+}
+
+.lite-anatomy-gate {
+  border-top: 1px solid var(--line);
+  background: #FAF9F6;
+  padding: 13px 18px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.lite-anatomy-tog {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #fff;
+}
+.lite-anatomy-tog button {
+  background: none;
+  border: none;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  padding: 7px 12px;
+  cursor: pointer;
+  color: var(--text-2);
+}
+.lite-anatomy-tog-on { background: var(--ink) !important; color: #fff !important; }
+.lite-anatomy-gsc { font-size: 26px; font-weight: 700; min-width: 48px; text-align: center; }
+.lite-anatomy-gch {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.lite-anatomy-gch--ok { background: #E7F5EC; color: var(--good); }
+.lite-anatomy-gch--no { background: var(--bad-tint); color: var(--bad); }
+.lite-anatomy-gtx { flex: 1; min-width: 200px; font-size: 11.5px; color: var(--text-2); line-height: 1.45; }
+.lite-anatomy-gtx b { color: var(--text); }
+
+.lite-anatomy-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 26px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
 }
 
 /* ── Slim strip (methodology stamp / closing note) ────────────────── */
@@ -1293,4 +1534,245 @@
   color: #fff;
   background: var(--foundation);
   flex-shrink: 0;
+}
+
+/* ── Report v4 dimension row + embedded methodology (Report redesign,
+   Part 3, M1) — the one shared row used in Visibility/Accessibility/
+   True Value: name + score + one-line evidence + a HOW IT'S SCORED
+   pill opening an inline two-cell panel. Mirrors design-refs/report-v4-
+   embedded-methodology-mock.html's .dim/.dim-h/.how/.meth rules,
+   reusing this app's own tokens rather than the mock's separate
+   --slate/--slate2/--blue-tint names (same discipline as the landing
+   page's .lite-anatomy-* block). A .lite-v4-tv ancestor class re-tints
+   everything for the True Value card's solid-accent background. ── */
+
+.lite-v4-dim {
+  border-top: 1px solid var(--line);
+  padding: 13px 0;
+}
+.lite-v4-dim:first-of-type { border-top: none; }
+.lite-v4-dim-h {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.lite-v4-dim-h .lite-v4-nm { font-size: 14.5px; font-weight: 600; color: var(--text); }
+.lite-v4-dim-h .lite-v4-pt { font-family: var(--mono); font-size: 12.5px; color: var(--text-2); }
+.lite-v4-dim-h .lite-v4-ev {
+  font-size: 12px;
+  color: var(--text-2);
+  flex: 1;
+  text-align: right;
+  min-width: 160px;
+}
+.lite-v4-sitetag {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  background: var(--track);
+  color: var(--text-2);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.lite-v4-how {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--text-2);
+  padding: 3px 10px;
+}
+.lite-v4-how[aria-expanded='true'] { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+.lite-v4-meth {
+  display: none;
+  margin-top: 10px;
+  background: var(--paper-2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.lite-v4-meth.lite-v4-meth--open { display: grid; }
+@media (max-width: 620px) { .lite-v4-meth.lite-v4-meth--open { grid-template-columns: 1fr; } }
+.lite-v4-meth-k {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.13em;
+  color: var(--text-2);
+  display: block;
+  margin-bottom: 6px;
+}
+.lite-v4-mcap { font-size: 11px; color: var(--text-2); line-height: 1.5; }
+.lite-v4-mcap b { color: var(--text); }
+
+.lite-v4-chips { display: flex; flex-wrap: wrap; }
+.lite-v4-chip {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin: 0 4px 5px 0;
+  background: #fff;
+}
+.lite-v4-chip i { font-style: normal; margin-right: 4px; }
+.lite-v4-chip--pass i { color: var(--good); }
+.lite-v4-chip--fail i { color: var(--bad); }
+.lite-v4-chip--na i { color: var(--text-2); }
+.lite-v4-chip--advisory { border-style: dashed; color: var(--warn-ink); }
+
+/* Band ladder with a floating YOU marker over the earned rung. */
+.lite-v4-dots { display: flex; gap: 10px; align-items: flex-start; margin: 2px 0 6px; }
+.lite-v4-dots .lite-v4-rung {
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  color: var(--text-2);
+  position: relative;
+}
+.lite-v4-dots .lite-v4-rung i {
+  display: block;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin-bottom: 3px;
+  background: #fff;
+}
+.lite-v4-dots .lite-v4-rung--you i { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lite-v4-dots .lite-v4-rung--you::after {
+  content: 'YOU';
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 7.5px;
+  color: var(--accent-ink);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+/* Meter with a live fill, a fixed cap tick, and two YOU-style markers. */
+.lite-v4-meter { height: 9px; background: var(--track); border-radius: 5px; position: relative; margin: 8px 0 4px; }
+.lite-v4-meter .lite-v4-meter-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: var(--foundation);
+  border-radius: 5px;
+}
+.lite-v4-meter .lite-v4-meter-tick { position: absolute; top: -3px; width: 2px; height: 15px; background: var(--text-2); }
+.lite-v4-meter .lite-v4-meter-you {
+  position: absolute;
+  top: -14px;
+  transform: translateX(-50%);
+  font-family: var(--mono);
+  font-size: 7.5px;
+  color: var(--accent-ink);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.lite-v4-meter .lite-v4-meter-you--tick { top: auto; bottom: -14px; color: var(--text-2); }
+
+/* Mirrored dual-lens bars (True Value's seen/said pair), always shown
+   above the accordion — never repeated inside the panel. */
+.lite-v4-duo { display: grid; grid-template-columns: 1fr 15px 1fr; gap: 6px; align-items: center; margin: 8px 0 2px; }
+.lite-v4-duo-track {
+  height: 9px;
+  background: var(--track);
+  border-radius: 5px;
+  position: relative;
+  overflow: hidden;
+}
+.lite-v4-duo-track .lite-v4-duo-fill { position: absolute; top: 0; bottom: 0; background: var(--foundation); border-radius: 5px; }
+.lite-v4-duo-track--l .lite-v4-duo-fill { right: 0; }
+.lite-v4-duo-track--r .lite-v4-duo-fill { left: 0; }
+.lite-v4-duo-zero { position: absolute; top: -2px; width: 2px; height: 13px; background: var(--bad-on-dark); }
+.lite-v4-duo-track--l .lite-v4-duo-zero { right: 0; }
+.lite-v4-duo-track--r .lite-v4-duo-zero { left: 0; }
+.lite-v4-duo-mid { font-family: var(--mono); font-size: 9px; color: var(--text-2); text-align: center; }
+.lite-v4-duolab { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 8.5px; color: var(--text-2); }
+
+/* Accessibility tiles: pips + a 4-square catalog grid. */
+.lite-v4-pips { display: flex; gap: 8px; margin: 8px 0 2px; }
+.lite-v4-pip { text-align: center; font-family: var(--mono); font-size: 8px; color: var(--text-2); }
+.lite-v4-pip i {
+  display: flex; width: 22px; height: 22px; border-radius: 7px; margin: 0 auto 3px;
+  font-style: normal; align-items: center; justify-content: center; font-size: 11px;
+  color: #fff; background: var(--good);
+}
+.lite-v4-pip--off i { background: var(--track); color: var(--text-2); }
+.lite-v4-grid4 { display: flex; gap: 4px; margin: 8px 0 2px; }
+.lite-v4-grid4 i { width: 18px; height: 24px; border-radius: 4px; background: var(--track); display: block; }
+.lite-v4-grid4 i.lite-v4-grid4-ok { background: var(--foundation); }
+
+/* True Value's solid-accent-card re-tint — same tokens, inverse palette. */
+.lite-v4-tv .lite-v4-dim { border-top-color: rgba(255,255,255,0.25); }
+.lite-v4-tv .lite-v4-dim-h .lite-v4-nm { color: #fff; }
+.lite-v4-tv .lite-v4-dim-h .lite-v4-pt { color: #fff; }
+.lite-v4-tv .lite-v4-dim-h .lite-v4-ev { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-how { border-color: rgba(255,255,255,0.45); color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-how[aria-expanded='true'] { background: #fff; color: var(--accent-ink); border-color: #fff; }
+.lite-v4-tv .lite-v4-meth { background: rgba(255,255,255,0.13); }
+.lite-v4-tv .lite-v4-meth-k { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-mcap { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-mcap b { color: #fff; }
+.lite-v4-tv .lite-v4-chip { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.4); color: #fff; }
+.lite-v4-tv .lite-v4-chip--advisory { color: #FFD9A8; border-color: #FFD9A8; background: none; }
+.lite-v4-tv .lite-v4-dots .lite-v4-rung { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-dots .lite-v4-rung i { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.4); color: #fff; }
+.lite-v4-tv .lite-v4-dots .lite-v4-rung--you i { background: #fff; border-color: #fff; color: var(--accent-ink); }
+.lite-v4-tv .lite-v4-dots .lite-v4-rung--you::after { color: #fff; }
+.lite-v4-tv .lite-v4-sitetag { background: rgba(255,255,255,0.2); color: #fff; }
+.lite-v4-tv .lite-v4-duo-track { background: rgba(255,255,255,0.25); }
+.lite-v4-tv .lite-v4-duo-track .lite-v4-duo-fill { background: #fff; }
+.lite-v4-tv .lite-v4-duo-mid { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-duolab { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-na-line { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-na-line b { color: #fff; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; }
+
+.lite-v4-gate {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.3);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--accent-tint);
+}
+.lite-v4-gate b { color: #fff; }
+.lite-v4-gate--positive { color: var(--text-2); border-top-color: var(--line); }
+.lite-v4-gate--positive b { color: var(--text); }
+
+/* ── Full Diagnostic gate — inline + block variants (Report redesign,
+   Part 6, G1) ── */
+.lite-fdg-inline {
+  margin-top: 10px;
+  background: var(--ink);
+  color: var(--text-inv);
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.lite-fdg-inline-m { font-size: 13px; max-width: 420px; line-height: 1.5; color: var(--text-inv); }
+.lite-fdg-cnt { display: block; font-family: var(--mono); font-size: 9.5px; color: var(--text-inv-2); margin-top: 4px; }
+
+.lite-fdg-block .lite-fdg-heading {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 8px 0 2px;
+  color: #fff;
 }

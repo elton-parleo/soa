@@ -4,29 +4,29 @@ Validates each generated row against QUERY_CONSTRAINTS before returning.
 Invalid rows are skipped and logged — partial success is acceptable for AI
 generation (unlike CSV upload which is all-or-nothing).
 
-Also generates SoA Lite studies (generate_lite_queries) — a fixed 12-query
-brand_vs_brand set, 3 per QUERY_STAGES stage. Unlike the general path,
-partial success is NOT acceptable there (see generate_lite_queries):
-a report built from a lopsided stage distribution would be misleading, so
-a persistent shortfall raises LiteGenerationError instead of returning
-whatever was generated.
+Also generates SoA Lite studies (generate_lite_queries) — a fixed
+LITE_QUERY_COUNT-query brand_vs_brand set, LITE_QUERIES_PER_STAGE per
+QUERY_STAGES stage. Unlike the general path, partial success is NOT
+acceptable there (see generate_lite_queries): a report built from a
+lopsided stage distribution would be misleading, so a persistent
+shortfall raises LiteGenerationError instead of returning whatever was
+generated.
 """
 
 import json
 import logging
 from openai import OpenAI
 from soa_shared.constants import QUERY_CONSTRAINTS, QUERY_STAGES
+from soa_shared.scan_dimensions import LITE_QUERIES_PER_STAGE
 
 log = logging.getLogger(__name__)
 
 BATCH_SIZE = 10
 
-LITE_QUERIES_PER_STAGE = 3
-
 
 class LiteGenerationError(Exception):
-    """Raised when generate_lite_queries cannot reach 3 valid queries for
-    every stage even after the targeted shortfall retry."""
+    """Raised when generate_lite_queries cannot reach LITE_QUERIES_PER_STAGE
+    valid queries for every stage even after the targeted shortfall retry."""
 
 
 def _build_prompt(
@@ -220,13 +220,15 @@ def generate_lite_queries(
     api_key: str,
 ) -> list:
     """
-    Generates a fixed 12-query SoA Lite study: exactly LITE_QUERIES_PER_STAGE
-    (3) queries per QUERY_STAGES stage. The distribution is enforced here,
+    Generates a fixed LITE_QUERY_COUNT-query SoA Lite study: exactly
+    LITE_QUERIES_PER_STAGE queries per QUERY_STAGES stage (Stage 25:
+    bumped from 3/stage to 6/stage — soa_shared.scan_dimensions is the
+    one place this count is defined). The distribution is enforced here,
     not just requested in the prompt — validated rows are bucketed by
     stage, and if any stage is short after the first call, ONE targeted
     regeneration call asks only for the shortfall stages/counts. If still
     short after that retry, raises LiteGenerationError: a partial lite
-    study (e.g. 2 Comparison questions instead of 3) would skew the
+    study (e.g. 5 Comparison questions instead of 6) would skew the
     resulting report, so it's better to fail the request outright.
     """
     buckets: dict = {stage: [] for stage in QUERY_STAGES}

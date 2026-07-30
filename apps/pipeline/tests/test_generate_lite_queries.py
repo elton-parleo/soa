@@ -1,8 +1,8 @@
 """
 Tests for generate_lite_queries' stage-distribution enforcement: exactly
-LITE_QUERIES_PER_STAGE (3) queries per QUERY_STAGES stage, a single
-targeted retry for shortfall stages, and LiteGenerationError if the
-shortfall persists after that retry (a partial lite study would produce a
+LITE_QUERIES_PER_STAGE queries per QUERY_STAGES stage, a single targeted
+retry for shortfall stages, and LiteGenerationError if the shortfall
+persists after that retry (a partial lite study would produce a
 misleading report). Mocks _call_openai_and_validate so no real OpenAI call
 is made; _validate_generated_row's own behavior is covered elsewhere.
 """
@@ -54,26 +54,30 @@ def test_perfect_distribution_needs_no_retry():
         rows = generate_lite_queries("Acme", ["Rival"], api_key="k")
 
     assert mock_call.call_count == 1
-    assert len(rows) == 12
-    assert _stage_counts(rows) == {s: 3 for s in QUERY_STAGES}
+    assert len(rows) == LITE_QUERIES_PER_STAGE * len(QUERY_STAGES)
+    assert _stage_counts(rows) == {s: LITE_QUERIES_PER_STAGE for s in QUERY_STAGES}
 
 
 def test_excess_rows_for_a_stage_are_capped_not_overcounted():
-    batch = [_row(stage, f"-{i}") for stage in QUERY_STAGES for i in range(5 if stage == "Awareness" else 3)]
+    batch = [
+        _row(stage, f"-{i}")
+        for stage in QUERY_STAGES
+        for i in range(LITE_QUERIES_PER_STAGE + 2 if stage == "Awareness" else LITE_QUERIES_PER_STAGE)
+    ]
 
     with patch("generation.query_generator._call_openai_and_validate") as mock_call:
         mock_call.return_value = batch
         rows = generate_lite_queries("Acme", [], api_key="k")
 
     assert mock_call.call_count == 1
-    assert _stage_counts(rows) == {s: 3 for s in QUERY_STAGES}
+    assert _stage_counts(rows) == {s: LITE_QUERIES_PER_STAGE for s in QUERY_STAGES}
 
 
 def test_shortfall_then_successful_retry():
     first_batch = [
         _row(stage, f"-first-{i}")
         for stage in QUERY_STAGES
-        for i in range(2 if stage == "Awareness" else 3)
+        for i in range(LITE_QUERIES_PER_STAGE - 1 if stage == "Awareness" else LITE_QUERIES_PER_STAGE)
     ]
     retry_batch = [_row("Awareness", "-retry")]
 
@@ -82,7 +86,7 @@ def test_shortfall_then_successful_retry():
         rows = generate_lite_queries("Acme", ["Rival"], api_key="k")
 
     assert mock_call.call_count == 2
-    assert _stage_counts(rows) == {s: 3 for s in QUERY_STAGES}
+    assert _stage_counts(rows) == {s: LITE_QUERIES_PER_STAGE for s in QUERY_STAGES}
 
     retry_prompt = mock_call.call_args_list[1][0][0]
     assert "Awareness" in retry_prompt
@@ -93,7 +97,7 @@ def test_shortfall_persists_after_retry_raises():
     first_batch = [
         _row(stage, f"-first-{i}")
         for stage in QUERY_STAGES
-        for i in range(1 if stage == "Comparison" else 3)
+        for i in range(LITE_QUERIES_PER_STAGE - 2 if stage == "Comparison" else LITE_QUERIES_PER_STAGE)
     ]
     retry_batch = []  # still short
 
@@ -109,7 +113,7 @@ def test_partial_retry_success_still_raises_if_short():
     first_batch = [
         _row(stage, f"-first-{i}")
         for stage in QUERY_STAGES
-        for i in range(1 if stage == "Comparison" else 3)
+        for i in range(LITE_QUERIES_PER_STAGE - 2 if stage == "Comparison" else LITE_QUERIES_PER_STAGE)
     ]
     # Retry returns only 1 of the 2 needed Comparison rows.
     retry_batch = [_row("Comparison", "-retry")]

@@ -89,21 +89,22 @@ describe('LiteWidget (root) — state machine', () => {
     expect(screen.getByText('Run my free diagnostic')).toBeInTheDocument()
   })
 
-  it('fetches and renders the teaser once complete with no email on file', async () => {
+  it('fetches and renders the full report directly once complete, with no email on file (Report redesign, Part 8, E1)', async () => {
     sessionStorage.setItem('soaLiteToken', 'tok-done')
     liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'skipped' })
     liteApi.getReport.mockResolvedValue({
       status: 'complete',
-      locked: true,
-      overall: [{ name: 'Acme Co', role: 'primary', som: 60 }],
+      locked: false,
+      overall: [{ name: 'Acme Co', role: 'primary', metrics: { som: 60 } }],
       visibility: 60, accessibility: null, composite: 60, scan_status: 'skipped',
     })
 
     render(<LiteWidget />)
 
     await waitFor(() =>
-      expect(screen.getByText('Want the full report?')).toBeInTheDocument()
+      expect(screen.getByText('Composite score')).toBeInTheDocument()
     )
+    expect(screen.queryByText('Want the full report?')).not.toBeInTheDocument()
   })
 
   it('renders the full report directly when the report is already unlocked', async () => {
@@ -233,7 +234,7 @@ describe('LiteWidget — adaptive shapes', () => {
     // The funnel teaser (W4) still renders as a locked, decorative tease —
     // its stage cells are fixed constants, not the real data above.
     expect(screen.getByText('Where you disappear in the funnel')).toBeInTheDocument()
-    expect(screen.getByText('AWARENESS')).toBeInTheDocument()
+    expect(screen.getAllByText('FULL ANALYSIS').length).toBeGreaterThan(0)
   })
 })
 
@@ -247,21 +248,6 @@ describe('LiteWidget — old API shape (additive fields absent)', () => {
     render(<LiteWidget />)
 
     await waitFor(() => expect(screen.getByText('Reading your store')).toBeInTheDocument())
-  })
-
-  it('renders the old-shape teaser without errors when visibility/accessibility/composite are absent', async () => {
-    sessionStorage.setItem('soaLiteToken', 'tok-old-api-2')
-    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete' })
-    liteApi.getReport.mockResolvedValue({
-      status: 'complete',
-      locked: true,
-      overall: [{ name: 'Acme Co', role: 'primary', som: 60 }],
-      // no visibility/accessibility/composite/scan_status — pre-Stage-3 shape
-    })
-
-    render(<LiteWidget />)
-
-    await waitFor(() => expect(screen.getByText('Acme Co (you)')).toBeInTheDocument())
   })
 
   it('renders the old-shape full report without errors when scan is absent', async () => {

@@ -187,7 +187,7 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
 
         # Stage 16: v3 crawl-derived dimensions — the Accessibility
         # pillar in full, plus the SEEN half of each True Value
-        # dimension. The SAID half needs the 12-query coded/metrics data
+        # dimension. The SAID half needs the LITE_QUERY_COUNT-query coded/metrics data
         # this crawl-only engine never sees — that's computed at report-
         # build time instead (apps/api/app/services/lite_pillars.py) and
         # combined with these seen scores there. Dict keys use the
@@ -200,6 +200,14 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
             "price_truth_seen": scorer.score_price_truth_seen(pages, site_type_result),
             "member_value_seen": scorer.score_member_value_seen(pages, site_type_result),
             "deal_citability_seen": scorer.score_deal_citability_seen(pages, site_type_result),
+            # Stage 25 (Part 3): value_protocols is encode-only (seen half
+            # only, no said half exists at all — see lite_pillars.py) and
+            # reuses F3's already-fetched MCP well-known page, never a
+            # second fetch. site_type_result is deliberately not passed —
+            # unlike protocol_feed, this dimension is never 'na' on a
+            # brand-only site (V1: absence always scores 0, it never
+            # excludes the dimension).
+            "value_protocols_seen": scorer.score_value_protocols(pages),
         }
 
         # Stage 16 (Part 6): price-honesty checks are UNSCORED under v3

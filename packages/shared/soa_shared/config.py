@@ -45,6 +45,17 @@ SOA_OPENAI_MAX_CONCURRENT: int = int(os.environ.get("SOA_OPENAI_MAX_CONCURRENT",
 SOA_PERPLEXITY_MAX_CONCURRENT: int = int(os.environ.get("SOA_PERPLEXITY_MAX_CONCURRENT", "3"))
 SOA_GEMINI_MAX_CONCURRENT: int = int(os.environ.get("SOA_GEMINI_MAX_CONCURRENT", "3"))
 
+# Stage 25 (Part 4, Q2): SoA Lite is ChatGPT-only and now runs
+# LITE_QUERY_COUNT (24) queries per scan, double the pre-Stage-25 count —
+# a lead-gen visitor is waiting live on the result (see worker.py's
+# get_next_planned_cycle), so lite cycles get their own, higher
+# chatgpt-concurrency override instead of inheriting the shared
+# SOA_OPENAI_MAX_CONCURRENT default (3) every other study type uses.
+# run_orchestrator.py applies this ONLY when the cycle_code has the
+# 'lite-' prefix (the same convention worker.py's queue-priority check
+# uses) — never changes concurrency for a regular client cycle.
+LITE_QUERY_CONCURRENCY: int = int(os.environ.get("LITE_QUERY_CONCURRENCY", "6"))
+
 # Per-platform inter-run delays (Fix 3: Claude needs wider gap between runs)
 SOA_CLAUDE_INTER_RUN_DELAY: float = float(os.environ.get("SOA_CLAUDE_INTER_RUN_DELAY", "3.0"))
 SOA_DEFAULT_INTER_RUN_DELAY: float = float(os.environ.get("SOA_DEFAULT_INTER_RUN_DELAY", "2.0"))

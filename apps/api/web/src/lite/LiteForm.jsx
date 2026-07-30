@@ -27,6 +27,7 @@ import { liteApi } from './liteApi.js'
 import { validateSubmission } from './validation.js'
 import { looksLikeUrl, deriveBrandFromUrl } from './liteDerive.js'
 import { LogoHeader, ErrorBanner, LightCard } from './liteTheme.jsx'
+import { LITE_QUERY_COUNT } from './landing/scanDimensionsRegistry.js'
 
 export function LiteForm({
   onSubmitted,
@@ -180,7 +181,7 @@ export function LiteForm({
           </div>
           <div className="lite-body lite-muted" style={{ marginBottom: 20 }}>
             Enter your brand or store URL and up to 2 competitors — we'll run a
-            free 12-query diagnostic against ChatGPT and, if you give us a URL,
+            free {LITE_QUERY_COUNT}-query diagnostic against ChatGPT and, if you give us a URL,
             read your store the way an AI shopping agent does.
           </div>
 

@@ -242,16 +242,17 @@ def _seed_v3_cycle_with_a_fix(conn):
         "VALUES (7, 301, 'overall', 'overall', 12, 6, 0.5, 0.6, 1.0)"
     )
     dimensions = {
-        "scorer_version": "3",
+        "scorer_version": "4",
         "agent_access": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
         "catalog_context": {
             "score": 2, "max": 8, "coverage": "full", "evidence": [],
             "fix": "fix catalog_context", "fix_human": "Add product identifiers so agents can match your listings.",
         },
         "protocol_feed": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
-        "price_truth_seen": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
-        "member_value_seen": {"score": 12, "max": 12, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+        "price_truth_seen": {"score": 5, "max": 5, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+        "member_value_seen": {"score": 9, "max": 9, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
         "deal_citability_seen": {"score": 4, "max": 4, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+        "value_protocols_seen": {"score": 7, "max": 7, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
     }
     conn.exec_driver_sql(
         "INSERT INTO soa_lite_scan_results (lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe) "

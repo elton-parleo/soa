@@ -33,6 +33,7 @@ from sqlalchemy import text
 from soa_shared.database import engine, session_factory
 from soa_shared.models.soa_models import LITE_STATUS_PENDING
 from soa_shared.org_helpers import get_or_create_leadgen_org
+from soa_shared.scan_dimensions import SCORER_VERSION
 from app.routers.metrics import build_entity_metrics
 from app.services.lite_crosswalk import GAP_THRESHOLD, RunSignal, link_dimensions, link_incentive_citation
 from app.services.lite_incentive_citation import build_incentive_citation_payload
@@ -50,8 +51,6 @@ from app.schemas import (
     PublicLiteStatusResponse,
     PublicLiteSubmitRequest,
     PublicLiteSubmitResponse,
-    PublicLiteTeaserEntity,
-    PublicLiteTeaserResponse,
 )
 
 log = logging.getLogger(__name__)
@@ -565,7 +564,7 @@ def _fetch_metrics_rows(conn, cycle_id: int):
     """), {"cid": cycle_id}).fetchall()
 
 
-def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str | None) -> dict:
+def _build_report_payload(conn, lite_request_id: int, cycle_id: int) -> dict:
     rows = _fetch_metrics_rows(conn, cycle_id)
 
     entity_info: dict = {}    # comparison_code -> {"name":, "role":} (internal grouping key only)
@@ -622,14 +621,20 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
     if scan_complete and primary_entity_id is not None:
         run_signals = _fetch_run_signals(conn, cycle_id, primary_entity_id)
 
-    # Stage 16 (Part 7): the ONE composite function — a scorer_version
-    # "3" scan computes visibility/accessibility/composite from the
-    # registry-driven pillars breakdown (build_pillars_payload); every
-    # other case (older scan, no scan, no primary entity) falls back to
-    # the pre-Stage-16 formula byte-identically, so historical rows keep
-    # rendering exactly as they always have (Stage 10 W6 precedent).
+    # Stage 16 (Part 7), updated Stage 25 (R1/R2): the ONE composite
+    # function — a scan at the CURRENT scorer version computes
+    # visibility/accessibility/composite from the registry-driven
+    # pillars breakdown (build_pillars_payload); every other case
+    # (older scan at a retired scorer_version, no scan, no primary
+    # entity) falls back to the pre-Stage-16 formula byte-identically,
+    # so historical rows keep rendering exactly as they always have
+    # (Stage 10 W6 precedent). Compared against the registry's own
+    # SCORER_VERSION rather than a hard-coded literal so a v3 row now
+    # correctly falls through to that same historical fallback the
+    # instant this file bumps to v4 — no second "is this current"
+    # definition to keep in sync by hand.
     pillars_payload = None
-    if scan_complete and scorer_version == "3" and primary_entity_id is not None:
+    if scan_complete and scorer_version == SCORER_VERSION and primary_entity_id is not None:
         primary_metrics = overall_metrics.get(primary_code) or {}
         membership_probe = _decode_json_field(scan_row[5], {})
         pillars_payload = build_pillars_payload(
@@ -660,22 +665,6 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
                 if accessibility is not None
                 else visibility
             )
-
-    if not email:
-        overall = [
-            PublicLiteTeaserEntity(
-                name=info["name"],
-                role=info["role"],
-                som=overall_metrics.get(code, {}).get("som"),
-            ).model_dump()
-            for code, info in entity_info.items()
-        ]
-        return PublicLiteTeaserResponse(
-            status="complete", locked=True, overall=overall,
-            visibility=visibility, accessibility=accessibility, composite=composite,
-            scan_status=scan_status, competitor_source=competitor_source,
-            scorer_version=scorer_version,
-        ).model_dump()
 
     overall = [
         PublicLiteEntityMetrics(
@@ -858,19 +847,22 @@ def get_lite_status(token: str):
 
 @router.get("/soa-lite/{token}/report", response_model=None)
 def get_lite_report(token: str):
+    # Report redesign (Part 8, E1): a valid, complete token always renders
+    # the full report — never gated on whether an email is on file. See
+    # set_lite_email below for the (unchanged) notification-capture path.
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT id, status, email, cycle_id FROM soa_lite_requests WHERE token = :token
+            SELECT id, status, cycle_id FROM soa_lite_requests WHERE token = :token
         """), {"token": token}).fetchone()
 
         if not row:
             raise HTTPException(status_code=404, detail="Not found.")
 
-        lite_request_id, lite_status, email, cycle_id = row
+        lite_request_id, lite_status, cycle_id = row
         if lite_status != 'complete':
             raise HTTPException(status_code=409, detail="Report is not ready yet.")
 
-        return _build_report_payload(conn, lite_request_id, cycle_id, email)
+        return _build_report_payload(conn, lite_request_id, cycle_id)
 
 
 # ─── PATCH /api/public/soa-lite/{token}/email ────────────────────────────
@@ -878,11 +870,11 @@ def get_lite_report(token: str):
 @router.patch("/soa-lite/{token}/email", response_model=None)
 def set_lite_email(token: str, data: PublicLiteEmailRequest):
     """
-    Always stores the email, even if the report isn't ready yet — capturing
-    the lead is the priority, and the report will already be unlocked once
-    the widget later calls GET /report. Returns the full report inline only
-    when already complete (saves the widget a round trip); otherwise
-    returns the same {status, phase} shape as GET /status.
+    Always stores the email, even if the report isn't ready yet — this is
+    a notification-capture address only (Part 8, E2): the report itself is
+    never gated on it (see get_lite_report). Returns the full report
+    inline only when already complete (saves the widget a round trip);
+    otherwise returns the same {status, phase} shape as GET /status.
     """
     with engine.begin() as conn:
         row = conn.execute(text("""
@@ -911,4 +903,4 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
                 competitors=_decode_json_field(competitor_names, None), competitor_source=competitor_source,
             ).model_dump()
 
-        return _build_report_payload(conn, lite_request_id, cycle_id, data.email)
+        return _build_report_payload(conn, lite_request_id, cycle_id)

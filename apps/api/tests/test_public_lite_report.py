@@ -148,24 +148,41 @@ def test_409_when_not_complete(db, status):
     assert exc_info.value.status_code == 409
 
 
-# ─── teaser (email null) ─────────────────────────────────────────────────
+# ─── email de-gating (Report redesign, Part 8, E1) ───────────────────────
+# A valid, complete token always renders the full report — never gated
+# on whether an email is on file. These replace the old teaser (email
+# null -> locked/reduced-shape response) tests removed this stage.
 
-def test_teaser_returned_when_email_is_null(db):
+def test_full_report_returned_when_email_is_null(db):
     with db.begin() as conn:
         _seed_complete_cycle(conn, token="t1", email=None)
 
     result = public_lite.get_lite_report("t1")
 
-    assert result["locked"] is True
+    assert result["locked"] is False
     assert len(result["overall"]) == 2
     names = {e["name"] for e in result["overall"]}
     assert names == {"Acme Co", "Rival Co"}
     for entity in result["overall"]:
-        assert set(entity.keys()) == {"name", "role", "som"}
-    assert "by_stage" not in result
-    # Stage 19 (R6): no scan row at all defaults to scorer_version "1" —
-    # same convention as PublicLiteScan.scorer_version.
-    assert result["scorer_version"] == "1"
+        assert {"name", "role", "metrics"}.issubset(entity.keys())
+    assert result["by_stage"] is None  # DEPRECATED key, always null — present, not absent
+
+
+def test_report_payload_is_byte_identical_with_and_without_email(db):
+    """The acceptance criterion, directly: attaching an email to an
+    already-complete request must not change a single byte of what
+    GET /report returns."""
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email=None)
+
+    without_email = public_lite.get_lite_report("t1")
+
+    with db.begin() as conn:
+        conn.exec_driver_sql("UPDATE soa_lite_requests SET email = ? WHERE token = ?", ("visitor@example.com", "t1"))
+
+    with_email = public_lite.get_lite_report("t1")
+
+    assert without_email == with_email
 
 
 def test_teaser_primary_role_present(db):
@@ -383,13 +400,13 @@ def test_full_report_never_leaks_stage_level_mention_data(db):
             assert round(rate * 100, 1) not in {round(n, 1) for n in numeric_leaves}
 
 
-def test_teaser_never_leaks_stage_level_mention_data(db):
+def test_report_never_leaks_stage_level_mention_data(db):
     with db.begin() as conn:
         _seed_cycle_with_rich_stage_variance(conn, token="t1", email=None)
 
     result = public_lite.get_lite_report("t1")
 
-    assert "by_stage" not in result  # teaser never had this key at all
+    assert result["by_stage"] is None  # DEPRECATED key, always null
     serialized = json.dumps(result).lower()
     for stage_name in _STAGE_NAMES:
         assert stage_name not in serialized
@@ -435,7 +452,7 @@ def test_v3_pillars_block_never_leaks_stage_names(db):
 
     result = public_lite.get_lite_report("t1")
 
-    assert result["scan"]["scorer_version"] == "3"
+    assert result["scan"]["scorer_version"] == "4"
     assert result["pillars"] is not None
     serialized = json.dumps(result).lower()
     for stage_name in _STAGE_NAMES:
@@ -646,21 +663,25 @@ def test_no_score_cap_language_anywhere_in_api_app_source():
 # ─── Stage 16 (Part 7): pillars block + composite versioning ────────────
 
 _V3_CRAWL_DIMENSIONS = {
-    "scorer_version": "3",
+    "scorer_version": "4",
     "agent_access": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": "fix agent_access"},
     "catalog_context": {"score": 8, "max": 8, "coverage": "full", "evidence": [], "fix": "fix catalog_context"},
     "protocol_feed": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": "fix protocol_feed"},
-    "price_truth_seen": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": "fix price_truth"},
-    "member_value_seen": {"score": 12, "max": 12, "coverage": "full", "evidence": [], "fix": "fix member_value"},
+    "price_truth_seen": {"score": 5, "max": 5, "coverage": "full", "evidence": [], "fix": "fix price_truth"},
+    "member_value_seen": {"score": 9, "max": 9, "coverage": "full", "evidence": [], "fix": "fix member_value"},
     "deal_citability_seen": {"score": 4, "max": 4, "coverage": "full", "evidence": [], "fix": "fix deal_citability"},
+    "value_protocols_seen": {"score": 7, "max": 7, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
 }
 
 
 def _seed_v3_full_credit_scan(conn, token="v3full", email="visitor@example.com", dimensions=None, revenue_probe=None):
-    """A scorer_version '3' scan + 2 purchase-intent mentions that cite
-    everything — mirrors test_lite_pillars.py's 'full credit' fixture,
-    so the resulting composite/pillars are exactly known (100 across
-    every pillar) without re-deriving the arithmetic here."""
+    """A current-scorer-version scan + 4 purchase-intent mentions that
+    cite everything — mirrors test_lite_pillars.py's 'full credit'
+    fixture, so the resulting composite/pillars are exactly known (100
+    across every pillar) without re-deriving the arithmetic here. Needs
+    4 mentions (not 2): deal_citability.said is count-banded (Stage 25's
+    4-tier COUNT_BAND_TABLE), and only reaches its 100% band at a cited
+    count of 4+ — 2/2 would land in the 70% band instead."""
     conn.exec_driver_sql(
         "INSERT INTO soa_lite_requests (token, email, status, cycle_id) VALUES (?, ?, 'complete', 5)",
         (token, email),
@@ -689,9 +710,13 @@ def _seed_v3_full_credit_scan(conn, token="v3full", email="visitor@example.com",
     )
     conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (901, 'Comparison')")
     conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (902, 'Ready to Buy')")
+    conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (903, 'Comparison')")
+    conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (904, 'Ready to Buy')")
     conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (901, 5, 901, 'success')")
     conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (902, 5, 902, 'success')")
-    for run_id in (901, 902):
+    conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (903, 5, 903, 'success')")
+    conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (904, 5, 904, 'success')")
+    for run_id in (901, 902, 903, 904):
         conn.exec_driver_sql(
             "INSERT INTO soa_coded_mentions (run_id, entity_id, mentioned, deal_cited, deal_types, member_value_cited) "
             "VALUES (?, 201, 1, 1, ?, 1)",
@@ -711,7 +736,7 @@ def test_v3_full_report_composite_uses_pillars_not_the_old_blend(db):
 
     result = public_lite.get_lite_report("v3full")
 
-    assert result["scan"]["scorer_version"] == "3"
+    assert result["scan"]["scorer_version"] == "4"
     assert result["visibility"] == 100
     assert result["accessibility"] == 100
     assert result["composite"] == 100
@@ -719,6 +744,63 @@ def test_v3_full_report_composite_uses_pillars_not_the_old_blend(db):
     assert result["pillars"]["accessibility"]["score"] == 100
     assert result["pillars"]["true_value"]["score"] == 100
     assert result["pillars"]["member_value_na"] is False
+
+
+def test_v3_full_credit_scan_verdict_reaches_the_full_report_as_agent_ready(db):
+    """Stage 25 (Part 5, G1): the verdict gate travels end to end through
+    PublicLitePillars — a full-credit scan (composite 100, True Value
+    100%) clears both thresholds and reads AGENT-READY in the actual API
+    response, not just inside build_pillars_payload's own return dict."""
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn)
+
+    result = public_lite.get_lite_report("v3full")
+
+    assert result["pillars"]["verdict"] == "AGENT-READY"
+
+
+def test_v3_weak_scan_verdict_reaches_the_full_report_as_not_agent_ready(db):
+    """Same wiring check, opposite gate outcome: a scan with almost
+    nothing crawlable and no mentions clears neither threshold."""
+    weak_dimensions = {
+        "scorer_version": "4",
+        "agent_access": {"score": 0, "max": 6, "coverage": "full", "evidence": []},
+        "catalog_context": {"score": 0, "max": 8, "coverage": "full", "evidence": []},
+        "protocol_feed": {"score": 0, "max": 6, "coverage": "full", "evidence": []},
+        "price_truth_seen": {"score": 0, "max": 5, "coverage": "full", "evidence": []},
+        "member_value_seen": {"score": 0, "max": 9, "coverage": "full", "evidence": []},
+        "deal_citability_seen": {"score": 0, "max": 4, "coverage": "full", "evidence": []},
+        "value_protocols_seen": {"score": 0, "max": 7, "coverage": "full", "evidence": []},
+    }
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, email, status, cycle_id) "
+            "VALUES ('v3weak', 'visitor@example.com', 'complete', 10)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (501, 'Weak Co', 'weak-co', 'brand')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (10, 501, 'M001', 'primary')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_metrics_results "
+            "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+            " mention_rate, soa_pct, position_index, rsi_score) "
+            "VALUES (10, 501, 'overall', 'overall', 0, 0, 0.0, 0.0, 0.0, NULL)"
+        )
+        rid = _lite_request_id(conn, "v3weak")
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_scan_results "
+            "(lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe) "
+            "VALUES (?, 'complete', 0, 0, ?, ?)",
+            (rid, json.dumps(weak_dimensions), json.dumps({"result": "no", "raw_evidence": None})),
+        )
+
+    result = public_lite.get_lite_report("v3weak")
+
+    assert result["composite"] == 0
+    assert result["pillars"]["verdict"] == "NOT AGENT-READY"
 
 
 def test_v3_pillars_fix_text_reaches_the_full_report(db):
@@ -740,7 +822,7 @@ def test_v3_pillars_fix_text_reaches_the_full_report(db):
 # ─── Part 3 (F1): report.pillars.fixes end to end ────────────────────────
 
 _V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN = {
-    "scorer_version": "3",
+    "scorer_version": "4",
     "agent_access": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
     "catalog_context": {
         "score": 3, "max": 8, "coverage": "full", "evidence": [],
@@ -750,9 +832,10 @@ _V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN = {
         "score": 0, "max": 6, "coverage": "full", "evidence": [],
         "fix": "fix protocol_feed", "fix_human": "Publish the files that let AI agents discover your store.",
     },
-    "price_truth_seen": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
-    "member_value_seen": {"score": 12, "max": 12, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+    "price_truth_seen": {"score": 5, "max": 5, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+    "member_value_seen": {"score": 9, "max": 9, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
     "deal_citability_seen": {"score": 4, "max": 4, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+    "value_protocols_seen": {"score": 7, "max": 7, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
 }
 
 
@@ -770,12 +853,13 @@ def test_v3_report_fixes_field_reaches_the_full_report_end_to_end(db):
     assert "fix" not in fixes["visible"][0]  # no markup key on a visible entry
 
 
-def test_v3_teaser_never_includes_pillars_fixes(db):
+def test_v3_report_includes_pillars_fixes_even_when_email_is_null(db):
     with db.begin() as conn:
         _seed_v3_full_credit_scan(conn, email=None, dimensions=_V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN)
 
     result = public_lite.get_lite_report("v3full")
-    assert "pillars" not in result or result.get("pillars") is None
+    assert result.get("pillars") is not None
+    assert result["pillars"]["fixes"] is not None
 
 
 # ─── Part 5 (R3): revenue_estimate_usd end to end ────────────────────────
@@ -915,18 +999,18 @@ def test_v3_crosswalk_attaches_a_chip_when_the_keyed_dimension_is_genuinely_fail
     assert catalog_row["linked"] == {"reason": "absent from most answers"}
 
 
-def test_v3_teaser_gets_new_composite_but_no_pillars_block(db):
+def test_v3_report_has_full_pillars_block_even_when_email_is_null(db):
     with db.begin() as conn:
         _seed_v3_full_credit_scan(conn, token="v3teaser", email=None)
 
     result = public_lite.get_lite_report("v3teaser")
 
-    assert result["locked"] is True
+    assert result["locked"] is False
     assert result["visibility"] == 100
     assert result["accessibility"] == 100
     assert result["composite"] == 100
-    assert "pillars" not in result
-    assert result["scorer_version"] == "3"
+    assert result["pillars"] is not None
+    assert result["scan"]["scorer_version"] == "4"
 
 
 def test_v1_row_composite_still_uses_the_pre_stage16_blend(db):
@@ -950,11 +1034,13 @@ def test_v3_program_less_store_normalizes_member_value_na_onto_81(db):
     """Acceptance fixture: a program-less store — the crawl found no
     loyalty surface at all (member_value_seen score 0) and the
     membership probe came back 'no' — so member_value is N/A end to
-    end. price_truth/deal_citability still earn full credit, so
-    true_value's 21 applicable points (of the normal 40) are all
-    earned, and the /81 composite normalization (Part 4 P4) still
-    reaches 100 — proving a program-less store isn't penalized for a
-    dimension that was correctly excluded, not scored as zero."""
+    end. price_truth/deal_citability/value_protocols still earn full
+    credit, so true_value's 25 applicable points (of the normal 40:
+    price_truth 12 + deal_citability 6 + value_protocols 7) are all
+    earned, and the /85 composite normalization (Part 4 P4, Stage 25:
+    100 - member_value's 15) still reaches 100 — proving a program-less
+    store isn't penalized for a dimension that was correctly excluded,
+    not scored as zero."""
     with db.begin() as conn:
         conn.exec_driver_sql(
             "INSERT INTO soa_lite_requests (token, email, status, cycle_id) "
@@ -986,9 +1072,17 @@ def test_v3_program_less_store_normalizes_member_value_na_onto_81(db):
         )
         conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (911, 'Comparison')")
         conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (912, 'Ready to Buy')")
+        conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (913, 'Comparison')")
+        conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (914, 'Ready to Buy')")
         conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (911, 6, 911, 'success')")
         conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (912, 6, 912, 'success')")
-        for run_id in (911, 912):
+        conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (913, 6, 913, 'success')")
+        conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (914, 6, 914, 'success')")
+        # 4 purchase-intent mentions (not 2): deal_citability.said is
+        # count-banded and only reaches its 100% band at a cited count of
+        # 4+ (Stage 25's 4-tier COUNT_BAND_TABLE) — same reasoning as
+        # _seed_v3_full_credit_scan above.
+        for run_id in (911, 912, 913, 914):
             # deal_cited/deal_types drive price_truth/deal_citability's said
             # halves; nothing here claims member value, so member_value_
             # said would be N/A on its own too — moot, since P3 already
@@ -1133,14 +1227,14 @@ def test_no_scan_row_at_all_yields_scan_none(db):
     assert result["scan_status"] is None
 
 
-def test_teaser_never_includes_the_full_scan_object(db):
+def test_report_includes_the_full_scan_object_even_when_email_is_null(db):
     with db.begin() as conn:
         _seed_complete_cycle(conn, token="t1", email=None)
         rid = _lite_request_id(conn, "t1")
         _seed_scan_row(conn, rid, status="complete", total_score=59, dimensions=_FULL_DIMENSIONS)
 
     result = public_lite.get_lite_report("t1")
-    assert "scan" not in result
+    assert result["scan"] is not None
 
 
 def test_report_attaches_linked_reason_from_crosswalk(db):
@@ -1255,12 +1349,12 @@ def test_full_report_has_visibility_breakdown_shaped_correctly(db):
     assert vb["totals"] == {"total_mentions": 12, "total_queries": 12}
 
 
-def test_teaser_never_includes_visibility_breakdown(db):
+def test_report_includes_visibility_breakdown_even_when_email_is_null(db):
     with db.begin() as conn:
         _seed_complete_cycle(conn, token="t1", email=None)
 
     result = public_lite.get_lite_report("t1")
-    assert "visibility_breakdown" not in result
+    assert result["visibility_breakdown"] is not None
 
 
 # ─── Stage 8 (A1): visibility_breakdown.incentive_citation ───────────────
@@ -1325,12 +1419,12 @@ def test_incentive_citation_null_rate_for_zero_mention_entity(db):
     assert ic["Acme Co"]["cited_answers"] is None
 
 
-def test_teaser_never_includes_incentive_citation(db):
+def test_report_includes_incentive_citation_even_when_email_is_null(db):
     with db.begin() as conn:
         _seed_complete_cycle(conn, token="t1", email=None)
 
     result = public_lite.get_lite_report("t1")
-    assert "visibility_breakdown" not in result  # whole object absent, incentive_citation included
+    assert result["visibility_breakdown"]["incentive_citation"] is not None
 
 
 def test_full_report_carries_same_subscores_as_teaser(db):
@@ -1347,20 +1441,7 @@ def test_full_report_carries_same_subscores_as_teaser(db):
 
 # ─── additive-only: pre-Stage-3 response shape is unchanged/subset ──────
 
-_PRE_STAGE3_TEASER_KEYS = {"status", "locked", "overall"}
 _PRE_STAGE3_REPORT_KEYS = {"status", "locked", "overall", "by_stage"}
-
-
-def test_teaser_response_is_additive_over_pre_stage3_shape(db):
-    with db.begin() as conn:
-        _seed_complete_cycle(conn, token="t1", email=None)
-
-    result = public_lite.get_lite_report("t1")
-    assert _PRE_STAGE3_TEASER_KEYS.issubset(result.keys())
-    assert isinstance(result["locked"], bool)
-    assert isinstance(result["overall"], list)
-    for entity in result["overall"]:
-        assert {"name", "role", "som"}.issubset(entity.keys())
 
 
 def test_full_report_response_is_additive_over_pre_stage3_shape(db):
