@@ -311,9 +311,12 @@ function ManifestRow({ row, reducedMotion }) {
 }
 
 // ─── Status-page email card (Stage 12, E1) — unchanged ──────────────────
-// The primary ask, moved earlier — not a replacement for LiteTeaser's
-// post-run gate, which is unchanged (E2: no previously-gated content
-// becomes visible any earlier; only the ASK moves earlier in time).
+// Report redesign (Part 8, E2): this stays exactly what it always was —
+// a notification-capture address only. The report itself is no longer
+// gated on email at all (Part 8, E1 deleted that gate entirely), so this
+// card was never "the same ask, moved earlier" in the sense of unlocking
+// anything sooner — it never gated content in the first place, only
+// requested where to send a completion notice.
 function StatusEmailCard({ token }) {
   const [email, setEmail] = useState('')
   const [emailError, setEmailError] = useState(null)
@@ -360,8 +363,8 @@ function StatusEmailCard({ token }) {
         Leave your email and we'll send your report the moment it's ready — no need to keep this tab open.
       </div>
       <ErrorBanner message={submitError} />
-      {/* noValidate: validateEmail()'s message renders inline, same
-          reasoning as LiteTeaser's unlock form. */}
+      {/* noValidate: validateEmail()'s message renders inline instead of
+          relying on the browser's native email-input validation. */}
       <form onSubmit={handleSubmit} noValidate>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <input

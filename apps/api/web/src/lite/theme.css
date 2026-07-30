@@ -7,7 +7,7 @@
  * class is prefixed lite- so nothing here can collide with the authed
  * app, which has no stylesheets of its own today. Imported once from
  * LiteWidget.jsx; .lite-root must be the outermost class on every
- * top-level view (LiteForm/LiteProgress/LiteTeaser/LiteFullReport) so
+ * top-level view (LiteForm/LiteProgress/LiteFullReport) so
  * the custom properties resolve wherever the widget mounts.
  *
  * --sans reuses the app's existing DM Sans (already CDN-loaded in
@@ -115,7 +115,7 @@
 /* Stage 22: sole child of .lite-root, stacking the full-width mini-nav
    above the centered .lite-shell. .lite-root itself keeps its original
    single-child-centering CSS untouched (every other view — LiteForm,
-   LiteProgress, LiteTeaser, LiteFailed — still mounts one child directly
+   LiteProgress, LiteFailed — still mounts one child directly
    under it), so this wrapper is what actually centers .lite-shell now. */
 .lite-page {
   width: 100%;
@@ -1534,4 +1534,245 @@
   color: #fff;
   background: var(--foundation);
   flex-shrink: 0;
+}
+
+/* ── Report v4 dimension row + embedded methodology (Report redesign,
+   Part 3, M1) — the one shared row used in Visibility/Accessibility/
+   True Value: name + score + one-line evidence + a HOW IT'S SCORED
+   pill opening an inline two-cell panel. Mirrors design-refs/report-v4-
+   embedded-methodology-mock.html's .dim/.dim-h/.how/.meth rules,
+   reusing this app's own tokens rather than the mock's separate
+   --slate/--slate2/--blue-tint names (same discipline as the landing
+   page's .lite-anatomy-* block). A .lite-v4-tv ancestor class re-tints
+   everything for the True Value card's solid-accent background. ── */
+
+.lite-v4-dim {
+  border-top: 1px solid var(--line);
+  padding: 13px 0;
+}
+.lite-v4-dim:first-of-type { border-top: none; }
+.lite-v4-dim-h {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.lite-v4-dim-h .lite-v4-nm { font-size: 14.5px; font-weight: 600; color: var(--text); }
+.lite-v4-dim-h .lite-v4-pt { font-family: var(--mono); font-size: 12.5px; color: var(--text-2); }
+.lite-v4-dim-h .lite-v4-ev {
+  font-size: 12px;
+  color: var(--text-2);
+  flex: 1;
+  text-align: right;
+  min-width: 160px;
+}
+.lite-v4-sitetag {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  background: var(--track);
+  color: var(--text-2);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.lite-v4-how {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--text-2);
+  padding: 3px 10px;
+}
+.lite-v4-how[aria-expanded='true'] { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+.lite-v4-meth {
+  display: none;
+  margin-top: 10px;
+  background: var(--paper-2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.lite-v4-meth.lite-v4-meth--open { display: grid; }
+@media (max-width: 620px) { .lite-v4-meth.lite-v4-meth--open { grid-template-columns: 1fr; } }
+.lite-v4-meth-k {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.13em;
+  color: var(--text-2);
+  display: block;
+  margin-bottom: 6px;
+}
+.lite-v4-mcap { font-size: 11px; color: var(--text-2); line-height: 1.5; }
+.lite-v4-mcap b { color: var(--text); }
+
+.lite-v4-chips { display: flex; flex-wrap: wrap; }
+.lite-v4-chip {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin: 0 4px 5px 0;
+  background: #fff;
+}
+.lite-v4-chip i { font-style: normal; margin-right: 4px; }
+.lite-v4-chip--pass i { color: var(--good); }
+.lite-v4-chip--fail i { color: var(--bad); }
+.lite-v4-chip--na i { color: var(--text-2); }
+.lite-v4-chip--advisory { border-style: dashed; color: var(--warn-ink); }
+
+/* Band ladder with a floating YOU marker over the earned rung. */
+.lite-v4-dots { display: flex; gap: 10px; align-items: flex-start; margin: 2px 0 6px; }
+.lite-v4-dots .lite-v4-rung {
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  color: var(--text-2);
+  position: relative;
+}
+.lite-v4-dots .lite-v4-rung i {
+  display: block;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-2);
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin-bottom: 3px;
+  background: #fff;
+}
+.lite-v4-dots .lite-v4-rung--you i { background: var(--accent); border-color: var(--accent); color: #fff; }
+.lite-v4-dots .lite-v4-rung--you::after {
+  content: 'YOU';
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 7.5px;
+  color: var(--accent-ink);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+/* Meter with a live fill, a fixed cap tick, and two YOU-style markers. */
+.lite-v4-meter { height: 9px; background: var(--track); border-radius: 5px; position: relative; margin: 8px 0 4px; }
+.lite-v4-meter .lite-v4-meter-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: var(--foundation);
+  border-radius: 5px;
+}
+.lite-v4-meter .lite-v4-meter-tick { position: absolute; top: -3px; width: 2px; height: 15px; background: var(--text-2); }
+.lite-v4-meter .lite-v4-meter-you {
+  position: absolute;
+  top: -14px;
+  transform: translateX(-50%);
+  font-family: var(--mono);
+  font-size: 7.5px;
+  color: var(--accent-ink);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.lite-v4-meter .lite-v4-meter-you--tick { top: auto; bottom: -14px; color: var(--text-2); }
+
+/* Mirrored dual-lens bars (True Value's seen/said pair), always shown
+   above the accordion — never repeated inside the panel. */
+.lite-v4-duo { display: grid; grid-template-columns: 1fr 15px 1fr; gap: 6px; align-items: center; margin: 8px 0 2px; }
+.lite-v4-duo-track {
+  height: 9px;
+  background: var(--track);
+  border-radius: 5px;
+  position: relative;
+  overflow: hidden;
+}
+.lite-v4-duo-track .lite-v4-duo-fill { position: absolute; top: 0; bottom: 0; background: var(--foundation); border-radius: 5px; }
+.lite-v4-duo-track--l .lite-v4-duo-fill { right: 0; }
+.lite-v4-duo-track--r .lite-v4-duo-fill { left: 0; }
+.lite-v4-duo-zero { position: absolute; top: -2px; width: 2px; height: 13px; background: var(--bad-on-dark); }
+.lite-v4-duo-track--l .lite-v4-duo-zero { right: 0; }
+.lite-v4-duo-track--r .lite-v4-duo-zero { left: 0; }
+.lite-v4-duo-mid { font-family: var(--mono); font-size: 9px; color: var(--text-2); text-align: center; }
+.lite-v4-duolab { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 8.5px; color: var(--text-2); }
+
+/* Accessibility tiles: pips + a 4-square catalog grid. */
+.lite-v4-pips { display: flex; gap: 8px; margin: 8px 0 2px; }
+.lite-v4-pip { text-align: center; font-family: var(--mono); font-size: 8px; color: var(--text-2); }
+.lite-v4-pip i {
+  display: flex; width: 22px; height: 22px; border-radius: 7px; margin: 0 auto 3px;
+  font-style: normal; align-items: center; justify-content: center; font-size: 11px;
+  color: #fff; background: var(--good);
+}
+.lite-v4-pip--off i { background: var(--track); color: var(--text-2); }
+.lite-v4-grid4 { display: flex; gap: 4px; margin: 8px 0 2px; }
+.lite-v4-grid4 i { width: 18px; height: 24px; border-radius: 4px; background: var(--track); display: block; }
+.lite-v4-grid4 i.lite-v4-grid4-ok { background: var(--foundation); }
+
+/* True Value's solid-accent-card re-tint — same tokens, inverse palette. */
+.lite-v4-tv .lite-v4-dim { border-top-color: rgba(255,255,255,0.25); }
+.lite-v4-tv .lite-v4-dim-h .lite-v4-nm { color: #fff; }
+.lite-v4-tv .lite-v4-dim-h .lite-v4-pt { color: #fff; }
+.lite-v4-tv .lite-v4-dim-h .lite-v4-ev { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-how { border-color: rgba(255,255,255,0.45); color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-how[aria-expanded='true'] { background: #fff; color: var(--accent-ink); border-color: #fff; }
+.lite-v4-tv .lite-v4-meth { background: rgba(255,255,255,0.13); }
+.lite-v4-tv .lite-v4-meth-k { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-mcap { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-mcap b { color: #fff; }
+.lite-v4-tv .lite-v4-chip { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.4); color: #fff; }
+.lite-v4-tv .lite-v4-chip--advisory { color: #FFD9A8; border-color: #FFD9A8; background: none; }
+.lite-v4-tv .lite-v4-dots .lite-v4-rung { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-dots .lite-v4-rung i { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.4); color: #fff; }
+.lite-v4-tv .lite-v4-dots .lite-v4-rung--you i { background: #fff; border-color: #fff; color: var(--accent-ink); }
+.lite-v4-tv .lite-v4-dots .lite-v4-rung--you::after { color: #fff; }
+.lite-v4-tv .lite-v4-sitetag { background: rgba(255,255,255,0.2); color: #fff; }
+.lite-v4-tv .lite-v4-duo-track { background: rgba(255,255,255,0.25); }
+.lite-v4-tv .lite-v4-duo-track .lite-v4-duo-fill { background: #fff; }
+.lite-v4-tv .lite-v4-duo-mid { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-duolab { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-na-line { color: var(--accent-tint); }
+.lite-v4-tv .lite-v4-na-line b { color: #fff; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; }
+
+.lite-v4-gate {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.3);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--accent-tint);
+}
+.lite-v4-gate b { color: #fff; }
+.lite-v4-gate--positive { color: var(--text-2); border-top-color: var(--line); }
+.lite-v4-gate--positive b { color: var(--text); }
+
+/* ── Full Diagnostic gate — inline + block variants (Report redesign,
+   Part 6, G1) ── */
+.lite-fdg-inline {
+  margin-top: 10px;
+  background: var(--ink);
+  color: var(--text-inv);
+  border-radius: 14px;
+  padding: 16px 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.lite-fdg-inline-m { font-size: 13px; max-width: 420px; line-height: 1.5; color: var(--text-inv); }
+.lite-fdg-cnt { display: block; font-family: var(--mono); font-size: 9.5px; color: var(--text-inv-2); margin-top: 4px; }
+
+.lite-fdg-block .lite-fdg-heading {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 8px 0 2px;
+  color: #fff;
 }

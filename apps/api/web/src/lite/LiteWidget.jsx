@@ -13,14 +13,14 @@
  *   sessionStorage so a refresh mid-run doesn't lose it -> poll /status
  *   every 5s (now also carrying scan_status, Stage 3) -> PROGRESS view
  *   through phases queued/generating_queries/running/analyzing ->
- *   'complete' fetches /report -> TEASER (locked, email null) or
- *   FULL REPORT (unlocked, email set) -> submitting email on the teaser
- *   swaps straight to FULL REPORT using PATCH /email's inline response.
- *   'failed' shows a retry-from-form view. The full report's "add your
- *   store URL" prompt (brand-only submissions) resets straight back to
- *   FORM, pre-filled with the already-confirmed brand name — there is no
- *   API to attach a URL to an existing request, so this is an honest
- *   restart rather than a silent no-op.
+ *   'complete' fetches /report -> FULL REPORT, always (Report redesign,
+ *   Part 8, E1: the report is never gated on an email being on file —
+ *   a valid, complete token renders the full report directly). 'failed'
+ *   shows a retry-from-form view. The full report's "add your store URL"
+ *   prompt (brand-only submissions) resets straight back to FORM,
+ *   pre-filled with the already-confirmed brand name — there is no API
+ *   to attach a URL to an existing request, so this is an honest restart
+ *   rather than a silent no-op.
  *
  * Stage 9 additions, both optional props so /lite's existing embed
  * behavior is byte-for-byte unchanged when they're omitted:
@@ -37,21 +37,21 @@
  *     after a successful submit, so the address bar is shareable from
  *     the first second of the run (U2) without a full page reload.
  *
- * This file re-exports LiteForm/LiteProgress/LiteFailed/LiteTeaser/
- * LiteFullReport from their own modules (Stage 4 split them out as the
- * combined report grew) so `import { X } from './LiteWidget.jsx'` keeps
- * working for every existing caller and test.
+ * This file re-exports LiteForm/LiteProgress/LiteFailed/LiteFullReport
+ * from their own modules (Stage 4 split them out as the combined report
+ * grew) so `import { X } from './LiteWidget.jsx'` keeps working for
+ * every existing caller and test. LiteTeaser (the pre-Part-8 email gate)
+ * is deleted entirely — see the state-machine note above.
  */
 import { useEffect, useState } from 'react'
 import './theme.css'
 import { liteApi } from './liteApi.js'
 import { LiteForm } from './LiteForm.jsx'
 import { LiteProgress, LiteFailed } from './LiteProgress.jsx'
-import { LiteTeaser } from './LiteTeaser.jsx'
 import { LiteFullReport } from './LiteFullReport.jsx'
 import { LightCard } from './liteTheme.jsx'
 
-export { LiteForm, LiteProgress, LiteFailed, LiteTeaser, LiteFullReport }
+export { LiteForm, LiteProgress, LiteFailed, LiteFullReport }
 
 // Exported so the landing page (Stage 6) can hand off a submission to
 // this widget's resume-from-sessionStorage behavior without duplicating
@@ -242,9 +242,7 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
   }
 
   if (phaseData?.status === 'complete' && report) {
-    return report.locked
-      ? <LiteTeaser report={report} token={token} onUnlocked={setReport} />
-      : <LiteFullReport report={report} onAddStoreUrl={handleAddStoreUrl} token={token} />
+    return <LiteFullReport report={report} onAddStoreUrl={handleAddStoreUrl} token={token} />
   }
 
   return (

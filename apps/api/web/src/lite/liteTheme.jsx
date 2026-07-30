@@ -174,8 +174,8 @@ export function LightCard({ children, style, id }) {
   )
 }
 
-export function DarkCard({ children, style, id }) {
-  return <div className="lite-card-dark" style={style} id={id}>{children}</div>
+export function DarkCard({ children, style, id, className }) {
+  return <div className={`lite-card-dark${className ? ` ${className}` : ''}`} style={style} id={id}>{children}</div>
 }
 
 // ─── Full Diagnostic gate (Part 1) ─────────────────────────────────────
@@ -189,37 +189,68 @@ export function DarkCard({ children, style, id }) {
 // here, ever: this module's vocabulary is exclusively paid-tier.
 export const FULL_DIAGNOSTIC_CTA_LABEL = 'Contact us for a free custom Full Diagnostic'
 
-export function FullDiagnosticGate({ message, subMessage, cta = FULL_DIAGNOSTIC_CTA_LABEL, ctaUrl, children }) {
-  return (
-    <div style={{ marginTop: 24 }}>
-      <div style={{ marginBottom: 16 }}>
-        <span
-          className="lite-chip lite-mono"
-          style={{ border: '1px solid var(--warn)', color: 'var(--warn-ink)', background: 'transparent' }}
-        >
-          Full analysis
-        </span>
-      </div>
-      {children && (
-        <div aria-hidden="true" style={{ marginBottom: 20, filter: 'blur(3px)', opacity: 0.55, pointerEvents: 'none' }}>
-          {children}
-        </div>
-      )}
-      <DarkCard style={{ textAlign: 'center' }}>
-        <div style={{ color: 'var(--text-inv)', fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
-          {message}
-        </div>
-        {subMessage && (
-          <div className="lite-mono lite-muted--inv" style={{ marginBottom: 14, fontSize: 12 }}>
-            {subMessage}
-          </div>
-        )}
+// Report redesign (Part 6, G1): fully self-contained styling via an
+// inline style object, not a className alone — an ancestor rule (a card
+// background, an inverse-text context) can never restyle this pill,
+// since nothing here is left for the cascade to override. The same
+// component mounts in three places (funnel, fixes, closing module) and
+// must render byte-identical computed style in every one of them (see
+// the computed-style-equality test in LiteFullReport.test.jsx).
+const FULL_ANALYSIS_PILL_STYLE = {
+  display: 'inline-block',
+  fontFamily: 'var(--mono)',
+  fontSize: 10,
+  letterSpacing: '0.22em',
+  fontWeight: 600,
+  color: '#E8A33D',
+  border: '1.5px solid #E8A33D',
+  borderRadius: 999,
+  padding: '6px 16px 5px',
+  background: 'none',
+}
+
+export function FullAnalysisPill() {
+  return <span style={FULL_ANALYSIS_PILL_STYLE}>FULL ANALYSIS</span>
+}
+
+// Report redesign (Part 6, G1): ONE gate component, two layouts.
+// 'inline' — message (with the pill) left, CTA right, in a slim dark
+// bar; used for in-flow teasers (funnel, fixes) that sit immediately
+// after their own (separately blurred) decorative preview — the gate
+// itself never blurs anything anymore; a caller wanting a decorative
+// preview renders it itself, outside this component, same G2 discipline
+// as before. 'block' — pill, heading, a free content slot, then the
+// CTA; the closing, full-width module before the footer.
+export function FullDiagnosticGate({
+  variant = 'inline', message, subMessage, heading, cta = FULL_DIAGNOSTIC_CTA_LABEL, ctaUrl, children,
+}) {
+  if (variant === 'block') {
+    return (
+      <DarkCard className="lite-fdg-block">
+        <FullAnalysisPill />
+        {heading && <h3 className="lite-fdg-heading">{heading}</h3>}
+        {children}
         {ctaUrl && (
           <a href={ctaUrl} target="_blank" rel="noreferrer" className="lite-pill lite-pill--solid">
             {cta}
           </a>
         )}
       </DarkCard>
+    )
+  }
+  return (
+    <div className="lite-fdg-inline">
+      <div className="lite-fdg-inline-m">
+        <FullAnalysisPill />
+        <br />
+        {message}
+        {subMessage && <span className="lite-fdg-cnt">{subMessage}</span>}
+      </div>
+      {ctaUrl && (
+        <a href={ctaUrl} target="_blank" rel="noreferrer" className="lite-pill lite-pill--solid">
+          {cta}
+        </a>
+      )}
     </div>
   )
 }

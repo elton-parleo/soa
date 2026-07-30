@@ -3,7 +3,7 @@ import {
   looksLikeUrl, deriveBrandFromUrl, domainFromStoreUrl, accessibilityBadgeText,
   groupDimensionsByFamily, rankDimensionsByGap, computeExposure, formatCurrency,
   getScoreBand, getVerdictLine, getDominantRivalPayoff, getIncentiveCitationPayoff,
-  seedMonthlyRevenue, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX,
+  seedAnnualRevenue, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX,
 } from '../liteDerive.js'
 
 describe('looksLikeUrl', () => {
@@ -172,22 +172,22 @@ describe('computeExposure', () => {
   })
 })
 
-describe('seedMonthlyRevenue (Part 5, R3)', () => {
-  it('converts an annual estimate to the monthly slider unit', () => {
-    expect(seedMonthlyRevenue(12_000_000)).toBeCloseTo(1_000_000, 5)
+describe('seedAnnualRevenue (Part 5 R3; annual units Report redesign Part 7)', () => {
+  it('passes an annual estimate straight through, unconverted — the calculator is annual throughout now', () => {
+    expect(seedAnnualRevenue(12_000_000)).toBe(12_000_000)
   })
 
   it('clamps below the slider minimum', () => {
-    expect(seedMonthlyRevenue(100)).toBe(REVENUE_SLIDER_MIN)
+    expect(seedAnnualRevenue(100)).toBe(REVENUE_SLIDER_MIN)
   })
 
   it('clamps above the slider maximum', () => {
-    expect(seedMonthlyRevenue(999_000_000_000)).toBe(REVENUE_SLIDER_MAX)
+    expect(seedAnnualRevenue(999_000_000_000)).toBe(REVENUE_SLIDER_MAX)
   })
 
   it('returns null when the probe never ran (null/undefined) — caller falls back to its own default', () => {
-    expect(seedMonthlyRevenue(null)).toBeNull()
-    expect(seedMonthlyRevenue(undefined)).toBeNull()
+    expect(seedAnnualRevenue(null)).toBeNull()
+    expect(seedAnnualRevenue(undefined)).toBeNull()
   })
 })
 

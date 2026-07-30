@@ -3,9 +3,9 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
 import '@testing-library/jest-dom'
 
-import { FullDiagnosticGate, FULL_DIAGNOSTIC_CTA_LABEL } from '../liteTheme.jsx'
+import { FullDiagnosticGate, FullAnalysisPill, FULL_DIAGNOSTIC_CTA_LABEL } from '../liteTheme.jsx'
 
-describe('FullDiagnosticGate (Part 1, M1)', () => {
+describe('FullDiagnosticGate (Part 1, M1; variants restyled Report redesign Part 6, G1)', () => {
   it('renders the default CTA label wired to ctaUrl', () => {
     render(<FullDiagnosticGate message="See more" ctaUrl="https://parleo.io/demo" />)
     const link = screen.getByText('Contact us for a free custom Full Diagnostic').closest('a')
@@ -32,34 +32,57 @@ describe('FullDiagnosticGate (Part 1, M1)', () => {
     expect(screen.getByText('4 more fixes identified')).toBeInTheDocument()
   })
 
-  it('renders the amber "Full analysis" tag', () => {
+  it('renders the FULL ANALYSIS pill (default inline variant)', () => {
     render(<FullDiagnosticGate message="See more" ctaUrl="https://x.example.com" />)
-    expect(screen.getByText('Full analysis')).toBeInTheDocument()
-  })
-
-  it('wraps decorative children in an aria-hidden container — never real gated data behind a blur', () => {
-    const { container } = render(
-      <FullDiagnosticGate message="See more" ctaUrl="https://x.example.com">
-        <div data-testid="decorative-content">fixed illustrative content</div>
-      </FullDiagnosticGate>,
-    )
-    const decorative = screen.getByTestId('decorative-content')
-    expect(decorative.closest('[aria-hidden="true"]')).not.toBeNull()
-    // The blurred wrapper carries pointer-events:none — genuinely inert,
-    // not just visually blurred.
-    expect(decorative.closest('[aria-hidden="true"]')).toHaveStyle({ pointerEvents: 'none' })
+    expect(screen.getByText('FULL ANALYSIS')).toBeInTheDocument()
   })
 
   it('never renders email-gate language — paid-tier vocabulary only', () => {
     const { container } = render(
       <FullDiagnosticGate
         message="Two fixes get you started. The full ranked list comes with a custom Full Diagnostic."
-        subMessage="4 more fixes identified"
+        subMessage="4 MORE FIXES IDENTIFIED"
         ctaUrl="https://x.example.com"
-      >
-        <div>decorative</div>
-      </FullDiagnosticGate>,
+      />,
     )
     expect(container.textContent.toLowerCase()).not.toMatch(/email|unlock with your|sign up/)
+  })
+
+  it('inline variant renders message/CTA in a single slim bar, ignoring any children prop (blur is the caller\'s job now)', () => {
+    render(
+      <FullDiagnosticGate variant="inline" message="See more" ctaUrl="https://x.example.com">
+        <div data-testid="should-not-render">nope</div>
+      </FullDiagnosticGate>,
+    )
+    expect(screen.queryByTestId('should-not-render')).not.toBeInTheDocument()
+  })
+
+  it('block variant renders a heading and its children as real, unblurred content, followed by the CTA', () => {
+    render(
+      <FullDiagnosticGate variant="block" heading="A bigger picture" ctaUrl="https://x.example.com">
+        <div data-testid="block-content">real content, not decorative</div>
+      </FullDiagnosticGate>,
+    )
+    expect(screen.getByText('A bigger picture')).toBeInTheDocument()
+    const content = screen.getByTestId('block-content')
+    expect(content.closest('[aria-hidden="true"]')).toBeNull()
+    expect(screen.getByText(FULL_DIAGNOSTIC_CTA_LABEL).closest('a')).toHaveAttribute('href', 'https://x.example.com')
+  })
+})
+
+describe('FullAnalysisPill (Report redesign, Part 6, G1)', () => {
+  it('renders identical computed style regardless of its mounting ancestor — no ancestor rule can restyle it', () => {
+    const { container: c1 } = render(<div style={{ color: 'red', fontFamily: 'serif' }}><FullAnalysisPill /></div>)
+    const { container: c2 } = render(<div className="lite-card-dark"><FullAnalysisPill /></div>)
+    const { container: c3 } = render(
+      <div style={{ background: 'var(--accent)', color: '#fff' }} className="lite-v4-tv"><FullAnalysisPill /></div>,
+    )
+    const pills = [c1, c2, c3].map((c) => c.querySelector('span'))
+    const styles = pills.map((p) => getComputedStyle(p))
+    const props = ['color', 'fontSize', 'fontWeight', 'letterSpacing', 'borderRadius', 'padding']
+    for (const prop of props) {
+      expect(styles[1][prop]).toBe(styles[0][prop])
+      expect(styles[2][prop]).toBe(styles[0][prop])
+    }
   })
 })

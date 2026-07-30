@@ -690,3 +690,291 @@ def test_fixes_value_protocols_ranks_like_any_other_true_value_dimension():
     assert [v["code"] for v in result["fixes"]["visible"]] == ["value_protocols", "member_value"]
     assert result["fixes"]["visible"][0]["fix_human"] == "Declare your agent-checkout capabilities in your protocol manifest."
     assert result["fixes"]["remaining_count"] == 5
+
+
+# ─── checks[]/band-context (Report redesign, Part 1, A1/A2) ─────────────
+#
+# Realistic, exact-wording evidence fixtures — copied verbatim from
+# apps/pipeline/scan/scorer.py's own evidence-string construction, since
+# checks[] is parsed from that fixed wording (no pipeline diff this
+# stage — see lite_pillars.py's module comment). A change to scorer.py's
+# wording that isn't mirrored here is exactly the drift risk that
+# tradeoff accepted; these fixtures are the tripwire for it.
+
+from soa_shared.scan_dimensions import DIMENSIONS_BY_CODE as _DIMS  # noqa: E402
+
+_REALISTIC_CRAWL_DIMS = {
+    "agent_access": {
+        "score": 5, "max": 6, "coverage": "full",
+        "evidence": [
+            "robots.txt is fetchable", "robots.txt allows product paths",
+            "no bot-blocking encountered on sampled pages", "no sitemap found",
+        ],
+    },
+    "catalog_context": {
+        "score": 0, "max": 8, "coverage": "full",
+        "evidence": [
+            "https://x/p1: missing/incomplete Product+Offer JSON-LD",
+            "https://x/p2: missing/incomplete Product+Offer JSON-LD",
+            "no discoverable shipping/returns terms",
+            "0/2 product pages expose a gtin/mpn/sku identifier",
+        ],
+    },
+    "protocol_feed": {
+        "score": 1, "max": 6, "coverage": "partial",
+        "evidence": [
+            "/llms.txt present and non-empty",
+            "no MCP endpoint declaration found (well-known path checked, absent; no link markup)",
+            "no UCP/UIP capability markup found",
+            "no agentic-commerce hints found in structured data",
+        ],
+    },
+    "price_truth_seen": {
+        "score": 0, "max": 5, "coverage": "full",
+        "evidence": [
+            "0/2 product pages expose a machine-readable price consistent with the page's own text",
+            "0/2 product pages declare priceCurrency",
+        ],
+    },
+    "member_value_seen": {
+        "score": 0, "max": 9, "coverage": "full",
+        "evidence": [
+            "no loyalty/rewards page found in nav/footer",
+            "no structured member/tier pricing found on sampled product pages",
+        ],
+    },
+    "deal_citability_seen": {
+        "score": 0, "max": 4, "coverage": "full",
+        "evidence": [
+            "0/2 product pages state a concrete amount or discount mechanic",
+            "0/2 product pages declare a currently-active validity window",
+            "0/2 product pages expose eligibility/code/stackability terms",
+        ],
+    },
+    "value_protocols_seen": {
+        "score": 0, "max": 7, "coverage": "full",
+        "evidence": [
+            "does not declare a UCP shopping-discount capability",
+            "does not declare a loyalty/member protocol extension",
+            "does not declare an ACP promotions capability",
+            "declared protocol manifest version is missing, unrecognized, or out of date",
+        ],
+    },
+    "price_honesty_advisory": {"scored": False, "would_have_capped": False, "evidence": [], "cap_basis": []},
+}
+
+
+def _no_purchase_intent_signals():
+    return [
+        RunSignal(stage="Comparison", primary_mentioned=True, primary_deal_cited=True),
+        RunSignal(stage="Ready to Buy", primary_mentioned=True, primary_deal_cited=False),
+    ]
+
+
+def _realistic_result():
+    return build_pillars_payload(
+        som_pct=35.0, rsi_score=0.2, total_mentions=8,
+        crawl_dimensions=_REALISTIC_CRAWL_DIMS, run_signals=_no_purchase_intent_signals(),
+        membership_probe_result="no", membership_probe_evidence="Allbirds does not appear to offer...",
+    )
+
+
+_SEEN_SIDE_CHECK_IDS_BY_CODE = {
+    "agent_access": ("robots_allows", "no_bot_blocks", "sitemap"),
+    "catalog_context": ("product_data", "completeness", "identifiers"),
+    "protocol_feed": ("llms_txt", "mcp", "ucp"),
+    "price_truth": ("price_in_code", "price_matches_page"),
+    "member_value": ("loyalty_page", "member_price_encoded", "markup_parses"),
+    "deal_citability": ("not_expired", "actionable"),  # concrete_amount carries a live-count suffix
+    "value_protocols": ("ucp_discount", "loyalty", "acp_promotions", "version_schema"),
+}
+
+
+def test_checks_seen_side_labels_are_registry_how_measured_strings():
+    """A1's parity rule: every structural (non-outcome, non-advisory)
+    check's label must be verbatim one of its dimension's soa_shared.
+    scan_dimensions.Dimension.how_measured strings — never a second,
+    independently-worded copy of the methodology text."""
+    result = _realistic_result()
+    all_dims = (
+        result["accessibility"]["dimensions"] + result["true_value"]["dimensions"]
+    )
+    checked_any = False
+    for dim in all_dims:
+        if not dim.get("checks"):
+            continue
+        how_measured = set(_DIMS[dim["code"]].how_measured)
+        seen_ids = _SEEN_SIDE_CHECK_IDS_BY_CODE[dim["code"]]
+        for check in dim["checks"]:
+            if check["code"] in seen_ids:
+                assert check["label"] in how_measured, (dim["code"], check)
+                checked_any = True
+    assert checked_any
+
+
+def test_agent_access_checks_pass_fail_from_evidence():
+    result = _realistic_result()
+    agent_access = next(d for d in result["accessibility"]["dimensions"] if d["code"] == "agent_access")
+    by_code = {c["code"]: c["state"] for c in agent_access["checks"]}
+    assert by_code == {"robots_allows": "pass", "no_bot_blocks": "pass", "sitemap": "fail"}
+
+
+def test_catalog_context_checks_do_not_false_match_incomplete_as_complete():
+    """Regression: 'incomplete' ends in 'complete', which an endswith
+    check on 'complete Product+Offer JSON-LD' would false-match — every
+    sampled page is genuinely incomplete here, so product_data must fail."""
+    result = _realistic_result()
+    catalog = next(d for d in result["accessibility"]["dimensions"] if d["code"] == "catalog_context")
+    by_code = {c["code"]: c["state"] for c in catalog["checks"]}
+    assert by_code == {"product_data": "fail", "completeness": "fail", "identifiers": "fail"}
+
+
+def test_protocol_feed_checks_from_evidence():
+    result = _realistic_result()
+    pf = next(d for d in result["accessibility"]["dimensions"] if d["code"] == "protocol_feed")
+    by_code = {c["code"]: c["state"] for c in pf["checks"]}
+    assert by_code == {"llms_txt": "pass", "mcp": "fail", "ucp": "fail"}
+
+
+def test_value_protocols_checks_all_fail_when_manifest_declares_nothing():
+    result = _realistic_result()
+    vp = next(d for d in result["true_value"]["dimensions"] if d["code"] == "value_protocols")
+    by_code = {c["code"]: c["state"] for c in vp["checks"]}
+    assert by_code == {
+        "ucp_discount": "fail", "loyalty": "fail", "acp_promotions": "fail", "version_schema": "fail",
+    }
+    # Labels equal how_measured in-order (Part 1, A1) — this dimension's
+    # 4 scorer.py checks map 1:1, in order, onto its 4 how_measured strings.
+    assert [c["label"] for c in vp["checks"]] == list(_DIMS["value_protocols"].how_measured)
+
+
+def test_value_protocols_checks_all_na_when_no_manifest_found():
+    crawl = dict(_REALISTIC_CRAWL_DIMS)
+    crawl["value_protocols_seen"] = {"score": 0, "max": 7, "coverage": "full", "evidence": ["no protocol profile found"]}
+    result = build_pillars_payload(
+        som_pct=35.0, rsi_score=0.2, total_mentions=8,
+        crawl_dimensions=crawl, run_signals=_no_purchase_intent_signals(),
+        membership_probe_result="no",
+    )
+    vp = next(d for d in result["true_value"]["dimensions"] if d["code"] == "value_protocols")
+    assert all(c["state"] == "na" for c in vp["checks"])
+
+
+def test_price_truth_checks_combine_seen_said_and_advisory():
+    result = _realistic_result()
+    pt = next(d for d in result["true_value"]["dimensions"] if d["code"] == "price_truth")
+    by_code = {c["code"]: c["state"] for c in pt["checks"]}
+    assert by_code["price_in_code"] == "fail"
+    assert by_code["price_matches_page"] == "na"  # nothing to compare — no price at all
+    assert by_code["said_price_cited"] == "fail"  # 0/8 mentions cited a price
+    assert by_code["fake_sale_prices"] == "advisory"  # always advisory-styled; text varies
+
+
+def test_price_truth_fake_sale_prices_label_reflects_would_have_capped():
+    capped_crawl = dict(_REALISTIC_CRAWL_DIMS)
+    capped_crawl["price_honesty_advisory"] = {"scored": False, "would_have_capped": True, "evidence": [], "cap_basis": ["x"]}
+    result = build_pillars_payload(
+        som_pct=35.0, rsi_score=0.2, total_mentions=8,
+        crawl_dimensions=capped_crawl, run_signals=_no_purchase_intent_signals(),
+        membership_probe_result="no",
+    )
+    pt = next(d for d in result["true_value"]["dimensions"] if d["code"] == "price_truth")
+    fake_sale = next(c for c in pt["checks"] if c["code"] == "fake_sale_prices")
+    assert "flagged" in fake_sale["label"] and "none" not in fake_sale["label"]
+
+
+def test_deal_citability_checks_not_expired_is_na_when_no_deal_at_all():
+    result = _realistic_result()
+    dc = next(d for d in result["true_value"]["dimensions"] if d["code"] == "deal_citability")
+    by_code = {c["code"]: c["state"] for c in dc["checks"]}
+    assert by_code == {"concrete_amount": "fail", "not_expired": "na", "actionable": "fail"}
+    concrete = next(c for c in dc["checks"] if c["code"] == "concrete_amount")
+    assert "(0/2 pages)" in concrete["label"]
+
+
+def test_member_value_na_dimension_has_no_checks():
+    """T2: the N/A path shows a decision sentence + probe quote, not a
+    checks grid — checks must be None even though seen/said data exists."""
+    result = _realistic_result()
+    mv = next(d for d in result["true_value"]["dimensions"] if d["code"] == "member_value")
+    assert mv["na"] is True
+    assert mv["checks"] is None
+
+
+def test_member_value_checks_when_applicable():
+    crawl = dict(_REALISTIC_CRAWL_DIMS)
+    crawl["member_value_seen"] = {
+        "score": 5, "max": 9, "coverage": "full",
+        "evidence": ["loyalty page found and fetchable: https://x/rewards", "no structured member/tier pricing found on sampled product pages"],
+    }
+    result = build_pillars_payload(
+        som_pct=35.0, rsi_score=0.2, total_mentions=8,
+        crawl_dimensions=crawl, run_signals=_no_purchase_intent_signals(),
+        membership_probe_result="yes",
+    )
+    mv = next(d for d in result["true_value"]["dimensions"] if d["code"] == "member_value")
+    assert mv["na"] is False
+    by_code = {c["code"]: c["state"] for c in mv["checks"]}
+    assert by_code["loyalty_page"] == "pass"
+    assert by_code["member_price_encoded"] == "fail"
+    assert by_code["markup_parses"] == "na"  # not observable from evidence strings
+
+
+def test_share_of_mentions_and_recommendation_strength_have_no_checks():
+    """These two dimensions show a live meter/band ladder instead of a
+    checks grid (mock: 'HOW WE MEASURE', not 'WHAT WE CHECK')."""
+    result = _realistic_result()
+    som = next(d for d in result["visibility"]["dimensions"] if d["code"] == "share_of_mentions")
+    rs = next(d for d in result["visibility"]["dimensions"] if d["code"] == "recommendation_strength")
+    assert som["checks"] is None
+    assert rs["checks"] is None
+
+
+# ─── Band context (Part 1, A2) ────────────────────────────────────────────
+
+def test_share_of_mentions_your_value_is_the_live_share_pct():
+    result = score_share_of_mentions(som_pct=35.0, total_mentions=8)
+    assert result["your_value"] == 35.0
+
+
+def test_recommendation_strength_your_band_moves_with_earned_score():
+    full = score_recommendation_strength(rsi_score=3.0, total_mentions=6)
+    partial = score_recommendation_strength(rsi_score=0.0, total_mentions=6)
+    zero = score_recommendation_strength(rsi_score=-1.0, total_mentions=6)
+    assert full["your_band"] == 0
+    assert partial["your_band"] == 1
+    assert zero["your_band"] == 2
+
+
+@pytest.mark.parametrize("cited,total,expected_band", [
+    (0, 10, 0),   # 0% -> band 0
+    (2, 10, 1),   # 20% -> (0,25] -> band 1
+    (4, 10, 2),   # 40% -> (25,50] -> band 2
+    (8, 10, 3),   # 80% -> (50,100] -> band 3
+])
+def test_price_truth_said_your_band_perturbation(cited, total, expected_band):
+    """Perturbation test (per the stage's own TESTS spec): changing the
+    underlying cited/total ratio must move your_band, proving it's
+    derived from the real value rather than a hard-coded index."""
+    signals = [RunSignal(stage="Awareness", primary_mentioned=True, primary_price_quoted=(i < cited)) for i in range(total)]
+    result = score_price_truth_said(signals)
+    assert result["your_band"] == expected_band
+    assert result["band_table_ref"] == "rate"
+
+
+def test_deal_citability_said_your_band_is_count_banded_not_rate_banded():
+    signals = [
+        RunSignal(stage="Comparison", primary_mentioned=True, primary_deal_cited=True),
+        RunSignal(stage="Ready to Buy", primary_mentioned=True, primary_deal_cited=False),
+    ]
+    result = score_deal_citability_said(signals)
+    assert result["band_table_ref"] == "count"
+    assert result["your_value"] == 1
+    assert result["your_band"] == 1  # COUNT_BAND_TABLE: exactly 1 -> band index 1
+
+
+def test_na_said_result_has_no_band_fields():
+    result = score_price_truth_said([])
+    assert result["na"] is True
+    assert "your_band" not in result
+    assert "band_table_ref" not in result

@@ -31,7 +31,7 @@ import { useState } from 'react'
 import {
   accessibilityBadgeText, computeExposure, formatCurrency, formatDateStamp,
   getDominantRivalPayoff, getIncentiveCitationPayoff, groupDimensionsByFamily, rankDimensionsByGap,
-  seedMonthlyRevenue, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX,
+  seedAnnualRevenue, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX,
 } from './liteDerive.js'
 import {
   ENTITY_COLORS, RIVAL_SLATE_RAMP, LightCard, DarkCard, SectionHeader, ReportHeaderBar,
@@ -40,11 +40,22 @@ import {
 import {
   DIMENSIONS, DIMENSIONS_BY_CODE, PILLAR_ACCESSIBILITY, PILLAR_NAMES,
   PILLAR_TRUE_VALUE, PILLAR_VISIBILITY, TOTAL_MAX, LITE_QUERY_COUNT,
-  VERDICT_AGENT_READY,
+  VERDICT_AGENT_READY, VERDICT_COMPOSITE_THRESHOLD, VERDICT_TRUE_VALUE_RATIO_THRESHOLD,
 } from './landing/scanDimensionsRegistry.js'
 
-const DEFAULT_REVENUE = 1_000_000
+const DEFAULT_REVENUE = 12_000_000
 const DEFAULT_AI_SHARE_PCT = 20
+
+// Report redesign (Part 3, M2): one shared hook per accordion group (a
+// pillar card) — opening a row's panel always closes whichever other
+// row's panel was open in that same group, never more than one at once.
+function useSingleOpenAccordion() {
+  const [openCode, setOpenCode] = useState(null)
+  function toggle(code) {
+    setOpenCode((current) => (current === code ? null : code))
+  }
+  return { openCode, toggle }
+}
 
 // ─── v3 pillar helpers (Stage 19) ───────────────────────────────────────
 // report.pillars is the single source of truth for a scorer_version "3"
@@ -147,6 +158,21 @@ function ExecutiveTilesLegacy({ report, exposure }) {
 const VISIBILITY_WEAK_THRESHOLD = 0.5
 const TRUE_VALUE_STRONG_THRESHOLD = 0.75
 
+// Report redesign (Part 2): every branch is now verdict-aware, not just
+// the two True-Value-strong ones — whenever pillars.verdict is present
+// and the branch hasn't already read it itself (strong_full_tv/
+// strong_tv_not_ready do that above, since a win claim there specifically
+// needs the gate's own say-so), append the gate's own plain-language
+// readiness line. A pre-G1 report (no verdict key at all) appends
+// nothing — never a fabricated readiness claim.
+function _appendVerdictClause(result, verdict) {
+  if (!verdict) return result
+  const clause = verdict === VERDICT_AGENT_READY
+    ? ' You clear the agent-ready bar.'
+    : ' Below the agent-ready bar.'
+  return { ...result, support: result.support + clause }
+}
+
 function deriveHeroVerdict(pillars) {
   const vis = pillarEarnedMax(pillars.visibility)
   const tv = pillarEarnedMax(pillars.true_value)
@@ -154,25 +180,25 @@ function deriveHeroVerdict(pillars) {
   const tvRatio = tv.max ? tv.earned / tv.max : 0
 
   if (visRatio < VISIBILITY_WEAK_THRESHOLD) {
-    return {
+    return _appendVerdictClause({
       key: 'weak_visibility',
       plain: 'Agents barely know you exist —', bold: 'most answers never mention you at all.',
       support: "Visibility comes before value — that's the first fix.",
-    }
+    }, pillars.verdict)
   }
   if (pillars.member_value_na) {
-    return {
+    return _appendVerdictClause({
       key: 'tv_na',
       plain: 'Agents talk about you, and', bold: 'your value score is normalized —',
       support: `No membership program was found, so True Value is scored out of ${formatScore(tv.max)}, not 40.`,
-    }
+    }, pillars.verdict)
   }
   if (tv.earned === 0) {
-    return {
+    return _appendVerdictClause({
       key: 'strong_zero_tv',
       plain: 'Agents talk about you —', bold: 'they never talk about your value.',
       support: `You hold ${formatScore(vis.earned)}/${formatScore(vis.max)} visibility points, but 0 of ${formatScore(tv.max)} True Value points.`,
-    }
+    }, pillars.verdict)
   }
   if (tvRatio >= TRUE_VALUE_STRONG_THRESHOLD) {
     if (pillars.verdict && pillars.verdict !== VERDICT_AGENT_READY) {
@@ -188,11 +214,11 @@ function deriveHeroVerdict(pillars) {
       support: 'Visibility and True Value are both landing.',
     }
   }
-  return {
+  return _appendVerdictClause({
     key: 'strong_partial_tv',
     plain: 'Agents talk about you, and', bold: 'some of your value gets through —',
     support: "But there's real room left to encode.",
-  }
+  }, pillars.verdict)
 }
 
 // ─── Stage 21 (H1): one segmented bar, three pillars ────────────────────
@@ -257,7 +283,11 @@ function PillarSegmentedBar({ pillars }) {
         fontFamily: 'var(--mono)', fontSize: 10, letterSpacing: '0.08em', color: 'var(--text-inv-2)',
       }}>
         <span>ONE BAR · THREE PILLARS · FILLED = EARNED</span>
-        <span>{pillars.member_value_na ? `NORMALIZED · ${formatScore(tv.max + vis.max + acc.max)} PTS APPLICABLE` : 'COMPOSITE = STRAIGHT SUM'}</span>
+        <span>
+          {pillars.member_value_na
+            ? `*MEMBER VALUE NOT APPLICABLE — SCORED ON ${formatScore(tv.max + vis.max + acc.max)} POINTS, SHOWN OUT OF 100`
+            : 'COMPOSITE = STRAIGHT SUM'}
+        </span>
       </div>
     </div>
   )
@@ -310,7 +340,7 @@ function ExecutiveHeroV3({ report, exposure }) {
         <div style={{ background: 'var(--ink-2)', borderRadius: 12, padding: '12px 16px', textAlign: 'right' }}>
           <div style={{ fontSize: 22, fontWeight: 600, color: '#fff' }}>{formatCurrency(exposure)}</div>
           <div className="lite-mono" style={{ fontSize: 10.5, color: 'var(--text-inv-2)', letterSpacing: '0.08em' }}>
-            MODELED EXPOSURE / MO
+            MODELED EXPOSURE / YEAR
           </div>
         </div>
       </div>
@@ -572,33 +602,14 @@ function ShareOfMentionsCardV3({ shareOfMentions, totals, scoredPoints }) {
 // rsi_score and its -1..+3 scale never reach the visitor (bug fix 2:
 // score_recommendation_strength's own evidence is now the banded plain-
 // language line itself, not a second client-side template of it).
-function RecommendationStrengthGauge({ dimension }) {
-  if (!dimension) return null
-  const pct = dimension.max ? Math.max(0, Math.min(100, (dimension.earned / dimension.max) * 100)) : 0
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--line)', flexWrap: 'wrap' }}>
-      <span className="lite-label" style={{ minWidth: 190 }}>
-        {dimension.name} · {formatScore(dimension.earned)}/{formatScore(dimension.max)}
-      </span>
-      <div className="lite-bar-track" style={{ flex: '1 1 120px', position: 'relative' }}>
-        <div className="lite-bar-fill" style={{ width: `${pct}%`, background: 'var(--accent)' }} />
-        <span
-          aria-hidden="true"
-          style={{ position: 'absolute', left: `${pct}%`, top: -3, width: 2, height: 14, background: 'var(--text)', transform: 'translateX(-1px)' }}
-        />
-      </div>
-      {dimension.evidence?.[0] && (
-        <span style={{ fontSize: 12, color: 'var(--text-2)', minWidth: 170 }}>{dimension.evidence[0]}</span>
-      )}
-    </div>
-  )
-}
-
 // Fixed, illustrative constants — never derived from report data (G2).
 // A blurred REAL number in the DOM would be a leak, not a gate; these
-// are the only values this card ever renders.
-const DECORATIVE_STAGE_LABELS = ['Awareness', 'Research', 'Comparison', 'Ready to Buy']
+// are the only values this card ever renders. Report redesign (Part 6,
+// G2): the per-bar labels are redacted glyph blocks, never the real
+// purchase-stage names — a grep test asserts none of QUERY_STAGES'
+// values ever appear in this component's rendered output.
 const DECORATIVE_BAR_HEIGHT_PCT = [62, 41, 27, 14]
+const DECORATIVE_REDACTED_GLYPHS = ['▮▮▮▮', '▮▮▮', '▮▮▮▮▮', '▮▮▮']
 
 function FunnelTeaserCard({ ctaUrl }) {
   return (
@@ -608,20 +619,24 @@ function FunnelTeaserCard({ ctaUrl }) {
         <div className="lite-body lite-muted" style={{ fontSize: 13 }}>Stage-by-stage mention rates, from awareness to ready-to-buy.</div>
       </div>
 
-      <FullDiagnosticGate ctaUrl={ctaUrl} message="See which stage you vanish from">
+      <div className="lite-funnel-decor" aria-hidden="true" style={{ marginBottom: 20, filter: 'blur(5px)', opacity: 0.55, pointerEvents: 'none' }}>
         <div style={{ display: 'flex', gap: 8 }}>
-          {DECORATIVE_STAGE_LABELS.map((label, i) => (
-            <div key={label} style={{ flex: 1 }}>
+          {DECORATIVE_BAR_HEIGHT_PCT.map((heightPct, i) => (
+            <div key={i} style={{ flex: 1 }}>
               <div style={{ height: 56, background: 'var(--track)', borderRadius: 4, display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
-                <div style={{ width: '100%', height: `${DECORATIVE_BAR_HEIGHT_PCT[i]}%`, background: 'var(--foundation)' }} />
+                <div style={{ width: '100%', height: `${heightPct}%`, background: 'var(--foundation)' }} />
               </div>
               <div className="lite-mono" style={{ fontSize: 9, textAlign: 'center', marginTop: 4, color: 'var(--text-2)' }}>
-                {label.toUpperCase()}
+                {DECORATIVE_REDACTED_GLYPHS[i]}
               </div>
             </div>
           ))}
         </div>
-      </FullDiagnosticGate>
+      </div>
+      <FullDiagnosticGate
+        ctaUrl={ctaUrl}
+        message="See which stage you vanish from — measured stage by stage in the full diagnostic."
+      />
     </div>
   )
 }
@@ -768,6 +783,7 @@ function VisibilitySection({ report, ctaUrl }) {
   const rsiDim = isV3 ? dimByCode(report.pillars.visibility.dimensions, 'recommendation_strength') : null
   const somDim = isV3 ? dimByCode(report.pillars.visibility.dimensions, 'share_of_mentions') : null
   const somScoredPoints = somDim ? `${formatScore(somDim.earned)}/${formatScore(somDim.max)} pts` : null
+  const accordion = useSingleOpenAccordion()
 
   return (
     <LightCard id="viz">
@@ -794,7 +810,18 @@ function VisibilitySection({ report, ctaUrl }) {
                 />
               </div>
             )}
-            <RecommendationStrengthGauge dimension={rsiDim} />
+            {somDim && (
+              <DimensionRowV4
+                dimension={somDim} open={accordion.openCode === somDim.code}
+                onToggleOpen={() => accordion.toggle(somDim.code)}
+              />
+            )}
+            {rsiDim && (
+              <DimensionRowV4
+                dimension={rsiDim} open={accordion.openCode === rsiDim.code}
+                onToggleOpen={() => accordion.toggle(rsiDim.code)}
+              />
+            )}
           </div>
         ) : isSolo ? (
           <div style={{ marginTop: 20 }}>
@@ -824,101 +851,13 @@ function VisibilitySection({ report, ctaUrl }) {
   )
 }
 
-// ─── Stage 21 (T): True Value butterfly — the report's centerpiece ─────
-// The three dual-lens dimensions (price_truth, member_value,
-// deal_citability), each a mirrored pair of tracks meeting at a
-// centered name + n/max: WHAT YOU ENCODE fills leftward from the
-// center, WHAT AGENTS SAID fills rightward — both anchored AT the
-// center and growing outward, so the two wings' sizes compare at a
-// glance. Card is solid --accent (the "blue = ours" convention) —
-// per Stage 18's contrast finding, white is the mathematical ceiling
-// on this background (nothing dimmer clears AA), so hierarchy here
-// comes from size/weight, never a dimmer text color.
+// ─── Stage 21 (T), restyled Report redesign Part 4: True Value card ────
+// price_truth/member_value/deal_citability's mirrored seen/said bars and
+// value_protocols' single site-only row now render via the shared
+// DimensionRowV4 (see TrueValueSection below) — this card's own
+// aggregate quadrant verdict/footer payoff/fix pointer are unchanged.
 
 const TRUE_VALUE_CODES = ['price_truth', 'member_value', 'deal_citability', 'value_protocols']
-
-function ButterflyWing({ side, subLens }) {
-  if (!subLens) return null
-  const align = side === 'left' ? 'right' : 'left'
-  if (subLens.na) {
-    return (
-      <div style={{ textAlign: align }}>
-        <div className="lite-mono" style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>
-          — · not enough mentions to measure
-        </div>
-      </div>
-    )
-  }
-  const pct = subLens.max ? Math.max(0, Math.min(100, (subLens.earned / subLens.max) * 100)) : 0
-  const isZero = subLens.earned === 0
-  return (
-    <div style={{ textAlign: align }}>
-      <div style={{ position: 'relative', height: 10, borderRadius: 5, background: 'rgba(255,255,255,0.22)', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: 0, [align === 'right' ? 'right' : 'left']: 0, height: 10, borderRadius: 5, width: `${pct}%`, background: '#fff' }} />
-        {isZero && (
-          <span
-            aria-hidden="true"
-            className="lite-butterfly-zero-tick"
-            style={{ position: 'absolute', top: -2, [align === 'right' ? 'right' : 'left']: 0, width: 2, height: 14, background: 'var(--bad-on-dark)' }}
-          />
-        )}
-      </div>
-      {subLens.evidence?.[0] && (
-        <div style={{ fontSize: 11, color: '#fff', marginTop: 3 }}>{subLens.evidence[0]}</div>
-      )}
-    </div>
-  )
-}
-
-function ButterflyRow({ dimension }) {
-  if (dimension.code === 'member_value' && dimension.na) {
-    return (
-      <div style={{ padding: '10px 0', textAlign: 'center', opacity: 0.85 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 600, color: '#fff' }}>{dimension.name}</div>
-        <div className="lite-mono" style={{ fontSize: 10, fontWeight: 700, color: '#fff', marginTop: 2 }}>NOT APPLICABLE</div>
-        <div style={{ fontSize: 12, color: '#fff', marginTop: 6, maxWidth: 420, marginLeft: 'auto', marginRight: 'auto' }}>
-          No loyalty or membership program found — neither the site crawl nor a direct model probe located one.
-        </div>
-        {dimension.evidence?.[0] && (
-          <div className="lite-mono" style={{ fontSize: 11, color: '#fff', marginTop: 4 }}>{dimension.evidence[0]}</div>
-        )}
-      </div>
-    )
-  }
-  // Stage 25 (Part 6, A1): value_protocols is encode-only — a real left
-  // (seen) wing, but no said half exists at all (an agent's answer can't
-  // state whether a store "declares" a checkout protocol). The right
-  // side is a caption explaining why, never an empty wing standing in
-  // for a silent zero.
-  if (dimension.code === 'value_protocols') {
-    return (
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 1fr', gap: 10, alignItems: 'center', padding: '8px 0' }}>
-        <ButterflyWing side="left" subLens={dimension.seen} />
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 13.5, fontWeight: 600, color: '#fff' }}>{dimension.name}</div>
-          <div className="lite-mono" style={{ fontSize: 10.5, color: '#fff' }}>
-            {formatScore(dimension.earned)}/{formatScore(dimension.max)}
-          </div>
-        </div>
-        <div style={{ textAlign: 'left', fontSize: 11, fontStyle: 'italic', color: '#fff', opacity: 0.85 }}>
-          executes at checkout — not scored on answers
-        </div>
-      </div>
-    )
-  }
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 1fr', gap: 10, alignItems: 'center', padding: '8px 0' }}>
-      <ButterflyWing side="left" subLens={dimension.seen} />
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 13.5, fontWeight: 600, color: '#fff' }}>{dimension.name}</div>
-        <div className="lite-mono" style={{ fontSize: 10.5, color: '#fff' }}>
-          {formatScore(dimension.earned)}/{formatScore(dimension.max)}
-        </div>
-      </div>
-      <ButterflyWing side="right" subLens={dimension.said} />
-    </div>
-  )
-}
 
 // Working / distribution gap / encoding gap / cited-from-elsewhere —
 // generic seen-vs-said quadrant classifier: earned/max ratio (payload-
@@ -996,8 +935,59 @@ function trueValueFixPointer(report) {
   return `${matchingRanks.length > 1 ? 'FIXES' : 'FIX'} ${label} TARGET THIS PILLAR ↓`
 }
 
+// Report redesign (Part 4, T2): the probe's verbatim answer is the
+// dimension's own evidence[0], formatted "probe: '...'" by lite_pillars.
+// py — extracted here rather than re-shaped server-side, since this is
+// purely a display concern (M2: the raw quote lives only inside the
+// WHY panel).
+function extractProbeQuote(evidence) {
+  const match = (evidence || [])[0]?.match(/^probe: '(.*)'$/)
+  return match ? match[1] : null
+}
+
+// Report redesign (Part 4, T2): the decision sentence's numbers are
+// registry-derived, never hard-coded — a future weight change moves
+// both the "these N points" and "remaining M" figures automatically.
+// Report redesign (Part 4): the row's one-line evidence summary for a
+// dual-lens dimension — the said outcome's own evidence line (the more
+// informative half — "1 deal cited when shoppers were ready to buy"),
+// falling back to the seen line only when said itself has nothing (an
+// N/A said sub-lens reads as an honest "not enough mentions," never a
+// fabricated 0%). value_protocols has no said half at all, so its row
+// summary is always its seen evidence.
+function trueValueRowSummary(dimension) {
+  if (!dimension.said) return dimension.seen?.evidence?.[0] || null
+  if (dimension.said.na) return 'not enough mentions to measure'
+  return dimension.said.evidence?.[0] || dimension.seen?.evidence?.[0] || null
+}
+
+function memberValueNaDecision() {
+  const weight = DIMENSIONS_BY_CODE.member_value.weight
+  const applicable = TOTAL_MAX - weight
+  return `Neither the site crawl nor a direct model check found a program — so these ${weight} points are skipped and your score is calculated on the remaining ${applicable}.`
+}
+
+// Report redesign (Part 4, T4): the gate strip renders the RUN'S ACTUAL
+// numbers against the registry's own verdict thresholds (soa_shared.
+// scan_dimensions.compute_verdict) — never a restatement of the pass/
+// fail chip, always the arithmetic that produced it.
+function VerdictGateStrip({ pillars }) {
+  const tv = pillarEarnedMax(pillars.true_value)
+  const tvPct = tv.max ? (tv.earned / tv.max) * 100 : 0
+  const isReady = pillars.verdict === VERDICT_AGENT_READY
+  return (
+    <div className={`lite-v4-gate${isReady ? ' lite-v4-gate--positive' : ''}`}>
+      <b>{isReady ? 'Why agent-ready:' : 'Why not agent-ready:'}</b>{' '}
+      readiness needs a score of {VERDICT_COMPOSITE_THRESHOLD}+ AND True Value above{' '}
+      {Math.round(VERDICT_TRUE_VALUE_RATIO_THRESHOLD * 100)}% of its applicable points.
+      You're at {formatScore(pillars.composite)} — and True Value is at {Math.round(tvPct)}%.
+    </div>
+  )
+}
+
 function TrueValueSection({ report }) {
   const trueValue = report.pillars?.true_value
+  const accordion = useSingleOpenAccordion()
   if (!trueValue) return null
   const { seen, said } = trueValueAggregateSeenSaid(trueValue.dimensions)
   const quadrant = classifySeenSaidQuadrant(seen, said)
@@ -1006,8 +996,8 @@ function TrueValueSection({ report }) {
   const tv = pillarEarnedMax(trueValue)
 
   return (
-    <DarkCard id="tv" style={{ background: 'var(--accent)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'baseline', marginBottom: 16 }}>
+    <DarkCard id="tv" style={{ background: 'var(--accent)' }} className="lite-v4-tv">
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'baseline', marginBottom: 8 }}>
         <div>
           {/* Stage 18 finding, reused: white is the AA ceiling on
               --accent — no dimmer inverse-text token clears 4.5:1 here,
@@ -1026,12 +1016,25 @@ function TrueValueSection({ report }) {
         </span>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 1fr', gap: 10, fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '0.1em', color: '#fff', marginBottom: 6 }}>
-        <span style={{ textAlign: 'right' }}>WHAT YOU ENCODE</span>
-        <span />
-        <span style={{ textAlign: 'left' }}>WHAT AGENTS SAID</span>
-      </div>
-      {trueValue.dimensions.map((d) => <ButterflyRow key={d.code} dimension={d} />)}
+      {trueValue.dimensions.map((d) => (
+        d.code === 'member_value' && d.na ? (
+          <DimensionRowV4
+            key={d.code} dimension={d}
+            evOverride="NOT APPLICABLE · no loyalty program found"
+            naDecision={memberValueNaDecision()}
+            naQuote={extractProbeQuote(d.evidence)}
+            open={accordion.openCode === d.code} onToggleOpen={() => accordion.toggle(d.code)}
+          />
+        ) : (
+          <DimensionRowV4
+            key={d.code} dimension={d} siteOnly={d.code === 'value_protocols'}
+            evOverride={trueValueRowSummary(d)}
+            open={accordion.openCode === d.code} onToggleOpen={() => accordion.toggle(d.code)}
+          />
+        )
+      ))}
+
+      <VerdictGateStrip pillars={report.pillars} />
 
       <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.25)', display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', fontSize: 12.5, color: '#fff' }}>
         <span><strong>{SEEN_SAID_QUADRANT_COPY[quadrant]}</strong> {footerPayoff}</span>
@@ -1240,43 +1243,228 @@ function DimensionFamily({ title, subtotal, max, applicableMax, dimensions }) {
   )
 }
 
-// ─── Stage 21 (A): accessibility tiles ──────────────────────────────────
-// Three tiles replace the shared-scale dimension chart for a v3 row —
-// the composition story now lives in the hero's segmented bar, so this
-// section is just "how are these three doing," independently at a
-// glance. good >=80%, bad at exactly 0%, warn in between — matching
-// the thresholds Stage 21's mock renders (Agent Access 83% good,
-// Protocol & Feed 33% warn, Catalog & Context 0% bad).
-const ACCESSIBILITY_GOOD_THRESHOLD = 0.8
+// ─── Report redesign (Part 3, M1): the shared v4 dimension row ─────────
+// ONE row component reused across Visibility/Accessibility/True Value —
+// name + earned/max + a one-line evidence summary + a HOW IT'S SCORED
+// pill opening an inline two-cell panel. All prose beyond that one-line
+// summary (probe quotes, band sentences, per-check evidence) lives ONLY
+// inside the panel (M2) — row surfaces never grow a second paragraph.
+// Every label/caption/chip renders from scanDimensionsRegistry.js's per-
+// dimension detail fields (M3), never a literal re-wording here.
+//
+// checks[]/your_value/your_band/seen/said all come from report.pillars
+// (lite_pillars.py, Part 1) — this component only decides HOW to draw
+// them, never re-derives a score or a band from raw evidence itself.
 
-function accessibilityTone(earned, max) {
-  if (!max || earned === 0) return 'bad'
-  const ratio = earned / max
-  return ratio >= ACCESSIBILITY_GOOD_THRESHOLD ? 'good' : 'warn'
+function CheckChip({ check }) {
+  const glyph = { pass: '✓', fail: '✕', na: '—', advisory: '·' }[check.state] || '—'
+  return (
+    <span className={`lite-v4-chip lite-mono lite-v4-chip--${check.state}`}>
+      <i aria-hidden="true">{glyph}</i>{check.label}
+    </span>
+  )
 }
 
-function AccessibilityTile({ dimension }) {
-  const tone = accessibilityTone(dimension.earned, dimension.max)
-  const pct = dimension.max ? Math.max(0, Math.min(100, (dimension.earned / dimension.max) * 100)) : 0
+function V4Meter({ fillPct, capPct, capLabel, youPct, youValueLabel }) {
+  // Report redesign (Part 3): the meter's own coordinate system runs to
+  // a fixed visual ceiling above the scored cap (not 0-100 directly) so
+  // the cap tick reads as a real threshold partway across the bar,
+  // rather than sitting at the meter's right edge — a display choice
+  // only, the underlying fillPct/capPct/youPct are the real values.
+  const VISUAL_CEILING = 70
+  const scale = (pct) => Math.max(0, Math.min(100, (pct / VISUAL_CEILING) * 100))
   return (
-    <div style={{ background: 'var(--paper)', borderRadius: 12, padding: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text)' }}>{dimension.name}</div>
-        <span className="lite-mono" style={{ fontSize: 11, fontWeight: 700, color: tone === 'bad' ? 'var(--bad-ink)' : 'var(--text-2)' }}>
-          {formatScore(dimension.earned)}/{formatScore(dimension.max)}
+    <div className="lite-v4-meter">
+      <div className="lite-v4-meter-fill" style={{ width: `${scale(fillPct)}%` }} />
+      <span className="lite-v4-meter-tick" style={{ left: `${scale(capPct)}%` }} aria-hidden="true" />
+      <span className="lite-v4-meter-you" style={{ left: `${scale(youPct)}%` }}>YOU · {youValueLabel}</span>
+      <span className="lite-v4-meter-you lite-v4-meter-you--tick" style={{ left: `${scale(capPct)}%` }}>{capLabel}</span>
+    </div>
+  )
+}
+
+function V4Ladder({ bands, youIndex }) {
+  return (
+    <div className="lite-v4-dots">
+      {bands.map((band, i) => (
+        <span key={band.label} className={`lite-v4-rung${i === youIndex ? ' lite-v4-rung--you' : ''}`}>
+          <i>{band.label}</i>{band.value}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function V4Pips({ pips, checks }) {
+  return (
+    <div className="lite-v4-pips">
+      {pips.map((pip, i) => {
+        const ok = checks?.[i] ? checks[i].state === 'pass' : Boolean(pip.ok)
+        return (
+          <span key={pip.label} className={`lite-v4-pip${ok ? '' : ' lite-v4-pip--off'}`}>
+            <i aria-hidden="true">{ok ? '✓' : '✕'}</i>{pip.label}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+function V4Grid({ total, ok }) {
+  return (
+    <div className="lite-v4-grid4">
+      {Array.from({ length: total }, (_, i) => (
+        <i key={i} className={i < ok ? 'lite-v4-grid4-ok' : ''} />
+      ))}
+    </div>
+  )
+}
+
+// Mirrored seen/said bars — True Value's dual-lens dimensions, always
+// visible above the accordion (T1) using the same zero-tick convention
+// as the pre-existing ButterflyWing, just restyled to the v4 card.
+function V4Duo({ seen, said, leftLabel, rightLabel }) {
+  const leftPct = seen.max ? Math.max(0, Math.min(100, (seen.earned / seen.max) * 100)) : 0
+  const rightPct = said.max ? Math.max(0, Math.min(100, (said.earned / said.max) * 100)) : 0
+  return (
+    <div>
+      <div className="lite-v4-duo">
+        <span className="lite-v4-duo-track lite-v4-duo-track--l">
+          <span className="lite-v4-duo-fill" style={{ width: `${leftPct}%` }} />
+          {seen.earned === 0 && <span className="lite-v4-duo-zero" aria-hidden="true" />}
+        </span>
+        <span className="lite-v4-duo-mid" aria-hidden="true">⇄</span>
+        <span className="lite-v4-duo-track lite-v4-duo-track--r">
+          <span className="lite-v4-duo-fill" style={{ width: `${rightPct}%` }} />
+          {said.earned === 0 && <span className="lite-v4-duo-zero" aria-hidden="true" />}
         </span>
       </div>
-      <div className="lite-bar-track" style={{ marginTop: 8, height: 6 }}>
-        {pct > 0 && (
-          <div
-            className="lite-bar-fill"
-            style={{ width: `${pct}%`, height: 6, background: tone === 'good' ? 'var(--good)' : tone === 'warn' ? 'var(--warn)' : 'var(--bad)' }}
-          />
+      <div className="lite-v4-duolab">
+        <span>{leftLabel} · {formatScore(seen.earned)}/{formatScore(seen.max)}</span>
+        <span>{rightLabel} · {said.na ? '—' : `${formatScore(said.earned)}/${formatScore(said.max)}`}</span>
+      </div>
+    </div>
+  )
+}
+
+// The registry's one-line HOW IT'S SCORED/YOUR BAND caption — an ordered
+// array of {text, bold} segments (Stage 26 convention) so the component
+// never hand-assembles bold/plain copy itself.
+function ScoredCaption({ segments }) {
+  return (
+    <span className="lite-v4-mcap">
+      {(segments || []).map((seg, i) => (seg.bold ? <b key={i}>{seg.text}</b> : <span key={i}>{seg.text}</span>))}
+    </span>
+  )
+}
+
+// Report redesign (Part 3, M2): "open" is a controlled prop, not local
+// state — the parent section owns which ONE row's panel is open (see
+// useSingleOpenAccordion below), so expanding a second row's panel
+// always collapses whichever one was open before it, section-wide.
+function DimensionRowV4({ dimension, evOverride, siteOnly, naDecision, naQuote, open, onToggleOpen }) {
+  const registryDim = DIMENSIONS_BY_CODE[dimension.code]
+  if (!registryDim) return null
+
+  const isNa = dimension.na
+  const hasSplit = Boolean(dimension.seen && dimension.said)
+  const panelId = `v4-meth-${dimension.code}`
+
+  const pt = isNa ? 'N/A' : `${formatScore(dimension.earned)}/${formatScore(dimension.max)}`
+  const ev = evOverride !== undefined ? evOverride : (dimension.evidence?.[0] || '')
+
+  return (
+    <div className="lite-v4-dim">
+      <div className="lite-v4-dim-h">
+        <span className="lite-v4-nm">{registryDim.name}</span>
+        <span className="lite-v4-pt">{pt}</span>
+        {siteOnly && <span className="lite-v4-sitetag">SITE ONLY</span>}
+        {ev && <span className={`lite-v4-ev${isNa ? ' lite-v4-na-line' : ''}`}>{ev}</span>}
+        <button
+          type="button"
+          className="lite-v4-how"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={onToggleOpen}
+        >
+          {isNa ? 'WHY' : "HOW IT'S SCORED"}
+        </button>
+      </div>
+
+      {!isNa && hasSplit && (
+        <V4Duo
+          seen={dimension.seen} said={dimension.said}
+          leftLabel="ON YOUR SITE" rightLabel="IN ANSWERS"
+        />
+      )}
+      {!isNa && !hasSplit && registryDim.visualKind === 'meter' && (
+        <V4Meter
+          fillPct={dimension.your_value ?? 0} capPct={50} capLabel="50% = ALL 25"
+          youPct={dimension.your_value ?? 0} youValueLabel={`${formatScore(dimension.your_value ?? 0)}%`}
+        />
+      )}
+      {!isNa && !hasSplit && registryDim.visualKind === 'pips' && (
+        <V4Pips pips={registryDim.visualParams.pips} checks={dimension.checks} />
+      )}
+      {!isNa && !hasSplit && registryDim.visualKind === 'grid' && (
+        <V4Grid
+          total={registryDim.visualParams.total}
+          ok={dimension.max ? Math.round((dimension.earned / dimension.max) * registryDim.visualParams.total) : 0}
+        />
+      )}
+
+      <div id={panelId} className={`lite-v4-meth${open ? ' lite-v4-meth--open' : ''}`}>
+        {isNa ? (
+          <>
+            <div>
+              <span className="lite-v4-meth-k">HOW WE DECIDED</span>
+              <span className="lite-v4-mcap">{naDecision}</span>
+            </div>
+            {naQuote && (
+              <div>
+                <span className="lite-v4-meth-k">WHAT THE MODEL SAID</span>
+                <span className="lite-v4-mcap lite-mono">"{naQuote}"</span>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div>
+              <span className="lite-v4-meth-k">{dimension.checks ? 'WHAT WE CHECK · YOUR RESULT' : registryDim.leftLabel}</span>
+              <div className="lite-v4-chips">
+                {dimension.checks
+                  ? dimension.checks.map((c) => <CheckChip key={c.code} check={c} />)
+                  : registryDim.chips.map((chip) => (
+                    <span key={typeof chip === 'string' ? chip : chip.label} className="lite-v4-chip lite-mono">{typeof chip === 'string' ? chip : chip.label}</span>
+                  ))}
+              </div>
+            </div>
+            <div>
+              <span className="lite-v4-meth-k">{registryDim.visualKind === 'ladder' ? 'YOUR BAND' : registryDim.rightLabel}</span>
+              {registryDim.visualKind === 'ladder' ? (
+                <V4Ladder bands={registryDim.visualParams.bands} youIndex={dimension.your_band ?? dimension.said?.your_band} />
+              ) : (
+                <ScoredCaption segments={registryDim.scoredCaption} />
+              )}
+            </div>
+          </>
         )}
       </div>
-      {dimension.evidence?.[0] && (
-        <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 5 }}>{dimension.evidence[0]}</div>
-      )}
+    </div>
+  )
+}
+
+// ─── Stage 21 (A), restyled Report redesign (Part 5): accessibility
+// tiles — three tiles, the composition story lives in the hero's
+// segmented bar, so this section is just "how are these three doing,"
+// independently at a glance. Each tile's body is the same shared
+// DimensionRowV4 used everywhere else (live pips/grid, the checks[]
+// panel behind HOW IT'S SCORED) — no bespoke tone-bar rendering.
+
+function AccessibilityTile({ dimension, open, onToggleOpen }) {
+  return (
+    <div style={{ background: 'var(--paper)', borderRadius: 12, padding: '4px 12px 12px' }}>
+      <DimensionRowV4 dimension={dimension} open={open} onToggleOpen={onToggleOpen} />
       {dimension.linked && <Chip tone="accent">LINKED · {dimension.linked.reason.toUpperCase()}</Chip>}
     </div>
   )
@@ -1285,6 +1473,7 @@ function AccessibilityTile({ dimension }) {
 function AccessibilityCardV3({ report }) {
   const accessibility = report.pillars?.accessibility
   const dims = (accessibility?.dimensions || []).filter((d) => !d.na)
+  const accordion = useSingleOpenAccordion()
   if (dims.length === 0) return null
   const { earned, max } = pillarEarnedMax(accessibility)
   return (
@@ -1294,7 +1483,12 @@ function AccessibilityCardV3({ report }) {
         headline="Agents can knock, but can't read much"
       />
       <div className="lite-acc-grid">
-        {dims.map((d) => <AccessibilityTile key={d.code} dimension={d} />)}
+        {dims.map((d) => (
+          <AccessibilityTile
+            key={d.code} dimension={d}
+            open={accordion.openCode === d.code} onToggleOpen={() => accordion.toggle(d.code)}
+          />
+        ))}
       </div>
     </LightCard>
   )
@@ -1596,13 +1790,16 @@ function FixListV3({ report, ctaUrl }) {
         </>
       )}
       {remainingCount > 0 && (
-        <FullDiagnosticGate
-          ctaUrl={ctaUrl}
-          message="Two fixes get you started. The full ranked list — every fix, quantified and sequenced for your store — comes with a custom Full Diagnostic."
-          subMessage={`${remainingCount} more fix${remainingCount === 1 ? '' : 'es'} identified`}
-        >
-          <DecorativeFixRows />
-        </FullDiagnosticGate>
+        <>
+          <div aria-hidden="true" style={{ marginTop: 16, filter: 'blur(5px)', opacity: 0.55, pointerEvents: 'none' }}>
+            <DecorativeFixRows />
+          </div>
+          <FullDiagnosticGate
+            ctaUrl={ctaUrl}
+            message="Two fixes get you started. The full ranked list — every fix, quantified and sequenced for your store — comes with a custom Full Diagnostic."
+            subMessage={`${remainingCount} MORE FIX${remainingCount === 1 ? '' : 'ES'} IDENTIFIED`}
+          />
+        </>
       )}
     </LightCard>
   )
@@ -1618,13 +1815,13 @@ function ExposureCalculator({ revenue, onRevenueChange, aiSharePct, onAiShareCha
   return (
     <div>
       <label className="lite-label" style={{ display: 'block', marginBottom: 8 }}>
-        Monthly revenue: {formatCurrency(revenue)}
+        Annual revenue: {formatCurrency(revenue)}
       </label>
       <input
         type="range" min={REVENUE_SLIDER_MIN} max={REVENUE_SLIDER_MAX} step={10000} value={revenue}
         onChange={(e) => onRevenueChange(Number(e.target.value))}
         className="lite-slider" style={{ marginBottom: 22 }}
-        aria-label="Monthly revenue"
+        aria-label="Annual revenue"
       />
 
       <label className="lite-label" style={{ display: 'block', marginBottom: 8 }}>
@@ -1640,7 +1837,7 @@ function ExposureCalculator({ revenue, onRevenueChange, aiSharePct, onAiShareCha
       <div style={{ background: 'var(--paper)', borderRadius: 12, padding: 22, textAlign: 'center' }}>
         <div className="lite-numeral lite-numeral--calc">
           {formatCurrency(exposure)}
-          <span className="lite-mono lite-muted" style={{ fontSize: 14, fontWeight: 400, marginLeft: 6 }}>/ mo</span>
+          <span className="lite-mono lite-muted" style={{ fontSize: 14, fontWeight: 400, marginLeft: 6 }}>/ year</span>
         </div>
         <div className="lite-mono lite-muted" style={{ fontSize: 11, marginTop: 8 }}>Modeled, not measured.</div>
       </div>
@@ -1663,10 +1860,10 @@ function ExposureCard({ revenue, onRevenueChange, aiSharePct, onAiShareChange, e
           <div>
             <div className="lite-numeral lite-numeral--calc" style={{ marginBottom: 2 }}>
               {formatCurrency(exposure)}
-              <span className="lite-mono lite-muted" style={{ fontSize: 14, fontWeight: 400, marginLeft: 6 }}>/ month</span>
+              <span className="lite-mono lite-muted" style={{ fontSize: 14, fontWeight: 400, marginLeft: 6 }}>/ year</span>
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
-              {formatCurrency(revenue)} monthly revenue · {aiSharePct}% AI-assisted share ·{' '}
+              {formatCurrency(revenue)} annual revenue · {aiSharePct}% AI-assisted share ·{' '}
               <button
                 type="button"
                 onClick={() => setExpanded(true)}
@@ -1717,16 +1914,20 @@ const REMAINING_LOCKED_TOPICS = [
   'Price-history integrity — was-prices verified over time',
 ]
 
-function DiagnosticCliff({ ctaUrl }) {
+// Report redesign (Part 6, G4): the closing module — a block-variant
+// FullDiagnosticGate replacing the old bespoke cliff card entirely.
+// Heading + the 3 highlighted items are the mock's exact copy; the
+// platform chips and remaining-topics line are kept as additional
+// content inside the same block (the gate's content slot is free-form,
+// not limited to exactly those 3 items).
+function ClosingDiagnosticModule({ ctaUrl }) {
   return (
-    <DarkCard>
-      <div style={{ marginBottom: 22 }}>
-        <div className="lite-label lite-label--inv" style={{ marginBottom: 10 }}>Live agent answers across</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {PLATFORM_LABELS.map((p) => <span key={p} className="lite-platform-chip">{p}</span>)}
-        </div>
-      </div>
-      <div className="lite-cols-3" style={{ marginBottom: 20 }}>
+    <FullDiagnosticGate
+      variant="block"
+      ctaUrl={ctaUrl}
+      heading={`This report is a ${LITE_QUERY_COUNT}-question sample. The full picture is bigger.`}
+    >
+      <div className="lite-cols-3" style={{ margin: '12px 0 16px' }}>
         {HIGHLIGHT_PANELS.map((panel) => (
           <div key={panel.title}>
             <div style={{ color: 'var(--text-inv)', fontWeight: 700, fontSize: 14, marginBottom: 6 }}>{panel.title}</div>
@@ -1734,21 +1935,19 @@ function DiagnosticCliff({ ctaUrl }) {
           </div>
         ))}
       </div>
-      <div className="lite-mono lite-muted--inv" style={{ fontSize: 12, marginBottom: 20 }}>
+      <div style={{ marginBottom: 16 }}>
+        <div className="lite-label lite-label--inv" style={{ marginBottom: 10 }}>Live agent answers across</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {PLATFORM_LABELS.map((p) => <span key={p} className="lite-platform-chip">{p}</span>)}
+        </div>
+      </div>
+      <div className="lite-mono lite-muted--inv" style={{ fontSize: 12, marginBottom: 16 }}>
         Also in the full diagnostic: {REMAINING_LOCKED_TOPICS.join(' · ')}
       </div>
-      <div className="lite-divider lite-divider--inv" />
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginTop: 20 }}>
-        {ctaUrl && (
-          <a href={ctaUrl} target="_blank" rel="noreferrer" className="lite-pill lite-pill--solid">
-            {FULL_DIAGNOSTIC_CTA_LABEL}
-          </a>
-        )}
-        <span className="lite-body--inv" style={{ fontSize: 13 }}>
-          45 minutes with your report. We bring live agent answers for two of your categories. No integration, nothing to install.
-        </span>
+      <div className="lite-body--inv" style={{ fontSize: 13, marginBottom: 16 }}>
+        45 minutes with your report. We bring live agent answers for two of your categories. No integration, nothing to install.
       </div>
-    </DarkCard>
+    </FullDiagnosticGate>
   )
 }
 
@@ -1803,14 +2002,15 @@ export function LiteFullReport({ report, onAddStoreUrl, token }) {
   const entities = report.overall || []
   const ctaUrl = import.meta.env.VITE_LITE_CTA_URL
 
-  // Part 5 (R3): seeds from the revenue probe's annual estimate
-  // (converted to this slider's monthly unit, clamped) when present;
-  // falls back to the existing static default otherwise, unchanged.
+  // Part 5 (R3), annual throughout since Report redesign Part 7: seeds
+  // from the revenue probe's own annual estimate (clamped to the
+  // slider's range) when present; falls back to the existing static
+  // default otherwise, unchanged.
   // revenueTouched flips the instant the visitor drags the slider
   // themselves — "user adjustment overrides the estimate for that
   // session" — which also drops the ESTIMATED provenance label, since
   // the value on screen is no longer the estimate.
-  const [revenue, setRevenue] = useState(() => seedMonthlyRevenue(report.revenue_estimate_usd) ?? DEFAULT_REVENUE)
+  const [revenue, setRevenue] = useState(() => seedAnnualRevenue(report.revenue_estimate_usd) ?? DEFAULT_REVENUE)
   const [revenueTouched, setRevenueTouched] = useState(false)
   const [aiSharePct, setAiSharePct] = useState(DEFAULT_AI_SHARE_PCT)
   const exposure = computeExposure({ revenue, aiSharePct, visibility: report.visibility })
@@ -1860,7 +2060,7 @@ export function LiteFullReport({ report, onAddStoreUrl, token }) {
           isEstimated={revenueIsEstimated}
         />
 
-        <DiagnosticCliff ctaUrl={ctaUrl} />
+        <ClosingDiagnosticModule ctaUrl={ctaUrl} />
 
         <Footer />
         </div>

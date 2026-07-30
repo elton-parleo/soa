@@ -148,24 +148,41 @@ def test_409_when_not_complete(db, status):
     assert exc_info.value.status_code == 409
 
 
-# ─── teaser (email null) ─────────────────────────────────────────────────
+# ─── email de-gating (Report redesign, Part 8, E1) ───────────────────────
+# A valid, complete token always renders the full report — never gated
+# on whether an email is on file. These replace the old teaser (email
+# null -> locked/reduced-shape response) tests removed this stage.
 
-def test_teaser_returned_when_email_is_null(db):
+def test_full_report_returned_when_email_is_null(db):
     with db.begin() as conn:
         _seed_complete_cycle(conn, token="t1", email=None)
 
     result = public_lite.get_lite_report("t1")
 
-    assert result["locked"] is True
+    assert result["locked"] is False
     assert len(result["overall"]) == 2
     names = {e["name"] for e in result["overall"]}
     assert names == {"Acme Co", "Rival Co"}
     for entity in result["overall"]:
-        assert set(entity.keys()) == {"name", "role", "som"}
-    assert "by_stage" not in result
-    # Stage 19 (R6): no scan row at all defaults to scorer_version "1" —
-    # same convention as PublicLiteScan.scorer_version.
-    assert result["scorer_version"] == "1"
+        assert {"name", "role", "metrics"}.issubset(entity.keys())
+    assert result["by_stage"] is None  # DEPRECATED key, always null — present, not absent
+
+
+def test_report_payload_is_byte_identical_with_and_without_email(db):
+    """The acceptance criterion, directly: attaching an email to an
+    already-complete request must not change a single byte of what
+    GET /report returns."""
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email=None)
+
+    without_email = public_lite.get_lite_report("t1")
+
+    with db.begin() as conn:
+        conn.exec_driver_sql("UPDATE soa_lite_requests SET email = ? WHERE token = ?", ("visitor@example.com", "t1"))
+
+    with_email = public_lite.get_lite_report("t1")
+
+    assert without_email == with_email
 
 
 def test_teaser_primary_role_present(db):
@@ -383,13 +400,13 @@ def test_full_report_never_leaks_stage_level_mention_data(db):
             assert round(rate * 100, 1) not in {round(n, 1) for n in numeric_leaves}
 
 
-def test_teaser_never_leaks_stage_level_mention_data(db):
+def test_report_never_leaks_stage_level_mention_data(db):
     with db.begin() as conn:
         _seed_cycle_with_rich_stage_variance(conn, token="t1", email=None)
 
     result = public_lite.get_lite_report("t1")
 
-    assert "by_stage" not in result  # teaser never had this key at all
+    assert result["by_stage"] is None  # DEPRECATED key, always null
     serialized = json.dumps(result).lower()
     for stage_name in _STAGE_NAMES:
         assert stage_name not in serialized
@@ -836,12 +853,13 @@ def test_v3_report_fixes_field_reaches_the_full_report_end_to_end(db):
     assert "fix" not in fixes["visible"][0]  # no markup key on a visible entry
 
 
-def test_v3_teaser_never_includes_pillars_fixes(db):
+def test_v3_report_includes_pillars_fixes_even_when_email_is_null(db):
     with db.begin() as conn:
         _seed_v3_full_credit_scan(conn, email=None, dimensions=_V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN)
 
     result = public_lite.get_lite_report("v3full")
-    assert "pillars" not in result or result.get("pillars") is None
+    assert result.get("pillars") is not None
+    assert result["pillars"]["fixes"] is not None
 
 
 # ─── Part 5 (R3): revenue_estimate_usd end to end ────────────────────────
@@ -981,18 +999,18 @@ def test_v3_crosswalk_attaches_a_chip_when_the_keyed_dimension_is_genuinely_fail
     assert catalog_row["linked"] == {"reason": "absent from most answers"}
 
 
-def test_v3_teaser_gets_new_composite_but_no_pillars_block(db):
+def test_v3_report_has_full_pillars_block_even_when_email_is_null(db):
     with db.begin() as conn:
         _seed_v3_full_credit_scan(conn, token="v3teaser", email=None)
 
     result = public_lite.get_lite_report("v3teaser")
 
-    assert result["locked"] is True
+    assert result["locked"] is False
     assert result["visibility"] == 100
     assert result["accessibility"] == 100
     assert result["composite"] == 100
-    assert "pillars" not in result
-    assert result["scorer_version"] == "4"
+    assert result["pillars"] is not None
+    assert result["scan"]["scorer_version"] == "4"
 
 
 def test_v1_row_composite_still_uses_the_pre_stage16_blend(db):
@@ -1209,14 +1227,14 @@ def test_no_scan_row_at_all_yields_scan_none(db):
     assert result["scan_status"] is None
 
 
-def test_teaser_never_includes_the_full_scan_object(db):
+def test_report_includes_the_full_scan_object_even_when_email_is_null(db):
     with db.begin() as conn:
         _seed_complete_cycle(conn, token="t1", email=None)
         rid = _lite_request_id(conn, "t1")
         _seed_scan_row(conn, rid, status="complete", total_score=59, dimensions=_FULL_DIMENSIONS)
 
     result = public_lite.get_lite_report("t1")
-    assert "scan" not in result
+    assert result["scan"] is not None
 
 
 def test_report_attaches_linked_reason_from_crosswalk(db):
@@ -1331,12 +1349,12 @@ def test_full_report_has_visibility_breakdown_shaped_correctly(db):
     assert vb["totals"] == {"total_mentions": 12, "total_queries": 12}
 
 
-def test_teaser_never_includes_visibility_breakdown(db):
+def test_report_includes_visibility_breakdown_even_when_email_is_null(db):
     with db.begin() as conn:
         _seed_complete_cycle(conn, token="t1", email=None)
 
     result = public_lite.get_lite_report("t1")
-    assert "visibility_breakdown" not in result
+    assert result["visibility_breakdown"] is not None
 
 
 # ─── Stage 8 (A1): visibility_breakdown.incentive_citation ───────────────
@@ -1401,12 +1419,12 @@ def test_incentive_citation_null_rate_for_zero_mention_entity(db):
     assert ic["Acme Co"]["cited_answers"] is None
 
 
-def test_teaser_never_includes_incentive_citation(db):
+def test_report_includes_incentive_citation_even_when_email_is_null(db):
     with db.begin() as conn:
         _seed_complete_cycle(conn, token="t1", email=None)
 
     result = public_lite.get_lite_report("t1")
-    assert "visibility_breakdown" not in result  # whole object absent, incentive_citation included
+    assert result["visibility_breakdown"]["incentive_citation"] is not None
 
 
 def test_full_report_carries_same_subscores_as_teaser(db):
@@ -1423,20 +1441,7 @@ def test_full_report_carries_same_subscores_as_teaser(db):
 
 # ─── additive-only: pre-Stage-3 response shape is unchanged/subset ──────
 
-_PRE_STAGE3_TEASER_KEYS = {"status", "locked", "overall"}
 _PRE_STAGE3_REPORT_KEYS = {"status", "locked", "overall", "by_stage"}
-
-
-def test_teaser_response_is_additive_over_pre_stage3_shape(db):
-    with db.begin() as conn:
-        _seed_complete_cycle(conn, token="t1", email=None)
-
-    result = public_lite.get_lite_report("t1")
-    assert _PRE_STAGE3_TEASER_KEYS.issubset(result.keys())
-    assert isinstance(result["locked"], bool)
-    assert isinstance(result["overall"], list)
-    for entity in result["overall"]:
-        assert {"name", "role", "som"}.issubset(entity.keys())
 
 
 def test_full_report_response_is_additive_over_pre_stage3_shape(db):

@@ -843,15 +843,38 @@ class PublicLiteVisibilityBreakdown(BaseModel):
     incentive_citation: List[PublicLiteIncentiveCitation] = []
 
 
+class PublicLiteCheck(BaseModel):
+    """One WHAT WE CHECK/YOUR RESULT row inside a dimension's checks[]
+    (Part 1, A1). label is always one of the dimension's own soa_shared.
+    scan_dimensions.Dimension.how_measured strings (parity-tested) — this
+    is never a second, independently-worded copy of that methodology
+    text. evidence is an optional live-data detail (e.g. the price-
+    honesty advisory's flagged/none-flagged note)."""
+    code: str
+    label: str
+    state: str  # "pass" | "fail" | "na" | "advisory"
+    evidence: Optional[str] = None
+
+
 class PublicLiteSubLens(BaseModel):
     """One half (seen or said) of a True Value dimension. na=True means
     this half didn't contribute (crawl coverage='na', or said's own
     opportunity set had fewer than 2 mentions) — the dimension's earned/
-    max already reflect the na-rescale onto whichever half did apply."""
+    max already reflect the na-rescale onto whichever half did apply.
+
+    band_table_ref/your_value/your_band (Part 1, A2): only populated on
+    a said sub-lens that isn't na — not new computation, just reporting
+    which band soa_shared.scan_dimensions.apply_rate_band/apply_count_
+    band already decided this run landed in, so the frontend can put a
+    "YOU" marker on the right rung of the band ladder it already renders.
+    """
     earned: float
     max: float
     na: bool = False
     evidence: List[str] = []
+    band_table_ref: Optional[str] = None
+    your_value: Optional[float] = None
+    your_band: Optional[int] = None
 
 
 class PublicLitePillarDimension(BaseModel):
@@ -867,6 +890,17 @@ class PublicLitePillarDimension(BaseModel):
     both stay at their defaults (None/False) there. locked=True means
     this dimension fell outside the top-3-by-gap free tier; fix is
     always None when locked (paid-diagnostic text never serialized).
+
+    checks (Part 1, A1): the live WHAT WE CHECK/YOUR RESULT chips — null
+    for share_of_mentions/recommendation_strength (which show a live
+    meter/band ladder instead, via your_value/your_band below) and for
+    an N/A True Value dimension (which shows a decision sentence + probe
+    quote instead, T2).
+    your_value/your_band (A2): only ever populated on share_of_mentions
+    (your_value = live share %) and recommendation_strength (your_band =
+    index into its 3-rung ladder) — the True Value dimensions' own band
+    context lives on their `said` sub-lens instead, since that's the half
+    the band is actually computed over.
     """
     code: str
     name: str
@@ -876,6 +910,9 @@ class PublicLitePillarDimension(BaseModel):
     evidence: List[str] = []
     seen: Optional[PublicLiteSubLens] = None
     said: Optional[PublicLiteSubLens] = None
+    checks: Optional[List[PublicLiteCheck]] = None
+    your_value: Optional[float] = None
+    your_band: Optional[int] = None
     fix: Optional[str] = None
     # Part 5 (H1): plain-language rewrite of `fix` — see the matching
     # comment on PublicLiteScanDimension.fix_human above.
@@ -983,33 +1020,9 @@ class PublicLiteReportResponse(BaseModel):
     # Part 5 (R3): annual USD estimate from the revenue probe (apps/
     # pipeline/generation/revenue_probe.py), null when the probe never
     # ran or came back unparseable/absurd. Feeds ONLY the exposure
-    # calculator's default seed (converted to its monthly unit,
-    # clamped) — never a score input.
+    # calculator's default seed (annual units throughout since Report
+    # redesign Part 7 — no /12 conversion) — never a score input.
     revenue_estimate_usd: Optional[float] = None
-
-
-class PublicLiteTeaserEntity(BaseModel):
-    name: str
-    role: str
-    som: Optional[float] = None
-
-
-class PublicLiteTeaserResponse(BaseModel):
-    status: str
-    locked: bool = True
-    overall: List[PublicLiteTeaserEntity] = []
-    visibility: Optional[float] = None
-    accessibility: Optional[float] = None
-    composite: Optional[float] = None
-    scan_status: Optional[str] = None
-    # Stage 13 (W4/W5): same fallback/methodology-stamp signal as the
-    # full report (see PublicLiteReportResponse).
-    competitor_source: Optional[str] = None
-    # Stage 19 (R6): the teaser has no `scan` object to read a scorer_
-    # version off of (unlike the full report), so this is its only
-    # signal for the "scored under a previous methodology" notice —
-    # defaults to "1", same convention as PublicLiteScan.scorer_version.
-    scorer_version: str = "1"
 
 
 class PublicLiteEmailRequest(BaseModel):
