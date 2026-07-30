@@ -37,99 +37,168 @@ export const PILLAR_NAMES = {
   [PILLAR_TRUE_VALUE]: 'True Value',
 }
 
-// code -> { code, name, pillar, weight, seenMax, saidMax, whatItIs,
-// howMeasured, howScored } — seenMax/saidMax are null for pillars with
-// no seen/said split (visibility, accessibility) and for value_
-// protocols' said half specifically (it has a seen half but no said
-// half at all — encode-only), exactly like Python's Dimension.seen_max/
-// said_max.
+// Stage 26: the equation tab bar's one-line question per pillar (the
+// mock's "are you mentioned?" etc.) — marketing copy, not derived from
+// anything scoring-related, so it lives alongside PILLAR_NAMES rather
+// than on each Dimension.
+export const PILLAR_QUESTIONS = {
+  [PILLAR_VISIBILITY]: 'are you mentioned?',
+  [PILLAR_ACCESSIBILITY]: 'can agents read you?',
+  [PILLAR_TRUE_VALUE]: 'is your value shown?',
+}
+
+// code -> { code, name, pillar, weight, seenMax, saidMax, oneLiner,
+// leftLabel, chips, rightLabel, visualKind, visualParams, scoredCaption }
+// — seenMax/saidMax are null for pillars with no seen/said split
+// (visibility, accessibility) and for value_protocols' said half
+// specifically (it has a seen half but no said half at all —
+// encode-only), exactly like Python's Dimension.seen_max/said_max.
+//
+// Stage 26 (exhibit-tabs methodology rebuild): oneLiner/chips/
+// scoredCaption/visualKind+params are this section's expanded-row detail
+// copy, populated verbatim from the mock (design-refs/methodology-v4-
+// exhibit-tabs-mock.html) — replaces the earlier whatItIs/howMeasured/
+// howScored 3-microsection deck (unused now; nothing else read those
+// fields). scoredCaption is an ordered array of {text, bold} segments so
+// the component never hand-assembles bold/plain copy itself. chips
+// entries are plain strings, except price_truth's one advisory entry
+// ({label, advisory: true}) for the dashed warn-styled chip.
+// visualKind is one of 'meter' | 'ladder' | 'pips' | 'grid' | 'duo' |
+// 'none' — 'none' means the right cell is caption-only (agent_access,
+// protocol_feed, value_protocols all have no scored-side graphic).
 export const DIMENSIONS = [
   {
     code: 'share_of_mentions', name: 'Share of Mentions', pillar: PILLAR_VISIBILITY,
     weight: 25, seenMax: null, saidMax: null,
-    whatItIs: 'Your share of every brand mention across the answers.',
-    howMeasured: [
-      `${LITE_QUERY_COUNT} shopper questions on ChatGPT`,
-      'every brand mention coded',
-      'your mentions vs the field',
+    oneLiner: 'your share of all brand mentions',
+    leftLabel: 'HOW WE MEASURE',
+    chips: [`${LITE_QUERY_COUNT} shopper questions`, 'every brand counted', 'your share'],
+    rightLabel: "HOW IT'S SCORED",
+    visualKind: 'meter',
+    visualParams: { fillPct: 70, tickPct: 70, tickLabel: '50% SHARE' },
+    scoredCaption: [
+      { text: 'Bigger share, more points. ', bold: false },
+      { text: '50% share = all 25.', bold: true },
     ],
-    howScored: 'Linear — half of all mentions earns full marks.',
   },
   {
     code: 'recommendation_strength', name: 'Recommendation Strength', pillar: PILLAR_VISIBILITY,
     weight: 15, seenMax: null, saidMax: null,
-    whatItIs: "How you're mentioned — the pick, or one of a list.",
-    howMeasured: [
-      'position in the answer',
-      'endorsement language',
+    oneLiner: 'top pick, or just listed',
+    leftLabel: 'HOW WE MEASURE',
+    chips: ['where you appear', "how strongly you're recommended"],
+    rightLabel: "HOW IT'S SCORED",
+    visualKind: 'ladder',
+    visualParams: {
+      bands: [
+        { label: '1st + endorsed', value: '15/15', hot: true },
+        { label: 'listed', value: '7', hot: false },
+        { label: 'absent', value: '0', hot: false },
+      ],
+    },
+    scoredCaption: [
+      { text: "More points when you're the first, strongest pick.", bold: true },
     ],
-    howScored: 'Banded from mention position and strength.',
   },
   {
     code: 'agent_access', name: 'Agent Access', pillar: PILLAR_ACCESSIBILITY,
     weight: 6, seenMax: null, saidMax: null,
-    whatItIs: 'Can agents get in at all.',
-    howMeasured: [
-      'robots.txt allows product paths',
-      'no bot-blocks',
-      'sitemap resolves',
+    oneLiner: 'can agents reach your site',
+    leftLabel: 'THE CHECKS',
+    chips: [],
+    rightLabel: "HOW IT'S SCORED",
+    visualKind: 'pips',
+    visualParams: {
+      pips: [
+        { label: 'robots', ok: true },
+        { label: 'no blocks', ok: true },
+        { label: 'sitemap', ok: false },
+      ],
+    },
+    scoredCaption: [
+      { text: 'Each check passed earns points.', bold: true },
+      { text: ' 2 of 3 = 4/6.', bold: false },
     ],
-    howScored: 'Pass/fail checks, summed.',
   },
   {
     code: 'catalog_context', name: 'Catalog & Context', pillar: PILLAR_ACCESSIBILITY,
     weight: 8, seenMax: null, saidMax: null,
-    whatItIs: 'Can agents parse what you sell.',
-    howMeasured: [
-      'Product + Offer structured data on product pages',
-      'name, price, availability complete',
-      'GTIN/brand identifiers consistent',
+    oneLiner: 'can agents read your products',
+    leftLabel: 'WHAT WE CHECK',
+    chips: ['product data', 'price + availability', 'product IDs (GTIN)', 'shipping info'],
+    rightLabel: "HOW IT'S SCORED",
+    visualKind: 'grid',
+    visualParams: { total: 4, ok: 3 },
+    scoredCaption: [
+      { text: 'Points per readable product page.', bold: true },
+      { text: ' 3 of 4 = 6/8.', bold: false },
     ],
-    howScored: 'Share of sampled pages passing; identifiers weighted.',
   },
   {
     code: 'protocol_feed', name: 'Protocol & Feed Presence', pillar: PILLAR_ACCESSIBILITY,
     weight: 6, seenMax: null, saidMax: null,
-    whatItIs: 'Are you present on the channels agents query.',
-    howMeasured: [
-      'llms.txt',
-      'MCP declaration',
-      'a UCP profile exists',
+    oneLiner: 'listed where agents look',
+    leftLabel: 'WHAT WE CHECK',
+    chips: ['llms.txt', 'MCP', 'UCP profile'],
+    rightLabel: "HOW IT'S SCORED",
+    visualKind: 'none',
+    visualParams: null,
+    scoredCaption: [
+      { text: 'Points for each one present.', bold: true },
+      { text: ' Feeds are checked in the full analysis.', bold: false },
     ],
-    howScored: 'Presence checks; feed participation is verified in the full analysis.',
   },
   {
     code: 'price_truth', name: 'Price Truth', pillar: PILLAR_TRUE_VALUE,
     weight: 12, seenMax: 5, saidMax: 7,
-    whatItIs: 'Can agents state your real price.',
-    howMeasured: [
-      'machine-readable price and currency on offers',
-      'promotions as data, not banner images',
-      'the structured price agrees with the price on the page',
+    oneLiner: 'do agents know your price',
+    leftLabel: 'WHAT WE CHECK',
+    chips: [
+      'price in your code', 'code matches page price', 'price hidden behind login',
+      { label: 'fake sale prices · flagged', advisory: true },
     ],
-    howScored: "Encoding checks plus how often answers that name you state your price. A price behind sign-in doesn't exist to an agent.",
+    rightLabel: 'SCORED ON BOTH SIDES',
+    visualKind: 'duo',
+    visualParams: { leftPct: 100, rightPct: 57, leftLabel: 'ON YOUR SITE · 5', rightLabel: 'IN ANSWERS · 7' },
+    scoredCaption: [
+      { text: 'A readable price — ', bold: false },
+      { text: 'and answers that actually say it.', bold: true },
+    ],
   },
   {
     code: 'member_value', name: 'Member Value', pillar: PILLAR_TRUE_VALUE,
     weight: 15, seenMax: 9, saidMax: 6,
-    whatItIs: 'Can agents see what members get — and do they say it.',
-    howMeasured: [
-      'a loyalty page agents can find and read',
-      'member prices attached to product offers',
-      'markup valid enough that strict parsers keep it',
+    oneLiner: 'do agents mention member perks',
+    leftLabel: 'WHAT WE CHECK',
+    chips: ['findable loyalty page', 'member price in your code', 'code that parses cleanly'],
+    rightLabel: 'SCORED ON BOTH SIDES',
+    visualKind: 'duo',
+    visualParams: { leftPct: 100, rightPct: 40, leftLabel: 'ON YOUR SITE · 9', rightLabel: 'IN ANSWERS · 6' },
+    scoredCaption: [
+      { text: 'No loyalty program? This one is skipped', bold: true },
+      { text: ' and your score adjusts — we check first.', bold: false },
     ],
-    howScored: 'Encoding checks plus how often answers credit you with member value. Skipped and rescaled only when no program exists.',
   },
   {
     code: 'deal_citability', name: 'Deal Citability', pillar: PILLAR_TRUE_VALUE,
     weight: 6, seenMax: 4, saidMax: 2,
-    whatItIs: 'Do live promotions survive into answers.',
-    howMeasured: [
-      'deals in markup that are concrete (amount stated)',
-      'active (validity date, not expired)',
-      'actionable (eligibility or code readable)',
+    oneLiner: 'do your deals get mentioned',
+    leftLabel: 'WHAT WE CHECK',
+    chips: ['clear discount amount', 'not expired', 'codes agents can use'],
+    rightLabel: 'SCORED ON BOTH SIDES',
+    visualKind: 'ladder',
+    visualParams: {
+      bands: [
+        { label: '0 cited', value: '0', hot: false },
+        { label: '1', value: '40%', hot: true },
+        { label: '2–3', value: '70%', hot: true },
+        { label: '4+', value: '100%', hot: true },
+      ],
+    },
+    scoredCaption: [
+      { text: 'Deals in your code — ', bold: false },
+      { text: 'and cited when shoppers are ready to buy.', bold: true },
     ],
-    howScored: 'Encoding checks plus deal citations on purchase-intent questions. No published deals scores zero, not exempt.',
   },
   {
     code: 'value_protocols', name: 'Value Protocols', pillar: PILLAR_TRUE_VALUE,
@@ -139,14 +208,22 @@ export const DIMENSIONS = [
     // there is nothing to cite (Part 3, V1; Part 6, A1's single-wing
     // butterfly render).
     weight: 7, seenMax: 7, saidMax: null,
-    whatItIs: 'Can your value execute inside agent checkout — not just be described.',
-    howMeasured: [
-      'UCP discount capability declared',
-      'loyalty or member extension declared',
-      'ACP promotions declared',
-      'declared versions current and schemas resolving',
+    oneLiner: 'is value wired into agent checkout',
+    siteOnly: true,
+    leftLabel: 'WHAT WE CHECK',
+    // Stage 26 (B5): "checkout discount capability" — the mock's own
+    // chip literally reads "checkout discount support", but B5's wording
+    // discipline (this dimension only ever says a store "declares" a
+    // capability, never that it "supports" one) takes precedence over
+    // verbatim-copying that one chip.
+    chips: ['UCP discounts', 'checkout discount capability', 'loyalty extension', 'ACP promotions'],
+    rightLabel: "HOW IT'S SCORED",
+    visualKind: 'none',
+    visualParams: null,
+    scoredCaption: [
+      { text: "This one never shows up in answers — it works at checkout.", bold: true },
+      { text: ' We score what your store declares; the full analysis tests what works.', bold: false },
     ],
-    howScored: "Declaration checks — we score what a store declares, the full analysis verifies what works. This one doesn't appear in the sentence — it executes at checkout.",
   },
 ]
 

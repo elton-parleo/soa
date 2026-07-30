@@ -95,7 +95,7 @@ describe('LandingPage — truth-rule copy regression guards', () => {
   it('carries the exact methodology stamp', () => {
     render(<LandingPage navigate={navigate} />)
 
-    expect(screen.getByText(`${LITE_QUERY_COUNT} queries · 1 platform · deterministic · sample, not a category study.`)).toBeInTheDocument()
+    expect(screen.getByText(`${LITE_QUERY_COUNT} queries · ChatGPT only · deterministic · sample, not a category study`)).toBeInTheDocument()
   })
 
   it('scopes the four-agent claim to the crawl, not the ChatGPT-only score', () => {
