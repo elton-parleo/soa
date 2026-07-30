@@ -33,6 +33,7 @@ from sqlalchemy import text
 from soa_shared.database import engine, session_factory
 from soa_shared.models.soa_models import LITE_STATUS_PENDING
 from soa_shared.org_helpers import get_or_create_leadgen_org
+from soa_shared.scan_dimensions import SCORER_VERSION
 from app.routers.metrics import build_entity_metrics
 from app.services.lite_crosswalk import GAP_THRESHOLD, RunSignal, link_dimensions, link_incentive_citation
 from app.services.lite_incentive_citation import build_incentive_citation_payload
@@ -622,14 +623,20 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int, email: str 
     if scan_complete and primary_entity_id is not None:
         run_signals = _fetch_run_signals(conn, cycle_id, primary_entity_id)
 
-    # Stage 16 (Part 7): the ONE composite function — a scorer_version
-    # "3" scan computes visibility/accessibility/composite from the
-    # registry-driven pillars breakdown (build_pillars_payload); every
-    # other case (older scan, no scan, no primary entity) falls back to
-    # the pre-Stage-16 formula byte-identically, so historical rows keep
-    # rendering exactly as they always have (Stage 10 W6 precedent).
+    # Stage 16 (Part 7), updated Stage 25 (R1/R2): the ONE composite
+    # function — a scan at the CURRENT scorer version computes
+    # visibility/accessibility/composite from the registry-driven
+    # pillars breakdown (build_pillars_payload); every other case
+    # (older scan at a retired scorer_version, no scan, no primary
+    # entity) falls back to the pre-Stage-16 formula byte-identically,
+    # so historical rows keep rendering exactly as they always have
+    # (Stage 10 W6 precedent). Compared against the registry's own
+    # SCORER_VERSION rather than a hard-coded literal so a v3 row now
+    # correctly falls through to that same historical fallback the
+    # instant this file bumps to v4 — no second "is this current"
+    # definition to keep in sync by hand.
     pillars_payload = None
-    if scan_complete and scorer_version == "3" and primary_entity_id is not None:
+    if scan_complete and scorer_version == SCORER_VERSION and primary_entity_id is not None:
         primary_metrics = overall_metrics.get(primary_code) or {}
         membership_probe = _decode_json_field(scan_row[5], {})
         pillars_payload = build_pillars_payload(

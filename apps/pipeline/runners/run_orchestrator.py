@@ -69,6 +69,27 @@ _PLATFORM_INTER_RUN_DELAY: Dict[str, float] = {
 }
 
 
+def resolve_platform_concurrency(cycle_code: str, platform: str, max_concurrent: int) -> int:
+    """
+    Stage 25 (Part 4, Q2): a lite cycle (cycle_code prefix 'lite-' — the
+    same convention worker.py's get_next_planned_cycle queue-priority
+    check uses) gets its own chatgpt concurrency (LITE_QUERY_CONCURRENCY)
+    instead of the shared SOA_OPENAI_MAX_CONCURRENT default every other
+    study type uses. Lite is ChatGPT-only and a lead-gen visitor is
+    waiting live on the result, so its LITE_QUERY_COUNT-query run
+    shouldn't inherit a limit sized for ordinary background cycles.
+
+    Every other cycle/platform combination is completely unaffected —
+    this only ever overrides the 'chatgpt' entry, and only for a 'lite-'
+    cycle_code; a lite cycle's other platforms (were it ever to run any)
+    and every non-lite cycle fall through to the existing
+    _PLATFORM_MAX_CONCURRENT table unchanged.
+    """
+    if cycle_code.startswith("lite-") and platform == "chatgpt":
+        return config.LITE_QUERY_CONCURRENCY
+    return _PLATFORM_MAX_CONCURRENT.get(platform, max_concurrent)
+
+
 class RunOrchestrator:
 
     def __init__(
@@ -204,18 +225,19 @@ class RunOrchestrator:
         counters = {"completed": 0, "errors": 0, "timeouts": 0}
         first_run_done = False
 
-        # One semaphore per platform — claude=1 to avoid concurrent 429s
+        # One semaphore per platform — claude=1 to avoid concurrent 429s.
+        # resolve_platform_concurrency (Stage 25, Part 4, Q2) gives a lite
+        # cycle its own, higher chatgpt concurrency instead of the shared
+        # SOA_OPENAI_MAX_CONCURRENT default — see its docstring.
         sems: Dict[str, asyncio.Semaphore] = {
-            p: asyncio.Semaphore(
-                _PLATFORM_MAX_CONCURRENT.get(p, self.max_concurrent)
-            )
+            p: asyncio.Semaphore(resolve_platform_concurrency(self.cycle_code, p, self.max_concurrent))
             for p in self.platforms
         }
 
         logger.info(
             "Cycle %s: semaphore limits — %s",
             self.cycle_code,
-            {p: _PLATFORM_MAX_CONCURRENT.get(p, self.max_concurrent) for p in self.platforms},
+            {p: resolve_platform_concurrency(self.cycle_code, p, self.max_concurrent) for p in self.platforms},
         )
 
         # Group pending by (query_id, platform) to apply inter-run delay

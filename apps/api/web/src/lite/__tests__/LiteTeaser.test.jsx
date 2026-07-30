@@ -5,6 +5,7 @@ import '@testing-library/jest-dom'
 
 import { LiteTeaser } from '../LiteTeaser.jsx'
 import { liteApi } from '../liteApi.js'
+import { SCORER_VERSION } from '../landing/scanDimensionsRegistry.js'
 
 vi.mock('../liteApi.js', () => ({
   liteApi: { setEmail: vi.fn() },
@@ -186,8 +187,14 @@ describe('LiteTeaser — R6 honest version fallback (Stage 19)', () => {
     expect(screen.getByText('SCORED UNDER A PREVIOUS METHODOLOGY')).toBeInTheDocument()
   })
 
-  it('never shows the notice for a scorer_version "3" row', () => {
+  it('shows the notice for a retired scorer_version "3" row (Stage 25: v3 is now a previous methodology)', () => {
     const report = { ...baseTeaser, scan_status: 'complete', scorer_version: '3' }
+    render(<LiteTeaser report={report} token="tok-1" onUnlocked={() => {}} />)
+    expect(screen.getByText('SCORED UNDER A PREVIOUS METHODOLOGY')).toBeInTheDocument()
+  })
+
+  it('never shows the notice for a row at the current scorer version', () => {
+    const report = { ...baseTeaser, scan_status: 'complete', scorer_version: SCORER_VERSION }
     render(<LiteTeaser report={report} token="tok-1" onUnlocked={() => {}} />)
     expect(screen.queryByText('SCORED UNDER A PREVIOUS METHODOLOGY')).not.toBeInTheDocument()
   })

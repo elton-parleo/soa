@@ -1,15 +1,14 @@
 """
-Stage 16 (Part 1, R3): parity tests for soa_shared/scan_dimensions.py —
-the v3 three-pillar registry. A rubric change that touches only one
-side (registry vs. the functions that consume it) fails here instead
-of silently drifting, the same discipline as Stage 14's status-parity
-tests.
+Stage 16 (Part 1, R3), rescaled Stage 25 (Part 1, R1): parity tests for
+soa_shared/scan_dimensions.py — the v4 three-pillar registry. A rubric
+change that touches only one side (registry vs. the functions that
+consume it) fails here instead of silently drifting, the same
+discipline as Stage 14's status-parity tests.
 
 This file covers the registry's OWN internal shape (pillar sums,
-seen/said splits, band-table declarations, the composite formula).
-The cross-module "every registry code has a scoring implementation"
-check is added once apps/pipeline/scan/scorer.py's v3 dimension
-functions exist (Stage 16 Parts 2/3) — see test_scorer.py.
+seen/said splits, band-table declarations, the composite formula, the
+verdict gate). The cross-module "every registry code has a scoring
+implementation" check lives in test_scorer.py.
 """
 import dataclasses
 
@@ -22,6 +21,8 @@ from soa_shared.scan_dimensions import (
     DIMENSIONS,
     DIMENSIONS_BY_CODE,
     DIMENSION_ORDER,
+    LITE_QUERIES_PER_STAGE,
+    LITE_QUERY_COUNT,
     MEMBER_VALUE_CODE,
     MIN_OPPORTUNITY_SET_MENTIONS,
     OPPORTUNITY_SET_ALL_MENTIONS,
@@ -34,17 +35,30 @@ from soa_shared.scan_dimensions import (
     RATE_BAND_TABLE,
     SCORER_VERSION,
     TOTAL_MAX,
+    VERDICT_AGENT_READY,
+    VERDICT_COMPOSITE_THRESHOLD,
+    VERDICT_NOT_AGENT_READY,
+    VERDICT_TRUE_VALUE_RATIO_THRESHOLD,
     apply_count_band,
     apply_rate_band,
     applicable_max,
     compute_composite,
+    compute_verdict,
     dimension_max,
 )
 import soa_shared.scan_dimensions as scan_dimensions
 
+TRUE_VALUE_SPLIT_CODES = ("price_truth", "member_value", "deal_citability")
+TRUE_VALUE_CODES = ("price_truth", "member_value", "deal_citability", "value_protocols")
 
-def test_scorer_version_is_3():
-    assert SCORER_VERSION == "3"
+
+def test_scorer_version_is_4():
+    assert SCORER_VERSION == "4"
+
+
+def test_lite_query_count_is_24():
+    assert LITE_QUERIES_PER_STAGE == 6
+    assert LITE_QUERY_COUNT == 24
 
 
 def test_pillar_weights_sum_to_spec():
@@ -62,7 +76,7 @@ def test_pillar_order_covers_every_pillar_exactly_once():
 
 def test_dimension_order_matches_dimensions_and_has_no_duplicates():
     assert DIMENSION_ORDER == tuple(d.code for d in DIMENSIONS)
-    assert len(DIMENSION_ORDER) == len(set(DIMENSION_ORDER)) == 8
+    assert len(DIMENSION_ORDER) == len(set(DIMENSION_ORDER)) == 9
 
 
 def test_every_dimension_weight_sums_correctly_within_its_pillar():
@@ -77,22 +91,40 @@ def test_every_dimension_weight_sums_correctly_within_its_pillar():
     ("agent_access", 6),
     ("catalog_context", 8),
     ("protocol_feed", 6),
-    ("price_truth", 14),
-    ("member_value", 19),
-    ("deal_citability", 7),
+    ("price_truth", 12),
+    ("member_value", 15),
+    ("deal_citability", 6),
+    ("value_protocols", 7),
 ])
 def test_dimension_weights_match_spec(code, expected_weight):
     assert DIMENSIONS_BY_CODE[code].weight == expected_weight
 
 
-def test_only_true_value_dimensions_have_a_seen_said_split():
-    true_value_codes = {"price_truth", "member_value", "deal_citability"}
+def test_only_true_value_split_dimensions_have_a_seen_said_split():
+    """value_protocols is a True Value pillar member but is encode-only
+    (a seen half, no said half at all) — has_seen_said_split requires
+    BOTH to be set, so it correctly reads False for value_protocols,
+    same as every non-True-Value dimension."""
     for d in DIMENSIONS:
-        if d.code in true_value_codes:
+        if d.code in TRUE_VALUE_SPLIT_CODES:
             assert d.has_seen_said_split, f"{d.code} should have a seen/said split"
             assert d.pillar == PILLAR_TRUE_VALUE
         else:
             assert not d.has_seen_said_split, f"{d.code} should NOT have a seen/said split"
+
+
+def test_value_protocols_has_a_seen_half_but_no_said_half():
+    vp = DIMENSIONS_BY_CODE["value_protocols"]
+    assert vp.pillar == PILLAR_TRUE_VALUE
+    assert vp.seen_max == vp.weight == 7
+    assert vp.said_max is None
+    assert vp.said_opportunity_set is None
+    assert vp.said_band_type is None
+
+
+def test_true_value_pillar_has_exactly_four_dimensions_in_documented_order():
+    tv_codes = tuple(d.code for d in DIMENSIONS if d.pillar == PILLAR_TRUE_VALUE)
+    assert tv_codes == TRUE_VALUE_CODES
 
 
 def test_seen_plus_said_equals_dimension_weight():
@@ -102,9 +134,9 @@ def test_seen_plus_said_equals_dimension_weight():
 
 
 @pytest.mark.parametrize("code,seen,said", [
-    ("price_truth", 6, 8),
-    ("member_value", 12, 7),
-    ("deal_citability", 4, 3),
+    ("price_truth", 5, 7),
+    ("member_value", 9, 6),
+    ("deal_citability", 4, 2),
 ])
 def test_seen_said_split_matches_spec(code, seen, said):
     d = DIMENSIONS_BY_CODE[code]
@@ -112,7 +144,7 @@ def test_seen_said_split_matches_spec(code, seen, said):
     assert d.said_max == said
 
 
-def test_every_said_sublens_declares_opportunity_set_and_band_type():
+def test_every_split_sublens_declares_opportunity_set_and_band_type():
     for d in DIMENSIONS:
         if d.has_seen_said_split:
             assert d.said_opportunity_set is not None, d.code
@@ -161,12 +193,17 @@ def test_apply_rate_band_edges(rate_pct, expected_fraction):
 
 @pytest.mark.parametrize("count,expected_fraction", [
     (0, 0.0),
-    (1, 0.60),
-    (2, 1.0),
-    (5, 1.0),
+    (1, 0.40),
+    (2, 0.70),
+    (3, 0.70),
+    (4, 1.0),
+    (10, 1.0),
     (None, 0.0),
 ])
 def test_apply_count_band_edges(count, expected_fraction):
+    """Stage 25 (Part 4, Q3): recalibrated for the 24-query study's
+    doubled purchase-intent opportunity set — 0/40/70/100% at
+    0/1/2-3/4+ citations, up from the v3 0/60/100% at 0/1/2+."""
     assert apply_count_band(count) == expected_fraction
 
 
@@ -189,7 +226,7 @@ def test_applicable_max_full():
 
 
 def test_applicable_max_member_value_na():
-    assert applicable_max(member_value_na=True) == 81  # 100 - 19
+    assert applicable_max(member_value_na=True) == 85  # 100 - 15
 
 
 def test_compute_composite_full_scoring():
@@ -199,10 +236,10 @@ def test_compute_composite_full_scoring():
 
 
 def test_compute_composite_na_normalization():
-    assert compute_composite(81, member_value_na=True) == 100
+    assert compute_composite(85, member_value_na=True) == 100
     assert compute_composite(0, member_value_na=True) == 0
-    # 40 of 81 applicable points -> ~49%
-    assert compute_composite(40, member_value_na=True) == round(40 / 81 * 100)
+    # 40 of 85 applicable points -> ~47%
+    assert compute_composite(40, member_value_na=True) == round(40 / 85 * 100)
 
 
 def test_compute_composite_never_raises_on_degenerate_basis(monkeypatch):
@@ -212,11 +249,11 @@ def test_compute_composite_never_raises_on_degenerate_basis(monkeypatch):
 
 def test_perturbation_changing_member_value_weight_moves_applicable_max_and_composite(monkeypatch):
     """
-    Part 7, A3: nothing about the /81 normalization is hard-coded — it's
+    Part 7, A3: nothing about the /85 normalization is hard-coded — it's
     TOTAL_MAX minus member_value's registered weight, read fresh at call
     time. Perturb ONLY member_value's weight (TOTAL_MAX untouched) and
     confirm applicable_max/compute_composite move to a DIFFERENT number
-    than the spec's 81, proving the formula — not a baked-in constant —
+    than the spec's 85, proving the formula — not a baked-in constant —
     drives the result.
     """
     perturbed_member_value = dataclasses.replace(
@@ -227,7 +264,7 @@ def test_perturbation_changing_member_value_weight_moves_applicable_max_and_comp
         {**scan_dimensions.DIMENSIONS_BY_CODE, "member_value": perturbed_member_value},
     )
 
-    assert applicable_max(member_value_na=True) == 71  # 100 - 29, not the spec's 81
+    assert applicable_max(member_value_na=True) == 71  # 100 - 29, not the spec's 85
     assert applicable_max(member_value_na=False) == 100  # unaffected when member_value IS scored
     assert compute_composite(71, member_value_na=True) == 100
     assert compute_composite(35.5, member_value_na=True) == 50
@@ -241,13 +278,23 @@ def test_dimension_max_no_split_dimension_ignores_said_na():
     assert dimension_max(agent_access, said_na=True) == agent_access.weight
 
 
-@pytest.mark.parametrize("code", ["price_truth", "member_value", "deal_citability"])
+def test_dimension_max_value_protocols_ignores_said_na_too():
+    """value_protocols has a seen half (seen_max == weight) but no said
+    half — has_seen_said_split is False, so said_na is meaningless and
+    dimension_max always returns the full weight, same as any other
+    no-split dimension."""
+    vp = DIMENSIONS_BY_CODE["value_protocols"]
+    assert dimension_max(vp, said_na=False) == vp.weight
+    assert dimension_max(vp, said_na=True) == vp.weight
+
+
+@pytest.mark.parametrize("code", TRUE_VALUE_SPLIT_CODES)
 def test_dimension_max_split_dimension_full_weight_when_said_present(code):
     dim = DIMENSIONS_BY_CODE[code]
     assert dimension_max(dim, said_na=False) == dim.weight
 
 
-@pytest.mark.parametrize("code", ["price_truth", "member_value", "deal_citability"])
+@pytest.mark.parametrize("code", TRUE_VALUE_SPLIT_CODES)
 def test_dimension_max_split_dimension_rescales_to_seen_when_said_na(code):
     dim = DIMENSIONS_BY_CODE[code]
     assert dimension_max(dim, said_na=True) == dim.seen_max
@@ -256,3 +303,46 @@ def test_dimension_max_split_dimension_rescales_to_seen_when_said_na(code):
 def test_dimension_max_defaults_said_na_to_false():
     price_truth = DIMENSIONS_BY_CODE["price_truth"]
     assert dimension_max(price_truth) == price_truth.weight
+
+
+# ── Detail copy (Stage 25, Part 1, R1) ──────────────────────────────────
+
+def test_every_dimension_has_non_empty_detail_copy():
+    for d in DIMENSIONS:
+        assert isinstance(d.what_it_is, str) and d.what_it_is, d.code
+        assert isinstance(d.how_measured, tuple) and 2 <= len(d.how_measured) <= 4, d.code
+        assert all(isinstance(c, str) and c for c in d.how_measured), d.code
+        assert isinstance(d.how_scored, str) and d.how_scored, d.code
+
+
+# ── Verdict gate (Stage 25, Part 5, G1) ─────────────────────────────────
+
+def test_verdict_thresholds_match_spec():
+    assert VERDICT_COMPOSITE_THRESHOLD == 60
+    assert VERDICT_TRUE_VALUE_RATIO_THRESHOLD == 0.25
+
+
+@pytest.mark.parametrize("composite,tv_earned,tv_max,expected", [
+    # High composite, near-zero True Value -> NOT AGENT-READY regardless
+    # of composite (the case the whole gate exists for).
+    (90, 0, 40, VERDICT_NOT_AGENT_READY),
+    (60, 0, 40, VERDICT_NOT_AGENT_READY),
+    # Composite below threshold -> NOT AGENT-READY even with full TV.
+    (59, 40, 40, VERDICT_NOT_AGENT_READY),
+    # Both thresholds cleared -> AGENT-READY.
+    (60, 10, 40, VERDICT_AGENT_READY),  # tv_ratio 0.25 exactly clears
+    (100, 40, 40, VERDICT_AGENT_READY),
+    # tv_ratio just under the threshold -> NOT AGENT-READY.
+    (60, 9.9, 40, VERDICT_NOT_AGENT_READY),
+])
+def test_compute_verdict_decision_table(composite, tv_earned, tv_max, expected):
+    assert compute_verdict(composite, tv_earned, tv_max) == expected
+
+
+def test_compute_verdict_never_raises_on_degenerate_true_value_max():
+    assert compute_verdict(100, 0, 0) == VERDICT_NOT_AGENT_READY
+    assert compute_verdict(100, 0, None) == VERDICT_NOT_AGENT_READY
+
+
+def test_compute_verdict_never_raises_on_none_composite():
+    assert compute_verdict(None, 40, 40) == VERDICT_NOT_AGENT_READY

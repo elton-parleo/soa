@@ -7,7 +7,10 @@ import { describe, it, expect, vi } from 'vitest'
 import '@testing-library/jest-dom'
 
 import { LiteFullReport } from '../LiteFullReport.jsx'
-import { DIMENSIONS, DIMENSIONS_BY_CODE, PILLAR_NAMES } from '../landing/scanDimensionsRegistry.js'
+import {
+  DIMENSIONS, DIMENSIONS_BY_CODE, PILLAR_NAMES, LITE_QUERY_COUNT,
+  VERDICT_AGENT_READY, VERDICT_NOT_AGENT_READY,
+} from '../landing/scanDimensionsRegistry.js'
 import ALLBIRDS_V3_REPORT from './fixtures/allbirds_v3_report.json'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -107,7 +110,7 @@ describe('LiteFullReport — page frame', () => {
 describe('LiteFullReport — visibility section (Stage 7)', () => {
   it('renders the W1 section header', () => {
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.getByText('VISIBILITY · 12 QUERIES · CHATGPT')).toBeInTheDocument()
+    expect(screen.getByText(`VISIBILITY · ${LITE_QUERY_COUNT} QUERIES · CHATGPT`)).toBeInTheDocument()
     expect(screen.getByText('How often agents mention you — and your value')).toBeInTheDocument()
   })
 
@@ -122,7 +125,7 @@ describe('LiteFullReport — visibility section (Stage 7)', () => {
 
   it('renders the mention-rate subtitle and You/Rivals legend', () => {
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.getByText(/How many of the 12 shopper questions named each brand/)).toBeInTheDocument()
+    expect(screen.getByText(new RegExp(`How many of the ${LITE_QUERY_COUNT} shopper questions named each brand`))).toBeInTheDocument()
     expect(screen.getByText('You')).toBeInTheDocument()
     expect(screen.getByText('Rivals')).toBeInTheDocument()
   })
@@ -674,7 +677,7 @@ describe('LiteFullReport — footer', () => {
   it('renders the re-run cadence line and methodology stamp', () => {
     render(<LiteFullReport report={baseReport} />)
     expect(screen.getByText(/re-run this diagnostic monthly/)).toBeInTheDocument()
-    expect(screen.getByText(/12 QUERIES · 1 PLATFORM · 1 RUN EACH/)).toBeInTheDocument()
+    expect(screen.getByText(new RegExp(`${LITE_QUERY_COUNT} QUERIES · 1 PLATFORM · 1 RUN EACH`))).toBeInTheDocument()
     expect(screen.getByText(/SAMPLE, NOT A CATEGORY STUDY/)).toBeInTheDocument()
   })
 })
@@ -849,10 +852,42 @@ describe('LiteFullReport — v3 hero verdict template table', () => {
     ['weak visibility overrides everything else', buildV3Pillars({ visibilityShareEarned: 5 }), /Agents barely know you exist/],
     ['strong visibility + zero True Value', zeroTrueValuePillars(), /they never talk about your value\./],
     ['strong visibility + True Value N/A', buildV3Pillars({ memberValueNa: true, dealCitabilitySeen: subLens(0, 4, false), dealCitabilitySaid: subLens(0, 3, false) }), /your value score is normalized/],
-    ['strong visibility + True Value nearly full', buildV3Pillars({ memberValueNa: false, dealCitabilitySeen: subLens(4, 4, false), dealCitabilitySaid: subLens(3, 3, false) }), /and they get your value right\./],
+    ['strong visibility + True Value nearly full, no verdict field (pre-G1 report)', buildV3Pillars({ memberValueNa: false, dealCitabilitySeen: subLens(4, 4, false), dealCitabilitySaid: subLens(3, 3, false) }), /and they get your value right\./],
+    ['strong visibility + True Value nearly full, verdict AGENT-READY', { ...buildV3Pillars({ memberValueNa: false, dealCitabilitySeen: subLens(4, 4, false), dealCitabilitySaid: subLens(3, 3, false) }), verdict: VERDICT_AGENT_READY }, /and they get your value right\./],
   ])('verdict template: %s', (_label, pillars, expected) => {
     render(<LiteFullReport report={buildV3Report({ pillars })} />)
     expect(screen.getByText(expected)).toBeInTheDocument()
+  })
+
+  it('Stage 25 (G2): strong visibility + True Value nearly full but verdict is NOT-AGENT-READY (e.g. weak Accessibility) never claims the unqualified win', () => {
+    const pillars = {
+      ...buildV3Pillars({ memberValueNa: false, dealCitabilitySeen: subLens(4, 4, false), dealCitabilitySaid: subLens(3, 3, false) }),
+      verdict: VERDICT_NOT_AGENT_READY,
+    }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.queryByText(/and they get your value right\./)).not.toBeInTheDocument()
+    expect(screen.getByText(/your value comes through/)).toBeInTheDocument()
+    expect(screen.getByText(/still keeps you short of agent-ready/)).toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — v3 hero verdict chip (Stage 25, Part 5/6, G1/A2)', () => {
+  it('renders the AGENT-READY chip next to the composite score', () => {
+    const pillars = { ...buildV3Pillars(), verdict: VERDICT_AGENT_READY }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText(VERDICT_AGENT_READY)).toBeInTheDocument()
+  })
+
+  it('renders the NOT AGENT-READY chip next to the composite score', () => {
+    const pillars = { ...buildV3Pillars(), verdict: VERDICT_NOT_AGENT_READY }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText(VERDICT_NOT_AGENT_READY)).toBeInTheDocument()
+  })
+
+  it('renders no verdict chip at all for a pre-G1 report with no verdict field', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.queryByText(VERDICT_AGENT_READY)).not.toBeInTheDocument()
+    expect(screen.queryByText(VERDICT_NOT_AGENT_READY)).not.toBeInTheDocument()
   })
 })
 
@@ -884,6 +919,47 @@ describe('LiteFullReport — True Value section (Stage 19, R2)', () => {
     render(<LiteFullReport report={buildV3Report()} />)
     expect(screen.queryByText('Incentive citation rate')).not.toBeInTheDocument()
     expect(screen.queryByText('13% · 1 of 8 mentions')).not.toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — value_protocols single-wing butterfly row (Stage 25, Part 6, A1)', () => {
+  function pillarsWithValueProtocols(vpOverrides = {}) {
+    const base = buildV3Pillars()
+    const vpDim = pillarDim('value_protocols', 'Value Protocols', 7, 7, {
+      seen: subLens(7, 7, false, ['declares a UCP shopping-discount capability']),
+      said: null,
+      fix: null, fix_human: null, locked: false,
+      ...vpOverrides,
+    })
+    return {
+      ...base,
+      true_value: { ...base.true_value, dimensions: [...base.true_value.dimensions, vpDim] },
+    }
+  }
+
+  it('renders a left (seen) wing and the checkout caption in place of a right wing', () => {
+    const pillars = pillarsWithValueProtocols()
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('Value Protocols')).toBeInTheDocument()
+    expect(screen.getByText('declares a UCP shopping-discount capability')).toBeInTheDocument()
+    expect(screen.getByText('executes at checkout — not scored on answers')).toBeInTheDocument()
+  })
+
+  it('never renders a right-wing bar/evidence for value_protocols even if said data is present (code-keyed branch, not data-keyed)', () => {
+    // Defensive: said should always be null for this dimension in real
+    // data, but the single-wing branch is keyed on dimension.code, not
+    // on said being absent — so even a malformed payload with a non-
+    // null said must still render the caption, never a said wing.
+    const pillars = pillarsWithValueProtocols({ said: subLens(5, 7, false, ['SHOULD_NEVER_RENDER']) })
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('executes at checkout — not scored on answers')).toBeInTheDocument()
+    expect(screen.queryByText('SHOULD_NEVER_RENDER')).not.toBeInTheDocument()
+  })
+
+  it('shows the earned/max score next to the dimension name, same as the other three dimensions', () => {
+    const pillars = pillarsWithValueProtocols()
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('7/7')).toBeInTheDocument()
   })
 })
 
@@ -949,7 +1025,7 @@ describe('LiteFullReport — v3 True Value pillar verdict + footer (Stage 21, T3
 describe('LiteFullReport — v3 visibility: comparative bars + donut + RS gauge (Stage 21, V1/V2)', () => {
   it('restores mention rate as its own comparative bars, sorted with YOU tagged', () => {
     render(<LiteFullReport report={buildV3Report()} />)
-    expect(screen.getByText('Mention rate · of 12 answers')).toBeInTheDocument()
+    expect(screen.getByText(`Mention rate · of ${LITE_QUERY_COUNT} answers`)).toBeInTheDocument()
     expect(screen.getByText('YOU')).toBeInTheDocument()
     expect(screen.getByText('67% · 8/12')).toBeInTheDocument()
     expect(screen.getByText('42% · 5/12')).toBeInTheDocument()
@@ -1119,6 +1195,17 @@ describe('LiteFullReport — R6 honest version fallback (Stage 19)', () => {
     const report = { ...baseReport, scan: { status: 'skipped', total_score: null, dimensions: [], pages_fetched: [] }, scan_status: 'skipped' }
     render(<LiteFullReport report={report} />)
     expect(screen.queryByText('SCORED UNDER A PREVIOUS METHODOLOGY')).not.toBeInTheDocument()
+  })
+
+  it('Stage 25: shows the notice for a genuine scorer_version "3" row (pillars absent, retired under the v4 registry bump) and still renders its real, non-zero legacy scores', () => {
+    const v3Report = {
+      ...baseReport,
+      pillars: undefined,
+      scan: { ...baseReport.scan, scorer_version: '3' },
+    }
+    render(<LiteFullReport report={v3Report} />)
+    expect(screen.getByText('SCORED UNDER A PREVIOUS METHODOLOGY')).toBeInTheDocument()
+    expect(screen.getByText('61')).toBeInTheDocument() // composite, real not zeroed
   })
 })
 

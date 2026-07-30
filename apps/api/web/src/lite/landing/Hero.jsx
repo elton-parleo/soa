@@ -3,7 +3,7 @@
  *
  * Embeds the existing LiteForm submit flow (compact variant — see
  * ../LiteForm.jsx) rather than reimplementing it. Truth rules honored:
- *  - T1: visibility copy stays scoped to ChatGPT/12 queries; the "four
+ *  - T1: visibility copy stays scoped to ChatGPT/LITE_QUERY_COUNT queries; the "four
  *    agents" claim is scoped strictly to what the crawl reads.
  *  - T2: no "instant"/"about a minute" language — results stream live
  *    over a few minutes.
@@ -13,6 +13,7 @@
 import { SectionHeader } from '../liteTheme.jsx'
 import { LiteForm } from '../LiteForm.jsx'
 import { TrustChip, PrivacyNote, SampleTeaserCard, ReportPreviewMock, BrandChip } from './landingTheme.jsx'
+import { LITE_QUERY_COUNT } from './scanDimensionsRegistry.js'
 
 const PLATFORMS = [
   { label: 'ChatGPT', glyph: 'C' },
@@ -35,7 +36,7 @@ export function Hero({ onSubmitted }) {
       <div className="lite-cols-2" style={{ marginTop: 40, alignItems: 'start', gap: 48 }}>
         <div>
           <p className="lite-body lite-muted" style={{ fontSize: 15, marginBottom: 24, maxWidth: 480 }}>
-            We ask ChatGPT 12 questions across all four stages of a purchase —
+            We ask ChatGPT {LITE_QUERY_COUNT} questions across all four stages of a purchase —
             awareness, research, comparison, ready to buy — and score how
             often it recommends you, and at what price. Then we crawl your
             store the same way ChatGPT, Gemini, Perplexity, and Copilot all

@@ -34,6 +34,7 @@ import worker
 from generation.competitor_generator import CompetitorCandidate
 from generation.query_generator import LiteGenerationError
 from soa_shared.constants import QUERY_STAGES
+from soa_shared.scan_dimensions import LITE_QUERIES_PER_STAGE, LITE_QUERY_COUNT
 
 
 def _lite_row(stage, i):
@@ -51,8 +52,8 @@ def _lite_row(stage, i):
     }
 
 
-def _twelve_rows():
-    return [_lite_row(stage, i) for stage in QUERY_STAGES for i in range(3)]
+def _lite_query_rows():
+    return [_lite_row(stage, i) for stage in QUERY_STAGES for i in range(LITE_QUERIES_PER_STAGE)]
 
 
 @pytest.fixture
@@ -252,7 +253,7 @@ def test_full_happy_path_reaches_running_with_cycle(db):
     with db.begin() as conn:
         _insert_pending(conn, competitors=["Rival"])
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
         worker.process_lite_requests()
 
     status, brand_entity_id, competitor_entity_ids, study_type, cycle_id, error = _lite_row_by_token(
@@ -278,13 +279,13 @@ def test_entities_resolved_and_reused_across_requests(db):
     with db.begin() as conn:
         _insert_pending(conn, token="req1", brand="Acme", competitors=["Rival"])
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
         worker.process_lite_requests()
 
     with db.begin() as conn:
         _insert_pending(conn, token="req2", brand="Acme", competitors=["OtherCo"])
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
         worker.process_lite_requests()
 
     with db.connect() as conn:
@@ -298,7 +299,7 @@ def test_creates_cycle_with_correct_comparison_set(db):
     with db.begin() as conn:
         _insert_pending(conn, competitors=["Rival"])
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
         worker.process_lite_requests()
 
     with db.connect() as conn:
@@ -316,15 +317,15 @@ def test_creates_cycle_with_correct_comparison_set(db):
     assert cycle[3] == "brand_vs_brand"
     assert json.loads(cycle[4]) == ["chatgpt"]
     assert cycle[5] == 1
-    assert cycle[6] == 12
+    assert cycle[6] == LITE_QUERY_COUNT
     assert comparison_set == [("M001", "primary"), ("M002", "competitor")]
 
 
-def test_inserts_twelve_queries_with_lite_study_type(db):
+def test_inserts_lite_query_count_queries_with_lite_study_type(db):
     with db.begin() as conn:
         _insert_pending(conn, competitors=[])
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
         worker.process_lite_requests()
 
     with db.connect() as conn:
@@ -334,7 +335,7 @@ def test_inserts_twelve_queries_with_lite_study_type(db):
         created_by = conn.exec_driver_sql(
             "SELECT DISTINCT created_by FROM soa_queries WHERE study_type = 'lite-a1b2c3d4'"
         ).fetchone()[0]
-    assert count == 12
+    assert count == LITE_QUERY_COUNT
     assert created_by == "soa-lite"
 
 
@@ -342,7 +343,7 @@ def test_no_competitors_yields_primary_only_comparison_set(db):
     with db.begin() as conn:
         _insert_pending(conn, competitors=[])
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
         worker.process_lite_requests()
 
     with db.connect() as conn:
@@ -357,7 +358,7 @@ def test_processes_only_one_pending_row_per_call(db):
         _insert_pending(conn, token="req1", brand="Acme")
         _insert_pending(conn, token="req2", brand="Beta")
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
         worker.process_lite_requests()
 
     with db.connect() as conn:
@@ -525,7 +526,7 @@ def test_store_url_creates_scan_row_and_persists_result(db):
         _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
 
     scan_result = _make_scan_result()
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
          patch("scan.engine.run_scan", return_value=scan_result) as mock_scan:
         worker.process_lite_requests()
 
@@ -550,7 +551,7 @@ def test_without_store_url_scan_is_skipped_and_flow_unchanged(db):
     with db.begin() as conn:
         _insert_pending(conn, competitors=["Rival"])  # no store_url
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
          patch("scan.engine.run_scan") as mock_scan:
         worker.process_lite_requests()
 
@@ -578,7 +579,7 @@ def test_degraded_scan_result_persisted_and_request_still_completes(db, scan_sta
         status=scan_status, total_score=None, dimensions={}, pages_fetched=[],
         error="site blocked automated access",
     )
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
          patch("scan.engine.run_scan", return_value=scan_result):
         worker.process_lite_requests()
 
@@ -603,7 +604,7 @@ def test_membership_probe_result_persisted_on_scan_row(db):
         _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
 
     probe_result = {"result": "yes", "raw_evidence": "Acme Rewards is a free loyalty program."}
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
          patch("scan.engine.run_scan", return_value=_make_scan_result()), \
          patch("generation.membership_probe.probe_membership", return_value=probe_result) as mock_probe:
         worker.process_lite_requests()
@@ -620,7 +621,7 @@ def test_membership_probe_runs_even_without_store_url(db):
     with db.begin() as conn:
         _insert_pending(conn, competitors=["Rival"])  # no store_url
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
          patch("generation.membership_probe.probe_membership",
                return_value={"result": "no", "raw_evidence": None}) as mock_probe:
         worker.process_lite_requests()
@@ -640,7 +641,7 @@ def test_membership_probe_failure_never_blocks_the_run(db):
     def _raise(*a, **k):
         raise RuntimeError("boom")
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
          patch("scan.engine.run_scan", return_value=_make_scan_result()), \
          patch("generation.membership_probe.probe_membership", _raise):
         worker.process_lite_requests()
@@ -657,7 +658,7 @@ def test_revenue_probe_result_persisted_on_scan_row(db):
         _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
 
     probe_result = {"annual_revenue_usd": 12_000_000.0, "basis": "estimated DTC apparel brand", "quote": "estimated DTC apparel brand"}
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
          patch("scan.engine.run_scan", return_value=_make_scan_result()), \
          patch("generation.revenue_probe.probe_revenue", return_value=probe_result) as mock_probe:
         worker.process_lite_requests()
@@ -674,7 +675,7 @@ def test_revenue_probe_runs_even_without_store_url(db):
     with db.begin() as conn:
         _insert_pending(conn, competitors=["Rival"])  # no store_url
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
          patch("generation.revenue_probe.probe_revenue",
                return_value={"annual_revenue_usd": None, "basis": None, "quote": None}) as mock_probe:
         worker.process_lite_requests()
@@ -694,7 +695,7 @@ def test_revenue_probe_failure_never_blocks_the_run(db):
     def _raise(*a, **k):
         raise RuntimeError("boom")
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
          patch("scan.engine.run_scan", return_value=_make_scan_result()), \
          patch("generation.revenue_probe.probe_revenue", _raise):
         worker.process_lite_requests()
@@ -705,19 +706,20 @@ def test_revenue_probe_failure_never_blocks_the_run(db):
 
 
 def test_revenue_probe_is_metrically_invisible_query_count_unaffected(db):
-    """The revenue probe is not one of the 12 tracked queries — it never
-    touches soa_queries/soa_runs, so soa_queries' row count is exactly
-    the fixed 12-query study regardless of what the probe returns."""
+    """The revenue probe is not one of the LITE_QUERY_COUNT tracked
+    queries — it never touches soa_queries/soa_runs, so soa_queries' row
+    count is exactly the fixed-size study regardless of what the probe
+    returns."""
     with db.begin() as conn:
         _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
          patch("scan.engine.run_scan", return_value=_make_scan_result()), \
          patch("generation.revenue_probe.probe_revenue",
                return_value={"annual_revenue_usd": 9_000_000.0, "basis": "guess", "quote": "guess"}):
         worker.process_lite_requests()
 
-    assert _query_count(db.connect()) == 12
+    assert _query_count(db.connect()) == LITE_QUERY_COUNT
 
 
 def test_sweep_waits_when_scan_still_running_within_window(db):
@@ -760,7 +762,7 @@ def test_worker_crash_mid_scan_does_not_reprocess_and_sweep_recovers(db):
     with db.begin() as conn:
         _insert_pending(conn, token="crash001", store_url="https://acme.example.com")
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()), \
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
          patch("scan.engine.run_scan", side_effect=RuntimeError("worker died mid-scan")):
         worker.process_lite_requests()
 
@@ -770,7 +772,7 @@ def test_worker_crash_mid_scan_does_not_reprocess_and_sweep_recovers(db):
     scan_status, *_ = _scan_row_by_token(db.connect(), "crash001")
     assert scan_status == "running"  # stuck, as if the worker died before writing a result
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()) as mock_gen:
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()) as mock_gen:
         worker.process_lite_requests()
     mock_gen.assert_not_called()  # no longer 'pending' — must not be reprocessed
 
@@ -923,7 +925,7 @@ def test_generated_competitors_top_up_manual_ones_and_persist_mixed_source(db, m
     with db.begin() as conn:
         _insert_pending(conn, competitors=["Rival"])
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()) as mock_gen:
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()) as mock_gen:
         worker.process_lite_requests()
 
     names, source, status = _competitor_fields_by_token(db.connect(), "a1b2c3d4e5f6")
@@ -945,7 +947,7 @@ def test_generated_competitors_get_entities_created_alongside_manual_ones(db, mo
     with db.begin() as conn:
         _insert_pending(conn, competitors=["Rival"])
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
         worker.process_lite_requests()
 
     with db.connect() as conn:
@@ -965,7 +967,7 @@ def test_no_manual_competitors_and_generation_finds_none_yields_none_source(db):
     with db.begin() as conn:
         _insert_pending(conn, competitors=[])
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
         worker.process_lite_requests()
 
     names, source, status = _competitor_fields_by_token(db.connect(), "a1b2c3d4e5f6")
@@ -986,7 +988,7 @@ def test_competitor_generation_failure_never_blocks_the_run(db, monkeypatch):
     with db.begin() as conn:
         _insert_pending(conn, competitors=["Rival"])
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
         worker.process_lite_requests()
 
     status, *_ , error = _lite_row_by_token(db.connect(), "a1b2c3d4e5f6")
@@ -1012,7 +1014,7 @@ def test_crash_after_persisting_competitors_leaves_generated_set_intact(db, monk
     with patch(
         "soa_shared.cycle_creation.create_cycle_with_comparison_set",
         side_effect=RuntimeError("crash during cycle creation"),
-    ), patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+    ), patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
         worker.process_lite_requests()
 
     names, source, status = _competitor_fields_by_token(db.connect(), "a1b2c3d4e5f6")
@@ -1051,7 +1053,7 @@ def test_first_request_failure_does_not_block_second_in_next_poll(db, monkeypatc
         _insert_pending(conn, token="req1first", brand="Acme", competitors=["Rival"])
         _insert_pending(conn, token="req2second", brand="Beta", competitors=["Rival2"])
 
-    with patch("generation.query_generator.generate_lite_queries", return_value=_twelve_rows()):
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
         worker.process_lite_requests()  # claims req1 (oldest) -> raises -> marked failed
         worker.process_lite_requests()  # claims req2 (now oldest pending) -> succeeds
 

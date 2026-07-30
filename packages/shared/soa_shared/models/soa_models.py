@@ -1369,7 +1369,7 @@ class SoaRecommendation(Base):
 # 15. soa_lite_requests — SoA Lite orchestration state machine and
 # lead-capture record. Backs the public, unauthenticated "enter a brand,
 # get a report" flow: one row per visitor submission, driving generation
-# and run of a 12-query study through the existing pipeline, then gating
+# and run of a fixed-size (LITE_QUERY_COUNT) study through the existing pipeline, then gating
 # the resulting report behind `token`. All rows live under the dedicated
 # 'Parleo Lead Gen' organization — see soa_shared/org_helpers.py.
 # ---------------------------------------------------------------------------

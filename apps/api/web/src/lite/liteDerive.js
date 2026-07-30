@@ -4,6 +4,7 @@
  * client-side "modeled exposure" estimate. No DOM, no fetch — unit
  * tested directly.
  */
+import { LITE_QUERY_COUNT } from './landing/scanDimensionsRegistry.js'
 
 // ─── Input routing (LiteForm) ──────────────────────────────────────────────
 
@@ -257,7 +258,7 @@ export function getDominantRivalPayoff(visibilityBreakdown) {
   if (!topRival || (topRival.share_pct || 0) < 50) return null
 
   const totalMentions = visibilityBreakdown?.totals?.total_mentions ?? 0
-  const totalQueries = visibilityBreakdown?.totals?.total_queries ?? 12
+  const totalQueries = visibilityBreakdown?.totals?.total_queries ?? LITE_QUERY_COUNT
   return `${totalMentions} brand mentions across ${totalQueries} answers. Half went to one rival.`
 }
 

@@ -1,7 +1,8 @@
 """
 lite_pillars.py — pure scoring for the v3 Agent Scan dimensions that are
-derived from the 12-query coded/metrics data (soa_coded_mentions,
-soa_price_observations via MetricsCalculator), not from the crawl.
+derived from the LITE_QUERY_COUNT-query coded/metrics data
+(soa_coded_mentions, soa_price_observations via MetricsCalculator), not
+from the crawl.
 
 These dimensions don't exist inside apps/pipeline/scan/scorer.py's
 crawl-only engine — that module never sees mention/metrics data — so
@@ -19,12 +20,14 @@ from typing import Dict, List, Optional
 
 from soa_shared.scan_dimensions import (
     DIMENSIONS_BY_CODE,
+    LITE_QUERY_COUNT,
     MIN_OPPORTUNITY_SET_MENTIONS,
     PILLAR_WEIGHTS,
     PURCHASE_INTENT_STAGES,
     apply_count_band,
     apply_rate_band,
     compute_composite,
+    compute_verdict,
     dimension_max,
 )
 
@@ -47,7 +50,7 @@ def score_share_of_mentions(som_pct: Optional[float], total_mentions: int) -> Di
     if not total_mentions or som_pct is None:
         return {
             "code": "share_of_mentions", "earned": 0.0, "max": weight,
-            "evidence": ["not mentioned in any of the 12 queries"],
+            "evidence": [f"not mentioned in any of the {LITE_QUERY_COUNT} queries"],
         }
     capped = min(som_pct, 50.0)
     earned = round(capped / 50.0 * weight)
@@ -91,7 +94,7 @@ def score_recommendation_strength(rsi_score: Optional[float], total_mentions: in
     if not total_mentions or rsi_score is None:
         return {
             "code": "recommendation_strength", "earned": 0.0, "max": weight,
-            "evidence": ["not mentioned in any of the 12 queries"],
+            "evidence": [f"not mentioned in any of the {LITE_QUERY_COUNT} queries"],
         }
     raw = (rsi_score + 1.0) / 4.0 * weight
     earned = max(0, min(weight, round(raw)))
@@ -248,7 +251,12 @@ def member_value_applicable(probe_result: Optional[str], seen_score: float) -> b
 # ad-hoc blend anywhere else (Part 7's "ONE composite function").
 
 _ACCESSIBILITY_CODES = ("agent_access", "catalog_context", "protocol_feed")
-_TRUE_VALUE_CODES = ("price_truth", "member_value", "deal_citability")
+# The three True Value dimensions with a real seen/said split — Stage 25
+# adds a 4th True Value dimension, value_protocols, which is encode-only
+# (a seen half, no said half at all) and is therefore built separately,
+# after this loop, rather than folded into it (see build_pillars_payload).
+_TRUE_VALUE_SPLIT_CODES = ("price_truth", "member_value", "deal_citability")
+_VALUE_PROTOCOLS_CODE = "value_protocols"
 
 # Top FREE_FIX_RANK dimensions by opportunity size (max - earned) across
 # the combined accessibility + True Value pool keep their fix text; the
@@ -417,7 +425,7 @@ def build_pillars_payload(
     true_value_earned = 0.0
     true_value_applicable_max = 0.0
     true_value_dims = []
-    for code in _TRUE_VALUE_CODES:
+    for code in _TRUE_VALUE_SPLIT_CODES:
         dim = DIMENSIONS_BY_CODE[code]
         seen = crawl_dimensions.get(f"{code}_seen") or {}
         said = said_by_code[code]
@@ -464,8 +472,33 @@ def build_pillars_payload(
             "fix": seen.get("fix"), "fix_human": seen.get("fix_human"), "locked": False,
         })
 
-    # Fix text only exists on the 6 crawl-derived dimensions above
-    # (accessibility's 3 + True Value's 3 seen-halves) — visibility's
+    # Value Protocols (Stage 25, Part 1/3): encode-only — a seen half,
+    # no said half at all, because an agent's answer has no way to state
+    # whether a store "declares" a checkout protocol (Part 6, A1's
+    # single-wing butterfly render). Built separately from the loop
+    # above rather than folded in: `said` stays a real Python None (not
+    # a _sub_lens with na=True), matching the schema's already-optional
+    # `said` field, and there is no member_value-style na branch — V1
+    # is explicit that absence scores 0, it never excludes this
+    # dimension from the pillar the way member_value can be excluded.
+    vp_dim = DIMENSIONS_BY_CODE[_VALUE_PROTOCOLS_CODE]
+    vp_seen = crawl_dimensions.get(f"{_VALUE_PROTOCOLS_CODE}_seen") or {}
+    vp_seen_row = _sub_lens(
+        vp_seen.get("score") or 0.0, vp_seen.get("max") or 0.0,
+        (vp_seen.get("coverage") or "full") == "na", vp_seen.get("evidence") or [],
+    )
+    vp_earned = vp_seen.get("score") or 0.0
+    vp_max = dimension_max(vp_dim)  # no said/split -> always the full weight
+    true_value_earned += vp_earned
+    true_value_applicable_max += vp_max
+    true_value_dims.append({
+        "code": _VALUE_PROTOCOLS_CODE, "name": vp_dim.name, "earned": vp_earned, "max": vp_max,
+        "na": False, "evidence": [], "seen": vp_seen_row, "said": None,
+        "fix": vp_seen.get("fix"), "fix_human": vp_seen.get("fix_human"), "locked": False,
+    })
+
+    # Fix text only exists on the 7 crawl-derived dimensions above
+    # (accessibility's 3 + True Value's 4 seen-halves) — visibility's
     # mention-derived dimensions have nothing crawl-fixable to offer, so
     # they're outside the ranking pool entirely (see _rank_and_lock_fixes).
     fixable_dims = accessibility_dims + true_value_dims
@@ -475,6 +508,14 @@ def build_pillars_payload(
     total_earned = visibility_earned + accessibility_earned + true_value_earned
     composite = compute_composite(total_earned, member_value_na=member_value_na)
 
+    # Stage 25 (Part 5, G1): the verdict gate — deliberately independent
+    # of the composite's straight-sum weighting. Uses True Value's own
+    # applicable_max (already na-aware: excludes member_value's weight
+    # when it's N/A), so a legitimately program-less store is judged on
+    # the value dimensions that actually apply to it, same discipline as
+    # the composite's own /85 rescale.
+    verdict = compute_verdict(composite, true_value_earned, true_value_applicable_max)
+
     return {
         "visibility": _pillar(visibility_earned, PILLAR_WEIGHTS["visibility"], visibility_dims),
         "accessibility": _pillar(accessibility_earned, accessibility_applicable_max, accessibility_dims),
@@ -482,4 +523,5 @@ def build_pillars_payload(
         "composite": composite,
         "member_value_na": member_value_na,
         "fixes": fixes,
+        "verdict": verdict,
     }

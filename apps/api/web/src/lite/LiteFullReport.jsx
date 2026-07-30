@@ -39,7 +39,8 @@ import {
 } from './liteTheme.jsx'
 import {
   DIMENSIONS, DIMENSIONS_BY_CODE, PILLAR_ACCESSIBILITY, PILLAR_NAMES,
-  PILLAR_TRUE_VALUE, PILLAR_VISIBILITY, TOTAL_MAX,
+  PILLAR_TRUE_VALUE, PILLAR_VISIBILITY, TOTAL_MAX, LITE_QUERY_COUNT,
+  VERDICT_AGENT_READY,
 } from './landing/scanDimensionsRegistry.js'
 
 const DEFAULT_REVENUE = 1_000_000
@@ -127,12 +128,22 @@ function ExecutiveTilesLegacy({ report, exposure }) {
 
 // ─── Stage 21 (H): hero verdict template table ──────────────────────────
 // ONE deterministic branch per data shape, no LLM — keyed off the
-// visibility/True-Value pillar ratios and member_value_na, exactly the
-// three inputs a visitor's own hero numbers already show. Priority
-// order matters: weak visibility overrides everything else (nothing
-// else matters if agents barely know you), then the na framing (a
-// different STORY than "zero" — normalized, not empty), then the
-// zero/partial/full True Value bands.
+// visibility/True-Value pillar ratios, member_value_na, and (Stage 25,
+// Part 5) the actual verdict gate — exactly the inputs a visitor's own
+// hero numbers already show. Priority order matters: weak visibility
+// overrides everything else (nothing else matters if agents barely know
+// you), then the na framing (a different STORY than "zero" —
+// normalized, not empty), then the zero/partial/full True Value bands.
+//
+// Stage 25 (Part 5, G2): "strong_full_tv" is the one branch that reads
+// as an unqualified win ("and they get your value right") — the one
+// case where a narrative/verdict mismatch would actually mislead a
+// visitor, since the gate also weighs Accessibility, which this
+// narrative's own visRatio/tvRatio inputs never look at. A store can
+// clear both ratio bands here and still land NOT-AGENT-READY on a weak
+// Accessibility pillar; verdict-aware branching catches exactly that
+// case rather than declaring a win the gate disagrees with. The other
+// three bands already read as "not fully there" and never risk this.
 const VISIBILITY_WEAK_THRESHOLD = 0.5
 const TRUE_VALUE_STRONG_THRESHOLD = 0.75
 
@@ -164,6 +175,13 @@ function deriveHeroVerdict(pillars) {
     }
   }
   if (tvRatio >= TRUE_VALUE_STRONG_THRESHOLD) {
+    if (pillars.verdict && pillars.verdict !== VERDICT_AGENT_READY) {
+      return {
+        key: 'strong_tv_not_ready',
+        plain: 'Agents talk about you, and', bold: 'your value comes through —',
+        support: "but a gap elsewhere in the storefront still keeps you short of agent-ready.",
+      }
+    }
     return {
       key: 'strong_full_tv',
       plain: 'Agents talk about you —', bold: 'and they get your value right.',
@@ -245,6 +263,31 @@ function PillarSegmentedBar({ pillars }) {
   )
 }
 
+// Stage 25 (Part 5/6, G1/A2): the verdict chip is a pass/fail READING of
+// the gate (registry-defined thresholds, computed server-side —
+// build_pillars_payload/compute_verdict), deliberately distinct styling
+// from the narrative verdict LINE below it — that line is color
+// commentary, this chip is the strict threshold. Absent entirely for a
+// pre-G1 report (no pillars.verdict key at all), never a fabricated
+// default.
+function VerdictChip({ verdict }) {
+  if (!verdict) return null
+  const isReady = verdict === VERDICT_AGENT_READY
+  return (
+    <span
+      className="lite-mono"
+      style={{
+        display: 'inline-block', fontSize: 11, fontWeight: 700, letterSpacing: '0.05em',
+        padding: '4px 10px', borderRadius: 999,
+        background: isReady ? 'var(--good)' : 'var(--ink-2)',
+        color: isReady ? '#fff' : 'var(--bad-on-dark)',
+      }}
+    >
+      {verdict}
+    </span>
+  )
+}
+
 function ExecutiveHeroV3({ report, exposure }) {
   const pillars = report.pillars
   const verdict = deriveHeroVerdict(pillars)
@@ -255,9 +298,10 @@ function ExecutiveHeroV3({ report, exposure }) {
           <div className="lite-mono" style={{ fontSize: 10.5, letterSpacing: '0.12em', color: 'var(--text-inv-2)', textTransform: 'uppercase' }}>
             Agent commerce score · {formatDateStamp()}
           </div>
-          <div className="lite-numeral lite-numeral--inv" style={{ fontSize: 56, lineHeight: 1, marginTop: 4 }}>
+          <div className="lite-numeral lite-numeral--inv" style={{ fontSize: 56, lineHeight: 1, marginTop: 4, display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
             {formatScore(report.composite)}
             <span style={{ fontSize: 18, color: 'var(--text-inv-2)', fontWeight: 400 }}>/100</span>
+            <VerdictChip verdict={pillars.verdict} />
           </div>
           <div className="lite-body--inv" style={{ fontSize: 14, maxWidth: 320, lineHeight: 1.5, marginTop: 6 }}>
             {verdict.plain} <strong style={{ color: '#fff' }}>{verdict.bold}</strong> {verdict.support}
@@ -304,7 +348,7 @@ function MentionRateCard({ mentionRate }) {
     <div>
       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>Mention rate</div>
       <div className="lite-body lite-muted" style={{ fontSize: 12.5, marginBottom: 16 }}>
-        How many of the 12 shopper questions named each brand at least once
+        How many of the {LITE_QUERY_COUNT} shopper questions named each brand at least once
       </div>
       {mentionRate.map((r, i) => (
         <div key={r.entity} style={{ marginBottom: 12 }}>
@@ -442,7 +486,7 @@ function MentionRateBarsV3({ mentionRate }) {
   const colors = entityColors(sorted, { rivalRamp: RIVAL_SLATE_RAMP })
   return (
     <div>
-      <div className="lite-label" style={{ marginBottom: 8 }}>Mention rate · of 12 answers</div>
+      <div className="lite-label" style={{ marginBottom: 8 }}>Mention rate · of {LITE_QUERY_COUNT} answers</div>
       {sorted.map((r, i) => (
         <div
           key={r.entity}
@@ -602,7 +646,7 @@ function findIncentiveCitationChip(scan) {
 function IncentiveCitationRow({ entity, mentionRateEntry, color }) {
   const hasMentions = entity.mentions > 0
   const isZeroPrimary = entity.is_primary && entity.rate_pct === 0
-  const totalQueries = mentionRateEntry?.total_queries ?? 12
+  const totalQueries = mentionRateEntry?.total_queries ?? LITE_QUERY_COUNT
   const mentionRateWidth = mentionRateEntry?.rate_pct ?? 0
   const citedWidth = hasMentions ? ((entity.cited_answers || 0) / totalQueries) * 100 : 0
   const animated = useAnimateOnMount()
@@ -728,7 +772,7 @@ function VisibilitySection({ report, ctaUrl }) {
   return (
     <LightCard id="viz">
       <SectionHeader
-        label="VISIBILITY · 12 QUERIES · CHATGPT"
+        label={`VISIBILITY · ${LITE_QUERY_COUNT} QUERIES · CHATGPT`}
         annotation={formatDateStamp()}
         headline="How often agents mention you — and your value"
       />
@@ -791,7 +835,7 @@ function VisibilitySection({ report, ctaUrl }) {
 // on this background (nothing dimmer clears AA), so hierarchy here
 // comes from size/weight, never a dimmer text color.
 
-const TRUE_VALUE_CODES = ['price_truth', 'member_value', 'deal_citability']
+const TRUE_VALUE_CODES = ['price_truth', 'member_value', 'deal_citability', 'value_protocols']
 
 function ButterflyWing({ side, subLens }) {
   if (!subLens) return null
@@ -838,6 +882,27 @@ function ButterflyRow({ dimension }) {
         {dimension.evidence?.[0] && (
           <div className="lite-mono" style={{ fontSize: 11, color: '#fff', marginTop: 4 }}>{dimension.evidence[0]}</div>
         )}
+      </div>
+    )
+  }
+  // Stage 25 (Part 6, A1): value_protocols is encode-only — a real left
+  // (seen) wing, but no said half exists at all (an agent's answer can't
+  // state whether a store "declares" a checkout protocol). The right
+  // side is a caption explaining why, never an empty wing standing in
+  // for a silent zero.
+  if (dimension.code === 'value_protocols') {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 150px 1fr', gap: 10, alignItems: 'center', padding: '8px 0' }}>
+        <ButterflyWing side="left" subLens={dimension.seen} />
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: '#fff' }}>{dimension.name}</div>
+          <div className="lite-mono" style={{ fontSize: 10.5, color: '#fff' }}>
+            {formatScore(dimension.earned)}/{formatScore(dimension.max)}
+          </div>
+        </div>
+        <div style={{ textAlign: 'left', fontSize: 11, fontStyle: 'italic', color: '#fff', opacity: 0.85 }}>
+          executes at checkout — not scored on answers
+        </div>
       </div>
     )
   }
@@ -1641,8 +1706,8 @@ function ExposureCard({ revenue, onRevenueChange, aiSharePct, onAiShareChange, e
 
 const PLATFORM_LABELS = ['ChatGPT', 'Gemini', 'Perplexity', 'Claude']
 const HIGHLIGHT_PANELS = [
-  { title: '3 more AI platforms', body: 'See how Gemini, Perplexity, and Claude answer the same 12 queries.' },
-  { title: 'Full category run', body: 'Hundreds of queries across your whole category, not a 12-query sample.' },
+  { title: '3 more AI platforms', body: `See how Gemini, Perplexity, and Claude answer the same ${LITE_QUERY_COUNT} queries.` },
+  { title: 'Full category run', body: `Hundreds of queries across your whole category, not a ${LITE_QUERY_COUNT}-query sample.` },
   { title: 'Net price accuracy', body: 'The gap between list price and true member price across your catalog.' },
 ]
 const REMAINING_LOCKED_TOPICS = [
@@ -1696,7 +1761,7 @@ function Footer() {
         We'll re-run this diagnostic monthly if you keep your report link.
       </span>
       <span className="lite-mono lite-muted" style={{ fontSize: 11 }}>
-        12 QUERIES · 1 PLATFORM · 1 RUN EACH · {formatDateStamp().toUpperCase()} · SAMPLE, NOT A CATEGORY STUDY
+        {LITE_QUERY_COUNT} QUERIES · 1 PLATFORM · 1 RUN EACH · {formatDateStamp().toUpperCase()} · SAMPLE, NOT A CATEGORY STUDY
       </span>
     </div>
   )

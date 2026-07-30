@@ -24,10 +24,41 @@ LOYALTY_TEXT_KEYWORDS = (
 SHIPPING_RETURNS_TEXT_KEYWORDS = (
     "free shipping", "return policy", "returns within", "ships in",
 )
-MEMBER_PRICE_JSON_HINTS = (
-    "memberprice", "member price", "loyaltyprice",
-    "eligiblecustomertype", "membershippointsearned",
+# Stage 25 (Part 2, P3): evidence-only signals — these never change a
+# score (price_truth_seen/deal_citability_seen still treat these pages
+# exactly as "no price"/"no deal shown", same as before), they only make
+# the evidence string honest about WHY nothing was crawlable: a real
+# gate the crawler correctly can't see behind, not a missing feature.
+LOGIN_GATED_PRICE_TEXT_KEYWORDS = (
+    "sign in to see price", "log in to see price", "sign in to view price",
+    "login to view pricing", "members-only pricing", "sign in for pricing",
+    "log in to view price",
 )
+EMAIL_GATED_DEAL_TEXT_KEYWORDS = (
+    "enter your email to unlock", "sign up to reveal your discount",
+    "get your code by email", "unlock your discount code",
+    "join our email list for a discount", "subscribe for a discount code",
+    "enter your email for a discount",
+)
+
+# Stage 25 (Part 2, P2): the exact schema.org vocabulary a member-price
+# claim must use to count — the same vocabulary the landing page's own
+# JSON-LD excerpt documents as valid (apps/api/web/src/lite/__tests__/
+# AnatomyOfAnAnswer.test.jsx's JSONLD_KEY_ALLOWLIST: membershipPointsEarned,
+# eligibleCustomerType) plus the memberPrice/loyaltyPrice convention
+# scorer.py's own fix text already recommends. Replaces the old whole-blob
+# substring scan (any of these words ANYWHERE in the node, including an
+# unrelated description sentence) with structural validation at the right
+# nesting level — see _detect_member_price_structure.
+MEMBER_PRICE_FIELD_KEYS = ("memberPrice", "loyaltyPrice")
+# Stage 25 (Part 2, P1): visible, currency-symbol-led prices in the page's
+# own rendered text — the other half of the price-consistency check
+# (scorer.py's _visible_body_price_mismatch). Requires a decimal component
+# so stray non-price numerals ("5 reviews") don't count; ambiguity from
+# ANY other dollar-looking text (a promo amount, a variant price) is
+# handled by the scorer's own "exactly one distinct value" guard, not by
+# a smarter regex here.
+VISIBLE_PRICE_PATTERN = re.compile(r"\$\s?\d[\d,]*\.\d{2}\b")
 # Stage 10 (D3): V4's CONCRETE/ACTIONABLE sub-checks mirror the deal_cited
 # rubric's own CONCRETE/ACTIONABLE tests (apps/pipeline/parser/prompts.py,
 # "DEAL CITATION RULES" — frozen per Stage 8 H1, read-only reference here).
@@ -79,6 +110,9 @@ class ExtractedData:
     shipping_returns_text_hits: list = field(default_factory=list)  # list[str]
     raw_jsonld_types: list = field(default_factory=list)        # list[str]
     agentic_protocol_hints: list = field(default_factory=list)  # list[str] evidence
+    visible_prices: list = field(default_factory=list)          # list[float], distinct, sorted
+    login_gated_price_text_hits: list = field(default_factory=list)  # list[str], evidence-only
+    email_gated_deal_text_hits: list = field(default_factory=list)   # list[str], evidence-only
 
 
 def _coerce_price(value) -> Optional[float]:
@@ -111,6 +145,61 @@ def _extract_offer(node: dict) -> OfferData:
         availability=availability,
         valid_through=valid_through,
     )
+
+
+def _has_valid_eligible_customer_type(offer_node: dict) -> bool:
+    """A real Offer.eligibleCustomerType — a non-empty string (or list of
+    them), at the offer level, not merely the phrase appearing somewhere
+    in the JSON."""
+    value = offer_node.get("eligibleCustomerType")
+    if isinstance(value, list):
+        return any(isinstance(v, str) and v.strip() for v in value)
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _has_valid_membership_points(offer_node: dict) -> bool:
+    """A real numeric priceSpecification.membershipPointsEarned — schema.org's
+    own UnitPriceSpecification property, not a stray text mention."""
+    price_spec = offer_node.get("priceSpecification")
+    if not isinstance(price_spec, dict):
+        return False
+    points = price_spec.get("membershipPointsEarned")
+    return isinstance(points, (int, float)) and not isinstance(points, bool)
+
+
+def _has_valid_member_price_field(node: dict) -> bool:
+    """A dedicated memberPrice/loyaltyPrice field with an actual numeric
+    price — either a bare number or a PriceSpecification-shaped dict."""
+    for key in MEMBER_PRICE_FIELD_KEYS:
+        value = node.get(key)
+        if value is None:
+            continue
+        if isinstance(value, dict):
+            if _coerce_price(value.get("price")) is not None:
+                return True
+        elif _coerce_price(value) is not None:
+            return True
+    return False
+
+
+def _detect_member_price_structure(node: dict, offer_nodes: list) -> bool:
+    """
+    Stage 25 (Part 2, P2): strict-parse member-price detection — true only
+    when an actually-typed schema.org structure is present at the right
+    nesting level (a memberPrice/loyaltyPrice field on the product, or an
+    Offer with eligibleCustomerType or priceSpecification.
+    membershipPointsEarned), never a substring match anywhere in the raw
+    JSON blob. A product description that merely mentions "member price"
+    in prose no longer counts — the old MEMBER_PRICE_JSON_HINTS behavior.
+    """
+    if _has_valid_member_price_field(node):
+        return True
+    for offer_node in offer_nodes:
+        if not isinstance(offer_node, dict):
+            continue
+        if _has_valid_eligible_customer_type(offer_node) or _has_valid_membership_points(offer_node):
+            return True
+    return False
 
 
 def _first_str(value) -> Optional[str]:
@@ -167,7 +256,7 @@ def _walk_jsonld_node(node, extracted: ExtractedData) -> None:
             blob = json.dumps(node).lower()
         except (TypeError, ValueError):
             blob = ""
-        product.has_member_price_hint = any(kw in blob for kw in MEMBER_PRICE_JSON_HINTS)
+        product.has_member_price_hint = _detect_member_price_structure(node, offer_nodes)
         product.has_concrete_discount_hint = any(kw in blob for kw in CONCRETE_DISCOUNT_JSON_HINTS)
         product.has_actionable_hint = any(kw in blob for kw in ACTIONABLE_JSON_HINTS)
         if any(kw in blob for kw in AGENTIC_PROTOCOL_JSON_HINTS):
@@ -217,6 +306,17 @@ def extract(html: str) -> ExtractedData:
         pass
 
     try:
+        # Stage 25 (Part 2, P1): strip script/style before any visible-text
+        # scan below — without this, a page's own JSON-LD price would
+        # trivially "match itself" as the visible-text price, defeating the
+        # whole point of the consistency check (and the pre-existing
+        # loyalty/shipping keyword scans would pick up script contents too).
+        for tag in soup.find_all(["script", "style"]):
+            tag.decompose()
+    except Exception:
+        log.exception("[scan.structured_data] failed to strip script/style before text scans")
+
+    try:
         was_price_matches = set()
         was_price_texts = []
         for el in soup.find_all(["del", "s", "strike"]):
@@ -244,6 +344,23 @@ def extract(html: str) -> ExtractedData:
         log.exception("[scan.structured_data] failed to scan for was-price signals")
 
     try:
+        # Stage 25 (Part 2, P1): every distinct dollar-formatted price in
+        # the page's own visible text (script/style already stripped
+        # above) — the scorer compares this against the structured Offer
+        # price; more than one distinct value here means the page is
+        # ambiguous (variants, a sale pair, an unrelated dollar figure)
+        # and the scorer's own guard skips the check entirely rather than
+        # guessing which one is "the" price.
+        prices = set()
+        for match in VISIBLE_PRICE_PATTERN.findall(soup.get_text(" ", strip=True)):
+            parsed = _parse_money(match)
+            if parsed is not None:
+                prices.add(round(parsed, 2))
+        extracted.visible_prices = sorted(prices)
+    except Exception:
+        log.exception("[scan.structured_data] failed to scan for visible body prices")
+
+    try:
         # "link markup" (D2) means an explicit <link>/<meta> declaration,
         # e.g. <link rel="mcp-manifest" href="...">  — deliberately NOT
         # scanning <a> hrefs/text, which would false-positive on ordinary
@@ -265,6 +382,12 @@ def extract(html: str) -> ExtractedData:
         extracted.loyalty_text_hits = [kw for kw in LOYALTY_TEXT_KEYWORDS if kw in body_text]
         extracted.shipping_returns_text_hits = [
             kw for kw in SHIPPING_RETURNS_TEXT_KEYWORDS if kw in body_text
+        ]
+        extracted.login_gated_price_text_hits = [
+            kw for kw in LOGIN_GATED_PRICE_TEXT_KEYWORDS if kw in body_text
+        ]
+        extracted.email_gated_deal_text_hits = [
+            kw for kw in EMAIL_GATED_DEAL_TEXT_KEYWORDS if kw in body_text
         ]
     except Exception:
         log.exception("[scan.structured_data] failed to scan body text")

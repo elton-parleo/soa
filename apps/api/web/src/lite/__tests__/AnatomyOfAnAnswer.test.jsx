@@ -7,15 +7,16 @@ import { describe, it, expect, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
 
 import { AnatomyOfAnAnswer } from '../landing/AnatomyOfAnAnswer.jsx'
-import { SCORER_VERSION, PILLAR_ORDER as V3_PILLAR_ORDER, PILLAR_WEIGHTS as V3_PILLAR_WEIGHTS } from '../landing/scanDimensionsRegistry.js'
 import {
+  SCORER_VERSION,
+  LITE_QUERY_COUNT,
   DIMENSIONS,
   DIMENSIONS_BY_CODE,
   PILLAR_NAMES,
   PILLAR_ORDER,
   PILLAR_WEIGHTS,
   PILLAR_TRUE_VALUE,
-} from '../landing/scanDimensionsV4Preview.js'
+} from '../landing/scanDimensionsRegistry.js'
 
 function contrastRatio(hex1, hex2) {
   const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 }
@@ -33,73 +34,40 @@ const COMPONENT_SRC = fs.readFileSync(
 )
 const THEME_CSS = fs.readFileSync(path.join(__dirname, '../theme.css'), 'utf8')
 
-// ─── P0 gate: REAL (v3) registry totals (enforced in CI) ─────────────────
-// Unrelated to the v4 preview below — this tracks the actual scan/report
-// scorer, which stays v3 the entire time the preview is live (S3).
+// ─── P0 gate: registry totals (enforced in CI) ───────────────────────────
 
-describe('AnatomyOfAnAnswer — P0 registry gate (real v3 scorer)', () => {
-  it('registry is scorer_version 3 with pillar weights summing to 40/20/40', () => {
-    expect(SCORER_VERSION).toBe('3')
-    expect(V3_PILLAR_ORDER).toEqual(['visibility', 'accessibility', 'true_value'])
-    expect(V3_PILLAR_WEIGHTS.visibility).toBe(40)
-    expect(V3_PILLAR_WEIGHTS.accessibility).toBe(20)
-    expect(V3_PILLAR_WEIGHTS.true_value).toBe(40)
-  })
-
-  it('renders a hidden scorer-version marker matching the REAL registry, not the v4 preview', () => {
-    const { container } = render(<AnatomyOfAnAnswer />)
-    expect(container.querySelector('[data-scorer-version]').getAttribute('data-scorer-version')).toBe('3')
-  })
-})
-
-// ─── Stage 24 (S1): v4 preview module isolation ──────────────────────────
-
-describe('AnatomyOfAnAnswer — v4 preview module isolation (S1)', () => {
-  it('the preview module is scorer_version-agnostic marketing data — pillar weights sum to 40/20/40', () => {
+describe('AnatomyOfAnAnswer — P0 registry gate', () => {
+  it('registry is scorer_version 4 with pillar weights summing to 40/20/40', () => {
+    expect(SCORER_VERSION).toBe('4')
     expect(PILLAR_ORDER).toEqual(['visibility', 'accessibility', 'true_value'])
     expect(PILLAR_WEIGHTS.visibility).toBe(40)
     expect(PILLAR_WEIGHTS.accessibility).toBe(20)
     expect(PILLAR_WEIGHTS.true_value).toBe(40)
   })
 
+  it('renders a hidden scorer-version marker matching the registry', () => {
+    const { container } = render(<AnatomyOfAnAnswer />)
+    expect(container.querySelector('[data-scorer-version]').getAttribute('data-scorer-version')).toBe('4')
+  })
+
   it('True Value has exactly four dimensions in the documented order, Value Protocols last', () => {
     const tvCodes = DIMENSIONS.filter((d) => d.pillar === PILLAR_TRUE_VALUE).map((d) => d.code)
     expect(tvCodes).toEqual(['price_truth', 'member_value', 'deal_citability', 'value_protocols'])
   })
-
-  it('import-guard: only AnatomyOfAnAnswer.jsx imports scanDimensionsV4Preview outside test files', () => {
-    const srcRoot = path.join(__dirname, '..', '..') // apps/api/web/src
-    const offenders = []
-
-    function walk(dir) {
-      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        if (entry.name === '__tests__' || entry.name === 'node_modules') continue
-        const full = path.join(dir, entry.name)
-        if (entry.isDirectory()) { walk(full); continue }
-        if (!/\.(js|jsx)$/.test(entry.name)) continue
-        if (entry.name === 'scanDimensionsV4Preview.js') continue
-        const text = fs.readFileSync(full, 'utf8')
-        if (text.includes('scanDimensionsV4Preview') && entry.name !== 'AnatomyOfAnAnswer.jsx') {
-          offenders.push(path.relative(srcRoot, full))
-        }
-      }
-    }
-    walk(srcRoot)
-
-    expect(offenders).toEqual([])
-  })
 })
 
-// ─── Stage 24 (S2): skipped parity — documented debt, not enforced yet ───
+// ─── Stage 25 (R1/R2): test_v4_preview_matches_live_registry, now ACTIVE ──
+// Stage 24 introduced this as a SKIPPED shadow-comparison against a
+// hard-coded expectation, since no real v4 registry existed yet to
+// compare against. Stage 25 deleted the marketing-only preview module
+// and made scanDimensionsRegistry.js itself the v4 registry — so this
+// is now a live regression guard (not a tautology-with-itself): it pins
+// the exact weights the whole stage's rescale/reconciliation depended
+// on, so a future edit that silently drifts a weight without updating
+// this test fails loudly, same as any other pinned-value test.
 
-describe('AnatomyOfAnAnswer — v4 preview vs. future soa_shared registry (S2)', () => {
-  // Flip to active (drop .skip) the moment SCORER_VERSION (scanDimensions
-  // Registry.js) === '4' — at that point a real soa_shared v4 export
-  // exists to compare against instead of this hard-coded shadow of the
-  // expected shape. Until then this documents the debt in the suite
-  // where it can't be forgotten, without importing a Python module (or a
-  // JS export) that doesn't exist yet.
-  it.skip('test_v4_preview_matches_live_registry — flip to active when SCORER_VERSION === "4"', () => {
+describe('AnatomyOfAnAnswer — test_v4_preview_matches_live_registry (flipped active, R2)', () => {
+  it('pillar weights and True Value dimension weights match the documented v4 spec', () => {
     const EXPECTED_V4_PILLAR_WEIGHTS = { visibility: 40, accessibility: 20, true_value: 40 }
     const EXPECTED_V4_TRUE_VALUE_WEIGHTS = {
       price_truth: 12, member_value: 15, deal_citability: 6, value_protocols: 7,
@@ -108,6 +76,11 @@ describe('AnatomyOfAnAnswer — v4 preview vs. future soa_shared registry (S2)',
     for (const [code, weight] of Object.entries(EXPECTED_V4_TRUE_VALUE_WEIGHTS)) {
       expect(DIMENSIONS_BY_CODE[code].weight).toBe(weight)
     }
+  })
+
+  it('value_protocols has a seen half but no said half at all (encode-only)', () => {
+    expect(DIMENSIONS_BY_CODE.value_protocols.seenMax).toBe(7)
+    expect(DIMENSIONS_BY_CODE.value_protocols.saidMax).toBeNull()
   })
 })
 
@@ -235,7 +208,7 @@ describe('AnatomyOfAnAnswer — eyebrow and seam labels (Changes 3/4)', () => {
     // Pinned exactly: if the seam's platform mention is ever dropped
     // further, this is the one remaining place the claim is scoped —
     // it must not silently disappear too.
-    expect(screen.getByText('12 queries · 1 platform · deterministic · sample, not a category study.'))
+    expect(screen.getByText(`${LITE_QUERY_COUNT} queries · 1 platform · deterministic · sample, not a category study.`))
       .toBeInTheDocument()
   })
 })

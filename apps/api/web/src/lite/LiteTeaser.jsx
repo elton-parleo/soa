@@ -21,6 +21,7 @@ import { accessibilityBadgeText, getScoreBand, getVerdictLine } from './liteDeri
 import {
   ENTITY_COLORS, LightCard, DarkCard, BandPill, BandScale, FamilyBar, ErrorBanner, Chip,
 } from './liteTheme.jsx'
+import { SCORER_VERSION } from './landing/scanDimensionsRegistry.js'
 
 function WorstAnswer({ excerpt }) {
   if (!excerpt || !excerpt.text) return null
@@ -92,13 +93,15 @@ export function LiteTeaser({ report, token, onUnlocked }) {
   const accessBadge = accessibilityBadgeText(report.scan_status)
   const band = getScoreBand(report.composite)
   const verdict = getVerdictLine(report)
-  // Stage 19 (R6): the teaser has no scan/pillars object to detect this
-  // from itself — scorer_version is its only signal. composite/visibility/
-  // accessibility are already correct either way (see public_lite.py's
-  // version branch); this is purely the same disclosure the full report
-  // gives, so a visitor isn't left assuming the current methodology scored
-  // an old row.
-  const scoredUnderPreviousMethodology = report.scan_status === 'complete' && report.scorer_version !== '3'
+  // Stage 19 (R6), updated Stage 25: the teaser has no scan/pillars
+  // object to detect this from itself — scorer_version is its only
+  // signal. composite/visibility/accessibility are already correct
+  // either way (see public_lite.py's version branch); this is purely
+  // the same disclosure the full report gives, so a visitor isn't left
+  // assuming the current methodology scored an old row. Compared
+  // against the registry's own SCORER_VERSION, not a hard-coded
+  // literal, so this stays correct the next time the registry bumps.
+  const scoredUnderPreviousMethodology = report.scan_status === 'complete' && report.scorer_version !== SCORER_VERSION
 
   async function handleUnlock(e) {
     e.preventDefault()

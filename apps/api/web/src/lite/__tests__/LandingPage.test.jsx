@@ -5,6 +5,7 @@ import '@testing-library/jest-dom'
 
 import LandingPage from '../LandingPage.jsx'
 import { liteApi } from '../liteApi.js'
+import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
 
 vi.mock('../liteApi.js', () => ({
   liteApi: { submit: vi.fn() },
@@ -94,7 +95,7 @@ describe('LandingPage — truth-rule copy regression guards', () => {
   it('carries the exact methodology stamp', () => {
     render(<LandingPage navigate={navigate} />)
 
-    expect(screen.getByText('12 queries · 1 platform · deterministic · sample, not a category study.')).toBeInTheDocument()
+    expect(screen.getByText(`${LITE_QUERY_COUNT} queries · 1 platform · deterministic · sample, not a category study.`)).toBeInTheDocument()
   })
 
   it('scopes the four-agent claim to the crawl, not the ChatGPT-only score', () => {

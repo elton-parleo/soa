@@ -32,10 +32,10 @@ import { LogoHeader, ErrorBanner, LightCard, DarkCard, Chip } from './liteTheme.
 import { domainFromStoreUrl, formatElapsed, maskEmail } from './liteDerive.js'
 import { liteApi } from './liteApi.js'
 import { validateEmail } from './validation.js'
-import { PILLAR_NAMES, PILLAR_ORDER } from './landing/scanDimensionsRegistry.js'
+import { PILLAR_NAMES, PILLAR_ORDER, LITE_QUERY_COUNT } from './landing/scanDimensionsRegistry.js'
 
 const STALL_THRESHOLD_MS = 90_000
-const DEFAULT_TOTAL_QUERIES = 12 // fixed query count for every SoA Lite run, not registry data
+const DEFAULT_TOTAL_QUERIES = LITE_QUERY_COUNT // fixed query count for every SoA Lite run
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(() => (
@@ -184,7 +184,7 @@ function deriveQuestionsRow(phaseData) {
   }
   if (QUESTIONS_DONE_PHASES.has(phase)) {
     const total = progress?.total_runs || DEFAULT_TOTAL_QUERIES
-    return { state: 'done', stamp: `${total} OF ${total}`, detail: 'All 12 answers collected', fraction: 1 }
+    return { state: 'done', stamp: `${total} OF ${total}`, detail: `All ${total} answers collected`, fraction: 1 }
   }
   return { state: 'pending', detail: '', stamp: null, fraction: 0 }
 }

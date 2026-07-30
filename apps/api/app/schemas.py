@@ -922,19 +922,25 @@ class PublicLiteFixesSection(BaseModel):
 
 class PublicLitePillars(BaseModel):
     """
-    Stage 16 (Part 7): the three-pillar breakdown behind a scorer_
-    version "3" scan's visibility/accessibility/composite scalars.
+    Stage 16 (Part 7), rescaled Stage 25: the three-pillar breakdown
+    behind a scan's visibility/accessibility/composite scalars.
     Additive — present on the full report only, and only when the scan
-    row is scorer_version "3" (older rows have no v3-shaped crawl
-    dimensions to build this from; see public_lite.py's version branch).
+    row is at the CURRENT scorer version (older rows have no
+    current-shaped crawl dimensions to build this from; see
+    public_lite.py's version branch).
     """
     visibility: PublicLitePillar
     accessibility: PublicLitePillar
     true_value: PublicLitePillar
     member_value_na: bool = False
-    # Part 3 (F1): additive, same v3-only availability as the rest of
-    # this object — see PublicLiteFixesSection's own docstring.
+    # Part 3 (F1): additive, same current-version-only availability as
+    # the rest of this object — see PublicLiteFixesSection's own
+    # docstring.
     fixes: Optional[PublicLiteFixesSection] = None
+    # Stage 25 (Part 5, G1): "AGENT-READY" | "NOT AGENT-READY" — a pass/
+    # fail gate independent of the composite's straight-sum weighting,
+    # from soa_shared.scan_dimensions.compute_verdict.
+    verdict: Optional[str] = None
 
 
 class PublicLiteReportResponse(BaseModel):

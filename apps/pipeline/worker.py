@@ -11,7 +11,7 @@ only through the database — no direct coupling.
 
 Also polls soa_lite_requests (status='pending') for SoA Lite, the public
 unauthenticated lead-gen flow: process_lite_requests resolves entities,
-generates a fixed 12-query study, and creates a cycle for it, which then
+generates a fixed LITE_QUERY_COUNT-query study, and creates a cycle for it, which then
 flows through the SAME planned-cycle poll/execute_cycle path as any other
 cycle (prioritized — see get_next_planned_cycle). Once the cycle is
 queued, process_lite_requests also runs the Agent Scan (scan/engine.py)
@@ -58,9 +58,11 @@ def get_next_planned_cycle():
     cycle_mode) or None.
 
     SoA Lite cycles (cycle_code prefix 'lite-') jump the queue ahead of
-    everything else: they run in ~2 minutes (1 platform, 1 run/query, 12
-    queries) versus hours for a full client cycle, and a lead-gen visitor
-    is waiting live on the result. Within each priority tier, oldest first.
+    everything else: they run in a couple minutes (1 platform,
+    1 run/query, LITE_QUERY_COUNT queries, at LITE_QUERY_CONCURRENCY —
+    see run_orchestrator.py) versus hours for a full client cycle, and a
+    lead-gen visitor is waiting live on the result. Within each priority
+    tier, oldest first.
     """
     with engine.connect() as conn:
         row = conn.execute(text("""
@@ -499,7 +501,7 @@ def process_lite_requests():
                 "id":   request_id,
             })
 
-        # c. Generate the fixed 12-query study and insert into soa_queries.
+        # c. Generate the fixed LITE_QUERY_COUNT-query study and insert into soa_queries.
         # _insert_generated_rows' query_code prefixing (first 3 chars up to
         # the first underscore) naturally yields 'LIT' for study_type
         # 'lite-{token8}' — no lite-specific insert logic needed.

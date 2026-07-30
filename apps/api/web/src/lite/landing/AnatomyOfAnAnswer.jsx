@@ -8,21 +8,19 @@
  * answer with inline marks), then how that maps onto the pillar score
  * (sticky, pillar-grouped ledger).
  *
- * Stage 24: the ledger now renders the v4 FRAMEWORK PREVIEW —
- * apps/api/web/src/lite/landing/scanDimensionsV4Preview.js — a
- * marketing-only preview of the framework the scan will move to next;
- * the live scan/report stay on v3 (soa_shared/scan_dimensions.py via
- * scanDimensionsRegistry.js) the entire time this is live (see that
- * module's own header comment, and its own S3 in the stage brief). The
- * hidden `data-scorer-version` marker below is the one thing still
- * sourced from the REAL v3 registry — it is an existing P0 CI gate
- * tracking actual scorer reality, unrelated to this preview.
+ * Stage 25: this now renders straight off scanDimensionsRegistry.js —
+ * the SAME registry-backed module the live report uses (the JS mirror
+ * of soa_shared/scan_dimensions.py's v4 registry). The v4-preview-only
+ * module (scanDimensionsV4Preview.js, Stage 24) is deleted; landing and
+ * scorer cannot disagree from this commit on. The hidden
+ * `data-scorer-version` marker below is this same registry's
+ * SCORER_VERSION — one number, one source, everywhere.
  *
  * Each ledger row expands (accordion, one open at a time) into a
  * three-microsection detail panel — WHAT IT IS / HOW WE MEASURE / HOW
- * IT'S SCORED — populated entirely from the preview module's per-
- * dimension whatItIs/howMeasured/howScored fields, never hard-coded
- * copy in this file.
+ * IT'S SCORED — populated entirely from the registry's per-dimension
+ * whatItIs/howMeasured/howScored fields, never hard-coded copy in this
+ * file.
  *
  * One activation model, keyed by dimension code (I1): clicking/
  * Enter-Space-ing any mark, markup line, chrome badge, or ledger row
@@ -46,14 +44,15 @@
  */
 import { useState } from 'react'
 import { SectionHeader } from '../liteTheme.jsx'
-import { SCORER_VERSION } from './scanDimensionsRegistry.js'
 import {
+  SCORER_VERSION,
+  LITE_QUERY_COUNT,
   DIMENSIONS,
   DIMENSIONS_BY_CODE,
   PILLAR_NAMES,
   PILLAR_ORDER,
   PILLAR_TRUE_VALUE,
-} from './scanDimensionsV4Preview.js'
+} from './scanDimensionsRegistry.js'
 
 const DIM = DIMENSIONS_BY_CODE
 
@@ -368,12 +367,11 @@ export function AnatomyOfAnAnswer() {
       </div>
 
       <div className="lite-mono lite-muted" style={{ fontSize: 11.5, marginTop: 16 }}>
-        12 queries · 1 platform · deterministic · sample, not a category study.
+        {LITE_QUERY_COUNT} queries · 1 platform · deterministic · sample, not a category study.
       </div>
       {/* Registry version marker for the P0 CI gate — not user-visible
-          copy, and NOT the v4 preview: this tracks the real scan/report
-          scorer (still v3) so the gate keeps meaning what it always
-          has, independent of this section's preview content above. */}
+          copy. Tracks the real scan/report scorer, straight off the
+          same registry this whole section renders from. */}
       <span data-scorer-version={SCORER_VERSION} style={{ display: 'none' }} aria-hidden="true" />
     </section>
   )
