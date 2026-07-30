@@ -1176,18 +1176,48 @@
   justify-content: space-between;
   gap: 10px;
 }
-.lite-anatomy-ledger-desc {
+/* Stage 24 (Part 2, L1): the three-microsection detail panel replacing
+   the old single-paragraph .lite-anatomy-ledger-desc. */
+.lite-anatomy-detail-panel {
+  margin-top: 10px;
+}
+.lite-anatomy-detail-section {
+  margin-top: 10px;
+}
+.lite-anatomy-detail-section:first-child {
   margin-top: 8px;
+}
+.lite-anatomy-detail-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-2);
+  margin-bottom: 4px;
+}
+.lite-anatomy-detail-body {
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--text-2);
 }
+.lite-anatomy-detail-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.lite-anatomy-detail-check {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
 .lite-anatomy-seen-said {
+  display: block;
   font-family: var(--mono);
   font-size: 10.5px;
   font-weight: 700;
   color: var(--accent-ink);
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 /* True Value card (Stage 18, Change 2): ink -> accent blue. White text
@@ -1215,7 +1245,9 @@
 .lite-anatomy-pillar-card--tv .lite-anatomy-ledger-row--active {
   background: rgba(255, 255, 255, 0.16);
 }
-.lite-anatomy-pillar-card--tv .lite-anatomy-ledger-desc {
+.lite-anatomy-pillar-card--tv .lite-anatomy-detail-label,
+.lite-anatomy-pillar-card--tv .lite-anatomy-detail-body,
+.lite-anatomy-pillar-card--tv .lite-anatomy-detail-check {
   color: #fff;
 }
 .lite-anatomy-pillar-card--tv .lite-anatomy-seen-said {

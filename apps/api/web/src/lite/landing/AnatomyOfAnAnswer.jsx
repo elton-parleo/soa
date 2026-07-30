@@ -5,24 +5,40 @@
  * Stage 18). Walks a visitor through one real shopper question: what
  * the agent's crawl actually sees (browser-chrome markup card, real
  * schema.org JSON-LD), then what the agent says back (an illustrative
- * answer with inline marks), then how that maps onto the three-pillar
- * score (sticky, pillar-grouped ledger).
+ * answer with inline marks), then how that maps onto the pillar score
+ * (sticky, pillar-grouped ledger).
  *
- * Every dimension name, weight, and SEEN/SAID split renders from
- * scanDimensionsRegistry.js (the hand-maintained JS mirror of
- * soa_shared/scan_dimensions.py — see that file's docstring) — nothing
- * here is a second definition of the rubric. Descriptive copy (ledger
- * blurbs, the question/answer illustration) is free text, not registry
- * data.
+ * Stage 24: the ledger now renders the v4 FRAMEWORK PREVIEW —
+ * apps/api/web/src/lite/landing/scanDimensionsV4Preview.js — a
+ * marketing-only preview of the framework the scan will move to next;
+ * the live scan/report stay on v3 (soa_shared/scan_dimensions.py via
+ * scanDimensionsRegistry.js) the entire time this is live (see that
+ * module's own header comment, and its own S3 in the stage brief). The
+ * hidden `data-scorer-version` marker below is the one thing still
+ * sourced from the REAL v3 registry — it is an existing P0 CI gate
+ * tracking actual scorer reality, unrelated to this preview.
+ *
+ * Each ledger row expands (accordion, one open at a time) into a
+ * three-microsection detail panel — WHAT IT IS / HOW WE MEASURE / HOW
+ * IT'S SCORED — populated entirely from the preview module's per-
+ * dimension whatItIs/howMeasured/howScored fields, never hard-coded
+ * copy in this file.
  *
  * One activation model, keyed by dimension code (I1): clicking/
  * Enter-Space-ing any mark, markup line, chrome badge, or ledger row
  * activates that dimension everywhere — matching elements share a
  * `dim` prop compared against `activeDims`. The ghost sentence
- * activates all three True Value dimensions at once; every other
- * activation is a single dimension. `openDim` tracks which ONE
- * ledger row has its description expanded (accordion — one open at a
- * time), defaulting to member_value on mount (I2).
+ * activates the three True Value dimensions the illustrative sentence
+ * actually marks; every other activation is a single dimension.
+ * `openDim` tracks which ONE ledger row has its detail panel expanded
+ * (accordion — one open at a time), defaulting to member_value on
+ * mount (I2).
+ *
+ * Value Protocols (Part 3) is the fourth True Value row: it is
+ * encode-only, so it has NO mark in the illustrative answer — its
+ * cross-highlight target instead is a new capability badge in the
+ * browser-chrome row ("UCP · DISCOUNT ✓"), the honest visual for a
+ * declared-but-unspoken capability.
  *
  * Demo brand: Allbirds (the existing placeholder brand across the
  * widget — see LiteForm.jsx), footwear category. The agent answer is
@@ -30,22 +46,23 @@
  */
 import { useState } from 'react'
 import { SectionHeader } from '../liteTheme.jsx'
+import { SCORER_VERSION } from './scanDimensionsRegistry.js'
 import {
   DIMENSIONS,
   DIMENSIONS_BY_CODE,
   PILLAR_NAMES,
   PILLAR_ORDER,
   PILLAR_TRUE_VALUE,
-  SCORER_VERSION,
-} from './scanDimensionsRegistry.js'
+} from './scanDimensionsV4Preview.js'
 
 const DIM = DIMENSIONS_BY_CODE
 
-// True Value dims, in registry order, for the ghost sentence's
-// "activate all three at once" group and the blue ledger card.
-const TRUE_VALUE_CODES = Object.values(DIM)
-  .filter((d) => d.pillar === PILLAR_TRUE_VALUE)
-  .map((d) => d.code)
+// The three True Value dimensions the illustrative sentence actually
+// marks (I1). Deliberately NOT derived from pillar membership — Value
+// Protocols is also a True Value dimension but has no sentence span at
+// all (Part 3, V1), so this fixed set is a content decision, not a
+// registry fact.
+const TRUE_VALUE_SENTENCE_CODES = ['price_truth', 'member_value', 'deal_citability']
 
 // Pillar -> member dimension codes, in registry order. Membership
 // itself is static (a dimension's pillar assignment doesn't change),
@@ -88,18 +105,10 @@ const CHROME_BADGES = [
   { key: 'llms', label: 'llms.txt ✓', dim: 'protocol_feed' },
   { key: 'mcp', label: 'MCP ✓', dim: 'protocol_feed' },
   { key: 'ucp', label: 'UCP ✓', dim: 'protocol_feed' },
+  // Part 3 (V1): Value Protocols' only cross-highlight target — it has
+  // no answer mark, so this badge is the sole L2 element for it.
+  { key: 'ucp-discount', label: 'UCP · DISCOUNT ✓', dim: 'value_protocols' },
 ]
-
-const LEDGER_COPY = {
-  share_of_mentions: 'How often Allbirds gets named at all across shopper questions on ChatGPT.',
-  recommendation_strength: 'Whether the agent singles Allbirds out as the best pick, or just lists it among others.',
-  agent_access: "Whether agents can even reach Allbirds' pages — robots.txt, sitemap, basic crawlability.",
-  catalog_context: 'Whether product identity — name, brand, GTIN — is machine-readable enough for an agent to be sure what it’s looking at.',
-  protocol_feed: 'Whether Allbirds exposes newer agent-facing surfaces: llms.txt, MCP, and UCP.',
-  price_truth: 'Whether the price is machine-readable on the page (SEEN) and whether the agent actually states it (SAID).',
-  member_value: 'Whether member/loyalty pricing is encoded on the page (SEEN) and whether the agent tells the shopper about it (SAID).',
-  deal_citability: 'Whether an active, concrete deal is encoded (SEEN) and whether the agent cites it as a real offer (SAID).',
-}
 
 // ─── Small building blocks ───────────────────────────────────────────
 
@@ -156,9 +165,43 @@ function CodeLine({ line, active, onActivate }) {
   )
 }
 
+// Part 2 (L1): the three-microsection detail panel — WHAT IT IS / HOW
+// WE MEASURE / HOW IT'S SCORED — populated entirely from the preview
+// module's per-dimension fields. True Value's seen/said split renders
+// inside HOW IT'S SCORED, computed live from dim.seenMax/saidMax (never
+// baked into the howScored copy itself) so it still moves under the
+// existing perturbation-test discipline.
+function DimensionDetailPanel({ dim }) {
+  const hasSplit = dim.seenMax !== null && dim.saidMax !== null
+  return (
+    <span className="lite-anatomy-detail-panel" style={{ display: 'block' }}>
+      <span className="lite-anatomy-detail-section" style={{ display: 'block' }}>
+        <span className="lite-anatomy-detail-label">WHAT IT IS</span>
+        <span className="lite-anatomy-detail-body" style={{ display: 'block' }}>{dim.whatItIs}</span>
+      </span>
+      <span className="lite-anatomy-detail-section" style={{ display: 'block' }}>
+        <span className="lite-anatomy-detail-label">HOW WE MEASURE</span>
+        <span className="lite-anatomy-detail-checklist" style={{ display: 'block' }}>
+          {dim.howMeasured.map((check) => (
+            <span key={check} className="lite-anatomy-detail-check" style={{ display: 'block' }}>✓ {check}</span>
+          ))}
+        </span>
+      </span>
+      <span className="lite-anatomy-detail-section" style={{ display: 'block' }}>
+        <span className="lite-anatomy-detail-label">HOW IT'S SCORED</span>
+        <span className="lite-anatomy-detail-body" style={{ display: 'block' }}>{dim.howScored}</span>
+        {hasSplit && (
+          <span className="lite-anatomy-seen-said" style={{ display: 'block' }}>
+            SEEN {dim.seenMax} · SAID {dim.saidMax}
+          </span>
+        )}
+      </span>
+    </span>
+  )
+}
+
 function LedgerRow({ code, active, open, onActivate }) {
   const dim = DIM[code]
-  const hasSplit = dim.seenMax !== null && dim.saidMax !== null
   const classes = ['lite-anatomy-ledger-row']
   if (active) classes.push('lite-anatomy-ledger-row--active')
   return (
@@ -174,16 +217,7 @@ function LedgerRow({ code, active, open, onActivate }) {
           {dim.weight} pts
         </span>
       </span>
-      {open && (
-        <span style={{ display: 'block' }}>
-          <span className="lite-anatomy-ledger-desc">{LEDGER_COPY[code]}</span>
-          {hasSplit && (
-            <span className="lite-anatomy-seen-said" style={{ display: 'block' }}>
-              SEEN {dim.seenMax} · SAID {dim.saidMax}
-            </span>
-          )}
-        </span>
-      )}
+      {open && <DimensionDetailPanel dim={dim} />}
     </button>
   )
 }
@@ -227,7 +261,7 @@ export function AnatomyOfAnAnswer() {
   }
 
   function activateGhost() {
-    activate(TRUE_VALUE_CODES, 'member_value')
+    activate(TRUE_VALUE_SENTENCE_CODES, 'member_value')
   }
 
   const isActive = (code) => activeDims.includes(code)
@@ -302,8 +336,8 @@ export function AnatomyOfAnAnswer() {
             .
             <button
               type="button"
-              className={`lite-anatomy-ghost${TRUE_VALUE_CODES.every(isActive) ? ' lite-anatomy-ghost--active' : ''}`}
-              aria-pressed={TRUE_VALUE_CODES.every(isActive)}
+              className={`lite-anatomy-ghost${TRUE_VALUE_SENTENCE_CODES.every(isActive) ? ' lite-anatomy-ghost--active' : ''}`}
+              aria-pressed={TRUE_VALUE_SENTENCE_CODES.every(isActive)}
               onClick={activateGhost}
             >
               …the sentence most stores never get
@@ -336,7 +370,10 @@ export function AnatomyOfAnAnswer() {
       <div className="lite-mono lite-muted" style={{ fontSize: 11.5, marginTop: 16 }}>
         12 queries · 1 platform · deterministic · sample, not a category study.
       </div>
-      {/* Registry version marker for the P0 CI gate — not user-visible copy. */}
+      {/* Registry version marker for the P0 CI gate — not user-visible
+          copy, and NOT the v4 preview: this tracks the real scan/report
+          scorer (still v3) so the gate keeps meaning what it always
+          has, independent of this section's preview content above. */}
       <span data-scorer-version={SCORER_VERSION} style={{ display: 'none' }} aria-hidden="true" />
     </section>
   )

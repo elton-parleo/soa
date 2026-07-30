@@ -7,14 +7,15 @@ import { describe, it, expect, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
 
 import { AnatomyOfAnAnswer } from '../landing/AnatomyOfAnAnswer.jsx'
+import { SCORER_VERSION, PILLAR_ORDER as V3_PILLAR_ORDER, PILLAR_WEIGHTS as V3_PILLAR_WEIGHTS } from '../landing/scanDimensionsRegistry.js'
 import {
   DIMENSIONS,
   DIMENSIONS_BY_CODE,
   PILLAR_NAMES,
   PILLAR_ORDER,
   PILLAR_WEIGHTS,
-  SCORER_VERSION,
-} from '../landing/scanDimensionsRegistry.js'
+  PILLAR_TRUE_VALUE,
+} from '../landing/scanDimensionsV4Preview.js'
 
 function contrastRatio(hex1, hex2) {
   const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4 }
@@ -32,20 +33,81 @@ const COMPONENT_SRC = fs.readFileSync(
 )
 const THEME_CSS = fs.readFileSync(path.join(__dirname, '../theme.css'), 'utf8')
 
-// ─── P0 gate: registry totals (enforced in CI) ───────────────────────────
+// ─── P0 gate: REAL (v3) registry totals (enforced in CI) ─────────────────
+// Unrelated to the v4 preview below — this tracks the actual scan/report
+// scorer, which stays v3 the entire time the preview is live (S3).
 
-describe('AnatomyOfAnAnswer — P0 registry gate', () => {
+describe('AnatomyOfAnAnswer — P0 registry gate (real v3 scorer)', () => {
   it('registry is scorer_version 3 with pillar weights summing to 40/20/40', () => {
     expect(SCORER_VERSION).toBe('3')
+    expect(V3_PILLAR_ORDER).toEqual(['visibility', 'accessibility', 'true_value'])
+    expect(V3_PILLAR_WEIGHTS.visibility).toBe(40)
+    expect(V3_PILLAR_WEIGHTS.accessibility).toBe(20)
+    expect(V3_PILLAR_WEIGHTS.true_value).toBe(40)
+  })
+
+  it('renders a hidden scorer-version marker matching the REAL registry, not the v4 preview', () => {
+    const { container } = render(<AnatomyOfAnAnswer />)
+    expect(container.querySelector('[data-scorer-version]').getAttribute('data-scorer-version')).toBe('3')
+  })
+})
+
+// ─── Stage 24 (S1): v4 preview module isolation ──────────────────────────
+
+describe('AnatomyOfAnAnswer — v4 preview module isolation (S1)', () => {
+  it('the preview module is scorer_version-agnostic marketing data — pillar weights sum to 40/20/40', () => {
     expect(PILLAR_ORDER).toEqual(['visibility', 'accessibility', 'true_value'])
     expect(PILLAR_WEIGHTS.visibility).toBe(40)
     expect(PILLAR_WEIGHTS.accessibility).toBe(20)
     expect(PILLAR_WEIGHTS.true_value).toBe(40)
   })
 
-  it('renders a hidden scorer-version marker matching the registry', () => {
-    const { container } = render(<AnatomyOfAnAnswer />)
-    expect(container.querySelector('[data-scorer-version]').getAttribute('data-scorer-version')).toBe('3')
+  it('True Value has exactly four dimensions in the documented order, Value Protocols last', () => {
+    const tvCodes = DIMENSIONS.filter((d) => d.pillar === PILLAR_TRUE_VALUE).map((d) => d.code)
+    expect(tvCodes).toEqual(['price_truth', 'member_value', 'deal_citability', 'value_protocols'])
+  })
+
+  it('import-guard: only AnatomyOfAnAnswer.jsx imports scanDimensionsV4Preview outside test files', () => {
+    const srcRoot = path.join(__dirname, '..', '..') // apps/api/web/src
+    const offenders = []
+
+    function walk(dir) {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === '__tests__' || entry.name === 'node_modules') continue
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory()) { walk(full); continue }
+        if (!/\.(js|jsx)$/.test(entry.name)) continue
+        if (entry.name === 'scanDimensionsV4Preview.js') continue
+        const text = fs.readFileSync(full, 'utf8')
+        if (text.includes('scanDimensionsV4Preview') && entry.name !== 'AnatomyOfAnAnswer.jsx') {
+          offenders.push(path.relative(srcRoot, full))
+        }
+      }
+    }
+    walk(srcRoot)
+
+    expect(offenders).toEqual([])
+  })
+})
+
+// ─── Stage 24 (S2): skipped parity — documented debt, not enforced yet ───
+
+describe('AnatomyOfAnAnswer — v4 preview vs. future soa_shared registry (S2)', () => {
+  // Flip to active (drop .skip) the moment SCORER_VERSION (scanDimensions
+  // Registry.js) === '4' — at that point a real soa_shared v4 export
+  // exists to compare against instead of this hard-coded shadow of the
+  // expected shape. Until then this documents the debt in the suite
+  // where it can't be forgotten, without importing a Python module (or a
+  // JS export) that doesn't exist yet.
+  it.skip('test_v4_preview_matches_live_registry — flip to active when SCORER_VERSION === "4"', () => {
+    const EXPECTED_V4_PILLAR_WEIGHTS = { visibility: 40, accessibility: 20, true_value: 40 }
+    const EXPECTED_V4_TRUE_VALUE_WEIGHTS = {
+      price_truth: 12, member_value: 15, deal_citability: 6, value_protocols: 7,
+    }
+    expect(PILLAR_WEIGHTS).toEqual(EXPECTED_V4_PILLAR_WEIGHTS)
+    for (const [code, weight] of Object.entries(EXPECTED_V4_TRUE_VALUE_WEIGHTS)) {
+      expect(DIMENSIONS_BY_CODE[code].weight).toBe(weight)
+    }
   })
 })
 
@@ -62,7 +124,7 @@ describe('AnatomyOfAnAnswer — registry-drivenness', () => {
 
   it('component source contains no hard-coded point-value flag literals', () => {
     // The exact composed strings a hand-typed flag would produce
-    // (V·25, TV·19, "19 pts", etc.) — these must only ever appear as
+    // (V·25, TV·15, "15 pts", etc.) — these must only ever appear as
     // template-literal expressions reading DIM[code].weight, never as
     // source text, so none of these literal substrings may appear.
     for (const dim of DIMENSIONS) {
@@ -74,13 +136,34 @@ describe('AnatomyOfAnAnswer — registry-drivenness', () => {
     }
   })
 
+  it('component source contains no hard-coded detail-copy literals (whatItIs/howMeasured/howScored come from the module)', () => {
+    // howMeasured entries are filtered to reasonably-distinguishing
+    // strings (>20 chars) — short technical tokens like "llms.txt"
+    // legitimately also appear in the illustration's own unrelated,
+    // deliberately-hardcoded browser-chrome badge label, and a bare
+    // substring match there isn't evidence of the copy itself being
+    // hand-typed into JSX.
+    for (const dim of DIMENSIONS) {
+      expect(COMPONENT_SRC).not.toContain(dim.whatItIs)
+      expect(COMPONENT_SRC).not.toContain(dim.howScored)
+      for (const check of dim.howMeasured) {
+        if (check.length <= 20) continue
+        expect(COMPONENT_SRC).not.toContain(check)
+      }
+    }
+  })
+
   it('perturbing a registry weight moves the rendered ledger flag', () => {
     const original = DIMENSIONS_BY_CODE.member_value.weight
     DIMENSIONS_BY_CODE.member_value.weight = 41
     try {
       render(<AnatomyOfAnAnswer />)
-      expect(screen.getByText('41 pts')).toBeInTheDocument()
-      expect(screen.queryByText(`${original} pts`)).not.toBeInTheDocument()
+      // Scoped to member_value's own row: recommendation_strength also
+      // legitimately weighs 15 in the v4 preview, so a page-wide "15
+      // pts" search would still find it after this perturbation.
+      const row = screen.getByText(DIMENSIONS_BY_CODE.member_value.name).closest('button')
+      expect(within(row).getByText('41 pts')).toBeInTheDocument()
+      expect(within(row).queryByText(`${original} pts`)).not.toBeInTheDocument()
     } finally {
       DIMENSIONS_BY_CODE.member_value.weight = original
     }
@@ -157,7 +240,7 @@ describe('AnatomyOfAnAnswer — eyebrow and seam labels (Changes 3/4)', () => {
   })
 })
 
-// ─── Change 1: grouped ledger (three pillar cards) ────────────────────
+// ─── Change 1: grouped ledger (now four rows in True Value, Stage 24) ────
 
 describe('AnatomyOfAnAnswer — grouped ledger', () => {
   it('renders exactly three pillar cards, in registry pillar order', () => {
@@ -171,7 +254,7 @@ describe('AnatomyOfAnAnswer — grouped ledger', () => {
     expect(headerNames).toEqual(PILLAR_ORDER.map((p) => PILLAR_NAMES[p]))
   })
 
-  it('each pillar card contains exactly its own dimensions, in registry order', () => {
+  it('each pillar card contains exactly its own dimensions, in registry order (True Value now has four)', () => {
     const { container } = render(<AnatomyOfAnAnswer />)
     const cards = container.querySelectorAll('.lite-anatomy-pillar-card')
 
@@ -184,6 +267,8 @@ describe('AnatomyOfAnAnswer — grouped ledger', () => {
         .map((el) => el.textContent)
       expect(rowNames).toEqual(expectedCodes.map((c) => DIMENSIONS_BY_CODE[c].name))
     }
+    const tvExpected = DIMENSIONS.filter((d) => d.pillar === PILLAR_TRUE_VALUE)
+    expect(tvExpected).toHaveLength(4)
   })
 
   it('a pillar header total is the live sum of its members\' weights (perturbation test)', () => {
@@ -193,8 +278,8 @@ describe('AnatomyOfAnAnswer — grouped ledger', () => {
       const { container } = render(<AnatomyOfAnAnswer />)
       const trueValueCard = container.querySelector('.lite-anatomy-pillar-card--tv')
       const total = trueValueCard.querySelector('.lite-anatomy-pillar-header span:last-child').textContent
-      // price_truth(14) + member_value(19) + perturbed deal_citability(20) = 53
-      expect(total).toBe('53')
+      // price_truth(12) + member_value(15) + perturbed deal_citability(20) + value_protocols(7) = 54
+      expect(total).toBe('54')
     } finally {
       DIMENSIONS_BY_CODE.deal_citability.weight = original
     }
@@ -242,7 +327,7 @@ describe('AnatomyOfAnAnswer — True Value card color (Change 2)', () => {
     // a gray) — that combination measures well under AA on this
     // background. Scoped to the .lite-anatomy-pillar-card--tv rule
     // block specifically (theme.css uses --text-inv-2 elsewhere, e.g.
-    // the True Value marks in the ink answer bubble, which is fine).
+        // the True Value marks in the ink answer bubble, which is fine).
     const tvRules = THEME_CSS.split(/(?=\.lite-anatomy-pillar-card--tv)/).filter((r) => r.startsWith('.lite-anatomy-pillar-card--tv'))
     for (const rule of tvRules) {
       expect(rule).not.toContain('text-inv-2')
@@ -301,6 +386,9 @@ const ACTIVATABLE_CASES = [
   { code: 'price_truth', otherText: 'listed at $98' },
   { code: 'member_value', otherText: 'Members save $10 and earn reward points on this pair' },
   { code: 'deal_citability', otherText: 'a seasonal discount is currently running on select colors' },
+  // value_protocols is deliberately excluded here — it has no "other
+  // element" to activate in the answer/markup (see the dedicated Part 3
+  // (V1) describe block below, which covers its badge-only activation).
 ]
 
 describe('AnatomyOfAnAnswer — activation model', () => {
@@ -313,8 +401,8 @@ describe('AnatomyOfAnAnswer — activation model', () => {
       .toHaveTextContent(/SEEN .* SAID/)
   })
 
-  it.each(ACTIVATABLE_CASES)('clicking the $code ledger row activates its other element and opens exactly one description', ({ code, otherText }) => {
-    render(<AnatomyOfAnAnswer />)
+  it.each(ACTIVATABLE_CASES)('clicking the $code ledger row activates its other element and opens exactly one detail panel', ({ code, otherText }) => {
+    const { container } = render(<AnatomyOfAnAnswer />)
     const dim = DIMENSIONS_BY_CODE[code]
     const row = screen.getByText(dim.name).closest('button')
 
@@ -326,11 +414,12 @@ describe('AnatomyOfAnAnswer — activation model', () => {
     const other = screen.getByText(otherText).closest('button, span')
     expect(other).toHaveAttribute('aria-pressed', 'true')
 
-    // Exactly one ledger row's description is open.
-    const openDescriptions = screen.getAllByText(/./).filter(
-      (el) => el.className === 'lite-anatomy-ledger-desc',
-    )
-    expect(openDescriptions).toHaveLength(1)
+    // Exactly one ledger row's detail panel is open. The panel is a
+    // pure structural wrapper (all its text lives in nested children,
+    // no direct text node of its own), so it's queried by class rather
+    // than screen.getAllByText, which only matches elements with a
+    // direct text-node child.
+    expect(container.querySelectorAll('.lite-anatomy-detail-panel')).toHaveLength(1)
   })
 
   it('opening a second dimension closes the first (accordion, one open at a time)', () => {
@@ -346,7 +435,7 @@ describe('AnatomyOfAnAnswer — activation model', () => {
       .toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('the ghost sentence activates all three True Value dimensions together', () => {
+  it('the ghost sentence activates the three sentence-marked True Value dimensions, not Value Protocols', () => {
     render(<AnatomyOfAnAnswer />)
     fireEvent.click(screen.getByText('…the sentence most stores never get'))
 
@@ -354,6 +443,8 @@ describe('AnatomyOfAnAnswer — activation model', () => {
       const row = screen.getByText(DIMENSIONS_BY_CODE[code].name).closest('button')
       expect(row).toHaveClass('lite-anatomy-ledger-row--active')
     }
+    expect(screen.getByText(DIMENSIONS_BY_CODE.value_protocols.name).closest('button'))
+      .not.toHaveClass('lite-anatomy-ledger-row--active')
     expect(screen.getByText('listed at $98').closest('button')).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByText('a seasonal discount is currently running on select colors').closest('button'))
       .toHaveAttribute('aria-pressed', 'true')
@@ -391,6 +482,137 @@ describe('AnatomyOfAnAnswer — activation model', () => {
   })
 })
 
+// ─── Part 2 (L1): three-microsection detail panel, table-driven ─────────
+
+describe('AnatomyOfAnAnswer — L1 detail panel (Part 2)', () => {
+  it.each(DIMENSIONS)('expanding $code renders all three microsections with the module\'s own copy', (dim) => {
+    render(<AnatomyOfAnAnswer />)
+    const row = screen.getByText(dim.name).closest('button')
+    fireEvent.click(row)
+
+    expect(within(row).getByText('WHAT IT IS')).toBeInTheDocument()
+    expect(within(row).getByText('HOW WE MEASURE')).toBeInTheDocument()
+    expect(within(row).getByText(/HOW IT.S SCORED/)).toBeInTheDocument()
+
+    expect(within(row).getByText(dim.whatItIs)).toBeInTheDocument()
+    expect(within(row).getByText(dim.howScored)).toBeInTheDocument()
+    for (const check of dim.howMeasured) {
+      expect(within(row).getByText(`✓ ${check}`)).toBeInTheDocument()
+    }
+
+    if (dim.seenMax !== null && dim.saidMax !== null) {
+      expect(within(row).getByText(`SEEN ${dim.seenMax} · SAID ${dim.saidMax}`)).toBeInTheDocument()
+    }
+  })
+
+  it('R1: every dimension has non-empty whatItIs/howMeasured/howScored in the module itself', () => {
+    for (const dim of DIMENSIONS) {
+      expect(dim.whatItIs).toEqual(expect.any(String))
+      expect(dim.whatItIs.length).toBeGreaterThan(0)
+      expect(Array.isArray(dim.howMeasured)).toBe(true)
+      expect(dim.howMeasured.length).toBeGreaterThanOrEqual(2)
+      expect(dim.howMeasured.length).toBeLessThanOrEqual(4)
+      for (const check of dim.howMeasured) {
+        expect(check.length).toBeGreaterThan(0)
+      }
+      expect(dim.howScored).toEqual(expect.any(String))
+      expect(dim.howScored.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('the panel collapses (unmounts) when its row is not the open one', () => {
+    render(<AnatomyOfAnAnswer />)
+    // member_value opens by default (I2); price_truth's panel is closed.
+    expect(screen.queryByText(DIMENSIONS_BY_CODE.price_truth.whatItIs)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText(DIMENSIONS_BY_CODE.price_truth.name).closest('button'))
+    expect(screen.getByText(DIMENSIONS_BY_CODE.price_truth.whatItIs)).toBeInTheDocument()
+    expect(screen.queryByText(DIMENSIONS_BY_CODE.member_value.whatItIs)).not.toBeInTheDocument()
+  })
+})
+
+// ─── Part 3 (V1): Value Protocols' special rendering ─────────────────────
+
+describe('AnatomyOfAnAnswer — Value Protocols (Part 3, V1)', () => {
+  it('has no mark in the illustrative answer — exactly five answer marks exist, none for value_protocols', () => {
+    const { container } = render(<AnatomyOfAnAnswer />)
+    const marks = container.querySelectorAll('.lite-anatomy-answer .lite-anatomy-mark')
+    expect(marks).toHaveLength(5) // share_of_mentions, recommendation_strength, price_truth, member_value, deal_citability
+    const markTexts = Array.from(marks).map((m) => m.textContent)
+    for (const forbidden of ['UCP', 'declare', 'checkout']) {
+      expect(markTexts.some((t) => t.includes(forbidden))).toBe(false)
+    }
+  })
+
+  it('renders the UCP · DISCOUNT capability badge', () => {
+    render(<AnatomyOfAnAnswer />)
+    expect(screen.getByText('UCP · DISCOUNT ✓')).toBeInTheDocument()
+  })
+
+  it('activating the value_protocols ledger row highlights the capability badge, not any answer mark', () => {
+    const { container } = render(<AnatomyOfAnAnswer />)
+    fireEvent.click(screen.getByText(DIMENSIONS_BY_CODE.value_protocols.name).closest('button'))
+
+    const badge = screen.getByText('UCP · DISCOUNT ✓')
+    expect(badge).toHaveAttribute('aria-pressed', 'true')
+
+    // No answer mark is ever pressed by this activation.
+    const marks = container.querySelectorAll('.lite-anatomy-answer .lite-anatomy-mark')
+    for (const mark of marks) {
+      expect(mark).toHaveAttribute('aria-pressed', 'false')
+    }
+  })
+
+  it('its detail panel\'s scored line ends with the checkout-execution sentence', () => {
+    render(<AnatomyOfAnAnswer />)
+    fireEvent.click(screen.getByText(DIMENSIONS_BY_CODE.value_protocols.name).closest('button'))
+    expect(screen.getByText(/This one doesn.t appear in the sentence — it executes at checkout\.$/)).toBeInTheDocument()
+  })
+
+  it('has no seen/said split rendered (encode-only)', () => {
+    render(<AnatomyOfAnAnswer />)
+    const row = screen.getByText(DIMENSIONS_BY_CODE.value_protocols.name).closest('button')
+    fireEvent.click(row)
+    expect(within(row).queryByText(/SEEN \d+ · SAID \d+/)).not.toBeInTheDocument()
+  })
+
+  it('is the fourth (last) row inside the blue True Value card', () => {
+    const { container } = render(<AnatomyOfAnAnswer />)
+    const tvCard = container.querySelector('.lite-anatomy-pillar-card--tv')
+    const rowNames = Array.from(tvCard.querySelectorAll('.lite-anatomy-ledger-row-head span:first-child'))
+      .map((el) => el.textContent)
+    expect(rowNames[rowNames.length - 1]).toBe('Value Protocols')
+  })
+})
+
+// ─── Copy sweeps (V2 wording discipline + register bans) ─────────────────
+
+describe('AnatomyOfAnAnswer — copy sweeps', () => {
+  it('never mentions the internal "rsi" metric name', () => {
+    // Word-boundary match, not a bare substring check — "version" (as
+    // in data-scorer-version, an attribute, not text content anyway)
+    // legitimately contains "rsi" and must not false-positive here.
+    render(<AnatomyOfAnAnswer />)
+    expect(document.body.textContent.toLowerCase()).not.toMatch(/\brsi\b/)
+  })
+
+  it('never mentions the retired score cap ("cap"/"caps at") or V5', () => {
+    render(<AnatomyOfAnAnswer />)
+    const rendered = document.body.textContent.toLowerCase()
+    expect(rendered).not.toContain('caps at')
+    expect(rendered).not.toMatch(/\bcap\b/)
+    expect(rendered).not.toContain('v5')
+  })
+
+  it('Value Protocols copy says "declares", never "supports"', () => {
+    render(<AnatomyOfAnAnswer />)
+    fireEvent.click(screen.getByText(DIMENSIONS_BY_CODE.value_protocols.name).closest('button'))
+    const row = screen.getByText(DIMENSIONS_BY_CODE.value_protocols.name).closest('button')
+    const text = row.textContent.toLowerCase()
+    expect(text).toContain('declar') // "declared"/"declares"/"declaration"
+    expect(text).not.toContain('support')
+  })
+})
+
 // ─── Responsive (360 / 768 / 1280) ────────────────────────────────────
 // jsdom does not evaluate CSS media queries, so these assert the class
 // hooks theme.css's actual @media rules key off of are present, rather
@@ -405,6 +627,13 @@ describe('AnatomyOfAnAnswer — responsive structure', () => {
     expect(container.querySelector('.lite-anatomy-grid')).toBeInTheDocument()
     expect(container.querySelector('.lite-anatomy-code-panel')).toBeInTheDocument()
     expect(container.querySelector('.lite-anatomy-ledger')).toBeInTheDocument()
+  })
+
+  it('renders and expands an accordion row correctly at 360px (mobile)', () => {
+    window.innerWidth = 360
+    render(<AnatomyOfAnAnswer />)
+    fireEvent.click(screen.getByText(DIMENSIONS_BY_CODE.agent_access.name).closest('button'))
+    expect(screen.getByText(DIMENSIONS_BY_CODE.agent_access.whatItIs)).toBeInTheDocument()
   })
 
   it('the grid collapses to one column under 860px (mobile stacking hook)', () => {
