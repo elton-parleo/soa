@@ -29,7 +29,7 @@ from soa_shared.scan_dimensions import SCORER_VERSION
 from . import scorer, site_typing
 from .discovery import DiscoveryResult, discover_pages, resolve_canonical_origin
 from .fetcher import FetchBudget, fetch
-from .structured_data import ExtractedData, extract
+from .structured_data import EXTRACTION_REV, ExtractedData, extract
 
 log = logging.getLogger(__name__)
 
@@ -240,6 +240,7 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         # per-dimension one — no migration needed (JSON column); absence
         # on older rows means scorer_version "1" is implied.
         dimensions["scorer_version"] = SCORER_VERSION
+        dimensions["scan_engine_rev"] = EXTRACTION_REV
         dimensions["price_honesty_advisory"] = {
             "scored": False,
             "would_have_capped": v5_would_have_capped,

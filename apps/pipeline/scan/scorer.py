@@ -833,6 +833,21 @@ def score_price_truth_seen(pages, site_type_result) -> DimensionScore:
         f"{len(with_price)}/{len(product_pages)} product pages expose a machine-readable price consistent with the page's own text",
         f"{len(with_currency)}/{len(product_pages)} product pages declare priceCurrency",
     ]
+    if not with_price and not mismatched_pages:
+        # F5: exact about what was and wasn't found, rather than leaving
+        # a bare 0/N ratio to imply "nothing here at all" when a social-
+        # preview card exists but isn't what agents actually parse.
+        # Excludes the mismatched-price case deliberately — there,
+        # schema.org markup DOES exist (it just disagrees with the page's
+        # own text), so "no ... markup" would be false; that case already
+        # gets its own evidence line below.
+        og_meta_pages = [p for p in product_pages if p.extracted and p.extracted.og_price_meta_present]
+        if og_meta_pages:
+            evidence.append(
+                "social-preview (OG) price metadata found — not the schema.org offers agents parse"
+            )
+        else:
+            evidence.append("no schema.org Product/Offer price markup")
     if mismatched_pages:
         evidence.append(
             f"{len(mismatched_pages)} product page(s) show a structured price that disagrees with the page's own visible price text"

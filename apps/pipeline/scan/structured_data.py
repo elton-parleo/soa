@@ -15,6 +15,17 @@ from bs4 import BeautifulSoup
 
 log = logging.getLogger(__name__)
 
+# Provenance marker for this module's extraction logic — bumped whenever
+# a change here would materially affect what a scan pulls out of a page
+# (not scoring methodology; that's soa_shared.scan_dimensions.SCORER_
+# VERSION). Stored as a sibling key on the scan's dimensions dict (see
+# engine.py), same "absence on older rows implies the prior generation"
+# convention SCORER_VERSION already uses — no migration needed. Bumped
+# here: the JSON-LD traversal fix that makes nested product structures
+# (hasVariant, isVariantOf, itemOffered, mainEntity) visible at all;
+# "1" (never itself stored) is the generation before this fix existed.
+EXTRACTION_REV = "2"
+
 WAS_PRICE_CSS_HINTS = (
     "was-price", "compare-at", "strikethrough", "original-price", "list-price",
 )
@@ -75,6 +86,12 @@ AGENTIC_PROTOCOL_LINK_HINTS = ("mcp", "ucp", "uip")
 AGENTIC_PROTOCOL_JSON_HINTS = (
     "mcp", "ucp", "uip", "agentic-commerce", "agent-discount", "machine-payable",
 )
+# F5: Open Graph / product: social-preview price meta — <meta
+# property="og:price:amount" ...> or <meta property="product:price:
+# amount" ...>, whichever a page uses. Evidence-only (see ExtractedData.
+# og_price_meta_present's docstring) — never a price/currency source,
+# since these tags are meant for link-preview cards, not agent parsing.
+OG_PRICE_META_PROPERTIES = ("og:price:amount", "product:price:amount")
 
 
 @dataclass
@@ -113,6 +130,11 @@ class ExtractedData:
     visible_prices: list = field(default_factory=list)          # list[float], distinct, sorted
     login_gated_price_text_hits: list = field(default_factory=list)  # list[str], evidence-only
     email_gated_deal_text_hits: list = field(default_factory=list)   # list[str], evidence-only
+    # F5: social-preview (Open Graph / product:) price meta — evidence-
+    # only, never a scoring input. Lets score_price_truth_seen's "no
+    # price found" evidence distinguish "nothing at all" from "a social
+    # card exists, but not the schema.org markup agents actually parse."
+    og_price_meta_present: bool = False
 
 
 def _coerce_price(value) -> Optional[float]:
@@ -221,10 +243,36 @@ def _parse_money(text: str) -> Optional[float]:
     return _coerce_price(match.group(0))
 
 
-def _walk_jsonld_node(node, extracted: ExtractedData) -> None:
+_MAX_JSONLD_DEPTH = 12
+
+
+def _walk_jsonld_node(node, extracted: ExtractedData, _depth: int = 0) -> None:
+    """
+    Never raises — a malformed, self-referencing, or pathologically deep
+    blob just stops descending past _MAX_JSONLD_DEPTH rather than
+    stack-overflowing.
+
+    Generic descent: after handling this node itself (type collection,
+    Product/ProductGroup/Organization), recurse into every dict/list
+    value the node carries, so nested product structures are visited
+    wherever they appear — hasVariant, isVariantOf, itemOffered,
+    mainEntity, @graph, and any future nesting — without a per-key
+    special case. @graph used to be handled as its own explicit
+    recursion; that's now just one more list-valued key the generic
+    descent walks into, so it's folded in rather than kept separate.
+
+    Offer nodes are still collected ONLY via a Product/ProductGroup's own
+    `offers` key (inside the branch below) — the generic descent below
+    will walk INTO an offers node too (e.g. to reach a legitimate nested
+    Offer.itemOffered Product), but an Offer node itself is never typed
+    Product/ProductGroup, so walking into one never appends a second,
+    free-floating product for it.
+    """
+    if _depth > _MAX_JSONLD_DEPTH:
+        return
     if isinstance(node, list):
         for item in node:
-            _walk_jsonld_node(item, extracted)
+            _walk_jsonld_node(item, extracted, _depth + 1)
         return
     if not isinstance(node, dict):
         return
@@ -232,9 +280,6 @@ def _walk_jsonld_node(node, extracted: ExtractedData) -> None:
     node_type = node.get("@type")
     types = node_type if isinstance(node_type, list) else ([node_type] if node_type else [])
     extracted.raw_jsonld_types.extend(t for t in types if t)
-
-    if "@graph" in node:
-        _walk_jsonld_node(node["@graph"], extracted)
 
     if any(t in ("Product", "ProductGroup") for t in types):
         product = ProductData(name=node.get("name") if isinstance(node.get("name"), str) else None)
@@ -267,6 +312,10 @@ def _walk_jsonld_node(node, extracted: ExtractedData) -> None:
 
     if "Organization" in types:
         extracted.organization_present = True
+
+    for value in node.values():
+        if isinstance(value, (dict, list)):
+            _walk_jsonld_node(value, extracted, _depth + 1)
 
 
 def extract(html: str) -> ExtractedData:
@@ -376,6 +425,17 @@ def extract(html: str) -> ExtractedData:
                 )
     except Exception:
         log.exception("[scan.structured_data] failed to scan for agentic-protocol link markup")
+
+    try:
+        # F5: evidence-only — never a price/currency source (see
+        # ExtractedData.og_price_meta_present's docstring).
+        for tag in soup.find_all("meta"):
+            prop = (tag.get("property") or "").strip().lower()
+            if prop in OG_PRICE_META_PROPERTIES and tag.get("content"):
+                extracted.og_price_meta_present = True
+                break
+    except Exception:
+        log.exception("[scan.structured_data] failed to scan for OG price meta")
 
     try:
         body_text = soup.get_text(" ", strip=True).lower()
