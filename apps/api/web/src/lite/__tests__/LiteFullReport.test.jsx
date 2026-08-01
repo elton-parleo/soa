@@ -2,7 +2,7 @@ import React from 'react'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import '@testing-library/jest-dom'
 
@@ -866,6 +866,21 @@ describe('LiteFullReport — v3 hero: segmented bar + verdict (Stage 21, H1/H2)'
     expect(screen.getByText('COMPOSITE = STRAIGHT SUM')).toBeInTheDocument()
   })
 
+  // Fetch-resilience stage (Part C, C2): mirrors the member_value_na
+  // legend pattern above, for a different reason — every sampled
+  // product page failed to fetch this run, not "doesn't apply."
+  it('shows the ENCODE CHECKS BLOCKED legend dagger when a True Value dimension is blocked', () => {
+    const pillars = buildV3Pillars()
+    pillars.true_value.dimensions[0] = { ...pillars.true_value.dimensions[0], blocked: true, earned: 0, max: 0 }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText(/†ENCODE CHECKS BLOCKED BY SITE — SEE TRUE VALUE/)).toBeInTheDocument()
+  })
+
+  it('omits the legend dagger when no True Value dimension is blocked', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.queryByText(/ENCODE CHECKS BLOCKED/)).not.toBeInTheDocument()
+  })
+
   it('never renders the old two-dial/tile layout (no bare "Composite score"/"Modeled exposure/mo" tile pair) for a v3 row', () => {
     render(<LiteFullReport report={buildV3Report()} />)
     expect(screen.queryByText('Composite score')).not.toBeInTheDocument()
@@ -978,6 +993,34 @@ describe('LiteFullReport — True Value section (Stage 19, R2; restyled Report r
     render(<LiteFullReport report={buildV3Report({ pillars })} />)
     expect(screen.getByText('not enough mentions to measure')).toBeInTheDocument()
     expect(screen.queryByText('0%')).not.toBeInTheDocument()
+  })
+
+  // Fetch-resilience stage (Part C, B4/C1): every sampled product page
+  // failed to fetch this run — the dimension renders NOT MEASURABLE,
+  // with the fetch facts surfaced and no leaked said-outcome sentence
+  // (which would otherwise sit confusingly next to "NOT MEASURABLE").
+  it('renders a blocked True Value dimension as NOT MEASURABLE with the fetch facts, no said-outcome leak, no false-fail chip', () => {
+    const blockedFact = "2 of 2 product pages rate-limited our reader (HTTP 429) — couldn't be evaluated."
+    const pillars = buildV3Pillars()
+    pillars.true_value.dimensions[0] = {
+      ...pillars.true_value.dimensions[0],
+      blocked: true, earned: 0, max: 0,
+      seen: { ...pillars.true_value.dimensions[0].seen, blocked: true, evidence: [blockedFact] },
+      checks: [
+        { code: 'price_truth_blocked_0', label: 'Machine-readable price present', state: 'blocked', evidence: blockedFact },
+      ],
+      fix: null, fix_human: null,
+    }
+    pillars.fixes = computeFixesSection(pillars.accessibility.dimensions, pillars.true_value.dimensions)
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    const row = screen.getAllByText('Price Truth')[0].closest('.lite-v4-dim')
+    expect(within(row).getByText('NOT MEASURABLE')).toBeInTheDocument()
+    expect(within(row).queryByText(/cited a price/)).not.toBeInTheDocument()
+    expect(within(row).getAllByText(blockedFact).length).toBeGreaterThan(0)
+    fireEvent.click(within(row).getByText('WHY'))
+    expect(within(row).getByText(/not a failing score, it's an unread one/)).toBeInTheDocument()
+    expect(row.querySelector('.lite-v4-chip--blocked')).toBeInTheDocument()
+    expect(row.querySelector('.lite-v4-chip--fail')).not.toBeInTheDocument()
   })
 
   it('Report redesign (Part 3, M2): only one dimension row\'s panel stays open at a time within the card — opening a second closes the first', () => {
@@ -1193,6 +1236,34 @@ describe('LiteFullReport — v3 accessibility tiles (Stage 21, A)', () => {
     render(<LiteFullReport report={buildV3Report({ pillars })} />)
     expect(screen.queryByText(/^LINKED ·/)).not.toBeInTheDocument()
     expect(screen.queryByText('Protocol & Feed Presence')).not.toBeInTheDocument()
+  })
+
+  // Fetch-resilience stage (Part C, C1): a dimension whose crawl
+  // coverage came back 'blocked' (every sampled product page failed to
+  // fetch this run) renders as NOT MEASURABLE with blocked-state check
+  // chips — never the ordinary pass/fail chips, which would misread
+  // "never checked" as "checked and failed."
+  it('renders a blocked accessibility dimension as NOT MEASURABLE with blocked-state check chips, never a false fail', () => {
+    const blockedFact = "2 of 2 product pages rate-limited our reader (HTTP 429) — couldn't be evaluated."
+    const pillars = buildV3Pillars()
+    pillars.accessibility.dimensions[1] = {
+      ...pillars.accessibility.dimensions[1],
+      blocked: true, earned: 0, max: 0,
+      evidence: [blockedFact],
+      checks: [
+        { code: 'catalog_context_blocked_0', label: 'Product+Offer JSON-LD present', state: 'blocked', evidence: blockedFact },
+      ],
+      fix: null, fix_human: null,
+    }
+    pillars.fixes = computeFixesSection(pillars.accessibility.dimensions, pillars.true_value.dimensions)
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    const row = screen.getAllByText('Catalog & Context')[0].closest('.lite-v4-dim')
+    expect(within(row).getByText('NOT MEASURABLE')).toBeInTheDocument()
+    fireEvent.click(within(row).getByText('WHY'))
+    expect(within(row).getByText(/not a failing score, it's an unread one/)).toBeInTheDocument()
+    expect(within(row).getByText('Product+Offer JSON-LD present')).toBeInTheDocument()
+    expect(row.querySelector('.lite-v4-chip--blocked')).toBeInTheDocument()
+    expect(row.querySelector('.lite-v4-chip--fail')).not.toBeInTheDocument()
   })
 })
 

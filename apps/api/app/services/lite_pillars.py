@@ -55,6 +55,14 @@ CHECK_PASS = "pass"
 CHECK_FAIL = "fail"
 CHECK_NA = "na"
 CHECK_ADVISORY = "advisory"
+# Fetch-resilience stage (Part C): a dimension whose sampled product
+# pages all terminally failed to fetch (scorer.py coverage='blocked')
+# has nothing for the ordinary evidence-parsing check functions below
+# to read — those parse for specific phrasings a blocked dimension's
+# evidence never contains, and would silently misread "never checked"
+# as "checked and failed" if run on it. CHECK_BLOCKED short-circuits
+# that entirely; see _blocked_checks.
+CHECK_BLOCKED = "blocked"
 
 
 def _check(check_code: str, label: str, state: str, evidence: Optional[str] = None) -> Dict:
@@ -202,6 +210,20 @@ def _deal_citability_checks(seen_evidence: List[str]) -> List[Dict]:
         ),
         _check("not_expired", dim.how_measured[1], active_state),
         _check("actionable", dim.how_measured[2], CHECK_PASS if actionable_n > 0 else CHECK_FAIL),
+    ]
+
+
+def _blocked_checks(code: str, evidence: List[str]) -> List[Dict]:
+    """Fetch-resilience stage (Part C): every one of a blocked
+    dimension's registered checks reports state=CHECK_BLOCKED with the
+    same honest fetch-facts line — there's no per-check granularity
+    to report when the pages that would answer each check were never
+    read at all."""
+    dim = DIMENSIONS_BY_CODE[code]
+    note = evidence[0] if evidence else "product pages could not be read this run"
+    return [
+        _check(f"{code}_blocked_{i}", label, CHECK_BLOCKED, evidence=note)
+        for i, label in enumerate(dim.how_measured)
     ]
 
 
@@ -508,14 +530,16 @@ def _rank_and_lock_fixes(dims: List[Dict]) -> None:
     same as public_lite.py's applicable_codes exclusion); non-na rows
     outside the top FREE_FIX_RANK by gap have their fix nulled and
     locked set — paid-diagnostic fix text never leaves the process for
-    a locked dimension."""
+    a locked dimension. Fetch-resilience stage: blocked rows are excluded
+    the same way — a dimension we couldn't read has no fix we can
+    honestly attribute (fix/fix_human are already None on a blocked row)."""
     ranked = sorted(
-        (d for d in dims if not d["na"]),
+        (d for d in dims if not d["na"] and not d.get("blocked")),
         key=lambda d: (-(d["max"] - d["earned"]), d["code"]),
     )
     free_codes = {d["code"] for d in ranked[:FREE_FIX_RANK]}
     for d in dims:
-        if d["na"]:
+        if d["na"] or d.get("blocked"):
             d["locked"] = False
             continue
         d["locked"] = d["code"] not in free_codes
@@ -550,7 +574,7 @@ def _build_fixes_section(dims: List[Dict]) -> Dict:
     remaining_count or occupy a free slot.
     """
     ranked = sorted(
-        (d for d in dims if not d["na"] and d.get("fix_human")),
+        (d for d in dims if not d["na"] and not d.get("blocked") and d.get("fix_human")),
         key=lambda d: (-(d["max"] - d["earned"]), d["code"]),
     )
     visible = [
@@ -577,14 +601,21 @@ _ACCESSIBILITY_CHECKS_BY_CODE = {
 def _crawl_dim_row(code: str, crawl_dimensions: Dict[str, dict]) -> Dict:
     d = crawl_dimensions.get(code) or {}
     coverage = d.get("coverage") or "full"
+    blocked = coverage == "blocked"
     evidence = d.get("evidence") or []
     checks_fn = _ACCESSIBILITY_CHECKS_BY_CODE.get(code)
+    if blocked:
+        checks = _blocked_checks(code, evidence)
+    elif checks_fn and coverage != "na":
+        checks = checks_fn(evidence)
+    else:
+        checks = None
     return {
         "code": code, "name": DIMENSIONS_BY_CODE[code].name,
         "earned": d.get("score") or 0.0, "max": d.get("max") or 0.0,
-        "na": coverage == "na", "evidence": evidence,
+        "na": coverage == "na", "blocked": blocked, "evidence": evidence,
         "seen": None, "said": None,
-        "checks": checks_fn(evidence) if checks_fn and coverage != "na" else None,
+        "checks": checks,
         "fix": d.get("fix"), "fix_human": d.get("fix_human"), "locked": False,
     }
 
@@ -650,13 +681,15 @@ def build_pillars_payload(
     # protocol_feed is the only one of the three that can ever go 'na'
     # (brand-only sites, Stage 10 D5); excluded from both sums, not
     # scored as zero, same na-exclusion convention as engine.py's own
-    # crawl-only total.
+    # crawl-only total. Fetch-resilience stage: catalog_context can now
+    # also come back 'blocked' (every sampled product page unreadable
+    # this run) — excluded from both sums the same way, per B4.
     accessibility_earned = 0.0
     accessibility_applicable_max = 0.0
     accessibility_dims = []
     for code in _ACCESSIBILITY_CODES:
         row = _crawl_dim_row(code, crawl_dimensions)
-        if not row["na"]:
+        if not row["na"] and not row["blocked"]:
             accessibility_earned += row["earned"]
             accessibility_applicable_max += row["max"]
         accessibility_dims.append(row)
@@ -685,9 +718,12 @@ def build_pillars_payload(
         dim = DIMENSIONS_BY_CODE[code]
         seen = crawl_dimensions.get(f"{code}_seen") or {}
         said = said_by_code[code]
+        seen_coverage = seen.get("coverage") or "full"
+        seen_blocked = seen_coverage == "blocked"
         seen_row = _sub_lens(
             seen.get("score") or 0.0, seen.get("max") or 0.0,
-            (seen.get("coverage") or "full") == "na", seen.get("evidence") or [],
+            seen_coverage == "na", seen.get("evidence") or [],
+            extra={"blocked": True} if seen_blocked else None,
         )
         said_row = _sub_lens(said["earned"], said["max"], said["na"], said.get("evidence") or [], extra=said)
 
@@ -703,6 +739,22 @@ def build_pillars_payload(
                 # Part 1 (A1): no live checks on the N/A path — the panel
                 # shows the decision sentence + probe quote instead (T2).
                 "checks": None,
+                "fix": None, "fix_human": None, "locked": False,
+            })
+            continue
+
+        if seen_blocked:
+            # Fetch-resilience stage (B4): the encode sub-lens is NOT
+            # MEASURABLE — excluded from the applicable max exactly like
+            # the existing member-value N/A path above, rather than
+            # rescaled onto said or scored as zero. said's own row is
+            # still attached (real signal, unrelated to page fetches)
+            # even though it doesn't count toward the composite here —
+            # no methodology change, just an honest "couldn't verify."
+            true_value_dims.append({
+                "code": code, "name": dim.name, "earned": 0.0, "max": 0.0,
+                "na": False, "blocked": True, "evidence": [], "seen": seen_row, "said": said_row,
+                "checks": _blocked_checks(code, seen.get("evidence") or []),
                 "fix": None, "fix_human": None, "locked": False,
             })
             continue

@@ -296,7 +296,7 @@ def _attach_v3_linked_reasons(pillars_payload: dict | None, linked: dict) -> Non
         return
     for pillar_key in ("accessibility", "true_value"):
         for dim in pillars_payload[pillar_key]["dimensions"]:
-            if dim["code"] not in v3_linked or dim["na"]:
+            if dim["code"] not in v3_linked or dim["na"] or dim.get("blocked"):
                 continue
             is_failing = dim["max"] > 0 and dim["earned"] < GAP_THRESHOLD * dim["max"]
             if is_failing:

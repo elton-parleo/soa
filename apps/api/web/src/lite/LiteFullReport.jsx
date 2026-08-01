@@ -68,16 +68,19 @@ function isV3Report(report) {
   return Boolean(report.pillars)
 }
 
-// earned = sum over every dimension row (an na dimension's earned/max
-// are already zeroed server-side — see lite_pillars.py); max = sum over
-// non-na rows only, since an na dimension's *nominal* max (e.g.
-// protocol_feed's crawl-side 6) is NOT pre-zeroed the way member_value's
-// is — filtering here, uniformly, handles both cases correctly without
-// special-casing either.
+// earned = sum over every dimension row (an na/blocked dimension's
+// earned/max are already zeroed server-side — see lite_pillars.py);
+// max = sum over non-na, non-blocked rows only, since a dimension's
+// *nominal* max (e.g. protocol_feed's crawl-side 6, or catalog_context's
+// when every sampled product page was rate-limited this run) is NOT
+// pre-zeroed the way member_value's na branch is — filtering here,
+// uniformly, handles every case correctly without special-casing any of
+// them. blocked (fetch resilience stage) means "couldn't be read this
+// run," same applicable-max exclusion as na, never a false zero score.
 function pillarEarnedMax(pillar) {
   const dims = pillar?.dimensions || []
   const earned = dims.reduce((sum, d) => sum + (d.earned || 0), 0)
-  const max = dims.filter((d) => !d.na).reduce((sum, d) => sum + (d.max || 0), 0)
+  const max = dims.filter((d) => !d.na && !d.blocked).reduce((sum, d) => sum + (d.max || 0), 0)
   return { earned, max }
 }
 
@@ -258,6 +261,15 @@ function PillarBarSegment({ label, earned, max, weight, isTrueValue }) {
   )
 }
 
+// Fetch-resilience stage (C2): true when any True Value dimension's
+// encode/seen wing is NOT MEASURABLE this run (every sampled product
+// page failed to fetch) — mirrors the existing member_value_na legend
+// pattern, just for a different reason (couldn't be read, not doesn't
+// apply).
+function anyTrueValueEncodeBlocked(pillars) {
+  return (pillars.true_value?.dimensions || []).some((d) => d.blocked || d.seen?.blocked)
+}
+
 function PillarSegmentedBar({ pillars }) {
   const vis = pillarEarnedMax(pillars.visibility)
   const acc = pillarEarnedMax(pillars.accessibility)
@@ -287,6 +299,7 @@ function PillarSegmentedBar({ pillars }) {
           {pillars.member_value_na
             ? `*MEMBER VALUE NOT APPLICABLE — SCORED ON ${formatScore(tv.max + vis.max + acc.max)} POINTS, SHOWN OUT OF 100`
             : 'COMPOSITE = STRAIGHT SUM'}
+          {anyTrueValueEncodeBlocked(pillars) && ' · †ENCODE CHECKS BLOCKED BY SITE — SEE TRUE VALUE'}
         </span>
       </div>
     </div>
@@ -1257,7 +1270,7 @@ function DimensionFamily({ title, subtotal, max, applicableMax, dimensions }) {
 // them, never re-derives a score or a band from raw evidence itself.
 
 function CheckChip({ check }) {
-  const glyph = { pass: '✓', fail: '✕', na: '—', advisory: '·' }[check.state] || '—'
+  const glyph = { pass: '✓', fail: '✕', na: '—', advisory: '·', blocked: '⊘' }[check.state] || '—'
   return (
     <span className={`lite-v4-chip lite-mono lite-v4-chip--${check.state}`}>
       <i aria-hidden="true">{glyph}</i>{check.label}
@@ -1367,19 +1380,31 @@ function DimensionRowV4({ dimension, evOverride, siteOnly, naDecision, naQuote, 
   if (!registryDim) return null
 
   const isNa = dimension.na
+  // Fetch-resilience stage (Part C): every sampled product page failed
+  // to fetch this run — distinct from na (doesn't apply) and from a
+  // genuine 0 (checked, found nothing). Never routes through the
+  // ordinary evidence-parsing check chips or the seen/said duo bars,
+  // both of which would silently render an unread page as a failing
+  // zero — the exact incident this stage exists to fix.
+  const isBlocked = Boolean(dimension.blocked)
   const hasSplit = Boolean(dimension.seen && dimension.said)
   const panelId = `v4-meth-${dimension.code}`
 
-  const pt = isNa ? 'N/A' : `${formatScore(dimension.earned)}/${formatScore(dimension.max)}`
-  const ev = evOverride !== undefined ? evOverride : (dimension.evidence?.[0] || '')
+  const pt = isBlocked ? 'NOT MEASURABLE' : isNa ? 'N/A' : `${formatScore(dimension.earned)}/${formatScore(dimension.max)}`
+  // isBlocked always wins over any caller-supplied evOverride (e.g.
+  // TrueValueSection's said-outcome summary) — showing a said sentence
+  // like "5/6 mentions cited a price" next to "NOT MEASURABLE" would be
+  // actively misleading about what "couldn't be evaluated" refers to.
+  const blockedFact = dimension.seen?.evidence?.[0] || dimension.evidence?.[0] || ''
+  const ev = isBlocked ? blockedFact : (evOverride !== undefined ? evOverride : (dimension.evidence?.[0] || ''))
 
   return (
     <div className="lite-v4-dim">
       <div className="lite-v4-dim-h">
         <span className="lite-v4-nm">{registryDim.name}</span>
-        <span className="lite-v4-pt">{pt}</span>
+        <span className={`lite-v4-pt${isBlocked ? ' lite-v4-pt--blocked' : ''}`}>{pt}</span>
         {siteOnly && <span className="lite-v4-sitetag">SITE ONLY</span>}
-        {ev && <span className={`lite-v4-ev${isNa ? ' lite-v4-na-line' : ''}`}>{ev}</span>}
+        {ev && <span className={`lite-v4-ev${isNa || isBlocked ? ' lite-v4-na-line' : ''}`}>{ev}</span>}
         <button
           type="button"
           className="lite-v4-how"
@@ -1387,26 +1412,26 @@ function DimensionRowV4({ dimension, evOverride, siteOnly, naDecision, naQuote, 
           aria-controls={panelId}
           onClick={onToggleOpen}
         >
-          {isNa ? 'WHY' : "HOW IT'S SCORED"}
+          {isNa || isBlocked ? 'WHY' : "HOW IT'S SCORED"}
         </button>
       </div>
 
-      {!isNa && hasSplit && (
+      {!isNa && !isBlocked && hasSplit && (
         <V4Duo
           seen={dimension.seen} said={dimension.said}
           leftLabel="ON YOUR SITE" rightLabel="IN ANSWERS"
         />
       )}
-      {!isNa && !hasSplit && registryDim.visualKind === 'meter' && (
+      {!isNa && !isBlocked && !hasSplit && registryDim.visualKind === 'meter' && (
         <V4Meter
           fillPct={dimension.your_value ?? 0} capPct={50} capLabel="50% = ALL 25"
           youPct={dimension.your_value ?? 0} youValueLabel={`${formatScore(dimension.your_value ?? 0)}%`}
         />
       )}
-      {!isNa && !hasSplit && registryDim.visualKind === 'pips' && (
+      {!isNa && !isBlocked && !hasSplit && registryDim.visualKind === 'pips' && (
         <V4Pips pips={registryDim.visualParams.pips} checks={dimension.checks} />
       )}
-      {!isNa && !hasSplit && registryDim.visualKind === 'grid' && (
+      {!isNa && !isBlocked && !hasSplit && registryDim.visualKind === 'grid' && (
         <V4Grid
           total={registryDim.visualParams.total}
           ok={dimension.max ? Math.round((dimension.earned / dimension.max) * registryDim.visualParams.total) : 0}
@@ -1414,7 +1439,28 @@ function DimensionRowV4({ dimension, evOverride, siteOnly, naDecision, naQuote, 
       )}
 
       <div id={panelId} className={`lite-v4-meth${open ? ' lite-v4-meth--open' : ''}`}>
-        {isNa ? (
+        {isBlocked ? (
+          <>
+            <div>
+              <span className="lite-v4-meth-k">HOW WE DECIDED</span>
+              <span className="lite-v4-mcap">
+                Every sampled page our reader tried failed to load this run, so this check couldn't be
+                evaluated — that's not a failing score, it's an unread one.
+              </span>
+              {blockedFact && (
+                <span className="lite-v4-mcap lite-mono" style={{ display: 'block', marginTop: 6 }}>{blockedFact}</span>
+              )}
+            </div>
+            {dimension.checks && (
+              <div>
+                <span className="lite-v4-meth-k">WHAT WE CHECK · YOUR RESULT</span>
+                <div className="lite-v4-chips">
+                  {dimension.checks.map((c) => <CheckChip key={c.code} check={c} />)}
+                </div>
+              </div>
+            )}
+          </>
+        ) : isNa ? (
           <>
             <div>
               <span className="lite-v4-meth-k">HOW WE DECIDED</span>

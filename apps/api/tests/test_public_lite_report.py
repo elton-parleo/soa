@@ -1250,6 +1250,27 @@ def test_report_attaches_linked_reason_from_crosswalk(db):
     assert by_code["F1"]["linked"] is None
 
 
+def test_attach_v3_linked_reasons_never_flags_a_blocked_dimension():
+    """Fetch-resilience stage (Part C): a dimension whose crawl coverage
+    is 'blocked' (every sampled product page failed to fetch this run)
+    must never pick up a crosswalk 'linked' chip — its earned=0 would
+    otherwise look exactly like a genuine gap failing GAP_THRESHOLD, the
+    same phantom-zero shape this stage exists to fix. Direct unit test
+    on the pure function (see test_report_attaches_linked_reason_from_
+    crosswalk above for the router-integration case)."""
+    pillars_payload = {
+        "true_value": {
+            "dimensions": [
+                {"code": "price_truth", "na": False, "blocked": True, "earned": 0.0, "max": 12.0},
+            ],
+        },
+        "accessibility": {"dimensions": []},
+    }
+    public_lite._attach_v3_linked_reasons(pillars_payload, {"V1": "mentioned but no price surfaced"})
+    row = pillars_payload["true_value"]["dimensions"][0]
+    assert "linked" not in row
+
+
 def test_report_attaches_incentive_citation_linked_reason_end_to_end(db):
     """
     Stage 8 (A4), integration-level: proves the router actually merges

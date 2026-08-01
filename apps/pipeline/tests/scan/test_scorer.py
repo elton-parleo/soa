@@ -738,3 +738,88 @@ def test_allbirds_like_fixture_resolves_www_and_scores_normally(monkeypatch):
     assert result.dimensions["protocol_feed"]["coverage"] != "na"
     assert result.dimensions["member_value_seen"]["coverage"] != "na"
     assert "1/1 product pages expose a machine-readable price consistent with the page's own text" in result.dimensions["price_truth_seen"]["evidence"]
+
+
+# ─── Fetch-resilience stage, Part B: fetch-status-aware scoring (engine-level) ──
+
+def _serve_with_blocked_products(pages: dict, blocked_suffixes, status=429, default_status=404):
+    """Same matching convention as _serve, but any URL ending with one
+    of blocked_suffixes returns `status` (429 by default) instead of the
+    page dict's content — every attempt of fetcher.py's retry ladder
+    gets the same terminal response, so the page ends up 'blocked'."""
+    ordered = sorted(pages.items(), key=lambda kv: -len(kv[0]))
+
+    def fake_get(self, url, headers=None):
+        if any(url.endswith(suffix) for suffix in blocked_suffixes):
+            return httpx.Response(status, text="", request=httpx.Request("GET", url))
+        for suffix, html in ordered:
+            if url.endswith(suffix):
+                return httpx.Response(200, text=html, request=httpx.Request("GET", url))
+        return httpx.Response(default_status, text="", request=httpx.Request("GET", url))
+    return fake_get
+
+
+def test_run_degrades_to_blocked_when_all_pdps_and_homepage_are_rate_limited(monkeypatch):
+    """B3: one page of real store content is enough to score a run —
+    zero is not. Every product page AND the homepage are rate-limited
+    here, so the run degrades to status='blocked' even though robots.txt
+    itself fetched fine (the pre-existing blocked check at the top of
+    _derive_status never fires in this scenario)."""
+    pages = _base_pages(member_price=True)
+    fake_get = _serve_with_blocked_products(
+        pages, blocked_suffixes=["/products/blue-widget", "/products/red-widget", "rich.example.com"],
+    )
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+
+    result = engine.run_scan("https://rich.example.com")
+
+    assert result.status == "blocked"
+    assert result.total_score is None
+    assert result.dimensions == {}
+
+
+def test_run_completes_with_blocked_pdp_dependent_dims_when_homepage_is_still_readable(monkeypatch):
+    """B3 counter-case: product pages are all rate-limited, but the
+    homepage reads fine — the run still completes; the individual
+    product-page-dependent dimensions report their own coverage='blocked'
+    instead. B4/B5: blocked dimensions are excluded from total_score
+    (not scored as a phantom zero), and Agent Access notes the 429
+    hostility in evidence without changing its own score."""
+    pages = _base_pages(member_price=True)
+    fake_get = _serve_with_blocked_products(
+        pages, blocked_suffixes=["/products/blue-widget", "/products/red-widget"],
+    )
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+
+    result = engine.run_scan("https://rich.example.com")
+
+    assert result.status == "complete"
+    blocked_codes = {"price_truth_seen", "catalog_context", "deal_citability_seen"}
+    for code in blocked_codes:
+        assert result.dimensions[code]["coverage"] == "blocked", code
+        assert result.dimensions[code]["score"] == 0.0, code
+
+    assert any("rate-limited (HTTP 429)" in line for line in result.dimensions["agent_access"]["evidence"])
+
+    # B4: blocked dims excluded from applicable_max — re-derive the
+    # expected total from the dimensions actually included, rather than
+    # asserting an arbitrary threshold.
+    applicable = {
+        code: d for code, d in result.dimensions.items()
+        if isinstance(d, dict) and "score" in d and d.get("coverage") not in ("na", "blocked")
+    }
+    expected_total = round(
+        sum(d["score"] for d in applicable.values()) / sum(d["max"] for d in applicable.values()) * 100
+    )
+    assert result.total_score == expected_total
+
+    # Sanity: this genuinely differs from what counting the blocked dims
+    # as failing zeros would have produced — the exclusion isn't a no-op.
+    all_scored = {
+        code: d for code, d in result.dimensions.items()
+        if isinstance(d, dict) and "score" in d and d.get("coverage") != "na"
+    }
+    naive_total = round(
+        sum(d["score"] for d in all_scored.values()) / sum(d["max"] for d in all_scored.values()) * 100
+    )
+    assert result.total_score > naive_total

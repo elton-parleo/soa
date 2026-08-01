@@ -108,17 +108,39 @@ def _gather_pages(discovery: DiscoveryResult, budget: FetchBudget) -> list:
 def _fetch_entry(fr) -> dict:
     """Stage 11 (F3): one pages_fetched row — every fetch the scan
     performed, including robots.txt/sitemap/well-known probes that were
-    previously invisible."""
+    previously invisible. A4 (fetch resilience): attempts/retry_after_seen/
+    bytes give the scorer (and the report) the structured facts behind
+    a status, instead of re-deriving them from evidence strings."""
     return {
         "url": fr.url,
         "final_url": fr.final_url,
         "status": fr.status,
         "http_status": fr.http_status,
+        "attempts": fr.attempts,
+        "retry_after_seen": fr.retry_after_seen,
+        "bytes": fr.bytes,
     }
 
 
 def _derive_status(discovery: DiscoveryResult, pages: list) -> str:
     if discovery.robots_fetch.status == "blocked":
+        return STATUS_BLOCKED
+
+    # B3 (fetch resilience): a run isn't meaningfully "complete" just
+    # because some infrastructure probe (llms.txt, a well-known path)
+    # happened to fetch while every actual product page was obstructed
+    # AND the homepage also failed — one page of real store content is
+    # enough to score a run; zero is not. A partial PDP success (or a
+    # readable homepage) still completes normally — the individual
+    # product-page-dependent checks report their own 'blocked' coverage
+    # via scorer.py in that case, rather than degrading the whole run.
+    product_pages = [p for p in pages if p.candidate.kind == "product"]
+    homepage_page = next((p for p in pages if p.candidate.kind == "homepage"), None)
+    homepage_fetched = homepage_page is not None and homepage_page.fetch_result.status == "fetched"
+    all_product_pages_unreadable = bool(product_pages) and all(
+        p.fetch_result.status != "fetched" for p in product_pages
+    )
+    if all_product_pages_unreadable and not homepage_fetched:
         return STATUS_BLOCKED
 
     fetched_pages = [p for p in pages if p.fetch_result.status == "fetched"]
@@ -223,7 +245,10 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         # Value's seen halves) — not the public composite, which also
         # needs the Visibility pillar and True Value's said halves and
         # is assembled fresh at the report layer, never read from here.
-        applicable = {code: d for code, d in dim_scores.items() if d.coverage != "na"}
+        # B4 (fetch resilience): 'blocked' is excluded the same way 'na'
+        # is — a dimension we couldn't read is not a dimension that
+        # scored zero.
+        applicable = {code: d for code, d in dim_scores.items() if d.coverage not in ("na", "blocked")}
         applicable_score = sum(d.score for d in applicable.values())
         applicable_max = sum(d.max for d in applicable.values())
         total_score = int(round(applicable_score / applicable_max * 100)) if applicable_max else 0

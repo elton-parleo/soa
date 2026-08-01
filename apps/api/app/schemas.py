@@ -852,7 +852,7 @@ class PublicLiteCheck(BaseModel):
     honesty advisory's flagged/none-flagged note)."""
     code: str
     label: str
-    state: str  # "pass" | "fail" | "na" | "advisory"
+    state: str  # "pass" | "fail" | "na" | "advisory" | "blocked"
     evidence: Optional[str] = None
 
 
@@ -861,6 +861,12 @@ class PublicLiteSubLens(BaseModel):
     this half didn't contribute (crawl coverage='na', or said's own
     opportunity set had fewer than 2 mentions) — the dimension's earned/
     max already reflect the na-rescale onto whichever half did apply.
+
+    blocked=True (fetch resilience stage): the seen half's underlying
+    scan coverage was 'blocked' — every sampled product page terminally
+    failed to fetch this run, so this half is NOT MEASURABLE rather than
+    a genuine zero. Distinct from na: na means "doesn't apply here", not
+    "couldn't be read this time."
 
     band_table_ref/your_value/your_band (Part 1, A2): only populated on
     a said sub-lens that isn't na — not new computation, just reporting
@@ -871,6 +877,7 @@ class PublicLiteSubLens(BaseModel):
     earned: float
     max: float
     na: bool = False
+    blocked: bool = False
     evidence: List[str] = []
     band_table_ref: Optional[str] = None
     your_value: Optional[float] = None
@@ -891,6 +898,15 @@ class PublicLitePillarDimension(BaseModel):
     this dimension fell outside the top-3-by-gap free tier; fix is
     always None when locked (paid-diagnostic text never serialized).
 
+    blocked (fetch resilience stage): True when this dimension's crawl
+    coverage came back 'blocked' — every sampled product page terminally
+    failed to fetch this run (429/403/5xx, after the scanner's own retry
+    ladder already tried). earned/max are both 0 in that case — excluded
+    from the pillar's applicable max the same way an na dimension is —
+    and checks[] all report state='blocked' rather than a false fail.
+    Distinct from na: this dimension DOES apply to this site, the scan
+    just couldn't read the pages that would prove it this run.
+
     checks (Part 1, A1): the live WHAT WE CHECK/YOUR RESULT chips — null
     for share_of_mentions/recommendation_strength (which show a live
     meter/band ladder instead, via your_value/your_band below) and for
@@ -907,6 +923,7 @@ class PublicLitePillarDimension(BaseModel):
     earned: float
     max: float
     na: bool = False
+    blocked: bool = False
     evidence: List[str] = []
     seen: Optional[PublicLiteSubLens] = None
     said: Optional[PublicLiteSubLens] = None

@@ -978,3 +978,110 @@ def test_na_said_result_has_no_band_fields():
     assert result["na"] is True
     assert "your_band" not in result
     assert "band_table_ref" not in result
+
+
+# ─── Fetch-resilience stage (Part C): coverage='blocked' report surfaces ──
+#
+# scorer.py can now return coverage='blocked' on catalog_context/
+# price_truth_seen/deal_citability_seen when every sampled product page
+# terminally failed to fetch this run (429/403/5xx, after the scanner's
+# own retry ladder already tried). build_pillars_payload must render
+# that as NOT MEASURABLE — excluded from the pillar's applicable max
+# exactly like 'na', never scored as a phantom zero — and every one of
+# the dimension's checks[] must report state='blocked', never a false
+# 'fail' derived from evidence wording the blocked dimension never has.
+
+_BLOCKED_EVIDENCE = ["2 of 2 product pages rate-limited our reader (HTTP 429) — couldn't be evaluated."]
+
+
+def test_catalog_context_blocked_excludes_from_accessibility_denominator():
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["catalog_context"] = {"score": 0, "max": 8, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}
+    result = build_pillars_payload(
+        som_pct=0.0, rsi_score=None, total_mentions=0,
+        crawl_dimensions=crawl, run_signals=[], membership_probe_result="unknown",
+    )
+    # agent_access(6) + protocol_feed(6) = 12 applicable, both full -> 100%.
+    # catalog_context's 8 points never enter the denominator at all.
+    assert result["accessibility"]["score"] == 100
+    row = next(d for d in result["accessibility"]["dimensions"] if d["code"] == "catalog_context")
+    assert row["blocked"] is True
+    assert row["na"] is False
+    assert row["earned"] == 0.0
+    assert all(c["state"] == "blocked" for c in row["checks"])
+    assert all(c["evidence"] == _BLOCKED_EVIDENCE[0] for c in row["checks"])
+
+
+def test_price_truth_blocked_excludes_whole_dimension_from_true_value():
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["price_truth_seen"] = {"score": 0, "max": 5, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    # member_value(9) + deal_citability(4) + value_protocols(7) = 20
+    # applicable, all full -> 100%. price_truth's 12 (seen+said) never
+    # enters the denominator.
+    assert result["true_value"]["score"] == 100
+    row = next(d for d in result["true_value"]["dimensions"] if d["code"] == "price_truth")
+    assert row["blocked"] is True
+    assert row["na"] is False
+    assert row["earned"] == 0.0
+    assert row["max"] == 0.0
+    assert row["seen"]["blocked"] is True
+    # the seen sub-lens keeps its real nominal max (5) — only the
+    # combined dimension's own earned/max are zeroed for the composite.
+    assert row["seen"]["max"] == 5
+    assert all(c["state"] == "blocked" for c in row["checks"])
+    # said is untouched — a real, unrelated signal, still attached even
+    # though it doesn't count toward the composite here.
+    assert row["said"]["na"] is False
+
+
+def test_deal_citability_blocked_excludes_whole_dimension_from_true_value():
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["deal_citability_seen"] = {"score": 0, "max": 4, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    row = next(d for d in result["true_value"]["dimensions"] if d["code"] == "deal_citability")
+    assert row["blocked"] is True
+    assert row["earned"] == 0.0
+    assert row["max"] == 0.0
+    # price_truth(12) + member_value(9) + value_protocols(7) = 28 applicable.
+    assert result["true_value"]["score"] == 100
+
+
+def test_blocked_dimension_all_ok_case_is_unaffected():
+    """Sanity: nothing here changes behavior when no dimension is
+    blocked — same byte-identical full-credit result as before this
+    stage."""
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=_FULL_CRAWL_DIMS, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    assert result["true_value"]["score"] == 100
+    assert result["accessibility"]["score"] == 100
+    for d in result["accessibility"]["dimensions"] + result["true_value"]["dimensions"]:
+        assert d.get("blocked") in (False, None)
+
+
+def test_blocked_dimension_excluded_from_fix_ranking_and_fixes_section():
+    """A blocked dimension has no fix we can honestly attribute (we
+    never read the pages that would reveal one) — it must never occupy
+    a free fix slot, count toward remaining_count, or come back locked."""
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["catalog_context"] = {"score": 0, "max": 8, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}
+    result = build_pillars_payload(
+        som_pct=0.0, rsi_score=None, total_mentions=0,
+        crawl_dimensions=crawl, run_signals=[], membership_probe_result="unknown",
+    )
+    row = next(d for d in result["accessibility"]["dimensions"] if d["code"] == "catalog_context")
+    assert row["locked"] is False
+    assert row["fix"] is None
+    assert row["fix_human"] is None
+    assert not any(f["code"] == "catalog_context" for f in result["fixes"]["visible"])

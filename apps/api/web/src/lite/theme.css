@@ -1559,6 +1559,7 @@
 }
 .lite-v4-dim-h .lite-v4-nm { font-size: 14.5px; font-weight: 600; color: var(--text); }
 .lite-v4-dim-h .lite-v4-pt { font-family: var(--mono); font-size: 12.5px; color: var(--text-2); }
+.lite-v4-dim-h .lite-v4-pt--blocked { color: var(--text-2); opacity: 0.65; font-style: italic; }
 .lite-v4-dim-h .lite-v4-ev {
   font-size: 12px;
   color: var(--text-2);
@@ -1626,6 +1627,12 @@
 .lite-v4-chip--fail i { color: var(--bad); }
 .lite-v4-chip--na i { color: var(--text-2); }
 .lite-v4-chip--advisory { border-style: dashed; color: var(--warn-ink); }
+/* Fetch-resilience stage: 'blocked' (NOT MEASURABLE — every sampled
+   product page failed to fetch this run) reads as muted/inert, never
+   the failing red of --fail — this dimension isn't scoring badly, it
+   just couldn't be read this run. */
+.lite-v4-chip--blocked { opacity: 0.6; }
+.lite-v4-chip--blocked i { color: var(--text-2); }
 
 /* Band ladder with a floating YOU marker over the earned rung. */
 .lite-v4-dots { display: flex; gap: 10px; align-items: flex-start; margin: 2px 0 6px; }
@@ -1726,6 +1733,8 @@
 .lite-v4-tv .lite-v4-mcap b { color: #fff; }
 .lite-v4-tv .lite-v4-chip { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.4); color: #fff; }
 .lite-v4-tv .lite-v4-chip--advisory { color: #FFD9A8; border-color: #FFD9A8; background: none; }
+.lite-v4-tv .lite-v4-chip--blocked { opacity: 0.55; }
+.lite-v4-tv .lite-v4-dim-h .lite-v4-pt--blocked { color: var(--accent-tint); opacity: 1; }
 .lite-v4-tv .lite-v4-dots .lite-v4-rung { color: var(--accent-tint); }
 .lite-v4-tv .lite-v4-dots .lite-v4-rung i { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.4); color: #fff; }
 .lite-v4-tv .lite-v4-dots .lite-v4-rung--you i { background: #fff; border-color: #fff; color: var(--accent-ink); }
