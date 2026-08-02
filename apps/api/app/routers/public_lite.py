@@ -296,7 +296,7 @@ def _attach_v3_linked_reasons(pillars_payload: dict | None, linked: dict) -> Non
         return
     for pillar_key in ("accessibility", "true_value"):
         for dim in pillars_payload[pillar_key]["dimensions"]:
-            if dim["code"] not in v3_linked or dim["na"]:
+            if dim["code"] not in v3_linked or dim["na"] or dim.get("blocked"):
                 continue
             is_failing = dim["max"] > 0 and dim["earned"] < GAP_THRESHOLD * dim["max"]
             if is_failing:
@@ -589,7 +589,19 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int) -> dict:
     scan_row = _fetch_scan_row(conn, lite_request_id)
     scan_status = scan_row[0] if scan_row else None
     scan_complete = bool(scan_row and scan_row[0] == 'complete')
-    dimensions_raw = _decode_json_field(scan_row[3], {}) if scan_complete else {}
+    # R2 (fetch resilience, hotfix 3): a 'blocked' or 'failed' scan under
+    # the CURRENT scorer version now carries a real, honestly-degraded
+    # dimensions dict too (engine.py's _degraded_dimensions — every
+    # crawl-derived dimension coverage='blocked', see scan/engine.py) —
+    # scan_scorable is the broader gate that lets those render through
+    # the same v4 pillars machinery as a normal scan, rather than an
+    # empty {} routing to the retired legacy fallback. scan_complete
+    # itself stays narrow (status == 'complete') for the one place that
+    # still needs exactly that: the old-scorer-version historical
+    # fallback below, which only has real numbers to show for a scan
+    # that genuinely completed under its own (retired) rubric.
+    scan_scorable = bool(scan_row and scan_row[0] in ('complete', 'blocked', 'failed'))
+    dimensions_raw = _decode_json_field(scan_row[3], {}) if scan_scorable else {}
     scorer_version = dimensions_raw.get('scorer_version') or '1'
 
     # Part 5 (R3): independent of scan_complete/scorer_version — the
@@ -618,7 +630,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int) -> dict:
         primary_entity_id = primary_entity_row[0] if primary_entity_row else None
 
     run_signals: list = []
-    if scan_complete and primary_entity_id is not None:
+    if scan_scorable and primary_entity_id is not None:
         run_signals = _fetch_run_signals(conn, cycle_id, primary_entity_id)
 
     # Stage 16 (Part 7), updated Stage 25 (R1/R2): the ONE composite
@@ -634,7 +646,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int) -> dict:
     # instant this file bumps to v4 — no second "is this current"
     # definition to keep in sync by hand.
     pillars_payload = None
-    if scan_complete and scorer_version == SCORER_VERSION and primary_entity_id is not None:
+    if scan_scorable and scorer_version == SCORER_VERSION and primary_entity_id is not None:
         primary_metrics = overall_metrics.get(primary_code) or {}
         membership_probe = _decode_json_field(scan_row[5], {})
         pillars_payload = build_pillars_payload(
@@ -712,7 +724,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int) -> dict:
     # entity_id already fetched above for the pillars computation — no
     # second query for either.
     linked: dict = {}
-    if scan_complete and primary_entity_id is not None:
+    if scan_scorable and primary_entity_id is not None:
         linked = link_dimensions(run_signals, dimensions_raw)
 
         # Stage 8 (A4): merged via setdefault so an existing Stage-7

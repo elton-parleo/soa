@@ -155,7 +155,8 @@ describe('LiteWidget — adaptive shapes', () => {
 
     render(<LiteWidget />)
 
-    await waitFor(() => expect(screen.getByText('FOUNDATION · 30/35')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Composite score')).toBeInTheDocument())
+    expect(screen.getByText('68')).toBeInTheDocument()
     expect(screen.queryByText('Add your store URL to see why')).not.toBeInTheDocument()
   })
 
@@ -196,7 +197,7 @@ describe('LiteWidget — adaptive shapes', () => {
     expect(screen.getByLabelText('Your brand or store URL')).toHaveValue('Acme Co')
   })
 
-  it('scan blocked still renders the visibility section fully, with the blocked badge in the why-section', async () => {
+  it('scan blocked still renders the visibility section fully, with the degraded-run banner (fetch-resilience stage: real pillars, v4 layout)', async () => {
     sessionStorage.setItem('soaLiteToken', 'tok-blocked')
     sessionStorage.setItem('soaLiteStoreUrl', 'bigbox.com')
     liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'blocked' })
@@ -220,16 +221,41 @@ describe('LiteWidget — adaptive shapes', () => {
         totals: { total_mentions: 7, total_queries: 12 },
       },
       scan: { status: 'blocked', total_score: null, dimensions: [], pages_fetched: [] },
-      visibility: 60, accessibility: null, composite: 60, scan_status: 'blocked',
+      visibility: 60, accessibility: 0, composite: 60, scan_status: 'blocked',
+      // Fetch-resilience stage (R1/R2): a narrow-blocked scan under the
+      // current scorer version now carries a real pillars payload —
+      // every crawl-derived dimension honestly blocked, never absent.
+      pillars: {
+        visibility: {
+          score: 100, max: 100,
+          dimensions: [
+            { code: 'share_of_mentions', name: 'Share of Mentions', earned: 25, max: 25, na: false, evidence: [], seen: null, said: null, checks: null },
+            { code: 'recommendation_strength', name: 'Recommendation Strength', earned: 15, max: 15, na: false, evidence: [], seen: null, said: null, checks: null },
+          ],
+        },
+        accessibility: {
+          score: 0, max: 100,
+          dimensions: [
+            { code: 'agent_access', name: 'Agent Access', earned: 0, max: 6, na: false, blocked: true, evidence: ['the store root and every sampled product page were rate-limited or blocked this run — nothing could be measured on-site'], seen: null, said: null, checks: [] },
+            { code: 'catalog_context', name: 'Catalog & Context', earned: 0, max: 8, na: false, blocked: true, evidence: [], seen: null, said: null, checks: [] },
+            { code: 'protocol_feed', name: 'Protocol & Feed Presence', earned: 0, max: 6, na: false, blocked: true, evidence: [], seen: null, said: null, checks: [] },
+          ],
+        },
+        true_value: { score: 0, max: 100, dimensions: [] },
+        composite: 60,
+        member_value_na: false,
+        fixes: { visible: [], remaining_count: 0 },
+        verdict: 'NOT AGENT-READY',
+      },
     })
 
     render(<LiteWidget />)
 
     // The real, unlocked visibility section (W1/W2) still renders in full —
-    // a blocked scan degrades the why-section only, per rule 7.
+    // a blocked scan degrades Accessibility/True Value only, per rule 7.
     await waitFor(() => expect(screen.getByText('How often agents mention you — and your value')).toBeInTheDocument())
     expect(screen.getByText('42% · 5/12')).toBeInTheDocument()
-    expect(screen.getByText(/blocked our reader/)).toBeInTheDocument()
+    expect(screen.getByText(/rate-limited our reader/)).toBeInTheDocument()
 
     // The funnel teaser (W4) still renders as a locked, decorative tease —
     // its stage cells are fixed constants, not the real data above.

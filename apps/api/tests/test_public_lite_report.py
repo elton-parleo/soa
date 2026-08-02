@@ -730,6 +730,58 @@ def _seed_v3_full_credit_scan(conn, token="v3full", email="visitor@example.com",
     return token
 
 
+# R2 (fetch resilience, hotfix 3): the exact shape engine.py's
+# _degraded_dimensions synthesizes for a BLOCKED/FAILED run — every
+# crawl-derived dimension honestly coverage='blocked', never an empty {}.
+_DEGRADED_CRAWL_DIMENSIONS = {
+    "scorer_version": "4",
+    **{
+        code: {
+            "score": 0.0, "max": max_, "coverage": "blocked",
+            "evidence": [
+                "the store root and every sampled product page were rate-limited "
+                "or blocked this run — nothing could be measured on-site"
+            ],
+            "fix": None, "fix_human": None, "deferred_items": [], "cap_basis": [],
+        }
+        for code, max_ in (
+            ("agent_access", 6), ("catalog_context", 8), ("protocol_feed", 6),
+            ("price_truth_seen", 5), ("member_value_seen", 9), ("deal_citability_seen", 4),
+            ("value_protocols_seen", 7),
+        )
+    },
+}
+
+
+def test_blocked_scan_under_current_scorer_version_still_gets_a_pillars_payload(db):
+    """R2 (fetch resilience, hotfix 3): a degraded-blocked scan (engine.py's
+    R1 narrow rule) carries a real, honestly-blocked dimensions dict under
+    the current scorer version — the report must build a real pillars
+    payload from it (every crawl dimension NOT MEASURABLE, excluded from
+    the applicable max) instead of falling back to the retired legacy
+    template. Visibility (answer-side, mention-derived) still computes
+    for real — it never depended on the crawl at all."""
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="blocked1", dimensions=_DEGRADED_CRAWL_DIMENSIONS)
+        conn.exec_driver_sql(
+            "UPDATE soa_lite_scan_results SET status = 'blocked', total_score = NULL "
+            "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = 'blocked1')"
+        )
+
+    result = public_lite.get_lite_report("blocked1")
+
+    assert result["scan_status"] == "blocked"
+    assert result["pillars"] is not None
+    for code in ("agent_access", "catalog_context", "protocol_feed"):
+        row = next(d for d in result["pillars"]["accessibility"]["dimensions"] if d["code"] == code)
+        assert row["blocked"] is True
+        assert row["earned"] == 0.0
+    for code in ("price_truth", "deal_citability"):
+        row = next(d for d in result["pillars"]["true_value"]["dimensions"] if d["code"] == code)
+        assert row["blocked"] is True
+    assert result["pillars"]["visibility"]["score"] == 100
+
+
 def test_v3_full_report_composite_uses_pillars_not_the_old_blend(db):
     with db.begin() as conn:
         _seed_v3_full_credit_scan(conn)
@@ -1248,6 +1300,27 @@ def test_report_attaches_linked_reason_from_crosswalk(db):
     by_code = {d["code"]: d for d in result["scan"]["dimensions"]}
     assert by_code["V1"]["linked"] == {"reason": "mentioned but no price surfaced"}
     assert by_code["F1"]["linked"] is None
+
+
+def test_attach_v3_linked_reasons_never_flags_a_blocked_dimension():
+    """Fetch-resilience stage (Part C): a dimension whose crawl coverage
+    is 'blocked' (every sampled product page failed to fetch this run)
+    must never pick up a crosswalk 'linked' chip — its earned=0 would
+    otherwise look exactly like a genuine gap failing GAP_THRESHOLD, the
+    same phantom-zero shape this stage exists to fix. Direct unit test
+    on the pure function (see test_report_attaches_linked_reason_from_
+    crosswalk above for the router-integration case)."""
+    pillars_payload = {
+        "true_value": {
+            "dimensions": [
+                {"code": "price_truth", "na": False, "blocked": True, "earned": 0.0, "max": 12.0},
+            ],
+        },
+        "accessibility": {"dimensions": []},
+    }
+    public_lite._attach_v3_linked_reasons(pillars_payload, {"V1": "mentioned but no price surfaced"})
+    row = pillars_payload["true_value"]["dimensions"][0]
+    assert "linked" not in row
 
 
 def test_report_attaches_incentive_citation_linked_reason_end_to_end(db):

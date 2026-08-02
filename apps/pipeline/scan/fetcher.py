@@ -21,10 +21,15 @@ a known, accepted limitation.
 """
 import ipaddress
 import logging
+import os
+import random
+import re
 import socket
 import time
 import urllib.robotparser
 from dataclasses import dataclass, field
+from datetime import datetime
+from email.utils import parsedate_to_datetime
 from typing import Optional
 from urllib.parse import urljoin, urlparse
 
@@ -32,12 +37,48 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-USER_AGENT = "ParleoScanBot/1.0 (+https://parleo.io/scan)"
+
+def _env_int(name: str, default: int) -> int:
+    """Never raises — an unset or unparseable env var falls back to
+    default, same never-throw discipline as the rest of the scanner."""
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
+
+
+# Identifies honestly (A1): one real constant, sent on every page fetch —
+# no browser impersonation, no per-call variation.
+USER_AGENT = "ParleoScanBot/1.0 (+https://www.parleo.io/bot)"
+ACCEPT_HEADER = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+ACCEPT_LANGUAGE_HEADER = "en-US,en;q=0.9"
 TIMEOUT_SECONDS = 10.0
 MAX_REDIRECTS = 5
 ALLOWED_SCHEMES = {"http", "https"}
 ALLOWED_PORTS = {80, 443}
-POLITENESS_DELAY_SECONDS = 1.0
+
+# A2/A5: env-tunable so a hostile-edge rerun can be slowed without a
+# deploy. POLITENESS_DELAY_SECONDS is the name existing tests already
+# monkeypatch (see tests/scan/test_scorer.py, test_fetcher_ssrf.py) — kept
+# as-is rather than renamed, just now derived from the env-tunable knob
+# and jittered (see _jittered_delay) instead of being a bare constant.
+SCAN_FETCH_DELAY_MS = _env_int("SCAN_FETCH_DELAY_MS", 2500)
+SCAN_FETCH_RETRIES = _env_int("SCAN_FETCH_RETRIES", 3)
+POLITENESS_DELAY_SECONDS = SCAN_FETCH_DELAY_MS / 1000.0
+POLITENESS_JITTER_FRACTION = 0.40
+
+# A3: retry ladder for 429/403/5xx — a terminal-looking response on the
+# first attempt isn't necessarily the truth; it may be an edge that
+# rate-limits bursts and would happily serve the second request a few
+# seconds later. RETRY_BACKOFF_BASE_SECONDS/FIRST_REQUEST_429_COOLOFF_
+# SECONDS are separate, zeroable module constants (not folded into
+# SCAN_FETCH_DELAY_MS) so tests can silence retry sleeps without also
+# silencing the ordinary per-page politeness delay, and vice versa.
+RETRY_AFTER_CAP_SECONDS = 30.0
+RETRY_BACKOFF_BASE_SECONDS = 4.0
+FIRST_REQUEST_429_COOLOFF_SECONDS = 20.0
+RETRYABLE_STATUS_CODES = {429, 403, 500, 502, 503, 504}
+
 MAX_PAGE_FETCHES = 12
 MIN_BODY_LENGTH = 100
 
@@ -47,14 +88,27 @@ BLOCKED = "blocked"
 ROBOTS_DISALLOWED = "robots_disallowed"
 FAILED = "failed"
 
-# Stage 11 (F2): a final 2xx body under MIN_BODY_LENGTH chars, or one of
-# these bot-challenge signatures, reads as 'blocked' rather than a
-# genuine page — a real product/homepage is never this short or this
-# markered.
-CHALLENGE_PAGE_MARKERS = (
-    "checking your browser", "cf-browser-verification", "cf-chl",
-    "attention required", "ddos protection by", "captcha",
-    "please enable javascript and cookies",
+# Stage 11 (F2): a final 2xx body under MIN_BODY_LENGTH chars reads as
+# 'blocked' rather than a genuine page — a real product/homepage is
+# never this short.
+#
+# Challenge-page rewrite (hotfix 4): interstitials are tiny (a few KB);
+# real PDPs run 100KB+. Bodies over CHALLENGE_MAX_BYTES are NEVER a
+# challenge, full stop, regardless of anything else on the page — this
+# alone rules out a real product page that happens to embed a
+# grecaptcha script tag (routine on real storefronts, and the exact
+# incident shape that used to misfire: "captcha" appearing anywhere in
+# 150KB of real markup used to be enough to blank the page).
+CHALLENGE_MAX_BYTES = _env_int("CHALLENGE_MAX_BYTES", 30_000)
+# Signatures are scoped to <title> or this many leading bytes of the
+# body — never a substring search over the whole page (same reasoning:
+# a real page can legitimately mention any of these words far down the
+# page without being an interstitial).
+CHALLENGE_SCAN_BYTES = 2000
+CHALLENGE_PAGE_SIGNATURES = (
+    "just a moment", "attention required", "checking your browser",
+    "verify you are human", "cf-browser-verification", "cf-chl",
+    "ddos protection by", "complete the captcha", "solve the captcha",
 )
 
 
@@ -67,6 +121,11 @@ class FetchResult:
     final_url: Optional[str] = None       # last URL reached, even if unchanged
     http_status: Optional[int] = None     # raw HTTP status code, when one was received
     redirect_chain: list = field(default_factory=list)  # URLs that redirected onward, in order
+    # A4: structured per-URL fetch outcome the scorer can read directly,
+    # rather than re-deriving attempt/retry facts from evidence strings.
+    attempts: int = 1                             # HTTP requests actually made for this URL
+    retry_after_seen: Optional[float] = None       # max Retry-After (seconds, capped) honored, if any
+    bytes: Optional[int] = None                    # response body size, when a response was received
 
 
 class SsrfRejected(Exception):
@@ -149,23 +208,154 @@ def _registrable_domain(hostname: Optional[str]) -> str:
     return ".".join(labels[-2:]) if len(labels) >= 2 else hostname.lower()
 
 
-def _looks_like_challenge_page(html: Optional[str]) -> bool:
+def _challenge_signature_in(text: str) -> Optional[str]:
+    for marker in CHALLENGE_PAGE_SIGNATURES:
+        if marker in text:
+            return marker
+    return None
+
+
+def _looks_like_challenge_page(html: Optional[str]) -> Optional[str]:
+    """
+    Challenge-page rewrite (hotfix 4): a conjunction of independent
+    signals, never a bare substring-anywhere match. Returns None when
+    the page is not a challenge, else a short string naming which rule
+    fired — never a bare bool the caller has to re-derive an
+    explanation for.
+    """
     if not html:
-        return False
+        return None
+
+    body_bytes = len(html.encode("utf-8", errors="replace"))
+    if body_bytes > CHALLENGE_MAX_BYTES:
+        return None
+
     lowered = html.lower()
-    return any(marker in lowered for marker in CHALLENGE_PAGE_MARKERS)
+    # Real-content override: a page shipping structured product data,
+    # social-preview metadata, or a real nav bar is never a bare
+    # challenge interstitial — those ship none of these.
+    if (
+        "application/ld+json" in lowered
+        or "og:title" in lowered
+        or "og:type" in lowered
+        or "<nav" in lowered
+    ):
+        return None
+
+    title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+    title_text = title_match.group(1).lower() if title_match else ""
+    if _challenge_signature_in(title_text):
+        return f"challenge-page: title signature + {body_bytes // 1000}KB body"
+
+    if _challenge_signature_in(lowered[:CHALLENGE_SCAN_BYTES]):
+        return f"challenge-page: body signature + {body_bytes // 1000}KB body"
+
+    return None
 
 
 _last_fetch_at: dict = {}
+# A3: hostnames this process has made at least one HTTP request to —
+# distinct from _last_fetch_at (which tracks timing, not "have we ever
+# tried"). Backs the first-request-429 cool-off: a rate-limit on the
+# very first request to a domain this run reads as sitewide hostility
+# from the start, not an ordinary mid-run rate limit.
+_domain_seen: set = set()
+
+
+def _jittered_delay(base_seconds: float) -> float:
+    """A2: ±40% jitter around the base politeness delay — never negative,
+    never raises. base_seconds <= 0 (tests monkeypatch it to 0) returns 0
+    unconditionally so tests stay fast regardless of jitter."""
+    if base_seconds <= 0:
+        return 0.0
+    spread = base_seconds * POLITENESS_JITTER_FRACTION
+    return max(0.0, base_seconds + random.uniform(-spread, spread))
 
 
 def _politeness_wait(hostname: str) -> None:
     last = _last_fetch_at.get(hostname)
     if last is not None:
         elapsed = time.monotonic() - last
-        if elapsed < POLITENESS_DELAY_SECONDS:
-            time.sleep(POLITENESS_DELAY_SECONDS - elapsed)
+        delay = _jittered_delay(POLITENESS_DELAY_SECONDS)
+        if elapsed < delay:
+            time.sleep(delay - elapsed)
     _last_fetch_at[hostname] = time.monotonic()
+
+
+def _request_headers() -> dict:
+    """A1: the one honest identity, plus normal Accept/Accept-Language —
+    never varied per call, never a browser impersonation."""
+    return {
+        "User-Agent": USER_AGENT,
+        "Accept": ACCEPT_HEADER,
+        "Accept-Language": ACCEPT_LANGUAGE_HEADER,
+    }
+
+
+def _parse_retry_after(header_value: Optional[str]) -> Optional[float]:
+    """A3: Retry-After as either delta-seconds or an HTTP-date, capped at
+    RETRY_AFTER_CAP_SECONDS. Never raises — an absent or unparseable
+    header returns None so the caller falls back to exponential backoff."""
+    if not header_value:
+        return None
+    try:
+        return max(0.0, min(float(header_value), RETRY_AFTER_CAP_SECONDS))
+    except (TypeError, ValueError):
+        pass
+    try:
+        dt = parsedate_to_datetime(header_value)
+        if dt is None:
+            return None
+        now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.now()
+        delta = (dt - now).total_seconds()
+        return max(0.0, min(delta, RETRY_AFTER_CAP_SECONDS))
+    except Exception:
+        return None
+
+
+def _fetch_with_retries(current_url: str, hostname: str):
+    """
+    A3: issues the GET request, retrying on 429/403/5xx up to
+    SCAN_FETCH_RETRIES total attempts — Retry-After (capped) when the
+    response sends one, otherwise exponential backoff (RETRY_BACKOFF_
+    BASE_SECONDS, doubling each attempt). A 429 on the very first
+    request this process has made to this hostname additionally
+    triggers one FIRST_REQUEST_429_COOLOFF_SECONDS cool-off before the
+    ladder starts — an immediate sitewide-hostility signal, distinct
+    from an ordinary rate limit hit mid-run.
+
+    Returns (response, attempts, retry_after_seen): response is the
+    LAST httpx.Response received (whatever its final status — the
+    caller decides what that means), attempts is how many requests were
+    actually made, retry_after_seen is the largest Retry-After value
+    honored in seconds, or None if the ladder ran on backoff alone (or
+    never retried at all).
+    """
+    is_first_request_to_host = hostname not in _domain_seen
+    _domain_seen.add(hostname)
+
+    resp = None
+    retry_after_seen: Optional[float] = None
+
+    for attempt in range(1, SCAN_FETCH_RETRIES + 1):
+        with httpx.Client(follow_redirects=False, timeout=TIMEOUT_SECONDS) as client:
+            resp = client.get(current_url, headers=_request_headers())
+
+        if resp.status_code not in RETRYABLE_STATUS_CODES or attempt >= SCAN_FETCH_RETRIES:
+            return resp, attempt, retry_after_seen
+
+        if resp.status_code == 429 and is_first_request_to_host and attempt == 1:
+            time.sleep(FIRST_REQUEST_429_COOLOFF_SECONDS)
+        is_first_request_to_host = False
+
+        retry_after = _parse_retry_after(resp.headers.get("retry-after"))
+        if retry_after is not None:
+            retry_after_seen = max(retry_after_seen or 0.0, retry_after)
+            time.sleep(retry_after)
+        else:
+            time.sleep(RETRY_BACKOFF_BASE_SECONDS * (2 ** (attempt - 1)))
+
+    return resp, SCAN_FETCH_RETRIES, retry_after_seen
 
 
 def fetch(
@@ -198,6 +388,8 @@ def fetch(
     current_url = url
     redirect_chain: list = []
     starting_domain = _registrable_domain(urlparse(url).hostname)
+    total_attempts = 0
+    retry_after_seen: Optional[float] = None
 
     try:
         if robot_parser is not None and not robot_parser.can_fetch(USER_AGENT, current_url):
@@ -210,7 +402,8 @@ def fetch(
             if hop_domain != starting_domain:
                 return FetchResult(
                     url=url, final_url=current_url, status=FAILED,
-                    redirect_chain=redirect_chain,
+                    redirect_chain=redirect_chain, attempts=total_attempts or 1,
+                    retry_after_seen=retry_after_seen,
                     error=(
                         f"cross-domain redirect stopped at {current_url!r} "
                         f"(registrable domain {hop_domain!r} != {starting_domain!r})"
@@ -220,8 +413,10 @@ def fetch(
             hostname = urlparse(current_url).hostname
             _politeness_wait(hostname)
 
-            with httpx.Client(follow_redirects=False, timeout=TIMEOUT_SECONDS) as client:
-                resp = client.get(current_url, headers={"User-Agent": USER_AGENT})
+            resp, hop_attempts, hop_retry_after = _fetch_with_retries(current_url, hostname)
+            total_attempts += hop_attempts
+            if hop_retry_after is not None:
+                retry_after_seen = max(retry_after_seen or 0.0, hop_retry_after)
 
             if resp.is_redirect:
                 redirect_chain.append(current_url)
@@ -231,7 +426,8 @@ def fetch(
                     return FetchResult(
                         url=url, final_url=current_url, status=FAILED,
                         http_status=resp.status_code, redirect_chain=redirect_chain,
-                        error="redirect with no Location header",
+                        attempts=total_attempts, retry_after_seen=retry_after_seen,
+                        bytes=len(resp.content), error="redirect with no Location header",
                     )
                 current_url = next_url
                 continue
@@ -240,65 +436,80 @@ def fetch(
                 return FetchResult(
                     url=url, final_url=current_url, status=NOT_FOUND,
                     http_status=resp.status_code, redirect_chain=redirect_chain,
-                    error=f"HTTP {resp.status_code}",
+                    attempts=total_attempts, retry_after_seen=retry_after_seen,
+                    bytes=len(resp.content), error=f"HTTP {resp.status_code}",
                 )
 
             if resp.status_code in (403, 429):
                 return FetchResult(
                     url=url, final_url=current_url, status=BLOCKED,
                     http_status=resp.status_code, redirect_chain=redirect_chain,
-                    error=f"HTTP {resp.status_code}",
+                    attempts=total_attempts, retry_after_seen=retry_after_seen,
+                    bytes=len(resp.content), error=f"HTTP {resp.status_code}",
                 )
 
             if resp.status_code >= 400:
                 return FetchResult(
                     url=url, final_url=current_url, status=FAILED,
                     http_status=resp.status_code, redirect_chain=redirect_chain,
-                    error=f"HTTP {resp.status_code}",
+                    attempts=total_attempts, retry_after_seen=retry_after_seen,
+                    bytes=len(resp.content), error=f"HTTP {resp.status_code}",
                 )
 
             body = resp.text
-            if _looks_like_challenge_page(body):
+            challenge_reason = _looks_like_challenge_page(body)
+            if challenge_reason:
                 return FetchResult(
                     url=url, final_url=current_url, status=BLOCKED, html=body,
                     http_status=resp.status_code, redirect_chain=redirect_chain,
-                    error="challenge-page markers detected in response body",
+                    attempts=total_attempts, retry_after_seen=retry_after_seen,
+                    bytes=len(resp.content),
+                    error=challenge_reason,
                 )
             if check_short_body and len(body.strip()) < MIN_BODY_LENGTH:
                 return FetchResult(
                     url=url, final_url=current_url, status=BLOCKED, html=body,
                     http_status=resp.status_code, redirect_chain=redirect_chain,
+                    attempts=total_attempts, retry_after_seen=retry_after_seen,
+                    bytes=len(resp.content),
                     error=f"suspiciously short body ({len(body.strip())} chars) after following redirects",
                 )
 
             return FetchResult(
                 url=url, final_url=current_url, status=FETCHED, html=body,
                 http_status=resp.status_code, redirect_chain=redirect_chain,
+                attempts=total_attempts, retry_after_seen=retry_after_seen,
+                bytes=len(resp.content),
             )
 
         return FetchResult(
             url=url, final_url=current_url, status=FAILED,
-            redirect_chain=redirect_chain, error="too many redirects",
+            redirect_chain=redirect_chain, attempts=total_attempts or 1,
+            retry_after_seen=retry_after_seen, error="too many redirects",
         )
 
     except SsrfRejected as e:
         return FetchResult(
             url=url, final_url=current_url, status=FAILED,
-            redirect_chain=redirect_chain, error=f"blocked by SSRF guard: {e}",
+            redirect_chain=redirect_chain, attempts=total_attempts or 1,
+            retry_after_seen=retry_after_seen, error=f"blocked by SSRF guard: {e}",
         )
     except httpx.TimeoutException as e:
         return FetchResult(
             url=url, final_url=current_url, status=FAILED,
-            redirect_chain=redirect_chain, error=f"timeout: {e}",
+            redirect_chain=redirect_chain, attempts=total_attempts or 1,
+            retry_after_seen=retry_after_seen, error=f"timeout: {e}",
         )
     except httpx.HTTPError as e:
         return FetchResult(
             url=url, final_url=current_url, status=FAILED,
-            redirect_chain=redirect_chain, error=f"HTTP error: {e}",
+            redirect_chain=redirect_chain, attempts=total_attempts or 1,
+            retry_after_seen=retry_after_seen, error=f"HTTP error: {e}",
         )
     except Exception as e:
         log.exception(f"[scan.fetcher] unexpected error fetching {url}")
         return FetchResult(
             url=url, final_url=current_url, status=FAILED,
-            redirect_chain=redirect_chain, error=f"unexpected error: {e}",
+            redirect_chain=redirect_chain, attempts=total_attempts or 1,
+            retry_after_seen=retry_after_seen, error=f"unexpected error: {e}",
         )

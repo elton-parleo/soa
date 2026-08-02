@@ -24,6 +24,15 @@ item), or "na" (inapplicable to this site type — excluded from every
 sum by engine.py/public_lite.py, not scored as zero). F3 and V5 are
 "partial" by definition under scorer_version "2": each always carries at
 least one deferred_item.
+
+Fetch-resilience stage (Part B): a fourth coverage value, "blocked",
+covers an offer/markup-dependent check whose sampled product pages
+ALL terminally failed to fetch (429/403/5xx/timeout, after fetcher.py's
+retry ladder already tried) — the check has nothing to evaluate, which
+is a different honest answer than either a genuine zero or "na".
+Excluded from every applicable-max sum exactly like "na" (lite_pillars.py).
+A page that fetched but simply had no matching markup is still a
+genuine, scored zero — "blocked" only ever means "never read."
 """
 import json
 from dataclasses import dataclass, field
@@ -74,7 +83,7 @@ class DimensionScore:
     # (never serialized to the free report — see public_lite.py's
     # fixes-list builder); fix_human is what the free report shows.
     fix_human: Optional[str] = None
-    coverage: str = "full"  # full | partial | na
+    coverage: str = "full"  # full | partial | na | blocked
     deferred_items: list = field(default_factory=list)  # [{label, reason}]
     cap_basis: list = field(default_factory=list)  # V5 only — evidence lines that justified a cap
 
@@ -113,6 +122,71 @@ def _no_product_pages_score(
         score=0.0, max=weight, coverage="partial",
         evidence=[site_type_result.reason], fix=fix, fix_human=fix_human,
     )
+
+
+def _readable_product_pages(product_pages):
+    """B1: only pages whose fetch actually succeeded feed an offer/
+    markup-dependent check — a page that terminally failed after
+    fetcher.py's retry ladder (429/403/5xx/timeout) has no extracted
+    data at all (engine.py only extracts from a 'fetched' result), and
+    must never be silently counted as 'checked, nothing found' — the
+    exact incident this stage fixes. Returns (readable, unreadable);
+    `product_pages` itself is untouched (still every sampled candidate,
+    for denominator/evidence purposes upstream)."""
+    readable = [p for p in product_pages if p.fetch_result.status == "fetched"]
+    unreadable = [p for p in product_pages if p.fetch_result.status != "fetched"]
+    return readable, unreadable
+
+
+def _unreadable_status_detail(unreadable_pages) -> str:
+    """Honest, first-person wording keyed off the actual HTTP status(es)
+    seen — never a generic 'blocked' claim when we know exactly what
+    happened."""
+    codes = sorted({p.fetch_result.http_status for p in unreadable_pages if p.fetch_result.http_status})
+    if codes == [429]:
+        return "rate-limited our reader (HTTP 429)"
+    if len(codes) == 1:
+        return f"returned HTTP {codes[0]} to our reader"
+    if codes:
+        return "returned errors to our reader (" + ", ".join(f"HTTP {c}" for c in codes) + ")"
+    return "could not be reached by our reader (network error or timeout)"
+
+
+def _all_blocked_score(weight: float, product_pages) -> DimensionScore:
+    """B1/B2: every sampled product page was unreadable — this check has
+    nothing to evaluate. coverage='blocked' renders NOT MEASURABLE
+    (lite_pillars.py), distinct from both a genuine zero and 'na': the
+    site may well pass this check, we simply couldn't read the pages
+    that would prove it, so it must never render as a failing 0."""
+    n = len(product_pages)
+    return DimensionScore(
+        score=0.0, max=weight, coverage="blocked",
+        evidence=[f"{n} of {n} product pages {_unreadable_status_detail(product_pages)} — couldn't be evaluated."],
+    )
+
+
+def _blocked_pages_evidence_line(total: int, unreadable_pages) -> str:
+    """B2: partial fetch success — the check still scores normally over
+    the pages actually read; this line makes the exclusion honest
+    rather than silent."""
+    n = len(unreadable_pages)
+    return (
+        f"{n} of {total} product pages {_unreadable_status_detail(unreadable_pages)} "
+        "— excluded from this check; scored over the page(s) actually read."
+    )
+
+
+def _pages_with_only_readable_products(pages, readable_product_pages):
+    """Rebuilds a pages list for a pass-through call into one of the
+    frozen v2 functions: every non-product page is kept untouched, and
+    product-kind entries are restricted to the ones that actually
+    fetched — so the v2 function underneath never sees an unreadable
+    product page and silently treats it as 'checked, nothing found'.
+    A no-op (returns `pages` itself) when nothing was unreadable, which
+    is what keeps the all-fetched case byte-identical to before this
+    stage."""
+    readable_ids = {id(p) for p in readable_product_pages}
+    return [p for p in pages if p.candidate.kind != "product" or id(p) in readable_ids]
 
 
 def _parse_date(value) -> Optional[datetime]:
@@ -162,6 +236,33 @@ def score_f1_agent_access(discovery, pages) -> DimensionScore:
         evidence.append("no bot-blocking encountered on sampled pages")
     else:
         evidence.append(f"{len(blocked_pages)} page(s) returned bot-blocked responses")
+
+    # B5: a 429-hostile edge is itself a real accessibility signal —
+    # named honestly here without changing the score off it. Our UA is
+    # not necessarily the UA an agent's own browsing tool sends, so this
+    # stays a first-person observation about our reader, not a claim
+    # about how agents generally fare against this site.
+    rate_limited_pages = [p for p in pages if p.fetch_result.http_status == 429]
+    if rate_limited_pages:
+        evidence.append(
+            f"{len(rate_limited_pages)} page request(s) rate-limited (HTTP 429) — a bot-hostile edge"
+        )
+
+    # R1 (fetch resilience, hotfix 3): a homepage that specifically
+    # failed to fetch, on a run that still completed (product pages
+    # read fine), is page-level evidence — not a run-level event
+    # (_derive_status no longer degrades the whole run over this).
+    # Named honestly here, without changing the score off it.
+    homepage_page = next((p for p in pages if p.candidate.kind == "homepage"), None)
+    if homepage_page and homepage_page.fetch_result.status != "fetched":
+        fr = homepage_page.fetch_result
+        attempts_note = f"; {fr.attempts} attempt{'s' if fr.attempts != 1 else ''}" if fr.attempts else ""
+        if fr.http_status == 429:
+            evidence.append(f"store root rate-limited our reader (HTTP 429{attempts_note}) — product pages read successfully")
+        elif fr.http_status:
+            evidence.append(f"store root returned HTTP {fr.http_status} to our reader{attempts_note} — product pages read successfully")
+        else:
+            evidence.append("store root could not be reached by our reader (network error) — product pages read successfully")
 
     if discovery.sitemap_urls:
         points += weight * 0.1
@@ -724,11 +825,23 @@ def score_agent_access(discovery, pages) -> DimensionScore:
 
 def score_catalog_context(pages, site_type_result) -> DimensionScore:
     """Stage 16: v2's score_f2_catalog_context, rescaled onto the v3
-    catalog_context dimension's weight."""
-    return _rescale_dimension_score(
-        score_f2_catalog_context(pages, site_type_result),
-        DIMENSIONS_BY_CODE["catalog_context"].weight,
-    )
+    catalog_context dimension's weight. B1/B2 (fetch resilience): a
+    product page that terminally failed to fetch is excluded before the
+    frozen v2 check ever sees it (all-unreadable short-circuits to
+    coverage='blocked' without calling v2 at all; partial exclusion
+    passes v2 a filtered pages list) — see _readable_product_pages."""
+    weight = DIMENSIONS_BY_CODE["catalog_context"].weight
+    product_pages = _product_pages(pages)
+    readable_pages, unreadable_pages = _readable_product_pages(product_pages)
+
+    if product_pages and not readable_pages:
+        return _all_blocked_score(weight, product_pages)
+
+    scoped_pages = _pages_with_only_readable_products(pages, readable_pages) if unreadable_pages else pages
+    result = _rescale_dimension_score(score_f2_catalog_context(scoped_pages, site_type_result), weight)
+    if unreadable_pages:
+        result.evidence.append(_blocked_pages_evidence_line(len(product_pages), unreadable_pages))
+    return result
 
 
 def score_protocol_feed(pages, site_type_result) -> DimensionScore:
@@ -799,15 +912,19 @@ def score_price_truth_seen(pages, site_type_result) -> DimensionScore:
             fix_human="Show your prices in a format agents can read directly from the page, not just as text or an image.",
         )
 
+    readable_pages, unreadable_pages = _readable_product_pages(product_pages)
+    if not readable_pages:
+        return _all_blocked_score(weight, product_pages)
+
     with_currency = [
-        p for p in product_pages
+        p for p in readable_pages
         if p.extracted and any(o.price_currency for prod in p.extracted.products for o in prod.offers)
     ]
 
     with_price = []
     mismatched_pages = []
     login_gated_pages = []
-    for p in product_pages:
+    for p in readable_pages:
         has_price = p.extracted and any(
             o.price is not None for prod in p.extracted.products for o in prod.offers
         )
@@ -825,14 +942,29 @@ def score_price_truth_seen(pages, site_type_result) -> DimensionScore:
             continue
         with_price.append(p)
 
-    price_ratio = len(with_price) / len(product_pages)
-    currency_ratio = len(with_currency) / len(product_pages)
+    price_ratio = len(with_price) / len(readable_pages)
+    currency_ratio = len(with_currency) / len(readable_pages)
     points = weight * 0.6 * price_ratio + weight * 0.4 * currency_ratio
 
     evidence = [
-        f"{len(with_price)}/{len(product_pages)} product pages expose a machine-readable price consistent with the page's own text",
-        f"{len(with_currency)}/{len(product_pages)} product pages declare priceCurrency",
+        f"{len(with_price)}/{len(readable_pages)} product pages expose a machine-readable price consistent with the page's own text",
+        f"{len(with_currency)}/{len(readable_pages)} product pages declare priceCurrency",
     ]
+    if not with_price and not mismatched_pages:
+        # F5: exact about what was and wasn't found, rather than leaving
+        # a bare 0/N ratio to imply "nothing here at all" when a social-
+        # preview card exists but isn't what agents actually parse.
+        # Excludes the mismatched-price case deliberately — there,
+        # schema.org markup DOES exist (it just disagrees with the page's
+        # own text), so "no ... markup" would be false; that case already
+        # gets its own evidence line below.
+        og_meta_pages = [p for p in readable_pages if p.extracted and p.extracted.og_price_meta_present]
+        if og_meta_pages:
+            evidence.append(
+                "social-preview (OG) price metadata found — not the schema.org offers agents parse"
+            )
+        else:
+            evidence.append("no schema.org Product/Offer price markup")
     if mismatched_pages:
         evidence.append(
             f"{len(mismatched_pages)} product page(s) show a structured price that disagrees with the page's own visible price text"
@@ -841,6 +973,8 @@ def score_price_truth_seen(pages, site_type_result) -> DimensionScore:
         evidence.append(
             f"{len(login_gated_pages)} product page(s) show a login-gated price rather than no price at all"
         )
+    if unreadable_pages:
+        evidence.append(_blocked_pages_evidence_line(len(product_pages), unreadable_pages))
 
     fix = None
     fix_human = None
@@ -857,17 +991,26 @@ def score_price_truth_seen(pages, site_type_result) -> DimensionScore:
 def score_deal_citability_seen(pages, site_type_result) -> DimensionScore:
     """Stage 16 (T1): deal_citability.seen (4) = v2's score_v4_value_rails
     (CONCRETE/ACTIVE/ACTIONABLE, weighted equally), rescaled onto the
-    seen sub-max."""
-    result = _rescale_dimension_score(
-        score_v4_value_rails(pages, site_type_result),
-        DIMENSIONS_BY_CODE["deal_citability"].seen_max,
-    )
+    seen sub-max. B1/B2 (fetch resilience): same unreadable-product-page
+    exclusion as score_catalog_context/score_price_truth_seen — see
+    _readable_product_pages."""
+    weight = DIMENSIONS_BY_CODE["deal_citability"].seen_max
+    product_pages = _product_pages(pages)
+    readable_pages, unreadable_pages = _readable_product_pages(product_pages)
+
+    if product_pages and not readable_pages:
+        return _all_blocked_score(weight, product_pages)
+
+    scoped_pages = _pages_with_only_readable_products(pages, readable_pages) if unreadable_pages else pages
+    result = _rescale_dimension_score(score_v4_value_rails(scoped_pages, site_type_result), weight)
+    if unreadable_pages:
+        result.evidence.append(_blocked_pages_evidence_line(len(product_pages), unreadable_pages))
     # Stage 25 (Part 2, P3): evidence-only — a deal gated behind an
     # email/signup popup still scores exactly like any other page with no
     # crawlable deal (no scoring change, score/max untouched above); this
     # only makes the evidence honest about WHY nothing was found.
     gated_pages = [
-        p for p in _product_pages(pages)
+        p for p in readable_pages
         if p.extracted and p.extracted.email_gated_deal_text_hits
     ]
     if gated_pages:
@@ -893,13 +1036,30 @@ def score_member_value_seen(pages, site_type_result) -> DimensionScore:
     JUST loyalty-surface discoverability, rescaled onto the full 12.
     Its evidence is still surfaced (honest, not silent) even though it
     contributes no points.
+
+    B1/B2 (fetch resilience): 'blocked' (every sampled product page
+    terminally failed to fetch) is excluded from raw_score/raw_max the
+    exact same way 'na' already is — rescaled exactly like the existing
+    member-value N/A path, per the stage spec. Loyalty-surface
+    discoverability doesn't depend on product pages at all, so it's
+    unaffected either way.
     """
     new_max = DIMENSIONS_BY_CODE["member_value"].seen_max
 
     loyalty = score_v2_loyalty_surface(pages)
-    member_price = score_v3_member_value(pages, site_type_result)
 
-    components = [loyalty] if member_price.coverage == "na" else [loyalty, member_price]
+    product_pages = _product_pages(pages)
+    readable_pages, unreadable_pages = _readable_product_pages(product_pages)
+    if product_pages and not readable_pages:
+        member_price = _all_blocked_score(WEIGHTS["V3"], product_pages)
+    else:
+        scoped_pages = _pages_with_only_readable_products(pages, readable_pages) if unreadable_pages else pages
+        member_price = score_v3_member_value(scoped_pages, site_type_result)
+        if unreadable_pages:
+            member_price.evidence.append(_blocked_pages_evidence_line(len(product_pages), unreadable_pages))
+
+    excluded = member_price.coverage in ("na", "blocked")
+    components = [loyalty] if excluded else [loyalty, member_price]
     raw_max = sum(c.max for c in components)
     raw_score = sum(c.score for c in components)
     ratio = (new_max / raw_max) if raw_max else 0.0
@@ -913,7 +1073,7 @@ def score_member_value_seen(pages, site_type_result) -> DimensionScore:
         deferred_items.extend(c.deferred_items)
         fix = fix or c.fix
         fix_human = fix_human or c.fix_human
-    if member_price.coverage == "na":
+    if excluded:
         evidence.extend(member_price.evidence)
 
     return DimensionScore(
