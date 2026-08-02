@@ -385,11 +385,36 @@ function ExecutiveTiles({ report, exposure }) {
 // blocked/failed scan under the current scorer version too, per R1/R2)
 // so Accessibility/True Value below read as NOT MEASURABLE, never a
 // failing zero, and this banner is the one place that says why.
-function DegradedRunBanner({ status }) {
+// Sitemap-sampler stage (hotfix 5, S3): first-person banner copy, one
+// honest hedge, no generalization about how other agents would fare —
+// that claim was never ours to make (grep-tested: the retired "will
+// hit the same wall" line is gone repo-wide). degradedReason/
+// bannerFacts come from report.scan (engine.py computes the dynamic
+// facts server-side; this only templates the static wording around
+// them). A pre-hotfix-5 scan row has no degraded_reason at all — falls
+// back to a generic, still-honest message keyed on status alone.
+function _attemptsPhrase(bannerFacts) {
+  const n = bannerFacts?.attempts
+  if (!n) return ''
+  const robotsNote = bannerFacts.robots_included ? ', incl. robots.txt where applicable' : ''
+  return ` (${n} attempt${n === 1 ? '' : 's'}${robotsNote})`
+}
+
+function DegradedRunBanner({ status, degradedReason, bannerFacts }) {
   if (status !== 'blocked' && status !== 'failed') return null
-  const message = status === 'blocked'
-    ? 'Your site rate-limited our reader — nothing could be measured on-site. Many AI shopping agents will hit the same wall.'
-    : "We couldn't finish reading your site this time — nothing could be measured on-site. We'll try again on your next diagnostic."
+
+  let message
+  if (degradedReason === 'no_product_pages_found') {
+    const n = bannerFacts?.sitemaps_read ?? 0
+    message = `We read ${n} of your sitemap${n === 1 ? '' : 's'} but couldn't locate product pages to sample — this can be our reader's limitation; on-site checks weren't evaluated.`
+  } else if (status === 'blocked') {
+    const refusal = bannerFacts?.refusal
+    const verb = refusal === '403' ? '403-refused' : refusal === '429' ? 'rate-limited' : 'blocked'
+    message = `Your site ${verb} our identified reader on every page we tried${_attemptsPhrase(bannerFacts)}. We can only measure our own reader — but an edge this strict is worth verifying against the agents you care about.`
+  } else {
+    message = "We couldn't finish reading your site this time — nothing could be measured on-site. We'll try again on your next diagnostic."
+  }
+
   return (
     <LightCard>
       <InfoBadge message={message} />
@@ -1825,7 +1850,13 @@ export function LiteFullReport({ report, onAddStoreUrl, token }) {
           token={token}
         />
 
-        {isV3Report(report) && <DegradedRunBanner status={report.scan_status} />}
+        {isV3Report(report) && (
+          <DegradedRunBanner
+            status={report.scan_status}
+            degradedReason={report.scan?.degraded_reason}
+            bannerFacts={report.scan?.degraded_banner_facts}
+          />
+        )}
 
         <ExecutiveTiles report={report} exposure={exposure} />
 

@@ -228,7 +228,22 @@ def score_f1_agent_access(discovery, pages) -> DimensionScore:
         else:
             evidence.append(f"robots.txt disallows: {disallowed}")
     else:
-        evidence.append(f"robots.txt not fetchable (status={discovery.robots_fetch.status})")
+        # S4 (sitemap sampler, hotfix 5): refusing robots.txt itself to
+        # an identified reader is its own notable, factual, first-
+        # person observation — not just a generic "not fetchable."
+        if discovery.robots_fetch.http_status == 403:
+            evidence.append("robots.txt itself refused our identified reader (HTTP 403) — a notable accessibility signal on its own")
+        else:
+            evidence.append(f"robots.txt not fetchable (status={discovery.robots_fetch.status})")
+
+    # S1.c (sitemap sampler, hotfix 5): candidate product URLs excluded
+    # from sampling because robots.txt disallows them for our reader —
+    # its own honest finding, counted before the sample was even taken,
+    # never conflated with "rate-limited" (a fetch-time signal) or
+    # silently dropped.
+    robots_excluded = discovery.sitemap_sampling.get("robots_excluded", 0)
+    if robots_excluded:
+        evidence.append(f"robots.txt disallows {robots_excluded} candidate product page(s) to our reader")
 
     blocked_pages = [p for p in pages if p.fetch_result.status == "blocked"]
     if not blocked_pages:

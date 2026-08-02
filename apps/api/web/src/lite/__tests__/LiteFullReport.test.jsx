@@ -735,7 +735,7 @@ describe('LiteFullReport — email de-gating (Report redesign, Part 8, E1)', () 
 })
 
 describe('LiteFullReport — degraded-run banner (fetch-resilience stage, hotfix 3, R1/R2)', () => {
-  it('shows the blocked banner and NOT MEASURABLE dimensions when scan_status is blocked', () => {
+  it('shows the S3 first-person 429 banner and NOT MEASURABLE dimensions when scan_status is blocked', () => {
     const pillars = buildV3Pillars()
     pillars.accessibility.dimensions = pillars.accessibility.dimensions.map((d) => ({
       ...d, blocked: true, earned: 0,
@@ -747,15 +747,47 @@ describe('LiteFullReport — degraded-run banner (fetch-resilience stage, hotfix
     }))
     const report = buildV3Report({
       pillars, scan_status: 'blocked',
-      scan: { status: 'blocked', total_score: null, dimensions: [], pages_fetched: [] },
+      scan: {
+        status: 'blocked', total_score: null, dimensions: [], pages_fetched: [],
+        degraded_reason: 'blocked',
+        degraded_banner_facts: { refusal: '429', attempts: 6, robots_included: true },
+      },
     })
     render(<LiteFullReport report={report} />)
 
-    expect(screen.getByText(/Your site rate-limited our reader/)).toBeInTheDocument()
+    expect(screen.getByText(/Your site rate-limited our identified reader on every page we tried \(6 attempts, incl\. robots\.txt where applicable\)/)).toBeInTheDocument()
+    expect(screen.queryByText(/will hit the same wall/)).not.toBeInTheDocument()
     expect(screen.getAllByText('NOT MEASURABLE').length).toBeGreaterThan(0)
   })
 
-  it('shows the failed banner (different copy) when scan_status is failed', () => {
+  it('shows the S3 403-refused wording when the banner facts say so', () => {
+    const report = buildV3Report({
+      scan_status: 'blocked',
+      scan: {
+        status: 'blocked', total_score: null, dimensions: [], pages_fetched: [],
+        degraded_reason: 'blocked',
+        degraded_banner_facts: { refusal: '403', attempts: 3, robots_included: false },
+      },
+    })
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/Your site 403-refused our identified reader on every page we tried \(3 attempts\)/)).toBeInTheDocument()
+  })
+
+  it('shows the S2 no-product-pages-found banner, never blaming the site', () => {
+    const report = buildV3Report({
+      scan_status: 'failed',
+      scan: {
+        status: 'failed', total_score: null, dimensions: [], pages_fetched: [],
+        degraded_reason: 'no_product_pages_found',
+        degraded_banner_facts: { sitemaps_read: 3 },
+      },
+    })
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/We read 3 of your sitemaps but couldn't locate product pages to sample/)).toBeInTheDocument()
+    expect(screen.getByText(/this can be our reader's limitation/)).toBeInTheDocument()
+  })
+
+  it('shows the generic unreachable banner when scan_status is failed with no degraded_reason', () => {
     const report = buildV3Report({
       scan_status: 'failed',
       scan: { status: 'failed', total_score: null, dimensions: [], pages_fetched: [] },
@@ -766,8 +798,13 @@ describe('LiteFullReport — degraded-run banner (fetch-resilience stage, hotfix
 
   it('omits the banner entirely for a normal complete run', () => {
     render(<LiteFullReport report={buildV3Report()} />)
-    expect(screen.queryByText(/rate-limited our reader — nothing could be measured/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/on every page we tried/)).not.toBeInTheDocument()
     expect(screen.queryByText(/couldn't finish reading your site/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/couldn't locate product pages/)).not.toBeInTheDocument()
+  })
+
+  it('S3: the retired generalization ("will hit the same wall") is gone from the source entirely', () => {
+    expect(COMPONENT_SRC).not.toContain('will hit the same wall')
   })
 })
 

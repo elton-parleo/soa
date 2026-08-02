@@ -780,6 +780,16 @@ class PublicLiteScan(BaseModel):
     "3" — always False, since v3 never caps total_score (engine.py
     hardcodes it). Kept serialized only for rule 6 (additive-only); a
     v1/v2 row's historical True value still renders exactly as before.
+
+    Sitemap-sampler stage (hotfix 5, S2/S3): degraded_reason is only
+    ever populated for a non-'complete' status — "blocked" (the site
+    rate-limited/refused our reader), "no_product_pages_found" (our
+    sampler couldn't locate product pages this run, never the site's
+    fault), or "unreachable" (total network/DNS failure, nothing
+    responded at all). degraded_banner_facts carries the dynamic facts
+    the report's first-person banner fills in (refusal type, attempt
+    count, whether robots.txt was included, or sitemaps read) — the
+    banner's own static wording lives in the frontend.
     """
     status: str
     total_score: Optional[int] = None
@@ -789,6 +799,8 @@ class PublicLiteScan(BaseModel):
     value: Optional[PublicLiteScanFamily] = None
     dimensions: List[PublicLiteScanDimension] = []
     pages_fetched: List[dict] = []
+    degraded_reason: Optional[str] = None
+    degraded_banner_facts: Optional[dict] = None
 
 
 class PublicLiteVisibilityMentionRate(BaseModel):

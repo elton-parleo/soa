@@ -126,6 +126,13 @@ class FetchResult:
     attempts: int = 1                             # HTTP requests actually made for this URL
     retry_after_seen: Optional[float] = None       # max Retry-After (seconds, capped) honored, if any
     bytes: Optional[int] = None                    # response body size, when a response was received
+    # Sitemap-sampler stage (hotfix 5): raw response bytes, populated
+    # only on a successful fetch — needed for gzip-encoded sitemap
+    # decompression, where the decoded `html` text is useless (a .gz
+    # file's bytes aren't valid UTF-8). Never serialized to pages_fetched
+    # or persisted anywhere — runtime-only, garbage-collected with the
+    # rest of the scan's in-memory state.
+    content: Optional[bytes] = None
 
 
 class SsrfRejected(Exception):
@@ -479,7 +486,7 @@ def fetch(
                 url=url, final_url=current_url, status=FETCHED, html=body,
                 http_status=resp.status_code, redirect_chain=redirect_chain,
                 attempts=total_attempts, retry_after_seen=retry_after_seen,
-                bytes=len(resp.content),
+                bytes=len(resp.content), content=resp.content,
             )
 
         return FetchResult(

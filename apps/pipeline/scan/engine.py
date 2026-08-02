@@ -122,26 +122,39 @@ def _fetch_entry(fr) -> dict:
     }
 
 
-def _derive_status(discovery: DiscoveryResult, pages: list) -> str:
+def _derive_status(discovery: DiscoveryResult, pages: list) -> tuple:
     """
-    R1 (fetch resilience, hotfix 3): the ONE run-blocked rule, evaluated
-    after every fetch has already completed (R3) — no early short-
-    circuit on robots.txt's own status, no separate blocked_pages
-    fallback. A run is degraded-blocked ONLY IF zero sampled product
-    pages fetched successfully AND the store root (homepage) also
-    failed to fetch. Homepage failure alone, with product pages read
-    fine, is not a run-level event at all — it's page-level evidence
-    (see score_f1_agent_access), and any dimension that specifically
-    needs homepage content simply has none to work with, same as any
-    other unreadable page under hotfix 2's per-page rules.
+    R1 (fetch resilience, hotfix 3), refined by S2 (sitemap sampler,
+    hotfix 5): the run-blocked rule, evaluated after every fetch has
+    already completed — no early short-circuit on robots.txt's own
+    status, no separate blocked_pages fallback. Returns (status,
+    reason); reason is None for STATUS_COMPLETE and otherwise one of
+    "no_product_pages_found" | "blocked" | "unreachable" — the same
+    STATUS_BLOCKED/STATUS_FAILED values as before (no new DB status,
+    no migration), but the reason distinguishes WHY, since each needs
+    genuinely different report wording.
 
-    Within that "nothing readable from the store" case, one more
-    distinction: an actively hostile response (rate-limited, bot-
-    blocked, a real 404) means the site is there and rejected/lacks
-    what we asked for — that's honestly 'blocked'. Total unreachability
-    (DNS/network failure on every single attempt, including robots.txt
-    and the sitemap) is a different, honest answer — 'failed' — since
-    no server ever actually responded to call this "the site blocked
+    A run is degraded-blocked ONLY IF at least one product page was
+    actually ATTEMPTED and none fetched successfully, AND the store
+    root (homepage) also failed to fetch. Homepage failure alone, with
+    product pages read fine, is not a run-level event at all — it's
+    page-level evidence (see score_f1_agent_access).
+
+    S2: if the sampler produced ZERO product-page candidates to even
+    attempt, that is USUALLY a different, honest answer —
+    "no_product_pages_found" — never blamed on the site (S4's exact
+    concern: an all-normal-responses sampler miss is OUR limitation).
+    But zero candidates can also happen BECAUSE robots.txt or the
+    sitemap itself came back hostile (403/429 — the Sephora shape,
+    S4) — that's still honestly "blocked", not a sampler limitation,
+    even though it too means no product URL was ever found. Once ≥1
+    real product-page attempt happened, the remaining "nothing
+    readable" distinction applies: an actively hostile response
+    (rate-limited, bot-blocked, a real 404) means the site is there
+    and rejected/lacks what we asked for — "blocked". Total
+    unreachability (DNS/network failure on every single attempt,
+    including robots.txt and the sitemap) is "unreachable" — no
+    server ever actually responded to call this "the site blocked
     us." FetchResult.http_status is only ever set when a real HTTP
     response was received, so its presence anywhere is exactly this
     signal.
@@ -152,12 +165,28 @@ def _derive_status(discovery: DiscoveryResult, pages: list) -> str:
     any_product_page_fetched = any(p.fetch_result.status == "fetched" for p in product_pages)
 
     if any_product_page_fetched or homepage_fetched:
-        return STATUS_COMPLETE
+        return STATUS_COMPLETE, None
+
+    if not product_pages:
+        # S2/S4: zero candidates isn't automatically "our limitation" —
+        # if robots.txt or the sitemap itself came back hostile (403/429,
+        # the Sephora shape), that's still honestly "the site blocked
+        # us," even though it also means no product URL was ever found
+        # to sample. Only when discovery genuinely came up empty despite
+        # normal responses is this "no_product_pages_found" (never a
+        # site-blame). discovery.all_fetches already includes robots_fetch
+        # and every sitemap/child probe made.
+        sampling_saw_hostile_status = any(fr.http_status in (403, 429) for fr in discovery.all_fetches)
+        if sampling_saw_hostile_status:
+            return STATUS_BLOCKED, "blocked"
+        return STATUS_FAILED, "no_product_pages_found"
 
     responded = discovery.robots_fetch.http_status is not None or any(
         p.fetch_result.http_status is not None for p in pages
     )
-    return STATUS_BLOCKED if responded else STATUS_FAILED
+    if responded:
+        return STATUS_BLOCKED, "blocked"
+    return STATUS_FAILED, "unreachable"
 
 
 # R2 (fetch resilience, hotfix 3): every crawl-derived dimension code,
@@ -203,6 +232,48 @@ DEGRADED_REASON_FAILED = (
     "the store root and every sampled product page could not be reached "
     "this run (network error) — nothing could be measured on-site"
 )
+# S2 (sitemap sampler, hotfix 5): a distinct, honest reason for the case
+# where the sampler simply never found a product page to attempt at
+# all — never worded as a site-blame ("blocked"/"refused"), since this
+# can just as easily be our reader's own limitation.
+DEGRADED_REASON_NO_PRODUCT_PAGES_TEMPLATE = (
+    "we read {n} of your sitemaps but couldn't locate product pages to "
+    "sample this run — this can be our reader's limitation; on-site "
+    "checks weren't evaluated"
+)
+
+
+def _sitemaps_read_count(discovery: DiscoveryResult) -> int:
+    return sum(
+        1 for entry in discovery.sitemap_sampling.get("children_probed", [])
+        if "skipped" not in entry
+    )
+
+
+def _degraded_banner_facts(discovery: DiscoveryResult, pages: list, reason: str) -> dict:
+    """S3: the dynamic facts the report banner needs — computed here
+    since only engine.py has access to the underlying FetchResults.
+    The banner's STATIC wording lives in the frontend (grep-testable);
+    these are just the numbers it fills in."""
+    if reason == "no_product_pages_found":
+        return {"sitemaps_read": _sitemaps_read_count(discovery)}
+
+    if reason == "blocked":
+        all_relevant = [discovery.robots_fetch] + [p.fetch_result for p in pages]
+        walled_statuses = {fr.http_status for fr in all_relevant if fr.http_status in (403, 429)}
+        if walled_statuses == {403}:
+            refusal = "403"
+        elif walled_statuses == {429}:
+            refusal = "429"
+        elif walled_statuses:
+            refusal = "mixed"
+        else:
+            refusal = None
+        attempts_total = sum(fr.attempts or 0 for fr in all_relevant)
+        robots_included = discovery.robots_fetch.http_status in (403, 429)
+        return {"refusal": refusal, "attempts": attempts_total, "robots_included": robots_included}
+
+    return {}
 
 
 def run_scan(input_url_or_domain: str) -> ScanResult:
@@ -241,20 +312,49 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         pages_fetched = [_fetch_entry(fr) for fr in discovery.all_fetches]
         pages_fetched.extend(_fetch_entry(p.fetch_result) for p in pages)
 
-        status = _derive_status(discovery, pages)
+        status, degraded_reason = _derive_status(discovery, pages)
 
         if status != STATUS_COMPLETE:
-            # R2 (fetch resilience, hotfix 3): BLOCKED and FAILED both
-            # get a real, fully-shaped dimensions dict (every crawl-
-            # derived dimension honestly coverage='blocked') so the
-            # report renders through the standard v4 pillars machinery
-            # instead of a bespoke legacy fallback — total_score stays
-            # None either way (R3), since nothing was actually scored.
-            dimensions = {}
-            if status == STATUS_BLOCKED:
+            # R2 (fetch resilience, hotfix 3), refined by S2: every
+            # degraded status gets a real, fully-shaped dimensions dict
+            # (every crawl-derived dimension honestly coverage='blocked')
+            # so the report renders through the standard v4 pillars
+            # machinery instead of a bespoke legacy fallback —
+            # total_score stays None either way (R3), since nothing was
+            # actually scored. degraded_reason/degraded_banner_facts and
+            # the sitemap sampling record ride along as additive sibling
+            # keys (no migration) so the report can render the right
+            # first-person banner (S3) and the sampling decision stays
+            # debuggable regardless of outcome (S1.d).
+            if degraded_reason == "no_product_pages_found":
+                sitemaps_read = _sitemaps_read_count(discovery)
+                dimensions = _degraded_dimensions(
+                    DEGRADED_REASON_NO_PRODUCT_PAGES_TEMPLATE.format(n=sitemaps_read)
+                )
+            elif degraded_reason == "blocked":
                 dimensions = _degraded_dimensions(DEGRADED_REASON_BLOCKED)
-            elif status == STATUS_FAILED:
+            else:
                 dimensions = _degraded_dimensions(DEGRADED_REASON_FAILED)
+            dimensions["degraded_reason"] = degraded_reason
+            dimensions["degraded_banner_facts"] = _degraded_banner_facts(discovery, pages, degraded_reason)
+            dimensions["sitemap_sampling"] = discovery.sitemap_sampling
+            # S4 (sitemap sampler, hotfix 5): Agent Access is unique
+            # among the crawl-derived dimensions on a degraded run —
+            # "can an agent even reach this site" is exactly the
+            # question a blocked/failed run just answered, not a
+            # question it left unmeasured. Scored for real (robots.txt/
+            # page-fetch data is already fully gathered by this point,
+            # regardless of overall run status) instead of synthesized
+            # as blocked — the robots-403-itself fact (Sephora) and the
+            # robots-disallow-exclusion count (S1.c) only ever reach the
+            # report through this real call.
+            agent_access_result = scorer.score_agent_access(discovery, pages)
+            dimensions["agent_access"] = {
+                "score": agent_access_result.score, "max": agent_access_result.max,
+                "evidence": agent_access_result.evidence, "fix": agent_access_result.fix,
+                "fix_human": agent_access_result.fix_human, "coverage": agent_access_result.coverage,
+                "deferred_items": agent_access_result.deferred_items, "cap_basis": agent_access_result.cap_basis,
+            }
             return ScanResult(
                 status=status,
                 dimensions=dimensions,
@@ -264,6 +364,7 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
                 cross_domain_redirect=resolution.cross_domain_flag,
                 error=(
                     "site blocked automated access" if status == STATUS_BLOCKED
+                    else "no product pages found to sample" if degraded_reason == "no_product_pages_found"
                     else "no pages could be fetched"
                 ),
             )
@@ -329,6 +430,10 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         # on older rows means scorer_version "1" is implied.
         dimensions["scorer_version"] = SCORER_VERSION
         dimensions["scan_engine_rev"] = EXTRACTION_REV
+        # S1.d: recorded on every run, not just degraded ones —
+        # debuggability was the whole point ("this incident was
+        # invisible in logs").
+        dimensions["sitemap_sampling"] = discovery.sitemap_sampling
         dimensions["price_honesty_advisory"] = {
             "scored": False,
             "would_have_capped": v5_would_have_capped,

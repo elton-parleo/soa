@@ -201,7 +201,12 @@ def test_shopify_sitemapindex_recursion_finds_products_via_child_sitemap(monkeyp
     result = discover_pages("https://shop.example.com", FetchBudget())
 
     assert "https://shop.example.com/products/blue-widget" in result.sitemap_urls
-    assert "https://shop.example.com/pages/about" in result.sitemap_urls
+    # Sitemap-sampler rewrite (hotfix 5, S1.a): only the WINNING child by
+    # product-URL density contributes its URLs — the pages child (0%
+    # product density) is probed but never selected, so its URLs never
+    # pollute the candidate pool. Both children are still probed (both
+    # this small) and recorded in the sampling log either way.
+    assert "https://shop.example.com/pages/about" not in result.sitemap_urls
     product_urls = {c.url for c in result.candidates if c.kind == "product"}
     assert product_urls
     assert result.discovery_path == "sitemap"
@@ -209,6 +214,10 @@ def test_shopify_sitemapindex_recursion_finds_products_via_child_sitemap(monkeyp
     # The un-followed child sitemap names are still recorded for
     # site_typing's T1 commerce-path signal, even once fetched.
     assert any("sitemap_products_1.xml" in u for u in result.sitemap_index_entries)
+    assert result.sitemap_sampling["child_chosen"] == "https://shop.example.com/sitemap_products_1.xml"
+    assert result.sitemap_sampling["candidates_found"] == 2
+    # 3 entries: the top-level index itself, plus its two children.
+    assert len(result.sitemap_sampling["children_probed"]) == 3
 
 
 # ─── Stage 11 (D2): collection-page hop fallback ────────────────────────
@@ -307,9 +316,12 @@ def test_discovery_budget_bounds_sitemap_recursion_independently(monkeypatch):
     monkeypatch.setattr(httpx.Client, "get", fake_get)
 
     result = discover_pages("https://shop.example.com", FetchBudget())
-    # Bounded by DISCOVERY_FETCH_BUDGET/MAX_SITEMAPS_TO_FOLLOW long before
-    # all 20 children could be visited — never raises, never hangs, and
-    # most of the declared children are never actually fetched.
+    # Bounded by DISCOVERY_FETCH_BUDGET/SITEMAP_CHILD_PROBE_LIMIT long
+    # before all 20 children could be visited — never raises, never
+    # hangs, and most of the declared children are never actually
+    # fetched. Every probed child here is identical (same single URL),
+    # so the content-based selector picks exactly one of them — the
+    # URL still shows up, just once, not once per probed child.
     visited_children = sum(1 for u in result.sitemap_urls if u == "https://shop.example.com/products/never-reached")
     assert 0 < visited_children < 20
     assert len(result.sitemap_index_entries) == 20  # every declared child name is still recorded (T1)
