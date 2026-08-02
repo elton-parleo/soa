@@ -378,46 +378,24 @@ describe('LiteFullReport — funnel teaser (G2: decorative, never real data)', (
   })
 })
 
-describe('LiteFullReport — executive tiles', () => {
-  it('renders composite, visibility, accessibility, and modeled exposure', () => {
+describe('LiteFullReport — executive tiles (legacy scorer-version fallback)', () => {
+  it('renders composite, visibility, and accessibility — no exposure tile (fetch-resilience stage: legacy template retired)', () => {
     render(<LiteFullReport report={baseReport} />)
     expect(screen.getByText('Composite score')).toBeInTheDocument()
     expect(screen.getByText('Visibility')).toBeInTheDocument()
     expect(screen.getByText('Accessibility')).toBeInTheDocument()
-    expect(screen.getByText('Modeled exposure/mo')).toBeInTheDocument()
+    expect(screen.queryByText(/Modeled exposure/)).not.toBeInTheDocument()
   })
 })
 
-describe('LiteFullReport — why-section, all 8 dimensions', () => {
-  it('renders all 8 dimension code+name headers grouped Foundation/Value with correct subtotals', () => {
-    render(<LiteFullReport report={baseReport} />)
-    expect(screen.getByText('FOUNDATION · 27/35')).toBeInTheDocument()
-    expect(screen.getByText('VALUE · 32/65')).toBeInTheDocument()
-    EIGHT_DIMENSIONS.forEach((d) => {
-      expect(screen.getByText(`${d.code} · ${d.name.toUpperCase()}`)).toBeInTheDocument()
-    })
-  })
-
-  it('renders an integrity-cap footnote when integrity_capped is true', () => {
-    const report = { ...baseReport, scan: { ...baseReport.scan, integrity_capped: true } }
-    render(<LiteFullReport report={report} />)
-    expect(screen.getByText(/the score cannot pass 59/)).toBeInTheDocument()
-  })
-
-  it('omits the integrity-cap footnote when false', () => {
-    render(<LiteFullReport report={baseReport} />)
-    expect(screen.queryByText(/the score cannot pass 59/)).not.toBeInTheDocument()
-  })
-
-  it('renders a linked-reason chip on the matching dimension', () => {
-    const dims = EIGHT_DIMENSIONS.map((d) =>
-      d.code === 'V1' ? { ...d, linked: { reason: 'mentioned but no price surfaced' } } : d
-    )
-    const report = { ...baseReport, scan: { ...baseReport.scan, dimensions: dims } }
-    render(<LiteFullReport report={report} />)
-    expect(screen.getByText('LINKED · MENTIONED BUT NO PRICE SURFACED')).toBeInTheDocument()
-  })
-
+// Fetch-resilience stage (hotfix 3, R2): the F1-V5 per-dimension why-
+// section (grouped Foundation/Value, integrity-cap footnote, linked-
+// reason chips, blocked/failed messaging) is retired — a scan under the
+// current scorer version, whatever its status, now renders through the
+// v4 pillars layout instead (see the DegradedRunBanner tests below and
+// the existing v3 crosswalk-chip tests). Only the true "no scan
+// attempted at all" case is left here.
+describe('LiteFullReport — why section: no scan submitted', () => {
   it('shows the "add your store URL" prompt when scan is skipped (brand-only submission)', () => {
     const report = { ...baseReport, scan: { status: 'skipped', total_score: null, dimensions: [], pages_fetched: [] }, scan_status: 'skipped' }
     const onAddStoreUrl = vi.fn()
@@ -433,108 +411,19 @@ describe('LiteFullReport — why-section, all 8 dimensions', () => {
     render(<LiteFullReport report={report} />)
     expect(screen.getByText('Add your store URL to see why')).toBeInTheDocument()
   })
-
-  it('shows the blocked badge + F1 explanation when scan is blocked, without hiding visibility sections', () => {
-    const report = { ...baseReport, scan: { status: 'blocked', total_score: null, dimensions: [], pages_fetched: [] }, scan_status: 'blocked' }
-    render(<LiteFullReport report={report} />)
-
-    expect(screen.getByText(/blocked our reader — that's itself a finding/)).toBeInTheDocument()
-    expect(screen.getByText(/Agent Access \(F1\)/)).toBeInTheDocument()
-    // Visibility sections still render fully.
-    expect(screen.getByText('Where you disappear in the funnel')).toBeInTheDocument()
-    expect(screen.getAllByText('FULL ANALYSIS').length).toBeGreaterThan(0)
-  })
-
-  it('shows an honest explanation when scan failed', () => {
-    const report = { ...baseReport, scan: { status: 'failed', total_score: null, dimensions: [], pages_fetched: [] }, scan_status: 'failed' }
-    render(<LiteFullReport report={report} />)
-    expect(screen.getByText(/couldn't finish reading your store this time/)).toBeInTheDocument()
-  })
 })
 
-describe('LiteFullReport — Stage 10: partial coverage + deferred items', () => {
-  it('shows the PARTIAL tag only on coverage=partial dimensions (F3), not full ones', () => {
-    render(<LiteFullReport report={baseReport} />)
-    expect(screen.getAllByText('Partial · full analysis')).toHaveLength(1)
-  })
-
-  it('lists deferred items under a partial dimension with a lock glyph, no email wording in the item copy itself', () => {
-    render(<LiteFullReport report={baseReport} />)
-    const deferredLine = screen.getByText(/Merchant Center \/ Deal Directory participation — verified in the full analysis/)
-    expect(deferredLine).toBeInTheDocument()
-    expect(deferredLine.textContent).not.toMatch(/email|unlock/i)
-  })
-
-  it('renders a NOT APPLICABLE row for coverage=na dimensions, excluded from the bar fill', () => {
-    const dims = EIGHT_DIMENSIONS.map((d) =>
-      d.code === 'V3'
-        ? { ...d, score: 0, coverage: 'na', evidence: ['no Offer markup found — member pricing is not applicable'] }
-        : d
-    )
-    const report = { ...baseReport, scan: { ...baseReport.scan, dimensions: dims } }
-    render(<LiteFullReport report={report} />)
-
-    expect(screen.getByText('— · NOT APPLICABLE')).toBeInTheDocument()
-    expect(screen.getByText(/member pricing is not applicable/)).toBeInTheDocument()
-  })
-
-  it('switches the family header to "n/{applicable_max} applicable" only when a dimension is na', () => {
-    const dims = EIGHT_DIMENSIONS.map((d) => (d.code === 'V3' ? { ...d, score: 0, coverage: 'na' } : d))
-    const report = {
-      ...baseReport,
-      scan: { ...baseReport.scan, dimensions: dims, value: { subtotal: 25, max: 65, applicable_max: 51 } },
-    }
-    render(<LiteFullReport report={report} />)
-
-    expect(screen.getByText('VALUE · 25/51 APPLICABLE')).toBeInTheDocument()
-    expect(screen.getByText('FOUNDATION · 27/35')).toBeInTheDocument() // unaffected family: familiar /35
-  })
-
-  it('appends cap_basis evidence lines under the integrity-cap footnote when capped', () => {
-    const dims = EIGHT_DIMENSIONS.map((d) =>
-      d.code === 'V5' ? { ...d, cap_basis: ['was-price signal on 2/2 sampled pages, sitewide', 'no priceValidUntil found on any sampled product page'] } : d
-    )
-    const report = { ...baseReport, scan: { ...baseReport.scan, integrity_capped: true, dimensions: dims } }
-    render(<LiteFullReport report={report} />)
-
-    expect(screen.getByText(/the score cannot pass 59/)).toBeInTheDocument()
-    expect(screen.getByText('was-price signal on 2/2 sampled pages, sitewide')).toBeInTheDocument()
-    expect(screen.getByText('no priceValidUntil found on any sampled product page')).toBeInTheDocument()
-  })
-
-  it('renders a pre-Stage-10 (scorer_version "1") row with no coverage tags and no crash', () => {
-    const oldShapeDims = EIGHT_DIMENSIONS.map(({ coverage, deferred_items, cap_basis, ...rest }) => rest)
-    const report = { ...baseReport, scan: { ...baseReport.scan, dimensions: oldShapeDims } }
-    render(<LiteFullReport report={report} />)
-
-    expect(screen.queryByText('Partial · full analysis')).not.toBeInTheDocument()
-    expect(screen.queryByText('— · NOT APPLICABLE')).not.toBeInTheDocument()
-    expect(screen.getByText('FOUNDATION · 27/35')).toBeInTheDocument()
-  })
-})
-
-describe('LiteFullReport — ranked fixes', () => {
-  it('shows the fix text for unlocked fixes', () => {
-    render(<LiteFullReport report={baseReport} />)
-    expect(screen.getByText('add priceCurrency')).toBeInTheDocument()
-  })
-
-  it('shows "Unlocks with your email" and no fix text for locked dimensions', () => {
-    render(<LiteFullReport report={baseReport} />)
-    expect(screen.queryByText('stop fake was-prices')).not.toBeInTheDocument()
-    expect(screen.getAllByText('Unlocks with your email').length).toBe(2) // V4 and V5 are locked
-    expect(screen.getAllByText('Locked').length).toBe(2) // snippet column for the same 2 rows
-  })
-
-  it('shows a footer sentence with the unlocked/total fix count', () => {
-    render(<LiteFullReport report={baseReport} />)
-    expect(screen.getByText('Showing 6 of 8 fixes. The rest unlock with your email below.')).toBeInTheDocument()
-  })
-
-  it('renders nothing when the scan is not complete', () => {
+// Fetch-resilience stage (hotfix 3, R2): Stage 10's partial/na/cap
+// coverage tags and the legacy ranked-fixes table both lived inside the
+// now-retired F1-V5 why-section/fix-list — see FixListV3's own tests
+// for the current (pillars-driven) fix-ranking behavior, and lite_
+// pillars.py's own tests for na/blocked coverage handling server-side.
+describe('LiteFullReport — legacy ranked fixes: renders nothing without pillars', () => {
+  it('renders nothing when the report has no pillars payload, regardless of scan status', () => {
     const report = { ...baseReport, scan: { status: 'skipped', total_score: null, dimensions: [], pages_fetched: [] } }
     render(<LiteFullReport report={report} />)
     expect(screen.queryByText(/Showing \d+ of \d+ fixes/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/RANKED FIXES/)).not.toBeInTheDocument()
   })
 })
 
@@ -842,6 +731,43 @@ describe('LiteFullReport — email de-gating (Report redesign, Part 8, E1)', () 
     const { container: lockedTrue } = render(<LiteFullReport report={buildV3Report({ locked: true })} />)
     const { container: lockedFalse } = render(<LiteFullReport report={buildV3Report({ locked: false })} />)
     expect(lockedTrue.textContent).toBe(lockedFalse.textContent)
+  })
+})
+
+describe('LiteFullReport — degraded-run banner (fetch-resilience stage, hotfix 3, R1/R2)', () => {
+  it('shows the blocked banner and NOT MEASURABLE dimensions when scan_status is blocked', () => {
+    const pillars = buildV3Pillars()
+    pillars.accessibility.dimensions = pillars.accessibility.dimensions.map((d) => ({
+      ...d, blocked: true, earned: 0,
+      evidence: ["the store root and every sampled product page were rate-limited or blocked this run — nothing could be measured on-site"],
+      checks: null, fix: null, fix_human: null,
+    }))
+    pillars.true_value.dimensions = pillars.true_value.dimensions.map((d) => ({
+      ...d, blocked: true, earned: 0, max: 0, checks: null, fix: null, fix_human: null,
+    }))
+    const report = buildV3Report({
+      pillars, scan_status: 'blocked',
+      scan: { status: 'blocked', total_score: null, dimensions: [], pages_fetched: [] },
+    })
+    render(<LiteFullReport report={report} />)
+
+    expect(screen.getByText(/Your site rate-limited our reader/)).toBeInTheDocument()
+    expect(screen.getAllByText('NOT MEASURABLE').length).toBeGreaterThan(0)
+  })
+
+  it('shows the failed banner (different copy) when scan_status is failed', () => {
+    const report = buildV3Report({
+      scan_status: 'failed',
+      scan: { status: 'failed', total_score: null, dimensions: [], pages_fetched: [] },
+    })
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/couldn't finish reading your site this time/)).toBeInTheDocument()
+  })
+
+  it('omits the banner entirely for a normal complete run', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    expect(screen.queryByText(/rate-limited our reader — nothing could be measured/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/couldn't finish reading your site/)).not.toBeInTheDocument()
   })
 })
 
@@ -1313,7 +1239,6 @@ describe('LiteFullReport — R6 honest version fallback (Stage 19)', () => {
     expect(screen.getByText('61')).toBeInTheDocument() // composite
     expect(screen.getByText('63')).toBeInTheDocument() // visibility, rounded from 62.5
     expect(screen.getByText('59')).toBeInTheDocument() // accessibility
-    expect(screen.getByText('FOUNDATION · 27/35')).toBeInTheDocument() // stored v2 data renders faithfully
   })
 
   it('never shows the notice for a v3 row', () => {
@@ -1350,10 +1275,10 @@ describe('LiteFullReport — copy sweep (Stage 19)', () => {
     expect(screen.queryByText('FOUNDATION')).not.toBeInTheDocument()
   })
 
-  it('a v2 report still legitimately shows Foundation/Value grouping (unchanged legacy path)', () => {
+  it('fetch-resilience stage: a v2 report no longer shows Foundation/Value grouping either (legacy why-section retired)', () => {
     render(<LiteFullReport report={baseReport} />)
-    expect(screen.getByText('FOUNDATION · 27/35')).toBeInTheDocument()
-    expect(screen.getByText('VALUE · 32/65')).toBeInTheDocument()
+    expect(screen.queryByText(/^FOUNDATION ·/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^VALUE ·/)).not.toBeInTheDocument()
   })
 
   it('the composite stays named "Agent Commerce Score" territory only via existing labels — never "Store Value Score"', () => {

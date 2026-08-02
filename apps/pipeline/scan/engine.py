@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
-from soa_shared.scan_dimensions import SCORER_VERSION
+from soa_shared.scan_dimensions import DIMENSIONS_BY_CODE, SCORER_VERSION
 
 from . import scorer, site_typing
 from .discovery import DiscoveryResult, discover_pages, resolve_canonical_origin
@@ -123,35 +123,86 @@ def _fetch_entry(fr) -> dict:
 
 
 def _derive_status(discovery: DiscoveryResult, pages: list) -> str:
-    if discovery.robots_fetch.status == "blocked":
-        return STATUS_BLOCKED
+    """
+    R1 (fetch resilience, hotfix 3): the ONE run-blocked rule, evaluated
+    after every fetch has already completed (R3) — no early short-
+    circuit on robots.txt's own status, no separate blocked_pages
+    fallback. A run is degraded-blocked ONLY IF zero sampled product
+    pages fetched successfully AND the store root (homepage) also
+    failed to fetch. Homepage failure alone, with product pages read
+    fine, is not a run-level event at all — it's page-level evidence
+    (see score_f1_agent_access), and any dimension that specifically
+    needs homepage content simply has none to work with, same as any
+    other unreadable page under hotfix 2's per-page rules.
 
-    # B3 (fetch resilience): a run isn't meaningfully "complete" just
-    # because some infrastructure probe (llms.txt, a well-known path)
-    # happened to fetch while every actual product page was obstructed
-    # AND the homepage also failed — one page of real store content is
-    # enough to score a run; zero is not. A partial PDP success (or a
-    # readable homepage) still completes normally — the individual
-    # product-page-dependent checks report their own 'blocked' coverage
-    # via scorer.py in that case, rather than degrading the whole run.
+    Within that "nothing readable from the store" case, one more
+    distinction: an actively hostile response (rate-limited, bot-
+    blocked, a real 404) means the site is there and rejected/lacks
+    what we asked for — that's honestly 'blocked'. Total unreachability
+    (DNS/network failure on every single attempt, including robots.txt
+    and the sitemap) is a different, honest answer — 'failed' — since
+    no server ever actually responded to call this "the site blocked
+    us." FetchResult.http_status is only ever set when a real HTTP
+    response was received, so its presence anywhere is exactly this
+    signal.
+    """
     product_pages = [p for p in pages if p.candidate.kind == "product"]
     homepage_page = next((p for p in pages if p.candidate.kind == "homepage"), None)
     homepage_fetched = homepage_page is not None and homepage_page.fetch_result.status == "fetched"
-    all_product_pages_unreadable = bool(product_pages) and all(
-        p.fetch_result.status != "fetched" for p in product_pages
-    )
-    if all_product_pages_unreadable and not homepage_fetched:
-        return STATUS_BLOCKED
+    any_product_page_fetched = any(p.fetch_result.status == "fetched" for p in product_pages)
 
-    fetched_pages = [p for p in pages if p.fetch_result.status == "fetched"]
-    if fetched_pages:
+    if any_product_page_fetched or homepage_fetched:
         return STATUS_COMPLETE
 
-    blocked_pages = [p for p in pages if p.fetch_result.status == "blocked"]
-    if blocked_pages:
-        return STATUS_BLOCKED
+    responded = discovery.robots_fetch.http_status is not None or any(
+        p.fetch_result.http_status is not None for p in pages
+    )
+    return STATUS_BLOCKED if responded else STATUS_FAILED
 
-    return STATUS_FAILED
+
+# R2 (fetch resilience, hotfix 3): every crawl-derived dimension code,
+# paired with the soa_shared registry entry (and whether it's a seen/
+# said-split True Value dimension, whose crawl-side weight is seen_max
+# rather than the full weight) — used to synthesize an honest, fully-
+# v4-shaped dimensions dict for a run that never reached scoring
+# (BLOCKED or FAILED) so the report renders through the exact same
+# pillars/NOT-MEASURABLE machinery as a normal scan, rather than an
+# empty {} that public_lite.py/lite_pillars.py have no honest way to
+# distinguish from "never scored under this version at all."
+_DEGRADED_DIM_SPECS = (
+    ("agent_access", "agent_access", False),
+    ("catalog_context", "catalog_context", False),
+    ("protocol_feed", "protocol_feed", False),
+    ("price_truth_seen", "price_truth", True),
+    ("member_value_seen", "member_value", True),
+    ("deal_citability_seen", "deal_citability", True),
+    ("value_protocols_seen", "value_protocols", False),
+)
+
+
+def _degraded_dimensions(reason: str) -> dict:
+    dims = {}
+    for dim_key, registry_code, is_split in _DEGRADED_DIM_SPECS:
+        registry_dim = DIMENSIONS_BY_CODE[registry_code]
+        weight = registry_dim.seen_max if is_split else registry_dim.weight
+        dims[dim_key] = {
+            "score": 0.0, "max": weight, "evidence": [reason],
+            "fix": None, "fix_human": None, "coverage": "blocked",
+            "deferred_items": [], "cap_basis": [],
+        }
+    dims["scorer_version"] = SCORER_VERSION
+    dims["scan_engine_rev"] = EXTRACTION_REV
+    return dims
+
+
+DEGRADED_REASON_BLOCKED = (
+    "the store root and every sampled product page were rate-limited or "
+    "blocked this run — nothing could be measured on-site"
+)
+DEGRADED_REASON_FAILED = (
+    "the store root and every sampled product page could not be reached "
+    "this run (network error) — nothing could be measured on-site"
+)
 
 
 def run_scan(input_url_or_domain: str) -> ScanResult:
@@ -193,8 +244,20 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         status = _derive_status(discovery, pages)
 
         if status != STATUS_COMPLETE:
+            # R2 (fetch resilience, hotfix 3): BLOCKED and FAILED both
+            # get a real, fully-shaped dimensions dict (every crawl-
+            # derived dimension honestly coverage='blocked') so the
+            # report renders through the standard v4 pillars machinery
+            # instead of a bespoke legacy fallback — total_score stays
+            # None either way (R3), since nothing was actually scored.
+            dimensions = {}
+            if status == STATUS_BLOCKED:
+                dimensions = _degraded_dimensions(DEGRADED_REASON_BLOCKED)
+            elif status == STATUS_FAILED:
+                dimensions = _degraded_dimensions(DEGRADED_REASON_FAILED)
             return ScanResult(
                 status=status,
+                dimensions=dimensions,
                 pages_fetched=pages_fetched,
                 started_at=started_at,
                 finished_at=_now(),

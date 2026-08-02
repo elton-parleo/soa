@@ -248,6 +248,22 @@ def score_f1_agent_access(discovery, pages) -> DimensionScore:
             f"{len(rate_limited_pages)} page request(s) rate-limited (HTTP 429) — a bot-hostile edge"
         )
 
+    # R1 (fetch resilience, hotfix 3): a homepage that specifically
+    # failed to fetch, on a run that still completed (product pages
+    # read fine), is page-level evidence — not a run-level event
+    # (_derive_status no longer degrades the whole run over this).
+    # Named honestly here, without changing the score off it.
+    homepage_page = next((p for p in pages if p.candidate.kind == "homepage"), None)
+    if homepage_page and homepage_page.fetch_result.status != "fetched":
+        fr = homepage_page.fetch_result
+        attempts_note = f"; {fr.attempts} attempt{'s' if fr.attempts != 1 else ''}" if fr.attempts else ""
+        if fr.http_status == 429:
+            evidence.append(f"store root rate-limited our reader (HTTP 429{attempts_note}) — product pages read successfully")
+        elif fr.http_status:
+            evidence.append(f"store root returned HTTP {fr.http_status} to our reader{attempts_note} — product pages read successfully")
+        else:
+            evidence.append("store root could not be reached by our reader (network error) — product pages read successfully")
+
     if discovery.sitemap_urls:
         points += weight * 0.1
         evidence.append(f"sitemap present ({len(discovery.sitemap_urls)} URLs)")

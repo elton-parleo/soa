@@ -30,7 +30,7 @@
 import { useState } from 'react'
 import {
   accessibilityBadgeText, computeExposure, formatCurrency, formatDateStamp,
-  getDominantRivalPayoff, getIncentiveCitationPayoff, groupDimensionsByFamily, rankDimensionsByGap,
+  getDominantRivalPayoff, getIncentiveCitationPayoff,
   seedAnnualRevenue, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX,
 } from './liteDerive.js'
 import {
@@ -124,7 +124,18 @@ function PreviousMethodologyNotice() {
   )
 }
 
-function ExecutiveTilesLegacy({ report, exposure }) {
+// Fetch-resilience stage (hotfix 3, R2): the legacy per-dimension why-
+// section/ranked-fixes machinery is retired entirely — every reachable
+// scan status (complete, blocked, failed) under the CURRENT scorer
+// version now gets a real pillars payload and renders through
+// ExecutiveHeroV3/the v4 components below (see engine.py's R1/R2 and
+// public_lite.py's scan_scorable gate). This tile row is now reached
+// ONLY for a scan genuinely scored under a RETIRED scorer version
+// (real historical numbers, nothing to fabricate) or no scan at all —
+// no exposure tile here (that's a v4-only concept; there's no crawl-
+// derived accessibility/True-Value split to model it against for these
+// rows) and no per-dimension breakdown below it.
+function ExecutiveTilesLegacy({ report }) {
   const accessBadge = accessibilityBadgeText(report.scan_status)
   const showNotice = report.scan?.status === 'complete'
   return (
@@ -134,7 +145,6 @@ function ExecutiveTilesLegacy({ report, exposure }) {
         <Tile label="Composite score" value={formatScore(report.composite)} />
         <Tile label="Visibility" value={formatScore(report.visibility)} />
         <Tile label="Accessibility" value={formatScore(report.accessibility)} badge={accessBadge} />
-        <Tile label="Modeled exposure/mo" value={formatCurrency(exposure)} />
       </div>
     </LightCard>
   )
@@ -366,7 +376,30 @@ function ExecutiveTiles({ report, exposure }) {
   if (isV3Report(report)) {
     return <ExecutiveHeroV3 report={report} exposure={exposure} />
   }
-  return <ExecutiveTilesLegacy report={report} exposure={exposure} />
+  return <ExecutiveTilesLegacy report={report} />
+}
+
+// R2 (fetch resilience, hotfix 3): the honest banner for a degraded run
+// — replaces the retired ScanDegradedExplanation. Only ever shown
+// alongside the real v4 pillars layout (isV3Report is true for a
+// blocked/failed scan under the current scorer version too, per R1/R2)
+// so Accessibility/True Value below read as NOT MEASURABLE, never a
+// failing zero, and this banner is the one place that says why.
+function DegradedRunBanner({ status }) {
+  if (status !== 'blocked' && status !== 'failed') return null
+  const message = status === 'blocked'
+    ? 'Your site rate-limited our reader — nothing could be measured on-site. Many AI shopping agents will hit the same wall.'
+    : "We couldn't finish reading your site this time — nothing could be measured on-site. We'll try again on your next diagnostic."
+  return (
+    <LightCard>
+      <InfoBadge message={message} />
+      <div className="lite-body" style={{ marginTop: 14 }}>
+        Accessibility and True Value below read <strong>NOT MEASURABLE</strong>, not a failing
+        score — we simply couldn't read the pages that would prove it this run. Visibility (how
+        often agents mention you) is unaffected: it comes from live answers, not our crawl.
+      </div>
+    </LightCard>
+  )
 }
 
 // ─── Visibility section (Stage 7 — replaces the old per-stage bars) ────
@@ -1120,142 +1153,6 @@ function AddStoreUrlPrompt({ onAddStoreUrl }) {
   )
 }
 
-function ScanDegradedExplanation({ status }) {
-  const message = status === 'blocked'
-    ? "Your store blocked our reader — that's itself a finding. Many AI shopping agents will hit the same wall."
-    : "We couldn't finish reading your store this time. We'll try again on your next diagnostic."
-  return (
-    <div>
-      <InfoBadge message={message} />
-      <div className="lite-body" style={{ marginTop: 14 }}>
-        This affects <strong>Agent Access (F1)</strong>, one of the 8 dimensions
-        we score: whether an AI shopping agent can even reach your product
-        pages at all — robots.txt rules, bot-detection, and sitemap
-        availability all factor in. A store that's unreachable scores 0 here
-        regardless of how good everything else is.
-      </div>
-    </div>
-  )
-}
-
-// Stage 10 (W1): deferred items are never a gate — amber + working-session
-// language only, no email-unlock wording anywhere near them (consistent
-// with the Stage 7 funnel teaser: full analysis = the paid diagnostic).
-function DeferredItemsList({ items }) {
-  if (!items || items.length === 0) return null
-  return (
-    <div style={{ paddingLeft: 4, marginTop: 2, marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
-      {items.map((item) => (
-        <div key={item.label} className="lite-mono lite-muted" style={{ fontSize: 11, display: 'flex', gap: 6 }}>
-          <span aria-hidden="true">🔒</span>
-          <span>{item.label} — verified in the full analysis</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function DimensionRow({ dimension, sharedMax }) {
-  const isNa = dimension.coverage === 'na'
-  const isPartial = dimension.coverage === 'partial'
-  const trackPct = sharedMax ? (dimension.max / sharedMax) * 100 : 0
-  const fillPct = sharedMax ? (dimension.score / sharedMax) * 100 : 0
-  const isZero = dimension.score === 0
-  const barColor = dimension.code.startsWith('F') ? 'var(--foundation)' : 'var(--accent)'
-  const gridlines = []
-  for (let v = 0; v <= sharedMax; v += 5) gridlines.push(v)
-  if (gridlines[gridlines.length - 1] !== sharedMax) gridlines.push(sharedMax)
-
-  return (
-    <div>
-      <div className="lite-dim-row">
-        <div className="lite-dim-label lite-mono">{dimension.code} · {dimension.name.toUpperCase()}</div>
-        <div className="lite-dim-bar-cell">
-          <div className="lite-dim-track" style={isNa ? { opacity: 0.35 } : undefined}>
-            {!isNa && <div className="lite-dim-fill" style={{ width: `${trackPct}%` }} />}
-            {!isNa && !isZero && <div className="lite-dim-fill" style={{ width: `${fillPct}%`, background: barColor }} />}
-            {!isNa && isZero && <span className="lite-dim-zero-tick" aria-hidden="true" />}
-            {gridlines.map((v) => (
-              <span key={v} className="lite-dim-gridline" style={{ left: `${(v / sharedMax) * 100}%` }} aria-hidden="true" />
-            ))}
-          </div>
-        </div>
-        <div className="lite-dim-score-cell">
-          {isNa ? (
-            <span className="lite-mono lite-muted" style={{ fontSize: 12, fontWeight: 700 }}>— · NOT APPLICABLE</span>
-          ) : (
-            <>
-              <span className="lite-mono" style={{ fontSize: 12, fontWeight: 700, color: isZero ? 'var(--bad-ink)' : 'var(--text)' }}>
-                {formatScore(dimension.score)}/{dimension.max}
-              </span>
-              {isPartial && (
-                <span
-                  className="lite-chip lite-mono"
-                  style={{ border: '1px solid var(--warn)', color: 'var(--warn-ink)', background: 'transparent' }}
-                >
-                  Partial · full analysis
-                </span>
-              )}
-              {dimension.linked && <Chip tone="accent">LINKED · {dimension.linked.reason.toUpperCase()}</Chip>}
-            </>
-          )}
-        </div>
-      </div>
-      {isNa && dimension.evidence?.[0] && (
-        <div className="lite-mono lite-muted" style={{ fontSize: 11, paddingLeft: 4, marginTop: 2, marginBottom: 8 }}>
-          {dimension.evidence[0]}
-        </div>
-      )}
-      {isPartial && <DeferredItemsList items={dimension.deferred_items} />}
-    </div>
-  )
-}
-
-function DimensionChart({ dimensions }) {
-  const sharedMax = Math.max(...dimensions.map((d) => d.max || 0), 1)
-  const axisValues = []
-  for (let v = 0; v <= sharedMax; v += 5) axisValues.push(v)
-  if (axisValues[axisValues.length - 1] !== sharedMax) axisValues.push(sharedMax)
-
-  return (
-    <div>
-      {dimensions.map((d) => <DimensionRow key={d.code} dimension={d} sharedMax={sharedMax} />)}
-      <div className="lite-dim-row" aria-hidden="true" style={{ paddingTop: 4, marginTop: 2, borderTop: '1px solid var(--line)' }}>
-        <div className="lite-dim-label" />
-        <div className="lite-dim-bar-cell lite-dim-axis-track">
-          {axisValues.map((v) => (
-            <span
-              key={v}
-              className="lite-mono lite-muted"
-              style={{ position: 'absolute', left: `${(v / sharedMax) * 100}%`, transform: 'translateX(-50%)', fontSize: 11 }}
-            >
-              {v}
-            </span>
-          ))}
-        </div>
-        <div className="lite-dim-score-cell" />
-      </div>
-    </div>
-  )
-}
-
-function DimensionFamily({ title, subtotal, max, applicableMax, dimensions }) {
-  if (dimensions.length === 0) return null
-  // Stage 10 (W2): "n/{applicable_max} applicable" only when this family
-  // actually has a 'na' dimension — otherwise the familiar /35 · /65.
-  const hasNa = dimensions.some((d) => d.coverage === 'na')
-  const denominator = hasNa && applicableMax ? applicableMax : max
-  const suffix = hasNa && applicableMax ? ' APPLICABLE' : ''
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <div className="lite-label" style={{ marginBottom: 6, fontSize: 12 }}>
-        {title.toUpperCase()} · {formatScore(subtotal)}/{formatScore(denominator)}{suffix}
-      </div>
-      <DimensionChart dimensions={dimensions} />
-    </div>
-  )
-}
-
 // ─── Report redesign (Part 3, M1): the shared v4 dimension row ─────────
 // ONE row component reused across Visibility/Accessibility/True Value —
 // name + earned/max + a one-line evidence summary + a HOW IT'S SCORED
@@ -1540,79 +1437,21 @@ function AccessibilityCardV3({ report }) {
   )
 }
 
-function WhySection({ report, onAddStoreUrl }) {
-  const scan = report.scan
-  const status = scan?.status
-
-  if (!status || status === 'skipped') {
-    return <AddStoreUrlPrompt onAddStoreUrl={onAddStoreUrl} />
-  }
-  if (status === 'blocked' || status === 'failed') {
-    return <ScanDegradedExplanation status={status} />
-  }
-
-  const { foundation, value } = groupDimensionsByFamily(scan.dimensions)
-  const v5 = (scan.dimensions || []).find((d) => d.code === 'V5')
-
-  return (
-    <div>
-      {scan.integrity_capped && (
-        <div className="lite-body lite-muted" style={{ marginBottom: 20 }}>
-          <div>One more rule: until offers carry honest machine-readable prices, the score cannot pass 59.</div>
-          {v5?.cap_basis?.length > 0 && (
-            <ul style={{ margin: '8px 0 0', paddingLeft: 20 }}>
-              {v5.cap_basis.map((line) => (
-                <li key={line} className="lite-mono" style={{ fontSize: 11 }}>{line}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-      <DimensionFamily
-        title="Foundation" subtotal={scan.foundation?.subtotal} max={scan.foundation?.max ?? 35}
-        applicableMax={scan.foundation?.applicable_max} dimensions={foundation}
-      />
-      <DimensionFamily
-        title="Value" subtotal={scan.value?.subtotal} max={scan.value?.max ?? 65}
-        applicableMax={scan.value?.applicable_max} dimensions={value}
-      />
-    </div>
-  )
-}
-
-function FamilyLegend() {
-  return (
-    <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-      <span className="lite-mono lite-muted" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-        <span style={{ width: 10, height: 10, background: 'var(--foundation)', display: 'inline-block', borderRadius: 2 }} aria-hidden="true" />
-        FOUNDATION
-      </span>
-      <span className="lite-mono lite-muted" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-        <span style={{ width: 10, height: 10, background: 'var(--accent)', display: 'inline-block', borderRadius: 2 }} aria-hidden="true" />
-        VALUE
-      </span>
-    </div>
-  )
-}
-
-// Stage 21: a v3 row no longer has a separate "why"/methodology-
-// composition card — the hero's segmented bar already tells that story,
-// and Accessibility now has its own dedicated section (AccessibilityCardV3)
-// matching the mock's section list (no methodology/why card at all).
-// This stays legacy-only (v1/v2 rows keep their exact existing layout).
+// Fetch-resilience stage (hotfix 3, R2): the F1-V5 per-dimension why-
+// section is retired — every reachable scan status under the current
+// scorer version now renders through the v4 pillars layout instead
+// (DegradedRunBanner/ExecutiveHeroV3/TrueValueSection/AccessibilityCardV3
+// above). The only case left here is no store_url ever having been
+// submitted (no scan row at all, or status='skipped') — nothing crawl-
+// derived or v4-shaped to show, just the CTA to add one.
 function WhySectionCard({ report, onAddStoreUrl }) {
   if (isV3Report(report)) return null
-  const showLegend = report.scan?.status === 'complete'
+  const status = report.scan?.status
+  if (status && status !== 'skipped') return null
   return (
     <LightCard>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-        <SectionHeader
-          label="SCORE COMPOSITION · 8 DIMENSIONS"
-          headline={report.composite === null || report.composite === undefined ? 'Why' : `Where ${formatScore(report.composite)} comes from`}
-        />
-        {showLegend && <FamilyLegend />}
-      </div>
-      <WhySection report={report} onAddStoreUrl={onAddStoreUrl} />
+      <SectionHeader label="WHY" headline="Why does this matter" />
+      <AddStoreUrlPrompt onAddStoreUrl={onAddStoreUrl} />
     </LightCard>
   )
 }
@@ -1652,112 +1491,15 @@ function DiagnosisCard({ diagnosis }) {
 // client-side from pillars.*.dimensions, which is how ranks 3+ genuinely
 // never reach this component at all, not just get styled as "locked".
 //
-// Legacy (pre-v3) reports keep their original scan.dimensions-driven
-// rendering untouched below (LegacyFixRow) — those are frozen historical
-// rows, same "renders exactly as it always has" precedent used
-// throughout this codebase for pre-v3 data.
-
-// A fix string sometimes carries an inline "e.g. {snippet}" clause
-// (see lite_pillars.py's crawl-derived fix text) — split it so the
-// snippet can collapse behind its own toggle instead of always showing
-// inline. No snippet marker found -> the whole string is the title,
-// nothing to collapse. Legacy-only (see module comment above).
-function splitFixSnippet(fix) {
-  if (!fix) return { title: '', snippet: null }
-  const idx = fix.search(/[{<]/)
-  if (idx === -1) return { title: fix, snippet: null }
-  const title = fix.slice(0, idx).trim().replace(/,?\s*e\.g\.?:?\s*$/i, '').trim()
-  const snippet = fix.slice(idx).trim()
-  return { title: title || fix, snippet }
-}
-
-function LegacyFixRow({ dimension, rank, maxGap }) {
-  const [snippetOpen, setSnippetOpen] = useState(false)
-  const earned = dimension.score ?? dimension.earned ?? 0
-  const gap = (dimension.max || 0) - earned
-  const impactPct = maxGap ? Math.max(0, Math.min(100, (gap / maxGap) * 100)) : 0
-  const { title, snippet } = dimension.locked ? { title: '', snippet: null } : splitFixSnippet(dimension.fix)
-
-  return (
-    <div className="lite-fix-row" style={dimension.locked ? { color: 'var(--text-2)' } : undefined}>
-      <div className="lite-mono lite-muted" style={{ fontSize: 12 }}>{String(rank).padStart(2, '0')}</div>
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: dimension.locked ? 'var(--text-2)' : 'var(--text)' }}>
-          {dimension.locked ? 'Unlocks with your email' : title || 'No issue found here.'}
-        </div>
-        {snippet && (
-          <div style={{ marginTop: 6 }}>
-            <button
-              type="button"
-              onClick={() => setSnippetOpen((v) => !v)}
-              aria-expanded={snippetOpen}
-              className="lite-mono lite-snippet-toggle"
-            >
-              {snippetOpen ? 'HIDE SNIPPET' : 'VIEW SNIPPET'}
-            </button>
-            {snippetOpen && <pre className="lite-mono lite-snippet-pre">{snippet}</pre>}
-          </div>
-        )}
-      </div>
-      <div className="lite-muted" style={{ fontSize: 13 }}>{dimension.locked ? '—' : dimension.name}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span className="lite-mono" style={{ fontSize: 12, fontWeight: 700, color: dimension.locked ? 'var(--text-2)' : 'var(--text)' }}>
-          {dimension.locked ? '+?' : `+${gap}`}
-        </span>
-        {!dimension.locked && (
-          <span className="lite-bar-track" style={{ width: 44, height: 5 }}>
-            <span className="lite-bar-fill" style={{ width: `${impactPct}%`, background: 'var(--foundation)' }} />
-          </span>
-        )}
-      </div>
-      <div className="lite-mono lite-muted" style={{ fontSize: 12 }}>
-        {dimension.locked ? 'Locked' : snippet ? 'Included in fix' : 'No snippet needed'}
-      </div>
-    </div>
-  )
-}
+// Fetch-resilience stage (hotfix 3, R2): the legacy scan.dimensions-
+// driven fix table (LegacyFixRow/LegacyFixList) is retired — a scan
+// under the current scorer version, whatever its status, now always
+// has a real pillars.fixes to read (see engine.py's R1/R2 and public_
+// lite.py's scan_scorable gate). Only a genuinely-retired scorer
+// version has neither shape to show; FixList renders nothing for it,
+// same as it already does for no-scan/skipped.
 
 const IMPACT_COUNT_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six']
-
-function LegacyFixList({ report }) {
-  const scan = report.scan
-  if (!scan || scan.status !== 'complete') return null
-  const ranked = rankDimensionsByGap(scan.dimensions)
-  const maxGap = ranked.length ? (ranked[0].max || 0) - (ranked[0].score ?? ranked[0].earned ?? 0) : 0
-  const unlockedCount = ranked.filter((d) => !d.locked).length
-
-  return (
-    <LightCard id="fix">
-      <SectionHeader
-        label="RANKED FIXES · ORDERED BY MODELED IMPACT"
-        headline={fixesHeadline(ranked)}
-      />
-      <div className="lite-fix-table-header lite-label" style={{ fontSize: 11 }}>
-        <span />
-        <span>Fix</span>
-        <span>Dimension</span>
-        <span>Impact</span>
-        <span>Snippet</span>
-      </div>
-      {ranked.map((d, i) => <LegacyFixRow key={d.code} dimension={d} rank={i + 1} maxGap={maxGap} />)}
-      <div className="lite-body" style={{ marginTop: 16, fontWeight: 600 }}>
-        Showing {unlockedCount} of {ranked.length} fixes. The rest unlock with your email below.
-      </div>
-    </LightCard>
-  )
-}
-
-// Headline computed from the SAME ranked list the table renders — the
-// unlocked rows' impacts summed, spelled out for small counts to match
-// the design mock's voice ("Three moves recover up to 41 points").
-// Legacy-only — see fixesHeadlineV3 below for the v3 equivalent.
-function fixesHeadline(ranked) {
-  const unlocked = ranked.filter((d) => !d.locked)
-  const sum = unlocked.reduce((total, d) => total + ((d.max || 0) - (d.score ?? d.earned ?? 0)), 0)
-  const count = unlocked.length
-  const word = IMPACT_COUNT_WORDS[count] || String(count)
-  return `${word} move${count === 1 ? '' : 's'} recover up to ${formatScore(sum)} points`
-}
 
 // Part 3 (F2): headline recomputed over just the visible (top 2) fixes
 // — never over remaining_count, which carries no impact data at all.
@@ -1852,7 +1594,7 @@ function FixListV3({ report, ctaUrl }) {
 }
 
 function FixList({ report, ctaUrl }) {
-  return isV3Report(report) ? <FixListV3 report={report} ctaUrl={ctaUrl} /> : <LegacyFixList report={report} />
+  return isV3Report(report) ? <FixListV3 report={report} ctaUrl={ctaUrl} /> : null
 }
 
 // ─── Exposure calculator ────────────────────────────────────────────────
@@ -2082,6 +1824,8 @@ export function LiteFullReport({ report, onAddStoreUrl, token }) {
           scanStatus={report.scan_status}
           token={token}
         />
+
+        {isV3Report(report) && <DegradedRunBanner status={report.scan_status} />}
 
         <ExecutiveTiles report={report} exposure={exposure} />
 

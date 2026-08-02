@@ -526,57 +526,6 @@
   }
 }
 
-/* ── Dimension chart (why-section, 8 dimensions on a shared scale) ───
- * Fixed (non-percentage) flex-basis on the label/score columns
- * guarantees the middle bar column is pixel-identical across every
- * sibling row — including the trailing axis row — without needing a
- * shared CSS Grid + absolutely-positioned overlay spanning all rows. */
-
-.lite-dim-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 9px 0;
-}
-.lite-dim-label { flex: 0 0 170px; font-size: 12px; color: var(--text-2); }
-.lite-dim-bar-cell { flex: 1 1 auto; min-width: 60px; }
-.lite-dim-score-cell {
-  flex: 0 0 100px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-}
-@media (max-width: 480px) {
-  .lite-dim-row { flex-wrap: wrap; padding: 12px 0; }
-  .lite-dim-label { flex: 1 1 100%; }
-  .lite-dim-bar-cell { flex: 1 1 100%; order: 3; margin-top: 4px; }
-  .lite-dim-score-cell { flex: 0 0 auto; margin-left: auto; }
-}
-
-.lite-dim-track { position: relative; height: 8px; }
-.lite-dim-fill {
-  position: absolute;
-  top: 0; left: 0; bottom: 0;
-  border-radius: 4px;
-  background: var(--track);
-}
-.lite-dim-gridline {
-  position: absolute;
-  top: -3px; bottom: -3px;
-  width: 1px;
-  background: var(--line);
-}
-.lite-dim-zero-tick {
-  position: absolute;
-  top: -2px; bottom: -2px;
-  left: 0;
-  width: 3px;
-  border-radius: 2px;
-  background: var(--bad);
-}
-.lite-dim-axis-track { position: relative; height: 14px; }
-
 /* ── Fix table ───────────────────────────────────────────────────── */
 
 .lite-fix-table-header {
@@ -596,8 +545,7 @@
 }
 /* Part 3 (F2): v3's fix table has no Snippet column — the free report
    never serializes markup to have one (H2) — so it's one column
-   narrower than the legacy 5-column layout above, which LegacyFixRow
-   still uses untouched. */
+   narrower than the base 5-column layout above. */
 .lite-fix-table-header--v3,
 .lite-fix-row--v3 {
   grid-template-columns: 28px minmax(160px, 2fr) 1fr 90px;
@@ -626,17 +574,6 @@
   cursor: pointer;
 }
 .lite-snippet-toggle:hover { color: var(--text); border-color: var(--text-2); }
-.lite-snippet-pre {
-  display: block;
-  background: var(--paper);
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 11px;
-  overflow-x: auto;
-  margin: 8px 0 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
 
 /* ── Sliders ─────────────────────────────────────────────────────── */
 

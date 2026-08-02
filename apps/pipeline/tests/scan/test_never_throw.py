@@ -175,12 +175,19 @@ def test_malformed_sitemapindex_never_raises(monkeypatch):
 def test_unexpected_exception_inside_pipeline_never_raises(monkeypatch):
     """
     Belt-and-suspenders: even a bug deep inside scoring must not escape
-    run_scan()'s outer try/except.
+    run_scan()'s outer try/except. The homepage body needs to clear
+    fetcher.py's MIN_BODY_LENGTH short-body-blocked heuristic (R1,
+    hotfix 3: _derive_status no longer treats an infrastructure probe
+    like llms.txt fetching fine as "the run is complete" — only a real
+    product page or a genuinely-fetched homepage count) so this run
+    actually reaches the scoring stage the monkeypatched scorer blows up
+    in, rather than degrading to 'blocked' before scoring is ever tried.
     """
     _mock_public_dns(monkeypatch)
 
     def fake_get(self, url, headers=None):
-        return httpx.Response(200, text="<html>ok</html>", request=httpx.Request("GET", url))
+        body = "<html><body>" + ("Home page content, plenty of it here. " * 5) + "</body></html>"
+        return httpx.Response(200, text=body, request=httpx.Request("GET", url))
 
     monkeypatch.setattr(httpx.Client, "get", fake_get)
 

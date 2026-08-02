@@ -272,7 +272,15 @@ def test_bot_blocked_store_returns_blocked_status(monkeypatch):
 
     assert result.status == "blocked"
     assert result.total_score is None
-    assert result.dimensions == {}
+    # R2 (fetch resilience, hotfix 3): a degraded-blocked run still gets
+    # a real, fully v4-shaped dimensions dict — every crawl-derived
+    # dimension honestly coverage='blocked' — instead of an empty {},
+    # so the report can render through the standard pillars machinery.
+    assert result.dimensions
+    assert result.dimensions["scorer_version"]
+    for code in ("agent_access", "catalog_context", "protocol_feed", "price_truth_seen", "member_value_seen", "deal_citability_seen", "value_protocols_seen"):
+        assert result.dimensions[code]["coverage"] == "blocked"
+        assert result.dimensions[code]["score"] == 0.0
 
 
 def test_fake_was_price_with_no_validity_anywhere_is_advisory_only_never_caps(monkeypatch):
@@ -763,8 +771,8 @@ def test_run_degrades_to_blocked_when_all_pdps_and_homepage_are_rate_limited(mon
     """B3: one page of real store content is enough to score a run —
     zero is not. Every product page AND the homepage are rate-limited
     here, so the run degrades to status='blocked' even though robots.txt
-    itself fetched fine (the pre-existing blocked check at the top of
-    _derive_status never fires in this scenario)."""
+    itself fetched fine (R1, hotfix 3: robots.txt status no longer
+    short-circuits _derive_status at all)."""
     pages = _base_pages(member_price=True)
     fake_get = _serve_with_blocked_products(
         pages, blocked_suffixes=["/products/blue-widget", "/products/red-widget", "rich.example.com"],
@@ -775,7 +783,10 @@ def test_run_degrades_to_blocked_when_all_pdps_and_homepage_are_rate_limited(mon
 
     assert result.status == "blocked"
     assert result.total_score is None
-    assert result.dimensions == {}
+    # R2 (fetch resilience, hotfix 3): a real, fully v4-shaped dimensions
+    # dict, not an empty {} — see test_bot_blocked_store_returns_blocked_status.
+    assert result.dimensions
+    assert result.dimensions["price_truth_seen"]["coverage"] == "blocked"
 
 
 def test_run_completes_with_blocked_pdp_dependent_dims_when_homepage_is_still_readable(monkeypatch):
@@ -823,3 +834,85 @@ def test_run_completes_with_blocked_pdp_dependent_dims_when_homepage_is_still_re
         sum(d["score"] for d in all_scored.values()) / sum(d["max"] for d in all_scored.values()) * 100
     )
     assert result.total_score > naive_total
+
+
+# ─── R1 (fetch resilience, hotfix 3): the exact run-blocked rule ──────────
+
+def test_incident_replay_root_rate_limited_pdps_read_through_still_scores_normally(monkeypatch):
+    """Incident replay: the store root is rate-limited on every single
+    attempt (retries exhausted, homepage never fetches), sitemaps read
+    fine, PDP1 is rate-limited on its first attempt but the retry ladder
+    gets it through on the second, PDP2 reads cleanly first try. R1: this
+    must NOT degrade the run — both product pages genuinely fetched, so
+    the run completes and scores normally; the homepage's own rate-
+    limiting surfaces only as Agent Access evidence, page-level, never a
+    run-level block."""
+    pages = _base_pages(member_price=True)
+    pdp1_attempts = {"n": 0}
+
+    def fake_get(self, url, headers=None):
+        if url == "https://rich.example.com":
+            return httpx.Response(429, text="", request=httpx.Request("GET", url))
+        if url.endswith("/products/blue-widget"):
+            pdp1_attempts["n"] += 1
+            if pdp1_attempts["n"] == 1:
+                return httpx.Response(429, text="", request=httpx.Request("GET", url))
+            return httpx.Response(200, text=pages["/products/blue-widget"], request=httpx.Request("GET", url))
+        for suffix, html in sorted(pages.items(), key=lambda kv: -len(kv[0])):
+            if url.endswith(suffix):
+                return httpx.Response(200, text=html, request=httpx.Request("GET", url))
+        return httpx.Response(404, text="", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    result = engine.run_scan("https://rich.example.com")
+
+    assert result.status == "complete"
+    assert result.total_score is not None
+    agent_access_evidence = " ".join(result.dimensions["agent_access"]["evidence"])
+    assert "store root rate-limited our reader (HTTP 429" in agent_access_evidence
+    assert "product pages read successfully" in agent_access_evidence
+    assert result.dimensions["price_truth_seen"]["coverage"] != "blocked"
+    assert result.dimensions["price_truth_seen"]["score"] > 0
+
+
+def test_truly_blocked_fixture_root_and_all_pdps_terminal_429(monkeypatch):
+    """R1's narrow rule DOES fire here: nothing readable anywhere on the
+    store — the run degrades to status='blocked' with every crawl-
+    derived dimension honestly coverage='blocked', not scored zero."""
+    pages = _base_pages(member_price=True)
+    blocked_suffixes = ("/products/blue-widget", "/products/red-widget")
+
+    def fake_get(self, url, headers=None):
+        if url == "https://rich.example.com" or any(url.endswith(s) for s in blocked_suffixes):
+            return httpx.Response(429, text="", request=httpx.Request("GET", url))
+        for suffix, html in sorted(pages.items(), key=lambda kv: -len(kv[0])):
+            if url.endswith(suffix):
+                return httpx.Response(200, text=html, request=httpx.Request("GET", url))
+        return httpx.Response(404, text="", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    result = engine.run_scan("https://rich.example.com")
+
+    assert result.status == "blocked"
+    assert result.total_score is None
+    for code in (
+        "agent_access", "catalog_context", "protocol_feed", "price_truth_seen",
+        "member_value_seen", "deal_citability_seen", "value_protocols_seen",
+    ):
+        assert result.dimensions[code]["coverage"] == "blocked", code
+        assert result.dimensions[code]["score"] == 0.0, code
+
+
+def test_partial_fixture_one_of_two_pdps_blocked_scores_over_the_readable_page(monkeypatch):
+    """hotfix 2 behavior unchanged: a single blocked PDP alongside a
+    readable one never degrades the run, and the affected checks score
+    over the page they could actually read."""
+    pages = _base_pages(member_price=True)
+    fake_get = _serve_with_blocked_products(pages, blocked_suffixes=["/products/blue-widget"])
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+
+    result = engine.run_scan("https://rich.example.com")
+
+    assert result.status == "complete"
+    assert result.dimensions["price_truth_seen"]["coverage"] == "full"
+    assert any("rate-limited our reader" in e for e in result.dimensions["price_truth_seen"]["evidence"])
