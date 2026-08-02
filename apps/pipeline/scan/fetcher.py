@@ -23,6 +23,7 @@ import ipaddress
 import logging
 import os
 import random
+import re
 import socket
 import time
 import urllib.robotparser
@@ -87,14 +88,27 @@ BLOCKED = "blocked"
 ROBOTS_DISALLOWED = "robots_disallowed"
 FAILED = "failed"
 
-# Stage 11 (F2): a final 2xx body under MIN_BODY_LENGTH chars, or one of
-# these bot-challenge signatures, reads as 'blocked' rather than a
-# genuine page — a real product/homepage is never this short or this
-# markered.
-CHALLENGE_PAGE_MARKERS = (
-    "checking your browser", "cf-browser-verification", "cf-chl",
-    "attention required", "ddos protection by", "captcha",
-    "please enable javascript and cookies",
+# Stage 11 (F2): a final 2xx body under MIN_BODY_LENGTH chars reads as
+# 'blocked' rather than a genuine page — a real product/homepage is
+# never this short.
+#
+# Challenge-page rewrite (hotfix 4): interstitials are tiny (a few KB);
+# real PDPs run 100KB+. Bodies over CHALLENGE_MAX_BYTES are NEVER a
+# challenge, full stop, regardless of anything else on the page — this
+# alone rules out a real product page that happens to embed a
+# grecaptcha script tag (routine on real storefronts, and the exact
+# incident shape that used to misfire: "captcha" appearing anywhere in
+# 150KB of real markup used to be enough to blank the page).
+CHALLENGE_MAX_BYTES = _env_int("CHALLENGE_MAX_BYTES", 30_000)
+# Signatures are scoped to <title> or this many leading bytes of the
+# body — never a substring search over the whole page (same reasoning:
+# a real page can legitimately mention any of these words far down the
+# page without being an interstitial).
+CHALLENGE_SCAN_BYTES = 2000
+CHALLENGE_PAGE_SIGNATURES = (
+    "just a moment", "attention required", "checking your browser",
+    "verify you are human", "cf-browser-verification", "cf-chl",
+    "ddos protection by", "complete the captcha", "solve the captcha",
 )
 
 
@@ -194,11 +208,49 @@ def _registrable_domain(hostname: Optional[str]) -> str:
     return ".".join(labels[-2:]) if len(labels) >= 2 else hostname.lower()
 
 
-def _looks_like_challenge_page(html: Optional[str]) -> bool:
+def _challenge_signature_in(text: str) -> Optional[str]:
+    for marker in CHALLENGE_PAGE_SIGNATURES:
+        if marker in text:
+            return marker
+    return None
+
+
+def _looks_like_challenge_page(html: Optional[str]) -> Optional[str]:
+    """
+    Challenge-page rewrite (hotfix 4): a conjunction of independent
+    signals, never a bare substring-anywhere match. Returns None when
+    the page is not a challenge, else a short string naming which rule
+    fired — never a bare bool the caller has to re-derive an
+    explanation for.
+    """
     if not html:
-        return False
+        return None
+
+    body_bytes = len(html.encode("utf-8", errors="replace"))
+    if body_bytes > CHALLENGE_MAX_BYTES:
+        return None
+
     lowered = html.lower()
-    return any(marker in lowered for marker in CHALLENGE_PAGE_MARKERS)
+    # Real-content override: a page shipping structured product data,
+    # social-preview metadata, or a real nav bar is never a bare
+    # challenge interstitial — those ship none of these.
+    if (
+        "application/ld+json" in lowered
+        or "og:title" in lowered
+        or "og:type" in lowered
+        or "<nav" in lowered
+    ):
+        return None
+
+    title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+    title_text = title_match.group(1).lower() if title_match else ""
+    if _challenge_signature_in(title_text):
+        return f"challenge-page: title signature + {body_bytes // 1000}KB body"
+
+    if _challenge_signature_in(lowered[:CHALLENGE_SCAN_BYTES]):
+        return f"challenge-page: body signature + {body_bytes // 1000}KB body"
+
+    return None
 
 
 _last_fetch_at: dict = {}
@@ -405,13 +457,14 @@ def fetch(
                 )
 
             body = resp.text
-            if _looks_like_challenge_page(body):
+            challenge_reason = _looks_like_challenge_page(body)
+            if challenge_reason:
                 return FetchResult(
                     url=url, final_url=current_url, status=BLOCKED, html=body,
                     http_status=resp.status_code, redirect_chain=redirect_chain,
                     attempts=total_attempts, retry_after_seen=retry_after_seen,
                     bytes=len(resp.content),
-                    error="challenge-page markers detected in response body",
+                    error=challenge_reason,
                 )
             if check_short_body and len(body.strip()) < MIN_BODY_LENGTH:
                 return FetchResult(
