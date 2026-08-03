@@ -220,7 +220,11 @@ describe('LiteWidget — adaptive shapes', () => {
         ],
         totals: { total_mentions: 7, total_queries: 12 },
       },
-      scan: { status: 'blocked', total_score: null, dimensions: [], pages_fetched: [] },
+      scan: {
+        status: 'blocked', total_score: null, dimensions: [], pages_fetched: [],
+        degraded_reason: 'blocked',
+        degraded_banner_facts: { refusal: '429', attempts: 4, robots_included: false },
+      },
       visibility: 60, accessibility: 0, composite: 60, scan_status: 'blocked',
       // Fetch-resilience stage (R1/R2): a narrow-blocked scan under the
       // current scorer version now carries a real pillars payload —
@@ -255,7 +259,7 @@ describe('LiteWidget — adaptive shapes', () => {
     // a blocked scan degrades Accessibility/True Value only, per rule 7.
     await waitFor(() => expect(screen.getByText('How often agents mention you — and your value')).toBeInTheDocument())
     expect(screen.getByText('42% · 5/12')).toBeInTheDocument()
-    expect(screen.getByText(/rate-limited our reader/)).toBeInTheDocument()
+    expect(screen.getByText(/rate-limited our identified reader on every page we tried/)).toBeInTheDocument()
 
     // The funnel teaser (W4) still renders as a locked, decorative tease —
     // its stage cells are fixed constants, not the real data above.

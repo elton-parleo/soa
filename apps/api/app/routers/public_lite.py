@@ -438,11 +438,19 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
     pages_fetched = _decode_json_field(pages_fetched, [])
 
     if status != 'complete':
+        # Sitemap-sampler stage (hotfix 5, S2/S3): degraded_reason/
+        # degraded_banner_facts are sibling keys inside the same
+        # dimensions jsonb engine.py already writes (no migration) —
+        # decoded here just enough to surface them, never the full
+        # per-dimension breakdown (that stays complete-only, unchanged).
+        degraded = _decode_json_field(dimensions, {})
         return PublicLiteScan(
             status=status,
             total_score=total_score,
             integrity_capped=bool(integrity_capped),
             pages_fetched=pages_fetched,
+            degraded_reason=degraded.get('degraded_reason'),
+            degraded_banner_facts=degraded.get('degraded_banner_facts'),
         ).model_dump()
 
     dimensions = _decode_json_field(dimensions, {})
