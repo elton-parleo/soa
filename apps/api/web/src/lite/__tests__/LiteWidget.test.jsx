@@ -28,52 +28,68 @@ describe('LiteWidget (root) — state machine', () => {
 
   it('stores the token and shows progress after a successful brand-only submission', async () => {
     liteApi.submit.mockResolvedValue({ token: 'tok-abc', status: 'pending' })
-    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+    liteApi.getStatus.mockResolvedValue({
+      status: 'pending', phase: 'queued', scan_status: null,
+      events: [{ seq: 1, ts: '2026-01-01T00:00:00Z', kind: 'state', task: 'run', text: 'queued' }],
+    })
 
     render(<LiteWidget />)
     fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'Acme Co' } })
     fireEvent.click(screen.getByText('Run my free diagnostic'))
 
     await waitFor(() => expect(sessionStorage.getItem('soaLiteToken')).toBe('tok-abc'))
-    // Brand-only (no store_url): the reading-your-store row resolves na
-    // immediately — there's nothing to wait for.
-    await waitFor(() => expect(screen.getByText('No store URL was provided this run.')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('AUDIT QUEUED')).toBeInTheDocument())
     expect(sessionStorage.getItem('soaLiteStoreUrl')).toBeNull()
   })
 
   it('stores the store URL and shows the scan track after a URL submission', async () => {
     liteApi.submit.mockResolvedValue({ token: 'tok-url', status: 'pending' })
-    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: 'running' })
+    liteApi.getStatus.mockResolvedValue({
+      status: 'pending', phase: 'queued', scan_status: 'running',
+      events: [
+        { seq: 1, ts: '2026-01-01T00:00:00Z', kind: 'state', task: 'run', text: 'running' },
+        { seq: 2, ts: '2026-01-01T00:00:01Z', kind: 'log', task: 'crawl', text: 'reading acme.com…' },
+      ],
+    })
 
     render(<LiteWidget />)
     fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'acme.com' } })
     fireEvent.click(screen.getByText('Run my free diagnostic'))
 
     await waitFor(() => expect(sessionStorage.getItem('soaLiteStoreUrl')).toBe('acme.com'))
-    await waitFor(() => expect(screen.getByText('fetching pages…')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('reading acme.com…')).toBeInTheDocument())
   })
 
   it('resumes polling immediately when a token already exists in sessionStorage', async () => {
     sessionStorage.setItem('soaLiteToken', 'tok-existing')
     liteApi.getStatus.mockResolvedValue({
       status: 'running', phase: 'analyzing', progress: { completed_runs: 12, total_runs: 12 },
+      events: [
+        { seq: 1, ts: '2026-01-01T00:00:00Z', kind: 'state', task: 'run', text: 'running' },
+        { seq: 2, ts: '2026-01-01T00:00:01Z', kind: 'log', task: 'scoring', text: 'coding mentions, prices, and incentives…' },
+      ],
     })
 
     render(<LiteWidget />)
 
     await waitFor(() => expect(liteApi.getStatus).toHaveBeenCalledWith('tok-existing'))
-    // Legacy 'analyzing' phase maps onto the scoring-the-answers row.
     await waitFor(() => expect(screen.getByText('coding mentions, prices, and incentives…')).toBeInTheDocument())
   })
 
   it('resumes with the persisted store_url domain on the scan track after a refresh', async () => {
     sessionStorage.setItem('soaLiteToken', 'tok-existing')
     sessionStorage.setItem('soaLiteStoreUrl', 'acme.com')
-    liteApi.getStatus.mockResolvedValue({ status: 'running', phase: 'running', scan_status: 'running', progress: { completed_runs: 1, total_runs: 12 } })
+    liteApi.getStatus.mockResolvedValue({
+      status: 'running', phase: 'running', scan_status: 'running', progress: { completed_runs: 1, total_runs: 12 },
+      events: [
+        { seq: 1, ts: '2026-01-01T00:00:00Z', kind: 'state', task: 'run', text: 'running' },
+        { seq: 2, ts: '2026-01-01T00:00:01Z', kind: 'log', task: 'crawl', text: 'reading acme.com…' },
+      ],
+    })
 
     render(<LiteWidget />)
 
-    await waitFor(() => expect(screen.getByText('fetching pages…')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('reading acme.com…')).toBeInTheDocument())
   })
 
   it('shows the retry view on failed status and clears storage on retry', async () => {
@@ -271,13 +287,13 @@ describe('LiteWidget — adaptive shapes', () => {
 // ─── Additive fields absent (old API) ───────────────────────────────────
 
 describe('LiteWidget — old API shape (additive fields absent)', () => {
-  it('renders the pre-scan progress experience without errors when scan_status is absent', async () => {
+  it('renders the pre-scan progress experience without errors when scan_status/events are absent', async () => {
     sessionStorage.setItem('soaLiteToken', 'tok-old-api')
-    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued' }) // no scan_status key at all
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued' }) // no scan_status/events keys at all — P7 fallback
 
     render(<LiteWidget />)
 
-    await waitFor(() => expect(screen.getByText('Reading your store')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('AUDIT QUEUED')).toBeInTheDocument())
   })
 
   it('renders the old-shape full report without errors when scan is absent', async () => {
@@ -308,6 +324,10 @@ describe('LiteWidget — Stage 9: urlToken seeds the token from the URL', () => 
   it('polls immediately using urlToken, without requiring a sessionStorage token', async () => {
     liteApi.getStatus.mockResolvedValue({
       status: 'running', phase: 'analyzing', progress: { completed_runs: 12, total_runs: 12 },
+      events: [
+        { seq: 1, ts: '2026-01-01T00:00:00Z', kind: 'state', task: 'run', text: 'running' },
+        { seq: 2, ts: '2026-01-01T00:00:01Z', kind: 'log', task: 'scoring', text: 'coding mentions, prices, and incentives…' },
+      ],
     })
 
     render(<LiteWidget urlToken="tok-from-url" />)

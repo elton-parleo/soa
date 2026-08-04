@@ -36,11 +36,14 @@ describe('App — /bots routing (W4)', () => {
 describe('App — /report/{token} routing renders each U1 state', () => {
   it('running request -> the live, resumable progress view', async () => {
     setPath('/report/tok-running')
-    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+    liteApi.getStatus.mockResolvedValue({
+      status: 'pending', phase: 'queued', scan_status: null,
+      events: [{ seq: 1, ts: '2026-01-01T00:00:00Z', kind: 'state', task: 'run', text: 'queued' }],
+    })
 
     render(<App />)
 
-    await waitFor(() => expect(screen.getByText('No store URL was provided this run.')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('AUDIT QUEUED')).toBeInTheDocument())
     expect(liteApi.submit).not.toHaveBeenCalled()
   })
 
@@ -131,7 +134,10 @@ describe('App — post-submit navigation lands on /report/{token} (U2)', () => {
   it('from /scan: pushes history to /report/{token} and the progress view takes over in place', async () => {
     setPath('/scan')
     liteApi.submit.mockResolvedValue({ token: 'tok-scan-submitted', status: 'pending' })
-    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+    liteApi.getStatus.mockResolvedValue({
+      status: 'pending', phase: 'queued', scan_status: null,
+      events: [{ seq: 1, ts: '2026-01-01T00:00:00Z', kind: 'state', task: 'run', text: 'queued' }],
+    })
 
     render(<App />)
     const primaryInputs = screen.getAllByLabelText('Your brand or store URL')
@@ -140,7 +146,7 @@ describe('App — post-submit navigation lands on /report/{token} (U2)', () => {
     fireEvent.click(submitButtons[0])
 
     await waitFor(() => expect(window.location.pathname).toBe('/report/tok-scan-submitted'))
-    await waitFor(() => expect(screen.getByText('No store URL was provided this run.')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('AUDIT QUEUED')).toBeInTheDocument())
   })
 })
 

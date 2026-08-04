@@ -697,6 +697,21 @@ class PublicLiteStatusResponse(BaseModel):
     # the instant the scan row exists, in any status (blocked/failed/
     # skipped rows still carry whatever was fetched before stopping).
     scan_pages_read: Optional[int] = None
+    # Part 1 (E1): the run-manifest's append-only event log — [{seq, ts,
+    # kind: 'log'|'done'|'state', task, text, chips?}], written
+    # incrementally by apps/pipeline/lite_events.py as each stage
+    # progresses. Passed straight through from soa_lite_requests.events;
+    # a pre-this-stage row (or the DB default) is '[]', which the status
+    # page's fallback view (P7) renders as the minimal pre-event page —
+    # never absent/null, since the column itself is NOT NULL server_default '[]'.
+    events: Optional[List[dict]] = None
+    # Part 1 (P4): same shape as PublicLiteScan.degraded_reason/
+    # degraded_banner_facts below, computed the SAME way
+    # (_build_scan_payload) so the status page's terminal banner is
+    # byte-identical to the report's — both None whenever the scan is
+    # 'complete' (nothing to explain) or hasn't produced a row yet.
+    degraded_reason: Optional[str] = None
+    degraded_banner_facts: Optional[dict] = None
 
 
 class PublicLiteEntityMetrics(BaseModel):

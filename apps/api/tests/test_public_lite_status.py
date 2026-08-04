@@ -28,7 +28,7 @@ def db(monkeypatch):
             CREATE TABLE soa_lite_requests (
                 id INTEGER PRIMARY KEY, token TEXT UNIQUE, status TEXT,
                 cycle_id INTEGER, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                competitor_names TEXT, competitor_source TEXT
+                competitor_names TEXT, competitor_source TEXT, events TEXT DEFAULT '[]'
             )
         """)
         conn.exec_driver_sql("""
@@ -50,18 +50,25 @@ def db(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_lite_scan_results (
                 id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, status TEXT,
-                dimensions TEXT, pages_fetched TEXT, membership_probe TEXT
+                total_score INTEGER, integrity_capped BOOLEAN DEFAULT 0,
+                dimensions TEXT, pages_fetched TEXT, membership_probe TEXT,
+                revenue_probe TEXT, fetch_probe TEXT
             )
         """)
     monkeypatch.setattr(public_lite, "engine", engine)
     return engine
 
 
-def _insert_lite(conn, token, status, cycle_id=None, competitor_names=None, competitor_source=None):
+def _insert_lite(conn, token, status, cycle_id=None, competitor_names=None, competitor_source=None, events=None):
     conn.exec_driver_sql(
-        "INSERT INTO soa_lite_requests (token, status, cycle_id, competitor_names, competitor_source) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (token, status, cycle_id, json.dumps(competitor_names) if competitor_names is not None else None, competitor_source),
+        "INSERT INTO soa_lite_requests (token, status, cycle_id, competitor_names, competitor_source, events) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            token, status, cycle_id,
+            json.dumps(competitor_names) if competitor_names is not None else None,
+            competitor_source,
+            json.dumps(events) if events is not None else '[]',
+        ),
     )
 
 
@@ -529,3 +536,84 @@ def test_status_response_is_additive_over_pre_stage20_shape(db):
     assert pre_stage20_fields.issubset(set(result.model_dump().keys()))
     assert result.status == "running"
     assert result.phase == "running"
+
+
+# ─── Part 1 (E1/P4): events[] + degraded_reason/degraded_banner_facts ───
+
+def test_events_pass_through_unchanged(db):
+    events = [
+        {"seq": 1, "ts": "2026-01-01T00:00:00Z", "kind": "state", "task": "run", "text": "running"},
+        {"seq": 2, "ts": "2026-01-01T00:00:01Z", "kind": "log", "task": "crawl", "text": "reading acme.com…"},
+    ]
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "running", events=events)
+    result = public_lite.get_lite_status("t1")
+    assert result.events == events
+
+
+def test_events_default_to_empty_list_for_a_pre_stage_row(db):
+    """A row from before this stage has events='[]' (the column's own
+    server_default) rather than NULL, but this is defended anyway (P7's
+    fallback view treats missing/empty identically)."""
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "pending")
+    result = public_lite.get_lite_status("t1")
+    assert result.events == []
+
+
+def test_degraded_reason_and_banner_facts_absent_when_scan_complete(db):
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "running", cycle_id=1)
+        _insert_cycle(conn, 1, "running", total_runs_planned=12)
+        _insert_scan(conn, 1, "complete", dimensions={"F1": {"score": 8, "max": 10}})
+    result = public_lite.get_lite_status("t1")
+    assert result.degraded_reason is None
+    assert result.degraded_banner_facts is None
+
+
+def test_degraded_reason_and_banner_facts_present_for_a_blocked_scan(db):
+    """Reuses _build_scan_payload — the exact function GET /report calls
+    — so the status page's terminal banner can never diverge from the
+    report's own wording for the same run."""
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "running", cycle_id=1)
+        _insert_cycle(conn, 1, "running", total_runs_planned=12)
+        _insert_scan(
+            conn, 1, "blocked",
+            dimensions={
+                "degraded_reason": "blocked",
+                "degraded_banner_facts": {"refusal": "429", "attempts": 4, "robots_included": False},
+            },
+        )
+    result = public_lite.get_lite_status("t1")
+    assert result.degraded_reason == "blocked"
+    assert result.degraded_banner_facts["refusal"] == "429"
+    assert result.degraded_banner_facts["attempts"] == 4
+
+
+def test_degraded_reason_no_product_pages(db):
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "running", cycle_id=1)
+        _insert_cycle(conn, 1, "running", total_runs_planned=12)
+        _insert_scan(conn, 1, "blocked", dimensions={"degraded_reason": "no_product_pages_found"})
+    result = public_lite.get_lite_status("t1")
+    assert result.degraded_reason == "no_product_pages_found"
+
+
+def test_degraded_fields_absent_when_no_scan_row_exists_at_all(db):
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "pending")
+    result = public_lite.get_lite_status("t1")
+    assert result.degraded_reason is None
+    assert result.degraded_banner_facts is None
+
+
+def test_status_response_events_and_degraded_fields_are_additive(db):
+    with db.begin() as conn:
+        _insert_lite(conn, "t1", "pending")
+    result = public_lite.get_lite_status("t1")
+    pre_stage_fields = {
+        "status", "phase", "progress", "scan_status", "competitors", "competitor_source",
+        "membership_check", "scan_pages_read",
+    }
+    assert pre_stage_fields.issubset(set(result.model_dump().keys()))
