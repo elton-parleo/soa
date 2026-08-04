@@ -278,15 +278,22 @@ def test_bot_blocked_store_returns_blocked_status(monkeypatch):
     # so the report can render through the standard pillars machinery.
     assert result.dimensions
     assert result.dimensions["scorer_version"]
-    for code in ("catalog_context", "protocol_feed", "price_truth_seen", "member_value_seen", "deal_citability_seen", "value_protocols_seen"):
+    for code in ("catalog_context", "protocol_feed", "price_truth_seen", "member_value_seen", "deal_citability_seen"):
         assert result.dimensions[code]["coverage"] == "blocked"
         assert result.dimensions[code]["score"] == 0.0
-    # agent_access (S4, sitemap sampler): scored for real even here —
-    # "can an agent reach this site" is exactly what a uniform-403 run
-    # just answered, not something it left unmeasured.
+    # agent_access (S4, sitemap sampler) / value_protocols (N1, not-
+    # measurable consistency stage): both real-scored even here — "can
+    # an agent reach this site" / "does it declare a protocol" are
+    # exactly what a uniform-403 run just answered, not something it
+    # left unmeasured. value_protocols never even looks at PDPs, so a
+    # 403-walled run still gets an honest 0/7 "no protocol profile
+    # found" instead of the page-sampling blanket.
     assert result.dimensions["agent_access"]["coverage"] == "full"
     assert result.dimensions["agent_access"]["score"] == 0.0
     assert any("robots.txt itself refused our identified reader (HTTP 403)" in e for e in result.dimensions["agent_access"]["evidence"])
+    assert result.dimensions["value_protocols_seen"]["coverage"] == "full"
+    assert result.dimensions["value_protocols_seen"]["score"] == 0.0
+    assert result.dimensions["value_protocols_seen"]["evidence"] == ["no protocol profile found"]
 
 
 def test_fake_was_price_with_no_validity_anywhere_is_advisory_only_never_caps(monkeypatch):
@@ -903,14 +910,17 @@ def test_truly_blocked_fixture_root_and_all_pdps_terminal_429(monkeypatch):
     assert result.total_score is None
     for code in (
         "catalog_context", "protocol_feed", "price_truth_seen",
-        "member_value_seen", "deal_citability_seen", "value_protocols_seen",
+        "member_value_seen", "deal_citability_seen",
     ):
         assert result.dimensions[code]["coverage"] == "blocked", code
         assert result.dimensions[code]["score"] == 0.0, code
-    # agent_access (S4, sitemap sampler): scored for real — robots.txt
-    # and the sitemap themselves fetched fine here, so it's not a bare
-    # zero, just an honest (non-'blocked') coverage.
+    # agent_access (S4, sitemap sampler) / value_protocols (N1): scored
+    # for real — robots.txt/sitemap/MCP well-known all fetched fine
+    # here (only the store root and PDPs 429'd), so neither is a bare
+    # blocked zero, just an honest (non-'blocked') coverage.
     assert result.dimensions["agent_access"]["coverage"] == "full"
+    assert result.dimensions["value_protocols_seen"]["coverage"] == "full"
+    assert result.dimensions["value_protocols_seen"]["evidence"] == ["no protocol profile found"]
 
 
 def test_partial_fixture_one_of_two_pdps_blocked_scores_over_the_readable_page(monkeypatch):

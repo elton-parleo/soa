@@ -35,6 +35,9 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
+from . import signing
+from .identity import BOT_UA
+
 log = logging.getLogger(__name__)
 
 
@@ -47,9 +50,13 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
-# Identifies honestly (A1): one real constant, sent on every page fetch —
-# no browser impersonation, no per-call variation.
-USER_AGENT = "ParleoScanBot/1.0 (+https://www.parleo.io/bot)"
+# Identifies honestly (A1): one real constant, sent on every page fetch
+# — declared always (W5's UA_POLICY default), never per-call variation.
+# The literal value lives in identity.py (W1, single source) — every
+# other module that needs the bot's own UA (discovery.py, scorer.py,
+# agent_access_matrix.py) imports THIS name, not identity.BOT_UA
+# directly, so there is still exactly one name used repo-wide.
+USER_AGENT = BOT_UA
 ACCEPT_HEADER = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 ACCEPT_LANGUAGE_HEADER = "en-US,en;q=0.9"
 TIMEOUT_SECONDS = 10.0
@@ -289,14 +296,19 @@ def _politeness_wait(hostname: str) -> None:
     _last_fetch_at[hostname] = time.monotonic()
 
 
-def _request_headers() -> dict:
+def _request_headers(url: str) -> dict:
     """A1: the one honest identity, plus normal Accept/Accept-Language —
-    never varied per call, never a browser impersonation."""
-    return {
+    never varied per call, never a browser impersonation. W2: signs the
+    request (RFC 9421 / Web Bot Auth) when signing.is_signing_enabled()
+    — signing.sign_request() itself returns {} when disabled, so this
+    is a plain no-op merge (byte-identical headers) with signing off."""
+    headers = {
         "User-Agent": USER_AGENT,
         "Accept": ACCEPT_HEADER,
         "Accept-Language": ACCEPT_LANGUAGE_HEADER,
     }
+    headers.update(signing.sign_request("GET", url))
+    return headers
 
 
 def _parse_retry_after(header_value: Optional[str]) -> Optional[float]:
@@ -346,7 +358,7 @@ def _fetch_with_retries(current_url: str, hostname: str):
 
     for attempt in range(1, SCAN_FETCH_RETRIES + 1):
         with httpx.Client(follow_redirects=False, timeout=TIMEOUT_SECONDS) as client:
-            resp = client.get(current_url, headers=_request_headers())
+            resp = client.get(current_url, headers=_request_headers(current_url))
 
         if resp.status_code not in RETRYABLE_STATUS_CODES or attempt >= SCAN_FETCH_RETRIES:
             return resp, attempt, retry_after_seen

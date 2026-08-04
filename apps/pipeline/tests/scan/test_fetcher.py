@@ -49,7 +49,10 @@ def test_every_request_sends_the_honest_ua_and_standard_headers(monkeypatch):
 
     assert seen_headers
     for headers in seen_headers:
-        assert headers["User-Agent"] == "ParleoScanBot/1.0 (+https://www.parleo.io/bot)"
+        assert headers["User-Agent"] == (
+            "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); "
+            "compatible; ParleoAuditBot/1.0; +https://www.parleo.io/bots"
+        )
         assert headers["Accept"] == fetcher.ACCEPT_HEADER
         assert headers["Accept-Language"] == fetcher.ACCEPT_LANGUAGE_HEADER
 

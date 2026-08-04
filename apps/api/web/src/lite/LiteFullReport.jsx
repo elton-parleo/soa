@@ -271,13 +271,37 @@ function PillarBarSegment({ label, earned, max, weight, isTrueValue }) {
   )
 }
 
+// N2 (not-measurable consistency stage): the True Value card header,
+// the hero pillar bar's fill (via pillarEarnedMax, which already
+// excludes na/blocked dims), the C2 dagger legend, and the UNVERIFIED
+// verdict chip (N3) must all agree on what "not measurable" means —
+// one shared predicate here, not four independent judgment calls.
+// blockedTrueValueDims is specifically the couldn't-read set (never
+// na — member_value_na has its own dedicated legend line and its own
+// concept: doesn't apply, not couldn't measure).
+function blockedTrueValueDims(pillars) {
+  return (pillars.true_value?.dimensions || []).filter((d) => d.blocked || d.seen?.blocked)
+}
+
 // Fetch-resilience stage (C2): true when any True Value dimension's
 // encode/seen wing is NOT MEASURABLE this run (every sampled product
 // page failed to fetch) — mirrors the existing member_value_na legend
 // pattern, just for a different reason (couldn't be read, not doesn't
 // apply).
 function anyTrueValueEncodeBlocked(pillars) {
-  return (pillars.true_value?.dimensions || []).some((d) => d.blocked || d.seen?.blocked)
+  return blockedTrueValueDims(pillars).length > 0
+}
+
+// N2: the card header's own "not measurable" count — every dimension
+// excluded from the applicable max this run, whether because it
+// doesn't apply (member_value_na) or because we genuinely couldn't
+// read it (blocked/seen.blocked). Matches pillarEarnedMax's own
+// exclusion rule (!d.na && !d.blocked) exactly, so the header and the
+// gate strip — which also reads pillarEarnedMax via the same `tv` —
+// can never disagree (one shared computed source, by construction).
+function trueValueNotMeasurableCount(pillars) {
+  const naCount = (pillars.true_value?.dimensions || []).filter((d) => d.na).length
+  return naCount + blockedTrueValueDims(pillars).length
 }
 
 function PillarSegmentedBar({ pillars }) {
@@ -400,6 +424,39 @@ function _attemptsPhrase(bannerFacts) {
   return ` (${n} attempt${n === 1 ? '' : 's'}${robotsNote})`
 }
 
+// Part 2 (P4.b), state/kind-aware (N4): the Sephora fix — whether
+// agents "would hit the same wall" stops being an inference the
+// instant the fetch probe has an answer. Nothing is appended when the
+// probe hasn't run yet or came back inconclusive (bannerFacts.
+// fetch_probe is only ever set by public_lite.py on a decisive
+// outcome).
+//
+// N4: the "wall appears specific" claim only makes sense when there
+// genuinely WAS a wall (status === 'blocked') — it renders nowhere
+// else. The no-product-pages-found state gets its own honest,
+// sampling-scoped sentence instead: the probe proves the page exists,
+// it just says nothing about why OUR sampler missed it. The generic
+// unreachable fallback (no degraded_reason at all) gets neither claim
+// when the probe succeeded — there's no "wall" and no "sampler miss"
+// to honestly describe, only total non-response. The could-not-access
+// direction is universally true regardless of state, so it always
+// renders.
+function _fetchProbeSentence(bannerFacts, degradedReason, status) {
+  const probe = bannerFacts?.fetch_probe
+  if (!probe) return ''
+  if (!probe.agent_could_access) {
+    return " It reported it couldn't access the page either."
+  }
+  if (degradedReason === 'no_product_pages_found') {
+    const kindPhrase = probe.kind === 'store_root' ? 'your homepage' : 'your product page'
+    return ` ChatGPT opened ${kindPhrase} fine — the pages exist; our sampler couldn't locate them this run.`
+  }
+  if (status === 'blocked') {
+    return ' ChatGPT opened it fine — the wall appears specific to unidentified readers like ours.'
+  }
+  return ''
+}
+
 function DegradedRunBanner({ status, degradedReason, bannerFacts }) {
   if (status !== 'blocked' && status !== 'failed') return null
 
@@ -410,10 +467,16 @@ function DegradedRunBanner({ status, degradedReason, bannerFacts }) {
   } else if (status === 'blocked') {
     const refusal = bannerFacts?.refusal
     const verb = refusal === '403' ? '403-refused' : refusal === '429' ? 'rate-limited' : 'blocked'
-    message = `Your site ${verb} our identified reader on every page we tried${_attemptsPhrase(bannerFacts)}. We can only measure our own reader — but an edge this strict is worth verifying against the agents you care about.`
+    // W6: one template, one conditional — bannerFacts.signed comes
+    // straight from engine.py's signing.is_signing_enabled() snapshot
+    // for this run (public_lite.py merges it in unconditionally), the
+    // same flag scorer.py's own evidence lines already read.
+    const readerPhrase = bannerFacts?.signed ? 'our cryptographically verified reader (Web Bot Auth)' : 'our identified reader'
+    message = `Your site ${verb} ${readerPhrase} on every page we tried${_attemptsPhrase(bannerFacts)}. We can only measure our own reader — but an edge this strict is worth verifying against the agents you care about.`
   } else {
     message = "We couldn't finish reading your site this time — nothing could be measured on-site. We'll try again on your next diagnostic."
   }
+  message += _fetchProbeSentence(bannerFacts, degradedReason, status)
 
   return (
     <LightCard>
@@ -961,13 +1024,17 @@ function classifySeenSaidQuadrant(seen, said) {
 
 // Aggregate seen/said totals across the True Value pillar's dimensions —
 // member_value is excluded entirely when na (nothing to aggregate, same
-// exclusion the pillar's own earned/max total already applies), and a
-// guard-na said sub-lens contributes nothing to the said side (an
+// exclusion the pillar's own earned/max total already applies), a
+// blocked dimension is ALSO excluded entirely (N3 fix: its seen.max is
+// its real registry weight even though the dimension scored zero — left
+// in, it silently inflates the quadrant denominator with 0 earned,
+// misreading "we never got to check" as "little encoded to cite"), and
+// a guard-na said sub-lens contributes nothing to the said side (an
 // unmeasured outcome isn't a zero one).
 function trueValueAggregateSeenSaid(dimensions) {
   const totals = { seen: { earned: 0, max: 0 }, said: { earned: 0, max: 0 } }
   dimensions.forEach((d) => {
-    if (d.na) return
+    if (d.na || d.blocked || d.seen?.blocked) return
     if (d.seen) { totals.seen.earned += d.seen.earned; totals.seen.max += d.seen.max }
     if (d.said && !d.said.na) { totals.said.earned += d.said.earned; totals.said.max += d.said.max }
   })
@@ -1065,6 +1132,19 @@ function TrueValueSection({ report }) {
   const footerPayoff = trueValueFooterPayoff(report)
   const fixPointer = trueValueFixPointer(report)
   const tv = pillarEarnedMax(trueValue)
+  // N2: tv.max is already the APPLICABLE max (pillarEarnedMax excludes
+  // na/blocked dims) — the header must read that, never the nominal
+  // registry weight, or an unmeasured run silently looks like a failing
+  // score out of a denominator that was never actually in play this run.
+  const notMeasurableCount = trueValueNotMeasurableCount(report.pillars)
+  // N3: once ANY encode wing is blocked, the quadrant classifier above
+  // (now correctly excluding blocked dims from its own aggregate) has
+  // nothing genuinely measured to classify — its default fallback reads
+  // 'encoding_gap', an active claim ("little encoded to cite") this run
+  // never actually checked. UNVERIFIED overrides both the chip and the
+  // closing line; the competitor line (footerPayoff) is unrelated to
+  // encoding and stays exactly as it was.
+  const unverified = anyTrueValueEncodeBlocked(report.pillars)
 
   return (
     <DarkCard id="tv" style={{ background: 'var(--accent)' }} className="lite-v4-tv">
@@ -1075,7 +1155,8 @@ function TrueValueSection({ report }) {
               so both lines stay full white, differentiated by size only
               (never SectionHeader's inv mode, which uses --text-inv-2). */}
           <div className="lite-mono" style={{ fontSize: 10.5, letterSpacing: '0.12em', color: '#fff', textTransform: 'uppercase' }}>
-            {PILLAR_NAMES[PILLAR_TRUE_VALUE]} · {formatScore(tv.earned)}/{formatScore(pillarNominalWeight(PILLAR_TRUE_VALUE))} · only we score this
+            {PILLAR_NAMES[PILLAR_TRUE_VALUE]} · {formatScore(tv.earned)}/{formatScore(tv.max)} applicable
+            {notMeasurableCount > 0 && ` · ${notMeasurableCount} not measurable this run`} · only we score this
           </div>
           <div className="lite-headline" style={{ color: '#fff', marginTop: 2 }}>The value only we score</div>
         </div>
@@ -1083,7 +1164,7 @@ function TrueValueSection({ report }) {
           className="lite-mono"
           style={{ background: '#fff', color: 'var(--bad)', fontSize: 10, letterSpacing: '0.1em', fontWeight: 700, padding: '4px 12px', borderRadius: 999 }}
         >
-          VERDICT · {QUADRANT_LABEL[quadrant]}
+          VERDICT · {unverified ? 'UNVERIFIED THIS RUN' : QUADRANT_LABEL[quadrant]}
         </span>
       </div>
 
@@ -1108,7 +1189,13 @@ function TrueValueSection({ report }) {
       <VerdictGateStrip pillars={report.pillars} />
 
       <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.25)', display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', fontSize: 12.5, color: '#fff' }}>
-        <span><strong>{SEEN_SAID_QUADRANT_COPY[quadrant]}</strong> {footerPayoff}</span>
+        <span>
+          <strong>
+            {unverified
+              ? "We couldn't read your pages to verify encoding this run — and agents aren't citing your value either."
+              : SEEN_SAID_QUADRANT_COPY[quadrant]}
+          </strong> {footerPayoff}
+        </span>
         {fixPointer && <span className="lite-mono" style={{ fontSize: 10, letterSpacing: '0.08em' }}>{fixPointer}</span>}
       </div>
     </DarkCard>
@@ -1293,11 +1380,58 @@ function ScoredCaption({ segments }) {
   )
 }
 
+// Agent Access Matrix (Part 1, M4): a compact per-agent table inside the
+// Agent Access dimension's own HOW IT'S SCORED panel — never a scoring
+// input, purely the report making a receipt-backed claim ("here's what
+// your robots.txt actually says") visible. rows come straight from
+// report.scan.agent_access_matrix (apps/pipeline/scan/agent_access_
+// matrix.py); each row's `rule` (the matched robots.txt line, when one
+// matched) is the hover/secondary text behind the state glyph.
+const AGENT_MATRIX_GLYPH = { allowed: '✓', blocked: '✕', partial: '±', unknown: '—' }
+
+function AgentAccessMatrixTable({ rows }) {
+  if (!rows || rows.length === 0) return null
+  return (
+    <div style={{ gridColumn: '1 / -1', marginTop: 4 }}>
+      <span className="lite-v4-meth-k">AGENT ACCESS MATRIX</span>
+      <div className="lite-agent-matrix-scroll">
+        <table className="lite-agent-matrix">
+          <thead>
+            <tr>
+              <th>AGENT</th>
+              <th>WHO IT SERVES</th>
+              <th>YOUR PRODUCT PAGES</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const state = row.product_pages || 'unknown'
+              const glyph = AGENT_MATRIX_GLYPH[state] || '—'
+              return (
+                <tr key={row.agent}>
+                  <td className="lite-mono">{row.agent}</td>
+                  <td>{row.platform} · {row.role}</td>
+                  <td className="lite-mono" title={row.rule || undefined}>
+                    <i aria-hidden="true">{glyph}</i>{state}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <span className="lite-v4-mcap" style={{ display: 'block', marginTop: 6 }}>
+        Read from your robots.txt — each platform's crawlers are governed separately.
+      </span>
+    </div>
+  )
+}
+
 // Report redesign (Part 3, M2): "open" is a controlled prop, not local
 // state — the parent section owns which ONE row's panel is open (see
 // useSingleOpenAccordion below), so expanding a second row's panel
 // always collapses whichever one was open before it, section-wide.
-function DimensionRowV4({ dimension, evOverride, siteOnly, naDecision, naQuote, open, onToggleOpen }) {
+function DimensionRowV4({ dimension, evOverride, siteOnly, naDecision, naQuote, open, onToggleOpen, agentAccessMatrix }) {
   const registryDim = DIMENSIONS_BY_CODE[dimension.code]
   if (!registryDim) return null
 
@@ -1415,6 +1549,7 @@ function DimensionRowV4({ dimension, evOverride, siteOnly, naDecision, naQuote, 
                 <ScoredCaption segments={registryDim.scoredCaption} />
               )}
             </div>
+            {dimension.code === 'agent_access' && <AgentAccessMatrixTable rows={agentAccessMatrix} />}
           </>
         )}
       </div>
@@ -1429,10 +1564,13 @@ function DimensionRowV4({ dimension, evOverride, siteOnly, naDecision, naQuote, 
 // DimensionRowV4 used everywhere else (live pips/grid, the checks[]
 // panel behind HOW IT'S SCORED) — no bespoke tone-bar rendering.
 
-function AccessibilityTile({ dimension, open, onToggleOpen }) {
+function AccessibilityTile({ dimension, open, onToggleOpen, agentAccessMatrix }) {
   return (
     <div style={{ background: 'var(--paper)', borderRadius: 12, padding: '4px 12px 12px' }}>
-      <DimensionRowV4 dimension={dimension} open={open} onToggleOpen={onToggleOpen} />
+      <DimensionRowV4
+        dimension={dimension} open={open} onToggleOpen={onToggleOpen}
+        agentAccessMatrix={dimension.code === 'agent_access' ? agentAccessMatrix : undefined}
+      />
       {dimension.linked && <Chip tone="accent">LINKED · {dimension.linked.reason.toUpperCase()}</Chip>}
     </div>
   )
@@ -1455,6 +1593,7 @@ function AccessibilityCardV3({ report }) {
           <AccessibilityTile
             key={d.code} dimension={d}
             open={accordion.openCode === d.code} onToggleOpen={() => accordion.toggle(d.code)}
+            agentAccessMatrix={report.scan?.agent_access_matrix}
           />
         ))}
       </div>

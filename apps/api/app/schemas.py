@@ -788,8 +788,18 @@ class PublicLiteScan(BaseModel):
     fault), or "unreachable" (total network/DNS failure, nothing
     responded at all). degraded_banner_facts carries the dynamic facts
     the report's first-person banner fills in (refusal type, attempt
-    count, whether robots.txt was included, or sitemaps read) — the
-    banner's own static wording lives in the frontend.
+    count, whether robots.txt was included, or sitemaps read, plus an
+    optional `fetch_probe` sub-dict — Part 2, P4.b — merged in at
+    report-build time since the probe runs after the scan writes its
+    own banner facts) — the banner's own static wording lives in the
+    frontend.
+
+    Part 1 (M1-M4): agent_access_matrix is the per-agent robots.txt
+    table (apps/pipeline/scan/agent_access_matrix.py) — populated for
+    both 'complete' and degraded statuses (Agent Access is real-scored
+    on both, see engine.py's S4/M1-M5 comments), null only when no scan
+    row exists at all or under an older scorer_version. No scoring
+    impact — evidence/table only.
     """
     status: str
     total_score: Optional[int] = None
@@ -801,6 +811,7 @@ class PublicLiteScan(BaseModel):
     pages_fetched: List[dict] = []
     degraded_reason: Optional[str] = None
     degraded_banner_facts: Optional[dict] = None
+    agent_access_matrix: Optional[List[dict]] = None
 
 
 class PublicLiteVisibilityMentionRate(BaseModel):

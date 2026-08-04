@@ -92,7 +92,7 @@ def db(monkeypatch):
                 id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, input_url TEXT,
                 status TEXT DEFAULT 'pending', total_score INTEGER,
                 integrity_capped BOOLEAN DEFAULT 0, dimensions TEXT, pages_fetched TEXT,
-                membership_probe TEXT, revenue_probe TEXT,
+                membership_probe TEXT, revenue_probe TEXT, fetch_probe TEXT,
                 error TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
             )
         """)
@@ -175,6 +175,23 @@ def _no_revenue_probe_call(monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _no_fetch_probe_call(monkeypatch):
+    """
+    Part 2 (P1): process_lite_requests calls generation.fetch_probe.
+    probe_fetch after the revenue probe, but ONLY when the scan
+    returned a fetch_probe_url — _make_scan_result()'s defaults leave
+    that field None, so most tests never actually invoke this at all.
+    Defaulting it here anyway (same convention as the other two
+    probes) keeps any test that DOES set fetch_probe_url from making a
+    real OpenAI call by accident.
+    """
+    monkeypatch.setattr(
+        "generation.fetch_probe.probe_fetch",
+        lambda *a, **k: {"outcome": "inconclusive", "url": None, "price": None, "quote": None, "note": None},
+    )
+
+
 def _insert_pending(conn, token="a1b2c3d4e5f6", brand="Acme", competitors=None, store_url=None):
     conn.exec_driver_sql(
         "INSERT INTO soa_lite_requests (token, brand_name, competitor_names, store_url, status) "
@@ -211,6 +228,15 @@ def _membership_probe_by_token(conn, token):
 def _revenue_probe_by_token(conn, token):
     row = conn.exec_driver_sql(
         "SELECT revenue_probe FROM soa_lite_scan_results "
+        "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = ?)",
+        (token,),
+    ).fetchone()
+    return json.loads(row[0]) if row and row[0] else None
+
+
+def _fetch_probe_by_token(conn, token):
+    row = conn.exec_driver_sql(
+        "SELECT fetch_probe FROM soa_lite_scan_results "
         "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = ?)",
         (token,),
     ).fetchone()
@@ -720,6 +746,112 @@ def test_revenue_probe_is_metrically_invisible_query_count_unaffected(db):
         worker.process_lite_requests()
 
     assert _query_count(db.connect()) == LITE_QUERY_COUNT
+
+
+# ── Part 2 (P1): fetch probe ─────────────────────────────────────────────
+
+def test_fetch_probe_result_persisted_when_scan_returns_a_probe_url(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    scan_result = _make_scan_result(
+        fetch_probe_url="https://acme.example.com/products/tee", fetch_probe_kind="product_page",
+    )
+    probe_result = {
+        "outcome": "quoted_price", "url": "https://acme.example.com/products/tee", "kind": "product_page",
+        "price": "$29.99", "quote": "Classic Tee — $29.99", "note": "Found it.",
+    }
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
+         patch("scan.engine.run_scan", return_value=scan_result), \
+         patch("generation.fetch_probe.probe_fetch", return_value=probe_result) as mock_probe:
+        worker.process_lite_requests()
+
+    mock_probe.assert_called_once_with(
+        "https://acme.example.com/products/tee", "test-key", kind="product_page",
+    )
+    assert _fetch_probe_by_token(db.connect(), "a1b2c3d4e5f6") == probe_result
+
+
+def test_fetch_probe_skipped_when_scan_returns_no_probe_url(db):
+    """No store_url at all -> the scan itself is skipped -> _run_lite_scan
+    returns None -> nothing for the fetch probe to open, unlike
+    membership/revenue which ask about the brand generally regardless."""
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])  # no store_url
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
+         patch("generation.fetch_probe.probe_fetch") as mock_probe:
+        worker.process_lite_requests()
+
+    mock_probe.assert_not_called()
+    assert _fetch_probe_by_token(db.connect(), "a1b2c3d4e5f6") is None
+
+
+def test_fetch_probe_failure_never_blocks_the_run(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    scan_result = _make_scan_result(fetch_probe_url="https://acme.example.com/products/tee")
+
+    def _raise(*a, **k):
+        raise RuntimeError("boom")
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
+         patch("scan.engine.run_scan", return_value=scan_result), \
+         patch("generation.fetch_probe.probe_fetch", _raise):
+        worker.process_lite_requests()
+
+    status, *_ = _lite_row_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert status == "running"  # request itself still succeeded
+    assert _fetch_probe_by_token(db.connect(), "a1b2c3d4e5f6") is None  # never written
+
+
+def test_fetch_probe_is_metrically_invisible_query_count_unaffected(db):
+    """The fetch probe is not one of the LITE_QUERY_COUNT tracked
+    queries — it never touches soa_queries/soa_runs, so soa_queries' row
+    count is exactly the fixed-size study regardless of what the probe
+    returns."""
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    scan_result = _make_scan_result(fetch_probe_url="https://acme.example.com/products/tee")
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
+         patch("scan.engine.run_scan", return_value=scan_result), \
+         patch("generation.fetch_probe.probe_fetch",
+               return_value={"outcome": "quoted_price", "url": "https://acme.example.com/products/tee",
+                              "price": "$29.99", "quote": "q", "note": "n"}):
+        worker.process_lite_requests()
+
+    assert _query_count(db.connect()) == LITE_QUERY_COUNT
+
+
+def test_fetch_probe_outcome_never_changes_the_scan_row_score(db):
+    """Scoring parity: the fetch probe writes to its OWN column via a
+    separate UPDATE statement, after the scan row's dimensions/
+    total_score are already committed — no probe outcome can touch
+    them, by construction. Two runs differing only in the mocked
+    probe's outcome must persist byte-identical scan status/score."""
+    scan_result = _make_scan_result(fetch_probe_url="https://acme.example.com/products/tee")
+
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
+         patch("scan.engine.run_scan", return_value=scan_result), \
+         patch("generation.fetch_probe.probe_fetch",
+               return_value={"outcome": "could_not_access", "url": "u", "price": None, "quote": None, "note": None}):
+        worker.process_lite_requests()
+    row_a = _scan_row_by_token(db.connect(), "a1b2c3d4e5f6")
+
+    with db.begin() as conn:
+        _insert_pending(conn, token="b2c3d4e5f6a1", competitors=["Rival"], store_url="https://acme.example.com")
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
+         patch("scan.engine.run_scan", return_value=scan_result), \
+         patch("generation.fetch_probe.probe_fetch",
+               return_value={"outcome": "quoted_price", "url": "u", "price": "$99", "quote": "q", "note": "n"}):
+        worker.process_lite_requests()
+    row_b = _scan_row_by_token(db.connect(), "b2c3d4e5f6a1")
+
+    assert row_a[:5] == row_b[:5]  # status, total_score, integrity_capped, dimensions, pages_fetched
 
 
 def test_sweep_waits_when_scan_still_running_within_window(db):

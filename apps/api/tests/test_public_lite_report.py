@@ -51,7 +51,7 @@ def db(monkeypatch):
             CREATE TABLE soa_lite_scan_results (
                 id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, status TEXT,
                 total_score INTEGER, integrity_capped BOOLEAN, dimensions TEXT, pages_fetched TEXT,
-                membership_probe TEXT, revenue_probe TEXT
+                membership_probe TEXT, revenue_probe TEXT, fetch_probe TEXT
             )
         """)
         conn.exec_driver_sql("""
@@ -478,16 +478,17 @@ def _lite_request_id(conn, token):
 
 def _seed_scan_row(
     conn, lite_request_id, status="complete", total_score=None,
-    integrity_capped=False, dimensions=None, pages_fetched=None,
+    integrity_capped=False, dimensions=None, pages_fetched=None, fetch_probe=None,
 ):
     conn.exec_driver_sql(
         "INSERT INTO soa_lite_scan_results "
-        "(lite_request_id, status, total_score, integrity_capped, dimensions, pages_fetched) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "(lite_request_id, status, total_score, integrity_capped, dimensions, pages_fetched, fetch_probe) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
         (
             lite_request_id, status, total_score, integrity_capped,
             json.dumps(dimensions) if dimensions is not None else None,
             json.dumps(pages_fetched) if pages_fetched is not None else None,
+            json.dumps(fetch_probe) if fetch_probe is not None else None,
         ),
     )
 
@@ -643,6 +644,208 @@ def test_scorer_version_3_row_has_deprecated_always_empty_cap_fields(db):
         assert d["cap_basis"] == []
 
 
+# ─── Part 1 (M4) / Part 2 (P4.b): Agent Access Matrix + fetch probe ──────
+
+_SAMPLE_MATRIX = [
+    {"agent": "GPTBot", "platform": "OpenAI", "role": "Model training",
+     "root": "blocked", "product_pages": "blocked", "rule": "Disallow: /"},
+    {"agent": "ClaudeBot", "platform": "Anthropic", "role": "Crawling",
+     "root": "allowed", "product_pages": "allowed", "rule": "Allow: /"},
+]
+
+
+def test_agent_access_matrix_reaches_scan_payload_when_complete(db):
+    dimensions = dict(_V3_CRAWL_DIMENSIONS)
+    dimensions["agent_access_matrix"] = _SAMPLE_MATRIX
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="v3matrix", dimensions=dimensions)
+
+    result = public_lite.get_lite_report("v3matrix")
+
+    assert result["scan"]["agent_access_matrix"] == _SAMPLE_MATRIX
+
+
+def test_agent_access_matrix_reaches_scan_payload_when_degraded(db):
+    dimensions = {
+        "degraded_reason": "blocked",
+        "degraded_banner_facts": {"refusal": "403", "attempts": 3, "robots_included": True},
+        "agent_access_matrix": _SAMPLE_MATRIX,
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="blocked", total_score=None, dimensions=dimensions)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert result["scan"]["status"] == "blocked"
+    assert result["scan"]["agent_access_matrix"] == _SAMPLE_MATRIX
+
+
+def test_w6_signing_enabled_merges_true_into_degraded_banner_facts(db):
+    dimensions = {
+        "degraded_reason": "blocked",
+        "degraded_banner_facts": {"refusal": "403", "attempts": 3, "robots_included": True},
+        "signing_enabled": True,
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="blocked", total_score=None, dimensions=dimensions)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert result["scan"]["degraded_banner_facts"]["signed"] is True
+
+
+def test_w6_signing_disabled_or_absent_merges_false_into_degraded_banner_facts(db):
+    dimensions = {
+        "degraded_reason": "blocked",
+        "degraded_banner_facts": {"refusal": "403", "attempts": 3, "robots_included": True},
+        # signing_enabled deliberately omitted — a pre-W6 row, honestly
+        # defaults to unsigned wording rather than raising a KeyError.
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="blocked", total_score=None, dimensions=dimensions)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert result["scan"]["degraded_banner_facts"]["signed"] is False
+
+
+def test_fetch_probe_merges_could_not_access_into_degraded_banner_facts(db):
+    dimensions = {
+        "degraded_reason": "blocked",
+        "degraded_banner_facts": {"refusal": "403", "attempts": 3, "robots_included": True},
+    }
+    fetch_probe = {
+        "outcome": "could_not_access", "url": "https://acme.example.com/products/tee", "kind": "product_page",
+        "price": None, "quote": None, "note": "Blocked.",
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="blocked", total_score=None, dimensions=dimensions, fetch_probe=fetch_probe)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert result["scan"]["degraded_banner_facts"]["fetch_probe"] == {
+        "outcome": "could_not_access", "agent_could_access": False,
+        "url": "https://acme.example.com/products/tee", "kind": "product_page",
+    }
+
+
+def test_fetch_probe_merges_agent_could_access_direction(db):
+    dimensions = {"degraded_reason": "blocked", "degraded_banner_facts": {"refusal": "429", "attempts": 5}}
+    fetch_probe = {"outcome": "quoted_price", "url": "https://acme.example.com/products/tee", "price": "$29.99", "quote": "q", "note": "n"}
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="blocked", total_score=None, dimensions=dimensions, fetch_probe=fetch_probe)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert result["scan"]["degraded_banner_facts"]["fetch_probe"]["agent_could_access"] is True
+
+
+def test_fetch_probe_kind_reaches_banner_facts_for_store_root(db):
+    """N4: the banner needs kind too, not just outcome — the frontend
+    names what was actually opened ('your homepage' vs 'your product
+    page') rather than a generic 'it'."""
+    dimensions = {"degraded_reason": "no_product_pages_found", "degraded_banner_facts": {"sitemaps_read": 2}}
+    fetch_probe = {
+        "outcome": "quoted_price", "url": "https://acme.example.com", "kind": "store_root",
+        "price": "$29.99", "quote": "q", "note": "n",
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="failed", total_score=None, dimensions=dimensions, fetch_probe=fetch_probe)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert result["scan"]["degraded_banner_facts"]["fetch_probe"]["kind"] == "store_root"
+
+
+def test_fetch_probe_inconclusive_never_merges_into_banner_facts(db):
+    dimensions = {"degraded_reason": "blocked", "degraded_banner_facts": {"refusal": "429", "attempts": 5}}
+    fetch_probe = {"outcome": "inconclusive", "url": "https://acme.example.com/products/tee", "price": None, "quote": None, "note": None}
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="blocked", total_score=None, dimensions=dimensions, fetch_probe=fetch_probe)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert "fetch_probe" not in (result["scan"]["degraded_banner_facts"] or {})
+
+
+def test_fetch_probe_evidence_reaches_price_truth_check(db):
+    fetch_probe = {
+        "outcome": "quoted_price", "url": "https://acme.example.com/products/tee", "kind": "product_page",
+        "price": "$29.99", "quote": "Classic Tee — $29.99", "note": "n",
+    }
+    dimensions = dict(_V3_CRAWL_DIMENSIONS)
+    dimensions["price_truth_seen"] = dict(
+        dimensions["price_truth_seen"],
+        evidence=[
+            "1/1 product pages expose a machine-readable price consistent with the page's own text",
+            "1/1 product pages declare priceCurrency",
+        ],
+    )
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="v3probe", dimensions=dimensions, fetch_probe=fetch_probe)
+
+    result = public_lite.get_lite_report("v3probe")
+
+    price_truth = next(d for d in result["pillars"]["true_value"]["dimensions"] if d["code"] == "price_truth")
+    price_in_code = next(c for c in price_truth["checks"] if c["code"] == "price_in_code")
+    assert price_in_code["evidence"] == "ChatGPT itself opened your product page and quoted $29.99 (/products/tee)."
+    # P4.c: state must be unchanged by the probe's evidence.
+    assert price_in_code["state"] == "pass"
+
+
+def test_fetch_probe_store_root_never_reaches_price_truth_check(db):
+    """N4 (bullet 3): a quoted_price from the STORE ROOT (no product
+    page was ever sampled) must never be presented as product-page
+    price evidence — the fact still reaches the visitor, but only via
+    the banner, labeled as the homepage."""
+    fetch_probe = {
+        "outcome": "quoted_price", "url": "https://acme.example.com", "kind": "store_root",
+        "price": "$29.99", "quote": "Starting at $29.99", "note": "n",
+    }
+    dimensions = dict(_V3_CRAWL_DIMENSIONS)
+    dimensions["price_truth_seen"] = dict(
+        dimensions["price_truth_seen"],
+        evidence=[
+            "1/1 product pages expose a machine-readable price consistent with the page's own text",
+            "1/1 product pages declare priceCurrency",
+        ],
+    )
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="v3probestore", dimensions=dimensions, fetch_probe=fetch_probe)
+
+    result = public_lite.get_lite_report("v3probestore")
+
+    price_truth = next(d for d in result["pillars"]["true_value"]["dimensions"] if d["code"] == "price_truth")
+    price_in_code = next(c for c in price_truth["checks"] if c["code"] == "price_in_code")
+    assert price_in_code["evidence"] is None
+    assert price_in_code["state"] == "pass"
+
+
+def test_agent_access_matrix_and_fetch_probe_have_no_internal_ids(db):
+    dimensions = dict(_V3_CRAWL_DIMENSIONS)
+    dimensions["agent_access_matrix"] = _SAMPLE_MATRIX
+    fetch_probe = {"outcome": "quoted_price", "url": "https://acme.example.com/products/tee", "price": "$29.99", "quote": "q", "note": "n"}
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="v3ids", dimensions=dimensions, fetch_probe=fetch_probe)
+
+    result = public_lite.get_lite_report("v3ids")
+    _scan_for_internal_ids(result)
+
+
 _FORBIDDEN_CAP_PHRASES = ("score cap", "59-point", "59 point", "capped the score", "score is capped")
 
 
@@ -674,7 +877,9 @@ _V3_CRAWL_DIMENSIONS = {
 }
 
 
-def _seed_v3_full_credit_scan(conn, token="v3full", email="visitor@example.com", dimensions=None, revenue_probe=None):
+def _seed_v3_full_credit_scan(
+    conn, token="v3full", email="visitor@example.com", dimensions=None, revenue_probe=None, fetch_probe=None,
+):
     """A current-scorer-version scan + 4 purchase-intent mentions that
     cite everything — mirrors test_lite_pillars.py's 'full credit'
     fixture, so the resulting composite/pillars are exactly known (100
@@ -700,12 +905,14 @@ def _seed_v3_full_credit_scan(conn, token="v3full", email="visitor@example.com",
     )
     rid = _lite_request_id(conn, token)
     conn.exec_driver_sql(
-        "INSERT INTO soa_lite_scan_results (lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe, revenue_probe) "
-        "VALUES (?, 'complete', 90, 0, ?, ?, ?)",
+        "INSERT INTO soa_lite_scan_results "
+        "(lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe, revenue_probe, fetch_probe) "
+        "VALUES (?, 'complete', 90, 0, ?, ?, ?, ?)",
         (
             rid, json.dumps(dimensions if dimensions is not None else _V3_CRAWL_DIMENSIONS),
             json.dumps({"result": "yes", "raw_evidence": None}),
             json.dumps(revenue_probe) if revenue_probe is not None else None,
+            json.dumps(fetch_probe) if fetch_probe is not None else None,
         ),
     )
     conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (901, 'Comparison')")
