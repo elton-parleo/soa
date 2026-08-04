@@ -37,3 +37,8 @@ Thumbs.db
 apps/pipeline/alembic/versions/*.pyc
 
 design-refs
+
+# W3: generated Web Bot Auth key directory document — regenerated from
+# whatever BOT_SIGNING_KEY is live in the environment (make keydirectory),
+# never committed (see apps/pipeline/scripts/generate_key_directory.py).
+apps/pipeline/keydirectory/

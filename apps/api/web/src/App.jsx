@@ -11,6 +11,7 @@ import StudyLibrary      from './components/StudyLibrary.jsx'
 import StudyDetail      from './components/StudyDetail.jsx'
 import LiteWidget        from './lite/LiteWidget.jsx'
 import LandingPage       from './lite/LandingPage.jsx'
+import BotsPage          from './lite/BotsPage.jsx'
 
 // ─── Read initial view from URL hash on page load ────────────────────────────
 function getInitialView() {
@@ -250,6 +251,12 @@ export default function App() {
   // /lite (see above); /lite itself is untouched for existing embeds.
   if (pathname === '/scan') {
     return <LandingPage navigate={navigate} />
+  }
+
+  // W4: ParleoAuditBot's public documentation page — same pre-auth,
+  // standalone treatment as /scan/lite above.
+  if (pathname === '/bots') {
+    return <BotsPage />
   }
 
   // Stage 9: unique, revisitable report URLs. /report alone (no token

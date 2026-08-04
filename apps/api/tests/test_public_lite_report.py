@@ -682,6 +682,39 @@ def test_agent_access_matrix_reaches_scan_payload_when_degraded(db):
     assert result["scan"]["agent_access_matrix"] == _SAMPLE_MATRIX
 
 
+def test_w6_signing_enabled_merges_true_into_degraded_banner_facts(db):
+    dimensions = {
+        "degraded_reason": "blocked",
+        "degraded_banner_facts": {"refusal": "403", "attempts": 3, "robots_included": True},
+        "signing_enabled": True,
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="blocked", total_score=None, dimensions=dimensions)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert result["scan"]["degraded_banner_facts"]["signed"] is True
+
+
+def test_w6_signing_disabled_or_absent_merges_false_into_degraded_banner_facts(db):
+    dimensions = {
+        "degraded_reason": "blocked",
+        "degraded_banner_facts": {"refusal": "403", "attempts": 3, "robots_included": True},
+        # signing_enabled deliberately omitted — a pre-W6 row, honestly
+        # defaults to unsigned wording rather than raising a KeyError.
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="blocked", total_score=None, dimensions=dimensions)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert result["scan"]["degraded_banner_facts"]["signed"] is False
+
+
 def test_fetch_probe_merges_could_not_access_into_degraded_banner_facts(db):
     dimensions = {
         "degraded_reason": "blocked",

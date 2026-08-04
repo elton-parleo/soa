@@ -22,3 +22,7 @@ httpcore>=1.0.0,<2.0.0
 
 # HTML parsing — Agent Scan structured-data extraction (scan/structured_data.py)
 beautifulsoup4>=4.12,<5.0
+
+# Web Bot Auth request signing (scan/signing.py) — Ed25519 / RFC 9421.
+# Same package + version floor already used in apps/api/requirements.txt.
+cryptography>=41.0.0

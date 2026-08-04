@@ -467,7 +467,12 @@ function DegradedRunBanner({ status, degradedReason, bannerFacts }) {
   } else if (status === 'blocked') {
     const refusal = bannerFacts?.refusal
     const verb = refusal === '403' ? '403-refused' : refusal === '429' ? 'rate-limited' : 'blocked'
-    message = `Your site ${verb} our identified reader on every page we tried${_attemptsPhrase(bannerFacts)}. We can only measure our own reader — but an edge this strict is worth verifying against the agents you care about.`
+    // W6: one template, one conditional — bannerFacts.signed comes
+    // straight from engine.py's signing.is_signing_enabled() snapshot
+    // for this run (public_lite.py merges it in unconditionally), the
+    // same flag scorer.py's own evidence lines already read.
+    const readerPhrase = bannerFacts?.signed ? 'our cryptographically verified reader (Web Bot Auth)' : 'our identified reader'
+    message = `Your site ${verb} ${readerPhrase} on every page we tried${_attemptsPhrase(bannerFacts)}. We can only measure our own reader — but an edge this strict is worth verifying against the agents you care about.`
   } else {
     message = "We couldn't finish reading your site this time — nothing could be measured on-site. We'll try again on your next diagnostic."
   }

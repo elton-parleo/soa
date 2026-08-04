@@ -25,6 +25,14 @@ beforeEach(() => {
   setPath('/')
 })
 
+describe('App — /bots routing (W4)', () => {
+  it('renders BotsPage, unauthenticated, same pre-auth treatment as /scan and /lite', () => {
+    setPath('/bots')
+    render(<App />)
+    expect(screen.getByRole('heading', { name: 'ParleoAuditBot' })).toBeInTheDocument()
+  })
+})
+
 describe('App — /report/{token} routing renders each U1 state', () => {
   it('running request -> the live, resumable progress view', async () => {
     setPath('/report/tok-running')

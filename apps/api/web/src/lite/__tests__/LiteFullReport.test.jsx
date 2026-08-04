@@ -773,6 +773,36 @@ describe('LiteFullReport — degraded-run banner (fetch-resilience stage, hotfix
     expect(screen.getByText(/Your site 403-refused our identified reader on every page we tried \(3 attempts\)/)).toBeInTheDocument()
   })
 
+  // W6: one template, one conditional — bannerFacts.signed switches the
+  // reader phrase; every other word in the sentence stays the same.
+  it('W6: uses the cryptographically-verified-reader phrase when bannerFacts.signed is true', () => {
+    const report = buildV3Report({
+      scan_status: 'blocked',
+      scan: {
+        status: 'blocked', total_score: null, dimensions: [], pages_fetched: [],
+        degraded_reason: 'blocked',
+        degraded_banner_facts: { refusal: '403', attempts: 3, robots_included: false, signed: true },
+      },
+    })
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/Your site 403-refused our cryptographically verified reader \(Web Bot Auth\) on every page we tried \(3 attempts\)/)).toBeInTheDocument()
+    expect(screen.queryByText(/403-refused our identified reader/)).not.toBeInTheDocument()
+  })
+
+  it('W6: keeps the unsigned phrase when bannerFacts.signed is false or absent', () => {
+    const report = buildV3Report({
+      scan_status: 'blocked',
+      scan: {
+        status: 'blocked', total_score: null, dimensions: [], pages_fetched: [],
+        degraded_reason: 'blocked',
+        degraded_banner_facts: { refusal: '403', attempts: 3, robots_included: false, signed: false },
+      },
+    })
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/Your site 403-refused our identified reader on every page we tried \(3 attempts\)/)).toBeInTheDocument()
+    expect(screen.queryByText(/cryptographically verified/)).not.toBeInTheDocument()
+  })
+
   it('shows the S2 no-product-pages-found banner, never blaming the site', () => {
     const report = buildV3Report({
       scan_status: 'failed',

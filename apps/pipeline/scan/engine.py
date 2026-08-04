@@ -26,7 +26,7 @@ from urllib.parse import urlparse
 
 from soa_shared.scan_dimensions import DIMENSIONS_BY_CODE, SCORER_VERSION
 
-from . import scorer, site_typing
+from . import scorer, signing, site_typing
 from .agent_access_matrix import build_agent_access_matrix
 from .discovery import DiscoveryResult, discover_pages, resolve_canonical_origin
 from .fetcher import FetchBudget, fetch
@@ -464,6 +464,13 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
             for dim_key, score in discovery_surface_scores.items():
                 dimensions[dim_key] = _serialize_dim_score(score)
             dimensions["agent_access_matrix"] = agent_access_matrix
+            # W6: recorded on every run (mirrors sitemap_sampling/
+            # agent_access_matrix's own "debuggability was the point"
+            # rationale) — the one flag the report's evidence wording
+            # (scorer.py's _reader_phrase) and the degraded banner
+            # (public_lite.py) both key off, so they can never disagree
+            # about whether this run's fetches were actually signed.
+            dimensions["signing_enabled"] = signing.is_signing_enabled()
             return ScanResult(
                 status=status,
                 dimensions=dimensions,
@@ -545,6 +552,9 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         # Part 1 (M4): recorded on every run, same rationale as
         # sitemap_sampling above — additive sibling key, no migration.
         dimensions["agent_access_matrix"] = agent_access_matrix
+        # W6: see the degraded branch's identical line for why this is
+        # recorded unconditionally.
+        dimensions["signing_enabled"] = signing.is_signing_enabled()
         dimensions["price_honesty_advisory"] = {
             "scored": False,
             "would_have_capped": v5_would_have_capped,

@@ -42,6 +42,8 @@ from typing import Optional
 from soa_shared.scan_dimensions import DIMENSIONS_BY_CODE
 
 from . import site_typing
+from .fetcher import USER_AGENT
+from .signing import is_signing_enabled
 
 WEIGHTS = {
     "F1": 10, "F2": 15, "F3": 10,
@@ -69,6 +71,14 @@ PRICE_HISTORY_DEFERRED_ITEM = {
     "label": "Price-history integrity",
     "reason": "requires repeat observation over time — a single crawl cannot verify whether a 'was' price was ever real",
 }
+
+# W6: ONE template, ONE conditional — every evidence line that names
+# "our reader" this way reads the SAME flag (signing.is_signing_enabled,
+# a single process-wide source, see that module's own docstring), so a
+# run's fetches were either signed or not, never inconsistently worded
+# across evidence lines within the same scan.
+def _reader_phrase() -> str:
+    return "our cryptographically verified reader (Web Bot Auth)" if is_signing_enabled() else "our identified reader"
 
 
 @dataclass
@@ -220,7 +230,7 @@ def score_f1_agent_access(discovery, pages, divergence_evidence=()) -> Dimension
         if discovery.robot_parser is not None:
             disallowed = [
                 u for u in product_urls
-                if not discovery.robot_parser.can_fetch("ParleoScanBot/1.0", u)
+                if not discovery.robot_parser.can_fetch(USER_AGENT, u)
             ]
         if not disallowed:
             points += weight * 0.4
@@ -232,7 +242,7 @@ def score_f1_agent_access(discovery, pages, divergence_evidence=()) -> Dimension
         # an identified reader is its own notable, factual, first-
         # person observation — not just a generic "not fetchable."
         if discovery.robots_fetch.http_status == 403:
-            evidence.append("robots.txt itself refused our identified reader (HTTP 403) — a notable accessibility signal on its own")
+            evidence.append(f"robots.txt itself refused {_reader_phrase()} (HTTP 403) — a notable accessibility signal on its own")
         else:
             evidence.append(f"robots.txt not fetchable (status={discovery.robots_fetch.status})")
 

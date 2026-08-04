@@ -474,6 +474,13 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
         probe_note = _fetch_probe_banner_note(fetch_probe)
         if probe_note:
             banner_facts['fetch_probe'] = probe_note
+        # W6: whether this run's fetches were signed (Web Bot Auth) —
+        # engine.py records signing_enabled unconditionally, so this is
+        # always present (never absent-vs-false ambiguity) on any row
+        # scanned since that stage shipped; a pre-W6 row has no such
+        # key at all and defaults to False (unsigned wording), honest
+        # for a row that predates signing existing.
+        banner_facts['signed'] = bool(degraded.get('signing_enabled'))
         return PublicLiteScan(
             status=status,
             total_score=total_score,
