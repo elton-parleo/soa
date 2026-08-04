@@ -404,6 +404,76 @@ def test_member_value_na_excludes_it_entirely_from_true_value_and_composite():
     assert result["composite"] == 100
 
 
+# ─── N5: Member Value precedence (N/A -> NOT MEASURABLE -> scored) ───────
+# probe-determined N/A beats NOT MEASURABLE — inapplicability is
+# independent of the crawl. The three tiers are mutually exclusive on
+# any given row; each fixture below locks in exactly one.
+
+def test_n5_na_beats_blocked_when_probe_confirms_no_program_and_crawl_is_blocked():
+    """Tier 1 (N/A): even though the crawl-side seen half is genuinely
+    'blocked' (couldn't be read this run), the probe already confirmed
+    there's no program at all — inapplicability doesn't depend on
+    whether the crawl could read anything, so this renders N/A, never
+    NOT MEASURABLE."""
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["member_value_seen"] = {
+        "score": 0, "max": 9, "coverage": "blocked",
+        "evidence": ["the store root and every sampled product page were rate-limited or blocked this run"],
+    }
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="no",
+    )
+    assert result["member_value_na"] is True
+    member_value_row = next(d for d in result["true_value"]["dimensions"] if d["code"] == "member_value")
+    assert member_value_row["na"] is True
+    assert member_value_row.get("blocked") is not True
+
+
+def test_n5_blocked_when_probe_confirms_a_program_but_crawl_is_blocked():
+    """Tier 2 (NOT MEASURABLE): the probe confirms a program EXISTS
+    (applicable), but the crawl genuinely couldn't read anything this
+    run — a real "couldn't verify" state, distinct from N/A."""
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["member_value_seen"] = {
+        "score": 0, "max": 9, "coverage": "blocked",
+        "evidence": ["the store root and every sampled product page were rate-limited or blocked this run"],
+    }
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    assert result["member_value_na"] is False
+    member_value_row = next(d for d in result["true_value"]["dimensions"] if d["code"] == "member_value")
+    assert member_value_row["na"] is False
+    assert member_value_row["blocked"] is True
+    assert member_value_row["earned"] == 0.0
+    assert member_value_row["max"] == 0.0
+
+
+def test_n5_scored_for_real_when_crawl_succeeded_regardless_of_probe():
+    """Tier 3 (scored): the crawl itself found real credit — applicable
+    and measurable, scored normally, independent of what the probe
+    said (an 'unknown' probe result is an abstention, not a finding)."""
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["member_value_seen"] = {
+        "score": 9, "max": 9, "coverage": "full",
+        "evidence": ["1/1 product pages expose member/tier pricing in structured data"],
+    }
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="unknown",
+    )
+    assert result["member_value_na"] is False
+    member_value_row = next(d for d in result["true_value"]["dimensions"] if d["code"] == "member_value")
+    assert member_value_row["na"] is False
+    assert member_value_row.get("blocked") is not True
+    assert member_value_row["earned"] > 0.0
+
+
 # Stage 21 (bug fix 3): the applicable path only ever showed crawl
 # evidence, silently dropping the probe finding that made the dimension
 # applicable in the first place when the crawl itself found nothing.

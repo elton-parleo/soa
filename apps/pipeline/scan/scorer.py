@@ -206,7 +206,7 @@ def _parse_date(value) -> Optional[datetime]:
         return None
 
 
-def score_f1_agent_access(discovery, pages) -> DimensionScore:
+def score_f1_agent_access(discovery, pages, divergence_evidence=()) -> DimensionScore:
     weight = WEIGHTS["F1"]
     evidence = []
     points = 0.0
@@ -244,6 +244,16 @@ def score_f1_agent_access(discovery, pages) -> DimensionScore:
     robots_excluded = discovery.sitemap_sampling.get("robots_excluded", 0)
     if robots_excluded:
         evidence.append(f"robots.txt disallows {robots_excluded} candidate product page(s) to our reader")
+
+    # M5 (Agent Access Matrix, Part 1): a named agent's own robots.txt
+    # group disagreeing with the general '*' group — "blocking 2-4
+    # crawlers without knowing" — is a receipt-backed finding on its
+    # own. Computed by agent_access_matrix.py and passed in by the
+    # caller (engine.py, which also serializes the full matrix onto
+    # dimensions["agent_access_matrix"]) rather than recomputed here, so
+    # the matrix is built exactly once per scan. No scoring impact —
+    # evidence only.
+    evidence.extend(divergence_evidence)
 
     blocked_pages = [p for p in pages if p.fetch_result.status == "blocked"]
     if not blocked_pages:
@@ -829,11 +839,12 @@ def _combine_coverage(*scores: DimensionScore) -> str:
     return "partial" if any(s.coverage == "partial" for s in scores) else "full"
 
 
-def score_agent_access(discovery, pages) -> DimensionScore:
+def score_agent_access(discovery, pages, divergence_evidence=()) -> DimensionScore:
     """Stage 16: v2's score_f1_agent_access, rescaled onto the v3
-    agent_access dimension's weight."""
+    agent_access dimension's weight. divergence_evidence: see M5 in
+    score_f1_agent_access — threaded through unchanged."""
     return _rescale_dimension_score(
-        score_f1_agent_access(discovery, pages),
+        score_f1_agent_access(discovery, pages, divergence_evidence=divergence_evidence),
         DIMENSIONS_BY_CODE["agent_access"].weight,
     )
 

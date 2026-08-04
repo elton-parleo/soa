@@ -332,7 +332,7 @@ def _decode_json_field(value, default):
 def _fetch_scan_row(conn, lite_request_id: int):
     return conn.execute(text("""
         SELECT status, total_score, integrity_capped, dimensions, pages_fetched,
-               membership_probe, revenue_probe
+               membership_probe, revenue_probe, fetch_probe
         FROM soa_lite_scan_results
         WHERE lite_request_id = :rid
     """), {"rid": lite_request_id}).fetchone()
@@ -409,6 +409,27 @@ def _fetch_run_signals(conn, cycle_id: int, primary_entity_id: int) -> list:
     return signals
 
 
+def _fetch_probe_banner_note(fetch_probe: dict) -> dict | None:
+    """
+    Part 2 (P4.b), kind-aware (N4): the fact the blocked/degraded banner
+    needs to stop "agents would hit the same wall" from being an
+    inference — whether ChatGPT itself could open the same URL our
+    reader tried, AND which URL that was (product page vs the store
+    root) so the frontend can name it honestly instead of a generic
+    "it". None when the probe hasn't run yet or came back inconclusive
+    (nothing confident enough to append to the banner).
+    """
+    outcome = (fetch_probe or {}).get("outcome")
+    if outcome not in ("quoted_price", "opened_no_price", "could_not_access"):
+        return None
+    return {
+        "outcome": outcome,
+        "agent_could_access": outcome in ("quoted_price", "opened_no_price"),
+        "url": fetch_probe.get("url"),
+        "kind": fetch_probe.get("kind"),
+    }
+
+
 def _build_scan_payload(scan_row, linked: dict) -> dict | None:
     """
     Shapes one soa_lite_scan_results row into the public 'scan' object.
@@ -434,8 +455,10 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
     if not scan_row:
         return None
 
-    status, total_score, integrity_capped, dimensions, pages_fetched, _membership_probe, _revenue_probe = scan_row
+    (status, total_score, integrity_capped, dimensions, pages_fetched,
+     _membership_probe, _revenue_probe, fetch_probe_raw) = scan_row
     pages_fetched = _decode_json_field(pages_fetched, [])
+    fetch_probe = _decode_json_field(fetch_probe_raw, {})
 
     if status != 'complete':
         # Sitemap-sampler stage (hotfix 5, S2/S3): degraded_reason/
@@ -444,13 +467,21 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
         # decoded here just enough to surface them, never the full
         # per-dimension breakdown (that stays complete-only, unchanged).
         degraded = _decode_json_field(dimensions, {})
+        banner_facts = dict(degraded.get('degraded_banner_facts') or {})
+        # Part 2 (P4.b): the probe runs AFTER the scan writes its own
+        # banner facts (it needs the scan's own fetch_probe_url), so
+        # this is the earliest point the two can be combined.
+        probe_note = _fetch_probe_banner_note(fetch_probe)
+        if probe_note:
+            banner_facts['fetch_probe'] = probe_note
         return PublicLiteScan(
             status=status,
             total_score=total_score,
             integrity_capped=bool(integrity_capped),
             pages_fetched=pages_fetched,
             degraded_reason=degraded.get('degraded_reason'),
-            degraded_banner_facts=degraded.get('degraded_banner_facts'),
+            degraded_banner_facts=banner_facts or None,
+            agent_access_matrix=degraded.get('agent_access_matrix'),
         ).model_dump()
 
     dimensions = _decode_json_field(dimensions, {})
@@ -536,6 +567,7 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
         ).model_dump(),
         dimensions=dim_rows,
         pages_fetched=pages_fetched,
+        agent_access_matrix=dimensions.get('agent_access_matrix'),
     ).model_dump()
 
 
@@ -618,6 +650,12 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int) -> dict:
     revenue_probe = _decode_json_field(scan_row[6], {}) if scan_row else {}
     revenue_estimate_usd = revenue_probe.get('annual_revenue_usd')
 
+    # Part 2 (P4): same unconditional read as revenue_probe above — the
+    # fetch probe is a brand/URL-level OpenAI call, not gated on
+    # scan_scorable (it's meaningful evidence on a blocked run too, see
+    # _build_scan_payload's banner-merge above).
+    fetch_probe = _decode_json_field(scan_row[7], {}) if scan_row else {}
+
     # Stage 13 (W4/W5): drives the widget's solo-comparison fallback and
     # the "auto-selected by ChatGPT" methodology stamp.
     competitor_source_row = conn.execute(text("""
@@ -665,6 +703,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int) -> dict:
             run_signals=run_signals,
             membership_probe_result=membership_probe.get("result"),
             membership_probe_evidence=membership_probe.get("raw_evidence"),
+            fetch_probe_result=fetch_probe or None,
         )
 
     if pillars_payload is not None:

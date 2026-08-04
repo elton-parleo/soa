@@ -1571,6 +1571,28 @@
 .lite-v4-chip--blocked { opacity: 0.6; }
 .lite-v4-chip--blocked i { color: var(--text-2); }
 
+/* Agent Access Matrix (Part 1, M4): a compact per-agent robots.txt
+   table inside Agent Access's own HOW IT'S SCORED panel. Horizontal
+   scroll wrapper keeps the 3-column table usable at mobile 360 rather
+   than squeezing columns illegibly. */
+.lite-agent-matrix-scroll { overflow-x: auto; }
+.lite-agent-matrix { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+.lite-agent-matrix th, .lite-agent-matrix td {
+  text-align: left;
+  padding: 5px 8px;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+.lite-agent-matrix th {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  color: var(--text-2);
+  font-weight: 600;
+}
+.lite-agent-matrix td:first-child { font-weight: 600; }
+.lite-agent-matrix td i { font-style: normal; margin-right: 4px; }
+
 /* Band ladder with a floating YOU marker over the earned rung. */
 .lite-v4-dots { display: flex; gap: 10px; align-items: flex-start; margin: 2px 0 6px; }
 .lite-v4-dots .lite-v4-rung {

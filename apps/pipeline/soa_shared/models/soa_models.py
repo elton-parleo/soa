@@ -1640,6 +1640,25 @@ class SoaLiteScanResult(Base):
         ),
     )
 
+    fetch_probe = Column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Part 2 (P1/P2), kind-aware (N4): {outcome: 'quoted_price'|"
+            "'opened_no_price'|'could_not_access'|'inconclusive', url: str, "
+            "kind: 'product_page'|'store_root'|null, price: str|null, "
+            "quote: str|null, note: str|null} from a single out-of-band OpenAI "
+            "Responses-API call with the web_search tool (apps/pipeline/"
+            "generation/fetch_probe.py) — ChatGPT actually opening one sampled "
+            "product URL. Same never-throw, ONE-call (no retry) pattern. "
+            "Metrically invisible — not one of the LITE_QUERY_COUNT tracked "
+            "queries, excluded from every mention/citation denominator. Feeds "
+            "Price Truth evidence and the blocked/degraded banner (apps/api/"
+            "app/services/lite_pillars.py, apps/api/app/routers/public_lite.py); "
+            "never affects any score."
+        ),
+    )
+
     error = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())

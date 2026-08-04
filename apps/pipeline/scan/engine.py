@@ -27,6 +27,7 @@ from urllib.parse import urlparse
 from soa_shared.scan_dimensions import DIMENSIONS_BY_CODE, SCORER_VERSION
 
 from . import scorer, site_typing
+from .agent_access_matrix import build_agent_access_matrix
 from .discovery import DiscoveryResult, discover_pages, resolve_canonical_origin
 from .fetcher import FetchBudget, fetch
 from .structured_data import EXTRACTION_REV, ExtractedData, extract
@@ -57,6 +58,19 @@ class ScanResult:
     finished_at: Optional[str] = None
     error: Optional[str] = None
     cross_domain_redirect: Optional[str] = None  # Stage 11 (H3): set whenever a redirect hop stopped at a different domain
+    # Part 2 (P1): the URL worker.py's fetch probe should ask ChatGPT to
+    # open — first a successfully-fetched PDP, else the first ATTEMPTED
+    # PDP (even if it failed), else the store root. Always a real URL
+    # once discovery ran at all; None only when the scan never got that
+    # far (skipped, or an unparseable input).
+    fetch_probe_url: Optional[str] = None
+    # N4 (not-measurable consistency stage): which rung of the ladder
+    # fetch_probe_url came from — "product_page" | "store_root" — so
+    # every rendered probe line can honestly name what was actually
+    # opened ("your homepage" vs "your product page") instead of a raw
+    # URL, and a homepage price quote is never mistaken for product-
+    # page price evidence.
+    fetch_probe_kind: Optional[str] = None
 
 
 def _now() -> str:
@@ -103,6 +117,101 @@ def _gather_pages(discovery: DiscoveryResult, budget: FetchBudget) -> list:
 
         pages.append(PageScanData(candidate=candidate, fetch_result=result, extracted=extracted))
     return pages
+
+
+FETCH_PROBE_KIND_PRODUCT_PAGE = "product_page"
+FETCH_PROBE_KIND_STORE_ROOT = "store_root"
+
+
+def _choose_fetch_probe_url(canonical_origin: str, pages: list) -> tuple:
+    """Part 2 (P1), kind-aware (N4): first successfully-fetched PDP;
+    else the first ATTEMPTED PDP (present in `pages` regardless of its
+    fetch outcome — `pages` only ever contains candidates actually
+    fetched, per _gather_pages); else the store root. Always returns a
+    real (url, kind) pair — canonical_origin is a plain string by the
+    time pages exist."""
+    product_pages = [p for p in pages if p.candidate.kind == "product"]
+    fetched = next((p for p in product_pages if p.fetch_result.status == "fetched"), None)
+    if fetched:
+        return fetched.candidate.url, FETCH_PROBE_KIND_PRODUCT_PAGE
+    if product_pages:
+        return product_pages[0].candidate.url, FETCH_PROBE_KIND_PRODUCT_PAGE
+    return canonical_origin, FETCH_PROBE_KIND_STORE_ROOT
+
+
+def _compute_agent_access(discovery: DiscoveryResult, pages: list) -> tuple:
+    """
+    Part 1 (M1-M5): builds the Agent Access Matrix exactly once and
+    scores agent_access for real with its M5 divergence evidence folded
+    in. Shared by both the degraded and complete paths below — Agent
+    Access is real-scored on both (S4, hotfix 5), so the matrix and its
+    divergence evidence must be too. Returns (DimensionScore, matrix_list)
+    — the DimensionScore so callers can fold it into the same
+    applicable-sum machinery every other dimension uses; matrix_list is
+    serialized additively onto dimensions["agent_access_matrix"]
+    regardless of run status.
+    """
+    product_urls = [p.candidate.url for p in pages if p.candidate.kind == "product"]
+    matrix, divergence_evidence = build_agent_access_matrix(discovery, product_urls)
+    result = scorer.score_agent_access(discovery, pages, divergence_evidence=divergence_evidence)
+    return result, matrix
+
+
+# N1 (not-measurable plumbing consistency): per-dimension measurability
+# derives from ITS OWN required inputs, not a per-run blanket.
+# agent_access/value_protocols only ever read discovery-surface fetches
+# (robots.txt, the MCP well-known page) — never a sampled PDP
+# (value_protocols' scorer never even looks at PDPs; agent_access was
+# already real-scored on a degraded run, hotfix 5 S4). requires_pdp=False
+# dims are ALWAYS real-scored, complete run or degraded — table-driven
+# so the split is one declared fact, not per-dimension judgment calls.
+#
+# protocol_feed is deliberately NOT in this set despite ALSO reading
+# only discovery-surface fetches (llms.txt/MCP) in its own scorer logic
+# (Stage 11 T3) — it additionally depends on site_typing.classify_site,
+# which can't distinguish a genuinely brand-only site from a site that
+# 403'd EVERY fetch including robots.txt/homepage (both present as zero
+# commerce signals to classify_site). Real-scoring protocol_feed on a
+# uniform-block run would silently misreport it as "not applicable"
+# instead of "couldn't be measured" — a different, unscoped bug this
+# stage doesn't touch (site_typing's own decision table is out of
+# scope: "no methodology change"). Stays on the synthetic NOT MEASURABLE
+# path here; only value_protocols (which never consults site typing at
+# all) gets the fix.
+_DIMENSION_INPUT_MAP = (
+    # (dim_key, registry_code, is_split, requires_pdp)
+    ("agent_access", "agent_access", False, False),
+    ("catalog_context", "catalog_context", False, True),
+    ("protocol_feed", "protocol_feed", False, True),
+    ("price_truth_seen", "price_truth", True, True),
+    ("member_value_seen", "member_value", True, True),
+    ("deal_citability_seen", "deal_citability", True, True),
+    ("value_protocols_seen", "value_protocols", False, False),
+)
+
+
+def _compute_discovery_surface_scores(discovery: DiscoveryResult, pages: list) -> tuple:
+    """
+    N1: the two dimensions whose required inputs are discovery-surface
+    fetches only, with no site-typing dependency either (see
+    _DIMENSION_INPUT_MAP and its comment on why protocol_feed is
+    excluded) — real-scored unconditionally, complete run or degraded.
+    Returns ({dim_key: DimensionScore, ...}, agent_access_matrix).
+    """
+    agent_access_score, agent_access_matrix = _compute_agent_access(discovery, pages)
+    scores = {
+        "agent_access": agent_access_score,
+        "value_protocols_seen": scorer.score_value_protocols(pages),
+    }
+    return scores, agent_access_matrix
+
+
+def _serialize_dim_score(score) -> dict:
+    return {
+        "score": score.score, "max": score.max, "evidence": score.evidence, "fix": score.fix,
+        "fix_human": score.fix_human, "coverage": score.coverage,
+        "deferred_items": score.deferred_items, "cap_basis": score.cap_basis,
+    }
 
 
 def _fetch_entry(fr) -> dict:
@@ -189,23 +298,23 @@ def _derive_status(discovery: DiscoveryResult, pages: list) -> tuple:
     return STATUS_FAILED, "unreachable"
 
 
-# R2 (fetch resilience, hotfix 3): every crawl-derived dimension code,
-# paired with the soa_shared registry entry (and whether it's a seen/
-# said-split True Value dimension, whose crawl-side weight is seen_max
-# rather than the full weight) — used to synthesize an honest, fully-
-# v4-shaped dimensions dict for a run that never reached scoring
+# R2 (fetch resilience, hotfix 3), narrowed by N1: every crawl-derived
+# dimension that actually REQUIRES sampled product pages, paired with
+# the soa_shared registry entry (and whether it's a seen/said-split True
+# Value dimension, whose crawl-side weight is seen_max rather than the
+# full weight) — used to synthesize an honest, fully-v4-shaped
+# dimensions dict for a run that never reached PDP-dependent scoring
 # (BLOCKED or FAILED) so the report renders through the exact same
 # pillars/NOT-MEASURABLE machinery as a normal scan, rather than an
 # empty {} that public_lite.py/lite_pillars.py have no honest way to
-# distinguish from "never scored under this version at all."
-_DEGRADED_DIM_SPECS = (
-    ("agent_access", "agent_access", False),
-    ("catalog_context", "catalog_context", False),
-    ("protocol_feed", "protocol_feed", False),
-    ("price_truth_seen", "price_truth", True),
-    ("member_value_seen", "member_value", True),
-    ("deal_citability_seen", "deal_citability", True),
-    ("value_protocols_seen", "value_protocols", False),
+# distinguish from "never scored under this version at all." Derived
+# from _DIMENSION_INPUT_MAP rather than listed twice — agent_access/
+# protocol_feed/value_protocols_seen (requires_pdp=False) are excluded
+# here; _compute_discovery_surface_scores real-scores them instead (N1).
+_DEGRADED_DIM_SPECS = tuple(
+    (dim_key, registry_code, is_split)
+    for dim_key, registry_code, is_split, requires_pdp in _DIMENSION_INPUT_MAP
+    if requires_pdp
 )
 
 
@@ -312,20 +421,25 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         pages_fetched = [_fetch_entry(fr) for fr in discovery.all_fetches]
         pages_fetched.extend(_fetch_entry(p.fetch_result) for p in pages)
 
+        # Part 2 (P1), kind-aware (N4): computed once, regardless of what
+        # status this run lands on below — the fetch probe still has a
+        # URL worth asking ChatGPT to open even on a blocked/failed run
+        # (the ladder's own store-root fallback covers that case).
+        fetch_probe_url, fetch_probe_kind = _choose_fetch_probe_url(canonical_origin, pages)
+
         status, degraded_reason = _derive_status(discovery, pages)
 
         if status != STATUS_COMPLETE:
-            # R2 (fetch resilience, hotfix 3), refined by S2: every
-            # degraded status gets a real, fully-shaped dimensions dict
-            # (every crawl-derived dimension honestly coverage='blocked')
-            # so the report renders through the standard v4 pillars
+            # R2 (fetch resilience, hotfix 3), refined by S2 and N1:
+            # every degraded status gets a real, fully-shaped dimensions
+            # dict so the report renders through the standard v4 pillars
             # machinery instead of a bespoke legacy fallback —
-            # total_score stays None either way (R3), since nothing was
-            # actually scored. degraded_reason/degraded_banner_facts and
-            # the sitemap sampling record ride along as additive sibling
-            # keys (no migration) so the report can render the right
-            # first-person banner (S3) and the sampling decision stays
-            # debuggable regardless of outcome (S1.d).
+            # total_score stays None either way (R3), since nothing PDP-
+            # dependent was actually scored. degraded_reason/degraded_
+            # banner_facts and the sitemap sampling record ride along as
+            # additive sibling keys (no migration) so the report can
+            # render the right first-person banner (S3) and the sampling
+            # decision stays debuggable regardless of outcome (S1.d).
             if degraded_reason == "no_product_pages_found":
                 sitemaps_read = _sitemaps_read_count(discovery)
                 dimensions = _degraded_dimensions(
@@ -338,23 +452,18 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
             dimensions["degraded_reason"] = degraded_reason
             dimensions["degraded_banner_facts"] = _degraded_banner_facts(discovery, pages, degraded_reason)
             dimensions["sitemap_sampling"] = discovery.sitemap_sampling
-            # S4 (sitemap sampler, hotfix 5): Agent Access is unique
-            # among the crawl-derived dimensions on a degraded run —
-            # "can an agent even reach this site" is exactly the
-            # question a blocked/failed run just answered, not a
-            # question it left unmeasured. Scored for real (robots.txt/
-            # page-fetch data is already fully gathered by this point,
-            # regardless of overall run status) instead of synthesized
-            # as blocked — the robots-403-itself fact (Sephora) and the
-            # robots-disallow-exclusion count (S1.c) only ever reach the
-            # report through this real call.
-            agent_access_result = scorer.score_agent_access(discovery, pages)
-            dimensions["agent_access"] = {
-                "score": agent_access_result.score, "max": agent_access_result.max,
-                "evidence": agent_access_result.evidence, "fix": agent_access_result.fix,
-                "fix_human": agent_access_result.fix_human, "coverage": agent_access_result.coverage,
-                "deferred_items": agent_access_result.deferred_items, "cap_basis": agent_access_result.cap_basis,
-            }
+            # N1: agent_access/value_protocols never depend on sampled
+            # PDPs (see _DIMENSION_INPUT_MAP) — real-scored here exactly
+            # like a complete run, instead of synthesized as blocked.
+            # This is what makes the robots-403-itself fact (Sephora),
+            # the robots-disallow-exclusion count (S1.c), and an honest
+            # "no protocol profile found" 0/7 (rather than a page-
+            # sampling blanket that was never true for this dimension)
+            # reach a degraded report at all.
+            discovery_surface_scores, agent_access_matrix = _compute_discovery_surface_scores(discovery, pages)
+            for dim_key, score in discovery_surface_scores.items():
+                dimensions[dim_key] = _serialize_dim_score(score)
+            dimensions["agent_access_matrix"] = agent_access_matrix
             return ScanResult(
                 status=status,
                 dimensions=dimensions,
@@ -362,14 +471,14 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
                 started_at=started_at,
                 finished_at=_now(),
                 cross_domain_redirect=resolution.cross_domain_flag,
+                fetch_probe_url=fetch_probe_url,
+                fetch_probe_kind=fetch_probe_kind,
                 error=(
                     "site blocked automated access" if status == STATUS_BLOCKED
                     else "no product pages found to sample" if degraded_reason == "no_product_pages_found"
                     else "no pages could be fetched"
                 ),
             )
-
-        site_type_result = site_typing.classify_site(pages, discovery)
 
         # Stage 16: v3 crawl-derived dimensions — the Accessibility
         # pillar in full, plus the SEEN half of each True Value
@@ -379,21 +488,20 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         # combined with these seen scores there. Dict keys use the
         # *_seen suffix for the split dimensions so a partial (seen-only)
         # result is never mistaken for a final combined dimension score.
+        # Part 1 (M1-M5) / N1: the two discovery-surface dims (incl. the
+        # Agent Access Matrix) come from the same helper the degraded
+        # path uses — one definition of "how these two are scored," not
+        # two.
+        site_type_result = site_typing.classify_site(pages, discovery)
+        discovery_surface_scores, agent_access_matrix = _compute_discovery_surface_scores(discovery, pages)
+
         dim_scores = {
-            "agent_access": scorer.score_agent_access(discovery, pages),
+            **discovery_surface_scores,
             "catalog_context": scorer.score_catalog_context(pages, site_type_result),
             "protocol_feed": scorer.score_protocol_feed(pages, site_type_result),
             "price_truth_seen": scorer.score_price_truth_seen(pages, site_type_result),
             "member_value_seen": scorer.score_member_value_seen(pages, site_type_result),
             "deal_citability_seen": scorer.score_deal_citability_seen(pages, site_type_result),
-            # Stage 25 (Part 3): value_protocols is encode-only (seen half
-            # only, no said half exists at all — see lite_pillars.py) and
-            # reuses F3's already-fetched MCP well-known page, never a
-            # second fetch. site_type_result is deliberately not passed —
-            # unlike protocol_feed, this dimension is never 'na' on a
-            # brand-only site (V1: absence always scores 0, it never
-            # excludes the dimension).
-            "value_protocols_seen": scorer.score_value_protocols(pages),
         }
 
         # Stage 16 (Part 6): price-honesty checks are UNSCORED under v3
@@ -434,6 +542,9 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         # debuggability was the whole point ("this incident was
         # invisible in logs").
         dimensions["sitemap_sampling"] = discovery.sitemap_sampling
+        # Part 1 (M4): recorded on every run, same rationale as
+        # sitemap_sampling above — additive sibling key, no migration.
+        dimensions["agent_access_matrix"] = agent_access_matrix
         dimensions["price_honesty_advisory"] = {
             "scored": False,
             "would_have_capped": v5_would_have_capped,
@@ -451,6 +562,8 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
             started_at=started_at,
             finished_at=_now(),
             cross_domain_redirect=resolution.cross_domain_flag,
+            fetch_probe_url=fetch_probe_url,
+            fetch_probe_kind=fetch_probe_kind,
         )
 
     except Exception as e:

@@ -806,6 +806,155 @@ describe('LiteFullReport — degraded-run banner (fetch-resilience stage, hotfix
   it('S3: the retired generalization ("will hit the same wall") is gone from the source entirely', () => {
     expect(COMPONENT_SRC).not.toContain('will hit the same wall')
   })
+
+  // Part 2 (P4.b): the Sephora fix — the banner's claim about agents
+  // stops being an inference once the fetch probe has an answer.
+  it('appends the agent-got-through sentence when the fetch probe reached the page fine', () => {
+    const report = buildV3Report({
+      scan_status: 'blocked',
+      scan: {
+        status: 'blocked', total_score: null, dimensions: [], pages_fetched: [],
+        degraded_reason: 'blocked',
+        degraded_banner_facts: {
+          refusal: '403', attempts: 3, robots_included: true,
+          fetch_probe: { outcome: 'quoted_price', agent_could_access: true, url: 'https://acme.example.com/products/tee' },
+        },
+      },
+    })
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/ChatGPT opened it fine — the wall appears specific to unidentified readers like ours/)).toBeInTheDocument()
+  })
+
+  it('appends the agent-also-walled sentence when the fetch probe could not access the page either', () => {
+    const report = buildV3Report({
+      scan_status: 'blocked',
+      scan: {
+        status: 'blocked', total_score: null, dimensions: [], pages_fetched: [],
+        degraded_reason: 'blocked',
+        degraded_banner_facts: {
+          refusal: '403', attempts: 3, robots_included: true,
+          fetch_probe: { outcome: 'could_not_access', agent_could_access: false, url: 'https://acme.example.com/products/tee' },
+        },
+      },
+    })
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/It reported it couldn't access the page either/)).toBeInTheDocument()
+  })
+
+  it('appends nothing when the fetch probe has not run yet', () => {
+    const report = buildV3Report({
+      scan_status: 'blocked',
+      scan: {
+        status: 'blocked', total_score: null, dimensions: [], pages_fetched: [],
+        degraded_reason: 'blocked',
+        degraded_banner_facts: { refusal: '403', attempts: 3, robots_included: true },
+      },
+    })
+    render(<LiteFullReport report={report} />)
+    expect(screen.queryByText(/ChatGPT opened it fine/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/It reported it couldn't access the page either/)).not.toBeInTheDocument()
+  })
+
+  // N4: the no-product-pages-found state never claims "the wall appears
+  // specific" (there's no wall — our sampler just never found a page to
+  // ask about) — it gets its own honest, sampling-scoped sentence,
+  // naming the URL kind that was actually probed.
+  it('N4: no-product-pages-found + agent could access -> the sampling-honest sentence, naming the store root', () => {
+    const report = buildV3Report({
+      scan_status: 'failed',
+      scan: {
+        status: 'failed', total_score: null, dimensions: [], pages_fetched: [],
+        degraded_reason: 'no_product_pages_found',
+        degraded_banner_facts: {
+          sitemaps_read: 2,
+          fetch_probe: { outcome: 'quoted_price', agent_could_access: true, url: 'https://acme.example.com', kind: 'store_root' },
+        },
+      },
+    })
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/ChatGPT opened your homepage fine — the pages exist; our sampler couldn't locate them this run\./)).toBeInTheDocument()
+    expect(screen.queryByText(/the wall appears specific/)).not.toBeInTheDocument()
+  })
+
+  it('N4: no-product-pages-found + agent could access a product page -> names "your product page"', () => {
+    const report = buildV3Report({
+      scan_status: 'failed',
+      scan: {
+        status: 'failed', total_score: null, dimensions: [], pages_fetched: [],
+        degraded_reason: 'no_product_pages_found',
+        degraded_banner_facts: {
+          sitemaps_read: 2,
+          fetch_probe: { outcome: 'opened_no_price', agent_could_access: true, url: 'https://acme.example.com/products/tee', kind: 'product_page' },
+        },
+      },
+    })
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/ChatGPT opened your product page fine — the pages exist; our sampler couldn't locate them this run\./)).toBeInTheDocument()
+  })
+
+  it('N4: no-product-pages-found + agent also could not access -> the universal could-not-access sentence', () => {
+    const report = buildV3Report({
+      scan_status: 'failed',
+      scan: {
+        status: 'failed', total_score: null, dimensions: [], pages_fetched: [],
+        degraded_reason: 'no_product_pages_found',
+        degraded_banner_facts: {
+          sitemaps_read: 2,
+          fetch_probe: { outcome: 'could_not_access', agent_could_access: false, url: 'https://acme.example.com', kind: 'store_root' },
+        },
+      },
+    })
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/It reported it couldn't access the page either/)).toBeInTheDocument()
+    expect(screen.queryByText(/the pages exist/)).not.toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReport — Agent Access Matrix (Part 1, M4)', () => {
+  const MATRIX = [
+    { agent: 'GPTBot', platform: 'OpenAI', role: 'Model training', root: 'blocked', product_pages: 'blocked', rule: 'Disallow: /' },
+    { agent: 'OAI-SearchBot', platform: 'OpenAI', role: 'ChatGPT search index', root: 'allowed', product_pages: 'allowed', rule: 'Allow: /' },
+    { agent: 'ChatGPT-User', platform: 'OpenAI', role: 'On-demand user fetches', root: 'allowed', product_pages: 'allowed', rule: 'Allow: /' },
+    { agent: 'ClaudeBot', platform: 'Anthropic', role: 'Crawling', root: 'allowed', product_pages: 'partial', rule: null },
+    { agent: 'PerplexityBot', platform: 'Perplexity', role: 'Search index', root: 'allowed', product_pages: 'allowed', rule: 'Allow: /' },
+    { agent: 'Google-Extended', platform: 'Google', role: 'Gemini/AI training control', root: 'allowed', product_pages: 'unknown', rule: null },
+  ]
+
+  function reportWithMatrix() {
+    return buildV3Report({
+      scan: { status: 'complete', total_score: 82, integrity_capped: false, scorer_version: '3', dimensions: [], pages_fetched: [], agent_access_matrix: MATRIX },
+    })
+  }
+
+  it('renders all six agent rows with their states and the caption, inside Agent Access\'s own panel', () => {
+    render(<LiteFullReport report={reportWithMatrix()} />)
+    fireEvent.click(screen.getAllByText("HOW IT'S SCORED")[0]) // Agent Access is the first accessibility tile
+
+    for (const row of MATRIX) {
+      expect(screen.getByText(row.agent)).toBeInTheDocument()
+    }
+    expect(screen.getByText(/Read from your robots\.txt — each platform's crawlers are governed separately\./)).toBeInTheDocument()
+  })
+
+  it('never renders the matrix table on a different dimension\'s panel', () => {
+    render(<LiteFullReport report={reportWithMatrix()} />)
+    const catalogHow = screen.getAllByText("HOW IT'S SCORED")[1]
+    fireEvent.click(catalogHow)
+    const panel = catalogHow.closest('.lite-v4-dim').querySelector('.lite-v4-meth')
+    expect(within(panel).queryByText('AGENT ACCESS MATRIX')).not.toBeInTheDocument()
+  })
+
+  it('renders nothing when the scan carries no matrix (older/degraded row without one)', () => {
+    render(<LiteFullReport report={buildV3Report()} />)
+    fireEvent.click(screen.getAllByText("HOW IT'S SCORED")[0])
+    expect(screen.queryByText('AGENT ACCESS MATRIX')).not.toBeInTheDocument()
+  })
+
+  it('scrolls horizontally rather than overflowing at mobile 360px', () => {
+    const { container } = render(<LiteFullReport report={reportWithMatrix()} />)
+    fireEvent.click(screen.getAllByText("HOW IT'S SCORED")[0])
+    expect(container.querySelector('.lite-agent-matrix-scroll')).toBeInTheDocument()
+  })
 })
 
 describe('LiteFullReport — v3 hero: segmented bar + verdict (Stage 21, H1/H2)', () => {
@@ -1097,6 +1246,127 @@ describe('LiteFullReport — v3 True Value pillar verdict + footer (Stage 21, T3
     }
     render(<LiteFullReport report={buildV3Report({ pillars })} />)
     expect(screen.queryByText(/TARGET THIS PILLAR/)).not.toBeInTheDocument()
+  })
+})
+
+// ─── N1-N5: not-measurable plumbing consistency stage ───────────────────
+// blockedDim() mirrors the exact shape lite_pillars.py's build_pillars_
+// payload produces for a seen_blocked True Value dimension (earned/max
+// zeroed at the top level, blocked: true, seen carries the real weight
+// + blocked flag) — the shape trueValueAggregateSeenSaid/pillarEarnedMax/
+// anyTrueValueEncodeBlocked must all correctly exclude (N2/N3).
+function blockedDim(code, name, weight, reason) {
+  return {
+    code, name, earned: 0, max: 0, na: false, blocked: true, evidence: [],
+    seen: { earned: 0, max: weight, na: false, evidence: [reason], blocked: true },
+    said: subLens(0, 0, false, []),
+    checks: null, fix: null, fix_human: null, locked: false,
+  }
+}
+
+function buildStarvedTrueValuePillars() {
+  const accessibilityDims = [
+    pillarDim('agent_access', 'Agent Access', 6, 6, { evidence: ['robots.txt allows crawling'] }),
+    pillarDim('catalog_context', 'Catalog & Context', 0, 0, {
+      blocked: true, evidence: ["couldn't be evaluated — product pages weren't sampled this run"],
+      checks: null, fix: null, fix_human: null,
+    }),
+    pillarDim('protocol_feed', 'Protocol & Feed Presence', 3, 6, { evidence: ['no llms.txt found'] }),
+  ]
+  const trueValueDims = [
+    blockedDim('price_truth', 'Price Truth', 5, "2 of 2 product pages couldn't be evaluated — product pages weren't sampled this run"),
+    pillarDim('member_value', 'Member Value', 0, 0, {
+      na: true, evidence: ["probe: 'No, we do not have a member pricing program.'"],
+      seen: subLens(0, 9, false, ['no loyalty page found']),
+      said: subLens(0, 6, true, ['fewer than 2 mentions in the relevant opportunity set']),
+    }),
+    blockedDim('deal_citability', 'Deal Citability', 4, "2 of 2 product pages couldn't be evaluated — product pages weren't sampled this run"),
+    pillarDim('value_protocols', 'Value Protocols', 0, 7, {
+      seen: subLens(0, 7, false, ['no protocol profile found']),
+      said: null,
+    }),
+  ]
+  return {
+    visibility: {
+      score: 90, max: 100,
+      dimensions: [
+        pillarDim('share_of_mentions', 'Share of Mentions', 20, 25, { evidence: ['e'] }),
+        pillarDim('recommendation_strength', 'Recommendation Strength', 14, 15, { evidence: ['e'] }),
+      ],
+    },
+    accessibility: { score: 60, max: 100, dimensions: accessibilityDims },
+    true_value: { score: 0, max: 100, dimensions: trueValueDims },
+    member_value_na: true,
+    fixes: { visible: [], remaining_count: 0 },
+    verdict: 'NOT AGENT-READY',
+    composite: 40,
+  }
+}
+
+describe('LiteFullReport — N1-N5 not-measurable plumbing consistency', () => {
+  it('N2: True Value header reads {earned}/{applicable} applicable · {n} not measurable this run', () => {
+    const pillars = buildStarvedTrueValuePillars()
+    const { container } = render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    // True Value applicable max here is JUST value_protocols' 7 (price_truth
+    // and deal_citability blocked, member_value na) — 3 dims excluded.
+    // textTransform:uppercase is CSS-only — the actual DOM text stays
+    // title-case ("True Value"), and JSX expressions render as separate
+    // sibling text nodes, so this asserts against container.textContent
+    // rather than a single-element getByText match.
+    expect(container.textContent).toMatch(/True Value · 0\/7 applicable · 3 not measurable this run/)
+  })
+
+  it('N2: header omits the not-measurable clause on a fully-scored run', () => {
+    const pillars = buildV3Pillars({ memberValueNa: false })
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.queryByText(/not measurable this run/)).not.toBeInTheDocument()
+  })
+
+  it('N2: header and gate strip agree on the applicable max (one shared computed source)', () => {
+    const pillars = buildStarvedTrueValuePillars()
+    const { container } = render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText(/True Value is at 0%/)).toBeInTheDocument()
+    expect(container.textContent).toMatch(/True Value · 0\/7 applicable/)
+  })
+
+  it('N2: the C2 dagger legend still renders when a True Value dim is blocked', () => {
+    const pillars = buildStarvedTrueValuePillars()
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText(/†ENCODE CHECKS BLOCKED BY SITE/)).toBeInTheDocument()
+  })
+
+  it('N2 grep: no hardcoded "/40" True Value denominator anywhere in the source', () => {
+    expect(COMPONENT_SRC).not.toMatch(/formatScore\(tv\.earned\)\}\/\{formatScore\(pillarNominalWeight\(PILLAR_TRUE_VALUE\)\)/)
+  })
+
+  it('N3: shows UNVERIFIED THIS RUN (not a quadrant label) when an encode wing is blocked', () => {
+    const pillars = buildStarvedTrueValuePillars()
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('VERDICT · UNVERIFIED THIS RUN')).toBeInTheDocument()
+    expect(screen.queryByText('VERDICT · ENCODING GAP')).not.toBeInTheDocument()
+  })
+
+  it('N3: closing line is the honest could-not-verify sentence, competitor line unchanged', () => {
+    const pillars = buildStarvedTrueValuePillars()
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText(/We couldn't read your pages to verify encoding this run — and agents aren't citing your value either\./)).toBeInTheDocument()
+    // footerPayoff (competitor line) is independent of encoding state — still renders.
+    expect(screen.getByText(/Rothy's cites value in 40% of mentions|No rival cites value either/)).toBeInTheDocument()
+  })
+
+  it('N3 grep: no "little encoded"/"nothing encoded" claim renders for an unverified run', () => {
+    const pillars = buildStarvedTrueValuePillars()
+    const { container } = render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(container.textContent).not.toMatch(/little encoded/i)
+    expect(container.textContent).not.toMatch(/nothing encoded/i)
+  })
+
+  it('N3: a genuinely-measured encoding-gap run still shows the real quadrant chip (not swallowed by the new branch)', () => {
+    const pillars = buildV3Pillars({ memberValueNa: true, dealCitabilitySeen: subLens(0, 4, false), dealCitabilitySaid: subLens(0, 3, false) })
+    pillars.true_value.dimensions[0] = { ...pillars.true_value.dimensions[0], seen: subLens(0, 6, false), said: subLens(0, 8, false) }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('VERDICT · ENCODING GAP')).toBeInTheDocument()
+    expect(screen.getByText("Little encoded to cite, and agents aren't citing it.")).toBeInTheDocument()
   })
 })
 

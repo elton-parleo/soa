@@ -18,6 +18,7 @@ lite_incentive_citation.py).
 """
 import re
 from typing import Dict, List, Optional
+from urllib.parse import urlparse
 
 from soa_shared.scan_dimensions import (
     BAND_TYPE_COUNT,
@@ -149,7 +150,42 @@ def _protocol_feed_checks(evidence: List[str]) -> List[Dict]:
     ]
 
 
-def _price_truth_checks(seen_evidence: List[str], said_result: Dict, price_honesty: Optional[Dict]) -> List[Dict]:
+def _fetch_probe_evidence_line(fetch_probe: Optional[Dict]) -> Optional[str]:
+    """
+    Part 2 (P4.a), kind-aware (N4): the fetch probe's own three fixed
+    sentences, keyed off its outcome — ChatGPT's own attempt to open
+    the same product URL our reader sampled. Never changes any check's
+    state (P4.c); None when the probe hasn't run yet or came back
+    inconclusive (nothing confident enough to state as evidence).
+
+    N4: a probe opened against the STORE ROOT (the ladder's fallback
+    rung — no product page was ever sampled to ask about) is never
+    presented as product-page price evidence here, regardless of
+    outcome — a homepage price quote is not evidence about whether the
+    PRODUCT PAGE's price is in code. That fact still reaches the
+    visitor, just only via the degraded/no-product-pages banner
+    (public_lite.py::_fetch_probe_banner_note), labeled as the
+    homepage, not here.
+    """
+    if not fetch_probe:
+        return None
+    if fetch_probe.get("kind") == "store_root":
+        return None
+    outcome = fetch_probe.get("outcome")
+    path = urlparse(fetch_probe.get("url") or "").path or fetch_probe.get("url") or ""
+    if outcome == "quoted_price":
+        return f"ChatGPT itself opened your product page and quoted {fetch_probe.get('price')} ({path})."
+    if outcome == "opened_no_price":
+        return f"ChatGPT itself opened your product page ({path}) but could not find a price to quote."
+    if outcome == "could_not_access":
+        return f"ChatGPT itself reported it could not access your product page ({path})."
+    return None
+
+
+def _price_truth_checks(
+    seen_evidence: List[str], said_result: Dict, price_honesty: Optional[Dict],
+    fetch_probe: Optional[Dict] = None,
+) -> List[Dict]:
     dim = DIMENSIONS_BY_CODE["price_truth"]
     price_line = next((e for e in seen_evidence if "expose a machine-readable price" in e), None)
     m = re.match(r"(\d+)/(\d+)", price_line) if price_line else None
@@ -161,7 +197,7 @@ def _price_truth_checks(seen_evidence: List[str], said_result: Dict, price_hones
     capped = bool((price_honesty or {}).get("would_have_capped"))
     advisory_label = f"fake sale prices · {'flagged' if capped else 'none flagged'}"
     return [
-        _check("price_in_code", dim.how_measured[0], price_state),
+        _check("price_in_code", dim.how_measured[0], price_state, evidence=_fetch_probe_evidence_line(fetch_probe)),
         _check("price_matches_page", dim.how_measured[2], match_state),
         _check("said_price_cited", said_evidence or "mentions citing a price", _said_check_state(said_result)),
         # Always the dashed advisory chip (mock: permanently .adv-styled) —
@@ -657,6 +693,7 @@ def build_pillars_payload(
     run_signals: List[RunSignal],
     membership_probe_result: Optional[str],
     membership_probe_evidence: Optional[str] = None,
+    fetch_probe_result: Optional[Dict] = None,
 ) -> Dict:
     """
     Assembles the full v3 pillar/composite payload from already-fetched
@@ -785,6 +822,7 @@ def build_pillars_payload(
         if code == "price_truth":
             checks = _price_truth_checks(
                 seen.get("evidence") or [], said, crawl_dimensions.get("price_honesty_advisory"),
+                fetch_probe=fetch_probe_result,
             )
         elif code == "member_value":
             checks = _member_value_checks(seen_row["evidence"], said)

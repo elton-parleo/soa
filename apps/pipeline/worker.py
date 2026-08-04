@@ -567,8 +567,10 @@ def process_lite_requests():
         # must never flip this already-queued request to 'failed' via the
         # except below, which is for entity/query/cycle failures only
         # (rule 7 — the scan never blocks the report).
+        fetch_probe_url = None
+        fetch_probe_kind = None
         try:
-            _run_lite_scan(request_id, store_url)
+            fetch_probe_url, fetch_probe_kind = _run_lite_scan(request_id, store_url)
         except Exception:
             log.exception(f"[lite] request {request_id}: scan orchestration failed unexpectedly")
 
@@ -591,16 +593,31 @@ def process_lite_requests():
         except Exception:
             log.exception(f"[lite] request {request_id}: revenue probe failed unexpectedly")
 
+        # Part 2 (P1): same isolation as the probes above. Unlike
+        # membership/revenue (which ask about the brand generally),
+        # this probe needs an actual URL to open — run_scan always
+        # returns one once discovery got far enough (see engine.py's
+        # _choose_fetch_probe_url ladder), so it's skipped only when
+        # there was never a store_url to scan at all.
+        if fetch_probe_url:
+            try:
+                _run_fetch_probe(request_id, fetch_probe_url, fetch_probe_kind, api_key)
+            except Exception:
+                log.exception(f"[lite] request {request_id}: fetch probe failed unexpectedly")
+
     except Exception as e:
         log.exception(f"[lite] request {request_id} failed")
         _mark_lite_failed(request_id, str(e))
 
 
-def _run_lite_scan(request_id: int, store_url: str | None):
+def _run_lite_scan(request_id: int, store_url: str | None) -> tuple:
     """
     Runs the Agent Scan for this lite request and updates the
     soa_lite_scan_results row already created (status='running') in the
     same transaction that queued the cycle — see process_lite_requests.
+    Returns (url, kind) the fetch probe (Part 2) should ask ChatGPT to
+    open (result.fetch_probe_url/fetch_probe_kind — N4), or (None, None)
+    when there was no scan to run at all.
 
     store_url is None -> 'skipped': guessing a domain server-side risks
     scanning the wrong store, which is worse than no scan at all. The
@@ -618,7 +635,7 @@ def _run_lite_scan(request_id: int, store_url: str | None):
                 WHERE lite_request_id = :rid
             """), {"rid": request_id})
         log.info(f"[lite] request {request_id}: no store_url — scan skipped")
-        return
+        return None, None
 
     from scan.engine import run_scan
 
@@ -646,6 +663,7 @@ def _run_lite_scan(request_id: int, store_url: str | None):
         })
 
     log.info(f"[lite] request {request_id}: scan {result.status} (score={result.total_score})")
+    return result.fetch_probe_url, result.fetch_probe_kind
 
 
 def _run_membership_probe(request_id: int, brand_name: str, store_url: str | None, api_key: str):
@@ -695,6 +713,33 @@ def _run_revenue_probe(request_id: int, brand_name: str, store_url: str | None, 
         """), {"rid": request_id, "probe": json.dumps(result)})
 
     log.info(f"[lite] request {request_id}: revenue probe result={result['annual_revenue_usd']}")
+
+
+def _run_fetch_probe(request_id: int, probe_url: str, probe_kind: str | None, api_key: str):
+    """
+    Part 2 (P1), kind-aware (N4): runs the fetch probe and writes its
+    result onto the soa_lite_scan_results row already created when the
+    cycle was queued — same row/pattern as _run_membership_probe/
+    _run_revenue_probe above.
+
+    probe_fetch itself never raises (generation/fetch_probe.py) — it
+    always returns a well-defined {outcome, url, kind, price, quote,
+    note} dict, so this function only ever writes one update to the
+    scan row.
+    """
+    from generation.fetch_probe import probe_fetch
+
+    log.info(f"[lite] request {request_id}: asking ChatGPT to open one of your product pages…")
+    result = probe_fetch(probe_url, api_key, kind=probe_kind)
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE soa_lite_scan_results
+            SET fetch_probe = :probe, updated_at = NOW()
+            WHERE lite_request_id = :rid
+        """), {"rid": request_id, "probe": json.dumps(result)})
+
+    log.info(f"[lite] request {request_id}: fetch probe result={result['outcome']}")
 
 
 SCAN_TERMINAL_STATUSES = ("complete", "blocked", "failed", "skipped")
