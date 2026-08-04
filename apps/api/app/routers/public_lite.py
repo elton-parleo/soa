@@ -819,12 +819,27 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
         session.commit()
 
     token = uuid.uuid4().hex
+    # Part 1 (E1): the run-manifest's very first event, written directly
+    # here rather than through apps/pipeline's lite_events.emit_event —
+    # apps/api never imports apps/pipeline (the two communicate only
+    # through Postgres; see this file's module docstring), and this is
+    # the row's first-ever write, so there's no concurrent writer that
+    # could already hold a copy of `events` to race against — unlike
+    # every later append, which all happen worker-side via emit_event's
+    # read-modify-write.
+    initial_events = json.dumps([{
+        "seq": 1,
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "kind": "state",
+        "task": "run",
+        "text": "queued",
+    }])
     with engine.begin() as conn:
         conn.execute(text("""
             INSERT INTO soa_lite_requests
-              (token, brand_name, competitor_names, store_url, status, ip_hash, organization_id)
+              (token, brand_name, competitor_names, store_url, status, ip_hash, organization_id, events)
             VALUES
-              (:token, :brand, :competitors, :store_url, :status, :ip_hash, :org_id)
+              (:token, :brand, :competitors, :store_url, :status, :ip_hash, :org_id, :events)
         """), {
             "token":       token,
             "brand":       data.brand_name,
@@ -833,6 +848,7 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
             "status":      LITE_STATUS_PENDING,
             "ip_hash":     ip_hash,
             "org_id":      org_id,
+            "events":      initial_events,
         })
 
     return PublicLiteSubmitResponse(token=token, status="pending")
@@ -876,8 +892,8 @@ def _derive_membership_check(scan_status: str | None, dimensions_raw: dict, prob
 def get_lite_status(token: str):
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT lr.status, c.id, c.status, c.total_runs_planned, sr.status,
-                   lr.competitor_names, lr.competitor_source,
+            SELECT lr.id, lr.status, c.id, c.status, c.total_runs_planned, sr.status,
+                   lr.competitor_names, lr.competitor_source, lr.events,
                    sr.dimensions, sr.pages_fetched, sr.membership_probe
             FROM soa_lite_requests lr
             LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
@@ -888,10 +904,16 @@ def get_lite_status(token: str):
         if not row:
             raise HTTPException(status_code=404, detail="Not found.")
 
-        (lite_status, cycle_id, cycle_status, total_runs_planned, scan_status,
-         competitor_names, competitor_source,
+        (lite_request_id, lite_status, cycle_id, cycle_status, total_runs_planned, scan_status,
+         competitor_names, competitor_source, events_raw,
          dimensions_raw, pages_fetched_raw, membership_probe_raw) = row
         live_counts = _fetch_live_progress_counts(conn, cycle_id) if cycle_id else None
+
+        # Part 1 (P4): reuses _build_scan_payload (same function
+        # get_lite_report calls) so the status page's terminal banner is
+        # computed identically to the report's — never a second,
+        # divergent definition of degraded_reason/degraded_banner_facts.
+        scan_row = _fetch_scan_row(conn, lite_request_id)
 
     phase, progress = _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts)
 
@@ -902,10 +924,15 @@ def get_lite_status(token: str):
         scan_status, _decode_json_field(dimensions_raw, {}), probe_result,
     )
 
+    scan_payload = _build_scan_payload(scan_row, {})
+
     return PublicLiteStatusResponse(
         status=lite_status, phase=phase, progress=progress, scan_status=scan_status,
         competitors=_decode_json_field(competitor_names, None), competitor_source=competitor_source,
         membership_check=membership_check, scan_pages_read=scan_pages_read,
+        events=_decode_json_field(events_raw, []),
+        degraded_reason=(scan_payload or {}).get('degraded_reason'),
+        degraded_banner_facts=(scan_payload or {}).get('degraded_banner_facts'),
     )
 
 
@@ -945,7 +972,7 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
     with engine.begin() as conn:
         row = conn.execute(text("""
             SELECT lr.id, lr.status, lr.cycle_id, c.status, c.total_runs_planned,
-                   lr.competitor_names, lr.competitor_source
+                   lr.competitor_names, lr.competitor_source, lr.events
             FROM soa_lite_requests lr
             LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
             WHERE lr.token = :token
@@ -955,7 +982,7 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
             raise HTTPException(status_code=404, detail="Not found.")
 
         (lite_request_id, lite_status, cycle_id, cycle_status, total_runs_planned,
-         competitor_names, competitor_source) = row
+         competitor_names, competitor_source, events_raw) = row
 
         conn.execute(text("""
             UPDATE soa_lite_requests SET email = :email, updated_at = NOW() WHERE token = :token
@@ -964,9 +991,17 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
         if lite_status != 'complete':
             live_counts = _fetch_live_progress_counts(conn, cycle_id) if cycle_id else None
             phase, progress = _derive_phase(lite_status, cycle_status, total_runs_planned, live_counts)
+            # Part 1 (P6): same additive events/degraded fields as GET
+            # /status — attaching an email mid-run must not change the
+            # shape of what the widget already reads from this response.
+            scan_row = _fetch_scan_row(conn, lite_request_id)
+            scan_payload = _build_scan_payload(scan_row, {})
             return PublicLiteStatusResponse(
                 status=lite_status, phase=phase, progress=progress,
                 competitors=_decode_json_field(competitor_names, None), competitor_source=competitor_source,
+                events=_decode_json_field(events_raw, []),
+                degraded_reason=(scan_payload or {}).get('degraded_reason'),
+                degraded_banner_facts=(scan_payload or {}).get('degraded_banner_facts'),
             ).model_dump()
 
         return _build_report_payload(conn, lite_request_id, cycle_id)

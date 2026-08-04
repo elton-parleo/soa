@@ -27,7 +27,7 @@ def db(monkeypatch):
             CREATE TABLE soa_lite_requests (
                 id INTEGER PRIMARY KEY, token TEXT UNIQUE, email TEXT,
                 status TEXT, cycle_id INTEGER, updated_at TIMESTAMP,
-                competitor_names TEXT, competitor_source TEXT
+                competitor_names TEXT, competitor_source TEXT, events TEXT DEFAULT '[]'
             )
         """)
         conn.exec_driver_sql("""

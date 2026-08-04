@@ -32,6 +32,7 @@ from datetime import datetime, timedelta, timezone
 # Add pipeline root to path so local modules resolve correctly
 sys.path.insert(0, os.path.dirname(__file__))
 
+import lite_events
 from soa_shared.database import engine
 from soa_shared.models.soa_models import (
     LITE_STATUS_COMPLETE,
@@ -365,6 +366,7 @@ def _mark_lite_failed(request_id: int, error: str):
                 WHERE id = :id
             """), {"status": LITE_STATUS_FAILED, "id": request_id, "err": error[:1000]})
             conn.commit()
+        lite_events.emit_state(request_id, "failed")
         log.error(f"[lite] request {request_id} failed: {error}")
     except Exception:
         log.critical(
@@ -419,6 +421,7 @@ def process_lite_requests():
                 WHERE id = :id
             """), {"status": LITE_STATUS_IDENTIFYING_COMPETITORS, "id": request_id})
 
+        lite_events.emit_state(request_id, "running")
         log.info(f"[lite] Starting request {request_id} for brand '{brand_name}'")
 
         # JSON columns normally come back already-decoded (psycopg2 parses
@@ -457,6 +460,7 @@ def process_lite_requests():
         # — so a crash partway through the rest of this function still
         # leaves the generated set on the row rather than losing it to a
         # future re-generation.
+        lite_events.emit_log(request_id, lite_events.TASK_COMPETITORS, "identifying your closest rivals…")
         candidates = generate_competitors(brand_name, api_key, store_url=store_url)
         competitor_names, competitor_source = select_competitors(
             manual_competitor_names, candidates, brand_name,
@@ -480,6 +484,16 @@ def process_lite_requests():
         log.info(
             f"[lite] request {request_id}: competitors={competitor_names} source={competitor_source}"
         )
+        if competitor_names:
+            lite_events.emit_done(
+                request_id, lite_events.TASK_COMPETITORS,
+                f"{len(competitor_names)} competitors found", chips=competitor_names,
+            )
+        else:
+            lite_events.emit_done(
+                request_id, lite_events.TASK_COMPETITORS,
+                "Running solo — no close rivals identified",
+            )
 
         # b. Resolve entities — upsert-by-slug so repeat submissions of the
         # same brand reuse the existing soa_entities row.
@@ -505,6 +519,7 @@ def process_lite_requests():
         # _insert_generated_rows' query_code prefixing (first 3 chars up to
         # the first underscore) naturally yields 'LIT' for study_type
         # 'lite-{token8}' — no lite-specific insert logic needed.
+        lite_events.emit_log(request_id, lite_events.TASK_QUERIES, "writing your shopper questions…")
         rows = generate_lite_queries(brand_name, competitor_names, api_key)
 
         with engine.connect() as conn:
@@ -635,10 +650,15 @@ def _run_lite_scan(request_id: int, store_url: str | None) -> tuple:
                 WHERE lite_request_id = :rid
             """), {"rid": request_id})
         log.info(f"[lite] request {request_id}: no store_url — scan skipped")
+        lite_events.emit_done(
+            request_id, lite_events.TASK_CRAWL,
+            "No store URL was provided — scan skipped",
+        )
         return None, None
 
     from scan.engine import run_scan
 
+    lite_events.emit_log(request_id, lite_events.TASK_CRAWL, f"reading {store_url}…")
     result = run_scan(store_url)
 
     with engine.begin() as conn:
@@ -663,7 +683,45 @@ def _run_lite_scan(request_id: int, store_url: str | None) -> tuple:
         })
 
     log.info(f"[lite] request {request_id}: scan {result.status} (score={result.total_score})")
+    _emit_crawl_retry_moments(request_id, result)
+    lite_events.emit_done(request_id, lite_events.TASK_CRAWL, _crawl_done_text(result))
     return result.fetch_probe_url, result.fetch_probe_kind
+
+
+def _emit_crawl_retry_moments(request_id: int, result) -> None:
+    """
+    Mirrors the crawl's politeness-ladder retries into the console. A4
+    (fetch resilience)'s per-page attempts/retry_after_seen data
+    (scan/engine.py::_fetch_entry, carried on every result.pages_fetched
+    row) already has this; fetcher.py's retry ladder itself has no
+    request_id to narrate to and is a tight sleep/retry loop with no
+    live callback hook, so this reconstructs the "interesting moments"
+    from the finished scan result rather than streaming them mid-fetch.
+    Bounded by MAX_PAGE_FETCHES (~12 pages/scan), so one line per
+    retried page is never spammy.
+    """
+    for entry in result.pages_fetched or []:
+        attempts = entry.get("attempts") or 1
+        if attempts <= 1:
+            continue
+        retry_after = entry.get("retry_after_seen")
+        cooloff = f", backed off {retry_after:.0f}s" if retry_after else ""
+        outcome = "retry succeeded" if entry.get("status") == "fetched" else "still no luck"
+        lite_events.emit_log(
+            request_id, lite_events.TASK_CRAWL,
+            f"{entry.get('url')} rate-limited us{cooloff} — {outcome}",
+        )
+
+
+def _crawl_done_text(result) -> str:
+    if result.status == 'complete':
+        pages = len(result.pages_fetched or [])
+        return f"{pages} pages read — catalog, loyalty, and protocol surfaces"
+    if result.status == 'blocked':
+        return "Your store blocked our reader — that itself is a finding"
+    if result.status == 'failed':
+        return "Couldn't finish reading your store this time"
+    return "Scan did not complete"
 
 
 def _run_membership_probe(request_id: int, brand_name: str, store_url: str | None, api_key: str):
@@ -678,6 +736,10 @@ def _run_membership_probe(request_id: int, brand_name: str, store_url: str | Non
     """
     from generation.membership_probe import probe_membership
 
+    lite_events.emit_log(
+        request_id, lite_events.TASK_PROBE_MEMBERSHIP,
+        "asking whether a membership program exists…",
+    )
     result = probe_membership(brand_name, api_key, store_url=store_url)
 
     with engine.begin() as conn:
@@ -688,6 +750,13 @@ def _run_membership_probe(request_id: int, brand_name: str, store_url: str | Non
         """), {"rid": request_id, "probe": json.dumps(result)})
 
     log.info(f"[lite] request {request_id}: membership probe result={result['result']}")
+    if result['result'] == 'yes':
+        done_text = "Program found — Member Value will be scored"
+    elif result['result'] == 'no':
+        done_text = "No program found — scoring normalized"
+    else:
+        done_text = "Couldn't determine membership status"
+    lite_events.emit_done(request_id, lite_events.TASK_PROBE_MEMBERSHIP, done_text)
 
 
 def _run_revenue_probe(request_id: int, brand_name: str, store_url: str | None, api_key: str):
@@ -703,6 +772,7 @@ def _run_revenue_probe(request_id: int, brand_name: str, store_url: str | None, 
     """
     from generation.revenue_probe import probe_revenue
 
+    lite_events.emit_log(request_id, lite_events.TASK_PROBE_REVENUE, "estimating annual revenue…")
     result = probe_revenue(brand_name, api_key, store_url=store_url)
 
     with engine.begin() as conn:
@@ -713,6 +783,11 @@ def _run_revenue_probe(request_id: int, brand_name: str, store_url: str | None, 
         """), {"rid": request_id, "probe": json.dumps(result)})
 
     log.info(f"[lite] request {request_id}: revenue probe result={result['annual_revenue_usd']}")
+    if result.get('annual_revenue_usd'):
+        done_text = f"~${result['annual_revenue_usd']:,.0f}/yr estimated"
+    else:
+        done_text = "Couldn't estimate revenue"
+    lite_events.emit_done(request_id, lite_events.TASK_PROBE_REVENUE, done_text)
 
 
 def _run_fetch_probe(request_id: int, probe_url: str, probe_kind: str | None, api_key: str):
@@ -730,6 +805,10 @@ def _run_fetch_probe(request_id: int, probe_url: str, probe_kind: str | None, ap
     from generation.fetch_probe import probe_fetch
 
     log.info(f"[lite] request {request_id}: asking ChatGPT to open one of your product pages…")
+    lite_events.emit_log(
+        request_id, lite_events.TASK_PROBE_FETCH,
+        "asking ChatGPT to open one of your product pages…",
+    )
     result = probe_fetch(probe_url, api_key, kind=probe_kind)
 
     with engine.begin() as conn:
@@ -740,10 +819,50 @@ def _run_fetch_probe(request_id: int, probe_url: str, probe_kind: str | None, ap
         """), {"rid": request_id, "probe": json.dumps(result)})
 
     log.info(f"[lite] request {request_id}: fetch probe result={result['outcome']}")
+    kind_phrase = "your homepage" if probe_kind == "store_root" else "your product page"
+    outcome = result.get('outcome')
+    if outcome == 'quoted_price':
+        done_text = f"ChatGPT opened {kind_phrase} and quoted a price"
+    elif outcome == 'opened_no_price':
+        done_text = f"ChatGPT opened {kind_phrase} fine"
+    elif outcome == 'could_not_access':
+        done_text = f"ChatGPT couldn't access {kind_phrase} either"
+    else:
+        done_text = "Inconclusive"
+    lite_events.emit_done(request_id, lite_events.TASK_PROBE_FETCH, done_text)
 
 
 SCAN_TERMINAL_STATUSES = ("complete", "blocked", "failed", "skipped")
 SCAN_TIMEOUT_MINUTES = 10
+
+
+def _decode_json_field(value, default):
+    """Same defensive str-vs-already-decoded idiom as competitor_names
+    handling in process_lite_requests above."""
+    if isinstance(value, str):
+        return json.loads(value) if value else default
+    return value if value is not None else default
+
+
+def _terminal_run_state(cycle_status: str, scan_status: str, degraded_reason: str | None) -> str:
+    """
+    Part 1 (E1): maps the sweep's final (cycle_status, scan_status,
+    degraded_reason) onto the run-manifest's kind=state terminal value
+    — drives the status page's chip and terminal banner (P4). A failed
+    cycle always wins (nothing about the crawl matters if the pipeline
+    itself never finished); otherwise a no-product-pages-found scan or
+    a blocked/failed scan gets its own state so the status page can
+    show the SAME hotfix-3/5 honest banner the report already shows —
+    a normal or skipped (no store_url) scan is just 'done', since rule
+    7 means the scan never blocks completion.
+    """
+    if cycle_status != 'complete':
+        return 'failed'
+    if degraded_reason == 'no_product_pages_found':
+        return 'no-product-pages'
+    if scan_status in ('blocked', 'failed'):
+        return 'degraded-blocked'
+    return 'done'
 
 
 def _as_utc_datetime(value):
@@ -786,7 +905,7 @@ def _sweep_lite_completions():
 
     with engine.connect() as conn:
         rows = conn.execute(text("""
-            SELECT lr.id, c.status, sr.id, sr.status, sr.updated_at
+            SELECT lr.id, c.status, sr.id, sr.status, sr.updated_at, sr.dimensions
             FROM soa_lite_requests lr
             JOIN soa_cycles c ON c.id = lr.cycle_id
             JOIN soa_lite_scan_results sr ON sr.lite_request_id = lr.id
@@ -794,8 +913,9 @@ def _sweep_lite_completions():
               AND c.status IN ('complete', 'failed')
         """)).fetchall()
 
-    for lite_id, cycle_status, scan_id, scan_status, scan_updated_at in rows:
+    for lite_id, cycle_status, scan_id, scan_status, scan_updated_at, dimensions_raw in rows:
         try:
+            final_scan_status = scan_status
             with engine.begin() as conn:
                 if scan_status not in SCAN_TERMINAL_STATUSES:
                     scan_age = _as_utc_datetime(scan_updated_at)
@@ -808,6 +928,7 @@ def _sweep_lite_completions():
                         SET status = 'failed', error = 'scan timed out', updated_at = NOW()
                         WHERE id = :id
                     """), {"id": scan_id})
+                    final_scan_status = 'failed'
 
                 if cycle_status == 'complete':
                     conn.execute(text("""
@@ -823,6 +944,15 @@ def _sweep_lite_completions():
                             updated_at = NOW()
                         WHERE id = :id
                     """), {"status": LITE_STATUS_FAILED, "id": lite_id})
+
+            degraded_reason = _decode_json_field(dimensions_raw, {}).get('degraded_reason')
+            state = _terminal_run_state(cycle_status, final_scan_status, degraded_reason)
+            lite_events.emit_state(lite_id, state)
+            if state != 'failed':
+                lite_events.emit_done(
+                    lite_id, lite_events.TASK_REPORT,
+                    "Three pillars, ranked fixes, private link",
+                )
         except Exception:
             log.exception(f"[lite] request {lite_id}: completion sweep failed for this row — will retry next pass")
 

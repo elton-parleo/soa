@@ -42,6 +42,7 @@ import {
   PILLAR_TRUE_VALUE, PILLAR_VISIBILITY, TOTAL_MAX, LITE_QUERY_COUNT,
   VERDICT_AGENT_READY, VERDICT_COMPOSITE_THRESHOLD, VERDICT_TRUE_VALUE_RATIO_THRESHOLD,
 } from './landing/scanDimensionsRegistry.js'
+import { DegradedRunBanner } from './DegradedRunBanner.jsx'
 
 const DEFAULT_REVENUE = 12_000_000
 const DEFAULT_AI_SHARE_PCT = 20
@@ -401,93 +402,6 @@ function ExecutiveTiles({ report, exposure }) {
     return <ExecutiveHeroV3 report={report} exposure={exposure} />
   }
   return <ExecutiveTilesLegacy report={report} />
-}
-
-// R2 (fetch resilience, hotfix 3): the honest banner for a degraded run
-// — replaces the retired ScanDegradedExplanation. Only ever shown
-// alongside the real v4 pillars layout (isV3Report is true for a
-// blocked/failed scan under the current scorer version too, per R1/R2)
-// so Accessibility/True Value below read as NOT MEASURABLE, never a
-// failing zero, and this banner is the one place that says why.
-// Sitemap-sampler stage (hotfix 5, S3): first-person banner copy, one
-// honest hedge, no generalization about how other agents would fare —
-// that claim was never ours to make (grep-tested: the retired "will
-// hit the same wall" line is gone repo-wide). degradedReason/
-// bannerFacts come from report.scan (engine.py computes the dynamic
-// facts server-side; this only templates the static wording around
-// them). A pre-hotfix-5 scan row has no degraded_reason at all — falls
-// back to a generic, still-honest message keyed on status alone.
-function _attemptsPhrase(bannerFacts) {
-  const n = bannerFacts?.attempts
-  if (!n) return ''
-  const robotsNote = bannerFacts.robots_included ? ', incl. robots.txt where applicable' : ''
-  return ` (${n} attempt${n === 1 ? '' : 's'}${robotsNote})`
-}
-
-// Part 2 (P4.b), state/kind-aware (N4): the Sephora fix — whether
-// agents "would hit the same wall" stops being an inference the
-// instant the fetch probe has an answer. Nothing is appended when the
-// probe hasn't run yet or came back inconclusive (bannerFacts.
-// fetch_probe is only ever set by public_lite.py on a decisive
-// outcome).
-//
-// N4: the "wall appears specific" claim only makes sense when there
-// genuinely WAS a wall (status === 'blocked') — it renders nowhere
-// else. The no-product-pages-found state gets its own honest,
-// sampling-scoped sentence instead: the probe proves the page exists,
-// it just says nothing about why OUR sampler missed it. The generic
-// unreachable fallback (no degraded_reason at all) gets neither claim
-// when the probe succeeded — there's no "wall" and no "sampler miss"
-// to honestly describe, only total non-response. The could-not-access
-// direction is universally true regardless of state, so it always
-// renders.
-function _fetchProbeSentence(bannerFacts, degradedReason, status) {
-  const probe = bannerFacts?.fetch_probe
-  if (!probe) return ''
-  if (!probe.agent_could_access) {
-    return " It reported it couldn't access the page either."
-  }
-  if (degradedReason === 'no_product_pages_found') {
-    const kindPhrase = probe.kind === 'store_root' ? 'your homepage' : 'your product page'
-    return ` ChatGPT opened ${kindPhrase} fine — the pages exist; our sampler couldn't locate them this run.`
-  }
-  if (status === 'blocked') {
-    return ' ChatGPT opened it fine — the wall appears specific to unidentified readers like ours.'
-  }
-  return ''
-}
-
-function DegradedRunBanner({ status, degradedReason, bannerFacts }) {
-  if (status !== 'blocked' && status !== 'failed') return null
-
-  let message
-  if (degradedReason === 'no_product_pages_found') {
-    const n = bannerFacts?.sitemaps_read ?? 0
-    message = `We read ${n} of your sitemap${n === 1 ? '' : 's'} but couldn't locate product pages to sample — this can be our reader's limitation; on-site checks weren't evaluated.`
-  } else if (status === 'blocked') {
-    const refusal = bannerFacts?.refusal
-    const verb = refusal === '403' ? '403-refused' : refusal === '429' ? 'rate-limited' : 'blocked'
-    // W6: one template, one conditional — bannerFacts.signed comes
-    // straight from engine.py's signing.is_signing_enabled() snapshot
-    // for this run (public_lite.py merges it in unconditionally), the
-    // same flag scorer.py's own evidence lines already read.
-    const readerPhrase = bannerFacts?.signed ? 'our cryptographically verified reader (Web Bot Auth)' : 'our identified reader'
-    message = `Your site ${verb} ${readerPhrase} on every page we tried${_attemptsPhrase(bannerFacts)}. We can only measure our own reader — but an edge this strict is worth verifying against the agents you care about.`
-  } else {
-    message = "We couldn't finish reading your site this time — nothing could be measured on-site. We'll try again on your next diagnostic."
-  }
-  message += _fetchProbeSentence(bannerFacts, degradedReason, status)
-
-  return (
-    <LightCard>
-      <InfoBadge message={message} />
-      <div className="lite-body" style={{ marginTop: 14 }}>
-        Accessibility and True Value below read <strong>NOT MEASURABLE</strong>, not a failing
-        score — we simply couldn't read the pages that would prove it this run. Visibility (how
-        often agents mention you) is unaffected: it comes from live answers, not our crawl.
-      </div>
-    </LightCard>
-  )
 }
 
 // ─── Visibility section (Stage 7 — replaces the old per-stage bars) ────

@@ -19,9 +19,10 @@ import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
+import lite_events
 import soa_shared.config as config
 from soa_shared.database import session_factory
-from soa_shared.models.soa_models import SoaCycle, SoaQuery, SoaRun
+from soa_shared.models.soa_models import SoaCycle, SoaLiteRequest, SoaQuery, SoaRun
 from soa_shared.scope_resolution import materialize_and_freeze
 from runners.base_runner import BasePlatformRunner
 from runners.claude_runner import ClaudeRunner
@@ -129,6 +130,13 @@ class RunOrchestrator:
 
             session.expunge(self.cycle)
 
+        # Part 1 (E1), lite-gated: resolves the soa_lite_requests.id that
+        # owns this cycle, for query-progress event emission
+        # (lite_events.py) — zero query cost for every non-lite cycle
+        # (the vast majority), since the cheap prefix check on
+        # cycle_code short-circuits before any DB round trip.
+        self._lite_request_id = self._resolve_lite_request_id()
+
         # Validate prerequisites before any API calls
         self._validate_prerequisites()
 
@@ -136,6 +144,17 @@ class RunOrchestrator:
         self.runners: Dict[str, BasePlatformRunner] = {
             p: _RUNNER_CLASSES[p]() for p in self.platforms
         }
+
+    def _resolve_lite_request_id(self) -> Optional[int]:
+        if not self.cycle_code.startswith("lite-"):
+            return None
+        with session_factory() as session:
+            row = (
+                session.query(SoaLiteRequest.id)
+                .filter(SoaLiteRequest.cycle_id == self.cycle.id)
+                .first()
+            )
+            return row[0] if row else None
 
     def _validate_prerequisites(self) -> None:
         from soa_shared.models.soa_models import SoaCycleEntity
@@ -274,7 +293,27 @@ class RunOrchestrator:
                     counters["errors"] += 1
                 # 'skipped' does not update any counter — already counted in pre-filter
 
+                # E3: one throttled console line per RESOLVED run (never
+                # per pre-filtered 'skipped' item) — no `await` between
+                # the counter updates above and this read, so the sum is
+                # exactly as safe under this same coroutine's own
+                # in-flight increments as `counters["completed"] += 1`
+                # itself already is (see RunOrchestrator's module-level
+                # concurrency note in lite_events.py).
+                if self._lite_request_id is not None and result.status in ("success", "error", "timeout"):
+                    resolved = counters["completed"] + counters["errors"] + counters["timeouts"]
+                    lite_events.emit_log(
+                        self._lite_request_id, lite_events.TASK_QUERIES,
+                        f"q{resolved}/{total_planned} answered",
+                    )
+
         await asyncio.gather(*[_run_one(item) for item in pending])
+
+        if self._lite_request_id is not None:
+            lite_events.emit_done(
+                self._lite_request_id, lite_events.TASK_QUERIES,
+                f"All {total_planned} answers collected",
+            )
 
         # 8. Finalize cycle
         self._finalize_cycle(counters["completed"])

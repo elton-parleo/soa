@@ -435,55 +435,82 @@
   animation: lite-shimmer 1.6s ease-in-out infinite;
 }
 
-/* ── Run manifest — status page (Stage 20) ──────────────────────────
- * Six fixed-order rows, each independently pending/active/done/na —
- * see LiteProgress.jsx's deriveManifestRows(). Glyph column + name +
- * stamp on one line, detail spans the remaining width on the next —
- * same grid shape as design-refs/status-page-run-manifest-mock.html,
- * adapted to sit inside the existing LightCard rather than its own
- * bordered card (avoids double-bordering). Reuses lite-pulse
- * (Stage 12) rather than a second keyframe for the active glyph. */
-.lite-manifest-row {
-  display: grid;
-  grid-template-columns: 22px 1fr auto;
-  gap: 12px;
-  align-items: baseline;
-  padding: 13px 0;
-  border-top: 1px solid var(--line);
-}
-.lite-manifest-row:first-child { border-top: none; }
-.lite-manifest-glyph {
-  font-family: var(--mono);
-  font-size: 14px;
-  text-align: center;
-}
-.lite-manifest-glyph--pulse { animation: lite-pulse 1.2s ease-in-out infinite; }
-.lite-manifest-detail {
-  grid-column: 2 / 4;
-  font-size: 12.5px;
-  color: var(--text-2);
-  min-height: 17px;
-  line-height: 1.5;
-}
-.lite-manifest-qbar {
-  display: inline-block;
-  width: 110px;
-  height: 5px;
-  background: var(--track);
-  border-radius: 3px;
-  vertical-align: middle;
-  margin: 0 8px 2px 0;
+/* ── Run-manifest console + completion feed (Part 1, P2/P3) ──────────
+ * Retires the Stage 20 six-row manifest — this page now projects the
+ * always-visible console (kind=log events) and the arrival-order
+ * completion feed (kind=done events) straight from events[]. Console
+ * is a dark terminal so it reads distinctly from the surrounding
+ * LightCard; feed cards sit on the card's own background. Reuses
+ * lite-pulse (Stage 12) for the LIVE dot rather than a second
+ * keyframe. */
+.lite-console {
+  border-radius: 10px;
   overflow: hidden;
+  border: 1px solid var(--line);
 }
-.lite-manifest-qbar > span {
-  display: block;
-  height: 5px;
-  background: var(--accent);
-  border-radius: 3px;
-  transition: width 0.5s ease;
+.lite-console-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #14161c;
+  color: #9aa4b2;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
+.lite-console-live-dot {
+  display: inline-block;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #4ade80;
+  flex-shrink: 0;
+}
+.lite-console-live-dot--pulse { animation: lite-pulse 1.4s ease-in-out infinite; }
+.lite-console-body {
+  background: #0d0f13;
+  color: #cbd3df;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.lite-console-line {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  word-break: break-word;
+}
+.lite-console-line--muted { color: #6b7280; font-style: italic; }
+.lite-console-ts { color: #6b7280; flex-shrink: 0; }
+.lite-console-task { color: #7dd3fc; flex-shrink: 0; }
+.lite-console-text { flex: 1 1 auto; min-width: 0; }
+
+.lite-feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lite-feed-card {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2, var(--track));
+}
+.lite-feed-check {
+  color: var(--good);
+  font-size: 14px;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+@keyframes lite-feed-card-enter {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.lite-feed-card--enter { animation: lite-feed-card-enter 0.3s ease-out; }
 @media (prefers-reduced-motion: reduce) {
-  .lite-manifest-qbar > span { transition: none; }
+  .lite-feed-card--enter { animation: none; }
 }
 
 /* ── Focus visibility ────────────────────────────────────────────── */

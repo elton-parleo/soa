@@ -83,7 +83,7 @@ def db(monkeypatch):
                 competitor_names TEXT, brand_entity_id INTEGER, competitor_entity_ids TEXT,
                 study_type TEXT, store_url TEXT, cycle_id INTEGER, status TEXT DEFAULT 'pending',
                 error_message TEXT, ip_hash TEXT, organization_id INTEGER,
-                report_email_sent_at TIMESTAMP, competitor_source TEXT,
+                report_email_sent_at TIMESTAMP, competitor_source TEXT, events TEXT DEFAULT '[]',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
             )
         """)
@@ -122,6 +122,13 @@ def db(monkeypatch):
         """)
 
     monkeypatch.setattr(worker, "engine", engine)
+    # Part 1 (E1): lite_events.py does its own `from soa_shared.database
+    # import engine` at module load, binding a SEPARATE name from
+    # worker.engine — patching worker.engine alone doesn't reach it, so
+    # every emit_event() call from worker.py would otherwise hit the
+    # real (unconfigured) production engine.
+    lite_events_module = importlib.import_module("lite_events")
+    monkeypatch.setattr(lite_events_module, "engine", engine)
     db_module = importlib.import_module("soa_shared.database")
     monkeypatch.setattr(db_module, "session_factory", sessionmaker(bind=engine))
     monkeypatch.setenv("OPEN_AI_API_KEY", "test-key")
@@ -1218,3 +1225,269 @@ def test_failed_request_is_not_re_picked_on_a_third_poll(db, monkeypatch):
     with patch("generation.query_generator.generate_lite_queries") as mock_gen:
         worker.process_lite_requests()  # nothing pending left — must be a clean no-op
     mock_gen.assert_not_called()
+
+
+# ── Part 1 (E1): run-manifest event emission ────────────────────────────
+
+def _events_by_token(conn, token):
+    raw = conn.exec_driver_sql(
+        "SELECT events FROM soa_lite_requests WHERE token = ?", (token,)
+    ).fetchone()[0]
+    return json.loads(raw) if isinstance(raw, str) else (raw or [])
+
+
+def _events_of_kind(events, kind):
+    return [e for e in events if e["kind"] == kind]
+
+
+def _events_for_task(events, task):
+    return [e for e in events if e["task"] == task]
+
+
+def test_running_state_emitted_once_request_is_claimed(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
+        worker.process_lite_requests()
+
+    events = _events_by_token(db.connect(), "a1b2c3d4e5f6")
+    state_texts = [e["text"] for e in _events_of_kind(events, "state")]
+    assert "running" in state_texts
+    # seq is strictly increasing and starts at 1 (E2 additivity contract).
+    seqs = [e["seq"] for e in events]
+    assert seqs == sorted(seqs)
+    assert seqs[0] == 1
+    assert len(seqs) == len(set(seqs))
+
+
+def test_competitors_done_event_carries_names_as_chips(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
+        worker.process_lite_requests()
+
+    events = _events_by_token(db.connect(), "a1b2c3d4e5f6")
+    done = _events_of_kind(_events_for_task(events, "competitors"), "done")
+    assert len(done) == 1
+    assert done[0]["chips"] == ["Rival"]
+
+
+def test_competitors_done_event_solo_has_no_chips(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=[])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
+        worker.process_lite_requests()
+
+    events = _events_by_token(db.connect(), "a1b2c3d4e5f6")
+    done = _events_of_kind(_events_for_task(events, "competitors"), "done")
+    assert len(done) == 1
+    assert "chips" not in done[0]
+    assert "solo" in done[0]["text"].lower()
+
+
+def test_crawl_events_skipped_without_store_url(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])  # no store_url
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
+         patch("scan.engine.run_scan") as mock_scan:
+        worker.process_lite_requests()
+
+    mock_scan.assert_not_called()
+    events = _events_by_token(db.connect(), "a1b2c3d4e5f6")
+    crawl_events = _events_for_task(events, "crawl")
+    # No log line was ever emitted (nothing to narrate — the scan never
+    # ran at all), but the task still gets exactly one done event so the
+    # completion feed's fixed 8-task denominator is always reachable.
+    assert _events_of_kind(crawl_events, "log") == []
+    done = _events_of_kind(crawl_events, "done")
+    assert len(done) == 1
+    assert "no store url" in done[0]["text"].lower()
+
+
+def test_crawl_events_present_for_a_complete_scan(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    scan_result = _make_scan_result()
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
+         patch("scan.engine.run_scan", return_value=scan_result):
+        worker.process_lite_requests()
+
+    events = _events_by_token(db.connect(), "a1b2c3d4e5f6")
+    crawl_events = _events_for_task(events, "crawl")
+    log_texts = [e["text"] for e in _events_of_kind(crawl_events, "log")]
+    assert any("acme.example.com" in t for t in log_texts)
+    done = _events_of_kind(crawl_events, "done")
+    assert len(done) == 1
+    assert "1 pages read" in done[0]["text"]
+
+
+def test_crawl_retry_moments_mirrored_into_console(db):
+    """A4 (fetch resilience)'s per-page attempts/retry_after_seen data
+    (already on every pages_fetched row) is reconstructed into one
+    console line per retried page — fetcher.py's own retry ladder has
+    no live log.info calls to mirror, so this is done post-hoc from the
+    finished scan result (see worker.py::_emit_crawl_retry_moments)."""
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    scan_result = _make_scan_result(
+        pages_fetched=[
+            {"url": "https://acme.example.com", "status": "fetched", "attempts": 1, "retry_after_seen": None},
+            {"url": "https://acme.example.com/products", "status": "fetched", "attempts": 2, "retry_after_seen": 5.0},
+        ],
+    )
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
+         patch("scan.engine.run_scan", return_value=scan_result):
+        worker.process_lite_requests()
+
+    events = _events_by_token(db.connect(), "a1b2c3d4e5f6")
+    log_texts = [e["text"] for e in _events_of_kind(_events_for_task(events, "crawl"), "log")]
+    retry_lines = [t for t in log_texts if "products" in t]
+    assert len(retry_lines) == 1
+    assert "retry succeeded" in retry_lines[0]
+    assert "5s" in retry_lines[0]
+    # The un-retried page (attempts=1) never gets a retry line of its own
+    # — only the "reading {url}…" line and the one retried page's line.
+    assert len(log_texts) == 2
+
+
+def test_probe_done_events_present_with_result_aware_text(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    scan_result = _make_scan_result()
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
+         patch("scan.engine.run_scan", return_value=scan_result), \
+         patch("generation.membership_probe.probe_membership", return_value={"result": "yes", "raw_evidence": "loyalty page found"}), \
+         patch("generation.revenue_probe.probe_revenue", return_value={"annual_revenue_usd": 5_000_000, "basis": "estimate", "quote": None}):
+        worker.process_lite_requests()
+
+    events = _events_by_token(db.connect(), "a1b2c3d4e5f6")
+
+    membership_done = _events_of_kind(_events_for_task(events, "probe_membership"), "done")
+    assert len(membership_done) == 1
+    assert "Program found" in membership_done[0]["text"]
+
+    revenue_done = _events_of_kind(_events_for_task(events, "probe_revenue"), "done")
+    assert len(revenue_done) == 1
+    assert "5,000,000" in revenue_done[0]["text"]
+
+
+def test_fetch_probe_done_event_present_when_probe_url_returned(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    scan_result = _make_scan_result(fetch_probe_url="https://acme.example.com/p/shoe", fetch_probe_kind="product_page")
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
+         patch("scan.engine.run_scan", return_value=scan_result), \
+         patch("generation.fetch_probe.probe_fetch", return_value={
+             "outcome": "quoted_price", "url": "https://acme.example.com/p/shoe",
+             "kind": "product_page", "price": "$80", "quote": "It's $80.", "note": None,
+         }):
+        worker.process_lite_requests()
+
+    events = _events_by_token(db.connect(), "a1b2c3d4e5f6")
+    probe_events = _events_for_task(events, "probe_fetch")
+    log_texts = [e["text"] for e in _events_of_kind(probe_events, "log")]
+    assert any("open one of your product pages" in t for t in log_texts)
+    done = _events_of_kind(probe_events, "done")
+    assert len(done) == 1
+    assert "quoted a price" in done[0]["text"]
+
+
+# ── Part 1 (E1): sweep terminal-state + report events ────────────────────
+
+def _insert_running_lite_with_dimensions(conn, token, cycle_status, scan_status, dimensions=None):
+    conn.exec_driver_sql(
+        "INSERT INTO soa_cycles (cycle_code, status) VALUES (?, ?)",
+        (f"lite-{token}", cycle_status),
+    )
+    cycle_id = conn.exec_driver_sql(
+        "SELECT id FROM soa_cycles WHERE cycle_code = ?", (f"lite-{token}",)
+    ).fetchone()[0]
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_requests (token, brand_name, status, cycle_id) VALUES (?, 'Acme', 'running', ?)",
+        (token, cycle_id),
+    )
+    lite_id = conn.exec_driver_sql(
+        "SELECT id FROM soa_lite_requests WHERE token = ?", (token,)
+    ).fetchone()[0]
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_scan_results (lite_request_id, status, dimensions, updated_at) VALUES (?, ?, ?, ?)",
+        (lite_id, scan_status, json.dumps(dimensions) if dimensions is not None else None,
+         datetime.now(timezone.utc).isoformat()),
+    )
+
+
+def test_sweep_emits_done_state_and_report_event_on_normal_completion(db):
+    with db.begin() as conn:
+        _insert_running_lite_with_dimensions(conn, "done0001", "complete", "complete")
+
+    worker._sweep_lite_completions()
+
+    events = _events_by_token(db.connect(), "done0001")
+    state_texts = [e["text"] for e in _events_of_kind(events, "state")]
+    assert state_texts == ["done"]
+    report_done = _events_of_kind(_events_for_task(events, "report"), "done")
+    assert len(report_done) == 1
+
+
+def test_sweep_emits_failed_state_and_no_report_event_on_cycle_failure(db):
+    with db.begin() as conn:
+        _insert_running_lite_with_dimensions(conn, "fail0001", "failed", "complete")
+
+    worker._sweep_lite_completions()
+
+    events = _events_by_token(db.connect(), "fail0001")
+    state_texts = [e["text"] for e in _events_of_kind(events, "state")]
+    assert state_texts == ["failed"]
+    assert _events_for_task(events, "report") == []
+
+
+def test_sweep_emits_degraded_blocked_state_when_scan_blocked(db):
+    with db.begin() as conn:
+        _insert_running_lite_with_dimensions(conn, "block001", "complete", "blocked", dimensions={"degraded_reason": "blocked"})
+
+    worker._sweep_lite_completions()
+
+    events = _events_by_token(db.connect(), "block001")
+    state_texts = [e["text"] for e in _events_of_kind(events, "state")]
+    assert state_texts == ["degraded-blocked"]
+    # A degraded-but-complete run still gets its report card — the
+    # pipeline itself succeeded (rule 7: scan never blocks the report).
+    assert len(_events_of_kind(_events_for_task(events, "report"), "done")) == 1
+
+
+def test_sweep_emits_no_product_pages_state(db):
+    with db.begin() as conn:
+        _insert_running_lite_with_dimensions(
+            conn, "nopp0001", "complete", "blocked",
+            dimensions={"degraded_reason": "no_product_pages_found"},
+        )
+
+    worker._sweep_lite_completions()
+
+    events = _events_by_token(db.connect(), "nopp0001")
+    state_texts = [e["text"] for e in _events_of_kind(events, "state")]
+    assert state_texts == ["no-product-pages"]
+
+
+def test_sweep_emits_degraded_blocked_when_scan_timed_out(db):
+    """A scan stuck 'running' past SCAN_TIMEOUT_MINUTES is force-failed
+    by the sweep itself — the terminal state must reflect THAT final
+    status, not the stale pre-timeout one, even though degraded_reason
+    was never written (the scan never got far enough to compute one)."""
+    with db.begin() as conn:
+        _insert_running_lite_with_dimensions(conn, "stuck001", "complete", "running")
+        _age_scan_row(conn, "stuck001", minutes_ago=15)
+
+    worker._sweep_lite_completions()
+
+    events = _events_by_token(db.connect(), "stuck001")
+    state_texts = [e["text"] for e in _events_of_kind(events, "state")]
+    assert state_texts == ["degraded-blocked"]

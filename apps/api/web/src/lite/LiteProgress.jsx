@@ -1,41 +1,57 @@
 /**
- * The run manifest — status page (Stage 20), rebuilt as a PURE
- * PROJECTION of one /status poll snapshot (M0). deriveManifestRows()
- * is the single mapping function: status payload -> six fixed-order
- * rows, each independently pending/active/done/na. No row's content
- * comes from client-side accumulated state — feeding any one snapshot
- * to this component (fresh mount, a refresh, a same-tab revisit via
- * Stage 9's /report/{token} URL) renders the correct full manifest.
- * Only the elapsed clock, the >90s stalled notice, and
- * prefers-reduced-motion are legitimately time/environment-based, not
- * manifest content — they never change WHICH state a row is in.
+ * The run-manifest status page (Part 1), rebuilt around the append-only
+ * events[] array on the /status snapshot (apps/pipeline/lite_events.py
+ * writes it; apps/api/app/routers/public_lite.py passes it straight
+ * through). The prior stage's fixed six-row projection is retired
+ * entirely — this page now projects THREE things from events[], every
+ * poll, from scratch: the header's state chip +
+ * progress bar (kind=state / done-task fraction), the always-visible
+ * console (kind=log, arrival order), and the completion feed (kind=done,
+ * arrival order, newest first). No client-side accumulation of its own:
+ * feeding any one snapshot to this component renders the correct full
+ * page — a fresh mount, a refresh, or a same-tab revisit via /report/
+ * {token} all reproduce identically from that snapshot's events[] alone.
  *
- * Rows are independent of each other and of visual position: the scan
- * (row 0) and membership probe (row 1) both run synchronously in the
- * same worker tick as the cycle is queued (see apps/pipeline/worker.py
- * ::process_lite_requests), often finishing before query-running even
- * starts, while competitor generation (row 2) happens earlier still —
- * so real runs complete rows out of visual order constantly. Display
- * order never changes; only each row's own state does.
- *
- * membership_check and scan_pages_read (Stage 20, additive fields on
- * GET /status) are the only two pieces of manifest content this page
- * needs that weren't already on the status payload — both sourced from
- * data _run_lite_scan/_run_membership_probe already write to
- * soa_lite_scan_results (see public_lite.py::_derive_membership_check).
- * No live per-page fetch count exists anywhere server-side (the crawl
- * writes once, at the end) — row 0's active state is deliberately a
- * generic line, never an invented count (S3).
+ * TASK_ORDER/TASK_DISPLAY_NAMES below is a manually-synced mirror of
+ * apps/pipeline/lite_events.py's TASKS registry — JS can't import
+ * Python (same precedent as BOT_NAME/BOT_UA in BotsPage.jsx). Task ids
+ * are stable; only the 8 ids and their order need to match.
  */
 import { useEffect, useRef, useState } from 'react'
 import { LogoHeader, ErrorBanner, LightCard, DarkCard, Chip } from './liteTheme.jsx'
 import { domainFromStoreUrl, formatElapsed, maskEmail } from './liteDerive.js'
 import { liteApi } from './liteApi.js'
 import { validateEmail } from './validation.js'
-import { PILLAR_NAMES, PILLAR_ORDER, LITE_QUERY_COUNT } from './landing/scanDimensionsRegistry.js'
+import { DegradedRunBanner } from './DegradedRunBanner.jsx'
 
 const STALL_THRESHOLD_MS = 90_000
-const DEFAULT_TOTAL_QUERIES = LITE_QUERY_COUNT // fixed query count for every SoA Lite run
+const MAX_CONSOLE_HEIGHT_PX = 260
+
+const TASK_ORDER = [
+  'crawl', 'probe_membership', 'probe_revenue', 'probe_fetch',
+  'competitors', 'queries', 'scoring', 'report',
+]
+const TASK_DISPLAY_NAMES = {
+  crawl: 'Reading your store',
+  probe_membership: 'Membership check',
+  probe_revenue: 'Revenue estimate',
+  probe_fetch: 'Fetch probe',
+  competitors: 'Competitor set',
+  queries: 'Shopper questions',
+  scoring: 'Scoring the answers',
+  report: 'Your report',
+}
+
+const STATE_CHIP_LABEL = {
+  queued: 'AUDIT QUEUED',
+  running: 'AUDIT RUNNING · USUALLY 10–20 MINUTES',
+  done: 'AUDIT COMPLETE',
+  failed: 'AUDIT FAILED',
+  'degraded-blocked': 'AUDIT COMPLETE · SITE BLOCKED OUR READER',
+  'no-product-pages': 'AUDIT COMPLETE · PRODUCT PAGES NOT FOUND',
+}
+
+// ─── Shared hooks (elapsed clock, reduced-motion, staleness) ────────────
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(() => (
@@ -69,25 +85,22 @@ function useElapsedSeconds(active) {
   return elapsed
 }
 
-/** R2 (Stage 12), generalized for Stage 20: tracks the last time the
- * manifest's own rendered signature actually changed — not phaseData's
- * object identity, which is fresh every 5s poll even when nothing
- * moved — and reports "stalled" once that's been >90s while the run is
- * still non-terminal. Driven by the SAME rows deriveManifestRows just
- * computed, so any visible change to any row (not just query progress)
- * correctly resets the clock. */
-function useStalledState(signature, active) {
-  const lastSignatureRef = useRef(signature)
+/** P5: tracks the last time the snapshot's latest event ts actually
+ * advanced, and reports "stalled" once that's been >90s while the run
+ * is still active. Client-derived only — never stored as an event, and
+ * never lets a dead worker read as "almost done". */
+function useStalledSince(latestTs, active) {
+  const lastTsRef = useRef(latestTs)
   const lastChangeAtRef = useRef(Date.now())
   const [isStalled, setIsStalled] = useState(false)
 
   useEffect(() => {
-    if (signature !== lastSignatureRef.current) {
-      lastSignatureRef.current = signature
+    if (latestTs !== lastTsRef.current) {
+      lastTsRef.current = latestTs
       lastChangeAtRef.current = Date.now()
       setIsStalled(false)
     }
-  }, [signature])
+  }, [latestTs])
 
   useEffect(() => {
     if (!active) return undefined
@@ -100,223 +113,207 @@ function useStalledState(signature, active) {
   return isStalled
 }
 
-// ─── Row derivation (pure) ───────────────────────────────────────────────
+// ─── Pure projection helpers ─────────────────────────────────────────────
 
-const SCAN_INFO_COPY = {
-  blocked: (domain) => `${domain} blocked our reader — that itself is a finding, and it's in your report.`,
-  failed: (domain) => `We couldn't finish reading ${domain} this time — noted honestly in your report.`,
-  skipped: (domain) => `We didn't get a chance to read ${domain} this run.`,
+function formatEventClock(ts) {
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-function deriveReadingStoreRow(phaseData, storeUrl) {
-  if (!storeUrl) {
-    return { state: 'na', detail: 'No store URL was provided this run.', stamp: null, fraction: 1 }
-  }
-  const domain = domainFromStoreUrl(storeUrl)
-  const scanStatus = phaseData?.scan_status
-
-  if (scanStatus === 'complete') {
-    const pages = phaseData?.scan_pages_read
-    const detail = pages !== null && pages !== undefined
-      ? `${pages} pages read — catalog, loyalty, and protocol surfaces`
-      : 'Finished reading your store'
-    return { state: 'done', detail, stamp: 'DONE', fraction: 1 }
-  }
-  if (scanStatus === 'blocked' || scanStatus === 'failed' || scanStatus === 'skipped') {
-    return { state: 'na', detail: SCAN_INFO_COPY[scanStatus](domain), stamp: null, fraction: 1 }
-  }
-  if (!scanStatus) {
-    return { state: 'pending', detail: '', stamp: null, fraction: 0 }
-  }
-  return { state: 'active', detail: 'fetching pages…', stamp: null, fraction: 0 }
+/** P1: derives ~N minutes remaining from the completed-task fraction and
+ * elapsed time so far — labeled ESTIMATE, never a promise. Returns null
+ * until there's enough signal (avoids a wild extrapolation off one
+ * early task), in which case the header falls back to the state chip's
+ * own "usually 10-20 minutes" copy alone. */
+export function estimateRemainingMinutes(elapsedSeconds, completedFraction) {
+  if (!completedFraction || completedFraction < 0.05) return null
+  const estimatedTotalSeconds = elapsedSeconds / completedFraction
+  const remainingSeconds = Math.max(0, estimatedTotalSeconds - elapsedSeconds)
+  return Math.max(1, Math.ceil(remainingSeconds / 60))
 }
 
-function deriveMembershipRow(phaseData) {
-  const check = phaseData?.membership_check
-  if (check === 'applies') {
-    return { state: 'done', detail: 'Program found — Member Value will be scored', stamp: 'SCORED', fraction: 1 }
+/** M0-equivalent for this stage: the single mapping from one events[]
+ * array to everything the page renders — no other client state feeds
+ * derivation. */
+export function projectEvents(events) {
+  const safeEvents = events || []
+  const logEvents = safeEvents.filter((e) => e.kind === 'log')
+  const doneEvents = safeEvents.filter((e) => e.kind === 'done')
+  const stateEvents = safeEvents.filter((e) => e.kind === 'state')
+  const latestState = stateEvents.length ? stateEvents[stateEvents.length - 1].text : null
+  const completedTasks = new Set(doneEvents.map((e) => e.task))
+  const completedFraction = TASK_ORDER.length ? completedTasks.size / TASK_ORDER.length : 0
+  const latestTs = safeEvents.length ? safeEvents[safeEvents.length - 1].ts : null
+
+  return {
+    logEvents,
+    // P3: arrival order, prepended — newest done task first.
+    doneEvents: doneEvents.slice().reverse(),
+    latestState,
+    completedFraction,
+    latestTs,
   }
-  if (check === 'na') {
-    return { state: 'na', detail: 'No program found — scoring normalized', stamp: null, fraction: 1 }
-  }
-  if (phaseData?.scan_status) {
-    return { state: 'active', detail: 'asking whether a membership program exists…', stamp: null, fraction: 0 }
-  }
-  return { state: 'pending', detail: '', stamp: null, fraction: 0 }
 }
 
-function deriveCompetitorRow(phaseData) {
-  // competitor_source (not competitors.length) is the real "has this
-  // resolved yet" signal: competitor_names starts as the visitor's own
-  // manual list (often []) from the very first poll, at submission time
-  // — only competitor_source is null until process_lite_requests'
-  // auto-generation step actually runs and writes both fields together
-  // (see worker.py). Using competitors==null here would misread an
-  // unresolved solo submission as an already-resolved one.
-  const source = phaseData?.competitor_source
-  if (source == null) {
-    if (phaseData?.phase === 'identifying_competitors') {
-      return { state: 'active', detail: 'identifying your closest rivals…', stamp: null, fraction: 0 }
-    }
-    return { state: 'pending', detail: '', stamp: null, fraction: 0 }
-  }
-  const competitors = phaseData?.competitors || []
-  if (competitors.length === 0) {
-    return { state: 'na', detail: 'Running solo — no close rivals identified', stamp: null, fraction: 1 }
-  }
-  return { state: 'done', detail: null, chips: competitors, stamp: `${competitors.length} FOUND`, fraction: 1 }
-}
+// ─── Header ───────────────────────────────────────────────────────────────
 
-const QUESTIONS_DONE_PHASES = new Set(['coding', 'analyzing', 'metrics', 'complete'])
-
-function deriveQuestionsRow(phaseData) {
-  const phase = phaseData?.phase
-  const progress = phaseData?.progress
-
-  if (phase === 'running') {
-    const total = progress?.total_runs || DEFAULT_TOTAL_QUERIES
-    const completed = progress?.completed_runs ?? 0
-    return {
-      state: 'active', stamp: null, fraction: total ? completed / total : 0,
-      detail: `${completed} of ${total} answers`,
-      qbarPct: total ? Math.round((completed / total) * 100) : 0,
-    }
-  }
-  if (QUESTIONS_DONE_PHASES.has(phase)) {
-    const total = progress?.total_runs || DEFAULT_TOTAL_QUERIES
-    return { state: 'done', stamp: `${total} OF ${total}`, detail: `All ${total} answers collected`, fraction: 1 }
-  }
-  return { state: 'pending', detail: '', stamp: null, fraction: 0 }
-}
-
-function pillarScoredCopy() {
-  const names = PILLAR_ORDER.map((p) => PILLAR_NAMES[p])
-  const last = names[names.length - 1]
-  return `Scored across ${names.slice(0, -1).join(', ')}, and ${last}`
-}
-
-function deriveScoringRow(phaseData) {
-  const phase = phaseData?.phase
-  if (phase === 'coding' || phase === 'analyzing') {
-    return { state: 'active', detail: 'coding mentions, prices, and incentives…', stamp: null, fraction: 0 }
-  }
-  if (phase === 'metrics' || phase === 'complete') {
-    return { state: 'done', detail: pillarScoredCopy(), stamp: 'DONE', fraction: 1 }
-  }
-  return { state: 'pending', detail: '', stamp: null, fraction: 0 }
-}
-
-function deriveReportRow(phaseData) {
-  if (phaseData?.status === 'complete') {
-    return { state: 'done', detail: 'Three pillars, ranked fixes, private link', stamp: 'READY', fraction: 1 }
-  }
-  if (phaseData?.phase === 'metrics') {
-    return { state: 'active', detail: 'assembling your report…', stamp: null, fraction: 0 }
-  }
-  return { state: 'pending', detail: '', stamp: null, fraction: 0 }
-}
-
-const ROW_DEFS = [
-  { key: 'reading_store', name: 'Reading your store', weight: 14, derive: deriveReadingStoreRow, needsStoreUrl: true },
-  { key: 'membership_check', name: 'Membership check', weight: 6, derive: deriveMembershipRow },
-  { key: 'competitor_set', name: 'Competitor set', weight: 6, derive: deriveCompetitorRow },
-  { key: 'shopper_questions', name: 'Shopper questions', weight: 40, derive: deriveQuestionsRow },
-  { key: 'scoring_answers', name: 'Scoring the answers', weight: 24, derive: deriveScoringRow },
-  { key: 'your_report', name: 'Your report', weight: 10, derive: deriveReportRow },
-]
-
-/**
- * The single mapping function (M0): one status snapshot -> the full
- * six-row manifest, in fixed display order. A row's `fraction` (0-1)
- * feeds the aggregate bar; `state` is always one of pending/active/
- * done/na. Rule S2/test requirement: an overall status of 'failed'
- * must never leave a row pulsing — any row still active collapses to
- * 'na' with no detail (LiteWidget.jsx routes 'failed' to <LiteFailed>
- * instead of this component in production; this is a defensive
- * invariant on the pure function itself).
- */
-export function deriveManifestRows(phaseData, storeUrl) {
-  const rows = ROW_DEFS.map(({ key, name, weight, derive, needsStoreUrl }) => ({
-    key,
-    name,
-    weight,
-    ...derive(phaseData, needsStoreUrl ? storeUrl : undefined),
-  }))
-
-  if (phaseData?.status === 'failed') {
-    return rows.map((row) => (
-      row.state === 'active'
-        ? { ...row, state: 'na', detail: '', chips: undefined, qbarPct: undefined }
-        : row
-    ))
-  }
-  return rows
-}
-
-export function aggregatePct(rows) {
-  const total = rows.reduce((sum, row) => sum + row.weight * (row.fraction || 0), 0)
-  return Math.max(0, Math.min(100, Math.round(total)))
-}
-
-// ─── Row rendering ───────────────────────────────────────────────────────
-
-const GLYPH_BY_STATE = { done: '✓', na: '—', active: '●', pending: '●' }
-const GLYPH_COLOR_BY_STATE = {
-  done: 'var(--good)', na: 'var(--text-2)', active: 'var(--accent)', pending: 'var(--line)',
-}
-
-function ManifestRow({ row, reducedMotion }) {
-  const pulse = row.state === 'active' && !reducedMotion
-  const glyphClasses = ['lite-manifest-glyph']
-  if (pulse) glyphClasses.push('lite-manifest-glyph--pulse')
+function ProgressHeader({ brandOrDomain, latestState, fallbackStatus, completedFraction, elapsedSeconds, isActive }) {
+  // P7 fallback (no events yet, e.g. a pre-deploy row, or a run that
+  // just submitted and hasn't had its first event land): derive the
+  // chip from the status endpoint's own `status` field instead of a
+  // state event — 'pending' reads as queued, anything else active-ish
+  // reads as running, matching the honest default this same status
+  // value already implied on the old six-row manifest.
+  const chipLabel = STATE_CHIP_LABEL[latestState]
+    || (fallbackStatus === 'pending' ? STATE_CHIP_LABEL.queued : STATE_CHIP_LABEL.running)
+  const remainingMin = isActive ? estimateRemainingMinutes(elapsedSeconds, completedFraction) : null
+  const pct = Math.round(Math.max(0, Math.min(1, completedFraction)) * 100)
 
   return (
-    <div className="lite-manifest-row">
-      <span
-        className={glyphClasses.join(' ')}
-        style={{ color: GLYPH_COLOR_BY_STATE[row.state] }}
-        aria-hidden="true"
-      >
-        {GLYPH_BY_STATE[row.state]}
-      </span>
-      <span style={{ fontSize: 14.5, fontWeight: 600, color: row.state === 'pending' ? 'var(--text-2)' : 'var(--text)' }}>
-        {row.name}
-      </span>
-      {row.stamp && (
-        <span
-          className="lite-mono"
-          style={{ fontSize: 11, letterSpacing: '0.06em', color: row.state === 'done' ? 'var(--good-ink)' : 'var(--text-2)' }}
-        >
-          {row.stamp}
-        </span>
-      )}
-      <div className="lite-manifest-detail">
-        {row.chips ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
-            {row.chips.map((name) => <Chip key={name} tone="outline">{name}</Chip>)}
-          </div>
-        ) : row.qbarPct !== undefined ? (
-          <span>
-            <span className="lite-manifest-qbar" aria-hidden="true"><span style={{ width: `${row.qbarPct}%` }} /></span>
-            <span className="lite-mono">{row.detail}</span>
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+        <div className="lite-headline" style={{ fontSize: 18 }}>
+          {brandOrDomain} — agentic value audit
+        </div>
+        {isActive && (
+          <span className="lite-mono lite-muted" style={{ fontSize: 11 }} data-testid="lite-elapsed">
+            {formatElapsed(elapsedSeconds)}
           </span>
-        ) : row.state === 'active' ? (
-          <span className="lite-mono">{row.detail}</span>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+        <Chip tone={latestState === 'failed' ? 'bad' : 'outline'}>{chipLabel}</Chip>
+        {remainingMin != null && (
+          <span className="lite-mono lite-muted" style={{ fontSize: 11 }}>
+            ~{remainingMin} min remaining · ESTIMATE
+          </span>
+        )}
+      </div>
+      <div className="lite-bar-track">
+        <div
+          className={`lite-bar-fill${isActive ? ' lite-bar-fill--shimmer' : ''}`}
+          style={{ width: `${pct}%`, background: 'var(--accent)' }}
+        />
+      </div>
+    </div>
+  )
+}
+
+// ─── Console (P2) ───────────────────────────────────────────────────────
+
+function ConsoleLine({ event }) {
+  return (
+    <div className="lite-console-line">
+      <span className="lite-console-ts">{formatEventClock(event.ts)}</span>
+      <span className="lite-console-task">{(TASK_DISPLAY_NAMES[event.task] || event.task).toUpperCase()}</span>
+      <span className="lite-console-text">{event.text}</span>
+    </div>
+  )
+}
+
+function Console({ logEvents, isStalled, reducedMotion }) {
+  const bodyRef = useRef(null)
+  const [pinnedToBottom, setPinnedToBottom] = useState(true)
+
+  useEffect(() => {
+    const el = bodyRef.current
+    if (el && pinnedToBottom) {
+      el.scrollTop = el.scrollHeight
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logEvents.length, isStalled])
+
+  function handleScroll() {
+    const el = bodyRef.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    setPinnedToBottom(distanceFromBottom < 24)
+  }
+
+  return (
+    <div className="lite-console">
+      <div className="lite-console-titlebar">
+        <span className={`lite-console-live-dot${reducedMotion ? '' : ' lite-console-live-dot--pulse'}`} aria-hidden="true" />
+        <span className="lite-mono" style={{ fontSize: 11, letterSpacing: '0.06em' }}>LIVE</span>
+      </div>
+      <div
+        ref={bodyRef}
+        className="lite-console-body"
+        style={{ maxHeight: MAX_CONSOLE_HEIGHT_PX }}
+        onScroll={handleScroll}
+        role="log"
+        aria-live="polite"
+        data-testid="lite-console-body"
+      >
+        {logEvents.length === 0 ? (
+          <div className="lite-console-line lite-console-line--muted">Starting up…</div>
         ) : (
-          row.detail || null
+          logEvents.map((e) => <ConsoleLine key={e.seq} event={e} />)
+        )}
+        {isStalled && (
+          <div className="lite-console-line lite-console-line--muted">
+            no updates for a while — still checking…
+          </div>
         )}
       </div>
     </div>
   )
 }
 
-// ─── Status-page email card (Stage 12, E1) — unchanged ──────────────────
+// ─── Completion feed (P3) ───────────────────────────────────────────────
+
+function CompletionCard({ event }) {
+  const name = TASK_DISPLAY_NAMES[event.task] || event.task
+  return (
+    <div className="lite-feed-card">
+      <span className="lite-feed-check" aria-hidden="true">✓</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{name}</span>
+          <span className="lite-mono lite-muted" style={{ fontSize: 10.5, letterSpacing: '0.06em' }}>DONE</span>
+        </div>
+        <div className="lite-body lite-muted" style={{ fontSize: 13, marginTop: 2 }}>{event.text}</div>
+        {event.chips && event.chips.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+            {event.chips.map((c) => <Chip key={c} tone="outline">{c}</Chip>)}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CompletionFeed({ doneEvents, reducedMotion }) {
+  return (
+    <div className="lite-feed">
+      <div className="lite-mono lite-muted" style={{ fontSize: 11, marginBottom: 10 }}>
+        {doneEvents.length} OF {TASK_ORDER.length} TASKS
+      </div>
+      {doneEvents.length === 0 ? (
+        <div className="lite-body lite-muted" style={{ fontSize: 13 }}>
+          Tasks will appear here as they finish…
+        </div>
+      ) : (
+        <div className="lite-feed-list">
+          {doneEvents.map((e) => (
+            <div key={e.task} className={reducedMotion ? '' : 'lite-feed-card--enter'}>
+              <CompletionCard event={e} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Status-page email card (Stage 12, E1) — unchanged (P6) ─────────────
 // Report redesign (Part 8, E2): this stays exactly what it always was —
 // a notification-capture address only. The report itself is no longer
-// gated on email at all (Part 8, E1 deleted that gate entirely), so this
-// card was never "the same ask, moved earlier" in the sense of unlocking
-// anything sooner — it never gated content in the first place, only
-// requested where to send a completion notice.
+// gated on email at all, so this card was never "the same ask, moved
+// earlier" — it never gated content, only requested where to send a
+// completion notice.
 function StatusEmailCard({ token }) {
   const [email, setEmail] = useState('')
   const [emailError, setEmailError] = useState(null)
@@ -394,42 +391,48 @@ export function LiteProgress({ phaseData, storeUrl, error, token }) {
   const reducedMotion = usePrefersReducedMotion()
   const elapsedSeconds = useElapsedSeconds(isActive)
 
-  const rows = deriveManifestRows(phaseData, storeUrl)
-  const pct = aggregatePct(rows)
-  const signature = JSON.stringify(rows.map((r) => [r.key, r.state, r.detail, r.stamp, r.chips, r.qbarPct]))
-  const isStalled = useStalledState(signature, isActive)
+  const events = phaseData?.events
+  const hasEvents = Array.isArray(events) && events.length > 0
+  const { logEvents, doneEvents, latestState, completedFraction, latestTs } = projectEvents(events)
+  const isStalled = useStalledSince(latestTs, isActive && latestState === 'running')
+
+  const brandOrDomain = storeUrl ? domainFromStoreUrl(storeUrl) : 'Your store'
+  const showDegradedBanner = latestState === 'degraded-blocked' || latestState === 'no-product-pages'
 
   return (
     <div className="lite-root">
-      <div className="lite-shell" style={{ maxWidth: 480 }}>
+      <div className="lite-shell" style={{ maxWidth: 560 }}>
         <LightCard>
           <LogoHeader />
           <ErrorBanner message={error} />
 
-          {isActive && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
-              <span className="lite-mono lite-muted" style={{ fontSize: 11 }} data-testid="lite-elapsed">
-                {formatElapsed(elapsedSeconds)}
-              </span>
+          <ProgressHeader
+            brandOrDomain={brandOrDomain}
+            latestState={latestState}
+            fallbackStatus={phaseData?.status}
+            completedFraction={completedFraction}
+            elapsedSeconds={elapsedSeconds}
+            isActive={isActive}
+          />
+
+          {showDegradedBanner && (
+            <div style={{ marginBottom: 16 }}>
+              <DegradedRunBanner
+                status={phaseData?.scan_status}
+                degradedReason={phaseData?.degraded_reason}
+                bannerFacts={phaseData?.degraded_banner_facts}
+              />
             </div>
           )}
 
-          <div className="lite-bar-track" style={{ marginBottom: 18 }}>
-            <div
-              className={`lite-bar-fill${isActive ? ' lite-bar-fill--shimmer' : ''}`}
-              style={{ width: `${pct}%`, background: 'var(--accent)' }}
-            />
-          </div>
-
-          <div className="lite-manifest">
-            {rows.map((row) => <ManifestRow key={row.key} row={row} reducedMotion={reducedMotion} />)}
-          </div>
-
-          {isStalled && (
-            <div className="lite-muted" style={{ fontSize: 12, marginTop: 12 }}>
-              Still working — long queries can take a while.
-            </div>
-          )}
+          {hasEvents ? (
+            <>
+              <div style={{ marginBottom: 16 }}>
+                <Console logEvents={logEvents} isStalled={isStalled} reducedMotion={reducedMotion} />
+              </div>
+              <CompletionFeed doneEvents={doneEvents} reducedMotion={reducedMotion} />
+            </>
+          ) : null}
         </LightCard>
 
         {isActive && (

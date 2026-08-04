@@ -1503,6 +1503,26 @@ class SoaLiteRequest(Base):
 
     error_message = Column(Text, nullable=True)
 
+    events = Column(
+        JSON,
+        nullable=False,
+        default=list,
+        server_default="[]",
+        comment=(
+            "Append-only run-manifest event log: [{seq, ts, kind: "
+            "'log'|'done'|'state', task, text, chips?}]. task is one of "
+            "the fixed TASK registry (apps/pipeline/lite_events.py) — "
+            "crawl, probe_membership, probe_revenue, probe_fetch, "
+            "competitors, queries, scoring, report. Written incrementally "
+            "by worker.py/run_orchestrator.py/orchestrator/pipeline.py as "
+            "each stage progresses; log-kind events are capped at the "
+            "most recent 200 (done/state events are never trimmed) — see "
+            "lite_events.py::emit_event. Purely additive: the status "
+            "endpoint (apps/api/app/routers/public_lite.py) passes this "
+            "straight through, and a pre-this-stage row simply has '[]'."
+        ),
+    )
+
     report_email_sent_at = Column(
         DateTime(timezone=True),
         nullable=True,

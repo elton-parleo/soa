@@ -13,9 +13,10 @@ from typing import List, Optional, Tuple
 
 from sqlalchemy import func
 
+import lite_events
 import soa_shared.config as config
 from soa_shared.database import session_factory
-from soa_shared.models.soa_models import SoaCycle, SoaCodedMention, SoaCycleEntity, SoaQuery, SoaRun
+from soa_shared.models.soa_models import SoaCycle, SoaCodedMention, SoaCycleEntity, SoaLiteRequest, SoaQuery, SoaRun
 from orchestrator.pipeline_report import PipelineReport
 from runners.run_orchestrator import RunOrchestrator
 from parser.coding_orchestrator import CodingOrchestrator
@@ -100,6 +101,12 @@ class PipelineOrchestrator:
         self.dry_run = dry_run
 
         self.cycle = self._load_or_create_cycle()
+
+        # Part 1 (E1), lite-gated: same zero-cost-for-non-lite pattern as
+        # RunOrchestrator._resolve_lite_request_id — a cheap cycle_code
+        # prefix check short-circuits before any DB round trip for every
+        # non-lite cycle.
+        self._lite_request_id = self._resolve_lite_request_id()
 
         # Guard: refuse to rerun a fully complete cycle unless user passed explicit override flags
         if (
@@ -356,6 +363,11 @@ class PipelineOrchestrator:
             )
 
         logger.info("Stage 2 (coding) starting for cycle %s", self.cycle_code)
+        if self._lite_request_id is not None:
+            lite_events.emit_log(
+                self._lite_request_id, lite_events.TASK_SCORING,
+                "coding mentions, prices, and incentives…",
+            )
         orchestrator = CodingOrchestrator(
             cycle_code=self.cycle_code,
             max_concurrent=self.max_concurrent_coder,
@@ -452,6 +464,12 @@ class PipelineOrchestrator:
         export_path = os.path.join(
             cfg.SOA_EXPORTS_DIR, f"soa_metrics_{self.cycle_code}.xlsx"
         )
+
+        if self._lite_request_id is not None:
+            lite_events.emit_done(
+                self._lite_request_id, lite_events.TASK_SCORING,
+                "Scored across Visibility, Accessibility, and True Value",
+            )
 
         return MetricsStageResult(
             rows_written=summary.total_rows_written,
@@ -757,6 +775,17 @@ class PipelineOrchestrator:
                     )
             session.expunge(cycle)
         return cycle
+
+    def _resolve_lite_request_id(self) -> Optional[int]:
+        if not self.cycle_code.startswith("lite-"):
+            return None
+        with session_factory() as session:
+            row = (
+                session.query(SoaLiteRequest.id)
+                .filter(SoaLiteRequest.cycle_id == self.cycle.id)
+                .first()
+            )
+            return row[0] if row else None
 
     def _update_cycle_status(self, status: str) -> None:
         try:
