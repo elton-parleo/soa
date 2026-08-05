@@ -20,6 +20,7 @@ from soa_shared.models.soa_models import SoaCycle, SoaCodedMention, SoaCycleEnti
 from orchestrator.pipeline_report import PipelineReport
 from runners.run_orchestrator import RunOrchestrator
 from parser.coding_orchestrator import CodingOrchestrator
+from parser.pass2_recode_batch import recode_runs
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +108,12 @@ class PipelineOrchestrator:
         # prefix check short-circuits before any DB round trip for every
         # non-lite cycle.
         self._lite_request_id = self._resolve_lite_request_id()
+        # Part 1 (P3): total soa_price_observations rows pass-2 wrote this
+        # run, threaded from _run_stage_coding (where pass-2 executes)
+        # into _run_stage_metrics (where the scoring done-event chip is
+        # emitted) — the two are separate stage methods on the same
+        # instance, called in sequence by run_pipeline().
+        self._pass2_observations_written = 0
 
         # Guard: refuse to rerun a fully complete cycle unless user passed explicit override flags
         if (
@@ -366,7 +373,7 @@ class PipelineOrchestrator:
         if self._lite_request_id is not None:
             lite_events.emit_log(
                 self._lite_request_id, lite_events.TASK_SCORING,
-                "coding mentions, prices, and incentives…",
+                "coding answers — mentions, then price observations…",
             )
         orchestrator = CodingOrchestrator(
             cycle_code=self.cycle_code,
@@ -397,6 +404,10 @@ class PipelineOrchestrator:
             "Stage 2 (coding) complete: %d coded, %d needs review",
             summary.coded, summary.needs_review_count,
         )
+
+        if self._lite_request_id is not None:
+            await self._run_pass2_recode()
+
         return CodingStageResult(
             coded=summary.coded,
             needs_review=summary.needs_review_count,
@@ -408,6 +419,52 @@ class PipelineOrchestrator:
             skipped=False,
             skip_reason=None,
         )
+
+    async def _run_pass2_recode(self) -> None:
+        """
+        Part 1 (P1/P2), lite-gated: pass-2 price/citation extraction
+        (parser/response_coder_v2.py) for every run this cycle has
+        pass-1-coded — not just runs freshly coded THIS call, since a
+        resumed cycle's earlier-coded runs need pass-2 too.
+        ResponseCoderV2.code_run's own soa_pass2_coding_log sentinel
+        check makes calling it on an already-processed run a cheap,
+        idempotent no-op, so re-scanning the full coded set on every
+        resume is safe.
+
+        Joins LITE_QUERY_CONCURRENCY — not max_concurrent_coder — since
+        this runs AFTER pass-1 coding is done and isn't latency-critical;
+        it must never compete with answer generation for API headroom.
+        Cost note (P5): adds ~one coding call per answered query
+        (~LITE_QUERY_COUNT/audit), so a lite audit's total OpenAI call
+        count roughly doubles (~24 -> ~52). Daily rate limits are
+        unchanged this stage — see public_lite.py's RATE_LIMIT_* — flag
+        for a deliberate review if audit volume grows.
+
+        Never raises: a bug here (or in recode_runs/ResponseCoderV2,
+        which already isolate per-response failures) must never fail
+        Stage 2 or the pipeline — pass-2 is enrichment, not on the
+        critical path to a report existing at all.
+        """
+        try:
+            with session_factory() as session:
+                run_ids = [
+                    row[0] for row in session.query(SoaCodedMention.run_id)
+                    .join(SoaRun, SoaRun.id == SoaCodedMention.run_id)
+                    .filter(SoaRun.cycle_id == self.cycle.id)
+                    .distinct()
+                    .all()
+                ]
+            if not run_ids:
+                return
+
+            summary = await recode_runs(run_ids, concurrency=config.LITE_QUERY_CONCURRENCY)
+            self._pass2_observations_written = sum(r.observations_written for r in summary.results)
+            logger.info(
+                "Stage 2b (pass-2 recode) complete for cycle %s: %d/%d succeeded, %d observations written",
+                self.cycle_code, summary.succeeded, summary.total, self._pass2_observations_written,
+            )
+        except Exception:
+            logger.exception("Stage 2b (pass-2 recode) failed unexpectedly for cycle %s", self.cycle_code)
 
     async def _run_stage_metrics(self) -> MetricsStageResult:
         """
@@ -466,9 +523,17 @@ class PipelineOrchestrator:
         )
 
         if self._lite_request_id is not None:
+            # Part 1 (P3): names the pass-2 yield when there is one —
+            # never a chip claiming "0 price observations" when pass-2
+            # simply never ran (e.g. a non-lite path or a skipped stage).
+            chips = (
+                [f"{self._pass2_observations_written} price observations"]
+                if self._pass2_observations_written > 0 else None
+            )
             lite_events.emit_done(
                 self._lite_request_id, lite_events.TASK_SCORING,
                 "Scored across Visibility, Accessibility, and True Value",
+                chips=chips,
             )
 
         return MetricsStageResult(

@@ -1137,6 +1137,24 @@ describe('LiteFullReport — True Value section (Stage 19, R2; restyled Report r
     expect(screen.queryByText('0%')).not.toBeInTheDocument()
   })
 
+  // Part 1 (P4): a distinct honest state from the generic outcome-guard
+  // NA above — enough mention volume existed, but none of it was ever
+  // through pass-2 price coding (no soa_pass2_coding_log sentinel), so
+  // there is no basis to rate at all. Must never collapse into the
+  // same "not enough mentions" copy, and never a 0%.
+  it('renders a not_evaluated said sub-lens with its own honest copy, distinct from the generic NA', () => {
+    const pillars = buildV3Pillars({
+      dealCitabilitySaid: {
+        earned: 0, max: 3, na: true, not_evaluated: true,
+        evidence: ['this audit predates price-observation coding — re-run for the full picture'],
+      },
+    })
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('this audit predates price-observation coding — re-run for the full picture')).toBeInTheDocument()
+    expect(screen.queryByText('not enough mentions to measure')).not.toBeInTheDocument()
+    expect(screen.queryByText('0%')).not.toBeInTheDocument()
+  })
+
   // Fetch-resilience stage (Part C, B4/C1): every sampled product page
   // failed to fetch this run — the dimension renders NOT MEASURABLE,
   // with the fetch facts surfaced and no leaked said-outcome sentence

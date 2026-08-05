@@ -421,12 +421,39 @@ def _na_said_result(code: str, weight: float) -> Dict:
     }
 
 
+def _not_evaluated_said_result(code: str, weight: float) -> Dict:
+    """
+    Part 1 (P4): a distinct honest state from _na_said_result — there
+    WAS enough mention volume, but none of it has ever been through
+    pass-2 price/citation coding (no soa_pass2_coding_log sentinel for
+    any mention in the opportunity set), so there is no signal to rate
+    at all. na=True keeps this on the existing NA rendering/rescaling
+    path (rule 6, additive); not_evaluated distinguishes it from
+    _na_said_result's "too few mentions" for the frontend's copy —
+    "coded, none stated" (a real 0%) must never look identical to
+    "never coded" (structural, this).
+    """
+    return {
+        "code": code, "earned": 0.0, "max": weight, "na": True, "not_evaluated": True,
+        "evidence": ["this audit predates price-observation coding — re-run for the full picture"],
+    }
+
+
 def score_price_truth_said(run_signals: List[RunSignal]) -> Dict:
     """
     Opportunity set: all mentions of the primary entity. Citation =
     RunSignal.primary_price_quoted (the same 'any stated/net price
     observed' signal apps/api/app/services/lite_crosswalk.py already
     uses for V1 linking — not a second definition).
+
+    Part 1 (P4): primary_price_quoted only ever means something for a
+    mention pass 2 has actually coded (RunSignal.pass2_coded — see
+    public_lite.py::_fetch_run_signals's soa_pass2_coding_log join).
+    The denominator is narrowed to sentineled mentions specifically so
+    that "coded, none stated" (a real 0%, sentineled_mentions nonempty,
+    cited=0) is never confused with "never coded" (sentineled_mentions
+    empty) — the latter renders NOT EVALUATED, never a 0% rate the
+    audit has no basis for.
     """
     weight = DIMENSIONS_BY_CODE["price_truth"].said_max
     mentions = [s for s in run_signals if s.primary_mentioned]
@@ -434,12 +461,17 @@ def score_price_truth_said(run_signals: List[RunSignal]) -> Dict:
     if total < MIN_OPPORTUNITY_SET_MENTIONS:
         return _na_said_result("price_truth_said", weight)
 
-    cited = sum(1 for s in mentions if s.primary_price_quoted)
-    rate_pct = cited / total * 100
+    sentineled_mentions = [s for s in mentions if s.pass2_coded]
+    if not sentineled_mentions:
+        return _not_evaluated_said_result("price_truth_said", weight)
+
+    coded_total = len(sentineled_mentions)
+    cited = sum(1 for s in sentineled_mentions if s.primary_price_quoted)
+    rate_pct = cited / coded_total * 100
     earned = round(apply_rate_band(rate_pct) * weight)
     return {
         "code": "price_truth_said", "earned": earned, "max": weight, "na": False,
-        "evidence": [f"{cited}/{total} mentions ({rate_pct:.0f}%) cited a price"],
+        "evidence": [f"{cited}/{coded_total} coded answers ({rate_pct:.0f}%) cited a price"],
         "band_table_ref": BAND_TYPE_RATE, "your_value": round(rate_pct, 1), "your_band": _rate_band_index(rate_pct),
     }
 

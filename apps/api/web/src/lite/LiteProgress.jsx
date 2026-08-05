@@ -357,7 +357,7 @@ function StatusEmailCard({ token }) {
         This takes a few minutes.
       </div>
       <div className="lite-body--inv" style={{ marginBottom: 16 }}>
-        Leave your email and we'll send your report the moment it's ready — no need to keep this tab open.
+        Leave your email and we'll send your report the moment it's ready — no need to keep this tab open. We won't spam you or share your email.
       </div>
       <ErrorBanner message={submitError} />
       {/* noValidate: validateEmail()'s message renders inline instead of

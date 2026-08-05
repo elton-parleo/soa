@@ -124,12 +124,17 @@ def test_recommendation_strength_evidence_never_leaks_the_raw_metric_or_its_scal
 # ─── True Value 'said' sub-lenses (Stage 16, Part 3 T2) ──────────────────
 
 def _mentioned(stage="Awareness", price_quoted=False, member_price_claimed=False,
-               deal_types=(), deal_cited=False, member_value_cited=False):
+               deal_types=(), deal_cited=False, member_value_cited=False, pass2_coded=True):
+    # Part 1 (P4): defaults to pass2_coded=True — every existing caller
+    # here already means "pass 2 ran and (didn't) find a price", never
+    # "pass 2 never ran"; tests that specifically want the NOT EVALUATED
+    # path pass pass2_coded=False explicitly.
     return RunSignal(
         stage=stage, primary_mentioned=True, primary_deal_cited=deal_cited,
         primary_deal_types=tuple(deal_types), primary_price_quoted=price_quoted,
         primary_member_price_claimed=member_price_claimed,
         primary_member_value_cited=member_value_cited,
+        pass2_coded=pass2_coded,
     )
 
 
@@ -165,6 +170,50 @@ def test_price_truth_said_rate_bands(cited, total, expected_earned):
     assert result["na"] is False
     assert result["earned"] == expected_earned
     assert result["max"] == 7
+
+
+# — Part 1 (P4): sentinel-aware NOT EVALUATED vs a real 0% —
+
+def test_price_truth_said_not_evaluated_when_zero_sentineled_mentions():
+    """Enough mention VOLUME (>= MIN_OPPORTUNITY_SET_MENTIONS), but none
+    of it has ever been through pass-2 price coding — the audit has no
+    price signal at all, which must never render as a 0% rate."""
+    signals = [_mentioned(price_quoted=False, pass2_coded=False) for _ in range(3)]
+    result = score_price_truth_said(signals)
+    assert result["na"] is True
+    assert result["not_evaluated"] is True
+    assert result["earned"] == 0.0
+    assert "predates price-observation coding" in result["evidence"][0]
+    assert "0%" not in result["evidence"][0]
+    assert "your_band" not in result
+    assert "band_table_ref" not in result
+
+
+def test_price_truth_said_not_evaluated_never_reachable_via_zero_percent_rate():
+    """Grep-style guard: a genuinely 0%-cited but SENTINELED set must
+    still render as a real 0% (na=False), never collapse into
+    not_evaluated — the two states must stay distinguishable in both
+    directions."""
+    signals = [_mentioned(price_quoted=False, pass2_coded=True) for _ in range(3)]
+    result = score_price_truth_said(signals)
+    assert result["na"] is False
+    assert "not_evaluated" not in result
+    assert result["earned"] == 0
+    assert "0%" in result["evidence"][0]
+
+
+def test_price_truth_said_mixed_cycle_denominator_is_sentineled_mentions_only():
+    """2 sentineled mentions (1 cited) + 1 never-coded mention — the
+    never-coded one must be excluded from BOTH numerator and
+    denominator, not counted as an uncited (0) mention."""
+    signals = [
+        _mentioned(price_quoted=True, pass2_coded=True),
+        _mentioned(price_quoted=False, pass2_coded=True),
+        _mentioned(price_quoted=False, pass2_coded=False),  # never coded — excluded entirely
+    ]
+    result = score_price_truth_said(signals)
+    assert result["na"] is False
+    assert "1/2 coded answers" in result["evidence"][0]
 
 
 # — member_value.said (rate band, opportunity set = purchase-intent only) —
@@ -319,21 +368,25 @@ def _full_credit_signals():
             stage="Comparison", primary_mentioned=True, primary_deal_cited=True,
             primary_deal_types=("member_price",), primary_price_quoted=True,
             primary_member_price_claimed=True, primary_member_value_cited=True,
+            pass2_coded=True,
         ),
         RunSignal(
             stage="Comparison", primary_mentioned=True, primary_deal_cited=True,
             primary_deal_types=("member_price",), primary_price_quoted=True,
             primary_member_price_claimed=True, primary_member_value_cited=True,
+            pass2_coded=True,
         ),
         RunSignal(
             stage="Ready to Buy", primary_mentioned=True, primary_deal_cited=True,
             primary_deal_types=("member_price",), primary_price_quoted=True,
             primary_member_price_claimed=True, primary_member_value_cited=True,
+            pass2_coded=True,
         ),
         RunSignal(
             stage="Ready to Buy", primary_mentioned=True, primary_deal_cited=True,
             primary_deal_types=("member_price",), primary_price_quoted=True,
             primary_member_price_claimed=True, primary_member_value_cited=True,
+            pass2_coded=True,
         ),
     ]
 
@@ -836,8 +889,8 @@ _REALISTIC_CRAWL_DIMS = {
 
 def _no_purchase_intent_signals():
     return [
-        RunSignal(stage="Comparison", primary_mentioned=True, primary_deal_cited=True),
-        RunSignal(stage="Ready to Buy", primary_mentioned=True, primary_deal_cited=False),
+        RunSignal(stage="Comparison", primary_mentioned=True, primary_deal_cited=True, pass2_coded=True),
+        RunSignal(stage="Ready to Buy", primary_mentioned=True, primary_deal_cited=False, pass2_coded=True),
     ]
 
 
@@ -1026,7 +1079,7 @@ def test_price_truth_said_your_band_perturbation(cited, total, expected_band):
     """Perturbation test (per the stage's own TESTS spec): changing the
     underlying cited/total ratio must move your_band, proving it's
     derived from the real value rather than a hard-coded index."""
-    signals = [RunSignal(stage="Awareness", primary_mentioned=True, primary_price_quoted=(i < cited)) for i in range(total)]
+    signals = [RunSignal(stage="Awareness", primary_mentioned=True, primary_price_quoted=(i < cited), pass2_coded=True) for i in range(total)]
     result = score_price_truth_said(signals)
     assert result["your_band"] == expected_band
     assert result["band_table_ref"] == "rate"

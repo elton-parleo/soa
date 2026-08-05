@@ -1009,6 +1009,13 @@ function extractProbeQuote(evidence) {
 // summary is always its seen evidence.
 function trueValueRowSummary(dimension) {
   if (!dimension.said) return dimension.seen?.evidence?.[0] || null
+  // Part 1 (P4): not_evaluated (no soa_pass2_coding_log sentinel on any
+  // mention — pass-2 price coding never ran for this audit) is a
+  // distinct honest state from the generic "too few mentions" na —
+  // checked first so it never falls through to that stale copy.
+  if (dimension.said.not_evaluated) {
+    return 'this audit predates price-observation coding — re-run for the full picture'
+  }
   if (dimension.said.na) return 'not enough mentions to measure'
   return dimension.said.evidence?.[0] || dimension.seen?.evidence?.[0] || null
 }

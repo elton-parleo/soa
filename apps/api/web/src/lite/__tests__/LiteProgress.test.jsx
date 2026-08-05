@@ -371,7 +371,7 @@ describe('LiteProgress — email band, verbatim copy, unchanged (P6)', () => {
     render(<LiteProgress phaseData={{ status: 'running', events: [ev(1, 'state', 'run', 'running')] }} token="tok-1" />)
     expect(screen.getByText('This takes a few minutes.')).toBeInTheDocument()
     expect(screen.getByText(
-      /Leave your email and we'll send your report the moment it's ready — no need to keep this tab open\./,
+      /Leave your email and we'll send your report the moment it's ready — no need to keep this tab open\. We won't spam you or share your email\./,
     )).toBeInTheDocument()
   })
 

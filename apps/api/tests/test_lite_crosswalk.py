@@ -53,8 +53,33 @@ def test_awareness_and_ready_to_buy_stages_excluded_from_absence_check():
 
 def test_mentioned_with_no_price_ever_surfaced_links_v1():
     signals = [
-        RunSignal(stage="Awareness", primary_mentioned=True, primary_price_quoted=False),
-        RunSignal(stage="Research", primary_mentioned=True, primary_price_quoted=False),
+        RunSignal(stage="Awareness", primary_mentioned=True, primary_price_quoted=False, pass2_coded=True),
+        RunSignal(stage="Research", primary_mentioned=True, primary_price_quoted=False, pass2_coded=True),
+    ]
+    linked = link_dimensions(signals, {})
+    assert linked["V1"] == "mentioned but no price surfaced"
+
+
+# Part 1 (P4 adjacent fix): the same "no price surfaced" claim is
+# actively misleading when pass 2 never coded any of the primary
+# entity's mentions at all — primary_price_quoted is unpopulated, not
+# genuinely absent, so the rule must not fire.
+def test_mentioned_with_no_price_but_never_pass2_coded_does_not_link_v1():
+    signals = [
+        RunSignal(stage="Awareness", primary_mentioned=True, primary_price_quoted=False, pass2_coded=False),
+        RunSignal(stage="Research", primary_mentioned=True, primary_price_quoted=False, pass2_coded=False),
+    ]
+    linked = link_dimensions(signals, {})
+    assert "V1" not in linked
+
+
+def test_mentioned_with_no_price_mixed_sentinel_coverage_still_links_v1():
+    """Even one sentineled mention with no price is enough real signal
+    to link V1 — the gate only excludes runs pass 2 never touched at
+    all, not the whole rule whenever coverage is partial."""
+    signals = [
+        RunSignal(stage="Awareness", primary_mentioned=True, primary_price_quoted=False, pass2_coded=True),
+        RunSignal(stage="Research", primary_mentioned=True, primary_price_quoted=False, pass2_coded=False),
     ]
     linked = link_dimensions(signals, {})
     assert linked["V1"] == "mentioned but no price surfaced"
