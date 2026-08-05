@@ -421,12 +421,39 @@ def _na_said_result(code: str, weight: float) -> Dict:
     }
 
 
+def _not_evaluated_said_result(code: str, weight: float) -> Dict:
+    """
+    Part 1 (P4): a distinct honest state from _na_said_result — there
+    WAS enough mention volume, but none of it has ever been through
+    pass-2 price/citation coding (no soa_pass2_coding_log sentinel for
+    any mention in the opportunity set), so there is no signal to rate
+    at all. na=True keeps this on the existing NA rendering/rescaling
+    path (rule 6, additive); not_evaluated distinguishes it from
+    _na_said_result's "too few mentions" for the frontend's copy —
+    "coded, none stated" (a real 0%) must never look identical to
+    "never coded" (structural, this).
+    """
+    return {
+        "code": code, "earned": 0.0, "max": weight, "na": True, "not_evaluated": True,
+        "evidence": ["this audit predates price-observation coding — re-run for the full picture"],
+    }
+
+
 def score_price_truth_said(run_signals: List[RunSignal]) -> Dict:
     """
     Opportunity set: all mentions of the primary entity. Citation =
     RunSignal.primary_price_quoted (the same 'any stated/net price
     observed' signal apps/api/app/services/lite_crosswalk.py already
     uses for V1 linking — not a second definition).
+
+    Part 1 (P4): primary_price_quoted only ever means something for a
+    mention pass 2 has actually coded (RunSignal.pass2_coded — see
+    public_lite.py::_fetch_run_signals's soa_pass2_coding_log join).
+    The denominator is narrowed to sentineled mentions specifically so
+    that "coded, none stated" (a real 0%, sentineled_mentions nonempty,
+    cited=0) is never confused with "never coded" (sentineled_mentions
+    empty) — the latter renders NOT EVALUATED, never a 0% rate the
+    audit has no basis for.
     """
     weight = DIMENSIONS_BY_CODE["price_truth"].said_max
     mentions = [s for s in run_signals if s.primary_mentioned]
@@ -434,12 +461,17 @@ def score_price_truth_said(run_signals: List[RunSignal]) -> Dict:
     if total < MIN_OPPORTUNITY_SET_MENTIONS:
         return _na_said_result("price_truth_said", weight)
 
-    cited = sum(1 for s in mentions if s.primary_price_quoted)
-    rate_pct = cited / total * 100
+    sentineled_mentions = [s for s in mentions if s.pass2_coded]
+    if not sentineled_mentions:
+        return _not_evaluated_said_result("price_truth_said", weight)
+
+    coded_total = len(sentineled_mentions)
+    cited = sum(1 for s in sentineled_mentions if s.primary_price_quoted)
+    rate_pct = cited / coded_total * 100
     earned = round(apply_rate_band(rate_pct) * weight)
     return {
         "code": "price_truth_said", "earned": earned, "max": weight, "na": False,
-        "evidence": [f"{cited}/{total} mentions ({rate_pct:.0f}%) cited a price"],
+        "evidence": [f"{cited}/{coded_total} coded answers ({rate_pct:.0f}%) cited a price"],
         "band_table_ref": BAND_TYPE_RATE, "your_value": round(rate_pct, 1), "your_band": _rate_band_index(rate_pct),
     }
 
@@ -871,15 +903,58 @@ def build_pillars_payload(
     fixes = _build_fixes_section(fixable_dims)
 
     total_earned = visibility_earned + accessibility_earned + true_value_earned
-    composite = compute_composite(total_earned, member_value_na=member_value_na)
+    raw_composite = compute_composite(total_earned, member_value_na=member_value_na)
 
-    # Stage 25 (Part 5, G1): the verdict gate — deliberately independent
-    # of the composite's straight-sum weighting. Uses True Value's own
-    # applicable_max (already na-aware: excludes member_value's weight
-    # when it's N/A), so a legitimately program-less store is judged on
-    # the value dimensions that actually apply to it, same discipline as
-    # the composite's own /85 rescale.
-    verdict = compute_verdict(composite, true_value_earned, true_value_applicable_max)
+    # Verdict gate template branching (G1): compute_composite's denominator
+    # is a static registry constant — it never shrinks when a dimension
+    # comes back 'blocked', so a run with unmeasurable accessibility
+    # dimensions used to get a real (silently misleading, artificially
+    # low) composite instead of an honest "can't score this run" — and
+    # compute_verdict would then assert a failing verdict from data that
+    # was never actually measured. state disambiguates three cases:
+    #   scored: nothing blocked -> the numbers above are trustworthy.
+    #   composite_withheld: accessibility has a blocked dimension, but
+    #     True Value itself is clean -> tv_pct is still real, composite
+    #     and verdict are withheld (None) rather than fabricated.
+    #   unverified: True Value's OWN applicable set has a blocked
+    #     dimension (the same "any blocked encode wing" condition the
+    #     True Value section's UNVERIFIED chip already uses — see
+    #     LiteFullReport.jsx's anyTrueValueEncodeBlocked/N3 — reused
+    #     here, not redefined) -> True Value's own measurement is
+    #     compromised enough that neither composite nor tv_pct means
+    #     anything this run.
+    unmeasured_count = sum(1 for d in accessibility_dims if d["blocked"])
+    true_value_blocked = any(d.get("blocked") for d in true_value_dims)
+    if true_value_blocked:
+        state = "unverified"
+    elif unmeasured_count > 0:
+        state = "composite_withheld"
+    else:
+        state = "scored"
+
+    if state == "unverified":
+        tv_pct = None
+    elif true_value_applicable_max > 0:
+        tv_pct = round(true_value_earned / true_value_applicable_max * 100, 1)
+    else:
+        tv_pct = None
+
+    if state == "scored":
+        composite = raw_composite
+        # Stage 25 (Part 5, G1): the verdict gate — deliberately
+        # independent of the composite's straight-sum weighting. Uses
+        # True Value's own applicable_max (already na-aware: excludes
+        # member_value's weight when it's N/A), so a legitimately
+        # program-less store is judged on the value dimensions that
+        # actually apply to it, same discipline as the composite's own
+        # /85 rescale. Only ever called in state=scored — the invariant
+        # (asserted server-side by PublicLitePillars' model_validator)
+        # is that AGENT-READY/NOT AGENT-READY exists only alongside a
+        # real composite, never withheld/unverified data.
+        verdict = compute_verdict(composite, true_value_earned, true_value_applicable_max)
+    else:
+        composite = None
+        verdict = None
 
     return {
         "visibility": _pillar(visibility_earned, PILLAR_WEIGHTS["visibility"], visibility_dims),
@@ -889,4 +964,9 @@ def build_pillars_payload(
         "member_value_na": member_value_na,
         "fixes": fixes,
         "verdict": verdict,
+        "state": state,
+        "tv_pct": tv_pct,
+        "tv_earned": true_value_earned,
+        "tv_applicable": true_value_applicable_max,
+        "unmeasured_count": unmeasured_count,
     }

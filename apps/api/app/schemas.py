@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, field_validator, model_validator
 from typing import List, Optional
 from soa_shared.constants import QUERY_CONSTRAINTS
+from soa_shared.scan_dimensions import VERDICT_AGENT_READY, VERDICT_NOT_AGENT_READY
 
 # ─── Shared constraint validator ──────────────────────────────────────────────
 
@@ -1031,8 +1032,41 @@ class PublicLitePillars(BaseModel):
     fixes: Optional[PublicLiteFixesSection] = None
     # Stage 25 (Part 5, G1): "AGENT-READY" | "NOT AGENT-READY" — a pass/
     # fail gate independent of the composite's straight-sum weighting,
-    # from soa_shared.scan_dimensions.compute_verdict.
+    # from soa_shared.scan_dimensions.compute_verdict. Only ever set
+    # alongside a real composite (state == "scored") — see the
+    # model_validator below and build_pillars_payload's own docstring.
     verdict: Optional[str] = None
+    # Verdict gate template branching stage (G1): was previously silently
+    # dropped by validation — build_pillars_payload's return dict has
+    # always had a `composite` key, but this model never declared the
+    # field, so pillars.composite was undefined in every report response
+    # regardless of this value. Now a real field, and the one that can
+    # legitimately be None (composite_withheld/unverified), distinct from
+    # the top-level PublicLiteReportResponse.composite it's sourced from.
+    composite: Optional[float] = None
+    # state: "scored" | "composite_withheld" | "unverified" — see
+    # build_pillars_payload's docstring for the exact three-way rule.
+    # Absent on a pre-this-stage cached/mocked payload; the frontend
+    # treats a missing state as "scored" (rule 6, additive-only).
+    state: str = "scored"
+    tv_pct: Optional[float] = None
+    tv_earned: float = 0.0
+    tv_applicable: float = 0.0
+    unmeasured_count: int = 0
+
+    @model_validator(mode="after")
+    def _verdict_requires_a_real_score(self):
+        """G1's invariant, enforced at construction time: a failing (or
+        passing) verdict may never be asserted from a run that couldn't
+        compute its own composite — AGENT-READY/NOT AGENT-READY exist
+        only in state == 'scored', which is exactly when composite is
+        guaranteed non-None. Catches any future regression that
+        reintroduces a fabricated verdict, not just this stage's fix."""
+        if self.verdict in (VERDICT_AGENT_READY, VERDICT_NOT_AGENT_READY) and self.composite is None:
+            raise ValueError(
+                f"verdict={self.verdict!r} must not be asserted when composite is withheld (None)"
+            )
+        return self
 
 
 class PublicLiteReportResponse(BaseModel):

@@ -77,6 +77,11 @@ def db(monkeypatch):
                 stated_price FLOAT, claimed_net_price FLOAT, member_price_claimed BOOLEAN
             )
         """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_pass2_coding_log (
+                id INTEGER PRIMARY KEY, run_id INTEGER, coding_pass_version INTEGER
+            )
+        """)
     monkeypatch.setattr(public_lite, "engine", engine)
     return engine
 
@@ -443,6 +448,7 @@ def _seed_v3_scan_with_stage_tagged_mentions(conn, cycle_id=1, primary_entity_id
             "VALUES (?, ?, 10.0, 1)",
             (qid, primary_entity_id),
         )
+        _seed_pass2_sentinel(conn, qid)
 
 
 def test_v3_pillars_block_never_leaks_stage_names(db):
@@ -493,9 +499,23 @@ def _seed_scan_row(
     )
 
 
-def _seed_run_signals_for_v1(conn, cycle_id=1, primary_entity_id=101):
+def _seed_pass2_sentinel(conn, run_id):
+    """Part 1 (P4): marks a run as pass-2-coded (soa_pass2_coding_log) —
+    without this, primary_price_quoted is unpopulated rather than
+    genuinely False, and the price-dependent crosswalk/said-lens rules
+    correctly decline to fire at all (see _fetch_run_signals/
+    score_price_truth_said)."""
+    conn.exec_driver_sql(
+        "INSERT INTO soa_pass2_coding_log (run_id, coding_pass_version) VALUES (?, 2)", (run_id,)
+    )
+
+
+def _seed_run_signals_for_v1(conn, cycle_id=1, primary_entity_id=101, pass2_coded=True):
     """Two successful runs where the primary entity is mentioned but no
-    price is ever observed for it — triggers the V1 crosswalk rule."""
+    price is ever observed for it — triggers the V1 crosswalk rule
+    (when pass2_coded=True, the default — both runs get a
+    soa_pass2_coding_log sentinel so "no price" reads as a real,
+    pass-2-coded absence, not an unpopulated field)."""
     conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (1, 'Awareness')")
     conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (2, 'Awareness')")
     conn.exec_driver_sql(
@@ -512,6 +532,9 @@ def _seed_run_signals_for_v1(conn, cycle_id=1, primary_entity_id=101):
         "INSERT INTO soa_coded_mentions (run_id, entity_id, mentioned, deal_cited) VALUES (2, ?, 1, 0)",
         (primary_entity_id,),
     )
+    if pass2_coded:
+        _seed_pass2_sentinel(conn, 1)
+        _seed_pass2_sentinel(conn, 2)
 
 
 # Gaps (max - score) are all distinct: V1=9, V2=8, V3=7, V4=6, F2=5, V5=3, F1=2, F3=1.
@@ -934,6 +957,7 @@ def _seed_v3_full_credit_scan(
             "VALUES (?, 201, 10.0, 1)",
             (run_id,),
         )
+        _seed_pass2_sentinel(conn, run_id)
     return token
 
 
@@ -1356,6 +1380,7 @@ def test_v3_program_less_store_normalizes_member_value_na_onto_81(db):
                 "VALUES (?, 301, 10.0, 0)",
                 (run_id,),
             )
+            _seed_pass2_sentinel(conn, run_id)
 
     result = public_lite.get_lite_report("v3na")
 

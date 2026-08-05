@@ -1009,6 +1009,13 @@ function extractProbeQuote(evidence) {
 // summary is always its seen evidence.
 function trueValueRowSummary(dimension) {
   if (!dimension.said) return dimension.seen?.evidence?.[0] || null
+  // Part 1 (P4): not_evaluated (no soa_pass2_coding_log sentinel on any
+  // mention — pass-2 price coding never ran for this audit) is a
+  // distinct honest state from the generic "too few mentions" na —
+  // checked first so it never falls through to that stale copy.
+  if (dimension.said.not_evaluated) {
+    return 'this audit predates price-observation coding — re-run for the full picture'
+  }
   if (dimension.said.na) return 'not enough mentions to measure'
   return dimension.said.evidence?.[0] || dimension.seen?.evidence?.[0] || null
 }
@@ -1019,20 +1026,51 @@ function memberValueNaDecision() {
   return `Neither the site crawl nor a direct model check found a program — so these ${weight} points are skipped and your score is calculated on the remaining ${applicable}.`
 }
 
-// Report redesign (Part 4, T4): the gate strip renders the RUN'S ACTUAL
-// numbers against the registry's own verdict thresholds (soa_shared.
+// Report redesign (Part 4, T4), state-branched (verdict/gate template
+// stage, G1/G2): the gate strip renders the RUN'S ACTUAL numbers
+// against the registry's own verdict thresholds (soa_shared.
 // scan_dimensions.compute_verdict) — never a restatement of the pass/
-// fail chip, always the arithmetic that produced it.
+// fail chip, always the arithmetic that produced it. Reads
+// pillars.composite/tv_pct/unmeasured_count directly (the backend's own
+// build_pillars_payload computation, additive fields) rather than
+// re-deriving them locally — one shared source, so this sentence can
+// never drift from what the True Value section and the hero chip
+// already show. G3: the em-dash placeholder is a DISPLAY-site concern
+// (hero big-number, stat tiles) — this template branches on state
+// instead of ever interpolating a None into a sentence.
 function VerdictGateStrip({ pillars }) {
-  const tv = pillarEarnedMax(pillars.true_value)
-  const tvPct = tv.max ? (tv.earned / tv.max) * 100 : 0
+  // pillars.state is absent only on a payload predating this stage
+  // (rule 6, additive) — treated as 'scored' so an old cached/mocked
+  // fixture keeps rendering exactly as it always did.
+  const state = pillars.state || 'scored'
+
+  if (state === 'unverified') {
+    return (
+      <div className="lite-v4-gate">
+        <b>Why there's no verdict this run:</b>{' '}
+        Nothing on-site could be measured this run — there's no score to judge. Answer-side results above are real; re-run for the full picture.
+      </div>
+    )
+  }
+
+  if (state === 'composite_withheld') {
+    return (
+      <div className="lite-v4-gate">
+        <b>Why there's no verdict this run:</b>{' '}
+        Readiness needs a score of {VERDICT_COMPOSITE_THRESHOLD}+ AND True Value above{' '}
+        {Math.round(VERDICT_TRUE_VALUE_RATIO_THRESHOLD * 100)}% of its applicable points.
+        True Value is at {Math.round(pillars.tv_pct)}% — but {pillars.unmeasured_count} dimensions couldn't be measured this run, so a full score and a verdict aren't possible. Re-run once the pages are readable.
+      </div>
+    )
+  }
+
   const isReady = pillars.verdict === VERDICT_AGENT_READY
   return (
     <div className={`lite-v4-gate${isReady ? ' lite-v4-gate--positive' : ''}`}>
       <b>{isReady ? 'Why agent-ready:' : 'Why not agent-ready:'}</b>{' '}
       readiness needs a score of {VERDICT_COMPOSITE_THRESHOLD}+ AND True Value above{' '}
       {Math.round(VERDICT_TRUE_VALUE_RATIO_THRESHOLD * 100)}% of its applicable points.
-      You're at {formatScore(pillars.composite)} — and True Value is at {Math.round(tvPct)}%.
+      You're at {formatScore(pillars.composite)} — and True Value is at {Math.round(pillars.tv_pct)}%.
     </div>
   )
 }

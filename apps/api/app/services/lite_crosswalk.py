@@ -31,6 +31,12 @@ class RunSignal:
     primary_price_quoted: bool = False           # any stated/net price observed for primary
     primary_member_price_claimed: bool = False
     primary_member_value_cited: bool = False      # Stage 16 (Part 5): soa_coded_mentions.member_value_cited
+    # Part 1 (P4): whether this run has a soa_pass2_coding_log sentinel —
+    # distinguishes "pass 2 ran, genuinely found no price" from "pass 2
+    # never ran at all" for primary_price_quoted. False (never coded) and
+    # True-but-price-absent (coded, none stated) must never read the
+    # same to a rule that keys off primary_price_quoted alone.
+    pass2_coded: bool = False
     competitor_mentioned: bool = False
     competitor_deal_cited: bool = False
 
@@ -70,8 +76,15 @@ def link_dimensions(run_signals: list, scan_dimensions: Dict[str, dict]) -> Dict
             linked.setdefault("F1", "absent from most answers")
             linked.setdefault("F2", "absent from most answers")
 
+    # Part 1 (P4 adjacent fix): primary_price_quoted is only meaningful
+    # for a run pass 2 actually coded — a cycle with zero pass-2-coded
+    # mentions has no signal either way, so this rule must not fire a
+    # false "no price surfaced" reason off an unpopulated field (the
+    # exact ambiguity the soa_pass2_coding_log sentinel exists to
+    # resolve — see lite_pillars.py::score_price_truth_said).
     mentioned_runs = [r for r in run_signals if r.primary_mentioned]
-    if mentioned_runs and not any(r.primary_price_quoted for r in mentioned_runs):
+    sentineled_mentioned_runs = [r for r in mentioned_runs if r.pass2_coded]
+    if sentineled_mentioned_runs and not any(r.primary_price_quoted for r in sentineled_mentioned_runs):
         linked.setdefault("V1", "mentioned but no price surfaced")
 
     if any(r.primary_price_quoted for r in run_signals) and _dimension_gap_below_half(scan_dimensions, "V3"):

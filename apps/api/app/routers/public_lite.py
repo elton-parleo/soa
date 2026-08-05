@@ -363,16 +363,24 @@ def _fetch_run_signals(conn, cycle_id: int, primary_entity_id: int) -> list:
     """), {"cid": cycle_id, "eid": primary_entity_id}).fetchall()
     primary_by_run = {row[0]: (row[1], row[2], row[3], row[4]) for row in primary_rows}
 
+    # Part 1 (P4): pass2_coded (soa_pass2_coding_log, coding_pass_version=2)
+    # is a SEPARATE join from soa_price_observations — a sentineled run
+    # with zero observation rows for this entity is a real "coded, no
+    # price stated" zero, honestly distinct from a run pass 2 never
+    # touched at all. LEFT JOINing observations alone (as before this
+    # stage) could never tell the two apart.
     price_rows = conn.execute(text("""
         SELECT r.id,
                MAX(CASE WHEN po.stated_price IS NOT NULL OR po.claimed_net_price IS NOT NULL THEN 1 ELSE 0 END),
-               MAX(CASE WHEN po.member_price_claimed THEN 1 ELSE 0 END)
+               MAX(CASE WHEN po.member_price_claimed THEN 1 ELSE 0 END),
+               MAX(CASE WHEN log.id IS NOT NULL THEN 1 ELSE 0 END)
         FROM soa_runs r
         LEFT JOIN soa_price_observations po ON po.run_id = r.id AND po.entity_id = :eid
+        LEFT JOIN soa_pass2_coding_log log ON log.run_id = r.id AND log.coding_pass_version = 2
         WHERE r.cycle_id = :cid AND r.status = 'success'
         GROUP BY r.id
     """), {"cid": cycle_id, "eid": primary_entity_id}).fetchall()
-    price_by_run = {row[0]: (bool(row[1]), bool(row[2])) for row in price_rows}
+    price_by_run = {row[0]: (bool(row[1]), bool(row[2]), bool(row[3])) for row in price_rows}
 
     competitor_rows = conn.execute(text("""
         SELECT r.id,
@@ -392,7 +400,7 @@ def _fetch_run_signals(conn, cycle_id: int, primary_entity_id: int) -> list:
             run_id, (False, False, None, False),
         )
         deal_types = _decode_json_field(deal_types, [])
-        price_quoted, member_price_claimed = price_by_run.get(run_id, (False, False))
+        price_quoted, member_price_claimed, pass2_coded = price_by_run.get(run_id, (False, False, False))
         competitor_mentioned, competitor_deal_cited = competitor_by_run.get(run_id, (False, False))
 
         signals.append(RunSignal(
@@ -403,6 +411,7 @@ def _fetch_run_signals(conn, cycle_id: int, primary_entity_id: int) -> list:
             primary_price_quoted=price_quoted,
             primary_member_price_claimed=member_price_claimed,
             primary_member_value_cited=bool(member_value_cited),
+            pass2_coded=pass2_coded,
             competitor_mentioned=competitor_mentioned,
             competitor_deal_cited=competitor_deal_cited,
         ))

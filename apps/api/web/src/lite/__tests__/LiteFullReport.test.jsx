@@ -681,6 +681,19 @@ function buildV3Pillars({ dealCitabilitySeen, dealCitabilitySaid, memberValueNa 
     true_value: { score: 70, max: 100, dimensions: trueValueDims },
     member_value_na: memberValueNa,
     fixes: computeFixesSection(accessibilityDims, trueValueDims),
+    // Verdict/gate template branching stage (G1): a realistic fully-
+    // scored context — tv_pct mirrors true_value.score above (the same
+    // earned/applicable*100 computation, not a second definition).
+    // Callers needing composite_withheld/unverified override `state`
+    // (+ composite/tv_pct as G1 specifies for that state) directly via
+    // spread, same pattern already used for `verdict` throughout this
+    // file.
+    state: 'scored',
+    composite: 74,
+    tv_pct: 70,
+    tv_earned: 21,
+    tv_applicable: 30,
+    unmeasured_count: 0,
   }
 }
 
@@ -1137,6 +1150,24 @@ describe('LiteFullReport — True Value section (Stage 19, R2; restyled Report r
     expect(screen.queryByText('0%')).not.toBeInTheDocument()
   })
 
+  // Part 1 (P4): a distinct honest state from the generic outcome-guard
+  // NA above — enough mention volume existed, but none of it was ever
+  // through pass-2 price coding (no soa_pass2_coding_log sentinel), so
+  // there is no basis to rate at all. Must never collapse into the
+  // same "not enough mentions" copy, and never a 0%.
+  it('renders a not_evaluated said sub-lens with its own honest copy, distinct from the generic NA', () => {
+    const pillars = buildV3Pillars({
+      dealCitabilitySaid: {
+        earned: 0, max: 3, na: true, not_evaluated: true,
+        evidence: ['this audit predates price-observation coding — re-run for the full picture'],
+      },
+    })
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('this audit predates price-observation coding — re-run for the full picture')).toBeInTheDocument()
+    expect(screen.queryByText('not enough mentions to measure')).not.toBeInTheDocument()
+    expect(screen.queryByText('0%')).not.toBeInTheDocument()
+  })
+
   // Fetch-resilience stage (Part C, B4/C1): every sampled product page
   // failed to fetch this run — the dimension renders NOT MEASURABLE,
   // with the fetch facts surfaced and no leaked said-outcome sentence
@@ -1328,8 +1359,18 @@ function buildStarvedTrueValuePillars() {
     true_value: { score: 0, max: 100, dimensions: trueValueDims },
     member_value_na: true,
     fixes: { visible: [], remaining_count: 0 },
-    verdict: 'NOT AGENT-READY',
-    composite: 40,
+    // Verdict/gate template branching stage (G1): a True Value dimension
+    // (price_truth) is blocked here — the real backend now reads this as
+    // state='unverified' (composite/verdict/tv_pct all withheld), never
+    // the fabricated 'NOT AGENT-READY' + composite=40 this fixture used
+    // to hard-code (the exact shape of the bug this stage fixes).
+    verdict: null,
+    composite: null,
+    state: 'unverified',
+    tv_pct: null,
+    tv_earned: 0,
+    tv_applicable: 7,
+    unmeasured_count: 1,
   }
 }
 
@@ -1352,11 +1393,12 @@ describe('LiteFullReport — N1-N5 not-measurable plumbing consistency', () => {
     expect(screen.queryByText(/not measurable this run/)).not.toBeInTheDocument()
   })
 
-  it('N2: header and gate strip agree on the applicable max (one shared computed source)', () => {
+  it('N2/G1: header still reports its real applicable max; the gate strip withholds the verdict rather than asserting a fabricated 0%', () => {
     const pillars = buildStarvedTrueValuePillars()
     const { container } = render(<LiteFullReport report={buildV3Report({ pillars })} />)
-    expect(screen.getByText(/True Value is at 0%/)).toBeInTheDocument()
     expect(container.textContent).toMatch(/True Value · 0\/7 applicable/)
+    expect(screen.getByText(/Nothing on-site could be measured this run/)).toBeInTheDocument()
+    expect(screen.queryByText(/True Value is at 0%/)).not.toBeInTheDocument()
   })
 
   it('N2: the C2 dagger legend still renders when a True Value dim is blocked', () => {
@@ -1397,6 +1439,98 @@ describe('LiteFullReport — N1-N5 not-measurable plumbing consistency', () => {
     render(<LiteFullReport report={buildV3Report({ pillars })} />)
     expect(screen.getByText('VERDICT · ENCODING GAP')).toBeInTheDocument()
     expect(screen.getByText("Little encoded to cite, and agents aren't citing it.")).toBeInTheDocument()
+  })
+})
+
+// ─── Verdict/gate template branching stage (G1/G2/G3) ────────────────────
+// The gate strip (VerdictGateStrip) reads pillars.state/composite/tv_pct/
+// unmeasured_count directly — no local re-derivation — so these fixtures
+// set those fields explicitly (via spread over buildV3Pillars' realistic
+// scored defaults) the same way `verdict` is already hand-set throughout
+// this file, rather than trying to hand-derive them from the dimension
+// list a second time.
+
+describe('LiteFullReport — verdict gate strip: state-branched templates (G1/G2)', () => {
+  it('scored (pass): unchanged heading/template, real numbers substituted for both placeholders', () => {
+    const pillars = { ...buildV3Pillars(), verdict: VERDICT_AGENT_READY, composite: 74, tv_pct: 70 }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('Why agent-ready:')).toBeInTheDocument()
+    expect(screen.getByText(/readiness needs a score of 60\+ AND True Value above 25% of its applicable points\./)).toBeInTheDocument()
+    expect(screen.getByText(/You're at 74 — and True Value is at 70%\./)).toBeInTheDocument()
+  })
+
+  it('scored (fail): unchanged heading/template, real numbers substituted for both placeholders', () => {
+    const pillars = { ...buildV3Pillars(), verdict: VERDICT_NOT_AGENT_READY, composite: 40, tv_pct: 12 }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('Why not agent-ready:')).toBeInTheDocument()
+    expect(screen.getByText(/You're at 40 — and True Value is at 12%\./)).toBeInTheDocument()
+  })
+
+  it('composite_withheld: the exact G2 sentence, True Value percentage real, composite withheld', () => {
+    const pillars = {
+      ...buildV3Pillars(), verdict: null, composite: null,
+      state: 'composite_withheld', tv_pct: 16, unmeasured_count: 2,
+    }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText("Why there's no verdict this run:")).toBeInTheDocument()
+    expect(screen.getByText(
+      "Readiness needs a score of 60+ AND True Value above 25% of its applicable points. True Value is at 16% — but 2 dimensions couldn't be measured this run, so a full score and a verdict aren't possible. Re-run once the pages are readable.",
+    )).toBeInTheDocument()
+    expect(screen.queryByText(/Why agent-ready:|Why not agent-ready:/)).not.toBeInTheDocument()
+  })
+
+  it('unverified: the exact G2 sentence, no numbers at all', () => {
+    const pillars = {
+      ...buildV3Pillars(), verdict: null, composite: null,
+      state: 'unverified', tv_pct: null, unmeasured_count: 1,
+    }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText("Why there's no verdict this run:")).toBeInTheDocument()
+    expect(screen.getByText(
+      "Nothing on-site could be measured this run — there's no score to judge. Answer-side results above are real; re-run for the full picture.",
+    )).toBeInTheDocument()
+  })
+
+  it('a pre-G1 fixture with no state key falls back to scored (rule 6, additive)', () => {
+    const pillars = { ...buildV3Pillars(), verdict: VERDICT_AGENT_READY }
+    delete pillars.state
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.getByText('Why agent-ready:')).toBeInTheDocument()
+  })
+
+  it('G1 invariant, answer-side: a NOT AGENT-READY verdict can only be asserted when the gate strip also has a real composite — this fixture combination cannot legitimately occur, and the withheld/unverified branches above never read pillars.verdict at all', () => {
+    // Documents the invariant the backend now enforces at construction
+    // time (schemas.py's model_validator) — the frontend's own defense
+    // is structural: composite_withheld/unverified branch BEFORE ever
+    // touching pillars.verdict, so even a malformed payload can't
+    // reach the pass/fail template with withheld data.
+    const pillars = { ...buildV3Pillars(), verdict: VERDICT_NOT_AGENT_READY, state: 'unverified', composite: null }
+    render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    expect(screen.queryByText(/Why not agent-ready:/)).not.toBeInTheDocument()
+    expect(screen.getByText("Why there's no verdict this run:")).toBeInTheDocument()
+  })
+})
+
+// G3: the em-dash placeholder is a display-site concern (hero big-
+// number, stat tiles) — it must never leak into a sentence template.
+// Sweeps container.textContent across every gate-strip-relevant
+// fixture in this file for the three empty-interpolation patterns.
+describe('LiteFullReport — G3: placeholder containment (no dash/empty-interpolation in prose)', () => {
+  const DASH_PATTERNS = [/at — /, /— —/, /at %/]
+
+  it.each([
+    ['scored pass', { ...buildV3Pillars(), verdict: VERDICT_AGENT_READY, composite: 74, tv_pct: 70 }],
+    ['scored fail', { ...buildV3Pillars(), verdict: VERDICT_NOT_AGENT_READY, composite: 40, tv_pct: 12 }],
+    ['composite_withheld', { ...buildV3Pillars(), verdict: null, composite: null, state: 'composite_withheld', tv_pct: 16, unmeasured_count: 2 }],
+    ['unverified', { ...buildV3Pillars(), verdict: null, composite: null, state: 'unverified', tv_pct: null, unmeasured_count: 1 }],
+    ['unverified via a real blocked-dimension fixture', buildStarvedTrueValuePillars()],
+    ['member_value N/A', buildV3Pillars({ memberValueNa: true })],
+    ['zero True Value', zeroTrueValuePillars()],
+  ])('%s: no dash/empty-interpolation pattern anywhere in the rendered report', (_label, pillars) => {
+    const { container } = render(<LiteFullReport report={buildV3Report({ pillars })} />)
+    for (const pattern of DASH_PATTERNS) {
+      expect(container.textContent).not.toMatch(pattern)
+    }
   })
 })
 

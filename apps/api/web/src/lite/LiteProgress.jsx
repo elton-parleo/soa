@@ -185,11 +185,6 @@ function ProgressHeader({ brandOrDomain, latestState, fallbackStatus, completedF
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
         <Chip tone={latestState === 'failed' ? 'bad' : 'outline'}>{chipLabel}</Chip>
-        {remainingMin != null && (
-          <span className="lite-mono lite-muted" style={{ fontSize: 11 }}>
-            ~{remainingMin} min remaining · ESTIMATE
-          </span>
-        )}
       </div>
       <div className="lite-bar-track">
         <div
@@ -357,7 +352,7 @@ function StatusEmailCard({ token }) {
         This takes a few minutes.
       </div>
       <div className="lite-body--inv" style={{ marginBottom: 16 }}>
-        Leave your email and we'll send your report the moment it's ready — no need to keep this tab open.
+        Leave your email and we'll send your report the moment it's ready — no need to keep this tab open. We won't spam you or share your email.
       </div>
       <ErrorBanner message={submitError} />
       {/* noValidate: validateEmail()'s message renders inline instead of
