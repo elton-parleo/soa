@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /r/
+Disallow: /s/
+
+Sitemap: https://audit.parleo.io/sitemap.xml

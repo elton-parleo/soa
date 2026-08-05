@@ -86,9 +86,9 @@ describe('accessibilityBadgeText', () => {
     ['blocked', 'blocked'],
     ['failed', 'failed'],
     ['skipped', 'no store URL'],
-    ['running', 'scanning…'],
-    [null, 'scanning…'],
-    [undefined, 'scanning…'],
+    ['running', 'auditing…'],
+    [null, 'auditing…'],
+    [undefined, 'auditing…'],
   ])('maps %s to %s', (status, expected) => {
     expect(accessibilityBadgeText(status)).toBe(expected)
   })

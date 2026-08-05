@@ -12,6 +12,7 @@ import StudyDetail      from './components/StudyDetail.jsx'
 import LiteWidget        from './lite/LiteWidget.jsx'
 import LandingPage       from './lite/LandingPage.jsx'
 import BotsPage          from './lite/BotsPage.jsx'
+import { isAuditHost } from './lite/publicUrls.js'
 
 // ─── Read initial view from URL hash on page load ────────────────────────────
 function getInitialView() {
@@ -210,12 +211,13 @@ function AppContent() {
   )
 }
 
-// ─── Pathname routing for the public lite/scan/report surfaces ───────────────
+// ─── Pathname routing for the public lite/audit/report surfaces ──────────────
 // Stage 9: unlike AppContent's hash-based view state (unaffected, reads
 // the hash independently), the public pages need real pathname changes
-// so a submit on /scan can land on /report/{token} without a full
-// reload (U2) — pushState alone doesn't re-render React, so this pairs
-// it with a pathname state + a popstate listener for back/forward.
+// so a submit on the landing page can land on /r/{token} (audit host) or
+// /report/{token} (/lite embed) without a full reload (U2) — pushState
+// alone doesn't re-render React, so this pairs it with a pathname state
+// + a popstate listener for back/forward.
 function useLitePathname() {
   const [pathname, setPathname] = useState(window.location.pathname)
 
@@ -235,9 +237,41 @@ function useLitePathname() {
   return [pathname, navigate]
 }
 
+// Non-audit paths on audit.parleo.io must 404, not redirect (H1) — the
+// edge (vercel.json) already returns a real HTTP 404 for everything but
+// '/', '/r/*', '/s/*' before the SPA bundle even loads; this is a
+// client-side backstop for the same rule (e.g. local dev without the
+// edge config in front of it).
+function AuditHostNotFound() {
+  return (
+    <div className="lite-root">
+      <div className="lite-shell" style={{ maxWidth: 480 }}>
+        <p className="lite-body">Not found.</p>
+      </div>
+    </div>
+  )
+}
+
 // ─── Root — wraps everything in AuthProvider ─────────────────────────────────
 export default function App() {
   const [pathname, navigate] = useLitePathname()
+
+  // audit.parleo.io migration (H1): this host serves ONLY the public
+  // audit tool — landing at '/', report/status at '/r/<token>' and
+  // '/s/<id>' (both are the same token-driven LiteWidget state machine;
+  // 'status' isn't a distinct internal route, see LiteWidget.jsx). No
+  // other path on this host reaches the authed dashboard, /lite, or
+  // /bots — checked first and exclusively, before any other routing.
+  if (isAuditHost()) {
+    if (pathname === '/') {
+      return <LandingPage navigate={navigate} />
+    }
+    if (pathname.startsWith('/r/') || pathname.startsWith('/s/')) {
+      const token = decodeURIComponent(pathname.slice(3))
+      return <LiteWidget urlToken={token} navigate={navigate} />
+    }
+    return <AuditHostNotFound />
+  }
 
   // SoA Lite: a public, unauthenticated widget iframed/linked from the
   // marketing site. Checked before AuthProvider mounts so this path never
@@ -247,14 +281,8 @@ export default function App() {
     return <LiteWidget navigate={navigate} />
   }
 
-  // Parleo Scan landing page — same pre-auth, standalone treatment as
-  // /lite (see above); /lite itself is untouched for existing embeds.
-  if (pathname === '/scan') {
-    return <LandingPage navigate={navigate} />
-  }
-
   // W4: ParleoAuditBot's public documentation page — same pre-auth,
-  // standalone treatment as /scan/lite above.
+  // standalone treatment as /lite above.
   if (pathname === '/bots') {
     return <BotsPage />
   }

@@ -39,12 +39,16 @@ import {
   PILLAR_TRUE_VALUE,
   TOTAL_MAX,
 } from './scanDimensionsRegistry.js'
+import { reportUrl } from '../publicUrls.js'
 
 // B3: no dedicated sample-report route exists yet — points at a real,
 // complete, scorer_version-4 report already in the database (the
 // Allbirds run generated during this stage's own live verification),
-// not a placeholder. Single constant per B3.
-export const SAMPLE_REPORT_URL = '/report/1710d72d74ee4a2ea6c9884c72cc96e2'
+// not a placeholder. Single constant per B3. Rebased onto
+// PUBLIC_AUDIT_BASE_URL (U1) by the audit.parleo.io migration — this
+// link opens in a new tab, so it must be absolute regardless of which
+// host is currently rendering the landing page.
+export const SAMPLE_REPORT_URL = reportUrl('1710d72d74ee4a2ea6c9884c72cc96e2')
 
 // True Value dimensions with an exhibit cross-highlight target (D3's
 // XMAP) — pt/mv/dc each map to a seen-card line + a said-card mark;

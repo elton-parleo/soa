@@ -4,7 +4,7 @@ import { Pill } from '../liteTheme.jsx'
 import { PathColumn } from './landingTheme.jsx'
 
 const COLUMNS = [
-  { dotColor: 'var(--accent-ink)', kicker: 'FREE', title: 'The Parleo Scan', description: 'The diagnostic on this page.' },
+  { dotColor: 'var(--accent-ink)', kicker: 'FREE', title: 'The Parleo Audit', description: 'The diagnostic on this page.' },
   { dotColor: 'var(--warn-ink)', kicker: 'DIAGNOSTIC', title: 'Share of Algorithm measurement', description: 'Live agent answers across your category, run for you.' },
   { dotColor: 'var(--ink)', kicker: 'PLATFORM', title: 'Command Center', description: 'Your offers, encoded, monitored, and attributed.' },
   { dotColor: 'var(--good-ink)', kicker: 'LIVE', title: 'Deals API + protocols', description: 'MCP and UCP endpoints agents query directly.' },

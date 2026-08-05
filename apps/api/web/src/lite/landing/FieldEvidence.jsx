@@ -42,7 +42,7 @@ export function FieldEvidence() {
     <section className="lite-landing-section">
       <SectionHeader label="FIELD EVIDENCE" />
       <h2 className="lite-display-headline" style={{ fontSize: 'clamp(28px, 4.5vw, 48px)' }}>
-        What the scan finds <span className="lite-serif-italic">in the wild</span>.
+        What the audit finds <span className="lite-serif-italic">in the wild</span>.
       </h2>
 
       <div className="lite-cols-3" style={{ marginTop: 32 }}>

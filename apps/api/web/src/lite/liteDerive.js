@@ -169,8 +169,8 @@ export function accessibilityBadgeText(scanStatus) {
     case 'blocked': return 'blocked'
     case 'failed': return 'failed'
     case 'skipped': return 'no store URL'
-    case 'running': return 'scanning…'
-    default: return 'scanning…'
+    case 'running': return 'auditing…'
+    default: return 'auditing…'
   }
 }
 

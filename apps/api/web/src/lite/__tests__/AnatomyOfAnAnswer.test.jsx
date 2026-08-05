@@ -502,8 +502,8 @@ describe('AnatomyOfAnAnswer — sample report CTA (B3)', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
-  it('SAMPLE_REPORT_URL points at a real report token, not an obvious placeholder', () => {
-    expect(SAMPLE_REPORT_URL).toMatch(/^\/report\/[a-f0-9]{32}$/)
+  it('SAMPLE_REPORT_URL points at a real report token, not an obvious placeholder, absolute on PUBLIC_AUDIT_BASE_URL (U1)', () => {
+    expect(SAMPLE_REPORT_URL).toMatch(/^https:\/\/audit\.parleo\.io\/r\/[a-f0-9]{32}$/)
   })
 })
 
