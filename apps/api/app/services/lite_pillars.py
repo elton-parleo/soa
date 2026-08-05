@@ -903,15 +903,58 @@ def build_pillars_payload(
     fixes = _build_fixes_section(fixable_dims)
 
     total_earned = visibility_earned + accessibility_earned + true_value_earned
-    composite = compute_composite(total_earned, member_value_na=member_value_na)
+    raw_composite = compute_composite(total_earned, member_value_na=member_value_na)
 
-    # Stage 25 (Part 5, G1): the verdict gate — deliberately independent
-    # of the composite's straight-sum weighting. Uses True Value's own
-    # applicable_max (already na-aware: excludes member_value's weight
-    # when it's N/A), so a legitimately program-less store is judged on
-    # the value dimensions that actually apply to it, same discipline as
-    # the composite's own /85 rescale.
-    verdict = compute_verdict(composite, true_value_earned, true_value_applicable_max)
+    # Verdict gate template branching (G1): compute_composite's denominator
+    # is a static registry constant — it never shrinks when a dimension
+    # comes back 'blocked', so a run with unmeasurable accessibility
+    # dimensions used to get a real (silently misleading, artificially
+    # low) composite instead of an honest "can't score this run" — and
+    # compute_verdict would then assert a failing verdict from data that
+    # was never actually measured. state disambiguates three cases:
+    #   scored: nothing blocked -> the numbers above are trustworthy.
+    #   composite_withheld: accessibility has a blocked dimension, but
+    #     True Value itself is clean -> tv_pct is still real, composite
+    #     and verdict are withheld (None) rather than fabricated.
+    #   unverified: True Value's OWN applicable set has a blocked
+    #     dimension (the same "any blocked encode wing" condition the
+    #     True Value section's UNVERIFIED chip already uses — see
+    #     LiteFullReport.jsx's anyTrueValueEncodeBlocked/N3 — reused
+    #     here, not redefined) -> True Value's own measurement is
+    #     compromised enough that neither composite nor tv_pct means
+    #     anything this run.
+    unmeasured_count = sum(1 for d in accessibility_dims if d["blocked"])
+    true_value_blocked = any(d.get("blocked") for d in true_value_dims)
+    if true_value_blocked:
+        state = "unverified"
+    elif unmeasured_count > 0:
+        state = "composite_withheld"
+    else:
+        state = "scored"
+
+    if state == "unverified":
+        tv_pct = None
+    elif true_value_applicable_max > 0:
+        tv_pct = round(true_value_earned / true_value_applicable_max * 100, 1)
+    else:
+        tv_pct = None
+
+    if state == "scored":
+        composite = raw_composite
+        # Stage 25 (Part 5, G1): the verdict gate — deliberately
+        # independent of the composite's straight-sum weighting. Uses
+        # True Value's own applicable_max (already na-aware: excludes
+        # member_value's weight when it's N/A), so a legitimately
+        # program-less store is judged on the value dimensions that
+        # actually apply to it, same discipline as the composite's own
+        # /85 rescale. Only ever called in state=scored — the invariant
+        # (asserted server-side by PublicLitePillars' model_validator)
+        # is that AGENT-READY/NOT AGENT-READY exists only alongside a
+        # real composite, never withheld/unverified data.
+        verdict = compute_verdict(composite, true_value_earned, true_value_applicable_max)
+    else:
+        composite = None
+        verdict = None
 
     return {
         "visibility": _pillar(visibility_earned, PILLAR_WEIGHTS["visibility"], visibility_dims),
@@ -921,4 +964,9 @@ def build_pillars_payload(
         "member_value_na": member_value_na,
         "fixes": fixes,
         "verdict": verdict,
+        "state": state,
+        "tv_pct": tv_pct,
+        "tv_earned": true_value_earned,
+        "tv_applicable": true_value_applicable_max,
+        "unmeasured_count": unmeasured_count,
     }

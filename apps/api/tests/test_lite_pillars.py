@@ -19,6 +19,7 @@ from app.services.lite_pillars import (
     score_recommendation_strength,
     score_share_of_mentions,
 )
+from soa_shared.scan_dimensions import VERDICT_AGENT_READY, VERDICT_NOT_AGENT_READY
 
 
 # ─── score_share_of_mentions (V1) ────────────────────────────────────────
@@ -1191,6 +1192,182 @@ def test_blocked_dimension_all_ok_case_is_unaffected():
     assert result["accessibility"]["score"] == 100
     for d in result["accessibility"]["dimensions"] + result["true_value"]["dimensions"]:
         assert d.get("blocked") in (False, None)
+
+
+# ─── Verdict/gate template branching stage (G1): state/composite/tv_pct ──
+
+def test_state_scored_when_nothing_blocked():
+    """Fully-scored fixture: byte-identical to the pre-stage behavior —
+    real numeric composite, verdict computed, no regression."""
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=_FULL_CRAWL_DIMS, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    assert result["state"] == "scored"
+    assert result["composite"] == 100
+    assert result["tv_pct"] == 100.0
+    assert result["verdict"] == VERDICT_AGENT_READY
+    assert result["unmeasured_count"] == 0
+
+
+def test_state_scored_fail_when_nothing_blocked_but_below_threshold():
+    """A genuinely low-scoring but fully-measured run: composite/verdict
+    are real, never withheld — 'scored' covers both pass and fail."""
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["agent_access"] = {"score": 0, "max": 6, "coverage": "full", "evidence": ["e"]}
+    result = build_pillars_payload(
+        som_pct=0.0, rsi_score=None, total_mentions=0,
+        crawl_dimensions=crawl, run_signals=[], membership_probe_result="unknown",
+    )
+    assert result["state"] == "scored"
+    assert result["composite"] is not None
+    assert result["verdict"] == VERDICT_NOT_AGENT_READY
+
+
+def test_state_composite_withheld_when_accessibility_blocked_but_true_value_clean():
+    """The reported shape: True Value is genuinely measurable (a real,
+    nonzero tv_pct) while accessibility couldn't be read this run —
+    composite and verdict are withheld (None), never a fabricated low
+    number or a false failing verdict."""
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["catalog_context"] = {"score": 0, "max": 8, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    assert result["state"] == "composite_withheld"
+    assert result["composite"] is None
+    assert result["verdict"] is None
+    assert result["tv_pct"] == 100.0  # True Value itself is untouched — still real
+    assert result["unmeasured_count"] == 1
+
+
+def test_state_unverified_when_a_true_value_dimension_is_blocked():
+    """True Value's own applicable set is compromised — the pillar's own
+    measurement can't be trusted, so both composite AND tv_pct are
+    withheld, not just composite."""
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["price_truth_seen"] = {"score": 0, "max": 5, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    assert result["state"] == "unverified"
+    assert result["composite"] is None
+    assert result["tv_pct"] is None
+    assert result["verdict"] is None
+
+
+def test_state_unverified_wins_over_composite_withheld_when_both_blocked():
+    """Both accessibility AND True Value have a blocked dimension —
+    unverified (the stricter state) wins, since True Value's own
+    measurement is the one that's actually compromised."""
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["catalog_context"] = {"score": 0, "max": 8, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}
+    crawl["price_truth_seen"] = {"score": 0, "max": 5, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    assert result["state"] == "unverified"
+    assert result["composite"] is None
+    assert result["tv_pct"] is None
+
+
+def test_unmeasured_count_counts_every_blocked_accessibility_dimension():
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["catalog_context"] = {"score": 0, "max": 8, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}
+    crawl["agent_access"] = {"score": 0, "max": 6, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    assert result["state"] == "composite_withheld"
+    assert result["unmeasured_count"] == 2
+
+
+def test_tv_earned_and_tv_applicable_are_always_real_numbers_even_when_withheld():
+    """tv_earned/tv_applicable are raw sums, not nullable — G1 lists
+    them alongside tv_pct precisely so a caller can still see the real
+    underlying numbers even in a state where tv_pct itself is None."""
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["price_truth_seen"] = {"score": 0, "max": 5, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    assert result["state"] == "unverified"
+    assert result["tv_earned"] > 0
+    assert result["tv_applicable"] > 0
+
+
+def test_build_pillars_payload_output_round_trips_through_the_public_schema_for_every_state():
+    """The real end-to-end guard: build_pillars_payload's dict is exactly
+    what public_lite.py hands to PublicLitePillars(**pillars_payload) —
+    round-tripping through the actual schema (not a hand-built dict)
+    proves the invariant fires on the REAL production wiring, not just a
+    synthetic construction."""
+    from app.schemas import PublicLitePillars
+
+    scored = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=_FULL_CRAWL_DIMS, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    assert PublicLitePillars(**scored).state == "scored"
+
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["catalog_context"] = {"score": 0, "max": 8, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}
+    withheld = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    assert PublicLitePillars(**withheld).composite is None
+
+    crawl2 = dict(_FULL_CRAWL_DIMS)
+    crawl2["price_truth_seen"] = {"score": 0, "max": 5, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}
+    unverified = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl2, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    assert PublicLitePillars(**unverified).tv_pct is None
+
+
+def test_g1_invariant_a_fabricated_verdict_with_no_composite_fails_serialization():
+    """G1's own required test: constructing a NOT AGENT-READY verdict
+    with composite=None must raise — this is the regression net for any
+    future call site that reintroduces the exact bug this stage fixes."""
+    import pytest as _pytest
+    from pydantic import ValidationError
+
+    from app.schemas import PublicLitePillars
+
+    empty_pillar = {"score": 0, "max": 0, "dimensions": []}
+    with _pytest.raises(ValidationError):
+        PublicLitePillars(
+            visibility=empty_pillar, accessibility=empty_pillar, true_value=empty_pillar,
+            composite=None, state="composite_withheld", verdict=VERDICT_NOT_AGENT_READY,
+        )
+    # AGENT-READY is asserted just as strictly — a passing verdict is no
+    # more allowed to come from withheld data than a failing one.
+    with _pytest.raises(ValidationError):
+        PublicLitePillars(
+            visibility=empty_pillar, accessibility=empty_pillar, true_value=empty_pillar,
+            composite=None, state="unverified", verdict=VERDICT_AGENT_READY,
+        )
+    # The valid case: a real composite alongside a real verdict succeeds.
+    PublicLitePillars(
+        visibility=empty_pillar, accessibility=empty_pillar, true_value=empty_pillar,
+        composite=42, state="scored", verdict=VERDICT_NOT_AGENT_READY,
+    )
 
 
 def test_blocked_dimension_excluded_from_fix_ranking_and_fixes_section():

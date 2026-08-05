@@ -160,15 +160,6 @@ describe('LiteProgress — header state chip, table-driven per kind=state value'
     expect(screen.getByText(/Your store — agentic value audit/)).toBeInTheDocument()
   })
 
-  it('shows the ESTIMATE countdown once there is enough completed-task signal', () => {
-    const events = [
-      ev(1, 'done', 'crawl', 'x'), ev(2, 'done', 'competitors', 'y'),
-      ev(3, 'done', 'probe_membership', 'z'), ev(4, 'done', 'probe_revenue', 'w'),
-    ]
-    render(<LiteProgress phaseData={{ status: 'running', events }} />)
-    expect(screen.getByText(/min remaining · ESTIMATE/)).toBeInTheDocument()
-  })
-
   it('omits the countdown before there is any completed-task signal', () => {
     render(<LiteProgress phaseData={{ status: 'running', events: [ev(1, 'state', 'run', 'running')] }} />)
     expect(screen.queryByText(/ESTIMATE/)).not.toBeInTheDocument()

@@ -185,11 +185,6 @@ function ProgressHeader({ brandOrDomain, latestState, fallbackStatus, completedF
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
         <Chip tone={latestState === 'failed' ? 'bad' : 'outline'}>{chipLabel}</Chip>
-        {remainingMin != null && (
-          <span className="lite-mono lite-muted" style={{ fontSize: 11 }}>
-            ~{remainingMin} min remaining · ESTIMATE
-          </span>
-        )}
       </div>
       <div className="lite-bar-track">
         <div
