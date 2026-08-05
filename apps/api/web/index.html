@@ -11,6 +11,12 @@
       rel="stylesheet"/>
   </head>
   <body style="margin:0">
+    <!-- TODO(audit.parleo.io migration, I3): no analytics/tracker is
+         wired into this app yet. Whenever one is added, it must
+         initialize on both www.parleo.io and audit.parleo.io with
+         cross-domain linking configured from one shared constant, or
+         the marketing->audit->report funnel will fragment into two
+         sessions. -->
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -26,7 +26,7 @@ export function Hero({ onSubmitted }) {
   return (
     <section className="lite-landing-section lite-landing-section--tight" style={{ paddingTop: 56 }}>
       <SectionHeader
-        label={<>THE PARLEO SCAN <span className="lite-badge-dot" style={{ background: 'var(--accent)' }} aria-hidden="true" /></>}
+        label={<>THE PARLEO AUDIT <span className="lite-badge-dot" style={{ background: 'var(--accent)' }} aria-hidden="true" /></>}
       />
       <h1 className="lite-display-headline">
         Do AI agents recommend your{' '}
@@ -55,7 +55,7 @@ export function Hero({ onSubmitted }) {
           </div>
 
           <PrivacyNote>
-            The scan reads only your public pages, the same ones agents see,
+            The audit reads only your public pages, the same ones agents see,
             and only asks ChatGPT about your brand and its closest
             competitors. Your report link is private until you share it.
           </PrivacyNote>

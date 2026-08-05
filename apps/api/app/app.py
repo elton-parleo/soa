@@ -26,6 +26,19 @@ _lite_origin = os.getenv("LITE_ALLOWED_ORIGIN")
 if _lite_origin:
     _cors_origins.append(_lite_origin)
 
+# audit.parleo.io migration (X1): the audit host is served by this same
+# Vercel deployment, so its own /api/* calls are same-origin — this
+# entry only matters if the API ever ends up served from a different
+# origin than the page (e.g. local dev pointed at a remote API, or a
+# future split deployment). Additive only, never removes an origin.
+_cors_origins.append(os.getenv("PUBLIC_AUDIT_BASE_URL", "https://audit.parleo.io").rstrip("/"))
+
+# X2: no cookie Domain is set anywhere in this app — SoA Lite's public
+# endpoints are session-less (no login), so there's no cross-host state
+# that would justify widening a cookie Domain to .parleo.io. Left
+# host-scoped by default; revisit only if something genuinely needs to
+# share state between audit.parleo.io and the marketing/authed hosts.
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,

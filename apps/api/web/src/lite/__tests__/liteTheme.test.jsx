@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
 import '@testing-library/jest-dom'
 
-import { FullDiagnosticGate, FullAnalysisPill, FULL_DIAGNOSTIC_CTA_LABEL } from '../liteTheme.jsx'
+import { FullDiagnosticGate, FullAnalysisPill, FULL_DIAGNOSTIC_CTA_LABEL, LogoHeader, ReportHeaderBar } from '../liteTheme.jsx'
 
 describe('FullDiagnosticGate (Part 1, M1; variants restyled Report redesign Part 6, G1)', () => {
   it('renders the default CTA label wired to ctaUrl', () => {
@@ -84,5 +84,22 @@ describe('FullAnalysisPill (Report redesign, Part 6, G1)', () => {
       expect(styles[1][prop]).toBe(styles[0][prop])
       expect(styles[2][prop]).toBe(styles[0][prop])
     }
+  })
+})
+
+describe('R1: scan→audit rendered-copy rename', () => {
+  it('LogoHeader reads "Parleo Audit", not "Parleo Scan"', () => {
+    render(<LogoHeader />)
+    expect(screen.getByText('Parleo Audit')).toBeInTheDocument()
+    expect(screen.queryByText('Parleo Scan')).not.toBeInTheDocument()
+  })
+
+  it('ReportHeaderBar status copy says Audit, not Scan', () => {
+    render(<ReportHeaderBar brandOrDomain="Acme Co" scanStatus="complete" />)
+    expect(screen.getByText('Audit complete')).toBeInTheDocument()
+
+    const { unmount } = render(<ReportHeaderBar brandOrDomain="Acme Co" scanStatus="failed" />)
+    expect(screen.getByText('Audit failed')).toBeInTheDocument()
+    unmount()
   })
 })

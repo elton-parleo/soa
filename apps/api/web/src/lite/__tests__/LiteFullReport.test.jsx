@@ -11,6 +11,7 @@ import {
   DIMENSIONS, DIMENSIONS_BY_CODE, PILLAR_NAMES, LITE_QUERY_COUNT,
   VERDICT_AGENT_READY, VERDICT_NOT_AGENT_READY,
 } from '../landing/scanDimensionsRegistry.js'
+import { PUBLIC_AUDIT_BASE_URL } from '../publicUrls.js'
 import ALLBIRDS_V3_REPORT from './fixtures/allbirds_v3_report.json'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -79,14 +80,14 @@ describe('LiteFullReport — page frame', () => {
     expect(screen.getByText('Acme Co')).toBeInTheDocument() // header bar brand
   })
 
-  it('Stage 9 (U3): Copy link writes the canonical /report/{token} URL to the clipboard', async () => {
+  it('Stage 9 (U3), audit.parleo.io migration: Copy link writes the canonical /r/{token} URL on PUBLIC_AUDIT_BASE_URL to the clipboard', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
 
     render(<LiteFullReport report={baseReport} token="tok-copy-123" />)
     fireEvent.click(screen.getByText('Copy link'))
 
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/report/tok-copy-123`))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${PUBLIC_AUDIT_BASE_URL}/r/tok-copy-123`))
     await waitFor(() => expect(screen.getByText('Copied')).toBeInTheDocument())
   })
 

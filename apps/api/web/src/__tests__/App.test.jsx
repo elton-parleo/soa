@@ -15,18 +15,36 @@ vi.mock('../lite/liteApi.js', () => ({
   },
 }))
 
+// audit.parleo.io migration (H1): App.jsx branches on isAuditHost()
+// before anything else. Mocking that function (rather than trying to
+// redefine window.location.hostname, which jsdom's real Location
+// instance won't allow — it throws "Cannot redefine property") means
+// pushState-driven pathname/history behavior, which the rest of this
+// file's tests depend on, keeps working against the real jsdom Location
+// unchanged.
+let mockAuditHost = false
+vi.mock('../lite/publicUrls.js', async (importOriginal) => {
+  const actual = await importOriginal()
+  return { ...actual, isAuditHost: () => mockAuditHost }
+})
+
 function setPath(path) {
   window.history.pushState({}, '', path)
+}
+
+function setHostname(hostname) {
+  mockAuditHost = hostname === 'audit.parleo.io'
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
   sessionStorage.clear()
+  mockAuditHost = false
   setPath('/')
 })
 
 describe('App — /bots routing (W4)', () => {
-  it('renders BotsPage, unauthenticated, same pre-auth treatment as /scan and /lite', () => {
+  it('renders BotsPage, unauthenticated, same pre-auth treatment as /lite', () => {
     setPath('/bots')
     render(<App />)
     expect(screen.getByRole('heading', { name: 'ParleoAuditBot' })).toBeInTheDocument()
@@ -131,9 +149,10 @@ describe('App — post-submit navigation lands on /report/{token} (U2)', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/report/tok-submitted'))
   })
 
-  it('from /scan: pushes history to /report/{token} and the progress view takes over in place', async () => {
-    setPath('/scan')
-    liteApi.submit.mockResolvedValue({ token: 'tok-scan-submitted', status: 'pending' })
+  it('from the audit host landing page (/): pushes history to /r/{token} and the progress view takes over in place', async () => {
+    setHostname('audit.parleo.io')
+    setPath('/')
+    liteApi.submit.mockResolvedValue({ token: 'tok-audit-submitted', status: 'pending' })
     liteApi.getStatus.mockResolvedValue({
       status: 'pending', phase: 'queued', scan_status: null,
       events: [{ seq: 1, ts: '2026-01-01T00:00:00Z', kind: 'state', task: 'run', text: 'queued' }],
@@ -145,8 +164,61 @@ describe('App — post-submit navigation lands on /report/{token} (U2)', () => {
     const submitButtons = screen.getAllByText('Get your visibility report')
     fireEvent.click(submitButtons[0])
 
-    await waitFor(() => expect(window.location.pathname).toBe('/report/tok-scan-submitted'))
+    await waitFor(() => expect(window.location.pathname).toBe('/r/tok-audit-submitted'))
     await waitFor(() => expect(screen.getByText('AUDIT QUEUED')).toBeInTheDocument())
+  })
+})
+
+describe('App — H1/H2: audit.parleo.io hostname routing', () => {
+  it('renders LandingPage at \'/\' on the audit host', () => {
+    setHostname('audit.parleo.io')
+    setPath('/')
+    render(<App />)
+    expect(screen.getByRole('navigation', { name: 'Parleo Audit' })).toBeInTheDocument()
+  })
+
+  it('renders the LiteWidget progress view at /r/{token} on the audit host', async () => {
+    setHostname('audit.parleo.io')
+    setPath('/r/tok-audit-r')
+    liteApi.getStatus.mockResolvedValue({
+      status: 'pending', phase: 'queued', scan_status: null,
+      events: [{ seq: 1, ts: '2026-01-01T00:00:00Z', kind: 'state', task: 'run', text: 'queued' }],
+    })
+
+    render(<App />)
+
+    await waitFor(() => expect(liteApi.getStatus).toHaveBeenCalledWith('tok-audit-r'))
+    expect(liteApi.submit).not.toHaveBeenCalled()
+  })
+
+  it('renders the same LiteWidget flow at /s/{id} on the audit host — not a distinct internal route', async () => {
+    setHostname('audit.parleo.io')
+    setPath('/s/tok-audit-s')
+    liteApi.getStatus.mockResolvedValue({
+      status: 'pending', phase: 'queued', scan_status: null,
+      events: [{ seq: 1, ts: '2026-01-01T00:00:00Z', kind: 'state', task: 'run', text: 'queued' }],
+    })
+
+    render(<App />)
+
+    await waitFor(() => expect(liteApi.getStatus).toHaveBeenCalledWith('tok-audit-s'))
+  })
+
+  it('H1: any other path on the audit host is not found — no dashboard, no /lite, no /bots', () => {
+    setHostname('audit.parleo.io')
+    for (const path of ['/lite', '/bots', '/scan', '/report/tok-x', '/dashboard']) {
+      setPath(path)
+      const { unmount } = render(<App />)
+      expect(screen.getByText('Not found.')).toBeInTheDocument()
+      unmount()
+    }
+  })
+
+  it('H2: /scan on the main host no longer renders the landing page (route deleted, not redirected)', () => {
+    setHostname('localhost')
+    setPath('/scan')
+    render(<App />)
+    expect(screen.queryByRole('navigation', { name: 'Parleo Audit' })).not.toBeInTheDocument()
   })
 })
 

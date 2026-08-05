@@ -8,7 +8,8 @@
  * changes, update both.
  *
  * Presentational only, unauthenticated, at /bots — same pre-auth
- * standalone treatment as /scan and /lite (see App.jsx).
+ * standalone treatment as /lite (see App.jsx). Lives on the marketing
+ * host only, not on audit.parleo.io (H1).
  */
 import './theme.css'
 import { LightCard, SectionHeader } from './liteTheme.jsx'

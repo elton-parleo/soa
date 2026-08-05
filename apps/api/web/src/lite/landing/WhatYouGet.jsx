@@ -65,7 +65,7 @@ function FixesVisual() {
 const CARDS = [
   { icon: '📈', label: 'THE SCORE', Visual: AnswersVisual, text: 'A 0-100 score you can re-run monthly and hand to your team.' },
   { icon: '📄', label: 'THE WHY', Visual: WhyVisual, text: 'Every finding with the evidence, including what a member really pays versus what agents quote.' },
-  { icon: '#', label: 'THE FIXES', Visual: FixesVisual, text: 'Ranked by score impact, with the exact markup to ship. Copy, paste, re-scan.' },
+  { icon: '#', label: 'THE FIXES', Visual: FixesVisual, text: 'Ranked by score impact, with the exact markup to ship. Copy, paste, re-audit.' },
 ]
 
 export function WhatYouGet() {

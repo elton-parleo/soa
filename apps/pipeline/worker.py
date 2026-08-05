@@ -649,10 +649,10 @@ def _run_lite_scan(request_id: int, store_url: str | None) -> tuple:
                 SET status = 'skipped', updated_at = NOW()
                 WHERE lite_request_id = :rid
             """), {"rid": request_id})
-        log.info(f"[lite] request {request_id}: no store_url — scan skipped")
+        log.info(f"[lite] request {request_id}: no store_url — audit skipped")
         lite_events.emit_done(
             request_id, lite_events.TASK_CRAWL,
-            "No store URL was provided — scan skipped",
+            "No store URL was provided — audit skipped",
         )
         return None, None
 
@@ -721,7 +721,7 @@ def _crawl_done_text(result) -> str:
         return "Your store blocked our reader — that itself is a finding"
     if result.status == 'failed':
         return "Couldn't finish reading your store this time"
-    return "Scan did not complete"
+    return "Audit did not complete"
 
 
 def _run_membership_probe(request_id: int, brand_name: str, store_url: str | None, api_key: str):
@@ -966,7 +966,10 @@ def _sweep_lite_completions():
         log.exception("[lite] report-ready email sweep failed unexpectedly")
 
 
-LITE_REPORT_BASE_URL = os.environ.get("LITE_REPORT_BASE_URL", "https://parleo.io")
+# audit.parleo.io migration (U1): single source for the report-ready
+# email's link — same constant name/intent as the frontend's
+# PUBLIC_AUDIT_BASE_URL (apps/api/web/src/lite/publicUrls.js).
+PUBLIC_AUDIT_BASE_URL = os.environ.get("PUBLIC_AUDIT_BASE_URL", "https://audit.parleo.io").rstrip("/")
 
 
 def _send_pending_report_emails():
@@ -1000,7 +1003,7 @@ def _send_pending_report_emails():
 
     sender = get_email_sender()
     for lite_id, token, email, brand_name in rows:
-        report_url = f"{LITE_REPORT_BASE_URL}/report/{token}"
+        report_url = f"{PUBLIC_AUDIT_BASE_URL}/r/{token}"
         try:
             sent = sender.send_report_ready(email, report_url, brand_name)
         except Exception:

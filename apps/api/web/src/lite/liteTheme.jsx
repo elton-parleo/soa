@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from 'react'
 import { SCORE_BANDS } from './liteDerive.js'
+import { reportUrl } from './publicUrls.js'
 
 export const STAGE_ORDER = ['Awareness', 'Research', 'Comparison', 'Ready to Buy']
 
@@ -65,7 +66,7 @@ export function LogoHeader() {
         <rect x="2" y="2" width="8" height="20" rx="1.5" style={{ fill: 'var(--accent)' }} />
         <rect x="14" y="6" width="8" height="12" rx="1.5" style={{ fill: 'var(--accent)' }} opacity="0.4" />
       </svg>
-      <span className="lite-label" style={{ fontSize: 12 }}>Parleo Scan</span>
+      <span className="lite-label" style={{ fontSize: 12 }}>Parleo Audit</span>
     </div>
   )
 }
@@ -73,12 +74,12 @@ export function LogoHeader() {
 // ─── Report header bar (page frame, item 1) ────────────────────────────
 
 const SCAN_STATUS_COPY = {
-  complete: 'Scan complete',
+  complete: 'Audit complete',
   blocked: 'Store blocked',
-  failed: 'Scan failed',
-  skipped: 'No store scanned',
-  running: 'Scanning…',
-  pending: 'Scanning…',
+  failed: 'Audit failed',
+  skipped: 'No store audited',
+  running: 'Auditing…',
+  pending: 'Auditing…',
 }
 
 function scanStatusTone(scanStatus) {
@@ -89,20 +90,20 @@ function scanStatusTone(scanStatus) {
 
 export function ReportHeaderBar({ brandOrDomain, scannedDateLabel, scanStatus, token }) {
   const [copied, setCopied] = useState(false)
-  const statusText = SCAN_STATUS_COPY[scanStatus] || 'Scanning…'
+  const statusText = SCAN_STATUS_COPY[scanStatus] || 'Auditing…'
   const tone = scanStatusTone(scanStatus)
 
   async function handleCopyLink() {
-    // Stage 9 (U3): the canonical /report/{token} URL, built explicitly
-    // rather than trusting window.location.href — this bar can render
-    // while the page is still at the legacy /lite path (sessionStorage-
-    // resumed), where location.href would copy an unshareable URL that
-    // means nothing to anyone else. Falls back to location.href only if
-    // no token was threaded down (shouldn't happen on the full report,
-    // which always has one by the time it renders).
-    const url = token
-      ? `${window.location.origin}/report/${encodeURIComponent(token)}`
-      : window.location.href
+    // Stage 9 (U3), extended by the audit.parleo.io migration's U1-U3:
+    // the canonical /r/{token} URL on PUBLIC_AUDIT_BASE_URL, built
+    // explicitly rather than trusting window.location.href — this bar
+    // can render while the page is still at the legacy /lite path
+    // (sessionStorage-resumed) on the marketing host, where location
+    // would point at the wrong host entirely, not just an unshareable
+    // path. Falls back to location.href only if no token was threaded
+    // down (shouldn't happen on the full report, which always has one
+    // by the time it renders).
+    const url = token ? reportUrl(token) : window.location.href
     try {
       await navigator.clipboard.writeText(url)
       setCopied(true)

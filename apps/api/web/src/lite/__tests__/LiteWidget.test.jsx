@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
 
 import LiteWidget from '../LiteWidget.jsx'
@@ -15,9 +15,32 @@ vi.mock('../liteApi.js', () => ({
   },
 }))
 
+const ORIGINAL_LOCATION = window.location
+
+// audit.parleo.io migration: LiteWidget branches on window.location.hostname
+// (see publicUrls.js's isAuditHost) to pick the right same-origin path
+// prefix. jsdom's default hostname is 'localhost', matching main-host
+// behavior automatically — this helper is only needed by tests that
+// exercise the audit-host branch.
+function setHostname(hostname) {
+  Object.defineProperty(window, 'location', {
+    value: { ...ORIGINAL_LOCATION, hostname },
+    writable: true,
+    configurable: true,
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   sessionStorage.clear()
+})
+
+afterEach(() => {
+  Object.defineProperty(window, 'location', {
+    value: ORIGINAL_LOCATION,
+    writable: true,
+    configurable: true,
+  })
 })
 
 describe('LiteWidget (root) — state machine', () => {
@@ -379,17 +402,34 @@ describe('LiteWidget — Stage 9: urlToken seeds the token from the URL', () => 
     expect(sessionStorage.getItem('soaLiteToken')).toBeNull()
   })
 
-  it('the not-found "Start a new scan" button calls navigate when provided', () => {
+  it('the not-found "Start a new audit" button navigates to \'/\' on the audit host', () => {
+    setHostname('audit.parleo.io')
     const navigate = vi.fn()
     render(<LiteWidget urlToken="" navigate={navigate} />)
 
-    fireEvent.click(screen.getByText('Start a new scan'))
-    expect(navigate).toHaveBeenCalledWith('/scan')
+    fireEvent.click(screen.getByText('Start a new audit'))
+    expect(navigate).toHaveBeenCalledWith('/')
+  })
+
+  it('the not-found "Start a new audit" button does a full navigation to PUBLIC_AUDIT_BASE_URL on the marketing host', () => {
+    // A plain mutable stand-in, not jsdom's real Location — assigning
+    // .href below must not trigger jsdom's unimplemented cross-origin
+    // navigation warning.
+    setHostname('parleo.io')
+    const navigate = vi.fn()
+    render(<LiteWidget urlToken="" navigate={navigate} />)
+
+    fireEvent.click(screen.getByText('Start a new audit'))
+    // A dead /report/{token} link on the marketing host has no local
+    // landing page to send the visitor to anymore (H2 removed /scan) —
+    // it must leave for the audit host's own landing page instead.
+    expect(navigate).not.toHaveBeenCalled()
+    expect(window.location.href).toContain('audit.parleo.io')
   })
 })
 
 describe('LiteWidget — Stage 9: navigate after submit', () => {
-  it('calls navigate with /report/{token} after a successful submission', async () => {
+  it('calls navigate with /report/{token} after a successful submission on the marketing host', async () => {
     liteApi.submit.mockResolvedValue({ token: 'tok-nav', status: 'pending' })
     liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
     const navigate = vi.fn()
@@ -399,6 +439,19 @@ describe('LiteWidget — Stage 9: navigate after submit', () => {
     fireEvent.click(screen.getByText('Run my free diagnostic'))
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/report/tok-nav'))
+  })
+
+  it('calls navigate with /r/{token} after a successful submission on the audit host', async () => {
+    setHostname('audit.parleo.io')
+    liteApi.submit.mockResolvedValue({ token: 'tok-audit-nav', status: 'pending' })
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+    const navigate = vi.fn()
+
+    render(<LiteWidget navigate={navigate} />)
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'Acme Co' } })
+    fireEvent.click(screen.getByText('Run my free diagnostic'))
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/r/tok-audit-nav'))
   })
 
   it('does not throw when navigate is omitted (today\'s exact /lite behavior)', async () => {

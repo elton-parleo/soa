@@ -1,7 +1,11 @@
 /**
  * SoA Lite — public, unauthenticated lead-gen widget at /lite, and (Stage
- * 9) the same state machine reused at /report/{token} for unique,
- * revisitable report URLs (see App.jsx).
+ * 9) the same state machine reused at /report/{token} on the marketing
+ * host and at /r/{token} + /s/{id} on audit.parleo.io for unique,
+ * revisitable report URLs (see App.jsx). '/s/' isn't a distinct
+ * internal route — it's just another external name for this same
+ * token-driven flow, which already renders progress or the full report
+ * depending on where the run is.
  *
  * Self-contained: no Sidebar, no AuthContext, no import of the authed
  * app's api.js/supabase.js (see liteApi.js). Meant to be iframed or
@@ -50,6 +54,7 @@ import { LiteForm } from './LiteForm.jsx'
 import { LiteProgress, LiteFailed } from './LiteProgress.jsx'
 import { LiteFullReport } from './LiteFullReport.jsx'
 import { LightCard } from './liteTheme.jsx'
+import { PUBLIC_AUDIT_BASE_URL, isAuditHost } from './publicUrls.js'
 
 export { LiteForm, LiteProgress, LiteFailed, LiteFullReport }
 
@@ -96,9 +101,21 @@ function ReportNotFound({ navigate }) {
           <button
             type="button"
             className="lite-pill lite-pill--solid"
-            onClick={() => (navigate ? navigate('/scan') : (window.location.href = '/scan'))}
+            onClick={() => {
+              // On the audit host, '/' is the landing page — a fast
+              // client-side transition. A dead /report/{token} link on
+              // the marketing host (H2: /scan no longer exists there)
+              // has nowhere local to send the visitor, so it does a
+              // full navigation out to the audit host's landing page.
+              if (isAuditHost()) {
+                if (navigate) navigate('/')
+                else window.location.href = '/'
+              } else {
+                window.location.href = PUBLIC_AUDIT_BASE_URL
+              }
+            }}
           >
-            Start a new scan
+            Start a new audit
           </button>
         </LightCard>
       </div>
@@ -157,7 +174,10 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
     // U2: canonical, shareable URL from the first second of the run —
     // history push, no reload (navigate is a no-op-free optional prop so
     // any caller/test that doesn't pass one keeps today's exact behavior).
-    if (navigate) navigate(`/report/${newToken}`)
+    // This widget renders on both hosts (the /lite embed on the
+    // marketing host, and /r//s on the audit host), so the prefix has
+    // to match whichever one is actually serving the page.
+    if (navigate) navigate(isAuditHost() ? `/r/${newToken}` : `/report/${newToken}`)
   }
 
   function resetToForm(prefillBrandName) {
