@@ -24,9 +24,14 @@
       "dest": "/audit-sitemap.xml"
     },
     {
-      "src": "^/(r/.*|s/.*)?$",
+      "src": "^/$",
       "has": [{ "type": "host", "value": "audit.parleo.io" }],
-      "dest": "/index.html"
+      "dest": "/audit.html"
+    },
+    {
+      "src": "^/(r/.*|s/.*)$",
+      "has": [{ "type": "host", "value": "audit.parleo.io" }],
+      "dest": "/audit-report.html"
     },
     {
       "handle": "filesystem"

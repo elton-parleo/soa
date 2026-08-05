@@ -123,4 +123,35 @@ describe('LandingPage — I2/I3: canonical + OG/Twitter meta on the one indexabl
     expect(document.querySelector('link[rel="canonical"]')).not.toBeInTheDocument()
     expect(document.querySelector('meta[property="og:title"]')).not.toBeInTheDocument()
   })
+
+  it('S2: idempotent against tags the static HTML already baked in — updates in place, never duplicates', () => {
+    // Simulates audit.html's build-time-injected head (S1) already
+    // being in the DOM before React ever mounts.
+    const staticCanonical = document.createElement('link')
+    staticCanonical.rel = 'canonical'
+    staticCanonical.href = 'https://audit.parleo.io/stale'
+    document.head.appendChild(staticCanonical)
+
+    const staticOgTitle = document.createElement('meta')
+    staticOgTitle.setAttribute('property', 'og:title')
+    staticOgTitle.content = 'stale title'
+    document.head.appendChild(staticOgTitle)
+
+    const { unmount } = render(<LandingPage navigate={navigate} />)
+
+    expect(document.querySelectorAll('link[rel="canonical"]')).toHaveLength(1)
+    expect(document.querySelectorAll('meta[property="og:title"]')).toHaveLength(1)
+    expect(document.querySelector('link[rel="canonical"]')).toHaveAttribute('href', `${PUBLIC_AUDIT_BASE_URL}/`)
+    expect(document.querySelector('meta[property="og:title"]').content).not.toBe('stale title')
+
+    unmount()
+    // The tags pre-existed, so unmount restores them rather than
+    // removing them — the static document must still have a head.
+    expect(document.querySelectorAll('link[rel="canonical"]')).toHaveLength(1)
+    expect(document.querySelector('link[rel="canonical"]')).toHaveAttribute('href', 'https://audit.parleo.io/stale')
+    expect(document.querySelector('meta[property="og:title"]').content).toBe('stale title')
+
+    document.head.removeChild(document.querySelector('link[rel="canonical"]'))
+    document.head.removeChild(document.querySelector('meta[property="og:title"]'))
+  })
 })

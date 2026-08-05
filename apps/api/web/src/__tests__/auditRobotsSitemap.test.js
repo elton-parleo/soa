@@ -37,3 +37,21 @@ describe('public/audit-sitemap.xml', () => {
     expect(locs).toEqual(['https://audit.parleo.io/'])
   })
 })
+
+// L3: the main host (everything but audit.parleo.io) gets its own
+// robots.txt — /report/ and /s/ are duplicates of audit-host content
+// and disallowed; /lite is deliberately left crawlable, since L2's
+// canonical tag is the correct way to consolidate its ranking onto the
+// audit host without sending crawlers a conflicting disallow signal.
+describe('public/robots.txt (main host, L3)', () => {
+  const robots = fs.readFileSync(path.join(PUBLIC_DIR, 'robots.txt'), 'utf8')
+
+  it('disallows /report/ and /s/', () => {
+    expect(robots).toMatch(/Disallow:\s*\/report\//)
+    expect(robots).toMatch(/Disallow:\s*\/s\//)
+  })
+
+  it('does not disallow /lite', () => {
+    expect(robots).not.toMatch(/Disallow:\s*\/lite/)
+  })
+})

@@ -27,14 +27,21 @@ describe('vercel.json — audit.parleo.io host routing (H1)', () => {
     expect(audit404.dest).toBeUndefined() // a real 404, no fallback content
   })
 
-  it('serves the landing/report/status paths on the audit host', () => {
-    const appRoute = findRoute((r) => r.has?.some((h) => h.type === 'host' && h.value === 'audit.parleo.io') && r.dest === '/index.html')
-    expect(appRoute).toBeDefined()
-    expect(new RegExp(appRoute.src).test('/')).toBe(true)
-    expect(new RegExp(appRoute.src).test('/r/abc123')).toBe(true)
-    expect(new RegExp(appRoute.src).test('/s/abc123')).toBe(true)
-    expect(new RegExp(appRoute.src).test('/bots')).toBe(false)
-    expect(new RegExp(appRoute.src).test('/lite')).toBe(false)
+  it('S1: serves the landing page from its own audit.html document, not index.html', () => {
+    const landingRoute = findRoute((r) => r.has?.some((h) => h.type === 'host' && h.value === 'audit.parleo.io') && r.dest === '/audit.html')
+    expect(landingRoute).toBeDefined()
+    expect(new RegExp(landingRoute.src).test('/')).toBe(true)
+    expect(new RegExp(landingRoute.src).test('/r/abc123')).toBe(false)
+    expect(new RegExp(landingRoute.src).test('/bots')).toBe(false)
+  })
+
+  it('S3: serves /r/ and /s/ from their own audit-report.html document, not audit.html or index.html', () => {
+    const reportRoute = findRoute((r) => r.has?.some((h) => h.type === 'host' && h.value === 'audit.parleo.io') && r.dest === '/audit-report.html')
+    expect(reportRoute).toBeDefined()
+    expect(new RegExp(reportRoute.src).test('/r/abc123')).toBe(true)
+    expect(new RegExp(reportRoute.src).test('/s/abc123')).toBe(true)
+    expect(new RegExp(reportRoute.src).test('/')).toBe(false)
+    expect(new RegExp(reportRoute.src).test('/lite')).toBe(false)
   })
 
   it('serves audit-specific robots.txt and sitemap.xml, not the main-host files', () => {

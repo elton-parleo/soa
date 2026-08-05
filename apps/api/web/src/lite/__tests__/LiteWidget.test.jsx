@@ -5,6 +5,7 @@ import '@testing-library/jest-dom'
 
 import LiteWidget from '../LiteWidget.jsx'
 import { liteApi } from '../liteApi.js'
+import { PUBLIC_AUDIT_BASE_URL } from '../publicUrls.js'
 
 vi.mock('../liteApi.js', () => ({
   liteApi: {
@@ -485,5 +486,78 @@ describe('LiteWidget — Stage 9: noindex meta (U4)', () => {
   it('adds noindex for the not-found state on an empty urlToken (still a report route)', () => {
     render(<LiteWidget urlToken="" />)
     expect(queryNoindexMeta()).not.toBeNull()
+  })
+
+  it('S3: is a no-op on the audit host — audit-report.html already bakes noindex in statically', async () => {
+    setHostname('audit.parleo.io')
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+
+    render(<LiteWidget urlToken="tok-audit-noindex" />)
+    await waitFor(() => expect(liteApi.getStatus).toHaveBeenCalled())
+    expect(queryNoindexMeta()).toBeNull()
+  })
+
+  it('S2: does not duplicate a noindex tag the static document already has, on the audit host', async () => {
+    setHostname('audit.parleo.io')
+    const staticMeta = document.createElement('meta')
+    staticMeta.name = 'robots'
+    staticMeta.content = 'noindex'
+    document.head.appendChild(staticMeta)
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+
+    render(<LiteWidget urlToken="tok-audit-noindex-2" />)
+    await waitFor(() => expect(liteApi.getStatus).toHaveBeenCalled())
+    expect(document.head.querySelectorAll('meta[name="robots"]')).toHaveLength(1)
+
+    document.head.removeChild(staticMeta)
+  })
+})
+
+describe('LiteWidget — L1/L2: canonical link on the marketing host', () => {
+  function queryCanonical() {
+    return document.head.querySelector('link[rel="canonical"]')
+  }
+
+  it('L2: bare /lite form (no token) canonicalizes to PUBLIC_AUDIT_BASE_URL root', () => {
+    render(<LiteWidget />)
+    expect(queryCanonical()).toHaveAttribute('href', `${PUBLIC_AUDIT_BASE_URL}/`)
+  })
+
+  it('L1: /report/{token} canonicalizes to the audit host\'s /r/{token}', async () => {
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+    render(<LiteWidget urlToken="tok-canonical" />)
+    await waitFor(() => expect(queryCanonical()).toHaveAttribute('href', `${PUBLIC_AUDIT_BASE_URL}/r/tok-canonical`))
+  })
+
+  it('L1: a /lite session resumed from sessionStorage (token, but not a report route) also canonicalizes to /r/{token}', async () => {
+    sessionStorage.setItem('soaLiteToken', 'tok-resumed')
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+    render(<LiteWidget />)
+    await waitFor(() => expect(queryCanonical()).toHaveAttribute('href', `${PUBLIC_AUDIT_BASE_URL}/r/tok-resumed`))
+  })
+
+  it('no canonical while showing the not-found state', () => {
+    render(<LiteWidget urlToken="" />)
+    expect(queryCanonical()).toBeNull()
+  })
+
+  it('no canonical added on the audit host itself — already canonical there', () => {
+    setHostname('audit.parleo.io')
+    render(<LiteWidget urlToken="tok-on-audit" />)
+    expect(queryCanonical()).toBeNull()
+  })
+
+  it('updates the canonical href in place across a state transition, without leaving a stale duplicate', async () => {
+    liteApi.submit.mockResolvedValue({ token: 'tok-transition', status: 'pending' })
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+    render(<LiteWidget />)
+
+    expect(queryCanonical()).toHaveAttribute('href', `${PUBLIC_AUDIT_BASE_URL}/`)
+
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'Acme Co' } })
+    fireEvent.click(screen.getByText('Run my free diagnostic'))
+
+    await waitFor(() => expect(queryCanonical()).toHaveAttribute('href', `${PUBLIC_AUDIT_BASE_URL}/r/tok-transition`))
+    expect(document.head.querySelectorAll('link[rel="canonical"]')).toHaveLength(1)
   })
 })

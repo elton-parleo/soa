@@ -54,7 +54,8 @@ import { LiteForm } from './LiteForm.jsx'
 import { LiteProgress, LiteFailed } from './LiteProgress.jsx'
 import { LiteFullReport } from './LiteFullReport.jsx'
 import { LightCard } from './liteTheme.jsx'
-import { PUBLIC_AUDIT_BASE_URL, isAuditHost } from './publicUrls.js'
+import { PUBLIC_AUDIT_BASE_URL, isAuditHost, reportUrl } from './publicUrls.js'
+import { upsertMeta, upsertLink, restoreOrRemove } from './headMeta.js'
 
 export { LiteForm, LiteProgress, LiteFailed, LiteFullReport }
 
@@ -149,17 +150,33 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Stage 9 (U4): noindex whenever a real report/progress view could be
-  // showing — /report/* always, or /lite once a token exists. Never
-  // site-wide (index.html has no default meta to worry about undoing).
+  // Stage 9 (U4), audit.parleo.io migration (S2/S3): noindex whenever a
+  // real report/progress view could be showing — /report/* always, or
+  // /lite once a token exists. Marketing host only: audit-report.html
+  // already bakes noindex into the served document for /r/ and /s/
+  // (S3), so adding a second tag here on the audit host would just
+  // duplicate it.
   useEffect(() => {
+    if (isAuditHost()) return undefined
     if (!token && !isReportRoute) return undefined
-    const meta = document.createElement('meta')
-    meta.name = 'robots'
-    meta.content = 'noindex'
-    document.head.appendChild(meta)
-    return () => { document.head.removeChild(meta) }
+    const handle = upsertMeta('name', 'robots', 'noindex')
+    return () => restoreOrRemove(handle)
   }, [token, isReportRoute])
+
+  // L1/L2: on the marketing host, this page is always a duplicate of
+  // something the audit host owns — declare that canonical explicitly.
+  // A bare /lite form (no token yet) canonicalizes to the audit host's
+  // root (L2); once a token exists — via /report/{token}, or a /lite
+  // session resumed from sessionStorage — it canonicalizes to that
+  // report's /r/ URL (L1). Skipped on the audit host itself (already
+  // canonical there, see S3) and while showing the not-found state
+  // (nothing real to declare a canonical identity for).
+  useEffect(() => {
+    if (isAuditHost() || notFound) return undefined
+    const href = token ? reportUrl(token) : `${PUBLIC_AUDIT_BASE_URL}/`
+    const handle = upsertLink('canonical', href)
+    return () => restoreOrRemove(handle)
+  }, [token, notFound])
 
   function handleSubmitted(newToken, { storeUrl: newStoreUrl } = {}) {
     writeSession(STORAGE_KEY, newToken)

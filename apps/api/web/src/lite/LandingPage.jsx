@@ -26,6 +26,8 @@ import { Path } from './landing/Path.jsx'
 import { FinalCta } from './landing/FinalCta.jsx'
 import { LandingFooter } from './landing/LandingFooter.jsx'
 import { PUBLIC_AUDIT_BASE_URL } from './publicUrls.js'
+import { LANDING_META_TITLE, LANDING_META_DESCRIPTION, OG_IMAGE_URL } from './landingMeta.js'
+import { upsertMeta, upsertLink, restoreOrRemove } from './headMeta.js'
 
 function writeSession(key, value) {
   try {
@@ -37,47 +39,41 @@ function writeSession(key, value) {
   } catch (_) {}
 }
 
-const META_TITLE = 'Parleo Audit — how AI shopping agents see your store'
-const META_DESCRIPTION =
-  'A free audit of what agentic shoppers actually see when they read your store: pricing, membership terms, and structured data.'
-
-// I2/I3: canonical + OG/Twitter tags, only on the landing page (the one
-// indexable/shareable page on this host — /r/ and /s/ get noindex
-// instead, see LiteWidget.jsx). No og:image/twitter:image tag: no share
+// I2/I3, S1/S2: canonical + OG/Twitter tags, only on the landing page
+// (the one indexable/shareable page on this host — /r/ and /s/ get a
+// minimal noindex head instead, see LiteWidget.jsx). The audit host's
+// served document already has these tags baked in at build time (same
+// landingMeta.js constants, see vite.config.js's auditHeadPlugin) —
+// upsert* updates that static tag in place instead of duplicating it,
+// which also makes this effect correct standalone (e.g. reached via
+// client-side navigation without the static head present at all).
+// No og:image/twitter:image tag while OG_IMAGE_URL is null: no share
 // image asset exists in this repo yet, and a made-up path would just
 // 404 on every unfurl, so it's omitted rather than faked.
 function useLandingMeta() {
   useEffect(() => {
     const prevTitle = document.title
-    document.title = META_TITLE
+    document.title = LANDING_META_TITLE
 
-    const canonical = document.createElement('link')
-    canonical.rel = 'canonical'
-    canonical.href = `${PUBLIC_AUDIT_BASE_URL}/`
-
-    const metaTags = [
-      ['name', 'description', META_DESCRIPTION],
-      ['property', 'og:title', META_TITLE],
-      ['property', 'og:description', META_DESCRIPTION],
-      ['property', 'og:url', `${PUBLIC_AUDIT_BASE_URL}/`],
-      ['property', 'og:type', 'website'],
-      ['name', 'twitter:card', 'summary'],
-      ['name', 'twitter:title', META_TITLE],
-      ['name', 'twitter:description', META_DESCRIPTION],
-    ].map(([attr, key, content]) => {
-      const el = document.createElement('meta')
-      el.setAttribute(attr, key)
-      el.content = content
-      return el
-    })
-
-    document.head.appendChild(canonical)
-    metaTags.forEach((el) => document.head.appendChild(el))
+    const landingUrl = `${PUBLIC_AUDIT_BASE_URL}/`
+    const handles = [
+      upsertLink('canonical', landingUrl),
+      upsertMeta('name', 'description', LANDING_META_DESCRIPTION),
+      upsertMeta('property', 'og:title', LANDING_META_TITLE),
+      upsertMeta('property', 'og:description', LANDING_META_DESCRIPTION),
+      upsertMeta('property', 'og:url', landingUrl),
+      upsertMeta('property', 'og:type', 'website'),
+      upsertMeta('name', 'twitter:card', 'summary'),
+      upsertMeta('name', 'twitter:title', LANDING_META_TITLE),
+      upsertMeta('name', 'twitter:description', LANDING_META_DESCRIPTION),
+      ...(OG_IMAGE_URL
+        ? [upsertMeta('property', 'og:image', OG_IMAGE_URL), upsertMeta('name', 'twitter:image', OG_IMAGE_URL)]
+        : []),
+    ]
 
     return () => {
       document.title = prevTitle
-      document.head.removeChild(canonical)
-      metaTags.forEach((el) => document.head.removeChild(el))
+      handles.forEach(restoreOrRemove)
     }
   }, [])
 }
