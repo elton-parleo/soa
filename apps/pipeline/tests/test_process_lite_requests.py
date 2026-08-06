@@ -552,6 +552,129 @@ def test_sweep_leaves_still_running_cycles_alone(db):
     assert status == "running"
 
 
+# ── Part 3: pillar-headline generation on completion ─────────────────────
+
+def _create_metrics_table(conn):
+    conn.exec_driver_sql("""
+        CREATE TABLE IF NOT EXISTS soa_metrics_results (
+            id INTEGER PRIMARY KEY, cycle_id INTEGER, entity_id INTEGER,
+            slice_type TEXT, soa_pct REAL, mention_rate REAL, rsi_score REAL
+        )
+    """)
+
+
+def _seed_overall_metrics(conn, cycle_id, primary_entity_id, competitor_entity_id):
+    conn.exec_driver_sql(
+        "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (?, ?, 'M001', 'primary')",
+        (cycle_id, primary_entity_id),
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (?, ?, 'M002', 'competitor')",
+        (cycle_id, competitor_entity_id),
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_metrics_results (cycle_id, entity_id, slice_type, soa_pct, mention_rate, rsi_score) "
+        "VALUES (?, ?, 'overall', 35.0, 42.0, 3.2)",
+        (cycle_id, primary_entity_id),
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_metrics_results (cycle_id, entity_id, slice_type, soa_pct, mention_rate, rsi_score) "
+        "VALUES (?, ?, 'overall', 55.0, 60.0, 4.0)",
+        (cycle_id, competitor_entity_id),
+    )
+
+
+_CRAWL_DIMENSIONS_FOR_HEADLINES = {
+    "agent_access": {"score": 5, "max": 6, "coverage": "full", "evidence": ["robots.txt is fetchable"]},
+    "catalog_context": {"score": 2, "max": 8, "coverage": "full", "evidence": []},
+    "protocol_feed": {"score": 1, "max": 6, "coverage": "full", "evidence": []},
+    "price_truth_seen": {"score": 2, "max": 5, "coverage": "full", "evidence": ["price found in code"]},
+    "member_value_seen": {"score": 0, "max": 9, "coverage": "na", "evidence": []},
+    "deal_citability_seen": {"score": 0, "max": 4, "coverage": "full", "evidence": []},
+    "value_protocols_seen": {"score": 0, "max": 7, "coverage": "full", "evidence": []},
+}
+
+
+def test_sweep_generates_pillar_headlines_and_stores_them_on_dimensions(db):
+    with db.begin() as conn:
+        _create_metrics_table(conn)
+        conn.exec_driver_sql("INSERT INTO soa_entities (name, slug, entity_type) VALUES ('Acme', 'acme', 'brand')")
+        conn.exec_driver_sql("INSERT INTO soa_entities (name, slug, entity_type) VALUES ('Rival', 'rival', 'brand')")
+        primary_id = conn.exec_driver_sql("SELECT id FROM soa_entities WHERE slug = 'acme'").fetchone()[0]
+        competitor_id = conn.exec_driver_sql("SELECT id FROM soa_entities WHERE slug = 'rival'").fetchone()[0]
+
+        _insert_running_lite_with_cycle(conn, "head0001", "complete")
+        cycle_id = conn.exec_driver_sql(
+            "SELECT cycle_id FROM soa_lite_requests WHERE token = 'head0001'"
+        ).fetchone()[0]
+        _seed_overall_metrics(conn, cycle_id, primary_id, competitor_id)
+
+        conn.exec_driver_sql(
+            "UPDATE soa_lite_scan_results SET dimensions = ? "
+            "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = 'head0001')",
+            (json.dumps(_CRAWL_DIMENSIONS_FOR_HEADLINES),),
+        )
+
+    fake_headlines = {
+        "visibility": {"headline": "You hold 35% share of all brand mentions.", "source": "generated"},
+        "accessibility": {"headline": "Agent Access earns 5 of 6 points.", "source": "generated"},
+        "true_value": {"headline": "Price Truth earns 2 of 5 points on your site.", "source": "generated"},
+    }
+    with patch("generation.pillar_headlines.generate_pillar_headlines", return_value=fake_headlines) as mock_gen:
+        worker._sweep_lite_completions()
+
+    assert mock_gen.call_count == 1
+    # The lean visibility facts (soa_pct/mention_rate/rsi_score, rank)
+    # reached generate_pillar_headlines via _fetch_visibility_metrics —
+    # this is the one place that query result actually gets asserted.
+    _, visibility_metrics_arg, _ = mock_gen.call_args[0]
+    assert visibility_metrics_arg["som_pct"] == 35.0
+    assert visibility_metrics_arg["mention_rate"] == 42.0
+    assert visibility_metrics_arg["rsi_score"] == 3.2
+    # primary's soa_pct (35) trails the competitor's (55) in the fixture -> 2nd of 2.
+    assert visibility_metrics_arg["rank_line"] == "2nd of 2 in the competitor set"
+
+    _, _, _, dimensions, *_ = _scan_row_by_token(db.connect(), "head0001")
+    stored = json.loads(dimensions) if isinstance(dimensions, str) else dimensions
+    assert stored["generated_headlines"] == fake_headlines
+    # additive: the crawl dimensions already on the row are untouched.
+    assert stored["agent_access"]["score"] == 5
+
+    events = _events_by_token(db.connect(), "head0001")
+    report_logs = [e["text"] for e in _events_for_task(events, "report") if e["kind"] == "log"]
+    assert "writing your pillar summaries…" in report_logs
+    report_done = _events_of_kind(_events_for_task(events, "report"), "done")
+    assert len(report_done) == 1  # still exactly one "Your report" done event
+
+
+def test_sweep_pillar_headline_failure_never_blocks_completion_or_the_report_event(db):
+    with db.begin() as conn:
+        _insert_running_lite_with_cycle(conn, "head0002", "complete")
+
+    with patch("generation.pillar_headlines.generate_pillar_headlines", side_effect=RuntimeError("boom")):
+        worker._sweep_lite_completions()  # must not raise
+
+    status, *_ = _lite_row_by_token(db.connect(), "head0002")
+    assert status == "complete"
+
+    events = _events_by_token(db.connect(), "head0002")
+    report_done = _events_of_kind(_events_for_task(events, "report"), "done")
+    assert len(report_done) == 1
+
+
+def test_sweep_skips_pillar_headlines_entirely_without_an_api_key(db, monkeypatch):
+    monkeypatch.delenv("OPEN_AI_API_KEY", raising=False)
+    with db.begin() as conn:
+        _insert_running_lite_with_cycle(conn, "head0003", "complete")
+
+    with patch("generation.pillar_headlines.generate_pillar_headlines") as mock_gen:
+        worker._sweep_lite_completions()
+
+    mock_gen.assert_not_called()
+    status, *_ = _lite_row_by_token(db.connect(), "head0003")
+    assert status == "complete"  # completion itself is unaffected
+
+
 # ── Agent Scan integration ──────────────────────────────────────────────
 
 def test_store_url_creates_scan_row_and_persists_result(db):
@@ -1100,6 +1223,76 @@ def test_generated_competitors_get_entities_created_alongside_manual_ones(db, mo
 
     assert gen_entity is not None  # entity created exactly once for the generated candidate
     assert comparison_roles == [("M001", "primary"), ("M002", "competitor"), ("M003", "competitor")]
+
+
+# ── Logo feature, Part 2a: website_url reaches soa_entities ──────────────
+
+def test_brand_entity_gets_website_url_from_store_url(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=[], store_url="https://acme.example.com")
+
+    with patch("generation.competitor_generator.generate_competitors", return_value=[]), \
+         patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        row = conn.exec_driver_sql(
+            "SELECT website_url FROM soa_entities WHERE slug = 'acme'"
+        ).fetchone()
+    assert row == ("https://acme.example.com",)
+
+
+def test_generated_competitor_entity_gets_website_url_from_its_domain(db, monkeypatch):
+    monkeypatch.setattr(
+        "generation.competitor_generator.generate_competitors",
+        lambda *a, **k: [CompetitorCandidate(name="Vuori", domain="vuoriclothing.com")],
+    )
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=[])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        row = conn.exec_driver_sql(
+            "SELECT website_url FROM soa_entities WHERE slug = 'vuori'"
+        ).fetchone()
+    assert row == ("vuoriclothing.com",)
+
+
+def test_manual_competitor_entity_has_a_null_website_url(db):
+    # A visitor-typed competitor name has no domain signal — never
+    # guessed, left null for BrandLogo's own fallback chain to handle.
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"])
+
+    with patch("generation.competitor_generator.generate_competitors", return_value=[]), \
+         patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        row = conn.exec_driver_sql(
+            "SELECT website_url FROM soa_entities WHERE slug = 'rival'"
+        ).fetchone()
+    assert row == (None,)
+
+
+def test_generated_competitor_with_no_confident_domain_gets_a_null_website_url(db, monkeypatch):
+    monkeypatch.setattr(
+        "generation.competitor_generator.generate_competitors",
+        lambda *a, **k: [CompetitorCandidate(name="Mystery Co", domain=None)],
+    )
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=[])
+
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        row = conn.exec_driver_sql(
+            "SELECT website_url FROM soa_entities WHERE slug = 'mystery-co'"
+        ).fetchone()
+    assert row == (None,)
 
 
 def test_no_manual_competitors_and_generation_finds_none_yields_none_source(db):

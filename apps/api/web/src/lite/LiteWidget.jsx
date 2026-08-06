@@ -53,6 +53,7 @@ import { liteApi } from './liteApi.js'
 import { LiteForm } from './LiteForm.jsx'
 import { LiteProgress, LiteFailed } from './LiteProgress.jsx'
 import { LiteFullReport } from './LiteFullReport.jsx'
+import { LiteFullReportV4 } from './report/LiteFullReportV4.jsx'
 import { LightCard } from './liteTheme.jsx'
 import { PUBLIC_AUDIT_BASE_URL, isAuditHost, reportUrl } from './publicUrls.js'
 import { upsertMeta, upsertLink, restoreOrRemove } from './headMeta.js'
@@ -159,7 +160,7 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
   useEffect(() => {
     if (isAuditHost()) return undefined
     if (!token && !isReportRoute) return undefined
-    const handle = upsertMeta('name', 'robots', 'noindex')
+    const handle = upsertMeta('name', 'robots', 'noindex,nofollow')
     return () => restoreOrRemove(handle)
   }, [token, isReportRoute])
 
@@ -279,6 +280,14 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
   }
 
   if (phaseData?.status === 'complete' && report) {
+    // V4 report redesign: the new rail+focus-mode layout renders only
+    // for a current-version (pillars-bearing) report — a pre-this-stage
+    // row falls back to the legacy template exactly as it always has,
+    // rather than hitting a V4 layout built for a payload shape it
+    // never had.
+    if (report.pillars) {
+      return <LiteFullReportV4 report={report} token={token} />
+    }
     return <LiteFullReport report={report} onAddStoreUrl={handleAddStoreUrl} token={token} />
   }
 

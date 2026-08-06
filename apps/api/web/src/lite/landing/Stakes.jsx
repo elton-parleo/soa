@@ -1,97 +1,92 @@
 /**
- * THE STAKES — section [5]. Reuses computeExposure from ../liteDerive.js
- * verbatim (same function the real report's exposure calculator calls —
- * see LiteFullReport.jsx's ExposureCalculator) so landing and report can
- * never disagree; no new math lives here.
+ * THE STAKES — V4 design, section [3] (moved earlier per the mock,
+ * right after the proof band). L2: drops the mock's own member-share
+ * slider, fixed 60% incentive share, 8-13% agent-discovery band, and
+ * low-high range — none of that model is implemented and the 60%
+ * figure has no citation to stand behind. Kept: the visual treatment
+ * (DarkPanel, two-column layout, big number), driven by the real,
+ * shared computeExposure module (same one the report's exposure
+ * section imports — see liteDerive.js) instead.
  *
- * The two interactive sliders (revenue, member share) scope down to a
- * "revenue pool exposed to invisible value" using the static
- * incentive-influenced-revenue rate, then computeExposure is called
- * twice — once at each end of the static agent-influenced-discovery
- * range — to produce a live low/high range instead of a single point
- * estimate (the report only ever needs a point estimate, since it has a
- * real per-brand visibility score; the landing page doesn't).
+ * Two real inputs: revenue and AI-assisted share. This widget has no
+ * specific brand scored yet, so `visibility` (computeExposure's third
+ * input) defaults to 0 — full mention-gap, framing the number as "what
+ * is exposed if agents can't find you at all," which matches this
+ * section's own headline. Always a single point estimate, not the
+ * mock's low-high band (that came from AGENT_DISCOVERY_RANGE, dropped
+ * along with the rest of the unimplemented model).
  */
 import { useState } from 'react'
-import { SectionHeader } from '../liteTheme.jsx'
-import { computeExposure } from '../liteDerive.js'
+import { DarkPanel, StatusChip, Button } from '../../ds/index.js'
+import { computeExposure, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX, AI_SHARE_SLIDER_MIN, AI_SHARE_SLIDER_MAX, AI_SHARE_DEFAULT_PCT, formatCurrency } from '../liteDerive.js'
 
-const DEFAULT_REVENUE = 200_000_000
-const DEFAULT_MEMBER_SHARE_PCT = 40
-const INCENTIVE_INFLUENCED_PCT = 60
-const AGENT_DISCOVERY_RANGE = [8, 13]
-
-function formatMillions(n) {
-  return `$${(n / 1_000_000).toFixed(1)}M`
-}
+const DEFAULT_REVENUE = 20_000_000
 
 export function Stakes() {
   const [revenue, setRevenue] = useState(DEFAULT_REVENUE)
-  const [memberSharePct, setMemberSharePct] = useState(DEFAULT_MEMBER_SHARE_PCT)
+  const [aiSharePct, setAiSharePct] = useState(AI_SHARE_DEFAULT_PCT)
 
-  const revenuePool = revenue * (memberSharePct / 100) * (INCENTIVE_INFLUENCED_PCT / 100)
-  const [lowPct, highPct] = AGENT_DISCOVERY_RANGE
-  const exposureLow = computeExposure({ revenue: revenuePool, aiSharePct: lowPct, visibility: 0 })
-  const exposureHigh = computeExposure({ revenue: revenuePool, aiSharePct: highPct, visibility: 0 })
+  const exposure = computeExposure({ revenue, aiSharePct, visibility: 0 })
 
   return (
-    <section className="lite-landing-section" style={{ background: 'var(--ink)', maxWidth: 'none', padding: 0 }}>
-      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '64px 20px' }}>
-        <SectionHeader inv label="THE STAKES" />
-        <h2 className="lite-display-headline lite-display-headline--inv" style={{ fontSize: 'clamp(28px, 4.5vw, 48px)' }}>
-          What's at stake for a store <span className="lite-serif-italic">your size</span>.
-        </h2>
-
-        <div className="lite-cols-2" style={{ marginTop: 40, gap: 48, alignItems: 'start' }}>
-          <div>
-            <label className="lite-label lite-label--inv" style={{ display: 'block', marginBottom: 8 }}>
-              Annual online revenue: {formatMillions(revenue)}
-            </label>
-            <input
-              type="range" min={1_000_000} max={500_000_000} step={1_000_000}
-              value={revenue} onChange={(e) => setRevenue(Number(e.target.value))}
-              className="lite-slider" style={{ marginBottom: 26 }}
-              aria-label="Annual online revenue"
-            />
-
-            <label className="lite-label lite-label--inv" style={{ display: 'block', marginBottom: 8 }}>
-              Member share of revenue: {memberSharePct}%
-            </label>
-            <input
-              type="range" min={0} max={100} step={1}
-              value={memberSharePct} onChange={(e) => setMemberSharePct(Number(e.target.value))}
-              className="lite-slider" style={{ marginBottom: 26 }}
-              aria-label="Member share of revenue"
-            />
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-inv-2)', padding: '10px 0', borderTop: '1px solid var(--line-dark)' }}>
-              <span>Incentive-influenced revenue</span>
-              <span className="lite-mono">{INCENTIVE_INFLUENCED_PCT}%</span>
+    <section style={{ padding: '60px 24px 20px' }}>
+      <DarkPanel pad={0} radius={20} atmos style={{ maxWidth: 1120, margin: '0 auto', overflow: 'hidden', boxShadow: 'var(--shadow-elevated)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+          <div style={{ padding: '40px 44px 42px', borderRight: '1px solid var(--dark-border)' }}>
+            <div className="section-heading sm on-dark">What is invisible value <span className="accent">costing you?</span></div>
+            <div style={{ marginTop: 28 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16 }}>
+                <span style={{ fontSize: 14, color: 'var(--dark-muted)' }}>Annual online revenue</span>
+                <b className="num" style={{ fontSize: 17, fontWeight: 720, letterSpacing: '-0.02em', color: 'var(--dark-text)' }}>{formatCurrency(revenue)}</b>
+              </div>
+              <input
+                type="range"
+                min={REVENUE_SLIDER_MIN}
+                max={REVENUE_SLIDER_MAX}
+                step={REVENUE_SLIDER_MIN}
+                value={revenue}
+                onChange={(e) => setRevenue(+e.target.value)}
+                aria-label="Annual online revenue"
+                style={{ width: '100%', marginTop: 14, accentColor: 'var(--dark-text)' }}
+              />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-inv-2)', padding: '10px 0', borderTop: '1px solid var(--line-dark)' }}>
-              <span>Agent-influenced discovery</span>
-              <span className="lite-mono">{lowPct} to {highPct}%</span>
+            <div style={{ marginTop: 22, paddingTop: 22, borderTop: '1px solid var(--dark-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16 }}>
+                <span style={{ fontSize: 14, color: 'var(--dark-muted)' }}>AI-assisted share of sales</span>
+                <b className="num" style={{ fontSize: 17, fontWeight: 720, letterSpacing: '-0.02em', color: 'var(--dark-text)' }}>{aiSharePct}%</b>
+              </div>
+              <input
+                type="range"
+                min={AI_SHARE_SLIDER_MIN}
+                max={AI_SHARE_SLIDER_MAX}
+                value={aiSharePct}
+                onChange={(e) => setAiSharePct(+e.target.value)}
+                aria-label="AI-assisted share of sales"
+                style={{ width: '100%', marginTop: 14, accentColor: 'var(--dark-text)' }}
+              />
+            </div>
+            <div className="mono-label" style={{ fontSize: 9, color: 'var(--dark-faint)', marginTop: 22, paddingTop: 16, borderTop: '1px solid var(--dark-border)', lineHeight: 1.7 }}>
+              MODELED FROM YOUR INPUTS · SAME MODEL AS YOUR FULL REPORT
             </div>
           </div>
-
-          <div>
-            <span className="lite-chip lite-chip--warn" style={{ marginBottom: 14, display: 'inline-block' }}>● Modeled</span>
-            <div className="lite-body--inv" style={{ fontSize: 14, marginBottom: 6 }}>
-              Modeled annual revenue exposed to invisible value
+          <div style={{ padding: '40px 44px 42px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div><StatusChip tone="warning" size="sm">Modeled</StatusChip></div>
+            <div style={{ fontSize: 15.5, color: 'var(--dark-text)', lineHeight: 1.5, marginTop: 20, letterSpacing: '-0.008em' }}>Modeled annual revenue exposed to invisible value</div>
+            <div className="num" style={{ fontSize: 52, fontWeight: 740, letterSpacing: '-0.038em', lineHeight: 1, color: 'var(--dark-text)', marginTop: 20 }}>{formatCurrency(exposure)}</div>
+            <div style={{ fontSize: 13.5, color: 'var(--dark-muted)', lineHeight: 1.62, marginTop: 20, maxWidth: 400 }}>
+              Assumes agents currently find you 0% of the time — the full picture, including what agents already see, comes from a Parleo audit.
             </div>
-            <div className="lite-mono lite-muted--inv" style={{ fontSize: 12, marginBottom: 16 }}>
-              About 60% of retail revenue moves on incentives agents can't count
+            <div style={{ marginTop: 24 }}>
+              <a href="#run" style={{ textDecoration: 'none' }}>
+                <Button variant="blue" arrow>See your real number, run the free audit</Button>
+              </a>
             </div>
-            <div className="lite-numeral lite-numeral--tile lite-numeral--inv" style={{ marginBottom: 16 }}>
-              {formatMillions(exposureLow)}<span style={{ margin: '0 10px', color: 'var(--text-inv-2)' }}>–</span>{formatMillions(exposureHigh)}
+            <div style={{ fontSize: 12.5, color: 'var(--dark-muted)', lineHeight: 1.6, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--dark-border)' }}>
+              And it's closable: <b style={{ color: 'var(--dark-text)' }}>TrueSync</b>, Parleo's fix layer, encodes the value agents are missing.
             </div>
-            <p className="lite-body--inv" style={{ fontSize: 13.5 }}>
-              A modeled range with a deliberate haircut, not a measurement.
-              The measured number comes from a Parleo diagnostic.
-            </p>
           </div>
         </div>
-      </div>
+      </DarkPanel>
     </section>
   )
 }

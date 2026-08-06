@@ -25,6 +25,8 @@ import os
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -332,10 +334,23 @@ def _decode_json_field(value, default):
 def _fetch_scan_row(conn, lite_request_id: int):
     return conn.execute(text("""
         SELECT status, total_score, integrity_capped, dimensions, pages_fetched,
-               membership_probe, revenue_probe, fetch_probe
+               membership_probe, revenue_probe, fetch_probe, input_url
         FROM soa_lite_scan_results
         WHERE lite_request_id = :rid
     """), {"rid": lite_request_id}).fetchone()
+
+
+def _bare_domain(url) -> Optional[str]:
+    """Logo feature, Part 1c: the bare hostname (no scheme, no leading
+    www.) BrandLogo's domain-keyed fallback tiers need — the target's
+    own domain is always known (it's what the crawl was asked to read),
+    independent of whether the crawl itself found an icon."""
+    if not url:
+        return None
+    hostname = urlparse(url if '://' in url else f'https://{url}').hostname
+    if not hostname:
+        return None
+    return hostname[4:] if hostname.startswith('www.') else hostname
 
 
 def _fetch_run_signals(conn, cycle_id: int, primary_entity_id: int) -> list:
@@ -465,7 +480,7 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
         return None
 
     (status, total_score, integrity_capped, dimensions, pages_fetched,
-     _membership_probe, _revenue_probe, fetch_probe_raw) = scan_row
+     _membership_probe, _revenue_probe, fetch_probe_raw, _input_url) = scan_row
     pages_fetched = _decode_json_field(pages_fetched, [])
     fetch_probe = _decode_json_field(fetch_probe_raw, {})
 
@@ -604,12 +619,17 @@ def _fetch_metrics_rows(conn, cycle_id: int):
     every cycle; a future internal-only table can query them directly
     without this router touching them.
     """
+    # Logo feature, Part 2b: e.website_url appended at the END (index 14)
+    # — build_entity_metrics is documented to work off indices 0-11
+    # unchanged (same shape as soa_dashboard_summary), and role/
+    # comparison_code are already read positionally at 12/13 elsewhere
+    # in this file, so nothing existing may shift.
     return conn.execute(text("""
         SELECT
           e.slug, e.name, mr.slice_type, mr.slice_value,
           mr.total_runs, mr.total_mentions, mr.mention_rate, mr.soa_pct,
           mr.position_index, mr.rsi_score, mr.deal_citation_rate, mr.platform_dist_index,
-          ce.role, ce.comparison_code
+          ce.role, ce.comparison_code, e.website_url
         FROM soa_metrics_results mr
         JOIN soa_entities e ON e.id = mr.entity_id
         JOIN soa_cycle_entities ce
@@ -635,8 +655,8 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int) -> dict:
     primary_code = None
 
     for row in rows:
-        name, role, comp_code = row[1], row[12], row[13]
-        entity_info.setdefault(comp_code, {"name": name, "role": role})
+        name, role, comp_code, website_url = row[1], row[12], row[13], row[14]
+        entity_info.setdefault(comp_code, {"name": name, "role": role, "website_url": website_url})
         if role == 'primary':
             primary_code = comp_code
         overall_metrics[comp_code] = build_entity_metrics(row)
@@ -659,6 +679,12 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int) -> dict:
     scan_scorable = bool(scan_row and scan_row[0] in ('complete', 'blocked', 'failed'))
     dimensions_raw = _decode_json_field(scan_row[3], {}) if scan_scorable else {}
     scorer_version = dimensions_raw.get('scorer_version') or '1'
+
+    # Logo feature, Part 1c: unconditional on scan_scorable — the target
+    # domain is known the instant a request names a store_url, whether
+    # or not the crawl itself ever completed. BrandLogo's rail fallback
+    # needs this even on a blocked/failed run.
+    store_domain = _bare_domain(scan_row[8]) if scan_row else None
 
     # Part 5 (R3): independent of scan_complete/scorer_version — the
     # revenue probe is a brand-level OpenAI call, same as the membership
@@ -762,6 +788,7 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int) -> dict:
             "mentioned_queries": overall_metrics.get(code, {}).get("total_mentions") or 0,
             "total_queries": overall_metrics.get(code, {}).get("total_runs") or 0,
             "mentions": overall_metrics.get(code, {}).get("total_mentions") or 0,
+            "domain": info.get("website_url"),
         }
         for code, info in entity_info.items()
     ]
@@ -807,6 +834,15 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int) -> dict:
         competitor_source=competitor_source,
         pillars=pillars_payload,
         revenue_estimate_usd=revenue_estimate_usd,
+        # F1/F2: only ever present on the crawl_dimensions dict of a
+        # STATUS_COMPLETE run (engine.py) — naturally None on a degraded/
+        # blocked/pre-this-stage row, same additive gating as `pillars`.
+        offers=dimensions_raw.get("offers"),
+        product_image_url=dimensions_raw.get("product_image_url"),
+        product_name=dimensions_raw.get("product_name"),
+        generated_headlines=dimensions_raw.get("generated_headlines"),
+        brand_icon_url=dimensions_raw.get("brand_icon_url"),
+        store_domain=store_domain,
     ).model_dump()
 
 

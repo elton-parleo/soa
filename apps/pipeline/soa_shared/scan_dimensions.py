@@ -71,6 +71,14 @@ PILLAR_VISIBILITY = "visibility"
 PILLAR_ACCESSIBILITY = "accessibility"
 PILLAR_TRUE_VALUE = "true_value"
 
+# F3 (V4 report redesign): who owns closing a dimension's gap. ENG is
+# the default — a store's own engineering team ships the fix. TRUESYNC
+# is reserved for the two dimensions Parleo's TrueSync product closes
+# directly (deal_citability, value_protocols) — see the report's
+# TrueSync section copy ("Parleo fixes two of them directly").
+FIX_OWNER_ENG = "ENG"
+FIX_OWNER_TRUESYNC = "TRUESYNC"
+
 PILLAR_ORDER: Tuple[str, ...] = (PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE)
 
 PILLAR_NAMES = {
@@ -174,6 +182,8 @@ class Dimension:
     what_it_is: str = ""
     how_measured: Tuple[str, ...] = ()
     how_scored: str = ""
+    # F3: who closes this dimension's gap — see FIX_OWNER_* above.
+    fix_owner: str = FIX_OWNER_ENG
 
     @property
     def has_seen_said_split(self) -> bool:
@@ -269,6 +279,7 @@ DIMENSIONS: Tuple[Dimension, ...] = (
         seen_max=4, said_max=2,
         said_opportunity_set=OPPORTUNITY_SET_PURCHASE_INTENT,
         said_band_type=BAND_TYPE_COUNT,
+        fix_owner=FIX_OWNER_TRUESYNC,
         what_it_is="Do live promotions survive into answers.",
         how_measured=(
             "deals in markup that are concrete (amount stated)",
@@ -285,6 +296,7 @@ DIMENSIONS: Tuple[Dimension, ...] = (
         # whether a store "declares" a checkout protocol, so there is
         # nothing to cite (Part 3, V1; Part 6, A1's single-wing render).
         seen_max=7, said_max=None,
+        fix_owner=FIX_OWNER_TRUESYNC,
         what_it_is="Can your value execute inside agent checkout — not just be described.",
         how_measured=(
             "UCP discount capability declared",
@@ -306,6 +318,16 @@ PILLAR_WEIGHTS = {
 TOTAL_MAX = sum(PILLAR_WEIGHTS.values())
 
 MEMBER_VALUE_CODE = "member_value"
+
+# F4: the report's "gap areas" are an editorial grouping one level above
+# individual dimensions — Visibility, Accessibility, Incentive Sync
+# (member_value + deal_citability), Protocol Declarations
+# (value_protocols) — matching the TrueSync section's own copy ("the
+# audit measures four gap areas... Parleo fixes two of them directly").
+# Fixed structural facts about the framework, not derived per-run — same
+# footing as TOTAL_MAX above.
+GAP_AREA_COUNT = 4
+PARLEO_OWNED_GAP_AREA_COUNT = 2
 
 
 # ── Seen/said combination (Stage 16, Part 3 T2) ─────────────────────────

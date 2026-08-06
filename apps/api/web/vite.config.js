@@ -51,7 +51,7 @@ function auditHeadPlugin(auditBaseUrl) {
   // — a shared report link must not unfurl like brand marketing.
   const reportTags = [
     `<title>${escapeAttr(REPORT_META_TITLE)}</title>`,
-    meta('name', 'robots', 'noindex'),
+    meta('name', 'robots', 'noindex,nofollow'),
   ].join('\n    ')
 
   return {

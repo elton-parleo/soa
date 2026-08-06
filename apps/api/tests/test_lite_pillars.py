@@ -737,17 +737,40 @@ def _build_six_fix_result(**overrides):
 
 
 def test_fixes_visible_is_the_top_2_by_gap():
+    # Part 2 (2a): natural top-2 by gap would be member_value(6),
+    # price_truth(5) — neither TrueSync-owned. The always-ranked rule
+    # swaps the LAST slot for deal_citability (gap 4, the only
+    # TrueSync-owned dimension in this fixture with a recoverable
+    # point) — see test_fixes_ranked_list_always_includes_a_truesync_fix
+    # below for the rule itself.
     result = _build_six_fix_result()
-    assert [v["code"] for v in result["fixes"]["visible"]] == ["member_value", "price_truth"]
+    assert [v["code"] for v in result["fixes"]["visible"]] == ["member_value", "deal_citability"]
 
 
 def test_fixes_visible_entries_carry_only_plain_language_fix_human_and_impact():
     result = _build_six_fix_result()
     top = result["fixes"]["visible"][0]
-    assert top == {"code": "member_value", "name": "Member Value", "fix_human": "human-mv", "impact": 6.0}
+    assert top == {
+        "code": "member_value", "name": "Member Value", "fix_human": "human-mv", "impact": 6.0,
+        "fix_owner": "ENG",
+    }
     # No 'fix' (markup) key anywhere on a visible entry — H2's no-markup
     # rule holds at the schema level, not just by convention.
     assert "fix" not in top
+
+
+def test_fix_owner_registry_matches_truesync_report_copy():
+    # F3: TrueSync's report copy claims exactly two dimensions as its own
+    # direct fixes (deal_citability, value_protocols) — every other
+    # dimension is an ENG fix. A registry-level test, since the ranking
+    # fixture above can't push deal_citability's own small point pool
+    # (max 6) above member_value/price_truth's larger gaps to exercise
+    # it via a visible fixes entry.
+    from soa_shared.scan_dimensions import DIMENSIONS, FIX_OWNER_ENG, FIX_OWNER_TRUESYNC
+
+    truesync_codes = {d.code for d in DIMENSIONS if d.fix_owner == FIX_OWNER_TRUESYNC}
+    assert truesync_codes == {"deal_citability", "value_protocols"}
+    assert all(d.fix_owner == FIX_OWNER_ENG for d in DIMENSIONS if d.code not in truesync_codes)
 
 
 def test_fixes_remaining_count_is_the_rest():
@@ -757,13 +780,17 @@ def test_fixes_remaining_count_is_the_rest():
 
 def test_fixes_leak_test_ranks_beyond_2_are_absent_entirely():
     """F1's leak test: serialize the fixes field for a 6-fix fixture and
-    assert ranks 3+ are absent entirely — no code, no fix_human title,
-    anywhere in the serialized object, only a bare count."""
+    assert every unranked dimension is absent entirely — no code, no
+    fix_human title, anywhere in the serialized object, only a bare
+    count. deal_citability is visible here (Part 2's substitution rule
+    forces the TrueSync-owned fix into the last slot), so price_truth —
+    the dimension it displaced — is the one that must be absent instead
+    of deal_citability."""
     result = _build_six_fix_result()
     serialized = json.dumps(result["fixes"])
 
     for code, human in [
-        ("deal_citability", "human-dc"), ("protocol_feed", "human-pf"),
+        ("price_truth", "human-pt"), ("protocol_feed", "human-pf"),
         ("catalog_context", "human-cc"), ("agent_access", "human-aa"),
     ]:
         assert code not in serialized
@@ -783,16 +810,175 @@ def test_fixes_excludes_dimensions_with_no_fix_human_even_if_ranked_high():
     assert result["fixes"]["remaining_count"] == 3  # protocol_feed, catalog_context, agent_access
 
 
+# ─── Part 2: TrueSync always ranked ──────────────────────────────────────
+
+def test_fixes_natural_ranking_needs_no_substitution_when_truesync_already_in_top_2():
+    # 2c: value_protocols' gap (7) outranks every ENG dim naturally, so
+    # it already occupies a top-2 slot — the substitution rule must not
+    # touch anything here (ordering, and which dim gets displaced, are
+    # exactly what plain opportunity-size ranking would produce).
+    crawl = dict(_SIX_FIX_CRAWL_DIMS)
+    crawl["value_protocols_seen"] = {
+        "score": 0, "max": 7, "coverage": "full",
+        "fix": "declare capabilities", "fix_human": "Declare your agent-checkout capabilities in your protocol manifest.",
+    }
+    result = _build_six_fix_result(crawl_dimensions=crawl)
+    assert [v["code"] for v in result["fixes"]["visible"]] == ["value_protocols", "member_value"]
+
+
+def test_fixes_ranked_list_always_includes_a_truesync_fix_substitution_fires():
+    # 2a: natural top-2 (member_value gap 6, price_truth gap 5) is all
+    # ENG-owned. The rule replaces the LAST ranked slot with the
+    # highest-impact TrueSync-owned fix that still recovers >=1 point —
+    # here deal_citability (gap 4), the only TrueSync candidate in this
+    # fixture. The #1 slot (member_value) and its real numbers are
+    # untouched; price_truth is displaced into the unranked count rather
+    # than disappearing from the pool.
+    result = _build_six_fix_result()
+    visible = result["fixes"]["visible"]
+
+    assert [v["code"] for v in visible] == ["member_value", "deal_citability"]
+    assert visible[0]["impact"] == 6.0  # untouched — real gap, not inflated
+    assert visible[1]["fix_owner"] == "TRUESYNC"
+    assert visible[1]["impact"] == 4.0  # real gap, not inflated by the substitution
+    # price_truth (displaced) still counts toward the unranked total —
+    # 6 fixable dims total, 2 visible, 4 unranked including price_truth.
+    assert result["fixes"]["remaining_count"] == 4
+
+
+def test_fixes_2b_honest_exception_no_forced_row_when_no_truesync_fix_has_a_recoverable_point():
+    # 2b: both TrueSync-owned dimensions (deal_citability, value_protocols)
+    # are at full credit this run — zero gap, no fix_human, nothing to
+    # honestly recover. The substitution rule must not fire: the natural
+    # top-2 (member_value, price_truth) stands, and no TrueSync code or
+    # zero-point fix appears anywhere in the visible list.
+    crawl = dict(_SIX_FIX_CRAWL_DIMS)
+    crawl["deal_citability_seen"] = {"score": 4, "max": 4, "coverage": "full", "fix": None, "fix_human": None}
+    result = _build_six_fix_result(crawl_dimensions=crawl)
+
+    visible = result["fixes"]["visible"]
+    assert [v["code"] for v in visible] == ["member_value", "price_truth"]
+    assert not any(v["fix_owner"] == "TRUESYNC" for v in visible)
+    assert all(v["impact"] > 0 for v in visible)
+
+
+def test_fixes_substitution_preserves_the_additive_schema():
+    # The forced row is serialized exactly like a naturally-ranked one —
+    # same five keys, no markup leak — so the substitution is invisible
+    # to anything that only cares about the payload's shape.
+    result = _build_six_fix_result()
+    for entry in result["fixes"]["visible"]:
+        assert set(entry.keys()) == {"code", "name", "fix_human", "impact", "fix_owner"}
+
+
+# ─── Part 4: exposure_reasons end to end via build_pillars_payload ──────
+
+def test_exposure_reasons_reflect_this_runs_own_gaps():
+    # _SIX_FIX_CRAWL_DIMS (said-side full credit via _full_credit_signals):
+    # member_value_seen missed 6, price_truth_seen missed 5,
+    # deal_citability_seen missed 4, catalog_context missed 2,
+    # agent_access missed 1 -> top 3 by severity: mv_seen, pt_seen, dc_seen.
+    result = _build_six_fix_result()
+    ids = [r["id"] for r in result["exposure_reasons"]]
+    assert ids == ["mv_seen", "pt_seen", "dc_seen"]
+    assert sum(r["impact_weight"] for r in result["exposure_reasons"]) == pytest.approx(1.0)
+
+
+def test_exposure_reasons_additive_and_never_padded_below_three():
+    # value_protocols is the only True Value dim at full credit and every
+    # other dim has a real gap in this fixture, so exactly 3 (not more,
+    # not padded) reasons are selected from the 5 that trigger.
+    result = _build_six_fix_result()
+    assert len(result["exposure_reasons"]) == 3
+    for reason in result["exposure_reasons"]:
+        assert set(reason.keys()) == {"id", "text", "impact_weight", "severity_rank"}
+
+
+def test_exposure_reasons_empty_when_every_dimension_is_at_full_credit():
+    crawl = {
+        "agent_access": {"score": 6, "max": 6, "coverage": "full"},
+        "catalog_context": {"score": 8, "max": 8, "coverage": "full"},
+        "protocol_feed": {"score": 6, "max": 6, "coverage": "full"},
+        "price_truth_seen": {"score": 5, "max": 5, "coverage": "full"},
+        "member_value_seen": {"score": 9, "max": 9, "coverage": "full"},
+        "deal_citability_seen": {"score": 4, "max": 4, "coverage": "full"},
+        "value_protocols_seen": {"score": 7, "max": 7, "coverage": "full"},
+    }
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    assert result["exposure_reasons"] == []
+
+
+def test_exposure_reasons_excludes_a_blocked_dimension():
+    crawl = dict(_SIX_FIX_CRAWL_DIMS)
+    crawl["price_truth_seen"] = {**crawl["price_truth_seen"], "coverage": "blocked"}
+    result = _build_six_fix_result(crawl_dimensions=crawl)
+    ids = [r["id"] for r in result["exposure_reasons"]]
+    assert "pt_seen" not in ids
+
+
+def test_exposure_reasons_member_value_excluded_when_na():
+    # member_value_applicable is true if EITHER the probe said yes OR the
+    # crawl itself earned real seen credit — both must be false to force
+    # the na path this test wants to exercise.
+    crawl = dict(_SIX_FIX_CRAWL_DIMS)
+    crawl["member_value_seen"] = {**crawl["member_value_seen"], "score": 0}
+    result = _build_six_fix_result(crawl_dimensions=crawl, membership_probe_result="no")
+    ids = [r["id"] for r in result["exposure_reasons"]]
+    assert "mv_seen" not in ids
+    assert "mv_said" not in ids
+
+
+# ─── F4: gap-area counts for the S2 fixable-hook band ───────────────────
+
+def test_gap_area_counts_are_fixed_framework_constants():
+    result = _build_six_fix_result()
+    assert result["gap_areas_total"] == 4
+    assert result["gap_areas_parleo_fixes"] == 2
+
+
+def test_parleo_fixable_points_sums_only_truesync_owned_dimensions():
+    # _SIX_FIX_CRAWL_DIMS: deal_citability_seen is 0/4 (said half pinned
+    # to full credit by _full_credit_signals) -> gap 4; value_protocols_seen
+    # is a full 7/7 -> gap 0. Every other TRUESYNC-owned... there are only
+    # these two, so the sum is deal_citability's gap alone.
+    result = _build_six_fix_result()
+    assert result["parleo_fixable_points"] == 4.0
+
+
+def test_parleo_fixable_points_includes_value_protocols_when_it_has_a_gap():
+    crawl = dict(_SIX_FIX_CRAWL_DIMS)
+    crawl["value_protocols_seen"] = {**crawl["value_protocols_seen"], "score": 2}
+    result = _build_six_fix_result(crawl_dimensions=crawl)
+    # deal_citability gap (4) + value_protocols gap (7 - 2 = 5).
+    assert result["parleo_fixable_points"] == 9.0
+
+
+def test_parleo_fixable_points_excludes_blocked_truesync_dims():
+    # deal_citability's seen half unreadable this run -> excluded from
+    # the sum entirely, same "can't honestly attribute a fixable gap to
+    # a dimension we couldn't measure" rule _build_fixes_section uses.
+    crawl = dict(_SIX_FIX_CRAWL_DIMS)
+    crawl["deal_citability_seen"] = {**crawl["deal_citability_seen"], "coverage": "blocked"}
+    result = _build_six_fix_result(crawl_dimensions=crawl)
+    assert result["parleo_fixable_points"] == 0.0
+
+
 def test_fixes_na_dimension_excluded_from_ranking_and_count():
     # protocol_feed(gap 3) turns na, leaving 5 fixable dims: member_value(6)
-    # and price_truth(5) still visible; catalog_context(2), agent_access(1),
-    # and deal_citability(4) make up the remaining 3 — protocol_feed itself
+    # and price_truth(5) naturally rank top-2, but neither is TrueSync-
+    # owned, so Part 2's substitution rule swaps the last slot for
+    # deal_citability(4) — catalog_context(2), agent_access(1), and the
+    # displaced price_truth make up the remaining 3. protocol_feed itself
     # contributes to neither the visible list nor the count.
     crawl = dict(_SIX_FIX_CRAWL_DIMS)
     crawl["protocol_feed"] = {**crawl["protocol_feed"], "coverage": "na"}
     result = _build_six_fix_result(crawl_dimensions=crawl)
 
-    assert [v["code"] for v in result["fixes"]["visible"]] == ["member_value", "price_truth"]
+    assert [v["code"] for v in result["fixes"]["visible"]] == ["member_value", "deal_citability"]
     assert result["fixes"]["remaining_count"] == 3
 
 

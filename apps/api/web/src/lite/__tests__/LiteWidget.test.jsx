@@ -16,16 +16,29 @@ vi.mock('../liteApi.js', () => ({
   },
 }))
 
+// audit.parleo.io migration: LiteWidget branches on isAuditHost() (see
+// publicUrls.js) to pick the right same-origin path prefix. Mocking the
+// function directly — rather than trying to make window.location.hostname
+// equal PUBLIC_AUDIT_HOSTNAME — keeps these tests correct regardless of
+// what VITE_PUBLIC_AUDIT_BASE_URL happens to resolve to in this
+// environment (e.g. a local .env.local pointed at a dev hostname); same
+// pattern as App.test.jsx.
+let mockAuditHost = false
+vi.mock('../publicUrls.js', async (importOriginal) => {
+  const actual = await importOriginal()
+  return { ...actual, isAuditHost: () => mockAuditHost }
+})
+
 const ORIGINAL_LOCATION = window.location
 
-// audit.parleo.io migration: LiteWidget branches on window.location.hostname
-// (see publicUrls.js's isAuditHost) to pick the right same-origin path
-// prefix. jsdom's default hostname is 'localhost', matching main-host
-// behavior automatically — this helper is only needed by tests that
-// exercise the audit-host branch.
-function setHostname(hostname) {
+// Only the marketing-host "leaves for the audit host" test needs a real
+// window.location.href write/readback — jsdom's real Location throws on
+// cross-origin navigation, so that one test swaps in a plain writable
+// stand-in. Every other host-dependent test uses the isAuditHost() mock
+// above instead of touching window.location at all.
+function useWritableLocation() {
   Object.defineProperty(window, 'location', {
-    value: { ...ORIGINAL_LOCATION, hostname },
+    value: { href: ORIGINAL_LOCATION.href },
     writable: true,
     configurable: true,
   })
@@ -34,6 +47,7 @@ function setHostname(hostname) {
 beforeEach(() => {
   vi.clearAllMocks()
   sessionStorage.clear()
+  mockAuditHost = false
 })
 
 afterEach(() => {
@@ -295,14 +309,17 @@ describe('LiteWidget — adaptive shapes', () => {
 
     render(<LiteWidget />)
 
-    // The real, unlocked visibility section (W1/W2) still renders in full —
-    // a blocked scan degrades Accessibility/True Value only, per rule 7.
-    await waitFor(() => expect(screen.getByText('How often agents mention you — and your value')).toBeInTheDocument())
-    expect(screen.getByText('42% · 5/12')).toBeInTheDocument()
-    expect(screen.getByText(/rate-limited our identified reader on every page we tried/)).toBeInTheDocument()
+    // V4 report redesign: the real, unlocked Visibility section still
+    // renders in full — a blocked scan degrades Accessibility/True
+    // Value only, per rule 7. The degraded banner still surfaces the
+    // same honest fetch-facts message it always has.
+    await waitFor(() => expect(screen.getByText(/rate-limited our identified reader on every page we tried/)).toBeInTheDocument())
+    expect(screen.getByText('Share of Mentions')).toBeInTheDocument()
+    expect(screen.getByText('Recommendation Strength')).toBeInTheDocument()
 
-    // The funnel teaser (W4) still renders as a locked, decorative tease —
-    // its stage cells are fixed constants, not the real data above.
+    // The funnel gate section still renders as a locked, decorative
+    // tease — its stage cells are fixed constants, not the real data
+    // above.
     expect(screen.getByText('Where you disappear in the funnel')).toBeInTheDocument()
     expect(screen.getAllByText('FULL ANALYSIS').length).toBeGreaterThan(0)
   })
@@ -341,7 +358,7 @@ describe('LiteWidget — old API shape (additive fields absent)', () => {
 // ─── Stage 9: /report/{token} — urlToken, navigate, not-found ──────────
 
 function queryNoindexMeta() {
-  return document.head.querySelector('meta[name="robots"][content="noindex"]')
+  return document.head.querySelector('meta[name="robots"][content="noindex,nofollow"]')
 }
 
 describe('LiteWidget — Stage 9: urlToken seeds the token from the URL', () => {
@@ -404,7 +421,7 @@ describe('LiteWidget — Stage 9: urlToken seeds the token from the URL', () => 
   })
 
   it('the not-found "Start a new audit" button navigates to \'/\' on the audit host', () => {
-    setHostname('audit.parleo.io')
+    mockAuditHost = true
     const navigate = vi.fn()
     render(<LiteWidget urlToken="" navigate={navigate} />)
 
@@ -416,7 +433,7 @@ describe('LiteWidget — Stage 9: urlToken seeds the token from the URL', () => 
     // A plain mutable stand-in, not jsdom's real Location — assigning
     // .href below must not trigger jsdom's unimplemented cross-origin
     // navigation warning.
-    setHostname('parleo.io')
+    useWritableLocation()
     const navigate = vi.fn()
     render(<LiteWidget urlToken="" navigate={navigate} />)
 
@@ -425,7 +442,7 @@ describe('LiteWidget — Stage 9: urlToken seeds the token from the URL', () => 
     // landing page to send the visitor to anymore (H2 removed /scan) —
     // it must leave for the audit host's own landing page instead.
     expect(navigate).not.toHaveBeenCalled()
-    expect(window.location.href).toContain('audit.parleo.io')
+    expect(window.location.href).toBe(PUBLIC_AUDIT_BASE_URL)
   })
 })
 
@@ -443,7 +460,7 @@ describe('LiteWidget — Stage 9: navigate after submit', () => {
   })
 
   it('calls navigate with /r/{token} after a successful submission on the audit host', async () => {
-    setHostname('audit.parleo.io')
+    mockAuditHost = true
     liteApi.submit.mockResolvedValue({ token: 'tok-audit-nav', status: 'pending' })
     liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
     const navigate = vi.fn()
@@ -469,7 +486,7 @@ describe('LiteWidget — Stage 9: navigate after submit', () => {
 })
 
 describe('LiteWidget — Stage 9: noindex meta (U4)', () => {
-  it('adds <meta name="robots" content="noindex"> once a token exists', async () => {
+  it('adds <meta name="robots" content="noindex,nofollow"> once a token exists', async () => {
     sessionStorage.setItem('soaLiteToken', 'tok-noindex')
     liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
 
@@ -489,7 +506,7 @@ describe('LiteWidget — Stage 9: noindex meta (U4)', () => {
   })
 
   it('S3: is a no-op on the audit host — audit-report.html already bakes noindex in statically', async () => {
-    setHostname('audit.parleo.io')
+    mockAuditHost = true
     liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
 
     render(<LiteWidget urlToken="tok-audit-noindex" />)
@@ -498,10 +515,10 @@ describe('LiteWidget — Stage 9: noindex meta (U4)', () => {
   })
 
   it('S2: does not duplicate a noindex tag the static document already has, on the audit host', async () => {
-    setHostname('audit.parleo.io')
+    mockAuditHost = true
     const staticMeta = document.createElement('meta')
     staticMeta.name = 'robots'
-    staticMeta.content = 'noindex'
+    staticMeta.content = 'noindex,nofollow'
     document.head.appendChild(staticMeta)
     liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
 
@@ -542,7 +559,7 @@ describe('LiteWidget — L1/L2: canonical link on the marketing host', () => {
   })
 
   it('no canonical added on the audit host itself — already canonical there', () => {
-    setHostname('audit.parleo.io')
+    mockAuditHost = true
     render(<LiteWidget urlToken="tok-on-audit" />)
     expect(queryCanonical()).toBeNull()
   })

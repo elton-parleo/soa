@@ -30,6 +30,8 @@ from . import scorer, signing, site_typing
 from .agent_access_matrix import build_agent_access_matrix
 from .discovery import DiscoveryResult, discover_pages, resolve_canonical_origin
 from .fetcher import FetchBudget, fetch
+from .brand_icon import extract_brand_icon
+from .offer_feed import build_offer_feed, extract_product_image, extract_product_name
 from .structured_data import EXTRACTION_REV, ExtractedData, extract
 
 log = logging.getLogger(__name__)
@@ -562,6 +564,15 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
             "fix": v5_result.fix,
             "cap_basis": v5_result.cap_basis,
         }
+        # F1/F2: additive sibling keys, same no-migration pattern as
+        # sitemap_sampling/agent_access_matrix above — re-serialized from
+        # data this run already extracted, no new fetches.
+        dimensions["offers"] = build_offer_feed(pages, dim_scores)
+        dimensions["product_image_url"] = extract_product_image(pages)
+        dimensions["product_name"] = extract_product_name(pages)
+        # 1a/1b: the brand's own icon, from the homepage document already
+        # fetched above — no new fetch. Additive sibling key, same pattern.
+        dimensions["brand_icon_url"] = extract_brand_icon(pages)
 
         return ScanResult(
             status=STATUS_COMPLETE,

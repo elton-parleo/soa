@@ -133,7 +133,16 @@ def select_competitors(manual_names: list, candidates: list, brand_name: str):
     Dedupe is case-insensitive across both sets and against brand_name;
     empty or absurd-length names are dropped defensively.
 
-    Returns (final_names: list[str], source: str) where source is:
+    Logo feature, Part 2a: each entry is now {"name": str, "domain":
+    Optional[str]} rather than a bare name string — manual (visitor-
+    typed) competitors always carry domain=None (a typed name has no
+    domain signal at all); generated ones carry whatever the model
+    returned (also None when it wasn't confident). No verification
+    fetch here or anywhere downstream — a wrong or dead domain is the
+    render-side fallback chain's problem to degrade gracefully from
+    (BrandLogo, apps/api/web/src/ds/BrandLogo.jsx).
+
+    Returns (final: list[{"name", "domain"}], source: str) where source is:
       'mixed'     — manual names present AND at least one generated name added
       'manual'    — manual names present, nothing generated got added
       'generated' — no manual names, at least one generated name added
@@ -148,7 +157,7 @@ def select_competitors(manual_names: list, candidates: list, brand_name: str):
         if not (MIN_NAME_LENGTH <= len(name) <= MAX_NAME_LENGTH) or key in seen:
             continue
         seen.add(key)
-        final.append(name)
+        final.append({"name": name, "domain": None})
     manual_count = len(final)
 
     generated_added = 0
@@ -160,7 +169,7 @@ def select_competitors(manual_names: list, candidates: list, brand_name: str):
         if not (MIN_NAME_LENGTH <= len(name) <= MAX_NAME_LENGTH) or key in seen:
             continue
         seen.add(key)
-        final.append(name)
+        final.append({"name": name, "domain": candidate.domain})
         generated_added += 1
 
     if manual_count and generated_added:

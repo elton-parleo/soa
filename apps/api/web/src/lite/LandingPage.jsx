@@ -18,11 +18,14 @@ import './theme.css'
 import { STORAGE_KEY, STORAGE_KEY_STORE_URL } from './LiteWidget.jsx'
 import { LandingNav } from './landing/LandingNav.jsx'
 import { Hero } from './landing/Hero.jsx'
-import { AnatomyOfAnAnswer } from './landing/AnatomyOfAnAnswer.jsx'
-import { WhatYouGet } from './landing/WhatYouGet.jsx'
-import { FieldEvidence } from './landing/FieldEvidence.jsx'
+import { ProofBand } from './landing/ProofBand.jsx'
 import { Stakes } from './landing/Stakes.jsx'
+import { FieldEvidence } from './landing/FieldEvidence.jsx'
 import { Path } from './landing/Path.jsx'
+import { SampleReportSection } from './landing/SampleReportSection.jsx'
+import { Framework } from './landing/Framework.jsx'
+import { Grounded } from './landing/Grounded.jsx'
+import { TrueSyncSection } from './landing/TrueSyncSection.jsx'
 import { FinalCta } from './landing/FinalCta.jsx'
 import { LandingFooter } from './landing/LandingFooter.jsx'
 import { PUBLIC_AUDIT_BASE_URL } from './publicUrls.js'
@@ -93,11 +96,14 @@ export default function LandingPage({ navigate }) {
     <div className="lite-root" style={{ display: 'block', padding: 0 }}>
       <LandingNav />
       <Hero onSubmitted={handleSubmitted} />
-      <AnatomyOfAnAnswer />
-      <WhatYouGet />
-      <FieldEvidence />
+      <ProofBand />
       <Stakes />
+      <FieldEvidence />
       <Path />
+      <SampleReportSection />
+      <Framework />
+      <Grounded />
+      <TrueSyncSection />
       <FinalCta onSubmitted={handleSubmitted} />
       <LandingFooter />
     </div>

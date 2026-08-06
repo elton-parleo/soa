@@ -848,6 +848,12 @@ class PublicLiteVisibilityShare(BaseModel):
     is_primary: bool
     mentions: int
     share_pct: float
+    # Logo feature, Part 2b: soa_entities.website_url for this entity —
+    # the target's own crawled domain for the primary row, the
+    # generator's (possibly null) domain guess for a competitor row.
+    # Never a third-party lookup at render time; SoAIndex's BrandLogo
+    # avatars fall back to a monogram when this is null.
+    domain: Optional[str] = None
 
 
 class PublicLiteVisibilityTotals(BaseModel):
@@ -987,6 +993,39 @@ class PublicLitePillar(BaseModel):
     dimensions: List[PublicLitePillarDimension] = []
 
 
+class PublicLitePillarHeadline(BaseModel):
+    """Part 3: one pillar's generated (or registry-default) one-line
+    summary — see apps/pipeline/generation/pillar_headlines.py, which
+    writes this shape verbatim onto soa_lite_scan_results.dimensions'
+    generated_headlines key at completion time. source is 'generated'
+    | 'default' (default covers both a failed/rejected generation and a
+    not-measurable pillar — see NOT_MEASURABLE_HEADLINE in that
+    module)."""
+    headline: str
+    source: str
+
+
+class PublicLiteGeneratedHeadlines(BaseModel):
+    visibility: PublicLitePillarHeadline
+    accessibility: PublicLitePillarHeadline
+    true_value: PublicLitePillarHeadline
+
+
+class PublicLiteOfferRow(BaseModel):
+    """F1: one row of the report's OfferFeed — a re-serialization of
+    facts the crawl scorer already computed (see
+    apps/pipeline/scan/offer_feed.py::build_offer_feed), never a new
+    fetch. readable is 'seen' | 'partial' | 'invisible' | 'unmeasured' —
+    'unmeasured' only, never 'invisible', when the underlying dimension
+    couldn't be read this run (H1)."""
+    name: str
+    value: str
+    channel: str
+    eligibility: str
+    freshness: str
+    readable: str
+
+
 class PublicLiteFixEntry(BaseModel):
     """One of the top-2 free fixes (Part 3, F1) — plain-language only,
     no markup (see PublicLitePillarDimension.fix_human). impact is the
@@ -996,6 +1035,22 @@ class PublicLiteFixEntry(BaseModel):
     name: str
     fix_human: str
     impact: float
+    # F3: "ENG" or "TRUESYNC" — see scan_dimensions.Dimension.fix_owner.
+    fix_owner: str = "ENG"
+
+
+class PublicLiteExposureReason(BaseModel):
+    """Part 4: one run-tailored "why you're leaking value" reason — see
+    app/services/exposure_reasons.py's table-driven library. text
+    interpolates only run-derived numbers (never a literal). impact_weight
+    is this reason's share of the SELECTED group's severity (renormalized
+    among the returned reasons, not the full library) — the frontend
+    multiplies it against the live, slider-driven modeled exposure total,
+    the same way the pre-Part-4 static cause weights always did."""
+    id: str
+    text: str
+    impact_weight: float
+    severity_rank: int
 
 
 class PublicLiteFixesSection(BaseModel):
@@ -1053,6 +1108,17 @@ class PublicLitePillars(BaseModel):
     tv_earned: float = 0.0
     tv_applicable: float = 0.0
     unmeasured_count: int = 0
+    # F4: gap-area counts for the S2 fixable-hook band. gap_areas_total/
+    # gap_areas_parleo_fixes are fixed framework constants (4 and 2);
+    # parleo_fixable_points is this run's own measured recoverable
+    # points within TrueSync's two owned dimensions.
+    gap_areas_total: int = 4
+    gap_areas_parleo_fixes: int = 2
+    parleo_fixable_points: float = 0.0
+    # Part 4: up to 3 run-tailored exposure reasons, ranked by severity —
+    # see exposure_reasons.py. [] when nothing measured this run triggers
+    # a reason (honest-state: never padded/repeated to reach 3).
+    exposure_reasons: List[PublicLiteExposureReason] = []
 
     @model_validator(mode="after")
     def _verdict_requires_a_real_score(self):
@@ -1112,6 +1178,36 @@ class PublicLiteReportResponse(BaseModel):
     # calculator's default seed (annual units throughout since Report
     # redesign Part 7 — no /12 conversion) — never a score input.
     revenue_estimate_usd: Optional[float] = None
+    # F1/F2: additive, current-scan-only (see engine.py's dimensions
+    # dict — only ever set on a STATUS_COMPLETE run, same as `pillars`
+    # above). Both null on a degraded/blocked/old run — the report's
+    # parsed-page card renders its honest banner instead (H1).
+    offers: Optional[List[PublicLiteOfferRow]] = None
+    product_image_url: Optional[str] = None
+    # 1c: schema.org Product.name, same extraction pass/gating as
+    # product_image_url above — independently null-able (a product can
+    # have one field without the other).
+    product_name: Optional[str] = None
+    # Part 3: additive, same sibling-key-on-dimensions gating as offers/
+    # product_image_url above — null on any run from before this stage,
+    # or when the worker's OpenAI key was unset at completion time. The
+    # frontend falls back to its own hardcoded titles when null (3c).
+    generated_headlines: Optional[PublicLiteGeneratedHeadlines] = None
+    # Logo feature, Part 1b: the audited brand's own icon (apple-touch-
+    # icon > link rel=icon > schema.org Organization.logo), from the
+    # SAME homepage document the crawl already fetched — never a
+    # third-party or stock substitute for the primary brand. Null on a
+    # pre-this-stage run, a blocked/failed scan, or a homepage that
+    # declared no icon at all; the rail's BrandLogo falls back to its
+    # domain tier (Part 3).
+    brand_icon_url: Optional[str] = None
+    # Logo feature, Part 1c: the target's bare hostname (e.g.
+    # "vuoriclothing.com") — always derivable from the request's own
+    # store_url, independent of whether the crawl completed. Feeds
+    # BrandLogo's domain-keyed fallback tiers (provider, then favicon)
+    # when brand_icon_url is null. Never third-party-sourced itself —
+    # this is the merchant's own submitted domain, not a lookup.
+    store_domain: Optional[str] = None
 
 
 class PublicLiteEmailRequest(BaseModel):

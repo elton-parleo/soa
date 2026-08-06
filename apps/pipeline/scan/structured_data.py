@@ -113,6 +113,12 @@ class ProductData:
     mpn: Optional[str] = None
     sku: Optional[str] = None
     brand: Optional[str] = None
+    # F2: schema.org Product.image — first value if the node declares a
+    # list, exactly as-is from the markup (relative or absolute); the
+    # caller absolutizes against the page URL, since this module never
+    # sees it. Never OG/img-scraped — only the merchant's own product
+    # markup, same discipline as every other structured field here.
+    image: Optional[str] = None
 
 
 @dataclass
@@ -135,6 +141,19 @@ class ExtractedData:
     # price found" evidence distinguish "nothing at all" from "a social
     # card exists, but not the schema.org markup agents actually parse."
     og_price_meta_present: bool = False
+    # 1a: brand-icon candidates — <link rel="apple-touch-icon"> and
+    # <link rel="icon"> declarations, each {"href": str, "sizes":
+    # Optional[str]} exactly as declared (relative or absolute; the
+    # caller in scan/brand_icon.py absolutizes against the page URL,
+    # same division of labor as Product.image above). Only ever
+    # meaningful on the homepage page — extracted uniformly here like
+    # every other field, filtered to the homepage by the caller.
+    apple_touch_icons: list = field(default_factory=list)
+    icon_links: list = field(default_factory=list)
+    # schema.org Organization.logo — first value found, string or
+    # ImageObject.url, exactly as declared. Lowest-priority icon
+    # candidate (see scan/brand_icon.py's precedence order).
+    organization_logo: Optional[str] = None
 
 
 def _coerce_price(value) -> Optional[float]:
@@ -297,6 +316,12 @@ def _walk_jsonld_node(node, extracted: ExtractedData, _depth: int = 0) -> None:
             brand = brand.get("name")
         product.brand = _first_str(brand)
 
+        image = node.get("image")
+        if isinstance(image, dict):
+            # ImageObject shape: {"@type": "ImageObject", "url": "..."}
+            image = image.get("url")
+        product.image = _first_str(image)
+
         try:
             blob = json.dumps(node).lower()
         except (TypeError, ValueError):
@@ -312,6 +337,14 @@ def _walk_jsonld_node(node, extracted: ExtractedData, _depth: int = 0) -> None:
 
     if "Organization" in types:
         extracted.organization_present = True
+        if extracted.organization_logo is None:
+            logo = node.get("logo")
+            if isinstance(logo, dict):
+                # ImageObject shape: {"@type": "ImageObject", "url": "..."}
+                logo = logo.get("url")
+            logo = _first_str(logo)
+            if logo:
+                extracted.organization_logo = logo
 
     for value in node.values():
         if isinstance(value, (dict, list)):
@@ -425,6 +458,27 @@ def extract(html: str) -> ExtractedData:
                 )
     except Exception:
         log.exception("[scan.structured_data] failed to scan for agentic-protocol link markup")
+
+    try:
+        # 1a: brand-icon <link> declarations — apple-touch-icon(-precomposed)
+        # and icon/shortcut-icon, each kept with its own `sizes` attribute
+        # (if any) so the caller (scan/brand_icon.py) can pick the largest
+        # per tier. href/sizes kept exactly as declared; absolutizing
+        # against the page URL is the caller's job, same division of
+        # labor as Product.image above.
+        for tag in soup.find_all("link"):
+            rel = tag.get("rel") or []
+            if isinstance(rel, str):
+                rel = rel.split()
+            href = tag.get("href")
+            if not href:
+                continue
+            if "apple-touch-icon" in rel or "apple-touch-icon-precomposed" in rel:
+                extracted.apple_touch_icons.append({"href": href, "sizes": tag.get("sizes")})
+            elif "icon" in rel:
+                extracted.icon_links.append({"href": href, "sizes": tag.get("sizes")})
+    except Exception:
+        log.exception("[scan.structured_data] failed to scan for icon <link> tags")
 
     try:
         # F5: evidence-only — never a price/currency source (see

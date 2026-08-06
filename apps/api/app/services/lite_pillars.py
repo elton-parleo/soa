@@ -25,8 +25,11 @@ from soa_shared.scan_dimensions import (
     BAND_TYPE_RATE,
     COUNT_BAND_TABLE,
     DIMENSIONS_BY_CODE,
+    FIX_OWNER_TRUESYNC,
+    GAP_AREA_COUNT,
     LITE_QUERY_COUNT,
     MIN_OPPORTUNITY_SET_MENTIONS,
+    PARLEO_OWNED_GAP_AREA_COUNT,
     PILLAR_WEIGHTS,
     PURCHASE_INTENT_STAGES,
     RATE_BAND_TABLE,
@@ -38,6 +41,7 @@ from soa_shared.scan_dimensions import (
 )
 
 from app.services.lite_crosswalk import LOYALTY_DEAL_TYPES, RunSignal
+from app.services.exposure_reasons import select_exposure_reasons
 
 # ─── Check states (Part 1, A1) ────────────────────────────────────────────
 #
@@ -473,6 +477,9 @@ def score_price_truth_said(run_signals: List[RunSignal]) -> Dict:
         "code": "price_truth_said", "earned": earned, "max": weight, "na": False,
         "evidence": [f"{cited}/{coded_total} coded answers ({rate_pct:.0f}%) cited a price"],
         "band_table_ref": BAND_TYPE_RATE, "your_value": round(rate_pct, 1), "your_band": _rate_band_index(rate_pct),
+        # Part 4: raw counts, additive — exposure_reasons.py interpolates
+        # these directly rather than parsing the evidence sentence above.
+        "cited": cited, "total": coded_total,
     }
 
 
@@ -509,6 +516,7 @@ def score_member_value_said(run_signals: List[RunSignal]) -> Dict:
         "code": "member_value_said", "earned": earned, "max": weight, "na": False,
         "evidence": [f"{cited}/{total} purchase-intent mentions ({rate_pct:.0f}%) cited member value"],
         "band_table_ref": BAND_TYPE_RATE, "your_value": round(rate_pct, 1), "your_band": _rate_band_index(rate_pct),
+        "cited": cited, "total": total,
     }
 
 
@@ -534,6 +542,7 @@ def score_deal_citability_said(run_signals: List[RunSignal]) -> Dict:
         "code": "deal_citability_said", "earned": earned, "max": weight, "na": False,
         "evidence": [f"{cited} of {total} purchase-intent mentions cited a deal"],
         "band_table_ref": BAND_TYPE_COUNT, "your_value": cited, "your_band": _count_band_index(cited),
+        "cited": cited, "total": total,
     }
 
 
@@ -640,23 +649,66 @@ def _build_fixes_section(dims: List[Dict]) -> Dict:
     excludes any dimension with no fix_human at all — a dimension already
     scoring its full max has nothing to fix and must not count toward
     remaining_count or occupy a free slot.
+
+    Part 2 (2a/2b): the ranked list must always surface a TrueSync-owned
+    fix when one is honestly available — TrueSync fixes deal_citability
+    and value_protocols directly, so a ranked list that only ever shows
+    ENG-owned rows undersells what Parleo itself closes. If neither top
+    slot is TrueSync-owned, the LAST ranked slot is swapped for the
+    highest-impact TrueSync-owned dimension that still recovers >=1
+    applicable point (already-ranked ordering of the untouched slots is
+    left alone; the displaced dimension falls back into remaining_count,
+    it doesn't vanish). If no TrueSync-owned dimension can recover >=1
+    point this run (skipped/na or already at max), the rule does not
+    fire and no row is forced — a fix worth zero points must never
+    render as ranked.
     """
     ranked = sorted(
         (d for d in dims if not d["na"] and not d.get("blocked") and d.get("fix_human")),
         key=lambda d: (-(d["max"] - d["earned"]), d["code"]),
     )
+    visible_dims = list(ranked[:FREE_FIX_VISIBLE_RANK])
+
+    has_truesync = any(DIMENSIONS_BY_CODE[d["code"]].fix_owner == FIX_OWNER_TRUESYNC for d in visible_dims)
+    if not has_truesync and visible_dims:
+        truesync_candidates = [
+            d for d in ranked
+            if DIMENSIONS_BY_CODE[d["code"]].fix_owner == FIX_OWNER_TRUESYNC and (d["max"] - d["earned"]) >= 1
+        ]
+        if truesync_candidates:
+            visible_dims[-1] = truesync_candidates[0]  # ranked is already sorted by gap desc
+
     visible = [
         {
             "code": d["code"], "name": d["name"],
             "fix_human": d["fix_human"],
             "impact": round(d["max"] - d["earned"], 1),
+            # F3: ENG or TRUESYNC — see scan_dimensions.Dimension.fix_owner.
+            "fix_owner": DIMENSIONS_BY_CODE[d["code"]].fix_owner,
         }
-        for d in ranked[:FREE_FIX_VISIBLE_RANK]
+        for d in visible_dims
     ]
     return {
         "visible": visible,
-        "remaining_count": max(0, len(ranked) - FREE_FIX_VISIBLE_RANK),
+        "remaining_count": max(0, len(ranked) - len(visible_dims)),
     }
+
+
+def _parleo_fixable_points(dims: List[Dict]) -> float:
+    """F4: the point pool TrueSync itself can recover on this run — the
+    measured gap (max - earned) summed over the two TrueSync-owned
+    dimensions (deal_citability, value_protocols), excluding na/blocked
+    rows the same way _build_fixes_section does (nothing honestly
+    fixable to report from a dimension we couldn't measure)."""
+    return round(
+        sum(
+            d["max"] - d["earned"]
+            for d in dims
+            if not d["na"] and not d.get("blocked")
+            and DIMENSIONS_BY_CODE[d["code"]].fix_owner == FIX_OWNER_TRUESYNC
+        ),
+        1,
+    )
 
 
 _ACCESSIBILITY_CHECKS_BY_CODE = {
@@ -714,6 +766,10 @@ def _sub_lens(earned: float, max_: float, na: bool, evidence: List[str], extra: 
 def _pillar(earned: float, applicable_max: float, dimensions: List[Dict]) -> Dict:
     score = round(earned / applicable_max * 100) if applicable_max else 0
     return {"score": score, "max": 100.0, "dimensions": dimensions}
+
+
+def _dim_by_code(dims: List[Dict], code: str) -> Dict:
+    return next(d for d in dims if d["code"] == code)
 
 
 def build_pillars_payload(
@@ -894,6 +950,28 @@ def build_pillars_payload(
         "fix": vp_seen.get("fix"), "fix_human": vp_seen.get("fix_human"), "locked": False,
     })
 
+    # Part 4: table-driven exposure reasons — evaluated from the same
+    # already-computed sub-lenses above (seen/said dicts per True Value
+    # dim, accessibility's dim rows, visibility's som numbers), never a
+    # second scoring pass.
+    exposure_reasons_ctx = {
+        "price_truth_seen": _dim_by_code(true_value_dims, "price_truth")["seen"],
+        "price_truth_said": _dim_by_code(true_value_dims, "price_truth")["said"],
+        "member_value_applicable": not member_value_na,
+        "member_value_seen": _dim_by_code(true_value_dims, "member_value")["seen"],
+        "member_value_said": _dim_by_code(true_value_dims, "member_value")["said"],
+        "deal_citability_seen": _dim_by_code(true_value_dims, "deal_citability")["seen"],
+        "deal_citability_said": _dim_by_code(true_value_dims, "deal_citability")["said"],
+        "value_protocols": vp_seen_row,
+        "catalog_context": _dim_by_code(accessibility_dims, "catalog_context"),
+        "agent_access": _dim_by_code(accessibility_dims, "agent_access"),
+        "visibility": {
+            "earned": som_result["earned"], "max": som_result["max"], "na": False,
+            "som_pct": som_pct if som_pct is not None else 0.0, "total_mentions": total_mentions,
+        },
+    }
+    exposure_reasons = select_exposure_reasons(exposure_reasons_ctx)
+
     # Fix text only exists on the 7 crawl-derived dimensions above
     # (accessibility's 3 + True Value's 4 seen-halves) — visibility's
     # mention-derived dimensions have nothing crawl-fixable to offer, so
@@ -901,6 +979,7 @@ def build_pillars_payload(
     fixable_dims = accessibility_dims + true_value_dims
     _rank_and_lock_fixes(fixable_dims)
     fixes = _build_fixes_section(fixable_dims)
+    parleo_fixable_points = _parleo_fixable_points(fixable_dims)
 
     total_earned = visibility_earned + accessibility_earned + true_value_earned
     raw_composite = compute_composite(total_earned, member_value_na=member_value_na)
@@ -969,4 +1048,14 @@ def build_pillars_payload(
         "tv_earned": true_value_earned,
         "tv_applicable": true_value_applicable_max,
         "unmeasured_count": unmeasured_count,
+        # F4: gap-area counts for the S2 fixable-hook band ("Parleo can
+        # fix N of your M major gaps") — gap_areas_total/parleo_fixes are
+        # fixed framework facts (see scan_dimensions.GAP_AREA_COUNT);
+        # parleo_fixable_points is this run's own measured recoverable
+        # points within TrueSync's two owned dimensions.
+        "gap_areas_total": GAP_AREA_COUNT,
+        "gap_areas_parleo_fixes": PARLEO_OWNED_GAP_AREA_COUNT,
+        "parleo_fixable_points": parleo_fixable_points,
+        # Part 4: run-tailored exposure reasons — see exposure_reasons.py.
+        "exposure_reasons": exposure_reasons,
     }

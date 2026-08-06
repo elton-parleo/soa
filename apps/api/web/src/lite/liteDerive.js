@@ -128,6 +128,14 @@ export const EXPOSURE_HAIRCUT = 0.85
 export const REVENUE_SLIDER_MIN = 120000
 export const REVENUE_SLIDER_MAX = 120000000
 
+// V4 redesign: the AI-assisted-share slider range shared by the
+// landing Stakes widget and the report's ADJUST ASSUMPTIONS panel —
+// matches the report mock's own slider bounds (5-40%) exactly, since
+// nothing existing already owned this range.
+export const AI_SHARE_SLIDER_MIN = 5
+export const AI_SHARE_SLIDER_MAX = 40
+export const AI_SHARE_DEFAULT_PCT = 20
+
 /**
  * Report redesign (Part 7): the revenue probe's own annual USD estimate,
  * clamped to the slider's range — no /12 conversion anymore, since the
