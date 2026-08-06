@@ -138,7 +138,7 @@ export function LiteForm({
       <div>
         <ErrorBanner message={submitError} />
         <form onSubmit={handleSubmit}>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div className="lite-form-compact-row" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <label style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }} htmlFor={`${idPrefix}-primary`}>Your brand or store URL</label>
             <input
               id={`${idPrefix}-primary`}

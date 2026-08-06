@@ -62,7 +62,7 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
             </span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 40, alignItems: 'flex-end', marginTop: 18, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 340, maxWidth: 560, fontSize: 38, fontWeight: 740, letterSpacing: '-0.034em', lineHeight: 1.1, color: 'var(--dark-text)' }}>
+            <div className="lite-scorehero-headline" style={{ flex: 1, minWidth: 340, maxWidth: 560, fontSize: 38, fontWeight: 740, letterSpacing: '-0.034em', lineHeight: 1.1, color: 'var(--dark-text)' }}>
               {plain} <em style={{ fontFamily: "'Newsreader',Georgia,serif", fontWeight: 440, fontStyle: 'italic', color: 'var(--blue-lite)', letterSpacing: '-0.008em' }}>{emphasis}</em>
             </div>
             {pillars.state === 'scored' && (
@@ -73,7 +73,7 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
           <div style={{ marginTop: 26, padding: '22px 24px 20px', background: 'rgba(242,240,239,.055)', border: '1px solid var(--dark-border)', borderRadius: 15 }}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 22, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                <span className="num" style={{ fontSize: 66, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)' }}>{composite != null ? Math.round(composite) : '—'}</span>
+                <span className="num lite-display-num" style={{ fontSize: 66, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)' }}>{composite != null ? Math.round(composite) : '—'}</span>
                 <span className="num" style={{ fontSize: 23, fontWeight: 560, color: 'var(--dark-faint)', letterSpacing: '-0.02em' }}>/100</span>
               </div>
               {shortOfReady != null && (
@@ -89,7 +89,7 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
                   <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--muted)' }}>LANE WIDTH = POINT BUDGET · FILL = POINTS EARNED</span>
                   <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--muted)' }}>PACE FOR A READY SCORE</span>
                 </div>
-                <div style={{ display: 'flex', gap: 27, alignItems: 'flex-start' }}>
+                <div className="lite-scorehero-lanes-row" style={{ display: 'flex', gap: 27, alignItems: 'flex-start' }}>
                   <PaceLane label={PILLAR_NAMES[PILLAR_VISIBILITY]} earned={vis.earned} max={pillarNominalWeight(PILLAR_VISIBILITY)} />
                   <PaceLane label={PILLAR_NAMES[PILLAR_ACCESSIBILITY]} earned={acc.earned} max={pillarNominalWeight(PILLAR_ACCESSIBILITY)} />
                   <PaceLane label={PILLAR_NAMES[PILLAR_TRUE_VALUE]} earned={tv.earned} max={pillarNominalWeight(PILLAR_TRUE_VALUE)} isTrueValue />
@@ -98,7 +98,7 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16 }}>
+          <div className="lite-scorehero-tiles-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 16 }}>
             <div style={{ background: 'rgba(242,240,239,.05)', border: '1px solid var(--dark-border)', borderRadius: 13, padding: '15px 17px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Glyph name="eye" size={13} color="var(--blue-lite)" /><span className="mono-label" style={{ fontSize: 8.5, color: 'var(--dark-faint)' }}>SHARE OF MENTIONS</span></div>
               <div className="num" style={{ fontSize: 24, fontWeight: 720, letterSpacing: '-0.026em', color: 'var(--dark-text)', marginTop: 10, lineHeight: 1 }}>
@@ -115,7 +115,7 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
         </div>
 
         <div style={{ padding: '26px 32px 28px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
+          <div className="lite-scorehero-pillars-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14 }}>
             {pillarCards.map((p) => {
               const pct = p.max ? (p.earned / p.max) * 100 : 0
               return (

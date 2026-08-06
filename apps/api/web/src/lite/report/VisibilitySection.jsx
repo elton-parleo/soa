@@ -29,7 +29,7 @@ export function VisibilitySection({ report, open, onToggle, shareOfMentionsRank 
       score={som && rs ? `${Math.round(vis.earned)}/${Math.round(vis.max)}` : null}
       open={open} onToggle={onToggle}
     >
-      <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+      <div className="lite-vis-tiles-grid" style={{ marginTop: 22, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
         <div style={{ background: 'var(--surface-warm)', border: '1px solid var(--hairline)', borderRadius: 13, padding: '17px 18px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <Glyph name="eye" size={15} color="var(--blue)" />

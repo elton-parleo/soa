@@ -30,7 +30,7 @@ export function SoAIndex({ rows = [], you, projected, style }) {
       {rows.map((r, i) => {
         const isYou = r.name === you
         return (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: 'minmax(110px,140px) 1fr 74px', alignItems: 'center', gap: 12 }}>
+          <div key={i} className="lite-soaindex-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(110px,140px) 1fr 74px', alignItems: 'center', gap: 12 }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: isYou ? 640 : 500, color: 'var(--text-strong)' }}>
               <BrandLogo name={r.name} domain={r.domain} size={15} />
               {r.name}

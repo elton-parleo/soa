@@ -38,7 +38,7 @@ export function AccessibilitySection({ report, open, onToggle }) {
       score={`${Math.round(acc.earned)}/${Math.round(acc.max)}`}
       open={open} onToggle={onToggle}
     >
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginTop: 20 }}>
+      <div className="lite-v4-acc-tiles-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginTop: 20 }}>
         <ChecksTile dim={agentAccess} registryDim={DIMENSIONS_BY_CODE.agent_access} />
         <ChecksTile dim={catalog} registryDim={DIMENSIONS_BY_CODE.catalog_context} />
         <ChecksTile dim={protocol} registryDim={DIMENSIONS_BY_CODE.protocol_feed} />

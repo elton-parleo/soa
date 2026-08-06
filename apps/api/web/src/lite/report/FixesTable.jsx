@@ -27,7 +27,7 @@ export function FixesTable({ report, open, onToggle }) {
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 20 }}>
         {visible.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 2px 2px' }}>
+          <div className="lite-fixrow-header" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 2px 2px' }}>
             <span className="mono-label" style={{ fontSize: 9, color: 'var(--faint)', flex: 1 }}>THE MOVE</span>
             <span className="mono-label" style={{ fontSize: 9, color: 'var(--faint)', width: 190 }}>POINTS RECOVERED</span>
             <span className="mono-label" style={{ fontSize: 9, color: 'var(--faint)', width: 64, textAlign: 'right' }}>OWNER</span>
@@ -36,19 +36,19 @@ export function FixesTable({ report, open, onToggle }) {
         {visible.map((f, i) => {
           const isTrueSync = f.fix_owner === 'TRUESYNC'
           return (
-            <div key={f.code} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface-warm)', border: `1px solid ${isTrueSync ? 'rgba(1,102,255,.32)' : 'var(--hairline)'}`, borderRadius: 12, padding: '14px 16px' }}>
+            <div key={f.code} className="lite-fixrow" style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface-warm)', border: `1px solid ${isTrueSync ? 'rgba(1,102,255,.32)' : 'var(--hairline)'}`, borderRadius: 12, padding: '14px 16px' }}>
               <span className="num" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, flexShrink: 0, borderRadius: 9, background: isTrueSync ? 'var(--blue)' : 'var(--canvas-dim)', color: isTrueSync ? '#fff' : 'var(--muted)', fontSize: 11.5, fontWeight: 660 }}>{RANK_LABELS[i] || i + 1}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="lite-fixrow-title" style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 620, color: 'var(--text-strong)', letterSpacing: '-0.01em' }}>{f.name}</div>
                 <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.5 }}>{f.fix_human}</div>
               </div>
-              <div style={{ width: 190, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div className="lite-fixrow-points" style={{ width: 190, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ flex: 1, position: 'relative', height: 10, borderRadius: 5, background: 'var(--canvas-dim)', overflow: 'hidden' }}>
                   <i style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${(f.impact / maxImpact) * 100}%`, background: isTrueSync ? 'var(--blue)' : 'var(--ink)', borderRadius: 5 }} />
                 </div>
                 <span className="num" style={{ fontSize: 13, fontWeight: 680, color: isTrueSync ? 'var(--blue)' : 'var(--ink)', whiteSpace: 'nowrap' }}>+{f.impact} pts</span>
               </div>
-              <span className="mono-label" style={{ width: 64, flexShrink: 0, textAlign: 'right', fontSize: 9, color: isTrueSync ? 'var(--blue)' : 'var(--faint)' }}>{f.fix_owner}</span>
+              <span className="mono-label lite-fixrow-owner" style={{ width: 64, flexShrink: 0, textAlign: 'right', fontSize: 9, color: isTrueSync ? 'var(--blue)' : 'var(--faint)' }}>{f.fix_owner}</span>
             </div>
           )
         })}

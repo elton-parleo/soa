@@ -1,22 +1,6 @@
 import { Wordmark, Glyph, StatusChip, Button, BrandLogo } from '../../ds/index.js'
-import { NAV_IDS } from './useReportSections.js'
-import { pillarEarnedMax, isAgentReady } from './reportDerive.js'
+import { pillarEarnedMax, isAgentReady, buildNavItems } from './reportDerive.js'
 import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
-
-const NAV_META = {
-  score: { icon: 'chart', label: 'Score' },
-  viz: { icon: 'eye', label: 'Visibility' },
-  acc: { icon: 'globe', label: 'Accessibility' },
-  tv: { icon: 'tag', label: 'True Value' },
-  fix: { icon: 'check', label: 'Ranked fixes' },
-  truesync: { icon: 'refresh', label: 'The fix' },
-  exp: { icon: 'card', label: 'Exposure' },
-}
-
-function kLabel(n) {
-  if (n == null) return '—'
-  return n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : `$${Math.round(n / 1e3)}K`
-}
 
 export function ReportRail({ report, primaryEntityName, exposure, active, focus, allLabel, onToggleAll }) {
   const pillars = report.pillars
@@ -26,23 +10,10 @@ export function ReportRail({ report, primaryEntityName, exposure, active, focus,
   const tv = pillarEarnedMax(pillars.true_value)
   const readyPct = 60
 
-  const navItems = NAV_IDS.filter((id) => id !== 'fun').map((id) => {
-    if (!(id in NAV_META)) return null
-    const on = active === id
-    const meta = NAV_META[id]
-    let score = null
-    if (id === 'score') score = `${Math.round(composite ?? 0)}/100`
-    else if (id === 'viz') score = `${Math.round(vis.earned)}/${Math.round(vis.max)}`
-    else if (id === 'acc') score = `${Math.round(acc.earned)}/${Math.round(acc.max)}`
-    else if (id === 'tv') score = `${Math.round(tv.earned)}/${Math.round(tv.max)}`
-    else if (id === 'fix') score = `+${Math.round(vis.max - vis.earned + acc.max - acc.earned + tv.max - tv.earned > 0 ? Math.min(20, vis.max - vis.earned + acc.max - acc.earned + tv.max - tv.earned) : 0)}`
-    else if (id === 'truesync') score = 'TrueSync'
-    else if (id === 'exp') score = kLabel(exposure)
-    return { id, on, meta, score }
-  }).filter(Boolean)
+  const navItems = buildNavItems({ pillars, composite, exposure, active })
 
   return (
-    <div style={{ borderRight: '1px solid var(--border)', background: 'var(--canvas-dim)' }}>
+    <div className="lite-report-rail" style={{ borderRight: '1px solid var(--border)', background: 'var(--canvas-dim)' }}>
       <div style={{ position: 'sticky', top: 0, height: '100vh', overflowY: 'auto', overflowX: 'hidden', padding: '22px 18px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div>
           <Wordmark size={13} />

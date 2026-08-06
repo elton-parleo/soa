@@ -39,7 +39,7 @@ export function Path() {
     <section style={{ padding: '60px 24px 12px' }}>
       <div style={{ maxWidth: 1120, margin: '0 auto' }}>
         <div className="section-heading sm">Measure your agentic gaps. <span className="accent">Then close them.</span></div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18, marginTop: 32, alignItems: 'stretch' }}>
+        <div className="lite-path-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18, marginTop: 32, alignItems: 'stretch' }}>
           <StepCard
             n="01"
             tag="TODAY"

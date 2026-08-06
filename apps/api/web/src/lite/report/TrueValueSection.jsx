@@ -31,7 +31,7 @@ function ParsedPageCard({ offers, productImageUrl, productName }) {
   const availability = offers.find((o) => o.name === 'Availability')
 
   return (
-    <div style={{ background: 'var(--surface-warm)', border: '1px solid var(--border)', borderRadius: 14, padding: '18px 20px', display: 'grid', gridTemplateColumns: showImage ? '1fr 140px' : '1fr', gap: 18 }}>
+    <div className="lite-parsedcard-grid" style={{ background: 'var(--surface-warm)', border: '1px solid var(--border)', borderRadius: 14, padding: '18px 20px', display: 'grid', gridTemplateColumns: showImage ? '1fr 140px' : '1fr', gap: 18 }}>
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Glyph name="doc" size={14} color="var(--faint)" />
@@ -77,6 +77,7 @@ function ParsedPageCard({ offers, productImageUrl, productName }) {
       {showImage && (
         <div>
           <img
+            className="lite-parsedcard-image"
             src={productImageUrl}
             alt={productName || "Product, as parsed from the merchant's own markup"}
             loading="lazy"
@@ -116,7 +117,7 @@ function DualLensDim({ code, iconGlyph, dim, oneLiner, open, onToggle }) {
         <span style={{ fontSize: 13.5, color: 'var(--muted)' }}>{oneLiner}</span>
         <span style={{ marginLeft: 'auto' }}><HowItsScoredButton open={open} onToggle={onToggle} /></span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div className="lite-dimrow-meters-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <MeterHalf label="ON YOUR SITE" glyph="doc" sub={seen} blocked={seen?.blocked} />
         <MeterHalf label="IN ANSWERS" glyph="agent" sub={said} blocked={false} />
       </div>

@@ -10,6 +10,7 @@ import '../theme.css'
 import { DegradedRunBanner } from '../DegradedRunBanner.jsx'
 import { computeExposure, seedAnnualRevenue } from '../liteDerive.js'
 import { ReportRail } from './ReportRail.jsx'
+import { MobileReportNav } from './MobileReportNav.jsx'
 import { ScoreHero } from './ScoreHero.jsx'
 import { FixableHook } from './FixableHook.jsx'
 import { VisibilitySection } from './VisibilitySection.jsx'
@@ -54,11 +55,14 @@ export function LiteFullReportV4({ report, token }) {
   const auditUrl = typeof window !== 'undefined' ? `${window.location.origin}/` : '/'
   const truesyncPoints = report.pillars.parleo_fixable_points
 
+  const primaryEntityName = primaryEntity?.name || 'Your brand'
+
   return (
-    <div className="grain-overlay" style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '222px 1fr' }}>
+    <div className="grain-overlay lite-report-shell" style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '222px 1fr' }}>
+      <MobileReportNav report={report} primaryEntityName={primaryEntityName} exposure={exposure} active={active} />
       <ReportRail
         report={report}
-        primaryEntityName={primaryEntity?.name || 'Your brand'}
+        primaryEntityName={primaryEntityName}
         exposure={exposure}
         active={active}
         focus={focus}
@@ -66,7 +70,7 @@ export function LiteFullReportV4({ report, token }) {
         onToggleAll={toggleAll}
       />
       <div style={{ minWidth: 0 }}>
-        <div style={{ maxWidth: 920, margin: '0 auto', padding: '32px 28px 46px' }}>
+        <div className="lite-report-content" style={{ maxWidth: 920, margin: '0 auto', padding: '32px 28px 46px' }}>
           <DegradedRunBanner
             status={report.scan_status}
             degradedReason={report.scan?.degraded_reason}

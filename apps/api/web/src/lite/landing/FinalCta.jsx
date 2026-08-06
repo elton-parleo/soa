@@ -11,7 +11,7 @@ import { SAMPLE_REPORT_URL } from './landingSampleContent.js'
 export function FinalCta({ onSubmitted }) {
   return (
     <section style={{ padding: '8px 24px 40px' }}>
-      <div className="ink-photo" style={{ maxWidth: 1120, margin: '0 auto', borderRadius: 20, padding: '74px 40px 78px', textAlign: 'center' }}>
+      <div className="ink-photo lite-finalcta-panel" style={{ maxWidth: 1120, margin: '0 auto', borderRadius: 20, padding: '74px 40px 78px', textAlign: 'center' }}>
         <h2 className="section-heading sm on-dark" style={{ margin: 0 }}>Find out what agents are missing.</h2>
         <div style={{ maxWidth: 480, margin: '26px auto 0', textAlign: 'left' }}>
           <LiteForm onSubmitted={onSubmitted} compact inv submitLabel="Run my free audit" placeholder="yourstore.com" />

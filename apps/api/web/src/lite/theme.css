@@ -1771,3 +1771,552 @@
   margin: 8px 0 2px;
   color: #fff;
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   MOBILE — V4 audit landing + report (interim spec pending a mobile
+   mock from design). One section, not threaded through the file, on
+   purpose: every rule here targets a className added ADDITIVELY
+   alongside its component's existing (unchanged) inline desktop style
+   — nothing here has a base-level (non-@media) rule, so desktop is
+   never touched by anything below. A future design pass can retune
+   mobile end-to-end by editing only this section.
+
+   G1 — breakpoints, defined once: phone ≤640px, tablet 641-1024px,
+   desktop >1024px (untouched). Matches this file's own pre-existing
+   640px convention (see the fix-table/cols-2/cols-3 rules above) rather
+   than introducing a second scale. `!important` is used deliberately
+   throughout: every targeted element already carries an inline desktop
+   style (grid-template-columns, flex-direction, etc.), and inline
+   styles otherwise always beat a stylesheet rule regardless of
+   selector specificity — this is the one place in the codebase that
+   needs it, and only inside these phone/tablet blocks.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── G3: tap targets — every button/expander/nav-item link gets a
+   real 44px hit area on phone; desktop sizing is untouched (no rule
+   outside this @media block touches .btn-lift or button height). ── */
+@media (max-width: 640px) {
+  .lite-root button,
+  .lite-root a.btn-lift {
+    min-height: 44px;
+  }
+  .lite-root input[type="range"] {
+    padding: 14px 0; /* enlarges the tappable area around the native thumb without re-skinning it — re-skinning would need a fixed thumb color, losing the light/dark accent-color distinction different sliders rely on */
+    box-sizing: content-box;
+  }
+}
+
+/* ── G2 safety net: Button.jsx and .mono-label both set an
+   unconditional white-space:nowrap (desktop mock text always fits on
+   one line there) — several labels don't fit that way at 360px
+   ("See your real number, run the free audit", "RANKED IN THE FULL
+   ANALYSIS"). A grid/flex item's default min-width is its content's
+   min-content size, so an un-wrappable long label silently forces its
+   whole column/row wider than the viewport even after a
+   grid-template-columns:1fr override above — confirmed live at 360px
+   (the Stakes CTA forced a 399px column on a 360px viewport). Letting
+   these wrap is a strict no-op wherever the text already fits on one
+   line, so this is safe everywhere it's applied. !important because
+   both nowraps are set inline, which otherwise always wins over a
+   stylesheet rule. ── */
+@media (max-width: 640px) {
+  .lite-root .btn-lift {
+    white-space: normal !important;
+    text-align: center;
+  }
+  .lite-root .mono-label {
+    white-space: normal !important;
+  }
+}
+
+/* ── G4: display numbers scale with clamp() instead of a fixed size,
+   phone only — desktop keeps its exact mock px value untouched. A
+   fixed 46-66px number/currency string has no wrap point, so at 360px
+   it either overflows its own row (forcing the parent wider — the
+   Stakes exposure figure did exactly this, confirmed live at 360px)
+   or, once that's fixed, just runs past the card edge on its own. One
+   shared clamp for every such number — hero headline, the sample-card
+   and ScoreHero composite scores, the Stakes exposure figure, and
+   FieldEvidence's stat — is a deliberate simplification (an interim
+   spec ahead of a real mobile mock): it flattens some of these
+   numbers' desktop size hierarchy on phone rather than hand-tuning six
+   separate clamp ranges, in exchange for one rule that's guaranteed
+   never to force an overflow regardless of digit count. ── */
+@media (max-width: 640px) {
+  .lite-hero-grid h1.section-heading { font-size: clamp(34px, 9vw, 54px) !important; }
+  .lite-display-num { font-size: clamp(30px, 12vw, 52px) !important; }
+}
+
+/* ── LM1: landing nav — sample-report link + "Free Agentic Value
+   Audit" label drop out of the bar (the label reappears as the hero's
+   mobile-only eyebrow, LM2 below); wordmark stays left, the Run button
+   stays right via its existing margin-left:auto cluster. ── */
+@media (max-width: 640px) {
+  .lite-landing-nav-sep,
+  .lite-landing-nav-label,
+  .lite-landing-nav-samplelink {
+    display: none !important;
+  }
+}
+
+/* ── LM2: hero — stacks to a single column (text, then the sample
+   card, matching DOM order); the eyebrow that replaces the nav's
+   dropped label; trust badges collapse to one column under 400px; the
+   compact URL form (shared with LM5's final CTA — LiteForm.jsx) stacks
+   input above a full-width button. ── */
+@media (max-width: 640px) {
+  .lite-hero-grid {
+    display: block !important;
+    padding-top: 40px !important;
+  }
+  .lite-hero-grid > div:first-child {
+    max-width: none !important;
+  }
+  .lite-hero-grid > div:last-child {
+    margin-top: 36px;
+  }
+  .lite-hero-mobile-eyebrow {
+    display: block !important;
+    margin-bottom: 10px;
+  }
+}
+@media (max-width: 400px) {
+  .lite-hero-badges-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+@media (max-width: 640px) {
+  .lite-form-compact-row {
+    flex-direction: column !important;
+  }
+  .lite-form-compact-row input,
+  .lite-form-compact-row .btn-lift {
+    width: 100% !important;
+    flex: 1 1 auto !important;
+  }
+}
+
+/* ── LM3: the stakes/leakage-estimator band — sliders stack, the
+   right-hand modeled figure moves below, its CTA goes full-width.
+   LogoMarquee is unaffected: it already scrolls within its own
+   overflow:hidden container (ds/LogoMarquee.jsx), never the page's. ── */
+@media (max-width: 640px) {
+  .lite-stakes-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .lite-stakes-left {
+    border-right: none !important;
+    border-bottom: 1px solid var(--dark-border);
+  }
+  .lite-stakes-cta {
+    display: block !important;
+  }
+  .lite-stakes-cta .btn-lift {
+    width: 100%;
+  }
+}
+
+/* ── LM4: field-evidence cards, the path steps, framework pillar rows
+   + their dimension tiles, and the sample-report preview all collapse
+   to one column, full width, in mock (DOM) order. ── */
+@media (max-width: 640px) {
+  .lite-field-evidence-grid,
+  .lite-path-grid,
+  .lite-sample-grid,
+  .lite-framework-row-grid,
+  .lite-framework-tiles-grid,
+  .lite-landing-grounded-grid,
+  .lite-truesync-landing-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+@media (min-width: 641px) and (max-width: 1024px) {
+  .lite-path-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+/* ── LM5: final CTA — lighter panel padding + the same full-width
+   stacked form as LM2 (.lite-form-compact-row above); footer wraps. ── */
+@media (max-width: 640px) {
+  .lite-finalcta-panel {
+    padding: 48px 24px 52px !important;
+  }
+  .lite-landing-footer-row {
+    flex-wrap: wrap;
+    justify-content: center !important;
+    text-align: center;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   REPORT (phone layout)
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── RM1: the rail cannot be a sticky 222px sidebar on phone. The
+   report shell's grid collapses to one column; the desktop rail
+   (ReportRail.jsx, .lite-report-rail) hides outright; its replacement
+   (MobileReportNav.jsx, .lite-report-mobile-nav and its three pieces)
+   is hidden at desktop the same way, symmetrically. ── */
+@media (max-width: 640px) {
+  .lite-report-shell {
+    display: block !important;
+  }
+  .lite-report-rail {
+    display: none !important;
+  }
+  .lite-report-content {
+    padding: 20px 16px 40px !important;
+  }
+}
+@media (min-width: 641px) {
+  .lite-report-mobile-nav {
+    display: none !important;
+  }
+}
+
+.lite-report-mobile-summary {
+  display: none;
+}
+@media (max-width: 640px) {
+  .lite-report-mobile-summary {
+    display: block;
+    background: var(--surface);
+    border-bottom: 1px solid var(--hairline);
+    padding: 16px 16px 18px;
+  }
+  .lite-report-mobile-summary-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .lite-report-mobile-summary-name {
+    font-size: 15px;
+    font-weight: 660;
+    color: var(--text-strong);
+    letter-spacing: -0.01em;
+  }
+  .lite-report-mobile-summary-score-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+  }
+  .lite-report-mobile-summary-score {
+    font-size: 32px;
+    font-weight: 750;
+    letter-spacing: -0.03em;
+    color: var(--text-strong);
+  }
+  .lite-report-mobile-summary-score-max {
+    font-size: 14px;
+    font-weight: 560;
+    color: var(--faint);
+    margin-left: 2px;
+  }
+}
+
+.lite-report-mobile-stickybar {
+  display: none;
+}
+@media (max-width: 640px) {
+  .lite-report-mobile-stickybar {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    /* position:fixed, not sticky — confirmed live: sticky's containing
+       block is .lite-report-mobile-nav (the small summary+stickybar
+       wrapper, ~130px tall), so past that point in the scroll there's
+       no more room left for it to stick WITHIN, and it scrolls away
+       with the rest of that short wrapper instead of staying pinned
+       for the whole report. Visibility is already fully own-driven
+       (the IntersectionObserver toggle below), so native sticky
+       "when do I start pinning" semantics were never actually needed
+       — fixed positioning (relative to the viewport, unaffected by any
+       ancestor's height) is what the visual spec actually wants. */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 70;
+    height: 52px;
+    max-height: 56px;
+    padding: 0 14px;
+    background: rgba(242, 240, 239, 0.92);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--hairline);
+    /* Off-screen (not display:none) so the IntersectionObserver-driven
+       reveal is a cheap opacity/transform transition, not a layout
+       thrash, and so it never contributes a first, wrongly-visible
+       frame before JS decides whether the visitor has scrolled past
+       the summary block yet. */
+    transform: translateY(-100%);
+    opacity: 0;
+    transition: transform 200ms var(--ease), opacity 200ms var(--ease);
+  }
+  .lite-report-mobile-stickybar--visible {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  .lite-report-mobile-stickybar-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 620;
+    color: var(--text-strong);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lite-report-mobile-stickybar-score {
+    font-size: 15px;
+    font-weight: 720;
+    color: var(--text-strong);
+    flex-shrink: 0;
+  }
+  .lite-report-mobile-stickybar-score-max {
+    font-size: 10.5px;
+    font-weight: 560;
+    color: var(--faint);
+  }
+  .lite-report-mobile-sections-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 580;
+    color: var(--text-strong);
+    cursor: pointer;
+  }
+}
+
+.lite-report-mobile-sheet-overlay {
+  display: none;
+}
+@media (max-width: 640px) {
+  .lite-report-mobile-sheet-overlay {
+    display: flex;
+    align-items: flex-end;
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    background: rgba(23, 26, 33, 0.45);
+  }
+  .lite-report-mobile-sheet {
+    width: 100%;
+    max-height: 78vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border-radius: 18px 18px 0 0;
+    box-shadow: var(--shadow-elevated);
+    padding: 16px 6px 24px;
+  }
+  .lite-report-mobile-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 14px 12px;
+  }
+  .lite-report-mobile-sheet-header .mono-label {
+    font-size: 10px;
+    color: var(--faint);
+  }
+  .lite-report-mobile-sheet-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    border-radius: 10px;
+    border: none;
+    background: var(--canvas-dim);
+    cursor: pointer;
+  }
+  .lite-report-mobile-sheet-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .lite-report-mobile-sheet-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    min-height: 44px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    text-decoration: none;
+  }
+  .lite-report-mobile-sheet-item--on {
+    background: var(--blue-tint);
+  }
+  .lite-report-mobile-sheet-item-label {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 560;
+    color: var(--text-strong);
+  }
+  .lite-report-mobile-sheet-item-score {
+    font-size: 12.5px;
+    font-weight: 640;
+    color: var(--muted);
+  }
+  .lite-report-mobile-sheet-item--on .lite-report-mobile-sheet-item-score {
+    color: var(--blue);
+  }
+}
+
+/* ── RM2: score hero — pillar lanes and both 2-tile rows stack. The
+   headline carries a desktop minWidth:340 (a flex item's hard floor,
+   unlike a grid item's content-based auto minimum) that doesn't shrink
+   on its own — confirmed live at 360px, silently clipped by the
+   DarkPanel's own overflow:hidden rather than visible as a bug until
+   inspected. ── */
+@media (max-width: 640px) {
+  .lite-scorehero-lanes-row {
+    flex-direction: column;
+  }
+  .lite-scorehero-lanes-row > div {
+    width: 100% !important;
+  }
+  .lite-scorehero-tiles-grid,
+  .lite-scorehero-pillars-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .lite-scorehero-headline {
+    min-width: 0 !important;
+    font-size: clamp(24px, 7vw, 38px) !important;
+  }
+}
+
+/* ── Shared ReportSection header — same minWidth-floor pattern as the
+   ScoreHero headline above, same fix. ── */
+@media (max-width: 640px) {
+  .lite-report-section-title {
+    min-width: 0 !important;
+  }
+}
+
+/* ── RM3: dimension rows — the True Value dual-lens meters and the
+   Visibility/Accessibility tile rows stack vertically. Row headers
+   already wrap (flex-wrap:wrap in source, untouched); How-it's-scored
+   chips already wrap (HowItsScored.jsx, untouched). ── */
+@media (max-width: 640px) {
+  .lite-dimrow-meters-grid,
+  .lite-vis-tiles-grid,
+  .lite-v4-acc-tiles-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── RM4: the AGENT VIEW parsed card — single column, image first
+   (column-reverse over the existing two DOM children puts the
+   already-second image div visually first without reordering source),
+   height-clamped or omitted cleanly when absent (unchanged — the
+   image tag simply isn't rendered). ── */
+@media (max-width: 640px) {
+  .lite-parsedcard-grid {
+    display: flex !important;
+    flex-direction: column-reverse;
+  }
+  .lite-parsedcard-image {
+    width: 100% !important;
+    height: 200px !important;
+    aspect-ratio: auto !important;
+  }
+}
+
+/* ── RM5: OfferFeed — each signal stacks to a row-card: icon+name on
+   the first line, then the freshness/readable-state chips on their
+   own line beneath. Used by both the landing sample preview and the
+   report's True Value card; same treatment either place.
+
+   First attempt here was a plain flex-wrap on the whole row — wrong:
+   with the name block set to flex:1;min-width:0 (needed at desktop so
+   long names don't push the trailing chips off), flex-wrap never
+   actually triggers a line break, because the name block just keeps
+   absorbing whatever width is left, shrinking arbitrarily small
+   instead — confirmed live at 360px, it wrapped word-by-word into an
+   unreadable single-character-wide column. Forcing the chips group
+   (now a single wrapped element, OfferFeed.jsx) onto its own
+   full-width line is what actually fixes it — .lite-offerfeed-content
+   then only has the small icon to share line 1 with, so it gets real
+   room instead of being squeezed by the chips too. ── */
+@media (max-width: 640px) {
+  .lite-offerfeed-row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .lite-offerfeed-chips {
+    flex-basis: 100%;
+    margin-left: 43px; /* aligns under .lite-offerfeed-content, past the 30px icon + 13px gap */
+  }
+}
+
+/* ── RM6: fixes table — column header hides (same convention this
+   file already uses for .lite-fix-table-header above); each fix
+   becomes a wrapped card: title full width, then the points bar, then
+   the owner tag, each on its own line. ── */
+@media (max-width: 640px) {
+  .lite-fixrow-header {
+    display: none !important;
+  }
+  .lite-fixrow {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  /* rank badge + title share the first line unchanged (title already
+     flexes to fill the remaining space, no override needed); the
+     points bar and owner tag — the two fixed-pixel-width columns that
+     don't fit at 360px — each drop to their own full-width line. */
+  .lite-fixrow-points {
+    width: auto !important;
+    flex-basis: 100%;
+  }
+  .lite-fixrow-owner {
+    width: auto !important;
+    flex-basis: 100%;
+    text-align: left !important;
+  }
+}
+
+/* ── RM7: SoAIndex — each row stacks (name, then bar, then share)
+   instead of squeezing a 3-column grid into 360px. ── */
+@media (max-width: 640px) {
+  .lite-soaindex-row {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 6px;
+  }
+}
+
+/* ── RM8: funnel gate bars, exposure adjust-assumptions sliders, the
+   closing fork, and the grounded strip all collapse to one column /
+   a tighter row. Full Analysis stays first in the closing fork — it's
+   already the first DOM child, so block-stacking preserves that order
+   without any reordering. ── */
+@media (max-width: 640px) {
+  .lite-funnel-bars-row {
+    gap: 8px;
+  }
+  .lite-exposure-adjust-grid,
+  .lite-closingfork-grid,
+  .lite-report-grounded-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Shared report-page padding reduction — every ReportSection-based
+   card (Visibility, Accessibility, FunnelGate, FixesTable, Exposure)
+   shares this one class, so one rule tightens all of them. ── */
+@media (max-width: 640px) {
+  .lite-report-section {
+    padding: 18px 16px !important;
+  }
+}

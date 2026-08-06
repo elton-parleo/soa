@@ -31,8 +31,8 @@ export function Stakes() {
   return (
     <section style={{ padding: '60px 24px 20px' }}>
       <DarkPanel pad={0} radius={20} atmos style={{ maxWidth: 1120, margin: '0 auto', overflow: 'hidden', boxShadow: 'var(--shadow-elevated)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
-          <div style={{ padding: '40px 44px 42px', borderRight: '1px solid var(--dark-border)' }}>
+        <div className="lite-stakes-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+          <div className="lite-stakes-left" style={{ padding: '40px 44px 42px', borderRight: '1px solid var(--dark-border)' }}>
             <div className="section-heading sm on-dark">What is invisible value <span className="accent">costing you?</span></div>
             <div style={{ marginTop: 28 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16 }}>
@@ -72,12 +72,12 @@ export function Stakes() {
           <div style={{ padding: '40px 44px 42px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             <div><StatusChip tone="warning" size="sm">Modeled</StatusChip></div>
             <div style={{ fontSize: 15.5, color: 'var(--dark-text)', lineHeight: 1.5, marginTop: 20, letterSpacing: '-0.008em' }}>Modeled annual revenue exposed to invisible value</div>
-            <div className="num" style={{ fontSize: 52, fontWeight: 740, letterSpacing: '-0.038em', lineHeight: 1, color: 'var(--dark-text)', marginTop: 20 }}>{formatCurrency(exposure)}</div>
+            <div className="num lite-display-num" style={{ fontSize: 52, fontWeight: 740, letterSpacing: '-0.038em', lineHeight: 1, color: 'var(--dark-text)', marginTop: 20 }}>{formatCurrency(exposure)}</div>
             <div style={{ fontSize: 13.5, color: 'var(--dark-muted)', lineHeight: 1.62, marginTop: 20, maxWidth: 400 }}>
               Assumes agents currently find you 0% of the time — the full picture, including what agents already see, comes from a Parleo audit.
             </div>
             <div style={{ marginTop: 24 }}>
-              <a href="#run" style={{ textDecoration: 'none' }}>
+              <a href="#run" className="lite-stakes-cta" style={{ textDecoration: 'none' }}>
                 <Button variant="blue" arrow>See your real number, run the free audit</Button>
               </a>
             </div>

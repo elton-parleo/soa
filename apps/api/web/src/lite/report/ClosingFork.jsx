@@ -3,7 +3,7 @@ import { CLOSING_FORK_COPY, FULL_ANALYSIS_URL, TRUESYNC_URL } from './reportCont
 
 export function ClosingFork({ points }) {
   return (
-    <div id="next" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, scrollMarginTop: 26 }}>
+    <div id="next" className="lite-closingfork-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, scrollMarginTop: 26 }}>
       <DarkPanel pad="24px 26px" radius={16} atmos>
         <MonoTag tone="dark">FULL ANALYSIS</MonoTag>
         <h3 style={{ fontSize: 19, fontWeight: 700, color: 'var(--dark-text)', margin: '14px 0 8px', letterSpacing: '-0.016em' }}>{CLOSING_FORK_COPY.fullAnalysisTitle}</h3>
