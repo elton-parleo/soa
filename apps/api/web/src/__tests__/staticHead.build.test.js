@@ -86,9 +86,9 @@ describe('built audit.html (landing) — S1', () => {
 })
 
 describe('built audit-report.html (/r/, /s/) — S3', () => {
-  it('has a neutral title and noindex, and nothing from the landing head', () => {
+  it('has a neutral title and noindex,nofollow, and nothing from the landing head', () => {
     expect(auditReportHtml).toContain(`<title>${REPORT_META_TITLE}</title>`)
-    expect(auditReportHtml).toContain('<meta name="robots" content="noindex" />')
+    expect(auditReportHtml).toContain('<meta name="robots" content="noindex,nofollow" />')
     expect(auditReportHtml).not.toContain(LANDING_META_TITLE)
     expect(auditReportHtml).not.toMatch(/rel="canonical"|property="og:|name="twitter:/)
   })

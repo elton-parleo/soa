@@ -987,6 +987,21 @@ class PublicLitePillar(BaseModel):
     dimensions: List[PublicLitePillarDimension] = []
 
 
+class PublicLiteOfferRow(BaseModel):
+    """F1: one row of the report's OfferFeed — a re-serialization of
+    facts the crawl scorer already computed (see
+    apps/pipeline/scan/offer_feed.py::build_offer_feed), never a new
+    fetch. readable is 'seen' | 'partial' | 'invisible' | 'unmeasured' —
+    'unmeasured' only, never 'invisible', when the underlying dimension
+    couldn't be read this run (H1)."""
+    name: str
+    value: str
+    channel: str
+    eligibility: str
+    freshness: str
+    readable: str
+
+
 class PublicLiteFixEntry(BaseModel):
     """One of the top-2 free fixes (Part 3, F1) — plain-language only,
     no markup (see PublicLitePillarDimension.fix_human). impact is the
@@ -996,6 +1011,8 @@ class PublicLiteFixEntry(BaseModel):
     name: str
     fix_human: str
     impact: float
+    # F3: "ENG" or "TRUESYNC" — see scan_dimensions.Dimension.fix_owner.
+    fix_owner: str = "ENG"
 
 
 class PublicLiteFixesSection(BaseModel):
@@ -1053,6 +1070,13 @@ class PublicLitePillars(BaseModel):
     tv_earned: float = 0.0
     tv_applicable: float = 0.0
     unmeasured_count: int = 0
+    # F4: gap-area counts for the S2 fixable-hook band. gap_areas_total/
+    # gap_areas_parleo_fixes are fixed framework constants (4 and 2);
+    # parleo_fixable_points is this run's own measured recoverable
+    # points within TrueSync's two owned dimensions.
+    gap_areas_total: int = 4
+    gap_areas_parleo_fixes: int = 2
+    parleo_fixable_points: float = 0.0
 
     @model_validator(mode="after")
     def _verdict_requires_a_real_score(self):
@@ -1112,6 +1136,12 @@ class PublicLiteReportResponse(BaseModel):
     # calculator's default seed (annual units throughout since Report
     # redesign Part 7 — no /12 conversion) — never a score input.
     revenue_estimate_usd: Optional[float] = None
+    # F1/F2: additive, current-scan-only (see engine.py's dimensions
+    # dict — only ever set on a STATUS_COMPLETE run, same as `pillars`
+    # above). Both null on a degraded/blocked/old run — the report's
+    # parsed-page card renders its honest banner instead (H1).
+    offers: Optional[List[PublicLiteOfferRow]] = None
+    product_image_url: Optional[str] = None
 
 
 class PublicLiteEmailRequest(BaseModel):

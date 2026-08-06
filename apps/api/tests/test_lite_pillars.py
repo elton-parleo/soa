@@ -744,10 +744,27 @@ def test_fixes_visible_is_the_top_2_by_gap():
 def test_fixes_visible_entries_carry_only_plain_language_fix_human_and_impact():
     result = _build_six_fix_result()
     top = result["fixes"]["visible"][0]
-    assert top == {"code": "member_value", "name": "Member Value", "fix_human": "human-mv", "impact": 6.0}
+    assert top == {
+        "code": "member_value", "name": "Member Value", "fix_human": "human-mv", "impact": 6.0,
+        "fix_owner": "ENG",
+    }
     # No 'fix' (markup) key anywhere on a visible entry — H2's no-markup
     # rule holds at the schema level, not just by convention.
     assert "fix" not in top
+
+
+def test_fix_owner_registry_matches_truesync_report_copy():
+    # F3: TrueSync's report copy claims exactly two dimensions as its own
+    # direct fixes (deal_citability, value_protocols) — every other
+    # dimension is an ENG fix. A registry-level test, since the ranking
+    # fixture above can't push deal_citability's own small point pool
+    # (max 6) above member_value/price_truth's larger gaps to exercise
+    # it via a visible fixes entry.
+    from soa_shared.scan_dimensions import DIMENSIONS, FIX_OWNER_ENG, FIX_OWNER_TRUESYNC
+
+    truesync_codes = {d.code for d in DIMENSIONS if d.fix_owner == FIX_OWNER_TRUESYNC}
+    assert truesync_codes == {"deal_citability", "value_protocols"}
+    assert all(d.fix_owner == FIX_OWNER_ENG for d in DIMENSIONS if d.code not in truesync_codes)
 
 
 def test_fixes_remaining_count_is_the_rest():
@@ -781,6 +798,41 @@ def test_fixes_excludes_dimensions_with_no_fix_human_even_if_ranked_high():
     assert "member_value" not in codes
     assert codes == ["price_truth", "deal_citability"]
     assert result["fixes"]["remaining_count"] == 3  # protocol_feed, catalog_context, agent_access
+
+
+# ─── F4: gap-area counts for the S2 fixable-hook band ───────────────────
+
+def test_gap_area_counts_are_fixed_framework_constants():
+    result = _build_six_fix_result()
+    assert result["gap_areas_total"] == 4
+    assert result["gap_areas_parleo_fixes"] == 2
+
+
+def test_parleo_fixable_points_sums_only_truesync_owned_dimensions():
+    # _SIX_FIX_CRAWL_DIMS: deal_citability_seen is 0/4 (said half pinned
+    # to full credit by _full_credit_signals) -> gap 4; value_protocols_seen
+    # is a full 7/7 -> gap 0. Every other TRUESYNC-owned... there are only
+    # these two, so the sum is deal_citability's gap alone.
+    result = _build_six_fix_result()
+    assert result["parleo_fixable_points"] == 4.0
+
+
+def test_parleo_fixable_points_includes_value_protocols_when_it_has_a_gap():
+    crawl = dict(_SIX_FIX_CRAWL_DIMS)
+    crawl["value_protocols_seen"] = {**crawl["value_protocols_seen"], "score": 2}
+    result = _build_six_fix_result(crawl_dimensions=crawl)
+    # deal_citability gap (4) + value_protocols gap (7 - 2 = 5).
+    assert result["parleo_fixable_points"] == 9.0
+
+
+def test_parleo_fixable_points_excludes_blocked_truesync_dims():
+    # deal_citability's seen half unreadable this run -> excluded from
+    # the sum entirely, same "can't honestly attribute a fixable gap to
+    # a dimension we couldn't measure" rule _build_fixes_section uses.
+    crawl = dict(_SIX_FIX_CRAWL_DIMS)
+    crawl["deal_citability_seen"] = {**crawl["deal_citability_seen"], "coverage": "blocked"}
+    result = _build_six_fix_result(crawl_dimensions=crawl)
+    assert result["parleo_fixable_points"] == 0.0
 
 
 def test_fixes_na_dimension_excluded_from_ranking_and_count():

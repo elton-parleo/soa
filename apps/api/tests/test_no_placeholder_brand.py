@@ -18,6 +18,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 EXCLUDED_DIRS = {
     ".git", "node_modules", "dist", "build", "__pycache__", ".pytest_cache",
     ".venv", "venv", ".vite",
+    # Local, gitignored design-export reference material (mocks + design
+    # tokens) — never committed, never imported at build time, and its
+    # own third-party doc copy is outside this repo's control.
+    "design-refs",
 }
 
 # Explicitly flagged during Stage 9 P2 review and intentionally left

@@ -113,6 +113,12 @@ class ProductData:
     mpn: Optional[str] = None
     sku: Optional[str] = None
     brand: Optional[str] = None
+    # F2: schema.org Product.image — first value if the node declares a
+    # list, exactly as-is from the markup (relative or absolute); the
+    # caller absolutizes against the page URL, since this module never
+    # sees it. Never OG/img-scraped — only the merchant's own product
+    # markup, same discipline as every other structured field here.
+    image: Optional[str] = None
 
 
 @dataclass
@@ -296,6 +302,12 @@ def _walk_jsonld_node(node, extracted: ExtractedData, _depth: int = 0) -> None:
         if isinstance(brand, dict):
             brand = brand.get("name")
         product.brand = _first_str(brand)
+
+        image = node.get("image")
+        if isinstance(image, dict):
+            # ImageObject shape: {"@type": "ImageObject", "url": "..."}
+            image = image.get("url")
+        product.image = _first_str(image)
 
         try:
             blob = json.dumps(node).lower()

@@ -5,12 +5,12 @@
  * confirmation field; the visitor's edit (if any) always wins over
  * further auto-derivation, tracked via brandManuallyEdited.
  *
- * `compact` (Stage 6) renders the identical state machine and submit
- * path as an inline pill input + button — no LogoHeader/card chrome —
- * for embedding in the scan.parleo.io landing page's hero and final-CTA
- * bands. It changes markup only: every hook, validation call, and
- * liteApi.submit call below is shared between both render modes
- * untouched.
+ * `compact` (Stage 6, restyled to DS tokens in the V4 redesign) renders
+ * the identical state machine and submit path as an inline pill input +
+ * button — no LogoHeader/card chrome — for embedding in the audit
+ * landing page's hero and final-CTA bands. It changes markup only:
+ * every hook, validation call, and liteApi.submit call below is shared
+ * between both render modes untouched.
  *
  * Stage 13 (W1): the compact form no longer collects competitor names —
  * the worker now auto-generates them (see
@@ -28,6 +28,7 @@ import { validateSubmission } from './validation.js'
 import { looksLikeUrl, deriveBrandFromUrl } from './liteDerive.js'
 import { LogoHeader, ErrorBanner, LightCard } from './liteTheme.jsx'
 import { LITE_QUERY_COUNT } from './landing/scanDimensionsRegistry.js'
+import { Button } from '../ds/index.js'
 
 export function LiteForm({
   onSubmitted,
@@ -112,58 +113,69 @@ export function LiteForm({
   const labelStyle = { fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 6, display: 'block' }
 
   if (compact) {
-    // Dark bands (final-CTA) need inverse text/error colors and the
-    // accent (blue) button; the light hero uses the ink (dark) button —
-    // see the Stage 6 design language addendum.
-    const compactFieldErrorStyle = { ...fieldErrorStyle, color: inv ? 'var(--bad-on-dark)' : 'var(--bad-ink)' }
+    // V4 redesign: compact is landing-only (Hero + FinalCta), so its
+    // markup can commit fully to DS tokens without touching the
+    // non-compact /lite embed below. `inv` (dark band, e.g. the final
+    // CTA's ink-photo panel) swaps text/error colors for on-dark
+    // legibility; every hook, validation call, and liteApi.submit call
+    // stays exactly what the non-compact form uses.
+    const pillInputStyle = {
+      flex: '1 1 220px',
+      minWidth: 0,
+      fontFamily: 'var(--font-mono)',
+      fontSize: 13.5,
+      color: 'var(--text-strong)',
+      background: 'var(--surface)',
+      border: inv ? '1px solid transparent' : '1px solid var(--border-strong)',
+      borderRadius: 999,
+      padding: '14px 20px',
+      outline: 'none',
+      boxShadow: inv ? 'var(--shadow-md)' : 'var(--shadow-sm)',
+    }
+    const mutedColor = inv ? 'var(--dark-muted)' : 'var(--muted)'
+    const errorColor = inv ? '#FFB4B4' : 'var(--red-deep)'
     return (
       <div>
         <ErrorBanner message={submitError} />
         <form onSubmit={handleSubmit}>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <label className="lite-visually-hidden" htmlFor={`${idPrefix}-primary`}>Your brand or store URL</label>
+            <label style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)' }} htmlFor={`${idPrefix}-primary`}>Your brand or store URL</label>
             <input
               id={`${idPrefix}-primary`}
               type="text"
-              className="lite-input lite-input--pill"
               placeholder={placeholder}
               value={primaryInput}
               onChange={(e) => handlePrimaryChange(e.target.value)}
-              style={{ flex: '1 1 220px' }}
+              style={pillInputStyle}
             />
-            <button
-              type="submit"
-              disabled={submitting}
-              className={`lite-pill ${inv ? 'lite-pill--solid' : 'lite-pill--solid-ink'}`}
-              style={{ flex: '0 0 auto', height: 44, padding: '0 22px' }}
-            >
+            {/* Button doesn't take a `type` prop — its underlying <button>
+                has none set either, so as a form descendant it defaults
+                to type="submit" and this still triggers handleSubmit. */}
+            <Button variant="blue" size="lg" arrow disabled={submitting}>
               {submitting ? 'Starting…' : submitLabel}
-            </button>
+            </Button>
           </div>
           {!isUrlMode && (
-            <div style={compactFieldErrorStyle}>{errors.brandName || ' '}</div>
+            <div style={{ fontSize: 12, color: errorColor, marginTop: 8, minHeight: 16 }}>{errors.brandName || ' '}</div>
           )}
           {isUrlMode && (
             <div style={{ marginTop: 10 }}>
-              <label className={inv ? 'lite-muted--inv' : 'lite-muted'} style={{ fontSize: 12, marginBottom: 6, display: 'block' }} htmlFor={`${idPrefix}-confirmed-brand`}>
+              <label style={{ fontSize: 12, marginBottom: 6, display: 'block', color: mutedColor }} htmlFor={`${idPrefix}-confirmed-brand`}>
                 Confirm your brand name
               </label>
               <input
                 id={`${idPrefix}-confirmed-brand`}
                 type="text"
-                className="lite-input lite-input--pill"
                 placeholder="e.g. Allbirds"
                 value={confirmedBrand}
                 onChange={(e) => handleConfirmedBrandChange(e.target.value)}
+                style={pillInputStyle}
               />
-              <div style={compactFieldErrorStyle}>{errors.brandName || ' '}</div>
+              <div style={{ fontSize: 12, color: errorColor, marginTop: 8, minHeight: 16 }}>{errors.brandName || ' '}</div>
             </div>
           )}
 
-          <div
-            className={inv ? 'lite-muted--inv' : 'lite-muted'}
-            style={{ fontSize: 12, marginTop: 8 }}
-          >
+          <div style={{ fontSize: 12, marginTop: 8, color: mutedColor }}>
             We'll identify your closest competitors automatically.
           </div>
         </form>

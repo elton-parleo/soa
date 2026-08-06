@@ -20,19 +20,29 @@ beforeEach(() => {
   navigate = vi.fn()
 })
 
+// Both the Hero and FinalCta LiteForm submit buttons read "Run my free
+// audit", and so does LandingNav's plain #run anchor button — filter to
+// the two that are actual form submit buttons.
+function formSubmitButtons() {
+  return screen.getAllByRole('button', { name: 'Run my free audit' }).filter((btn) => btn.closest('form'))
+}
+
 describe('LandingPage — sections render', () => {
-  it('renders the nav, all seven sections, and the footer', () => {
+  it('renders the nav, all V4 sections, and the footer', () => {
     render(<LandingPage navigate={navigate} />)
 
     expect(screen.getByRole('navigation', { name: 'Parleo Audit' })).toBeInTheDocument()
-    expect(screen.getByText(/THE PARLEO AUDIT/)).toBeInTheDocument()
-    expect(screen.getByText('METHODOLOGY')).toBeInTheDocument()
-    expect(screen.getByText('WHAT YOU GET')).toBeInTheDocument()
-    expect(screen.getByText('FIELD EVIDENCE')).toBeInTheDocument()
-    expect(screen.getByText('THE STAKES')).toBeInTheDocument()
-    expect(screen.getByText('THE PATH')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: /Get your visibility report/ })).toBeInTheDocument()
-    expect(screen.getByText(/Parleo scores, tracks, and optimizes/)).toBeInTheDocument()
+    expect(screen.getByText(/We test ChatGPT with queries across the entire purchase funnel/)).toBeInTheDocument()
+    expect(screen.getByText('STORES WE AUDIT')).toBeInTheDocument()
+    expect(screen.getByText('costing you?')).toBeInTheDocument()
+    expect(screen.getByText('CASE 01')).toBeInTheDocument()
+    expect(screen.getByText('Find the leak')).toBeInTheDocument()
+    expect(screen.getByText('MODELED EXPOSURE $775K / YR')).toBeInTheDocument()
+    expect(screen.getByText(/The Share of Algorithm framework/)).toBeInTheDocument()
+    expect(screen.getByText('Every number above is measured')).toBeInTheDocument()
+    expect(screen.getByText('TRUESYNC')).toBeInTheDocument()
+    expect(screen.getByText('Find out what agents are missing.')).toBeInTheDocument()
+    expect(screen.getByText('© 2026 Parleo, Inc.')).toBeInTheDocument()
   })
 })
 
@@ -45,8 +55,7 @@ describe('LandingPage — hero form submits through the existing flow', () => {
     const primaryInputs = screen.getAllByLabelText('Your brand or store URL')
     fireEvent.change(primaryInputs[0], { target: { value: 'Acme Co' } })
 
-    const submitButtons = screen.getAllByText('Get your visibility report')
-    fireEvent.click(submitButtons[0])
+    fireEvent.click(formSubmitButtons()[0])
 
     await waitFor(() => expect(liteApi.submit).toHaveBeenCalledWith({
       brand_name: 'Acme Co',
@@ -68,9 +77,7 @@ describe('LandingPage — hero and final-CTA share one form component', () => {
 
     const primaryInputs = screen.getAllByLabelText('Your brand or store URL')
     expect(primaryInputs).toHaveLength(2)
-
-    const submitButtons = screen.getAllByText('Get your visibility report')
-    expect(submitButtons).toHaveLength(2)
+    expect(formSubmitButtons()).toHaveLength(2)
 
     // Independent state: typing in one does not affect the other.
     fireEvent.change(primaryInputs[0], { target: { value: 'Acme Co' } })
@@ -79,32 +86,31 @@ describe('LandingPage — hero and final-CTA share one form component', () => {
 })
 
 describe('LandingPage — truth-rule copy regression guards', () => {
-  it('never says the score is instant — only that it streams live', () => {
+  it('never says the score is instant — only gives a real time window', () => {
     render(<LandingPage navigate={navigate} />)
 
-    expect(screen.getByText(/Results in minutes, streamed live/)).toBeInTheDocument()
-    expect(screen.getByText(/Your score streams live in a few minutes/)).toBeInTheDocument()
+    expect(screen.getByText('Ready in 10–20 minutes')).toBeInTheDocument()
     expect(screen.queryByText(/instantly/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/about a minute/i)).not.toBeInTheDocument()
   })
 
-  it('marks exposure figures as modeled, not measured', () => {
+  it('marks the stakes-widget exposure figure as modeled, not measured', () => {
     render(<LandingPage navigate={navigate} />)
 
-    expect(screen.getByText('● Modeled')).toBeInTheDocument()
-    expect(screen.getByText(/A modeled range with a deliberate haircut, not a measurement/)).toBeInTheDocument()
+    expect(screen.getByText('Modeled')).toBeInTheDocument()
+    expect(screen.getByText(/Assumes agents currently find you 0% of the time/)).toBeInTheDocument()
   })
 
-  it('carries the exact methodology stamp', () => {
+  it('carries the exact methodology provenance', () => {
     render(<LandingPage navigate={navigate} />)
 
-    expect(screen.getByText(`${LITE_QUERY_COUNT} queries · ChatGPT only · deterministic · sample, not a category study`)).toBeInTheDocument()
+    expect(screen.getByText(`${LITE_QUERY_COUNT} queries, ChatGPT only, deterministic`)).toBeInTheDocument()
   })
 
-  it('scopes the four-agent claim to the crawl, not the ChatGPT-only score', () => {
+  it('scopes the multi-agent claim to the Full Analysis, not the free ChatGPT-only score', () => {
     render(<LandingPage navigate={navigate} />)
 
-    expect(screen.getByText(/VISIBILITY ON CHATGPT · STORE READ ACROSS THE FOUR AGENTS/i)).toBeInTheDocument()
+    expect(screen.getByText(/plus Gemini, Perplexity and Claude in the Full Analysis/)).toBeInTheDocument()
   })
 })
 

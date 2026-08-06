@@ -25,8 +25,11 @@ from soa_shared.scan_dimensions import (
     BAND_TYPE_RATE,
     COUNT_BAND_TABLE,
     DIMENSIONS_BY_CODE,
+    FIX_OWNER_TRUESYNC,
+    GAP_AREA_COUNT,
     LITE_QUERY_COUNT,
     MIN_OPPORTUNITY_SET_MENTIONS,
+    PARLEO_OWNED_GAP_AREA_COUNT,
     PILLAR_WEIGHTS,
     PURCHASE_INTENT_STAGES,
     RATE_BAND_TABLE,
@@ -650,6 +653,8 @@ def _build_fixes_section(dims: List[Dict]) -> Dict:
             "code": d["code"], "name": d["name"],
             "fix_human": d["fix_human"],
             "impact": round(d["max"] - d["earned"], 1),
+            # F3: ENG or TRUESYNC — see scan_dimensions.Dimension.fix_owner.
+            "fix_owner": DIMENSIONS_BY_CODE[d["code"]].fix_owner,
         }
         for d in ranked[:FREE_FIX_VISIBLE_RANK]
     ]
@@ -657,6 +662,23 @@ def _build_fixes_section(dims: List[Dict]) -> Dict:
         "visible": visible,
         "remaining_count": max(0, len(ranked) - FREE_FIX_VISIBLE_RANK),
     }
+
+
+def _parleo_fixable_points(dims: List[Dict]) -> float:
+    """F4: the point pool TrueSync itself can recover on this run — the
+    measured gap (max - earned) summed over the two TrueSync-owned
+    dimensions (deal_citability, value_protocols), excluding na/blocked
+    rows the same way _build_fixes_section does (nothing honestly
+    fixable to report from a dimension we couldn't measure)."""
+    return round(
+        sum(
+            d["max"] - d["earned"]
+            for d in dims
+            if not d["na"] and not d.get("blocked")
+            and DIMENSIONS_BY_CODE[d["code"]].fix_owner == FIX_OWNER_TRUESYNC
+        ),
+        1,
+    )
 
 
 _ACCESSIBILITY_CHECKS_BY_CODE = {
@@ -901,6 +923,7 @@ def build_pillars_payload(
     fixable_dims = accessibility_dims + true_value_dims
     _rank_and_lock_fixes(fixable_dims)
     fixes = _build_fixes_section(fixable_dims)
+    parleo_fixable_points = _parleo_fixable_points(fixable_dims)
 
     total_earned = visibility_earned + accessibility_earned + true_value_earned
     raw_composite = compute_composite(total_earned, member_value_na=member_value_na)
@@ -969,4 +992,12 @@ def build_pillars_payload(
         "tv_earned": true_value_earned,
         "tv_applicable": true_value_applicable_max,
         "unmeasured_count": unmeasured_count,
+        # F4: gap-area counts for the S2 fixable-hook band ("Parleo can
+        # fix N of your M major gaps") — gap_areas_total/parleo_fixes are
+        # fixed framework facts (see scan_dimensions.GAP_AREA_COUNT);
+        # parleo_fixable_points is this run's own measured recoverable
+        # points within TrueSync's two owned dimensions.
+        "gap_areas_total": GAP_AREA_COUNT,
+        "gap_areas_parleo_fixes": PARLEO_OWNED_GAP_AREA_COUNT,
+        "parleo_fixable_points": parleo_fixable_points,
     }

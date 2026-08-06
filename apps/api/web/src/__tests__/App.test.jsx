@@ -161,7 +161,9 @@ describe('App — post-submit navigation lands on /report/{token} (U2)', () => {
     render(<App />)
     const primaryInputs = screen.getAllByLabelText('Your brand or store URL')
     fireEvent.change(primaryInputs[0], { target: { value: 'Acme Co' } })
-    const submitButtons = screen.getAllByText('Get your visibility report')
+    // LandingNav also has a "Run my free audit" button, but it's a plain
+    // #run anchor, not a form submit — filter down to the real ones.
+    const submitButtons = screen.getAllByRole('button', { name: 'Run my free audit' }).filter((btn) => btn.closest('form'))
     fireEvent.click(submitButtons[0])
 
     await waitFor(() => expect(window.location.pathname).toBe('/r/tok-audit-submitted'))

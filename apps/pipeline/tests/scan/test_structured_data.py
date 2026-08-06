@@ -145,6 +145,45 @@ def test_flat_product_with_offers_dict_is_unchanged():
     assert extracted.products[0].offers[0].price == 19.99
 
 
+# ─── F2: Product.image ────────────────────────────────────────────────
+
+def test_product_image_extracted_as_a_plain_string():
+    html = _html_with_jsonld({
+        "@type": "Product", "name": "Widget",
+        "image": "https://cdn.example.com/widget.jpg",
+        "offers": {"@type": "Offer", "price": "19.99", "priceCurrency": "USD"},
+    })
+    extracted = structured_data.extract(html)
+    assert extracted.products[0].image == "https://cdn.example.com/widget.jpg"
+
+
+def test_product_image_takes_the_first_value_from_a_list():
+    html = _html_with_jsonld({
+        "@type": "Product", "name": "Widget",
+        "image": ["https://cdn.example.com/a.jpg", "https://cdn.example.com/b.jpg"],
+    })
+    extracted = structured_data.extract(html)
+    assert extracted.products[0].image == "https://cdn.example.com/a.jpg"
+
+
+def test_product_image_extracted_from_an_imageobject_url():
+    html = _html_with_jsonld({
+        "@type": "Product", "name": "Widget",
+        "image": {"@type": "ImageObject", "url": "https://cdn.example.com/imageobject.jpg"},
+    })
+    extracted = structured_data.extract(html)
+    assert extracted.products[0].image == "https://cdn.example.com/imageobject.jpg"
+
+
+def test_product_image_is_none_when_absent():
+    html = _html_with_jsonld({
+        "@type": "Product", "name": "Widget",
+        "offers": {"@type": "Offer", "price": "19.99", "priceCurrency": "USD"},
+    })
+    extracted = structured_data.extract(html)
+    assert extracted.products[0].image is None
+
+
 def test_product_with_aggregate_offer_does_not_regress_to_zero_products():
     """F2d: AggregateOffer (lowPrice/highPrice) isn't parsed by
     _extract_offer's price/priceSpecification reads today — this fixture

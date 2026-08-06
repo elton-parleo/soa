@@ -1,21 +1,24 @@
-/** Sticky landing nav — logo + wordmark left, anchor + parleo.io pill right. */
+/**
+ * Sticky landing nav — V4 design. Wordmark + "Free Agentic Value Audit"
+ * label, sample-report link + Run-my-free-audit button. Ported from the
+ * mock's Nav section (Audit Landing.dc.html) verbatim.
+ */
+import { Wordmark, Button } from '../../ds/index.js'
+import { SAMPLE_REPORT_URL } from './landingSampleContent.js'
+
 export function LandingNav() {
   return (
-    <nav className="lite-landing-nav" aria-label="Parleo Audit">
-      <div className="lite-landing-nav-left">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <rect x="2" y="2" width="8" height="20" rx="1.5" style={{ fill: 'var(--accent)' }} />
-          <rect x="14" y="6" width="8" height="12" rx="1.5" style={{ fill: 'var(--accent)' }} opacity="0.4" />
-        </svg>
-        <span className="lite-divider-v" style={{ height: 16 }} aria-hidden="true" />
-        <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>Parleo Audit</span>
-      </div>
-      <div className="lite-landing-nav-right">
-        <a href="#methodology" className="lite-landing-nav-link">How it works</a>
-        <span className="lite-pill" style={{ cursor: 'default' }}>
-          <span className="lite-badge-dot" aria-hidden="true" />
-          parleo.io
-        </span>
+    <nav aria-label="Parleo Audit" style={{ position: 'sticky', top: 0, zIndex: 60, background: 'rgba(242,240,239,.86)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--hairline)' }}>
+      <div style={{ maxWidth: 1120, margin: '0 auto', padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 14 }}>
+        <Wordmark size={15} />
+        <span style={{ width: 1, height: 15, background: 'var(--border)' }} />
+        <span style={{ fontSize: 13.5, fontWeight: 520, color: 'var(--text)' }}>Free Agentic Value Audit</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 18 }}>
+          <a href={SAMPLE_REPORT_URL} style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--text)' }}>See a sample report</a>
+          <a href="#run" style={{ textDecoration: 'none' }}>
+            <Button variant="blue" size="sm" arrow>Run my free audit</Button>
+          </a>
+        </div>
       </div>
     </nav>
   )

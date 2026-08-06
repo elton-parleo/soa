@@ -78,7 +78,7 @@ describe('BotsPage — W4: all required sections render', () => {
   it('renders the nav and footer', () => {
     render(<BotsPage />)
     expect(screen.getByRole('navigation', { name: 'Parleo' })).toBeInTheDocument()
-    expect(screen.getByText(/Parleo scores, tracks, and optimizes/)).toBeInTheDocument()
+    expect(screen.getByText('© 2026 Parleo, Inc.')).toBeInTheDocument()
   })
 })
 

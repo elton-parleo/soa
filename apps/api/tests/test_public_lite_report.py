@@ -1145,6 +1145,53 @@ def test_v3_report_includes_pillars_fixes_even_when_email_is_null(db):
     assert result["pillars"]["fixes"] is not None
 
 
+# ─── F1/F2: offers/product_image_url end to end ──────────────────────────
+
+_V3_CRAWL_DIMENSIONS_WITH_OFFERS = {
+    **_V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN,
+    "offers": [
+        {"name": "List price", "value": "$29.99", "channel": "schema.org",
+         "eligibility": "1 of 1 offers", "freshness": "live", "readable": "seen"},
+        {"name": "Availability", "value": "InStock", "channel": "schema.org",
+         "eligibility": "1 of 1 offers", "freshness": "live", "readable": "seen"},
+        {"name": "Shipping", "value": "Not declared", "channel": "none found",
+         "eligibility": "not found", "freshness": "stale", "readable": "invisible"},
+        {"name": "Member price", "value": "N/A", "channel": "none found",
+         "eligibility": "no products found", "freshness": "stale", "readable": "invisible"},
+        {"name": "Deals and promos", "value": "Not encoded", "channel": "none",
+         "eligibility": "no products found", "freshness": "stale", "readable": "invisible"},
+        {"name": "Checkout value", "value": "Declared", "channel": "UCP / ACP",
+         "eligibility": "declaration found", "freshness": "live", "readable": "seen"},
+    ],
+    "product_image_url": "https://cdn.example.com/widget.jpg",
+}
+
+
+def test_offers_and_product_image_reach_the_full_report_end_to_end(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, dimensions=_V3_CRAWL_DIMENSIONS_WITH_OFFERS)
+
+    result = public_lite.get_lite_report("v3full")
+
+    assert len(result["offers"]) == 6
+    assert [o["name"] for o in result["offers"]] == [
+        "List price", "Availability", "Shipping", "Member price", "Deals and promos", "Checkout value",
+    ]
+    assert result["offers"][0]["value"] == "$29.99"
+    assert result["product_image_url"] == "https://cdn.example.com/widget.jpg"
+
+
+def test_offers_and_product_image_are_null_when_the_run_predates_this_stage(db):
+    # A v3-scored row with no offers/product_image_url keys at all (the
+    # pre-F1/F2 shape) — must render null, never crash or fabricate rows.
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, dimensions=_V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN)
+
+    result = public_lite.get_lite_report("v3full")
+    assert result["offers"] is None
+    assert result["product_image_url"] is None
+
+
 # ─── Part 5 (R3): revenue_estimate_usd end to end ────────────────────────
 
 def test_revenue_estimate_usd_reaches_the_full_report_when_probe_ran(db):

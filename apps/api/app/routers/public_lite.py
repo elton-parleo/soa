@@ -807,6 +807,11 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int) -> dict:
         competitor_source=competitor_source,
         pillars=pillars_payload,
         revenue_estimate_usd=revenue_estimate_usd,
+        # F1/F2: only ever present on the crawl_dimensions dict of a
+        # STATUS_COMPLETE run (engine.py) — naturally None on a degraded/
+        # blocked/pre-this-stage row, same additive gating as `pillars`.
+        offers=dimensions_raw.get("offers"),
+        product_image_url=dimensions_raw.get("product_image_url"),
     ).model_dump()
 
 
