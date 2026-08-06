@@ -1,5 +1,6 @@
 import { Wordmark, ProvenanceLine, Button } from '../../ds/index.js'
 import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
+import { LOGO_PROVIDER_CONFIGURED } from '../../ds/logoProvider.js'
 
 export function ReportFooter({ auditUrl }) {
   return (
@@ -16,6 +17,11 @@ export function ReportFooter({ auditUrl }) {
         <Wordmark size={12} />
         <ProvenanceLine confidence="observed" parts={[`${LITE_QUERY_COUNT} live ChatGPT queries + a crawl of your store`, 'deterministic', 'a sample, not a category study']} />
       </div>
+      {LOGO_PROVIDER_CONFIGURED ? (
+        <div style={{ textAlign: 'center', marginTop: 12, fontSize: 11, color: 'var(--faint)' }}>
+          Logos by <a href="https://logo.dev" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>Logo.dev</a>
+        </div>
+      ) : null}
     </>
   )
 }

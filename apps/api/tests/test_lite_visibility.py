@@ -109,3 +109,27 @@ def test_mentioned_once_but_counted_three_times_in_one_answer():
     assert acme_rate["rate_pct"] != acme_share["share_pct"]
     assert acme_rate["mentioned_queries"] == 1
     assert acme_share["mentions"] == 3
+
+
+# ─── Logo feature, Part 2b: domain passthrough onto share_of_mentions ───
+
+def test_domain_carried_onto_share_of_mentions_when_present():
+    entities = [
+        {**_entity("Acme Co", True, 9, 12, 9), "domain": "acme.com"},
+        {**_entity("Rival Co", False, 3, 12, 3), "domain": "rival.com"},
+    ]
+    result = build_visibility_payload(entities)
+    domains = {s["entity"]: s["domain"] for s in result["share_of_mentions"]}
+    assert domains == {"Acme Co": "acme.com", "Rival Co": "rival.com"}
+
+
+def test_domain_defaults_to_none_when_entity_carries_no_domain_key():
+    entities = [_entity("Acme Co", True, 9, 12, 9)]
+    result = build_visibility_payload(entities)
+    assert result["share_of_mentions"][0]["domain"] is None
+
+
+def test_domain_never_appears_on_mention_rate_rows():
+    entities = [{**_entity("Acme Co", True, 9, 12, 9), "domain": "acme.com"}]
+    result = build_visibility_payload(entities)
+    assert "domain" not in result["mention_rate"][0]

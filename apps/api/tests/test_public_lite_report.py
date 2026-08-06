@@ -30,7 +30,7 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_entities (
-                id INTEGER PRIMARY KEY, name TEXT, slug TEXT UNIQUE, entity_type TEXT
+                id INTEGER PRIMARY KEY, name TEXT, slug TEXT UNIQUE, entity_type TEXT, website_url TEXT
             )
         """)
         conn.exec_driver_sql("""
@@ -51,7 +51,7 @@ def db(monkeypatch):
             CREATE TABLE soa_lite_scan_results (
                 id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, status TEXT,
                 total_score INTEGER, integrity_capped BOOLEAN, dimensions TEXT, pages_fetched TEXT,
-                membership_probe TEXT, revenue_probe TEXT, fetch_probe TEXT
+                membership_probe TEXT, revenue_probe TEXT, fetch_probe TEXT, input_url TEXT
             )
         """)
         conn.exec_driver_sql("""
@@ -902,6 +902,7 @@ _V3_CRAWL_DIMENSIONS = {
 
 def _seed_v3_full_credit_scan(
     conn, token="v3full", email="visitor@example.com", dimensions=None, revenue_probe=None, fetch_probe=None,
+    input_url=None,
 ):
     """A current-scorer-version scan + 4 purchase-intent mentions that
     cite everything — mirrors test_lite_pillars.py's 'full credit'
@@ -929,13 +930,14 @@ def _seed_v3_full_credit_scan(
     rid = _lite_request_id(conn, token)
     conn.exec_driver_sql(
         "INSERT INTO soa_lite_scan_results "
-        "(lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe, revenue_probe, fetch_probe) "
-        "VALUES (?, 'complete', 90, 0, ?, ?, ?, ?)",
+        "(lite_request_id, status, total_score, integrity_capped, dimensions, membership_probe, revenue_probe, fetch_probe, input_url) "
+        "VALUES (?, 'complete', 90, 0, ?, ?, ?, ?, ?)",
         (
             rid, json.dumps(dimensions if dimensions is not None else _V3_CRAWL_DIMENSIONS),
             json.dumps({"result": "yes", "raw_evidence": None}),
             json.dumps(revenue_probe) if revenue_probe is not None else None,
             json.dumps(fetch_probe) if fetch_probe is not None else None,
+            input_url,
         ),
     )
     conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (901, 'Comparison')")
@@ -1225,6 +1227,71 @@ def test_generated_headlines_is_null_when_the_run_predates_this_stage(db):
 
     result = public_lite.get_lite_report("v3full")
     assert result["generated_headlines"] is None
+
+
+# ─── Logo feature, Part 1b/1c: brand_icon_url / store_domain end to end ──
+
+_V3_CRAWL_DIMENSIONS_WITH_BRAND_ICON = {
+    **_V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN,
+    "brand_icon_url": "https://widgets.example.com/apple-touch-icon.png",
+}
+
+
+def test_brand_icon_url_reaches_the_full_report_end_to_end(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, dimensions=_V3_CRAWL_DIMENSIONS_WITH_BRAND_ICON)
+
+    result = public_lite.get_lite_report("v3full")
+    assert result["brand_icon_url"] == "https://widgets.example.com/apple-touch-icon.png"
+
+
+def test_brand_icon_url_is_null_when_the_run_predates_this_stage(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, dimensions=_V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN)
+
+    result = public_lite.get_lite_report("v3full")
+    assert result["brand_icon_url"] is None
+
+
+def test_store_domain_is_the_bare_hostname_of_input_url(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, input_url="https://www.widgets.example.com/")
+
+    result = public_lite.get_lite_report("v3full")
+    assert result["store_domain"] == "widgets.example.com"
+
+
+def test_store_domain_is_null_when_no_store_url_was_ever_given(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, input_url=None)
+
+    result = public_lite.get_lite_report("v3full")
+    assert result["store_domain"] is None
+
+
+def test_store_domain_is_present_even_when_the_scan_itself_is_blocked(db):
+    # store_domain comes from the request's own store_url, independent of
+    # whether the crawl completed — a blocked/failed scan still knows the
+    # domain it was asked to read.
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, email, status, cycle_id) VALUES ('blocked1', NULL, 'complete', 9)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_entities (id, name, slug, entity_type) VALUES (301, 'Blocked Brand', 'blocked-brand', 'brand')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (9, 301, 'M001', 'primary')"
+        )
+        rid = _lite_request_id(conn, 'blocked1')
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_scan_results (lite_request_id, status, dimensions, input_url) "
+            "VALUES (?, 'blocked', ?, ?)",
+            (rid, json.dumps({}), "https://blocked.example.com"),
+        )
+
+    result = public_lite.get_lite_report("blocked1")
+    assert result["store_domain"] == "blocked.example.com"
 
 
 # ─── Part 5 (R3): revenue_estimate_usd end to end ────────────────────────
@@ -1734,6 +1801,26 @@ def test_full_report_has_visibility_breakdown_shaped_correctly(db):
         "Acme Co": 50.0, "Rival Co": 50.0,
     }
     assert vb["totals"] == {"total_mentions": 12, "total_queries": 12}
+
+
+def test_share_of_mentions_carries_each_entitys_website_url_as_domain(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        conn.exec_driver_sql("UPDATE soa_entities SET website_url = 'acme.com' WHERE id = 101")
+        conn.exec_driver_sql("UPDATE soa_entities SET website_url = 'rival.com' WHERE id = 102")
+
+    result = public_lite.get_lite_report("t1")
+    domains = {r["entity"]: r["domain"] for r in result["visibility_breakdown"]["share_of_mentions"]}
+    assert domains == {"Acme Co": "acme.com", "Rival Co": "rival.com"}
+
+
+def test_share_of_mentions_domain_is_null_when_website_url_unset(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+
+    result = public_lite.get_lite_report("t1")
+    domains = {r["entity"]: r["domain"] for r in result["visibility_breakdown"]["share_of_mentions"]}
+    assert domains == {"Acme Co": None, "Rival Co": None}
 
 
 def test_report_includes_visibility_breakdown_even_when_email_is_null(db):

@@ -35,11 +35,17 @@ def unique_slug(conn, base_slug: str) -> str:
         n += 1
 
 
-def get_or_create_entity_by_slug(conn, name: str, entity_type: str) -> int:
+def get_or_create_entity_by_slug(conn, name: str, entity_type: str, website_url: str = None) -> int:
     """
     Returns the id of the soa_entities row whose slug exactly matches
     slugify(name), creating one with the given entity_type if none exists.
     Caller owns the transaction (pass an open conn from engine.begin()).
+
+    Logo feature, Part 2a: website_url is optional and only ever written
+    on CREATE — an existing row's website_url is never overwritten here
+    (it may have been set/edited elsewhere, e.g. apps/api/app/routers/
+    entities.py's explicit CRUD), so a later call with a different or
+    missing domain for the same slug is a no-op on this field.
     """
     slug = slugify(name)
 
@@ -50,8 +56,8 @@ def get_or_create_entity_by_slug(conn, name: str, entity_type: str) -> int:
         return existing[0]
 
     result = conn.execute(text("""
-        INSERT INTO soa_entities (name, slug, entity_type)
-        VALUES (:name, :slug, :entity_type)
+        INSERT INTO soa_entities (name, slug, entity_type, website_url)
+        VALUES (:name, :slug, :entity_type, :website_url)
         RETURNING id
-    """), {"name": name, "slug": slug, "entity_type": entity_type}).fetchone()
+    """), {"name": name, "slug": slug, "entity_type": entity_type, "website_url": website_url}).fetchone()
     return result[0]

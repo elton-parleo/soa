@@ -462,9 +462,15 @@ def process_lite_requests():
         # future re-generation.
         lite_events.emit_log(request_id, lite_events.TASK_COMPETITORS, "identifying your closest rivals…")
         candidates = generate_competitors(brand_name, api_key, store_url=store_url)
-        competitor_names, competitor_source = select_competitors(
+        competitor_candidates, competitor_source = select_competitors(
             manual_competitor_names, candidates, brand_name,
         )
+        # Logo feature, Part 2a: soa_lite_requests.competitor_names stays a
+        # plain list of name strings (its existing, documented shape —
+        # other readers of this column expect that) — domain rides
+        # separately, on soa_entities.website_url, via entity resolution
+        # below, where it's actually needed (BrandLogo's fallback chain).
+        competitor_names = [c["name"] for c in competitor_candidates]
 
         with engine.begin() as conn:
             conn.execute(text("""
@@ -496,12 +502,18 @@ def process_lite_requests():
             )
 
         # b. Resolve entities — upsert-by-slug so repeat submissions of the
-        # same brand reuse the existing soa_entities row.
+        # same brand reuse the existing soa_entities row. Logo feature,
+        # Part 2a: website_url is threaded through on creation — store_url
+        # for the brand's own entity (already in scope from the request),
+        # candidate.domain for each competitor (None when the model
+        # wasn't confident, same honest-null discipline as everywhere
+        # else) — this is what SoAIndex's logo avatars ultimately read
+        # (public_lite.py joins soa_entities.website_url back in).
         with engine.begin() as conn:
-            brand_entity_id = get_or_create_entity_by_slug(conn, brand_name, "brand")
+            brand_entity_id = get_or_create_entity_by_slug(conn, brand_name, "brand", website_url=store_url)
             competitor_entity_ids = [
-                get_or_create_entity_by_slug(conn, name, "brand")
-                for name in competitor_names
+                get_or_create_entity_by_slug(conn, c["name"], "brand", website_url=c["domain"])
+                for c in competitor_candidates
             ]
             conn.execute(text("""
                 UPDATE soa_lite_requests

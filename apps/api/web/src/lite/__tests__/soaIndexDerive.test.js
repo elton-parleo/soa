@@ -8,13 +8,28 @@ const SHARE_OF_MENTIONS = [
 ]
 
 describe('buildSoaIndexRows', () => {
-  it('carries {name, share} for every entity', () => {
+  it('carries {name, share, domain} for every entity', () => {
     const { rows } = buildSoaIndexRows(SHARE_OF_MENTIONS)
     expect(rows).toEqual([
-      { name: 'Allbirds', share: 25, projected: 42 },
-      { name: 'Nike', share: 37.5 },
-      { name: 'On', share: 37.5 },
+      { name: 'Allbirds', share: 25, domain: null, projected: 42 },
+      { name: 'Nike', share: 37.5, domain: null },
+      { name: 'On', share: 37.5, domain: null },
     ])
+  })
+
+  // Logo feature, Part 2b: domain rides alongside name/share, independent
+  // per row — the target's own crawled domain on the primary row, the
+  // generator's (possibly null) guess on competitor rows.
+  it('carries each entity\'s own domain independently, defaulting to null', () => {
+    const shares = [
+      { entity: 'Allbirds', is_primary: true, mentions: 10, share_pct: 25, domain: 'allbirds.com' },
+      { entity: 'Nike', is_primary: false, mentions: 15, share_pct: 37.5, domain: 'nike.com' },
+      { entity: 'On', is_primary: false, mentions: 15, share_pct: 37.5, domain: null },
+    ]
+    const { rows } = buildSoaIndexRows(shares)
+    expect(rows.find((r) => r.name === 'Allbirds').domain).toBe('allbirds.com')
+    expect(rows.find((r) => r.name === 'Nike').domain).toBe('nike.com')
+    expect(rows.find((r) => r.name === 'On').domain).toBeNull()
   })
 
   it('sets projected only on the primary row, as share + PROJECTED_SHARE_UPLIFT_PCT', () => {

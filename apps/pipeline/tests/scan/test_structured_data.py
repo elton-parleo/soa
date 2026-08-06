@@ -330,4 +330,95 @@ _MALFORMED_VARIANT_BLOBS = [
 def test_extract_never_raises_on_malformed_variants_of_the_has_variant_fixture(blob):
     html = _html_with_jsonld(blob)
     extracted = structured_data.extract(html)  # must not raise
-    assert isinstance(extracted, structured_data.ExtractedData)
+
+
+# ─── 1a: brand-icon <link> declarations + Organization.logo ─────────────
+
+def test_apple_touch_icon_captured_with_its_sizes():
+    html = '<html><head><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"></head><body></body></html>'
+    extracted = structured_data.extract(html)
+    assert extracted.apple_touch_icons == [{"href": "/apple-touch-icon.png", "sizes": "180x180"}]
+    assert extracted.icon_links == []
+
+
+def test_apple_touch_icon_precomposed_also_captured():
+    html = '<html><head><link rel="apple-touch-icon-precomposed" href="/icon.png"></head><body></body></html>'
+    extracted = structured_data.extract(html)
+    assert extracted.apple_touch_icons == [{"href": "/icon.png", "sizes": None}]
+
+
+def test_multiple_apple_touch_icons_all_captured_with_sizes():
+    html = """
+    <html><head>
+      <link rel="apple-touch-icon" sizes="57x57" href="/icon-57.png">
+      <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png">
+      <link rel="apple-touch-icon" sizes="120x120" href="/icon-120.png">
+    </head><body></body></html>
+    """
+    extracted = structured_data.extract(html)
+    assert len(extracted.apple_touch_icons) == 3
+    sizes = {i["sizes"] for i in extracted.apple_touch_icons}
+    assert sizes == {"57x57", "180x180", "120x120"}
+
+
+def test_rel_icon_captured_separately_from_apple_touch_icon():
+    html = '<html><head><link rel="icon" sizes="32x32" href="/favicon-32.png"></head><body></body></html>'
+    extracted = structured_data.extract(html)
+    assert extracted.icon_links == [{"href": "/favicon-32.png", "sizes": "32x32"}]
+    assert extracted.apple_touch_icons == []
+
+
+def test_shortcut_icon_rel_also_captured_as_icon_link():
+    html = '<html><head><link rel="shortcut icon" href="/favicon.ico"></head><body></body></html>'
+    extracted = structured_data.extract(html)
+    assert extracted.icon_links == [{"href": "/favicon.ico", "sizes": None}]
+
+
+def test_link_without_href_is_ignored():
+    html = '<html><head><link rel="icon"></head><body></body></html>'
+    extracted = structured_data.extract(html)
+    assert extracted.icon_links == []
+
+
+def test_no_icon_links_present_yields_empty_lists():
+    html = "<html><head></head><body><h1>Widget</h1></body></html>"
+    extracted = structured_data.extract(html)
+    assert extracted.apple_touch_icons == []
+    assert extracted.icon_links == []
+
+
+def test_organization_logo_captured_as_plain_string():
+    org = {"@context": "https://schema.org", "@type": "Organization", "name": "Acme", "logo": "https://acme.example.com/logo.png"}
+    extracted = structured_data.extract(_html_with_jsonld(org))
+    assert extracted.organization_logo == "https://acme.example.com/logo.png"
+
+
+def test_organization_logo_captured_from_imageobject_shape():
+    org = {
+        "@context": "https://schema.org", "@type": "Organization", "name": "Acme",
+        "logo": {"@type": "ImageObject", "url": "https://acme.example.com/logo.png"},
+    }
+    extracted = structured_data.extract(_html_with_jsonld(org))
+    assert extracted.organization_logo == "https://acme.example.com/logo.png"
+
+
+def test_organization_without_logo_field_leaves_it_none():
+    org = {"@context": "https://schema.org", "@type": "Organization", "name": "Acme"}
+    extracted = structured_data.extract(_html_with_jsonld(org))
+    assert extracted.organization_present is True
+    assert extracted.organization_logo is None
+
+
+def test_no_organization_node_at_all_leaves_logo_none():
+    extracted = structured_data.extract("<html><body><h1>Widget</h1></body></html>")
+    assert extracted.organization_logo is None
+
+
+def test_extract_never_raises_on_a_link_tag_with_a_non_string_rel():
+    # A <link> with no rel attribute at all (just an href) exercises the
+    # same code path with rel=[] — must not raise, and contributes no
+    # icon candidate either way.
+    html = '<html><head><link href="/icon.png"></head><body></body></html>'
+    extracted = structured_data.extract(html)  # must not raise
+    assert extracted.apple_touch_icons == []
+    assert extracted.icon_links == []

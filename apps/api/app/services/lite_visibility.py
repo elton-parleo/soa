@@ -26,7 +26,12 @@ from typing import Dict, List
 def build_visibility_payload(entities: List[Dict]) -> Dict:
     """
     entities: [{"name": str, "is_primary": bool, "mentioned_queries": int,
-                "total_queries": int, "mentions": int}, ...]
+                "total_queries": int, "mentions": int, "domain": Optional[str]}, ...]
+
+    Logo feature, Part 2b: domain is optional (absent entries default to
+    None via .get below) and additive — it only ever flows onto share_
+    of_mentions rows (the SoAIndex table's own rows), not mention_rate,
+    since only that table renders a per-entity logo avatar.
 
     mention_rate[i].rate_pct = mentioned_queries / total_queries * 100
     share_of_mentions[i].share_pct = mentions / sum(all mentions) * 100
@@ -61,6 +66,7 @@ def build_visibility_payload(entities: List[Dict]) -> Dict:
                 round(100 * e["mentions"] / total_mentions_all, 1)
                 if total_mentions_all else 0.0
             ),
+            "domain": e.get("domain"),
         }
         for e in entities
     ]

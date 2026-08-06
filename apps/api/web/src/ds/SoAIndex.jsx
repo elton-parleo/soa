@@ -32,7 +32,7 @@ export function SoAIndex({ rows = [], you, projected, style }) {
         return (
           <div key={i} style={{ display: 'grid', gridTemplateColumns: 'minmax(110px,140px) 1fr 74px', alignItems: 'center', gap: 12 }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: isYou ? 640 : 500, color: 'var(--text-strong)' }}>
-              <BrandLogo name={r.name} size={15} />
+              <BrandLogo name={r.name} domain={r.domain} size={15} />
               {r.name}
             </span>
             <div style={{ position: 'relative', height: 22, borderRadius: 6, background: 'var(--canvas-dim)', overflow: 'hidden' }}>

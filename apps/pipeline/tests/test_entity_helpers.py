@@ -79,6 +79,31 @@ def test_different_names_create_different_entities(conn):
     assert count == 2
 
 
+# ── Logo feature, Part 2a: website_url on creation ────────────────────────
+
+def test_website_url_set_on_creation_when_given(conn):
+    eid = get_or_create_entity_by_slug(conn, "Pampers", "brand", website_url="pampers.com")
+    row = conn.exec_driver_sql("SELECT website_url FROM soa_entities WHERE id = ?", (eid,)).fetchone()
+    assert row == ("pampers.com",)
+
+
+def test_website_url_is_null_when_not_given(conn):
+    eid = get_or_create_entity_by_slug(conn, "Pampers", "brand")
+    row = conn.exec_driver_sql("SELECT website_url FROM soa_entities WHERE id = ?", (eid,)).fetchone()
+    assert row == (None,)
+
+
+def test_website_url_never_overwritten_on_an_existing_entity(conn):
+    first_id = get_or_create_entity_by_slug(conn, "Pampers", "brand", website_url="pampers.com")
+    conn.commit()
+
+    second_id = get_or_create_entity_by_slug(conn, "Pampers", "brand", website_url="a-different-domain.com")
+
+    assert first_id == second_id
+    row = conn.exec_driver_sql("SELECT website_url FROM soa_entities WHERE id = ?", (first_id,)).fetchone()
+    assert row == ("pampers.com",)
+
+
 # ── unique_slug (unchanged behavior, moved not modified) ────────────────
 
 def test_unique_slug_disambiguates_on_collision(conn):

@@ -848,6 +848,12 @@ class PublicLiteVisibilityShare(BaseModel):
     is_primary: bool
     mentions: int
     share_pct: float
+    # Logo feature, Part 2b: soa_entities.website_url for this entity —
+    # the target's own crawled domain for the primary row, the
+    # generator's (possibly null) domain guess for a competitor row.
+    # Never a third-party lookup at render time; SoAIndex's BrandLogo
+    # avatars fall back to a monogram when this is null.
+    domain: Optional[str] = None
 
 
 class PublicLiteVisibilityTotals(BaseModel):
@@ -1187,6 +1193,21 @@ class PublicLiteReportResponse(BaseModel):
     # or when the worker's OpenAI key was unset at completion time. The
     # frontend falls back to its own hardcoded titles when null (3c).
     generated_headlines: Optional[PublicLiteGeneratedHeadlines] = None
+    # Logo feature, Part 1b: the audited brand's own icon (apple-touch-
+    # icon > link rel=icon > schema.org Organization.logo), from the
+    # SAME homepage document the crawl already fetched — never a
+    # third-party or stock substitute for the primary brand. Null on a
+    # pre-this-stage run, a blocked/failed scan, or a homepage that
+    # declared no icon at all; the rail's BrandLogo falls back to its
+    # domain tier (Part 3).
+    brand_icon_url: Optional[str] = None
+    # Logo feature, Part 1c: the target's bare hostname (e.g.
+    # "vuoriclothing.com") — always derivable from the request's own
+    # store_url, independent of whether the crawl completed. Feeds
+    # BrandLogo's domain-keyed fallback tiers (provider, then favicon)
+    # when brand_icon_url is null. Never third-party-sourced itself —
+    # this is the merchant's own submitted domain, not a lookup.
+    store_domain: Optional[str] = None
 
 
 class PublicLiteEmailRequest(BaseModel):

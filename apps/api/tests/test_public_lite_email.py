@@ -60,7 +60,7 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_entities (
-                id INTEGER PRIMARY KEY, name TEXT, slug TEXT UNIQUE, entity_type TEXT
+                id INTEGER PRIMARY KEY, name TEXT, slug TEXT UNIQUE, entity_type TEXT, website_url TEXT
             )
         """)
         conn.exec_driver_sql("""
@@ -81,7 +81,7 @@ def db(monkeypatch):
             CREATE TABLE soa_lite_scan_results (
                 id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, status TEXT,
                 total_score INTEGER, integrity_capped BOOLEAN, dimensions TEXT, pages_fetched TEXT,
-                membership_probe TEXT, revenue_probe TEXT, fetch_probe TEXT
+                membership_probe TEXT, revenue_probe TEXT, fetch_probe TEXT, input_url TEXT
             )
         """)
     monkeypatch.setattr(public_lite, "engine", engine)

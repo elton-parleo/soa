@@ -52,7 +52,7 @@ def db(monkeypatch):
                 id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, status TEXT,
                 total_score INTEGER, integrity_capped BOOLEAN DEFAULT 0,
                 dimensions TEXT, pages_fetched TEXT, membership_probe TEXT,
-                revenue_probe TEXT, fetch_probe TEXT
+                revenue_probe TEXT, fetch_probe TEXT, input_url TEXT
             )
         """)
     monkeypatch.setattr(public_lite, "engine", engine)

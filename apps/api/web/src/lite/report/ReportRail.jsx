@@ -51,7 +51,7 @@ export function ReportRail({ report, primaryEntityName, exposure, active, focus,
 
         <div style={{ background: 'var(--surface)', borderRadius: 12, boxShadow: 'var(--shadow-card)', padding: '15px 16px 16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-            <BrandLogo name={primaryEntityName} size={38} />
+            <BrandLogo name={primaryEntityName} src={report.brand_icon_url} domain={report.store_domain} size={38} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 16.5, fontWeight: 660, color: 'var(--text-strong)', letterSpacing: '-0.012em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{primaryEntityName}</div>
             </div>
