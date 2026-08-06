@@ -8,8 +8,10 @@
 import { useState } from 'react'
 import { Glyph, MonoTag, StateChip, OfferFeed, DarkPanel } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
-import { HowItsScoredButton, HowItsScoredPanel, useDetailToggle } from './HowItsScored.jsx'
-import { dimByCode, pillarEarnedMax, anyTrueValueEncodeBlocked, trueValueNotMeasurableCount, isAgentReady } from './reportDerive.js'
+import { HowItsScoredButton, HowItsScoredPanel, HowItsScoredChips } from './HowItsScored.jsx'
+import { SectionCollapseButton } from './SectionCollapseButton.jsx'
+import { useCollapsible } from './Collapsible.jsx'
+import { dimByCode, pillarEarnedMax, pillarHeadline, anyTrueValueEncodeBlocked, trueValueNotMeasurableCount, isAgentReady, PILLAR_TRUE_VALUE } from './reportDerive.js'
 import { DIMENSIONS_BY_CODE, VERDICT_COMPOSITE_THRESHOLD, VERDICT_TRUE_VALUE_RATIO_THRESHOLD } from '../landing/scanDimensionsRegistry.js'
 
 const GROUP_META = {
@@ -18,7 +20,9 @@ const GROUP_META = {
   invisible: { label: 'INVISIBLE', glyph: 'x', color: 'var(--red-deep)', bg: 'var(--red-tint)' },
 }
 
-function ParsedPageCard({ offers, productImageUrl }) {
+function ParsedPageCard({ offers, productImageUrl, productName }) {
+  const [imgFailed, setImgFailed] = useState(false)
+  const showImage = Boolean(productImageUrl) && !imgFailed
   const groups = { seen: [], partial: [], invisible: [] }
   for (const o of offers) {
     if (groups[o.readable]) groups[o.readable].push(o)
@@ -27,13 +31,16 @@ function ParsedPageCard({ offers, productImageUrl }) {
   const availability = offers.find((o) => o.name === 'Availability')
 
   return (
-    <div style={{ background: 'var(--surface-warm)', border: '1px solid var(--border)', borderRadius: 14, padding: '18px 20px', display: 'grid', gridTemplateColumns: productImageUrl ? '1fr 140px' : '1fr', gap: 18 }}>
+    <div style={{ background: 'var(--surface-warm)', border: '1px solid var(--border)', borderRadius: 14, padding: '18px 20px', display: 'grid', gridTemplateColumns: showImage ? '1fr 140px' : '1fr', gap: 18 }}>
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Glyph name="doc" size={14} color="var(--faint)" />
           <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--faint)' }}>YOUR PAGE, AS PARSED</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 12 }}>
+        {productName && (
+          <div style={{ fontSize: 14.5, fontWeight: 660, color: 'var(--text-strong)', lineHeight: 1.35, letterSpacing: '-0.012em', marginTop: 12 }}>{productName}</div>
+        )}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: productName ? 7 : 12 }}>
           {price && <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 19, fontWeight: 700, color: 'var(--text-strong)' }}>{price.value}</span>}
           {availability && <StateChip state={availability.readable} variant="chip" size="sm">{availability.value}</StateChip>}
         </div>
@@ -67,15 +74,15 @@ function ParsedPageCard({ offers, productImageUrl }) {
           )
         })}
       </div>
-      {productImageUrl && (
+      {showImage && (
         <div>
           <img
             src={productImageUrl}
-            alt="Product, as parsed from the merchant's own markup"
+            alt={productName || "Product, as parsed from the merchant's own markup"}
             loading="lazy"
             referrerPolicy="no-referrer"
             style={{ width: '100%', aspectRatio: '1 / 1', objectFit: 'contain', borderRadius: 10, background: 'var(--surface)', border: '1px solid var(--hairline)' }}
-            onError={(e) => { e.currentTarget.style.display = 'none' }}
+            onError={() => setImgFailed(true)}
           />
           <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 6, lineHeight: 1.4 }}>The merchant's own image, from the same markup we scored.</div>
         </div>
@@ -94,7 +101,7 @@ function ParsedPageHonestBanner() {
   )
 }
 
-function DualLensDim({ code, iconGlyph, dim, oneLiner, open, onToggle, howText }) {
+function DualLensDim({ code, iconGlyph, dim, oneLiner, open, onToggle }) {
   const reg = DIMENSIONS_BY_CODE[code]
   const seen = dim?.seen
   const said = dim?.said
@@ -107,13 +114,13 @@ function DualLensDim({ code, iconGlyph, dim, oneLiner, open, onToggle, howText }
           {Math.round(dim?.earned ?? 0)}<span style={{ color: 'var(--faint)', fontWeight: 500 }}>/{reg.weight}</span>
         </span>
         <span style={{ fontSize: 13.5, color: 'var(--muted)' }}>{oneLiner}</span>
-        <span style={{ marginLeft: 'auto' }}><HowItsScoredButton open={open} onClick={onToggle} /></span>
+        <span style={{ marginLeft: 'auto' }}><HowItsScoredButton open={open} onToggle={onToggle} /></span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <MeterHalf label="ON YOUR SITE" glyph="doc" sub={seen} blocked={seen?.blocked} />
         <MeterHalf label="IN ANSWERS" glyph="agent" sub={said} blocked={false} />
       </div>
-      {open && <HowItsScoredPanel>{howText}</HowItsScoredPanel>}
+      {open && <HowItsScoredChips checks={dim?.checks} caption={reg.scoredCaption} />}
     </div>
   )
 }
@@ -152,11 +159,11 @@ export function TrueValueSection({ report, open, onToggle }) {
   const notMeasurable = trueValueNotMeasurableCount(pillars)
   const encodeBlocked = anyTrueValueEncodeBlocked(pillars)
 
-  const [ptOpen, togglePt] = useDetailToggle()
-  const [mvOpen, toggleMv] = useDetailToggle()
-  const [dcOpen, toggleDc] = useDetailToggle()
-  const [vpOpen, toggleVp] = useDetailToggle()
-  const [whyNaOpen, setWhyNaOpen] = useState(false)
+  const [ptOpen, togglePt] = useCollapsible()
+  const [mvOpen, toggleMv] = useCollapsible()
+  const [dcOpen, toggleDc] = useCollapsible()
+  const [vpOpen, toggleVp] = useCollapsible()
+  const [whyNaOpen, toggleWhyNa] = useCollapsible()
 
   const offers = report.offers
   const unmeasuredOffers = (offers || []).filter((o) => o.readable === 'unmeasured').length
@@ -174,7 +181,7 @@ export function TrueValueSection({ report, open, onToggle }) {
               <span className="mono-label" style={{ fontSize: 10, color: 'var(--blue-lite)' }}>PILLAR 03 · TRUE VALUE</span>
               <MonoTag tone="blue">THE PILLAR ONLY PARLEO MEASURES</MonoTag>
             </div>
-            <h2 style={{ fontSize: 25, fontWeight: 720, letterSpacing: '-0.024em', color: 'var(--dark-text)', margin: '13px 0 0', lineHeight: 1.15 }}>Your value leaks before it reaches the answer</h2>
+            <h2 style={{ fontSize: 25, fontWeight: 720, letterSpacing: '-0.024em', color: 'var(--dark-text)', margin: '13px 0 0', lineHeight: 1.15 }}>{pillarHeadline(report, PILLAR_TRUE_VALUE)}</h2>
             <div style={{ fontSize: 14, color: 'var(--dark-muted)', lineHeight: 1.6, marginTop: 10 }}>
               One SKU, as parsed from the page your markup reached, next to what agents actually read.
               {notMeasurable > 0 && ` ${notMeasurable} dimension${notMeasurable === 1 ? '' : 's'} not measurable this run.`}
@@ -186,14 +193,14 @@ export function TrueValueSection({ report, open, onToggle }) {
               <span className="num" style={{ fontSize: 18, fontWeight: 500, color: 'var(--dark-faint)' }}>/{Math.round(tv.max)}</span>
             </div>
             <div className="mono-label" style={{ fontSize: 9, color: 'var(--blue-lite)', marginTop: 7 }}>POINTS EARNED</div>
-            <div style={{ marginTop: 12 }}><HowItsScoredButton open={open} onClick={onToggle} /></div>
+            <div style={{ marginTop: 12 }}><SectionCollapseButton open={open} onClick={onToggle} dark /></div>
           </div>
         </div>
       </DarkPanel>
 
       {open && (
         <div className="sec-body" style={{ background: 'var(--surface)', padding: '24px 28px 26px' }}>
-          {offers ? <ParsedPageCard offers={offers} productImageUrl={report.product_image_url} /> : <ParsedPageHonestBanner />}
+          {offers ? <ParsedPageCard offers={offers} productImageUrl={report.product_image_url} productName={report.product_name} /> : <ParsedPageHonestBanner />}
 
           {offers && (
             <div style={{ marginTop: 16, background: 'var(--surface-warm)', border: '1px solid var(--border)', borderRadius: 14, padding: '18px 20px' }}>
@@ -211,7 +218,6 @@ export function TrueValueSection({ report, open, onToggle }) {
                 code="price_truth" iconGlyph="card" dim={priceTruth}
                 oneLiner={encodeBlocked && priceTruth.blocked ? 'not measurable this run' : 'readable on your site, cited in answers'}
                 open={ptOpen} onToggle={togglePt}
-                howText="Encoding checks plus how often answers that name you state your price. A price behind sign-in doesn't exist to an agent."
               />
             )}
 
@@ -222,7 +228,7 @@ export function TrueValueSection({ report, open, onToggle }) {
                   <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 640, color: 'var(--faint)' }}>N/A</span>
                   <span style={{ fontSize: 13, color: 'var(--muted)' }}><b className="mono-label" style={{ fontSize: 9, color: 'var(--text)' }}>NOT APPLICABLE</b> · no loyalty program found</span>
                   <span style={{ marginLeft: 'auto' }}>
-                    <button type="button" onClick={() => setWhyNaOpen((v) => !v)} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--canvas-dim)', border: '1px solid var(--border)', borderRadius: 999, padding: '8px 14px 8px 11px', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.11em', color: 'var(--text)', fontWeight: 640 }}>
+                    <button type="button" onClick={toggleWhyNa} aria-expanded={whyNaOpen} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--canvas-dim)', border: '1px solid var(--border)', borderRadius: 999, padding: '8px 14px 8px 11px', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.11em', color: 'var(--text)', fontWeight: 640 }}>
                       <Glyph name={whyNaOpen ? 'x' : 'plus'} size={12} color="var(--text)" />WHY N/A
                     </button>
                   </span>
@@ -238,7 +244,6 @@ export function TrueValueSection({ report, open, onToggle }) {
                 code="member_value" iconGlyph="card" dim={memberValue}
                 oneLiner="loyalty program found and scored"
                 open={mvOpen} onToggle={toggleMv}
-                howText="Encoding checks plus how often answers credit you with member value. Skipped and rescaled only when no program exists."
               />
             )}
 
@@ -247,7 +252,6 @@ export function TrueValueSection({ report, open, onToggle }) {
                 code="deal_citability" iconGlyph="spark" dim={dealCitability}
                 oneLiner="deals encoded, cited when shoppers are ready"
                 open={dcOpen} onToggle={toggleDc}
-                howText="Encoding checks plus deal citations on purchase-intent questions. No published deals scores zero, not exempt."
               />
             )}
 
@@ -259,7 +263,7 @@ export function TrueValueSection({ report, open, onToggle }) {
                   <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 700, color: valueProtocols.earned === 0 ? 'var(--red-deep)' : 'var(--text-strong)' }}>
                     {valueProtocols.blocked ? 'N/M' : `${Math.round(valueProtocols.earned)}/${DIMENSIONS_BY_CODE.value_protocols.weight}`}
                   </span>
-                  <span style={{ marginLeft: 'auto' }}><HowItsScoredButton open={vpOpen} onClick={toggleVp} /></span>
+                  <span style={{ marginLeft: 'auto' }}><HowItsScoredButton open={vpOpen} onToggle={toggleVp} /></span>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 }}>
                   {(valueProtocols.checks || []).map((c) => (

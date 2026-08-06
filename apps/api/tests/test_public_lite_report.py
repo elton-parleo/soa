@@ -1164,6 +1164,7 @@ _V3_CRAWL_DIMENSIONS_WITH_OFFERS = {
          "eligibility": "declaration found", "freshness": "live", "readable": "seen"},
     ],
     "product_image_url": "https://cdn.example.com/widget.jpg",
+    "product_name": "Widget Deluxe",
 }
 
 
@@ -1179,17 +1180,51 @@ def test_offers_and_product_image_reach_the_full_report_end_to_end(db):
     ]
     assert result["offers"][0]["value"] == "$29.99"
     assert result["product_image_url"] == "https://cdn.example.com/widget.jpg"
+    assert result["product_name"] == "Widget Deluxe"
 
 
 def test_offers_and_product_image_are_null_when_the_run_predates_this_stage(db):
-    # A v3-scored row with no offers/product_image_url keys at all (the
-    # pre-F1/F2 shape) — must render null, never crash or fabricate rows.
+    # A v3-scored row with no offers/product_image_url/product_name keys
+    # at all (the pre-F1/F2/1c shape) — must render null, never crash or
+    # fabricate rows.
     with db.begin() as conn:
         _seed_v3_full_credit_scan(conn, dimensions=_V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN)
 
     result = public_lite.get_lite_report("v3full")
     assert result["offers"] is None
     assert result["product_image_url"] is None
+    assert result["product_name"] is None
+
+
+# ─── Part 3: generated_headlines end to end ──────────────────────────────
+
+_GENERATED_HEADLINES = {
+    "visibility": {"headline": "You hold 35% share of all brand mentions.", "source": "generated"},
+    "accessibility": {"headline": "Agent Access earns 5 of 6 points.", "source": "generated"},
+    "true_value": {"headline": "Couldn't be measured this run", "source": "default"},
+}
+
+_V3_CRAWL_DIMENSIONS_WITH_HEADLINES = {
+    **_V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN,
+    "generated_headlines": _GENERATED_HEADLINES,
+}
+
+
+def test_generated_headlines_reach_the_full_report_end_to_end(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, dimensions=_V3_CRAWL_DIMENSIONS_WITH_HEADLINES)
+
+    result = public_lite.get_lite_report("v3full")
+
+    assert result["generated_headlines"] == _GENERATED_HEADLINES
+
+
+def test_generated_headlines_is_null_when_the_run_predates_this_stage(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, dimensions=_V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN)
+
+    result = public_lite.get_lite_report("v3full")
+    assert result["generated_headlines"] is None
 
 
 # ─── Part 5 (R3): revenue_estimate_usd end to end ────────────────────────

@@ -30,7 +30,7 @@ from . import scorer, signing, site_typing
 from .agent_access_matrix import build_agent_access_matrix
 from .discovery import DiscoveryResult, discover_pages, resolve_canonical_origin
 from .fetcher import FetchBudget, fetch
-from .offer_feed import build_offer_feed, extract_product_image
+from .offer_feed import build_offer_feed, extract_product_image, extract_product_name
 from .structured_data import EXTRACTION_REV, ExtractedData, extract
 
 log = logging.getLogger(__name__)
@@ -568,6 +568,7 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         # data this run already extracted, no new fetches.
         dimensions["offers"] = build_offer_feed(pages, dim_scores)
         dimensions["product_image_url"] = extract_product_image(pages)
+        dimensions["product_name"] = extract_product_name(pages)
 
         return ScanResult(
             status=STATUS_COMPLETE,

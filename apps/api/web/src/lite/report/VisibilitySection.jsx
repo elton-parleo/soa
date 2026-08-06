@@ -1,7 +1,8 @@
 import { Glyph, SoAIndex } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
-import { HowItsScoredButton, HowItsScoredPanel, useDetailToggle } from './HowItsScored.jsx'
-import { dimByCode, pillarEarnedMax, PILLAR_VISIBILITY } from './reportDerive.js'
+import { HowItsScoredButton, HowItsScoredPanel } from './HowItsScored.jsx'
+import { useCollapsible } from './Collapsible.jsx'
+import { dimByCode, pillarEarnedMax, pillarHeadline, PILLAR_VISIBILITY } from './reportDerive.js'
 import { DIMENSIONS_BY_CODE, LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
 import { buildSoaIndexRows } from '../soaIndexDerive.js'
 
@@ -12,8 +13,8 @@ export function VisibilitySection({ report, open, onToggle, shareOfMentionsRank 
   const rs = dimByCode(dims, 'recommendation_strength')
   const somDim = DIMENSIONS_BY_CODE.share_of_mentions
   const rsDim = DIMENSIONS_BY_CODE.recommendation_strength
-  const [somOpen, toggleSom] = useDetailToggle()
-  const [rsOpen, toggleRs] = useDetailToggle()
+  const [somOpen, toggleSom] = useCollapsible()
+  const [rsOpen, toggleRs] = useCollapsible()
 
   const vis = pillarEarnedMax(pillars.visibility)
   const shareOfMentions = report.visibility_breakdown?.share_of_mentions || []
@@ -24,7 +25,7 @@ export function VisibilitySection({ report, open, onToggle, shareOfMentionsRank 
   return (
     <ReportSection
       id="viz" eyebrow={`PILLAR 01 · VISIBILITY · ${LITE_QUERY_COUNT} QUERIES`}
-      title="Agents know who you are"
+      title={pillarHeadline(report, PILLAR_VISIBILITY)}
       score={som && rs ? `${Math.round(vis.earned)}/${Math.round(vis.max)}` : null}
       open={open} onToggle={onToggle}
     >
@@ -52,7 +53,7 @@ export function VisibilitySection({ report, open, onToggle, shareOfMentionsRank 
             </div>
           </div>
           <div style={{ marginTop: 16 }}>
-            <HowItsScoredButton open={somOpen} onClick={toggleSom} />
+            <HowItsScoredButton open={somOpen} onToggle={toggleSom} />
           </div>
           {somOpen && (
             <HowItsScoredPanel>
@@ -73,7 +74,7 @@ export function VisibilitySection({ report, open, onToggle, shareOfMentionsRank 
           </div>
           <div style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 9, lineHeight: 1.55 }}>Where you land when agents do mention you.</div>
           <div style={{ marginTop: 16 }}>
-            <HowItsScoredButton open={rsOpen} onClick={toggleRs} />
+            <HowItsScoredButton open={rsOpen} onToggle={toggleRs} />
           </div>
           {rsOpen && (
             <HowItsScoredPanel>

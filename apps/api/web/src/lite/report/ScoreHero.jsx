@@ -9,7 +9,7 @@
 import { DarkPanel, Glyph, StatusChip, MonoTag } from '../../ds/index.js'
 import { LITE_QUERY_COUNT, VERDICT_COMPOSITE_THRESHOLD, PILLAR_NAMES } from '../landing/scanDimensionsRegistry.js'
 import { formatCurrency } from '../liteDerive.js'
-import { pillarEarnedMax, pillarNominalWeight, isAgentReady, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from './reportDerive.js'
+import { pillarEarnedMax, pillarNominalWeight, pillarHeadline, isAgentReady, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from './reportDerive.js'
 
 function PaceLane({ label, earned, max, isTrueValue }) {
   const pace = (VERDICT_COMPOSITE_THRESHOLD / 100) * max
@@ -44,9 +44,9 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
   const shortOfReady = composite != null ? Math.max(0, Math.round(VERDICT_COMPOSITE_THRESHOLD - composite)) : null
 
   const pillarCards = [
-    { key: PILLAR_VISIBILITY, icon: 'eye', ...vis, sub: 'AGENTS KNOW WHO YOU ARE' },
-    { key: PILLAR_ACCESSIBILITY, icon: 'globe', ...acc, sub: 'LITTLE OF YOUR CATALOG IS READABLE' },
-    { key: PILLAR_TRUE_VALUE, icon: 'tag', ...tv, sub: 'ONLY PARLEO MEASURES THIS PILLAR', accent: true },
+    { key: PILLAR_VISIBILITY, icon: 'eye', ...vis, sub: pillarHeadline(report, PILLAR_VISIBILITY) },
+    { key: PILLAR_ACCESSIBILITY, icon: 'globe', ...acc, sub: pillarHeadline(report, PILLAR_ACCESSIBILITY) },
+    { key: PILLAR_TRUE_VALUE, icon: 'tag', ...tv, sub: pillarHeadline(report, PILLAR_TRUE_VALUE), accent: true },
   ]
 
   return (

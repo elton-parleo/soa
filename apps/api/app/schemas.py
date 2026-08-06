@@ -987,6 +987,24 @@ class PublicLitePillar(BaseModel):
     dimensions: List[PublicLitePillarDimension] = []
 
 
+class PublicLitePillarHeadline(BaseModel):
+    """Part 3: one pillar's generated (or registry-default) one-line
+    summary — see apps/pipeline/generation/pillar_headlines.py, which
+    writes this shape verbatim onto soa_lite_scan_results.dimensions'
+    generated_headlines key at completion time. source is 'generated'
+    | 'default' (default covers both a failed/rejected generation and a
+    not-measurable pillar — see NOT_MEASURABLE_HEADLINE in that
+    module)."""
+    headline: str
+    source: str
+
+
+class PublicLiteGeneratedHeadlines(BaseModel):
+    visibility: PublicLitePillarHeadline
+    accessibility: PublicLitePillarHeadline
+    true_value: PublicLitePillarHeadline
+
+
 class PublicLiteOfferRow(BaseModel):
     """F1: one row of the report's OfferFeed — a re-serialization of
     facts the crawl scorer already computed (see
@@ -1013,6 +1031,20 @@ class PublicLiteFixEntry(BaseModel):
     impact: float
     # F3: "ENG" or "TRUESYNC" — see scan_dimensions.Dimension.fix_owner.
     fix_owner: str = "ENG"
+
+
+class PublicLiteExposureReason(BaseModel):
+    """Part 4: one run-tailored "why you're leaking value" reason — see
+    app/services/exposure_reasons.py's table-driven library. text
+    interpolates only run-derived numbers (never a literal). impact_weight
+    is this reason's share of the SELECTED group's severity (renormalized
+    among the returned reasons, not the full library) — the frontend
+    multiplies it against the live, slider-driven modeled exposure total,
+    the same way the pre-Part-4 static cause weights always did."""
+    id: str
+    text: str
+    impact_weight: float
+    severity_rank: int
 
 
 class PublicLiteFixesSection(BaseModel):
@@ -1077,6 +1109,10 @@ class PublicLitePillars(BaseModel):
     gap_areas_total: int = 4
     gap_areas_parleo_fixes: int = 2
     parleo_fixable_points: float = 0.0
+    # Part 4: up to 3 run-tailored exposure reasons, ranked by severity —
+    # see exposure_reasons.py. [] when nothing measured this run triggers
+    # a reason (honest-state: never padded/repeated to reach 3).
+    exposure_reasons: List[PublicLiteExposureReason] = []
 
     @model_validator(mode="after")
     def _verdict_requires_a_real_score(self):
@@ -1142,6 +1178,15 @@ class PublicLiteReportResponse(BaseModel):
     # parsed-page card renders its honest banner instead (H1).
     offers: Optional[List[PublicLiteOfferRow]] = None
     product_image_url: Optional[str] = None
+    # 1c: schema.org Product.name, same extraction pass/gating as
+    # product_image_url above — independently null-able (a product can
+    # have one field without the other).
+    product_name: Optional[str] = None
+    # Part 3: additive, same sibling-key-on-dimensions gating as offers/
+    # product_image_url above — null on any run from before this stage,
+    # or when the worker's OpenAI key was unset at completion time. The
+    # frontend falls back to its own hardcoded titles when null (3c).
+    generated_headlines: Optional[PublicLiteGeneratedHeadlines] = None
 
 
 class PublicLiteEmailRequest(BaseModel):

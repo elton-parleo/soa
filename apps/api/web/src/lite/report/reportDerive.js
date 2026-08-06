@@ -82,4 +82,22 @@ export function deriveScoreHeroHeadline(pillars) {
   return { plain: "Agents know you. They can't", emphasis: 'read your value.' }
 }
 
+const DEFAULT_PILLAR_HEADLINES = {
+  [PILLAR_VISIBILITY]: 'Agents know who you are',
+  [PILLAR_ACCESSIBILITY]: "Agents can knock, but can't read much",
+  [PILLAR_TRUE_VALUE]: 'Your value leaks before it reaches the answer',
+}
+
+// Part 3: the report's generated (or registry-default) one-line pillar
+// summary. apps/pipeline/generation/pillar_headlines.py computes and
+// stores this once, at run-completion time — the report only ever
+// reads what's stored here, never regenerates it. Falls back to the
+// pre-Part-3 hardcoded title (DEFAULT_PILLAR_HEADLINES, mirroring that
+// module's own DEFAULT_HEADLINES/NOT_MEASURABLE_HEADLINE verbatim) on
+// an older run, a not-measurable pillar, or a rejected/failed
+// generation for that pillar alone.
+export function pillarHeadline(report, pillarKey) {
+  return report.generated_headlines?.[pillarKey]?.headline || DEFAULT_PILLAR_HEADLINES[pillarKey]
+}
+
 export { PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE, PILLAR_VISIBILITY }

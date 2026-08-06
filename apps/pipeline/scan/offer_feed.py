@@ -57,6 +57,21 @@ def extract_product_image(pages) -> Optional[str]:
     return None
 
 
+def extract_product_name(pages) -> Optional[str]:
+    """1c: the first schema.org Product.name found across the sampled
+    pages — same markup, same iteration order as extract_product_image,
+    but resolved independently so a product with a name and no image (or
+    vice versa) still surfaces the field it has. None if no product on
+    any sampled page declared one."""
+    for page in pages:
+        if not page.extracted:
+            continue
+        for product in page.extracted.products:
+            if product.name:
+                return product.name
+    return None
+
+
 def build_offer_feed(pages, dim_scores: Dict) -> List[Dict]:
     """F1: one row per value signal — list price, availability, shipping,
     member price, deals/promos, checkout value — as {name, value, channel,

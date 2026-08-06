@@ -10,7 +10,7 @@ from typing import Optional
 
 import pytest
 
-from scan.offer_feed import build_offer_feed, extract_product_image
+from scan.offer_feed import build_offer_feed, extract_product_image, extract_product_name
 from scan.scorer import DimensionScore
 from scan.structured_data import ExtractedData, OfferData, ProductData
 
@@ -79,6 +79,46 @@ def test_extract_product_image_takes_the_first_across_multiple_pages():
     p1 = _page("https://example.com/a", ExtractedData(products=[ProductData(image="https://cdn.example.com/a.jpg")]))
     p2 = _page("https://example.com/b", ExtractedData(products=[ProductData(image="https://cdn.example.com/b.jpg")]))
     assert extract_product_image([p1, p2]) == "https://cdn.example.com/a.jpg"
+
+
+# ─── extract_product_name (1c) ───────────────────────────────────────────
+
+def test_extract_product_name_returns_the_first_declared_name():
+    extracted = ExtractedData(products=[ProductData(name="Widget")])
+    pages = [_page("https://example.com/products/widget", extracted)]
+    assert extract_product_name(pages) == "Widget"
+
+
+def test_extract_product_name_none_when_no_product_declares_one():
+    extracted = ExtractedData(products=[ProductData(image="https://cdn.example.com/widget.jpg")])
+    pages = [_page("https://example.com/products/widget", extracted)]
+    assert extract_product_name(pages) is None
+
+
+def test_extract_product_name_none_when_page_extraction_failed():
+    pages = [_Page(fetch_result=_FetchResult(url="https://example.com"), extracted=None)]
+    assert extract_product_name(pages) is None
+
+
+def test_extract_product_name_takes_the_first_across_multiple_pages():
+    p1 = _page("https://example.com/a", ExtractedData(products=[ProductData(name="Widget A")]))
+    p2 = _page("https://example.com/b", ExtractedData(products=[ProductData(name="Widget B")]))
+    assert extract_product_name([p1, p2]) == "Widget A"
+
+
+def test_extract_product_name_is_independent_of_extract_product_image():
+    # A product with a name but no image, and a separate product (or the
+    # same one) with an image but no name, must each surface their own
+    # field rather than one field's absence blanking the other.
+    extracted = ExtractedData(products=[ProductData(name="Widget", image=None)])
+    pages = [_page("https://example.com/widget", extracted)]
+    assert extract_product_name(pages) == "Widget"
+    assert extract_product_image(pages) is None
+
+    extracted2 = ExtractedData(products=[ProductData(name=None, image="https://cdn.example.com/widget.jpg")])
+    pages2 = [_page("https://example.com/widget", extracted2)]
+    assert extract_product_name(pages2) is None
+    assert extract_product_image(pages2) == "https://cdn.example.com/widget.jpg"
 
 
 # ─── build_offer_feed (F1) ────────────────────────────────────────────────

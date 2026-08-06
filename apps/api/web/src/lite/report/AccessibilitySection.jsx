@@ -1,6 +1,6 @@
 import { StateChip } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
-import { dimByCode, pillarEarnedMax } from './reportDerive.js'
+import { dimByCode, pillarEarnedMax, pillarHeadline, PILLAR_ACCESSIBILITY } from './reportDerive.js'
 import { DIMENSIONS_BY_CODE } from '../landing/scanDimensionsRegistry.js'
 import { toChipState } from './checkState.js'
 
@@ -34,7 +34,7 @@ export function AccessibilitySection({ report, open, onToggle }) {
   return (
     <ReportSection
       id="acc" eyebrow="PILLAR 02 · ACCESSIBILITY"
-      title="Agents can knock, but can't read much"
+      title={pillarHeadline(report, PILLAR_ACCESSIBILITY)}
       score={`${Math.round(acc.earned)}/${Math.round(acc.max)}`}
       open={open} onToggle={onToggle}
     >

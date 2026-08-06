@@ -83,6 +83,7 @@ export function LiteFullReportV4({ report, token }) {
           <FixesTable report={report} open={isOpen('fix')} onToggle={() => toggleSection('fix')} />
           <TrueSyncBand points={truesyncPoints} />
           <ExposureSection
+            report={report}
             revenue={revenue} onRevenueChange={setRevenue}
             aiSharePct={aiSharePct} onAiShareChange={setAiSharePct}
             exposure={exposure}

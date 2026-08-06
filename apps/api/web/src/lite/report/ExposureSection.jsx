@@ -1,25 +1,49 @@
 /**
  * S7: exposure. F6 — imports the same computeExposure module the
  * landing estimator uses, so the two surfaces can never disagree about
- * the model. Cause-bar weights below are the same illustrative ratios
- * the mock itself applies to its own modeled total (not a measured
- * breakdown either there or here) — modeled-not-measured framing stays
- * true in both places.
+ * the model.
+ *
+ * Part 4: the cause breakdown is no longer three static, run-agnostic
+ * weights — it's up to 3 reasons apps/api/app/services/exposure_
+ * reasons.py selected from THIS run's own measured gaps, each carrying
+ * an impact_weight (that reason's share of the selected group's
+ * severity). Dollar amounts still have to be computed here, live,
+ * because revenue/AI-share are sliders the visitor can drag — the
+ * server can't know the split in dollars, only the proportions.
  */
 import { Glyph, LeakageEstimator } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
-import { useDetailToggle } from './HowItsScored.jsx'
+import { useCollapsible } from './Collapsible.jsx'
 import { REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX, AI_SHARE_SLIDER_MIN, AI_SHARE_SLIDER_MAX, formatCurrency } from '../liteDerive.js'
 
-const CAUSE_WEIGHTS = [
-  { label: 'Price never quoted in answers', weight: 345 / 775, color: 'var(--blue)' },
-  { label: 'Catalog unreadable to agents', weight: 230 / 775, color: 'var(--blue-lite)' },
-  { label: 'No value declared at checkout', weight: 200 / 775, color: 'rgba(127,176,255,.42)' },
-]
+// 4c: reasons.impact_weight * exposure, independently rounded, can
+// drift a dollar or two from the modeled total — the remainder goes to
+// the largest share so the displayed lines always sum to exactly what
+// the hero number above them shows.
+export function splitExposureDollars(exposure, reasons) {
+  if (!reasons.length) return []
+  const total = Math.round(exposure)
+  const rounded = reasons.map((r) => Math.round(exposure * r.impact_weight))
+  const drift = total - rounded.reduce((sum, v) => sum + v, 0)
+  if (drift !== 0) {
+    let largestIdx = 0
+    for (let i = 1; i < reasons.length; i++) {
+      if (reasons[i].impact_weight > reasons[largestIdx].impact_weight) largestIdx = i
+    }
+    rounded[largestIdx] += drift
+  }
+  return rounded
+}
 
-export function ExposureSection({ revenue, onRevenueChange, aiSharePct, onAiShareChange, exposure, open, onToggle }) {
-  const [adjOpen, toggleAdj] = useDetailToggle()
-  const causes = CAUSE_WEIGHTS.map((c) => ({ ...c, value: Math.round(exposure * c.weight), display: formatCurrency(Math.round(exposure * c.weight)) }))
+export function ExposureSection({ report, revenue, onRevenueChange, aiSharePct, onAiShareChange, exposure, open, onToggle }) {
+  const [adjOpen, toggleAdj] = useCollapsible()
+  const reasons = report?.pillars?.exposure_reasons || []
+  const dollars = splitExposureDollars(exposure, reasons)
+  const causes = reasons.map((r, i) => ({
+    label: r.text,
+    value: dollars[i],
+    display: `≈ ${formatCurrency(dollars[i])}/yr · modeled`,
+  }))
 
   return (
     <ReportSection
@@ -28,7 +52,7 @@ export function ExposureSection({ revenue, onRevenueChange, aiSharePct, onAiShar
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           <a href="#expmodel" className="mono-label" style={{ fontSize: 9, color: 'var(--blue)' }}>HOW WE MODEL THIS ↓</a>
           <button
-            type="button" onClick={toggleAdj}
+            type="button" onClick={toggleAdj} aria-expanded={adjOpen}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--blue-soft)', border: '1px solid rgba(1,102,255,.24)', borderRadius: 999, padding: '8px 14px 8px 11px', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.11em', color: 'var(--blue)', fontWeight: 640 }}
           >
             <Glyph name={adjOpen ? 'x' : 'plus'} size={12} color="var(--blue)" />ADJUST ASSUMPTIONS
@@ -58,7 +82,11 @@ export function ExposureSection({ revenue, onRevenueChange, aiSharePct, onAiShar
       )}
 
       <div style={{ marginTop: 20 }}>
-        <LeakageEstimator total={formatCurrency(exposure).replace('$', '')} prefix="$" suffix=" / year" label="Modeled annual exposure" causes={causes} />
+        <LeakageEstimator
+          total={formatCurrency(exposure).replace('$', '')} prefix="$" suffix=" / year" label="Modeled annual exposure"
+          causes={causes}
+          provenance={causes.length ? ["the split across reasons is modeled from this run's own measured gaps, not independently measured"] : undefined}
+        />
       </div>
 
       <div id="expmodel" style={{ marginTop: 16, scrollMarginTop: 26, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.6 }}>

@@ -905,7 +905,7 @@ def _sweep_lite_completions():
 
     with engine.connect() as conn:
         rows = conn.execute(text("""
-            SELECT lr.id, c.status, sr.id, sr.status, sr.updated_at, sr.dimensions
+            SELECT lr.id, lr.cycle_id, c.status, sr.id, sr.status, sr.updated_at, sr.dimensions
             FROM soa_lite_requests lr
             JOIN soa_cycles c ON c.id = lr.cycle_id
             JOIN soa_lite_scan_results sr ON sr.lite_request_id = lr.id
@@ -913,7 +913,7 @@ def _sweep_lite_completions():
               AND c.status IN ('complete', 'failed')
         """)).fetchall()
 
-    for lite_id, cycle_status, scan_id, scan_status, scan_updated_at, dimensions_raw in rows:
+    for lite_id, cycle_id, cycle_status, scan_id, scan_status, scan_updated_at, dimensions_raw in rows:
         try:
             final_scan_status = scan_status
             with engine.begin() as conn:
@@ -949,6 +949,15 @@ def _sweep_lite_completions():
             state = _terminal_run_state(cycle_status, final_scan_status, degraded_reason)
             lite_events.emit_state(lite_id, state)
             if state != 'failed':
+                # Part 3: isolated exactly like the probes in
+                # process_lite_requests — a bug or API failure here must
+                # never prevent the state transition already committed
+                # above, or the "Your report" done event that follows.
+                try:
+                    _run_pillar_headlines(lite_id, cycle_id, scan_id, dimensions_raw)
+                except Exception:
+                    log.exception(f"[lite] request {lite_id}: pillar headline generation failed unexpectedly")
+
                 lite_events.emit_done(
                     lite_id, lite_events.TASK_REPORT,
                     "Three pillars, ranked fixes, private link",
@@ -964,6 +973,79 @@ def _sweep_lite_completions():
         _send_pending_report_emails()
     except Exception:
         log.exception("[lite] report-ready email sweep failed unexpectedly")
+
+
+def _fetch_visibility_metrics(conn, cycle_id: int) -> dict:
+    """Part 3: lean visibility facts for pillar-headline generation —
+    reads the SAME soa_metrics_results table apps/api's
+    _fetch_metrics_rows (app/routers/public_lite.py) reads: already-
+    computed, already-stored metrics, no re-derivation of the scoring
+    formula. Scoped to the primary entity's overall-slice numbers plus
+    its share-of-mentions rank across the full comparison set — the
+    same rank apps/api's frontend computes client-side as
+    shareOfMentionsRank (LiteFullReportV4.jsx), reimplemented here in
+    SQL since the worker has no JS runtime to share it with."""
+    rows = conn.execute(text("""
+        SELECT ce.role, mr.soa_pct, mr.mention_rate, mr.rsi_score
+        FROM soa_metrics_results mr
+        JOIN soa_cycle_entities ce ON ce.cycle_id = mr.cycle_id AND ce.entity_id = mr.entity_id
+        WHERE mr.cycle_id = :cid AND mr.slice_type = 'overall'
+    """), {"cid": cycle_id}).fetchall()
+
+    if not rows:
+        return {"som_pct": None, "mention_rate": None, "rsi_score": None, "rank_line": None}
+
+    ranked = sorted(rows, key=lambda r: -(r[1] or 0))
+    primary_row = next((r for r in rows if r[0] == 'primary'), None)
+    rank_line = None
+    if primary_row is not None:
+        idx = next(i for i, r in enumerate(ranked) if r[0] == 'primary')
+        n = idx + 1
+        suffix = 'st' if n == 1 else 'nd' if n == 2 else 'rd' if n == 3 else 'th'
+        rank_line = f"{n}{suffix} of {len(ranked)} in the competitor set"
+
+    return {
+        "som_pct": primary_row[1] if primary_row else None,
+        "mention_rate": primary_row[2] if primary_row else None,
+        "rsi_score": primary_row[3] if primary_row else None,
+        "rank_line": rank_line,
+    }
+
+
+def _run_pillar_headlines(lite_id: int, cycle_id: int, scan_id: int, dimensions_raw) -> None:
+    """
+    Part 3: one OpenAI call per audit, generating the three pillar
+    headlines from the run's own facts (generation/pillar_headlines.py)
+    and storing them as an additive sibling key on soa_lite_scan_
+    results.dimensions — same "no migration" pattern as offers/
+    product_image_url (scan/offer_feed.py). The report renders from
+    this stored value and never regenerates it (3b) — this sweep is the
+    ONLY place generated_headlines is ever written, and it only ever
+    runs once per request (this function only fires on the lite
+    request's single running -> complete/failed transition).
+    """
+    api_key = os.environ.get("OPEN_AI_API_KEY")
+    if not api_key:
+        return
+
+    from generation.pillar_headlines import generate_pillar_headlines
+
+    dims = _decode_json_field(dimensions_raw, {})
+
+    lite_events.emit_log(lite_id, lite_events.TASK_REPORT, "writing your pillar summaries…")
+
+    with engine.connect() as conn:
+        visibility_metrics = _fetch_visibility_metrics(conn, cycle_id)
+
+    headlines = generate_pillar_headlines(dims, visibility_metrics, api_key)
+
+    dims["generated_headlines"] = headlines
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE soa_lite_scan_results
+            SET dimensions = :dimensions, updated_at = NOW()
+            WHERE id = :id
+        """), {"dimensions": json.dumps(dims), "id": scan_id})
 
 
 # audit.parleo.io migration (U1): single source for the report-ready
