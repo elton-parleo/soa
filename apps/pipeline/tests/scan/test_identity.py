@@ -16,7 +16,7 @@ def test_bot_name_and_ua_are_the_specified_literals():
     assert identity.BOT_NAME == "ParleoAuditBot"
     assert identity.BOT_UA == (
         "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); "
-        "compatible; ParleoAuditBot/1.0; +https://www.parleo.io/bots"
+        "compatible; ParleoAuditBot/1.0; +https://bots.parleo.io"
     )
     assert "ParleoAuditBot/1.0" in identity.BOT_UA
     assert "compatible;" in identity.BOT_UA
@@ -55,6 +55,37 @@ def test_grep_kill_old_bot_name_absent_repo_wide():
         except Exception:
             continue
         if _OLD_BOT_NAME in text:
+            offenders.append(str(path.relative_to(repo_root)))
+    assert offenders == []
+
+
+_OLD_UA_DOC_URL = "https://" + "www.parleo.io/bots"  # never spelled literally, same rationale as above
+
+
+def test_grep_kill_old_ua_doc_url_absent_repo_wide():
+    """The BOT_UA +URL suffix moved from the marketing host to
+    bots.parleo.io (same host as KEY_DIRECTORY_URL) — this URL is
+    registered with Cloudflare Verified Bots, so a stray old reference
+    left behind would be a dead link on file with Cloudflare, not just
+    a docs typo. Scoped the same way as the grep-kill test above."""
+    repo_root = Path(__file__).resolve().parents[4]
+    assert (repo_root / "apps").is_dir(), f"unexpected repo root guess: {repo_root}"
+
+    skip_dir_names = {"node_modules", ".git", "__pycache__", "dist", "build", ".vite"}
+    text_suffixes = {".py", ".js", ".jsx", ".md", ".txt", ".json"}
+    offenders = []
+    for path in repo_root.rglob("*"):
+        if not path.is_file() or path.suffix not in text_suffixes:
+            continue
+        if any(part in skip_dir_names for part in path.parts):
+            continue
+        if path == Path(__file__):
+            continue  # this file's own _OLD_UA_DOC_URL construction, not a real reference
+        try:
+            text = path.read_text(errors="ignore")
+        except Exception:
+            continue
+        if _OLD_UA_DOC_URL in text:
             offenders.append(str(path.relative_to(repo_root)))
     assert offenders == []
 

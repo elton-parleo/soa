@@ -9,19 +9,38 @@
  *
  * Presentational only, unauthenticated, at /bots — same pre-auth
  * standalone treatment as /lite (see App.jsx). Lives on the marketing
- * host only, not on audit.parleo.io (H1).
+ * host only, not on audit.parleo.io (H1). bots.parleo.io is now
+ * canonical for this documentation (see CanonicalNotice below) — this
+ * page mirrors the same six sections verbatim so the two can't drift
+ * on facts; the standalone page is parleo-bots/public/index.html (a
+ * sibling project outside this repo) — update both together.
  */
+import { useEffect } from 'react'
 import './theme.css'
 import { LightCard, SectionHeader } from './liteTheme.jsx'
 import { LandingFooter } from './landing/LandingFooter.jsx'
+import { upsertLink, restoreOrRemove } from './headMeta.js'
+
+const BOTS_HOST_URL = 'https://bots.parleo.io/'
 
 // Copied from apps/pipeline/scan/identity.py — see module docstring above.
 const BOT_NAME = 'ParleoAuditBot'
-const BOT_UA = 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ParleoAuditBot/1.0; +https://www.parleo.io/bots'
+const BOT_UA = 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ParleoAuditBot/1.0; +https://bots.parleo.io'
 const KEY_DIRECTORY_URL = 'https://bots.parleo.io/.well-known/http-message-signatures-directory'
 // Copied from apps/pipeline/scan/fetcher.py::MAX_PAGE_FETCHES.
 const MAX_PAGES_PER_AUDIT = 12
-const LAST_UPDATED = 'August 2026'
+const LAST_UPDATED = 'August 6, 2026'
+
+// bots.parleo.io/ now hosts the canonical copy of this documentation
+// (see BOTS_HOST_URL) — this in-app page still renders as a courtesy
+// on the app's own hosts, but points readers and crawlers at the
+// canonical one instead of letting two indexable copies compete.
+function useCanonicalToBotsHost() {
+  useEffect(() => {
+    const handle = upsertLink('canonical', BOTS_HOST_URL)
+    return () => restoreOrRemove(handle)
+  }, [])
+}
 
 function BotsNav() {
   return (
@@ -171,10 +190,17 @@ function ContactSection() {
 }
 
 export default function BotsPage() {
+  useCanonicalToBotsHost()
   return (
     <div className="lite-root" style={{ display: 'block', padding: 0 }}>
       <BotsNav />
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 20px 60px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <p className="lite-body" style={{ margin: 0, fontSize: 13 }}>
+          Canonical documentation:{' '}
+          <a href={BOTS_HOST_URL} className="lite-mono" style={{ color: 'var(--accent-ink)', fontWeight: 700 }}>
+            bots.parleo.io
+          </a>
+        </p>
         <IdentitySection />
         <VerificationSection />
         <PurposeSection />
