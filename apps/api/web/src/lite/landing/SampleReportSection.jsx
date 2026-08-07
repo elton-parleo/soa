@@ -21,7 +21,7 @@ function ScorePanel() {
       </div>
       <div style={{ marginTop: 22 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-          <span className="num" style={{ fontSize: 52, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)', fontVariantNumeric: 'tabular-nums' }}>40</span>
+          <span className="num lite-display-num" style={{ fontSize: 52, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)', fontVariantNumeric: 'tabular-nums' }}>40</span>
           <span className="num" style={{ fontSize: 19, fontWeight: 560, color: 'var(--dark-faint)' }}>/100</span>
         </div>
         <div className="mono-label" style={{ fontSize: 8.5, color: 'var(--dark-faint)', marginTop: 9 }}>AGENTIC VALUE SCORE</div>
@@ -64,7 +64,7 @@ export function SampleReportSection() {
         </SectionHeading>
         <div style={{ marginTop: 30 }}>
           <BrowserChrome url="audit.parleo.io/r/allbirds" chip="SAMPLE" shadow="elevated" radius={16}>
-            <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 0, background: 'var(--surface)' }}>
+            <div className="lite-sample-grid" style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 0, background: 'var(--surface)' }}>
               <ScorePanel />
               <div style={{ padding: '24px 26px' }}>
                 <MetricRow items={SAMPLE_PILLAR_ITEMS} size={34} />

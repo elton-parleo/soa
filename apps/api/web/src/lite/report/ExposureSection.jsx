@@ -62,7 +62,7 @@ export function ExposureSection({ report, revenue, onRevenueChange, aiSharePct, 
       open={open} onToggle={onToggle}
     >
       {adjOpen && (
-        <div style={{ marginTop: 18, background: 'var(--surface-warm)', border: '1px solid var(--hairline)', borderRadius: 12, padding: '16px 18px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 22 }}>
+        <div className="lite-exposure-adjust-grid" style={{ marginTop: 18, background: 'var(--surface-warm)', border: '1px solid var(--hairline)', borderRadius: 12, padding: '16px 18px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 22 }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>
               <span>Annual revenue</span><b className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text-strong)' }}>{formatCurrency(revenue)}</b>

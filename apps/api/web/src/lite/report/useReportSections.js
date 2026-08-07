@@ -52,8 +52,24 @@ export function useReportSections() {
   // In focus mode, opening a new section changes page heights below the
   // fold — hold the section you scrolled to still by compensating the
   // scroll position after the DOM updates.
+  //
+  // RM9: on a phone, the visual viewport height changes as the browser
+  // chrome (URL bar, toolbars) shows/hides during scroll — this
+  // compensation math fights that instead of correcting for it, so it's
+  // skipped on phone in favor of plain accordion behavior (the section
+  // still opens/closes exactly the same; only the scroll-position
+  // correction is skipped). Desktop is completely unaffected — the
+  // matchMedia check is false above 640px so this branch is never taken
+  // there. jsdom has no matchMedia (see src/test-setup.js), so this
+  // reads as "not phone" in tests, same as desktop.
   useEffect(() => {
     if (!focus || !anchorRef.current || vpTopRef.current == null) return
+    const isPhone = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 640px)').matches
+    if (isPhone) {
+      anchorRef.current = null
+      vpTopRef.current = null
+      return
+    }
     const id = anchorRef.current
     const el = document.getElementById(id)
     if (el) {

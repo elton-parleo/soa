@@ -62,6 +62,7 @@ function PillarRow({ pillar }) {
   const cols = pillar === PILLAR_VISIBILITY ? 2 : pillar === PILLAR_ACCESSIBILITY ? 3 : 2
   return (
     <div
+      className="lite-framework-row-grid"
       style={{
         display: 'grid',
         gridTemplateColumns: '250px 1fr',
@@ -92,7 +93,7 @@ function PillarRow({ pillar }) {
           </div>
         )}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols},1fr)`, gap: 10, alignItems: 'stretch' }}>
+      <div className="lite-framework-tiles-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${cols},1fr)`, gap: 10, alignItems: 'stretch' }}>
         {dims.map((d) => <DimensionTile key={d.code} dim={d} blue={isTrueValue} />)}
       </div>
     </div>

@@ -14,7 +14,7 @@ export function FunnelGate({ open, onToggle }) {
     >
       <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>{FUNNEL_GATE_COPY.body}</div>
       <div style={{ position: 'relative', borderRadius: 14, background: 'var(--surface-warm)', border: '1px dashed var(--border-strong)', padding: '22px 20px 16px', marginTop: 16 }}>
-        <div aria-hidden="true" style={{ display: 'flex', gap: 16, alignItems: 'flex-end', height: 120, filter: 'blur(3.5px)', opacity: 0.72 }}>
+        <div aria-hidden="true" className="lite-funnel-bars-row" style={{ display: 'flex', gap: 16, alignItems: 'flex-end', height: 120, filter: 'blur(3.5px)', opacity: 0.72 }}>
           {STAGES.map((label, i) => (
             <span key={label} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%', textAlign: 'center' }}>
               <b className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 500, color: i === 3 ? 'var(--red-deep)' : 'var(--faint)', marginBottom: 6 }}>··%</b>

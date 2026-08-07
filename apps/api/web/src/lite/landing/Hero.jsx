@@ -19,8 +19,9 @@ export function Hero({ onSubmitted }) {
     <section style={{ position: 'relative', isolation: 'isolate', overflow: 'hidden' }}>
       <div aria-hidden="true" className="light-burn-warm" style={{ position: 'absolute', inset: 0, zIndex: 0 }} />
       <div aria-hidden="true" className="bg-grid-fine" style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundSize: '56px 56px' }} />
-      <div style={{ position: 'relative', zIndex: 1, maxWidth: 1120, margin: '0 auto', padding: '64px 24px 26px', display: 'grid', gridTemplateColumns: '6.4fr 5.6fr', gap: 56, alignItems: 'center' }}>
+      <div className="lite-hero-grid" style={{ position: 'relative', zIndex: 1, maxWidth: 1120, margin: '0 auto', padding: '64px 24px 26px', display: 'grid', gridTemplateColumns: '6.4fr 5.6fr', gap: 56, alignItems: 'center' }}>
         <div>
+          <span className="lite-hero-mobile-eyebrow mono-label" style={{ display: 'none', fontSize: 10, color: 'var(--faint)' }}>FREE AGENTIC VALUE AUDIT</span>
           <h1 className="section-heading" style={{ fontSize: 54, margin: 0 }}>
             Are AI agents quoting your product's{' '}
             <em style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontWeight: 460, color: 'var(--blue)', letterSpacing: '-0.012em' }}>true value</em>?
@@ -54,7 +55,7 @@ export function Hero({ onSubmitted }) {
             </span>
             <span style={{ fontSize: 12.5, color: 'var(--faint)' }}>plus Gemini, Perplexity and Claude in the Full Analysis</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 22px', marginTop: 22, maxWidth: 470 }}>
+          <div className="lite-hero-badges-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 22px', marginTop: 22, maxWidth: 470 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, flexShrink: 0, borderRadius: 8, background: 'rgba(1,102,255,.09)' }}>
                 <Glyph name="card" size={14} color="var(--blue)" />
@@ -100,7 +101,7 @@ export function Hero({ onSubmitted }) {
                       <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--dark-border)' }}>
                         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-                            <span className="num" style={{ fontSize: 46, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)' }}>40</span>
+                            <span className="num lite-display-num" style={{ fontSize: 46, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)' }}>40</span>
                             <span className="num" style={{ fontSize: 17, fontWeight: 560, color: 'var(--dark-faint)' }}>/100</span>
                           </div>
                           <div className="mono-label" style={{ marginLeft: 'auto', fontSize: 8, color: 'var(--dark-faint)', textAlign: 'right', lineHeight: 1.6 }}>

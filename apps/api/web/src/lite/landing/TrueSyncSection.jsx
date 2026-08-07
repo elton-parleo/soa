@@ -35,7 +35,7 @@ export function TrueSyncSection() {
           <p className="section-copy" style={{ margin: '14px 0 0', maxWidth: 640, fontSize: 15 }}>
             The audit measures four gap areas. Parleo fixes two of them directly: <b style={{ color: 'var(--text-strong)', fontWeight: 620 }}>incentive sync</b> (your member value and deals, encoded and current) and <b style={{ color: 'var(--text-strong)', fontWeight: 620 }}>protocol declarations</b> (your value wired into UCP and ACP agent checkout).
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginTop: 26 }}>
+          <div className="lite-truesync-landing-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginTop: 26 }}>
             <FixCard tag="01 ENCODE" glyph="doc" title="Member value and deals" body="In markup agents can read." />
             <FixCard tag="02 DECLARE" glyph="card" title="Value at agent checkout" body="UCP and ACP declarations." />
             <FixCard tag="03 STAY IN SYNC" glyph="refresh" title="No drift back to zero" body="Updated as offers change." />

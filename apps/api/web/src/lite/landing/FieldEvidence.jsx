@@ -73,7 +73,7 @@ function Case02Card() {
         <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--muted)' }}>{CASE_02.eyebrow}</span>
       </div>
       <div style={{ padding: '6px 24px 0', display: 'flex', alignItems: 'baseline', gap: 14 }}>
-        <span className="num" style={{ fontSize: 66, fontWeight: 750, letterSpacing: '-0.045em', lineHeight: 0.92, color: 'var(--blue)' }}>{CASE_02.statValue}</span>
+        <span className="num lite-display-num" style={{ fontSize: 66, fontWeight: 750, letterSpacing: '-0.045em', lineHeight: 0.92, color: 'var(--blue)' }}>{CASE_02.statValue}</span>
         <span className="mono-label" style={{ fontSize: 9, color: 'var(--muted)', lineHeight: 1.65, maxWidth: 140 }}>{CASE_02.statCaption}</span>
       </div>
       <div style={{ padding: '20px 24px 0', fontSize: 15, color: 'var(--text-strong)', lineHeight: 1.58, letterSpacing: '-0.008em' }}>{CASE_02.headline}</div>
@@ -109,7 +109,7 @@ export function FieldEvidence() {
         >
           Trade &amp; Retail Media Spend that never reaches the agent.
         </SectionHeading>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 20, marginTop: 34, alignItems: 'stretch' }}>
+        <div className="lite-field-evidence-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: 20, marginTop: 34, alignItems: 'stretch' }}>
           <Case01Card />
           <Case02Card />
         </div>
