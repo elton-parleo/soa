@@ -593,6 +593,20 @@ _ACCESSIBILITY_CODES = ("agent_access", "catalog_context", "protocol_feed")
 _TRUE_VALUE_SPLIT_CODES = ("price_truth", "member_value", "deal_citability")
 _VALUE_PROTOCOLS_CODE = "value_protocols"
 
+# Rescue session (Part 4b): mirrors scan/discovery.py's single-sourced
+# DISCOVERY_PATH_COVERAGE_NOTE registry by hand — apps/api (Vercel) and
+# apps/pipeline (Railway) are separate deployables with no shared
+# runtime import path for this, same "no codegen bridge, kept in sync
+# by eye" convention scanDimensionsRegistry.js already uses to mirror
+# soa_shared/scan_dimensions.py. "sitemap"/"none"/missing all correctly
+# resolve to None (nothing to say).
+_DISCOVERY_PATH_COVERAGE_NOTE = {
+    "homepage": "found via your site's links, not your sitemap",
+    "collection_hop": "found via your site's category pages, not your sitemap",
+    "platform_endpoint": "found via your store platform's catalog endpoint",
+    "llm_assisted": "found via AI-assisted discovery, not your sitemap",
+}
+
 # Top FREE_FIX_RANK dimensions by opportunity size (max - earned) across
 # the combined accessibility + True Value pool keep their fix text; the
 # rest are nulled and locked=True — the same top-3-free-by-gap convention
@@ -917,12 +931,24 @@ def build_pillars_payload(
         else:
             checks = _deal_citability_checks(seen.get("evidence") or [])
 
-        true_value_dims.append({
+        row = {
             "code": code, "name": dim.name, "earned": earned, "max": dim_max,
             "na": False, "evidence": [], "seen": seen_row, "said": said_row,
             "checks": checks,
             "fix": seen.get("fix"), "fix_human": seen.get("fix_human"), "locked": False,
-        })
+        }
+        # Rescue session (Part 4b): coverage follows provenance — the
+        # Price Truth one-liner says so, in the same place, whenever
+        # this run's product pages came from a tier other than the
+        # sitemap. Only price_truth carries this (it's the dimension
+        # with a dedicated one-liner reading crawl_dimensions directly
+        # today); member_value/deal_citability's report surfaces don't
+        # currently have an equivalent single-sentence slot.
+        if code == "price_truth":
+            discovery_note = _DISCOVERY_PATH_COVERAGE_NOTE.get(crawl_dimensions.get("discovery_path"))
+            if discovery_note:
+                row["discovery_note"] = discovery_note
+        true_value_dims.append(row)
 
     # Value Protocols (Stage 25, Part 1/3): encode-only — a seen half,
     # no said half at all, because an agent's answer has no way to state

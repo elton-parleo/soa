@@ -686,7 +686,7 @@ def test_store_url_creates_scan_row_and_persists_result(db):
          patch("scan.engine.run_scan", return_value=scan_result) as mock_scan:
         worker.process_lite_requests()
 
-    mock_scan.assert_called_once_with("https://acme.example.com")
+    mock_scan.assert_called_once_with("https://acme.example.com", api_key="test-key")
 
     status, *_ = _lite_row_by_token(db.connect(), "a1b2c3d4e5f6")
     assert status == "running"  # scan result never affects the lite request's own status

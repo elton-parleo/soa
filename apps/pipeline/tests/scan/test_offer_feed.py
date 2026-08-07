@@ -206,6 +206,46 @@ def test_offer_feed_checkout_value_row_from_value_protocols():
     assert row["readable"] == "seen"
 
 
+# ─── discovery_path coverage wording (Part 4b, rescue session) ──────────
+
+def test_offer_feed_sitemap_discovery_path_adds_no_coverage_note():
+    products = [ProductData(name="Widget", offers=[OfferData(price=29.99)])]
+    pages = [_page("https://example.com/widget", ExtractedData(products=products))]
+    dim_scores = {**DIM_SCORES_ALL_ZERO, "price_truth_seen": _dim(5, 5)}
+    rows = build_offer_feed(pages, dim_scores, discovery_path="sitemap")
+    row = next(r for r in rows if r["name"] == "List price")
+    assert row["eligibility"] == "1 of 1 offers"
+
+
+@pytest.mark.parametrize("discovery_path,expected_note", [
+    ("homepage", "found via your site's links, not your sitemap"),
+    ("collection_hop", "found via your site's category pages, not your sitemap"),
+    ("platform_endpoint", "found via your store platform's catalog endpoint"),
+    ("llm_assisted", "found via AI-assisted discovery, not your sitemap"),
+])
+def test_offer_feed_non_sitemap_discovery_path_appends_coverage_note_to_data_backed_rows(discovery_path, expected_note):
+    products = [ProductData(name="Widget", offers=[OfferData(price=29.99)], has_member_price_hint=True)]
+    pages = [_page("https://example.com/widget", ExtractedData(products=products))]
+    dim_scores = {
+        **DIM_SCORES_ALL_ZERO,
+        "price_truth_seen": _dim(5, 5), "member_value_seen": _dim(9, 9),
+    }
+    rows = build_offer_feed(pages, dim_scores, discovery_path=discovery_path)
+    by_name = {r["name"]: r for r in rows}
+    assert by_name["List price"]["eligibility"] == f"1 of 1 offers — {expected_note}"
+    assert by_name["Availability"]["eligibility"] == f"0 of 1 offers — {expected_note}"
+    assert by_name["Member price"]["eligibility"] == f"1 of 1 products — {expected_note}"
+
+
+def test_offer_feed_no_offers_found_never_gets_a_coverage_note_appended():
+    """A row with nothing to show has nothing to attribute — appending
+    the note there would read as an excuse for missing data, not a fact
+    about data that exists."""
+    rows = build_offer_feed([], DIM_SCORES_ALL_ZERO, discovery_path="platform_endpoint")
+    row = next(r for r in rows if r["name"] == "List price")
+    assert row["eligibility"] == "no offers found"
+
+
 # ─── H1: honest states — unmeasured, never a fabricated invisible ────────
 
 def test_offer_feed_blocked_dimension_reads_unmeasured_not_invisible():

@@ -219,7 +219,7 @@ export function TrueValueSection({ report, open, onToggle }) {
             {priceTruth && (
               <DualLensDim
                 code="price_truth" iconGlyph="card" dim={priceTruth}
-                oneLiner={encodeBlocked && priceTruth.blocked ? 'not measurable this run' : 'readable on your site, cited in answers'}
+                oneLiner={encodeBlocked && priceTruth.blocked ? 'not measurable this run' : (priceTruth.discovery_note || 'readable on your site, cited in answers')}
                 open={ptOpen} onToggle={togglePt}
               />
             )}
