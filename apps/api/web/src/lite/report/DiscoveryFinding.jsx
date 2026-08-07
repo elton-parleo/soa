@@ -11,7 +11,7 @@
 import { Glyph } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
 import { _fetchProbeSentence } from '../DegradedRunBanner.jsx'
-import { FAILURE_POINT_COPY } from './reportContent.js'
+import { FAILURE_POINT_COPY, BLOCKED_STEP_COPY, resolveFailurePointBody } from './reportContent.js'
 import { partialReadFailurePoint, buildMeasurableContext } from './reportDerive.js'
 
 const STEP_META = {
@@ -21,23 +21,31 @@ const STEP_META = {
   productPages: { n: '04', label: 'PRODUCT PAGES' },
 }
 
-function _buildSteps(trace, unmeasurablePoints) {
+// Blocked-run copy pass (2c): the blocked path reads its step facts in
+// plain verbs from BLOCKED_STEP_COPY (registry-sourced, reportContent.js)
+// instead of the generic wording below — the other failure points are
+// untouched this session.
+function _stepFact(key, good, failurePoint, genericGood, genericBad) {
+  const blocked = failurePoint === 'blocked' ? BLOCKED_STEP_COPY[key] : null
+  if (blocked) return good ? blocked.good : blocked.bad
+  return good ? genericGood : genericBad
+}
+
+function _buildSteps(trace, unmeasurablePoints, failurePoint) {
   if (!trace) return []
   const steps = []
   if (trace.robots_ok != null) {
     steps.push({
       key: 'robots',
       good: trace.robots_ok,
-      fact: trace.robots_ok
-        ? 'Read fine. Product paths allowed, no bot blocks.'
-        : 'Blocked or rate-limited before we could read it.',
+      fact: _stepFact('robots', trace.robots_ok, failurePoint, 'Read fine. Product paths allowed, no blocks on readers.', 'Blocked or rate-limited before we could read it.'),
     })
   }
   if (trace.homepage_fetched != null) {
     steps.push({
       key: 'homepage',
       good: trace.homepage_fetched,
-      fact: trace.homepage_fetched ? 'Fetched fine.' : 'Could not be fetched this run.',
+      fact: _stepFact('homepage', trace.homepage_fetched, failurePoint, 'Fetched fine.', 'Could not be fetched this run.'),
     })
   }
   if (trace.sitemaps_read != null && trace.product_urls_found != null) {
@@ -50,12 +58,11 @@ function _buildSteps(trace, unmeasurablePoints) {
   }
   if (trace.product_pages_fetched != null) {
     const fetched = trace.product_pages_fetched
+    const genericBad = `None reached, none parsed${unmeasurablePoints ? ` · ${Math.round(unmeasurablePoints)} points unread.` : '.'}`
     steps.push({
       key: 'productPages',
       good: fetched > 0,
-      fact: fetched > 0
-        ? `${fetched} reached and parsed.`
-        : `None reached, none parsed${unmeasurablePoints ? ` · ${Math.round(unmeasurablePoints)} points unread.` : '.'}`,
+      fact: _stepFact('productPages', fetched > 0, failurePoint, `${fetched} reached and parsed.`, genericBad),
     })
   }
   return steps
@@ -68,8 +75,9 @@ export function DiscoveryFinding({ report, open, onToggle }) {
   const trace = report.scan?.discovery_trace
   const bannerFacts = report.scan?.degraded_banner_facts
   const unmeasurablePoints = buildMeasurableContext(report.pillars).unmeasurable_points
-  const steps = _buildSteps(trace, unmeasurablePoints)
+  const steps = _buildSteps(trace, unmeasurablePoints, failurePoint)
   const probeSentence = _fetchProbeSentence(bannerFacts, degradedReason, report.scan_status)
+  const bodyText = resolveFailurePointBody(copy.body, bannerFacts)
 
   return (
     <ReportSection
@@ -77,7 +85,7 @@ export function DiscoveryFinding({ report, open, onToggle }) {
       open={open} onToggle={onToggle} accentColor="var(--amber)"
     >
       <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.6, marginTop: 4 }}>
-        {copy.body}{probeSentence}
+        {bodyText}{probeSentence}
       </div>
 
       {steps.length > 0 && (
@@ -99,9 +107,16 @@ export function DiscoveryFinding({ report, open, onToggle }) {
 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, marginTop: 22, padding: '15px 17px', background: 'var(--amber-tint)', border: '1px solid rgba(245,158,11,.3)', borderRadius: 12 }}>
         <Glyph name="filter" size={15} color="var(--amber-deep)" />
-        <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.6 }}>
-          <b style={{ color: 'var(--text-strong)' }}>What this usually means:</b> {copy.explanation} That's fix 01 below — it unlocks the {Math.round(unmeasurablePoints)} points this run couldn't read.
-        </div>
+        {failurePoint === 'blocked' ? (
+          // Blocked-run copy pass (1c): the registry's action line
+          // stands on its own here — the causal "why" already lives in
+          // bodyText above, so this box doesn't repeat it.
+          <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.6 }}>{copy.fixFraming}</div>
+        ) : (
+          <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.6 }}>
+            <b style={{ color: 'var(--text-strong)' }}>What this usually means:</b> {copy.explanation} That's fix 01 below — it unlocks the {Math.round(unmeasurablePoints)} points this run couldn't read.
+          </div>
+        )}
       </div>
     </ReportSection>
   )

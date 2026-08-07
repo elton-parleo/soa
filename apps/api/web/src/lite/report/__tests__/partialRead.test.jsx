@@ -239,6 +239,71 @@ describe('partial-read report state — Sephora (blocked)', () => {
   })
 })
 
+// Blocked-run copy pass: the reader is a marketing/ecommerce lead, not
+// the engineer who configured the CDN — every string in the blocked
+// entry moves to plain language. These guards protect that register
+// directly, and the fetch-probe sentence's wording/placement stays
+// byte-unchanged (it's asserted above too).
+describe('blocked-run copy pass — plain language, banned terms', () => {
+  const BANNED_TERMS = [
+    /\bedge\b/i, /\bWAF\b/, /user agent/i, /\bUA\b/, /403-refused/i, /429-refused/i,
+    /challenge page/i, /\bidentified reader\b/i,
+  ]
+
+  it('the registry heading and body contain none of the banned engineer-jargon terms', () => {
+    const bodyText = FAILURE_POINT_COPY.blocked.body({ refusal: '403', attempts: 6, robots_included: true, signed: true })
+    for (const s of [FAILURE_POINT_COPY.blocked.heading, bodyText]) {
+      for (const pattern of BANNED_TERMS) {
+        expect(s).not.toMatch(pattern)
+      }
+    }
+  })
+
+  it('"cryptographically" survives only in the fixFraming action line, explained in the same sentence', () => {
+    expect(FAILURE_POINT_COPY.blocked.heading).not.toMatch(/cryptographically/i)
+    expect(FAILURE_POINT_COPY.blocked.body({})).not.toMatch(/cryptographically/i)
+    expect(FAILURE_POINT_COPY.blocked.fixFraming).toMatch(/cryptographically/i)
+  })
+
+  it('writes a status code in words with the code in parentheses, never as a bare-number adjective', () => {
+    const bodyText = FAILURE_POINT_COPY.blocked.body({ refusal: '403', attempts: 6 })
+    expect(bodyText).toContain('refused every request (403)')
+    expect(bodyText).not.toMatch(/403-refused/)
+  })
+
+  it('refers to our own reader as "reader", never "bot", and uses "crawler" only in the published-crawlers phrase', () => {
+    // 2a is about OUR identity specifically — "reader", not "the bot"/
+    // "our crawler" — not a blanket ban on "bot" as a substring (the
+    // brief's own body text legitimately says "bot-blocking" as the
+    // industry term for what security tools do).
+    expect(FAILURE_POINT_COPY.blocked.heading).toMatch(/reader/i)
+    expect(FAILURE_POINT_COPY.blocked.heading).not.toMatch(/\bour bot\b|\bthe bot\b/i)
+    expect(FAILURE_POINT_COPY.blocked.body({})).not.toMatch(/\bour bot\b|\bthe bot\b|\bour crawler\b/i)
+    expect(FAILURE_POINT_COPY.blocked.body({})).not.toMatch(/\bcrawler\b/i)
+    expect(FAILURE_POINT_COPY.blocked.fixFraming).toMatch(/published crawlers/)
+  })
+
+  it('the rendered Sephora report shows the new heading and no banned terms anywhere on the page', () => {
+    const { container } = renderIt(SEPHORA_REPORT)
+    expect(screen.getByText('Your site turned our reader away at the door.')).toBeInTheDocument()
+    for (const pattern of BANNED_TERMS) {
+      expect(container.textContent).not.toMatch(pattern)
+    }
+  })
+
+  it('the discovery fix\'s ranked-fix description also carries the fixFraming action line', () => {
+    renderIt(SEPHORA_REPORT)
+    expect(screen.getAllByText(FAILURE_POINT_COPY.blocked.fixFraming).length).toBe(2) // discovery section box + ranked fix row
+  })
+
+  it('grep: the causal body/explanation text still renders exactly once per report (fixFraming is expected twice, per Part 1c)', () => {
+    const { container } = renderIt(SEPHORA_REPORT)
+    const bodyText = FAILURE_POINT_COPY.blocked.body({ refusal: '403', attempts: 6, robots_included: true, signed: true })
+    const occurrences = container.textContent.split(bodyText).length - 1
+    expect(occurrences).toBe(1)
+  })
+})
+
 // Honest-state suite extension (G3, LiteFullReport.test.jsx): the same
 // dash/empty-interpolation leak sweep, applied to the two new
 // partial-read fixtures — a new copy surface must inherit the guard,

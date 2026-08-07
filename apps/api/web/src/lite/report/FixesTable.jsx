@@ -8,8 +8,8 @@
  */
 import { Button, ProvenanceLine, StatusChip } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
-import { WALKTHROUGH_URL } from './reportContent.js'
-import { isPartialRead, buildMeasurableContext } from './reportDerive.js'
+import { WALKTHROUGH_URL, FAILURE_POINT_COPY } from './reportContent.js'
+import { isPartialRead, buildMeasurableContext, partialReadFailurePoint } from './reportDerive.js'
 
 const RANK_LABELS = ['01', '02', '03', '04', '05', '06', '07', '08']
 
@@ -32,6 +32,7 @@ export function FixesTable({ report, open, onToggle }) {
   const fixes = report.pillars.fixes
   if (!fixes) return null
   const partialRead = isPartialRead(report.pillars, report.scan?.degraded_reason)
+  const failurePoint = partialRead ? partialReadFailurePoint(report.scan?.degraded_reason) : null
   const rawVisible = fixes.visible || []
   const { ordered, discoveryCode } = partialRead ? _withDiscoveryFirst(rawVisible) : { ordered: rawVisible, discoveryCode: null }
   const visible = ordered
@@ -55,14 +56,20 @@ export function FixesTable({ report, open, onToggle }) {
         )}
         {visible.map((f, i) => {
           const isTrueSync = f.fix_owner === 'TRUESYNC'
+          // Blocked-run copy pass (1c): the discovery fix's description
+          // becomes the registry's plain-language action line instead
+          // of the backend's generic ENG fix text, for the blocked
+          // failure point only — registry-sourced, never inlined here.
+          const isDiscoveryRow = f.code === discoveryCode
+          const fixHuman = (isDiscoveryRow && failurePoint === 'blocked') ? FAILURE_POINT_COPY.blocked.fixFraming : f.fix_human
           return (
             <div key={f.code} className="lite-fixrow" style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface-warm)', border: `1px solid ${isTrueSync ? 'rgba(1,102,255,.32)' : 'var(--hairline)'}`, borderRadius: 12, padding: '14px 16px' }}>
               <span className="num" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, flexShrink: 0, borderRadius: 9, background: isTrueSync ? 'var(--blue)' : 'var(--canvas-dim)', color: isTrueSync ? '#fff' : 'var(--muted)', fontSize: 11.5, fontWeight: 660 }}>{RANK_LABELS[i] || i + 1}</span>
               <div className="lite-fixrow-title" style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 620, color: 'var(--text-strong)', letterSpacing: '-0.01em' }}>{f.name}</div>
-                <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.5 }}>{f.fix_human}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.5 }}>{fixHuman}</div>
               </div>
-              {f.code === discoveryCode && unlockedPoints > 0 ? (
+              {isDiscoveryRow && unlockedPoints > 0 ? (
                 <div className="lite-fixrow-points" style={{ width: 190, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                   <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ flex: 1, position: 'relative', height: 10, borderRadius: 5, background: 'var(--canvas-dim)', overflow: 'hidden' }}>

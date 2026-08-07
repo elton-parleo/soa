@@ -328,7 +328,7 @@ describe('LiteProgress — terminal banners reuse the hotfix-3/5 DegradedRunBann
       degraded_banner_facts: { refusal: '429', attempts: 3, robots_included: false },
       events,
     }} />)
-    expect(screen.getByText(/rate-limited our identified reader on every page we tried/)).toBeInTheDocument()
+    expect(screen.getByText(/Your site refused every request \(429\) before serving a page, across 3 attempts\./)).toBeInTheDocument()
   })
 
   it('no-product-pages state renders the sampler-scoped banner', () => {

@@ -769,12 +769,13 @@ describe('LiteFullReport — degraded-run banner (fetch-resilience stage, hotfix
     })
     render(<LiteFullReport report={report} />)
 
-    expect(screen.getByText(/Your site rate-limited our identified reader on every page we tried \(6 attempts, incl\. robots\.txt where applicable\)/)).toBeInTheDocument()
+    expect(screen.getByText(/Your site refused every request \(429\) before serving a page, across 6 attempts\./)).toBeInTheDocument()
+    expect(screen.getByText(/Your marketing team almost never knows it's on\./)).toBeInTheDocument()
     expect(screen.queryByText(/will hit the same wall/)).not.toBeInTheDocument()
     expect(screen.getAllByText('NOT MEASURABLE').length).toBeGreaterThan(0)
   })
 
-  it('shows the S3 403-refused wording when the banner facts say so', () => {
+  it('shows the 403-refused wording in plain language, code in parentheses', () => {
     const report = buildV3Report({
       scan_status: 'blocked',
       scan: {
@@ -784,13 +785,18 @@ describe('LiteFullReport — degraded-run banner (fetch-resilience stage, hotfix
       },
     })
     render(<LiteFullReport report={report} />)
-    expect(screen.getByText(/Your site 403-refused our identified reader on every page we tried \(3 attempts\)/)).toBeInTheDocument()
+    expect(screen.getByText(/Your site refused every request \(403\) before serving a page, across 3 attempts\./)).toBeInTheDocument()
+    expect(screen.queryByText(/403-refused/)).not.toBeInTheDocument()
   })
 
-  // W6: one template, one conditional — bannerFacts.signed switches the
-  // reader phrase; every other word in the sentence stays the same.
-  it('W6: uses the cryptographically-verified-reader phrase when bannerFacts.signed is true', () => {
-    const report = buildV3Report({
+  // Blocked-run copy pass: the banner reads from the same registry
+  // entry as the discovery finding section, and no longer branches on
+  // bannerFacts.signed — the copy is uniform regardless of whether the
+  // reader was cryptographically verified; that distinction now lives
+  // only in the V4 discovery fix's action line (FAILURE_POINT_COPY.
+  // blocked.fixFraming), not this banner.
+  it('the banner wording is the same whether or not bannerFacts.signed is true, and never says "cryptographically"', () => {
+    const signedReport = buildV3Report({
       scan_status: 'blocked',
       scan: {
         status: 'blocked', total_score: null, dimensions: [], pages_fetched: [],
@@ -798,13 +804,12 @@ describe('LiteFullReport — degraded-run banner (fetch-resilience stage, hotfix
         degraded_banner_facts: { refusal: '403', attempts: 3, robots_included: false, signed: true },
       },
     })
-    render(<LiteFullReport report={report} />)
-    expect(screen.getByText(/Your site 403-refused our cryptographically verified reader \(Web Bot Auth\) on every page we tried \(3 attempts\)/)).toBeInTheDocument()
-    expect(screen.queryByText(/403-refused our identified reader/)).not.toBeInTheDocument()
-  })
+    const { unmount } = render(<LiteFullReport report={signedReport} />)
+    expect(screen.getByText(/Your site refused every request \(403\) before serving a page, across 3 attempts\./)).toBeInTheDocument()
+    expect(screen.queryByText(/cryptographically/)).not.toBeInTheDocument()
+    unmount()
 
-  it('W6: keeps the unsigned phrase when bannerFacts.signed is false or absent', () => {
-    const report = buildV3Report({
+    const unsignedReport = buildV3Report({
       scan_status: 'blocked',
       scan: {
         status: 'blocked', total_score: null, dimensions: [], pages_fetched: [],
@@ -812,9 +817,9 @@ describe('LiteFullReport — degraded-run banner (fetch-resilience stage, hotfix
         degraded_banner_facts: { refusal: '403', attempts: 3, robots_included: false, signed: false },
       },
     })
-    render(<LiteFullReport report={report} />)
-    expect(screen.getByText(/Your site 403-refused our identified reader on every page we tried \(3 attempts\)/)).toBeInTheDocument()
-    expect(screen.queryByText(/cryptographically verified/)).not.toBeInTheDocument()
+    render(<LiteFullReport report={unsignedReport} />)
+    expect(screen.getByText(/Your site refused every request \(403\) before serving a page, across 3 attempts\./)).toBeInTheDocument()
+    expect(screen.queryByText(/cryptographically/)).not.toBeInTheDocument()
   })
 
   it('shows the S2 no-product-pages-found banner, never blaming the site', () => {
