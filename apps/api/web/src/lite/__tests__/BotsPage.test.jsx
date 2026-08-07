@@ -26,8 +26,15 @@ describe('BotsPage — W4: all required sections render', () => {
   it('renders the exact User-Agent string', () => {
     render(<BotsPage />)
     expect(screen.getByText(
-      'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ParleoAuditBot/1.0; +https://www.parleo.io/bots',
+      'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ParleoAuditBot/1.0; +https://bots.parleo.io',
     )).toBeInTheDocument()
+  })
+
+  it('declares bots.parleo.io canonical: link tag and a visible notice linking there', () => {
+    render(<BotsPage />)
+    expect(document.querySelector('link[rel="canonical"]')).toHaveAttribute('href', 'https://bots.parleo.io/')
+    const notice = screen.getByText(/Canonical documentation:/)
+    expect(notice.querySelector('a')).toHaveAttribute('href', 'https://bots.parleo.io/')
   })
 
   it('renders verification: Web Bot Auth, key directory URL, IP-allowlist preference note', () => {

@@ -25,9 +25,14 @@ BOT_NAME = "ParleoAuditBot"
 # origins gate rendering behavior on, not an attempt to pass as an
 # undeclared human browser; "compatible; ParleoAuditBot/1.0" is never
 # hidden or omitted.
+# The +URL suffix's documentation lives on the bots host, alongside the
+# key directory (KEY_DIRECTORY_URL below) — one host for everything a
+# verifier or site operator needs. This URL is registered with
+# Cloudflare Verified Bots; changing it again after registration means
+# re-registering, so treat it as stable.
 BOT_UA = (
     "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); "
-    "compatible; ParleoAuditBot/1.0; +https://www.parleo.io/bots"
+    "compatible; ParleoAuditBot/1.0; +https://bots.parleo.io"
 )
 
 # W2/W3: where verifiers (and the /bots page) find our published public
