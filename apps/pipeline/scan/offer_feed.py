@@ -10,6 +10,8 @@ agent_access_matrix/signing_enabled.
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
+from .discovery import discovery_coverage_note
+
 # H1: a row whose underlying dimension couldn't be measured this run
 # (blocked/na) reads "unmeasured" — never "invisible", which would claim
 # a real, absent signal rather than an unread one.
@@ -72,15 +74,32 @@ def extract_product_name(pages) -> Optional[str]:
     return None
 
 
-def build_offer_feed(pages, dim_scores: Dict) -> List[Dict]:
+def _eligibility_with_note(base: str, has_data: bool, note: Optional[str]) -> str:
+    """Part 4b: coverage follows provenance — a row backed by real
+    product-page data, sampled via a non-sitemap tier, says so right
+    where eligibility is already stated. A row with no data to show
+    (e.g. "no offers found") has nothing to attribute, so the note is
+    skipped there — appending it would read as an excuse, not a fact."""
+    if has_data and note:
+        return f"{base} — {note}"
+    return base
+
+
+def build_offer_feed(pages, dim_scores: Dict, discovery_path: str = "sitemap") -> List[Dict]:
     """F1: one row per value signal — list price, availability, shipping,
     member price, deals/promos, checkout value — as {name, value, channel,
     eligibility, freshness, readable}. Every row is re-serialized from
     data scorer.py/structured_data.py already computed for the crawl-
-    derived dimensions; nothing here re-fetches or re-parses a page."""
+    derived dimensions; nothing here re-fetches or re-parses a page.
+
+    discovery_path (Part 4b): when the sampled product pages came from a
+    tier other than the sitemap, every row whose eligibility is actually
+    backed by product-page data says so, via discovery.py's single-
+    sourced DISCOVERY_PATH_COVERAGE_NOTE registry."""
     products = _all_products(pages)
     offers = _all_offers(products)
     shipping_hits = [h for page in pages for h in (page.extracted.shipping_returns_text_hits if page.extracted else [])]
+    coverage_note = discovery_coverage_note(discovery_path)
 
     price_dim = dim_scores.get("price_truth_seen")
     member_dim = dim_scores.get("member_value_seen")
@@ -97,7 +116,10 @@ def build_offer_feed(pages, dim_scores: Dict) -> List[Dict]:
             "name": "List price",
             "value": f"${priced_offers[0].price:,.2f}" if priced_offers else "Not encoded",
             "channel": "schema.org" if priced_offers else "none found",
-            "eligibility": f"{len(priced_offers)} of {len(offers)} offers" if offers else "no offers found",
+            "eligibility": _eligibility_with_note(
+                f"{len(priced_offers)} of {len(offers)} offers" if offers else "no offers found",
+                bool(offers), coverage_note,
+            ),
             "freshness": "live" if priced_offers else "stale",
             "readable": _readable_from_dimension(price_dim),
         },
@@ -105,7 +127,10 @@ def build_offer_feed(pages, dim_scores: Dict) -> List[Dict]:
             "name": "Availability",
             "value": available_offers[0].availability if available_offers else "Not declared",
             "channel": "schema.org" if available_offers else "none found",
-            "eligibility": f"{len(available_offers)} of {len(offers)} offers" if offers else "no offers found",
+            "eligibility": _eligibility_with_note(
+                f"{len(available_offers)} of {len(offers)} offers" if offers else "no offers found",
+                bool(offers), coverage_note,
+            ),
             "freshness": "live" if available_offers else "stale",
             "readable": (
                 READABLE_UNMEASURED if _is_unmeasured(price_dim)
@@ -127,7 +152,10 @@ def build_offer_feed(pages, dim_scores: Dict) -> List[Dict]:
             "name": "Member price",
             "value": "Encoded on product data" if member_products else "N/A",
             "channel": "schema.org" if member_products else "none found",
-            "eligibility": f"{len(member_products)} of {len(products)} products" if products else "no products found",
+            "eligibility": _eligibility_with_note(
+                f"{len(member_products)} of {len(products)} products" if products else "no products found",
+                bool(products), coverage_note,
+            ),
             "freshness": "live" if member_products else "stale",
             "readable": _readable_from_dimension(member_dim),
         },
@@ -135,7 +163,10 @@ def build_offer_feed(pages, dim_scores: Dict) -> List[Dict]:
             "name": "Deals and promos",
             "value": "Encoded on product data" if deal_products else "Not encoded",
             "channel": "schema.org" if deal_products else "none",
-            "eligibility": f"{len(deal_products)} of {len(products)} products" if products else "no products found",
+            "eligibility": _eligibility_with_note(
+                f"{len(deal_products)} of {len(products)} products" if products else "no products found",
+                bool(products), coverage_note,
+            ),
             "freshness": "live" if deal_products else "stale",
             "readable": _readable_from_dimension(deal_dim),
         },

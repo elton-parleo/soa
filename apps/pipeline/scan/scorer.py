@@ -42,6 +42,7 @@ from typing import Optional
 from soa_shared.scan_dimensions import DIMENSIONS_BY_CODE
 
 from . import site_typing
+from .discovery import discovery_coverage_note
 from .fetcher import USER_AGENT
 from .signing import is_signing_enabled
 
@@ -304,6 +305,17 @@ def score_f1_agent_access(discovery, pages, divergence_evidence=()) -> Dimension
         evidence.append(f"sitemap present ({len(discovery.sitemap_urls)} URLs)")
     else:
         evidence.append("no sitemap found")
+
+    # Rescue session (Part 4c): honest, no-score-impact evidence for
+    # whichever run this run's product pages actually came from —
+    # discovery.py's DISCOVERY_PATH_COVERAGE_NOTE registry is the one
+    # place this wording lives (offer_feed.py's eligibility column
+    # draws from the same registry, never a second literal copy).
+    if discovery.discovery_path not in ("sitemap", "none"):
+        note = discovery_coverage_note(discovery.discovery_path) or discovery.discovery_path
+        evidence.append(
+            f"{_reader_phrase()} couldn't find product pages through your declared sitemaps — {note}"
+        )
 
     fix = None
     fix_human = None

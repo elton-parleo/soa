@@ -103,6 +103,13 @@ def _gather_pages(discovery: DiscoveryResult, budget: FetchBudget) -> list:
             result = discovery.llms_txt_fetch
         elif candidate.kind == "mcp_well_known" and discovery.mcp_well_known_fetch is not None:
             result = discovery.mcp_well_known_fetch
+        elif candidate.url in discovery.reused_product_fetches:
+            # Part 3 (3b): the LLM-assisted tier already fetched-and-
+            # verified this exact URL during discovery (charged to
+            # discovery_budget) — reused here rather than fetched again
+            # against the content budget, same reuse idea as homepage_
+            # fetch/llms_txt_fetch/mcp_well_known_fetch above.
+            result = discovery.reused_product_fetches[candidate.url]
         elif not budget.has_capacity():
             continue
         else:
@@ -387,7 +394,14 @@ def _degraded_banner_facts(discovery: DiscoveryResult, pages: list, reason: str)
     return {}
 
 
-def run_scan(input_url_or_domain: str) -> ScanResult:
+def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanResult:
+    """
+    api_key (Part 3, rescue session): optional — threaded down to
+    discover_pages' LLM-assisted last-resort tier ONLY. Every other
+    step of this pipeline is plain crawl logic and never touches it.
+    Absence must never break discovery (3c) — the tier simply never
+    fires without a key, exactly as if this parameter didn't exist.
+    """
     started_at = _now()
 
     try:
@@ -417,7 +431,7 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         budget.consume()
         canonical_origin = resolution.origin or input_origin
 
-        discovery = discover_pages(canonical_origin, budget, homepage_fetch=resolution.homepage_fetch)
+        discovery = discover_pages(canonical_origin, budget, homepage_fetch=resolution.homepage_fetch, api_key=api_key)
         pages = _gather_pages(discovery, budget)
 
         pages_fetched = [_fetch_entry(fr) for fr in discovery.all_fetches]
@@ -454,6 +468,12 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
             dimensions["degraded_reason"] = degraded_reason
             dimensions["degraded_banner_facts"] = _degraded_banner_facts(discovery, pages, degraded_reason)
             dimensions["sitemap_sampling"] = discovery.sitemap_sampling
+            # Rescue session (Part 4a): recorded regardless of outcome,
+            # same rationale as sitemap_sampling above — a run that
+            # still ended degraded (e.g. candidates were found but every
+            # one of them failed to fetch) is exactly when knowing WHICH
+            # tier produced those candidates matters most for debugging.
+            dimensions["discovery_path"] = discovery.discovery_path
             # N1: agent_access/value_protocols never depend on sampled
             # PDPs (see _DIMENSION_INPUT_MAP) — real-scored here exactly
             # like a complete run, instead of synthesized as blocked.
@@ -551,6 +571,9 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         # debuggability was the whole point ("this incident was
         # invisible in logs").
         dimensions["sitemap_sampling"] = discovery.sitemap_sampling
+        # Rescue session (Part 4a): see the degraded branch's identical
+        # line — recorded unconditionally, same rationale.
+        dimensions["discovery_path"] = discovery.discovery_path
         # Part 1 (M4): recorded on every run, same rationale as
         # sitemap_sampling above — additive sibling key, no migration.
         dimensions["agent_access_matrix"] = agent_access_matrix
@@ -566,8 +589,10 @@ def run_scan(input_url_or_domain: str) -> ScanResult:
         }
         # F1/F2: additive sibling keys, same no-migration pattern as
         # sitemap_sampling/agent_access_matrix above — re-serialized from
-        # data this run already extracted, no new fetches.
-        dimensions["offers"] = build_offer_feed(pages, dim_scores)
+        # data this run already extracted, no new fetches. discovery_path
+        # (Part 4b) lets the OfferFeed eligibility column state coverage
+        # honestly when it came from a non-sitemap tier.
+        dimensions["offers"] = build_offer_feed(pages, dim_scores, discovery_path=discovery.discovery_path)
         dimensions["product_image_url"] = extract_product_image(pages)
         dimensions["product_name"] = extract_product_name(pages)
         # 1a/1b: the brand's own icon, from the homepage document already

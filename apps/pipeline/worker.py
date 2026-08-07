@@ -597,7 +597,7 @@ def process_lite_requests():
         fetch_probe_url = None
         fetch_probe_kind = None
         try:
-            fetch_probe_url, fetch_probe_kind = _run_lite_scan(request_id, store_url)
+            fetch_probe_url, fetch_probe_kind = _run_lite_scan(request_id, store_url, api_key)
         except Exception:
             log.exception(f"[lite] request {request_id}: scan orchestration failed unexpectedly")
 
@@ -637,7 +637,7 @@ def process_lite_requests():
         _mark_lite_failed(request_id, str(e))
 
 
-def _run_lite_scan(request_id: int, store_url: str | None) -> tuple:
+def _run_lite_scan(request_id: int, store_url: str | None, api_key: str | None = None) -> tuple:
     """
     Runs the Agent Scan for this lite request and updates the
     soa_lite_scan_results row already created (status='running') in the
@@ -653,6 +653,11 @@ def _run_lite_scan(request_id: int, store_url: str | None) -> tuple:
     run_scan itself never raises (scan/engine.py) — it always returns a
     ScanResult with a terminal or 'skipped' status — so this function
     only ever writes one final update to the scan row.
+
+    api_key (rescue session, Part 3c): threaded down to run_scan's
+    last-resort LLM-assisted discovery tier ONLY — gates behind
+    LLM_DISCOVERY_FALLBACK there; a missing/None key just means that
+    one tier never fires, same as before this parameter existed.
     """
     if not store_url:
         with engine.begin() as conn:
@@ -671,7 +676,7 @@ def _run_lite_scan(request_id: int, store_url: str | None) -> tuple:
     from scan.engine import run_scan
 
     lite_events.emit_log(request_id, lite_events.TASK_CRAWL, f"reading {store_url}…")
-    result = run_scan(store_url)
+    result = run_scan(store_url, api_key=api_key)
 
     with engine.begin() as conn:
         conn.execute(text("""
@@ -696,6 +701,7 @@ def _run_lite_scan(request_id: int, store_url: str | None) -> tuple:
 
     log.info(f"[lite] request {request_id}: scan {result.status} (score={result.total_score})")
     _emit_crawl_retry_moments(request_id, result)
+    _emit_llm_discovery_moment(request_id, result)
     lite_events.emit_done(request_id, lite_events.TASK_CRAWL, _crawl_done_text(result))
     return result.fetch_probe_url, result.fetch_probe_kind
 
@@ -723,6 +729,28 @@ def _emit_crawl_retry_moments(request_id: int, result) -> None:
             request_id, lite_events.TASK_CRAWL,
             f"{entry.get('url')} rate-limited us{cooloff} — {outcome}",
         )
+
+
+def _emit_llm_discovery_moment(request_id: int, result) -> None:
+    """
+    Part 3c: the LLM-assisted discovery tier is deep inside the
+    synchronous scan/discovery.py call this function already blocked on
+    — there's no live callback to narrate from mid-scan, same
+    constraint _emit_crawl_retry_moments documents above. Reconstructed
+    here instead, from the finished sitemap_sampling trace's
+    llm_discovery key (Part 4a) — present only when that tier actually
+    ran (flag on, deterministic tiers all empty, site not blocked).
+    """
+    llm_trace = (result.dimensions or {}).get("sitemap_sampling", {}).get("llm_discovery")
+    if not llm_trace:
+        return
+    lite_events.emit_log(
+        request_id, lite_events.TASK_CRAWL,
+        "asking ChatGPT where your product pages live…",
+    )
+    returned = llm_trace.get("urls_returned", 0)
+    verified = llm_trace.get("urls_verified", 0)
+    log.info(f"[lite] request {request_id}: LLM discovery returned {returned} URL(s), {verified} verified")
 
 
 def _crawl_done_text(result) -> str:
