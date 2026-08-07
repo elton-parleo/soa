@@ -10,6 +10,68 @@ import {
 } from '../landing/scanDimensionsRegistry.js'
 import { NAV_IDS } from './useReportSections.js'
 
+// Partial-read report state (Part 2a): the ONE shared measurable-
+// denominator context every surface — rail, hero, lane chart, pillar
+// cards — reads from, so none of them can independently disagree about
+// what "measurable" means this run. Built entirely from facts already
+// serialized (each dimension's own earned/max/na/blocked), the same
+// exclusion pillarEarnedMax already applies per pillar, just summed
+// across all three and paired with each pillar's registry-nominal
+// full_max (pillarNominalWeight) — never a second, forked definition.
+export function buildMeasurableContext(pillars) {
+  const vis = pillarEarnedMax(pillars.visibility)
+  const acc = pillarEarnedMax(pillars.accessibility)
+  const tv = pillarEarnedMax(pillars.true_value)
+  const visFull = pillarNominalWeight(PILLAR_VISIBILITY)
+  const accFull = pillarNominalWeight(PILLAR_ACCESSIBILITY)
+  const tvFull = pillarNominalWeight(PILLAR_TRUE_VALUE)
+  const full_max = visFull + accFull + tvFull
+  const measurable_max = vis.max + acc.max + tv.max
+  const earned = vis.earned + acc.earned + tv.earned
+  return {
+    earned,
+    measurable_max,
+    full_max,
+    unmeasurable_points: Math.max(0, full_max - measurable_max),
+    visibility: { earned: vis.earned, measurable_max: vis.max, full_max: visFull },
+    accessibility: { earned: acc.earned, measurable_max: acc.max, full_max: accFull },
+    true_value: { earned: tv.earned, measurable_max: tv.max, full_max: tvFull },
+  }
+}
+
+function _hasBlockedDim(pillar) {
+  return (pillar?.dimensions || []).some((d) => d.blocked || d.seen?.blocked)
+}
+
+// Part 1: partial_read is a RENDERING state, never a persisted one —
+// some pillars/dimensions measured, at least one not, for a reason
+// about our reach rather than the merchant's score. Gated on an actual
+// `blocked` dimension existing somewhere (a reach failure) — never
+// just on measurable_max falling short of full_max, since `na`
+// (inapplicable, e.g. member_value_na) shrinks that same denominator
+// for reasons that have nothing to do with our reach and must never
+// trigger this state (Part 4a: unread is not na). 'unreachable' (total
+// network/DNS failure, nothing responded — not even robots.txt) stays
+// on today's failure treatment (1b): it isn't "honestly narrower," a
+// run that didn't happen.
+export function isPartialRead(pillars, degradedReason) {
+  if (degradedReason === 'unreachable') return false
+  const hasBlocked = _hasBlockedDim(pillars.visibility) || _hasBlockedDim(pillars.accessibility) || _hasBlockedDim(pillars.true_value)
+  if (!hasBlocked) return false
+  return buildMeasurableContext(pillars).measurable_max > 0
+}
+
+// Part 3c: which failure-point registry entry explains this run.
+// 'partial' covers everything that isn't a named run-level reason —
+// e.g. a complete-status run whose sampled product pages still came
+// back too thin to score a dimension (per-dimension coverage='blocked'
+// with no run-level degraded_reason at all).
+export function partialReadFailurePoint(degradedReason) {
+  if (degradedReason === 'no_product_pages_found') return 'no_product_pages_found'
+  if (degradedReason === 'blocked') return 'blocked'
+  return 'partial'
+}
+
 export function isV3Report(report) {
   return Boolean(report.pillars)
 }
@@ -112,6 +174,9 @@ export { PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE, PILLAR_VISIBILITY }
 // scroll-spy itself.
 export const NAV_META = {
   score: { icon: 'chart', label: 'Score' },
+  // Partial-read report state (Part 2b): only ever included in the
+  // built list when `partial` is passed to buildNavItems below.
+  why: { icon: 'eye', label: 'Why we stopped short' },
   viz: { icon: 'eye', label: 'Visibility' },
   acc: { icon: 'globe', label: 'Accessibility' },
   tv: { icon: 'tag', label: 'True Value' },
@@ -125,17 +190,18 @@ function kLabel(n) {
   return n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : `$${Math.round(n / 1e3)}K`
 }
 
-export function buildNavItems({ pillars, composite, exposure, active }) {
+export function buildNavItems({ pillars, composite, exposure, active, partial }) {
   const vis = pillarEarnedMax(pillars.visibility)
   const acc = pillarEarnedMax(pillars.accessibility)
   const tv = pillarEarnedMax(pillars.true_value)
 
-  return NAV_IDS.filter((id) => id !== 'fun').map((id) => {
+  return NAV_IDS.filter((id) => id !== 'fun' && (id !== 'why' || partial)).map((id) => {
     if (!(id in NAV_META)) return null
     const on = active === id
     const meta = NAV_META[id]
     let score = null
-    if (id === 'score') score = `${Math.round(composite ?? 0)}/100`
+    if (id === 'why') score = '↓'
+    else if (id === 'score') score = `${Math.round(composite ?? 0)}/100`
     else if (id === 'viz') score = `${Math.round(vis.earned)}/${Math.round(vis.max)}`
     else if (id === 'acc') score = `${Math.round(acc.earned)}/${Math.round(acc.max)}`
     else if (id === 'tv') score = `${Math.round(tv.earned)}/${Math.round(tv.max)}`

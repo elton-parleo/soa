@@ -203,6 +203,11 @@ describe('RM2-RM9: report section phone stacking', () => {
   it('shared ReportSection card padding tightens on phone (covers Visibility/Accessibility/FunnelGate/FixesTable/Exposure at once)', () => {
     expect(anyBlockMatches(THEME_CSS, '.lite-report-section', /padding/)).toBe(true)
   })
+
+  it('partial-read report state: the discovery finding\'s four-step trace and the complete-read band\'s dashed tiles collapse to one column', () => {
+    expect(anyBlockMatches(THEME_CSS, '.lite-discovery-steps-grid', /grid-template-columns:\s*1fr\s*!important/)).toBe(true)
+    expect(anyBlockMatches(THEME_CSS, '.lite-complete-read-grid', /grid-template-columns:\s*1fr\s*!important/)).toBe(true)
+  })
 })
 
 describe('Mobile QA round 1: three defects found in a real-phone walkthrough', () => {

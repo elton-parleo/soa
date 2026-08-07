@@ -125,6 +125,12 @@ def test_chewy_replay_picks_catalog_child_by_density_pdps_attempted_no_block(mon
     # Root rate-limiting shows up as Agent Access evidence, not a run block.
     agent_access_evidence = " ".join(result.dimensions["agent_access"]["evidence"])
     assert "store root rate-limited our reader" in agent_access_evidence
+    # Partial-read report state (Part 3): discovery_trace is recorded on
+    # a complete run too — 2 product URLs found via the catalog child,
+    # matching sitemap_sampling's own candidates_found.
+    trace = result.dimensions["discovery_trace"]
+    assert trace["product_urls_found"] == 2
+    assert trace["product_pages_fetched"] >= 1
 
 
 def test_chewy_replay_without_catalog_child_is_no_product_pages_found_not_blocked(monkeypatch):
@@ -140,6 +146,16 @@ def test_chewy_replay_without_catalog_child_is_no_product_pages_found_not_blocke
     assert result.total_score is None
     assert result.dimensions["degraded_reason"] == "no_product_pages_found"
     assert result.dimensions["degraded_banner_facts"]["sitemaps_read"] >= 1
+    # Partial-read report state (Part 3): zero product URLs found this
+    # run — status can only land on 'failed'/no_product_pages_found
+    # when neither a product page nor the homepage fetched (engine.py's
+    # _derive_status: either one fetching would have meant STATUS_COMPLETE),
+    # so homepage_fetched is honestly False here too.
+    trace = result.dimensions["discovery_trace"]
+    assert trace["product_urls_found"] == 0
+    assert trace["homepage_fetched"] is False
+    assert trace["product_pages_fetched"] == 0
+    assert trace["sitemaps_read"] >= 1
     # agent_access is scored for real even on a degraded run (S4) — the
     # synthetic "couldn't locate product pages" reason lives on the
     # OTHER crawl-derived dimensions, which genuinely have nothing to
@@ -304,6 +320,11 @@ def test_sephora_replay_uniform_403_stands_as_blocked_with_robots_evidence(monke
     assert facts["attempts"] > 0
     evidence = " ".join(result.dimensions["agent_access"]["evidence"])
     assert "robots.txt itself refused our identified reader (HTTP 403)" in evidence
+    # Partial-read report state (Part 3): robots.txt itself came back
+    # 403 this run — the trace must say so, not claim it was "ok".
+    trace = result.dimensions["discovery_trace"]
+    assert trace["robots_ok"] is False
+    assert trace["homepage_fetched"] is False
 
 
 # ─── Grep tests (S1.a single-sourcing; S3 retired wording) ─────────────

@@ -13,19 +13,21 @@ import { ReportRail } from './ReportRail.jsx'
 import { MobileReportNav } from './MobileReportNav.jsx'
 import { ScoreHero } from './ScoreHero.jsx'
 import { FixableHook } from './FixableHook.jsx'
+import { DiscoveryFinding } from './DiscoveryFinding.jsx'
 import { VisibilitySection } from './VisibilitySection.jsx'
 import { AccessibilitySection } from './AccessibilitySection.jsx'
 import { TrueValueSection } from './TrueValueSection.jsx'
 import { EditorialBand } from './EditorialBand.jsx'
 import { FunnelGate } from './FunnelGate.jsx'
 import { FixesTable } from './FixesTable.jsx'
+import { CompleteReadBand } from './CompleteReadBand.jsx'
 import { TrueSyncBand } from './TrueSyncBand.jsx'
 import { ExposureSection } from './ExposureSection.jsx'
 import { ClosingFork } from './ClosingFork.jsx'
 import { ReportGrounded } from './ReportGrounded.jsx'
 import { ReportFooter } from './ReportFooter.jsx'
 import { useReportSections } from './useReportSections.js'
-import { deriveScoreHeroHeadline } from './reportDerive.js'
+import { deriveScoreHeroHeadline, isPartialRead } from './reportDerive.js'
 
 const DEFAULT_REVENUE = 12_000_000
 const DEFAULT_AI_SHARE_PCT = 20
@@ -54,6 +56,7 @@ export function LiteFullReportV4({ report, token }) {
   const headline = deriveScoreHeroHeadline(report.pillars)
   const auditUrl = typeof window !== 'undefined' ? `${window.location.origin}/` : '/'
   const truesyncPoints = report.pillars.parleo_fixable_points
+  const partial = isPartialRead(report.pillars, report.scan?.degraded_reason)
 
   const primaryEntityName = primaryEntity?.name || 'Your brand'
 
@@ -75,16 +78,19 @@ export function LiteFullReportV4({ report, token }) {
             status={report.scan_status}
             degradedReason={report.scan?.degraded_reason}
             bannerFacts={report.scan?.degraded_banner_facts}
+            partialRead={partial}
           />
 
           <ScoreHero report={report} exposure={exposure} shareOfMentionsRank={rank} headline={headline} />
           <FixableHook report={report} />
+          {partial && <DiscoveryFinding report={report} open={isOpen('why')} onToggle={() => toggleSection('why')} />}
           <VisibilitySection report={report} open={isOpen('viz')} onToggle={() => toggleSection('viz')} shareOfMentionsRank={rank} />
           <AccessibilitySection report={report} open={isOpen('acc')} onToggle={() => toggleSection('acc')} />
           <TrueValueSection report={report} open={isOpen('tv')} onToggle={() => toggleSection('tv')} />
           <EditorialBand />
           <FunnelGate open={isOpen('fun')} onToggle={() => toggleSection('fun')} />
           <FixesTable report={report} open={isOpen('fix')} onToggle={() => toggleSection('fix')} />
+          {partial && <CompleteReadBand />}
           <TrueSyncBand points={truesyncPoints} />
           <ExposureSection
             report={report}
@@ -95,7 +101,7 @@ export function LiteFullReportV4({ report, token }) {
           />
           <ClosingFork points={truesyncPoints} />
           <ReportGrounded />
-          <ReportFooter auditUrl={auditUrl} />
+          <ReportFooter auditUrl={auditUrl} report={report} />
         </div>
       </div>
     </div>

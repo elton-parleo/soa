@@ -9,26 +9,48 @@
 import { DarkPanel, Glyph, StatusChip, MonoTag } from '../../ds/index.js'
 import { LITE_QUERY_COUNT, VERDICT_COMPOSITE_THRESHOLD, PILLAR_NAMES } from '../landing/scanDimensionsRegistry.js'
 import { formatCurrency } from '../liteDerive.js'
-import { pillarEarnedMax, pillarNominalWeight, pillarHeadline, isAgentReady, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from './reportDerive.js'
+import { pillarEarnedMax, pillarNominalWeight, pillarHeadline, isAgentReady, buildMeasurableContext, isPartialRead, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from './reportDerive.js'
 
-function PaceLane({ label, earned, max, isTrueValue }) {
-  const pace = (VERDICT_COMPOSITE_THRESHOLD / 100) * max
+// Part 2d: a lane whose measurable_max is short of its registry
+// full_max renders the shortfall as the DS hatch (ds-hatch, tokens.css)
+// instead of today's plain fill-to-max — and swaps the pace-delta
+// caption for "N PTS NEED PRODUCT PAGES", since pace against a max we
+// never attempted this run would be meaningless (asserted by test: no
+// lane with unread points ever renders a pace delta).
+function PaceLane({ label, earned, measurableMax, fullMax, isTrueValue }) {
+  const unread = Math.max(0, fullMax - measurableMax)
+  const pace = (VERDICT_COMPOSITE_THRESHOLD / 100) * fullMax
   const delta = Math.round(earned - pace)
-  const fillPct = max ? Math.min(100, (earned / max) * 100) : 0
+  const fillPct = fullMax ? Math.min(100, (earned / fullMax) * 100) : 0
+  const hatchPct = fullMax ? Math.min(100 - fillPct, (unread / fullMax) * 100) : 0
   const atPace = delta >= 0
   return (
-    <div style={{ flex: `0 1 auto`, width: `calc(${max}% - 18px)`, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ flex: `0 1 auto`, width: `calc(${fullMax}% - 18px)`, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: isTrueValue ? 'var(--blue)' : 'var(--text-strong)', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
       <div style={{ position: 'relative', height: 30, borderRadius: 4, background: 'var(--canvas-dim)', boxShadow: 'inset 0 1px 2px rgba(70,69,85,.16),inset 0 0 0 1px rgba(213,209,203,.95)', overflow: 'hidden', marginTop: 14 }}>
         <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${fillPct}%`, background: isTrueValue ? 'var(--blue)' : (atPace ? 'var(--ink)' : '#6B6979') }} />
+        {unread > 0 && (
+          <div className="ds-hatch" style={{ position: 'absolute', left: `${fillPct}%`, top: 0, bottom: 0, width: `${hatchPct}%` }} />
+        )}
         <span aria-hidden="true" style={{ position: 'absolute', left: `${VERDICT_COMPOSITE_THRESHOLD}%`, top: 0, bottom: 0, width: 1, background: 'rgba(30,30,46,.28)' }} />
         <span className="num" style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: isTrueValue ? 'var(--blue)' : 'var(--text-strong)' }}>
-          {Math.round(earned)}<span style={{ color: 'var(--faint)', fontWeight: 520 }}>/{Math.round(max)}</span>
+          {unread > 0
+            ? <>{Math.round(earned)}<span style={{ color: 'var(--faint)', fontWeight: 520 }}>/{Math.round(measurableMax)} of {Math.round(fullMax)}</span></>
+            : <>{Math.round(earned)}<span style={{ color: 'var(--faint)', fontWeight: 520 }}>/{Math.round(fullMax)}</span></>}
         </span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', marginTop: 8 }}>
-        <i style={{ width: 5, height: 5, borderRadius: '50%', background: atPace ? 'var(--green)' : 'var(--red-deep)', flexShrink: 0 }} />
-        <span className="mono-label" style={{ fontSize: 9, color: atPace ? 'var(--green)' : 'var(--red-deep)' }}>{atPace ? 'AT PACE' : `${delta} TO PACE`}</span>
+        {unread > 0 ? (
+          <>
+            <i style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }} />
+            <span className="mono-label" style={{ fontSize: 9, color: 'var(--amber-deep)' }}>{Math.round(unread)} PTS NEED PRODUCT PAGES</span>
+          </>
+        ) : (
+          <>
+            <i style={{ width: 5, height: 5, borderRadius: '50%', background: atPace ? 'var(--green)' : 'var(--red-deep)', flexShrink: 0 }} />
+            <span className="mono-label" style={{ fontSize: 9, color: atPace ? 'var(--green)' : 'var(--red-deep)' }}>{atPace ? 'AT PACE' : `${delta} TO PACE`}</span>
+          </>
+        )}
       </div>
     </div>
   )
@@ -42,6 +64,8 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
   const tv = pillarEarnedMax(pillars.true_value)
   const composite = report.composite
   const shortOfReady = composite != null ? Math.max(0, Math.round(VERDICT_COMPOSITE_THRESHOLD - composite)) : null
+  const partial = isPartialRead(pillars, report.scan?.degraded_reason)
+  const measurable = partial ? buildMeasurableContext(pillars) : null
 
   const pillarCards = [
     { key: PILLAR_VISIBILITY, icon: 'eye', ...vis, sub: pillarHeadline(report, PILLAR_VISIBILITY) },
@@ -65,23 +89,34 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
             <div className="lite-scorehero-headline" style={{ flex: 1, minWidth: 340, maxWidth: 560, fontSize: 38, fontWeight: 740, letterSpacing: '-0.034em', lineHeight: 1.1, color: 'var(--dark-text)' }}>
               {plain} <em style={{ fontFamily: "'Newsreader',Georgia,serif", fontWeight: 440, fontStyle: 'italic', color: 'var(--blue-lite)', letterSpacing: '-0.008em' }}>{emphasis}</em>
             </div>
-            {pillars.state === 'scored' && (
+            {pillars.state === 'scored' ? (
               <div style={{ flexShrink: 0 }}><StatusChip tone={isAgentReady(pillars) ? 'success' : 'risk'}>{isAgentReady(pillars) ? 'Agent-ready' : 'Not agent-ready'}</StatusChip></div>
-            )}
+            ) : partial ? (
+              <div style={{ flexShrink: 0 }}><StatusChip tone="warning">Partial read</StatusChip></div>
+            ) : null}
           </div>
 
           <div style={{ marginTop: 26, padding: '22px 24px 20px', background: 'rgba(242,240,239,.055)', border: '1px solid var(--dark-border)', borderRadius: 15 }}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 22, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                <span className="num lite-display-num" style={{ fontSize: 66, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)' }}>{composite != null ? Math.round(composite) : '—'}</span>
-                <span className="num" style={{ fontSize: 23, fontWeight: 560, color: 'var(--dark-faint)', letterSpacing: '-0.02em' }}>/100</span>
+                <span className="num lite-display-num" style={{ fontSize: 66, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)' }}>
+                  {composite != null ? Math.round(composite) : partial ? Math.round(measurable.earned) : '—'}
+                </span>
+                <span className="num" style={{ fontSize: 23, fontWeight: 560, color: 'var(--dark-faint)', letterSpacing: '-0.02em' }}>
+                  {composite == null && partial ? `/${Math.round(measurable.measurable_max)} measurable` : '/100'}
+                </span>
               </div>
-              {shortOfReady != null && (
+              {shortOfReady != null ? (
                 <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
                   <div className="num" style={{ fontSize: 23, fontWeight: 720, letterSpacing: '-0.024em', color: 'var(--blue-lite)', lineHeight: 1 }}>{shortOfReady} points</div>
                   <div className="mono-label" style={{ fontSize: 8.5, color: 'var(--dark-faint)', marginTop: 5 }}>SHORT OF THE READINESS BAR</div>
                 </div>
-              )}
+              ) : partial ? (
+                <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                  <div className="num" style={{ fontSize: 23, fontWeight: 720, letterSpacing: '-0.024em', color: 'var(--amber)', lineHeight: 1 }}>{Math.round(measurable.unmeasurable_points)} points</div>
+                  <div className="mono-label" style={{ fontSize: 8.5, color: 'var(--dark-faint)', marginTop: 5 }}>COULDN'T BE READ THIS RUN</div>
+                </div>
+              ) : null}
             </div>
             <div style={{ marginTop: 24 }}>
               <div style={{ background: 'var(--canvas)', borderRadius: 14, padding: '22px 22px 18px', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.7),0 10px 26px -12px rgba(10,10,18,.6)' }}>
@@ -90,9 +125,9 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
                   <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--muted)' }}>PACE FOR A READY SCORE</span>
                 </div>
                 <div className="lite-scorehero-lanes-row" style={{ display: 'flex', gap: 27, alignItems: 'flex-start' }}>
-                  <PaceLane label={PILLAR_NAMES[PILLAR_VISIBILITY]} earned={vis.earned} max={pillarNominalWeight(PILLAR_VISIBILITY)} />
-                  <PaceLane label={PILLAR_NAMES[PILLAR_ACCESSIBILITY]} earned={acc.earned} max={pillarNominalWeight(PILLAR_ACCESSIBILITY)} />
-                  <PaceLane label={PILLAR_NAMES[PILLAR_TRUE_VALUE]} earned={tv.earned} max={pillarNominalWeight(PILLAR_TRUE_VALUE)} isTrueValue />
+                  <PaceLane label={PILLAR_NAMES[PILLAR_VISIBILITY]} earned={vis.earned} measurableMax={partial ? vis.max : pillarNominalWeight(PILLAR_VISIBILITY)} fullMax={pillarNominalWeight(PILLAR_VISIBILITY)} />
+                  <PaceLane label={PILLAR_NAMES[PILLAR_ACCESSIBILITY]} earned={acc.earned} measurableMax={partial ? acc.max : pillarNominalWeight(PILLAR_ACCESSIBILITY)} fullMax={pillarNominalWeight(PILLAR_ACCESSIBILITY)} />
+                  <PaceLane label={PILLAR_NAMES[PILLAR_TRUE_VALUE]} earned={tv.earned} measurableMax={partial ? tv.max : pillarNominalWeight(PILLAR_TRUE_VALUE)} fullMax={pillarNominalWeight(PILLAR_TRUE_VALUE)} isTrueValue />
                 </div>
               </div>
             </div>
@@ -138,7 +173,7 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginTop: 18, paddingTop: 15, borderTop: '1px solid var(--dark-border)' }}>
             <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--dark-faint)' }}>
-              VISIBILITY {pillarNominalWeight(PILLAR_VISIBILITY)} · ACCESSIBILITY {pillarNominalWeight(PILLAR_ACCESSIBILITY)} · TRUE VALUE {pillarNominalWeight(PILLAR_TRUE_VALUE)} · STRAIGHT SUM, NO BLACK BOX
+              VISIBILITY {pillarNominalWeight(PILLAR_VISIBILITY)} · ACCESSIBILITY {pillarNominalWeight(PILLAR_ACCESSIBILITY)} · TRUE VALUE {pillarNominalWeight(PILLAR_TRUE_VALUE)} · STRAIGHT SUM, NO BLACK BOX{partial && ` · ${Math.round(measurable.unmeasurable_points)} PTS UNREAD THIS RUN`}
             </span>
           </div>
         </div>

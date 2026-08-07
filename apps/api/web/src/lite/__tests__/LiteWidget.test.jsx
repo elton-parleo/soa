@@ -312,8 +312,9 @@ describe('LiteWidget — adaptive shapes', () => {
     // V4 report redesign: the real, unlocked Visibility section still
     // renders in full — a blocked scan degrades Accessibility/True
     // Value only, per rule 7. The degraded banner still surfaces the
-    // same honest fetch-facts message it always has.
-    await waitFor(() => expect(screen.getByText(/rate-limited our identified reader on every page we tried/)).toBeInTheDocument())
+    // same honest fetch-facts message it always has (blocked-run copy
+    // pass: now in plain language, read from the failure-point registry).
+    await waitFor(() => expect(screen.getByText(/Your site refused every request \(429\) before serving a page, across 4 attempts\./)).toBeInTheDocument())
     expect(screen.getByText('Share of Mentions')).toBeInTheDocument()
     expect(screen.getByText('Recommendation Strength')).toBeInTheDocument()
 

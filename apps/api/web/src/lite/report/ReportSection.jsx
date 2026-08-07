@@ -1,6 +1,10 @@
 import { SectionCollapseButton } from './SectionCollapseButton.jsx'
 
-export function ReportSection({ id, eyebrow, title, score, extra, open, onToggle, children }) {
+// accentColor (Part 3, discovery finding): an optional top border —
+// additive, undefined by default so every existing caller renders
+// byte-identically. borderTop can't just append onto boxShadow's own
+// border(-adjacent) styling, so it's spread in only when passed.
+export function ReportSection({ id, eyebrow, title, score, extra, open, onToggle, children, accentColor }) {
   return (
     <div
       id={id}
@@ -8,6 +12,7 @@ export function ReportSection({ id, eyebrow, title, score, extra, open, onToggle
       style={{
         background: 'var(--surface)', borderRadius: 16, boxShadow: 'var(--shadow-card)',
         padding: '26px 28px', marginBottom: 16, scrollMarginTop: 26,
+        ...(accentColor ? { borderTop: `3px solid ${accentColor}` } : null),
       }}
     >
       <div className="lite-report-section-header" style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>

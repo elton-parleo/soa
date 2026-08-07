@@ -862,6 +862,47 @@ def test_fixes_2b_honest_exception_no_forced_row_when_no_truesync_fix_has_a_reco
     assert all(v["impact"] > 0 for v in visible)
 
 
+def test_fixes_truesync_ranks_on_a_partial_read_shaped_run_with_value_protocols_0_of_7():
+    """Partial-read report state (Part 5a): a run whose product pages
+    never came through — catalog_context, price_truth, member_value,
+    deal_citability all 'blocked' — but value_protocols (checked at the
+    domain root, independent of product pages) is real-scored at 0/7.
+    The always-ranked rule doesn't even need to fire here: blocked dims
+    are excluded from the ranking pool entirely (same as na), so
+    value_protocols' full 7-point gap naturally outranks the two
+    unblocked accessibility dims and lands in the free top 2 on its
+    own — a ranked TrueSync fix is produced without any special-casing
+    for the partial-read shape."""
+    crawl = {
+        "agent_access": {"score": 5, "max": 6, "coverage": "full", "fix": "fix-aa", "fix_human": "human-aa"},
+        "catalog_context": {"score": 0, "max": 8, "coverage": "blocked", "fix": None, "fix_human": None},
+        "protocol_feed": {"score": 0, "max": 6, "coverage": "full", "fix": "fix-pf", "fix_human": "human-pf"},
+        "price_truth_seen": {"score": 0, "max": 5, "coverage": "blocked", "fix": None, "fix_human": None},
+        "member_value_seen": {"score": 0, "max": 9, "coverage": "blocked", "fix": None, "fix_human": None},
+        "deal_citability_seen": {"score": 0, "max": 4, "coverage": "blocked", "fix": None, "fix_human": None},
+        "value_protocols_seen": {
+            "score": 0, "max": 7, "coverage": "full",
+            "fix": "declare capabilities", "fix_human": "Declare your agent-checkout capabilities in your protocol manifest.",
+        },
+    }
+    result = build_pillars_payload(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    visible = result["fixes"]["visible"]
+    codes = [v["code"] for v in visible]
+    assert "value_protocols" in codes
+    vp_entry = next(v for v in visible if v["code"] == "value_protocols")
+    assert vp_entry["fix_owner"] == "TRUESYNC"
+    assert vp_entry["impact"] == 7.0
+    # No blocked dimension ever occupies a slot or a fix_human string.
+    serialized = json.dumps(result["fixes"])
+    for blocked_code in ("catalog_context", "price_truth", "member_value", "deal_citability"):
+        assert blocked_code not in codes
+        assert blocked_code not in serialized
+
+
 def test_fixes_substitution_preserves_the_additive_schema():
     # The forced row is serialized exactly like a naturally-ranked one —
     # same five keys, no markup leak — so the substitution is invisible

@@ -86,6 +86,14 @@
 .shadow-card{box-shadow:var(--shadow-card)}.shadow-card-hover{box-shadow:var(--shadow-card-hover)}
 .shadow-elevated{box-shadow:var(--shadow-elevated)}.shadow-float{box-shadow:var(--shadow-float)}
 .section-divider{height:1px;background:linear-gradient(90deg,transparent 0%,var(--border) 22%,var(--border) 78%,transparent 100%)}
+/* Partial-read report state (Part 2d): the "not read this run" hatch —
+   token-driven (design-refs/report-partial-read-mock.html's .track u,
+   ported to CSS vars) so no caller inlines a repeating-gradient by
+   hand. Used for the lane chart's unmeasured remainder and any other
+   "unread" fill; NOT the dashed-border treatment (that stays a plain
+   `border:1px dashed var(--border-strong)`, already the established
+   convention elsewhere in the report). */
+.ds-hatch{background-image:repeating-linear-gradient(45deg,var(--canvas-dim) 0,var(--canvas-dim) 6px,var(--border) 6px,var(--border) 12px)}
 
 /* ─── tokens/motion.css ─────────────────────────────────────────────── */
 :root{--ease:cubic-bezier(.22,1,.36,1);

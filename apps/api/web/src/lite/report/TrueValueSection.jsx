@@ -11,7 +11,7 @@ import { ReportSection } from './ReportSection.jsx'
 import { HowItsScoredButton, HowItsScoredPanel, HowItsScoredChips } from './HowItsScored.jsx'
 import { SectionCollapseButton } from './SectionCollapseButton.jsx'
 import { useCollapsible } from './Collapsible.jsx'
-import { dimByCode, pillarEarnedMax, pillarHeadline, anyTrueValueEncodeBlocked, trueValueNotMeasurableCount, isAgentReady, PILLAR_TRUE_VALUE } from './reportDerive.js'
+import { dimByCode, pillarEarnedMax, pillarHeadline, anyTrueValueEncodeBlocked, trueValueNotMeasurableCount, isAgentReady, isPartialRead, PILLAR_TRUE_VALUE } from './reportDerive.js'
 import { DIMENSIONS_BY_CODE, VERDICT_COMPOSITE_THRESHOLD, VERDICT_TRUE_VALUE_RATIO_THRESHOLD } from '../landing/scanDimensionsRegistry.js'
 
 const GROUP_META = {
@@ -92,33 +92,39 @@ function ParsedPageCard({ offers, productImageUrl, productName }) {
   )
 }
 
-function ParsedPageHonestBanner() {
+// Part 4b: in a partial-read run, the honest banner also states fix 01
+// restores the panel — never a placeholder SKU either way.
+function ParsedPageHonestBanner({ partialRead }) {
   return (
     <div style={{ background: 'var(--surface-warm)', border: '1px dashed var(--border-strong)', borderRadius: 14, padding: '20px 22px', textAlign: 'center' }}>
       <div style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.6 }}>
-        No product page parsed cleanly enough this run to show what an agent read — the dimension rows below still reflect what could be measured.
+        {partialRead
+          ? "No product page was reachable this run. We couldn't get to a SKU to show you what an agent reads. Everything below still reflects what could be measured — and fix 01 brings this panel back."
+          : "No product page parsed cleanly enough this run to show what an agent read — the dimension rows below still reflect what could be measured."}
       </div>
     </div>
   )
 }
 
-function DualLensDim({ code, iconGlyph, dim, oneLiner, open, onToggle }) {
+function DualLensDim({ code, iconGlyph, dim, oneLiner, open, onToggle, partialRead }) {
   const reg = DIMENSIONS_BY_CODE[code]
   const seen = dim?.seen
   const said = dim?.said
+  const seenUnread = partialRead && seen?.blocked
+  const rowMax = seenUnread ? Math.round(said?.max ?? 0) : reg.weight
   return (
     <div style={{ borderTop: '1px solid var(--hairline)', padding: '20px 0 22px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, flexWrap: 'wrap', marginBottom: 14 }}>
         <Glyph name={iconGlyph} size={15} color="var(--text-strong)" />
         <span style={{ fontSize: 16, fontWeight: 660, color: 'var(--text-strong)', letterSpacing: '-0.014em' }}>{reg.name}</span>
         <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 13.5, fontWeight: 680, color: 'var(--text-strong)' }}>
-          {Math.round(dim?.earned ?? 0)}<span style={{ color: 'var(--faint)', fontWeight: 500 }}>/{reg.weight}</span>
+          {Math.round(dim?.earned ?? 0)}<span style={{ color: 'var(--faint)', fontWeight: 500 }}>/{rowMax}{seenUnread ? ' measurable' : ''}</span>
         </span>
         <span style={{ fontSize: 13.5, color: 'var(--muted)' }}>{oneLiner}</span>
         <span style={{ marginLeft: 'auto' }}><HowItsScoredButton open={open} onToggle={onToggle} /></span>
       </div>
       <div className="lite-dimrow-meters-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        <MeterHalf label="ON YOUR SITE" glyph="doc" sub={seen} blocked={seen?.blocked} />
+        <MeterHalf label="ON YOUR SITE" glyph="doc" sub={seen} blocked={seen?.blocked} unread={seenUnread} />
         <MeterHalf label="IN ANSWERS" glyph="agent" sub={said} blocked={false} />
       </div>
       {open && <HowItsScoredChips checks={dim?.checks} caption={reg.scoredCaption} />}
@@ -126,7 +132,12 @@ function DualLensDim({ code, iconGlyph, dim, oneLiner, open, onToggle }) {
   )
 }
 
-function MeterHalf({ label, glyph, sub, blocked }) {
+// Part 4a: `unread` is a third, distinct treatment from `blocked`'s
+// existing plain "N/M" — the DS hatch (tokens.css) plus a mono
+// "{n} PTS UNREAD" chip, only ever shown in a partial-read run.
+// Outside partial-read, a blocked box keeps today's "N/M" exactly
+// (1b — the nothing-measurable treatment is untouched).
+function MeterHalf({ label, glyph, sub, blocked, unread }) {
   const earned = sub?.earned ?? 0
   const max = sub?.max ?? 0
   const pct = max ? Math.min(100, (earned / max) * 100) : 0
@@ -134,17 +145,29 @@ function MeterHalf({ label, glyph, sub, blocked }) {
   const tone = blocked ? 'var(--faint)' : zero ? 'var(--red-deep)' : 'var(--text-strong)'
   const bg = blocked ? 'var(--canvas-dim)' : zero ? 'var(--red-tint)' : 'var(--surface-warm)'
   return (
-    <div style={{ background: bg, border: `1px solid ${zero && !blocked ? 'rgba(239,67,67,.28)' : 'var(--border)'}`, borderRadius: 12, padding: '15px 17px' }}>
+    <div
+      className={unread ? 'ds-hatch' : undefined}
+      style={{ background: unread ? undefined : bg, border: `1px ${unread ? 'dashed var(--border-strong)' : `solid ${zero && !blocked ? 'rgba(239,67,67,.28)' : 'var(--border)'}`}`, borderRadius: 12, padding: '15px 17px' }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <Glyph name={glyph} size={14} color={tone} />
         <span className="mono-label" style={{ fontSize: 9, color: tone }}>{label}</span>
-        <span className="num" style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 700, color: tone }}>
-          {blocked ? 'N/M' : `${Math.round(earned)}/${Math.round(max)}`}
-        </span>
+        {unread ? (
+          <span className="mono-label" style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--faint)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 999, padding: '3px 8px' }}>
+            {Math.round(sub?.max ?? 0)} PTS UNREAD
+          </span>
+        ) : (
+          <span className="num" style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 15, fontWeight: 700, color: tone }}>
+            {blocked ? 'N/M' : `${Math.round(earned)}/${Math.round(max)}`}
+          </span>
+        )}
       </div>
-      <div style={{ height: 8, background: blocked ? 'var(--canvas-dim)' : zero ? 'rgba(239,67,67,.16)' : 'var(--canvas-dim)', borderRadius: 4, marginTop: 13, overflow: 'hidden', position: 'relative' }}>
-        {!blocked && !zero && <i style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, background: 'var(--ink)', borderRadius: 4 }} />}
-      </div>
+      {!unread && (
+        <div style={{ height: 8, background: blocked ? 'var(--canvas-dim)' : zero ? 'rgba(239,67,67,.16)' : 'var(--canvas-dim)', borderRadius: 4, marginTop: 13, overflow: 'hidden', position: 'relative' }}>
+          {!blocked && !zero && <i style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, background: 'var(--ink)', borderRadius: 4 }} />}
+        </div>
+      )}
+      {unread && <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 10, lineHeight: 1.4 }}>Needs a product page we could parse.</div>}
     </div>
   )
 }
@@ -159,6 +182,7 @@ export function TrueValueSection({ report, open, onToggle }) {
   const valueProtocols = dimByCode(dims, 'value_protocols')
   const notMeasurable = trueValueNotMeasurableCount(pillars)
   const encodeBlocked = anyTrueValueEncodeBlocked(pillars)
+  const partialRead = isPartialRead(pillars, report.scan?.degraded_reason)
 
   const [ptOpen, togglePt] = useCollapsible()
   const [mvOpen, toggleMv] = useCollapsible()
@@ -203,7 +227,7 @@ export function TrueValueSection({ report, open, onToggle }) {
 
       {open && (
         <div className="sec-body" style={{ background: 'var(--surface)', padding: '24px 28px 26px' }}>
-          {offers ? <ParsedPageCard offers={offers} productImageUrl={report.product_image_url} productName={report.product_name} /> : <ParsedPageHonestBanner />}
+          {offers ? <ParsedPageCard offers={offers} productImageUrl={report.product_image_url} productName={report.product_name} /> : <ParsedPageHonestBanner partialRead={partialRead} />}
 
           {offers && (
             <div style={{ marginTop: 16, background: 'var(--surface-warm)', border: '1px solid var(--border)', borderRadius: 14, padding: '18px 20px' }}>
@@ -220,7 +244,7 @@ export function TrueValueSection({ report, open, onToggle }) {
               <DualLensDim
                 code="price_truth" iconGlyph="card" dim={priceTruth}
                 oneLiner={encodeBlocked && priceTruth.blocked ? 'not measurable this run' : (priceTruth.discovery_note || 'readable on your site, cited in answers')}
-                open={ptOpen} onToggle={togglePt}
+                open={ptOpen} onToggle={togglePt} partialRead={partialRead}
               />
             )}
 
@@ -246,7 +270,7 @@ export function TrueValueSection({ report, open, onToggle }) {
               <DualLensDim
                 code="member_value" iconGlyph="card" dim={memberValue}
                 oneLiner="loyalty program found and scored"
-                open={mvOpen} onToggle={toggleMv}
+                open={mvOpen} onToggle={toggleMv} partialRead={partialRead}
               />
             )}
 
@@ -254,7 +278,7 @@ export function TrueValueSection({ report, open, onToggle }) {
               <DualLensDim
                 code="deal_citability" iconGlyph="spark" dim={dealCitability}
                 oneLiner="deals encoded, cited when shoppers are ready"
-                open={dcOpen} onToggle={toggleDc}
+                open={dcOpen} onToggle={toggleDc} partialRead={partialRead}
               />
             )}
 
@@ -277,6 +301,11 @@ export function TrueValueSection({ report, open, onToggle }) {
                   <span className="mono-label" style={{ fontSize: 8, background: 'var(--blue)', color: '#fff', borderRadius: 999, padding: '2px 8px', fontWeight: 700, marginRight: 8 }}>TRUESYNC</span>
                   This is the dimension Parleo fixes directly: TrueSync declares and maintains your value across the checkout standards agents use (Google's UCP, OpenAI's ACP).
                 </div>
+                {partialRead && !valueProtocols.blocked && (
+                  <div style={{ marginTop: 10, fontSize: 12, color: 'var(--blue-deep)', lineHeight: 1.5 }}>
+                    Checked at your domain root, so the catalog problem never touched it — this score is complete.
+                  </div>
+                )}
                 {vpOpen && (
                   <div style={{ marginTop: 14, background: 'var(--surface)', border: '1px solid var(--hairline)', borderRadius: 12, padding: '14px 16px', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.6 }}>
                     <b style={{ color: 'var(--text-strong)' }}>This one never shows up in answers. It works at checkout.</b> We score what your store declares. The Full Analysis tests what works.
@@ -298,6 +327,7 @@ export function TrueValueSection({ report, open, onToggle }) {
                 <Glyph name="eyeOff" size={15} color="var(--faint)" />
                 <div style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.6 }}>
                   <b style={{ color: 'var(--text-strong)' }}>Verdict withheld:</b> {pillars.state === 'unverified' ? 'True Value itself could not be fully measured this run.' : 'part of this run could not be measured, so a readiness verdict would not be honest.'}
+                  {partialRead && ' The unread points are evidence not yet collected, not points you\'ve lost — a re-run after fix 01 fills them in.'}
                 </div>
               </div>
             )}

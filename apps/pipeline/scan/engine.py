@@ -394,6 +394,32 @@ def _degraded_banner_facts(discovery: DiscoveryResult, pages: list, reason: str)
     return {}
 
 
+def _discovery_trace_facts(discovery: DiscoveryResult, pages: list) -> dict:
+    """Partial-read report state (Part 3): the same underlying discovery
+    record sitemap_sampling already carries, reshaped into the facts
+    the report's four-step discovery trace needs. Recorded on every
+    run — same "debuggability was the point" rationale as
+    sitemap_sampling itself — not just degraded ones, since a
+    complete-status run (homepage fetched, zero product pages) can
+    still have individually blocked True Value dimensions worth
+    explaining."""
+    homepage_page = next((p for p in pages if p.candidate.kind == "homepage"), None)
+    homepage_fetched = homepage_page is not None and homepage_page.fetch_result.status == "fetched"
+    product_pages_fetched = sum(
+        1 for p in pages if p.candidate.kind == "product" and p.fetch_result.status == "fetched"
+    )
+    robots_status = discovery.robots_fetch.http_status
+    robots_ok = None if robots_status is None else robots_status not in (403, 429)
+    return {
+        "sitemaps_read": _sitemaps_read_count(discovery),
+        "product_urls_found": discovery.sitemap_sampling.get("candidates_found") or 0,
+        "tiers_attempted": [t.get("tier") for t in discovery.sitemap_sampling.get("tiers_attempted", [])],
+        "robots_ok": robots_ok,
+        "homepage_fetched": homepage_fetched,
+        "product_pages_fetched": product_pages_fetched,
+    }
+
+
 def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanResult:
     """
     api_key (Part 3, rescue session): optional — threaded down to
@@ -468,6 +494,9 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
             dimensions["degraded_reason"] = degraded_reason
             dimensions["degraded_banner_facts"] = _degraded_banner_facts(discovery, pages, degraded_reason)
             dimensions["sitemap_sampling"] = discovery.sitemap_sampling
+            # Partial-read report state (Part 3): additive sibling key,
+            # same no-migration pattern as sitemap_sampling above.
+            dimensions["discovery_trace"] = _discovery_trace_facts(discovery, pages)
             # Rescue session (Part 4a): recorded regardless of outcome,
             # same rationale as sitemap_sampling above — a run that
             # still ended degraded (e.g. candidates were found but every
@@ -574,6 +603,10 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
         # Rescue session (Part 4a): see the degraded branch's identical
         # line — recorded unconditionally, same rationale.
         dimensions["discovery_path"] = discovery.discovery_path
+        # Partial-read report state (Part 3): recorded unconditionally —
+        # a complete-status run (homepage fetched, zero product pages)
+        # can still have individually blocked True Value dimensions.
+        dimensions["discovery_trace"] = _discovery_trace_facts(discovery, pages)
         # Part 1 (M4): recorded on every run, same rationale as
         # sitemap_sampling above — additive sibling key, no migration.
         dimensions["agent_access_matrix"] = agent_access_matrix
