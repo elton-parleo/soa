@@ -175,8 +175,8 @@ export function TrueValueSection({ report, open, onToggle }) {
   return (
     <div id="tv" style={{ borderRadius: 18, boxShadow: 'var(--shadow-elevated)', marginBottom: 16, scrollMarginTop: 26, overflow: 'hidden', border: '1.5px solid var(--blue)' }}>
       <DarkPanel pad="22px 28px 20px" radius={0} atmos>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24 }}>
-          <div style={{ maxWidth: 520 }}>
+        <div className="lite-tv-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24 }}>
+          <div className="lite-tv-header-title" style={{ maxWidth: 520 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
               <Glyph name="tag" size={14} color="var(--blue-lite)" />
               <span className="mono-label" style={{ fontSize: 10, color: 'var(--blue-lite)' }}>PILLAR 03 · TRUE VALUE</span>
@@ -188,13 +188,15 @@ export function TrueValueSection({ report, open, onToggle }) {
               {notMeasurable > 0 && ` ${notMeasurable} dimension${notMeasurable === 1 ? '' : 's'} not measurable this run.`}
             </div>
           </div>
-          <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, justifyContent: 'flex-end' }}>
-              <span className="num" style={{ fontSize: 38, fontWeight: 720, letterSpacing: '-0.03em', color: 'var(--dark-text)', lineHeight: 1 }}>{Math.round(tv.earned)}</span>
-              <span className="num" style={{ fontSize: 18, fontWeight: 500, color: 'var(--dark-faint)' }}>/{Math.round(tv.max)}</span>
+          <div className="lite-tv-header-meta" style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            <div className="lite-tv-header-score">
+              <div className="lite-tv-header-points-row" style={{ display: 'flex', alignItems: 'baseline', gap: 3, justifyContent: 'flex-end' }}>
+                <span className="num" style={{ fontSize: 38, fontWeight: 720, letterSpacing: '-0.03em', color: 'var(--dark-text)', lineHeight: 1 }}>{Math.round(tv.earned)}</span>
+                <span className="num" style={{ fontSize: 18, fontWeight: 500, color: 'var(--dark-faint)' }}>/{Math.round(tv.max)}</span>
+              </div>
+              <div className="mono-label" style={{ fontSize: 9, color: 'var(--blue-lite)', marginTop: 7 }}>POINTS EARNED</div>
             </div>
-            <div className="mono-label" style={{ fontSize: 9, color: 'var(--blue-lite)', marginTop: 7 }}>POINTS EARNED</div>
-            <div style={{ marginTop: 12 }}><SectionCollapseButton open={open} onClick={onToggle} dark /></div>
+            <div className="lite-tv-header-collapse" style={{ marginTop: 12 }}><SectionCollapseButton open={open} onClick={onToggle} dark /></div>
           </div>
         </div>
       </DarkPanel>
