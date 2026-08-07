@@ -7,10 +7,11 @@ import { Stat } from './Stat.jsx'
 
 export function MetricRow({ items = [], size = 56, dark = false, countUp = true, style }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${items.length},1fr)`, gap: 0, ...style }}>
+    <div className="lite-metric-row" style={{ display: 'grid', gridTemplateColumns: `repeat(${items.length},1fr)`, gap: 0, ...style }}>
       {items.map((it, i) => (
         <div
           key={i}
+          className="lite-metric-row-item"
           style={{
             padding: '4px 32px 4px 0',
             marginLeft: i > 0 ? 32 : 0,

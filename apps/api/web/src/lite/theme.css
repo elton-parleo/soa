@@ -1936,6 +1936,30 @@
   }
 }
 
+/* ── Mobile QA round 1, defect 3: the sample-report preview's real
+   overflow cause — there is no tilt/rotate anywhere on this card (the
+   original hypothesis); confirmed live, the actual culprit is
+   MetricRow's per-column divider spacing (32px marginLeft + 32px
+   paddingLeft + the base 32px paddingRight = up to 96px of overhead on
+   a non-first column), sized for a wide desktop stat band. At 390px,
+   inside this card's already-narrow single collapsed column
+   (.lite-sample-grid, LM4 above), three columns' worth of that
+   overhead forced MetricRow's own grid track — and with it the
+   ScorePanel column sharing the same track — to ~475px, silently
+   clipped by BrowserChrome's overflow:hidden rather than visible as a
+   scrollbar. Scoped to .lite-metric-row-item (added in MetricRow.jsx
+   itself, ds/MetricRow.jsx) rather than a page override, since the
+   component is what needs the phone-safe divider width — this file's
+   only other MetricRow caller is the authed CycleDashboard, entirely
+   outside .lite-root, so it's unaffected. ── */
+@media (max-width: 640px) {
+  .lite-metric-row-item {
+    margin-left: 10px !important;
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+}
+
 /* ── LM5: final CTA — lighter panel padding + the same full-width
    stacked form as LM2 (.lite-form-compact-row above); footer wraps. ── */
 @media (max-width: 640px) {
@@ -2194,11 +2218,72 @@
   }
 }
 
-/* ── Shared ReportSection header — same minWidth-floor pattern as the
-   ScoreHero headline above, same fix. ── */
+/* ── Mobile QA round 1, defect 1: the shared ReportSection header
+   (Exposure/Visibility/Accessibility/FixesTable/FunnelGate all render
+   through this one component) squeezed its title to one word per line
+   instead of wrapping normally — confirmed live. The min-width:0 fix
+   below on its own wasn't the real bug: it let the title SHARE a row
+   with `extra`/score/collapse and shrink to make room for them, which
+   is exactly backwards (a flex item with min-width:0 in a
+   flex-wrap:wrap row keeps shrinking below its content size rather
+   than the row wrapping the item to its own line). The real fix is
+   the row becoming column direction, so title and controls are each
+   their own row instead of competing for one; min-width:0 stays as a
+   harmless second line of defense (a stretched column child has no
+   sibling to be squeezed by, so it's a no-op now, not load-bearing).
+   .lite-report-section-controls (ReportSection.jsx) groups extra/
+   score/collapse into one wrapped row via display:contents at desktop
+   (invisible to desktop layout) → display:flex here. ── */
 @media (max-width: 640px) {
+  .lite-report-section-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
   .lite-report-section-title {
     min-width: 0 !important;
+  }
+  .lite-report-section-controls {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+  }
+}
+
+/* ── Mobile QA round 1, defect 2: the True Value pillar's own header
+   (TrueValueSection.jsx — a bespoke DarkPanel intro, NOT the shared
+   ReportSection component defect 1 fixes; confirmed live that
+   Visibility/Accessibility route through plain ReportSection instead
+   and have no right-corner points display of their own, so this is a
+   one-off fix, not a "shared pillar header" bug as originally assumed).
+   Points display was `text-align:right` + absolutely-corner-pinned via
+   justify-content:space-between on the row, clipping against the
+   panel edge at 390px — confirmed live. Stacks the title block above a
+   full-width second row holding the points (left) and Collapse
+   (right), no numeric-value assumption (it's just text either way, so
+   a 0/0 blocked-run state renders exactly the same way). ── */
+@media (max-width: 640px) {
+  .lite-tv-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .lite-tv-header-title {
+    max-width: none !important;
+  }
+  .lite-tv-header-meta {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    text-align: left !important;
+    width: 100%;
+    margin-top: 16px;
+  }
+  .lite-tv-header-points-row {
+    justify-content: flex-start !important;
+  }
+  .lite-tv-header-collapse {
+    margin-top: 0 !important;
   }
 }
 

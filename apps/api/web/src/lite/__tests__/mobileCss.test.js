@@ -204,3 +204,37 @@ describe('RM2-RM9: report section phone stacking', () => {
     expect(anyBlockMatches(THEME_CSS, '.lite-report-section', /padding/)).toBe(true)
   })
 })
+
+describe('Mobile QA round 1: three defects found in a real-phone walkthrough', () => {
+  it('defect 1 — the shared ReportSection header (Exposure/Visibility/Accessibility/FixesTable/FunnelGate) stacks to column direction, and the extra/score/collapse group becomes a real wrapped row', () => {
+    expect(anyBlockMatches(THEME_CSS, '.lite-report-section-header', /flex-direction:\s*column\s*!important/)).toBe(true)
+    expect(anyBlockMatches(THEME_CSS, '.lite-report-section-controls', /display:\s*flex\s*!important/)).toBe(true)
+    expect(anyBlockMatches(THEME_CSS, '.lite-report-section-controls', /flex-wrap:\s*wrap/)).toBe(true)
+  })
+
+  it('defect 1 sweep — this is a genuine sibling-instance fix: Visibility/Accessibility/FixesTable/FunnelGate/Exposure all route through the one ReportSection component, so the same phone rule covers all of them (no per-page override was added anywhere)', () => {
+    // The only "extra"-bearing ReportSection callers are Exposure and
+    // FixesTable, but the header stacking applies to every ReportSection
+    // instance regardless of whether it passes extra/score, since the
+    // fix is on the shared component's own header row.
+    expect(THEME_CSS.match(/\.lite-report-section-header\s*[,{]/g)?.length).toBe(1)
+    // The base display:contents lives inline in ReportSection.jsx's own
+    // JSX (not in theme.css), so theme.css carries exactly one rule for
+    // this class: the phone override.
+    expect(THEME_CSS.match(/\.lite-report-section-controls\s*[,{]/g)?.length).toBe(1)
+  })
+
+  it('defect 2 — the True Value pillar header (its own bespoke DarkPanel intro, NOT the shared ReportSection defect 1 fixes — confirmed live that Visibility/Accessibility have no right-corner points display of their own) stacks to column, and the points/collapse group becomes a left-points/right-collapse row', () => {
+    expect(anyBlockMatches(THEME_CSS, '.lite-tv-header', /flex-direction:\s*column\s*!important/)).toBe(true)
+    expect(anyBlockMatches(THEME_CSS, '.lite-tv-header-meta', /flex-direction:\s*row\s*!important/)).toBe(true)
+    expect(anyBlockMatches(THEME_CSS, '.lite-tv-header-meta', /justify-content:\s*space-between\s*!important/)).toBe(true)
+    expect(anyBlockMatches(THEME_CSS, '.lite-tv-header-points-row', /justify-content:\s*flex-start\s*!important/)).toBe(true)
+  })
+
+  it('defect 3 — the real cause was MetricRow\'s 32px-per-column divider overhead forcing the sample-report card\'s grid track wider than the viewport (confirmed live: 475px track at 390px viewport, silently clipped by BrowserChrome\'s own overflow:hidden), not a tilt/rotate — there is no rotate/tilt/skew/perspective rule anywhere touching the landing preview cards', () => {
+    expect(anyBlockMatches(THEME_CSS, '.lite-metric-row-item', /margin-left:\s*10px\s*!important/)).toBe(true)
+    expect(anyBlockMatches(THEME_CSS, '.lite-metric-row-item', /padding-left:\s*10px\s*!important/)).toBe(true)
+    expect(THEME_CSS).not.toMatch(/\.lite-sample-grid[^}]*rotate/)
+    expect(THEME_CSS).not.toMatch(/\.lite-hero-grid[^}]*rotate/)
+  })
+})
