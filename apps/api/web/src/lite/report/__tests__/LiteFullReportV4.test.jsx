@@ -180,7 +180,11 @@ describe('LiteFullReportV4 — H1/H2 honest states', () => {
     expect(screen.getAllByText('Mens Cruiser Shadow Blue Natural White Sole').length).toBeGreaterThan(0)
   })
 
-  it('a blocked True Value dimension reads unmeasured, never a fabricated zero', () => {
+  // Partial-read report state: a blocked dim alongside otherwise-measured
+  // Visibility/Accessibility is exactly the partial_read shape (Part 1a),
+  // so it now reads the `unread` treatment (Part 4a) instead of the
+  // older, undifferentiated "N/M" — still never a fabricated zero.
+  it('a blocked True Value dimension in an otherwise-measured run reads unread, never a fabricated zero', () => {
     renderReport({
       pillars: {
         true_value: {
@@ -191,7 +195,8 @@ describe('LiteFullReportV4 — H1/H2 honest states', () => {
         },
       },
     })
-    expect(screen.getAllByText('N/M').length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/PTS UNREAD/).length).toBeGreaterThan(0)
+    expect(screen.queryByText('0/8')).not.toBeInTheDocument()
   })
 
   it('gap_areas_total/parleo_fixes come from the payload, not a hardcoded 4/2', () => {

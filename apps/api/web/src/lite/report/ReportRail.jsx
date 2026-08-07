@@ -1,5 +1,5 @@
 import { Wordmark, Glyph, StatusChip, Button, BrandLogo } from '../../ds/index.js'
-import { pillarEarnedMax, isAgentReady, buildNavItems } from './reportDerive.js'
+import { pillarEarnedMax, pillarNominalWeight, isAgentReady, isPartialRead, buildMeasurableContext, buildNavItems, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from './reportDerive.js'
 import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
 
 export function ReportRail({ report, primaryEntityName, exposure, active, focus, allLabel, onToggleAll }) {
@@ -8,9 +8,11 @@ export function ReportRail({ report, primaryEntityName, exposure, active, focus,
   const vis = pillarEarnedMax(pillars.visibility)
   const acc = pillarEarnedMax(pillars.accessibility)
   const tv = pillarEarnedMax(pillars.true_value)
-  const readyPct = 60
+  const partial = isPartialRead(pillars, report.scan?.degraded_reason)
+  const measurable = partial ? buildMeasurableContext(pillars) : null
+  const readyPct = partial ? Math.min(100, (60 / measurable.measurable_max) * 100) : 60
 
-  const navItems = buildNavItems({ pillars, composite, exposure, active })
+  const navItems = buildNavItems({ pillars, composite, exposure, active, partial })
 
   return (
     <div className="lite-report-rail" style={{ borderRight: '1px solid var(--border)', background: 'var(--canvas-dim)' }}>
@@ -29,31 +31,46 @@ export function ReportRail({ report, primaryEntityName, exposure, active, focus,
           </div>
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-              <span className="num" style={{ fontSize: 44, fontWeight: 750, letterSpacing: '-0.042em', lineHeight: 0.9, color: 'var(--text-strong)' }}>{composite != null ? Math.round(composite) : '—'}</span>
-              <span className="num" style={{ fontSize: 16, fontWeight: 560, color: 'var(--faint)' }}>/100</span>
+              <span className="num" style={{ fontSize: 44, fontWeight: 750, letterSpacing: '-0.042em', lineHeight: 0.9, color: 'var(--text-strong)' }}>
+                {composite != null ? Math.round(composite) : partial ? Math.round(measurable.earned) : '—'}
+              </span>
+              <span className="num" style={{ fontSize: 16, fontWeight: 560, color: 'var(--faint)' }}>
+                {composite == null && partial ? `/${Math.round(measurable.measurable_max)} read` : '/100'}
+              </span>
             </div>
             <div style={{ marginTop: 16 }}>
               <div style={{ position: 'relative', height: 11, borderRadius: 5.5, background: 'var(--canvas-dim)', boxShadow: 'inset 0 1px 2px rgba(70,69,85,.16),inset 0 0 0 1px rgba(213,209,203,.95)' }}>
-                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(100, composite ?? 0)}%`, borderRadius: 5.5, background: 'var(--ink)' }} />
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${partial ? Math.min(100, (measurable.earned / measurable.measurable_max) * 100 || 0) : Math.min(100, composite ?? 0)}%`, borderRadius: 5.5, background: 'var(--ink)' }} />
                 <span aria-hidden="true" style={{ position: 'absolute', left: `${readyPct}%`, top: -2, bottom: -2, width: 3, transform: 'translateX(-3px)', borderRadius: 2, background: 'var(--blue)' }} />
               </div>
               <div style={{ position: 'relative', height: 14, marginTop: 7 }}>
-                <span className="mono-label" style={{ position: 'absolute', left: 0, top: 0, fontSize: 9, color: 'var(--text-strong)', fontWeight: 600 }}>{composite != null ? Math.round(composite) : '—'} EARNED</span>
-                <span className="mono-label" style={{ position: 'absolute', left: `${readyPct}%`, top: 0, transform: 'translateX(-50%)', fontSize: 9, color: 'var(--muted)', whiteSpace: 'nowrap' }}>READY {readyPct}</span>
-                <span className="mono-label" style={{ position: 'absolute', right: 0, top: 0, fontSize: 9, color: 'var(--faint)' }}>100</span>
+                <span className="mono-label" style={{ position: 'absolute', left: 0, top: 0, fontSize: 9, color: 'var(--text-strong)', fontWeight: 600 }}>
+                  {composite != null ? Math.round(composite) : partial ? Math.round(measurable.earned) : '—'} EARNED
+                </span>
+                <span className="mono-label" style={{ position: 'absolute', left: `${readyPct}%`, top: 0, transform: 'translateX(-50%)', fontSize: 9, color: 'var(--muted)', whiteSpace: 'nowrap' }}>READY 60</span>
+                <span className="mono-label" style={{ position: 'absolute', right: 0, top: 0, fontSize: 9, color: 'var(--faint)' }}>{partial ? Math.round(measurable.measurable_max) : 100}</span>
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><i style={{ width: 9, height: 9, borderRadius: 2.5, background: 'var(--ink)', flexShrink: 0 }} /><span style={{ flex: 1, fontSize: 11.5, color: 'var(--muted)' }}>Visibility</span><span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--text-strong)' }}>{Math.round(vis.earned)}/{Math.round(vis.max)}</span></div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><i style={{ width: 9, height: 9, borderRadius: 2.5, background: 'rgba(30,30,46,.45)', flexShrink: 0 }} /><span style={{ flex: 1, fontSize: 11.5, color: 'var(--muted)' }}>Accessibility</span><span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--text-strong)' }}>{Math.round(acc.earned)}/{Math.round(acc.max)}</span></div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><i style={{ width: 9, height: 9, borderRadius: 2.5, background: 'var(--blue)', flexShrink: 0 }} /><span style={{ flex: 1, fontSize: 11.5, color: 'var(--blue)', fontWeight: 560 }}>True Value</span><span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--blue)', fontWeight: 640 }}>{Math.round(tv.earned)}/{Math.round(tv.max)}</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><i style={{ width: 9, height: 9, borderRadius: 2.5, background: 'var(--ink)', flexShrink: 0 }} /><span style={{ flex: 1, fontSize: 11.5, color: 'var(--muted)' }}>Visibility</span><span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--text-strong)' }}>{Math.round(vis.earned)}/{Math.round(vis.max)}{partial && vis.max < pillarNominalWeight(PILLAR_VISIBILITY) ? '*' : ''}</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><i style={{ width: 9, height: 9, borderRadius: 2.5, background: 'rgba(30,30,46,.45)', flexShrink: 0 }} /><span style={{ flex: 1, fontSize: 11.5, color: 'var(--muted)' }}>Accessibility</span><span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--text-strong)' }}>{Math.round(acc.earned)}/{Math.round(acc.max)}{partial && acc.max < pillarNominalWeight(PILLAR_ACCESSIBILITY) ? '*' : ''}</span></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><i style={{ width: 9, height: 9, borderRadius: 2.5, background: 'var(--blue)', flexShrink: 0 }} /><span style={{ flex: 1, fontSize: 11.5, color: 'var(--blue)', fontWeight: 560 }}>True Value</span><span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--blue)', fontWeight: 640 }}>{Math.round(tv.earned)}/{Math.round(tv.max)}{partial && tv.max < pillarNominalWeight(PILLAR_TRUE_VALUE) ? '*' : ''}</span></div>
             </div>
+            {partial && (
+              <div className="mono-label" style={{ fontSize: 8.5, color: 'var(--amber-deep)', marginTop: 8 }}>
+                *{Math.round(measurable.unmeasurable_points)} PTS NOT MEASURABLE
+              </div>
+            )}
           </div>
-          {pillars.state === 'scored' && (
+          {pillars.state === 'scored' ? (
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
               <StatusChip tone={isAgentReady(pillars) ? 'success' : 'risk'} size="sm">{isAgentReady(pillars) ? 'Agent-ready' : 'Not agent-ready'}</StatusChip>
             </div>
-          )}
+          ) : partial ? (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
+              <StatusChip tone="warning" size="sm">Partial read</StatusChip>
+            </div>
+          ) : null}
         </div>
 
         <div>

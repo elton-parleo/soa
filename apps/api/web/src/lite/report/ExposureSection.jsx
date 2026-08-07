@@ -15,6 +15,7 @@ import { Glyph, LeakageEstimator } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
 import { useCollapsible } from './Collapsible.jsx'
 import { REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX, AI_SHARE_SLIDER_MIN, AI_SHARE_SLIDER_MAX, formatCurrency } from '../liteDerive.js'
+import { isPartialRead } from './reportDerive.js'
 
 // 4c: reasons.impact_weight * exposure, independently rounded, can
 // drift a dollar or two from the modeled total — the remainder goes to
@@ -44,6 +45,7 @@ export function ExposureSection({ report, revenue, onRevenueChange, aiSharePct, 
     value: dollars[i],
     display: `≈ ${formatCurrency(dollars[i])}/yr · modeled`,
   }))
+  const partialRead = isPartialRead(report?.pillars || {}, report?.scan?.degraded_reason)
 
   return (
     <ReportSection
@@ -92,6 +94,11 @@ export function ExposureSection({ report, revenue, onRevenueChange, aiSharePct, 
       <div id="expmodel" style={{ marginTop: 16, scrollMarginTop: 26, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.6 }}>
         <b style={{ color: 'var(--text-strong)' }}>The model:</b> revenue × AI-assisted share × value-invisibility factor. {formatCurrency(revenue)} annual revenue, {aiSharePct}% AI-assisted share. The invisibility factor comes from your True Value result. The Full Analysis replaces this model with measured price gaps.
       </div>
+      {partialRead && (
+        <div className="mono-label" style={{ marginTop: 10, fontSize: 8.5, color: 'var(--faint)' }}>
+          ▨ SPLIT MODELED FROM THIS RUN'S OWN MEASURED GAPS · UNREAD DIMENSIONS CONTRIBUTE NOTHING
+        </div>
+      )}
     </ReportSection>
   )
 }

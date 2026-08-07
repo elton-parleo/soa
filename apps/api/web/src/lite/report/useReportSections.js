@@ -11,8 +11,13 @@
  */
 import { useEffect, useRef, useState } from 'react'
 
-export const NAV_IDS = ['score', 'viz', 'acc', 'tv', 'fun', 'fix', 'truesync', 'exp']
-export const SECTION_KEYS = ['viz', 'acc', 'tv', 'fun', 'fix', 'exp']
+// Partial-read report state (Part 3a): 'why' (the discovery finding)
+// sits between score and viz — harmless to include unconditionally
+// here, since document.getElementById('why') is simply absent (and
+// skipped) on a fully-scored report that never renders the section;
+// buildNavItems (reportDerive.js) is what actually gates its nav row.
+export const NAV_IDS = ['score', 'why', 'viz', 'acc', 'tv', 'fun', 'fix', 'truesync', 'exp']
+export const SECTION_KEYS = ['why', 'viz', 'acc', 'tv', 'fun', 'fix', 'exp']
 
 export function useReportSections() {
   const [sec, setSec] = useState({})

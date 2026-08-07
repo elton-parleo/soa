@@ -17,6 +17,7 @@
  * message keyed on status alone.
  */
 import { LightCard, InfoBadge } from './liteTheme.jsx'
+import { PARTIAL_READ_BANNER_COPY } from './report/reportContent.js'
 
 function _attemptsPhrase(bannerFacts) {
   const n = bannerFacts?.attempts
@@ -42,7 +43,7 @@ function _attemptsPhrase(bannerFacts) {
 // to honestly describe, only total non-response. The could-not-access
 // direction is universally true regardless of state, so it always
 // renders.
-function _fetchProbeSentence(bannerFacts, degradedReason, status) {
+export function _fetchProbeSentence(bannerFacts, degradedReason, status) {
   const probe = bannerFacts?.fetch_probe
   if (!probe) return ''
   if (!probe.agent_could_access) {
@@ -58,7 +59,23 @@ function _fetchProbeSentence(bannerFacts, degradedReason, status) {
   return ''
 }
 
-export function DegradedRunBanner({ status, degradedReason, bannerFacts }) {
+export function DegradedRunBanner({ status, degradedReason, bannerFacts, partialRead }) {
+  // Part 3d: partial_read demotes this banner to a compact pointer down
+  // to the discovery finding section — the causal explanation lives
+  // ONLY there now (grep-tested: appears once per report), never
+  // restated here. Renders even when status is 'complete' (a
+  // partial-read run whose homepage/product pages still fetched).
+  if (partialRead) {
+    return (
+      <LightCard>
+        <InfoBadge message={PARTIAL_READ_BANNER_COPY.summary} />
+        <div className="lite-body" style={{ marginTop: 10 }}>
+          <a href="#why" style={{ color: 'var(--amber-deep)', fontWeight: 640 }}>{PARTIAL_READ_BANNER_COPY.linkLabel} ↓</a>
+        </div>
+      </LightCard>
+    )
+  }
+
   if (status !== 'blocked' && status !== 'failed') return null
 
   let message

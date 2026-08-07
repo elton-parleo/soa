@@ -26,7 +26,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { BrandLogo, StatusChip, Glyph } from '../../ds/index.js'
-import { isAgentReady, buildNavItems } from './reportDerive.js'
+import { isAgentReady, isPartialRead, buildNavItems } from './reportDerive.js'
 
 export function ReportSummaryBlock({ report, primaryEntityName, summaryRef }) {
   const pillars = report.pillars
@@ -94,7 +94,8 @@ export function MobileStickyBar({ report, primaryEntityName, visible, sheetOpen,
 export function SectionsSheet({ report, exposure, active, open, onClose }) {
   const pillars = report.pillars
   const composite = report.composite
-  const navItems = buildNavItems({ pillars, composite, exposure, active })
+  const partial = isPartialRead(pillars, report.scan?.degraded_reason)
+  const navItems = buildNavItems({ pillars, composite, exposure, active, partial })
 
   // Closing the sheet unmounts the very <a> the browser is mid-navigating
   // from — confirmed live: the native anchor jump loses the race against

@@ -513,6 +513,7 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
             degraded_reason=degraded.get('degraded_reason'),
             degraded_banner_facts=banner_facts or None,
             agent_access_matrix=degraded.get('agent_access_matrix'),
+            discovery_trace=degraded.get('discovery_trace'),
         ).model_dump()
 
     dimensions = _decode_json_field(dimensions, {})
@@ -599,6 +600,7 @@ def _build_scan_payload(scan_row, linked: dict) -> dict | None:
         dimensions=dim_rows,
         pages_fetched=pages_fetched,
         agent_access_matrix=dimensions.get('agent_access_matrix'),
+        discovery_trace=dimensions.get('discovery_trace'),
     ).model_dump()
 
 

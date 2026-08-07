@@ -816,6 +816,11 @@ class PublicLiteScan(BaseModel):
     on both, see engine.py's S4/M1-M5 comments), null only when no scan
     row exists at all or under an older scorer_version. No scoring
     impact — evidence/table only.
+
+    Partial-read report state (Part 3): discovery_trace is engine.py's
+    _discovery_trace_facts(), recorded unconditionally (see engine.py —
+    a complete-status run can still have individually blocked True
+    Value dimensions worth explaining). Null only pre-this-stage.
     """
     status: str
     total_score: Optional[int] = None
@@ -828,6 +833,7 @@ class PublicLiteScan(BaseModel):
     degraded_reason: Optional[str] = None
     degraded_banner_facts: Optional[dict] = None
     agent_access_matrix: Optional[List[dict]] = None
+    discovery_trace: Optional[dict] = None
 
 
 class PublicLiteVisibilityMentionRate(BaseModel):

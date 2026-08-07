@@ -2299,6 +2299,18 @@
   }
 }
 
+/* ── Partial-read report state: the discovery finding's four-step
+   trace and the complete-read band's four dashed tiles are both
+   fixed-N-column grids (repeat(N,1fr)) sized for desktop — stack to
+   one column on phone, same convention as every other report grid
+   above. ── */
+@media (max-width: 640px) {
+  .lite-discovery-steps-grid,
+  .lite-complete-read-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 /* ── RM4: the AGENT VIEW parsed card — single column, image first
    (column-reverse over the existing two DOM children puts the
    already-second image div visually first without reordering source),
