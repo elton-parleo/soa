@@ -1,20 +1,14 @@
 /**
  * L3: static marketing content for the V4 landing page — sample-card
  * numbers, field-evidence cases, proof-band logo lists, provenance
- * lines. Ported verbatim from the mock's renderVals() data block
- * (design-refs/20260405_Audit SOA Front-end/Audit Landing.dc.html),
- * from the same Allbirds sample run referenced throughout that mock
- * and the report mock (Audit Report.dc.html) — originally 40/100,
- * Visibility 25/40, Accessibility 8/20, True Value 7/40.
- *
- * Re-weighting session: SAMPLE_PILLAR_ITEMS below is a PLACEHOLDER —
- * proportionally rescaled onto the new maxes (32/18/50) from the
- * original ratios, not a real number. The original Allbirds run was
- * scored under an earlier SCORER_VERSION, so SAMPLE_REPORT_URL's own
- * token now serves the "this report has expired" state (Part 4) rather
- * than a real report — both need a fresh run against the current model
- * post-deploy: re-run the sample brand, point SAMPLE_REPORT_URL at the
- * new token, and replace these placeholder numbers with its real ones.
+ * lines. The sample-card numbers (SAMPLE_OFFERS, SAMPLE_PILLAR_ITEMS)
+ * and SAMPLE_REPORT_URL's token are the real values of a live Allbirds
+ * run scored under SCORER_VERSION 5 (audit.parleo.io/r/
+ * b41eb69930a14d97b2a7e7a306a17440), fetched from the public report
+ * API and transcribed here as-is — not placeholders, not rescaled.
+ * SAMPLE_REPORT_SCORER_VERSION records which SCORER_VERSION that run
+ * was scored under, so a test can catch the next re-weighting before
+ * this page quietly starts linking an expired report again.
  *
  * Deliberately excludes the mock's dead data (never referenced by any
  * rendered tag in its own template): previewPillars, previewFixes,
@@ -25,31 +19,34 @@
 import { reportUrl } from '../publicUrls.js'
 import { LITE_QUERY_COUNT } from './scanDimensionsRegistry.js'
 
-// B3: no dedicated sample-report route exists yet — points at a real,
-// complete report already in the database (the Allbirds run generated
-// during an earlier stage's live verification). Re-weighting session:
-// this run predates the current SCORER_VERSION, so as of this deploy
-// the link now serves the expired-report state (Part 4) — needs
-// re-pointing at a fresh run, see the module docstring above.
-export const SAMPLE_REPORT_URL = reportUrl('1710d72d74ee4a2ea6c9884c72cc96e2')
+// The version SAMPLE_REPORT_URL's run was scored under — a re-weighting
+// that bumps SCORER_VERSION retires old reports (Part 4) rather than
+// migrating them, so this sample goes stale the same way; see the test
+// asserting this equals the live SCORER_VERSION.
+export const SAMPLE_REPORT_SCORER_VERSION = '5'
 
-// Sample report card (Hero, right column) — the mock's illustrative
-// preview OfferFeed, distinct from the report's own live-run OfferFeed.
+// B3: no dedicated sample-report route exists yet — points at a real,
+// complete report already in the database.
+export const SAMPLE_REPORT_URL = reportUrl('b41eb69930a14d97b2a7e7a306a17440')
+
+// Sample report card (Hero, right column) — the run's own real
+// OfferFeed rows, verbatim from the report API.
 export const SAMPLE_OFFERS = [
-  { name: 'List price', value: '$105.00', channel: 'schema.org', eligibility: '1 of 4 pages', freshness: 'live', readable: 'seen' },
-  { name: 'Free shipping', value: 'Text only', channel: 'page copy', eligibility: 'no structured threshold', freshness: 'live', readable: 'partial' },
-  { name: 'Member price', value: 'N/A', channel: 'none found', eligibility: 'no loyalty program', freshness: 'stale', readable: 'invisible' },
-  { name: 'Deals and promos', value: 'Not encoded', channel: 'none', eligibility: '0 of 4 pages', freshness: 'stale', readable: 'invisible' },
+  { name: 'List price', value: '$110.00', channel: 'schema.org', eligibility: '16 of 16 offers', freshness: 'live', readable: 'partial' },
+  { name: 'Availability', value: 'InStock', channel: 'schema.org', eligibility: '16 of 16 offers', freshness: 'live', readable: 'seen' },
+  { name: 'Shipping', value: 'free shipping', channel: 'page copy', eligibility: 'text only, no structured threshold', freshness: 'live', readable: 'partial' },
+  { name: 'Member price', value: 'N/A', channel: 'none found', eligibility: '0 of 67 products', freshness: 'stale', readable: 'invisible' },
+  { name: 'Deals and promos', value: 'Not encoded', channel: 'none', eligibility: '0 of 67 products', freshness: 'stale', readable: 'partial' },
   { name: 'Checkout value', value: 'Nothing declared', channel: 'UCP / ACP', eligibility: 'no declaration found', freshness: 'stale', readable: 'invisible' },
 ]
 
-// MetricRow items — sample report card. Placeholder values, proportionally
-// rescaled from the original run's ratios onto the new maxes — see the
-// module docstring; needs a real re-run to replace these.
+// MetricRow items — sample report card. Real earned/max per pillar;
+// subs are the run's own generated_headlines where the report shows
+// one, the registry default headline otherwise.
 export const SAMPLE_PILLAR_ITEMS = [
-  { value: 20, suffix: '/32', label: 'Visibility', sub: 'Agents know who you are' },
-  { value: 7, suffix: '/18', label: 'Accessibility', sub: 'Little of your catalog is readable' },
-  { value: 9, suffix: '/50', label: 'True Value', sub: 'Only Parleo measures this', accent: true },
+  { value: 25, suffix: '/32', label: 'Visibility', sub: 'Agents know who you are' },
+  { value: 14, suffix: '/18', label: 'Accessibility', sub: "Agents can knock, but can't read much" },
+  { value: 15, suffix: '/50', label: 'True Value', sub: 'Your prices are not machine-readable, while deal details appear on 2/2 pages.', accent: true },
 ]
 
 // Proof band — LogoMarquee items

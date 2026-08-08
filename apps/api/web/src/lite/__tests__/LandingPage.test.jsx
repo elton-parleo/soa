@@ -37,7 +37,7 @@ describe('LandingPage — sections render', () => {
     expect(screen.getByText('costing you?')).toBeInTheDocument()
     expect(screen.getByText('CASE 01')).toBeInTheDocument()
     expect(screen.getByText('Find the leak')).toBeInTheDocument()
-    expect(screen.getByText('MODELED EXPOSURE $775K / YR')).toBeInTheDocument()
+    expect(screen.getByText('MODELED EXPOSURE $4.5M / YR')).toBeInTheDocument()
     expect(screen.getByText(/The Share of Algorithm framework/)).toBeInTheDocument()
     expect(screen.getByText('Every number above is measured')).toBeInTheDocument()
     expect(screen.getByText('TRUESYNC')).toBeInTheDocument()
