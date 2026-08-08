@@ -34,7 +34,7 @@ FULL_MANIFEST = json.dumps({
 def test_no_mcp_page_at_all_scores_zero_with_honest_evidence():
     result = scorer.score_value_protocols([])
     assert result.score == 0.0
-    assert result.max == 7
+    assert result.max == 14
     assert result.evidence == ["no protocol profile found"]
 
 
@@ -67,52 +67,64 @@ def test_non_object_json_body_scores_zero():
     assert result.score == 0.0
 
 
-# ─── V2/V3: full credit and each sub-check independently ─────────────────
+# ─── V2/V3, re-weighting session (Part 1): five independent checks ───────
+# schema_resolution (3) — capabilities is a list AND specVersion is a
+# string, regardless of whether either is a REAL/current value.
+# version_currency (3) — specVersion is a string AND in
+# CURRENT_SPEC_VERSIONS. capability checks (ucp_discount 3, loyalty 3,
+# acp_promotions 2) unchanged in what they test, rebalanced in points.
 
-def test_full_manifest_scores_all_seven_points():
+def test_full_manifest_scores_all_fourteen_points():
     result = scorer.score_value_protocols([_mcp_page(body=FULL_MANIFEST)])
-    assert result.score == 7.0
-    assert result.max == 7
+    assert result.score == 14.0
+    assert result.max == 14
 
 
-def test_ucp_discount_only_scores_three():
+def test_ucp_discount_alone_scores_resolution_plus_the_capability():
+    # capabilities=[ucp] is a real list (+3 resolution); specVersion
+    # "2024-01" is a string but not current (+0 currency); ucp matches (+3).
     body = json.dumps({"capabilities": [scorer.UCP_DISCOUNT_CAPABILITY], "specVersion": "2024-01"})
     result = scorer.score_value_protocols([_mcp_page(body=body)])
-    assert result.score == 3.0
+    assert result.score == 6.0  # 3 (resolution) + 3 (ucp_discount)
 
 
-def test_loyalty_extension_only_scores_two():
+def test_loyalty_extension_alone_scores_resolution_plus_the_capability():
     body = json.dumps({"capabilities": [scorer.UCP_LOYALTY_CAPABILITY], "specVersion": "2024-01"})
     result = scorer.score_value_protocols([_mcp_page(body=body)])
-    assert result.score == 2.0
+    assert result.score == 6.0  # 3 (resolution) + 3 (loyalty_extension)
 
 
-def test_acp_promotions_only_scores_one():
+def test_acp_promotions_alone_scores_resolution_plus_the_capability():
     body = json.dumps({"capabilities": [scorer.ACP_PROMOTIONS_CAPABILITY], "specVersion": "2024-01"})
     result = scorer.score_value_protocols([_mcp_page(body=body)])
-    assert result.score == 1.0
+    assert result.score == 5.0  # 3 (resolution) + 2 (acp_promotions)
 
 
-def test_current_version_alone_scores_one():
+def test_current_version_with_no_capabilities_scores_resolution_and_currency():
+    # An empty-but-well-typed capabilities list still resolves (it IS a
+    # list) — resolution and currency are both real, distinct facts
+    # about this manifest, independent of whether anything is declared.
     body = json.dumps({"capabilities": [], "specVersion": "2025-01"})
     result = scorer.score_value_protocols([_mcp_page(body=body)])
-    assert result.score == 1.0
+    assert result.score == 6.0  # 3 (resolution) + 3 (currency)
 
 
-def test_wrong_version_profile_scores_zero_on_the_version_subcheck():
+def test_wrong_version_profile_scores_resolution_and_the_capability_not_currency():
     """A manifest that's otherwise well-formed but declares an out-of-date
-    or unrecognized specVersion doesn't earn the version/schema point,
-    even though capabilities themselves might still score."""
+    or unrecognized specVersion doesn't earn the currency point, even
+    though resolution and capabilities themselves still score."""
     body = json.dumps({"capabilities": [scorer.UCP_DISCOUNT_CAPABILITY], "specVersion": "1999-01"})
     result = scorer.score_value_protocols([_mcp_page(body=body)])
-    assert result.score == 3.0  # ucp_discount only, not +1 for version
+    assert result.score == 6.0  # 3 (resolution) + 3 (ucp_discount), not +3 currency
     assert any("out of date" in e or "unrecognized" in e for e in result.evidence)
 
 
-def test_missing_spec_version_scores_zero_on_the_version_subcheck():
+def test_missing_spec_version_fails_both_resolution_and_currency():
+    # specVersion absent entirely -> not a string -> resolution requires
+    # BOTH a list AND a string, so it fails too, not just currency.
     body = json.dumps({"capabilities": [scorer.ACP_PROMOTIONS_CAPABILITY]})
     result = scorer.score_value_protocols([_mcp_page(body=body)])
-    assert result.score == 1.0  # acp_promotions only
+    assert result.score == 2.0  # acp_promotions only
 
 
 # ─── V2: conservative exact-namespace match, never a substring/prefix ────
@@ -125,15 +137,19 @@ def test_a_similar_but_not_exact_capability_string_never_counts():
         "specVersion": "2025-01",
     })
     result = scorer.score_value_protocols([_mcp_page(body=body)])
-    # Only the version sub-check clears — none of the near-miss strings
-    # are an exact match for the real capability namespace.
-    assert result.score == 1.0
+    # Resolution and currency both clear (a well-typed, current
+    # manifest) — none of the near-miss strings are an exact match for
+    # the real capability namespace, so no capability check fires.
+    assert result.score == 6.0  # 3 (resolution) + 3 (currency)
 
 
-def test_capabilities_field_of_the_wrong_type_is_treated_as_empty():
+def test_capabilities_field_of_the_wrong_type_fails_resolution_not_currency():
+    # A bare string isn't a capabilities list -> resolution fails (it
+    # needs a real list) -> currency is independent of resolution and
+    # still clears on its own.
     body = json.dumps({"capabilities": "dev.ucp.shopping.discount", "specVersion": "2025-01"})
     result = scorer.score_value_protocols([_mcp_page(body=body)])
-    assert result.score == 1.0  # version only — a bare string isn't a capabilities list
+    assert result.score == 3.0  # currency only
 
 
 # ─── F3/VP dedup: profile present but no capabilities declared ───────────

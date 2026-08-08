@@ -14,7 +14,7 @@ import { Glyph, Button, BrowserChrome, Wordmark, BrandLogo } from '../../ds/inde
 import { LiteForm } from '../LiteForm.jsx'
 import { SAMPLE_REPORT_URL } from './landingSampleContent.js'
 
-export function Hero({ onSubmitted }) {
+export function Hero({ onSubmitted, initialStoreUrl = '' }) {
   return (
     <section style={{ position: 'relative', isolation: 'isolate', overflow: 'hidden' }}>
       <div aria-hidden="true" className="light-burn-warm" style={{ position: 'absolute', inset: 0, zIndex: 0 }} />
@@ -46,7 +46,7 @@ export function Hero({ onSubmitted }) {
             </div>
           </div>
           <div id="run" style={{ display: 'flex', gap: 10, marginTop: 28, maxWidth: 470, scrollMarginTop: 90 }}>
-            <LiteForm compact onSubmitted={onSubmitted} placeholder="yourstore.com" submitLabel="Run my free audit" />
+            <LiteForm compact onSubmitted={onSubmitted} placeholder="yourstore.com" submitLabel="Run my free audit" initialBrandName={initialStoreUrl} />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', marginTop: 26 }}>
             <span style={{ fontSize: 13.5, color: 'var(--faint)', marginRight: 2 }}>Measured on</span>
@@ -96,20 +96,20 @@ export function Hero({ onSubmitted }) {
                       </div>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 14, border: '1px solid rgba(127,176,255,.32)', background: 'rgba(127,176,255,.09)', borderRadius: 999, padding: '6px 12px' }}>
                         <Glyph name="arrowUpRight" size={12} color="#7FB0FF" />
-                        <span className="mono-label" style={{ fontSize: 9, color: '#7FB0FF' }}>20 POINTS RECOVERABLE</span>
+                        <span className="mono-label" style={{ fontSize: 9, color: '#7FB0FF' }}>25 POINTS RECOVERABLE</span>
                       </div>
                       <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--dark-border)' }}>
                         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-                            <span className="num lite-display-num" style={{ fontSize: 46, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)' }}>40</span>
+                            <span className="num lite-display-num" style={{ fontSize: 46, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)' }}>36</span>
                             <span className="num" style={{ fontSize: 17, fontWeight: 560, color: 'var(--dark-faint)' }}>/100</span>
                           </div>
                           <div className="mono-label" style={{ marginLeft: 'auto', fontSize: 8, color: 'var(--dark-faint)', textAlign: 'right', lineHeight: 1.6 }}>
-                            AGENTIC VALUE SCORE<br />20 SHORT OF THE READINESS BAR
+                            AGENTIC VALUE SCORE<br />24 SHORT OF THE READINESS BAR
                           </div>
                         </div>
                         <div style={{ marginTop: 20 }}>
-                          <ReadinessBarMini earnedPct={40} readyPct={60} />
+                          <ReadinessBarMini earnedPct={36} readyPct={60} />
                         </div>
                       </div>
                     </div>
@@ -120,16 +120,20 @@ export function Hero({ onSubmitted }) {
                     <span className="mono-label" style={{ fontSize: 8.5, color: 'var(--faint)' }}>POINTS EARNED PER PILLAR</span>
                     <span style={{ flex: 1, height: 1, background: 'var(--hairline)' }} />
                   </div>
+                  {/* Re-weighting session: placeholder numbers, proportionally
+                      rescaled from the same illustrative Allbirds story onto
+                      the new maxes (32/18/50) — see landingSampleContent.js's
+                      module docstring; needs a real re-run to replace these. */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 11 }}>
-                    <HeroPillarRow label="Visibility" sub="Whether agents mention you at all" pct={62.5} score="25/40" />
-                    <HeroPillarRow label="Accessibility" sub="Whether they can read your pages" pct={40} score="8/20" />
-                    <HeroPillarRow trueValue label="True Value" sub="Whether they can quote your real price" pct={17.5} score="7/40" />
+                    <HeroPillarRow label="Visibility" sub="Whether agents mention you at all" pct={62.5} score="20/32" />
+                    <HeroPillarRow label="Accessibility" sub="Whether they can read your pages" pct={39} score="7/18" />
+                    <HeroPillarRow trueValue label="True Value" sub="Whether they can quote your real price" pct={18} score="9/50" />
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 11, background: 'var(--surface)', borderTop: '1px solid var(--border)', padding: '13px 20px' }}>
                   <Glyph name="check" size={13} color="var(--blue)" />
                   <span style={{ fontSize: 12, color: 'var(--text)' }}>3 ranked fixes, in priority order</span>
-                  <span className="mono-label" style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--blue)' }}>RECOVERS UP TO 20 PTS</span>
+                  <span className="mono-label" style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--blue)' }}>RECOVERS UP TO 25 PTS</span>
                 </div>
               </div>
             </BrowserChrome>

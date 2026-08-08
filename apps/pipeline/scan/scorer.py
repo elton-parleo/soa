@@ -1178,11 +1178,29 @@ UCP_LOYALTY_CAPABILITY = "dev.ucp.shopping.loyalty"
 ACP_PROMOTIONS_CAPABILITY = "dev.acp.promotions"
 CURRENT_SPEC_VERSIONS = {"2025-01"}
 
+# Re-weighting session (Part 1, check-granularity review): the old
+# 3/2/1/1 split concentrated 43% of the dimension's weight on a single
+# binary check (ucp_discount) — at the re-weighted 14-point total that
+# would have swung a single check by 6 points. schema_valid_and_current
+# (one compound pass/fail) is now two checks — schema_resolution (the
+# manifest's shape resolves at all) and version_currency (the resolved
+# version is current) — and the three capability checks are rebalanced
+# closer to even. No new data: every check still reads the same
+# manifest dict (capabilities list, specVersion string) as before.
+#
+# "declaration presence" (manifest exists at all) was considered and
+# deliberately NOT added as its own scored check — protocol_feed (F3)
+# already credits a reachable MCP well-known endpoint, and
+# test_value_protocols.py's F3/VP dedup test requires an empty-but-
+# resolvable manifest (no capabilities, no specVersion) to still score
+# 0 here; a bare "a manifest exists" check would double-credit the
+# same reachability signal F3 already owns.
 VALUE_PROTOCOLS_POINTS = {
+    "schema_resolution": 3,
+    "version_currency": 3,
     "ucp_discount": 3,
-    "loyalty_extension": 2,
-    "acp_promotions": 1,
-    "version_schema": 1,
+    "loyalty_extension": 3,
+    "acp_promotions": 2,
 }
 
 
@@ -1211,6 +1229,15 @@ def score_value_protocols(pages) -> DimensionScore:
     deal_citability there's nothing here corresponding to a said sub-lens
     — see lite_pillars.py for how the seen-only result is combined into
     True Value.
+
+    Re-weighting session (Part 1): five checks, not four — the former
+    single "schema_valid_and_current" pass/fail is now schema_resolution
+    (does the manifest resolve to the documented {capabilities: [...],
+    specVersion: str} shape at all) and version_currency (is the
+    resolved version current), scored independently. A manifest with an
+    empty-but-well-typed capabilities list and a current specVersion now
+    correctly earns both — that's a real, distinct fact about the
+    manifest, not previously creditable on its own.
     """
     weight = DIMENSIONS_BY_CODE["value_protocols"].weight
     mcp_page = next((p for p in pages if p.candidate.kind == "mcp_well_known"), None)
@@ -1220,17 +1247,32 @@ def score_value_protocols(pages) -> DimensionScore:
         return DimensionScore(score=0.0, max=weight, evidence=["no protocol profile found"])
 
     capabilities = manifest.get("capabilities")
-    capabilities = capabilities if isinstance(capabilities, list) else []
+    capabilities_is_list = isinstance(capabilities, list)
+    capabilities = capabilities if capabilities_is_list else []
 
     has_ucp_discount = UCP_DISCOUNT_CAPABILITY in capabilities
     has_loyalty = UCP_LOYALTY_CAPABILITY in capabilities
     has_acp_promotions = ACP_PROMOTIONS_CAPABILITY in capabilities
 
     spec_version = manifest.get("specVersion")
-    schema_valid_and_current = isinstance(spec_version, str) and spec_version in CURRENT_SPEC_VERSIONS
+    spec_version_is_string = isinstance(spec_version, str)
+    schema_resolves = capabilities_is_list and spec_version_is_string
+    schema_valid_and_current = spec_version_is_string and spec_version in CURRENT_SPEC_VERSIONS
 
     points = 0.0
     evidence = []
+
+    if schema_resolves:
+        points += VALUE_PROTOCOLS_POINTS["schema_resolution"]
+        evidence.append("the manifest's capabilities list and specVersion resolve to the expected shape")
+    else:
+        evidence.append("the manifest is missing a capabilities list or a specVersion string")
+
+    if schema_valid_and_current:
+        points += VALUE_PROTOCOLS_POINTS["version_currency"]
+        evidence.append(f"declared protocol manifest version is current ({spec_version!r})")
+    else:
+        evidence.append("declared protocol manifest version is missing, unrecognized, or out of date")
 
     if has_ucp_discount:
         points += VALUE_PROTOCOLS_POINTS["ucp_discount"]
@@ -1249,12 +1291,6 @@ def score_value_protocols(pages) -> DimensionScore:
         evidence.append(f"declares an ACP promotions capability ({ACP_PROMOTIONS_CAPABILITY!r})")
     else:
         evidence.append("does not declare an ACP promotions capability")
-
-    if schema_valid_and_current:
-        points += VALUE_PROTOCOLS_POINTS["version_schema"]
-        evidence.append(f"declared protocol manifest version is current ({spec_version!r})")
-    else:
-        evidence.append("declared protocol manifest version is missing, unrecognized, or out of date")
 
     fix = None
     fix_human = None

@@ -27,7 +27,7 @@ from soa_shared.scan_dimensions import VERDICT_AGENT_READY, VERDICT_NOT_AGENT_RE
 def test_zero_mentions_scores_zero_not_na():
     result = score_share_of_mentions(som_pct=0.0, total_mentions=0)
     assert result["earned"] == 0.0
-    assert result["max"] == 25
+    assert result["max"] == 22
     assert result["code"] == "share_of_mentions"
 
 
@@ -37,23 +37,22 @@ def test_none_som_with_zero_mentions_scores_zero():
 
 
 @pytest.mark.parametrize("som_pct,expected_earned", [
-    (30.77, 15),
-    (36.36, 18),
-    (50.0, 25),      # exactly at the cap — full marks
-    (50.01, 25),      # just above the cap — still full marks (capped)
-    (60.0, 25),
-    (100.0, 25),
+    (30.77, 14),
+    (36.36, 16),
+    (50.0, 22),      # exactly at the cap — full marks
+    (50.01, 22),      # just above the cap — still full marks (capped)
+    (60.0, 22),
+    (100.0, 22),
 ])
 def test_share_of_mentions_cap_at_50(som_pct, expected_earned):
     result = score_share_of_mentions(som_pct=som_pct, total_mentions=6)
     assert result["earned"] == expected_earned
-    assert result["max"] == 25
+    assert result["max"] == 22
 
 
 def test_share_of_mentions_below_cap_is_linear():
-    # 25% share -> 25/50*25 = 12.5 -> round to 12 (banker's rounding on .5 -> even)
     result = score_share_of_mentions(som_pct=25.0, total_mentions=3)
-    assert result["earned"] == round(25.0 / 50 * 25)
+    assert result["earned"] == round(25.0 / 50 * 22)
 
 
 def test_share_of_mentions_evidence_present():
@@ -67,20 +66,20 @@ def test_share_of_mentions_evidence_present():
 def test_zero_mentions_recommendation_strength_scores_zero():
     result = score_recommendation_strength(rsi_score=None, total_mentions=0)
     assert result["earned"] == 0.0
-    assert result["max"] == 15
+    assert result["max"] == 10
 
 
 @pytest.mark.parametrize("rsi_score,expected_earned", [
     (-1.0, 0),    # all Negative -> floor
-    (0.17, 4),
-    (1.44, 9),
-    (2.12, 12),
-    (3.0, 15),    # all Primary -> ceiling
+    (0.17, 3),
+    (1.44, 6),
+    (2.12, 8),
+    (3.0, 10),    # all Primary -> ceiling
 ])
 def test_recommendation_strength_linear_mapping(rsi_score, expected_earned):
     result = score_recommendation_strength(rsi_score=rsi_score, total_mentions=4)
     assert result["earned"] == expected_earned
-    assert result["max"] == 15
+    assert result["max"] == 10
 
 
 def test_recommendation_strength_clamps_below_theoretical_min():
@@ -92,7 +91,7 @@ def test_recommendation_strength_clamps_below_theoretical_min():
 
 def test_recommendation_strength_clamps_above_theoretical_max():
     result = score_recommendation_strength(rsi_score=5.0, total_mentions=4)
-    assert result["earned"] == 15
+    assert result["earned"] == 10
 
 
 def test_recommendation_strength_evidence_present():
@@ -149,7 +148,7 @@ def test_price_truth_said_na_below_two_mentions():
     result = score_price_truth_said([_mentioned(price_quoted=True)])
     assert result["na"] is True
     assert result["earned"] == 0.0
-    assert result["max"] == 7
+    assert result["max"] == 9
 
 
 def test_price_truth_said_excludes_unmentioned_runs_from_opportunity_set():
@@ -160,9 +159,9 @@ def test_price_truth_said_excludes_unmentioned_runs_from_opportunity_set():
 
 @pytest.mark.parametrize("cited,total,expected_earned", [
     (0, 4, 0),    # 0% -> 0%
-    (1, 4, 3),    # 25% -> 40% of 7 -> 2.8 -> 3
-    (2, 4, 5),    # 50% -> 70% of 7 -> 4.9 -> 5
-    (3, 4, 7),    # 75% -> 100% of 7 -> 7
+    (1, 4, 4),    # 25% -> 40% of 9 -> 3.6 -> 4
+    (2, 4, 6),    # 50% -> 70% of 9 -> 6.3 -> 6
+    (3, 4, 9),    # 75% -> 100% of 9 -> 9
 ])
 def test_price_truth_said_rate_bands(cited, total, expected_earned):
     signals = [_mentioned(price_quoted=True) for _ in range(cited)]
@@ -170,7 +169,7 @@ def test_price_truth_said_rate_bands(cited, total, expected_earned):
     result = score_price_truth_said(signals)
     assert result["na"] is False
     assert result["earned"] == expected_earned
-    assert result["max"] == 7
+    assert result["max"] == 9
 
 
 # — Part 1 (P4): sentinel-aware NOT EVALUATED vs a real 0% —
@@ -227,7 +226,7 @@ def test_member_value_said_na_below_two_purchase_intent_mentions():
     ]
     result = score_member_value_said(signals)
     assert result["na"] is True
-    assert result["max"] == 6
+    assert result["max"] == 3
 
 
 def test_member_value_said_excludes_non_purchase_intent_stages():
@@ -279,9 +278,9 @@ def test_member_value_said_does_not_double_count_when_all_three_signals_fire():
 
 @pytest.mark.parametrize("cited,total,expected_earned", [
     (0, 4, 0),
-    (1, 4, 2),    # 25% -> 40% of 6 -> 2.4 -> 2
-    (2, 4, 4),    # 50% -> 70% of 6 -> 4.2 -> 4
-    (3, 4, 6),    # 75% -> 100% of 6 -> 6
+    (1, 4, 1),    # 25% -> 40% of 3 -> 1.2 -> 1
+    (2, 4, 2),    # 50% -> 70% of 3 -> 2.1 -> 2
+    (3, 4, 3),    # 75% -> 100% of 3 -> 3
 ])
 def test_member_value_said_rate_bands(cited, total, expected_earned):
     signals = [_mentioned(stage="Comparison", member_price_claimed=True) for _ in range(cited)]
@@ -289,7 +288,7 @@ def test_member_value_said_rate_bands(cited, total, expected_earned):
     result = score_member_value_said(signals)
     assert result["na"] is False
     assert result["earned"] == expected_earned
-    assert result["max"] == 6
+    assert result["max"] == 3
 
 
 # — deal_citability.said (count band, opportunity set = purchase-intent only) —
@@ -298,14 +297,14 @@ def test_deal_citability_said_na_below_two_purchase_intent_mentions():
     signals = [_mentioned(stage="Comparison", deal_cited=True), _mentioned(stage="Awareness", deal_cited=True)]
     result = score_deal_citability_said(signals)
     assert result["na"] is True
-    assert result["max"] == 2
+    assert result["max"] == 5
 
 
 @pytest.mark.parametrize("cited_count,expected_earned", [
     (0, 0),   # 0 -> 0%
-    (1, 1),   # 1 -> 40% of 2 -> 0.8 -> 1
-    (2, 1),   # 2-3 -> 70% of 2 -> 1.4 -> 1
-    (4, 2),   # 4+ -> 100% of 2 -> 2
+    (1, 2),   # 1 -> 40% of 5 -> 2.0
+    (2, 4),   # 2-3 -> 70% of 5 -> 3.5 -> 4 (round-half-to-even)
+    (4, 5),   # 4+ -> 100% of 5 -> 5
 ])
 def test_deal_citability_said_count_bands(cited_count, expected_earned):
     signals = [_mentioned(stage="Comparison", deal_cited=True) for _ in range(cited_count)]
@@ -313,7 +312,7 @@ def test_deal_citability_said_count_bands(cited_count, expected_earned):
     result = score_deal_citability_said(signals)
     assert result["na"] is False
     assert result["earned"] == expected_earned
-    assert result["max"] == 2
+    assert result["max"] == 5
 
 
 # ─── member_value applicability (Stage 16, Part 4, P3) ───────────────────
@@ -348,13 +347,13 @@ def test_member_value_applicable_handles_none_seen_score_defensively():
 # ─── build_pillars_payload (Stage 16, Part 7) ─────────────────────────────
 
 _FULL_CRAWL_DIMS = {
-    "agent_access": {"score": 6, "max": 6, "coverage": "full", "evidence": ["e"], "fix": "fix agent_access"},
+    "agent_access": {"score": 5, "max": 5, "coverage": "full", "evidence": ["e"], "fix": "fix agent_access"},
     "catalog_context": {"score": 8, "max": 8, "coverage": "full", "evidence": ["e"], "fix": "fix catalog_context"},
-    "protocol_feed": {"score": 6, "max": 6, "coverage": "full", "evidence": ["e"], "fix": "fix protocol_feed"},
-    "price_truth_seen": {"score": 5, "max": 5, "coverage": "full", "evidence": ["e"], "fix": "fix price_truth"},
-    "member_value_seen": {"score": 9, "max": 9, "coverage": "full", "evidence": ["e"], "fix": "fix member_value"},
-    "deal_citability_seen": {"score": 4, "max": 4, "coverage": "full", "evidence": ["e"], "fix": "fix deal_citability"},
-    "value_protocols_seen": {"score": 7, "max": 7, "coverage": "full", "evidence": ["e"], "fix": None, "fix_human": None},
+    "protocol_feed": {"score": 5, "max": 5, "coverage": "full", "evidence": ["e"], "fix": "fix protocol_feed"},
+    "price_truth_seen": {"score": 7, "max": 7, "coverage": "full", "evidence": ["e"], "fix": "fix price_truth"},
+    "member_value_seen": {"score": 5, "max": 5, "coverage": "full", "evidence": ["e"], "fix": "fix member_value"},
+    "deal_citability_seen": {"score": 7, "max": 7, "coverage": "full", "evidence": ["e"], "fix": "fix deal_citability"},
+    "value_protocols_seen": {"score": 14, "max": 14, "coverage": "full", "evidence": ["e"], "fix": None, "fix_human": None},
 }
 
 
@@ -426,12 +425,12 @@ def test_zero_credit_scenario_scores_0_on_every_pillar_and_composite():
 
 def test_accessibility_excludes_na_protocol_feed_from_denominator():
     crawl = dict(_FULL_CRAWL_DIMS)
-    crawl["protocol_feed"] = {"score": 0, "max": 6, "coverage": "na", "evidence": []}
+    crawl["protocol_feed"] = {"score": 0, "max": 5, "coverage": "na", "evidence": []}
     result = build_pillars_payload(
         som_pct=0.0, rsi_score=None, total_mentions=0,
         crawl_dimensions=crawl, run_signals=[], membership_probe_result="unknown",
     )
-    # agent_access(6) + catalog_context(8) = 14 applicable, both full marks -> 100%.
+    # agent_access(5) + catalog_context(8) = 13 applicable, both full marks -> 100%.
     assert result["accessibility"]["score"] == 100
     protocol_feed_row = next(d for d in result["accessibility"]["dimensions"] if d["code"] == "protocol_feed")
     assert protocol_feed_row["na"] is True
@@ -450,11 +449,11 @@ def test_member_value_na_excludes_it_entirely_from_true_value_and_composite():
     assert member_value_row["na"] is True
     assert member_value_row["earned"] == 0.0
     assert member_value_row["max"] == 0.0
-    # price_truth(12) + deal_citability(6) + value_protocols(7) = 25, all
-    # full -> true_value 100%.
+    # price_truth(16) + deal_citability(12) + value_protocols(14) = 42,
+    # all full -> true_value 100%.
     assert result["true_value"]["score"] == 100
-    # composite: visibility(40) + accessibility(20) + true_value(25) = 85
-    # earned out of applicable_max(member_value_na=True) = 85 -> 100.
+    # composite: visibility(32) + accessibility(18) + true_value(42) = 92
+    # earned out of applicable_max(member_value_na=True) = 92 -> 100.
     assert result["composite"] == 100
 
 
@@ -563,7 +562,7 @@ def test_member_value_applicable_via_crawl_credit_does_not_add_the_probe_line():
 def test_said_na_thin_opportunity_set_rescales_dimension_onto_seen_only():
     """Fewer than 2 mentions in price_truth's opportunity set (all
     mentions) -> price_truth_said is N/A -> the dimension rescales onto
-    its seen half (5 pts) instead of the full 12."""
+    its seen half (7 pts) instead of the full 16."""
     one_signal = [RunSignal(stage="Awareness", primary_mentioned=True, primary_price_quoted=True)]
     result = build_pillars_payload(
         som_pct=0.0, rsi_score=None, total_mentions=1,
@@ -571,8 +570,8 @@ def test_said_na_thin_opportunity_set_rescales_dimension_onto_seen_only():
         membership_probe_result="yes",
     )
     price_truth_row = next(d for d in result["true_value"]["dimensions"] if d["code"] == "price_truth")
-    assert price_truth_row["max"] == 5  # seen_max only, not the full 12
-    assert price_truth_row["earned"] == 5  # seen's full score, said contributes nothing
+    assert price_truth_row["max"] == 7  # seen_max only, not the full 16
+    assert price_truth_row["earned"] == 7  # seen's full score, said contributes nothing
     assert price_truth_row["said"]["na"] is True
 
 
@@ -642,21 +641,21 @@ def test_visibility_dimensions_never_carry_fix():
 
 
 def test_top_three_by_gap_stay_free_rest_are_locked():
-    # Distinct, unambiguous gaps: protocol_feed(6) and price_truth(4) and
-    # deal_citability(2) are the three biggest opportunities (gaps
+    # Distinct, unambiguous gaps: price_truth(6) and protocol_feed(5) and
+    # deal_citability(4) are the three biggest opportunities (gaps
     # computed against the real registry weight, not this fixture's own
     # "max" — price_truth/member_value's dim_max comes from
     # dimension_max(), full credit on said via _full_credit_signals());
     # the other four (including value_protocols, always seen-only) are
     # fully earned (gap 0) and should end up locked.
     crawl = {
-        "agent_access": {"score": 6, "max": 6, "coverage": "full", "fix": "f-aa"},
+        "agent_access": {"score": 5, "max": 5, "coverage": "full", "fix": "f-aa"},
         "catalog_context": {"score": 8, "max": 8, "coverage": "full", "fix": "f-cc"},
-        "protocol_feed": {"score": 0, "max": 6, "coverage": "full", "fix": "f-pf"},
-        "price_truth_seen": {"score": 1, "max": 5, "coverage": "full", "fix": "f-pt"},
-        "member_value_seen": {"score": 9, "max": 9, "coverage": "full", "fix": "f-mv"},
-        "deal_citability_seen": {"score": 2, "max": 4, "coverage": "full", "fix": "f-dc"},
-        "value_protocols_seen": {"score": 7, "max": 7, "coverage": "full", "fix": None},
+        "protocol_feed": {"score": 0, "max": 5, "coverage": "full", "fix": "f-pf"},
+        "price_truth_seen": {"score": 1, "max": 7, "coverage": "full", "fix": "f-pt"},
+        "member_value_seen": {"score": 5, "max": 5, "coverage": "full", "fix": "f-mv"},
+        "deal_citability_seen": {"score": 3, "max": 7, "coverage": "full", "fix": "f-dc"},
+        "value_protocols_seen": {"score": 14, "max": 14, "coverage": "full", "fix": None},
     }
     result = build_pillars_payload(
         som_pct=100.0, rsi_score=3.0, total_mentions=6,
@@ -715,14 +714,22 @@ def test_member_value_na_dimension_has_no_fix_and_is_not_locked():
 # full credit with no fix_human, so it never enters the ranking pool at
 # all (see _build_fixes_section's fix_human filter) — same zero-gap,
 # stays-out-of-the-way role it plays in the other fixtures above.
+# Re-weighting session: six distinct gaps, recomputed against the new
+# weights — price_truth(6) > member_value(5) > deal_citability(4) >
+# protocol_feed(3) > catalog_context(2) > agent_access(1). said halves
+# are always full credit via _full_credit_signals(); member_value's
+# max achievable gap shrank to 5 (weight 8 - said's full 3) now that
+# it's the lowest-weighted True Value dimension (universality
+# ordering) — it can no longer be pushed to the biggest gap in the set
+# the way it could under the old 15-point weight.
 _SIX_FIX_CRAWL_DIMS = {
-    "agent_access": {"score": 5, "max": 6, "coverage": "full", "fix": "fix-aa", "fix_human": "human-aa"},
+    "agent_access": {"score": 4, "max": 5, "coverage": "full", "fix": "fix-aa", "fix_human": "human-aa"},
     "catalog_context": {"score": 6, "max": 8, "coverage": "full", "fix": "fix-cc", "fix_human": "human-cc"},
-    "protocol_feed": {"score": 3, "max": 6, "coverage": "full", "fix": "fix-pf", "fix_human": "human-pf"},
-    "price_truth_seen": {"score": 0, "max": 5, "coverage": "full", "fix": "fix-pt", "fix_human": "human-pt"},
-    "member_value_seen": {"score": 3, "max": 9, "coverage": "full", "fix": "fix-mv", "fix_human": "human-mv"},
-    "deal_citability_seen": {"score": 0, "max": 4, "coverage": "full", "fix": "fix-dc", "fix_human": "human-dc"},
-    "value_protocols_seen": {"score": 7, "max": 7, "coverage": "full", "fix": None, "fix_human": None},
+    "protocol_feed": {"score": 2, "max": 5, "coverage": "full", "fix": "fix-pf", "fix_human": "human-pf"},
+    "price_truth_seen": {"score": 1, "max": 7, "coverage": "full", "fix": "fix-pt", "fix_human": "human-pt"},
+    "member_value_seen": {"score": 0, "max": 5, "coverage": "full", "fix": "fix-mv", "fix_human": "human-mv"},
+    "deal_citability_seen": {"score": 3, "max": 7, "coverage": "full", "fix": "fix-dc", "fix_human": "human-dc"},
+    "value_protocols_seen": {"score": 14, "max": 14, "coverage": "full", "fix": None, "fix_human": None},
 }
 
 
@@ -737,21 +744,21 @@ def _build_six_fix_result(**overrides):
 
 
 def test_fixes_visible_is_the_top_2_by_gap():
-    # Part 2 (2a): natural top-2 by gap would be member_value(6),
-    # price_truth(5) — neither TrueSync-owned. The always-ranked rule
+    # Part 2 (2a): natural top-2 by gap would be price_truth(6),
+    # member_value(5) — neither TrueSync-owned. The always-ranked rule
     # swaps the LAST slot for deal_citability (gap 4, the only
     # TrueSync-owned dimension in this fixture with a recoverable
     # point) — see test_fixes_ranked_list_always_includes_a_truesync_fix
     # below for the rule itself.
     result = _build_six_fix_result()
-    assert [v["code"] for v in result["fixes"]["visible"]] == ["member_value", "deal_citability"]
+    assert [v["code"] for v in result["fixes"]["visible"]] == ["price_truth", "deal_citability"]
 
 
 def test_fixes_visible_entries_carry_only_plain_language_fix_human_and_impact():
     result = _build_six_fix_result()
     top = result["fixes"]["visible"][0]
     assert top == {
-        "code": "member_value", "name": "Member Value", "fix_human": "human-mv", "impact": 6.0,
+        "code": "price_truth", "name": "Price Truth", "fix_human": "human-pt", "impact": 6.0,
         "fix_owner": "ENG",
     }
     # No 'fix' (markup) key anywhere on a visible entry — H2's no-markup
@@ -783,14 +790,14 @@ def test_fixes_leak_test_ranks_beyond_2_are_absent_entirely():
     assert every unranked dimension is absent entirely — no code, no
     fix_human title, anywhere in the serialized object, only a bare
     count. deal_citability is visible here (Part 2's substitution rule
-    forces the TrueSync-owned fix into the last slot), so price_truth —
+    forces the TrueSync-owned fix into the last slot), so member_value —
     the dimension it displaced — is the one that must be absent instead
     of deal_citability."""
     result = _build_six_fix_result()
     serialized = json.dumps(result["fixes"])
 
     for code, human in [
-        ("price_truth", "human-pt"), ("protocol_feed", "human-pf"),
+        ("member_value", "human-mv"), ("protocol_feed", "human-pf"),
         ("catalog_context", "human-cc"), ("agent_access", "human-aa"),
     ]:
         assert code not in serialized
@@ -800,7 +807,10 @@ def test_fixes_leak_test_ranks_beyond_2_are_absent_entirely():
 def test_fixes_excludes_dimensions_with_no_fix_human_even_if_ranked_high():
     # A dimension at a large gap but with NO fix_human (crawl scorer
     # found nothing to recommend) must never occupy a free slot or count
-    # toward remaining_count — it has nothing to show.
+    # toward remaining_count — it has nothing to show. With member_value
+    # excluded, deal_citability (gap 4) is already the natural #2 by
+    # gap and already TrueSync-owned — the substitution rule doesn't
+    # need to touch anything here.
     crawl = dict(_SIX_FIX_CRAWL_DIMS)
     crawl["member_value_seen"] = {**crawl["member_value_seen"], "fix": None, "fix_human": None}
     result = _build_six_fix_result(crawl_dimensions=crawl)
@@ -813,36 +823,37 @@ def test_fixes_excludes_dimensions_with_no_fix_human_even_if_ranked_high():
 # ─── Part 2: TrueSync always ranked ──────────────────────────────────────
 
 def test_fixes_natural_ranking_needs_no_substitution_when_truesync_already_in_top_2():
-    # 2c: value_protocols' gap (7) outranks every ENG dim naturally, so
-    # it already occupies a top-2 slot — the substitution rule must not
-    # touch anything here (ordering, and which dim gets displaced, are
-    # exactly what plain opportunity-size ranking would produce).
+    # 2c: value_protocols at a full 14-point gap outranks every ENG dim
+    # naturally, so it already occupies a top-2 slot — the substitution
+    # rule must not touch anything here (ordering, and which dim gets
+    # displaced, are exactly what plain opportunity-size ranking would
+    # produce).
     crawl = dict(_SIX_FIX_CRAWL_DIMS)
     crawl["value_protocols_seen"] = {
-        "score": 0, "max": 7, "coverage": "full",
+        "score": 0, "max": 14, "coverage": "full",
         "fix": "declare capabilities", "fix_human": "Declare your agent-checkout capabilities in your protocol manifest.",
     }
     result = _build_six_fix_result(crawl_dimensions=crawl)
-    assert [v["code"] for v in result["fixes"]["visible"]] == ["value_protocols", "member_value"]
+    assert [v["code"] for v in result["fixes"]["visible"]] == ["value_protocols", "price_truth"]
 
 
 def test_fixes_ranked_list_always_includes_a_truesync_fix_substitution_fires():
-    # 2a: natural top-2 (member_value gap 6, price_truth gap 5) is all
+    # 2a: natural top-2 (price_truth gap 6, member_value gap 5) is all
     # ENG-owned. The rule replaces the LAST ranked slot with the
     # highest-impact TrueSync-owned fix that still recovers >=1 point —
     # here deal_citability (gap 4), the only TrueSync candidate in this
-    # fixture. The #1 slot (member_value) and its real numbers are
-    # untouched; price_truth is displaced into the unranked count rather
-    # than disappearing from the pool.
+    # fixture. The #1 slot (price_truth) and its real numbers are
+    # untouched; member_value is displaced into the unranked count
+    # rather than disappearing from the pool.
     result = _build_six_fix_result()
     visible = result["fixes"]["visible"]
 
-    assert [v["code"] for v in visible] == ["member_value", "deal_citability"]
+    assert [v["code"] for v in visible] == ["price_truth", "deal_citability"]
     assert visible[0]["impact"] == 6.0  # untouched — real gap, not inflated
     assert visible[1]["fix_owner"] == "TRUESYNC"
     assert visible[1]["impact"] == 4.0  # real gap, not inflated by the substitution
-    # price_truth (displaced) still counts toward the unranked total —
-    # 6 fixable dims total, 2 visible, 4 unranked including price_truth.
+    # member_value (displaced) still counts toward the unranked total —
+    # 6 fixable dims total, 2 visible, 4 unranked including member_value.
     assert result["fixes"]["remaining_count"] == 4
 
 
@@ -850,38 +861,38 @@ def test_fixes_2b_honest_exception_no_forced_row_when_no_truesync_fix_has_a_reco
     # 2b: both TrueSync-owned dimensions (deal_citability, value_protocols)
     # are at full credit this run — zero gap, no fix_human, nothing to
     # honestly recover. The substitution rule must not fire: the natural
-    # top-2 (member_value, price_truth) stands, and no TrueSync code or
+    # top-2 (price_truth, member_value) stands, and no TrueSync code or
     # zero-point fix appears anywhere in the visible list.
     crawl = dict(_SIX_FIX_CRAWL_DIMS)
-    crawl["deal_citability_seen"] = {"score": 4, "max": 4, "coverage": "full", "fix": None, "fix_human": None}
+    crawl["deal_citability_seen"] = {"score": 7, "max": 7, "coverage": "full", "fix": None, "fix_human": None}
     result = _build_six_fix_result(crawl_dimensions=crawl)
 
     visible = result["fixes"]["visible"]
-    assert [v["code"] for v in visible] == ["member_value", "price_truth"]
+    assert [v["code"] for v in visible] == ["price_truth", "member_value"]
     assert not any(v["fix_owner"] == "TRUESYNC" for v in visible)
     assert all(v["impact"] > 0 for v in visible)
 
 
-def test_fixes_truesync_ranks_on_a_partial_read_shaped_run_with_value_protocols_0_of_7():
+def test_fixes_truesync_ranks_on_a_partial_read_shaped_run_with_value_protocols_0_of_14():
     """Partial-read report state (Part 5a): a run whose product pages
     never came through — catalog_context, price_truth, member_value,
     deal_citability all 'blocked' — but value_protocols (checked at the
-    domain root, independent of product pages) is real-scored at 0/7.
+    domain root, independent of product pages) is real-scored at 0/14.
     The always-ranked rule doesn't even need to fire here: blocked dims
     are excluded from the ranking pool entirely (same as na), so
-    value_protocols' full 7-point gap naturally outranks the two
+    value_protocols' full 14-point gap naturally outranks the two
     unblocked accessibility dims and lands in the free top 2 on its
     own — a ranked TrueSync fix is produced without any special-casing
     for the partial-read shape."""
     crawl = {
-        "agent_access": {"score": 5, "max": 6, "coverage": "full", "fix": "fix-aa", "fix_human": "human-aa"},
+        "agent_access": {"score": 4, "max": 5, "coverage": "full", "fix": "fix-aa", "fix_human": "human-aa"},
         "catalog_context": {"score": 0, "max": 8, "coverage": "blocked", "fix": None, "fix_human": None},
-        "protocol_feed": {"score": 0, "max": 6, "coverage": "full", "fix": "fix-pf", "fix_human": "human-pf"},
-        "price_truth_seen": {"score": 0, "max": 5, "coverage": "blocked", "fix": None, "fix_human": None},
-        "member_value_seen": {"score": 0, "max": 9, "coverage": "blocked", "fix": None, "fix_human": None},
-        "deal_citability_seen": {"score": 0, "max": 4, "coverage": "blocked", "fix": None, "fix_human": None},
+        "protocol_feed": {"score": 0, "max": 5, "coverage": "full", "fix": "fix-pf", "fix_human": "human-pf"},
+        "price_truth_seen": {"score": 0, "max": 7, "coverage": "blocked", "fix": None, "fix_human": None},
+        "member_value_seen": {"score": 0, "max": 5, "coverage": "blocked", "fix": None, "fix_human": None},
+        "deal_citability_seen": {"score": 0, "max": 7, "coverage": "blocked", "fix": None, "fix_human": None},
         "value_protocols_seen": {
-            "score": 0, "max": 7, "coverage": "full",
+            "score": 0, "max": 14, "coverage": "full",
             "fix": "declare capabilities", "fix_human": "Declare your agent-checkout capabilities in your protocol manifest.",
         },
     }
@@ -895,7 +906,7 @@ def test_fixes_truesync_ranks_on_a_partial_read_shaped_run_with_value_protocols_
     assert "value_protocols" in codes
     vp_entry = next(v for v in visible if v["code"] == "value_protocols")
     assert vp_entry["fix_owner"] == "TRUESYNC"
-    assert vp_entry["impact"] == 7.0
+    assert vp_entry["impact"] == 14.0
     # No blocked dimension ever occupies a slot or a fix_human string.
     serialized = json.dumps(result["fixes"])
     for blocked_code in ("catalog_context", "price_truth", "member_value", "deal_citability"):
@@ -916,12 +927,12 @@ def test_fixes_substitution_preserves_the_additive_schema():
 
 def test_exposure_reasons_reflect_this_runs_own_gaps():
     # _SIX_FIX_CRAWL_DIMS (said-side full credit via _full_credit_signals):
-    # member_value_seen missed 6, price_truth_seen missed 5,
+    # price_truth_seen missed 6, member_value_seen missed 5,
     # deal_citability_seen missed 4, catalog_context missed 2,
-    # agent_access missed 1 -> top 3 by severity: mv_seen, pt_seen, dc_seen.
+    # agent_access missed 1 -> top 3 by severity: pt_seen, mv_seen, dc_seen.
     result = _build_six_fix_result()
     ids = [r["id"] for r in result["exposure_reasons"]]
-    assert ids == ["mv_seen", "pt_seen", "dc_seen"]
+    assert ids == ["pt_seen", "mv_seen", "dc_seen"]
     assert sum(r["impact_weight"] for r in result["exposure_reasons"]) == pytest.approx(1.0)
 
 
@@ -982,10 +993,10 @@ def test_gap_area_counts_are_fixed_framework_constants():
 
 
 def test_parleo_fixable_points_sums_only_truesync_owned_dimensions():
-    # _SIX_FIX_CRAWL_DIMS: deal_citability_seen is 0/4 (said half pinned
-    # to full credit by _full_credit_signals) -> gap 4; value_protocols_seen
-    # is a full 7/7 -> gap 0. Every other TRUESYNC-owned... there are only
-    # these two, so the sum is deal_citability's gap alone.
+    # _SIX_FIX_CRAWL_DIMS: deal_citability is seen 3/7 + said full credit
+    # 5/5 = 8/12 -> gap 4; value_protocols_seen is a full 14/14 -> gap 0.
+    # Every other TRUESYNC-owned... there are only these two, so the sum
+    # is deal_citability's gap alone.
     result = _build_six_fix_result()
     assert result["parleo_fixable_points"] == 4.0
 
@@ -994,8 +1005,8 @@ def test_parleo_fixable_points_includes_value_protocols_when_it_has_a_gap():
     crawl = dict(_SIX_FIX_CRAWL_DIMS)
     crawl["value_protocols_seen"] = {**crawl["value_protocols_seen"], "score": 2}
     result = _build_six_fix_result(crawl_dimensions=crawl)
-    # deal_citability gap (4) + value_protocols gap (7 - 2 = 5).
-    assert result["parleo_fixable_points"] == 9.0
+    # deal_citability gap (4) + value_protocols gap (14 - 2 = 12).
+    assert result["parleo_fixable_points"] == 16.0
 
 
 def test_parleo_fixable_points_excludes_blocked_truesync_dims():
@@ -1009,17 +1020,17 @@ def test_parleo_fixable_points_excludes_blocked_truesync_dims():
 
 
 def test_fixes_na_dimension_excluded_from_ranking_and_count():
-    # protocol_feed(gap 3) turns na, leaving 5 fixable dims: member_value(6)
-    # and price_truth(5) naturally rank top-2, but neither is TrueSync-
+    # protocol_feed(gap 3) turns na, leaving 5 fixable dims: price_truth(6)
+    # and member_value(5) naturally rank top-2, but neither is TrueSync-
     # owned, so Part 2's substitution rule swaps the last slot for
     # deal_citability(4) — catalog_context(2), agent_access(1), and the
-    # displaced price_truth make up the remaining 3. protocol_feed itself
-    # contributes to neither the visible list nor the count.
+    # displaced member_value make up the remaining 3. protocol_feed
+    # itself contributes to neither the visible list nor the count.
     crawl = dict(_SIX_FIX_CRAWL_DIMS)
     crawl["protocol_feed"] = {**crawl["protocol_feed"], "coverage": "na"}
     result = _build_six_fix_result(crawl_dimensions=crawl)
 
-    assert [v["code"] for v in result["fixes"]["visible"]] == ["member_value", "deal_citability"]
+    assert [v["code"] for v in result["fixes"]["visible"]] == ["price_truth", "deal_citability"]
     assert result["fixes"]["remaining_count"] == 3
 
 
@@ -1031,14 +1042,16 @@ def test_fixes_value_protocols_ranks_like_any_other_true_value_dimension():
     do, not silently excluded for being the new dimension."""
     crawl = dict(_SIX_FIX_CRAWL_DIMS)
     crawl["value_protocols_seen"] = {
-        "score": 0, "max": 7, "coverage": "full",
+        "score": 0, "max": 14, "coverage": "full",
         "fix": "declare capabilities", "fix_human": "Declare your agent-checkout capabilities in your protocol manifest.",
     }
     result = _build_six_fix_result(crawl_dimensions=crawl)
 
-    # value_protocols' gap is 7 (0/7), bigger than member_value's 6 —
-    # it now takes the #1 slot, pushing member_value out of the free top 2.
-    assert [v["code"] for v in result["fixes"]["visible"]] == ["value_protocols", "member_value"]
+    # value_protocols' gap is 14 (0/14), the single biggest gap in this
+    # fixture — it takes the #1 slot naturally; price_truth (gap 6)
+    # remains #2, both without needing the substitution rule (value_
+    # protocols is already TrueSync-owned).
+    assert [v["code"] for v in result["fixes"]["visible"]] == ["value_protocols", "price_truth"]
     assert result["fixes"]["visible"][0]["fix_human"] == "Declare your agent-checkout capabilities in your protocol manifest."
     assert result["fixes"]["remaining_count"] == 5
 
@@ -1056,7 +1069,7 @@ from soa_shared.scan_dimensions import DIMENSIONS_BY_CODE as _DIMS  # noqa: E402
 
 _REALISTIC_CRAWL_DIMS = {
     "agent_access": {
-        "score": 5, "max": 6, "coverage": "full",
+        "score": 4, "max": 5, "coverage": "full",
         "evidence": [
             "robots.txt is fetchable", "robots.txt allows product paths",
             "no bot-blocking encountered on sampled pages", "no sitemap found",
@@ -1072,7 +1085,7 @@ _REALISTIC_CRAWL_DIMS = {
         ],
     },
     "protocol_feed": {
-        "score": 1, "max": 6, "coverage": "partial",
+        "score": 1, "max": 5, "coverage": "partial",
         "evidence": [
             "/llms.txt present and non-empty",
             "no MCP endpoint declaration found (well-known path checked, absent; no link markup)",
@@ -1081,21 +1094,21 @@ _REALISTIC_CRAWL_DIMS = {
         ],
     },
     "price_truth_seen": {
-        "score": 0, "max": 5, "coverage": "full",
+        "score": 0, "max": 7, "coverage": "full",
         "evidence": [
             "0/2 product pages expose a machine-readable price consistent with the page's own text",
             "0/2 product pages declare priceCurrency",
         ],
     },
     "member_value_seen": {
-        "score": 0, "max": 9, "coverage": "full",
+        "score": 0, "max": 5, "coverage": "full",
         "evidence": [
             "no loyalty/rewards page found in nav/footer",
             "no structured member/tier pricing found on sampled product pages",
         ],
     },
     "deal_citability_seen": {
-        "score": 0, "max": 4, "coverage": "full",
+        "score": 0, "max": 7, "coverage": "full",
         "evidence": [
             "0/2 product pages state a concrete amount or discount mechanic",
             "0/2 product pages declare a currently-active validity window",
@@ -1103,12 +1116,13 @@ _REALISTIC_CRAWL_DIMS = {
         ],
     },
     "value_protocols_seen": {
-        "score": 0, "max": 7, "coverage": "full",
+        "score": 0, "max": 14, "coverage": "full",
         "evidence": [
+            "the manifest is missing a capabilities list or a specVersion string",
+            "declared protocol manifest version is missing, unrecognized, or out of date",
             "does not declare a UCP shopping-discount capability",
             "does not declare a loyalty/member protocol extension",
             "does not declare an ACP promotions capability",
-            "declared protocol manifest version is missing, unrecognized, or out of date",
         ],
     },
     "price_honesty_advisory": {"scored": False, "would_have_capped": False, "evidence": [], "cap_basis": []},
@@ -1137,7 +1151,7 @@ _SEEN_SIDE_CHECK_IDS_BY_CODE = {
     "price_truth": ("price_in_code", "price_matches_page"),
     "member_value": ("loyalty_page", "member_price_encoded", "markup_parses"),
     "deal_citability": ("not_expired", "actionable"),  # concrete_amount carries a live-count suffix
-    "value_protocols": ("ucp_discount", "loyalty", "acp_promotions", "version_schema"),
+    "value_protocols": ("schema_resolution", "version_currency", "ucp_discount", "loyalty", "acp_promotions"),
 }
 
 
@@ -1192,10 +1206,11 @@ def test_value_protocols_checks_all_fail_when_manifest_declares_nothing():
     vp = next(d for d in result["true_value"]["dimensions"] if d["code"] == "value_protocols")
     by_code = {c["code"]: c["state"] for c in vp["checks"]}
     assert by_code == {
-        "ucp_discount": "fail", "loyalty": "fail", "acp_promotions": "fail", "version_schema": "fail",
+        "schema_resolution": "fail", "version_currency": "fail",
+        "ucp_discount": "fail", "loyalty": "fail", "acp_promotions": "fail",
     }
     # Labels equal how_measured in-order (Part 1, A1) — this dimension's
-    # 4 scorer.py checks map 1:1, in order, onto its 4 how_measured strings.
+    # 5 scorer.py checks map 1:1, in order, onto its 5 how_measured strings.
     assert [c["label"] for c in vp["checks"]] == list(_DIMS["value_protocols"].how_measured)
 
 

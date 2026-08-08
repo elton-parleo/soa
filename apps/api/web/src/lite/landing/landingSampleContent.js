@@ -4,8 +4,17 @@
  * lines. Ported verbatim from the mock's renderVals() data block
  * (design-refs/20260405_Audit SOA Front-end/Audit Landing.dc.html),
  * from the same Allbirds sample run referenced throughout that mock
- * and the report mock (Audit Report.dc.html) — 40/100, Visibility
- * 25/40, Accessibility 8/20, True Value 7/40.
+ * and the report mock (Audit Report.dc.html) — originally 40/100,
+ * Visibility 25/40, Accessibility 8/20, True Value 7/40.
+ *
+ * Re-weighting session: SAMPLE_PILLAR_ITEMS below is a PLACEHOLDER —
+ * proportionally rescaled onto the new maxes (32/18/50) from the
+ * original ratios, not a real number. The original Allbirds run was
+ * scored under an earlier SCORER_VERSION, so SAMPLE_REPORT_URL's own
+ * token now serves the "this report has expired" state (Part 4) rather
+ * than a real report — both need a fresh run against the current model
+ * post-deploy: re-run the sample brand, point SAMPLE_REPORT_URL at the
+ * new token, and replace these placeholder numbers with its real ones.
  *
  * Deliberately excludes the mock's dead data (never referenced by any
  * rendered tag in its own template): previewPillars, previewFixes,
@@ -17,11 +26,11 @@ import { reportUrl } from '../publicUrls.js'
 import { LITE_QUERY_COUNT } from './scanDimensionsRegistry.js'
 
 // B3: no dedicated sample-report route exists yet — points at a real,
-// complete, scorer_version-4 report already in the database (the
-// Allbirds run generated during an earlier stage's live verification),
-// not a placeholder. Moved here from the retired AnatomyOfAnAnswer.jsx
-// (the V4 landing no longer has a methodology deep-dive section) — same
-// single constant, same token.
+// complete report already in the database (the Allbirds run generated
+// during an earlier stage's live verification). Re-weighting session:
+// this run predates the current SCORER_VERSION, so as of this deploy
+// the link now serves the expired-report state (Part 4) — needs
+// re-pointing at a fresh run, see the module docstring above.
 export const SAMPLE_REPORT_URL = reportUrl('1710d72d74ee4a2ea6c9884c72cc96e2')
 
 // Sample report card (Hero, right column) — the mock's illustrative
@@ -34,11 +43,13 @@ export const SAMPLE_OFFERS = [
   { name: 'Checkout value', value: 'Nothing declared', channel: 'UCP / ACP', eligibility: 'no declaration found', freshness: 'stale', readable: 'invisible' },
 ]
 
-// MetricRow items — sample report card
+// MetricRow items — sample report card. Placeholder values, proportionally
+// rescaled from the original run's ratios onto the new maxes — see the
+// module docstring; needs a real re-run to replace these.
 export const SAMPLE_PILLAR_ITEMS = [
-  { value: 25, suffix: '/40', label: 'Visibility', sub: 'Agents know who you are' },
-  { value: 8, suffix: '/20', label: 'Accessibility', sub: 'Little of your catalog is readable' },
-  { value: 7, suffix: '/40', label: 'True Value', sub: 'Only Parleo measures this', accent: true },
+  { value: 20, suffix: '/32', label: 'Visibility', sub: 'Agents know who you are' },
+  { value: 7, suffix: '/18', label: 'Accessibility', sub: 'Little of your catalog is readable' },
+  { value: 9, suffix: '/50', label: 'True Value', sub: 'Only Parleo measures this', accent: true },
 ]
 
 // Proof band — LogoMarquee items

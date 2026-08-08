@@ -1,5 +1,5 @@
 """
-scan_dimensions.py — Stage 25: SCORER_VERSION "4", the three-pillar
+scan_dimensions.py — Stage 25: SCORER_VERSION "5", the three-pillar
 Agent Scan rubric. Single source of truth for pillar/dimension
 structure, weights, the seen/said split on True Value dimensions, band
 tables, opportunity sets, the lite study's query-count constant, and
@@ -9,22 +9,42 @@ the verdict gate's thresholds. Consumed by apps/pipeline/scan/scorer.py
 public_lite.py (report/teaser assembly), and the report/landing
 widgets.
 
-Replaces SCORER_VERSION "3" (Stage 16) as the basis for NEW scans. v3's
-public-contract fields stay serialized (additive-only, rule 6) but
-nothing new is computed from them going forward; a v3-scored row now
-falls through to the same honest "previous methodology" fallback v1/v2
-rows already used (see public_lite.py's version gate).
+Replaces SCORER_VERSION "4" (Stage 25's own original weights) as the
+basis for NEW scans — the re-weighting session moved True Value from
+40 to 50 of 100. Unlike the "3"->"4" transition, a "4"-scored row does
+NOT fall through to a degraded-but-rendering fallback: its earned
+points were computed against the OLD maxes, and rendering them against
+these new ones would produce incoherent output (earned exceeding max,
+wrong composites, wrong verdicts) that still looks plausible — the
+worst kind of silent corruption. public_lite.py's version gate instead
+retires any non-current-version row to an honest "this report has
+expired" state, never a partial render. See that gate for the exact
+cutover — v1/v2/v3 rows already fell through this same gate before
+this change; the re-weighting session did not alter their treatment.
 
 Pillars (sum to TOTAL_MAX):
-  visibility (40)     — share_of_mentions 25, recommendation_strength 15
-  accessibility (20)  — agent_access 6, catalog_context 8, protocol_feed 6
-  true_value (40)     — price_truth 12 (seen 5 / said 7),
-                         member_value 15 (seen 9 / said 6),
-                         deal_citability 6 (seen 4 / said 2),
-                         value_protocols 7 (seen 7 — encode-only, no
+  visibility (32)     — share_of_mentions 22, recommendation_strength 10
+  accessibility (18)  — agent_access 5, catalog_context 8, protocol_feed 5
+  true_value (50)     — price_truth 16 (seen 7 / said 9),
+                         value_protocols 14 (seen 14 — encode-only, no
                            said half at all: agents don't state whether
                            a store "declares UCP" in an answer, so
-                           there is nothing to cite)
+                           there is nothing to cite),
+                         deal_citability 12 (seen 7 / said 5),
+                         member_value 8 (seen 5 / said 3)
+
+Re-weighting session: True Value moved from 40 to 50 of 100 — it is the
+pillar only Parleo measures, so it now carries half the composite.
+Within True Value, weight ordering follows universality, not sentiment:
+Member Value only applies to brands running a loyalty program (N/A on a
+large share of runs) and is deliberately the LOWEST-weighted True Value
+dimension so it can never outweigh Deal Citability or Value Protocols,
+both of which apply to every run (see the weight-ordering test in
+test_scan_dimensions.py, which asserts this directly so a future edit
+can't silently invert it). Visibility/Accessibility absorbed the
+reduction (40→32, 20→18); Accessibility's catalog_context stays at 8
+unchanged — it is the precondition for True Value being measurable at
+all, so it wasn't a candidate for reduction.
 
 Composite = a straight sum of pillar points, rescaled onto 100 (or onto
 applicable_max when member_value is N/A — Part 4, P4). No blending
@@ -56,7 +76,7 @@ from typing import Optional, Tuple
 
 from soa_shared.constants import QUERY_STAGES
 
-SCORER_VERSION = "4"
+SCORER_VERSION = "5"
 
 # ── Lite study query count (Part 4, Q4) ─────────────────────────────────
 # The ONE constant every lite surface (worker, evidence copy, report
@@ -193,7 +213,7 @@ class Dimension:
 DIMENSIONS: Tuple[Dimension, ...] = (
     Dimension(
         code="share_of_mentions", name="Share of Mentions",
-        pillar=PILLAR_VISIBILITY, weight=25,
+        pillar=PILLAR_VISIBILITY, weight=22,
         what_it_is="Your share of every brand mention across the answers.",
         how_measured=(
             f"{LITE_QUERY_COUNT} shopper questions on ChatGPT",
@@ -204,7 +224,7 @@ DIMENSIONS: Tuple[Dimension, ...] = (
     ),
     Dimension(
         code="recommendation_strength", name="Recommendation Strength",
-        pillar=PILLAR_VISIBILITY, weight=15,
+        pillar=PILLAR_VISIBILITY, weight=10,
         what_it_is="How you're mentioned — the pick, or one of a list.",
         how_measured=(
             "position in the answer",
@@ -214,7 +234,7 @@ DIMENSIONS: Tuple[Dimension, ...] = (
     ),
     Dimension(
         code="agent_access", name="Agent Access",
-        pillar=PILLAR_ACCESSIBILITY, weight=6,
+        pillar=PILLAR_ACCESSIBILITY, weight=5,
         what_it_is="Can agents get in at all.",
         how_measured=(
             "robots.txt allows product paths",
@@ -236,7 +256,7 @@ DIMENSIONS: Tuple[Dimension, ...] = (
     ),
     Dimension(
         code="protocol_feed", name="Protocol & Feed Presence",
-        pillar=PILLAR_ACCESSIBILITY, weight=6,
+        pillar=PILLAR_ACCESSIBILITY, weight=5,
         what_it_is="Are you present on the channels agents query.",
         how_measured=(
             "llms.txt",
@@ -247,8 +267,8 @@ DIMENSIONS: Tuple[Dimension, ...] = (
     ),
     Dimension(
         code="price_truth", name="Price Truth",
-        pillar=PILLAR_TRUE_VALUE, weight=12,
-        seen_max=5, said_max=7,
+        pillar=PILLAR_TRUE_VALUE, weight=16,
+        seen_max=7, said_max=9,
         said_opportunity_set=OPPORTUNITY_SET_ALL_MENTIONS,
         said_band_type=BAND_TYPE_RATE,
         what_it_is="Can agents state your real price.",
@@ -261,8 +281,8 @@ DIMENSIONS: Tuple[Dimension, ...] = (
     ),
     Dimension(
         code="member_value", name="Member Value",
-        pillar=PILLAR_TRUE_VALUE, weight=15,
-        seen_max=9, said_max=6,
+        pillar=PILLAR_TRUE_VALUE, weight=8,
+        seen_max=5, said_max=3,
         said_opportunity_set=OPPORTUNITY_SET_PURCHASE_INTENT,
         said_band_type=BAND_TYPE_RATE,
         what_it_is="Can agents see what members get — and do they say it.",
@@ -275,8 +295,8 @@ DIMENSIONS: Tuple[Dimension, ...] = (
     ),
     Dimension(
         code="deal_citability", name="Deal Citability",
-        pillar=PILLAR_TRUE_VALUE, weight=6,
-        seen_max=4, said_max=2,
+        pillar=PILLAR_TRUE_VALUE, weight=12,
+        seen_max=7, said_max=5,
         said_opportunity_set=OPPORTUNITY_SET_PURCHASE_INTENT,
         said_band_type=BAND_TYPE_COUNT,
         fix_owner=FIX_OWNER_TRUESYNC,
@@ -290,19 +310,23 @@ DIMENSIONS: Tuple[Dimension, ...] = (
     ),
     Dimension(
         code="value_protocols", name="Value Protocols",
-        pillar=PILLAR_TRUE_VALUE, weight=7,
+        pillar=PILLAR_TRUE_VALUE, weight=14,
         # Encode-only: a seen half (crawl-derived declaration checks)
         # with NO said half at all — agents don't state in an answer
         # whether a store "declares" a checkout protocol, so there is
         # nothing to cite (Part 3, V1; Part 6, A1's single-wing render).
-        seen_max=7, said_max=None,
+        seen_max=14, said_max=None,
         fix_owner=FIX_OWNER_TRUESYNC,
         what_it_is="Can your value execute inside agent checkout — not just be described.",
+        # Re-weighting session (Part 1): five checks, not four — order
+        # matches scorer.py's score_value_protocols/VALUE_PROTOCOLS_POINTS
+        # and lite_pillars.py's _value_protocols_checks exactly.
         how_measured=(
+            "manifest resolves to the documented capabilities/specVersion shape",
+            "declared spec version is current",
             "UCP discount capability declared",
             "loyalty or member extension declared",
             "ACP promotions declared",
-            "declared versions current and schemas resolving",
         ),
         how_scored="Declaration checks — we score what a store declares, the full analysis verifies what works. This one doesn't appear in the sentence — it executes at checkout.",
     ),
@@ -356,10 +380,11 @@ def dimension_max(dimension: Dimension, said_na: bool = False) -> float:
 def applicable_max(member_value_na: bool) -> float:
     """
     TOTAL_MAX (100), or TOTAL_MAX minus member_value's full weight when
-    member_value is N/A (Part 4, P4 — Visibility 40 + Accessibility 20
-    + Price Truth 12 + Deal Citability 6 + Value Protocols 7 = 85) —
-    derived from the registry weights, never hard-coded, so a weight
-    change moves this number automatically (see the perturbation test).
+    member_value is N/A (Part 4, P4 — re-weighting session: Visibility
+    32 + Accessibility 18 + Price Truth 16 + Deal Citability 12 +
+    Value Protocols 14 = 92) — derived from the registry weights, never
+    hard-coded, so a weight change moves this number automatically (see
+    the perturbation test).
     """
     if not member_value_na:
         return TOTAL_MAX

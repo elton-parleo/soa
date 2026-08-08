@@ -458,7 +458,7 @@ def test_v3_pillars_block_never_leaks_stage_names(db):
 
     result = public_lite.get_lite_report("t1")
 
-    assert result["scan"]["scorer_version"] == "4"
+    assert result["scan"]["scorer_version"] == "5"
     assert result["pillars"] is not None
     serialized = json.dumps(result).lower()
     for stage_name in _STAGE_NAMES:
@@ -889,14 +889,14 @@ def test_no_score_cap_language_anywhere_in_api_app_source():
 # ─── Stage 16 (Part 7): pillars block + composite versioning ────────────
 
 _V3_CRAWL_DIMENSIONS = {
-    "scorer_version": "4",
-    "agent_access": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": "fix agent_access"},
+    "scorer_version": "5",
+    "agent_access": {"score": 5, "max": 5, "coverage": "full", "evidence": [], "fix": "fix agent_access"},
     "catalog_context": {"score": 8, "max": 8, "coverage": "full", "evidence": [], "fix": "fix catalog_context"},
-    "protocol_feed": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": "fix protocol_feed"},
-    "price_truth_seen": {"score": 5, "max": 5, "coverage": "full", "evidence": [], "fix": "fix price_truth"},
-    "member_value_seen": {"score": 9, "max": 9, "coverage": "full", "evidence": [], "fix": "fix member_value"},
-    "deal_citability_seen": {"score": 4, "max": 4, "coverage": "full", "evidence": [], "fix": "fix deal_citability"},
-    "value_protocols_seen": {"score": 7, "max": 7, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
+    "protocol_feed": {"score": 5, "max": 5, "coverage": "full", "evidence": [], "fix": "fix protocol_feed"},
+    "price_truth_seen": {"score": 7, "max": 7, "coverage": "full", "evidence": [], "fix": "fix price_truth"},
+    "member_value_seen": {"score": 5, "max": 5, "coverage": "full", "evidence": [], "fix": "fix member_value"},
+    "deal_citability_seen": {"score": 7, "max": 7, "coverage": "full", "evidence": [], "fix": "fix deal_citability"},
+    "value_protocols_seen": {"score": 14, "max": 14, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
 }
 
 
@@ -967,7 +967,7 @@ def _seed_v3_full_credit_scan(
 # _degraded_dimensions synthesizes for a BLOCKED/FAILED run — every
 # crawl-derived dimension honestly coverage='blocked', never an empty {}.
 _DEGRADED_CRAWL_DIMENSIONS = {
-    "scorer_version": "4",
+    "scorer_version": "5",
     **{
         code: {
             "score": 0.0, "max": max_, "coverage": "blocked",
@@ -978,9 +978,9 @@ _DEGRADED_CRAWL_DIMENSIONS = {
             "fix": None, "fix_human": None, "deferred_items": [], "cap_basis": [],
         }
         for code, max_ in (
-            ("agent_access", 6), ("catalog_context", 8), ("protocol_feed", 6),
-            ("price_truth_seen", 5), ("member_value_seen", 9), ("deal_citability_seen", 4),
-            ("value_protocols_seen", 7),
+            ("agent_access", 5), ("catalog_context", 8), ("protocol_feed", 5),
+            ("price_truth_seen", 7), ("member_value_seen", 5), ("deal_citability_seen", 7),
+            ("value_protocols_seen", 14),
         )
     },
 }
@@ -1015,13 +1015,100 @@ def test_blocked_scan_under_current_scorer_version_still_gets_a_pillars_payload(
     assert result["pillars"]["visibility"]["score"] == 100
 
 
+# ─── Re-weighting session (Part 4): the expired-report version gate ─────
+#
+# A scan scored under scorer_version "4" (the direct predecessor of this
+# session's weight change, and the first version that ever computed a
+# pillars payload) must never render — its earned points were computed
+# against maxes that no longer exist in the registry. Genuinely
+# pre-pillars versions ("1"/"2"/"3") are unaffected — see
+# test_pre_pillars_historical_version_is_unaffected_by_the_expired_gate.
+
+def test_stale_pillars_version_serves_the_expired_state_not_the_report(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(
+            conn, token="stale4",
+            dimensions={**_V3_CRAWL_DIMENSIONS, "scorer_version": "4"},
+            input_url="https://oldstore.example.com",
+        )
+
+    result = public_lite.get_lite_report("stale4")
+
+    assert result == {
+        "status": "expired",
+        "store_domain": "oldstore.example.com",
+        "store_url": "https://oldstore.example.com",
+    }
+
+
+def test_stale_pillars_version_expired_state_omits_score_pillars_and_verdict(db):
+    """Grep-assert: the expired payload never carries any field a real
+    report would use to imply a score — no partial rendering, no stale
+    score alongside a warning."""
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="stale4b", dimensions={**_V3_CRAWL_DIMENSIONS, "scorer_version": "4"})
+
+    result = public_lite.get_lite_report("stale4b")
+    for banned_key in ("pillars", "composite", "verdict", "visibility", "accessibility", "scan"):
+        assert banned_key not in result
+
+
+def test_current_pillars_version_still_renders_the_full_report(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn)  # _V3_CRAWL_DIMENSIONS defaults to the current scorer_version
+
+    result = public_lite.get_lite_report("v3full")
+    assert result["status"] == "complete"
+    assert result["pillars"] is not None
+    assert result["pillars"]["composite"] == 100
+
+
+def test_pre_pillars_historical_version_is_unaffected_by_the_expired_gate(db):
+    """scorer_version '2' predates build_pillars_payload entirely — it
+    was already on the historical foundation/value-family fallback
+    before this session and stays there; the expired gate is scoped to
+    pillars-capable versions (>= FIRST_PILLARS_SCORER_VERSION) only."""
+    dimensions = dict(_FULL_DIMENSIONS)
+    dimensions["scorer_version"] = "2"
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="hist2", email="visitor@example.com")
+        rid = _lite_request_id(conn, "hist2")
+        _seed_scan_row(conn, rid, status="complete", total_score=59, dimensions=dimensions)
+
+    result = public_lite.get_lite_report("hist2")
+    assert result["status"] == "complete"
+    assert result.get("pillars") is None
+    assert result["scan"]["scorer_version"] == "2"
+
+
+def test_expired_state_ctas_with_the_original_store_url_when_the_run_recorded_one(db):
+    """Backend side of the re-run CTA: store_url is what the frontend
+    prefills the fresh-audit link with — this proves it reaches the
+    payload whenever the original run recorded an input_url."""
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(
+            conn, token="stale4c",
+            dimensions={**_V3_CRAWL_DIMENSIONS, "scorer_version": "4"},
+            input_url="https://prefillme.example.com/",
+        )
+    result = public_lite.get_lite_report("stale4c")
+    assert result["store_url"] == "https://prefillme.example.com/"
+
+
+def test_expired_state_store_url_is_null_when_the_original_run_never_recorded_one(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="stale4d", dimensions={**_V3_CRAWL_DIMENSIONS, "scorer_version": "4"})
+    result = public_lite.get_lite_report("stale4d")
+    assert result["store_url"] is None
+
+
 def test_v3_full_report_composite_uses_pillars_not_the_old_blend(db):
     with db.begin() as conn:
         _seed_v3_full_credit_scan(conn)
 
     result = public_lite.get_lite_report("v3full")
 
-    assert result["scan"]["scorer_version"] == "4"
+    assert result["scan"]["scorer_version"] == "5"
     assert result["visibility"] == 100
     assert result["accessibility"] == 100
     assert result["composite"] == 100
@@ -1048,7 +1135,7 @@ def test_v3_weak_scan_verdict_reaches_the_full_report_as_not_agent_ready(db):
     """Same wiring check, opposite gate outcome: a scan with almost
     nothing crawlable and no mentions clears neither threshold."""
     weak_dimensions = {
-        "scorer_version": "4",
+        "scorer_version": "5",
         "agent_access": {"score": 0, "max": 6, "coverage": "full", "evidence": []},
         "catalog_context": {"score": 0, "max": 8, "coverage": "full", "evidence": []},
         "protocol_feed": {"score": 0, "max": 6, "coverage": "full", "evidence": []},
@@ -1107,7 +1194,7 @@ def test_v3_pillars_fix_text_reaches_the_full_report(db):
 # ─── Part 3 (F1): report.pillars.fixes end to end ────────────────────────
 
 _V3_CRAWL_DIMENSIONS_WITH_FIX_HUMAN = {
-    "scorer_version": "4",
+    "scorer_version": "5",
     "agent_access": {"score": 6, "max": 6, "coverage": "full", "evidence": [], "fix": None, "fix_human": None},
     "catalog_context": {
         "score": 3, "max": 8, "coverage": "full", "evidence": [],
@@ -1442,7 +1529,7 @@ def test_v3_report_has_full_pillars_block_even_when_email_is_null(db):
     assert result["accessibility"] == 100
     assert result["composite"] == 100
     assert result["pillars"] is not None
-    assert result["scan"]["scorer_version"] == "4"
+    assert result["scan"]["scorer_version"] == "5"
 
 
 def test_v1_row_composite_still_uses_the_pre_stage16_blend(db):

@@ -36,6 +36,15 @@ from soa_shared.database import engine, session_factory
 from soa_shared.models.soa_models import LITE_STATUS_PENDING
 from soa_shared.org_helpers import get_or_create_leadgen_org
 from soa_shared.scan_dimensions import SCORER_VERSION
+
+# Re-weighting session (Part 4): the first scorer_version that ever
+# computed a `pillars` payload via build_pillars_payload (Stage 25).
+# A row at this version or newer, but behind the CURRENT SCORER_VERSION,
+# is retired to the "expired" report state rather than re-rendered — see
+# _build_report_payload. Versions before this were never pillars-shaped
+# in the first place, so they keep using the historical fallback below,
+# unaffected by any future bump of this constant.
+FIRST_PILLARS_SCORER_VERSION = 4
 from app.routers.metrics import build_entity_metrics
 from app.services.lite_crosswalk import GAP_THRESHOLD, RunSignal, link_dimensions, link_incentive_citation
 from app.services.lite_incentive_citation import build_incentive_citation_payload
@@ -687,6 +696,36 @@ def _build_report_payload(conn, lite_request_id: int, cycle_id: int) -> dict:
     # or not the crawl itself ever completed. BrandLogo's rail fallback
     # needs this even on a blocked/failed run.
     store_domain = _bare_domain(scan_row[8]) if scan_row else None
+
+    # Re-weighting session (Part 4): a scan scored under an earlier
+    # PILLARS-CAPABLE version (scorer_version "4", the direct predecessor
+    # of this session's weight change) carries earned points computed
+    # against OLD dimension maxes — rendering it against the CURRENT
+    # registry would produce incoherent output (earned exceeding max,
+    # wrong composite, wrong verdict) that still looks plausible.
+    # Backward compatibility is explicitly not required: retire the
+    # report to an honest "expired" state instead of rendering it,
+    # recomputing it, or showing the stale score alongside a warning.
+    #
+    # Scoped to scorer_version >= FIRST_PILLARS_SCORER_VERSION deliberately
+    # — a genuinely pre-Stage-25 row (scorer_version "1"/"2"/"3") never
+    # went through build_pillars_payload at all (it was ALREADY on the
+    # historical foundation/value-family fallback below, byte-identically,
+    # long before this session), so it isn't newly "incoherent" the way a
+    # stale-but-pillars-shaped v4 row is — it keeps rendering exactly as
+    # it always has. Gated on scan_scorable too — a request with no scan
+    # row at all (dimensions_raw = {}, scorer_version defaults to "1")
+    # has nothing to expire.
+    try:
+        is_stale_pillars_version = int(scorer_version) >= FIRST_PILLARS_SCORER_VERSION and scorer_version != SCORER_VERSION
+    except (TypeError, ValueError):
+        is_stale_pillars_version = False
+    if scan_scorable and is_stale_pillars_version:
+        return {
+            "status": "expired",
+            "store_domain": store_domain,
+            "store_url": scan_row[8] if scan_row else None,
+        }
 
     # Part 5 (R3): independent of scan_complete/scorer_version — the
     # revenue probe is a brand-level OpenAI call, same as the membership

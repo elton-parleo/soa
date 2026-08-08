@@ -125,6 +125,36 @@ function ReportNotFound({ navigate }) {
   )
 }
 
+// ─── Expired-report state (Part 4, re-weighting session) — a report
+// scored under a retired scoring model. Never partial rendering, never
+// the stale score alongside a warning, never a recompute — just an
+// honest dead end with a way forward, same design system as
+// ReportNotFound above (a distinct case: this token is real and was
+// real once, it just can't be shown against the current model anymore).
+function ReportExpired({ storeUrl }) {
+  const runFreshHref = `${PUBLIC_AUDIT_BASE_URL}/${storeUrl ? `?url=${encodeURIComponent(storeUrl)}` : ''}`
+  return (
+    <div className="lite-root">
+      <div className="lite-shell" style={{ maxWidth: 480 }}>
+        <LightCard>
+          <div className="lite-headline" style={{ fontSize: 20, marginBottom: 8 }}>
+            This report has expired
+          </div>
+          <div className="lite-body lite-muted" style={{ marginBottom: 20 }}>
+            We've updated how the audit scores stores since this report ran — its
+            numbers were measured against an earlier model and are no longer
+            comparable to a current one. Run a fresh audit to see where you
+            stand today.
+          </div>
+          <a href={runFreshHref} className="lite-pill lite-pill--solid" style={{ textDecoration: 'none', display: 'inline-block' }}>
+            Run a fresh audit
+          </a>
+        </LightCard>
+      </div>
+    </div>
+  )
+}
+
 export default function LiteWidget({ urlToken, navigate } = {}) {
   // urlToken !== undefined means App.jsx rendered us from /report/{...} —
   // even an explicitly empty string (a bare /report) is a real, distinct
@@ -280,6 +310,13 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
   }
 
   if (phaseData?.status === 'complete' && report) {
+    // Re-weighting session (Part 4): a report scored under a retired
+    // scoring model never reaches pillars OR the legacy fallback below
+    // — checked first, since report.status is 'expired' instead of
+    // 'complete' and carries no score/pillar/verdict data at all.
+    if (report.status === 'expired') {
+      return <ReportExpired storeUrl={report.store_url} />
+    }
     // V4 report redesign: the new rail+focus-mode layout renders only
     // for a current-version (pillars-bearing) report — a pre-this-stage
     // row falls back to the legacy template exactly as it always has,

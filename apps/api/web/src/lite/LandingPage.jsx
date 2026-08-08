@@ -13,7 +13,7 @@
  * of a full page reload, so the transition from the marketing sections
  * to the live progress view doesn't lose React state or refetch assets.
  */
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import './theme.css'
 import { STORAGE_KEY, STORAGE_KEY_STORE_URL } from './LiteWidget.jsx'
 import { LandingNav } from './landing/LandingNav.jsx'
@@ -81,8 +81,25 @@ function useLandingMeta() {
   }, [])
 }
 
+// Re-weighting session (Part 4): the expired-report state's "run a
+// fresh audit" CTA prefills this from the retired report's own
+// store_url, when one was recorded — read once on mount, never
+// re-read on navigation within the page (a query param is how a full
+// navigation from ReportExpired hands this off, not client-side state).
+function usePrefillUrlFromQuery() {
+  const [prefillUrl] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('url') || ''
+    } catch (_) {
+      return ''
+    }
+  })
+  return prefillUrl
+}
+
 export default function LandingPage({ navigate }) {
   useLandingMeta()
+  const prefillUrl = usePrefillUrlFromQuery()
 
   function handleSubmitted(token, { storeUrl } = {}) {
     writeSession(STORAGE_KEY, token)
@@ -95,7 +112,7 @@ export default function LandingPage({ navigate }) {
   return (
     <div className="lite-root" style={{ display: 'block', padding: 0 }}>
       <LandingNav />
-      <Hero onSubmitted={handleSubmitted} />
+      <Hero onSubmitted={handleSubmitted} initialStoreUrl={prefillUrl} />
       <ProofBand />
       <Stakes />
       <FieldEvidence />

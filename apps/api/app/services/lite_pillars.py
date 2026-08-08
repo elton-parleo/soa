@@ -268,27 +268,32 @@ def _blocked_checks(code: str, evidence: List[str]) -> List[Dict]:
 
 
 def _value_protocols_checks(evidence: List[str]) -> List[Dict]:
+    # Re-weighting session (Part 1): five checks, not four — schema
+    # resolution and version currency are independently scored (see
+    # scorer.py's score_value_protocols docstring). Order here matches
+    # DIMENSIONS_BY_CODE["value_protocols"].how_measured exactly.
     dim = DIMENSIONS_BY_CODE["value_protocols"]
+    check_ids = ("schema_resolution", "version_currency", "ucp_discount", "loyalty", "acp_promotions")
     if evidence == ["no protocol profile found"]:
         return [
             _check(check_id, label, CHECK_NA, evidence="no protocol profile found")
-            for check_id, label in zip(
-                ("ucp_discount", "loyalty", "acp_promotions", "version_schema"), dim.how_measured,
-            )
+            for check_id, label in zip(check_ids, dim.how_measured)
         ]
 
     def _found(sub: str) -> bool:
         return any(sub in e for e in evidence)
 
+    resolution_state = CHECK_PASS if _found("resolve to the expected shape") else CHECK_FAIL
+    version_state = CHECK_PASS if _found("declared protocol manifest version is current") else CHECK_FAIL
     ucp_state = CHECK_PASS if _found("declares a UCP shopping-discount capability") else CHECK_FAIL
     loyalty_state = CHECK_PASS if _found("declares a loyalty/member protocol extension") else CHECK_FAIL
     acp_state = CHECK_PASS if _found("declares an ACP promotions capability") else CHECK_FAIL
-    version_state = CHECK_PASS if _found("declared protocol manifest version is current") else CHECK_FAIL
     return [
-        _check("ucp_discount", dim.how_measured[0], ucp_state),
-        _check("loyalty", dim.how_measured[1], loyalty_state),
-        _check("acp_promotions", dim.how_measured[2], acp_state),
-        _check("version_schema", dim.how_measured[3], version_state),
+        _check("schema_resolution", dim.how_measured[0], resolution_state),
+        _check("version_currency", dim.how_measured[1], version_state),
+        _check("ucp_discount", dim.how_measured[2], ucp_state),
+        _check("loyalty", dim.how_measured[3], loyalty_state),
+        _check("acp_promotions", dim.how_measured[4], acp_state),
     ]
 
 
@@ -1052,7 +1057,8 @@ def build_pillars_payload(
         # member_value's weight when it's N/A), so a legitimately
         # program-less store is judged on the value dimensions that
         # actually apply to it, same discipline as the composite's own
-        # /85 rescale. Only ever called in state=scored — the invariant
+        # /92 rescale (re-weighting session: was /85). Only ever called
+        # in state=scored — the invariant
         # (asserted server-side by PublicLitePillars' model_validator)
         # is that AGENT-READY/NOT AGENT-READY exists only alongside a
         # real composite, never withheld/unverified data.

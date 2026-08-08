@@ -52,8 +52,8 @@ TRUE_VALUE_SPLIT_CODES = ("price_truth", "member_value", "deal_citability")
 TRUE_VALUE_CODES = ("price_truth", "member_value", "deal_citability", "value_protocols")
 
 
-def test_scorer_version_is_4():
-    assert SCORER_VERSION == "4"
+def test_scorer_version_is_5():
+    assert SCORER_VERSION == "5"
 
 
 def test_lite_query_count_is_24():
@@ -62,11 +62,26 @@ def test_lite_query_count_is_24():
 
 
 def test_pillar_weights_sum_to_spec():
-    assert PILLAR_WEIGHTS[PILLAR_VISIBILITY] == 40
-    assert PILLAR_WEIGHTS[PILLAR_ACCESSIBILITY] == 20
-    assert PILLAR_WEIGHTS[PILLAR_TRUE_VALUE] == 40
+    # Re-weighting session: True Value is the pillar only Parleo
+    # measures, so it now carries half the composite (40->50);
+    # Visibility/Accessibility absorbed the reduction (40->32, 20->18).
+    assert PILLAR_WEIGHTS[PILLAR_VISIBILITY] == 32
+    assert PILLAR_WEIGHTS[PILLAR_ACCESSIBILITY] == 18
+    assert PILLAR_WEIGHTS[PILLAR_TRUE_VALUE] == 50
     assert TOTAL_MAX == 100
     assert sum(PILLAR_WEIGHTS.values()) == TOTAL_MAX
+
+
+def test_true_value_dimension_weight_ordering_encodes_universality():
+    """Re-weighting session: within True Value, weight ordering follows
+    universality, not sentiment. Member Value only applies to brands
+    running a loyalty program (N/A on a large share of runs), so it
+    must never outweigh Deal Citability or Value Protocols, both of
+    which apply to every run — asserted directly so a future edit
+    can't silently invert it."""
+    member_value = DIMENSIONS_BY_CODE["member_value"].weight
+    assert DIMENSIONS_BY_CODE["deal_citability"].weight > member_value
+    assert DIMENSIONS_BY_CODE["value_protocols"].weight > member_value
 
 
 def test_pillar_order_covers_every_pillar_exactly_once():
@@ -86,15 +101,15 @@ def test_every_dimension_weight_sums_correctly_within_its_pillar():
 
 
 @pytest.mark.parametrize("code,expected_weight", [
-    ("share_of_mentions", 25),
-    ("recommendation_strength", 15),
-    ("agent_access", 6),
+    ("share_of_mentions", 22),
+    ("recommendation_strength", 10),
+    ("agent_access", 5),
     ("catalog_context", 8),
-    ("protocol_feed", 6),
-    ("price_truth", 12),
-    ("member_value", 15),
-    ("deal_citability", 6),
-    ("value_protocols", 7),
+    ("protocol_feed", 5),
+    ("price_truth", 16),
+    ("member_value", 8),
+    ("deal_citability", 12),
+    ("value_protocols", 14),
 ])
 def test_dimension_weights_match_spec(code, expected_weight):
     assert DIMENSIONS_BY_CODE[code].weight == expected_weight
@@ -116,7 +131,7 @@ def test_only_true_value_split_dimensions_have_a_seen_said_split():
 def test_value_protocols_has_a_seen_half_but_no_said_half():
     vp = DIMENSIONS_BY_CODE["value_protocols"]
     assert vp.pillar == PILLAR_TRUE_VALUE
-    assert vp.seen_max == vp.weight == 7
+    assert vp.seen_max == vp.weight == 14
     assert vp.said_max is None
     assert vp.said_opportunity_set is None
     assert vp.said_band_type is None
@@ -134,9 +149,9 @@ def test_seen_plus_said_equals_dimension_weight():
 
 
 @pytest.mark.parametrize("code,seen,said", [
-    ("price_truth", 5, 7),
-    ("member_value", 9, 6),
-    ("deal_citability", 4, 2),
+    ("price_truth", 7, 9),
+    ("member_value", 5, 3),
+    ("deal_citability", 7, 5),
 ])
 def test_seen_said_split_matches_spec(code, seen, said):
     d = DIMENSIONS_BY_CODE[code]
@@ -226,7 +241,7 @@ def test_applicable_max_full():
 
 
 def test_applicable_max_member_value_na():
-    assert applicable_max(member_value_na=True) == 85  # 100 - 15
+    assert applicable_max(member_value_na=True) == 92  # 100 - 8
 
 
 def test_compute_composite_full_scoring():
@@ -236,10 +251,10 @@ def test_compute_composite_full_scoring():
 
 
 def test_compute_composite_na_normalization():
-    assert compute_composite(85, member_value_na=True) == 100
+    assert compute_composite(92, member_value_na=True) == 100
     assert compute_composite(0, member_value_na=True) == 0
-    # 40 of 85 applicable points -> ~47%
-    assert compute_composite(40, member_value_na=True) == round(40 / 85 * 100)
+    # 40 of 92 applicable points -> ~43%
+    assert compute_composite(40, member_value_na=True) == round(40 / 92 * 100)
 
 
 def test_compute_composite_never_raises_on_degenerate_basis(monkeypatch):
@@ -249,11 +264,11 @@ def test_compute_composite_never_raises_on_degenerate_basis(monkeypatch):
 
 def test_perturbation_changing_member_value_weight_moves_applicable_max_and_composite(monkeypatch):
     """
-    Part 7, A3: nothing about the /85 normalization is hard-coded — it's
+    Part 7, A3: nothing about the /92 normalization is hard-coded — it's
     TOTAL_MAX minus member_value's registered weight, read fresh at call
     time. Perturb ONLY member_value's weight (TOTAL_MAX untouched) and
     confirm applicable_max/compute_composite move to a DIFFERENT number
-    than the spec's 85, proving the formula — not a baked-in constant —
+    than the spec's 92, proving the formula — not a baked-in constant —
     drives the result.
     """
     perturbed_member_value = dataclasses.replace(
@@ -264,7 +279,7 @@ def test_perturbation_changing_member_value_weight_moves_applicable_max_and_comp
         {**scan_dimensions.DIMENSIONS_BY_CODE, "member_value": perturbed_member_value},
     )
 
-    assert applicable_max(member_value_na=True) == 71  # 100 - 29, not the spec's 85
+    assert applicable_max(member_value_na=True) == 71  # 100 - 29, not the spec's 92
     assert applicable_max(member_value_na=False) == 100  # unaffected when member_value IS scored
     assert compute_composite(71, member_value_na=True) == 100
     assert compute_composite(35.5, member_value_na=True) == 50
@@ -308,11 +323,19 @@ def test_dimension_max_defaults_said_na_to_false():
 # ── Detail copy (Stage 25, Part 1, R1) ──────────────────────────────────
 
 def test_every_dimension_has_non_empty_detail_copy():
+    # Re-weighting session (Part 1): value_protocols carries 5
+    # how_measured entries (schema_resolution/version_currency split
+    # out of a former compound check) — the upper bound moved 4 -> 5.
     for d in DIMENSIONS:
         assert isinstance(d.what_it_is, str) and d.what_it_is, d.code
-        assert isinstance(d.how_measured, tuple) and 2 <= len(d.how_measured) <= 4, d.code
+        assert isinstance(d.how_measured, tuple) and 2 <= len(d.how_measured) <= 5, d.code
         assert all(isinstance(c, str) and c for c in d.how_measured), d.code
         assert isinstance(d.how_scored, str) and d.how_scored, d.code
+
+
+def test_value_protocols_how_measured_has_five_entries_in_check_order():
+    vp = DIMENSIONS_BY_CODE["value_protocols"]
+    assert len(vp.how_measured) == 5
 
 
 # ── Verdict gate (Stage 25, Part 5, G1) ─────────────────────────────────
