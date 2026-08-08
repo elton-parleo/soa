@@ -1,7 +1,8 @@
-// C1/C2: non-run-derived marketing prose for the report page, plus the
-// renamed CTA family (Full Analysis / Book your walkthrough) reused
-// from the same single source as the landing page.
-export { FULL_ANALYSIS_URL, WALKTHROUGH_URL, TRUESYNC_URL } from '../publicUrls.js'
+// C1/C2: non-run-derived marketing prose for the report page. The
+// walkthrough/TrueSync CTAs used to link out to WALKTHROUGH_URL/
+// FULL_ANALYSIS_URL/TRUESYNC_URL (publicUrls.js) — leadgen session
+// replaced every one of those links with RequestFormModal, so those
+// constants are gone; see lite/demoRequestCtas.js for the CTA copy.
 
 export const EDITORIAL_QUOTE = 'The shelf is now an algorithm. Most of your value is still invisible to it.'
 

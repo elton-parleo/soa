@@ -1,7 +1,9 @@
-import { DarkPanel, Container, MonoTag, Button } from '../../ds/index.js'
-import { CLOSING_FORK_COPY, FULL_ANALYSIS_URL, TRUESYNC_URL } from './reportContent.js'
+import { DarkPanel, Container, MonoTag, Button, RequestFormModal } from '../../ds/index.js'
+import { CLOSING_FORK_COPY } from './reportContent.js'
+import { useDemoRequestModal } from '../useDemoRequestModal.js'
 
-export function ClosingFork({ points }) {
+export function ClosingFork({ points, brandName, reportToken }) {
+  const demoModal = useDemoRequestModal({ brandName, reportToken })
   return (
     <div id="next" className="lite-closingfork-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, scrollMarginTop: 26 }}>
       <DarkPanel pad="24px 26px" radius={16} atmos>
@@ -9,7 +11,7 @@ export function ClosingFork({ points }) {
         <h3 style={{ fontSize: 19, fontWeight: 700, color: 'var(--dark-text)', margin: '14px 0 8px', letterSpacing: '-0.016em' }}>{CLOSING_FORK_COPY.fullAnalysisTitle}</h3>
         <div style={{ fontSize: 13, color: 'var(--dark-muted)', lineHeight: 1.65 }}>{CLOSING_FORK_COPY.fullAnalysisBody}</div>
         <div style={{ marginTop: 18 }}>
-          <a href={FULL_ANALYSIS_URL} style={{ textDecoration: 'none' }}><Button variant="blue" arrow>Book your walkthrough</Button></a>
+          <Button variant="blue" arrow onClick={() => demoModal.open('full_analysis_walkthrough')}>Book your walkthrough</Button>
         </div>
         <div className="mono-label" style={{ fontSize: 8.5, color: 'var(--dark-faint)', marginTop: 14, lineHeight: 1.7 }}>TAKES ONE CALL TO SCOPE · READ-OUT IN DAYS<br />NO INTEGRATION, NO OBLIGATION</div>
       </DarkPanel>
@@ -26,12 +28,22 @@ export function ClosingFork({ points }) {
           ))}
         </div>
         <div style={{ marginTop: 18 }}>
-          <a href={TRUESYNC_URL} style={{ textDecoration: 'none' }}><Button variant="outline" arrow>Talk to us about TrueSync</Button></a>
+          <Button variant="outline" arrow onClick={() => demoModal.open('truesync')}>Talk to us about TrueSync</Button>
         </div>
         {points != null && (
           <div className="mono-label" style={{ fontSize: 8.5, color: 'var(--faint)', marginTop: 14 }}>RECOVERS UP TO {Math.round(points)} VALUE POINTS ON THIS RUN</div>
         )}
       </Container>
+      {demoModal.cta && (
+        <RequestFormModal
+          open={demoModal.isOpen}
+          onClose={demoModal.close}
+          eyebrow={demoModal.cta.eyebrow}
+          title={demoModal.cta.title}
+          messagePlaceholder={demoModal.cta.messagePlaceholder}
+          onSubmit={demoModal.onSubmit}
+        />
+      )}
     </div>
   )
 }

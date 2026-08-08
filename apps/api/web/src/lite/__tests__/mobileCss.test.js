@@ -243,3 +243,18 @@ describe('Mobile QA round 1: three defects found in a real-phone walkthrough', (
     expect(THEME_CSS).not.toMatch(/\.lite-hero-grid[^}]*rotate/)
   })
 })
+
+describe('Leadgen session: RequestFormModal full-screen sheet on phone', () => {
+  it('the card fills the viewport and drops its radius under the phone media query', () => {
+    expect(anyBlockMatches(THEME_CSS, '.lite-request-modal-card', /width:\s*100%\s*!important/)).toBe(true)
+    expect(anyBlockMatches(THEME_CSS, '.lite-request-modal-card', /border-radius:\s*0\s*!important/)).toBe(true)
+  })
+
+  it('the overlay drops its padding so the sheet touches every edge — no horizontal scroll at 360px', () => {
+    expect(anyBlockMatches(THEME_CSS, '.lite-request-modal-overlay', /padding:\s*0\s*!important/)).toBe(true)
+  })
+
+  it('the modal\'s buttons meet 44px via the same global .lite-root button rule G3 already asserts, not a bespoke rule', () => {
+    expect(THEME_CSS.match(/\.lite-request-modal-card\s*[,{]/g)?.length).toBe(1)
+  })
+})

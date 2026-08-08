@@ -1,12 +1,13 @@
 /**
  * TrueSync — V4 design. MonoTag + SectionHeading inside a Container,
  * three fix cards (encode/declare/stay-in-sync), CTA row. Ported
- * verbatim. WALKTHROUGH_URL per the renamed "Book your walkthrough" CTA
- * family — this section's own button reads "Talk to us about TrueSync"
- * per the mock, still pointed at the same walkthrough destination.
+ * verbatim except the CTA itself: leadgen session replaced the
+ * WALKTHROUGH_URL link-out to parleo.io with RequestFormModal
+ * (source: landing_truesync — same TrueSync copy as the report's
+ * TrueSync CTAs, distinguishable by where the lead came from).
  */
-import { Glyph, MonoTag, SectionHeading, Container, Button } from '../../ds/index.js'
-import { WALKTHROUGH_URL } from '../publicUrls.js'
+import { Glyph, MonoTag, SectionHeading, Container, Button, RequestFormModal } from '../../ds/index.js'
+import { useDemoRequestModal } from '../useDemoRequestModal.js'
 
 function FixCard({ tag, glyph, title, body }) {
   return (
@@ -24,6 +25,7 @@ function FixCard({ tag, glyph, title, body }) {
 }
 
 export function TrueSyncSection() {
+  const demoModal = useDemoRequestModal()
   return (
     <section id="truesync" style={{ padding: '56px 24px 16px', scrollMarginTop: 90 }}>
       <Container pad={0}>
@@ -41,13 +43,21 @@ export function TrueSyncSection() {
             <FixCard tag="03 STAY IN SYNC" glyph="refresh" title="No drift back to zero" body="Updated as offers change." />
           </div>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', marginTop: 26 }}>
-            <a href={WALKTHROUGH_URL} style={{ textDecoration: 'none' }}>
-              <Button variant="blue" arrow>Talk to us about TrueSync</Button>
-            </a>
+            <Button variant="blue" arrow onClick={() => demoModal.open('landing_truesync')}>Talk to us about TrueSync</Button>
             <span style={{ fontSize: 13, color: 'var(--muted)' }}>or start with the free audit above. Same road.</span>
           </div>
         </div>
       </Container>
+      {demoModal.cta && (
+        <RequestFormModal
+          open={demoModal.isOpen}
+          onClose={demoModal.close}
+          eyebrow={demoModal.cta.eyebrow}
+          title={demoModal.cta.title}
+          messagePlaceholder={demoModal.cta.messagePlaceholder}
+          onSubmit={demoModal.onSubmit}
+        />
+      )}
     </section>
   )
 }

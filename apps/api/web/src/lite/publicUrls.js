@@ -28,11 +28,3 @@ export function isAuditHost() {
   return typeof window !== 'undefined' && window.location.hostname === PUBLIC_AUDIT_HOSTNAME
 }
 
-// V4 redesign CTA destinations. The mocks bind every "Book your
-// walkthrough"/"Talk to us about TrueSync"/Full-Analysis CTA to the
-// same {{ walkthroughUrl }} value — three separate named constants
-// (not one shared literal) so each CTA's destination can diverge later
-// without a call-site rename, even though they coincide today.
-export const WALKTHROUGH_URL = 'https://parleo.io'
-export const FULL_ANALYSIS_URL = WALKTHROUGH_URL
-export const TRUESYNC_URL = WALKTHROUGH_URL
