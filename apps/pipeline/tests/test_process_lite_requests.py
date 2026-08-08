@@ -1157,6 +1157,8 @@ def test_sweep_uses_logsender_by_default_and_masks_email_in_logs(db, monkeypatch
 
 
 def test_email_body_contains_report_url_and_no_score_language():
+    import re
+
     from email_sender import _email_html, _email_text
 
     report_url = "https://parleo.io/report/abc123token"
@@ -1167,6 +1169,16 @@ def test_email_body_contains_report_url_and_no_score_language():
     assert report_url in html
     assert "score" not in text.lower()
     assert "score" not in html.lower()
+
+    # Redesign session: extend to a bare digits check. No date/year is
+    # present in the copy, so any digit outside the report URL itself
+    # (which legitimately contains the token) would mean a number —
+    # possibly a score — leaked into the body. Strip tags/attributes
+    # first, since inline styles legitimately contain digits (px sizes,
+    # hex colors) that aren't visible copy.
+    visible_html = re.sub(r"<[^>]+>", " ", html).replace(report_url, "")
+    assert not any(ch.isdigit() for ch in visible_html)
+    assert not any(ch.isdigit() for ch in text.replace(report_url, ""))
 
 
 # ── Stage 13: worker-side competitor auto-generation ─────────────────────
