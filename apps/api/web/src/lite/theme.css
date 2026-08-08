@@ -2417,3 +2417,20 @@
     padding: 18px 16px !important;
   }
 }
+
+/* ── Leadgen session: RequestFormModal full-screen sheet on phone —
+   the centered card becomes the whole viewport so there's no cramped
+   floating box and no horizontal scroll at 360px. ── */
+@media (max-width: 640px) {
+  .lite-request-modal-overlay {
+    padding: 0 !important;
+  }
+  .lite-request-modal-card {
+    max-width: 100% !important;
+    width: 100% !important;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0 !important;
+    padding: 24px 20px 20px !important;
+  }
+}

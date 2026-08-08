@@ -390,3 +390,62 @@ describe('LiteFullReportV4 — Part 4: run-tailored exposure reasons', () => {
     expect(screen.getAllByText(/≈ \$[\d,]+\/yr · modeled/).length).toBe(1)
   })
 })
+
+describe('Leadgen session: every report walkthrough/TrueSync CTA opens RequestFormModal with the right copy, none link to parleo.io', () => {
+  it('no walkthrough/TrueSync anchor to parleo.io remains anywhere in the report', () => {
+    renderReport()
+    // #truesync in-page jump links (FixesTable's provenance, etc.) are
+    // fine and expected to remain — only an outbound parleo.io href is
+    // the thing this session removed.
+    const parleoLinks = screen.queryAllByRole('link').filter((a) => (a.getAttribute('href') || '').includes('parleo.io'))
+    expect(parleoLinks).toHaveLength(0)
+  })
+
+  it('every "Book your walkthrough" button (FunnelGate, FixesTable\'s "N MORE FIXES" upsell, ClosingFork) opens the same full-analysis-walkthrough copy', () => {
+    renderReport()
+    const walkthroughButtons = screen.getAllByRole('button', { name: 'Book your walkthrough' })
+    // DOM order: FunnelGate, FixesTable, ClosingFork.
+    expect(walkthroughButtons.length).toBe(3)
+
+    for (const button of walkthroughButtons) {
+      fireEvent.click(button)
+      const dialog = screen.getByRole('dialog')
+      expect(within(dialog).getByText('BOOK YOUR WALKTHROUGH')).toBeInTheDocument()
+      expect(within(dialog).getByText("Let's walk through your audit together.")).toBeInTheDocument()
+      expect(within(dialog).getByPlaceholderText('Anything you want us to focus on in the read-out?')).toBeInTheDocument()
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+    }
+  })
+
+  it('TrueSyncBand\'s "Talk to us about TrueSync" opens the truesync copy', () => {
+    renderReport()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Talk to us about TrueSync' })[0])
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).getByText('TRUESYNC')).toBeInTheDocument()
+    expect(within(dialog).getByText("Let's stop the leak.")).toBeInTheDocument()
+    expect(within(dialog).getByPlaceholderText('Tell us about your loyalty program and deals…')).toBeInTheDocument()
+  })
+
+  it('ClosingFork renders both CTAs, each opening its own copy', () => {
+    renderReport()
+    const walkthroughButtons = screen.getAllByRole('button', { name: 'Book your walkthrough' })
+    const trueSyncButtons = screen.getAllByRole('button', { name: 'Talk to us about TrueSync' })
+    // FixesTable + FunnelGate + ClosingFork's own walkthrough button = 3;
+    // TrueSyncBand + ClosingFork's own TrueSync button = 2.
+    expect(walkthroughButtons.length).toBe(3)
+    expect(trueSyncButtons.length).toBe(2)
+
+    fireEvent.click(trueSyncButtons[trueSyncButtons.length - 1])
+    expect(within(screen.getByRole('dialog')).getByText('TRUESYNC')).toBeInTheDocument()
+  })
+
+  it('the modal carries brand_name and report_token from the report context (Part 2c)', () => {
+    renderReport()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Talk to us about TrueSync' })[0])
+    // Fill and submit isn't needed here — the context ride-along is an
+    // onSubmit-closure concern (useDemoRequestModal.js), covered by its
+    // own unit test; this just asserts the modal actually opened wired
+    // to a report-context CTA, i.e. the button click reached open().
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+})

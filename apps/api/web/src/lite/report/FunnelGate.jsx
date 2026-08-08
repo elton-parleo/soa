@@ -1,12 +1,15 @@
-import { Button, StatusChip } from '../../ds/index.js'
+import { Button, RequestFormModal, StatusChip } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
-import { FUNNEL_GATE_COPY, FULL_ANALYSIS_URL } from './reportContent.js'
+import { FUNNEL_GATE_COPY } from './reportContent.js'
+import { useDemoRequestModal } from '../useDemoRequestModal.js'
 
 const STAGES = ['AWARENESS', 'CONSIDERATION', 'COMPARISON', 'READY TO BUY']
 const STAGE_HEIGHTS = [76, 56, 34, 13]
 
-export function FunnelGate({ open, onToggle }) {
+export function FunnelGate({ open, onToggle, brandName, reportToken }) {
+  const demoModal = useDemoRequestModal({ brandName, reportToken })
   return (
+    <>
     <ReportSection
       id="fun" eyebrow={FUNNEL_GATE_COPY.eyebrow} title={FUNNEL_GATE_COPY.title}
       extra={<StatusChip tone="warning" size="sm">Full Analysis</StatusChip>}
@@ -31,10 +34,19 @@ export function FunnelGate({ open, onToggle }) {
           <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.65, marginTop: 8 }}>{FUNNEL_GATE_COPY.ctaBody}</div>
           <div className="mono-label" style={{ fontSize: 8.5, color: 'var(--faint)', marginTop: 12, lineHeight: 1.7 }}>{FUNNEL_GATE_COPY.ctaFooter}</div>
         </div>
-        <a href={FULL_ANALYSIS_URL} style={{ textDecoration: 'none', flexShrink: 0 }}>
-          <Button variant="blue" size="lg" arrow>Book your walkthrough</Button>
-        </a>
+        <Button variant="blue" size="lg" arrow onClick={() => demoModal.open('full_analysis_walkthrough')} style={{ flexShrink: 0 }}>Book your walkthrough</Button>
       </div>
     </ReportSection>
+    {demoModal.cta && (
+      <RequestFormModal
+        open={demoModal.isOpen}
+        onClose={demoModal.close}
+        eyebrow={demoModal.cta.eyebrow}
+        title={demoModal.cta.title}
+        messagePlaceholder={demoModal.cta.messagePlaceholder}
+        onSubmit={demoModal.onSubmit}
+      />
+    )}
+    </>
   )
 }

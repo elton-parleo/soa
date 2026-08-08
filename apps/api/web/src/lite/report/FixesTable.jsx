@@ -6,10 +6,12 @@
  * would violate the no-fabrication rule. Owner tag comes straight from
  * F3's registry-driven fix_owner, never a literal.
  */
-import { Button, ProvenanceLine, StatusChip } from '../../ds/index.js'
+import { Button, ProvenanceLine, RequestFormModal, StatusChip } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
-import { WALKTHROUGH_URL, FAILURE_POINT_COPY } from './reportContent.js'
+import { FAILURE_POINT_COPY } from './reportContent.js'
 import { isPartialRead, buildMeasurableContext, partialReadFailurePoint } from './reportDerive.js'
+import { DEMO_REQUEST_CTAS } from '../demoRequestCtas.js'
+import { useDemoRequestModal } from '../useDemoRequestModal.js'
 
 const RANK_LABELS = ['01', '02', '03', '04', '05', '06', '07', '08']
 
@@ -28,7 +30,8 @@ function _withDiscoveryFirst(visible) {
   return { ordered, discoveryCode: visible[idx].code }
 }
 
-export function FixesTable({ report, open, onToggle }) {
+export function FixesTable({ report, open, onToggle, brandName, reportToken }) {
+  const demoModal = useDemoRequestModal({ brandName, reportToken })
   const fixes = report.pillars.fixes
   if (!fixes) return null
   const partialRead = isPartialRead(report.pillars, report.scan?.degraded_reason)
@@ -40,6 +43,7 @@ export function FixesTable({ report, open, onToggle }) {
   const maxImpact = Math.max(1, ...visible.map((f) => f.impact))
 
   return (
+    <>
     <ReportSection
       id="fix" eyebrow="RANKED FIXES · BY MODELED IMPACT"
       title={`${visible.length ? visible.length : 'No'} move${visible.length === 1 ? '' : 's'} recover up to ${Math.round(visible.reduce((s, f) => s + f.impact, 0))} points`}
@@ -104,9 +108,7 @@ export function FixesTable({ report, open, onToggle }) {
           </div>
           <div style={{ marginTop: 18, display: 'flex', justifyContent: 'space-between', gap: 22, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6, maxWidth: 430 }}>Ranked across your full catalog instead of a 24-query sample, each with the owner and the effort it takes.</span>
-            <a href={WALKTHROUGH_URL} style={{ textDecoration: 'none', flexShrink: 0 }}>
-              <Button variant="blue" arrow>Book your walkthrough</Button>
-            </a>
+            <Button variant="blue" arrow onClick={() => demoModal.open('full_analysis_walkthrough')} style={{ flexShrink: 0 }}>Book your walkthrough</Button>
           </div>
         </div>
       )}
@@ -115,5 +117,16 @@ export function FixesTable({ report, open, onToggle }) {
         <ProvenanceLine confidence="modeled" parts={['Action-level estimates', 'exposure shares are modeled, not measured']} />
       </div>
     </ReportSection>
+    {demoModal.cta && (
+      <RequestFormModal
+        open={demoModal.isOpen}
+        onClose={demoModal.close}
+        eyebrow={demoModal.cta.eyebrow}
+        title={demoModal.cta.title}
+        messagePlaceholder={demoModal.cta.messagePlaceholder}
+        onSubmit={demoModal.onSubmit}
+      />
+    )}
+    </>
   )
 }

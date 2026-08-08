@@ -1685,3 +1685,47 @@ class SoaLiteScanResult(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     lite_request = relationship("SoaLiteRequest", back_populates="scan_result")
+
+
+class SoaDemoRequest(Base):
+    """Leadgen session: 'Book your walkthrough' / 'Talk to us about
+    TrueSync' CTAs on the audit landing + report, replacing a bare link
+    to parleo.io. Written by apps/api/app/routers/public_demo.py via
+    raw SQL (INSERT ... RETURNING), same as soa_lite_requests — the
+    model here is the schema source of truth for Alembic, not an ORM
+    write path."""
+    __tablename__ = "soa_demo_requests"
+    __table_args__ = (
+        Index("ix_soa_demo_requests_created_at", "created_at"),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    name = Column(Text, nullable=False)
+    email = Column(Text, nullable=False)
+    company = Column(Text, nullable=False)
+    message = Column(Text, nullable=True, comment="Optional — the modal's Message field has no asterisk.")
+
+    source = Column(
+        Text,
+        nullable=False,
+        comment=(
+            "Which CTA opened the modal — full_analysis_walkthrough, "
+            "truesync, or landing_truesync. See apps/api/web/src/lite/"
+            "demoRequestCtas.js, the single source for the CTA-to-source "
+            "mapping."
+        ),
+    )
+    page_url = Column(Text, nullable=False, comment="window.location.href at submit time.")
+    brand_name = Column(Text, nullable=True, comment="Report-context submissions only — the audited brand.")
+    report_token = Column(Text, nullable=True, comment="Report-context submissions only — links the notification email to the report.")
+
+    ip_hash = Column(Text, nullable=True, comment="sha256(ip) — same convention as soa_lite_requests.ip_hash, never the raw IP.")
+
+    notified_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Set once the Resend notification email sends successfully. Null means either not-yet-attempted or send failed — the row is the backstop, not a queue.",
+    )
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from app.routers import studies, entities, cycles, metrics, scope, actions, public_lite
+from app.routers import studies, entities, cycles, metrics, scope, actions, public_lite, public_demo
 from app.auth import verify_token
 
 app = FastAPI(
@@ -84,6 +84,14 @@ app.include_router(
 # dependency; see app/routers/public_lite.py's module docstring.
 app.include_router(
     public_lite.router,
+    prefix="/api/public",
+)
+
+# Public, unauthenticated — the leadgen RequestFormModal. Same
+# treatment as public_lite above (no verify_token, same /api/public
+# prefix, same CORS origins already configured for this whole app).
+app.include_router(
+    public_demo.router,
     prefix="/api/public",
 )
 

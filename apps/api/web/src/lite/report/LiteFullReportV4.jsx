@@ -88,10 +88,10 @@ export function LiteFullReportV4({ report, token }) {
           <AccessibilitySection report={report} open={isOpen('acc')} onToggle={() => toggleSection('acc')} />
           <TrueValueSection report={report} open={isOpen('tv')} onToggle={() => toggleSection('tv')} />
           <EditorialBand />
-          <FunnelGate open={isOpen('fun')} onToggle={() => toggleSection('fun')} />
-          <FixesTable report={report} open={isOpen('fix')} onToggle={() => toggleSection('fix')} />
+          <FunnelGate open={isOpen('fun')} onToggle={() => toggleSection('fun')} brandName={primaryEntityName} reportToken={token} />
+          <FixesTable report={report} open={isOpen('fix')} onToggle={() => toggleSection('fix')} brandName={primaryEntityName} reportToken={token} />
           {partial && <CompleteReadBand />}
-          <TrueSyncBand points={truesyncPoints} />
+          <TrueSyncBand points={truesyncPoints} brandName={primaryEntityName} reportToken={token} />
           <ExposureSection
             report={report}
             revenue={revenue} onRevenueChange={setRevenue}
@@ -99,7 +99,7 @@ export function LiteFullReportV4({ report, token }) {
             exposure={exposure}
             open={isOpen('exp')} onToggle={() => toggleSection('exp')}
           />
-          <ClosingFork points={truesyncPoints} />
+          <ClosingFork points={truesyncPoints} brandName={primaryEntityName} reportToken={token} />
           <ReportGrounded />
           <ReportFooter auditUrl={auditUrl} report={report} />
         </div>

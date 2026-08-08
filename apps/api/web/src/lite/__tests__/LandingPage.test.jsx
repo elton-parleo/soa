@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
 
@@ -178,5 +178,26 @@ describe('LandingPage — I2/I3: canonical + OG/Twitter meta on the one indexabl
 
     document.head.removeChild(document.querySelector('link[rel="canonical"]'))
     document.head.removeChild(document.querySelector('meta[property="og:title"]'))
+  })
+})
+
+describe('Leadgen session: landing TrueSync CTA opens RequestFormModal, not a parleo.io link', () => {
+  it('"Talk to us about TrueSync" opens the modal with landing_truesync copy', () => {
+    render(<LandingPage navigate={navigate} />)
+
+    const trueSyncButton = screen.getByRole('button', { name: 'Talk to us about TrueSync' })
+    fireEvent.click(trueSyncButton)
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+    expect(within(dialog).getByText('TRUESYNC')).toBeInTheDocument()
+    expect(within(dialog).getByText("Let's stop the leak.")).toBeInTheDocument()
+    expect(within(dialog).getByPlaceholderText('Tell us about your loyalty program and deals…')).toBeInTheDocument()
+  })
+
+  it('no parleo.io link remains on the landing page', () => {
+    render(<LandingPage navigate={navigate} />)
+    const parleoLinks = screen.queryAllByRole('link').filter((a) => (a.getAttribute('href') || '').includes('parleo.io'))
+    expect(parleoLinks).toHaveLength(0)
   })
 })

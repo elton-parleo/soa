@@ -1,7 +1,9 @@
-import { Container, MonoTag, Button } from '../../ds/index.js'
-import { TRUESYNC_BAND_COPY, TRUESYNC_URL } from './reportContent.js'
+import { Container, MonoTag, Button, RequestFormModal } from '../../ds/index.js'
+import { TRUESYNC_BAND_COPY } from './reportContent.js'
+import { useDemoRequestModal } from '../useDemoRequestModal.js'
 
-export function TrueSyncBand({ points }) {
+export function TrueSyncBand({ points, brandName, reportToken }) {
+  const demoModal = useDemoRequestModal({ brandName, reportToken })
   return (
     <div id="truesync" style={{ marginBottom: 16, scrollMarginTop: 26 }}>
       <Container pad={0}>
@@ -16,11 +18,19 @@ export function TrueSyncBand({ points }) {
               </div>
             )}
           </div>
-          <a href={TRUESYNC_URL} style={{ textDecoration: 'none' }}>
-            <Button variant="blue" arrow>Talk to us about TrueSync</Button>
-          </a>
+          <Button variant="blue" arrow onClick={() => demoModal.open('truesync')}>Talk to us about TrueSync</Button>
         </div>
       </Container>
+      {demoModal.cta && (
+        <RequestFormModal
+          open={demoModal.isOpen}
+          onClose={demoModal.close}
+          eyebrow={demoModal.cta.eyebrow}
+          title={demoModal.cta.title}
+          messagePlaceholder={demoModal.cta.messagePlaceholder}
+          onSubmit={demoModal.onSubmit}
+        />
+      )}
     </div>
   )
 }

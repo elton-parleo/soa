@@ -1226,3 +1226,95 @@ class PublicLiteEmailRequest(BaseModel):
         if not _EMAIL_PATTERN.fullmatch(v):
             raise ValueError('email must be a valid email address')
         return v
+
+
+# ─── Leadgen session: RequestFormModal → POST /api/public/demo-request ──
+
+MAX_DEMO_SHORT_FIELD = 200
+MAX_DEMO_MESSAGE = 2000
+
+
+class PublicDemoRequestRequest(BaseModel):
+    name: str
+    email: str
+    company: str
+    message: Optional[str] = None
+    source: str
+    page_url: Optional[str] = None
+    brand_name: Optional[str] = None
+    report_token: Optional[str] = None
+    # Honeypot — a real visitor never sees or fills this field (see
+    # ds/RequestFormModal.jsx). Any non-empty value here is treated as
+    # a spam trip by the route handler, not a validation error: the
+    # response must look identical to a real success so the client
+    # doesn't learn the trap was sprung.
+    website: Optional[str] = None
+
+    @field_validator('name', 'company')
+    @classmethod
+    def validate_required_short_field(cls, v, info):
+        v = (v or '').strip()
+        if not v:
+            raise ValueError(f'{info.field_name} is required')
+        if len(v) > MAX_DEMO_SHORT_FIELD:
+            raise ValueError(f'{info.field_name} must be at most {MAX_DEMO_SHORT_FIELD} characters')
+        return v
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v):
+        v = (v or '').strip()
+        if not v:
+            raise ValueError('email is required')
+        if not _EMAIL_PATTERN.fullmatch(v):
+            raise ValueError('email must be a valid email address')
+        if len(v) > MAX_DEMO_SHORT_FIELD:
+            raise ValueError(f'email must be at most {MAX_DEMO_SHORT_FIELD} characters')
+        return v
+
+    @field_validator('source')
+    @classmethod
+    def validate_source(cls, v):
+        v = (v or '').strip()
+        if not v:
+            raise ValueError('source is required')
+        if len(v) > MAX_DEMO_SHORT_FIELD:
+            raise ValueError(f'source must be at most {MAX_DEMO_SHORT_FIELD} characters')
+        return v
+
+    @field_validator('message')
+    @classmethod
+    def validate_message(cls, v):
+        if v is None:
+            return v
+        v = v.strip()
+        if len(v) > MAX_DEMO_MESSAGE:
+            raise ValueError(f'message must be at most {MAX_DEMO_MESSAGE} characters')
+        return v or None
+
+    @field_validator('brand_name', 'report_token')
+    @classmethod
+    def validate_optional_short_field(cls, v, info):
+        if v is None:
+            return v
+        v = v.strip()
+        if len(v) > MAX_DEMO_SHORT_FIELD:
+            raise ValueError(f'{info.field_name} must be at most {MAX_DEMO_SHORT_FIELD} characters')
+        return v or None
+
+    @field_validator('page_url')
+    @classmethod
+    def validate_page_url(cls, v):
+        # Own, longer cap (matches store_url's precedent elsewhere in
+        # this file) — a real URL, possibly with a query string, easily
+        # exceeds the ~200-char cap the other optional fields use.
+        if v is None:
+            return v
+        v = v.strip()
+        if len(v) > 500:
+            raise ValueError('page_url must be at most 500 characters')
+        return v or None
+
+
+class PublicDemoRequestResponse(BaseModel):
+    ok: bool = True

@@ -54,6 +54,7 @@ SOA_TABLES = {
     "soa_price_observations",
     "soa_pass2_coding_log",
     "soa_lite_requests",
+    "soa_demo_requests",
 }
 # soa_coded_mentions_v2 is deliberately excluded — an orphaned table from an
 # earlier, superseded design in this same branch (see soa_price_observations'
