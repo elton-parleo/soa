@@ -1846,12 +1846,14 @@ describe('LiteFullReport — v3 registry-drivenness (Stage 19)', () => {
     // summed from DIMENSIONS live on every render (never a cached
     // export) — same discipline as AnatomyOfAnAnswer's PillarCard.
     const original = DIMENSIONS_BY_CODE.catalog_context.weight
-    DIMENSIONS_BY_CODE.catalog_context.weight = 41 // was 8 -> accessibility segment weight 6+41+6=53
+    // Re-weighting session: agent_access/protocol_feed are 5 each now
+    // (was 6) -> accessibility segment weight 5+41+5=51.
+    DIMENSIONS_BY_CODE.catalog_context.weight = 41 // was 8
     try {
       render(<LiteFullReport report={buildV3Report()} />)
       const caption = screen.getByText('ACCESSIBILITY 14/20')
       const accessibilitySegment = caption.parentElement.parentElement
-      expect(accessibilitySegment).toHaveStyle({ flex: '53 1 0%' })
+      expect(accessibilitySegment).toHaveStyle({ flex: '51 1 0%' })
     } finally {
       DIMENSIONS_BY_CODE.catalog_context.weight = original
     }

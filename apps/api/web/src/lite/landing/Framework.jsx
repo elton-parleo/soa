@@ -5,7 +5,7 @@
  * registry the report's methodology section uses — never a local
  * literal. The little 5-segment fill bar per dimension is derived from
  * weight relative to the heaviest dimension in the whole framework
- * (share_of_mentions, 25pts), not copied pixel values from the mock.
+ * (share_of_mentions, 22pts), not copied pixel values from the mock.
  * READ THE FRAMEWORK link stays behind showFrameworkLink (default off
  * — no methodology deep-dive page exists yet).
  */

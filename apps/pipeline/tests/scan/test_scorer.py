@@ -162,12 +162,14 @@ def test_rich_dtc_store_scores_high_on_value_family(monkeypatch):
     assert result.status == "complete"
     assert result.integrity_capped is False
     # Stage 25: value_protocols_seen is now in the crawl-only total too
-    # (0/7 here — this fixture never declares an MCP capabilities
+    # (0/14 here — this fixture never declares an MCP capabilities
     # manifest), which dilutes the pre-Stage-25 ">70" bound; the fixture
     # is about F1-F3/price_truth/member_value/deal_citability scoring
     # high, not about protocol declarations, so the threshold moves
-    # rather than adding an unrelated manifest fixture here.
-    assert result.total_score is not None and result.total_score > 55
+    # rather than adding an unrelated manifest fixture here. Re-weighting
+    # session: value_protocols doubled to 14 of the ~68-point crawl-only
+    # total, diluting it further still.
+    assert result.total_score is not None and result.total_score > 50
 
     true_value_total = sum(
         result.dimensions[c]["score"] for c in ("price_truth_seen", "member_value_seen", "deal_citability_seen")
@@ -181,7 +183,7 @@ def test_rich_dtc_store_scores_high_on_value_family(monkeypatch):
     # present in every _base_pages fixture) + member_value (member
     # pricing, present here) — both signals are present, so full marks.
     assert result.dimensions["member_value_seen"]["score"] == result.dimensions["member_value_seen"]["max"]
-    assert result.dimensions["scorer_version"] == "4"
+    assert result.dimensions["scorer_version"] == "5"
 
 
 # ─── Part 5 (H1): fix_human — plain-language fix text ────────────────────
@@ -498,7 +500,7 @@ def test_f3_with_no_protocol_markup_scores_zero_but_stays_applicable(monkeypatch
     f3 = result.dimensions["protocol_feed"]
     assert f3["coverage"] == "partial"
     assert f3["score"] == 0.0
-    assert f3["max"] == 6
+    assert f3["max"] == 5
 
 
 # ─── V4: CONCRETE / ACTIVE / ACTIONABLE (Stage 10, D3) ──────────────────
@@ -568,7 +570,7 @@ def test_brand_only_site_marks_protocol_feed_na_and_rescales_total(monkeypatch):
     # intentional consequence of the merge (T1), not a regression.
     member_value_seen = result.dimensions["member_value_seen"]
     assert member_value_seen["coverage"] == "full"
-    assert member_value_seen["max"] == 9
+    assert member_value_seen["max"] == 5
 
     advisory = result.dimensions["price_honesty_advisory"]
     assert advisory["scored"] is False

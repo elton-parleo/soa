@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
 
 import LandingPage from '../LandingPage.jsx'
@@ -43,6 +43,25 @@ describe('LandingPage — sections render', () => {
     expect(screen.getByText('TRUESYNC')).toBeInTheDocument()
     expect(screen.getByText('Find out what agents are missing.')).toBeInTheDocument()
     expect(screen.getByText('© 2026 Parleo, Inc.')).toBeInTheDocument()
+  })
+})
+
+describe('LandingPage — Part 4: expired-report CTA url prefill', () => {
+  afterEach(() => {
+    window.history.pushState(null, '', '/')
+  })
+
+  it('prefills the hero form from a ?url= query param, e.g. from the expired-report CTA', () => {
+    window.history.pushState(null, '', '/?url=https%3A%2F%2Foldstore.example.com')
+    render(<LandingPage navigate={navigate} />)
+    const input = screen.getAllByPlaceholderText('yourstore.com')[0]
+    expect(input).toHaveValue('https://oldstore.example.com')
+  })
+
+  it('leaves the hero form empty when no ?url= param is present', () => {
+    render(<LandingPage navigate={navigate} />)
+    const input = screen.getAllByPlaceholderText('yourstore.com')[0]
+    expect(input).toHaveValue('')
   })
 })
 

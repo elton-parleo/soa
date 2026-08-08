@@ -184,6 +184,37 @@ describe('LiteWidget (root) — state machine', () => {
       expect(screen.getByText('Composite score')).toBeInTheDocument()
     )
   })
+
+  // Re-weighting session (Part 4): a report scored under a retired
+  // scoring model never reaches the full report or the legacy fallback.
+  it('shows the expired state, not the report, when report.status is "expired"', async () => {
+    sessionStorage.setItem('soaLiteToken', 'tok-expired')
+    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'complete' })
+    liteApi.getReport.mockResolvedValue({
+      status: 'expired',
+      store_domain: 'oldstore.example.com',
+      store_url: 'https://oldstore.example.com',
+    })
+
+    render(<LiteWidget />)
+
+    await waitFor(() => expect(screen.getByText('This report has expired')).toBeInTheDocument())
+    expect(screen.queryByText('Composite score')).not.toBeInTheDocument()
+    const cta = screen.getByText('Run a fresh audit')
+    expect(cta.getAttribute('href')).toContain(encodeURIComponent('https://oldstore.example.com'))
+  })
+
+  it('the expired-state CTA omits the url query param when the retired run recorded no store_url', async () => {
+    sessionStorage.setItem('soaLiteToken', 'tok-expired-nourl')
+    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'complete' })
+    liteApi.getReport.mockResolvedValue({ status: 'expired', store_domain: null, store_url: null })
+
+    render(<LiteWidget />)
+
+    await waitFor(() => expect(screen.getByText('This report has expired')).toBeInTheDocument())
+    const cta = screen.getByText('Run a fresh audit')
+    expect(cta.getAttribute('href')).not.toContain('?url=')
+  })
 })
 
 // ─── Adaptive shapes ───────────────────────────────────────────────────

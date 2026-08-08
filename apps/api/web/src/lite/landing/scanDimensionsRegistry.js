@@ -4,8 +4,9 @@
  * soa_shared/constants.py's QUERY_STAGES. There is no build-time bridge
  * from the Python registry to the web bundle in this codebase; keeping
  * this file's values in sync with the Python source is enforced by
- * tests/AnatomyOfAnAnswer.test.jsx's pillar-total/SCORER_VERSION
- * assertions, not by codegen.
+ * scanDimensionsRegistry.test.js's pillar-total/dimension-weight/
+ * SCORER_VERSION assertions (mirroring apps/pipeline/tests/
+ * test_scan_dimensions_parity.py's own numbers by hand), not by codegen.
  *
  * Exported as plain, mutable-for-tests data (not frozen) so a test can
  * substitute a perturbed DIMENSIONS_BY_CODE entry and assert the
@@ -21,7 +22,7 @@
  * how_measured/how_scored — never consumed by scoring.
  */
 
-export const SCORER_VERSION = '4'
+export const SCORER_VERSION = '5'
 
 export const LITE_QUERY_COUNT = 24
 
@@ -69,7 +70,7 @@ export const PILLAR_QUESTIONS = {
 export const DIMENSIONS = [
   {
     code: 'share_of_mentions', name: 'Share of Mentions', pillar: PILLAR_VISIBILITY,
-    weight: 25, seenMax: null, saidMax: null,
+    weight: 22, seenMax: null, saidMax: null,
     oneLiner: 'your share of all brand mentions',
     leftLabel: 'HOW WE MEASURE',
     chips: [`${LITE_QUERY_COUNT} shopper questions`, 'every brand counted', 'your share'],
@@ -78,12 +79,12 @@ export const DIMENSIONS = [
     visualParams: { fillPct: 70, tickPct: 70, tickLabel: '50% SHARE' },
     scoredCaption: [
       { text: 'Bigger share, more points. ', bold: false },
-      { text: '50% share = all 25.', bold: true },
+      { text: '50% share = all 22.', bold: true },
     ],
   },
   {
     code: 'recommendation_strength', name: 'Recommendation Strength', pillar: PILLAR_VISIBILITY,
-    weight: 15, seenMax: null, saidMax: null,
+    weight: 10, seenMax: null, saidMax: null,
     oneLiner: 'top pick, or just listed',
     leftLabel: 'HOW WE MEASURE',
     chips: ['where you appear', "how strongly you're recommended"],
@@ -91,8 +92,8 @@ export const DIMENSIONS = [
     visualKind: 'ladder',
     visualParams: {
       bands: [
-        { label: '1st + endorsed', value: '15/15', hot: true },
-        { label: 'listed', value: '7', hot: false },
+        { label: '1st + endorsed', value: '10/10', hot: true },
+        { label: 'listed', value: '5', hot: false },
         { label: 'absent', value: '0', hot: false },
       ],
     },
@@ -102,7 +103,7 @@ export const DIMENSIONS = [
   },
   {
     code: 'agent_access', name: 'Agent Access', pillar: PILLAR_ACCESSIBILITY,
-    weight: 6, seenMax: null, saidMax: null,
+    weight: 5, seenMax: null, saidMax: null,
     oneLiner: 'can agents reach your site',
     leftLabel: 'THE CHECKS',
     chips: [],
@@ -117,7 +118,7 @@ export const DIMENSIONS = [
     },
     scoredCaption: [
       { text: 'Each check passed earns points.', bold: true },
-      { text: ' 2 of 3 = 4/6.', bold: false },
+      { text: ' 2 of 3 = 3/5.', bold: false },
     ],
   },
   {
@@ -136,7 +137,7 @@ export const DIMENSIONS = [
   },
   {
     code: 'protocol_feed', name: 'Protocol & Feed Presence', pillar: PILLAR_ACCESSIBILITY,
-    weight: 6, seenMax: null, saidMax: null,
+    weight: 5, seenMax: null, saidMax: null,
     oneLiner: 'listed where agents look',
     leftLabel: 'WHAT WE CHECK',
     chips: ['llms.txt', 'MCP', 'UCP profile'],
@@ -150,7 +151,7 @@ export const DIMENSIONS = [
   },
   {
     code: 'price_truth', name: 'Price Truth', pillar: PILLAR_TRUE_VALUE,
-    weight: 12, seenMax: 5, saidMax: 7,
+    weight: 16, seenMax: 7, saidMax: 9,
     oneLiner: 'do agents know your price',
     leftLabel: 'WHAT WE CHECK',
     chips: [
@@ -159,7 +160,7 @@ export const DIMENSIONS = [
     ],
     rightLabel: 'SCORED ON BOTH SIDES',
     visualKind: 'duo',
-    visualParams: { leftPct: 100, rightPct: 57, leftLabel: 'ON YOUR SITE · 5', rightLabel: 'IN ANSWERS · 7' },
+    visualParams: { leftPct: 100, rightPct: 57, leftLabel: 'ON YOUR SITE · 7', rightLabel: 'IN ANSWERS · 9' },
     scoredCaption: [
       { text: 'A readable price — ', bold: false },
       { text: 'and answers that actually say it.', bold: true },
@@ -167,13 +168,13 @@ export const DIMENSIONS = [
   },
   {
     code: 'member_value', name: 'Member Value', pillar: PILLAR_TRUE_VALUE,
-    weight: 15, seenMax: 9, saidMax: 6,
+    weight: 8, seenMax: 5, saidMax: 3,
     oneLiner: 'do agents mention member perks',
     leftLabel: 'WHAT WE CHECK',
     chips: ['findable loyalty page', 'member price in your code', 'code that parses cleanly'],
     rightLabel: 'SCORED ON BOTH SIDES',
     visualKind: 'duo',
-    visualParams: { leftPct: 100, rightPct: 40, leftLabel: 'ON YOUR SITE · 9', rightLabel: 'IN ANSWERS · 6' },
+    visualParams: { leftPct: 100, rightPct: 40, leftLabel: 'ON YOUR SITE · 5', rightLabel: 'IN ANSWERS · 3' },
     scoredCaption: [
       { text: 'No loyalty program? This one is skipped', bold: true },
       { text: ' and your score adjusts — we check first.', bold: false },
@@ -181,7 +182,7 @@ export const DIMENSIONS = [
   },
   {
     code: 'deal_citability', name: 'Deal Citability', pillar: PILLAR_TRUE_VALUE,
-    weight: 6, seenMax: 4, saidMax: 2,
+    weight: 12, seenMax: 7, saidMax: 5,
     oneLiner: 'do your deals get mentioned',
     leftLabel: 'WHAT WE CHECK',
     chips: ['clear discount amount', 'not expired', 'codes agents can use'],
@@ -207,7 +208,7 @@ export const DIMENSIONS = [
     // in an answer whether a store "declares" a checkout protocol, so
     // there is nothing to cite (Part 3, V1; Part 6, A1's single-wing
     // butterfly render).
-    weight: 7, seenMax: 7, saidMax: null,
+    weight: 14, seenMax: 14, saidMax: null,
     oneLiner: 'is value wired into agent checkout',
     siteOnly: true,
     leftLabel: 'WHAT WE CHECK',
@@ -216,7 +217,13 @@ export const DIMENSIONS = [
     // discipline (this dimension only ever says a store "declares" a
     // capability, never that it "supports" one) takes precedence over
     // verbatim-copying that one chip.
-    chips: ['UCP discounts', 'checkout discount capability', 'loyalty extension', 'ACP promotions'],
+    //
+    // Re-weighting session (Part 1): the manifest-shape check split into
+    // two (resolves + current version), reflected here as one added chip
+    // rather than two — this list is landing-page illustrative copy, not
+    // the report's own check labels (those come from soa_shared.scan_
+    // dimensions.Dimension.how_measured, served by the API).
+    chips: ['manifest resolves + version current', 'UCP discounts', 'loyalty extension', 'ACP promotions'],
     rightLabel: "HOW IT'S SCORED",
     visualKind: 'none',
     visualParams: null,
