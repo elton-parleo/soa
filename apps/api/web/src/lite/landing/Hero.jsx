@@ -81,7 +81,7 @@ export function Hero({ onSubmitted, initialStoreUrl = '' }) {
                       <Wordmark size={12} dark />
                       <span style={{ width: 1, height: 13, background: 'var(--dark-border)' }} />
                       <span style={{ fontSize: 12, color: 'var(--dark-muted)' }}>Agentic Value Audit</span>
-                      <span className="mono-label" style={{ marginLeft: 'auto', fontSize: 8.5, color: 'var(--dark-faint)' }}>SAMPLE · JUL 2026</span>
+                      <span className="mono-label" style={{ marginLeft: 'auto', fontSize: 8.5, color: 'var(--dark-faint)' }}>SAMPLE · AUG 2026</span>
                     </div>
                     <div style={{ marginTop: 15 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -89,27 +89,27 @@ export function Hero({ onSubmitted, initialStoreUrl = '' }) {
                         <span style={{ fontSize: 13.5, fontWeight: 620, color: 'var(--dark-text)' }}>Allbirds</span>
                       </div>
                       <div style={{ fontSize: 26, fontWeight: 730, letterSpacing: '-0.03em', lineHeight: 1.12, color: 'var(--dark-text)', marginTop: 10 }}>
-                        $5.9M of funded value <em style={{ fontFamily: "'Newsreader',Georgia,serif", fontWeight: 440, fontStyle: 'italic', color: '#7FB0FF', letterSpacing: '-0.008em' }}>agents never quoted.</em>
+                        $4.5M of funded value <em style={{ fontFamily: "'Newsreader',Georgia,serif", fontWeight: 440, fontStyle: 'italic', color: '#7FB0FF', letterSpacing: '-0.008em' }}>agents never quoted.</em>
                       </div>
                       <div style={{ fontSize: 12.5, color: 'var(--dark-muted)', lineHeight: 1.5, marginTop: 9 }}>
-                        Allbirds funds member pricing and live promotions. Across 24 ChatGPT answers, none of it surfaced.
+                        Value Protocols earns 0 of 14 points — no checkout capability declared, the single largest gap behind that number.
                       </div>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginTop: 14, border: '1px solid rgba(127,176,255,.32)', background: 'rgba(127,176,255,.09)', borderRadius: 999, padding: '6px 12px' }}>
                         <Glyph name="arrowUpRight" size={12} color="#7FB0FF" />
-                        <span className="mono-label" style={{ fontSize: 9, color: '#7FB0FF' }}>25 POINTS RECOVERABLE</span>
+                        <span className="mono-label" style={{ fontSize: 9, color: '#7FB0FF' }}>20 POINTS RECOVERABLE</span>
                       </div>
                       <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid var(--dark-border)' }}>
                         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-                            <span className="num lite-display-num" style={{ fontSize: 46, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)' }}>36</span>
+                            <span className="num lite-display-num" style={{ fontSize: 46, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)' }}>59</span>
                             <span className="num" style={{ fontSize: 17, fontWeight: 560, color: 'var(--dark-faint)' }}>/100</span>
                           </div>
                           <div className="mono-label" style={{ marginLeft: 'auto', fontSize: 8, color: 'var(--dark-faint)', textAlign: 'right', lineHeight: 1.6 }}>
-                            AGENTIC VALUE SCORE<br />24 SHORT OF THE READINESS BAR
+                            AGENTIC VALUE SCORE<br />1 SHORT OF THE READINESS BAR
                           </div>
                         </div>
                         <div style={{ marginTop: 20 }}>
-                          <ReadinessBarMini earnedPct={36} readyPct={60} />
+                          <ReadinessBarMini earnedPct={59} readyPct={60} />
                         </div>
                       </div>
                     </div>
@@ -120,20 +120,16 @@ export function Hero({ onSubmitted, initialStoreUrl = '' }) {
                     <span className="mono-label" style={{ fontSize: 8.5, color: 'var(--faint)' }}>POINTS EARNED PER PILLAR</span>
                     <span style={{ flex: 1, height: 1, background: 'var(--hairline)' }} />
                   </div>
-                  {/* Re-weighting session: placeholder numbers, proportionally
-                      rescaled from the same illustrative Allbirds story onto
-                      the new maxes (32/18/50) — see landingSampleContent.js's
-                      module docstring; needs a real re-run to replace these. */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 11 }}>
-                    <HeroPillarRow label="Visibility" sub="Whether agents mention you at all" pct={62.5} score="20/32" />
-                    <HeroPillarRow label="Accessibility" sub="Whether they can read your pages" pct={39} score="7/18" />
-                    <HeroPillarRow trueValue label="True Value" sub="Whether they can quote your real price" pct={18} score="9/50" />
+                    <HeroPillarRow label="Visibility" sub="Whether agents mention you at all" pct={78} score="25/32" />
+                    <HeroPillarRow label="Accessibility" sub="Whether they can read your pages" pct={79} score="14/18" />
+                    <HeroPillarRow trueValue label="True Value" sub="Whether they can quote your real price" pct={30} score="15/50" />
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 11, background: 'var(--surface)', borderTop: '1px solid var(--border)', padding: '13px 20px' }}>
                   <Glyph name="check" size={13} color="var(--blue)" />
                   <span style={{ fontSize: 12, color: 'var(--text)' }}>3 ranked fixes, in priority order</span>
-                  <span className="mono-label" style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--blue)' }}>RECOVERS UP TO 25 PTS</span>
+                  <span className="mono-label" style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--blue)' }}>RECOVERS UP TO 20 PTS</span>
                 </div>
               </div>
             </BrowserChrome>

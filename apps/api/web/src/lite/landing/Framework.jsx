@@ -32,6 +32,12 @@ const DIMENSION_BLURB = {
 
 const GLOBAL_MAX_WEIGHT = Math.max(...DIMENSIONS.map((d) => d.weight))
 
+// Spelled out to match "Three pillars" — DIMENSIONS.length still drives
+// it, so a dimension added or removed changes the word, not just a digit
+// nobody notices is stale next to a spelled-out neighbor.
+const COUNT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve']
+const DIMENSION_COUNT_WORD = COUNT_WORDS[DIMENSIONS.length] || String(DIMENSIONS.length)
+
 function fillCount(weight) {
   return Math.min(5, Math.max(1, Math.round((weight / GLOBAL_MAX_WEIGHT) * 5)))
 }
@@ -107,7 +113,7 @@ export function Framework({ showFrameworkLink = false }) {
         <SectionHeading
           size="sm"
           accent="scores 100 points."
-          body="Three pillars, eight dimensions, one straight sum. Every point traces back to something an agent could or could not read on your site. Two pillars are table stakes. The third decides whether your value reaches the answer."
+          body={`Three pillars, ${DIMENSION_COUNT_WORD} dimensions, one straight sum. Every point traces back to something an agent could or could not read on your site. Two pillars are table stakes. The third decides whether your value reaches the answer.`}
         >
           The Share of Algorithm framework
         </SectionHeading>
@@ -115,7 +121,7 @@ export function Framework({ showFrameworkLink = false }) {
           {PILLAR_ORDER.map((pillar) => <PillarRow key={pillar} pillar={pillar} />)}
         </div>
         <p style={{ margin: '20px 0 0', maxWidth: 760, fontSize: 13.5, lineHeight: 1.65, color: 'var(--muted)', textWrap: 'pretty' }}>
-          <b style={{ color: 'var(--text-strong)', fontWeight: 640 }}>Every True Value dimension is dual-lens:</b> what your pages encode, and what agents actually said. The visibility tools you already pay for measure the first pillar only.
+          <b style={{ color: 'var(--text-strong)', fontWeight: 640 }}>Most True Value dimensions are dual-lens:</b> what your pages encode, and what agents actually said. Value Protocols is the one exception — checkout capability is declared or it isn't. The visibility tools you already pay for measure the first pillar only.
         </p>
         {showFrameworkLink && (
           <a href="#" className="mono-label" style={{ display: 'inline-block', fontSize: 9.5, color: 'var(--blue)', marginTop: 14, borderBottom: '1px dashed rgba(1,102,255,.4)', paddingBottom: 2 }}>

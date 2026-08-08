@@ -1,9 +1,9 @@
 /**
  * Sample report — V4 design. BrowserChrome frame around a miniature
  * replica of the sample report's score panel + OfferFeed, linking out
- * to SAMPLE_REPORT_URL. Ported verbatim from the mock; sample numbers
- * are the canonical 40/100 (Visibility 25/40, Accessibility 8/20, True
- * Value 7/40) run, same as landingSampleContent.js.
+ * to SAMPLE_REPORT_URL. Sample numbers are that run's real 59/100
+ * (Visibility 25/32, Accessibility 14/18, True Value 15/50), same run
+ * as landingSampleContent.js — see that file's docstring for the token.
  */
 import { BrowserChrome, BrandLogo, StatusChip, MetricRow, OfferFeed, Button, SectionHeading } from '../../ds/index.js'
 import { SAMPLE_REPORT_URL, SAMPLE_PILLAR_ITEMS, SAMPLE_OFFERS } from './landingSampleContent.js'
@@ -21,20 +21,20 @@ function ScorePanel() {
       </div>
       <div style={{ marginTop: 22 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-          <span className="num lite-display-num" style={{ fontSize: 52, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)', fontVariantNumeric: 'tabular-nums' }}>40</span>
+          <span className="num lite-display-num" style={{ fontSize: 52, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)', fontVariantNumeric: 'tabular-nums' }}>59</span>
           <span className="num" style={{ fontSize: 19, fontWeight: 560, color: 'var(--dark-faint)' }}>/100</span>
         </div>
         <div className="mono-label" style={{ fontSize: 8.5, color: 'var(--dark-faint)', marginTop: 9 }}>AGENTIC VALUE SCORE</div>
         <div style={{ marginTop: 20 }}>
           <div style={{ background: 'var(--canvas)', borderRadius: 12, padding: '16px 16px 13px', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.7),0 8px 20px -10px rgba(10,10,18,.55)' }}>
             <div style={{ position: 'relative', height: 11, borderRadius: 5.5, background: 'var(--canvas-dim)', boxShadow: 'inset 0 1px 2px rgba(70,69,85,.16),inset 0 0 0 1px rgba(213,209,203,.95)' }}>
-              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '40%', borderRadius: 5.5, background: 'var(--ink)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.16)' }} />
-              <span aria-hidden="true" style={{ position: 'absolute', left: '40%', top: -2, bottom: -2, width: 3, transform: 'translateX(-3px)', borderRadius: 2, background: 'var(--blue)', boxShadow: '0 0 10px rgba(1,102,255,.6)' }} />
+              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '59%', borderRadius: 5.5, background: 'var(--ink)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.16)' }} />
+              <span aria-hidden="true" style={{ position: 'absolute', left: '59%', top: -2, bottom: -2, width: 3, transform: 'translateX(-3px)', borderRadius: 2, background: 'var(--blue)', boxShadow: '0 0 10px rgba(1,102,255,.6)' }} />
               <span aria-hidden="true" style={{ position: 'absolute', left: '60%', top: -4, bottom: -4, width: 1, background: 'var(--text-strong)' }} />
               <span aria-hidden="true" style={{ position: 'absolute', left: '60%', top: -8, width: 5, height: 5, transform: 'translateX(-2px)', background: 'var(--text-strong)', clipPath: 'polygon(0 0,100% 0,50% 100%)' }} />
             </div>
             <div style={{ position: 'relative', height: 14, marginTop: 7 }}>
-              <span className="mono-label" style={{ position: 'absolute', left: 0, top: 0, fontSize: 9, color: 'var(--text-strong)', fontWeight: 600 }}>40 EARNED</span>
+              <span className="mono-label" style={{ position: 'absolute', left: 0, top: 0, fontSize: 9, color: 'var(--text-strong)', fontWeight: 600 }}>59 EARNED</span>
               <span className="mono-label" style={{ position: 'absolute', left: '60%', top: 0, transform: 'translateX(-50%)', fontSize: 9, color: 'var(--muted)', whiteSpace: 'nowrap' }}>READY 60</span>
               <span className="mono-label" style={{ position: 'absolute', right: 0, top: 0, fontSize: 9, color: 'var(--faint)' }}>100</span>
             </div>
@@ -43,7 +43,7 @@ function ScorePanel() {
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--dark-border)' }}>
           <StatusChip tone="risk" size="sm">Not agent-ready</StatusChip>
           <div className="mono-label" style={{ fontSize: 9, color: 'var(--dark-faint)', marginTop: 11, lineHeight: 1.7 }}>
-            20 POINTS BELOW READY<br />2ND OF 6 IN ITS COMPETITOR SET
+            1 POINT BELOW READY<br />1ST OF 6 IN ITS COMPETITOR SET
           </div>
         </div>
       </div>
@@ -76,7 +76,7 @@ export function SampleReportSection() {
                   <a href={SAMPLE_REPORT_URL} style={{ textDecoration: 'none' }}>
                     <Button variant="blue" arrow>Open the full sample report</Button>
                   </a>
-                  <span className="mono-label" style={{ fontSize: 9, color: 'var(--faint)' }}>MODELED EXPOSURE $775K / YR</span>
+                  <span className="mono-label" style={{ fontSize: 9, color: 'var(--faint)' }}>MODELED EXPOSURE $4.5M / YR</span>
                 </div>
               </div>
             </div>
