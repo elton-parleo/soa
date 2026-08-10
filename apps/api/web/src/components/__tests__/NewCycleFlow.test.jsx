@@ -59,6 +59,39 @@ describe('NewCycleFlow — step transitions', () => {
     expect(screen.getByText('Next: Study & Queries →')).not.toBeDisabled()
   })
 
+  it('search finds a brand, clicking it selects it, and Next enables — full happy path', async () => {
+    api.getEntities.mockResolvedValue([ACME, { id: 2, name: 'Zeta Co', category: 'grooming', type: 'Brand' }])
+    render(<NewCycleFlow />)
+    await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByPlaceholderText(/Search entities/), { target: { value: 'acme' } })
+    expect(screen.getByText('Acme')).toBeInTheDocument()
+    expect(screen.queryByText('Zeta Co')).not.toBeInTheDocument()
+
+    expect(screen.getByText('Next: Study & Queries →')).toBeDisabled()
+    fireEvent.click(screen.getByText('Acme'))
+
+    expect(screen.getByText('✓ Selected')).toBeInTheDocument()
+    expect(screen.getByText('Next: Study & Queries →')).not.toBeDisabled()
+  })
+
+  it('does not crash when the entity fetch resolves undefined (api.js\'s 401 handler resolves instead of rejecting) — the picker still renders and stays usable', async () => {
+    // Regression for the real bug: api.js's request() calls
+    // supabase.auth.signOut() + window.location.reload() and returns
+    // (not throws) on a 401, so .then(setEntities) — not .catch() — is
+    // what receives this. Before the fix, entities.filter(...) on this
+    // undefined threw and unmounted the whole step with no error
+    // boundary above it, making brand selection permanently impossible.
+    api.getEntities.mockResolvedValue(undefined)
+    render(<NewCycleFlow />)
+
+    await waitFor(() => expect(screen.getByText('No matches — try a different search.')).toBeInTheDocument())
+    // The rest of step 1 must still be fully interactive — proves this
+    // didn't silently unmount/crash the component.
+    expect(screen.getByPlaceholderText('https://example.com')).toBeInTheDocument()
+    expect(screen.getByText('Next: Study & Queries →')).toBeDisabled()
+  })
+
   it('advances brand -> study -> review, and back again', async () => {
     await goToStep3()
     expect(screen.getByText('Acme')).toBeInTheDocument()

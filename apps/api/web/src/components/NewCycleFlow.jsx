@@ -226,7 +226,14 @@ function Step1({ state, setState, onNext, auditToken }) {
   }, [auditToken])
 
   useEffect(() => {
-    api.getEntities().then(setEntities).catch(() => {})
+    // api.js's request() resolves (never rejects) with `undefined` on a
+    // 401 — it signs out and reloads the page instead of throwing, so
+    // .catch() below never sees that case. Without this guard,
+    // setEntities(undefined) makes the next render's entities.filter(...)
+    // throw, which unmounts this whole step with no error boundary above
+    // it — on a stale/expired session, the picker never renders at all
+    // instead of showing an empty/error state.
+    api.getEntities().then(res => setEntities(Array.isArray(res) ? res : [])).catch(() => {})
   }, [])
 
   const filtered = entities.filter(e => matchesSearch(e, search))
