@@ -1,8 +1,9 @@
 import { Wordmark, Glyph, StatusChip, Button, BrandLogo } from '../../ds/index.js'
 import { pillarEarnedMax, pillarNominalWeight, isAgentReady, isPartialRead, buildMeasurableContext, buildNavItems, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from './reportDerive.js'
 import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
+import { ShareReportButton } from './ShareReportButton.jsx'
 
-export function ReportRail({ report, primaryEntityName, exposure, active, focus, allLabel, onToggleAll }) {
+export function ReportRail({ report, primaryEntityName, exposure, active, focus, allLabel, onToggleAll, token }) {
   const pillars = report.pillars
   const composite = report.composite
   const vis = pillarEarnedMax(pillars.visibility)
@@ -112,6 +113,7 @@ export function ReportRail({ report, primaryEntityName, exposure, active, focus,
           <a href="#run" style={{ textDecoration: 'none' }}>
             <Button variant="blue" size="sm" arrow style={{ width: '100%', justifyContent: 'center' }}>Run your free audit</Button>
           </a>
+          {token && <ShareReportButton token={token} />}
           <div className="mono-label" style={{ fontSize: 9, color: 'var(--faint)', lineHeight: 1.8, paddingTop: 12, borderTop: '1px solid var(--hairline)' }}>
             {LITE_QUERY_COUNT} LIVE CHATGPT QUERIES<br />+ FULL SITE CRAWL
           </div>
