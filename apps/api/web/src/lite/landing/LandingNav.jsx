@@ -5,6 +5,8 @@
  */
 import { Wordmark, Button } from '../../ds/index.js'
 import { SAMPLE_REPORT_URL } from './landingSampleContent.js'
+import { track } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
 
 export function LandingNav() {
   return (
@@ -14,7 +16,7 @@ export function LandingNav() {
         <span className="lite-landing-nav-sep" style={{ width: 1, height: 15, background: 'var(--border)' }} />
         <span className="lite-landing-nav-label" style={{ fontSize: 13.5, fontWeight: 520, color: 'var(--text)' }}>Free Agentic Value Audit</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 18 }}>
-          <a href={SAMPLE_REPORT_URL} className="lite-landing-nav-samplelink" style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--text)' }}>See a sample report</a>
+          <a href={SAMPLE_REPORT_URL} onClick={() => track(EVENTS.SAMPLE_REPORT_CLICKED, { placement: 'nav' })} className="lite-landing-nav-samplelink" style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--text)' }}>See a sample report</a>
           <a href="#run" style={{ textDecoration: 'none' }}>
             <Button variant="blue" size="sm" arrow>Run my free audit</Button>
           </a>

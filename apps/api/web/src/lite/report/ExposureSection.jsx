@@ -11,11 +11,14 @@
  * because revenue/AI-share are sliders the visitor can drag — the
  * server can't know the split in dollars, only the proportions.
  */
+import { useRef } from 'react'
 import { Glyph, LeakageEstimator } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
 import { useCollapsible } from './Collapsible.jsx'
 import { REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX, AI_SHARE_SLIDER_MIN, AI_SHARE_SLIDER_MAX, formatCurrency } from '../liteDerive.js'
 import { isPartialRead } from './reportDerive.js'
+import { track } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
 
 // 4c: reasons.impact_weight * exposure, independently rounded, can
 // drift a dollar or two from the modeled total — the remainder goes to
@@ -37,7 +40,16 @@ export function splitExposureDollars(exposure, reasons) {
 }
 
 export function ExposureSection({ report, revenue, onRevenueChange, aiSharePct, onAiShareChange, exposure, open, onToggle }) {
-  const [adjOpen, toggleAdj] = useCollapsible()
+  const [adjOpen, toggleAdj] = useCollapsible(false, { section: 'exp', control: 'adjust_assumptions' })
+  // adjust_assumptions_used (once per load) is a distinct signal from
+  // section_expanded above — this fires only once real slider use
+  // happens, not just on opening the panel to look at it.
+  const usedRef = useRef(false)
+  function trackAssumptionsUsedOnce() {
+    if (usedRef.current) return
+    usedRef.current = true
+    track(EVENTS.ADJUST_ASSUMPTIONS_USED, {})
+  }
   const reasons = report?.pillars?.exposure_reasons || []
   const dollars = splitExposureDollars(exposure, reasons)
   const causes = reasons.map((r, i) => ({
@@ -69,13 +81,13 @@ export function ExposureSection({ report, revenue, onRevenueChange, aiSharePct, 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>
               <span>Annual revenue</span><b className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text-strong)' }}>{formatCurrency(revenue)}</b>
             </div>
-            <input type="range" min={REVENUE_SLIDER_MIN} max={REVENUE_SLIDER_MAX} step={REVENUE_SLIDER_MIN} value={revenue} onChange={(e) => onRevenueChange(+e.target.value)} aria-label="Annual revenue" style={{ width: '100%', accentColor: 'var(--blue)' }} />
+            <input type="range" min={REVENUE_SLIDER_MIN} max={REVENUE_SLIDER_MAX} step={REVENUE_SLIDER_MIN} value={revenue} onChange={(e) => { onRevenueChange(+e.target.value); trackAssumptionsUsedOnce() }} aria-label="Annual revenue" style={{ width: '100%', accentColor: 'var(--blue)' }} />
           </div>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>
               <span>AI-assisted share of sales</span><b className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text-strong)' }}>{aiSharePct}%</b>
             </div>
-            <input type="range" min={AI_SHARE_SLIDER_MIN} max={AI_SHARE_SLIDER_MAX} value={aiSharePct} onChange={(e) => onAiShareChange(+e.target.value)} aria-label="AI-assisted share of sales" style={{ width: '100%', accentColor: 'var(--blue)' }} />
+            <input type="range" min={AI_SHARE_SLIDER_MIN} max={AI_SHARE_SLIDER_MAX} value={aiSharePct} onChange={(e) => { onAiShareChange(+e.target.value); trackAssumptionsUsedOnce() }} aria-label="AI-assisted share of sales" style={{ width: '100%', accentColor: 'var(--blue)' }} />
           </div>
           <div className="mono-label" style={{ gridColumn: '1/-1', fontSize: 8.5, color: 'var(--faint)', lineHeight: 1.7 }}>
             ADJUST THE INPUTS AND THE MODEL FOLLOWS · THE FULL ANALYSIS REPLACES THE MODEL WITH MEASURED PRICE GAPS

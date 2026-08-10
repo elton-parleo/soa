@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",
+    "posthog-js": "^1.415.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

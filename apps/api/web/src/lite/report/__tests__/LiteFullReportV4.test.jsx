@@ -1,12 +1,21 @@
 import React from 'react'
 import { render, screen, fireEvent, within } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import '@testing-library/jest-dom'
 
 import { LiteFullReportV4 } from '../LiteFullReportV4.jsx'
 import { splitExposureDollars } from '../ExposureSection.jsx'
 import { DIMENSIONS_BY_CODE } from '../../landing/scanDimensionsRegistry.js'
 import { EDITORIAL_QUOTE } from '../reportContent.js'
+import { track, identifyReport, captureSrcParam, isTokenOwned } from '../../analytics.js'
+import { EVENTS } from '../../analyticsEvents.js'
+
+vi.mock('../../analytics.js', () => ({
+  track: vi.fn(),
+  identifyReport: vi.fn(),
+  captureSrcParam: vi.fn(() => 'direct'),
+  isTokenOwned: vi.fn(() => true),
+}))
 
 // Canonical sample numbers used throughout this stage's mocks:
 // Visibility 25/40, Accessibility 8/20, True Value 7/40, composite 40.
@@ -104,6 +113,13 @@ const FULL_REPORT = {
     parleo_fixable_points: 13,
   },
 }
+
+beforeEach(() => {
+  track.mockClear()
+  identifyReport.mockClear()
+  captureSrcParam.mockReturnValue('direct')
+  isTokenOwned.mockReturnValue(true)
+})
 
 function renderReport(overrides = {}) {
   const report = { ...FULL_REPORT, ...overrides, pillars: { ...FULL_REPORT.pillars, ...(overrides.pillars || {}) } }
@@ -447,5 +463,39 @@ describe('Leadgen session: every report walkthrough/TrueSync CTA opens RequestFo
     // own unit test; this just asserts the modal actually opened wired
     // to a report-context CTA, i.e. the button click reached open().
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReportV4 — report_viewed fires with the right state/viewer/src', () => {
+  it('scored + owner + direct', () => {
+    isTokenOwned.mockReturnValue(true)
+    captureSrcParam.mockReturnValue('direct')
+
+    renderReport()
+
+    expect(identifyReport).toHaveBeenCalledWith('tok-full')
+    expect(track).toHaveBeenCalledWith(EVENTS.REPORT_VIEWED, {
+      state: 'scored', viewer: 'owner', src: 'direct',
+    })
+  })
+
+  it('partial + visitor + email', () => {
+    isTokenOwned.mockReturnValue(false)
+    captureSrcParam.mockReturnValue('email')
+
+    renderReport({
+      pillars: {
+        true_value: {
+          ...FULL_REPORT.pillars.true_value,
+          dimensions: FULL_REPORT.pillars.true_value.dimensions.map((d) =>
+            d.code === 'price_truth' ? { ...d, blocked: true, seen: { ...d.seen, blocked: true } } : d,
+          ),
+        },
+      },
+    })
+
+    expect(track).toHaveBeenCalledWith(EVENTS.REPORT_VIEWED, {
+      state: 'partial', viewer: 'visitor', src: 'email',
+    })
   })
 })

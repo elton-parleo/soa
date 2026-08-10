@@ -11,10 +11,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 import { useDemoRequestModal } from '../useDemoRequestModal.js'
 import * as demoRequestApi from '../demoRequestApi.js'
+import { track } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
+
+vi.mock('../analytics.js', () => ({
+  track: vi.fn(),
+}))
 
 beforeEach(() => {
   vi.spyOn(demoRequestApi, 'submitDemoRequest').mockResolvedValue({ ok: true, status: 200, body: { ok: true } })
   window.history.pushState(null, '', '/r/tok123')
+  track.mockClear()
 })
 
 describe('useDemoRequestModal', () => {
@@ -70,5 +77,32 @@ describe('useDemoRequestModal', () => {
       brand_name: 'Allbirds',
       report_token: 'tok123',
     }))
+  })
+
+  it('fires demo_request_submitted on a 200 response, with source/brand_name/report_token', async () => {
+    const { result } = renderHook(() => useDemoRequestModal({ brandName: 'Allbirds', reportToken: 'tok123' }))
+    act(() => result.current.open('truesync'))
+
+    await act(async () => {
+      await result.current.onSubmit({ name: 'Jane', email: 'jane@company.com', company: 'Acme', message: '' })
+    })
+
+    expect(track).toHaveBeenCalledWith(EVENTS.DEMO_REQUEST_SUBMITTED, {
+      source: 'truesync',
+      brand_name: 'Allbirds',
+      report_token: 'tok123',
+    })
+  })
+
+  it('does not fire demo_request_submitted when the request resolves not-ok', async () => {
+    demoRequestApi.submitDemoRequest.mockResolvedValue({ ok: false, status: 422, body: null })
+    const { result } = renderHook(() => useDemoRequestModal({ brandName: 'Allbirds', reportToken: 'tok123' }))
+    act(() => result.current.open('truesync'))
+
+    await act(async () => {
+      await result.current.onSubmit({ name: 'Jane', email: 'jane@company.com', company: 'Acme', message: '' })
+    })
+
+    expect(track).not.toHaveBeenCalled()
   })
 })

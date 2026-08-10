@@ -2,6 +2,8 @@ import { Button, RequestFormModal, StatusChip } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
 import { FUNNEL_GATE_COPY } from './reportContent.js'
 import { useDemoRequestModal } from '../useDemoRequestModal.js'
+import { track } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
 
 const STAGES = ['AWARENESS', 'CONSIDERATION', 'COMPARISON', 'READY TO BUY']
 const STAGE_HEIGHTS = [76, 56, 34, 13]
@@ -34,7 +36,7 @@ export function FunnelGate({ open, onToggle, brandName, reportToken }) {
           <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.65, marginTop: 8 }}>{FUNNEL_GATE_COPY.ctaBody}</div>
           <div className="mono-label" style={{ fontSize: 8.5, color: 'var(--faint)', marginTop: 12, lineHeight: 1.7 }}>{FUNNEL_GATE_COPY.ctaFooter}</div>
         </div>
-        <Button variant="blue" size="lg" arrow onClick={() => demoModal.open('full_analysis_walkthrough')} style={{ flexShrink: 0 }}>Book your walkthrough</Button>
+        <Button variant="blue" size="lg" arrow onClick={() => { track(EVENTS.CTA_CLICKED, { cta: 'walkthrough', placement: 'funnel_gate' }); demoModal.open('full_analysis_walkthrough') }} style={{ flexShrink: 0 }}>Book your walkthrough</Button>
       </div>
     </ReportSection>
     {demoModal.cta && (

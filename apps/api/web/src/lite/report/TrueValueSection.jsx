@@ -184,11 +184,11 @@ export function TrueValueSection({ report, open, onToggle }) {
   const encodeBlocked = anyTrueValueEncodeBlocked(pillars)
   const partialRead = isPartialRead(pillars, report.scan?.degraded_reason)
 
-  const [ptOpen, togglePt] = useCollapsible()
-  const [mvOpen, toggleMv] = useCollapsible()
-  const [dcOpen, toggleDc] = useCollapsible()
-  const [vpOpen, toggleVp] = useCollapsible()
-  const [whyNaOpen, toggleWhyNa] = useCollapsible()
+  const [ptOpen, togglePt] = useCollapsible(false, { section: 'tv', control: 'price_truth' })
+  const [mvOpen, toggleMv] = useCollapsible(false, { section: 'tv', control: 'member_value' })
+  const [dcOpen, toggleDc] = useCollapsible(false, { section: 'tv', control: 'deal_citability' })
+  const [vpOpen, toggleVp] = useCollapsible(false, { section: 'tv', control: 'value_protocols' })
+  const [whyNaOpen, toggleWhyNa] = useCollapsible(false, { section: 'tv', control: 'why_na' })
 
   const offers = report.offers
   const unmeasuredOffers = (offers || []).filter((o) => o.readable === 'unmeasured').length
@@ -220,7 +220,7 @@ export function TrueValueSection({ report, open, onToggle }) {
               </div>
               <div className="mono-label" style={{ fontSize: 9, color: 'var(--blue-lite)', marginTop: 7 }}>POINTS EARNED</div>
             </div>
-            <div className="lite-tv-header-collapse" style={{ marginTop: 12 }}><SectionCollapseButton open={open} onClick={onToggle} dark /></div>
+            <div className="lite-tv-header-collapse" style={{ marginTop: 12 }}><SectionCollapseButton open={open} onClick={onToggle} dark section="tv" /></div>
           </div>
         </div>
       </DarkPanel>

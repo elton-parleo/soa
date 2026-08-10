@@ -34,7 +34,7 @@ export function ReportSection({ id, eyebrow, title, score, extra, open, onToggle
               {score}
             </span>
           )}
-          <SectionCollapseButton open={open} onClick={onToggle} />
+          <SectionCollapseButton open={open} onClick={onToggle} section={id} />
         </div>
       </div>
       {open && <div className="sec-body">{children}</div>}

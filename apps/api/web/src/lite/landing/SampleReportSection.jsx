@@ -7,11 +7,14 @@
  */
 import { BrowserChrome, BrandLogo, StatusChip, MetricRow, OfferFeed, Button, SectionHeading } from '../../ds/index.js'
 import { SAMPLE_REPORT_URL, SAMPLE_PILLAR_ITEMS, SAMPLE_OFFERS } from './landingSampleContent.js'
+import { track } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
 
 function ScorePanel() {
   return (
     <a
       href={SAMPLE_REPORT_URL}
+      onClick={() => track(EVENTS.SAMPLE_REPORT_CLICKED, { placement: 'sample_section' })}
       className="atmos-cool-dark"
       style={{ display: 'block', position: 'relative', background: 'var(--ink)', padding: '26px 26px 24px', overflow: 'hidden', textDecoration: 'none' }}
     >
@@ -73,7 +76,7 @@ export function SampleReportSection() {
                   <OfferFeed offers={SAMPLE_OFFERS} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 18, flexWrap: 'wrap' }}>
-                  <a href={SAMPLE_REPORT_URL} style={{ textDecoration: 'none' }}>
+                  <a href={SAMPLE_REPORT_URL} onClick={() => track(EVENTS.SAMPLE_REPORT_CLICKED, { placement: 'sample_section' })} style={{ textDecoration: 'none' }}>
                     <Button variant="blue" arrow>Open the full sample report</Button>
                   </a>
                   <span className="mono-label" style={{ fontSize: 9, color: 'var(--faint)' }}>MODELED EXPOSURE $4.5M / YR</span>

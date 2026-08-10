@@ -6,7 +6,7 @@
  * either renderer.
  */
 import { describe, it, expect } from 'vitest'
-import { buildNavItems } from '../reportDerive.js'
+import { buildNavItems, deriveReportViewedState } from '../reportDerive.js'
 
 function _pillars(overrides = {}) {
   return {
@@ -79,5 +79,36 @@ describe('buildNavItems', () => {
   it('composite null renders 0/100, never a fabricated score', () => {
     const items = buildNavItems({ pillars: _pillars(), composite: null, exposure: 100000, active: 'score' })
     expect(items.find((i) => i.id === 'score').score).toBe('0/100')
+  })
+})
+
+describe('deriveReportViewedState — analytics report_viewed.state vocabulary', () => {
+  const fullyMeasuredPillars = {
+    visibility: { dimensions: [{ code: 'x', earned: 25, max: 40, na: false, blocked: false }] },
+    accessibility: { dimensions: [{ code: 'y', earned: 8, max: 20, na: false, blocked: false }] },
+    true_value: { dimensions: [{ code: 'z', earned: 3, max: 40, na: false, blocked: false }] },
+  }
+
+  function withBlockedDim() {
+    return {
+      ...fullyMeasuredPillars,
+      true_value: { dimensions: [{ code: 'z', earned: 0, max: 40, na: false, blocked: true }] },
+    }
+  }
+
+  it('a clean, fully-measured run derives "scored"', () => {
+    expect(deriveReportViewedState(fullyMeasuredPillars, null)).toBe('scored')
+  })
+
+  it('a blocked dimension with degraded_reason="blocked" derives "blocked"', () => {
+    expect(deriveReportViewedState(withBlockedDim(), 'blocked')).toBe('blocked')
+  })
+
+  it('a blocked dimension with no named degraded_reason derives "partial"', () => {
+    expect(deriveReportViewedState(withBlockedDim(), null)).toBe('partial')
+  })
+
+  it('degraded_reason="unreachable" never reads as partial/blocked (matches isPartialRead)', () => {
+    expect(deriveReportViewedState(withBlockedDim(), 'unreachable')).toBe('scored')
   })
 })

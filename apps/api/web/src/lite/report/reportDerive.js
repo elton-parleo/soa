@@ -76,6 +76,18 @@ export function isV3Report(report) {
   return Boolean(report.pillars)
 }
 
+// Analytics session (report_viewed.state): the registry's closed
+// vocabulary is scored/partial/blocked — 'expired' is handled entirely
+// upstream in LiteWidget.jsx, which never reaches this component for
+// an expired report at all. partialReadFailurePoint's own
+// 'no_product_pages_found' folds into 'partial' here, matching that
+// function's own doc comment ("'partial' covers everything that isn't
+// a named run-level reason").
+export function deriveReportViewedState(pillars, degradedReason) {
+  if (!isPartialRead(pillars, degradedReason)) return 'scored'
+  return partialReadFailurePoint(degradedReason) === 'blocked' ? 'blocked' : 'partial'
+}
+
 // earned = sum over every dimension row (na/blocked dims are already
 // zeroed server-side); max = sum over non-na, non-blocked rows only —
 // a dimension's nominal max isn't pre-zeroed the way member_value's na

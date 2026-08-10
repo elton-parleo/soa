@@ -13,10 +13,16 @@
  * so a paste is always the canonical audit-host link: no query string,
  * no hash, no legacy host, regardless of what path/embed this button
  * happened to render from.
+ *
+ * `placement` (analytics session) identifies WHICH of the 3 call sites
+ * fired a copy — `compact` alone can't, since desktop rail and mobile
+ * summary both render the full (non-compact) variant.
  */
 import { useEffect, useRef, useState } from 'react'
 import { Glyph } from '../../ds/index.js'
 import { reportUrl } from '../publicUrls.js'
+import { track } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
 
 const CONFIRM_MS = 2000
 
@@ -58,7 +64,7 @@ const visuallyHidden = {
   overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0,
 }
 
-export function ShareReportButton({ token, compact = false, style }) {
+export function ShareReportButton({ token, compact = false, style, placement }) {
   const url = reportUrl(token)
   const [copied, setCopied] = useState(false)
   const [announce, setAnnounce] = useState('')
@@ -84,6 +90,7 @@ export function ShareReportButton({ token, compact = false, style }) {
     }
     setFallbackOpen(false)
     setCopied(true)
+    track(EVENTS.SHARE_COPIED, { placement })
     // aria-live only announces on a text change — clear first so a
     // repeat click (re-copy while already in the copied state) still
     // fires a fresh announcement, not a silent no-op.

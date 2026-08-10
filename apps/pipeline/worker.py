@@ -1125,7 +1125,9 @@ def _send_pending_report_emails():
 
     sender = get_email_sender()
     for lite_id, token, email, brand_name in rows:
-        report_url = f"{PUBLIC_AUDIT_BASE_URL}/r/{token}"
+        # ?src=email: analytics attribution (docs/analytics.md) — the
+        # frontend's captureSrcParam() reads and strips this on load.
+        report_url = f"{PUBLIC_AUDIT_BASE_URL}/r/{token}?src=email"
         try:
             sent = sender.send_report_ready(email, report_url, brand_name)
         except Exception:

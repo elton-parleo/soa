@@ -13,8 +13,8 @@ export function VisibilitySection({ report, open, onToggle, shareOfMentionsRank 
   const rs = dimByCode(dims, 'recommendation_strength')
   const somDim = DIMENSIONS_BY_CODE.share_of_mentions
   const rsDim = DIMENSIONS_BY_CODE.recommendation_strength
-  const [somOpen, toggleSom] = useCollapsible()
-  const [rsOpen, toggleRs] = useCollapsible()
+  const [somOpen, toggleSom] = useCollapsible(false, { section: 'viz', control: 'share_of_mentions' })
+  const [rsOpen, toggleRs] = useCollapsible(false, { section: 'viz', control: 'recommendation_strength' })
 
   const vis = pillarEarnedMax(pillars.visibility)
   const shareOfMentions = report.visibility_breakdown?.share_of_mentions || []

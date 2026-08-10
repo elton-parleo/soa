@@ -57,6 +57,8 @@ import { LiteFullReportV4 } from './report/LiteFullReportV4.jsx'
 import { LightCard } from './liteTheme.jsx'
 import { PUBLIC_AUDIT_BASE_URL, isAuditHost, reportUrl } from './publicUrls.js'
 import { upsertMeta, upsertLink, restoreOrRemove } from './headMeta.js'
+import { track, identifyReport, captureSrcParam, isTokenOwned } from './analytics.js'
+import { EVENTS } from './analyticsEvents.js'
 
 export { LiteForm, LiteProgress, LiteFailed, LiteFullReport }
 
@@ -131,8 +133,19 @@ function ReportNotFound({ navigate }) {
 // honest dead end with a way forward, same design system as
 // ReportNotFound above (a distinct case: this token is real and was
 // real once, it just can't be shown against the current model anymore).
-function ReportExpired({ storeUrl }) {
+function ReportExpired({ storeUrl, token }) {
   const runFreshHref = `${PUBLIC_AUDIT_BASE_URL}/${storeUrl ? `?url=${encodeURIComponent(storeUrl)}` : ''}`
+
+  useEffect(() => {
+    identifyReport(token)
+    track(EVENTS.REPORT_VIEWED, {
+      state: 'expired',
+      viewer: isTokenOwned(token) ? 'owner' : 'visitor',
+      src: captureSrcParam(),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
     <div className="lite-root">
       <div className="lite-shell" style={{ maxWidth: 480 }}>
@@ -146,7 +159,12 @@ function ReportExpired({ storeUrl }) {
             comparable to a current one. Run a fresh audit to see where you
             stand today.
           </div>
-          <a href={runFreshHref} className="lite-pill lite-pill--solid" style={{ textDecoration: 'none', display: 'inline-block' }}>
+          <a
+            href={runFreshHref}
+            onClick={() => track(EVENTS.CTA_CLICKED, { cta: 'rerun', placement: 'expired_card' })}
+            className="lite-pill lite-pill--solid"
+            style={{ textDecoration: 'none', display: 'inline-block' }}
+          >
             Run a fresh audit
           </a>
         </LightCard>
@@ -315,7 +333,7 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
     // — checked first, since report.status is 'expired' instead of
     // 'complete' and carries no score/pillar/verdict data at all.
     if (report.status === 'expired') {
-      return <ReportExpired storeUrl={report.store_url} />
+      return <ReportExpired storeUrl={report.store_url} token={token} />
     }
     // V4 report redesign: the new rail+focus-mode layout renders only
     // for a current-version (pillars-bearing) report — a pre-this-stage

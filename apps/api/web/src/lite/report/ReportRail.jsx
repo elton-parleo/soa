@@ -2,6 +2,8 @@ import { Wordmark, Glyph, StatusChip, Button, BrandLogo } from '../../ds/index.j
 import { pillarEarnedMax, pillarNominalWeight, isAgentReady, isPartialRead, buildMeasurableContext, buildNavItems, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from './reportDerive.js'
 import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
 import { ShareReportButton } from './ShareReportButton.jsx'
+import { track } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
 
 export function ReportRail({ report, primaryEntityName, exposure, active, focus, allLabel, onToggleAll, token }) {
   const pillars = report.pillars
@@ -110,10 +112,10 @@ export function ReportRail({ report, primaryEntityName, exposure, active, focus,
         </div>
 
         <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <a href="#run" style={{ textDecoration: 'none' }}>
+          <a href="#run" onClick={() => track(EVENTS.CTA_CLICKED, { cta: 'run_your_free_audit', placement: 'rail' })} style={{ textDecoration: 'none' }}>
             <Button variant="blue" size="sm" arrow style={{ width: '100%', justifyContent: 'center' }}>Run your free audit</Button>
           </a>
-          {token && <ShareReportButton token={token} />}
+          {token && <ShareReportButton token={token} placement="desktop_rail" />}
           <div className="mono-label" style={{ fontSize: 9, color: 'var(--faint)', lineHeight: 1.8, paddingTop: 12, borderTop: '1px solid var(--hairline)' }}>
             {LITE_QUERY_COUNT} LIVE CHATGPT QUERIES<br />+ FULL SITE CRAWL
           </div>
