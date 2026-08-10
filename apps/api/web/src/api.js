@@ -166,6 +166,18 @@ export const api = {
   getCycleTruecostSnapshots: (cycleCode) =>
     get(`/api/cycles/${cycleCode}/truecost-snapshots`),
 
+  // Full Analysis — NewCycleFlow's own small endpoints (see
+  // app/routers/full_analysis.py). Continuation-mode audit resolve,
+  // competitor auto-suggestion, and standalone crawl launch.
+  getAuditContinuation: (token) =>
+    get(`/api/full-analysis/audit/${encodeURIComponent(token)}`),
+
+  suggestCompetitors: (data) =>
+    post('/api/full-analysis/suggest-competitors', data),
+
+  launchCrawl: (data) =>
+    post('/api/full-analysis/launch-crawl', data),
+
   getScopeTiers: () =>
     get('/api/scope/tiers'),
 
