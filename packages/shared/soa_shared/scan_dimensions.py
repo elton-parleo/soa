@@ -437,3 +437,56 @@ def compute_verdict(composite: float, true_value_earned: float, true_value_appli
     if tv_ratio < VERDICT_TRUE_VALUE_RATIO_THRESHOLD:
         return VERDICT_NOT_AGENT_READY
     return VERDICT_AGENT_READY
+
+
+# ── Full Analysis coexistence, Phase 3b: full-cycle scoring ─────────────
+# A full cycle runs many more queries than the LITE_QUERY_COUNT-query
+# lite audit (all platforms x all funnel stages x all personas x
+# runs-per-query) — a purchase-intent CITATION COUNT that's meaningfully
+# banded at lite's ~12-query purchase-intent volume trivially saturates
+# at full-cycle volume, where hundreds of purchase-intent mentions are
+# routine. deal_citability.said is the only COUNT_BAND_TABLE consumer in
+# the registry (price_truth/member_value already use RATE_BAND_TABLE,
+# already volume-invariant) — full-cycle scoring rebands it as a RATE
+# instead, same opportunity set (purchase-intent mentions), same
+# MIN_OPPORTUNITY_SET_MENTIONS gate, just cited/total*100 instead of a
+# raw cited count. This never changes v5/lite: apply_count_band and
+# COUNT_BAND_TABLE above are untouched and remain exactly what
+# lite_pillars.py::score_deal_citability_said uses — see app/services/
+# cycle_scoring.py's full-cycle said-scoring functions for the only
+# caller of apply_deal_citability_rate_band.
+#
+# DEAL_CITABILITY_RATE_BAND_TABLE starts numerically identical to
+# RATE_BAND_TABLE (same 0/25/50/100 shape) but is a SEPARATE, independently
+# -tunable constant, not a reuse of it — deal citation and price citation
+# are different behaviors with no a priori reason to share a threshold
+# curve. Unlike every other band table in this file, there is no
+# full-cycle production data yet to calibrate against; this is a
+# starting default, expected to move once real full-cycle runs
+# accumulate (same "recalibrated for the study's volume" precedent as
+# COUNT_BAND_TABLE's own Stage 25 history above).
+FULL_CYCLE_SCORER_VERSION = "6"
+
+DEAL_CITABILITY_RATE_BAND_TABLE: Tuple[Tuple[Optional[float], float], ...] = (
+    (0, 0.0),
+    (25, 0.40),
+    (50, 0.70),
+    (None, 1.0),
+)
+
+
+def apply_deal_citability_rate_band(rate_pct: Optional[float]) -> float:
+    """
+    Fraction (0.0-1.0) of deal_citability's said sub-lens max earned for
+    a purchase-intent deal-citation RATE expressed as a 0-100 percentage,
+    per DEAL_CITABILITY_RATE_BAND_TABLE. Full-cycle scoring only — lite
+    (v5) keeps using apply_count_band/COUNT_BAND_TABLE unchanged. Never
+    raises — None/negative input is treated as 0.
+    """
+    rate_pct = rate_pct or 0.0
+    if rate_pct <= 0:
+        return DEAL_CITABILITY_RATE_BAND_TABLE[0][1]
+    for upper, fraction in DEAL_CITABILITY_RATE_BAND_TABLE:
+        if upper is None or rate_pct <= upper:
+            return fraction
+    return DEAL_CITABILITY_RATE_BAND_TABLE[-1][1]
