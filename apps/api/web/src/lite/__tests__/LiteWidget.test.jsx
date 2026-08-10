@@ -202,6 +202,9 @@ describe('LiteWidget (root) — state machine', () => {
     expect(screen.queryByText('Composite score')).not.toBeInTheDocument()
     const cta = screen.getByText('Run a fresh audit')
     expect(cta.getAttribute('href')).toContain(encodeURIComponent('https://oldstore.example.com'))
+    // Restored Share button (leadgen+ session): the expired card has no
+    // shareable report, so it must never render one.
+    expect(screen.queryByRole('button', { name: 'Share report' })).not.toBeInTheDocument()
   })
 
   it('the expired-state CTA omits the url query param when the retired run recorded no store_url', async () => {

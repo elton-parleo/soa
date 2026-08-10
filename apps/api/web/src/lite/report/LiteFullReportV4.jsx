@@ -62,7 +62,7 @@ export function LiteFullReportV4({ report, token }) {
 
   return (
     <div className="grain-overlay lite-report-shell" style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '222px 1fr' }}>
-      <MobileReportNav report={report} primaryEntityName={primaryEntityName} exposure={exposure} active={active} />
+      <MobileReportNav report={report} primaryEntityName={primaryEntityName} exposure={exposure} active={active} token={token} />
       <ReportRail
         report={report}
         primaryEntityName={primaryEntityName}
@@ -71,6 +71,7 @@ export function LiteFullReportV4({ report, token }) {
         focus={focus}
         allLabel={allLabel}
         onToggleAll={toggleAll}
+        token={token}
       />
       <div style={{ minWidth: 0 }}>
         <div className="lite-report-content" style={{ maxWidth: 920, margin: '0 auto', padding: '32px 28px 46px' }}>

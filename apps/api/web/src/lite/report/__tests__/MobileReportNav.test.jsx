@@ -52,6 +52,16 @@ describe('ReportSummaryBlock', () => {
     const { getByText } = render(<ReportSummaryBlock report={_report({ composite: null })} primaryEntityName="Acme Co" summaryRef={{ current: null }} />)
     expect(getByText('—')).toBeInTheDocument()
   })
+
+  it('renders the full Share report button when a token is given', () => {
+    const { getByRole } = render(<ReportSummaryBlock report={_report()} primaryEntityName="Acme Co" summaryRef={{ current: null }} token="tok-summary" />)
+    expect(getByRole('button', { name: 'Share report' })).toBeInTheDocument()
+  })
+
+  it('omits the Share button when no token is given', () => {
+    const { queryByRole } = render(<ReportSummaryBlock report={_report()} primaryEntityName="Acme Co" summaryRef={{ current: null }} />)
+    expect(queryByRole('button', { name: 'Share report' })).not.toBeInTheDocument()
+  })
 })
 
 describe('MobileStickyBar', () => {
@@ -74,6 +84,20 @@ describe('MobileStickyBar', () => {
     expect(btn).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(btn)
     expect(onToggleSheet).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders the compact Share report button when a token is given, still reachable after the summary scrolls away', () => {
+    const { getByRole } = render(
+      <MobileStickyBar report={_report()} primaryEntityName="Acme Co" visible sheetOpen={false} onToggleSheet={() => {}} token="tok-sticky" />
+    )
+    expect(getByRole('button', { name: 'Share report' })).toBeInTheDocument()
+  })
+
+  it('omits the Share button when no token is given', () => {
+    const { queryByRole } = render(
+      <MobileStickyBar report={_report()} primaryEntityName="Acme Co" visible sheetOpen={false} onToggleSheet={() => {}} />
+    )
+    expect(queryByRole('button', { name: 'Share report' })).not.toBeInTheDocument()
   })
 })
 
@@ -137,5 +161,10 @@ describe('MobileReportNav', () => {
     const { container, getByRole } = render(<MobileReportNav report={_report()} primaryEntityName="Acme Co" exposure={1000} active="score" />)
     fireEvent.click(getByRole('button', { name: /Sections/ }))
     expect(container.querySelector('.lite-report-mobile-sheet-overlay')).toBeInTheDocument()
+  })
+
+  it('threads token to both the summary block and the sticky bar — two independent Share buttons, full + compact', () => {
+    const { getAllByRole } = render(<MobileReportNav report={_report()} primaryEntityName="Acme Co" exposure={1000} active="score" token="tok-nav" />)
+    expect(getAllByRole('button', { name: 'Share report' })).toHaveLength(2)
   })
 })

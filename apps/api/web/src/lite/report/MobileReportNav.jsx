@@ -27,8 +27,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { BrandLogo, StatusChip, Glyph } from '../../ds/index.js'
 import { isAgentReady, isPartialRead, buildNavItems } from './reportDerive.js'
+import { ShareReportButton } from './ShareReportButton.jsx'
 
-export function ReportSummaryBlock({ report, primaryEntityName, summaryRef }) {
+export function ReportSummaryBlock({ report, primaryEntityName, summaryRef, token }) {
   const pillars = report.pillars
   const composite = report.composite
   return (
@@ -47,6 +48,11 @@ export function ReportSummaryBlock({ report, primaryEntityName, summaryRef }) {
           </StatusChip>
         )}
       </div>
+      {token && (
+        <div style={{ marginTop: 14 }}>
+          <ShareReportButton token={token} />
+        </div>
+      )}
     </div>
   )
 }
@@ -68,7 +74,7 @@ export function useSummaryScrolledPast(summaryRef) {
   return pastSummary
 }
 
-export function MobileStickyBar({ report, primaryEntityName, visible, sheetOpen, onToggleSheet }) {
+export function MobileStickyBar({ report, primaryEntityName, visible, sheetOpen, onToggleSheet, token }) {
   const composite = report.composite
   return (
     <div className={`lite-report-mobile-stickybar${visible ? ' lite-report-mobile-stickybar--visible' : ''}`}>
@@ -77,6 +83,7 @@ export function MobileStickyBar({ report, primaryEntityName, visible, sheetOpen,
       <span className="num lite-report-mobile-stickybar-score">
         {composite != null ? Math.round(composite) : '—'}<span className="lite-report-mobile-stickybar-score-max">/100</span>
       </span>
+      {token && <ShareReportButton token={token} compact />}
       <button
         type="button"
         className="lite-report-mobile-sections-btn"
@@ -158,20 +165,21 @@ export function SectionsSheet({ report, exposure, active, open, onClose }) {
   )
 }
 
-export function MobileReportNav({ report, primaryEntityName, exposure, active }) {
+export function MobileReportNav({ report, primaryEntityName, exposure, active, token }) {
   const summaryRef = useRef(null)
   const pastSummary = useSummaryScrolledPast(summaryRef)
   const [sheetOpen, setSheetOpen] = useState(false)
 
   return (
     <div className="lite-report-mobile-nav">
-      <ReportSummaryBlock report={report} primaryEntityName={primaryEntityName} summaryRef={summaryRef} />
+      <ReportSummaryBlock report={report} primaryEntityName={primaryEntityName} summaryRef={summaryRef} token={token} />
       <MobileStickyBar
         report={report}
         primaryEntityName={primaryEntityName}
         visible={pastSummary}
         sheetOpen={sheetOpen}
         onToggleSheet={() => setSheetOpen((v) => !v)}
+        token={token}
       />
       <SectionsSheet report={report} exposure={exposure} active={active} open={sheetOpen} onClose={() => setSheetOpen(false)} />
     </div>
