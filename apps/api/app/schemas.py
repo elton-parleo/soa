@@ -423,6 +423,13 @@ class GenerationStatusResponse(BaseModel):
     status:        str
     target_count:  int
     created_count: int
+    # Additive — the router already passed this to the constructor, but
+    # Pydantic silently drops unknown kwargs by default, so it never
+    # actually reached any caller. StudyDetail.jsx (the existing study
+    # generation UI) already reads status.error_message and has always
+    # gotten undefined; this only fixes an existing latent gap, it
+    # doesn't change what any caller currently relies on.
+    error_message: Optional[str] = None
 
 
 # ─── Scope SKUs ──────────────────────

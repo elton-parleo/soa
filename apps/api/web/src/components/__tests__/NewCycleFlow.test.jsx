@@ -10,7 +10,7 @@ vi.mock('../../api.js', () => ({
   api: {
     getEntities: vi.fn(),
     getStudies: vi.fn(),
-    getStudyQueries: vi.fn(),
+    getQueryRows: vi.fn(),
     generateStudy: vi.fn(),
     getGenerationStatus: vi.fn(),
     checkCycleCode: vi.fn(),
@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   api.getEntities.mockResolvedValue([ACME])
   api.getStudies.mockResolvedValue([STUDY])
-  api.getStudyQueries.mockResolvedValue([{ query_code: 'Q1', query_text: 'Best beauty retailer?' }])
+  api.getQueryRows.mockResolvedValue([{ query_code: 'Q1', query_text: 'Best beauty retailer?' }])
   api.checkCycleCode.mockResolvedValue({ available: true, cycle_code: 'x' })
 })
 
@@ -190,6 +190,148 @@ describe('NewCycleFlow — brand combobox', () => {
 
     expect(brandInput()).toHaveValue('Zeta Co')
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+})
+
+describe('NewCycleFlow — inline study generation', () => {
+  const POLL_MS = 3000 // NewCycleFlow.jsx's GENERATION_POLL_INTERVAL_MS
+
+  // Runs under REAL timers — testing-library's waitFor polls via
+  // setTimeout internally, which stalls once fake timers are active.
+  // Each test switches to fake timers only after this returns, to drive
+  // the setInterval-based polling loop deterministically.
+  async function goToStep2AndOpenGenerateForm(name = 'Allbirds Full Analysis') {
+    await goToStep2()
+    fireEvent.click(screen.getByText('⊕ Generate a new study inline'))
+    fireEvent.change(screen.getByPlaceholderText('Study name'), { target: { value: name } })
+  }
+
+  it('successful generation: the study appears in the selector, selected, and queries render', async () => {
+    const NEW_ID = 'allbirds_full_analysis_9a4465'
+    api.generateStudy.mockResolvedValue({ study_type: NEW_ID, study_name: 'Allbirds Full Analysis', job_id: 1, status: 'pending' })
+    api.getGenerationStatus
+      .mockResolvedValueOnce({ study_type: NEW_ID, status: 'running', target_count: 50, created_count: 0 })
+      .mockResolvedValueOnce({ study_type: NEW_ID, status: 'complete', target_count: 50, created_count: 50 })
+    api.getStudies
+      .mockResolvedValueOnce([STUDY]) // initial mount fetch
+      .mockResolvedValueOnce([STUDY, { id: NEW_ID, name: 'Allbirds Full Analysis', category: 'footwear', patterns: [], queryCount: 50, lastRun: null }])
+    api.getQueryRows.mockResolvedValue([
+      { query_code: 'ALL_001', query_text: 'Best sustainable sneakers?' },
+      { query_code: 'ALL_002', query_text: 'Allbirds vs Rothys?' },
+    ])
+
+    await goToStep2AndOpenGenerateForm()
+
+    vi.useFakeTimers()
+    try {
+      fireEvent.click(screen.getByText('Generate'))
+      await vi.advanceTimersByTimeAsync(0) // flush generateStudy() + the synthesized studies update
+
+      // Synthesized into the list immediately — the <select> shows the
+      // new study selected right away, never an orphan/blank value.
+      expect(screen.getByRole('combobox')).toHaveValue(NEW_ID)
+
+      await vi.advanceTimersByTimeAsync(POLL_MS) // poll 1: running
+      await vi.advanceTimersByTimeAsync(POLL_MS) // poll 2: complete
+
+      expect(screen.getByText(/2 queries in this study/)).toBeInTheDocument()
+      fireEvent.click(screen.getByText(/2 queries in this study/))
+      expect(screen.getByText('Best sustainable sneakers?')).toBeInTheDocument()
+      expect(screen.getByText('Allbirds vs Rothys?')).toBeInTheDocument()
+      // The real /api/studies list was refetched once generation completed.
+      expect(api.getStudies).toHaveBeenCalledTimes(2)
+      expect(screen.getByText('Next: Review & Launch →')).not.toBeDisabled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a failed generation status renders a notice with retry, without resetting study type or depth', async () => {
+    const NEW_ID = 'allbirds_full_analysis_9a4465'
+    api.generateStudy.mockResolvedValue({ study_type: NEW_ID, study_name: 'Allbirds Full Analysis', job_id: 1, status: 'pending' })
+    api.getGenerationStatus.mockResolvedValueOnce({
+      study_type: NEW_ID, status: 'failed', target_count: 50, created_count: 0, error_message: 'OpenAI request timed out',
+    })
+
+    await goToStep2()
+    // Pick Deep before generating — must survive the failure untouched.
+    fireEvent.click(screen.getByText('Deep'))
+    fireEvent.click(screen.getByText('⊕ Generate a new study inline'))
+    fireEvent.change(screen.getByPlaceholderText('Study name'), { target: { value: 'Allbirds Full Analysis' } })
+
+    vi.useFakeTimers()
+    try {
+      fireEvent.click(screen.getByText('Generate'))
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(POLL_MS)
+
+      expect(screen.getByText('OpenAI request timed out')).toBeInTheDocument()
+      expect(screen.getByText('Retry')).toBeInTheDocument()
+      // No reset: the failed study stays selected (visible for context)
+      // and the depth preset the user picked is untouched — still
+      // rendered with the "selected" border color (T.navy), not reverted
+      // to Standard.
+      expect(screen.getByRole('combobox')).toHaveValue(NEW_ID)
+      expect(screen.getByText('Deep').parentElement).toHaveStyle({ borderColor: 'rgb(13, 24, 41)' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('polling timeout renders a notice, not a silent reset', async () => {
+    const NEW_ID = 'allbirds_full_analysis_9a4465'
+    api.generateStudy.mockResolvedValue({ study_type: NEW_ID, study_name: 'Allbirds Full Analysis', job_id: 1, status: 'pending' })
+    // Always 'running' — never reaches a terminal status.
+    api.getGenerationStatus.mockResolvedValue({ study_type: NEW_ID, status: 'running', target_count: 50, created_count: 3 })
+
+    await goToStep2AndOpenGenerateForm()
+
+    vi.useFakeTimers()
+    try {
+      fireEvent.click(screen.getByText('Generate'))
+      await vi.advanceTimersByTimeAsync(0)
+
+      // GENERATION_MAX_POLLS is 40 — advance past it.
+      for (let i = 0; i < 41; i++) {
+        await vi.advanceTimersByTimeAsync(POLL_MS)
+      }
+
+      expect(screen.getByText('Query generation is taking longer than expected.')).toBeInTheDocument()
+      expect(screen.getByText('Retry')).toBeInTheDocument()
+      // Still the same study selected, not reset to the placeholder.
+      expect(screen.getByRole('combobox')).toHaveValue(NEW_ID)
+    } finally {
+      vi.useRealTimers()
+    }
+  }, 10000)
+
+  it('retry re-invokes generation with the same name after a failure', async () => {
+    const FAILED_ID = 'allbirds_full_analysis_9a4465'
+    const RETRY_ID = 'allbirds_full_analysis_b2c3d4'
+    api.generateStudy
+      .mockResolvedValueOnce({ study_type: FAILED_ID, study_name: 'Allbirds Full Analysis', job_id: 1, status: 'pending' })
+      .mockResolvedValueOnce({ study_type: RETRY_ID, study_name: 'Allbirds Full Analysis', job_id: 2, status: 'pending' })
+    api.getGenerationStatus.mockResolvedValueOnce({
+      study_type: FAILED_ID, status: 'failed', target_count: 50, created_count: 0, error_message: 'boom',
+    })
+
+    await goToStep2AndOpenGenerateForm()
+
+    vi.useFakeTimers()
+    try {
+      fireEvent.click(screen.getByText('Generate'))
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(POLL_MS)
+      expect(screen.getByText('Retry')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByText('Retry'))
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(api.generateStudy).toHaveBeenCalledTimes(2)
+      expect(api.generateStudy.mock.calls[1][0]).toMatchObject({ study_name: 'Allbirds Full Analysis' })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

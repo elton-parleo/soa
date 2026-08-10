@@ -64,6 +64,12 @@ const RECURRENCE_OPTIONS = [
   { id: 'quarterly', label: 'Quarterly' },
 ]
 
+// Query generation polls every 3s (same interval as StudyDetail.jsx) —
+// capped so a stuck job doesn't poll forever; a timeout renders the
+// same honest notice+retry as a genuine failure, never a silent reset.
+const GENERATION_POLL_INTERVAL_MS = 3000
+const GENERATION_MAX_POLLS = 40 // 40 * 3s = 120s
+
 const INITIAL_STATE = {
   // Step 1
   primaryEntity: null,     // {id, name, category, ...} — from entity catalog or the audit
@@ -493,6 +499,7 @@ function Step2({ state, setState, onNext, onBack }) {
   const [genLoading, setGenLoading] = useState(false)
   const [genError, setGenError] = useState(null)
   const [genStatus, setGenStatus] = useState(null)
+  const [lastGenerateArgs, setLastGenerateArgs] = useState(null)
 
   useEffect(() => {
     api.getStudies().then(setStudies).catch(() => {})
@@ -500,36 +507,78 @@ function Step2({ state, setState, onNext, onBack }) {
 
   useEffect(() => {
     if (!state.studyType?.id) return
-    api.getStudyQueries(state.studyType.id)
-      .then(rows => setState(s => ({ ...s, queries: rows || [] })))
+    // api.getQueryRows (GET /studies/{type}/query-rows) returns the
+    // actual [{query_code, query_text, ...}] array this step renders.
+    // api.getStudyQueries (GET /studies/{type}/queries) is a DIFFERENT
+    // endpoint — a {study_type, total, by_pattern} count breakdown, not
+    // an array — using it here was the root cause of the reset bug:
+    // .map()/.length on that object throws once queriesVisible flips
+    // true, and with no error boundary anywhere in this app, an
+    // uncaught render error unmounts the whole tree.
+    api.getQueryRows(state.studyType.id)
+      .then(rows => setState(s => ({ ...s, queries: Array.isArray(rows) ? rows : [] })))
       .catch(() => {})
   }, [state.studyType?.id])
 
   // Poll a just-launched generation job — same 3s interval as
   // StudyDetail.jsx, so step 2 never sits on the dead-end empty state
-  // the classic wizard leaves generation in.
+  // the classic wizard leaves generation in. Capped at
+  // GENERATION_MAX_POLLS: a stuck job must not poll forever, but a
+  // timeout is reported the same honest way as a real failure, never a
+  // silent reset.
   useEffect(() => {
     if (!genLoading || !state.studyType?.id) return
+    const studyTypeId = state.studyType.id
     let cancelled = false
+    let attempts = 0
     const interval = setInterval(async () => {
+      attempts += 1
       try {
-        const status = await api.getGenerationStatus(state.studyType.id)
+        const status = await api.getGenerationStatus(studyTypeId)
         if (cancelled) return
         setGenStatus(status)
+
         if (status.status === 'complete' || status.status === 'failed') {
           clearInterval(interval)
           setGenLoading(false)
-          if (status.status === 'complete') {
-            const rows = await api.getStudyQueries(state.studyType.id)
-            if (!cancelled) setState(s => ({ ...s, queries: rows || [], queriesVisible: true }))
+          // A job can legitimately reach 'complete' with zero rows
+          // (generation returned nothing on both attempts of the very
+          // first batch — worker.py's early-break path) — that's not a
+          // genuine success, and must not render as an empty-but-normal
+          // study. created_count already reflects committed rows (it's
+          // updated in the same commit as each batch's inserts), so no
+          // new backend field is needed to detect this honestly.
+          if (status.status === 'complete' && (status.created_count || 0) > 0) {
+            const [rows] = await Promise.all([
+              api.getQueryRows(studyTypeId),
+              // The new study only appears in /api/studies once it has
+              // at least one committed Active query (that endpoint only
+              // returns study_types with Active rows) — refetch now so
+              // the dropdown's <option> list matches reality.
+              api.getStudies().then(list => { if (!cancelled) setStudies(list) }).catch(() => {}),
+            ])
+            if (!cancelled) setState(s => ({ ...s, queries: Array.isArray(rows) ? rows : [], queriesVisible: true }))
+          } else if (status.status === 'failed') {
+            setGenError(status.error_message || 'Query generation failed.')
           } else {
-            setGenError('Query generation failed.')
+            setGenError('Query generation finished without creating any queries.')
           }
+          return
+        }
+
+        if (attempts >= GENERATION_MAX_POLLS) {
+          clearInterval(interval)
+          setGenLoading(false)
+          setGenError('Query generation is taking longer than expected.')
         }
       } catch (_) {
-        if (!cancelled) { clearInterval(interval); setGenLoading(false) }
+        if (!cancelled) {
+          clearInterval(interval)
+          setGenLoading(false)
+          setGenError('Lost connection while checking generation status.')
+        }
       }
-    }, 3000)
+    }, GENERATION_POLL_INTERVAL_MS)
     return () => { cancelled = true; clearInterval(interval) }
   }, [genLoading, state.studyType?.id])
 
@@ -537,13 +586,29 @@ function Step2({ state, setState, onNext, onBack }) {
     setGenError(null)
     setGenLoading(true)
     setGenStatus(null)
+    setLastGenerateArgs({ name, description })
     try {
       const result = await api.generateStudy({ study_name: name, description: description || null, target_count: 50 })
-      setState(s => ({ ...s, studyType: { id: result.study_type, name } }))
+      // Synthesize the new study into the local list immediately — a
+      // fresh study has zero committed queries, so /api/studies (which
+      // only returns study_types with at least one Active query) won't
+      // include it yet, and without this the <select> would show an
+      // orphan value (no matching <option>) for the whole generation
+      // run, silently falling back to its placeholder.
+      setStudies(list => (
+        list.some(s => s.id === result.study_type)
+          ? list
+          : [...list, { id: result.study_type, name, category: '', patterns: [], queryCount: 0, lastRun: null }]
+      ))
+      setState(s => ({ ...s, studyType: { id: result.study_type, name }, queries: [], queriesVisible: false }))
     } catch (err) {
-      setGenError(err.message)
+      setGenError(err.message || 'Could not start query generation.')
       setGenLoading(false)
     }
+  }
+
+  const handleRetryGenerate = () => {
+    if (lastGenerateArgs) handleGenerate(lastGenerateArgs.name, lastGenerateArgs.description)
   }
 
   const depthPreset = DEPTH_PRESETS.find(d => d.id === state.depth) || DEPTH_PRESETS[0]
@@ -576,7 +641,17 @@ function Step2({ state, setState, onNext, onBack }) {
             <span>Generating queries{genStatus ? ` (${genStatus.created_count || 0}/${genStatus.target_count || '…'})` : '…'}</span>
           </div>
         )}
-        {genError && <div style={{ marginTop: 8, color: T.red, fontSize: 12 }}>{genError}</div>}
+        {genError && (
+          <div style={{ marginTop: 8, padding: 10, borderRadius: 8, background: T.redLight, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <span style={{ color: T.red, fontSize: 12 }}>{genError}</span>
+            {lastGenerateArgs && (
+              <button onClick={handleRetryGenerate}
+                style={{ background: 'none', border: `1px solid ${T.red}`, color: T.red, borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                Retry
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {state.studyType?.id && (
