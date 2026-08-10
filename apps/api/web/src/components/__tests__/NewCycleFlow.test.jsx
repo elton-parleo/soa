@@ -162,6 +162,46 @@ describe('NewCycleFlow — continuation-mode pre-fill', () => {
   })
 })
 
+describe('NewCycleFlow — degraded competitor suggestions', () => {
+  async function selectAcme() {
+    render(<NewCycleFlow />)
+    await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Acme'))
+  }
+
+  it('a backend-reported degraded response renders the notice, and manual add still works', async () => {
+    api.suggestCompetitors.mockResolvedValue({ status: 'degraded', reason: 'suggestions_unavailable', competitors: [], source: 'none' })
+    await selectAcme()
+
+    fireEvent.click(screen.getByText('✦ Auto-suggest'))
+    await waitFor(() => expect(screen.getByText('Suggestions are unavailable — add competitors manually.')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByPlaceholderText('Add a competitor by name'), { target: { value: 'Rival Co' } })
+    fireEvent.click(screen.getByText('Add'))
+    expect(screen.getByText('Rival Co')).toBeInTheDocument()
+  })
+
+  it('a request that errors gets the same honest notice, not a silent no-op', async () => {
+    api.suggestCompetitors.mockRejectedValue(new Error('network error'))
+    await selectAcme()
+
+    fireEvent.click(screen.getByText('✦ Auto-suggest'))
+    await waitFor(() => expect(screen.getByText('Suggestions are unavailable — add competitors manually.')).toBeInTheDocument())
+  })
+
+  it('an ok status with real suggestions never shows the degraded notice', async () => {
+    api.suggestCompetitors.mockResolvedValue({
+      status: 'ok', reason: null,
+      competitors: [{ name: 'Rival Co', domain: null }], source: 'generated',
+    })
+    await selectAcme()
+
+    fireEvent.click(screen.getByText('✦ Auto-suggest'))
+    await waitFor(() => expect(screen.getByText('Rival Co')).toBeInTheDocument())
+    expect(screen.queryByText('Suggestions are unavailable — add competitors manually.')).not.toBeInTheDocument()
+  })
+})
+
 describe('NewCycleFlow — honest platform rendering', () => {
   it('always lists Perplexity but marks it unavailable, and never includes it in the launch payload', async () => {
     api.createCycle.mockResolvedValue({ id: 99, cycle_code: '2026-08-acme-full' })

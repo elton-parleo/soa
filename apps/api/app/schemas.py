@@ -174,6 +174,14 @@ class SuggestedCompetitor(BaseModel):
     domain: Optional[str] = None
 
 class SuggestCompetitorsResponse(BaseModel):
+    # 'ok' — generation ran (or wasn't needed); an empty competitors list
+    # here is a legitimate "found none" result, not a failure.
+    # 'degraded' — the suggestion service itself is unavailable this
+    # request (e.g. no backend API key configured) — reason is a fixed,
+    # internals-free enum for the client to key UI copy off; never the
+    # underlying env var name or exception text.
+    status: str = "ok"
+    reason: Optional[str] = None  # e.g. 'suggestions_unavailable' — only set when status == 'degraded'
     competitors: List[SuggestedCompetitor]
     source: str  # 'generated' | 'manual' | 'mixed' | 'none' — see competitor_suggestion.select_competitors
 

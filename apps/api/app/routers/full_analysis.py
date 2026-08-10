@@ -115,12 +115,17 @@ def suggest_competitors(
 ):
     """
     Step 1's auto-suggest chips. Never errors out to the caller — a
-    missing/failing OpenAI call degrades to whatever manual_names were
-    already typed (or an empty list), same never-throw contract as
-    apps/pipeline's worker-side competitor generation.
+    missing OpenAI key degrades to whatever manual_names were already
+    typed (or an empty list), same never-throw contract as apps/pipeline's
+    worker-side competitor generation. Unlike before, that degradation is
+    now reported explicitly (status='degraded') rather than an empty
+    success response the client can't tell apart from "brand genuinely
+    has no competitors" — see SuggestCompetitorsResponse. reason is a
+    fixed enum string, never the env var name or any backend internals.
     """
     api_key = os.environ.get("OPEN_AI_API_KEY")
     candidates = []
+    degraded = not api_key
     if api_key:
         candidates = generate_competitors(
             data.brand_name, api_key,
@@ -131,6 +136,8 @@ def suggest_competitors(
 
     final, source = select_competitors(data.manual_names or [], candidates, data.brand_name)
     return SuggestCompetitorsResponse(
+        status="degraded" if degraded else "ok",
+        reason="suggestions_unavailable" if degraded else None,
         competitors=[SuggestedCompetitor(name=c["name"], domain=c["domain"]) for c in final],
         source=source,
     )

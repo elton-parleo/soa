@@ -111,8 +111,19 @@ def test_suggest_competitors_degrades_to_manual_only_without_api_key(monkeypatch
     req = SuggestCompetitorsRequest(brand_name="Acme", manual_names=["Rival A"])
     result = full_analysis_router.suggest_competitors(req, current_user=CURRENT_USER)
 
+    assert result.status == "degraded"
+    assert result.reason == "suggestions_unavailable"
     assert result.source == "manual"
     assert [c.name for c in result.competitors] == ["Rival A"]
+
+
+def test_suggest_competitors_degraded_reason_never_leaks_the_env_var_name(monkeypatch):
+    monkeypatch.delenv("OPEN_AI_API_KEY", raising=False)
+
+    req = SuggestCompetitorsRequest(brand_name="Acme")
+    result = full_analysis_router.suggest_competitors(req, current_user=CURRENT_USER)
+
+    assert "OPEN_AI_API_KEY" not in (result.reason or "")
 
 
 def test_suggest_competitors_merges_generated_with_manual(monkeypatch):
@@ -125,9 +136,27 @@ def test_suggest_competitors_merges_generated_with_manual(monkeypatch):
     req = SuggestCompetitorsRequest(brand_name="Acme", manual_names=["Rival A"])
     result = full_analysis_router.suggest_competitors(req, current_user=CURRENT_USER)
 
+    assert result.status == "ok"
+    assert result.reason is None
     assert result.source == "mixed"
     names = {c.name for c in result.competitors}
     assert names == {"Rival A", "Generated Co"}
+
+
+def test_suggest_competitors_ok_status_even_when_generation_legitimately_finds_none(monkeypatch):
+    """A configured, working suggestion service that genuinely found no
+    competitors is NOT a degraded state — status stays 'ok' so the client
+    never shows the "suggestions unavailable" notice for an honest empty
+    result."""
+    monkeypatch.setenv("OPEN_AI_API_KEY", "test-key")
+    monkeypatch.setattr(full_analysis_router, "generate_competitors", lambda brand_name, api_key, **kw: [])
+
+    req = SuggestCompetitorsRequest(brand_name="Acme")
+    result = full_analysis_router.suggest_competitors(req, current_user=CURRENT_USER)
+
+    assert result.status == "ok"
+    assert result.reason is None
+    assert result.competitors == []
 
 
 # ─── POST /full-analysis/launch-crawl ────────────────────────────────────

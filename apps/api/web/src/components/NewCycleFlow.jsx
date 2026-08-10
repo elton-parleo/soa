@@ -7,6 +7,7 @@
 // reusing NewCycleWizard's design tokens/patterns where they fit.
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api.js'
+import { StatusChip } from '../ds/index.js'
 
 // ─── Design tokens — mirrors NewCycleWizard.jsx's T object exactly ────────
 const T = {
@@ -194,6 +195,7 @@ function Step1({ state, setState, onNext, auditToken }) {
   const [continuationLoading, setContinuationLoading] = useState(!!auditToken)
   const [continuationError, setContinuationError] = useState(null)
   const [suggesting, setSuggesting] = useState(false)
+  const [suggestDegraded, setSuggestDegraded] = useState(false)
   const [manualCompetitor, setManualCompetitor] = useState('')
 
   // Continuation mode: pre-resolve brand/competitors/category from the
@@ -241,6 +243,7 @@ function Step1({ state, setState, onNext, auditToken }) {
   const handleSuggest = async () => {
     if (!state.primaryEntity) return
     setSuggesting(true)
+    setSuggestDegraded(false)
     try {
       const res = await api.suggestCompetitors({
         brand_name: state.primaryEntity.name,
@@ -249,8 +252,16 @@ function Step1({ state, setState, onNext, auditToken }) {
         manual_names: state.competitors.map(c => c.name),
       })
       setState(s => ({ ...s, competitors: res.competitors.map(c => ({ name: c.name, domain: c.domain, entity_id: null })) }))
+      // Backend-reported degradation (e.g. no suggestion API key
+      // configured) — an honest notice, never a silent empty result the
+      // visitor can't tell apart from "this brand genuinely has no
+      // competitors" (res.status === 'ok' with an empty list).
+      if (res.status === 'degraded') setSuggestDegraded(true)
     } catch (_) {
-      // Never blocks the flow — manual entry remains available.
+      // A request that errors or times out gets the SAME honest notice
+      // as a backend-reported degradation — never blocks the flow,
+      // manual entry always remains available.
+      setSuggestDegraded(true)
     } finally {
       setSuggesting(false)
     }
@@ -337,6 +348,11 @@ function Step1({ state, setState, onNext, auditToken }) {
             {suggesting ? 'Suggesting…' : '✦ Auto-suggest'}
           </button>
         </div>
+        {suggestDegraded && (
+          <div style={{ marginBottom: 10 }}>
+            <StatusChip tone="warning" size="sm">Suggestions are unavailable — add competitors manually.</StatusChip>
+          </div>
+        )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
           {state.competitors.map(c => (
             <span key={c.name} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 99, background: T.offWhite, border: `1px solid ${T.border}`, fontSize: 12, fontWeight: 500 }}>
