@@ -582,10 +582,15 @@ def process_lite_requests():
             # separate transaction — so there is no window where this
             # lite request is 'running' but has no scan row for
             # _sweep_lite_completions to join against.
+            # cycle_id (Phase 1's soa_cycle_scans linkage) is stamped here
+            # too, not just backfilled once for pre-existing rows — every
+            # lite-owned scan row going forward carries both FKs, which
+            # is what lets Phase 3's cycle-scoring service key entirely
+            # off cycle_id without a lite_request_id fallback.
             conn.execute(text("""
-                INSERT INTO soa_lite_scan_results (lite_request_id, input_url, status, updated_at)
-                VALUES (:rid, :url, 'running', NOW())
-            """), {"rid": request_id, "url": store_url})
+                INSERT INTO soa_lite_scan_results (lite_request_id, cycle_id, input_url, status, updated_at)
+                VALUES (:rid, :cid, :url, 'running', NOW())
+            """), {"rid": request_id, "cid": cycle_id, "url": store_url})
 
         log.info(f"[lite] request {request_id}: cycle {cycle_code} queued (id={cycle_id})")
 

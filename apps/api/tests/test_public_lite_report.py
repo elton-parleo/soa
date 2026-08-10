@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 
 import app.routers.public_lite as public_lite
+import app.services.cycle_scoring as cycle_scoring
 
 
 @pytest.fixture
@@ -1786,7 +1787,7 @@ def test_attach_v3_linked_reasons_never_flags_a_blocked_dimension():
         },
         "accessibility": {"dimensions": []},
     }
-    public_lite._attach_v3_linked_reasons(pillars_payload, {"V1": "mentioned but no price surfaced"})
+    cycle_scoring._attach_v3_linked_reasons(pillars_payload, {"V1": "mentioned but no price surfaced"})
     row = pillars_payload["true_value"]["dimensions"][0]
     assert "linked" not in row
 

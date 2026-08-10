@@ -89,7 +89,7 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_lite_scan_results (
-                id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, input_url TEXT,
+                id INTEGER PRIMARY KEY, lite_request_id INTEGER UNIQUE, cycle_id INTEGER, input_url TEXT,
                 status TEXT DEFAULT 'pending', total_score INTEGER,
                 integrity_capped BOOLEAN DEFAULT 0, dimensions TEXT, pages_fetched TEXT,
                 membership_probe TEXT, revenue_probe TEXT, fetch_probe TEXT,
