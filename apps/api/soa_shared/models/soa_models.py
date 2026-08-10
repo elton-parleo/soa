@@ -286,8 +286,15 @@ class SoaCycle(Base):
             "cycle_mode IN ('query','truecost')",
             name="ck_soa_cycles_cycle_mode",
         ),
+        CheckConstraint(
+            "prior_cycle_id IS NULL OR prior_cycle_id != id",
+            name="ck_soa_cycles_prior_cycle_not_self",
+        ),
         Index("ix_soa_cycles_study_type", "study_type"),
         Index("ix_soa_cycles_organization_id", "organization_id"),
+        Index("ix_soa_cycles_source_lite_request_id", "source_lite_request_id"),
+        Index("ix_soa_cycles_prior_cycle_id", "prior_cycle_id"),
+        Index("ix_soa_cycles_study_series_id", "study_series_id"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -377,6 +384,37 @@ class SoaCycle(Base):
             "A null entry in the list means the non-member baseline. "
             "Ignored for cycle_mode='query'. Defaults to [null] (baseline "
             "only) at sweep time when empty/None."
+        ),
+    )
+
+    source_lite_request_id = Column(
+        Integer,
+        ForeignKey("soa_lite_requests.id"),
+        nullable=True,
+        comment=(
+            "Set when this cycle was created as the Full Analysis "
+            "continuation of a SoA Lite audit run. Null for every cycle "
+            "created the ordinary way — never backfilled onto old cycles."
+        ),
+    )
+    study_series_id = Column(
+        Text,
+        nullable=True,
+        comment=(
+            "Free-text id shared by every cycle in a recurring study "
+            "series (e.g. an audit and the Full Analysis cycles run off "
+            "it monthly/quarterly). Null means this cycle is not part of "
+            "a tracked series."
+        ),
+    )
+    prior_cycle_id = Column(
+        Integer,
+        ForeignKey("soa_cycles.id"),
+        nullable=True,
+        comment=(
+            "The cycle this one continues from in its study_series_id "
+            "series — e.g. the audit's own cycle, for the first Full "
+            "Analysis run off it. Null for a series' first cycle."
         ),
     )
 
@@ -1553,7 +1591,12 @@ class SoaLiteRequest(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     brand_entity = relationship("SoaEntity", foreign_keys=[brand_entity_id])
-    cycle = relationship("SoaCycle")
+    # Explicit foreign_keys: soa_cycles.source_lite_request_id now creates
+    # a second FK path between these two tables (the Full Analysis
+    # continuation link, the reverse direction of this one) — without
+    # this, SQLAlchemy can no longer infer which FK this relationship
+    # means and raises AmbiguousForeignKeysError at mapper configuration.
+    cycle = relationship("SoaCycle", foreign_keys=[cycle_id])
     scan_result = relationship(
         "SoaLiteScanResult", back_populates="lite_request", uselist=False,
     )
@@ -1588,6 +1631,20 @@ class SoaLiteScanResult(Base):
         nullable=False,
         unique=True,
         index=True,
+    )
+
+    cycle_id = Column(
+        Integer,
+        ForeignKey("soa_cycles.id"),
+        nullable=True,
+        index=True,
+        comment=(
+            "The cycle this crawl is attached to — set for every scan "
+            "going forward (both lite-owned and Full-Analysis-owned). "
+            "lite_request_id remains the lite path's own FK, untouched; "
+            "this column is what lets a paid cycle with no lite_request "
+            "at all carry a crawl too."
+        ),
     )
 
     input_url = Column(
