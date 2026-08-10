@@ -22,6 +22,7 @@ vi.mock('../../api.js', () => ({
 }))
 
 const ACME = { id: 1, name: 'Acme', category: 'beauty', type: 'Brand' }
+const ZETA = { id: 2, name: 'Zeta Co', category: 'grooming', type: 'Brand' }
 const STUDY = { id: 'retailer_sephora', name: 'Sephora Retail' }
 
 beforeEach(() => {
@@ -32,10 +33,22 @@ beforeEach(() => {
   api.checkCycleCode.mockResolvedValue({ available: true, cycle_code: 'x' })
 })
 
+function brandInput() {
+  return screen.getByPlaceholderText(/Search entities/)
+}
+
+// Opens the dropdown (focus) and clicks an already-rendered option —
+// the real combobox UX: nothing is selectable until the field has focus.
+async function selectBrand(name) {
+  fireEvent.focus(brandInput())
+  await waitFor(() => expect(screen.getByText(name)).toBeInTheDocument())
+  fireEvent.mouseDown(screen.getByText(name))
+}
+
 async function goToStep2() {
   render(<NewCycleFlow />)
-  await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument())
-  fireEvent.click(screen.getByText('Acme'))
+  await waitFor(() => expect(brandInput()).toBeInTheDocument())
+  await selectBrand('Acme')
   fireEvent.click(screen.getByText('Next: Study & Queries →'))
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Study & Queries' })).toBeInTheDocument())
 }
@@ -52,26 +65,10 @@ async function goToStep3() {
 describe('NewCycleFlow — step transitions', () => {
   it('step 1 requires a primary brand before advancing', async () => {
     render(<NewCycleFlow />)
-    await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument())
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
     expect(screen.getByText('Next: Study & Queries →')).toBeDisabled()
 
-    fireEvent.click(screen.getByText('Acme'))
-    expect(screen.getByText('Next: Study & Queries →')).not.toBeDisabled()
-  })
-
-  it('search finds a brand, clicking it selects it, and Next enables — full happy path', async () => {
-    api.getEntities.mockResolvedValue([ACME, { id: 2, name: 'Zeta Co', category: 'grooming', type: 'Brand' }])
-    render(<NewCycleFlow />)
-    await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument())
-
-    fireEvent.change(screen.getByPlaceholderText(/Search entities/), { target: { value: 'acme' } })
-    expect(screen.getByText('Acme')).toBeInTheDocument()
-    expect(screen.queryByText('Zeta Co')).not.toBeInTheDocument()
-
-    expect(screen.getByText('Next: Study & Queries →')).toBeDisabled()
-    fireEvent.click(screen.getByText('Acme'))
-
-    expect(screen.getByText('✓ Selected')).toBeInTheDocument()
+    await selectBrand('Acme')
     expect(screen.getByText('Next: Study & Queries →')).not.toBeDisabled()
   })
 
@@ -84,7 +81,9 @@ describe('NewCycleFlow — step transitions', () => {
     // boundary above it, making brand selection permanently impossible.
     api.getEntities.mockResolvedValue(undefined)
     render(<NewCycleFlow />)
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
 
+    fireEvent.focus(brandInput())
     await waitFor(() => expect(screen.getByText('No matches — try a different search.')).toBeInTheDocument())
     // The rest of step 1 must still be fully interactive — proves this
     // didn't silently unmount/crash the component.
@@ -119,6 +118,81 @@ describe('NewCycleFlow — step transitions', () => {
   })
 })
 
+describe('NewCycleFlow — brand combobox', () => {
+  beforeEach(() => {
+    api.getEntities.mockResolvedValue([ACME, ZETA])
+  })
+
+  it('selecting an option fills the input, closes the dropdown, and enables Next', async () => {
+    render(<NewCycleFlow />)
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
+
+    fireEvent.change(brandInput(), { target: { value: 'ac' } })
+    expect(screen.getByText('Acme')).toBeInTheDocument()
+    expect(screen.queryByText('Zeta Co')).not.toBeInTheDocument()
+    expect(screen.getByText('Next: Study & Queries →')).toBeDisabled()
+
+    fireEvent.mouseDown(screen.getByText('Acme'))
+
+    expect(brandInput()).toHaveValue('Acme')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(screen.getByText('Next: Study & Queries →')).not.toBeDisabled()
+  })
+
+  it('editing the text after a selection clears the stored selection and disables Next', async () => {
+    render(<NewCycleFlow />)
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
+    await selectBrand('Acme')
+    expect(screen.getByText('Next: Study & Queries →')).not.toBeDisabled()
+
+    fireEvent.change(brandInput(), { target: { value: 'Acme X' } })
+
+    expect(screen.getByText('Next: Study & Queries →')).toBeDisabled()
+    // Typed text alone is never treated as a selection, even if it
+    // happens to match — the dropdown must reopen, not silently commit.
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+  })
+
+  it('Escape closes the dropdown', async () => {
+    render(<NewCycleFlow />)
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
+    fireEvent.focus(brandInput())
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+
+    fireEvent.keyDown(brandInput(), { key: 'Escape' })
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('click-outside closes the dropdown', async () => {
+    render(
+      <div>
+        <div data-testid="outside">outside</div>
+        <NewCycleFlow />
+      </div>
+    )
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
+    fireEvent.focus(brandInput())
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+
+    fireEvent.mouseDown(screen.getByTestId('outside'))
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('arrow keys move the highlight and Enter selects the highlighted option', async () => {
+    render(<NewCycleFlow />)
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
+    fireEvent.focus(brandInput())
+    await waitFor(() => expect(screen.getByText('Zeta Co')).toBeInTheDocument())
+
+    fireEvent.keyDown(brandInput(), { key: 'ArrowDown' }) // highlight Acme (index 0)
+    fireEvent.keyDown(brandInput(), { key: 'ArrowDown' }) // highlight Zeta Co (index 1)
+    fireEvent.keyDown(brandInput(), { key: 'Enter' })
+
+    expect(brandInput()).toHaveValue('Zeta Co')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+})
+
 describe('NewCycleFlow — continuation-mode pre-fill', () => {
   it('resolves brand/competitors/composite from the audit and collapses step 1 into a confirmation card', async () => {
     api.getAuditContinuation.mockResolvedValue({
@@ -147,7 +221,7 @@ describe('NewCycleFlow — continuation-mode pre-fill', () => {
     expect(screen.getByText('Next: Study & Queries →')).not.toBeDisabled()
   })
 
-  it('an edit click drops back to the manual picker without losing the resolved data entirely', async () => {
+  it('an edit click drops back to the manual picker with the pre-filled brand as a committed selection, not an open dropdown', async () => {
     api.getAuditContinuation.mockResolvedValue({
       lite_request_id: 7, cycle_id: 42, brand_name: 'Acme', brand_entity_id: 1,
       category: 'beauty', competitors: [], composite: 74, verdict: 'AGENT-READY',
@@ -159,14 +233,20 @@ describe('NewCycleFlow — continuation-mode pre-fill', () => {
 
     fireEvent.click(screen.getByText('Edit brand & competitors'))
     await waitFor(() => expect(screen.getByText('Primary brand')).toBeInTheDocument())
+
+    // Committed selection: input pre-filled with the audit's brand name,
+    // dropdown closed, Next already enabled — never an open/blank query.
+    expect(brandInput()).toHaveValue('Acme')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(screen.getByText('Next: Study & Queries →')).not.toBeDisabled()
   })
 })
 
 describe('NewCycleFlow — degraded competitor suggestions', () => {
   async function selectAcme() {
     render(<NewCycleFlow />)
-    await waitFor(() => expect(screen.getByText('Acme')).toBeInTheDocument())
-    fireEvent.click(screen.getByText('Acme'))
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
+    await selectBrand('Acme')
   }
 
   it('a backend-reported degraded response renders the notice, and manual add still works', async () => {

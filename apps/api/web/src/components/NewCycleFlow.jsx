@@ -101,6 +101,131 @@ function matchesSearch(entity, query) {
   )
 }
 
+// ─── Entity combobox ────────────────────────────────────────────────────
+//
+// A real combobox, not a search box glued to an always-open list:
+// selecting an option commits it (input shows the name, dropdown
+// closes, the entity id is stored via onChange); editing the text
+// afterward clears the stored selection until a new option is chosen —
+// typed text alone is never treated as a selection. `value` is the
+// controlled selection (an entity object or null); the input's own text
+// is internal state, synced from `value` whenever it changes externally
+// (continuation mode pre-filling it, or a parent-level reset).
+
+function EntityCombobox({ entities, value, onChange, placeholder }) {
+  const [query, setQuery] = useState(value?.name || '')
+  const [open, setOpen] = useState(false)
+  const [highlighted, setHighlighted] = useState(-1)
+  const wrapperRef = useRef(null)
+
+  // A value set from OUTSIDE this component (continuation mode's
+  // pre-fill) always renders as a committed, closed input — never an
+  // open dropdown mid-query. Deliberately does NOT sync on value
+  // becoming null: that happens via this component's own onChange(null)
+  // in handleInputChange, which already set query/open itself for the
+  // edit in progress — re-syncing here would immediately stomp it back
+  // to a blank, closed field on every keystroke after a selection.
+  useEffect(() => {
+    if (!value) return
+    setQuery(value.name || '')
+    setOpen(false)
+    setHighlighted(-1)
+  }, [value?.id])
+
+  useEffect(() => {
+    if (!open) return
+    function handleClickOutside(e) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [open])
+
+  const filtered = entities.filter(e => matchesSearch(e, query))
+
+  const selectEntity = (entity) => {
+    setQuery(entity.name)
+    setOpen(false)
+    setHighlighted(-1)
+    onChange(entity)
+  }
+
+  const handleInputChange = (e) => {
+    const val = e.target.value
+    setQuery(val)
+    setOpen(true)
+    setHighlighted(-1)
+    // Editing after a selection clears it — the stored selection and
+    // the raw text must never silently drift apart.
+    if (value) onChange(null)
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      setOpen(false)
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (!open) { setOpen(true); return }
+      setHighlighted(h => Math.min(h + 1, filtered.length - 1))
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlighted(h => Math.max(h - 1, 0))
+      return
+    }
+    if (e.key === 'Enter' && open && highlighted >= 0 && filtered[highlighted]) {
+      e.preventDefault()
+      selectEntity(filtered[highlighted])
+    }
+  }
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative' }}>
+      <input
+        role="combobox"
+        aria-expanded={open}
+        aria-autocomplete="list"
+        placeholder={placeholder}
+        value={query}
+        onChange={handleInputChange}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKeyDown}
+        style={{ width: '100%', padding: '10px 12px', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+      />
+      {open && (
+        <div role="listbox" style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10, marginTop: 4,
+          maxHeight: 200, overflowY: 'auto', border: `1px solid ${T.border}`, borderRadius: 8,
+          background: T.white, boxShadow: '0 4px 12px rgba(15, 23, 42, 0.12)',
+        }}>
+          {filtered.map((e, i) => (
+            <div key={e.id} role="option" aria-selected={value?.id === e.id}
+              onMouseDown={ev => { ev.preventDefault(); selectEntity(e) }}
+              onMouseEnter={() => setHighlighted(i)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', cursor: 'pointer',
+                borderBottom: `1px solid ${T.border}`,
+                background: i === highlighted ? T.tealLight : (value?.id === e.id ? T.offWhite : T.white),
+              }}>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>{e.name}</div>
+              <div style={{ fontSize: 11, color: T.slate }}>{e.category}</div>
+              {value?.id === e.id && <span style={{ marginLeft: 'auto', color: T.teal, fontSize: 12 }}>✓ Selected</span>}
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <div style={{ padding: 16, textAlign: 'center', color: T.slate, fontSize: 13 }}>No matches — try a different search.</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Shared bits ────────────────────────────────────────────────────────
 
 function Badge({ children, color = T.slate, bg = T.offWhite }) {
@@ -190,7 +315,6 @@ function ContinuationCard({ continuation, onEdit }) {
 
 function Step1({ state, setState, onNext, auditToken }) {
   const [entities, setEntities] = useState([])
-  const [search, setSearch] = useState('')
   const [editingContinuation, setEditingContinuation] = useState(false)
   const [continuationLoading, setContinuationLoading] = useState(!!auditToken)
   const [continuationError, setContinuationError] = useState(null)
@@ -237,8 +361,6 @@ function Step1({ state, setState, onNext, auditToken }) {
     // instead of showing an empty/error state.
     api.getEntities().then(res => setEntities(Array.isArray(res) ? res : [])).catch(() => {})
   }, [])
-
-  const filtered = entities.filter(e => matchesSearch(e, search))
 
   const handleSuggest = async () => {
     if (!state.primaryEntity) return
@@ -302,29 +424,12 @@ function Step1({ state, setState, onNext, auditToken }) {
         <>
           <div style={{ marginBottom: 20 }}>
             <label style={{ fontWeight: 600, fontSize: 13, display: 'block', marginBottom: 8 }}>Primary brand</label>
-            <input
+            <EntityCombobox
+              entities={entities}
+              value={state.primaryEntity}
+              onChange={entity => setState(s => ({ ...s, primaryEntity: entity }))}
               placeholder="Search entities by name, type, or category…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ width: '100%', padding: '10px 12px', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
             />
-            <div style={{ maxHeight: 200, overflowY: 'auto', border: `1px solid ${T.border}`, borderRadius: 8 }}>
-              {filtered.map(e => (
-                <div key={e.id} onClick={() => setState(s => ({ ...s, primaryEntity: e }))}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', cursor: 'pointer',
-                    borderBottom: `1px solid ${T.border}`,
-                    background: state.primaryEntity?.id === e.id ? T.tealLight : T.white,
-                  }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{e.name}</div>
-                  <div style={{ fontSize: 11, color: T.slate }}>{e.category}</div>
-                  {state.primaryEntity?.id === e.id && <span style={{ marginLeft: 'auto', color: T.teal, fontSize: 12 }}>✓ Selected</span>}
-                </div>
-              ))}
-              {filtered.length === 0 && (
-                <div style={{ padding: 16, textAlign: 'center', color: T.slate, fontSize: 13 }}>No matches — try a different search.</div>
-              )}
-            </div>
           </div>
 
           <div style={{ marginBottom: 20 }}>
