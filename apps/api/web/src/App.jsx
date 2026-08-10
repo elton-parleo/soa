@@ -4,8 +4,8 @@ import LoginPage        from './components/LoginPage.jsx'
 import CycleDashboard   from './components/CycleDashboard.jsx'
 import NewCycleWizard   from './components/NewCycleWizard.jsx'
 import NewCycleFlow     from './components/NewCycleFlow.jsx'
+import FullAnalysisReportGate from './components/FullAnalysisReportGate.jsx'
 import EntityRegistry   from './components/EntityRegistry.jsx'
-import MetricsDashboard  from './components/MetricsDashboard.jsx'
 import ResponseExplorer  from './components/ResponseExplorer.jsx'
 import ActionsPage       from './components/ActionsPage.jsx'
 import StudyLibrary      from './components/StudyLibrary.jsx'
@@ -145,8 +145,13 @@ function AppContent() {
   }
 
   if (view === 'metrics') {
+    // Full Analysis coexistence, Phase 4: the render-gate decides
+    // between the new Full Analysis report and the classic
+    // MetricsDashboard for this cycle — see FullAnalysisReportGate.jsx.
+    // MetricsDashboard.jsx itself is unchanged; the gate renders it
+    // directly (same props) whenever the discriminator says to.
     return (
-      <MetricsDashboard
+      <FullAnalysisReportGate
         cycleCode={selectedCycle}
         onNavigate={(v, params) => {
           if (v === 'metrics' && params?.cycleCode) {

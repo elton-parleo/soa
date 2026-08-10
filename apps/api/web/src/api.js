@@ -178,6 +178,9 @@ export const api = {
   launchCrawl: (data) =>
     post('/api/full-analysis/launch-crawl', data),
 
+  getFullAnalysisReport: (cycleCode) =>
+    get(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}`),
+
   getScopeTiers: () =>
     get('/api/scope/tiers'),
 
