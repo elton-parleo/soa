@@ -22,6 +22,8 @@ from app.routers.public_lite import _build_report_payload
 from app.schemas import (
     AuditCompetitor,
     AuditContinuationResponse,
+    FullAnalysisContinuation,
+    FullAnalysisReportResponse,
     LaunchCrawlRequest,
     LaunchCrawlResponse,
     SuggestCompetitorsRequest,
@@ -32,6 +34,7 @@ from app.services.competitor_suggestion import (
     generate_competitors,
     select_competitors,
 )
+from app.services.cycle_scoring_full import build_full_cycle_report
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -163,3 +166,90 @@ def launch_crawl(
         """), {"cycle_id": data.cycle_id, "store_url": data.store_url}).fetchone()
 
     return LaunchCrawlResponse(scan_id=row[0], cycle_id=data.cycle_id, status="pending")
+
+
+def _build_continuation(conn, source_lite_request_id: int) -> FullAnalysisContinuation | None:
+    """
+    Phase 4 report header, item 2: the audit's own composite/verdict/
+    date for the continuation banner's "your audit scored X" line —
+    only a direction/plain-composite comparison, never a false-precision
+    per-dimension delta (composite is on the same 0-100 scale under
+    both v5 and FULL_CYCLE_SCORER_VERSION; individual dimension bands
+    are not guaranteed comparable across the two, see cycle_scoring_
+    full.py's module docstring).
+    """
+    row = conn.execute(text("""
+        SELECT lr.id, lr.cycle_id, lr.status, lr.created_at, c.platforms, c.runs_per_query
+        FROM soa_lite_requests lr
+        LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
+        WHERE lr.id = :rid
+    """), {"rid": source_lite_request_id}).fetchone()
+    if not row:
+        return None
+    lite_request_id, audit_cycle_id, status, created_at, platforms_raw, runs_per_query = row
+
+    audit_composite = None
+    audit_verdict = None
+    if status == "complete" and audit_cycle_id is not None:
+        audit_report = _build_report_payload(conn, lite_request_id, audit_cycle_id)
+        audit_composite = audit_report.get("composite")
+        audit_verdict = (audit_report.get("pillars") or {}).get("verdict")
+
+    platforms = _decode_json_field(platforms_raw, [])
+    platforms_note = (
+        f"{', '.join(platforms) if platforms else 'the audited platform'} × {runs_per_query or 1} runs/query"
+    )
+
+    return FullAnalysisContinuation(
+        source_lite_request_id=source_lite_request_id,
+        audit_composite=audit_composite,
+        audit_verdict=audit_verdict,
+        audit_date=str(created_at)[:10] if created_at else None,
+        audit_platforms_note=platforms_note,
+    )
+
+
+@router.get("/full-analysis/report/{cycle_code}", response_model=FullAnalysisReportResponse)
+def get_full_analysis_report(
+    cycle_code: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Phase 4 render-gate: resolves for a cycle only when it has an
+    attached crawl AND a current-scorer-version score (build_full_cycle_
+    report's own status=='complete' check) — otherwise rendered=False,
+    and the frontend falls back to the classic MetricsDashboard for the
+    same cycle_code. Never a partial/degraded Full Analysis render.
+    """
+    org_id = current_user["organization_id"]
+    with engine.connect() as conn:
+        cycle = conn.execute(text("""
+            SELECT id, source_lite_request_id FROM soa_cycles
+            WHERE cycle_code = :code AND organization_id = :org_id
+        """), {"code": cycle_code, "org_id": org_id}).fetchone()
+        if not cycle:
+            raise HTTPException(status_code=404, detail=f"Cycle '{cycle_code}' not found.")
+        cycle_id, source_lite_request_id = cycle
+
+        report = build_full_cycle_report(conn, cycle_id)
+
+        if report["status"] != "complete":
+            return FullAnalysisReportResponse(
+                cycle_code=cycle_code, rendered=False,
+                reason="no crawl attached yet" if report["status"] == "not_scored" else report["status"],
+            )
+
+        continuation = (
+            _build_continuation(conn, source_lite_request_id)
+            if source_lite_request_id is not None else None
+        )
+
+    return FullAnalysisReportResponse(
+        cycle_code=cycle_code, rendered=True,
+        composite=report["pillars"]["composite"],
+        verdict=report["pillars"]["verdict"],
+        scorer_version=report["scorer_version"],
+        total_queries=report["total_queries"],
+        pillars=report["pillars"],
+        continuation=continuation,
+    )

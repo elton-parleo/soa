@@ -186,6 +186,29 @@ class LaunchCrawlResponse(BaseModel):
     cycle_id: int
     status: str
 
+# Phase 4: the render-gate response — GET /full-analysis/report/{code}.
+# `rendered=False` means "fall back to the classic MetricsDashboard for
+# this cycle" (no crawl attached, crawl not complete yet, or no primary
+# entity resolvable) — never a partial/degraded Full Analysis render.
+
+class FullAnalysisContinuation(BaseModel):
+    source_lite_request_id: int
+    audit_composite: Optional[int] = None
+    audit_verdict: Optional[str] = None
+    audit_date: Optional[str] = None
+    audit_platforms_note: str
+
+class FullAnalysisReportResponse(BaseModel):
+    cycle_code: str
+    rendered: bool
+    reason: Optional[str] = None
+    composite: Optional[int] = None
+    verdict: Optional[str] = None
+    scorer_version: Optional[str] = None
+    total_queries: Optional[int] = None
+    pillars: Optional[dict] = None
+    continuation: Optional[FullAnalysisContinuation] = None
+
 class QueryCreate(BaseModel):
     """Fields for creating a new query. query_code is auto-generated."""
     query_text:    str
