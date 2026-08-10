@@ -500,6 +500,33 @@ function Step2({ state, setState, onNext, onBack }) {
   const [genError, setGenError] = useState(null)
   const [genStatus, setGenStatus] = useState(null)
   const [lastGenerateArgs, setLastGenerateArgs] = useState(null)
+  // Guards api.getQueryRows against out-of-order responses. The
+  // "study just selected/generated" effect below fires an initial fetch
+  // immediately — for a freshly generated study that's still 0 rows,
+  // since the worker hasn't picked the job up yet. Under real network
+  // jitter that request can resolve AFTER the generation-complete
+  // refetch (issued seconds later, once polling reaches a terminal
+  // status) lands its real rows, silently clobbering the count back to
+  // 0 with stale data. Every fetch gets a ticket; a response only
+  // applies if its ticket is still the most recent one issued, so a
+  // late-arriving stale response is discarded instead of winning.
+  const queriesReqIdRef = useRef(0)
+
+  const refetchQueries = useCallback((studyTypeId) => {
+    const reqId = ++queriesReqIdRef.current
+    // api.getQueryRows (GET /studies/{type}/query-rows) returns the
+    // actual [{query_code, query_text, ...}] array this step renders.
+    // api.getStudyQueries (GET /studies/{type}/queries) is a DIFFERENT
+    // endpoint — a {study_type, total, by_pattern} count breakdown, not
+    // an array — using it here was the root cause of an earlier reset
+    // bug: .map()/.length on that object throws once queriesVisible
+    // flips true, and with no error boundary anywhere in this app, an
+    // uncaught render error unmounts the whole tree.
+    return api.getQueryRows(studyTypeId).then(rows => {
+      if (queriesReqIdRef.current !== reqId) return // superseded — discard
+      setState(s => ({ ...s, queries: Array.isArray(rows) ? rows : [] }))
+    })
+  }, [setState])
 
   useEffect(() => {
     api.getStudies().then(setStudies).catch(() => {})
@@ -507,17 +534,7 @@ function Step2({ state, setState, onNext, onBack }) {
 
   useEffect(() => {
     if (!state.studyType?.id) return
-    // api.getQueryRows (GET /studies/{type}/query-rows) returns the
-    // actual [{query_code, query_text, ...}] array this step renders.
-    // api.getStudyQueries (GET /studies/{type}/queries) is a DIFFERENT
-    // endpoint — a {study_type, total, by_pattern} count breakdown, not
-    // an array — using it here was the root cause of the reset bug:
-    // .map()/.length on that object throws once queriesVisible flips
-    // true, and with no error boundary anywhere in this app, an
-    // uncaught render error unmounts the whole tree.
-    api.getQueryRows(state.studyType.id)
-      .then(rows => setState(s => ({ ...s, queries: Array.isArray(rows) ? rows : [] })))
-      .catch(() => {})
+    refetchQueries(state.studyType.id).catch(() => {})
   }, [state.studyType?.id])
 
   // Poll a just-launched generation job — same 3s interval as
@@ -549,15 +566,15 @@ function Step2({ state, setState, onNext, onBack }) {
           // updated in the same commit as each batch's inserts), so no
           // new backend field is needed to detect this honestly.
           if (status.status === 'complete' && (status.created_count || 0) > 0) {
-            const [rows] = await Promise.all([
-              api.getQueryRows(studyTypeId),
+            await Promise.all([
+              refetchQueries(studyTypeId).catch(() => {}),
               // The new study only appears in /api/studies once it has
               // at least one committed Active query (that endpoint only
               // returns study_types with Active rows) — refetch now so
               // the dropdown's <option> list matches reality.
               api.getStudies().then(list => { if (!cancelled) setStudies(list) }).catch(() => {}),
             ])
-            if (!cancelled) setState(s => ({ ...s, queries: Array.isArray(rows) ? rows : [], queriesVisible: true }))
+            if (!cancelled) setState(s => ({ ...s, queriesVisible: true }))
           } else if (status.status === 'failed') {
             setGenError(status.error_message || 'Query generation failed.')
           } else {

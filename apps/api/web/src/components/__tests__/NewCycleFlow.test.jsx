@@ -246,6 +246,52 @@ describe('NewCycleFlow — inline study generation', () => {
     }
   })
 
+  it('a slow initial query-rows fetch does not clobber the terminal refetch (out-of-order response race)', async () => {
+    // Regression for "count stays 0 after a successful generation":
+    // the "study just generated" effect fires an initial getQueryRows
+    // the instant studyType.id is set — normally empty, since the
+    // worker hasn't run yet — and under real network jitter that
+    // request can resolve AFTER the generation-complete refetch lands
+    // its real rows, silently overwriting the count back to 0.
+    const NEW_ID = 'allbirds_full_analysis_9a4465'
+    api.generateStudy.mockResolvedValue({ study_type: NEW_ID, study_name: 'Allbirds Full Analysis', job_id: 1, status: 'pending' })
+    api.getGenerationStatus
+      .mockResolvedValueOnce({ study_type: NEW_ID, status: 'running', target_count: 50, created_count: 0 })
+      .mockResolvedValueOnce({ study_type: NEW_ID, status: 'complete', target_count: 50, created_count: 50 })
+    api.getStudies.mockResolvedValue([STUDY])
+
+    let resolveInitialFetch
+    const initialFetch = new Promise(resolve => { resolveInitialFetch = resolve })
+    api.getQueryRows
+      .mockReturnValueOnce(initialFetch) // the "just selected/generated" effect's fetch — stays pending
+      .mockResolvedValueOnce([ // the generation-complete refetch — resolves normally
+        { query_code: 'ALL_001', query_text: 'Best sustainable sneakers?' },
+      ])
+
+    await goToStep2AndOpenGenerateForm()
+
+    vi.useFakeTimers()
+    try {
+      fireEvent.click(screen.getByText('Generate'))
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(POLL_MS) // poll 1: running
+      await vi.advanceTimersByTimeAsync(POLL_MS) // poll 2: complete — real rows land
+
+      expect(screen.getByText(/1 query in this study/)).toBeInTheDocument()
+      expect(screen.getByText('Next: Review & Launch →')).not.toBeDisabled()
+
+      // The slow initial fetch FINALLY resolves, late, with stale empty
+      // data — it must be discarded, not applied.
+      resolveInitialFetch([])
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(screen.getByText(/1 query in this study/)).toBeInTheDocument()
+      expect(screen.getByText('Next: Review & Launch →')).not.toBeDisabled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('a failed generation status renders a notice with retry, without resetting study type or depth', async () => {
     const NEW_ID = 'allbirds_full_analysis_9a4465'
     api.generateStudy.mockResolvedValue({ study_type: NEW_ID, study_name: 'Allbirds Full Analysis', job_id: 1, status: 'pending' })
