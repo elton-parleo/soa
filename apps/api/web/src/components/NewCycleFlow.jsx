@@ -629,7 +629,12 @@ function Step2({ state, setState, onNext, onBack }) {
   }
 
   const depthPreset = DEPTH_PRESETS.find(d => d.id === state.depth) || DEPTH_PRESETS[0]
-  const isValid = !!state.studyType?.id
+  // Next requires a COMMITTED study selection with real, fetched query
+  // rows behind it — never just an id in state (a freshly generated
+  // study starts with studyType.id set and queries: [] until generation
+  // actually finishes) and never while generation is still in flight,
+  // mirroring Step1's "validation reads stored state" rule.
+  const isValid = !!state.studyType?.id && state.queries.length > 0 && !genLoading
 
   return (
     <div style={{ padding: 32, maxWidth: 720 }}>
@@ -642,7 +647,12 @@ function Step2({ state, setState, onNext, onBack }) {
           value={state.studyType?.id || ''}
           onChange={e => {
             const st = studies.find(s => s.id === e.target.value)
-            setState(s => ({ ...s, studyType: st || null, queriesVisible: false }))
+            // Clear the previous study's queries immediately — without
+            // this, switching studies leaves the OLD study's count/rows
+            // in state until the refetch resolves, which can both
+            // misrepresent the newly selected study and let Next enable
+            // on stale data for a split second.
+            setState(s => ({ ...s, studyType: st || null, queries: [], queriesVisible: false }))
           }}
           style={{ width: '100%', padding: '10px 12px', border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
         >
@@ -820,7 +830,12 @@ function Step3({ state, setState, onBack, onLaunched }) {
     checkAvailability(clean)
   }
 
-  const isValid = state.cycleCode && availability === 'available' && !!state.studyType?.id && !!state.primaryEntity
+  // Defense in depth, not the primary gate: Step2's own Next button
+  // already requires a committed study with queries.length > 0 before
+  // this step is reachable, but a direct-navigation path arriving here
+  // some other way must not be able to launch with a study id and no
+  // actual queries behind it.
+  const isValid = state.cycleCode && availability === 'available' && !!state.studyType?.id && !!state.primaryEntity && state.queries.length > 0
 
   const handleLaunch = async () => {
     setLaunchError(null)

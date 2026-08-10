@@ -230,8 +230,12 @@ describe('NewCycleFlow — inline study generation', () => {
       // Synthesized into the list immediately — the <select> shows the
       // new study selected right away, never an orphan/blank value.
       expect(screen.getByRole('combobox')).toHaveValue(NEW_ID)
+      // Generation is in flight — a study id is set, but no queries
+      // exist yet, so Next must stay disabled.
+      expect(screen.getByText('Next: Review & Launch →')).toBeDisabled()
 
       await vi.advanceTimersByTimeAsync(POLL_MS) // poll 1: running
+      expect(screen.getByText('Next: Review & Launch →')).toBeDisabled()
       await vi.advanceTimersByTimeAsync(POLL_MS) // poll 2: complete
 
       expect(screen.getByText(/2 queries in this study/)).toBeInTheDocument()
@@ -298,6 +302,11 @@ describe('NewCycleFlow — inline study generation', () => {
     api.getGenerationStatus.mockResolvedValueOnce({
       study_type: NEW_ID, status: 'failed', target_count: 50, created_count: 0, error_message: 'OpenAI request timed out',
     })
+    // A brand-new study genuinely has zero queries until generation
+    // succeeds — overrides the shared beforeEach default (which models
+    // an existing, already-populated study) so this test's "zero
+    // queries, Next disabled" assertion reflects a real failed job.
+    api.getQueryRows.mockResolvedValue([])
 
     await goToStep2()
     // Pick Deep before generating — must survive the failure untouched.
@@ -319,6 +328,9 @@ describe('NewCycleFlow — inline study generation', () => {
       // to Standard.
       expect(screen.getByRole('combobox')).toHaveValue(NEW_ID)
       expect(screen.getByText('Deep').parentElement).toHaveStyle({ borderColor: 'rgb(13, 24, 41)' })
+      // A failed generation produced zero queries — Next must stay
+      // disabled, never enabled off a bare studyType id.
+      expect(screen.getByText('Next: Review & Launch →')).toBeDisabled()
     } finally {
       vi.useRealTimers()
     }
@@ -378,6 +390,42 @@ describe('NewCycleFlow — inline study generation', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('NewCycleFlow — Step 2 Next gating', () => {
+  it('Next is disabled until a study is selected', async () => {
+    await goToStep2()
+    expect(screen.getByText('Next: Review & Launch →')).toBeDisabled()
+  })
+
+  it('regression: selecting an EXISTING study (no inline generation) still fetches its queries and enables Next', async () => {
+    await goToStep2()
+    const select = screen.getByRole('combobox')
+    fireEvent.change(select, { target: { value: STUDY.id } })
+
+    await waitFor(() => expect(screen.getByText(/1 query in this study/)).toBeInTheDocument())
+    expect(screen.getByText('Next: Review & Launch →')).not.toBeDisabled()
+  })
+
+  it('switching from a study with queries to one that resolves empty clears the stale count and disables Next again', async () => {
+    api.getStudies.mockResolvedValue([STUDY, { id: 'retailer_target', name: 'Target Retail' }])
+    api.getQueryRows
+      .mockResolvedValueOnce([{ query_code: 'Q1', query_text: 'Best beauty retailer?' }]) // Sephora
+      .mockResolvedValueOnce([]) // Target — genuinely no queries yet
+
+    await goToStep2()
+    const select = screen.getByRole('combobox')
+    fireEvent.change(select, { target: { value: STUDY.id } })
+    await waitFor(() => expect(screen.getByText('Next: Review & Launch →')).not.toBeDisabled())
+
+    fireEvent.change(select, { target: { value: 'retailer_target' } })
+    // Cleared immediately — never left showing Sephora's stale count/
+    // enabling Next for a study that hasn't confirmed it has queries.
+    expect(screen.getByText('Next: Review & Launch →')).toBeDisabled()
+
+    await waitFor(() => expect(screen.getByText(/0 queries in this study/)).toBeInTheDocument())
+    expect(screen.getByText('Next: Review & Launch →')).toBeDisabled()
   })
 })
 
