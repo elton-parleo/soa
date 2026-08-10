@@ -50,7 +50,7 @@ def _stage_counts(rows):
 
 def test_perfect_distribution_needs_no_retry():
     with patch("generation.query_generator._call_openai_and_validate") as mock_call:
-        mock_call.return_value = _perfect_batch()
+        mock_call.return_value = (_perfect_batch(), None)
         rows = generate_lite_queries("Acme", ["Rival"], api_key="k")
 
     assert mock_call.call_count == 1
@@ -66,7 +66,7 @@ def test_excess_rows_for_a_stage_are_capped_not_overcounted():
     ]
 
     with patch("generation.query_generator._call_openai_and_validate") as mock_call:
-        mock_call.return_value = batch
+        mock_call.return_value = (batch, None)
         rows = generate_lite_queries("Acme", [], api_key="k")
 
     assert mock_call.call_count == 1
@@ -82,7 +82,7 @@ def test_shortfall_then_successful_retry():
     retry_batch = [_row("Awareness", "-retry")]
 
     with patch("generation.query_generator._call_openai_and_validate") as mock_call:
-        mock_call.side_effect = [first_batch, retry_batch]
+        mock_call.side_effect = [(first_batch, None), (retry_batch, None)]
         rows = generate_lite_queries("Acme", ["Rival"], api_key="k")
 
     assert mock_call.call_count == 2
@@ -102,7 +102,7 @@ def test_shortfall_persists_after_retry_raises():
     retry_batch = []  # still short
 
     with patch("generation.query_generator._call_openai_and_validate") as mock_call:
-        mock_call.side_effect = [first_batch, retry_batch]
+        mock_call.side_effect = [(first_batch, None), (retry_batch, None)]
         with pytest.raises(LiteGenerationError):
             generate_lite_queries("Acme", ["Rival"], api_key="k")
 
@@ -119,6 +119,6 @@ def test_partial_retry_success_still_raises_if_short():
     retry_batch = [_row("Comparison", "-retry")]
 
     with patch("generation.query_generator._call_openai_and_validate") as mock_call:
-        mock_call.side_effect = [first_batch, retry_batch]
+        mock_call.side_effect = [(first_batch, None), (retry_batch, None)]
         with pytest.raises(LiteGenerationError, match="Comparison"):
             generate_lite_queries("Acme", ["Rival"], api_key="k")

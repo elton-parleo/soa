@@ -15,6 +15,7 @@ generated.
 
 import json
 import logging
+from typing import Optional
 from openai import OpenAI
 from soa_shared.constants import QUERY_CONSTRAINTS, QUERY_STAGES
 from soa_shared.scan_dimensions import LITE_QUERIES_PER_STAGE
@@ -22,6 +23,27 @@ from soa_shared.scan_dimensions import LITE_QUERIES_PER_STAGE
 log = logging.getLogger(__name__)
 
 BATCH_SIZE = 10
+
+# QUERY_CONSTRAINTS fields the DB allows NULL for (soa_queries.<field>.
+# nullable=True) — absent/None from a generated row means "unconstrained,"
+# not invalid, same skip-when-None convention app/routers/studies.py::
+# _validate_csv_row already applies. Every OTHER QUERY_CONSTRAINTS field
+# is NOT NULL in the schema, so a new field added there defaults to
+# strict (must match exactly) unless explicitly added here — deliberately
+# not derived from the model automatically, so adding a new constrained
+# field forces a conscious choice between "add it to the generation
+# prompt" and "it's fine unconstrained," not a silent default either way.
+#
+# subscription_state: an opt-in, feature-flagged (config.
+# ELIGIBILITY_CONDITIONING_ENABLED, default off) persona eligibility
+# signal for subscribe-and-save studies — see soa_models.py's column
+# comment ("Null = unconstrained") and constants.py's QUERY_
+# SUBSCRIPTION_STATES docstring. The general generation prompt
+# (_build_prompt) never asks for it — only curated/seeded studies and
+# the SoA Lite prompt (_build_lite_prompt) populate it deliberately —
+# so treating an absent value as invalid rejected 100% of every
+# generally-generated row deterministically, not from any LLM flakiness.
+_NULLABLE_CONSTRAINED_FIELDS = {'subscription_state'}
 
 
 class LiteGenerationError(Exception):
@@ -67,14 +89,19 @@ No markdown, no explanation, just the JSON array.{avoid_text}"""
 
 def _validate_generated_row(row: dict) -> tuple:
     """
-    Checks constrained fields against QUERY_CONSTRAINTS.
-    Returns (cleaned_row, errors). errors is empty if the row is valid.
+    Checks constrained fields against QUERY_CONSTRAINTS. A field in
+    _NULLABLE_CONSTRAINED_FIELDS is skipped (no error) when absent — the
+    DB itself treats it as valid, and not every generation prompt asks
+    for it. Every other constrained field must still match exactly.
+
+    Returns (cleaned_row, errors) — errors is a list of (field, message)
+    tuples, empty if the row is valid.
     """
     errors = []
 
     query_text = (row.get('query_text') or '').strip()
     if not query_text:
-        errors.append('query_text is empty')
+        errors.append(('query_text', 'query_text is empty'))
 
     cleaned = {
         'query_text': query_text,
@@ -84,21 +111,56 @@ def _validate_generated_row(row: dict) -> tuple:
 
     for field, allowed in QUERY_CONSTRAINTS.items():
         val = row.get(field)
+        if val is None and field in _NULLABLE_CONSTRAINED_FIELDS:
+            cleaned[field] = None
+            continue
         if val not in allowed:
             errors.append(
-                f"{field}={val!r} not in allowed values"
+                (field, f"{field}={val!r} not in allowed values")
             )
         cleaned[field] = val
 
     return cleaned, errors
 
 
-def _call_openai_and_validate(prompt: str, api_key: str) -> list:
+def _deterministic_failure_reason(row_errors: list, total_rows: int) -> Optional[str]:
+    """
+    row_errors: one entry per row that failed validation (rows that
+    passed aren't included), each a list of (field, message) tuples from
+    _validate_generated_row.
+
+    Returns a human-readable reason when EVERY row in the batch failed
+    validation and they all share at least one common failing field —
+    a deterministic prompt/schema mismatch (that field is never in the
+    model's output at all), not per-row LLM noise, so retrying the exact
+    same request would just reproduce the identical 100% failure. None
+    otherwise (a real retry is worth attempting).
+    """
+    if not row_errors or len(row_errors) < total_rows:
+        return None
+    fields_per_row = [{field for field, _ in errors} for errors in row_errors]
+    common_fields = set.intersection(*fields_per_row)
+    if not common_fields:
+        return None
+    return (
+        f"Every generated row failed validation on the same field(s): "
+        f"{', '.join(sorted(common_fields))} — this looks like a prompt/schema "
+        f"mismatch, not a one-off model error; retrying would not help."
+    )
+
+
+def _call_openai_and_validate(prompt: str, api_key: str) -> tuple:
     """
     Calls OpenAI with a fully-built prompt, parses the JSON response, and
     validates each row via _validate_generated_row.
-    Returns a list of validated, cleaned row dicts. Invalid rows and
-    unparseable responses are logged and skipped — does not raise.
+
+    Returns (valid_rows, deterministic_failure_reason). valid_rows is a
+    list of validated, cleaned row dicts (invalid rows are logged and
+    skipped, never raised). deterministic_failure_reason is set (and
+    valid_rows is []) only when every row in a non-empty batch failed
+    validation on the same field — see _deterministic_failure_reason;
+    None in every other case, including "nothing parsed at all" (that's
+    LLM-response noise, still worth a caller's retry).
     """
     client = OpenAI(api_key=api_key)
 
@@ -120,7 +182,7 @@ def _call_openai_and_validate(prompt: str, api_key: str) -> list:
     except json.JSONDecodeError as e:
         log.error(f"Failed to parse OpenAI response as JSON: {e}")
         log.error(f"Raw content: {content[:500]}")
-        return []
+        return [], None
 
     # Handle both raw array and {"questions": [...]} shapes
     if isinstance(parsed, dict):
@@ -131,17 +193,25 @@ def _call_openai_and_validate(prompt: str, api_key: str) -> list:
 
     if not isinstance(parsed, list):
         log.error(f"Expected JSON array, got: {type(parsed)}")
-        return []
+        return [], None
 
     valid_rows = []
+    row_errors = []
     for row in parsed:
         cleaned, errors = _validate_generated_row(row)
         if errors:
             log.warning(f"Skipping invalid generated row: {errors} — row={row}")
+            row_errors.append(errors)
             continue
         valid_rows.append(cleaned)
 
-    return valid_rows
+    if not valid_rows and parsed:
+        reason = _deterministic_failure_reason(row_errors, len(parsed))
+        if reason:
+            log.error(f"Deterministic generation failure: {reason}")
+            return [], reason
+
+    return valid_rows, None
 
 
 def generate_query_batch(
@@ -150,11 +220,13 @@ def generate_query_batch(
     batch_size: int,
     already_generated: list,
     api_key: str,
-) -> list:
+) -> tuple:
     """
     Calls OpenAI to generate one batch of queries.
-    Returns a list of validated, cleaned row dicts.
-    Invalid rows are skipped and logged — does not raise.
+    Returns (valid_rows, deterministic_failure_reason) — see
+    _call_openai_and_validate. Invalid rows are skipped and logged, never
+    raised; a non-None reason means every row failed for the same
+    field(s) and the caller should not blindly retry.
     """
     prompt = _build_prompt(study_name, description, batch_size, already_generated)
     return _call_openai_and_validate(prompt, api_key)
@@ -250,9 +322,17 @@ def generate_lite_queries(
             if len(bucket) < LITE_QUERIES_PER_STAGE
         }
 
+    # _call_openai_and_validate's deterministic_failure_reason isn't
+    # separately branched on here — the lite prompt already asks for
+    # every QUERY_CONSTRAINTS field explicitly (including
+    # subscription_state), and the existing shortfall-retry below
+    # already sends a DIFFERENT, narrower targeted prompt rather than
+    # blindly repeating the same request, so it isn't the "retrying
+    # would not help" case that reason exists to short-circuit.
     initial_counts = {stage: LITE_QUERIES_PER_STAGE for stage in QUERY_STAGES}
     prompt = _build_lite_prompt(brand_name, competitor_names, initial_counts, [])
-    _bucket(_call_openai_and_validate(prompt, api_key))
+    rows, _reason = _call_openai_and_validate(prompt, api_key)
+    _bucket(rows)
 
     shortfall = _shortfall()
     if shortfall:
@@ -260,7 +340,8 @@ def generate_lite_queries(
         retry_prompt = _build_lite_prompt(
             brand_name, competitor_names, shortfall, _already_generated(),
         )
-        _bucket(_call_openai_and_validate(retry_prompt, api_key))
+        retry_rows, _reason = _call_openai_and_validate(retry_prompt, api_key)
+        _bucket(retry_rows)
 
     shortfall = _shortfall()
     if shortfall:

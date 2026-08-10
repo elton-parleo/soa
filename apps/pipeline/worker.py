@@ -290,7 +290,7 @@ def process_generation_jobs():
             remaining = target_count - created_count
             batch_size = min(BATCH_SIZE, remaining)
 
-            rows = generate_query_batch(
+            rows, det_reason = generate_query_batch(
                 study_name=study_name,
                 description=description,
                 batch_size=batch_size,
@@ -298,17 +298,33 @@ def process_generation_jobs():
                 api_key=api_key,
             )
 
+            if det_reason:
+                # Every row in this batch failed validation on the same
+                # field(s) — a prompt/schema mismatch, not one-off model
+                # noise. Retrying would reproduce the identical 100%
+                # failure, so fail the job now instead of wasting a
+                # second OpenAI call and eventually "completing" with 0
+                # queries (see the created_count==0 guard below, which
+                # this path skips entirely by returning early).
+                log.error(f"[generation] job {job_id}: {det_reason}")
+                _mark_generation_failed(job_id, det_reason)
+                return
+
             if not rows:
                 log.warning(
                     f"[generation] job {job_id}: batch returned 0 valid rows — retrying once"
                 )
-                rows = generate_query_batch(
+                rows, det_reason = generate_query_batch(
                     study_name=study_name,
                     description=description,
                     batch_size=batch_size,
                     already_generated=generated_texts,
                     api_key=api_key,
                 )
+                if det_reason:
+                    log.error(f"[generation] job {job_id}: {det_reason}")
+                    _mark_generation_failed(job_id, det_reason)
+                    return
                 if not rows:
                     log.error(
                         f"[generation] job {job_id}: second attempt also 0 rows — stopping early"
@@ -329,6 +345,17 @@ def process_generation_jobs():
                 conn.commit()
 
             log.info(f"[generation] job {job_id}: {created_count}/{target_count}")
+
+        if created_count == 0:
+            # Reached here only via the "stopping early" break above (no
+            # deterministic reason, but two attempts still produced
+            # nothing usable) — an honest failure, never a "complete: 0
+            # queries" the frontend would otherwise render as a normal,
+            # if oddly empty, study.
+            _mark_generation_failed(
+                job_id, "Generation produced no usable queries after retrying.",
+            )
+            return
 
         # Mark complete
         with engine.connect() as conn:
