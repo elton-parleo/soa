@@ -1617,6 +1617,10 @@ class SoaLiteScanResult(Base):
             "status IN ('pending','running','complete','blocked','failed','skipped')",
             name="ck_soa_lite_scan_results_status",
         ),
+        CheckConstraint(
+            "lite_request_id IS NOT NULL OR cycle_id IS NOT NULL",
+            name="ck_soa_lite_scan_results_owned",
+        ),
         UniqueConstraint(
             "lite_request_id",
             name="uq_soa_lite_scan_results_lite_request_id",
@@ -1628,9 +1632,15 @@ class SoaLiteScanResult(Base):
     lite_request_id = Column(
         Integer,
         ForeignKey("soa_lite_requests.id"),
-        nullable=False,
+        nullable=True,
         unique=True,
         index=True,
+        comment=(
+            "Null for a Full-Analysis-launched crawl with no owning lite "
+            "request (cycle_id is set instead) — see "
+            "ck_soa_lite_scan_results_owned. Always set for the lite path's "
+            "own scan, exactly as before this column became nullable."
+        ),
     )
 
     cycle_id = Column(

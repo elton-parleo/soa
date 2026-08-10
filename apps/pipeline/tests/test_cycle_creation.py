@@ -22,6 +22,7 @@ def conn():
                 total_runs_planned INTEGER, completed_runs INTEGER, start_date DATE,
                 notes TEXT, platforms TEXT, runs_per_query INTEGER,
                 organization_id INTEGER, created_by TEXT,
+                source_lite_request_id INTEGER, study_series_id TEXT, prior_cycle_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)

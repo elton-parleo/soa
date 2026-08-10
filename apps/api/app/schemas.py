@@ -89,6 +89,13 @@ class CreateCycleRequest(BaseModel):
     # non-member baseline. Ignored for cycle_mode='query'.
     truecost_tiers: Optional[List[Optional[str]]] = None
 
+    # Full Analysis coexistence (Phase 2): set only by NewCycleFlow, never
+    # by the classic NewCycleWizard. All three default None — an ordinary
+    # cycle created the classic way stamps NULL on all of them, unchanged.
+    source_lite_request_id: Optional[int] = None
+    study_series_id: Optional[str] = None
+    prior_cycle_id: Optional[int] = None
+
     @field_validator("cycle_mode")
     @classmethod
     def validate_cycle_mode(cls, v):
@@ -133,6 +140,51 @@ class CycleStatusResponse(BaseModel):
 class CycleCheckResponse(BaseModel):
     available: bool
     cycle_code: str
+
+# ─── Full Analysis coexistence, Phase 2: NewCycleFlow's own small,
+# additive endpoints — continuation-mode audit resolve, competitor
+# auto-suggestion, and crawl launch. See app/routers/full_analysis.py.
+
+class AuditCompetitor(BaseModel):
+    name: str
+    entity_id: Optional[int] = None
+    domain: Optional[str] = None
+
+class AuditContinuationResponse(BaseModel):
+    lite_request_id: int
+    cycle_id: Optional[int] = None
+    brand_name: str
+    brand_entity_id: Optional[int] = None
+    category: Optional[str] = None
+    competitors: List[AuditCompetitor] = []
+    composite: Optional[int] = None
+    verdict: Optional[str] = None
+    audited_at: Optional[str] = None
+    store_url: Optional[str] = None
+    store_domain: Optional[str] = None
+
+class SuggestCompetitorsRequest(BaseModel):
+    brand_name: str
+    store_url: Optional[str] = None
+    category_hint: Optional[str] = None
+    manual_names: Optional[List[str]] = None
+
+class SuggestedCompetitor(BaseModel):
+    name: str
+    domain: Optional[str] = None
+
+class SuggestCompetitorsResponse(BaseModel):
+    competitors: List[SuggestedCompetitor]
+    source: str  # 'generated' | 'manual' | 'mixed' | 'none' — see competitor_suggestion.select_competitors
+
+class LaunchCrawlRequest(BaseModel):
+    cycle_id: int
+    store_url: str
+
+class LaunchCrawlResponse(BaseModel):
+    scan_id: int
+    cycle_id: int
+    status: str
 
 class QueryCreate(BaseModel):
     """Fields for creating a new query. query_code is auto-generated."""

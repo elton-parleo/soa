@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from app.routers import studies, entities, cycles, metrics, scope, actions, public_lite, public_demo
+from app.routers import studies, entities, cycles, metrics, scope, actions, full_analysis, public_lite, public_demo
 from app.auth import verify_token
 
 app = FastAPI(
@@ -76,6 +76,11 @@ app.include_router(
 )
 app.include_router(
     actions.router,
+    prefix="/api",
+    dependencies=[Depends(verify_token)],
+)
+app.include_router(
+    full_analysis.router,
     prefix="/api",
     dependencies=[Depends(verify_token)],
 )
