@@ -31,6 +31,8 @@ import { LandingFooter } from './landing/LandingFooter.jsx'
 import { PUBLIC_AUDIT_BASE_URL } from './publicUrls.js'
 import { LANDING_META_TITLE, LANDING_META_DESCRIPTION, OG_IMAGE_URL } from './landingMeta.js'
 import { upsertMeta, upsertLink, restoreOrRemove } from './headMeta.js'
+import { track, captureSrcParam } from './analytics.js'
+import { EVENTS } from './analyticsEvents.js'
 
 function writeSession(key, value) {
   try {
@@ -97,8 +99,21 @@ function usePrefillUrlFromQuery() {
   return prefillUrl
 }
 
+// Part 3c: landing_viewed.src mirrors captureSrcParam() (analytics.js)
+// — the same ?src= read-store-strip mechanism the report page uses for
+// ?src=email, here covering any future campaign link. Fires once per
+// mount; absent a src param this session, captureSrcParam() itself
+// resolves to 'direct'.
+function useLandingViewedTracking() {
+  useEffect(() => {
+    track(EVENTS.LANDING_VIEWED, { src: captureSrcParam() })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+}
+
 export default function LandingPage({ navigate }) {
   useLandingMeta()
+  useLandingViewedTracking()
   const prefillUrl = usePrefillUrlFromQuery()
 
   function handleSubmitted(token, { storeUrl } = {}) {

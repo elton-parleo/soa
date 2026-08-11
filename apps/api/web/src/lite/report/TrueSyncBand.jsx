@@ -1,6 +1,8 @@
 import { Container, MonoTag, Button, RequestFormModal } from '../../ds/index.js'
 import { TRUESYNC_BAND_COPY } from './reportContent.js'
 import { useDemoRequestModal } from '../useDemoRequestModal.js'
+import { track } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
 
 export function TrueSyncBand({ points, brandName, reportToken }) {
   const demoModal = useDemoRequestModal({ brandName, reportToken })
@@ -18,7 +20,7 @@ export function TrueSyncBand({ points, brandName, reportToken }) {
               </div>
             )}
           </div>
-          <Button variant="blue" arrow onClick={() => demoModal.open('truesync')}>Talk to us about TrueSync</Button>
+          <Button variant="blue" arrow onClick={() => { track(EVENTS.CTA_CLICKED, { cta: 'truesync', placement: 'truesync_band' }); demoModal.open('truesync') }}>Talk to us about TrueSync</Button>
         </div>
       </Container>
       {demoModal.cta && (

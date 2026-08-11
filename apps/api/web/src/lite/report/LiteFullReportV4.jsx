@@ -5,7 +5,7 @@
  * rendering exactly as it always has rather than hitting a half-shaped
  * V4 layout built for a payload it never had.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import '../theme.css'
 import { DegradedRunBanner } from '../DegradedRunBanner.jsx'
 import { computeExposure, seedAnnualRevenue } from '../liteDerive.js'
@@ -26,8 +26,11 @@ import { ExposureSection } from './ExposureSection.jsx'
 import { ClosingFork } from './ClosingFork.jsx'
 import { ReportGrounded } from './ReportGrounded.jsx'
 import { ReportFooter } from './ReportFooter.jsx'
-import { useReportSections } from './useReportSections.js'
-import { deriveScoreHeroHeadline, isPartialRead } from './reportDerive.js'
+import { useReportSections, NAV_IDS } from './useReportSections.js'
+import { deriveScoreHeroHeadline, isPartialRead, deriveReportViewedState } from './reportDerive.js'
+import { track, identifyReport, captureSrcParam, isTokenOwned } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
+import { useSectionViewTracking } from './useSectionViewTracking.js'
 
 const DEFAULT_REVENUE = 12_000_000
 const DEFAULT_AI_SHARE_PCT = 20
@@ -59,6 +62,20 @@ export function LiteFullReportV4({ report, token }) {
   const partial = isPartialRead(report.pillars, report.scan?.degraded_reason)
 
   const primaryEntityName = primaryEntity?.name || 'Your brand'
+
+  useEffect(() => {
+    identifyReport(token)
+    track(EVENTS.REPORT_VIEWED, {
+      state: deriveReportViewedState(report.pillars, report.scan?.degraded_reason),
+      viewer: isTokenOwned(token) ? 'owner' : 'visitor',
+      src: captureSrcParam(),
+    })
+    // Fires once per mount only — a token/report change means a
+    // genuinely different report page, not a re-render of this one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
+
+  useSectionViewTracking(NAV_IDS)
 
   return (
     <div className="grain-overlay lite-report-shell" style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '222px 1fr' }}>

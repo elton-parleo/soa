@@ -13,6 +13,12 @@ import '@testing-library/jest-dom'
 
 import { ShareReportButton } from '../ShareReportButton.jsx'
 import { PUBLIC_AUDIT_BASE_URL } from '../../publicUrls.js'
+import { track } from '../../analytics.js'
+import { EVENTS } from '../../analyticsEvents.js'
+
+vi.mock('../../analytics.js', () => ({
+  track: vi.fn(),
+}))
 
 const TOKEN = 'tok-abc123'
 const CANONICAL_URL = `${PUBLIC_AUDIT_BASE_URL}/r/${TOKEN}`
@@ -39,6 +45,7 @@ afterEach(() => {
   vi.useRealTimers()
   removeClipboard()
   delete document.execCommand
+  track.mockClear()
 })
 
 describe('ShareReportButton — copies the canonical URL', () => {
@@ -52,6 +59,7 @@ describe('ShareReportButton — copies the canonical URL', () => {
 
     expect(writeText).toHaveBeenCalledWith(CANONICAL_URL)
     expect(writeText.mock.calls[0][0]).not.toMatch(/[?#]/)
+    expect(writeText.mock.calls[0][0]).not.toContain('src=')
   })
 
   it('never window.location.href — different token than the current page still copies the token it was given', async () => {
@@ -200,5 +208,29 @@ describe('ShareReportButton — compact variant', () => {
   it('meets the 44px hit area via the same className the sticky bar\'s Sections button uses', () => {
     const { container } = render(<ShareReportButton token={TOKEN} compact />)
     expect(container.querySelector('button').className).toContain('lite-report-mobile-sections-btn')
+  })
+})
+
+describe('ShareReportButton — share_copied fires with the placement prop', () => {
+  it.each(['desktop_rail', 'mobile_summary', 'mobile_sticky_bar'])('placement=%s', async (placement) => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    mockClipboard(writeText)
+
+    const { getByRole } = render(<ShareReportButton token={TOKEN} placement={placement} />)
+    fireEvent.click(getByRole('button', { name: 'Share report' }))
+    await flushMicrotasks()
+
+    expect(track).toHaveBeenCalledWith(EVENTS.SHARE_COPIED, { placement })
+  })
+
+  it('does not fire on the fallback read-only-input path (no successful copy)', async () => {
+    removeClipboard()
+    document.execCommand = vi.fn(() => false)
+
+    const { getByRole } = render(<ShareReportButton token={TOKEN} placement="desktop_rail" />)
+    fireEvent.click(getByRole('button', { name: 'Share report' }))
+    await flushMicrotasks()
+
+    expect(track).not.toHaveBeenCalled()
   })
 })

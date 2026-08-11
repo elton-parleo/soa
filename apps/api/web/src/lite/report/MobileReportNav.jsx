@@ -50,7 +50,7 @@ export function ReportSummaryBlock({ report, primaryEntityName, summaryRef, toke
       </div>
       {token && (
         <div style={{ marginTop: 14 }}>
-          <ShareReportButton token={token} />
+          <ShareReportButton token={token} placement="mobile_summary" />
         </div>
       )}
     </div>
@@ -83,7 +83,7 @@ export function MobileStickyBar({ report, primaryEntityName, visible, sheetOpen,
       <span className="num lite-report-mobile-stickybar-score">
         {composite != null ? Math.round(composite) : '—'}<span className="lite-report-mobile-stickybar-score-max">/100</span>
       </span>
-      {token && <ShareReportButton token={token} compact />}
+      {token && <ShareReportButton token={token} compact placement="mobile_sticky_bar" />}
       <button
         type="button"
         className="lite-report-mobile-sections-btn"

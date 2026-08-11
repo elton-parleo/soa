@@ -5,9 +5,16 @@ import '@testing-library/jest-dom'
 
 import { LiteForm } from '../LiteForm.jsx'
 import { liteApi } from '../liteApi.js'
+import { track } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
 
 vi.mock('../liteApi.js', () => ({
   liteApi: { submit: vi.fn() },
+}))
+
+vi.mock('../analytics.js', () => ({
+  track: vi.fn(),
+  recordOwnedToken: vi.fn(),
 }))
 
 beforeEach(() => {
@@ -23,6 +30,7 @@ describe('LiteForm — brand-only mode', () => {
 
     await waitFor(() => expect(screen.getByText(/2-80 characters/)).toBeInTheDocument())
     expect(liteApi.submit).not.toHaveBeenCalled()
+    expect(track).not.toHaveBeenCalled()
   })
 
   it('rejects a competitor matching the brand name', async () => {
@@ -52,6 +60,7 @@ describe('LiteForm — brand-only mode', () => {
       competitor_names: ['Rival Co'],
       captcha_token: expect.any(String),
     })
+    expect(track).toHaveBeenCalledWith(EVENTS.AUDIT_SUBMITTED, {})
   })
 
   it('shows a rate-limit message on 429', async () => {

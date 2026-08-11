@@ -7,6 +7,8 @@
  */
 import { LiteForm } from '../LiteForm.jsx'
 import { SAMPLE_REPORT_URL } from './landingSampleContent.js'
+import { track } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
 
 export function FinalCta({ onSubmitted }) {
   return (
@@ -17,7 +19,7 @@ export function FinalCta({ onSubmitted }) {
           <LiteForm onSubmitted={onSubmitted} compact inv submitLabel="Run my free audit" placeholder="yourstore.com" />
         </div>
         <div style={{ fontSize: 13, color: 'var(--dark-muted)', marginTop: 16 }}>
-          Free, no email to start, ready in 10–20 minutes, <a href={SAMPLE_REPORT_URL} style={{ color: 'var(--blue-lite)', fontWeight: 530 }}>see a sample first</a>
+          Free, no email to start, ready in 10–20 minutes, <a href={SAMPLE_REPORT_URL} onClick={() => track(EVENTS.SAMPLE_REPORT_CLICKED, { placement: 'final_cta' })} style={{ color: 'var(--blue-lite)', fontWeight: 530 }}>see a sample first</a>
         </div>
       </div>
     </section>

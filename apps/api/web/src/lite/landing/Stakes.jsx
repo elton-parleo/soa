@@ -16,15 +16,27 @@
  * mock's low-high band (that came from AGENT_DISCOVERY_RANGE, dropped
  * along with the rest of the unimplemented model).
  */
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { DarkPanel, StatusChip, Button } from '../../ds/index.js'
 import { computeExposure, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX, AI_SHARE_SLIDER_MIN, AI_SHARE_SLIDER_MAX, AI_SHARE_DEFAULT_PCT, formatCurrency } from '../liteDerive.js'
+import { track } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
 
 const DEFAULT_REVENUE = 20_000_000
 
 export function Stakes() {
   const [revenue, setRevenue] = useState(DEFAULT_REVENUE)
   const [aiSharePct, setAiSharePct] = useState(AI_SHARE_DEFAULT_PCT)
+  // Stakes is a static landing section — mounted once for the page's
+  // whole session, never conditionally unmounted — so this ref is
+  // "once per session" in practice, and a range input's onChange
+  // fires on every tick while dragging, not just once, hence the guard.
+  const interactedRef = useRef(false)
+  function trackFirstInteraction() {
+    if (interactedRef.current) return
+    interactedRef.current = true
+    track(EVENTS.ESTIMATOR_INTERACTED, {})
+  }
 
   const exposure = computeExposure({ revenue, aiSharePct, visibility: 0 })
 
@@ -45,7 +57,7 @@ export function Stakes() {
                 max={REVENUE_SLIDER_MAX}
                 step={REVENUE_SLIDER_MIN}
                 value={revenue}
-                onChange={(e) => setRevenue(+e.target.value)}
+                onChange={(e) => { setRevenue(+e.target.value); trackFirstInteraction() }}
                 aria-label="Annual online revenue"
                 style={{ width: '100%', marginTop: 14, accentColor: 'var(--dark-text)' }}
               />
@@ -60,7 +72,7 @@ export function Stakes() {
                 min={AI_SHARE_SLIDER_MIN}
                 max={AI_SHARE_SLIDER_MAX}
                 value={aiSharePct}
-                onChange={(e) => setAiSharePct(+e.target.value)}
+                onChange={(e) => { setAiSharePct(+e.target.value); trackFirstInteraction() }}
                 aria-label="AI-assisted share of sales"
                 style={{ width: '100%', marginTop: 14, accentColor: 'var(--dark-text)' }}
               />

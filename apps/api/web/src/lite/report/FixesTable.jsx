@@ -12,6 +12,8 @@ import { FAILURE_POINT_COPY } from './reportContent.js'
 import { isPartialRead, buildMeasurableContext, partialReadFailurePoint } from './reportDerive.js'
 import { DEMO_REQUEST_CTAS } from '../demoRequestCtas.js'
 import { useDemoRequestModal } from '../useDemoRequestModal.js'
+import { track } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
 
 const RANK_LABELS = ['01', '02', '03', '04', '05', '06', '07', '08']
 
@@ -108,7 +110,7 @@ export function FixesTable({ report, open, onToggle, brandName, reportToken }) {
           </div>
           <div style={{ marginTop: 18, display: 'flex', justifyContent: 'space-between', gap: 22, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6, maxWidth: 430 }}>Ranked across your full catalog instead of a 24-query sample, each with the owner and the effort it takes.</span>
-            <Button variant="blue" arrow onClick={() => demoModal.open('full_analysis_walkthrough')} style={{ flexShrink: 0 }}>Book your walkthrough</Button>
+            <Button variant="blue" arrow onClick={() => { track(EVENTS.CTA_CLICKED, { cta: 'walkthrough', placement: 'fixes_table' }); demoModal.open('full_analysis_walkthrough') }} style={{ flexShrink: 0 }}>Book your walkthrough</Button>
           </div>
         </div>
       )}

@@ -6,6 +6,8 @@ import '@testing-library/jest-dom'
 import LiteWidget from '../LiteWidget.jsx'
 import { liteApi } from '../liteApi.js'
 import { PUBLIC_AUDIT_BASE_URL } from '../publicUrls.js'
+import { track, isTokenOwned, captureSrcParam } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
 
 vi.mock('../liteApi.js', () => ({
   liteApi: {
@@ -14,6 +16,14 @@ vi.mock('../liteApi.js', () => ({
     getReport: vi.fn(),
     setEmail: vi.fn(),
   },
+}))
+
+vi.mock('../analytics.js', () => ({
+  track: vi.fn(),
+  identifyReport: vi.fn(),
+  captureSrcParam: vi.fn(() => 'direct'),
+  isTokenOwned: vi.fn(() => false),
+  recordOwnedToken: vi.fn(),
 }))
 
 // audit.parleo.io migration: LiteWidget branches on isAuditHost() (see
@@ -205,6 +215,25 @@ describe('LiteWidget (root) — state machine', () => {
     // Restored Share button (leadgen+ session): the expired card has no
     // shareable report, so it must never render one.
     expect(screen.queryByRole('button', { name: 'Share report' })).not.toBeInTheDocument()
+  })
+
+  it('fires report_viewed(state: expired) with the viewer/src from analytics.js', async () => {
+    isTokenOwned.mockReturnValue(false)
+    captureSrcParam.mockReturnValue('email')
+    sessionStorage.setItem('soaLiteToken', 'tok-expired')
+    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'complete' })
+    liteApi.getReport.mockResolvedValue({
+      status: 'expired',
+      store_domain: 'oldstore.example.com',
+      store_url: 'https://oldstore.example.com',
+    })
+
+    render(<LiteWidget />)
+
+    await waitFor(() => expect(screen.getByText('This report has expired')).toBeInTheDocument())
+    expect(track).toHaveBeenCalledWith(EVENTS.REPORT_VIEWED, {
+      state: 'expired', viewer: 'visitor', src: 'email',
+    })
   })
 
   it('the expired-state CTA omits the url query param when the retired run recorded no store_url', async () => {

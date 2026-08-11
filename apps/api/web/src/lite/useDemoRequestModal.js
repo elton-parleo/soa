@@ -10,6 +10,8 @@
 import { useCallback, useState } from 'react'
 import { DEMO_REQUEST_CTAS } from './demoRequestCtas.js'
 import { submitDemoRequest } from './demoRequestApi.js'
+import { track } from './analytics.js'
+import { EVENTS } from './analyticsEvents.js'
 
 export function useDemoRequestModal({ brandName, reportToken } = {}) {
   const [ctaKey, setCtaKey] = useState(null)
@@ -20,14 +22,26 @@ export function useDemoRequestModal({ brandName, reportToken } = {}) {
   const cta = ctaKey ? DEMO_REQUEST_CTAS[ctaKey] : null
 
   const onSubmit = useCallback(
-    (values) =>
-      submitDemoRequest({
+    async (values) => {
+      const result = await submitDemoRequest({
         ...values,
         source: cta ? cta.source : undefined,
         page_url: typeof window !== 'undefined' ? window.location.href : '',
         brand_name: brandName || undefined,
         report_token: reportToken || undefined,
-      }),
+      })
+      // Fires only on a real 200 — never on a honeypot trip (RequestFormModal
+      // fakes success without ever calling onSubmit/this closure at all) and
+      // never on a 422/failure (result.ok is false there).
+      if (result && result.ok) {
+        track(EVENTS.DEMO_REQUEST_SUBMITTED, {
+          source: cta ? cta.source : undefined,
+          brand_name: brandName || undefined,
+          report_token: reportToken || undefined,
+        })
+      }
+      return result
+    },
     [cta, brandName, reportToken],
   )
 

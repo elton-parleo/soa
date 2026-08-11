@@ -29,6 +29,8 @@ import { looksLikeUrl, deriveBrandFromUrl } from './liteDerive.js'
 import { LogoHeader, ErrorBanner, LightCard } from './liteTheme.jsx'
 import { LITE_QUERY_COUNT } from './landing/scanDimensionsRegistry.js'
 import { Button } from '../ds/index.js'
+import { track, recordOwnedToken } from './analytics.js'
+import { EVENTS } from './analyticsEvents.js'
 
 export function LiteForm({
   onSubmitted,
@@ -97,6 +99,15 @@ export function LiteForm({
       if (storeUrl) payload.store_url = storeUrl
 
       const result = await liteApi.submit(payload)
+      // The funnel's spine (Q1) — fired once, right on accept, shared by
+      // every surface this form renders on (landing hero/final-CTA,
+      // the older /lite card). recordOwnedToken is the only signal
+      // that later tells report_viewed this browser is the run's
+      // owner, not a visitor who opened a shared link — see
+      // analytics.js's own doc comment for why sessionStorage's
+      // soaLiteToken can't answer that question by itself.
+      track(EVENTS.AUDIT_SUBMITTED, {})
+      recordOwnedToken(result.token)
       onSubmitted(result.token, { storeUrl })
     } catch (err) {
       if (err.status === 429) {

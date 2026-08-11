@@ -23,6 +23,8 @@ import { domainFromStoreUrl, formatElapsed, maskEmail } from './liteDerive.js'
 import { liteApi } from './liteApi.js'
 import { validateEmail } from './validation.js'
 import { DegradedRunBanner } from './DegradedRunBanner.jsx'
+import { track } from './analytics.js'
+import { EVENTS } from './analyticsEvents.js'
 
 const STALL_THRESHOLD_MS = 90_000
 const MAX_CONSOLE_HEIGHT_PX = 260
@@ -339,6 +341,7 @@ function StatusEmailCard({ token }) {
     try {
       await liteApi.setEmail(token, email.trim())
       setSubmittedEmail(email.trim())
+      track(EVENTS.EMAIL_CAPTURED, {})
     } catch (err2) {
       setSubmitError(err2.message || 'Something went wrong. Please try again.')
     } finally {
@@ -393,6 +396,13 @@ export function LiteProgress({ phaseData, storeUrl, error, token }) {
 
   const brandOrDomain = storeUrl ? domainFromStoreUrl(storeUrl) : 'Your store'
   const showDegradedBanner = latestState === 'degraded-blocked' || latestState === 'no-product-pages'
+
+  useEffect(() => {
+    track(EVENTS.STATUS_VIEWED, {})
+    // Fires once per mount only — the page polls phaseData repeatedly,
+    // that's not a new "view".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="lite-root">
