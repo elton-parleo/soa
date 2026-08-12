@@ -316,6 +316,13 @@ def select_evidence_exemplar(conn, cycle_id: int, primary_entity_id: int) -> Opt
     deterministically (largest |gap| first, run_id tiebreak) so the
     same cycle always surfaces the same exemplar. None when no run
     qualifies (never a fabricated example).
+
+    net_price_accuracy is filtered with `NOT s.net_price_accuracy`, not
+    `= 0` or `= false` — real Postgres (soa_incentive_scores.net_price_
+    accuracy is a genuine boolean column) rejects `boolean = integer`
+    outright, and the SQLite test fixtures' dynamic typing accepted `= 0`
+    silently, so this shipped once before a live run caught it. `NOT` is
+    the one form both dialects accept.
     """
     rows = conn.execute(text("""
         SELECT
@@ -330,7 +337,7 @@ def select_evidence_exemplar(conn, cycle_id: int, primary_entity_id: int) -> Opt
         WHERE r.cycle_id = :cid AND s.entity_id = :pid
           AND s.scoring_grain = 'observation' AND s.status = 'scored'
           AND s.measurement_status = 'measured'
-          AND s.net_price_accuracy = 0
+          AND NOT s.net_price_accuracy
           AND s.stated_price IS NOT NULL AND s.ground_truth_true_cost IS NOT NULL
           AND s.ground_truth_true_cost > 0
     """), {"cid": cycle_id, "pid": primary_entity_id}).fetchall()
