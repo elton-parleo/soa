@@ -336,6 +336,12 @@ def test_build_full_cycle_report_scores_end_to_end(db):
     # Both seeded stages (Ready to Buy, Comparison) are purchase-intent —
     # all 40 runs land in deal_citability's opportunity set.
     assert dc_row["said_envelope"]["denominator"] == 40
+    # TrueValueSection.jsx reads both of these directly (state to pick
+    # its "why not agent-ready" vs "verdict withheld" branch, tv_pct for
+    # the former's copy) — a complete, scored full-cycle report is
+    # always 'scored', never withheld.
+    assert report["pillars"]["state"] == "scored"
+    assert report["pillars"]["tv_pct"] == 100
 
 
 def test_build_full_cycle_report_not_scored_without_a_complete_crawl(db):

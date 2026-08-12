@@ -332,6 +332,13 @@ def build_full_cycle_pillars(
     total_earned = visibility_earned + accessibility_earned + true_value_earned
     composite = compute_composite(total_earned, member_value_na=member_value_na)
     verdict = compute_verdict(composite, true_value_earned, true_value_applicable_max)
+    # TrueValueSection.jsx reads pillars.tv_pct for its "why not agent-
+    # ready" copy and pillars.state to pick between that branch and a
+    # "verdict withheld" one lite uses for an unverified/degraded run —
+    # a full-cycle report is only ever built once the crawl AND cycle
+    # are complete (build_full_cycle_report's own render-gate), so
+    # state is always 'scored' here, never withheld.
+    tv_pct = round(100 * true_value_earned / true_value_applicable_max) if true_value_applicable_max else None
 
     # Same table-driven exposure reasons lite_pillars.py computes,
     # ported wholesale from its exposure_reasons_ctx construction — the
@@ -368,6 +375,8 @@ def build_full_cycle_pillars(
         "scorer_version": FULL_CYCLE_SCORER_VERSION,
         "exposure_reasons": exposure_reasons,
         "fixes": fixes,
+        "state": "scored",
+        "tv_pct": tv_pct,
     }
 
 
