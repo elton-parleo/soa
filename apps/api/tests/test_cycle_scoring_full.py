@@ -342,6 +342,11 @@ def test_build_full_cycle_report_scores_end_to_end(db):
     # always 'scored', never withheld.
     assert report["pillars"]["state"] == "scored"
     assert report["pillars"]["tv_pct"] == 100
+    # FixableHook.jsx's headline band — every dimension is at full
+    # credit in this fixture, so nothing is TrueSync-fixable this run.
+    assert report["pillars"]["gap_areas_total"] == 4
+    assert report["pillars"]["gap_areas_parleo_fixes"] == 2
+    assert report["pillars"]["parleo_fixable_points"] == 0.0
 
 
 def test_build_full_cycle_report_not_scored_without_a_complete_crawl(db):

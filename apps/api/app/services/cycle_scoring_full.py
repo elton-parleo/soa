@@ -36,7 +36,9 @@ from sqlalchemy import text
 from soa_shared.scan_dimensions import (
     DIMENSIONS_BY_CODE,
     FULL_CYCLE_SCORER_VERSION,
+    GAP_AREA_COUNT,
     MIN_OPPORTUNITY_SET_MENTIONS,
+    PARLEO_OWNED_GAP_AREA_COUNT,
     PURCHASE_INTENT_STAGES,
     apply_deal_citability_rate_band,
     compute_composite,
@@ -52,6 +54,7 @@ from app.services.lite_pillars import (
     _VALUE_PROTOCOLS_CODE,
     _crawl_dim_row,
     _dim_by_code,
+    _parleo_fixable_points,
     _pillar,
     _sub_lens,
     member_value_applicable,
@@ -363,7 +366,8 @@ def build_full_cycle_pillars(
         },
     }
     exposure_reasons = select_exposure_reasons(exposure_reasons_ctx)
-    fixes = _build_full_fixes_section(accessibility_dims + true_value_dims)
+    fixable_dims = accessibility_dims + true_value_dims
+    fixes = _build_full_fixes_section(fixable_dims)
 
     return {
         "visibility": _pillar(visibility_earned, DIMENSIONS_BY_CODE["share_of_mentions"].weight + DIMENSIONS_BY_CODE["recommendation_strength"].weight, visibility_dims),
@@ -377,6 +381,14 @@ def build_full_cycle_pillars(
         "fixes": fixes,
         "state": "scored",
         "tv_pct": tv_pct,
+        # FixableHook.jsx's headline band — GAP_AREA_COUNT/PARLEO_OWNED_
+        # GAP_AREA_COUNT are fixed registry constants (not per-run), same
+        # ones lite_pillars.py's build_pillars_payload surfaces;
+        # parleo_fixable_points is the real measured gap on TrueSync-
+        # owned dimensions this run (same helper, same inputs).
+        "gap_areas_total": GAP_AREA_COUNT,
+        "gap_areas_parleo_fixes": PARLEO_OWNED_GAP_AREA_COUNT,
+        "parleo_fixable_points": _parleo_fixable_points(fixable_dims),
     }
 
 
