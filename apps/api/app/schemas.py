@@ -231,7 +231,14 @@ class FullAnalysisReportResponse(BaseModel):
     platform_matrix: Optional[List[dict]] = None
     competitor_set: Optional[dict] = None
     scan: Optional[dict] = None
-    offers: Optional[dict] = None
+    # offers is a LIST of rows (TrueValueSection.jsx iterates it as an
+    # array) — dimensions_raw['offers'] is apps/pipeline/scan/offer_feed.
+    # py::build_offer_feed's own output, the same shape public_lite.py's
+    # PublicLiteReportResponse.offers carries via PublicLiteOfferRow —
+    # not reused directly here since that model is defined later in this
+    # file (would need reordering); loose dicts match this response's
+    # existing convention for `pillars` above.
+    offers: Optional[List[dict]] = None
     product_image_url: Optional[str] = None
     product_name: Optional[str] = None
     revenue_estimate_usd: Optional[float] = None

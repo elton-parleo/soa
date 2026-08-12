@@ -99,6 +99,21 @@ _DIMENSIONS = {
     "member_value_seen": {"score": 5, "max": 5, "coverage": "full", "evidence": []},
     "deal_citability_seen": {"score": 7, "max": 7, "coverage": "full", "evidence": []},
     "value_protocols_seen": {"score": 14, "max": 14, "coverage": "full", "evidence": []},
+    # A LIST of rows (apps/pipeline/scan/offer_feed.py::build_offer_feed's
+    # real output shape) — seeded on every test in this file so the
+    # actual FullAnalysisReportResponse(...) Pydantic construction always
+    # exercises offers with real list data, not just None. Regression
+    # guard: offers was typed Optional[dict] in schemas.py originally,
+    # which 500'd with a ValidationError on every real request (dict_type,
+    # "Input should be a valid dictionary") the instant a scored cycle
+    # actually had offers — no test caught it because every fixture left
+    # this key absent, so offers was always None and the mismatched type
+    # never got validated against real data.
+    "offers": [
+        {"name": "List price", "value": "$110.00", "channel": "SCHEMA.ORG", "eligibility": "1 of 1", "freshness": "live", "readable": "seen"},
+    ],
+    "product_image_url": None,
+    "product_name": "Men's Wool Runner",
 }
 
 
@@ -180,6 +195,11 @@ def test_renders_true_for_a_cycle_with_a_complete_crawl(patched_engine):
     assert result.competitor_set["overall"][0]["entity"] == "Full Cycle Brand"
     assert result.scan["status"] == "complete"
     assert result.revenue_estimate_usd is None  # no revenue_probe seeded this cycle
+    # Regression guard (see _DIMENSIONS' own comment): offers must build
+    # as a real Pydantic list, not silently coerce/reject a list where a
+    # dict was expected.
+    assert result.offers == _DIMENSIONS["offers"]
+    assert result.product_name == "Men's Wool Runner"
     # Every seeded dimension is already at full credit (score == max) —
     # nothing to fix, so an honestly empty list, not a fabricated one.
     # Ranked fixes live on pillars['fixes'] (FixesTable.jsx's real
