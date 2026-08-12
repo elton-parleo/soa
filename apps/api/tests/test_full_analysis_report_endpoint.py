@@ -182,7 +182,9 @@ def test_renders_true_for_a_cycle_with_a_complete_crawl(patched_engine):
     assert result.revenue_estimate_usd is None  # no revenue_probe seeded this cycle
     # Every seeded dimension is already at full credit (score == max) —
     # nothing to fix, so an honestly empty list, not a fabricated one.
-    assert result.fixes == []
+    # Ranked fixes live on pillars['fixes'] (FixesTable.jsx's real
+    # read path), not a separate top-level field.
+    assert result.pillars["fixes"] == {"visible": [], "remaining_count": 0}
     assert result.evidence is not None
     assert result.evidence["price_observation"]["accurate"] is False
 

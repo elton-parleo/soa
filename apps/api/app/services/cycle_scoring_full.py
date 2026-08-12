@@ -191,6 +191,36 @@ def score_deal_citability_said_full(run_signals: List[RunSignal]) -> Dict:
     }
 
 
+# ─── Ranked fixes (1e) ─────────────────────────────────────────────────────
+#
+# Full-cycle counterpart to lite_pillars.py::_build_fixes_section — same
+# {visible: [...], remaining_count} shape FixesTable.jsx already reads
+# (report.pillars.fixes), same ranking rule (opportunity size, max -
+# earned, descending; deterministic tiebreak by code), same per-row
+# fields (code, name, fix_human, impact, fix_owner — impact renamed
+# from the raw point gap, fix_owner straight from the shared Dimension
+# registry, never a literal). Deliberately WITHOUT lite's
+# FREE_FIX_VISIBLE_RANK truncation or forced-TrueSync-swap: this is the
+# paid, unlocked report — every fixable dimension is visible,
+# remaining_count is always 0, nothing is hidden behind a lock.
+
+def _build_full_fixes_section(dims: List[Dict]) -> Dict:
+    ranked = sorted(
+        (d for d in dims if not d["na"] and not d.get("blocked") and d.get("fix_human")),
+        key=lambda d: (-(d["max"] - d["earned"]), d["code"]),
+    )
+    visible = [
+        {
+            "code": d["code"], "name": d["name"],
+            "fix_human": d["fix_human"],
+            "impact": round(d["max"] - d["earned"], 1),
+            "fix_owner": DIMENSIONS_BY_CODE[d["code"]].fix_owner,
+        }
+        for d in ranked
+    ]
+    return {"visible": visible, "remaining_count": 0}
+
+
 # ─── Pillar/composite assembly ────────────────────────────────────────────
 #
 # Deliberately a separate assembly from lite_pillars.build_pillars_payload
@@ -266,6 +296,7 @@ def build_full_cycle_pillars(
             true_value_dims.append({
                 "code": code, "name": dim.name, "earned": 0.0, "max": 0.0, "na": True,
                 "seen": seen_row, "said": said_row, "said_envelope": said_envelope,
+                "fix": None, "fix_human": None,
             })
             continue
 
@@ -276,6 +307,13 @@ def build_full_cycle_pillars(
         true_value_dims.append({
             "code": code, "name": dim.name, "earned": earned, "max": dim_max, "na": False,
             "seen": seen_row, "said": said_row, "said_envelope": said_envelope,
+            # Same source lite_pillars.py's build_pillars_payload reads
+            # (seen.get('fix')/'fix_human') — fix text is a seen-side/
+            # crawl-derived concept, unrelated to the said envelope
+            # wrapping above it. Needed for build_fixes' (Phase 4)
+            # ranked-fixes section, which reads this field the same way
+            # FixesTable.jsx already does for lite.
+            "fix": seen.get("fix"), "fix_human": seen.get("fix_human"),
         })
 
     vp_dim = DIMENSIONS_BY_CODE[_VALUE_PROTOCOLS_CODE]
@@ -288,6 +326,7 @@ def build_full_cycle_pillars(
     true_value_dims.append({
         "code": _VALUE_PROTOCOLS_CODE, "name": vp_dim.name, "earned": vp_earned, "max": vp_max,
         "na": False, "seen": vp_seen_row, "said": None,
+        "fix": vp_seen.get("fix"), "fix_human": vp_seen.get("fix_human"),
     })
 
     total_earned = visibility_earned + accessibility_earned + true_value_earned
@@ -317,6 +356,7 @@ def build_full_cycle_pillars(
         },
     }
     exposure_reasons = select_exposure_reasons(exposure_reasons_ctx)
+    fixes = _build_full_fixes_section(accessibility_dims + true_value_dims)
 
     return {
         "visibility": _pillar(visibility_earned, DIMENSIONS_BY_CODE["share_of_mentions"].weight + DIMENSIONS_BY_CODE["recommendation_strength"].weight, visibility_dims),
@@ -327,6 +367,7 @@ def build_full_cycle_pillars(
         "member_value_na": member_value_na,
         "scorer_version": FULL_CYCLE_SCORER_VERSION,
         "exposure_reasons": exposure_reasons,
+        "fixes": fixes,
     }
 
 

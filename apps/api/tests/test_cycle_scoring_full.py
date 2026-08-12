@@ -15,6 +15,7 @@ from app.services.cycle_scoring_full import (
     STATE_MEASURED,
     STATE_NA,
     STATE_NOT_MEASURED,
+    _build_full_fixes_section,
     build_full_cycle_pillars,
     build_full_cycle_report,
     said_result_to_envelope,
@@ -128,6 +129,53 @@ def test_envelope_not_measured_state_for_zero_denominator():
     env = said_result_to_envelope(said)
     assert env["state"] == STATE_NOT_MEASURED
     assert env["value"] is None
+
+
+# ─── Ranked fixes (1e) ─────────────────────────────────────────────────────
+#
+# _build_full_fixes_section is the full-cycle counterpart to lite_
+# pillars.py::_build_fixes_section — same {visible, remaining_count}
+# shape FixesTable.jsx reads for both reports, same ranking rule
+# (opportunity size, max - earned, descending, code tiebreak), but
+# WITHOUT lite's FREE_FIX_VISIBLE_RANK=2 truncation or forced-TrueSync-
+# swap: this is the paid, unlocked report, so remaining_count is always
+# 0 and every fixable dimension is visible.
+
+def _dim(code, earned, max_, fix_human="Fix it.", na=False, blocked=False):
+    return {"code": code, "name": code, "earned": earned, "max": max_, "na": na, "blocked": blocked, "fix_human": fix_human}
+
+
+def test_full_fixes_section_ranks_by_gap_descending():
+    dims = [
+        _dim("catalog_context", 3, 8),   # gap 5
+        _dim("deal_citability", 0, 7),   # gap 7
+        # At max — the scan engine never writes fix_human for a
+        # dimension with nothing to fix, same real-world shape as
+        # test_full_analysis_report_endpoint.py's _DIMENSIONS fixture.
+        _dim("agent_access", 5, 5, fix_human=None),
+    ]
+    fixes = _build_full_fixes_section(dims)
+    assert [f["code"] for f in fixes["visible"]] == ["deal_citability", "catalog_context"]
+    assert fixes["visible"][0]["impact"] == 7.0
+    assert fixes["visible"][0]["fix_owner"] == DIMENSIONS_BY_CODE["deal_citability"].fix_owner
+
+
+def test_full_fixes_section_never_truncates_or_hides_anything():
+    """Unlike lite's FREE_FIX_VISIBLE_RANK=2 cap, the paid report shows
+    every fixable dimension — remaining_count is always 0."""
+    dims = [_dim(code, 0, 5) for code in ("agent_access", "catalog_context", "protocol_feed", "value_protocols")]
+    fixes = _build_full_fixes_section(dims)
+    assert len(fixes["visible"]) == 4
+    assert fixes["remaining_count"] == 0
+
+
+def test_full_fixes_section_skips_na_blocked_and_nothing_to_fix():
+    dims = [
+        _dim("agent_access", 0, 5, na=True),
+        _dim("catalog_context", 0, 5, blocked=True),
+        _dim("protocol_feed", 5, 5, fix_human=None),  # at max, no fix text either
+    ]
+    assert _build_full_fixes_section(dims) == {"visible": [], "remaining_count": 0}
 
 
 # ─── N/A member-value rescale at full-cycle volume ────────────────────────

@@ -4,8 +4,9 @@ assembly layer (app/services/full_analysis_extras.py) and the per-pillar
 continuation delta (app/routers/full_analysis.py::_compute_pillar_deltas).
 Each builder is a group-by/lookup over stored rows; these tests seed two
 platforms (one with a blocked crawler) and assert the matrix, competitor
-stage slices, fix ranking, and evidence selection all read real numbers,
-never a hardcoded/estimated one.
+stage slices, and evidence selection all read real numbers, never a
+hardcoded/estimated one. Ranked fixes (1e) live in cycle_scoring_full.py
+now (test_cycle_scoring_full.py) — see that file's own note.
 """
 import json
 
@@ -15,7 +16,6 @@ from sqlalchemy import create_engine, text
 from app.routers.full_analysis import _compute_pillar_deltas
 from app.services.full_analysis_extras import (
     build_competitor_set,
-    build_fixes,
     build_platform_matrix,
     build_what_if,
     select_evidence_exemplar,
@@ -249,27 +249,9 @@ def test_competitor_set_overall_and_by_stage(db):
     assert ready_primary["share_pct"] == 10.0  # 10/(10+90) — the funnel leak the mock's headline describes
 
 
-# ─── 1e: ranked fixes ──────────────────────────────────────────────────────
-
-def test_build_fixes_ranks_by_gap_and_skips_dimensions_with_nothing_to_fix():
-    dimensions_raw = {
-        "agent_access": {"score": 5, "max": 5, "coverage": "full", "fix_human": "should never appear"},  # at max — skipped
-        "catalog_context": {"score": 3, "max": 8, "coverage": "full", "fix_human": "Add structured data."},
-        "deal_citability_seen": {"score": 0, "max": 7, "coverage": "full", "fix_human": "Expose your promotions."},
-        "value_protocols_seen": {"score": 10, "max": 14, "coverage": "na", "fix_human": "should never appear (na)"},
-    }
-    fixes = build_fixes(dimensions_raw)
-
-    assert [f["code"] for f in fixes] == ["deal_citability_seen", "catalog_context"]  # gap 7 then gap 5
-    assert fixes[0]["modeled_points"] == 7.0
-    assert fixes[0]["body"] == "Expose your promotions."
-    assert fixes[0]["owner"] in ("ENG", "TRUESYNC")
-
-
-def test_build_fixes_empty_when_nothing_has_a_real_gap():
-    dimensions_raw = {"agent_access": {"score": 5, "max": 5, "coverage": "full", "fix_human": "n/a"}}
-    assert build_fixes(dimensions_raw) == []
-
+# 1e note: ranked fixes now live on pillars['fixes'] (cycle_scoring_
+# full.py::_build_full_fixes_section) — covered in test_cycle_scoring_
+# full.py, alongside the rest of that module's pillar assembly, not here.
 
 # ─── 1g: evidence exemplar determinism ────────────────────────────────────
 

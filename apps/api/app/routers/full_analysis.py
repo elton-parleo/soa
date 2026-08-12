@@ -38,7 +38,6 @@ from app.services.cycle_scoring import build_scan_payload
 from app.services.cycle_scoring_full import build_full_cycle_report
 from app.services.full_analysis_extras import (
     build_competitor_set,
-    build_fixes,
     build_platform_matrix,
     build_what_if,
     select_evidence_exemplar,
@@ -320,7 +319,9 @@ def get_full_analysis_report(
             build_competitor_set(conn, cycle_id, report["overall_entity_info"], report["overall_metrics"])
             if primary_entity_id is not None else None
         )
-        fixes = build_fixes(dimensions_raw)
+        # Ranked fixes live on report["pillars"]["fixes"] (cycle_scoring_
+        # full.py::_build_full_fixes_section) — the shape FixesTable.jsx
+        # actually reads, not a second top-level field.
         evidence = (
             select_evidence_exemplar(conn, cycle_id, primary_entity_id)
             if primary_entity_id is not None else None
@@ -342,7 +343,6 @@ def get_full_analysis_report(
         product_image_url=dimensions_raw.get("product_image_url"),
         product_name=dimensions_raw.get("product_name"),
         revenue_estimate_usd=report["revenue_estimate_usd"],
-        fixes=fixes,
         evidence=evidence,
         what_if=what_if,
     )

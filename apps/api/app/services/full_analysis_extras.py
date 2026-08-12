@@ -297,55 +297,14 @@ def build_competitor_set(conn, cycle_id: int, overall_entity_info: Dict[str, Dic
     }
 
 
-# ─── 1e: ranked fixes ──────────────────────────────────────────────────────
-
-# Crawl-derived seen-half dimension codes that carry a fix/fix_human
-# pair in dimensions_raw (scan/scorer.py) — the same set build_scan_
-# payload already ranks by opportunity size for lite's lock-gating.
-_FIXABLE_DIMENSION_CODES = (
-    "agent_access", "catalog_context", "protocol_feed",
-    "price_truth_seen", "member_value_seen", "deal_citability_seen", "value_protocols_seen",
-)
-
-
-def build_fixes(dimensions_raw: dict) -> List[Dict]:
-    """
-    1e: the SAME per-dimension fix/fix_human text and fix_owner (ENG|
-    TRUESYNC, from the shared Dimension registry) lite's report already
-    carries — unlocked (a paid report, no FREE_FIX_RANK gate) and
-    ranked by opportunity size (max - score), same convention as
-    cycle_scoring.py::build_scan_payload's ranked_codes. 'title' is the
-    dimension's own registry name (no separate short/long fix copy
-    exists in the data — fix_human is the only fix sentence written at
-    crawl time); 'body' is that fix_human sentence. modeled points is
-    the real point gap, never a fabricated estimate.
-    """
-    rows = []
-    for code in _FIXABLE_DIMENSION_CODES:
-        d = dimensions_raw.get(code) or {}
-        fix_human = d.get("fix_human")
-        if not fix_human:
-            continue  # nothing to fix, or dimension already at max
-        coverage = d.get("coverage") or "full"
-        if coverage == "na":
-            continue
-        score = d.get("score") or 0.0
-        max_ = d.get("max") or 0.0
-        gap = round(max_ - score, 1)
-        if gap <= 0:
-            continue
-        registry_code = code[:-5] if code.endswith("_seen") else code
-        dim = DIMENSIONS_BY_CODE.get(registry_code)
-        rows.append({
-            "code": code,
-            "title": dim.name if dim else registry_code,
-            "body": fix_human,
-            "owner": dim.fix_owner if dim else "ENG",
-            "modeled_points": gap,
-        })
-
-    rows.sort(key=lambda r: (-r["modeled_points"], r["code"]))
-    return rows
+# 1e note: ranked fixes moved to cycle_scoring_full.py::
+# _build_full_fixes_section, attached as pillars['fixes'] — discovered,
+# while wiring Phase 2, that the shipped FixesTable.jsx reads
+# report.pillars.fixes = {visible: [{code, name, fix_human, impact,
+# fix_owner}], remaining_count}, not a standalone top-level list. Per
+# the "shipped audit report beats the mock" precedence rule, the real
+# consuming component's shape wins — this module no longer builds
+# fixes at all, so FixesTable can be reused directly with zero forking.
 
 
 # ─── 1g: evidence exemplar ─────────────────────────────────────────────────

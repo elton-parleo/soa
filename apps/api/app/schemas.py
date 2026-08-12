@@ -235,7 +235,9 @@ class FullAnalysisReportResponse(BaseModel):
     product_image_url: Optional[str] = None
     product_name: Optional[str] = None
     revenue_estimate_usd: Optional[float] = None
-    fixes: Optional[List[dict]] = None
+    # Ranked fixes: pillars['fixes'] (cycle_scoring_full.py::
+    # _build_full_fixes_section) — {visible, remaining_count}, the exact
+    # shape FixesTable.jsx already reads for lite. Not a separate field.
     evidence: Optional[dict] = None
     what_if: Optional[dict] = None
 
