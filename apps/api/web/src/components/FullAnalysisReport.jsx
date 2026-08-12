@@ -1,184 +1,122 @@
-// FullAnalysisReport — Full Analysis coexistence, Phase 4: the paid
-// report a cycle renders once it has an attached, current-scorer-
-// version crawl (see the render-gate in FullAnalysisReportGate.jsx,
-// which decides between this and the classic MetricsDashboard.jsx —
-// untouched — for any given cycle). Built on the ds/ design-system
-// components ported from the audit/lite report's own design refs.
-import React, { useEffect, useState } from 'react'
+// FullAnalysisReport — Full Analysis coexistence, Phase 4/2: the real
+// report, built on the shipped audit report's own design system
+// (apps/api/web/src/lite/report/*, apps/api/web/src/ds/*) per design-
+// refs/FullAnalysisReportMock.jsx's structure. Route, gate, and
+// fallback behavior are unchanged — FullAnalysisReportGate.jsx still
+// calls this with exactly {cycleCode, report, onNavigate}.
+//
+// Precedence rule (per the task spec): the shipped audit report BEATS
+// the mock. Wherever a shipped lite/report/* component reads generically
+// off pillars/offers/competitor-share-shaped data with no lite-specific
+// content, it's imported and reused directly (VisibilitySection,
+// AccessibilitySection, TrueValueSection, FixesTable, EditorialBand,
+// ReportSection, FixableHook, reportDerive.js's pure helpers). Where a
+// shipped component hardcodes lite-only content (ScoreHero's single-
+// platform tags, ReportRail's "free audit" CTA and fixed nav id set,
+// ReportFooter's audit-upsell footer, TrueSyncBand's lead-gen demo-
+// request modal keyed to a lite token) it is NOT modified — a sibling
+// in ./full-analysis-report mirrors its markup/tokens instead, so lite
+// stays byte-for-byte untouched and carries zero regression risk.
+import { useState } from 'react'
 import { api } from '../api.js'
-import { MetricRow, StateChip, SectionHeading, Delta } from '../ds/index.js'
+import { computeExposure, seedAnnualRevenue } from '../lite/liteDerive.js'
+import { deriveScoreHeroHeadline } from '../lite/report/reportDerive.js'
+import { VisibilitySection } from '../lite/report/VisibilitySection.jsx'
+import { AccessibilitySection } from '../lite/report/AccessibilitySection.jsx'
+import { TrueValueSection } from '../lite/report/TrueValueSection.jsx'
+import { EditorialBand } from '../lite/report/EditorialBand.jsx'
+import { FixesTable } from '../lite/report/FixesTable.jsx'
+import { FixableHook } from '../lite/report/FixableHook.jsx'
+import '../lite/theme.css'
 
-const FIX_OWNER_LABELS = { ENG: 'Engineering', TRUESYNC: 'Parleo TrueSync' }
+import { FullAnalysisHero } from './full-analysis-report/FullAnalysisHero.jsx'
+import { FullAnalysisRail } from './full-analysis-report/FullAnalysisRail.jsx'
+import { ContinuationStrip } from './full-analysis-report/ContinuationStrip.jsx'
+import { DiscoverySection } from './full-analysis-report/DiscoverySection.jsx'
+import { PlatformMatrixSection } from './full-analysis-report/PlatformMatrixSection.jsx'
+import { CompetitorStageSection } from './full-analysis-report/CompetitorStageSection.jsx'
+import { AnalystLayerSection } from './full-analysis-report/AnalystLayerSection.jsx'
+import { EvidenceSection } from './full-analysis-report/EvidenceSection.jsx'
+import { FullAnalysisDarkBand } from './full-analysis-report/FullAnalysisDarkBand.jsx'
+import { FullAnalysisFooter } from './full-analysis-report/FullAnalysisFooter.jsx'
+import { shareOfMentionsRank } from './full-analysis-report/fullAnalysisDerive.js'
+import './full-analysis-report/fullAnalysis.css'
 
-const PILLAR_LABELS = {
-  visibility: 'Visibility',
-  accessibility: 'Accessibility',
-  true_value: 'True Value',
-}
-
-function envelopeState(envelope) {
-  if (!envelope) return null
-  if (envelope.state === 'na') return 'unmeasured'
-  if (envelope.state === 'not_measured') return 'unmeasured'
-  return envelope.value >= 50 ? 'seen' : envelope.value > 0 ? 'partial' : 'invisible'
-}
-
-function PillarBar({ pillarKey, pillar }) {
-  const pct = pillar.max ? Math.round((pillar.score / 100) * 100) : 0
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
-        <span style={{ fontWeight: 600, color: 'var(--text-strong)' }}>{PILLAR_LABELS[pillarKey] || pillarKey}</span>
-        <span className="num" style={{ color: 'var(--faint)' }}>{Math.round(pillar.score)}/100</span>
-      </div>
-      <div style={{ height: 8, borderRadius: 999, background: 'var(--canvas-dim)', overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: 'var(--blue)', borderRadius: 999 }} />
-      </div>
-    </div>
-  )
-}
-
-function ContinuationBanner({ continuation, composite }) {
-  if (!continuation) return null
-  const hasAuditScore = continuation.audit_composite != null
-  return (
-    <div style={{ padding: 20, borderRadius: 12, background: 'var(--canvas-dim)', border: '1px solid var(--border)', marginBottom: 28 }}>
-      <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6, color: 'var(--text-strong)' }}>
-        {hasAuditScore
-          ? `Your audit scored ${continuation.audit_composite} on ${continuation.audit_date || 'a recent date'}, ChatGPT only.`
-          : 'This cycle continues your audit.'}
-      </div>
-      <div style={{ fontSize: 13, color: 'var(--faint)', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span>The full analysis covers {continuation.audit_platforms_note}.</span>
-        {hasAuditScore && composite != null && (
-          <Delta value={composite - continuation.audit_composite} bare size="sm" />
-        )}
-      </div>
-    </div>
-  )
-}
-
-function DimensionSection({ dim }) {
-  const said = dim.said_envelope
-  const seen = dim.seen
-  return (
-    <div style={{ padding: '18px 0', borderBottom: '1px solid var(--border)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <div style={{ fontWeight: 650, fontSize: 15, color: 'var(--text-strong)' }}>{dim.name}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {dim.fix_owner && (
-            <span className="mono-label" style={{ fontSize: 10.5, color: 'var(--faint)' }}>
-              {FIX_OWNER_LABELS[dim.fix_owner] || dim.fix_owner}
-            </span>
-          )}
-          <span className="num" style={{ fontSize: 13, fontWeight: 600 }}>
-            {dim.na ? '—' : `${Math.round(dim.earned)}/${Math.round(dim.max)}`}
-          </span>
-        </div>
-      </div>
-      {dim.na ? (
-        <StateChip state="unmeasured">Not applicable this cycle</StateChip>
-      ) : (
-        <div style={{ display: 'flex', gap: 24 }}>
-          {seen && (
-            <div>
-              <div className="mono-label" style={{ fontSize: 10.5, color: 'var(--faint)', marginBottom: 4 }}>SEEN</div>
-              <StateChip state={seen.na ? 'unmeasured' : seen.earned >= seen.max ? 'seen' : seen.earned > 0 ? 'partial' : 'invisible'}>
-                {seen.na ? 'Unmeasured' : `${Math.round(seen.earned)}/${Math.round(seen.max)}`}
-              </StateChip>
-            </div>
-          )}
-          {said && (
-            <div>
-              <div className="mono-label" style={{ fontSize: 10.5, color: 'var(--faint)', marginBottom: 4 }}>SAID</div>
-              <StateChip state={envelopeState(said)}>
-                {said.state === 'na' ? 'Too few mentions'
-                  : said.state === 'not_measured' ? 'Not yet coded'
-                  : `${said.value}%`}
-              </StateChip>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AnalystLayer({ cycleCode }) {
-  const [metrics, setMetrics] = useState(null)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    api.getMetrics(cycleCode)
-      .then(data => {
-        const primary = data.entities.find(e => e.role === 'primary')
-        setMetrics(primary ? data.slices?.overall?.[primary.code] : null)
-      })
-      .catch(err => setError(err.message))
-  }, [cycleCode])
-
-  if (error) return null
-  if (!metrics) return <div style={{ color: 'var(--faint)', fontSize: 13 }}>Loading analyst metrics…</div>
-
-  return (
-    <MetricRow items={[
-      { value: metrics.mention_rate, suffix: '%', label: 'Mention Rate' },
-      { value: metrics.som, suffix: '%', label: 'Share of Mentions' },
-      { value: metrics.rsi, label: 'Recommendation Strength' },
-      { value: metrics.position_index, suffix: '%', label: 'Position Index' },
-      { value: metrics.pdi, suffix: '%', label: 'Platform Distribution' },
-      { value: metrics.deal_citation_rate, suffix: '%', label: 'Incentive Citation Rate' },
-    ]} size={32} />
-  )
-}
+const DEFAULT_REVENUE = 12_000_000
+const DEFAULT_AI_SHARE_PCT = 20
 
 export default function FullAnalysisReport({ cycleCode, report, onNavigate }) {
-  const { pillars, continuation, scorer_version: scorerVersion, total_queries: totalQueries } = report
+  const [open, setOpen] = useState({})
+  const isOpen = (key) => open[key] !== false
+  const toggle = (key) => setOpen((s) => ({ ...s, [key]: s[key] === false ? true : false }))
+
+  const pillars = report.pillars
+  const platformMatrix = report.platform_matrix || []
+  const platforms = platformMatrix.map((r) => r.platform)
+  const competitorSet = report.competitor_set
+  const primaryEntity = competitorSet?.overall?.find((e) => e.is_primary)
+  const primaryEntityName = primaryEntity?.entity || 'Your brand'
+
+  const revenue = seedAnnualRevenue(report.revenue_estimate_usd) ?? DEFAULT_REVENUE
+  const exposure = computeExposure({ revenue, aiSharePct: DEFAULT_AI_SHARE_PCT, visibility: pillars.visibility.score })
+  const rank = shareOfMentionsRank(competitorSet?.overall)
+  const headline = deriveScoreHeroHeadline(pillars)
+
+  // VisibilitySection.jsx (reused verbatim below) reads its competitor
+  // rows from report.visibility_breakdown.share_of_mentions — lite's
+  // own field name for exactly the row shape ({entity, is_primary,
+  // share_pct, domain}) this report carries at competitor_set.overall
+  // instead (both come from the same lite_visibility.py::
+  // build_visibility_payload). Shaping a local adapter object here,
+  // rather than changing VisibilitySection.jsx itself, keeps that
+  // shared component reading the one field name lite always has.
+  const reportForVisibility = { ...report, visibility_breakdown: { share_of_mentions: competitorSet?.overall || [] } }
+
+  const handleViewResponse = (runId) => {
+    if (onNavigate) onNavigate('response', { runId, cycleCode })
+  }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--canvas)', padding: '40px 32px', maxWidth: 880, margin: '0 auto' }}>
-      <button onClick={() => onNavigate && onNavigate('dashboard')}
-        style={{ background: 'none', border: 'none', color: 'var(--faint)', fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 20 }}>
-        ← Back to dashboard
-      </button>
+    <div className="grain-overlay fa-report-shell" style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '222px 1fr' }}>
+      <FullAnalysisRail
+        report={report} primaryEntityName={primaryEntityName} exposure={exposure}
+        active="score" hasContinuation={!!report.continuation}
+      />
+      <div style={{ minWidth: 0 }}>
+        <div className="fa-report-content" style={{ maxWidth: 960, margin: '0 auto', padding: '32px 28px 46px' }}>
+          <button
+            onClick={() => onNavigate && onNavigate('dashboard')}
+            style={{ background: 'none', border: 'none', color: 'var(--faint)', fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 16 }}
+          >
+            ← Back to dashboard
+          </button>
 
-      <SectionHeading accent={cycleCode} accentTone="primary" size="sm">
-        Full Analysis
-      </SectionHeading>
+          <FullAnalysisHero report={report} exposure={exposure} shareOfMentionsRank={rank} headline={headline} platforms={platforms} />
 
-      <div style={{ margin: '20px 0 28px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 4 }}>
-          <span className="num" style={{ fontSize: 44, fontWeight: 700, color: 'var(--text-strong)' }}>
-            {Math.round(pillars.composite ?? 0)}
-          </span>
-          <StateChip state={pillars.verdict === 'AGENT-READY' ? 'seen' : 'invisible'}>
-            {pillars.verdict}
-          </StateChip>
-        </div>
-        <div className="mono-label" style={{ fontSize: 11, color: 'var(--faint)' }}>
-          scorer v{scorerVersion} · {totalQueries} queries measured
-        </div>
-      </div>
-
-      <ContinuationBanner continuation={continuation} composite={pillars.composite} />
-
-      {['visibility', 'accessibility', 'true_value'].map(key => (
-        <PillarBar key={key} pillarKey={key} pillar={pillars[key]} />
-      ))}
-
-      <div style={{ marginTop: 36 }}>
-        <SectionHeading size="sm">Dimensions</SectionHeading>
-        <div style={{ marginTop: 16 }}>
-          {['visibility', 'accessibility', 'true_value'].flatMap(key =>
-            pillars[key].dimensions.map(dim => <DimensionSection key={dim.code} dim={dim} />)
+          {report.continuation && (
+            <ContinuationStrip continuation={report.continuation} platformsNote={report.continuation.audit_platforms_note} />
           )}
-        </div>
-      </div>
 
-      <div style={{ marginTop: 36 }}>
-        <SectionHeading size="sm">Analyst metrics</SectionHeading>
-        <div style={{ marginTop: 16 }}>
-          <AnalystLayer cycleCode={cycleCode} />
+          <FixableHook report={report} />
+
+          <DiscoverySection scan={report.scan} open={isOpen('discovery')} onToggle={() => toggle('discovery')} />
+          <PlatformMatrixSection matrix={platformMatrix} open={isOpen('matrix')} onToggle={() => toggle('matrix')} />
+
+          <VisibilitySection report={reportForVisibility} open={isOpen('viz')} onToggle={() => toggle('viz')} shareOfMentionsRank={rank} />
+          <CompetitorStageSection competitorSet={competitorSet} />
+          <AccessibilitySection report={report} open={isOpen('acc')} onToggle={() => toggle('acc')} />
+          <TrueValueSection report={report} open={isOpen('tv')} onToggle={() => toggle('tv')} />
+
+          <EditorialBand />
+
+          <FixesTable report={report} open={isOpen('fix')} onToggle={() => toggle('fix')} brandName={primaryEntityName} reportToken={null} />
+
+          <AnalystLayerSection cycleCode={cycleCode} open={isOpen('analyst')} onToggle={() => toggle('analyst')} />
+          <EvidenceSection evidence={report.evidence} onViewResponse={handleViewResponse} open={isOpen('evidence')} onToggle={() => toggle('evidence')} />
+
+          <FullAnalysisDarkBand fixCount={(pillars.fixes?.visible || []).filter((f) => f.fix_owner === 'TRUESYNC').length} />
+
+          <FullAnalysisFooter report={report} platformsLabel={platformMatrix.map((r) => r.platform_name).join(', ')} />
         </div>
       </div>
     </div>
