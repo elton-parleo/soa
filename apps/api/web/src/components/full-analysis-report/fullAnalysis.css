@@ -1,0 +1,27 @@
+/* Full Analysis report — responsive collapse per the design mock's own
+   @media(max-width:1000px) rule (design-refs/FullAnalysisReportMock.jsx).
+   Self-contained: scoped to fa-* classes only, never touches any
+   lite-*/.lite-report-* selector in ../../lite/theme.css. */
+@media (max-width: 1000px) {
+  .fa-report-shell {
+    grid-template-columns: 1fr !important;
+  }
+  .fa-report-rail {
+    border-right: none !important;
+  }
+  .fa-report-rail > div {
+    position: static !important;
+    height: auto !important;
+  }
+  .fa-hero-lanes {
+    flex-direction: column !important;
+  }
+  .fa-hero-lanes > div {
+    width: 100% !important;
+  }
+  .fa-hero-tiles,
+  .fa-hero-pillars,
+  .fa-discovery-steps {
+    grid-template-columns: 1fr !important;
+  }
+}

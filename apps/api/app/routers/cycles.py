@@ -139,6 +139,9 @@ def create_cycle(
                 {"entity_id": ce.entity_id, "comparison_code": ce.comparison_code, "role": ce.role}
                 for ce in data.comparison_set
             ],
+            source_lite_request_id=data.source_lite_request_id,
+            study_series_id=data.study_series_id,
+            prior_cycle_id=data.prior_cycle_id,
         )
 
     # 6. Scope snapshot — only when PLANNED_CYCLE_SCOPE_RESYNC is off.

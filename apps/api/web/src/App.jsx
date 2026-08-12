@@ -3,8 +3,9 @@ import { AuthProvider, useAuth } from './AuthContext.jsx'
 import LoginPage        from './components/LoginPage.jsx'
 import CycleDashboard   from './components/CycleDashboard.jsx'
 import NewCycleWizard   from './components/NewCycleWizard.jsx'
+import NewCycleFlow     from './components/NewCycleFlow.jsx'
+import FullAnalysisReportGate from './components/FullAnalysisReportGate.jsx'
 import EntityRegistry   from './components/EntityRegistry.jsx'
-import MetricsDashboard  from './components/MetricsDashboard.jsx'
 import ResponseExplorer  from './components/ResponseExplorer.jsx'
 import ActionsPage       from './components/ActionsPage.jsx'
 import StudyLibrary      from './components/StudyLibrary.jsx'
@@ -18,7 +19,7 @@ import { isAuditHost } from './lite/publicUrls.js'
 function getInitialView() {
   const hash = window.location.hash.replace('#', '')
   const validViews = [
-    'dashboard', 'wizard',
+    'dashboard', 'wizard', 'new-cycle',
     'entities', 'metrics',
     'studies', 'study-detail',
     'responses', 'actions',
@@ -33,6 +34,7 @@ function AppContent() {
   const [selectedCycle, setSelectedCycle] = useState(null)
   const [selectedStudy, setSelectedStudy] = useState(null)
   const [selectedRunId, setSelectedRunId] = useState(null)
+  const [selectedAuditToken, setSelectedAuditToken] = useState(null)
 
   // Replace the initial history entry with a proper state object so
   // popstate fires correctly on the first back press.
@@ -56,6 +58,7 @@ function AppContent() {
           setSelectedStudy(event.state.studyType)
         }
         setSelectedRunId(event.state.runId ?? null)
+        setSelectedAuditToken(event.state.auditToken ?? null)
       } else {
         // No state — at the initial history entry: go to dashboard.
         setView('dashboard')
@@ -82,6 +85,7 @@ function AppContent() {
       setSelectedStudy(params.studyType)
     }
     setSelectedRunId(params.runId ?? null)
+    setSelectedAuditToken(params.auditToken ?? null)
   }
 
   // Still loading session from storage — prevent flash of login page
@@ -118,6 +122,20 @@ function AppContent() {
     )
   }
 
+  // Full Analysis coexistence, Phase 2: the 3-step flow is the default
+  // "+ New Cycle" destination (see CycleDashboard below); the classic
+  // wizard stays reachable from its own "advanced setup" link.
+  if (view === 'new-cycle') {
+    return (
+      <NewCycleFlow
+        auditToken={selectedAuditToken}
+        onComplete={() => navigateTo('dashboard')}
+        onCancel={() => navigateTo('dashboard')}
+        onNavigate={(v, params) => navigateTo(v, params)}
+      />
+    )
+  }
+
   if (view === 'entities') {
     return (
       <EntityRegistry
@@ -127,8 +145,13 @@ function AppContent() {
   }
 
   if (view === 'metrics') {
+    // Full Analysis coexistence, Phase 4: the render-gate decides
+    // between the new Full Analysis report and the classic
+    // MetricsDashboard for this cycle — see FullAnalysisReportGate.jsx.
+    // MetricsDashboard.jsx itself is unchanged; the gate renders it
+    // directly (same props) whenever the discriminator says to.
     return (
-      <MetricsDashboard
+      <FullAnalysisReportGate
         cycleCode={selectedCycle}
         onNavigate={(v, params) => {
           if (v === 'metrics' && params?.cycleCode) {
@@ -204,7 +227,7 @@ function AppContent() {
   // Default: dashboard
   return (
     <CycleDashboard
-      onNewCycle={() => navigateTo('wizard')}
+      onNewCycle={() => navigateTo('new-cycle')}
       onNavigate={(v) => navigateTo(v)}
       onViewCycle={(code) => navigateTo('metrics', { cycleCode: code })}
     />

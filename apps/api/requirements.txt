@@ -20,6 +20,10 @@ cryptography>=41.0.0
 # Actions feature — detector thresholds config (app/services/finding_detector.py)
 PyYAML>=6.0,<7.0.0
 
+# Full Analysis — competitor auto-suggestion (app/services/competitor_suggestion.py).
+# Pinned to 1.x to match apps/pipeline/requirements.txt (avoids 2.x pulling numpy/sounddevice).
+openai>=1.57.0,<2.0.0
+
 # HTTP — pinned for compatibility with httpcore 1.x
 httpx>=0.27.0,<0.29.0
 httpcore>=1.0.0,<2.0.0

@@ -290,7 +290,7 @@ def process_generation_jobs():
             remaining = target_count - created_count
             batch_size = min(BATCH_SIZE, remaining)
 
-            rows = generate_query_batch(
+            rows, det_reason = generate_query_batch(
                 study_name=study_name,
                 description=description,
                 batch_size=batch_size,
@@ -298,17 +298,33 @@ def process_generation_jobs():
                 api_key=api_key,
             )
 
+            if det_reason:
+                # Every row in this batch failed validation on the same
+                # field(s) — a prompt/schema mismatch, not one-off model
+                # noise. Retrying would reproduce the identical 100%
+                # failure, so fail the job now instead of wasting a
+                # second OpenAI call and eventually "completing" with 0
+                # queries (see the created_count==0 guard below, which
+                # this path skips entirely by returning early).
+                log.error(f"[generation] job {job_id}: {det_reason}")
+                _mark_generation_failed(job_id, det_reason)
+                return
+
             if not rows:
                 log.warning(
                     f"[generation] job {job_id}: batch returned 0 valid rows — retrying once"
                 )
-                rows = generate_query_batch(
+                rows, det_reason = generate_query_batch(
                     study_name=study_name,
                     description=description,
                     batch_size=batch_size,
                     already_generated=generated_texts,
                     api_key=api_key,
                 )
+                if det_reason:
+                    log.error(f"[generation] job {job_id}: {det_reason}")
+                    _mark_generation_failed(job_id, det_reason)
+                    return
                 if not rows:
                     log.error(
                         f"[generation] job {job_id}: second attempt also 0 rows — stopping early"
@@ -329,6 +345,17 @@ def process_generation_jobs():
                 conn.commit()
 
             log.info(f"[generation] job {job_id}: {created_count}/{target_count}")
+
+        if created_count == 0:
+            # Reached here only via the "stopping early" break above (no
+            # deterministic reason, but two attempts still produced
+            # nothing usable) — an honest failure, never a "complete: 0
+            # queries" the frontend would otherwise render as a normal,
+            # if oddly empty, study.
+            _mark_generation_failed(
+                job_id, "Generation produced no usable queries after retrying.",
+            )
+            return
 
         # Mark complete
         with engine.connect() as conn:
@@ -582,10 +609,15 @@ def process_lite_requests():
             # separate transaction — so there is no window where this
             # lite request is 'running' but has no scan row for
             # _sweep_lite_completions to join against.
+            # cycle_id (Phase 1's soa_cycle_scans linkage) is stamped here
+            # too, not just backfilled once for pre-existing rows — every
+            # lite-owned scan row going forward carries both FKs, which
+            # is what lets Phase 3's cycle-scoring service key entirely
+            # off cycle_id without a lite_request_id fallback.
             conn.execute(text("""
-                INSERT INTO soa_lite_scan_results (lite_request_id, input_url, status, updated_at)
-                VALUES (:rid, :url, 'running', NOW())
-            """), {"rid": request_id, "url": store_url})
+                INSERT INTO soa_lite_scan_results (lite_request_id, cycle_id, input_url, status, updated_at)
+                VALUES (:rid, :cid, :url, 'running', NOW())
+            """), {"rid": request_id, "cid": cycle_id, "url": store_url})
 
         log.info(f"[lite] request {request_id}: cycle {cycle_code} queued (id={cycle_id})")
 
@@ -704,6 +736,94 @@ def _run_lite_scan(request_id: int, store_url: str | None, api_key: str | None =
     _emit_llm_discovery_moment(request_id, result)
     lite_events.emit_done(request_id, lite_events.TASK_CRAWL, _crawl_done_text(result))
     return result.fetch_probe_url, result.fetch_probe_kind
+
+
+# ─── Full Analysis coexistence, Phase 2: standalone cycle crawls ──────────
+#
+# apps/api/app/routers/full_analysis.py::launch_crawl writes a 'pending'
+# soa_lite_scan_results row keyed by cycle_id with NO lite_request_id
+# (Phase 1's soa_cycle_scans linkage — cycle_id nullable, then
+# lite_request_id relaxed to nullable too, see migration 8c31844a4171).
+# This is the pipeline-side stage that actually runs those — same
+# run_scan() engine _run_lite_scan already uses, just addressed by the
+# scan row's own id instead of lite_request_id, since there is no lite
+# request to key off for a standalone Full Analysis cycle. Never touches
+# a lite-owned row (those are always claimed by _run_lite_scan instead,
+# via process_lite_requests) — the WHERE clause below is scoped to
+# lite_request_id IS NULL specifically so the two paths can never race
+# on the same row.
+
+def _run_cycle_scan(scan_id: int, store_url: str, api_key: str | None) -> None:
+    """
+    Runs the Agent Scan for one standalone (non-lite) cycle crawl and
+    writes the result back onto its own soa_lite_scan_results row by id.
+    run_scan() never raises (scan/engine.py) — always returns a
+    ScanResult with a terminal or 'skipped' status.
+    """
+    from scan.engine import run_scan
+
+    result = run_scan(store_url, api_key=api_key)
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE soa_lite_scan_results
+            SET status = :status,
+                total_score = :total_score,
+                integrity_capped = :integrity_capped,
+                dimensions = :dimensions,
+                pages_fetched = :pages_fetched,
+                error = :error,
+                updated_at = NOW()
+            WHERE id = :scan_id
+        """), {
+            "scan_id":          scan_id,
+            "status":           result.status,
+            "total_score":      result.total_score,
+            "integrity_capped": result.integrity_capped,
+            "dimensions":       json.dumps(result.dimensions),
+            "pages_fetched":    json.dumps(result.pages_fetched),
+            "error":            result.error,
+        })
+    log.info(f"[cycle-crawl] scan {scan_id}: {result.status} (score={result.total_score})")
+
+
+def process_cycle_crawls() -> None:
+    """
+    Picks up one pending standalone cycle crawl per poll iteration —
+    same "fetch the oldest, one at a time" discipline as
+    get_next_planned_cycle, not a batch. Flips status to 'running'
+    before the (slow) scan call so a second poll iteration during a
+    long-running crawl never re-picks the same row.
+    """
+    api_key = os.environ.get("OPEN_AI_API_KEY")
+    with engine.connect() as conn:
+        row = conn.execute(text("""
+            SELECT id, input_url FROM soa_lite_scan_results
+            WHERE status = 'pending' AND lite_request_id IS NULL AND cycle_id IS NOT NULL
+            ORDER BY id
+            LIMIT 1
+        """)).fetchone()
+
+    if not row:
+        return
+
+    scan_id, store_url = row
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE soa_lite_scan_results SET status = 'running', updated_at = NOW()
+            WHERE id = :scan_id
+        """), {"scan_id": scan_id})
+
+    if not store_url:
+        with engine.begin() as conn:
+            conn.execute(text("""
+                UPDATE soa_lite_scan_results SET status = 'skipped', updated_at = NOW()
+                WHERE id = :scan_id
+            """), {"scan_id": scan_id})
+        log.info(f"[cycle-crawl] scan {scan_id}: no store_url — skipped")
+        return
+
+    _run_cycle_scan(scan_id, store_url, api_key)
 
 
 def _emit_crawl_retry_moments(request_id: int, result) -> None:
@@ -1212,6 +1332,14 @@ def main():
                 _sweep_lite_completions()
             except Exception:
                 log.exception("[lite] completion sweep failed")
+
+            # Full Analysis coexistence, Phase 2: standalone cycle crawls —
+            # same isolation as every other stage above, so a crawl failure
+            # never blocks cycle/lite processing on later loop iterations.
+            try:
+                process_cycle_crawls()
+            except Exception:
+                log.exception("[cycle-crawl] poll iteration failed")
 
             if not row:
                 time.sleep(POLL_INTERVAL)

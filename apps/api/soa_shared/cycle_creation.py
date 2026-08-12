@@ -33,6 +33,9 @@ def create_cycle_with_comparison_set(
     created_by,
     notes,
     comparison_set: list,
+    source_lite_request_id: int | None = None,
+    study_series_id: str | None = None,
+    prior_cycle_id: int | None = None,
 ) -> tuple:
     """
     Inserts one soa_cycles row (status='planned') and its soa_cycle_entities
@@ -44,6 +47,12 @@ def create_cycle_with_comparison_set(
     platforms/truecost_tiers are passed through as-is (caller JSON-encodes
     if using raw SQL params that require it, matching create_cycle).
 
+    source_lite_request_id/study_series_id/prior_cycle_id (Full Analysis
+    coexistence, Phase 2): all default None, so every pre-existing caller
+    (this function's original two — apps/api/app/routers/cycles.py and
+    apps/pipeline/worker.py's SoA Lite processor) keeps writing NULL for
+    all three, unchanged.
+
     Returns (cycle_id, created_at).
     """
     cycle_row = conn.execute(text("""
@@ -52,13 +61,15 @@ def create_cycle_with_comparison_set(
             cycle_mode, truecost_tiers,
             total_runs_planned, completed_runs, start_date, notes,
             platforms, runs_per_query,
-            organization_id, created_by
+            organization_id, created_by,
+            source_lite_request_id, study_series_id, prior_cycle_id
         ) VALUES (
             :code, :st, :sp, 'planned',
             :cycle_mode, :truecost_tiers,
             :total, 0, :start_date, :notes,
             :platforms, :runs_per_query,
-            :org_id, :created_by
+            :org_id, :created_by,
+            :source_lite_request_id, :study_series_id, :prior_cycle_id
         )
         RETURNING id, created_at
     """), {
@@ -74,6 +85,9 @@ def create_cycle_with_comparison_set(
         "runs_per_query": runs_per_query,
         "org_id":         organization_id,
         "created_by":     created_by,
+        "source_lite_request_id": source_lite_request_id,
+        "study_series_id":        study_series_id,
+        "prior_cycle_id":         prior_cycle_id,
     }).fetchone()
 
     cycle_id = cycle_row[0]

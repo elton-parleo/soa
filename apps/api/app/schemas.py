@@ -89,6 +89,13 @@ class CreateCycleRequest(BaseModel):
     # non-member baseline. Ignored for cycle_mode='query'.
     truecost_tiers: Optional[List[Optional[str]]] = None
 
+    # Full Analysis coexistence (Phase 2): set only by NewCycleFlow, never
+    # by the classic NewCycleWizard. All three default None — an ordinary
+    # cycle created the classic way stamps NULL on all of them, unchanged.
+    source_lite_request_id: Optional[int] = None
+    study_series_id: Optional[str] = None
+    prior_cycle_id: Optional[int] = None
+
     @field_validator("cycle_mode")
     @classmethod
     def validate_cycle_mode(cls, v):
@@ -133,6 +140,113 @@ class CycleStatusResponse(BaseModel):
 class CycleCheckResponse(BaseModel):
     available: bool
     cycle_code: str
+
+# ─── Full Analysis coexistence, Phase 2: NewCycleFlow's own small,
+# additive endpoints — continuation-mode audit resolve, competitor
+# auto-suggestion, and crawl launch. See app/routers/full_analysis.py.
+
+class AuditCompetitor(BaseModel):
+    name: str
+    entity_id: Optional[int] = None
+    domain: Optional[str] = None
+
+class AuditContinuationResponse(BaseModel):
+    lite_request_id: int
+    cycle_id: Optional[int] = None
+    brand_name: str
+    brand_entity_id: Optional[int] = None
+    category: Optional[str] = None
+    competitors: List[AuditCompetitor] = []
+    composite: Optional[int] = None
+    verdict: Optional[str] = None
+    audited_at: Optional[str] = None
+    store_url: Optional[str] = None
+    store_domain: Optional[str] = None
+
+class SuggestCompetitorsRequest(BaseModel):
+    brand_name: str
+    store_url: Optional[str] = None
+    category_hint: Optional[str] = None
+    manual_names: Optional[List[str]] = None
+
+class SuggestedCompetitor(BaseModel):
+    name: str
+    domain: Optional[str] = None
+
+class SuggestCompetitorsResponse(BaseModel):
+    # 'ok' — generation ran (or wasn't needed); an empty competitors list
+    # here is a legitimate "found none" result, not a failure.
+    # 'degraded' — the suggestion service itself is unavailable this
+    # request (e.g. no backend API key configured) — reason is a fixed,
+    # internals-free enum for the client to key UI copy off; never the
+    # underlying env var name or exception text.
+    status: str = "ok"
+    reason: Optional[str] = None  # e.g. 'suggestions_unavailable' — only set when status == 'degraded'
+    competitors: List[SuggestedCompetitor]
+    source: str  # 'generated' | 'manual' | 'mixed' | 'none' — see competitor_suggestion.select_competitors
+
+class LaunchCrawlRequest(BaseModel):
+    cycle_id: int
+    store_url: str
+
+class LaunchCrawlResponse(BaseModel):
+    scan_id: int
+    cycle_id: int
+    status: str
+
+# Phase 4: the render-gate response — GET /full-analysis/report/{code}.
+# `rendered=False` means "fall back to the classic MetricsDashboard for
+# this cycle" (no crawl attached, crawl not complete yet, or no primary
+# entity resolvable) — never a partial/degraded Full Analysis render.
+
+class FullAnalysisContinuation(BaseModel):
+    source_lite_request_id: int
+    audit_composite: Optional[int] = None
+    audit_verdict: Optional[str] = None
+    audit_date: Optional[str] = None
+    audit_platforms_note: str
+    # 1f: per-pillar earned/max/delta, added alongside (never replacing)
+    # the composite-level comparison above. `comparable=False` marks a
+    # pillar where the full-cycle rescore (e.g. deal_citability's rate-
+    # band vs lite's count-band) makes a numeric delta misleading — the
+    # frontend shows direction/"rescored at full scale" there instead of
+    # a point delta. None when the audit never reached pillars-shaped
+    # scoring at all (nothing to diff against).
+    pillar_deltas: Optional[List[dict]] = None
+
+class FullAnalysisReportResponse(BaseModel):
+    cycle_code: str
+    rendered: bool
+    reason: Optional[str] = None
+    composite: Optional[int] = None
+    verdict: Optional[str] = None
+    scorer_version: Optional[str] = None
+    total_queries: Optional[int] = None
+    pillars: Optional[dict] = None
+    continuation: Optional[FullAnalysisContinuation] = None
+    # Phase 1 additions (additive only — every key below is None/absent
+    # on any report built before this phase shipped, and the frontend
+    # must render fine without it; see full_analysis_extras.py for how
+    # each is assembled).
+    platform_matrix: Optional[List[dict]] = None
+    competitor_set: Optional[dict] = None
+    scan: Optional[dict] = None
+    # offers is a LIST of rows (TrueValueSection.jsx iterates it as an
+    # array) — dimensions_raw['offers'] is apps/pipeline/scan/offer_feed.
+    # py::build_offer_feed's own output, the same shape public_lite.py's
+    # PublicLiteReportResponse.offers carries via PublicLiteOfferRow —
+    # not reused directly here since that model is defined later in this
+    # file (would need reordering); loose dicts match this response's
+    # existing convention for `pillars` above.
+    offers: Optional[List[dict]] = None
+    product_image_url: Optional[str] = None
+    product_name: Optional[str] = None
+    revenue_estimate_usd: Optional[float] = None
+    # Ranked fixes: pillars['fixes'] (cycle_scoring_full.py::
+    # _build_full_fixes_section) — {visible, remaining_count}, the exact
+    # shape FixesTable.jsx already reads for lite. Not a separate field.
+    evidence: Optional[dict] = None
+    what_if: Optional[dict] = None
 
 class QueryCreate(BaseModel):
     """Fields for creating a new query. query_code is auto-generated."""
@@ -340,6 +454,13 @@ class GenerationStatusResponse(BaseModel):
     status:        str
     target_count:  int
     created_count: int
+    # Additive — the router already passed this to the constructor, but
+    # Pydantic silently drops unknown kwargs by default, so it never
+    # actually reached any caller. StudyDetail.jsx (the existing study
+    # generation UI) already reads status.error_message and has always
+    # gotten undefined; this only fixes an existing latent gap, it
+    # doesn't change what any caller currently relies on.
+    error_message: Optional[str] = None
 
 
 # ─── Scope SKUs ──────────────────────
