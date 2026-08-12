@@ -205,6 +205,14 @@ class FullAnalysisContinuation(BaseModel):
     audit_verdict: Optional[str] = None
     audit_date: Optional[str] = None
     audit_platforms_note: str
+    # 1f: per-pillar earned/max/delta, added alongside (never replacing)
+    # the composite-level comparison above. `comparable=False` marks a
+    # pillar where the full-cycle rescore (e.g. deal_citability's rate-
+    # band vs lite's count-band) makes a numeric delta misleading — the
+    # frontend shows direction/"rescored at full scale" there instead of
+    # a point delta. None when the audit never reached pillars-shaped
+    # scoring at all (nothing to diff against).
+    pillar_deltas: Optional[List[dict]] = None
 
 class FullAnalysisReportResponse(BaseModel):
     cycle_code: str
@@ -216,6 +224,20 @@ class FullAnalysisReportResponse(BaseModel):
     total_queries: Optional[int] = None
     pillars: Optional[dict] = None
     continuation: Optional[FullAnalysisContinuation] = None
+    # Phase 1 additions (additive only — every key below is None/absent
+    # on any report built before this phase shipped, and the frontend
+    # must render fine without it; see full_analysis_extras.py for how
+    # each is assembled).
+    platform_matrix: Optional[List[dict]] = None
+    competitor_set: Optional[dict] = None
+    scan: Optional[dict] = None
+    offers: Optional[dict] = None
+    product_image_url: Optional[str] = None
+    product_name: Optional[str] = None
+    revenue_estimate_usd: Optional[float] = None
+    fixes: Optional[List[dict]] = None
+    evidence: Optional[dict] = None
+    what_if: Optional[dict] = None
 
 class QueryCreate(BaseModel):
     """Fields for creating a new query. query_code is auto-generated."""

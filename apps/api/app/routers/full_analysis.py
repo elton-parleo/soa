@@ -34,7 +34,15 @@ from app.services.competitor_suggestion import (
     generate_competitors,
     select_competitors,
 )
+from app.services.cycle_scoring import build_scan_payload
 from app.services.cycle_scoring_full import build_full_cycle_report
+from app.services.full_analysis_extras import (
+    build_competitor_set,
+    build_fixes,
+    build_platform_matrix,
+    build_what_if,
+    select_evidence_exemplar,
+)
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -175,15 +183,49 @@ def launch_crawl(
     return LaunchCrawlResponse(scan_id=row[0], cycle_id=data.cycle_id, status="pending")
 
 
-def _build_continuation(conn, source_lite_request_id: int) -> FullAnalysisContinuation | None:
+# 1f: per-pillar deltas are comparable only where both the lite and
+# full-cycle scorers use the exact same formula/band table. true_value
+# is NOT comparable — deal_citability rebands as a RATE at full-cycle
+# volume specifically because lite's count band trivially saturates
+# there (cycle_scoring_full.py's own module docstring); a point-for-
+# point True Value delta would silently compare two different rulers.
+# visibility/accessibility reuse the identical scoring path in both.
+_PILLAR_DELTA_COMPARABLE = {"visibility": True, "accessibility": True, "true_value": False}
+
+
+def _compute_pillar_deltas(audit_pillars: dict, full_pillars: dict) -> list[dict]:
+    """
+    Pure (1f): both the lite and full-cycle pillars dicts share the
+    exact same shape (both built via lite_pillars.py::_pillar) —
+    {"score": 0-100 normalized, "max": 100.0, "dimensions": [...]} — so
+    audit_score/full_score here are already on the same 0-100 scale the
+    top-level composite comparison always relied on, nothing new to
+    normalize. comparable=False on a dimension whose full-cycle rescore
+    isn't apples-to-apples (see _PILLAR_DELTA_COMPARABLE) — the
+    frontend shows direction/"rescored at full scale" there instead of
+    a numeric delta.
+    """
+    deltas = []
+    for key in ("visibility", "accessibility", "true_value"):
+        audit_score = (audit_pillars.get(key) or {}).get("score")
+        full_score = (full_pillars.get(key) or {}).get("score")
+        comparable = _PILLAR_DELTA_COMPARABLE[key] and audit_score is not None and full_score is not None
+        deltas.append({
+            "pillar": key,
+            "audit_score": audit_score,
+            "full_score": full_score,
+            "delta": (full_score - audit_score) if comparable else None,
+            "comparable": comparable,
+        })
+    return deltas
+
+
+def _build_continuation(conn, source_lite_request_id: int, full_pillars: dict) -> FullAnalysisContinuation | None:
     """
     Phase 4 report header, item 2: the audit's own composite/verdict/
-    date for the continuation banner's "your audit scored X" line —
-    only a direction/plain-composite comparison, never a false-precision
-    per-dimension delta (composite is on the same 0-100 scale under
-    both v5 and FULL_CYCLE_SCORER_VERSION; individual dimension bands
-    are not guaranteed comparable across the two, see cycle_scoring_
-    full.py's module docstring).
+    date for the continuation banner's "your audit scored X" line, plus
+    (1f) a per-pillar delta (_compute_pillar_deltas) when the audit
+    itself reached pillars-shaped scoring.
     """
     row = conn.execute(text("""
         SELECT lr.id, lr.cycle_id, lr.status, lr.created_at, c.platforms, c.runs_per_query
@@ -197,10 +239,14 @@ def _build_continuation(conn, source_lite_request_id: int) -> FullAnalysisContin
 
     audit_composite = None
     audit_verdict = None
+    pillar_deltas = None
     if status == "complete" and audit_cycle_id is not None:
         audit_report = _build_report_payload(conn, lite_request_id, audit_cycle_id)
         audit_composite = audit_report.get("composite")
-        audit_verdict = (audit_report.get("pillars") or {}).get("verdict")
+        audit_pillars = audit_report.get("pillars")
+        audit_verdict = (audit_pillars or {}).get("verdict")
+        if audit_pillars:
+            pillar_deltas = _compute_pillar_deltas(audit_pillars, full_pillars)
 
     platforms = _decode_json_field(platforms_raw, [])
     platforms_note = (
@@ -213,6 +259,7 @@ def _build_continuation(conn, source_lite_request_id: int) -> FullAnalysisContin
         audit_verdict=audit_verdict,
         audit_date=str(created_at)[:10] if created_at else None,
         audit_platforms_note=platforms_note,
+        pillar_deltas=pillar_deltas,
     )
 
 
@@ -247,9 +294,38 @@ def get_full_analysis_report(
             )
 
         continuation = (
-            _build_continuation(conn, source_lite_request_id)
+            _build_continuation(conn, source_lite_request_id, report["pillars"])
             if source_lite_request_id is not None else None
         )
+
+        dimensions_raw = report["dimensions_raw"]
+        primary_entity_id = report["primary_entity_id"]
+
+        # 1d: discovery/parsed-page/value-signals — the SAME shape build_
+        # scan_payload already builds for lite (pages_fetched, agent_
+        # access_matrix, discovery_trace). linked={} deliberately: the
+        # v1/v2 dimension-code "linked reasons" crosswalk is a lite-
+        # report-specific concern (cycle_scoring.py's _attach_v3_linked_
+        # reasons handles the v3+ equivalent on `pillars` directly,
+        # which this report doesn't yet do either) — out of Phase 1's
+        # scope, and scan.dimensions isn't the primary source a v4-
+        # shaped report reads from anyway (pillars is).
+        scan_payload = build_scan_payload(report["scan_row"], {})
+
+        platform_matrix = (
+            build_platform_matrix(conn, cycle_id, primary_entity_id, dimensions_raw)
+            if primary_entity_id is not None else []
+        )
+        competitor_set = (
+            build_competitor_set(conn, cycle_id, report["overall_entity_info"], report["overall_metrics"])
+            if primary_entity_id is not None else None
+        )
+        fixes = build_fixes(dimensions_raw)
+        evidence = (
+            select_evidence_exemplar(conn, cycle_id, primary_entity_id)
+            if primary_entity_id is not None else None
+        )
+        what_if = build_what_if(competitor_set) if competitor_set else None
 
     return FullAnalysisReportResponse(
         cycle_code=cycle_code, rendered=True,
@@ -259,4 +335,14 @@ def get_full_analysis_report(
         total_queries=report["total_queries"],
         pillars=report["pillars"],
         continuation=continuation,
+        platform_matrix=platform_matrix,
+        competitor_set=competitor_set,
+        scan=scan_payload,
+        offers=dimensions_raw.get("offers"),
+        product_image_url=dimensions_raw.get("product_image_url"),
+        product_name=dimensions_raw.get("product_name"),
+        revenue_estimate_usd=report["revenue_estimate_usd"],
+        fixes=fixes,
+        evidence=evidence,
+        what_if=what_if,
     )

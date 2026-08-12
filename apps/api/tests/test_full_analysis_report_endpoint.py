@@ -51,12 +51,17 @@ def patched_engine(monkeypatch):
                 deal_citation_rate FLOAT, platform_dist_index FLOAT
             )
         """)
-        conn.exec_driver_sql("CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, stage TEXT)")
-        conn.exec_driver_sql("CREATE TABLE soa_runs (id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT)")
+        conn.exec_driver_sql("CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, stage TEXT, persona TEXT, query_text TEXT)")
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_runs (
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT, platform TEXT
+            )
+        """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_coded_mentions (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
-                mentioned BOOLEAN, deal_cited BOOLEAN, deal_types TEXT, member_value_cited BOOLEAN
+                mentioned BOOLEAN, deal_cited BOOLEAN, deal_types TEXT, member_value_cited BOOLEAN,
+                strength TEXT, evidence TEXT
             )
         """)
         conn.exec_driver_sql("""
@@ -66,6 +71,15 @@ def patched_engine(monkeypatch):
             )
         """)
         conn.exec_driver_sql("CREATE TABLE soa_pass2_coding_log (id INTEGER PRIMARY KEY, run_id INTEGER, coding_pass_version INTEGER)")
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_incentive_scores (
+                id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
+                scoring_grain TEXT, status TEXT, measurement_status TEXT,
+                stated_price FLOAT, ground_truth_true_cost FLOAT,
+                ground_truth_applied_deals TEXT, ground_truth_available_deals TEXT,
+                net_price_accuracy BOOLEAN
+            )
+        """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_lite_requests (
                 id INTEGER PRIMARY KEY, token TEXT UNIQUE, email TEXT, status TEXT, cycle_id INTEGER,
@@ -117,11 +131,15 @@ def _seed_scored_cycle(conn, cycle_code="fc-1", cycle_id=10, org_id=1, source_li
     )
     for i in range(10):
         qid = cycle_id * 1000 + i
+        platform = "chatgpt" if i % 2 == 0 else "gemini"
         conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (?, 'Ready to Buy')", (qid,))
-        conn.exec_driver_sql("INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (?, ?, ?, 'success')", (qid, cycle_id, qid))
         conn.exec_driver_sql(
-            "INSERT INTO soa_coded_mentions (run_id, entity_id, mentioned, deal_cited, deal_types, member_value_cited) "
-            "VALUES (?, ?, 1, 1, ?, 1)",
+            "INSERT INTO soa_runs (id, cycle_id, query_id, status, platform) VALUES (?, ?, ?, 'success', ?)",
+            (qid, cycle_id, qid, platform),
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_coded_mentions (run_id, entity_id, mentioned, deal_cited, deal_types, member_value_cited, strength) "
+            "VALUES (?, ?, 1, 1, ?, 1, 'Primary')",
             (qid, cycle_id * 10 + 1, json.dumps(["member_price"])),
         )
         conn.exec_driver_sql(
@@ -129,6 +147,13 @@ def _seed_scored_cycle(conn, cycle_code="fc-1", cycle_id=10, org_id=1, source_li
             (qid, cycle_id * 10 + 1),
         )
         conn.exec_driver_sql("INSERT INTO soa_pass2_coding_log (run_id, coding_pass_version) VALUES (?, 2)", (qid,))
+        conn.exec_driver_sql(
+            "INSERT INTO soa_incentive_scores "
+            "(run_id, entity_id, scoring_grain, status, measurement_status, stated_price, "
+            " ground_truth_true_cost, ground_truth_applied_deals, ground_truth_available_deals, net_price_accuracy) "
+            "VALUES (?, ?, 'observation', 'scored', 'measured', 10.0, 8.5, ?, '[]', 0)",
+            (qid, cycle_id * 10 + 1, json.dumps([{"id": "promo"}])),
+        )
 
 
 def test_renders_true_for_a_cycle_with_a_complete_crawl(patched_engine):
@@ -142,6 +167,24 @@ def test_renders_true_for_a_cycle_with_a_complete_crawl(patched_engine):
     assert result.verdict == "AGENT-READY"
     assert result.scorer_version == "6"
     assert result.continuation is None
+
+    # Phase 1: the full payload schema, end to end — every new key
+    # present and shaped from real seeded rows, nothing hardcoded.
+    assert {r["platform"] for r in result.platform_matrix} == {"chatgpt", "gemini"}
+    chatgpt_row = next(r for r in result.platform_matrix if r["platform"] == "chatgpt")
+    assert chatgpt_row["share_of_mentions"]["value"] == 100.0  # only entity tracked, always mentioned
+    assert chatgpt_row["recommendation_strength_band"] == "1st + endorsed"  # strength='Primary' seeded
+    assert chatgpt_row["price_truth_said"]["state"] == "measured"
+    assert chatgpt_row["price_truth_said"]["value"] == 0.0  # net_price_accuracy=0 seeded throughout
+
+    assert result.competitor_set["overall"][0]["entity"] == "Full Cycle Brand"
+    assert result.scan["status"] == "complete"
+    assert result.revenue_estimate_usd is None  # no revenue_probe seeded this cycle
+    # Every seeded dimension is already at full credit (score == max) —
+    # nothing to fix, so an honestly empty list, not a fabricated one.
+    assert result.fixes == []
+    assert result.evidence is not None
+    assert result.evidence["price_observation"]["accurate"] is False
 
 
 def test_falls_back_to_classic_when_no_crawl_attached(patched_engine):
@@ -179,6 +222,13 @@ def test_continuation_banner_present_when_cycle_traces_back_to_an_audit(patched_
     assert result.continuation.audit_composite == 100
     assert result.continuation.audit_date == "2026-07-01"
     assert "chatgpt" in result.continuation.audit_platforms_note
+    # This fixture's soa_lite_scan_results row is keyed by cycle_id, not
+    # lite_request_id (_fetch_scan_row's actual lookup key) — the audit
+    # side of _build_continuation resolves no scan row here, so pillars
+    # stays unset and pillar_deltas is None. _compute_pillar_deltas
+    # itself (the real 1f logic) is covered directly in
+    # test_full_analysis_extras.py, not through this heavier fixture.
+    assert result.continuation.pillar_deltas is None
 
 
 def test_continuation_banner_absent_for_a_cycle_created_the_ordinary_way(patched_engine):

@@ -44,12 +44,14 @@ from soa_shared.scan_dimensions import (
     dimension_max,
 )
 
+from app.services.exposure_reasons import select_exposure_reasons
 from app.services.lite_crosswalk import RunSignal
 from app.services.lite_pillars import (
     _ACCESSIBILITY_CODES,
     _TRUE_VALUE_SPLIT_CODES,
     _VALUE_PROTOCOLS_CODE,
     _crawl_dim_row,
+    _dim_by_code,
     _pillar,
     _sub_lens,
     member_value_applicable,
@@ -58,6 +60,22 @@ from app.services.lite_pillars import (
 )
 from app.services.cycle_scoring import decode_json_field, _fetch_run_signals, _fetch_metrics_rows
 from app.routers.metrics import build_entity_metrics
+
+# ─── Recommendation-strength band labels ──────────────────────────────────
+#
+# No short label for score_recommendation_strength_full's your_band (0/1/
+# 2) exists anywhere in the shipped audit today — _recommendation_
+# strength_band (lite_pillars.py) returns a full evidence SENTENCE, and
+# the landing page's static scanDimensionsRegistry.js illustrates the
+# same 3-rung ladder with its own wording ('1st + endorsed' / 'listed' /
+# 'absent'). The platform matrix (1a) needs a short label per row, so
+# this reuses that existing vocabulary rather than inventing new copy —
+# same band semantics (your_band), just the shortest existing phrasing.
+REC_STRENGTH_BAND_LABELS = ("1st + endorsed", "Listed", "Absent")
+
+
+def recommendation_strength_band_label(your_band: int) -> str:
+    return REC_STRENGTH_BAND_LABELS[your_band] if 0 <= your_band < len(REC_STRENGTH_BAND_LABELS) else "Absent"
 
 # ─── Envelope shape (data-structure backlog item 6) ──────────────────────
 #
@@ -264,16 +282,41 @@ def build_full_cycle_pillars(
     vp_seen = crawl_dimensions.get(f"{_VALUE_PROTOCOLS_CODE}_seen") or {}
     vp_earned = vp_seen.get("score") or 0.0
     vp_max = dimension_max(vp_dim)
+    vp_seen_row = _sub_lens(vp_earned, vp_max, False, vp_seen.get("evidence") or [])
     true_value_earned += vp_earned
     true_value_applicable_max += vp_max
     true_value_dims.append({
         "code": _VALUE_PROTOCOLS_CODE, "name": vp_dim.name, "earned": vp_earned, "max": vp_max,
-        "na": False, "seen": _sub_lens(vp_earned, vp_max, False, vp_seen.get("evidence") or []), "said": None,
+        "na": False, "seen": vp_seen_row, "said": None,
     })
 
     total_earned = visibility_earned + accessibility_earned + true_value_earned
     composite = compute_composite(total_earned, member_value_na=member_value_na)
     verdict = compute_verdict(composite, true_value_earned, true_value_applicable_max)
+
+    # Same table-driven exposure reasons lite_pillars.py computes,
+    # ported wholesale from its exposure_reasons_ctx construction — the
+    # underlying sub-lenses (true_value_dims' seen/said, accessibility_
+    # dims, som_result) have the identical shape here, so this is not a
+    # second scoring pass, just the same ctx assembled from this
+    # function's own already-computed rows.
+    exposure_reasons_ctx = {
+        "price_truth_seen": _dim_by_code(true_value_dims, "price_truth")["seen"],
+        "price_truth_said": _dim_by_code(true_value_dims, "price_truth")["said"],
+        "member_value_applicable": not member_value_na,
+        "member_value_seen": _dim_by_code(true_value_dims, "member_value")["seen"],
+        "member_value_said": _dim_by_code(true_value_dims, "member_value")["said"],
+        "deal_citability_seen": _dim_by_code(true_value_dims, "deal_citability")["seen"],
+        "deal_citability_said": _dim_by_code(true_value_dims, "deal_citability")["said"],
+        "value_protocols": vp_seen_row,
+        "catalog_context": _dim_by_code(accessibility_dims, "catalog_context"),
+        "agent_access": _dim_by_code(accessibility_dims, "agent_access"),
+        "visibility": {
+            "earned": som_result["earned"], "max": som_result["max"], "na": False,
+            "som_pct": som_pct if som_pct is not None else 0.0, "total_mentions": total_mentions,
+        },
+    }
+    exposure_reasons = select_exposure_reasons(exposure_reasons_ctx)
 
     return {
         "visibility": _pillar(visibility_earned, DIMENSIONS_BY_CODE["share_of_mentions"].weight + DIMENSIONS_BY_CODE["recommendation_strength"].weight, visibility_dims),
@@ -283,6 +326,7 @@ def build_full_cycle_pillars(
         "verdict": verdict,
         "member_value_na": member_value_na,
         "scorer_version": FULL_CYCLE_SCORER_VERSION,
+        "exposure_reasons": exposure_reasons,
     }
 
 
@@ -313,12 +357,17 @@ def build_full_cycle_report(conn, cycle_id: int) -> dict:
 
     rows = _fetch_metrics_rows(conn, cycle_id)
     overall_metrics: Dict = {}
+    # comp_code -> {"name", "role"} — the report-copy layer (full_
+    # analysis_extras.py, Phase 4) needs this for competitor_set's
+    # overall visibility rows; returned below rather than re-queried.
+    overall_entity_info: Dict = {}
     primary_code = None
     total_queries = 0
     for row in rows:
-        comp_code, role = row[13], row[12]
+        name, comp_code, role = row[1], row[13], row[12]
         if role == "primary":
             primary_code = comp_code
+        overall_entity_info[comp_code] = {"name": name, "role": role}
         overall_metrics[comp_code] = build_entity_metrics(row)
         total_queries = max(total_queries, overall_metrics[comp_code].get("total_runs") or 0)
 
@@ -333,6 +382,7 @@ def build_full_cycle_report(conn, cycle_id: int) -> dict:
 
     primary_metrics = overall_metrics.get(primary_code) or {}
     membership_probe = decode_json_field(scan_row[5], {})
+    revenue_probe = decode_json_field(scan_row[6], {})
 
     pillars = build_full_cycle_pillars(
         som_pct=primary_metrics.get("som"),
@@ -350,4 +400,14 @@ def build_full_cycle_report(conn, cycle_id: int) -> dict:
         "pillars": pillars,
         "scorer_version": FULL_CYCLE_SCORER_VERSION,
         "total_queries": total_queries,
+        # Report-copy layer inputs (Phase 4, full_analysis_extras.py) —
+        # already fetched above for pillars scoring, returned rather
+        # than re-queried by the router.
+        "dimensions_raw": dimensions_raw,
+        "primary_entity_id": primary_entity_id,
+        "overall_entity_info": overall_entity_info,
+        "overall_metrics": overall_metrics,
+        "revenue_estimate_usd": revenue_probe.get("annual_revenue_usd"),
+        "pages_fetched": decode_json_field(scan_row[4], []),
+        "scan_row": scan_row,
     }
