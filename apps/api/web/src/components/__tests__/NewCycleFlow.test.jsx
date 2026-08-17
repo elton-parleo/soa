@@ -625,3 +625,50 @@ describe('NewCycleFlow — honest platform rendering', () => {
     expect(payload.platforms).toEqual(['chatgpt', 'gemini'])
   })
 })
+
+// goToStep3() calls goToStep2() internally (its own fresh render) — the
+// two helpers can never be chained in one test without mounting a
+// second, independent <NewCycleFlow/>. These tests need to assert on
+// Step 2 first, so they continue to Step 3 by hand instead.
+async function advanceToStep3FromStep2() {
+  const select = screen.getByRole('combobox')
+  fireEvent.change(select, { target: { value: STUDY.id } })
+  await waitFor(() => expect(screen.getByText('Next: Review & Launch →')).not.toBeDisabled())
+  fireEvent.click(screen.getByText('Next: Review & Launch →'))
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Review & Launch' })).toBeInTheDocument())
+}
+
+describe('NewCycleFlow — depth presets', () => {
+  it('Standard is 3 runs per query and reaches the launch payload', async () => {
+    api.createCycle.mockResolvedValue({ id: 99, cycle_code: '2026-08-acme-full' })
+    api.launchCrawl.mockResolvedValue({ scan_id: 5, cycle_id: 99, status: 'pending' })
+
+    await goToStep2()
+    expect(screen.getByText('ChatGPT + Gemini, 3 runs per query.')).toBeInTheDocument()
+
+    await advanceToStep3FromStep2()
+    expect(screen.getByText(/Standard \(chatgpt, gemini · 3 runs\/query\)/)).toBeInTheDocument()
+
+    await waitFor(() => expect(screen.getByText('AVAILABLE ✓')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Launch Full Analysis'))
+    await waitFor(() => expect(api.createCycle).toHaveBeenCalledTimes(1))
+    expect(api.createCycle.mock.calls[0][0].runs_per_query).toBe(3)
+  })
+
+  it('Deep is 5 runs per query and reaches the launch payload', async () => {
+    api.createCycle.mockResolvedValue({ id: 99, cycle_code: '2026-08-acme-full' })
+    api.launchCrawl.mockResolvedValue({ scan_id: 5, cycle_id: 99, status: 'pending' })
+
+    await goToStep2()
+    expect(screen.getByText('ChatGPT + Gemini + Claude, 5 runs per query.')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Deep'))
+
+    await advanceToStep3FromStep2()
+    expect(screen.getByText(/Deep \(chatgpt, gemini, claude · 5 runs\/query\)/)).toBeInTheDocument()
+
+    await waitFor(() => expect(screen.getByText('AVAILABLE ✓')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Launch Full Analysis'))
+    await waitFor(() => expect(api.createCycle).toHaveBeenCalledTimes(1))
+    expect(api.createCycle.mock.calls[0][0].runs_per_query).toBe(5)
+  })
+})

@@ -49,12 +49,12 @@ const PLATFORM_META = [
 
 const DEPTH_PRESETS = [
   {
-    id: 'standard', name: 'Standard', description: 'ChatGPT + Gemini, 5 runs per query.',
-    platforms: ['chatgpt', 'gemini'], runsPerQuery: 5,
+    id: 'standard', name: 'Standard', description: 'ChatGPT + Gemini, 3 runs per query.',
+    platforms: ['chatgpt', 'gemini'], runsPerQuery: 3,
   },
   {
-    id: 'deep', name: 'Deep', description: 'ChatGPT + Gemini + Claude, 8 runs per query.',
-    platforms: ['chatgpt', 'gemini', 'claude'], runsPerQuery: 8,
+    id: 'deep', name: 'Deep', description: 'ChatGPT + Gemini + Claude, 5 runs per query.',
+    platforms: ['chatgpt', 'gemini', 'claude'], runsPerQuery: 5,
   },
 ]
 
