@@ -247,6 +247,10 @@ class FullAnalysisReportResponse(BaseModel):
     # shape FixesTable.jsx already reads for lite. Not a separate field.
     evidence: Optional[dict] = None
     what_if: Optional[dict] = None
+    # "From the transcript" widget — same shape/service as PublicLite
+    # ReportResponse.transcript (app/services/transcript_pick.py); one
+    # backend service, one frontend component, both products.
+    transcript: Optional[dict] = None
 
 class QueryCreate(BaseModel):
     """Fields for creating a new query. query_code is auto-generated."""
@@ -1335,6 +1339,11 @@ class PublicLiteReportResponse(BaseModel):
     # when brand_icon_url is null. Never third-party-sourced itself —
     # this is the merchant's own submitted domain, not a lookup.
     store_domain: Optional[str] = None
+    # "From the transcript" widget: one live query + verbatim response
+    # selected by app/services/transcript_pick.py::select_transcript,
+    # additive/null-safe (see that module's docstring for the selection
+    # cascade). Loose dict, same convention as `pillars` above.
+    transcript: Optional[dict] = None
 
 
 class PublicLiteEmailRequest(BaseModel):

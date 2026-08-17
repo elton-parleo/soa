@@ -35,7 +35,7 @@ def patched_engine(monkeypatch):
             )
         """)
         conn.exec_driver_sql("""
-            CREATE TABLE soa_entities (id INTEGER PRIMARY KEY, name TEXT, slug TEXT, website_url TEXT)
+            CREATE TABLE soa_entities (id INTEGER PRIMARY KEY, name TEXT, slug TEXT, website_url TEXT, aliases TEXT)
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_cycle_entities (
@@ -54,20 +54,22 @@ def patched_engine(monkeypatch):
         conn.exec_driver_sql("CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, stage TEXT, persona TEXT, query_text TEXT)")
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
-                id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT, platform TEXT
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT, platform TEXT,
+                raw_response TEXT, run_at TEXT
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_coded_mentions (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
                 mentioned BOOLEAN, deal_cited BOOLEAN, deal_types TEXT, member_value_cited BOOLEAN,
-                strength TEXT, evidence TEXT
+                strength TEXT, evidence TEXT, position INTEGER
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_price_observations (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
-                stated_price FLOAT, claimed_net_price FLOAT, member_price_claimed BOOLEAN
+                stated_price FLOAT, claimed_net_price FLOAT, member_price_claimed BOOLEAN,
+                merchant_name TEXT, attribution_status TEXT
             )
         """)
         conn.exec_driver_sql("CREATE TABLE soa_pass2_coding_log (id INTEGER PRIMARY KEY, run_id INTEGER, coding_pass_version INTEGER)")
@@ -261,3 +263,24 @@ def test_continuation_banner_absent_for_a_cycle_created_the_ordinary_way(patched
 
     assert result.rendered is True
     assert result.continuation is None
+
+
+# ─── "From the transcript" widget — same service as the lite report ───────
+
+def test_transcript_wired_into_the_full_analysis_report(patched_engine):
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn, cycle_code="fc-transcript", cycle_id=40)
+        # _seed_scored_cycle's own runs never set raw_response — give
+        # exactly one of them a verbatim answer so select_transcript has
+        # something to pick.
+        conn.exec_driver_sql(
+            "UPDATE soa_runs SET raw_response = 'Full Cycle Brand is the top pick here.', run_at = '2026-08-07' "
+            "WHERE id = 40000"
+        )
+
+    result = full_analysis_router.get_full_analysis_report("fc-transcript", current_user=CURRENT_USER)
+
+    assert result.rendered is True
+    assert result.transcript is not None
+    assert result.transcript["run_id"] == 40000
+    assert "Full Cycle Brand" in result.transcript["response_text"]

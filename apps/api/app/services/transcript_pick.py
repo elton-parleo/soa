@@ -24,16 +24,27 @@ raw_response and returns {start, end, kind} spans for the frontend to
 paint. A claim that can't be located contributes to `leaked` copy only
 — never an injected/approximated highlight (H1 convention).
 """
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import text
 
-from app.services.cycle_scoring import decode_json_field
 from soa_shared.scan_dimensions import PURCHASE_INTENT_STAGES
 
 _STRENGTH_RANK = {"Primary": 3, "Positive": 2, "Neutral": 1, "Negative": 0}
+
+
+def _decode_json_field(value, default):
+    """JSON columns come back already-decoded via psycopg2; defensively
+    handle a driver (or SQLite test) that returns the raw string instead
+    — same idiom as cycle_scoring.py::decode_json_field, duplicated here
+    (not imported) to avoid a cycle_scoring <-> transcript_pick import
+    cycle."""
+    if isinstance(value, str):
+        return json.loads(value) if value else default
+    return value if value is not None else default
 
 
 @dataclass
@@ -82,7 +93,7 @@ def _fetch_candidates(conn, cycle_id: int, primary_entity_id: int) -> List[_RunC
             coded=bool(coded), mentioned=bool(mentioned) if coded else False,
             position=position, strength=strength,
             deal_cited=bool(deal_cited) if coded else False,
-            deal_types=tuple(decode_json_field(deal_types, [])) if coded else (),
+            deal_types=tuple(_decode_json_field(deal_types, [])) if coded else (),
         )
     if not candidates:
         return []
@@ -129,7 +140,7 @@ def _fetch_candidates(conn, cycle_id: int, primary_entity_id: int) -> List[_RunC
             continue
         candidates[run_id].competitor_mentions.append(name)
         if deal_cited:
-            candidates[run_id].competitor_deals.append({"name": name, "deal_types": tuple(decode_json_field(deal_types, []))})
+            candidates[run_id].competitor_deals.append({"name": name, "deal_types": tuple(_decode_json_field(deal_types, []))})
 
     return list(candidates.values())
 
@@ -437,7 +448,7 @@ def select_transcript(
         SELECT name, aliases FROM soa_entities WHERE id = :pid
     """), {"pid": primary_entity_id}).fetchone()
     primary_name = entity_row[0] if entity_row else ""
-    primary_aliases = decode_json_field(entity_row[1], []) if entity_row else []
+    primary_aliases = _decode_json_field(entity_row[1], []) if entity_row else []
 
     total_queries = conn.execute(text("""
         SELECT COUNT(DISTINCT query_id) FROM soa_runs WHERE cycle_id = :cid AND status = 'success'
