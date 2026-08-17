@@ -190,6 +190,9 @@ export const NAV_META = {
   // built list when `partial` is passed to buildNavItems below.
   why: { icon: 'eye', label: 'Why we stopped short' },
   viz: { icon: 'eye', label: 'Visibility' },
+  // Only ever included in the built list when `transcript` is passed to
+  // buildNavItems below (null-safe — see TranscriptSection.jsx).
+  transcript: { icon: 'doc', label: 'The transcript' },
   acc: { icon: 'globe', label: 'Accessibility' },
   tv: { icon: 'tag', label: 'True Value' },
   fix: { icon: 'check', label: 'Ranked fixes' },
@@ -202,12 +205,12 @@ function kLabel(n) {
   return n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : `$${Math.round(n / 1e3)}K`
 }
 
-export function buildNavItems({ pillars, composite, exposure, active, partial }) {
+export function buildNavItems({ pillars, composite, exposure, active, partial, transcript }) {
   const vis = pillarEarnedMax(pillars.visibility)
   const acc = pillarEarnedMax(pillars.accessibility)
   const tv = pillarEarnedMax(pillars.true_value)
 
-  return NAV_IDS.filter((id) => id !== 'fun' && (id !== 'why' || partial)).map((id) => {
+  return NAV_IDS.filter((id) => id !== 'fun' && (id !== 'why' || partial) && (id !== 'transcript' || transcript)).map((id) => {
     if (!(id in NAV_META)) return null
     const on = active === id
     const meta = NAV_META[id]
@@ -215,6 +218,7 @@ export function buildNavItems({ pillars, composite, exposure, active, partial })
     if (id === 'why') score = '↓'
     else if (id === 'score') score = `${Math.round(composite ?? 0)}/100`
     else if (id === 'viz') score = `${Math.round(vis.earned)}/${Math.round(vis.max)}`
+    else if (id === 'transcript') score = `${transcript.query_index}/${transcript.total_queries}`
     else if (id === 'acc') score = `${Math.round(acc.earned)}/${Math.round(acc.max)}`
     else if (id === 'tv') score = `${Math.round(tv.earned)}/${Math.round(tv.max)}`
     else if (id === 'fix') score = `+${Math.round(vis.max - vis.earned + acc.max - acc.earned + tv.max - tv.earned > 0 ? Math.min(20, vis.max - vis.earned + acc.max - acc.earned + tv.max - tv.earned) : 0)}`

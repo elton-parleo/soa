@@ -40,6 +40,13 @@ export const EVENTS = {
   SHARE_COPIED: 'share_copied',
   CTA_CLICKED: 'cta_clicked',
   ADJUST_ASSUMPTIONS_USED: 'adjust_assumptions_used',
+  // "From the transcript" widget's inner "Show the full answer" toggle —
+  // deliberately a separate event from section_expanded (which the
+  // outer transcript section already gets for free via ReportSection/
+  // SectionCollapseButton): this one measures whether readers go past
+  // the preview into the full verbatim answer, not a generic section
+  // open.
+  TRANSCRIPT_ANSWER_EXPANDED: 'transcript_answer_expanded',
   // Shared (landing + report — the modal fires the same event either way)
   DEMO_REQUEST_SUBMITTED: 'demo_request_submitted',
 }
@@ -59,6 +66,7 @@ export const EVENT_REGISTRY = {
   [EVENTS.SHARE_COPIED]: ['placement'],
   [EVENTS.CTA_CLICKED]: ['cta', 'placement'],
   [EVENTS.ADJUST_ASSUMPTIONS_USED]: [],
+  [EVENTS.TRANSCRIPT_ANSWER_EXPANDED]: [],
   // Union of the landing call (source only) and the report call
   // (source + brand_name + report_token) — the report-only props are
   // simply absent on a landing-fired call.

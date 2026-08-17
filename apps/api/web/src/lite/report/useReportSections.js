@@ -16,8 +16,8 @@ import { useEffect, useRef, useState } from 'react'
 // here, since document.getElementById('why') is simply absent (and
 // skipped) on a fully-scored report that never renders the section;
 // buildNavItems (reportDerive.js) is what actually gates its nav row.
-export const NAV_IDS = ['score', 'why', 'viz', 'acc', 'tv', 'fun', 'fix', 'truesync', 'exp']
-export const SECTION_KEYS = ['why', 'viz', 'acc', 'tv', 'fun', 'fix', 'exp']
+export const NAV_IDS = ['score', 'why', 'viz', 'transcript', 'acc', 'tv', 'fun', 'fix', 'truesync', 'exp']
+export const SECTION_KEYS = ['why', 'viz', 'transcript', 'acc', 'tv', 'fun', 'fix', 'exp']
 
 export function useReportSections() {
   const [sec, setSec] = useState({})

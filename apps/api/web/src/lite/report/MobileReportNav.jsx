@@ -102,7 +102,7 @@ export function SectionsSheet({ report, exposure, active, open, onClose }) {
   const pillars = report.pillars
   const composite = report.composite
   const partial = isPartialRead(pillars, report.scan?.degraded_reason)
-  const navItems = buildNavItems({ pillars, composite, exposure, active, partial })
+  const navItems = buildNavItems({ pillars, composite, exposure, active, partial, transcript: report.transcript })
 
   // Closing the sheet unmounts the very <a> the browser is mid-navigating
   // from — confirmed live: the native anchor jump loses the race against
