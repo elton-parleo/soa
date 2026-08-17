@@ -347,6 +347,7 @@ def get_full_analysis_report(
                 conn, cycle_id, primary_entity_id,
                 share_pct=primary_share_row["share_pct"] if primary_share_row else None,
                 share_rank_label=share_rank_label_for((competitor_set or {}).get("overall", []), primary_name),
+                page_price_encoded=bool(dimensions_raw.get("offers")),
             )
 
     return FullAnalysisReportResponse(

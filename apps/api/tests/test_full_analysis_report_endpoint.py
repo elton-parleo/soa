@@ -69,13 +69,13 @@ def patched_engine(monkeypatch):
             CREATE TABLE soa_price_observations (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
                 stated_price FLOAT, claimed_net_price FLOAT, member_price_claimed BOOLEAN,
-                merchant_name TEXT, attribution_status TEXT
+                merchant_name TEXT, merchant_slug TEXT, attribution_status TEXT
             )
         """)
         conn.exec_driver_sql("CREATE TABLE soa_pass2_coding_log (id INTEGER PRIMARY KEY, run_id INTEGER, coding_pass_version INTEGER)")
         conn.exec_driver_sql("""
             CREATE TABLE soa_incentive_scores (
-                id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
+                id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER, price_observation_id INTEGER,
                 scoring_grain TEXT, status TEXT, measurement_status TEXT,
                 stated_price FLOAT, ground_truth_true_cost FLOAT,
                 ground_truth_applied_deals TEXT, ground_truth_available_deals TEXT,

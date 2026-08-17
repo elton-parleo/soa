@@ -681,6 +681,10 @@ def build_cycle_report(conn, cycle_id: int, scan_row) -> dict:
         transcript_payload = select_transcript(
             conn, cycle_id, primary_entity_id,
             share_pct=share_pct, share_rank_label=share_rank_label,
+            # F1/F2's own gate (engine.py, STATUS_COMPLETE only) — a
+            # non-empty offers list means the PDP encoded at least one
+            # machine-readable price the agent could have quoted.
+            page_price_encoded=bool(dimensions_raw.get("offers")),
         )
 
     return PublicLiteReportResponse(

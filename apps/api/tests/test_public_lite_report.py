@@ -78,7 +78,7 @@ def db(monkeypatch):
             CREATE TABLE soa_price_observations (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
                 stated_price FLOAT, claimed_net_price FLOAT, member_price_claimed BOOLEAN,
-                merchant_name TEXT, attribution_status TEXT
+                merchant_name TEXT, merchant_slug TEXT, attribution_status TEXT
             )
         """)
         conn.exec_driver_sql("""
@@ -88,9 +88,10 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_incentive_scores (
-                id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
+                id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER, price_observation_id INTEGER,
                 scoring_grain TEXT, status TEXT, measurement_status TEXT,
-                stated_price FLOAT, ground_truth_true_cost FLOAT, net_price_accuracy BOOLEAN
+                stated_price FLOAT, ground_truth_true_cost FLOAT, net_price_accuracy BOOLEAN,
+                ground_truth_applied_deals TEXT
             )
         """)
     monkeypatch.setattr(public_lite, "engine", engine)
