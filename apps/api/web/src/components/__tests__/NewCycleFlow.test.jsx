@@ -714,3 +714,27 @@ describe('NewCycleFlow — recurrence (monthly/quarterly disabled)', () => {
     expect(payload.notes).toBeNull()
   })
 })
+
+describe('NewCycleFlow — cycle-name timestamp', () => {
+  it('the auto-generated name is a full YYYYMMDD-HHMMSS timestamp, not just YYYY-MM', async () => {
+    await goToStep3()
+
+    const input = screen.getByRole('textbox')
+    expect(input.value).toMatch(/^\d{8}-\d{6}-/)
+    expect(input.value).toMatch(/^\d{8}-\d{6}-acme-full$/)
+    // The availability check fires against this exact generated code
+    // (debounced 500ms) — it's a real candidate cycle_code, not just
+    // display text.
+    await waitFor(() => expect(api.checkCycleCode).toHaveBeenCalledWith(input.value))
+  })
+
+  it('the generated name stays editable, and edits re-check availability against the new value', async () => {
+    await goToStep3()
+    const input = screen.getByRole('textbox')
+    const generated = input.value
+
+    fireEvent.change(input, { target: { value: `${generated}-2` } })
+    expect(input).toHaveValue(`${generated}-2`)
+    await waitFor(() => expect(api.checkCycleCode).toHaveBeenCalledWith(`${generated}-2`))
+  })
+})

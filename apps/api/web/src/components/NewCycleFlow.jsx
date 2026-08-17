@@ -885,8 +885,18 @@ function Step3({ state, setState, onBack, onLaunched }) {
   const debounceRef = useRef(null)
 
   const depthPreset = DEPTH_PRESETS.find(d => d.id === state.depth) || DEPTH_PRESETS[0]
-  const today = new Date()
-  const defaultCode = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${(state.primaryEntity?.name || 'brand').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-full`
+  const now = new Date()
+  const pad2 = n => String(n).padStart(2, '0')
+  // Full local timestamp (YYYYMMDD-HHMMSS), not just YYYY-MM — a cycle
+  // launched twice in the same month for the same brand used to collide
+  // on the auto-generated name every time, silently pushing the visitor
+  // into manually resolving TAKEN. No cycle_code length/charset
+  // constraint exists on the backend (soa_cycles.cycle_code is a plain
+  // unique TEXT column, CreateCycleRequest.cycle_code a bare str) — so
+  // there's nothing here to trim; the slug is exactly as long as it needs
+  // to be.
+  const timestamp = `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}-${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`
+  const defaultCode = `${timestamp}-${(state.primaryEntity?.name || 'brand').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-full`
 
   useEffect(() => {
     if (!state.cycleCode) {
