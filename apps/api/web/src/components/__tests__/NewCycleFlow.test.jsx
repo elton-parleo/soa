@@ -9,6 +9,7 @@ import { api } from '../../api.js'
 vi.mock('../../api.js', () => ({
   api: {
     getEntities: vi.fn(),
+    createEntity: vi.fn(),
     getStudies: vi.fn(),
     getQueryRows: vi.fn(),
     generateStudy: vi.fn(),
@@ -190,6 +191,89 @@ describe('NewCycleFlow — brand combobox', () => {
 
     expect(brandInput()).toHaveValue('Zeta Co')
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+})
+
+describe('NewCycleFlow — create a new primary brand inline', () => {
+  it('typing a name with no match offers to create it; selecting it commits the created entity', async () => {
+    const NEW_BRAND = { id: 99, name: 'Allbirds', category: '', type: 'Brand' }
+    api.createEntity.mockResolvedValue(NEW_BRAND)
+
+    render(<NewCycleFlow />)
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
+
+    fireEvent.change(brandInput(), { target: { value: 'Allbirds' } })
+    expect(screen.getByText('⊕ Create "Allbirds" as a new brand')).toBeInTheDocument()
+    expect(screen.getByText('Next: Study & Queries →')).toBeDisabled()
+
+    fireEvent.mouseDown(screen.getByText('⊕ Create "Allbirds" as a new brand'))
+
+    await waitFor(() => expect(api.createEntity).toHaveBeenCalledWith({
+      name: 'Allbirds', type: 'Brand', category: '', website_url: null, aliases: [],
+    }))
+    // Committed exactly like picking an existing option: input filled,
+    // dropdown closed, Next enabled.
+    await waitFor(() => expect(brandInput()).toHaveValue('Allbirds'))
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(screen.getByText('Next: Study & Queries →')).not.toBeDisabled()
+  })
+
+  it('never offers to create a name that already matches an existing entity exactly', async () => {
+    render(<NewCycleFlow />)
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
+
+    fireEvent.change(brandInput(), { target: { value: 'Acme' } })
+
+    expect(screen.queryByText('⊕ Create "Acme" as a new brand')).not.toBeInTheDocument()
+    expect(screen.getByText('Acme')).toBeInTheDocument()
+  })
+
+  it('the dedup check is case-insensitive — "ACME" surfaces the existing Acme, never a create row', async () => {
+    render(<NewCycleFlow />)
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
+
+    fireEvent.change(brandInput(), { target: { value: 'ACME' } })
+
+    expect(screen.queryByText('⊕ Create "ACME" as a new brand')).not.toBeInTheDocument()
+    fireEvent.mouseDown(screen.getByText('Acme'))
+
+    expect(api.createEntity).not.toHaveBeenCalled()
+    // Selecting the existing option commits ITS name (the canonical
+    // "Acme"), not the visitor's differently-cased typed text.
+    expect(brandInput()).toHaveValue('Acme')
+  })
+
+  it('a create failure shows an inline notice and never resets the typed text', async () => {
+    api.createEntity.mockRejectedValue(new Error('Could not reach the entity service.'))
+
+    render(<NewCycleFlow />)
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
+
+    fireEvent.change(brandInput(), { target: { value: 'Allbirds' } })
+    fireEvent.mouseDown(screen.getByText('⊕ Create "Allbirds" as a new brand'))
+
+    await waitFor(() => expect(screen.getByText('Could not reach the entity service.')).toBeInTheDocument())
+    expect(brandInput()).toHaveValue('Allbirds')
+    expect(screen.getByText('Next: Study & Queries →')).toBeDisabled()
+  })
+
+  it('the newly created brand flows into competitor auto-suggest like any other entity', async () => {
+    const NEW_BRAND = { id: 99, name: 'Allbirds', category: 'footwear', type: 'Brand' }
+    api.createEntity.mockResolvedValue(NEW_BRAND)
+    api.suggestCompetitors.mockResolvedValue({ status: 'ok', reason: null, competitors: [{ name: 'Rothys', domain: null }], source: 'generated' })
+
+    render(<NewCycleFlow />)
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
+    fireEvent.change(brandInput(), { target: { value: 'Allbirds' } })
+    fireEvent.mouseDown(screen.getByText('⊕ Create "Allbirds" as a new brand'))
+    await waitFor(() => expect(brandInput()).toHaveValue('Allbirds'))
+
+    fireEvent.click(screen.getByText('✦ Auto-suggest'))
+
+    await waitFor(() => expect(api.suggestCompetitors).toHaveBeenCalledWith(expect.objectContaining({
+      brand_name: 'Allbirds', category_hint: 'footwear',
+    })))
+    expect(screen.getByText('Rothys')).toBeInTheDocument()
   })
 })
 
@@ -539,5 +623,118 @@ describe('NewCycleFlow — honest platform rendering', () => {
     const payload = api.createCycle.mock.calls[0][0]
     expect(payload.platforms).not.toContain('perplexity')
     expect(payload.platforms).toEqual(['chatgpt', 'gemini'])
+  })
+})
+
+// goToStep3() calls goToStep2() internally (its own fresh render) — the
+// two helpers can never be chained in one test without mounting a
+// second, independent <NewCycleFlow/>. These tests need to assert on
+// Step 2 first, so they continue to Step 3 by hand instead.
+async function advanceToStep3FromStep2() {
+  const select = screen.getByRole('combobox')
+  fireEvent.change(select, { target: { value: STUDY.id } })
+  await waitFor(() => expect(screen.getByText('Next: Review & Launch →')).not.toBeDisabled())
+  fireEvent.click(screen.getByText('Next: Review & Launch →'))
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Review & Launch' })).toBeInTheDocument())
+}
+
+describe('NewCycleFlow — depth presets', () => {
+  it('Standard is 3 runs per query and reaches the launch payload', async () => {
+    api.createCycle.mockResolvedValue({ id: 99, cycle_code: '2026-08-acme-full' })
+    api.launchCrawl.mockResolvedValue({ scan_id: 5, cycle_id: 99, status: 'pending' })
+
+    await goToStep2()
+    expect(screen.getByText('ChatGPT + Gemini, 3 runs per query.')).toBeInTheDocument()
+
+    await advanceToStep3FromStep2()
+    expect(screen.getByText(/Standard \(chatgpt, gemini · 3 runs\/query\)/)).toBeInTheDocument()
+
+    await waitFor(() => expect(screen.getByText('AVAILABLE ✓')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Launch Full Analysis'))
+    await waitFor(() => expect(api.createCycle).toHaveBeenCalledTimes(1))
+    expect(api.createCycle.mock.calls[0][0].runs_per_query).toBe(3)
+  })
+
+  it('Deep is 5 runs per query and reaches the launch payload', async () => {
+    api.createCycle.mockResolvedValue({ id: 99, cycle_code: '2026-08-acme-full' })
+    api.launchCrawl.mockResolvedValue({ scan_id: 5, cycle_id: 99, status: 'pending' })
+
+    await goToStep2()
+    expect(screen.getByText('ChatGPT + Gemini + Claude, 5 runs per query.')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Deep'))
+
+    await advanceToStep3FromStep2()
+    expect(screen.getByText(/Deep \(chatgpt, gemini, claude · 5 runs\/query\)/)).toBeInTheDocument()
+
+    await waitFor(() => expect(screen.getByText('AVAILABLE ✓')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Launch Full Analysis'))
+    await waitFor(() => expect(api.createCycle).toHaveBeenCalledTimes(1))
+    expect(api.createCycle.mock.calls[0][0].runs_per_query).toBe(5)
+  })
+})
+
+describe('NewCycleFlow — recurrence (monthly/quarterly disabled)', () => {
+  it('Monthly and Quarterly render disabled with a "Coming soon" hint, and clicking them is a no-op', async () => {
+    await goToStep2()
+
+    const monthly = screen.getByText('Monthly').closest('button')
+    const quarterly = screen.getByText('Quarterly').closest('button')
+    expect(monthly).toBeDisabled()
+    expect(quarterly).toBeDisabled()
+    expect(screen.getAllByText('· Coming soon')).toHaveLength(2)
+
+    fireEvent.click(monthly)
+    fireEvent.click(quarterly)
+    // Still shows One-time as selected (navy fill) — neither click above
+    // changed state.recurrence off its default.
+    const oneTime = screen.getByText('One-time').closest('button')
+    expect(oneTime).toHaveStyle({ backgroundColor: 'rgb(13, 24, 41)' })
+  })
+
+  it('None is the only recurrence value that can reach the launch payload', async () => {
+    api.createCycle.mockResolvedValue({ id: 99, cycle_code: '2026-08-acme-full' })
+    api.launchCrawl.mockResolvedValue({ scan_id: 5, cycle_id: 99, status: 'pending' })
+
+    await goToStep2()
+    fireEvent.click(screen.getByText('Monthly').closest('button'))
+    fireEvent.click(screen.getByText('Quarterly').closest('button'))
+
+    await advanceToStep3FromStep2()
+    // Recurrence intent only ever gets appended to notes, and a series
+    // id only ever gets stamped, when recurrence !== 'none' — proving
+    // neither fires is proof state.recurrence stayed locked to 'none'.
+    expect(screen.getByText('One-time')).toBeInTheDocument()
+
+    await waitFor(() => expect(screen.getByText('AVAILABLE ✓')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Launch Full Analysis'))
+    await waitFor(() => expect(api.createCycle).toHaveBeenCalledTimes(1))
+
+    const payload = api.createCycle.mock.calls[0][0]
+    expect(payload.study_series_id).toBeNull()
+    expect(payload.notes).toBeNull()
+  })
+})
+
+describe('NewCycleFlow — cycle-name timestamp', () => {
+  it('the auto-generated name is a full YYYYMMDD-HHMMSS timestamp, not just YYYY-MM', async () => {
+    await goToStep3()
+
+    const input = screen.getByRole('textbox')
+    expect(input.value).toMatch(/^\d{8}-\d{6}-/)
+    expect(input.value).toMatch(/^\d{8}-\d{6}-acme-full$/)
+    // The availability check fires against this exact generated code
+    // (debounced 500ms) — it's a real candidate cycle_code, not just
+    // display text.
+    await waitFor(() => expect(api.checkCycleCode).toHaveBeenCalledWith(input.value))
+  })
+
+  it('the generated name stays editable, and edits re-check availability against the new value', async () => {
+    await goToStep3()
+    const input = screen.getByRole('textbox')
+    const generated = input.value
+
+    fireEvent.change(input, { target: { value: `${generated}-2` } })
+    expect(input).toHaveValue(`${generated}-2`)
+    await waitFor(() => expect(api.checkCycleCode).toHaveBeenCalledWith(`${generated}-2`))
   })
 })

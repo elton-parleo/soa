@@ -49,19 +49,24 @@ const PLATFORM_META = [
 
 const DEPTH_PRESETS = [
   {
-    id: 'standard', name: 'Standard', description: 'ChatGPT + Gemini, 5 runs per query.',
-    platforms: ['chatgpt', 'gemini'], runsPerQuery: 5,
+    id: 'standard', name: 'Standard', description: 'ChatGPT + Gemini, 3 runs per query.',
+    platforms: ['chatgpt', 'gemini'], runsPerQuery: 3,
   },
   {
-    id: 'deep', name: 'Deep', description: 'ChatGPT + Gemini + Claude, 8 runs per query.',
-    platforms: ['chatgpt', 'gemini', 'claude'], runsPerQuery: 8,
+    id: 'deep', name: 'Deep', description: 'ChatGPT + Gemini + Claude, 5 runs per query.',
+    platforms: ['chatgpt', 'gemini', 'claude'], runsPerQuery: 5,
   },
 ]
 
+// Monthly/quarterly are visibly present but disabled — recurring
+// execution isn't automated yet (see Step2's own note below), so
+// selecting either would persist an intent the product can't act on.
+// Kept as real option values (not removed) so turning them on later is
+// a one-line change, not a rebuild of this list.
 const RECURRENCE_OPTIONS = [
   { id: 'none',      label: 'One-time' },
-  { id: 'monthly',   label: 'Monthly' },
-  { id: 'quarterly', label: 'Quarterly' },
+  { id: 'monthly',   label: 'Monthly',   disabled: true },
+  { id: 'quarterly', label: 'Quarterly', disabled: true },
 ]
 
 // Query generation polls every 3s (same interval as StudyDetail.jsx) —
@@ -118,10 +123,12 @@ function matchesSearch(entity, query) {
 // is internal state, synced from `value` whenever it changes externally
 // (continuation mode pre-filling it, or a parent-level reset).
 
-function EntityCombobox({ entities, value, onChange, placeholder }) {
+function EntityCombobox({ entities, value, onChange, placeholder, onCreate, createLabel }) {
   const [query, setQuery] = useState(value?.name || '')
   const [open, setOpen] = useState(false)
   const [highlighted, setHighlighted] = useState(-1)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState(null)
   const wrapperRef = useRef(null)
 
   // A value set from OUTSIDE this component (continuation mode's
@@ -150,12 +157,44 @@ function EntityCombobox({ entities, value, onChange, placeholder }) {
   }, [open])
 
   const filtered = entities.filter(e => matchesSearch(e, query))
+  const trimmedQuery = query.trim()
+  // The registry's own create endpoint (api.createEntity, reused as-is
+  // below) has no dedup check of its own — every call mints a new row
+  // with a uniquified slug, so two entities can share a display name.
+  // This combobox is the one place that matters (it's how a duplicate
+  // would get created), so the dedup check lives here: an exact,
+  // case-insensitive name match is surfaced and selected instead of
+  // creating a near-identical row.
+  const exactMatch = trimmedQuery
+    ? entities.find(e => e.name.toLowerCase() === trimmedQuery.toLowerCase())
+    : null
+  const showCreateOption = !!onCreate && !!trimmedQuery && !exactMatch
 
   const selectEntity = (entity) => {
     setQuery(entity.name)
     setOpen(false)
     setHighlighted(-1)
+    setCreateError(null)
     onChange(entity)
+  }
+
+  const handleCreate = async () => {
+    if (!trimmedQuery || creating) return
+    // Re-check immediately before creating — entities may have been
+    // refreshed since the option rendered, and creating is never worth
+    // racing against a dupe that just appeared.
+    const nowExisting = entities.find(e => e.name.toLowerCase() === trimmedQuery.toLowerCase())
+    if (nowExisting) { selectEntity(nowExisting); return }
+    setCreating(true)
+    setCreateError(null)
+    try {
+      const created = await onCreate(trimmedQuery)
+      selectEntity(created)
+    } catch (err) {
+      setCreateError(err.message || 'Could not create this brand.')
+    } finally {
+      setCreating(false)
+    }
   }
 
   const handleInputChange = (e) => {
@@ -163,10 +202,15 @@ function EntityCombobox({ entities, value, onChange, placeholder }) {
     setQuery(val)
     setOpen(true)
     setHighlighted(-1)
+    setCreateError(null)
     // Editing after a selection clears it — the stored selection and
     // the raw text must never silently drift apart.
     if (value) onChange(null)
   }
+
+  // The create row (when shown) is one more selectable option, appended
+  // after every filtered match — index filtered.length.
+  const lastIndex = filtered.length - (showCreateOption ? 0 : 1)
 
   const handleKeyDown = (e) => {
     if (e.key === 'Escape') {
@@ -176,7 +220,7 @@ function EntityCombobox({ entities, value, onChange, placeholder }) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       if (!open) { setOpen(true); return }
-      setHighlighted(h => Math.min(h + 1, filtered.length - 1))
+      setHighlighted(h => Math.min(h + 1, lastIndex))
       return
     }
     if (e.key === 'ArrowUp') {
@@ -184,9 +228,13 @@ function EntityCombobox({ entities, value, onChange, placeholder }) {
       setHighlighted(h => Math.max(h - 1, 0))
       return
     }
-    if (e.key === 'Enter' && open && highlighted >= 0 && filtered[highlighted]) {
+    if (e.key === 'Enter' && open && highlighted >= 0) {
       e.preventDefault()
-      selectEntity(filtered[highlighted])
+      if (filtered[highlighted]) {
+        selectEntity(filtered[highlighted])
+      } else if (showCreateOption && highlighted === filtered.length) {
+        handleCreate()
+      }
     }
   }
 
@@ -223,8 +271,23 @@ function EntityCombobox({ entities, value, onChange, placeholder }) {
               {value?.id === e.id && <span style={{ marginLeft: 'auto', color: T.teal, fontSize: 12 }}>✓ Selected</span>}
             </div>
           ))}
-          {filtered.length === 0 && (
+          {showCreateOption && (
+            <div role="option" aria-selected={false}
+              onMouseDown={ev => { ev.preventDefault(); handleCreate() }}
+              onMouseEnter={() => setHighlighted(filtered.length)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', cursor: creating ? 'default' : 'pointer',
+                color: T.indigo, fontWeight: 600, fontSize: 13,
+                background: highlighted === filtered.length ? T.tealLight : T.white,
+              }}>
+              {creating ? 'Creating…' : `⊕ Create "${trimmedQuery}" as a new ${createLabel || 'brand'}`}
+            </div>
+          )}
+          {filtered.length === 0 && !showCreateOption && (
             <div style={{ padding: 16, textAlign: 'center', color: T.slate, fontSize: 13 }}>No matches — try a different search.</div>
+          )}
+          {createError && (
+            <div style={{ padding: '10px 14px', color: T.red, fontSize: 12, borderTop: `1px solid ${T.border}` }}>{createError}</div>
           )}
         </div>
       )}
@@ -368,6 +431,21 @@ function Step1({ state, setState, onNext, auditToken }) {
     api.getEntities().then(res => setEntities(Array.isArray(res) ? res : [])).catch(() => {})
   }, [])
 
+  // Reuses the registry's own create endpoint and validation (api.
+  // createEntity, POST /api/entities) rather than a parallel create
+  // path — same request shape EntityRegistry.jsx sends for a brand-new
+  // entity, type defaulted to 'Brand' since this step has no type
+  // selector of its own. The dedup check itself lives in EntityCombobox
+  // (the registry endpoint has none), so by the time this is called the
+  // name is already believed to be new; entities is still re-appended
+  // to here (not just left to a refetch) so the combobox's own list is
+  // immediately consistent if it's reopened.
+  const handleCreateEntity = async (name) => {
+    const created = await api.createEntity({ name, type: 'Brand', category: '', website_url: null, aliases: [] })
+    setEntities(list => [...list, created])
+    return created
+  }
+
   const handleSuggest = async () => {
     if (!state.primaryEntity) return
     setSuggesting(true)
@@ -435,6 +513,7 @@ function Step1({ state, setState, onNext, auditToken }) {
               value={state.primaryEntity}
               onChange={entity => setState(s => ({ ...s, primaryEntity: entity }))}
               placeholder="Search entities by name, type, or category…"
+              onCreate={handleCreateEntity}
             />
           </div>
 
@@ -733,14 +812,21 @@ function Step2({ state, setState, onNext, onBack }) {
         <label style={{ fontWeight: 600, fontSize: 13, display: 'block', marginBottom: 10 }}>Recurrence</label>
         <div style={{ display: 'flex', gap: 8 }}>
           {RECURRENCE_OPTIONS.map(opt => (
-            <button key={opt.id} onClick={() => setState(s => ({ ...s, recurrence: opt.id }))}
+            <button key={opt.id} disabled={opt.disabled}
+              onClick={() => { if (!opt.disabled) setState(s => ({ ...s, recurrence: opt.id })) }}
               style={{
-                padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                cursor: opt.disabled ? 'not-allowed' : 'pointer',
                 border: `1px solid ${state.recurrence === opt.id ? T.navy : T.border}`,
                 background: state.recurrence === opt.id ? T.navy : T.white,
-                color: state.recurrence === opt.id ? T.white : T.textMid,
+                color: opt.disabled ? T.slateLight : (state.recurrence === opt.id ? T.white : T.textMid),
+                opacity: opt.disabled ? 0.7 : 1,
               }}>
               {opt.label}
+              {opt.disabled && (
+                <span style={{ fontSize: 10, fontWeight: 600, color: T.slateLight }}>· Coming soon</span>
+              )}
             </button>
           ))}
         </div>
@@ -799,8 +885,18 @@ function Step3({ state, setState, onBack, onLaunched }) {
   const debounceRef = useRef(null)
 
   const depthPreset = DEPTH_PRESETS.find(d => d.id === state.depth) || DEPTH_PRESETS[0]
-  const today = new Date()
-  const defaultCode = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${(state.primaryEntity?.name || 'brand').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-full`
+  const now = new Date()
+  const pad2 = n => String(n).padStart(2, '0')
+  // Full local timestamp (YYYYMMDD-HHMMSS), not just YYYY-MM — a cycle
+  // launched twice in the same month for the same brand used to collide
+  // on the auto-generated name every time, silently pushing the visitor
+  // into manually resolving TAKEN. No cycle_code length/charset
+  // constraint exists on the backend (soa_cycles.cycle_code is a plain
+  // unique TEXT column, CreateCycleRequest.cycle_code a bare str) — so
+  // there's nothing here to trim; the slug is exactly as long as it needs
+  // to be.
+  const timestamp = `${now.getFullYear()}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}-${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`
+  const defaultCode = `${timestamp}-${(state.primaryEntity?.name || 'brand').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-full`
 
   useEffect(() => {
     if (!state.cycleCode) {
