@@ -44,9 +44,21 @@ function formatAskedDate(isoLike) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Legend/hover label per dotted-underline span kind — 'value_claim' is
+// a genuine off-site source (a different merchant named the price);
+// 'stale_price' is the primary's OWN price, self-attributed but
+// inaccurate (the sharpest DTC leak — never an off-site claim, so it
+// gets its own label rather than reusing "sourced outside your
+// markup", which would be false for it).
+const SPAN_LABELS = {
+  value_claim: 'value claim sourced outside your markup',
+  stale_price: 'your price, quoted stale',
+}
+
 // Splits response_text into React nodes, painting brand spans as a blue
-// highlight and value-claim spans as a dotted amber underline. limit
-// clips both the text and any span that starts before it — the
+// highlight and value-claim/stale-price spans as a dotted amber
+// underline (same style, different hover label — see SPAN_LABELS).
+// limit clips both the text and any span that starts before it — the
 // collapsed preview never shows a highlight for text it doesn't render.
 function renderAnswer(text, spans, limit, expanded) {
   const cut = expanded ? text.length : Math.min(limit ?? text.length, text.length)
@@ -67,7 +79,7 @@ function renderAnswer(text, spans, limit, expanded) {
       )
     } else {
       nodes.push(
-        <span key={`s${start}`} style={{ borderBottom: '2px dotted var(--amber)' }}>
+        <span key={`s${start}`} title={SPAN_LABELS[span.kind]} style={{ borderBottom: '2px dotted var(--amber)' }}>
           {content}
         </span>,
       )
@@ -76,6 +88,20 @@ function renderAnswer(text, spans, limit, expanded) {
   }
   if (cursor < cut) nodes.push(<span key={`t${cursor}`}>{text.slice(cursor, cut)}</span>)
   if (!expanded && cut < text.length) nodes.push(<span key="ellipsis">…</span>)
+  return nodes
+}
+
+// Wraps every occurrence of `needle` in `text` with an anchor to href —
+// used to link the "Price Truth" phrase in generated LEAKED copy to the
+// True Value pillar section where that dimension lives.
+function linkify(text, needle, href) {
+  if (!text || !text.includes(needle)) return text
+  const parts = text.split(needle)
+  const nodes = []
+  parts.forEach((part, i) => {
+    if (i > 0) nodes.push(<a key={`l${i}`} href={href} style={{ color: 'var(--blue)' }}>{needle}</a>)
+    nodes.push(<span key={`t${i}`}>{part}</span>)
+  })
   return nodes
 }
 
@@ -99,6 +125,15 @@ export function TranscriptSection({ report, open, onToggle }) {
   }
 
   const askedLabel = formatAskedDate(askedAt)
+  const hasOffsite = (spans || []).some((s) => s.kind === 'value_claim')
+  const hasStale = (spans || []).some((s) => s.kind === 'stale_price')
+  const legendText = hasOffsite && hasStale
+    ? 'Dotted underlines = value claims sourced outside your markup, or your own price quoted stale'
+    : hasOffsite
+      ? 'Dotted underlines = value claims sourced outside your markup'
+      : hasStale
+        ? 'Dotted underline = your own price, quoted stale'
+        : null
 
   return (
     <ReportSection
@@ -139,13 +174,13 @@ export function TranscriptSection({ report, open, onToggle }) {
         </div>
         <div style={{ background: 'var(--red-tint)', border: '1px solid var(--hairline)', borderRadius: 13, padding: '15px 17px' }}>
           <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--red-deep)' }}>◑ WHAT LEAKED</span>
-          <div style={{ marginTop: 8, fontSize: 13.5, color: 'var(--text)', lineHeight: 1.55 }}>{leaked}</div>
+          <div style={{ marginTop: 8, fontSize: 13.5, color: 'var(--text)', lineHeight: 1.55 }}>{linkify(leaked, 'Price Truth', '#tv')}</div>
         </div>
       </div>
 
       <div className="mono-label" style={{ marginTop: 16, fontSize: 9, color: 'var(--faint)' }}>
-        ▨ Dotted underlines = value claims sourced outside your markup
-        {askedLabel ? ` · Asked ${askedLabel}` : ''} · Query {queryIndex} of {totalQueries}
+        {legendText ? `▨ ${legendText} · ` : ''}
+        {askedLabel ? `Asked ${askedLabel} · ` : ''}Query {queryIndex} of {totalQueries}
       </div>
     </ReportSection>
   )

@@ -138,4 +138,79 @@ describe('TranscriptSection — span highlighting', () => {
     expect(underlined).toBeTruthy()
     expect(underlined.textContent.length).toBeLessThanOrEqual(8)
   })
+
+  it('paints a stale_price span with the same dotted style but a distinct hover label from value_claim', () => {
+    const transcript = _transcript({
+      response_text: 'Acme Co lists it at $110 on their own site.',
+      preview_cutoff: 45,
+      spans: [
+        { start: 0, end: 7, kind: 'brand' },
+        { start: 20, end: 24, kind: 'stale_price' },
+      ],
+    })
+    const { container } = render(<TranscriptSection report={{ transcript }} open onToggle={() => {}} />)
+    const stale = Array.from(container.querySelectorAll('span')).find((el) => el.title === 'your price, quoted stale')
+    expect(stale).toBeTruthy()
+    expect(stale.style.borderBottom).toContain('dotted')
+    expect(stale.textContent).toBe('$110')
+  })
+
+  it('never underlines the primary brand name as an off-site value_claim span', () => {
+    const transcript = _transcript({
+      response_text: 'Acme Co lists it at $110 on their own site.',
+      preview_cutoff: 45,
+      spans: [{ start: 0, end: 7, kind: 'brand' }],
+    })
+    const { container } = render(<TranscriptSection report={{ transcript }} open onToggle={() => {}} />)
+    expect(container.querySelectorAll('mark')).toHaveLength(1)
+    expect(container.querySelector('mark').textContent).toBe('Acme Co')
+    const dotted = Array.from(container.querySelectorAll('span')).filter(
+      (el) => el.style.borderBottom && el.style.borderBottom.includes('dotted'),
+    )
+    expect(dotted).toHaveLength(0)
+  })
+})
+
+describe('TranscriptSection — provenance legend (DTC fix)', () => {
+  it('shows the off-site legend only when a value_claim span is present', () => {
+    render(<TranscriptSection report={{ transcript: _transcript() }} open onToggle={() => {}} />)
+    expect(screen.getByText(/sourced outside your markup/)).toBeInTheDocument()
+  })
+
+  it('shows the stale-price legend when only a stale_price span is present', () => {
+    const transcript = _transcript({
+      spans: [{ start: 0, end: 7, kind: 'brand' }, { start: 32, end: 36, kind: 'stale_price' }],
+    })
+    render(<TranscriptSection report={{ transcript }} open onToggle={() => {}} />)
+    expect(screen.getByText(/your own price, quoted stale/)).toBeInTheDocument()
+    expect(screen.queryByText(/sourced outside your markup/)).not.toBeInTheDocument()
+  })
+
+  it('omits the dotted-underline legend entirely when no third-party or stale-price span exists', () => {
+    const transcript = _transcript({
+      spans: [{ start: 0, end: 7, kind: 'brand' }],
+      leaked: 'Nothing leaked in this run.',
+    })
+    render(<TranscriptSection report={{ transcript }} open onToggle={() => {}} />)
+    expect(screen.queryByText(/Dotted underline/)).not.toBeInTheDocument()
+    expect(screen.getByText(/Query 14 of 24/)).toBeInTheDocument()
+  })
+})
+
+describe('TranscriptSection — Price Truth link', () => {
+  it('links the "Price Truth" phrase in LEAKED copy to the True Value pillar section', () => {
+    const transcript = _transcript({
+      leaked: 'The agent quoted your price as $110.00 — your net right now is $93.50. This is the Price Truth gap measured across all 24 answers.',
+    })
+    render(<TranscriptSection report={{ transcript }} open onToggle={() => {}} />)
+    const link = screen.getByRole('link', { name: 'Price Truth' })
+    expect(link).toHaveAttribute('href', '#tv')
+  })
+
+  it('renders LEAKED copy with no "Price Truth" mention as plain text, no stray link', () => {
+    const transcript = _transcript({ leaked: "Nothing leaked in this run — it's a clean mention." })
+    render(<TranscriptSection report={{ transcript }} open onToggle={() => {}} />)
+    expect(screen.queryByRole('link', { name: 'Price Truth' })).not.toBeInTheDocument()
+    expect(screen.getByText(/clean mention/)).toBeInTheDocument()
+  })
 })
