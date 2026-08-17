@@ -58,10 +58,15 @@ const DEPTH_PRESETS = [
   },
 ]
 
+// Monthly/quarterly are visibly present but disabled — recurring
+// execution isn't automated yet (see Step2's own note below), so
+// selecting either would persist an intent the product can't act on.
+// Kept as real option values (not removed) so turning them on later is
+// a one-line change, not a rebuild of this list.
 const RECURRENCE_OPTIONS = [
   { id: 'none',      label: 'One-time' },
-  { id: 'monthly',   label: 'Monthly' },
-  { id: 'quarterly', label: 'Quarterly' },
+  { id: 'monthly',   label: 'Monthly',   disabled: true },
+  { id: 'quarterly', label: 'Quarterly', disabled: true },
 ]
 
 // Query generation polls every 3s (same interval as StudyDetail.jsx) —
@@ -807,14 +812,21 @@ function Step2({ state, setState, onNext, onBack }) {
         <label style={{ fontWeight: 600, fontSize: 13, display: 'block', marginBottom: 10 }}>Recurrence</label>
         <div style={{ display: 'flex', gap: 8 }}>
           {RECURRENCE_OPTIONS.map(opt => (
-            <button key={opt.id} onClick={() => setState(s => ({ ...s, recurrence: opt.id }))}
+            <button key={opt.id} disabled={opt.disabled}
+              onClick={() => { if (!opt.disabled) setState(s => ({ ...s, recurrence: opt.id })) }}
               style={{
-                padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                cursor: opt.disabled ? 'not-allowed' : 'pointer',
                 border: `1px solid ${state.recurrence === opt.id ? T.navy : T.border}`,
                 background: state.recurrence === opt.id ? T.navy : T.white,
-                color: state.recurrence === opt.id ? T.white : T.textMid,
+                color: opt.disabled ? T.slateLight : (state.recurrence === opt.id ? T.white : T.textMid),
+                opacity: opt.disabled ? 0.7 : 1,
               }}>
               {opt.label}
+              {opt.disabled && (
+                <span style={{ fontSize: 10, fontWeight: 600, color: T.slateLight }}>· Coming soon</span>
+              )}
             </button>
           ))}
         </div>

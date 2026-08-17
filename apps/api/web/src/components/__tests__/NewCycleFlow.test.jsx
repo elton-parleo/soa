@@ -672,3 +672,45 @@ describe('NewCycleFlow — depth presets', () => {
     expect(api.createCycle.mock.calls[0][0].runs_per_query).toBe(5)
   })
 })
+
+describe('NewCycleFlow — recurrence (monthly/quarterly disabled)', () => {
+  it('Monthly and Quarterly render disabled with a "Coming soon" hint, and clicking them is a no-op', async () => {
+    await goToStep2()
+
+    const monthly = screen.getByText('Monthly').closest('button')
+    const quarterly = screen.getByText('Quarterly').closest('button')
+    expect(monthly).toBeDisabled()
+    expect(quarterly).toBeDisabled()
+    expect(screen.getAllByText('· Coming soon')).toHaveLength(2)
+
+    fireEvent.click(monthly)
+    fireEvent.click(quarterly)
+    // Still shows One-time as selected (navy fill) — neither click above
+    // changed state.recurrence off its default.
+    const oneTime = screen.getByText('One-time').closest('button')
+    expect(oneTime).toHaveStyle({ backgroundColor: 'rgb(13, 24, 41)' })
+  })
+
+  it('None is the only recurrence value that can reach the launch payload', async () => {
+    api.createCycle.mockResolvedValue({ id: 99, cycle_code: '2026-08-acme-full' })
+    api.launchCrawl.mockResolvedValue({ scan_id: 5, cycle_id: 99, status: 'pending' })
+
+    await goToStep2()
+    fireEvent.click(screen.getByText('Monthly').closest('button'))
+    fireEvent.click(screen.getByText('Quarterly').closest('button'))
+
+    await advanceToStep3FromStep2()
+    // Recurrence intent only ever gets appended to notes, and a series
+    // id only ever gets stamped, when recurrence !== 'none' — proving
+    // neither fires is proof state.recurrence stayed locked to 'none'.
+    expect(screen.getByText('One-time')).toBeInTheDocument()
+
+    await waitFor(() => expect(screen.getByText('AVAILABLE ✓')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Launch Full Analysis'))
+    await waitFor(() => expect(api.createCycle).toHaveBeenCalledTimes(1))
+
+    const payload = api.createCycle.mock.calls[0][0]
+    expect(payload.study_series_id).toBeNull()
+    expect(payload.notes).toBeNull()
+  })
+})
