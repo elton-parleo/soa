@@ -588,6 +588,12 @@ def build_cycle_report(conn, cycle_id: int, scan_row) -> dict:
         visibility = pillars_payload["visibility"]["score"]
         accessibility = pillars_payload["accessibility"]["score"]
         composite = pillars_payload["composite"]
+        # Exposure-model fix: the modeled exposure figure is driven by
+        # True Value, not Visibility. Serialized additively (never by
+        # reshaping `visibility`, which the legacy tile and the
+        # Visibility section still read) and already normalized 0-100
+        # by _pillar, so a Member Value N/A run doesn't distort it.
+        true_value_score = pillars_payload["true_value"]["score"]
     else:
         # visibility reuses the same share-of-voice metric already
         # computed for the report (build_entity_metrics' 'som') — no
@@ -595,6 +601,10 @@ def build_cycle_report(conn, cycle_id: int, scan_row) -> dict:
         # the 'overall' slice), so no rebasing was needed for Stage 7 (A2).
         visibility = overall_metrics.get(primary_code, {}).get("som") if primary_code else None
         accessibility = scan_row[1] if scan_complete else None
+        # No pillars payload means no True Value pillar was ever
+        # computed for this row — null, not a zero standing in for one.
+        # The client models maximum gap and labels the figure as such.
+        true_value_score = None
         composite = None
         if visibility is not None:
             composite = (
@@ -691,6 +701,7 @@ def build_cycle_report(conn, cycle_id: int, scan_row) -> dict:
         status="complete", locked=False, overall=overall, by_stage=None,
         scan=scan_payload,
         visibility=visibility, accessibility=accessibility, composite=composite,
+        true_value_score=true_value_score,
         scan_status=scan_status,
         visibility_breakdown=visibility_breakdown,
         competitor_source=None,  # stamped by the caller (public_lite.py) when applicable

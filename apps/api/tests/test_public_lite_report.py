@@ -2139,3 +2139,77 @@ def test_transcript_never_crosses_a_different_cycles_token(db):
     result_t2 = public_lite.get_lite_report("t2")
     assert result_t2["transcript"]["run_id"] == 702
     assert "cycle 2 only" in result_t2["transcript"]["response_text"]
+
+
+# ─── Exposure-model fix: the additive true_value_score field ────────────
+#
+# The modeled exposure figure on the report page used to be driven by
+# the VISIBILITY pillar — the one thing every AEO monitor already
+# measures — while True Value, what this audit exists to measure, had no
+# influence on the dollar number at all. The client now reads this field
+# instead. It is strictly additive: `visibility` keeps its existing
+# value and meaning for the legacy tile and the Visibility section.
+
+def test_report_carries_true_value_score_from_the_true_value_pillar(db):
+    """The serialized field is the True Value pillar's own normalized
+    0-100 score — not a second derivation of it, and not Visibility."""
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="tvscore1")
+
+    result = public_lite.get_lite_report("tvscore1")
+
+    assert result["pillars"] is not None
+    assert result["true_value_score"] == result["pillars"]["true_value"]["score"]
+    # The full-credit fixture earns every applicable True Value point.
+    assert result["true_value_score"] == 100
+
+
+def test_true_value_score_is_independent_of_visibility(db):
+    """A blocked scan is the case that separates the two: Visibility is
+    answer-side and still scores 100, while every crawl-derived True
+    Value dimension is honestly blocked. Feeding Visibility into the
+    exposure model made that store look barely exposed; the field the
+    model now reads reports it correctly."""
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="tvscore2", dimensions=_DEGRADED_CRAWL_DIMENSIONS)
+        conn.exec_driver_sql(
+            "UPDATE soa_lite_scan_results SET status = 'blocked', total_score = NULL "
+            "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = 'tvscore2')"
+        )
+
+    result = public_lite.get_lite_report("tvscore2")
+
+    assert result["visibility"] == 100
+    assert result["true_value_score"] == result["pillars"]["true_value"]["score"]
+    assert result["true_value_score"] != result["visibility"]
+
+
+def test_legacy_row_has_a_null_true_value_score_and_an_unchanged_visibility(db):
+    """No pillars payload means no True Value pillar was ever computed —
+    null, not a zero standing in for one. The client then models maximum
+    gap and labels the figure as assuming fully invisible value.
+    `visibility` is untouched, so the legacy tile keeps rendering."""
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="tvscore3", email="visitor@example.com")
+        rid = _lite_request_id(conn, "tvscore3")
+        _seed_scan_row(conn, rid, status="complete", total_score=80, dimensions=_FULL_DIMENSIONS)
+
+    result = public_lite.get_lite_report("tvscore3")
+
+    assert result["pillars"] is None
+    assert result["true_value_score"] is None
+    assert result["visibility"] == 60.0
+
+
+def test_true_value_score_is_additive_and_changes_no_existing_field(db):
+    """Additive-contract guard: adding this field must not reshape or
+    re-value anything an already-deployed widget reads."""
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="tvscore4")
+
+    result = public_lite.get_lite_report("tvscore4")
+
+    assert "true_value_score" in result
+    assert result["visibility"] == result["pillars"]["visibility"]["score"]
+    assert result["accessibility"] == result["pillars"]["accessibility"]["score"]
+    assert result["composite"] == result["pillars"]["composite"]

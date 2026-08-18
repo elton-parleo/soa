@@ -499,3 +499,112 @@ describe('LiteFullReportV4 — report_viewed fires with the right state/viewer/s
     })
   })
 })
+
+// ─── Exposure model: True Value driven, with the substitution channel ──
+//
+// Every dollar figure below is computed BY HAND from the documented
+// formula against this fixture's inputs — DEFAULT_REVENUE $12,000,000
+// (no revenue_estimate_usd on FULL_REPORT) at the default 20% AI share,
+// so the AI-assisted slice is $2,400,000:
+//   channelFactor = min(1, (1 - trueValueScore/100) * 1.5)
+//   exposure      = 2,400,000 * channelFactor * 0.85
+describe('LiteFullReportV4 — the exposure figure is driven by True Value', () => {
+  it('True Value 40/100 -> 0.90 channel factor -> $1,836,000', () => {
+    renderReport({ true_value_score: 40 })
+    expect(screen.getAllByText(/1,836,000/).length).toBeGreaterThan(0)
+  })
+
+  it('True Value 80/100 -> 0.30 channel factor -> $612,000', () => {
+    renderReport({ true_value_score: 80 })
+    expect(screen.getAllByText(/612,000/).length).toBeGreaterThan(0)
+  })
+
+  // The property that was silently false while Visibility was the input:
+  // a strong True Value result has to produce a materially smaller
+  // number than a weak one, on otherwise identical inputs.
+  it('a strong True Value result models materially less exposure than a weak one', () => {
+    const { unmount } = renderReport({ true_value_score: 10 })
+    expect(screen.getAllByText(/2,040,000/).length).toBeGreaterThan(0)  // capped at the full slice
+    unmount()
+    renderReport({ true_value_score: 90 })
+    // 0.10 * 1.5 = 0.15 -> 2,400,000 * 0.15 * 0.85 = 306,000
+    expect(screen.getAllByText(/306,000/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/2,040,000/)).not.toBeInTheDocument()
+  })
+
+  it('the model line names True Value, the substitution allowance, and the cap', () => {
+    renderReport({ true_value_score: 40 })
+    const model = screen.getByText(/value-invisibility factor derived from your True Value result/)
+    expect(model).toHaveTextContent(/substitution allowance/)
+    expect(model).toHaveTextContent(/quotes a competitor's price or deal in your place/)
+    expect(model).toHaveTextContent(/capped so exposure never exceeds your AI-assisted revenue/)
+    expect(model).toHaveTextContent(/Modeled, not measured/)
+    // The claim that was false before this session — the copy said True
+    // Value while the code fed it Visibility — must not come back.
+    expect(screen.queryByText(/The invisibility factor comes from your True Value result/)).not.toBeInTheDocument()
+  })
+
+  it('keeps the MODELED, NOT MEASURED eyebrow exactly as it was', () => {
+    renderReport({ true_value_score: 40 })
+    expect(screen.getByText('EXPOSURE · MODELED, NOT MEASURED')).toBeInTheDocument()
+  })
+
+  // 2a: a legacy row carries no pillars payload, so there is no True
+  // Value pillar to read. The figure then models maximum gap — and the
+  // copy has to say so rather than imply a measurement.
+  it('a row with no true_value_score models maximum gap and says so', () => {
+    renderReport({ true_value_score: null })
+    expect(screen.getAllByText(/2,040,000/).length).toBeGreaterThan(0)
+    expect(screen.getByText(/assumes your value is fully invisible/)).toBeInTheDocument()
+  })
+
+  it('a scored row never claims the figure assumed fully invisible value', () => {
+    renderReport({ true_value_score: 40 })
+    expect(screen.queryByText(/assumes your value is fully invisible/)).not.toBeInTheDocument()
+  })
+
+  it('ADJUST ASSUMPTIONS carries the substitution allowance read-only, not as a slider', () => {
+    renderReport({ true_value_score: 40 })
+    fireEvent.click(screen.getByText('ADJUST ASSUMPTIONS'))
+
+    expect(screen.getByText('1.5× substitution allowance')).toBeInTheDocument()
+    expect(screen.getByText('MODELING CONSTANT · NOT ADJUSTABLE')).toBeInTheDocument()
+    // Two sliders only — revenue and AI share. A third would make every
+    // report's number incomparable to every other.
+    const sliders = screen.getAllByRole('slider')
+    expect(sliders.map((s) => s.getAttribute('aria-label')))
+      .toEqual(['Annual revenue', 'AI-assisted share of sales'])
+  })
+
+  it('scales linearly with the AI-share slider, from the single returned figure', () => {
+    renderReport({ true_value_score: 40 })
+    fireEvent.click(screen.getByText('ADJUST ASSUMPTIONS'))
+    const share = screen.getByLabelText('AI-assisted share of sales')
+
+    fireEvent.change(share, { target: { value: '10' } })
+    // 12,000,000 * 0.10 * 0.90 * 0.85 = 918,000 — exactly half of the
+    // 20% figure above, and computed once, not on a second path.
+    expect(screen.getAllByText(/918,000/).length).toBeGreaterThan(0)
+
+    fireEvent.change(share, { target: { value: '20' } })
+    expect(screen.getAllByText(/1,836,000/).length).toBeGreaterThan(0)
+  })
+})
+
+describe('splitExposureDollars — still sums to the modeled total at the new magnitude', () => {
+  // 4: the reasons split's INPUTS changed magnitude, not shape — the
+  // lines must still add up to exactly the hero figure above them.
+  it('three weights over $1,836,000 sum to the total, remainder to the largest', () => {
+    const reasons = [{ impact_weight: 0.5 }, { impact_weight: 0.33 }, { impact_weight: 0.17 }]
+    const dollars = splitExposureDollars(1_836_000, reasons)
+    expect(dollars.reduce((a, b) => a + b, 0)).toBe(1_836_000)
+    expect(dollars).toEqual([918_000, 605_880, 312_120])
+  })
+
+  it('sums to the total at the capped ceiling too', () => {
+    const reasons = [{ impact_weight: 0.6 }, { impact_weight: 0.4 }]
+    const dollars = splitExposureDollars(2_040_000, reasons)
+    expect(dollars.reduce((a, b) => a + b, 0)).toBe(2_040_000)
+    expect(dollars).toEqual([1_224_000, 816_000])
+  })
+})

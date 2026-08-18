@@ -117,7 +117,11 @@ describe('LandingPage — truth-rule copy regression guards', () => {
     render(<LandingPage navigate={navigate} />)
 
     expect(screen.getByText('Modeled')).toBeInTheDocument()
-    expect(screen.getByText(/Assumes agents currently find you 0% of the time/)).toBeInTheDocument()
+    // Exposure-model fix: the ceiling this widget assumes is now stated
+    // in the terms the model actually uses (True Value 0 — no value
+    // readable), not the mention-gap terms it used to borrow from
+    // Visibility. The figure itself is unchanged; only the claim is.
+    expect(screen.getByText(/Assumes agents can currently read none of your value/)).toBeInTheDocument()
   })
 
   it('carries the exact methodology provenance', () => {

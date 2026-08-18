@@ -1917,7 +1917,12 @@ export function LiteFullReport({ report, onAddStoreUrl, token }) {
   const [revenue, setRevenue] = useState(() => seedAnnualRevenue(report.revenue_estimate_usd) ?? DEFAULT_REVENUE)
   const [revenueTouched, setRevenueTouched] = useState(false)
   const [aiSharePct, setAiSharePct] = useState(DEFAULT_AI_SHARE_PCT)
-  const exposure = computeExposure({ revenue, aiSharePct, visibility: report.visibility })
+  // Exposure-model fix: True Value drives the figure now. This legacy
+  // template only ever renders rows without a pillars payload, so
+  // true_value_score is null here in practice and the model assumes
+  // maximum gap — report.visibility is still shown, unchanged, as its
+  // own tile below; it just no longer masquerades as the exposure input.
+  const exposure = computeExposure({ revenue, aiSharePct, trueValueScore: report.true_value_score })
   const revenueIsEstimated = report.revenue_estimate_usd != null && !revenueTouched
 
   function handleRevenueChange(value) {

@@ -117,6 +117,23 @@ export function rankDimensionsByGap(dimensions) {
 
 export const EXPOSURE_HAIRCUT = 0.85
 
+// Substitution channel (this session). Value leaks through TWO channels,
+// and the old formula only ever sized one of them:
+//   1. the direct channel — the agent omits the brand, or quotes it
+//      without its real price/member value. Sized by invisibility.
+//   2. the substitution channel — when the agent cannot verify what the
+//      brand is worth, it does not leave the slot empty: it quotes a
+//      competitor's price or deal IN THAT SAME ANSWER (the transcripts
+//      this audit collects show exactly this). So the loss on an
+//      affected transaction is larger than the brand's own margin leak
+//      — the sale moves.
+// 1.5 is a MODELED multiplier for that second channel, not a measured
+// one, and the product is capped at 1 so modeled exposure can never
+// exceed the AI-assisted revenue slice itself. It is deliberately a
+// named constant and NOT a slider: a per-report knob would make every
+// report's number incomparable to every other.
+export const SUBSTITUTION_MULTIPLIER = 1.5
+
 // The revenue slider's own range (LiteFullReport.jsx's ExposureCalculator
 // <input type="range">) — annual units (Report redesign, Part 7): was
 // monthly (10,000-10,000,000); the ×12 scale-up keeps the same real
@@ -152,21 +169,53 @@ export function seedAnnualRevenue(annualRevenueUsd) {
 }
 
 /**
- * Modeled, not measured: revenue * AI-assisted share of purchases *
- * observed mention gap * a 0.85 haircut for everything the model can't
- * account for (attribution, seasonality, funnel leakage). Mention gap
- * is 1 - visibility/100 — visibility already is the primary entity's
- * share-of-voice metric, so its complement is how often an AI answer
- * is estimated to miss the brand entirely. Report redesign (Part 7):
- * revenue is now annual, so the result is annual exposure — same
- * formula, no separate monthly/annual branch to keep in sync.
+ * Modeled, not measured:
+ *
+ *   invisibility  = 1 - trueValueScore / 100
+ *   channelFactor = min(1, invisibility * SUBSTITUTION_MULTIPLIER)
+ *   exposure      = revenue * aiShare * channelFactor * EXPOSURE_HAIRCUT
+ *
+ * `trueValueScore` is the True Value pillar's NORMALIZED 0-100 score
+ * (earned / applicable_max * 100 — the same normalization
+ * lite_pillars._pillar already applies, so a Member Value N/A run does
+ * not distort it). This input used to be the VISIBILITY pillar, which
+ * made the whole figure wrong in the one way that mattered: it was
+ * driven by the thing every AEO monitor already measures, while True
+ * Value — what this audit exists to measure and what TrueSync exists to
+ * fix — had no influence on the dollar number at all. A brand agents
+ * mention constantly but cannot price scored a small exposure; worse,
+ * recovering True Value points moved the number not at all, so the one
+ * property the figure has to have (fix the gap, watch the number fall)
+ * was silently false. It is now monotonic in trueValueScore and exactly
+ * 0 at 100.
+ *
+ * The 0.85 haircut is unchanged — everything the model can't account
+ * for (attribution, seasonality, funnel leakage). SUBSTITUTION_
+ * MULTIPLIER covers the competitor-substitution channel; see its own
+ * comment above.
+ *
+ * Worked examples, at $100M revenue and 20% AI-assisted share:
+ *   True Value  10/100 -> 0.90 * 1.5 = 1.35, capped 1.0 -> $17,000,000
+ *   True Value  40/100 -> 0.60 * 1.5 = 0.90              -> $15,300,000
+ *   True Value  80/100 -> 0.20 * 1.5 = 0.30              -> $ 5,100,000
+ *   True Value 100/100 -> 0                              -> $         0
+ * Note the cap binds for every trueValueScore at or below 33.3 — those
+ * runs all model the full AI-assisted slice, less the haircut.
+ *
+ * A null/absent trueValueScore (a legacy row with no pillars payload,
+ * and the landing estimator, which has no scored brand at all) means
+ * maximum gap — invisibility 1. Callers showing a number built that way
+ * must say so; they are not showing a measurement. Revenue is annual
+ * (Report redesign, Part 7), so the result is annual exposure.
  */
-export function computeExposure({ revenue, aiSharePct, visibility }) {
+export function computeExposure({ revenue, aiSharePct, trueValueScore }) {
   const rev = Number(revenue) || 0
   const share = Math.max(0, Math.min(100, Number(aiSharePct) || 0)) / 100
-  const vis = visibility === null || visibility === undefined ? 0 : Number(visibility)
-  const mentionGap = Math.max(0, 1 - vis / 100)
-  return rev * share * mentionGap * EXPOSURE_HAIRCUT
+  const raw = Number(trueValueScore)
+  const tv = Number.isFinite(raw) ? raw : 0
+  const invisibility = Math.max(0, 1 - tv / 100)
+  const channelFactor = Math.min(1, invisibility * SUBSTITUTION_MULTIPLIER)
+  return rev * share * channelFactor * EXPOSURE_HAIRCUT
 }
 
 /** LiteFullReport's accessibility dial — null when the dial should show

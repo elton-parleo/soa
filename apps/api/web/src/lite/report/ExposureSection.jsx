@@ -10,6 +10,13 @@
  * severity). Dollar amounts still have to be computed here, live,
  * because revenue/AI-share are sliders the visitor can drag — the
  * server can't know the split in dollars, only the proportions.
+ *
+ * Exposure-model fix (this session): the figure is driven by the True
+ * Value pillar, not Visibility, and carries a substitution allowance
+ * (see liteDerive.js::computeExposure). This component still renders
+ * ONE number — the single `exposure` prop — and never recomputes it;
+ * the reasons split and the model line below both read that same
+ * figure. All copy comes from reportContent.js::EXPOSURE_MODEL_COPY.
  */
 import { useRef } from 'react'
 import { Glyph, LeakageEstimator } from '../../ds/index.js'
@@ -17,6 +24,7 @@ import { ReportSection } from './ReportSection.jsx'
 import { useCollapsible } from './Collapsible.jsx'
 import { REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX, AI_SHARE_SLIDER_MIN, AI_SHARE_SLIDER_MAX, formatCurrency } from '../liteDerive.js'
 import { isPartialRead } from './reportDerive.js'
+import { EXPOSURE_MODEL_COPY } from './reportContent.js'
 import { track } from '../analytics.js'
 import { EVENTS } from '../analyticsEvents.js'
 
@@ -89,6 +97,10 @@ export function ExposureSection({ report, revenue, onRevenueChange, aiSharePct, 
             </div>
             <input type="range" min={AI_SHARE_SLIDER_MIN} max={AI_SHARE_SLIDER_MAX} value={aiSharePct} onChange={(e) => { onAiShareChange(+e.target.value); trackAssumptionsUsedOnce() }} aria-label="AI-assisted share of sales" style={{ width: '100%', accentColor: 'var(--blue)' }} />
           </div>
+          <div style={{ gridColumn: '1/-1', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, fontSize: 12.5, color: 'var(--muted)', paddingTop: 4, borderTop: '1px solid var(--hairline)' }}>
+            <span>{EXPOSURE_MODEL_COPY.substitutionAssumption}</span>
+            <span className="mono-label" style={{ fontSize: 8.5, color: 'var(--faint)' }}>{EXPOSURE_MODEL_COPY.substitutionAssumptionNote}</span>
+          </div>
           <div className="mono-label" style={{ gridColumn: '1/-1', fontSize: 8.5, color: 'var(--faint)', lineHeight: 1.7 }}>
             ADJUST THE INPUTS AND THE MODEL FOLLOWS · THE FULL ANALYSIS REPLACES THE MODEL WITH MEASURED PRICE GAPS
           </div>
@@ -104,7 +116,14 @@ export function ExposureSection({ report, revenue, onRevenueChange, aiSharePct, 
       </div>
 
       <div id="expmodel" style={{ marginTop: 16, scrollMarginTop: 26, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.6 }}>
-        <b style={{ color: 'var(--text-strong)' }}>The model:</b> revenue × AI-assisted share × value-invisibility factor. {formatCurrency(revenue)} annual revenue, {aiSharePct}% AI-assisted share. The invisibility factor comes from your True Value result. The Full Analysis replaces this model with measured price gaps.
+        <b style={{ color: 'var(--text-strong)' }}>{EXPOSURE_MODEL_COPY.lead}</b>{' '}
+        {EXPOSURE_MODEL_COPY.body({
+          revenueLabel: formatCurrency(revenue),
+          aiSharePct,
+          // A row with no True Value pillar was never scored on it —
+          // the copy has to own that, not imply a measurement.
+          measured: report?.true_value_score !== null && report?.true_value_score !== undefined,
+        })}
       </div>
       {partialRead && (
         <div className="mono-label" style={{ marginTop: 10, fontSize: 8.5, color: 'var(--faint)' }}>

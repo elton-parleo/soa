@@ -1297,6 +1297,16 @@ class PublicLiteReportResponse(BaseModel):
     visibility: Optional[float] = None
     accessibility: Optional[float] = None
     composite: Optional[float] = None
+    # Exposure-model fix (this session): the True Value pillar's own
+    # normalized 0-100 score, the input the modeled exposure figure is
+    # driven by (web/src/lite/liteDerive.js::computeExposure). Additive
+    # and independent of `visibility` above, which stays exactly as it
+    # was for the legacy tile and the Visibility section — the two are
+    # different pillars and the report shows both. Null on any row
+    # without a pillars payload (legacy scorer_version); the client
+    # then models maximum gap and says so rather than showing a number
+    # that pretends to be measured.
+    true_value_score: Optional[float] = None
     scan_status: Optional[str] = None
     visibility_breakdown: Optional[PublicLiteVisibilityBreakdown] = None
     pillars: Optional[PublicLitePillars] = None
