@@ -19,6 +19,30 @@ export const EDITORIAL_QUOTE = 'The shelf is now an algorithm. Most of your valu
 // because one clause is conditional: a row with no True Value pillar
 // (legacy scorer_version) models maximum gap, and the reader has to be
 // told that rather than shown a number implying it was measured.
+// The ranked-fixes "not ranked in this sample" strip. The base line was
+// a literal in FixesTable.jsx; it moves here because this session adds a
+// conditional clause to it.
+//
+// Why the clause: the report shows two point totals that use the same
+// arithmetic over the same dimensions — the section title's "N moves
+// recover up to M points" (the VISIBLE rows) and the headline finding's
+// "worth up to K points" (the whole TrueSync pool). They can legitimately
+// differ when a TrueSync dimension ranks outside the visible top two,
+// and that is honest — but silently. When the pool is larger than what
+// the visible rows account for, the strip now says how much of it is
+// sitting in the unranked remainder, so a reader can reconcile the two
+// numbers instead of guessing at the discrepancy. Below 1 point the
+// clause is noise, so it doesn't render.
+export const FIXES_REMAINING_STRIP = {
+  minTrueSyncRemainder: 1,
+  line: ({ remainingCount, trueSyncRemainder }) => (
+    `${remainingCount} MORE FIXES IDENTIFIED, NOT RANKED IN THIS SAMPLE`
+    + (trueSyncRemainder >= 1
+      ? ` · INCLUDING UP TO ${Math.round(trueSyncRemainder * 10) / 10} MORE TRUESYNC POINTS`
+      : '')
+  ),
+}
+
 export const EXPOSURE_MODEL_COPY = {
   lead: 'The model:',
   body: ({ revenueLabel, aiSharePct, measured }) => (

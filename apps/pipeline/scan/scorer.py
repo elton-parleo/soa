@@ -1244,7 +1244,32 @@ def score_value_protocols(pages) -> DimensionScore:
     manifest = _parse_protocol_manifest(mcp_page)
 
     if manifest is None:
-        return DimensionScore(score=0.0, max=weight, evidence=["no protocol profile found"])
+        # No manifest at all is the LARGEST possible gap on this
+        # dimension (the full 14 points), and it used to be the one gap
+        # that carried no fix — so exactly the brands with nothing
+        # declared, which is most of them, got no rankable Value
+        # Protocols fix. lite_pillars._build_fixes_section only ranks
+        # dimensions with a fix_human, while its "up to N points"
+        # TrueSync pool did not check for one, so the two headline
+        # numbers on the report could not reconcile. Scoring and
+        # evidence are unchanged; only the fix is new, and it is the
+        # "publish it" variant — the action here is to create the
+        # manifest, not to amend one that already exists (see the
+        # partial-manifest text below, which stays as it was).
+        return DimensionScore(
+            score=0.0,
+            max=weight,
+            evidence=["no protocol profile found"],
+            fix=(
+                "Publish an MCP well-known manifest declaring your agent-checkout capabilities, e.g. "
+                f'"capabilities": ["{UCP_DISCOUNT_CAPABILITY}", "{UCP_LOYALTY_CAPABILITY}", "{ACP_PROMOTIONS_CAPABILITY}"], '
+                "with a current specVersion."
+            ),
+            fix_human=(
+                "Publish a protocol manifest that declares which agent-checkout capabilities your store "
+                "offers — discounts, member pricing, promotions — so agents can see them before checkout."
+            ),
+        )
 
     capabilities = manifest.get("capabilities")
     capabilities_is_list = isinstance(capabilities, list)

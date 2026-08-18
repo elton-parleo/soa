@@ -651,6 +651,33 @@ def _rank_and_lock_fixes(dims: List[Dict]) -> None:
 FREE_FIX_VISIBLE_RANK = 2
 
 
+# One predicate, two consumers. The ranked list and the "up to N points"
+# TrueSync pool are the same arithmetic over the same dimensions, and
+# they used to disagree on ELIGIBILITY: _build_fixes_section required a
+# fix_human, _parleo_fixable_points did not. So a dimension with a real
+# gap and no fix text (score_value_protocols' no-manifest branch, before
+# this session) counted toward the headline's pool while being unable to
+# appear in the ranked list — and the report's two numbers could not
+# reconcile. The scorer no longer emits such a dimension (see
+# test_every_truesync_gap_on_every_fixture_carries_a_fix_human), but the
+# two sets are now equal BY CONSTRUCTION rather than by luck.
+#
+# gap >= 0.05 is the "nothing left to fix" floor: a dimension already at
+# its max must never occupy a free slot or inflate the pool. In practice
+# the scorers already withhold fix text at full credit, so this is a
+# second lock on the same door, not a new exclusion.
+_FIXABLE_GAP_FLOOR = 0.05
+
+
+def _is_fixable(d: Dict) -> bool:
+    return (
+        not d["na"]
+        and not d.get("blocked")
+        and (d["max"] - d["earned"]) >= _FIXABLE_GAP_FLOOR
+        and bool(d.get("fix_human"))
+    )
+
+
 def _build_fixes_section(dims: List[Dict]) -> Dict:
     """
     Builds the report's `fixes` field: {visible: [...], remaining_count}.
@@ -683,7 +710,7 @@ def _build_fixes_section(dims: List[Dict]) -> Dict:
     render as ranked.
     """
     ranked = sorted(
-        (d for d in dims if not d["na"] and not d.get("blocked") and d.get("fix_human")),
+        (d for d in dims if _is_fixable(d)),
         key=lambda d: (-(d["max"] - d["earned"]), d["code"]),
     )
     visible_dims = list(ranked[:FREE_FIX_VISIBLE_RANK])
@@ -716,14 +743,18 @@ def _build_fixes_section(dims: List[Dict]) -> Dict:
 def _parleo_fixable_points(dims: List[Dict]) -> float:
     """F4: the point pool TrueSync itself can recover on this run — the
     measured gap (max - earned) summed over the two TrueSync-owned
-    dimensions (deal_citability, value_protocols), excluding na/blocked
-    rows the same way _build_fixes_section does (nothing honestly
-    fixable to report from a dimension we couldn't measure)."""
+    dimensions (deal_citability, value_protocols), over exactly the rows
+    _build_fixes_section is willing to rank (_is_fixable — na/blocked
+    excluded because we couldn't measure them, fix-less excluded because
+    there is nothing to hand the merchant). Sharing the predicate is the
+    point: the report shows this pool as "worth up to N points" beside a
+    ranked list built from the same set, and the two must be able to
+    reconcile."""
     return round(
         sum(
             d["max"] - d["earned"]
             for d in dims
-            if not d["na"] and not d.get("blocked")
+            if _is_fixable(d)
             and DIMENSIONS_BY_CODE[d["code"]].fix_owner == FIX_OWNER_TRUESYNC
         ),
         1,

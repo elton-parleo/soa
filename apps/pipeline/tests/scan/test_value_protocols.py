@@ -38,6 +38,77 @@ def test_no_mcp_page_at_all_scores_zero_with_honest_evidence():
     assert result.evidence == ["no protocol profile found"]
 
 
+# ─── The no-manifest branch carries a fix (this session) ─────────────────
+#
+# Nothing declared is the LARGEST possible gap here — the full 14 points —
+# and it was the one gap that carried no fix, so lite_pillars could not
+# rank it (_build_fixes_section only ranks dimensions with a fix_human).
+# The 14-point dimension silently fell into "N more fixes identified" and
+# the report's two TrueSync point totals could not reconcile.
+
+def test_no_manifest_carries_a_publish_it_fix():
+    result = scorer.score_value_protocols([])
+
+    # Scoring and evidence are deliberately untouched.
+    assert result.score == 0.0
+    assert result.evidence == ["no protocol profile found"]
+
+    assert result.fix_human is not None
+    assert result.fix is not None
+    assert "manifest" in result.fix_human.lower()
+
+
+def test_the_no_manifest_fix_says_publish_not_amend():
+    """The action for a store with nothing declared is to CREATE the
+    manifest — the partial-manifest branch's "declare capabilities in
+    your manifest" wording assumes one already exists."""
+    result = scorer.score_value_protocols([])
+    assert result.fix_human.lower().startswith("publish")
+    assert result.fix.lower().startswith("publish")
+
+
+def test_the_no_manifest_fix_names_the_real_capability_constants():
+    """Reuses the module's own capability constants rather than retyping
+    the strings — the same discipline the partial-branch fix follows."""
+    result = scorer.score_value_protocols([])
+    for capability in (
+        scorer.UCP_DISCOUNT_CAPABILITY, scorer.UCP_LOYALTY_CAPABILITY, scorer.ACP_PROMOTIONS_CAPABILITY,
+    ):
+        assert capability in result.fix
+
+
+def test_every_unresolvable_manifest_shape_carries_the_same_fix():
+    """not_found / failed / empty body / garbage JSON / non-object JSON all
+    reach the same no-manifest return, so all five must be rankable."""
+    for pages in (
+        [],
+        [_mcp_page(status="not_found", body=None)],
+        [_mcp_page(status="failed", body=None)],
+        [_mcp_page(status="fetched", body="   ")],
+        [_mcp_page(status="fetched", body="not json at all {{{")],
+        [_mcp_page(status="fetched", body="[1, 2, 3]")],
+    ):
+        result = scorer.score_value_protocols(pages)
+        assert result.score == 0.0
+        assert result.fix_human, f"no fix_human for {pages!r}"
+
+
+def test_an_empty_but_resolvable_manifest_keeps_the_partial_branch_text():
+    """1b: only the no-manifest return changed. A manifest that resolves
+    but declares nothing still scores by the five checks and still takes
+    the "declare capabilities in your manifest" wording, not "publish"."""
+    result = scorer.score_value_protocols([_mcp_page(body=json.dumps({}))])
+    assert result.fix_human.lower().startswith("declare")
+    assert not result.fix_human.lower().startswith("publish")
+
+
+def test_a_full_manifest_still_carries_no_fix():
+    result = scorer.score_value_protocols([_mcp_page(body=FULL_MANIFEST)])
+    assert result.score == 14.0
+    assert result.fix is None
+    assert result.fix_human is None
+
+
 def test_mcp_well_known_not_found_scores_zero():
     result = scorer.score_value_protocols([_mcp_page(status="not_found", body=None)])
     assert result.score == 0.0

@@ -149,7 +149,11 @@ describe('LiteFullReportV4 — full scored run renders without crashing', () => 
     expect(screen.getByText('Parleo can fix 2 of your 4 major gaps.')).toBeInTheDocument()
     expect(screen.getByText('Add readable product data to every product page')).toBeInTheDocument()
     expect(screen.getAllByText('ENG').length).toBeGreaterThan(0)
-    expect(screen.getByText('4 MORE FIXES IDENTIFIED, NOT RANKED IN THIS SAMPLE')).toBeInTheDocument()
+    // 2c: this fixture's two visible rows are both ENG-owned, so none of
+    // its 13-point TrueSync pool is accounted for by what's ranked — the
+    // strip now says so rather than leaving the headline finding's "up to
+    // 13 points" unreconcilable with the section's own total.
+    expect(screen.getByText('4 MORE FIXES IDENTIFIED, NOT RANKED IN THIS SAMPLE · INCLUDING UP TO 13 MORE TRUESYNC POINTS')).toBeInTheDocument()
   })
 
   it('F1/F2/1c: the parsed-page card renders the real OfferFeed, product name, and product image (alt = product name)', () => {
@@ -693,5 +697,82 @@ describe('LiteFullReportV4 — the revenue control reaches large brands', () => 
     fireEvent.blur(amount)
 
     expect(track.mock.calls.filter(([event]) => event === EVENTS.ADJUST_ASSUMPTIONS_USED)).toHaveLength(1)
+  })
+})
+
+// ─── 2c: the remaining-fixes strip reconciles the two point totals ──────
+//
+// The section title sums the VISIBLE rows; the headline finding shows the
+// whole TrueSync pool. They can legitimately differ when a TrueSync
+// dimension ranks outside the visible top two — honest, but silent. The
+// strip now names the difference so a reader can reconcile them.
+
+describe('LiteFullReportV4 — the unranked-remainder strip accounts for the TrueSync pool', () => {
+  const twoEngVisible = [
+    { code: 'catalog_context', name: 'Add readable product data', fix_human: 'x', impact: 12, fix_owner: 'ENG' },
+    { code: 'price_truth', name: 'Put your price in your page code', fix_human: 'y', impact: 8, fix_owner: 'ENG' },
+  ]
+
+  it('names the unaccounted TrueSync points when none of the pool is visible', () => {
+    renderReport({ pillars: { parleo_fixable_points: 13, fixes: { visible: twoEngVisible, remaining_count: 4 } } })
+    expect(screen.getByText(/INCLUDING UP TO 13 MORE TRUESYNC POINTS/)).toBeInTheDocument()
+  })
+
+  it('omits the clause when every TrueSync point is already ranked — this run\'s shape after the scorer fix', () => {
+    // Value Protocols 14.0 + Deal Citability 9.7 = the whole 23.7 pool,
+    // both visible. Nothing is left unaccounted, so nothing is claimed.
+    renderReport({
+      pillars: {
+        parleo_fixable_points: 23.7,
+        fixes: {
+          visible: [
+            { code: 'value_protocols', name: 'Publish a protocol manifest', fix_human: 'a', impact: 14, fix_owner: 'TRUESYNC' },
+            { code: 'deal_citability', name: 'Make your deals citable', fix_human: 'b', impact: 9.7, fix_owner: 'TRUESYNC' },
+          ],
+          remaining_count: 1,
+        },
+      },
+    })
+    expect(screen.getByText('1 MORE FIXES IDENTIFIED, NOT RANKED IN THIS SAMPLE')).toBeInTheDocument()
+    expect(screen.queryByText(/MORE TRUESYNC POINTS/)).not.toBeInTheDocument()
+  })
+
+  it('omits the clause when the remainder rounds below a point — a sub-point claim is noise', () => {
+    renderReport({
+      pillars: {
+        parleo_fixable_points: 9.9,
+        fixes: {
+          visible: [
+            { code: 'deal_citability', name: 'Make your deals citable', fix_human: 'b', impact: 9.7, fix_owner: 'TRUESYNC' },
+            ...twoEngVisible.slice(0, 1),
+          ],
+          remaining_count: 2,
+        },
+      },
+    })
+    expect(screen.getByText('2 MORE FIXES IDENTIFIED, NOT RANKED IN THIS SAMPLE')).toBeInTheDocument()
+    expect(screen.queryByText(/MORE TRUESYNC POINTS/)).not.toBeInTheDocument()
+  })
+
+  it('the section title still sums only the visible rows', () => {
+    renderReport({
+      pillars: {
+        parleo_fixable_points: 23.7,
+        fixes: {
+          visible: [
+            { code: 'value_protocols', name: 'Publish a protocol manifest', fix_human: 'a', impact: 14, fix_owner: 'TRUESYNC' },
+            { code: 'deal_citability', name: 'Make your deals citable', fix_human: 'b', impact: 9.7, fix_owner: 'TRUESYNC' },
+          ],
+          remaining_count: 1,
+        },
+      },
+    })
+    // round(14 + 9.7) = 24 — the same number the headline finding shows
+    // for a 23.7-point pool, which is the whole point of this session.
+    expect(screen.getByText('2 moves recover up to 24 points')).toBeInTheDocument()
+    // ...and the headline finding shows the same number for the 23.7-point
+    // pool, which is the reconciliation this session was about.
+    expect(screen.getByText(/Incentive sync and protocol declarations are worth/))
+      .toHaveTextContent('up to 24 points')
   })
 })

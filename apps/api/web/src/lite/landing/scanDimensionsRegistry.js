@@ -246,6 +246,11 @@ export const PILLAR_WEIGHTS = Object.fromEntries(
 export const TOTAL_MAX = Object.values(PILLAR_WEIGHTS).reduce((sum, w) => sum + w, 0)
 
 // ── Verdict gate (Stage 25, Part 5, G1) ─────────────────────────────────
+// Mirrors FIX_OWNER_TRUESYNC in soa_shared/scan_dimensions.py — the
+// value the report payload's fixes[].fix_owner carries for a dimension
+// TrueSync closes directly.
+export const FIX_OWNER_TRUESYNC = 'TRUESYNC'
+
 export const VERDICT_COMPOSITE_THRESHOLD = 60
 export const VERDICT_TRUE_VALUE_RATIO_THRESHOLD = 0.25
 export const VERDICT_AGENT_READY = 'AGENT-READY'
