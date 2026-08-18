@@ -54,6 +54,7 @@ from app.services.lite_pillars import (
     _VALUE_PROTOCOLS_CODE,
     _crawl_dim_row,
     _dim_by_code,
+    _is_fixable,
     _parleo_fixable_points,
     _pillar,
     _sub_lens,
@@ -206,10 +207,20 @@ def score_deal_citability_said_full(run_signals: List[RunSignal]) -> Dict:
 # FREE_FIX_VISIBLE_RANK truncation or forced-TrueSync-swap: this is the
 # paid, unlocked report — every fixable dimension is visible,
 # remaining_count is always 0, nothing is hidden behind a lock.
+#
+# Eligibility is _is_fixable (imported from lite_pillars), the same
+# predicate _parleo_fixable_points below already uses — na/blocked
+# excluded, gap >= the 0.05 floor, fix_human present. Before this, this
+# function had its own inline copy missing the gap floor: harmless today
+# only because the scorer now never emits a fixable gap without
+# fix_human (test_every_truesync_gap_on_every_fixture_carries_a_fix_
+# human), i.e. safe by luck rather than by construction — the exact
+# failure mode lite hit before that guard existed. Sharing the predicate
+# makes the ranked list and the pool agree by construction here too.
 
 def _build_full_fixes_section(dims: List[Dict]) -> Dict:
     ranked = sorted(
-        (d for d in dims if not d["na"] and not d.get("blocked") and d.get("fix_human")),
+        (d for d in dims if _is_fixable(d)),
         key=lambda d: (-(d["max"] - d["earned"]), d["code"]),
     )
     visible = [
