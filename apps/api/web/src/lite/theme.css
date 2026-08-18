@@ -2466,3 +2466,39 @@
 @media (max-width: 640px) {
   .lite-resolving-mark { display: block; }
 }
+
+/* ── Revenue field (lite/RevenueField.jsx) — the log slider plus its
+   typed amount, shared by the report's ADJUST ASSUMPTIONS panel and the
+   landing Stakes widget. Grid areas rather than two DOM copies of the
+   input: desktop puts the amount on the label's right, phone drops it
+   below the track at full width (mobile pass, LM3/RM8 idiom). ── */
+.lite-revenue-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "label amount"
+    "range range"
+    "error error";
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 8px;
+}
+.lite-revenue-field-label { grid-area: label; font-size: 12.5px; }
+.lite-revenue-field-input { grid-area: amount; }
+.lite-revenue-field-range { grid-area: range; }
+.lite-revenue-field-error { grid-area: error; }
+
+@media (max-width: 640px) {
+  .lite-revenue-field {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "label"
+      "range"
+      "amount"
+      "error";
+  }
+  .lite-revenue-field-input {
+    width: 100%;
+    text-align: left !important;
+  }
+}

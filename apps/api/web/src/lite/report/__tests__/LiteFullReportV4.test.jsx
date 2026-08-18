@@ -608,3 +608,87 @@ describe('splitExposureDollars — still sums to the modeled total at the new ma
     expect(dollars).toEqual([1_224_000, 816_000])
   })
 })
+
+// ─── Revenue ceiling: $5B, log track, typed amount ─────────────────────
+
+describe('LiteFullReportV4 — the revenue control reaches large brands', () => {
+  it('seeds a large probe estimate at its real size, not the old $120M ceiling', () => {
+    renderReport({ true_value_score: 0, revenue_estimate_usd: 1_000_000_000 })
+    fireEvent.click(screen.getByText('ADJUST ASSUMPTIONS'))
+    expect(screen.getByLabelText('Annual revenue (exact amount)')).toHaveValue('$1B')
+    // 1,000,000,000 * 0.20 * 1.0 * 0.85 — the $1B-based figure. Clamped
+    // to $120M it would have modeled $20,400,000.
+    expect(screen.getAllByText(/170,000,000/).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/20,400,000/)).not.toBeInTheDocument()
+  })
+
+  it('the model line interpolates the seeded revenue, not a reduced one', () => {
+    renderReport({ true_value_score: 40, revenue_estimate_usd: 1_000_000_000 })
+    expect(screen.getByText(/\$1,000,000,000 annual revenue/)).toBeInTheDocument()
+  })
+
+  it('typing an amount updates the figure, the model line, and the reasons split together', () => {
+    const reasons = [
+      { id: 'pt_seen', text: 'Your price checks earn 2 of 5 points on your own site.', impact_weight: 0.5, severity_rank: 1 },
+      { id: 'catalog_context', text: 'Catalog & Context earns 2 of 8 points.', impact_weight: 0.3, severity_rank: 2 },
+      { id: 'agent_access', text: 'Agent Access earns 4 of 6 points.', impact_weight: 0.2, severity_rank: 3 },
+    ]
+    renderReport({ true_value_score: 40, pillars: { exposure_reasons: reasons } })
+    fireEvent.click(screen.getByText('ADJUST ASSUMPTIONS'))
+    const amount = screen.getByLabelText('Annual revenue (exact amount)')
+    fireEvent.change(amount, { target: { value: '1.5b' } })
+    fireEvent.blur(amount)
+
+    // 1,500,000,000 * 0.20 * 0.90 * 0.85 = 229,500,000 — one figure,
+    // consumed by every surface below it.
+    expect(screen.getAllByText(/229,500,000/).length).toBeGreaterThan(0)
+    expect(screen.getByText(/\$1,500,000,000 annual revenue/)).toBeInTheDocument()
+    expect(screen.getAllByText(/≈ \$[\d,]+\/yr · modeled/).length).toBe(3)
+  })
+
+  it('the revenue track carries a log position, and the AI-share slider is untouched', () => {
+    renderReport({ true_value_score: 40 })
+    fireEvent.click(screen.getByText('ADJUST ASSUMPTIONS'))
+
+    const revenue = screen.getByLabelText('Annual revenue')
+    expect(revenue).toHaveAttribute('max', '1000')
+    expect(revenue).toHaveAttribute('step', '1')
+
+    // 2c: the AI-share control keeps its own linear 5-40% range.
+    const share = screen.getByLabelText('AI-assisted share of sales')
+    expect(share).toHaveAttribute('min', '5')
+    expect(share).toHaveAttribute('max', '40')
+  })
+
+  it('dragging the revenue track updates the modeled figure', () => {
+    renderReport({ true_value_score: 0 })
+    fireEvent.click(screen.getByText('ADJUST ASSUMPTIONS'))
+    fireEvent.change(screen.getByLabelText('Annual revenue'), { target: { value: '1000' } })
+    // Position 1000 is $5,000,000,000 -> * 0.20 * 1.0 * 0.85
+    expect(screen.getAllByText(/850,000,000/).length).toBeGreaterThan(0)
+  })
+
+  it('a typed amount above the ceiling pins the track but models the real figure', () => {
+    renderReport({ true_value_score: 0 })
+    fireEvent.click(screen.getByText('ADJUST ASSUMPTIONS'))
+    const amount = screen.getByLabelText('Annual revenue (exact amount)')
+    fireEvent.change(amount, { target: { value: '8b' } })
+    fireEvent.blur(amount)
+
+    expect(screen.getByLabelText('Annual revenue')).toHaveValue('1000')
+    // 8,000,000,000 * 0.20 * 1.0 * 0.85
+    expect(screen.getAllByText(/1,360,000,000/).length).toBeGreaterThan(0)
+  })
+
+  it('a committed amount counts as adjust_assumptions_used, once', () => {
+    renderReport({ true_value_score: 40 })
+    fireEvent.click(screen.getByText('ADJUST ASSUMPTIONS'))
+    const amount = screen.getByLabelText('Annual revenue (exact amount)')
+    fireEvent.change(amount, { target: { value: '900m' } })
+    fireEvent.blur(amount)
+    fireEvent.change(amount, { target: { value: '800m' } })
+    fireEvent.blur(amount)
+
+    expect(track.mock.calls.filter(([event]) => event === EVENTS.ADJUST_ASSUMPTIONS_USED)).toHaveLength(1)
+  })
+})

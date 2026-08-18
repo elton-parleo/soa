@@ -134,16 +134,112 @@ export const EXPOSURE_HAIRCUT = 0.85
 // report's number incomparable to every other.
 export const SUBSTITUTION_MULTIPLIER = 1.5
 
-// The revenue slider's own range (LiteFullReport.jsx's ExposureCalculator
-// <input type="range">) — annual units (Report redesign, Part 7): was
-// monthly (10,000-10,000,000); the ×12 scale-up keeps the same real
-// revenue ceiling the control could always represent, just in the unit
-// the report now displays everywhere. Shared with seedAnnualRevenue
-// below so a probe-seeded estimate is clamped to exactly what the
-// control can represent, not a second, driftable copy of the same two
-// numbers.
+// The revenue slider's own range. $120M was a leftover from the
+// monthly-calculator era ($10M/mo × 12) that nobody revisited when the
+// unit went annual, and it silently capped every large brand. $5B
+// covers essentially every DTC/retail brand we audit, and anything
+// larger types an exact figure into the numeric input beside the track
+// (parseRevenueInput below) rather than being rounded down to fit.
+// Deliberately NOT the clamp for the probe seed any more —
+// seedAnnualRevenue clamps to the probe's own plausibility bounds, so a
+// real $1B estimate seeds as $1B instead of as $120M.
 export const REVENUE_SLIDER_MIN = 120000
-export const REVENUE_SLIDER_MAX = 120000000
+export const REVENUE_SLIDER_MAX = 5_000_000_000
+
+// Mirrors MIN_PLAUSIBLE_REVENUE_USD / MAX_PLAUSIBLE_REVENUE_USD in
+// apps/pipeline/generation/revenue_probe.py — the range that file
+// already treats as a usable estimate (outside it, an LLM guess of $1
+// or $50 trillion is a refusal or a hallucination, not a seed).
+// Deliberately a separate pair from the slider bounds above: the slider
+// bounds are what the CONTROL can represent, these are what a revenue
+// figure can credibly BE. Typing $8B is allowed even though the track
+// pins at $5B; typing $50T is not.
+export const MIN_PLAUSIBLE_REVENUE_USD = 100_000
+export const MAX_PLAUSIBLE_REVENUE_USD = 100_000_000_000
+
+// ─── Revenue slider: logarithmic position <-> value ─────────────────────
+//
+// A linear track from $120K to $5B would put roughly $5M of revenue in
+// every pixel, so the entire small-and-mid range — most of the brands
+// that actually run this audit — would collapse into the first few
+// pixels and be impossible to set. The range input therefore carries a
+// unitless 0-1000 POSITION, and revenue is the geometric interpolation
+// between the bounds. Each equal drag covers an equal RATIO, so a $2M
+// store and a $2B brand are each positioned precisely on the same
+// track. Both directions live here, pure and tested, because three
+// surfaces drive the same control (the report's ADJUST ASSUMPTIONS
+// panel, the landing Stakes widget, and the legacy report template) and
+// a second copy of this arithmetic would drift.
+export const REVENUE_SLIDER_STEPS = 1000
+
+const REVENUE_LOG_SPAN = Math.log(REVENUE_SLIDER_MAX / REVENUE_SLIDER_MIN)
+
+/**
+ * Rounds to 2 significant figures — $2.3M, $180M, $1.2B. Dragging a log
+ * track produces values like $2,347,881, which would flicker through
+ * arbitrary digits and read as false precision on a figure that is
+ * modeled anyway. The MODEL consumes this snapped value too, so the
+ * readout and the computed exposure can never disagree. Deliberately
+ * NOT applied to a typed figure: someone who types $123,456,789 means
+ * that number, and 2 sig figs would silently reduce it.
+ */
+export function snapRevenue(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return 0
+  const magnitude = Math.pow(10, Math.floor(Math.log10(n)) - 1)
+  return Math.round(n / magnitude) * magnitude
+}
+
+/** Slider position (0-REVENUE_SLIDER_STEPS) -> snapped revenue. */
+export function revenueSliderPositionToRevenue(position) {
+  const raw = Number(position)
+  const pos = Math.max(0, Math.min(REVENUE_SLIDER_STEPS, Number.isFinite(raw) ? raw : 0))
+  // Exact at both ends — no floating-point drift into $119,999.
+  if (pos <= 0) return REVENUE_SLIDER_MIN
+  if (pos >= REVENUE_SLIDER_STEPS) return REVENUE_SLIDER_MAX
+  return snapRevenue(REVENUE_SLIDER_MIN * Math.exp(REVENUE_LOG_SPAN * (pos / REVENUE_SLIDER_STEPS)))
+}
+
+/**
+ * Revenue -> slider position, the inverse of the above. A value outside
+ * the slider's range (a probe estimate below the floor, or a typed
+ * figure above the ceiling) pins the TRACK at its end while the caller
+ * keeps showing and modeling the true value — the merchant is never
+ * shown a silently reduced number.
+ */
+export function revenueToSliderPosition(revenue) {
+  const n = Number(revenue)
+  if (!Number.isFinite(n) || n <= REVENUE_SLIDER_MIN) return 0
+  if (n >= REVENUE_SLIDER_MAX) return REVENUE_SLIDER_STEPS
+  return Math.round(REVENUE_SLIDER_STEPS * Math.log(n / REVENUE_SLIDER_MIN) / REVENUE_LOG_SPAN)
+}
+
+/**
+ * Parses what a merchant types into the revenue field: shorthand
+ * ("100m", "1.2b", "750k"), a plain number ("750000"), and anything
+ * with $ / commas / spaces in it ("$500,000,000"). Returns null for
+ * anything it cannot read as a number — the caller shows an inline
+ * rejection rather than silently substituting a value. Does NOT clamp;
+ * the caller clamps to the plausibility bounds, which is a different
+ * decision from "is this text a number at all".
+ */
+const REVENUE_UNITS = { k: 1e3, m: 1e6, b: 1e9 }
+
+export function parseRevenueInput(text) {
+  const raw = String(text ?? '').trim().toLowerCase().replace(/[$,\s]/g, '')
+  if (!raw) return null
+  const match = /^([0-9]+(?:\.[0-9]+)?)([kmb])?$/.exec(raw)
+  if (!match) return null
+  const value = Number(match[1]) * (match[2] ? REVENUE_UNITS[match[2]] : 1)
+  return Number.isFinite(value) ? value : null
+}
+
+/** Clamps a revenue figure to what a revenue figure can credibly be. */
+export function clampToPlausibleRevenue(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  return Math.max(MIN_PLAUSIBLE_REVENUE_USD, Math.min(MAX_PLAUSIBLE_REVENUE_USD, n))
+}
 
 // V4 redesign: the AI-assisted-share slider range shared by the
 // landing Stakes widget and the report's ADJUST ASSUMPTIONS panel —
@@ -154,18 +250,25 @@ export const AI_SHARE_SLIDER_MAX = 40
 export const AI_SHARE_DEFAULT_PCT = 20
 
 /**
- * Report redesign (Part 7): the revenue probe's own annual USD estimate,
- * clamped to the slider's range — no /12 conversion anymore, since the
- * calculator's unit is now annual throughout. Null/undefined (probe
- * never ran, or came back unparseable/absurd — see revenue_probe.py)
- * returns null so the caller falls back to its existing static default,
- * unchanged.
+ * Report redesign (Part 7): the revenue probe's own annual USD estimate.
+ * Null/undefined (probe never ran, or came back unparseable/absurd —
+ * see revenue_probe.py) returns null so the caller falls back to its
+ * existing static default, unchanged.
+ *
+ * This used to clamp to the SLIDER's range, which meant a Sephora-scale
+ * audit seeded at $120M however large the real estimate was, and the
+ * exposure figure then understated by whatever multiple the brand
+ * exceeded it — silently, with the reduced number presented as the
+ * estimate. It now clamps only to the probe's own plausibility bounds,
+ * so a real $1B estimate seeds as $1B. A value beyond the slider's
+ * ceiling still seeds at its true size; the track simply pins at max
+ * while the numeric input and the model carry the real figure.
  */
 export function seedAnnualRevenue(annualRevenueUsd) {
   if (annualRevenueUsd === null || annualRevenueUsd === undefined) return null
   const annual = Number(annualRevenueUsd)
   if (!Number.isFinite(annual)) return null
-  return Math.max(REVENUE_SLIDER_MIN, Math.min(REVENUE_SLIDER_MAX, annual))
+  return clampToPlausibleRevenue(annual)
 }
 
 /**
@@ -378,4 +481,25 @@ export function formatElapsed(totalSeconds) {
 export function formatCurrency(value) {
   const n = Number(value) || 0
   return `$${Math.round(n).toLocaleString('en-US')}`
+}
+
+/**
+ * The short form the revenue field and the rail's exposure chip show:
+ * "$5B", "$1.2B", "$180M", "$2.3M", "$120K". One decimal place, and
+ * only when it carries information — "$5B", never "$5.0B". Extended
+ * through billions this session: the previous compact formatter
+ * (reportDerive.js's kLabel, which now delegates here) stopped at M and
+ * would have rendered the new $5B ceiling as "$5000M".
+ */
+export function formatCompactCurrency(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '—'
+  const abs = Math.abs(n)
+  // Chosen against the ROUNDED magnitude, not the raw one: a typed
+  // $999,999,999 rounds to 1000.0M, which must read "$1B", not "$1000M".
+  const unit = abs >= 999_950_000 ? [1e9, 'B'] : abs >= 999_950 ? [1e6, 'M'] : [1e3, 'K']
+  // 2-sig-fig snapping (snapRevenue) means one decimal reproduces a
+  // slider value exactly; a typed figure can carry more, and rounds.
+  const rounded = Math.round((n / unit[0]) * 10) / 10
+  return `$${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)}${unit[1]}`
 }

@@ -31,7 +31,8 @@ import { useState } from 'react'
 import {
   accessibilityBadgeText, computeExposure, formatCurrency, formatDateStamp,
   getDominantRivalPayoff, getIncentiveCitationPayoff,
-  seedAnnualRevenue, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX,
+  seedAnnualRevenue, REVENUE_SLIDER_STEPS,
+  revenueToSliderPosition, revenueSliderPositionToRevenue,
 } from './liteDerive.js'
 import {
   ENTITY_COLORS, RIVAL_SLATE_RAMP, LightCard, DarkCard, SectionHeader, ReportHeaderBar,
@@ -1721,9 +1722,16 @@ function ExposureCalculator({ revenue, onRevenueChange, aiSharePct, onAiShareCha
       <label className="lite-label" style={{ display: 'block', marginBottom: 8 }}>
         Annual revenue: {formatCurrency(revenue)}
       </label>
+      {/* Log position, not dollars: the $5B ceiling makes a linear
+          track unusable below ~$50M (see liteDerive.js). This legacy
+          template keeps its slider-only control — the typed field is on
+          the V4 report and the landing widget — but the mapping is the
+          same shared one, so its readout can still reach a real figure
+          at any scale. */}
       <input
-        type="range" min={REVENUE_SLIDER_MIN} max={REVENUE_SLIDER_MAX} step={10000} value={revenue}
-        onChange={(e) => onRevenueChange(Number(e.target.value))}
+        type="range" min={0} max={REVENUE_SLIDER_STEPS} step={1}
+        value={revenueToSliderPosition(revenue)}
+        onChange={(e) => onRevenueChange(revenueSliderPositionToRevenue(Number(e.target.value)))}
         className="lite-slider" style={{ marginBottom: 22 }}
         aria-label="Annual revenue"
       />
