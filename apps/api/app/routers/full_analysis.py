@@ -12,8 +12,10 @@ launch, attaches a crawl to the new cycle_id.
 import json
 import logging
 import os
+from datetime import datetime, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import text
 
 from soa_shared.database import engine
@@ -26,6 +28,7 @@ from app.schemas import (
     FullAnalysisReportResponse,
     LaunchCrawlRequest,
     LaunchCrawlResponse,
+    ShareLinkResponse,
     SuggestCompetitorsRequest,
     SuggestCompetitorsResponse,
     SuggestedCompetitor,
@@ -42,6 +45,7 @@ from app.services.full_analysis_extras import (
     build_what_if,
     select_evidence_exemplar,
 )
+from app.services.share_tokens import generate_public_token
 from app.services.transcript_pick import select_transcript
 
 log = logging.getLogger(__name__)
@@ -263,92 +267,86 @@ def _build_continuation(conn, source_lite_request_id: int, full_pillars: dict) -
     )
 
 
-@router.get("/full-analysis/report/{cycle_code}", response_model=FullAnalysisReportResponse)
-def get_full_analysis_report(
-    cycle_code: str,
-    current_user: dict = Depends(get_current_user),
-):
+def _assemble_full_analysis_report(
+    conn, cycle_id: int, cycle_code: str, source_lite_request_id: int | None,
+) -> FullAnalysisReportResponse:
     """
-    Phase 4 render-gate: resolves for a cycle only when it has an
-    attached crawl AND a current-scorer-version score (build_full_cycle_
-    report's own status=='complete' check) — otherwise rendered=False,
-    and the frontend falls back to the classic MetricsDashboard for the
-    same cycle_code. Never a partial/degraded Full Analysis render.
+    Phase 4 render-gate + full assembly: resolves for a cycle only when
+    it has an attached crawl AND a current-scorer-version score (build_
+    full_cycle_report's own status=='complete' check) — otherwise
+    rendered=False. Never a partial/degraded Full Analysis render.
+
+    Shared by the authenticated owner endpoint (get_full_analysis_
+    report, org-scoped lookup below) and the public share endpoint
+    (public_full_analysis.py, token-scoped lookup) — same render gate,
+    same payload shape, for both: a cycle that wouldn't render for its
+    owner must not render publicly either. Callers differ only in how
+    they resolve cycle_id/cycle_code/source_lite_request_id.
     """
-    org_id = current_user["organization_id"]
-    with engine.connect() as conn:
-        cycle = conn.execute(text("""
-            SELECT id, source_lite_request_id FROM soa_cycles
-            WHERE cycle_code = :code AND organization_id = :org_id
-        """), {"code": cycle_code, "org_id": org_id}).fetchone()
-        if not cycle:
-            raise HTTPException(status_code=404, detail=f"Cycle '{cycle_code}' not found.")
-        cycle_id, source_lite_request_id = cycle
+    report = build_full_cycle_report(conn, cycle_id)
 
-        report = build_full_cycle_report(conn, cycle_id)
-
-        if report["status"] != "complete":
-            return FullAnalysisReportResponse(
-                cycle_code=cycle_code, rendered=False,
-                reason="no crawl attached yet" if report["status"] == "not_scored" else report["status"],
-            )
-
-        continuation = (
-            _build_continuation(conn, source_lite_request_id, report["pillars"])
-            if source_lite_request_id is not None else None
+    if report["status"] != "complete":
+        return FullAnalysisReportResponse(
+            cycle_code=cycle_code, rendered=False,
+            reason="no crawl attached yet" if report["status"] == "not_scored" else report["status"],
         )
 
-        dimensions_raw = report["dimensions_raw"]
-        primary_entity_id = report["primary_entity_id"]
+    continuation = (
+        _build_continuation(conn, source_lite_request_id, report["pillars"])
+        if source_lite_request_id is not None else None
+    )
 
-        # 1d: discovery/parsed-page/value-signals — the SAME shape build_
-        # scan_payload already builds for lite (pages_fetched, agent_
-        # access_matrix, discovery_trace). linked={} deliberately: the
-        # v1/v2 dimension-code "linked reasons" crosswalk is a lite-
-        # report-specific concern (cycle_scoring.py's _attach_v3_linked_
-        # reasons handles the v3+ equivalent on `pillars` directly,
-        # which this report doesn't yet do either) — out of Phase 1's
-        # scope, and scan.dimensions isn't the primary source a v4-
-        # shaped report reads from anyway (pillars is).
-        scan_payload = build_scan_payload(report["scan_row"], {})
+    dimensions_raw = report["dimensions_raw"]
+    primary_entity_id = report["primary_entity_id"]
 
-        platform_matrix = (
-            build_platform_matrix(conn, cycle_id, primary_entity_id, dimensions_raw)
-            if primary_entity_id is not None else []
-        )
-        competitor_set = (
-            build_competitor_set(conn, cycle_id, report["overall_entity_info"], report["overall_metrics"])
-            if primary_entity_id is not None else None
-        )
-        # Ranked fixes live on report["pillars"]["fixes"] (cycle_scoring_
-        # full.py::_build_full_fixes_section) — the shape FixesTable.jsx
-        # actually reads, not a second top-level field.
-        evidence = (
-            select_evidence_exemplar(conn, cycle_id, primary_entity_id)
-            if primary_entity_id is not None else None
-        )
-        what_if = build_what_if(competitor_set) if competitor_set else None
+    # 1d: discovery/parsed-page/value-signals — the SAME shape build_
+    # scan_payload already builds for lite (pages_fetched, agent_
+    # access_matrix, discovery_trace). linked={} deliberately: the
+    # v1/v2 dimension-code "linked reasons" crosswalk is a lite-
+    # report-specific concern (cycle_scoring.py's _attach_v3_linked_
+    # reasons handles the v3+ equivalent on `pillars` directly,
+    # which this report doesn't yet do either) — out of Phase 1's
+    # scope, and scan.dimensions isn't the primary source a v4-
+    # shaped report reads from anyway (pillars is).
+    scan_payload = build_scan_payload(report["scan_row"], {})
 
-        # "From the transcript" widget — same service/selection cascade
-        # as the lite report (cycle_scoring.py::build_cycle_report),
-        # parameterized by this cycle_id. share_pct/rank come from the
-        # SAME competitor_set["overall"] rows just built above, never
-        # recomputed inside select_transcript.
-        transcript_payload = None
-        if primary_entity_id is not None:
-            primary_share_row = next(
-                (r for r in (competitor_set or {}).get("overall", []) if r["is_primary"]), None,
-            )
-            primary_name = next(
-                (info["name"] for info in report["overall_entity_info"].values() if info["role"] == "primary"),
-                None,
-            )
-            transcript_payload = select_transcript(
-                conn, cycle_id, primary_entity_id,
-                share_pct=primary_share_row["share_pct"] if primary_share_row else None,
-                share_rank_label=share_rank_label_for((competitor_set or {}).get("overall", []), primary_name),
-                page_price_encoded=bool(dimensions_raw.get("offers")),
-            )
+    platform_matrix = (
+        build_platform_matrix(conn, cycle_id, primary_entity_id, dimensions_raw)
+        if primary_entity_id is not None else []
+    )
+    competitor_set = (
+        build_competitor_set(conn, cycle_id, report["overall_entity_info"], report["overall_metrics"])
+        if primary_entity_id is not None else None
+    )
+    # Ranked fixes live on report["pillars"]["fixes"] (cycle_scoring_
+    # full.py::_build_full_fixes_section) — the shape FixesTable.jsx
+    # actually reads, not a second top-level field.
+    evidence = (
+        select_evidence_exemplar(conn, cycle_id, primary_entity_id)
+        if primary_entity_id is not None else None
+    )
+    what_if = build_what_if(competitor_set) if competitor_set else None
+
+    # "From the transcript" widget — same service/selection cascade
+    # as the lite report (cycle_scoring.py::build_cycle_report),
+    # parameterized by this cycle_id. share_pct/rank come from the
+    # SAME competitor_set["overall"] rows just built above, never
+    # recomputed inside select_transcript.
+    transcript_payload = None
+    if primary_entity_id is not None:
+        primary_share_row = next(
+            (r for r in (competitor_set or {}).get("overall", []) if r["is_primary"]), None,
+        )
+        primary_name = next(
+            (info["name"] for info in report["overall_entity_info"].values() if info["role"] == "primary"),
+            None,
+        )
+        transcript_payload = select_transcript(
+            conn, cycle_id, primary_entity_id,
+            share_pct=primary_share_row["share_pct"] if primary_share_row else None,
+            share_rank_label=share_rank_label_for((competitor_set or {}).get("overall", []), primary_name),
+            page_price_encoded=bool(dimensions_raw.get("offers")),
+        )
 
     return FullAnalysisReportResponse(
         cycle_code=cycle_code, rendered=True,
@@ -370,3 +368,126 @@ def get_full_analysis_report(
         generated_headlines=dimensions_raw.get("generated_headlines"),
         transcript=transcript_payload,
     )
+
+
+@router.get("/full-analysis/report/{cycle_code}", response_model=FullAnalysisReportResponse)
+def get_full_analysis_report(
+    cycle_code: str,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = current_user["organization_id"]
+    with engine.connect() as conn:
+        cycle = conn.execute(text("""
+            SELECT id, source_lite_request_id FROM soa_cycles
+            WHERE cycle_code = :code AND organization_id = :org_id
+        """), {"code": cycle_code, "org_id": org_id}).fetchone()
+        if not cycle:
+            raise HTTPException(status_code=404, detail=f"Cycle '{cycle_code}' not found.")
+        cycle_id, source_lite_request_id = cycle
+
+        return _assemble_full_analysis_report(conn, cycle_id, cycle_code, source_lite_request_id)
+
+
+# ─── Shareable Full Analysis reports (owner endpoints) ─────────────────────
+#
+# Authenticated, org-scoped like every other endpoint in this router.
+# Creating a link is a deliberate, per-action write (never automatic on
+# cycle completion) — these three endpoints are the only place a
+# soa_cycle_shares row is ever inserted or revoked.
+
+def _get_owned_cycle_id(conn, cycle_code: str, org_id: int) -> int:
+    row = conn.execute(text("""
+        SELECT id FROM soa_cycles WHERE cycle_code = :code AND organization_id = :org_id
+    """), {"code": cycle_code, "org_id": org_id}).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Cycle '{cycle_code}' not found.")
+    return row[0]
+
+
+def _active_share_row(conn, cycle_id: int):
+    """The most recent non-revoked, non-expired share row for a cycle,
+    or None. Expiry is compared in Python (now, bound as a param) rather
+    than a SQL NOW()/CURRENT_TIMESTAMP literal — portable across
+    Postgres and the SQLite fixtures these endpoints are tested against,
+    and avoids app/DB clock-skew ambiguity (same convention public_lite.
+    py::_enforce_rate_limits already uses)."""
+    return conn.execute(text("""
+        SELECT token, created_at, expires_at FROM soa_cycle_shares
+        WHERE cycle_id = :cid AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > :now)
+        ORDER BY created_at DESC LIMIT 1
+    """), {"cid": cycle_id, "now": datetime.now(timezone.utc)}).fetchone()
+
+
+def _share_row_to_response(row) -> ShareLinkResponse:
+    token, created_at, expires_at = row
+    return ShareLinkResponse(
+        token=token,
+        created_at=str(created_at),
+        expires_at=str(expires_at) if expires_at else None,
+    )
+
+
+@router.get("/full-analysis/report/{cycle_code}/share", response_model=Optional[ShareLinkResponse])
+def get_share_link(
+    cycle_code: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Read-only — never creates. Powers the "Manage link" affordance:
+    null means no active link exists yet, distinct from a Share button
+    that hasn't been clicked."""
+    org_id = current_user["organization_id"]
+    with engine.connect() as conn:
+        cycle_id = _get_owned_cycle_id(conn, cycle_code, org_id)
+        row = _active_share_row(conn, cycle_id)
+    return _share_row_to_response(row) if row else None
+
+
+@router.post("/full-analysis/report/{cycle_code}/share", response_model=ShareLinkResponse, status_code=201)
+def create_share_link(
+    cycle_code: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Create-or-return: a second click (or a second browser tab) never
+    mints a surprise second live link — returns the existing active one
+    if there already is one, same idempotent-from-the-UI's-perspective
+    shape ShareReportButton already assumes (one token, stable across
+    repeat visits to the report)."""
+    org_id = current_user["organization_id"]
+    with engine.begin() as conn:
+        cycle_id = _get_owned_cycle_id(conn, cycle_code, org_id)
+
+        existing = _active_share_row(conn, cycle_id)
+        if existing:
+            return _share_row_to_response(existing)
+
+        token = generate_public_token()
+        conn.execute(text("""
+            INSERT INTO soa_cycle_shares (cycle_id, token, created_by)
+            VALUES (:cid, :token, :created_by)
+        """), {"cid": cycle_id, "token": token, "created_by": current_user.get("user_id")})
+
+        row = conn.execute(text("""
+            SELECT token, created_at, expires_at FROM soa_cycle_shares WHERE token = :token
+        """), {"token": token}).fetchone()
+    return _share_row_to_response(row)
+
+
+@router.post("/full-analysis/report/{cycle_code}/share/revoke", status_code=204)
+def revoke_share_link(
+    cycle_code: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Revoking is permanent (revoked_at is set once, never cleared) —
+    sharing again after a revoke mints a fresh token via create_share_
+    link above, it never resurrects the old one. A no-op, not a 404, when
+    there's nothing active to revoke: idempotent from the UI's
+    perspective (a stale "Manage link" panel double-clicking Revoke)."""
+    org_id = current_user["organization_id"]
+    with engine.begin() as conn:
+        cycle_id = _get_owned_cycle_id(conn, cycle_code, org_id)
+        conn.execute(text("""
+            UPDATE soa_cycle_shares SET revoked_at = :now
+            WHERE cycle_id = :cid AND revoked_at IS NULL
+        """), {"cid": cycle_id, "now": datetime.now(timezone.utc)})
+    return Response(status_code=204)

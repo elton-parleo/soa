@@ -264,6 +264,15 @@ class FullAnalysisReportResponse(BaseModel):
     # backend service, one frontend component, both products.
     transcript: Optional[dict] = None
 
+# Shareable Full Analysis reports (soa_cycle_shares) — owner-facing
+# create/get response. The frontend builds the copyable URL itself
+# (reportUrl-equivalent + PUBLIC_*_BASE_URL), so this carries the token
+# and lifecycle timestamps only, never a pre-built URL.
+class ShareLinkResponse(BaseModel):
+    token: str
+    created_at: str
+    expires_at: Optional[str] = None
+
 class QueryCreate(BaseModel):
     """Fields for creating a new query. query_code is auto-generated."""
     query_text:    str
