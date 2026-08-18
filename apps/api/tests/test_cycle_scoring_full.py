@@ -185,6 +185,98 @@ def test_full_fixes_section_skips_na_blocked_and_nothing_to_fix():
     assert _build_full_fixes_section(dims) == {"visible": [], "remaining_count": 0}
 
 
+def test_full_fixes_section_carries_empty_sub_fixes_when_dims_have_no_checks_key():
+    """_dim() below never sets 'checks' — the hand-built fixture style
+    every other test in this section uses — so sub_fixes must default to
+    an empty list, not KeyError, and every one of those tests stays
+    valid unchanged."""
+    dims = [_dim("deal_citability", 0, 7)]
+    fixes = _build_full_fixes_section(dims)
+    assert fixes["visible"][0]["sub_fixes"] == []
+
+
+def test_sub_fixes_derive_from_failed_checks_only():
+    dims = [{
+        **_dim("catalog_context", 3, 8),
+        "checks": [
+            {"code": "product_data", "label": "l1", "state": "pass"},
+            {"code": "completeness", "label": "l2", "state": "fail", "evidence": None},
+            {"code": "identifiers", "label": "l3", "state": "na"},
+        ],
+    }]
+    fixes = _build_full_fixes_section(dims)
+    assert [s["code"] for s in fixes["visible"][0]["sub_fixes"]] == ["completeness"]
+
+
+def test_sub_fixes_share_parent_fix_owner_and_carry_no_invented_points():
+    dims = [{
+        **_dim("deal_citability", 0, 7),
+        "checks": [{"code": "concrete_amount", "label": "l", "state": "fail", "evidence": "e"}],
+    }]
+    fixes = _build_full_fixes_section(dims)
+    sub = fixes["visible"][0]["sub_fixes"][0]
+    assert sub["fix_owner"] == DIMENSIONS_BY_CODE["deal_citability"].fix_owner
+    assert "impact" not in sub and "points" not in sub
+    assert sub["evidence"] == "e"
+
+
+# ─── True Value checks[] wiring (3b) ───────────────────────────────────────
+#
+# Before this, a full-cycle report's True Value dims never got a checks[]
+# array at all — accessibility_dims got it for free via the shared
+# _crawl_dim_row, but true_value_dims (built inline in build_full_cycle_
+# pillars) never called lite_pillars.py's _price_truth_checks/_member_
+# value_checks/_deal_citability_checks/_value_protocols_checks. Reusing
+# those functions unchanged is presentation-only — it must never move
+# earned/max/composite (guarded by the existing end-to-end/reconciliation
+# tests below still passing unchanged).
+
+def test_true_value_dims_now_carry_checks_like_accessibility_already_did():
+    result = build_full_cycle_pillars(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6, total_queries=6,
+        crawl_dimensions=_SIX_FIX_CRAWL_DIMS, run_signals=_full_credit_signals(),
+        membership_probe_result="yes",
+    )
+    for d in result["true_value"]["dimensions"]:
+        if d["na"]:
+            continue
+        assert d["checks"] is not None, f"{d['code']} should carry structured checks, like accessibility already does"
+
+
+def test_member_value_na_dim_still_has_no_live_checks():
+    # member_value_applicable is False only when NEITHER signal found a
+    # program: probe didn't say 'yes' AND the crawl's own seen score is
+    # 0 — _NO_MANIFEST_VP_CRAWL_DIMS's member_value_seen.score=3 doesn't
+    # hit that (crawl alone makes it applicable), so this test builds
+    # its own minimal fixture rather than reusing that one.
+    crawl = {**_SIX_FIX_CRAWL_DIMS, "member_value_seen": {"score": 0, "max": 5, "coverage": "full"}}
+    result = build_full_cycle_pillars(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6, total_queries=6,
+        crawl_dimensions=crawl, run_signals=_full_credit_signals(),
+        membership_probe_result="no",
+    )
+    mv = next(d for d in result["true_value"]["dimensions"] if d["code"] == "member_value")
+    assert mv["na"] is True
+    assert mv["checks"] is None
+
+
+def test_fetch_probe_flows_into_price_truth_checks_evidence_line():
+    """fetch_probe_result (build_full_cycle_report's own scan_row[7],
+    now threaded through the same way it already reaches lite's
+    build_pillars_payload) reaches _price_truth_checks — the
+    price_in_code check's evidence line carries ChatGPT's own fetch-
+    probe sentence when a probe ran."""
+    probe = {"kind": "product", "outcome": "quoted_price", "price": "$42.00", "url": "https://example.com/p/1"}
+    result = build_full_cycle_pillars(
+        som_pct=100.0, rsi_score=3.0, total_mentions=6, total_queries=6,
+        crawl_dimensions=_SIX_FIX_CRAWL_DIMS, run_signals=_full_credit_signals(),
+        membership_probe_result="yes", fetch_probe_result=probe,
+    )
+    pt = next(d for d in result["true_value"]["dimensions"] if d["code"] == "price_truth")
+    price_check = next(c for c in pt["checks"] if c["code"] == "price_in_code")
+    assert price_check.get("evidence") and "$42.00" in price_check["evidence"]
+
+
 def test_full_fixes_section_shares_lite_pillars_is_fixable_gap_floor():
     """_build_full_fixes_section used to carry its own inline eligibility
     filter (na/blocked/fix_human, no gap floor) instead of calling

@@ -3,7 +3,10 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from app.routers import studies, entities, cycles, metrics, scope, actions, full_analysis, public_lite, public_demo
+from app.routers import (
+    studies, entities, cycles, metrics, scope, actions, full_analysis,
+    public_lite, public_demo, public_full_analysis,
+)
 from app.auth import verify_token
 
 app = FastAPI(
@@ -97,6 +100,14 @@ app.include_router(
 # prefix, same CORS origins already configured for this whole app).
 app.include_router(
     public_demo.router,
+    prefix="/api/public",
+)
+
+# Public, unauthenticated — shareable Full Analysis reports. Same
+# treatment as public_lite/public_demo above; see
+# app/routers/public_full_analysis.py's module docstring.
+app.include_router(
+    public_full_analysis.router,
     prefix="/api/public",
 )
 

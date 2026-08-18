@@ -14,6 +14,15 @@
  *                    audit_submitted
  *   Q4 read quality: report_viewed.state (scored/partial/blocked) vs
  *                    demo_request_submitted
+ *   Q5 FA share loop: the same report_viewed event, reused for Full
+ *                    Analysis's shareable reports (components/
+ *                    FullAnalysisReport.jsx) — report_type distinguishes
+ *                    the two products in one funnel rather than forking
+ *                    a second event; viewer is owner|visitor exactly as
+ *                    above, just determined by real auth state instead
+ *                    of lite's localStorage-ownership heuristic (Full
+ *                    Analysis has an authenticated view to check
+ *                    against, lite never does).
  *
  * Deliberately closed: no prop here ever carries an email, name,
  * company, message, or any other form value — every event about a
@@ -47,6 +56,11 @@ export const EVENTS = {
   // the preview into the full verbatim answer, not a generic section
   // open.
   TRANSCRIPT_ANSWER_EXPANDED: 'transcript_answer_expanded',
+  // Full Analysis's transcript browsing (2c/2d) — moving off the
+  // curated pick, via prev/next or the query picker. Lite never fires
+  // this (single curated pick only, no browsing UI mounted there yet —
+  // see TranscriptPicker.jsx's own docstring).
+  TRANSCRIPT_NAVIGATED: 'transcript_navigated',
   // Shared (landing + report — the modal fires the same event either way)
   DEMO_REQUEST_SUBMITTED: 'demo_request_submitted',
 }
@@ -60,13 +74,18 @@ export const EVENT_REGISTRY = {
   [EVENTS.ESTIMATOR_INTERACTED]: [],
   [EVENTS.STATUS_VIEWED]: [],
   [EVENTS.EMAIL_CAPTURED]: [],
-  [EVENTS.REPORT_VIEWED]: ['state', 'viewer', 'src'],
+  [EVENTS.REPORT_VIEWED]: ['state', 'viewer', 'src', 'report_type'],
   [EVENTS.SECTION_VIEWED]: ['section'],
   [EVENTS.SECTION_EXPANDED]: ['section', 'control'],
   [EVENTS.SHARE_COPIED]: ['placement'],
   [EVENTS.CTA_CLICKED]: ['cta', 'placement'],
   [EVENTS.ADJUST_ASSUMPTIONS_USED]: [],
   [EVENTS.TRANSCRIPT_ANSWER_EXPANDED]: [],
+  // direction ('prev'|'next') and picker (true) are mutually exclusive
+  // — exactly one is present per call, describing HOW the navigation
+  // happened; position/platform/narrative_case describe WHERE it
+  // landed. No query/response text ever, per this file's own rule.
+  [EVENTS.TRANSCRIPT_NAVIGATED]: ['direction', 'picker', 'position', 'platform', 'narrative_case'],
   // Union of the landing call (source only) and the report call
   // (source + brand_name + report_token) — the report-only props are
   // simply absent on a landing-fired call.

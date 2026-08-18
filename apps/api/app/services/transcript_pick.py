@@ -91,6 +91,7 @@ class _RunCandidate:
     stage: str
     persona: str
     query_text: str
+    run_number: int = 1
     coded: bool = False              # a soa_coded_mentions row exists for the primary on this run
     mentioned: bool = False          # only meaningful when coded=True
     position: Optional[int] = None
@@ -105,7 +106,7 @@ class _RunCandidate:
 def _fetch_candidates(conn, cycle_id: int, primary_entity_id: int) -> List[_RunCandidate]:
     run_rows = conn.execute(text("""
         SELECT r.id, r.platform, r.run_at, r.raw_response, r.query_id,
-               q.stage, q.persona, q.query_text,
+               q.stage, q.persona, q.query_text, r.run_number,
                cm.id IS NOT NULL AS coded, cm.mentioned, cm.position, cm.strength,
                cm.deal_cited, cm.deal_types
         FROM soa_runs r
@@ -118,11 +119,12 @@ def _fetch_candidates(conn, cycle_id: int, primary_entity_id: int) -> List[_RunC
 
     candidates: Dict[int, _RunCandidate] = {}
     for row in run_rows:
-        (run_id, platform, run_at, raw_response, query_id, stage, persona, query_text,
+        (run_id, platform, run_at, raw_response, query_id, stage, persona, query_text, run_number,
          coded, mentioned, position, strength, deal_cited, deal_types) = row
         candidates[run_id] = _RunCandidate(
             run_id=run_id, platform=platform, run_at=run_at, response_text=raw_response,
             query_id=query_id, stage=stage, persona=persona, query_text=query_text,
+            run_number=run_number,
             coded=bool(coded), mentioned=bool(mentioned) if coded else False,
             position=position, strength=strength,
             deal_cited=bool(deal_cited) if coded else False,
@@ -621,6 +623,52 @@ def _build_payload(
     return payload
 
 
+def _fetch_primary_identity(conn, primary_entity_id: int) -> _PrimaryIdentity:
+    entity_row = conn.execute(text("""
+        SELECT name, slug, aliases, website_url FROM soa_entities WHERE id = :pid
+    """), {"pid": primary_entity_id}).fetchone()
+    return _PrimaryIdentity(
+        name=entity_row[0] if entity_row else "",
+        slug=entity_row[1] if entity_row else "",
+        aliases=_decode_json_field(entity_row[2], []) if entity_row else [],
+        domain=_bare_domain(entity_row[3]) if entity_row else None,
+    )
+
+
+def _fetch_query_index_map(conn, cycle_id: int) -> Tuple[Dict[int, int], int]:
+    """1-based query_index per query_id (stable ordering, DISTINCT query_
+    id ASC — the same "which of the N queries is this" numbering the
+    curated pick, the index endpoint (2a), and the report header's own
+    query count all have to agree on), and the total."""
+    total_queries = conn.execute(text("""
+        SELECT COUNT(DISTINCT query_id) FROM soa_runs WHERE cycle_id = :cid AND status = 'success'
+    """), {"cid": cycle_id}).scalar() or 0
+    query_index_rows = conn.execute(text("""
+        SELECT DISTINCT query_id FROM soa_runs WHERE cycle_id = :cid AND status = 'success' ORDER BY query_id
+    """), {"cid": cycle_id}).fetchall()
+    query_index_by_id = {row[0]: i + 1 for i, row in enumerate(query_index_rows)}
+    return query_index_by_id, total_queries
+
+
+def _narrative_case_for(candidate: _RunCandidate, primary: _PrimaryIdentity) -> str:
+    """The same 4-way classification select_transcript's cascade already
+    encodes tier-by-tier (value_gap / mentioned_no_leak / not_mentioned /
+    uncoded) — extracted so an arbitrarily browsed transcript (transcript
+    browsing: 2a/2b) gets the identical classification a cascade-
+    selected one would, and the index endpoint (2a) can show the same
+    chip for every run without re-deriving the rule ad hoc. Order
+    matters and mirrors the cascade's own tier precedence exactly:
+    uncoded beats not_mentioned beats a leak check, same as tiers 4/5
+    only ever fire when nothing earlier already matched."""
+    if not candidate.coded:
+        return "uncoded"
+    if not candidate.mentioned:
+        return "not_mentioned"
+    if _has_leak(candidate, primary):
+        return "value_gap"
+    return "mentioned_no_leak"
+
+
 def select_transcript(
     conn, cycle_id: int, primary_entity_id: int,
     *, share_pct: Optional[float] = None, share_rank_label: Optional[str] = None,
@@ -654,46 +702,150 @@ def select_transcript(
     if not candidates:
         return None
 
-    entity_row = conn.execute(text("""
-        SELECT name, slug, aliases, website_url FROM soa_entities WHERE id = :pid
-    """), {"pid": primary_entity_id}).fetchone()
-    primary = _PrimaryIdentity(
-        name=entity_row[0] if entity_row else "",
-        slug=entity_row[1] if entity_row else "",
-        aliases=_decode_json_field(entity_row[2], []) if entity_row else [],
-        domain=_bare_domain(entity_row[3]) if entity_row else None,
+    primary = _fetch_primary_identity(conn, primary_entity_id)
+    query_index_by_id, total_queries = _fetch_query_index_map(conn, cycle_id)
+
+    candidate, tier, case = _select_curated_candidate(candidates, primary)
+    return _build_payload(
+        candidate, primary, tier=tier, case=case,
+        query_index=query_index_by_id.get(candidate.query_id, 1), total_queries=total_queries,
+        share_pct=share_pct, share_rank_label=share_rank_label,
+        page_price_encoded=page_price_encoded,
     )
 
-    total_queries = conn.execute(text("""
-        SELECT COUNT(DISTINCT query_id) FROM soa_runs WHERE cycle_id = :cid AND status = 'success'
-    """), {"cid": cycle_id}).scalar() or 0
-    query_index_rows = conn.execute(text("""
-        SELECT DISTINCT query_id FROM soa_runs WHERE cycle_id = :cid AND status = 'success' ORDER BY query_id
-    """), {"cid": cycle_id}).fetchall()
-    query_index_by_id = {row[0]: i + 1 for i, row in enumerate(query_index_rows)}
 
-    def pick(candidate: _RunCandidate, tier: int, case: str) -> dict:
-        return _build_payload(
-            candidate, primary, tier=tier, case=case,
-            query_index=query_index_by_id.get(candidate.query_id, 1), total_queries=total_queries,
-            share_pct=share_pct, share_rank_label=share_rank_label,
-            page_price_encoded=page_price_encoded,
-        )
-
+def _select_curated_candidate(
+    candidates: List[_RunCandidate], primary: _PrimaryIdentity,
+) -> Tuple[_RunCandidate, int, str]:
+    """The pure tier-cascade rule select_transcript's docstring
+    describes — no DB access, so list_transcript_index (2a) can reuse it
+    to surface curated_run_id without a second _fetch_candidates round
+    trip inside select_transcript itself."""
     tier1 = [c for c in candidates if c.coded and c.mentioned and c.stage in PURCHASE_INTENT_STAGES and _has_leak(c, primary)]
     if tier1:
-        return pick(min(tier1, key=lambda c: _leak_severity_key(c, primary)), 1, "value_gap")
+        return min(tier1, key=lambda c: _leak_severity_key(c, primary)), 1, "value_gap"
 
     tier2 = [c for c in candidates if c.coded and c.mentioned and _has_leak(c, primary)]
     if tier2:
-        return pick(min(tier2, key=lambda c: _leak_severity_key(c, primary)), 2, "value_gap")
+        return min(tier2, key=lambda c: _leak_severity_key(c, primary)), 2, "value_gap"
 
     tier3 = [c for c in candidates if c.coded and c.mentioned]
     if tier3:
-        return pick(min(tier3, key=_visibility_weakness_key), 3, "mentioned_no_leak")
+        return min(tier3, key=_visibility_weakness_key), 3, "mentioned_no_leak"
 
     tier4 = [c for c in candidates if c.coded and not c.mentioned]
     if tier4:
-        return pick(min(tier4, key=_absence_key), 4, "not_mentioned")
+        return min(tier4, key=_absence_key), 4, "not_mentioned"
 
-    return pick(min(candidates, key=lambda c: c.run_id), 5, "uncoded")
+    return min(candidates, key=lambda c: c.run_id), 5, "uncoded"
+
+
+# ─── Transcript browsing (2a): index + arbitrary-detail lookup ────────────
+#
+# select_transcript above stays exactly as it was — its single curated
+# pick is still what the report payload carries and still the widget's
+# default view. These two functions are the ADDITIVE surface behind
+# "browse every query": a compact per-query index (never every
+# transcript — a deep cycle is 250 queries x platforms x runs_per_query)
+# and a detail lookup for one arbitrary (query, platform, run), in the
+# exact same shape _build_payload already produces for the curated pick
+# so the widget's rendering code needs no branching between the two.
+
+_TRANSCRIPT_INDEX_PAGE_SIZE_MAX = 50
+
+# Strongest-signal-wins ranking for a query's chip when it has multiple
+# runs (across platforms/runs_per_query) — "does this query show a
+# problem anywhere" is what the picker's chip and jump-to-case filter
+# are for (2c), not an average across runs.
+_CASE_STRENGTH = {"value_gap": 0, "not_mentioned": 1, "mentioned_no_leak": 2, "uncoded": 3}
+
+
+def list_transcript_index(
+    conn, cycle_id: int, primary_entity_id: int, *, page: int = 1, page_size: int = 25,
+) -> dict:
+    """
+    Paginated, compact index of every query in the cycle — one row per
+    query_id (not per run), each carrying a `runs` list (run_id,
+    platform, run_number) for the frontend's platform/run selectors
+    (2b) to build from without a further round trip per query.
+    """
+    page = max(1, page)
+    page_size = max(1, min(_TRANSCRIPT_INDEX_PAGE_SIZE_MAX, page_size))
+
+    candidates = _fetch_candidates(conn, cycle_id, primary_entity_id)
+    if not candidates:
+        return {"queries": [], "page": page, "page_size": page_size, "total_queries": 0, "curated_run_id": None}
+
+    primary = _fetch_primary_identity(conn, primary_entity_id)
+    query_index_by_id, total_queries = _fetch_query_index_map(conn, cycle_id)
+
+    by_query: Dict[int, List[_RunCandidate]] = {}
+    for c in candidates:
+        by_query.setdefault(c.query_id, []).append(c)
+
+    rows = []
+    for query_id, runs in by_query.items():
+        cases = [_narrative_case_for(c, primary) for c in runs]
+        strongest = min(cases, key=lambda case: _CASE_STRENGTH[case])
+        first = runs[0]
+        rows.append({
+            "query_id": query_id,
+            "index": query_index_by_id.get(query_id, 0),
+            "total_queries": total_queries,
+            "query_text": first.query_text,
+            "stage": first.stage,
+            "persona": first.persona,
+            "narrative_case": strongest,
+            "runs": [
+                {"run_id": c.run_id, "platform": c.platform, "run_number": c.run_number}
+                for c in sorted(runs, key=lambda c: (c.platform, c.run_number))
+            ],
+        })
+    rows.sort(key=lambda r: r["index"])
+
+    start = (page - 1) * page_size
+    page_rows = rows[start:start + page_size]
+
+    curated_candidate, _tier, _case = _select_curated_candidate(candidates, primary)
+
+    return {
+        "queries": page_rows,
+        "page": page,
+        "page_size": page_size,
+        "total_queries": total_queries,
+        "curated_run_id": curated_candidate.run_id,
+    }
+
+
+def get_transcript_detail(
+    conn, cycle_id: int, primary_entity_id: int, run_id: int,
+    *, share_pct: Optional[float] = None, share_rank_label: Optional[str] = None,
+    page_price_encoded: Optional[bool] = None,
+) -> Optional[dict]:
+    """
+    The same payload shape select_transcript's curated pick returns, for
+    one arbitrary run — 2b/2c's platform and run selectors resolve to a
+    run_id (from list_transcript_index's own `runs` list) and fetch its
+    transcript through here. None when run_id doesn't belong to this
+    cycle at all (wrong cycle_id, or not a successful/non-empty run) —
+    the caller 404s exactly like an unknown query_id, never a payload
+    from a different cycle's own run.
+    """
+    candidates = _fetch_candidates(conn, cycle_id, primary_entity_id)
+    candidate = next((c for c in candidates if c.run_id == run_id), None)
+    if candidate is None:
+        return None
+
+    primary = _fetch_primary_identity(conn, primary_entity_id)
+    query_index_by_id, total_queries = _fetch_query_index_map(conn, cycle_id)
+    case = _narrative_case_for(candidate, primary)
+    # selection_tier has no meaning for an explicitly-picked transcript
+    # (tiers rank a CASCADE's candidates against each other; this is a
+    # single already-resolved choice) — 0 signals "not cascade-ranked",
+    # distinct from the curated pick's real 1-5.
+    return _build_payload(
+        candidate, primary, tier=0, case=case,
+        query_index=query_index_by_id.get(candidate.query_id, 1), total_queries=total_queries,
+        share_pct=share_pct, share_rank_label=share_rank_label,
+        page_price_encoded=page_price_encoded,
+    )

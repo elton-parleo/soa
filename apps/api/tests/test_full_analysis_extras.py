@@ -18,6 +18,7 @@ from app.services.full_analysis_extras import (
     build_competitor_set,
     build_platform_matrix,
     build_what_if,
+    select_also_worth_doing,
     select_evidence_exemplar,
 )
 
@@ -69,6 +70,17 @@ def db():
             CREATE TABLE soa_metrics_results (
                 id INTEGER PRIMARY KEY, cycle_id INTEGER, entity_id INTEGER,
                 slice_type TEXT, slice_value TEXT, total_mentions INTEGER
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_playbook (
+                play_id TEXT PRIMARY KEY, pillar TEXT, failure_mode TEXT, owner TEXT, play_text TEXT
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_recommendations (
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, play_id TEXT,
+                priority_score FLOAT, status TEXT DEFAULT 'proposed', suppressed BOOLEAN DEFAULT 0
             )
         """)
     return engine
@@ -336,3 +348,102 @@ def test_pillar_deltas_not_comparable_when_a_score_is_missing():
     deltas = {d["pillar"]: d for d in _compute_pillar_deltas(audit, full)}
     assert deltas["visibility"]["comparable"] is False
     assert deltas["accessibility"]["comparable"] is False
+
+
+# ─── 3b: cross-cutting fixes ("Also worth doing"), read-only ─────────────
+#
+# select_also_worth_doing never calls finding_detector.detect_findings/
+# recommendation_mapper.generate_recommendations itself (a separate, ORM-
+# session subsystem, manually triggered elsewhere) — it only reads
+# whatever soa_recommendations/soa_playbook rows already exist for this
+# cycle_id. The honest, common-today case is nothing has been generated
+# yet, so [] is correct, not a bug.
+
+def _seed_play(conn, play_id="VIS-01", pillar="Visibility", failure_mode="Absent from category queries.", owner="joint", play_text="Fix your schema markup."):
+    conn.exec_driver_sql(
+        "INSERT INTO soa_playbook (play_id, pillar, failure_mode, owner, play_text) VALUES (?, ?, ?, ?, ?)",
+        (play_id, pillar, failure_mode, owner, play_text),
+    )
+
+
+def _seed_recommendation(conn, cycle_id, play_id, priority_score=1.0, status="proposed", suppressed=False):
+    conn.exec_driver_sql(
+        "INSERT INTO soa_recommendations (cycle_id, play_id, priority_score, status, suppressed) VALUES (?, ?, ?, ?, ?)",
+        (cycle_id, play_id, priority_score, status, suppressed),
+    )
+
+
+def test_also_worth_doing_empty_when_nothing_has_been_generated_for_this_cycle(db):
+    """The common case today: no AC3 Actions run has ever touched this
+    cycle. Never an error, never a fabricated row."""
+    with db.connect() as conn:
+        assert select_also_worth_doing(conn, CYCLE_ID) == []
+
+
+def test_also_worth_doing_reads_a_real_recommendation_when_one_exists(db):
+    with db.begin() as conn:
+        _seed_play(conn)
+        _seed_recommendation(conn, CYCLE_ID, "VIS-01", priority_score=2.5)
+
+    with db.connect() as conn:
+        result = select_also_worth_doing(conn, CYCLE_ID)
+    assert result == [{
+        "play_id": "VIS-01", "pillar": "Visibility",
+        "failure_mode": "Absent from category queries.",
+        "play_text": "Fix your schema markup.",
+        "owner": "joint", "section_anchor": "viz",
+    }]
+
+
+def test_also_worth_doing_maps_pillar_to_the_matching_report_section_anchor(db):
+    with db.begin() as conn:
+        _seed_play(conn, play_id="TVD-01", pillar="True Value Delivery", play_text="Sync live promos.")
+        _seed_recommendation(conn, CYCLE_ID, "TVD-01")
+
+    with db.connect() as conn:
+        result = select_also_worth_doing(conn, CYCLE_ID)
+    assert result[0]["section_anchor"] == "tv"
+
+
+def test_also_worth_doing_omits_a_pillar_with_no_report_section():
+    """Fidelity is a real playbook pillar (no detector yet, but seeded)
+    with nothing in the report to link to — section_anchor is honestly
+    None rather than a wrong guess."""
+    from app.services.full_analysis_extras import _PLAY_PILLAR_TO_SECTION_ANCHOR
+    assert "Fidelity" not in _PLAY_PILLAR_TO_SECTION_ANCHOR
+
+
+def test_also_worth_doing_excludes_dismissed_and_suppressed_recommendations(db):
+    with db.begin() as conn:
+        _seed_play(conn, play_id="VIS-01")
+        _seed_play(conn, play_id="VIS-05", failure_mode="Absent from awareness queries.")
+        _seed_play(conn, play_id="TVD-07", pillar="True Value Delivery", play_text="Composite play.")
+        _seed_recommendation(conn, CYCLE_ID, "VIS-01", status="dismissed")
+        _seed_recommendation(conn, CYCLE_ID, "VIS-05", suppressed=True)
+        _seed_recommendation(conn, CYCLE_ID, "TVD-07", priority_score=9.0)
+
+    with db.connect() as conn:
+        result = select_also_worth_doing(conn, CYCLE_ID)
+    assert [r["play_id"] for r in result] == ["TVD-07"]
+
+
+def test_also_worth_doing_orders_by_priority_score_descending(db):
+    with db.begin() as conn:
+        _seed_play(conn, play_id="VIS-01")
+        _seed_play(conn, play_id="VIS-05", failure_mode="Absent from awareness queries.")
+        _seed_recommendation(conn, CYCLE_ID, "VIS-01", priority_score=1.0)
+        _seed_recommendation(conn, CYCLE_ID, "VIS-05", priority_score=5.0)
+
+    with db.connect() as conn:
+        result = select_also_worth_doing(conn, CYCLE_ID)
+    assert [r["play_id"] for r in result] == ["VIS-05", "VIS-01"]
+
+
+def test_also_worth_doing_never_leaks_a_recommendation_from_another_cycle(db):
+    other_cycle_id = CYCLE_ID + 1
+    with db.begin() as conn:
+        _seed_play(conn, play_id="VIS-01")
+        _seed_recommendation(conn, other_cycle_id, "VIS-01")
+
+    with db.connect() as conn:
+        assert select_also_worth_doing(conn, CYCLE_ID) == []

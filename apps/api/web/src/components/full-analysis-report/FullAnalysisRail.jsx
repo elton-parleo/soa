@@ -9,6 +9,7 @@
  */
 import { Wordmark, Glyph, StatusChip, StateChip, BrandLogo } from '../../ds/index.js'
 import { pillarEarnedMax, isAgentReady, isPartialRead, buildMeasurableContext, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from '../../lite/report/reportDerive.js'
+import { formatCompactCurrency } from '../../lite/liteDerive.js'
 
 const NAV_ITEMS = [
   { id: 'score', icon: 'chart', label: 'The score' },
@@ -23,9 +24,10 @@ const NAV_ITEMS = [
   { id: 'analyst', icon: 'layers', label: 'Analyst layer' },
   { id: 'evidence', icon: 'doc', label: 'Evidence' },
   { id: 'truesync', icon: 'refresh', label: 'TrueSync' },
+  { id: 'exp', icon: 'card', label: 'Exposure' },
 ]
 
-function navScore({ id, pillars, composite, totalQueries, transcript }) {
+function navScore({ id, pillars, composite, totalQueries, transcript, exposure }) {
   const vis = pillarEarnedMax(pillars.visibility)
   const acc = pillarEarnedMax(pillars.accessibility)
   const tv = pillarEarnedMax(pillars.true_value)
@@ -37,11 +39,12 @@ function navScore({ id, pillars, composite, totalQueries, transcript }) {
     case 'tv': return `${Math.round(tv.earned)}/${Math.round(tv.max)}`
     case 'fix': return pillars.fixes ? `+${Math.round(pillars.fixes.visible.reduce((s, f) => s + f.impact, 0))}` : null
     case 'evidence': return totalQueries ? `${totalQueries}` : null
+    case 'exp': return exposure == null ? '—' : formatCompactCurrency(exposure)
     default: return null
   }
 }
 
-export function FullAnalysisRail({ report, primaryEntityName, exposure, active, hasContinuation }) {
+export function FullAnalysisRail({ report, primaryEntityName, exposure, active, hasContinuation, readOnly = false }) {
   const pillars = report.pillars
   const composite = report.composite
   const vis = pillarEarnedMax(pillars.visibility)
@@ -58,6 +61,12 @@ export function FullAnalysisRail({ report, primaryEntityName, exposure, active, 
 
   const items = NAV_ITEMS.filter((item) => item.id !== 'continuation' || hasContinuation)
     .filter((item) => item.id !== 'transcript' || report.transcript)
+    // readOnly (public /fa/{token} viewer): FullAnalysisReport.jsx
+    // omits <AnalystLayerSection> outright (it fetches the authed
+    // /api/cycles/{code}/metrics directly — the one section with no
+    // public equivalent), so its nav entry would otherwise jump to an
+    // anchor that no longer exists.
+    .filter((item) => item.id !== 'analyst' || !readOnly)
 
   return (
     <div className="fa-report-rail" style={{ borderRight: '1px solid var(--border)', background: 'var(--canvas-dim)' }}>
@@ -119,7 +128,7 @@ export function FullAnalysisRail({ report, primaryEntityName, exposure, active, 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {items.map(({ id, icon, label }) => {
               const on = active === id
-              const score = navScore({ id, pillars, composite, totalQueries: report.total_queries, transcript: report.transcript })
+              const score = navScore({ id, pillars, composite, totalQueries: report.total_queries, transcript: report.transcript, exposure })
               return (
                 <a
                   key={id}

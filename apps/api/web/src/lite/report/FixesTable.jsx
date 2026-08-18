@@ -5,8 +5,19 @@
  * modeled total (S7's Exposure section), and fabricating one per row
  * would violate the no-fabrication rule. Owner tag comes straight from
  * F3's registry-driven fix_owner, never a literal.
+ *
+ * 3c: sub_fixes (per-row, expandable) and also_worth_doing (a strip
+ * below the ranked list) are both new, OPTIONAL fields on the same
+ * fixes payload — lite's own _build_fixes_section (lite_pillars.py)
+ * never sets either, so `f.sub_fixes` is always undefined there and
+ * `fixes.also_worth_doing` is always undefined too. Every addition
+ * below is guarded on those fields being present and non-empty, so
+ * lite's rendering (and its pinned tests) stay byte-for-byte
+ * unchanged; the fixrow/fixhead grammar and MODELED disclaimer are
+ * untouched either way.
  */
-import { Button, ProvenanceLine, RequestFormModal, StatusChip } from '../../ds/index.js'
+import { Fragment, useState } from 'react'
+import { Button, Glyph, ProvenanceLine, RequestFormModal, StatusChip } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
 import { FAILURE_POINT_COPY, FIXES_REMAINING_STRIP } from './reportContent.js'
 import { isPartialRead, buildMeasurableContext, partialReadFailurePoint } from './reportDerive.js'
@@ -35,6 +46,8 @@ function _withDiscoveryFirst(visible) {
 
 export function FixesTable({ report, open, onToggle, brandName, reportToken, queryCount = LITE_QUERY_COUNT }) {
   const demoModal = useDemoRequestModal({ brandName, reportToken })
+  const [expandedCodes, setExpandedCodes] = useState({})
+  const toggleExpanded = (code) => setExpandedCodes((s) => ({ ...s, [code]: !s[code] }))
   const fixes = report.pillars.fixes
   if (!fixes) return null
   const partialRead = isPartialRead(report.pillars, report.scan?.degraded_reason)
@@ -77,8 +90,11 @@ export function FixesTable({ report, open, onToggle, brandName, reportToken, que
           // failure point only — registry-sourced, never inlined here.
           const isDiscoveryRow = f.code === discoveryCode
           const fixHuman = (isDiscoveryRow && failurePoint === 'blocked') ? FAILURE_POINT_COPY.blocked.fixFraming : f.fix_human
+          const subFixes = f.sub_fixes || []
+          const isExpanded = !!expandedCodes[f.code]
           return (
-            <div key={f.code} className="lite-fixrow" style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface-warm)', border: `1px solid ${isTrueSync ? 'rgba(1,102,255,.32)' : 'var(--hairline)'}`, borderRadius: 12, padding: '14px 16px' }}>
+          <Fragment key={f.code}>
+            <div className="lite-fixrow" style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--surface-warm)', border: `1px solid ${isTrueSync ? 'rgba(1,102,255,.32)' : 'var(--hairline)'}`, borderRadius: 12, padding: '14px 16px' }}>
               <span className="num" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, flexShrink: 0, borderRadius: 9, background: isTrueSync ? 'var(--blue)' : 'var(--canvas-dim)', color: isTrueSync ? '#fff' : 'var(--muted)', fontSize: 11.5, fontWeight: 660 }}>{RANK_LABELS[i] || i + 1}</span>
               <div className="lite-fixrow-title" style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 620, color: 'var(--text-strong)', letterSpacing: '-0.01em' }}>{f.name}</div>
@@ -106,10 +122,48 @@ export function FixesTable({ report, open, onToggle, brandName, reportToken, que
                 </div>
               )}
               <span className="mono-label lite-fixrow-owner" style={{ width: 64, flexShrink: 0, textAlign: 'right', fontSize: 9, color: isTrueSync ? 'var(--blue)' : 'var(--faint)' }}>{f.fix_owner}</span>
+              {subFixes.length > 0 && (
+                <button
+                  type="button" onClick={() => toggleExpanded(f.code)} aria-expanded={isExpanded}
+                  aria-label={isExpanded ? `Hide the ${subFixes.length} specific checks behind ${f.name}` : `Show the ${subFixes.length} specific checks behind ${f.name}`}
+                  style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 7, border: '1px solid var(--border-strong)', background: isExpanded ? 'var(--blue-tint)' : 'var(--surface)', cursor: 'pointer' }}
+                >
+                  <Glyph name="chevronDown" size={11} color="var(--text-strong)" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none' }} />
+                </button>
+              )}
             </div>
+            {isExpanded && subFixes.length > 0 && (
+              <div className="lite-fixrow-subfixes" style={{ margin: '4px 0 0 38px', padding: '2px 0 2px 14px', borderLeft: '2px solid var(--hairline)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {subFixes.map((s) => (
+                  <div key={s.code} style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+                    <span style={{ color: 'var(--text-strong)', fontWeight: 560 }}>{s.label}</span>
+                    {s.evidence && <span> — {s.evidence}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Fragment>
           )
         })}
       </div>
+
+      {(fixes.also_worth_doing || []).length > 0 && (
+        <div style={{ marginTop: 16, borderRadius: 14, background: 'var(--surface)', border: '1px solid var(--hairline)', padding: '16px 18px' }}>
+          <span className="mono-label" style={{ fontSize: 9, color: 'var(--faint)' }}>ALSO WORTH DOING</span>
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {fixes.also_worth_doing.map((w) => (
+              <div key={w.play_id} style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                <span style={{ flex: 1, fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>
+                  {w.section_anchor ? (
+                    <a href={`#${w.section_anchor}`} style={{ color: 'inherit', textDecoration: 'none' }}>{w.play_text}</a>
+                  ) : w.play_text}
+                </span>
+                <span className="mono-label" style={{ fontSize: 9, color: 'var(--faint)', flexShrink: 0, textTransform: 'uppercase' }}>{w.owner}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {fixes.remaining_count > 0 && (
         <div style={{ marginTop: 16, borderRadius: 14, background: 'var(--surface-warm)', border: '1px dashed var(--border-strong)', padding: '18px 20px' }}>

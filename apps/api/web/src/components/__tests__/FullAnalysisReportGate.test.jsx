@@ -16,6 +16,9 @@ vi.mock('../../api.js', () => ({
     getPositions: vi.fn(),
     getMetrics: vi.fn(),
     resumeCycle: vi.fn(),
+    getShareLink: vi.fn(),
+    createShareLink: vi.fn(),
+    revokeShareLink: vi.fn(),
   },
 }))
 
@@ -37,6 +40,9 @@ beforeEach(() => {
     entities: [{ code: 'M001', name: 'Allbirds', role: 'primary' }, { code: 'M002', name: 'Nike', role: 'competitor' }],
     slices: { overall: { M001: { mention_rate: 70, som: 24, rsi: 0.5, position_index: 2.4, pdi: 0.82, deal_citation_rate: 12 } } },
   })
+  // FullAnalysisShareControl's own mount-time fetch, on the new-report
+  // (rendered=true) path — no active link by default.
+  api.getShareLink.mockResolvedValue(null)
 })
 
 // A FULL fixture — every Phase 1 payload key present — used for the
@@ -301,5 +307,64 @@ describe('FullAnalysisReportGate — continuation strip', () => {
 
     await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
     expect(screen.queryByText(/CONTINUED FROM YOUR AUDIT/)).not.toBeInTheDocument()
+  })
+})
+
+
+describe('FullAnalysisReportGate — exposure widget (1b/1c)', () => {
+  it('renders the modeled exposure hero stat and section from the cycle payload', async () => {
+    api.getFullAnalysisReport.mockResolvedValue(FULL_REPORT)
+
+    render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+    // FULL_REPORT: revenue_estimate_usd=12_000_000, true_value.score=70,
+    // DEFAULT_AI_SHARE_PCT=20 -> invisibility .30, channelFactor
+    // min(1, .30*1.5)=.45, exposure = 12_000_000*.20*.45*.85 = 918,000 —
+    // same computeExposure lite uses, same numbers appear twice (hero
+    // stat card + the modeled-exposure section further down).
+    expect(screen.getAllByText('$918,000').length).toBeGreaterThan(0)
+    expect(screen.getByText('What the gap is worth')).toBeInTheDocument()
+  })
+
+  it('the "How we model this" link resolves to a real, rendered section (not a dead #exp anchor)', async () => {
+    api.getFullAnalysisReport.mockResolvedValue(FULL_REPORT)
+
+    render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+    const link = screen.getByText('How we model this').closest('a')
+    expect(link).toHaveAttribute('href', '#exp')
+    expect(document.getElementById('exp')).not.toBeNull()
+  })
+
+  it('dragging the AI-share slider recomputes the figure with the exact same math as lite', async () => {
+    api.getFullAnalysisReport.mockResolvedValue(FULL_REPORT)
+
+    render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('ADJUST ASSUMPTIONS'))
+    const slider = screen.getByLabelText('AI-assisted share of sales')
+    fireEvent.change(slider, { target: { value: '40' } })
+
+    // Same inputs, aiSharePct=40 instead of 20 -> exposure doubles:
+    // 12_000_000*.40*.45*.85 = 1,836,000. The monotonic-in-TV math
+    // itself is covered by liteDerive.test.js's own invariant test —
+    // this only proves the wiring calls the same function with the
+    // slider's live value, not a re-derivation of the formula.
+    await waitFor(() => expect(screen.getAllByText('$1,836,000').length).toBeGreaterThan(0))
+  })
+
+  it('renders a $0 exposure honestly (not hidden) for a cycle with no True Value gap', async () => {
+    api.getFullAnalysisReport.mockResolvedValue({
+      ...FULL_REPORT,
+      pillars: { ...FULL_REPORT.pillars, true_value: { score: 100, max: 100, dimensions: [] } },
+    })
+
+    render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+    expect(screen.getAllByText('$0').length).toBeGreaterThan(0)
   })
 })

@@ -181,6 +181,26 @@ export const api = {
   getFullAnalysisReport: (cycleCode) =>
     get(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}`),
 
+  // Shareable Full Analysis reports (owner side) — see
+  // app/routers/full_analysis.py's share endpoints. getShareLink never
+  // creates; createShareLink is create-or-return-existing.
+  getShareLink: (cycleCode) =>
+    get(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}/share`),
+
+  createShareLink: (cycleCode) =>
+    post(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}/share`, {}),
+
+  revokeShareLink: (cycleCode) =>
+    post(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}/share/revoke`, {}),
+
+  // Transcript browsing (2a) — the report payload only ever carries the
+  // curated pick; these back TranscriptSection's picker/prev-next.
+  getTranscriptIndex: (cycleCode, page = 1) =>
+    get(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}/transcripts?page=${page}`),
+
+  getTranscriptDetail: (cycleCode, runId) =>
+    get(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}/transcripts/${runId}`),
+
   getScopeTiers: () =>
     get('/api/scope/tiers'),
 
