@@ -53,6 +53,12 @@ describe('L4: origin sweep — every canonical/og:url in <head> is rooted at PUB
   })
 
   it('LiteWidget — /report/{token} (marketing host)', async () => {
+    // Report-first resolution (status-flash fix): /report is the first
+    // request on a report route; a 409 ('not ready yet') hands the run
+    // back to the status poll this sweep already exercised.
+    const notReady = new Error('Report is not ready yet.')
+    notReady.status = 409
+    liteApi.getReport.mockRejectedValue(notReady)
     liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
     const { unmount } = render(<LiteWidget urlToken="tok-sweep" />)
 

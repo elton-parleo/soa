@@ -41,6 +41,24 @@
  *     after a successful submit, so the address bar is shareable from
  *     the first second of the run (U2) without a full page reload.
  *
+ * Report-first resolution (status-flash fix): a token-bearing report
+ * route does NOT enter the state machine above at the /status step.
+ * The render dispatch used to fall through to LiteProgress for anything
+ * that wasn't yet a report, which meant EVERY /r/{token} — including a
+ * report that finished last week — painted the status page first, then
+ * polled /status, then fetched /report, then finally re-rendered. Two
+ * sequential round trips and one wrong screen for the most common visit
+ * there is. Now the route resolves before it renders: mount fires
+ * getReport(token) and holds a neutral ReportResolving skeleton (no
+ * queue/phase copy, never LiteProgress) until the answer arrives —
+ * 200 renders the report on the first paint that has anything to say,
+ * 404 is the same terminal not-found as before, and 409 ('not ready
+ * yet') falls back to the unchanged /status poll + LiteProgress run.
+ * Finished report: one request, one render. In-progress run: the same
+ * status experience it has always had. Direct-form /lite sessions (no
+ * urlToken) never enter resolving at all and are byte-for-byte
+ * unchanged.
+ *
  * This file re-exports LiteForm/LiteProgress/LiteFailed/LiteFullReport
  * from their own modules (Stage 4 split them out as the combined report
  * grew) so `import { X } from './LiteWidget.jsx'` keeps working for
@@ -55,6 +73,7 @@ import { LiteProgress, LiteFailed } from './LiteProgress.jsx'
 import { LiteFullReport } from './LiteFullReport.jsx'
 import { LiteFullReportV4 } from './report/LiteFullReportV4.jsx'
 import { LightCard } from './liteTheme.jsx'
+import { Wordmark } from '../ds/Wordmark.jsx'
 import { PUBLIC_AUDIT_BASE_URL, isAuditHost, reportUrl } from './publicUrls.js'
 import { upsertMeta, upsertLink, restoreOrRemove } from './headMeta.js'
 import { track, identifyReport, captureSrcParam, isTokenOwned } from './analytics.js'
@@ -85,6 +104,60 @@ function writeSession(key, value) {
       sessionStorage.setItem(key, value)
     }
   } catch (_) {}
+}
+
+// ─── Resolving state (report routes only) ──────────────────────────────
+// Opening /r/{token} used to render LiteProgress for EVERY token before
+// the first response came back, so a finished report flashed the status
+// page on its way in — and paid two sequential round trips (/status,
+// then /report) to get there. The route now resolves before anything
+// renders: this neutral skeleton holds the report's own frame (rail +
+// main, DS tokens) for the single request it takes to learn what this
+// token is. Deliberately carries no queue/phase copy and no progress
+// affordance of any kind — it must never read as "your audit is
+// running" for a report that finished hours ago, which is exactly the
+// thing LiteProgress-as-fallthrough got wrong. Direct-form /lite
+// sessions (no urlToken) never reach it.
+function ReportResolving() {
+  return (
+    <div
+      className="grain-overlay lite-report-shell lite-resolving"
+      data-testid="lite-resolving"
+      aria-busy="true"
+      style={{
+        minHeight: '100vh',
+        display: 'grid',
+        gridTemplateColumns: '222px 1fr',
+        background: 'var(--canvas)',
+      }}
+    >
+      <div
+        className="lite-report-rail lite-resolving-rail"
+        style={{ borderRight: '1px solid var(--border)', background: 'var(--canvas-dim)', padding: '22px 18px' }}
+      >
+        <Wordmark size={14} />
+        <div className="lite-resolving-block" style={{ height: 12, width: '72%', marginTop: 28 }} />
+        <div className="lite-resolving-block" style={{ height: 12, width: '86%', marginTop: 12 }} />
+        <div className="lite-resolving-block" style={{ height: 12, width: '58%', marginTop: 12 }} />
+      </div>
+      <div
+        className="lite-report-content"
+        style={{ width: '100%', maxWidth: 920, margin: '0 auto', padding: '32px 28px 46px' }}
+      >
+        {/* The rail (and its wordmark) is hidden on phone, exactly as it
+            is on the report itself — so the mark repeats here, shown
+            only at that width, rather than leaving the narrow frame
+            unbranded. */}
+        <div className="lite-resolving-mark" style={{ marginBottom: 22 }}>
+          <Wordmark size={14} />
+        </div>
+        <div className="lite-resolving-block" style={{ height: 18, width: 180 }} />
+        <div className="lite-resolving-block" style={{ height: 148, marginTop: 24 }} />
+        <div className="lite-resolving-block" style={{ height: 96, marginTop: 18 }} />
+      </div>
+      <span className="lite-visually-hidden" role="status">Loading report</span>
+    </div>
+  )
 }
 
 // ─── Not-found state (U1) — unknown/expired token, or a bare /report ────
@@ -188,6 +261,12 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
   const [pollError, setPollError] = useState(null)
   const [notFound, setNotFound] = useState(isReportRoute && !urlToken)
   const [restartBrandName, setRestartBrandName] = useState('')
+  // Report-first resolution: a token-bearing report route starts in an
+  // explicit 'resolving' phase and renders nothing but the neutral
+  // skeleton until the first response says what this token is. Seeded
+  // false for every other entry point, so the /lite direct-form path
+  // never enters it.
+  const [resolving, setResolving] = useState(isReportRoute && !!urlToken)
 
   // A URL-borne token becomes the resumable one — a bare /lite visit or
   // a same-tab refresh later should find it exactly like any other
@@ -196,6 +275,42 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
     if (isReportRoute && urlToken) {
       writeSession(STORAGE_KEY, urlToken)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Report-first resolution (mount-only, report routes with a token).
+  // /report is the ONE request a finished audit needs: it already
+  // carries the complete payload, and the router distinguishes the
+  // three outcomes on its own, so no status call is made to find out
+  // which one this is —
+  //   200  → the report (complete, or the expired shape) renders
+  //          immediately; the poll effect below never starts.
+  //   404  → the token is unknown/malformed. Terminal, exactly as a 404
+  //          from /status is: scrub it and show the not-found view.
+  //   409  → 'Report is not ready yet' (public_lite.py::get_lite_report).
+  //          The run is real and still going, so this falls through to
+  //          the unchanged /status poll + LiteProgress experience.
+  // Anything else (500, offline) also falls through to polling, which
+  // owns the retry/error surface it always has.
+  useEffect(() => {
+    if (!resolving) return undefined
+    let cancelled = false
+    liteApi.getReport(urlToken)
+      .then((data) => {
+        if (cancelled) return
+        setReport(data)
+        setResolving(false)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        if (err.status === 404) {
+          writeSession(STORAGE_KEY, null)
+          writeSession(STORAGE_KEY_STORE_URL, null)
+          setNotFound(true)
+        }
+        setResolving(false)
+      })
+    return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -273,6 +388,10 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
   // not-found view (Stage 9, U1) instead of spinning forever.
   useEffect(() => {
     if (!token || notFound) return undefined
+    // Nothing to poll for while the route is still resolving, or once
+    // report-first resolution has already produced the report — the
+    // status page's whole job is covering an in-progress run.
+    if (resolving || report) return undefined
     if (phaseData?.status === 'complete' || phaseData?.status === 'failed') return undefined
 
     let cancelled = false
@@ -302,7 +421,7 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
       cancelled = true
       clearInterval(interval)
     }
-  }, [token, phaseData?.status, notFound])
+  }, [token, phaseData?.status, notFound, resolving, report])
 
   // Once complete, fetch the report (teaser or full, decided server-side
   // by whether an email is already on file).
@@ -319,6 +438,14 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
     return <ReportNotFound navigate={navigate} />
   }
 
+  // Before anything else that could be wrong for this token: hold the
+  // frame until the route has resolved. LiteProgress is never rendered
+  // from here, so a finished report has no status frame to flash and
+  // status_viewed never fires for a run that isn't in progress.
+  if (resolving) {
+    return <ReportResolving />
+  }
+
   if (!token) {
     return <LiteForm onSubmitted={handleSubmitted} initialBrandName={restartBrandName} />
   }
@@ -327,7 +454,11 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
     return <LiteFailed onRetry={handleRetry} />
   }
 
-  if (phaseData?.status === 'complete' && report) {
+  // `report` is only ever set by a completed run — report-first
+  // resolution above, or the post-'complete' fetch below — so it alone
+  // decides the report branch, and the dispatch order inside it is
+  // unchanged: expired first, then V4 (pillars), then legacy.
+  if (report) {
     // Re-weighting session (Part 4): a report scored under a retired
     // scoring model never reaches pillars OR the legacy fallback below
     // — checked first, since report.status is 'expired' instead of
