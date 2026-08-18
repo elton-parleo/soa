@@ -15,6 +15,7 @@ import { ScoreHero } from './ScoreHero.jsx'
 import { FixableHook } from './FixableHook.jsx'
 import { DiscoveryFinding } from './DiscoveryFinding.jsx'
 import { VisibilitySection } from './VisibilitySection.jsx'
+import { TranscriptSection } from './TranscriptSection.jsx'
 import { AccessibilitySection } from './AccessibilitySection.jsx'
 import { TrueValueSection } from './TrueValueSection.jsx'
 import { EditorialBand } from './EditorialBand.jsx'
@@ -103,6 +104,7 @@ export function LiteFullReportV4({ report, token }) {
           <FixableHook report={report} />
           {partial && <DiscoveryFinding report={report} open={isOpen('why')} onToggle={() => toggleSection('why')} />}
           <VisibilitySection report={report} open={isOpen('viz')} onToggle={() => toggleSection('viz')} shareOfMentionsRank={rank} />
+          <TranscriptSection report={report} open={isOpen('transcript')} onToggle={() => toggleSection('transcript')} />
           <AccessibilitySection report={report} open={isOpen('acc')} onToggle={() => toggleSection('acc')} />
           <TrueValueSection report={report} open={isOpen('tv')} onToggle={() => toggleSection('tv')} />
           <EditorialBand />

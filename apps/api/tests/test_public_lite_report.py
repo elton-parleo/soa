@@ -16,6 +16,7 @@ from sqlalchemy import create_engine
 
 import app.routers.public_lite as public_lite
 import app.services.cycle_scoring as cycle_scoring
+import soa_shared.config as config
 
 
 @pytest.fixture
@@ -31,7 +32,8 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_entities (
-                id INTEGER PRIMARY KEY, name TEXT, slug TEXT UNIQUE, entity_type TEXT, website_url TEXT
+                id INTEGER PRIMARY KEY, name TEXT, slug TEXT UNIQUE, entity_type TEXT, website_url TEXT,
+                aliases TEXT
             )
         """)
         conn.exec_driver_sql("""
@@ -57,30 +59,40 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_queries (
-                id INTEGER PRIMARY KEY, stage TEXT
+                id INTEGER PRIMARY KEY, stage TEXT, persona TEXT, query_text TEXT
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
-                id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT,
+                platform TEXT, raw_response TEXT, run_at TEXT
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_coded_mentions (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
                 mentioned BOOLEAN, deal_cited BOOLEAN, deal_types TEXT,
-                member_value_cited BOOLEAN
+                member_value_cited BOOLEAN, position INTEGER, strength TEXT
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_price_observations (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
-                stated_price FLOAT, claimed_net_price FLOAT, member_price_claimed BOOLEAN
+                stated_price FLOAT, claimed_net_price FLOAT, member_price_claimed BOOLEAN,
+                merchant_name TEXT, merchant_slug TEXT, attribution_status TEXT
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_pass2_coding_log (
                 id INTEGER PRIMARY KEY, run_id INTEGER, coding_pass_version INTEGER
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_incentive_scores (
+                id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER, price_observation_id INTEGER,
+                scoring_grain TEXT, status TEXT, measurement_status TEXT,
+                stated_price FLOAT, ground_truth_true_cost FLOAT, net_price_accuracy BOOLEAN,
+                ground_truth_applied_deals TEXT
             )
         """)
     monkeypatch.setattr(public_lite, "engine", engine)
@@ -2024,3 +2036,106 @@ def test_full_report_response_is_additive_over_pre_stage3_shape(db):
     assert len(ic) == 2
     for row in ic:
         assert {"entity", "is_primary", "mentions", "cited_answers", "rate_pct"}.issubset(row.keys())
+
+
+# ─── "From the transcript" widget — additive, token-scoped ────────────────
+
+def test_transcript_null_when_the_cycle_has_no_runs(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1")
+
+    result = public_lite.get_lite_report("t1")
+    assert result["transcript"] is None
+
+
+def test_transcript_present_and_shaped_when_a_run_exists(db, monkeypatch):
+    # Pinned explicitly (not relying on the ambient config.py default) —
+    # this test's whole point is the OFF state, so it must hold
+    # regardless of which branch/deploy it runs on.
+    monkeypatch.setattr(config, "TRANSCRIPT_NARRATIVE_ENABLED", False)
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1")
+        conn.exec_driver_sql(
+            "INSERT INTO soa_queries (id, stage, persona, query_text) VALUES (701, 'Ready to Buy', 'Value-Conscious', 'Best deal?')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_runs (id, cycle_id, query_id, status, platform, raw_response, run_at) "
+            "VALUES (701, 1, 701, 'success', 'chatgpt', 'Acme Co is a solid pick around here.', '2026-08-07')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_coded_mentions (run_id, entity_id, mentioned, strength) VALUES (701, 101, 1, 'Primary')"
+        )
+
+    result = public_lite.get_lite_report("t1")
+    assert result["transcript"] is not None
+    assert result["transcript"]["run_id"] == 701
+    assert result["transcript"]["narrative_case"] == "mentioned_no_leak"
+    # TRANSCRIPT_NARRATIVE_ENABLED defaults off (soa_shared/config.py) —
+    # the WHAT WENT RIGHT/WHAT LEAKED boxes' clause logic isn't shipped
+    # on this branch; the transcript itself (question, answer, spans,
+    # diagnostics) always is. Parity: every other key is unaffected.
+    assert "right" not in result["transcript"]
+    assert "leaked" not in result["transcript"]
+    for key in ("run_id", "platform", "query_text", "response_text", "spans", "narrative_case", "selection_tier"):
+        assert key in result["transcript"]
+
+
+def test_transcript_narrative_boxes_present_when_the_flag_is_on(db, monkeypatch):
+    monkeypatch.setattr(config, "TRANSCRIPT_NARRATIVE_ENABLED", True)
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1")
+        conn.exec_driver_sql(
+            "INSERT INTO soa_queries (id, stage, persona, query_text) VALUES (701, 'Ready to Buy', 'Value-Conscious', 'Best deal?')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_runs (id, cycle_id, query_id, status, platform, raw_response, run_at) "
+            "VALUES (701, 1, 701, 'success', 'chatgpt', 'Acme Co is a solid pick around here.', '2026-08-07')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_coded_mentions (run_id, entity_id, mentioned, strength) VALUES (701, 101, 1, 'Primary')"
+        )
+
+    result = public_lite.get_lite_report("t1")
+    assert result["transcript"]["right"]
+    assert result["transcript"]["leaked"]
+
+
+def test_transcript_never_crosses_a_different_cycles_token(db):
+    """
+    The lite report is unauthenticated and token-scoped — a token must
+    only ever surface its OWN cycle's runs, never another cycle's, even
+    when both cycles share the same primary entity_id.
+    """
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1")
+        # A second, unrelated cycle (cycle_id=2) reusing the SAME
+        # primary entity_id (101) — the leakage this test guards against
+        # is exactly this shared-entity case, not just a shared token.
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, status, cycle_id) VALUES ('t2', 'complete', 2)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (2, 101, 'M001', 'primary')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_metrics_results "
+            "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, mention_rate, soa_pct) "
+            "VALUES (2, 101, 'overall', 'overall', 5, 3, 0.6, 100.0)"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_queries (id, stage, persona, query_text) VALUES (702, 'Ready to Buy', 'Value-Conscious', 'Cycle 2 only question')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_runs (id, cycle_id, query_id, status, platform, raw_response, run_at) "
+            "VALUES (702, 2, 702, 'success', 'chatgpt', 'This answer belongs to cycle 2 only.', '2026-08-07')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_coded_mentions (run_id, entity_id, mentioned, strength) VALUES (702, 101, 1, 'Primary')"
+        )
+
+    result_t1 = public_lite.get_lite_report("t1")
+    assert result_t1["transcript"] is None  # cycle 1 itself has zero runs
+
+    result_t2 = public_lite.get_lite_report("t2")
+    assert result_t2["transcript"]["run_id"] == 702
+    assert "cycle 2 only" in result_t2["transcript"]["response_text"]

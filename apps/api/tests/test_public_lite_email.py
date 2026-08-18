@@ -38,29 +38,40 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_queries (
-                id INTEGER PRIMARY KEY, stage TEXT
+                id INTEGER PRIMARY KEY, stage TEXT, persona TEXT, query_text TEXT
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
-                id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT,
+                platform TEXT, raw_response TEXT, run_at TEXT
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_coded_mentions (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
-                mentioned BOOLEAN, deal_cited BOOLEAN, deal_types TEXT, member_value_cited BOOLEAN
+                mentioned BOOLEAN, deal_cited BOOLEAN, deal_types TEXT, member_value_cited BOOLEAN,
+                position INTEGER, strength TEXT
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_price_observations (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
-                stated_price FLOAT, claimed_net_price FLOAT, member_price_claimed BOOLEAN
+                stated_price FLOAT, claimed_net_price FLOAT, member_price_claimed BOOLEAN,
+                merchant_name TEXT, attribution_status TEXT
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_incentive_scores (
+                id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
+                scoring_grain TEXT, status TEXT, measurement_status TEXT,
+                stated_price FLOAT, ground_truth_true_cost FLOAT, net_price_accuracy BOOLEAN
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_entities (
-                id INTEGER PRIMARY KEY, name TEXT, slug TEXT UNIQUE, entity_type TEXT, website_url TEXT
+                id INTEGER PRIMARY KEY, name TEXT, slug TEXT UNIQUE, entity_type TEXT, website_url TEXT,
+                aliases TEXT
             )
         """)
         conn.exec_driver_sql("""

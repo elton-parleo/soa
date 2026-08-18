@@ -1,7 +1,7 @@
 import { Glyph, StateChip } from '../../ds/index.js'
 import { toChipState } from './checkState.js'
 
-export function HowItsScoredButton({ open, onToggle }) {
+export function HowItsScoredButton({ open, onToggle, label = "How it's scored" }) {
   return (
     <button
       type="button"
@@ -17,7 +17,7 @@ export function HowItsScoredButton({ open, onToggle }) {
       <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, flexShrink: 0, borderRadius: 7, background: 'var(--blue-tint)' }}>
         <Glyph name={open ? 'x' : 'plus'} size={11} color="var(--blue)" />
       </span>
-      How it's scored
+      {label}
     </button>
   )
 }

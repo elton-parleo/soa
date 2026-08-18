@@ -22,6 +22,7 @@ import { api } from '../api.js'
 import { computeExposure, seedAnnualRevenue } from '../lite/liteDerive.js'
 import { deriveScoreHeroHeadline } from '../lite/report/reportDerive.js'
 import { VisibilitySection } from '../lite/report/VisibilitySection.jsx'
+import { TranscriptSection } from '../lite/report/TranscriptSection.jsx'
 import { AccessibilitySection } from '../lite/report/AccessibilitySection.jsx'
 import { TrueValueSection } from '../lite/report/TrueValueSection.jsx'
 import { EditorialBand } from '../lite/report/EditorialBand.jsx'
@@ -104,6 +105,7 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate }) {
 
           <VisibilitySection report={reportForVisibility} open={isOpen('viz')} onToggle={() => toggle('viz')} shareOfMentionsRank={rank} />
           <CompetitorStageSection competitorSet={competitorSet} />
+          <TranscriptSection report={report} open={isOpen('transcript')} onToggle={() => toggle('transcript')} />
           <AccessibilitySection report={report} open={isOpen('acc')} onToggle={() => toggle('acc')} />
           <TrueValueSection report={report} open={isOpen('tv')} onToggle={() => toggle('tv')} />
 

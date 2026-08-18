@@ -34,7 +34,7 @@ from app.services.competitor_suggestion import (
     generate_competitors,
     select_competitors,
 )
-from app.services.cycle_scoring import build_scan_payload
+from app.services.cycle_scoring import build_scan_payload, share_rank_label_for
 from app.services.cycle_scoring_full import build_full_cycle_report
 from app.services.full_analysis_extras import (
     build_competitor_set,
@@ -42,6 +42,7 @@ from app.services.full_analysis_extras import (
     build_what_if,
     select_evidence_exemplar,
 )
+from app.services.transcript_pick import select_transcript
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -328,6 +329,27 @@ def get_full_analysis_report(
         )
         what_if = build_what_if(competitor_set) if competitor_set else None
 
+        # "From the transcript" widget — same service/selection cascade
+        # as the lite report (cycle_scoring.py::build_cycle_report),
+        # parameterized by this cycle_id. share_pct/rank come from the
+        # SAME competitor_set["overall"] rows just built above, never
+        # recomputed inside select_transcript.
+        transcript_payload = None
+        if primary_entity_id is not None:
+            primary_share_row = next(
+                (r for r in (competitor_set or {}).get("overall", []) if r["is_primary"]), None,
+            )
+            primary_name = next(
+                (info["name"] for info in report["overall_entity_info"].values() if info["role"] == "primary"),
+                None,
+            )
+            transcript_payload = select_transcript(
+                conn, cycle_id, primary_entity_id,
+                share_pct=primary_share_row["share_pct"] if primary_share_row else None,
+                share_rank_label=share_rank_label_for((competitor_set or {}).get("overall", []), primary_name),
+                page_price_encoded=bool(dimensions_raw.get("offers")),
+            )
+
     return FullAnalysisReportResponse(
         cycle_code=cycle_code, rendered=True,
         composite=report["pillars"]["composite"],
@@ -345,4 +367,5 @@ def get_full_analysis_report(
         revenue_estimate_usd=report["revenue_estimate_usd"],
         evidence=evidence,
         what_if=what_if,
+        transcript=transcript_payload,
     )

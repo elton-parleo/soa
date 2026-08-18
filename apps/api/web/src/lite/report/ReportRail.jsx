@@ -15,7 +15,7 @@ export function ReportRail({ report, primaryEntityName, exposure, active, focus,
   const measurable = partial ? buildMeasurableContext(pillars) : null
   const readyPct = partial ? Math.min(100, (60 / measurable.measurable_max) * 100) : 60
 
-  const navItems = buildNavItems({ pillars, composite, exposure, active, partial })
+  const navItems = buildNavItems({ pillars, composite, exposure, active, partial, transcript: report.transcript })
 
   return (
     <div className="lite-report-rail" style={{ borderRight: '1px solid var(--border)', background: 'var(--canvas-dim)' }}>
