@@ -787,6 +787,45 @@ def _run_cycle_scan(scan_id: int, store_url: str, api_key: str | None) -> None:
     log.info(f"[cycle-crawl] scan {scan_id}: {result.status} (score={result.total_score})")
 
 
+def _run_cycle_revenue_probe(scan_id: int, cycle_id: int, store_url: str, api_key: str) -> None:
+    """
+    Cycle-level counterpart to _run_revenue_probe: a standalone Full
+    Analysis cycle's own scan row (lite_request_id NULL) never goes
+    through process_lite_requests, so nothing ever populated its
+    revenue_probe — the exposure widget's revenue seed would silently
+    stay null for every non-continuation cycle forever. Same never-
+    throw isolation as the lite probes (caller wraps this in its own
+    try/except); the only new step is resolving a brand_name, since
+    this path has no soa_lite_requests row to read one off.
+
+    Continuation cycles skip this entirely (see process_cycle_crawls)
+    — the audit's own scan row already has a revenue_probe, and
+    app/routers/full_analysis.py falls back to reading it directly
+    rather than paying for a second, redundant OpenAI call.
+    """
+    from generation.revenue_probe import probe_revenue
+
+    with engine.connect() as conn:
+        row = conn.execute(text("""
+            SELECT e.name FROM soa_cycle_entities ce
+            JOIN soa_entities e ON e.id = ce.entity_id
+            WHERE ce.cycle_id = :cid AND ce.role = 'primary'
+        """), {"cid": cycle_id}).fetchone()
+    if not row:
+        return
+    brand_name = row[0]
+
+    result = probe_revenue(brand_name, api_key, store_url=store_url)
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE soa_lite_scan_results SET revenue_probe = :probe, updated_at = NOW()
+            WHERE id = :scan_id
+        """), {"scan_id": scan_id, "probe": json.dumps(result)})
+
+    log.info(f"[cycle-crawl] scan {scan_id}: revenue probe result={result['annual_revenue_usd']}")
+
+
 def process_cycle_crawls() -> None:
     """
     Picks up one pending standalone cycle crawl per poll iteration —
@@ -798,16 +837,18 @@ def process_cycle_crawls() -> None:
     api_key = os.environ.get("OPEN_AI_API_KEY")
     with engine.connect() as conn:
         row = conn.execute(text("""
-            SELECT id, input_url FROM soa_lite_scan_results
-            WHERE status = 'pending' AND lite_request_id IS NULL AND cycle_id IS NOT NULL
-            ORDER BY id
+            SELECT sr.id, sr.input_url, sr.cycle_id, c.source_lite_request_id
+            FROM soa_lite_scan_results sr
+            JOIN soa_cycles c ON c.id = sr.cycle_id
+            WHERE sr.status = 'pending' AND sr.lite_request_id IS NULL AND sr.cycle_id IS NOT NULL
+            ORDER BY sr.id
             LIMIT 1
         """)).fetchone()
 
     if not row:
         return
 
-    scan_id, store_url = row
+    scan_id, store_url, cycle_id, source_lite_request_id = row
     with engine.begin() as conn:
         conn.execute(text("""
             UPDATE soa_lite_scan_results SET status = 'running', updated_at = NOW()
@@ -824,6 +865,18 @@ def process_cycle_crawls() -> None:
         return
 
     _run_cycle_scan(scan_id, store_url, api_key)
+
+    # Revenue probe (exposure widget's seed): skipped for a continuation
+    # cycle — the audit's own scan row already carries one, and
+    # app/routers/full_analysis.py reads it directly rather than paying
+    # for a second, redundant OpenAI call for the same brand. Isolated
+    # exactly like every lite-side probe — a failure here must never
+    # affect the crawl result already written above.
+    if not source_lite_request_id and api_key:
+        try:
+            _run_cycle_revenue_probe(scan_id, cycle_id, store_url, api_key)
+        except Exception:
+            log.exception(f"[cycle-crawl] scan {scan_id}: revenue probe failed unexpectedly")
 
 
 def _emit_crawl_retry_moments(request_id: int, result) -> None:

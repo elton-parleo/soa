@@ -267,6 +267,26 @@ def _build_continuation(conn, source_lite_request_id: int, full_pillars: dict) -
     )
 
 
+def _audit_revenue_estimate(conn, source_lite_request_id: int) -> float | None:
+    """
+    1a: the exposure widget's revenue seed for a CONTINUATION cycle.
+    This cycle's own scan row never gets a revenue_probe (apps/pipeline/
+    worker.py::process_cycle_crawls skips the probe entirely for a
+    continuation, precisely to avoid this) — the audit's own lite-owned
+    scan row already asked the same question about the same brand, so
+    read its answer instead of a second, redundant OpenAI call.
+    """
+    row = conn.execute(text("""
+        SELECT revenue_probe FROM soa_lite_scan_results
+        WHERE lite_request_id = :rid
+        ORDER BY id DESC LIMIT 1
+    """), {"rid": source_lite_request_id}).fetchone()
+    if not row:
+        return None
+    revenue_probe = _decode_json_field(row[0], {})
+    return revenue_probe.get("annual_revenue_usd")
+
+
 def _assemble_full_analysis_report(
     conn, cycle_id: int, cycle_code: str, source_lite_request_id: int | None,
 ) -> FullAnalysisReportResponse:
@@ -348,6 +368,10 @@ def _assemble_full_analysis_report(
             page_price_encoded=bool(dimensions_raw.get("offers")),
         )
 
+    revenue_estimate_usd = report["revenue_estimate_usd"]
+    if revenue_estimate_usd is None and source_lite_request_id is not None:
+        revenue_estimate_usd = _audit_revenue_estimate(conn, source_lite_request_id)
+
     return FullAnalysisReportResponse(
         cycle_code=cycle_code, rendered=True,
         composite=report["pillars"]["composite"],
@@ -362,7 +386,7 @@ def _assemble_full_analysis_report(
         offers=dimensions_raw.get("offers"),
         product_image_url=dimensions_raw.get("product_image_url"),
         product_name=dimensions_raw.get("product_name"),
-        revenue_estimate_usd=report["revenue_estimate_usd"],
+        revenue_estimate_usd=revenue_estimate_usd,
         evidence=evidence,
         what_if=what_if,
         generated_headlines=dimensions_raw.get("generated_headlines"),
