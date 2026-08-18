@@ -8,11 +8,11 @@
  */
 import { Button, ProvenanceLine, RequestFormModal, StatusChip } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
-import { FAILURE_POINT_COPY } from './reportContent.js'
+import { FAILURE_POINT_COPY, FIXES_REMAINING_STRIP } from './reportContent.js'
 import { isPartialRead, buildMeasurableContext, partialReadFailurePoint } from './reportDerive.js'
 import { DEMO_REQUEST_CTAS } from '../demoRequestCtas.js'
 import { useDemoRequestModal } from '../useDemoRequestModal.js'
-import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
+import { LITE_QUERY_COUNT, FIX_OWNER_TRUESYNC } from '../landing/scanDimensionsRegistry.js'
 import { track } from '../analytics.js'
 import { EVENTS } from '../analyticsEvents.js'
 
@@ -44,6 +44,14 @@ export function FixesTable({ report, open, onToggle, brandName, reportToken, que
   const visible = ordered
   const unlockedPoints = partialRead ? buildMeasurableContext(report.pillars).unmeasurable_points : 0
   const maxImpact = Math.max(1, ...visible.map((f) => f.impact))
+  // 2c: how much of the headline finding's TrueSync pool the visible
+  // rows do NOT account for. Zero on a run where every TrueSync-owned
+  // fix is already ranked (the common case now that a no-manifest Value
+  // Protocols gap is rankable at all) — the strip clause then omits.
+  const visibleTrueSyncImpact = visible
+    .filter((f) => f.fix_owner === FIX_OWNER_TRUESYNC)
+    .reduce((sum, f) => sum + f.impact, 0)
+  const trueSyncRemainder = (report.pillars.parleo_fixable_points ?? 0) - visibleTrueSyncImpact
 
   return (
     <>
@@ -106,7 +114,9 @@ export function FixesTable({ report, open, onToggle, brandName, reportToken, que
       {fixes.remaining_count > 0 && (
         <div style={{ marginTop: 16, borderRadius: 14, background: 'var(--surface-warm)', border: '1px dashed var(--border-strong)', padding: '18px 20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <span className="mono-label" style={{ fontSize: 9, color: 'var(--faint)' }}>{fixes.remaining_count} MORE FIXES IDENTIFIED, NOT RANKED IN THIS SAMPLE</span>
+            <span className="mono-label" style={{ fontSize: 9, color: 'var(--faint)' }}>
+              {FIXES_REMAINING_STRIP.line({ remainingCount: fixes.remaining_count, trueSyncRemainder })}
+            </span>
             <span className="mono-label" style={{ fontSize: 9, letterSpacing: '.18em', fontWeight: 600, color: 'var(--amber-deep)', border: '1.5px solid var(--amber)', borderRadius: 999, padding: '5px 13px 4px', background: 'rgba(255,255,255,.94)', whiteSpace: 'nowrap' }}>RANKED IN THE FULL ANALYSIS</span>
           </div>
           <div style={{ marginTop: 18, display: 'flex', justifyContent: 'space-between', gap: 22, alignItems: 'center', flexWrap: 'wrap' }}>

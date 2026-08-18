@@ -782,6 +782,7 @@ def test_fix_owner_registry_matches_truesync_report_copy():
 
 def test_fixes_remaining_count_is_the_rest():
     result = _build_six_fix_result()
+    # 7 fixable dimensions this run, 2 visible.
     assert result["fixes"]["remaining_count"] == 4
 
 
@@ -1003,7 +1004,19 @@ def test_parleo_fixable_points_sums_only_truesync_owned_dimensions():
 
 def test_parleo_fixable_points_includes_value_protocols_when_it_has_a_gap():
     crawl = dict(_SIX_FIX_CRAWL_DIMS)
-    crawl["value_protocols_seen"] = {**crawl["value_protocols_seen"], "score": 2}
+    # Re-baselined by hand this session: the pool and the ranked list now
+    # share _is_fixable, so a gap only counts if there is a fix to hand
+    # the merchant. This fixture's value_protocols row was at full credit
+    # with fix_human None (its role in _SIX_FIX_CRAWL_DIMS is to stay out
+    # of the way); giving it a gap without also giving it a fix would now
+    # be a payload the scorer cannot emit — score_value_protocols always
+    # attaches fix text below full credit, including the no-manifest
+    # branch. See test_a_fixless_value_protocols_gap_is_excluded_from_
+    # the_pool_too for the exclusion asserted from the other side.
+    crawl["value_protocols_seen"] = {
+        **crawl["value_protocols_seen"], "score": 2,
+        "fix": "declare capabilities", "fix_human": "Declare your agent-checkout capabilities.",
+    }
     result = _build_six_fix_result(crawl_dimensions=crawl)
     # deal_citability gap (4) + value_protocols gap (14 - 2 = 12).
     assert result["parleo_fixable_points"] == 16.0
@@ -1627,3 +1640,177 @@ def test_blocked_dimension_excluded_from_fix_ranking_and_fixes_section():
     assert row["fix"] is None
     assert row["fix_human"] is None
     assert not any(f["code"] == "catalog_context" for f in result["fixes"]["visible"])
+
+
+# ─── The cited run's shape: Value Protocols 0/14 with no manifest ────────
+#
+# https://audit.parleo.io/r/5bab2c24c835411c9ce764af02231dc7 showed the
+# headline finding "worth up to 24 points" beside "2 moves recover up to
+# 19 points". The 24 was Deal Citability 9.7 + Value Protocols 14.0; the
+# 19 was Deal Citability + Price Truth, because Value Protocols had no
+# fix_human (scorer.score_value_protocols' no-manifest branch emitted
+# none) and _build_fixes_section only ranks dimensions that carry one.
+# The largest gap in the run was unrankable, so the two figures could not
+# reconcile. With the scorer emitting a "publish it" fix, this shape now
+# ranks Value Protocols first and the numbers agree.
+
+_NO_MANIFEST_VP_CRAWL_DIMS = {
+    "agent_access": {"score": 4, "max": 5, "coverage": "full", "fix": "fix-aa", "fix_human": "human-aa"},
+    "catalog_context": {"score": 6, "max": 8, "coverage": "full", "fix": "fix-cc", "fix_human": "human-cc"},
+    "protocol_feed": {"score": 2, "max": 5, "coverage": "full", "fix": "fix-pf", "fix_human": "human-pf"},
+    # Price Truth: seen 2.8 of 7 plus a partial said band -> earned 6.8
+    # of 16, gap 9.2 (pinned by
+    # test_no_manifest_run_has_the_three_gaps_the_cited_report_had).
+    "price_truth_seen": {"score": 2.8, "max": 7, "coverage": "full", "fix": "fix-pt", "fix_human": "human-pt"},
+    "member_value_seen": {"score": 3, "max": 5, "coverage": "full", "fix": "fix-mv", "fix_human": "human-mv"},
+    # Deal Citability: seen 2.3 of 7, said 0 (no deal cited in any
+    # answer). Earned 2.3 of 12 -> gap 9.7.
+    "deal_citability_seen": {"score": 2.3, "max": 7, "coverage": "full", "fix": "fix-dc", "fix_human": "human-dc"},
+    # The dimension this session changed: nothing declared at all, which
+    # is the full 14-point gap, and which NOW carries a fix.
+    "value_protocols_seen": {
+        "score": 0, "max": 14, "coverage": "full",
+        "fix": "Publish an MCP well-known manifest declaring your agent-checkout capabilities.",
+        "fix_human": (
+            "Publish a protocol manifest that declares which agent-checkout capabilities your store "
+            "offers — discounts, member pricing, promotions — so agents can see them before checkout."
+        ),
+    },
+}
+
+
+def _no_manifest_signals():
+    """4 purchase-intent mentions so no said sub-lens goes na. One quotes
+    a price (25% -> the 0.40 rate band for price_truth.said); none cites
+    a deal (count 0 -> deal_citability.said earns nothing); all credit
+    member value."""
+    return [
+        RunSignal(
+            stage="Comparison", primary_mentioned=True, primary_deal_cited=False,
+            primary_deal_types=(), primary_price_quoted=(i == 0),
+            primary_member_price_claimed=True, primary_member_value_cited=True,
+            pass2_coded=True,
+        )
+        for i in range(4)
+    ]
+
+
+def _build_no_manifest_result(**overrides):
+    kwargs = dict(
+        som_pct=100.0, rsi_score=3.0, total_mentions=4,
+        crawl_dimensions=_NO_MANIFEST_VP_CRAWL_DIMS, run_signals=_no_manifest_signals(),
+        membership_probe_result="yes",
+    )
+    kwargs.update(overrides)
+    return build_pillars_payload(**kwargs)
+
+
+def _dim_gap(result, pillar, code):
+    d = next(d for d in result[pillar]["dimensions"] if d["code"] == code)
+    return round(d["max"] - d["earned"], 1)
+
+
+def test_no_manifest_run_has_the_three_gaps_the_cited_report_had():
+    """Anchors the fixture to the real run before asserting behavior on
+    it — if the registry's weights or bands move, this fails first and
+    names which gap drifted, rather than the ranking tests failing
+    mysteriously."""
+    result = _build_no_manifest_result()
+    assert _dim_gap(result, "true_value", "value_protocols") == 14.0
+    assert _dim_gap(result, "true_value", "deal_citability") == 9.7
+    assert _dim_gap(result, "true_value", "price_truth") == 9.2
+
+
+def test_no_manifest_value_protocols_ranks_first_with_its_full_gap():
+    result = _build_no_manifest_result()
+    visible = result["fixes"]["visible"]
+    assert [v["code"] for v in visible] == ["value_protocols", "deal_citability"]
+    assert visible[0]["impact"] == 14.0
+    assert visible[0]["fix_owner"] == "TRUESYNC"
+    assert visible[1]["impact"] == 9.7
+    assert visible[1]["fix_owner"] == "TRUESYNC"
+
+
+def test_no_manifest_run_displaces_price_truth_into_the_remaining_count():
+    """Price Truth (gap 9.2) used to be visible as fix 02 only because
+    Value Protocols' larger gap couldn't be ranked at all."""
+    result = _build_no_manifest_result()
+    codes = [v["code"] for v in result["fixes"]["visible"]]
+    assert "price_truth" not in codes
+    # 7 fixable dimensions this run, 2 visible.
+    assert result["fixes"]["remaining_count"] == 5
+    # And it never leaks a name or an impact from outside the free top 2.
+    assert "price_truth" not in json.dumps(result["fixes"])
+
+
+def test_no_manifest_run_reconciles_the_pool_with_what_is_visible():
+    """The invariant this session is about: the headline finding's
+    TrueSync pool and the ranked list's visible TrueSync impact are the
+    same number, so the report's two point totals agree."""
+    result = _build_no_manifest_result()
+    pool = result["parleo_fixable_points"]
+    visible_truesync = round(
+        sum(v["impact"] for v in result["fixes"]["visible"] if v["fix_owner"] == "TRUESYNC"), 1,
+    )
+    assert pool == 23.7
+    assert visible_truesync == pool
+
+
+def test_no_manifest_run_does_not_need_the_always_truesync_rule():
+    """Both free slots are TrueSync-owned on their own merits, so the
+    substitution rule has nothing to force — the ranking is the natural
+    gap order, and no ENG row was displaced by special-casing."""
+    result = _build_no_manifest_result()
+    visible = result["fixes"]["visible"]
+    assert all(v["fix_owner"] == "TRUESYNC" for v in visible)
+    gaps = [v["impact"] for v in visible]
+    assert gaps == sorted(gaps, reverse=True)
+
+
+def test_a_fixless_value_protocols_gap_is_excluded_from_the_pool_too():
+    """The guard from the other direction: _is_fixable is shared, so a
+    dimension the ranked list can't show never inflates the pool either.
+    This is the pre-fix payload shape — the one that could not reconcile.
+    """
+    crawl = dict(_NO_MANIFEST_VP_CRAWL_DIMS)
+    crawl["value_protocols_seen"] = {"score": 0, "max": 14, "coverage": "full", "fix": None, "fix_human": None}
+    result = _build_no_manifest_result(crawl_dimensions=crawl)
+
+    codes = [v["code"] for v in result["fixes"]["visible"]]
+    assert "value_protocols" not in codes
+    # 9.7 (deal_citability alone), NOT 23.7 — the pool no longer counts a
+    # gap it cannot offer the merchant a fix for.
+    assert result["parleo_fixable_points"] == 9.7
+
+
+# ─── 2b: the scorer never emits a fixable gap without a fix ──────────────
+
+def test_every_truesync_gap_on_every_fixture_carries_a_fix_human():
+    """An assertion-style guard, not a runtime raise: a TrueSync-owned
+    dimension with a real, measured gap must carry fix_human, or the
+    report will show its points in the headline pool while being unable
+    to rank it — the exact defect this session fixed. Named per
+    dimension so a future violator is identified, not just counted."""
+    fixtures = {
+        "full credit": (_FULL_CRAWL_DIMS, _full_credit_signals()),
+        "six fixes": (_SIX_FIX_CRAWL_DIMS, _full_credit_signals()),
+        "no manifest": (_NO_MANIFEST_VP_CRAWL_DIMS, _no_manifest_signals()),
+    }
+    for label, (crawl, signals) in fixtures.items():
+        result = build_pillars_payload(
+            som_pct=100.0, rsi_score=3.0, total_mentions=4,
+            crawl_dimensions=crawl, run_signals=signals,
+            membership_probe_result="yes",
+        )
+        for d in result["true_value"]["dimensions"] + result["accessibility"]["dimensions"]:
+            if _DIMS[d["code"]].fix_owner != "TRUESYNC":
+                continue
+            if d["na"] or d.get("blocked"):
+                continue
+            gap = d["max"] - d["earned"]
+            if gap < 0.05:
+                continue
+            assert d.get("fix_human"), (
+                f"{label}: {d['code']} has a {gap:.1f}-point fixable gap but no fix_human — "
+                "it would count toward the headline's TrueSync pool while being unrankable"
+            )
