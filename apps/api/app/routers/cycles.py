@@ -9,6 +9,7 @@ from soa_shared.models.soa_models import SoaCycle, SoaScopeSku, SoaTruecostSnaps
 from soa_shared.scope_resolution import materialize_and_freeze
 from soa_shared.cycle_creation import create_cycle_with_comparison_set
 from app.auth import get_current_user
+from app.routers.public_lite import _fetch_live_progress_counts
 from app.schemas import (
     CreateCycleRequest,
     CycleStatusResponse,
@@ -190,7 +191,7 @@ def list_cycles(
             WHERE organization_id = :org_id
             ORDER BY created_at DESC
         """), {"org_id": org_id}).fetchall()
-    return [_row_to_cycle(r) for r in rows]
+        return [_row_to_cycle(r, live_completed_runs=_live_completed_runs(conn, r)) for r in rows]
 
 
 @router.get("/cycles/{cycle_code}", response_model=CycleStatusResponse)
@@ -210,12 +211,12 @@ def get_cycle(
             WHERE cycle_code = :code
               AND organization_id = :org_id
         """), {"code": cycle_code, "org_id": org_id}).fetchone()
-    if not row:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Cycle '{cycle_code}' not found",
-        )
-    return _row_to_cycle(row)
+        if not row:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Cycle '{cycle_code}' not found",
+            )
+        return _row_to_cycle(row, live_completed_runs=_live_completed_runs(conn, row))
 
 
 @router.get(
@@ -605,11 +606,37 @@ def update_run_mentions(
     return {"updated": updated_count}
 
 
-def _row_to_cycle(row) -> CycleStatusResponse:
+def _live_completed_runs(conn, row) -> Optional[int]:
+    """
+    soa_cycles.completed_runs is written exactly ONCE, at the very end of
+    the Runner stage (RunOrchestrator._finalize_cycle / worker.py's
+    truecost-sweep completion) — never incrementally — so a RUNNING
+    cycle's dashboard card sits at 0 the entire time queries are actually
+    executing, then jumps straight to the final count. The public lite
+    status page hit the exact same bug and fixed it by counting soa_runs
+    rows live instead (see public_lite._fetch_live_progress_counts) —
+    each run is persisted individually as it completes, so this is a
+    pure read with no crash-consistency risk of its own. Reused here for
+    the cycles dashboard. Returns None (meaning: trust the stored column)
+    for non-running cycles and for cycle_mode='truecost', which sweeps
+    SKUs through the Deal Engine instead of writing soa_runs at all.
+    """
+    status = row[1]
+    cycle_mode = row[11] if len(row) > 11 and row[11] else "query"
+    if status != "running" or cycle_mode == "truecost":
+        return None
+    cycle_id = row[10] if len(row) > 10 else None
+    if cycle_id is None:
+        return None
+    return _fetch_live_progress_counts(conn, cycle_id).resolved_runs
+
+
+def _row_to_cycle(row, live_completed_runs: Optional[int] = None) -> CycleStatusResponse:
     cycle_mode = row[11] if len(row) > 11 and row[11] else "query"
     truecost_tiers = row[12] if len(row) > 12 else None
     if isinstance(truecost_tiers, str):
         truecost_tiers = json.loads(truecost_tiers)
+    completed_runs = live_completed_runs if live_completed_runs is not None else (row[5] or 0)
     return CycleStatusResponse(
         cycle_code=row[0],
         status=row[1],
@@ -617,7 +644,7 @@ def _row_to_cycle(row) -> CycleStatusResponse:
         study_type=row[2],
         study_pattern=row[3],
         total_runs_planned=row[4],
-        completed_runs=row[5] or 0,
+        completed_runs=completed_runs,
         created_at=str(row[6])[:19] if row[6] else None,
         updated_at=str(row[7])[:19] if row[7] else None,
         platforms=json.loads(row[8]) if isinstance(row[8], str) else row[8],
