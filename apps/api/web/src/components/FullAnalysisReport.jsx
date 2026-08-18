@@ -17,10 +17,12 @@
 // request modal keyed to a lite token) it is NOT modified — a sibling
 // in ./full-analysis-report mirrors its markup/tokens instead, so lite
 // stays byte-for-byte untouched and carries zero regression risk.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { computeExposure, seedAnnualRevenue } from '../lite/liteDerive.js'
-import { deriveScoreHeroHeadline } from '../lite/report/reportDerive.js'
+import { deriveScoreHeroHeadline, deriveReportViewedState } from '../lite/report/reportDerive.js'
+import { track, identifyReport, captureSrcParam } from '../lite/analytics.js'
+import { EVENTS } from '../lite/analyticsEvents.js'
 import { VisibilitySection } from '../lite/report/VisibilitySection.jsx'
 import { TranscriptSection } from '../lite/report/TranscriptSection.jsx'
 import { AccessibilitySection } from '../lite/report/AccessibilitySection.jsx'
@@ -58,10 +60,33 @@ const DEFAULT_AI_SHARE_PCT = 20
 // EvidenceSection.jsx's own `onViewResponse &&` guard). The owner-only
 // FullAnalysisShareControl (create/copy/revoke) is likewise never shown
 // to a visitor who has no session to own anything with.
-export default function FullAnalysisReport({ cycleCode, report, onNavigate, readOnly = false }) {
+//
+// shareToken (readOnly only, from PublicFullAnalysisPage.jsx's URL
+// param): the one allowed pseudonymous analytics id, same registry rule
+// lite's report_token already follows — anyone with the link already
+// has it. The owner view never has an equivalent public handle in
+// scope, so it's simply never passed there, and identifyReport below
+// is skipped rather than reaching for cycleCode as a substitute.
+export default function FullAnalysisReport({ cycleCode, report, onNavigate, readOnly = false, shareToken }) {
   const [open, setOpen] = useState({})
   const isOpen = (key) => open[key] !== false
   const toggle = (key) => setOpen((s) => ({ ...s, [key]: s[key] === false ? true : false }))
+
+  // Q5 (analyticsEvents.js): one report_viewed per mount, mirroring
+  // lite's own owner|visitor split — here it's determined by readOnly
+  // (real auth state) rather than lite's localStorage-ownership
+  // heuristic, since this product actually has an authenticated view to
+  // check against.
+  useEffect(() => {
+    if (readOnly && shareToken) identifyReport(shareToken)
+    track(EVENTS.REPORT_VIEWED, {
+      state: deriveReportViewedState(report.pillars, report.scan?.degraded_reason),
+      viewer: readOnly ? 'visitor' : 'owner',
+      report_type: 'full_analysis',
+      src: captureSrcParam(),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cycleCode])
 
   const pillars = report.pillars
   const platformMatrix = report.platform_matrix || []

@@ -67,5 +67,5 @@ export default function PublicFullAnalysisPage({ token }) {
     )
   }
 
-  return <FullAnalysisReport cycleCode={state.report.cycle_code} report={state.report} readOnly />
+  return <FullAnalysisReport cycleCode={state.report.cycle_code} report={state.report} readOnly shareToken={token} />
 }
