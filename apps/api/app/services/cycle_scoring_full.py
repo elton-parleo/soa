@@ -52,12 +52,17 @@ from app.services.lite_pillars import (
     _ACCESSIBILITY_CODES,
     _TRUE_VALUE_SPLIT_CODES,
     _VALUE_PROTOCOLS_CODE,
+    CHECK_FAIL,
     _crawl_dim_row,
+    _deal_citability_checks,
     _dim_by_code,
     _is_fixable,
+    _member_value_checks,
     _parleo_fixable_points,
     _pillar,
+    _price_truth_checks,
     _sub_lens,
+    _value_protocols_checks,
     member_value_applicable,
     score_member_value_said,
     score_price_truth_said,
@@ -218,6 +223,24 @@ def score_deal_citability_said_full(run_signals: List[RunSignal]) -> Dict:
 # failure mode lite hit before that guard existed. Sharing the predicate
 # makes the ranked list and the pool agree by construction here too.
 
+def _sub_fixes_for(d: Dict, fix_owner: str) -> List[Dict]:
+    """
+    3b: one sub-fix per FAILED check under a fixable dimension — checks[]
+    (lite_pillars.py's _agent_access_checks/_price_truth_checks/etc,
+    computed above for every accessibility+true_value dim) is already a
+    structured, stored fact one level more granular than the dimension's
+    single fix_human blurb. A sub-fix carries no point value of its own
+    (it shares the parent dimension's impact — no invented split) and
+    the same owner as its parent row. Empty when the dimension has no
+    checks (na/blocked branches) or none of its checks failed.
+    """
+    return [
+        {"code": c["code"], "label": c["label"], "evidence": c.get("evidence"), "fix_owner": fix_owner}
+        for c in (d.get("checks") or [])
+        if c.get("state") == CHECK_FAIL
+    ]
+
+
 def _build_full_fixes_section(dims: List[Dict]) -> Dict:
     ranked = sorted(
         (d for d in dims if _is_fixable(d)),
@@ -229,6 +252,7 @@ def _build_full_fixes_section(dims: List[Dict]) -> Dict:
             "fix_human": d["fix_human"],
             "impact": round(d["max"] - d["earned"], 1),
             "fix_owner": DIMENSIONS_BY_CODE[d["code"]].fix_owner,
+            "sub_fixes": _sub_fixes_for(d, DIMENSIONS_BY_CODE[d["code"]].fix_owner),
         }
         for d in ranked
     ]
@@ -245,9 +269,18 @@ def _build_full_fixes_section(dims: List[Dict]) -> Dict:
 # _sub_lens, _pillar, member_value_applicable) and its two already
 # volume-invariant said scorers (price_truth, member_value) — only
 # deal_citability's said scoring and the visibility dims' evidence text
-# are genuinely new here. Skips checks[]/fixes/exposure_reasons — that
-# report-copy layer is Phase 4's concern, built on top of this function's
-# output, not duplicated into it.
+# are genuinely new here.
+#
+# checks[] (3b): true_value_dims now carries the same structured, per-
+# check pass/fail array lite's build_pillars_payload computes via
+# _price_truth_checks/_member_value_checks/_deal_citability_checks/
+# _value_protocols_checks — reused unchanged, same inputs (seen/said
+# evidence, price_honesty_advisory, fetch_probe), presentation-only
+# (never touches earned/max/composite). Before this, a full-cycle
+# report's True Value section always fell back to "Not measurable this
+# run" for every check, since accessibility_dims got checks for free
+# via the shared _crawl_dim_row but true_value_dims (built inline here)
+# never called the check-builder functions at all.
 
 def build_full_cycle_pillars(
     *,
@@ -258,6 +291,7 @@ def build_full_cycle_pillars(
     crawl_dimensions: Dict[str, dict],
     run_signals: List[RunSignal],
     membership_probe_result: Optional[str],
+    fetch_probe_result: Optional[Dict] = None,
 ) -> Dict:
     """
     Full-cycle counterpart to build_pillars_payload — same registry,
@@ -310,6 +344,9 @@ def build_full_cycle_pillars(
             true_value_dims.append({
                 "code": code, "name": dim.name, "earned": 0.0, "max": 0.0, "na": True,
                 "seen": seen_row, "said": said_row, "said_envelope": said_envelope,
+                # No live checks on the N/A path — same convention as
+                # lite_pillars.py's own member_value_na branch.
+                "checks": None,
                 "fix": None, "fix_human": None,
             })
             continue
@@ -318,9 +355,21 @@ def build_full_cycle_pillars(
         earned = (seen.get("score") or 0.0) + (0.0 if said["na"] else said["earned"])
         true_value_earned += earned
         true_value_applicable_max += dim_max
+
+        if code == "price_truth":
+            checks = _price_truth_checks(
+                seen.get("evidence") or [], said, crawl_dimensions.get("price_honesty_advisory"),
+                fetch_probe=fetch_probe_result,
+            )
+        elif code == "member_value":
+            checks = _member_value_checks(seen_row["evidence"], said)
+        else:
+            checks = _deal_citability_checks(seen.get("evidence") or [])
+
         true_value_dims.append({
             "code": code, "name": dim.name, "earned": earned, "max": dim_max, "na": False,
             "seen": seen_row, "said": said_row, "said_envelope": said_envelope,
+            "checks": checks,
             # Same source lite_pillars.py's build_pillars_payload reads
             # (seen.get('fix')/'fix_human') — fix text is a seen-side/
             # crawl-derived concept, unrelated to the said envelope
@@ -340,6 +389,7 @@ def build_full_cycle_pillars(
     true_value_dims.append({
         "code": _VALUE_PROTOCOLS_CODE, "name": vp_dim.name, "earned": vp_earned, "max": vp_max,
         "na": False, "seen": vp_seen_row, "said": None,
+        "checks": _value_protocols_checks(vp_seen.get("evidence") or []),
         "fix": vp_seen.get("fix"), "fix_human": vp_seen.get("fix_human"),
     })
 
@@ -456,6 +506,7 @@ def build_full_cycle_report(conn, cycle_id: int) -> dict:
     primary_metrics = overall_metrics.get(primary_code) or {}
     membership_probe = decode_json_field(scan_row[5], {})
     revenue_probe = decode_json_field(scan_row[6], {})
+    fetch_probe_result = decode_json_field(scan_row[7], {})
 
     pillars = build_full_cycle_pillars(
         som_pct=primary_metrics.get("som"),
@@ -465,6 +516,7 @@ def build_full_cycle_report(conn, cycle_id: int) -> dict:
         crawl_dimensions=dimensions_raw,
         run_signals=run_signals,
         membership_probe_result=membership_probe.get("result"),
+        fetch_probe_result=fetch_probe_result,
     )
 
     return {

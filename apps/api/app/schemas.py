@@ -273,6 +273,32 @@ class ShareLinkResponse(BaseModel):
     created_at: str
     expires_at: Optional[str] = None
 
+# Transcript browsing (2a) — app/services/transcript_pick.py::
+# list_transcript_index. One row per query_id (not per run — a query
+# can have multiple runs across platforms/runs_per_query); `runs` is
+# what the frontend's platform/run selectors (2b) build from.
+class TranscriptIndexRun(BaseModel):
+    run_id: int
+    platform: str
+    run_number: int
+
+class TranscriptIndexQuery(BaseModel):
+    query_id: int
+    index: int
+    total_queries: int
+    query_text: str
+    stage: Optional[str] = None
+    persona: Optional[str] = None
+    narrative_case: str
+    runs: List[TranscriptIndexRun]
+
+class TranscriptIndexResponse(BaseModel):
+    queries: List[TranscriptIndexQuery]
+    page: int
+    page_size: int
+    total_queries: int
+    curated_run_id: Optional[int] = None
+
 class QueryCreate(BaseModel):
     """Fields for creating a new query. query_code is auto-generated."""
     query_text:    str

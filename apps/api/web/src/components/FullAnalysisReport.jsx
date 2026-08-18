@@ -19,6 +19,7 @@
 // stays byte-for-byte untouched and carries zero regression risk.
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
+import { publicFullAnalysisApi } from '../publicFullAnalysisApi.js'
 import { computeExposure, seedAnnualRevenue } from '../lite/liteDerive.js'
 import { deriveScoreHeroHeadline, deriveReportViewedState } from '../lite/report/reportDerive.js'
 import { track, identifyReport, captureSrcParam } from '../lite/analytics.js'
@@ -30,6 +31,7 @@ import { TrueValueSection } from '../lite/report/TrueValueSection.jsx'
 import { EditorialBand } from '../lite/report/EditorialBand.jsx'
 import { FixesTable } from '../lite/report/FixesTable.jsx'
 import { FixableHook } from '../lite/report/FixableHook.jsx'
+import { ExposureSection } from '../lite/report/ExposureSection.jsx'
 import '../lite/theme.css'
 
 import { FullAnalysisHero } from './full-analysis-report/FullAnalysisHero.jsx'
@@ -72,6 +74,18 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
   const isOpen = (key) => open[key] !== false
   const toggle = (key) => setOpen((s) => ({ ...s, [key]: s[key] === false ? true : false }))
 
+  // Transcript browsing (2b/2c) — same owner-vs-visitor split as every
+  // other fetch in this file: the authed cycleCode path when readOnly is
+  // false, the public share-token path (rate-limited, no session) when
+  // it's true. TranscriptSection never sees cycleCode/shareToken itself,
+  // only these two functions.
+  const fetchTranscriptIndex = readOnly
+    ? (page) => publicFullAnalysisApi.getTranscriptIndex(shareToken, page)
+    : (page) => api.getTranscriptIndex(cycleCode, page)
+  const fetchTranscriptDetail = readOnly
+    ? (runId) => publicFullAnalysisApi.getTranscriptDetail(shareToken, runId)
+    : (runId) => api.getTranscriptDetail(cycleCode, runId)
+
   // Q5 (analyticsEvents.js): one report_viewed per mount, mirroring
   // lite's own owner|visitor split — here it's determined by readOnly
   // (real auth state) rather than lite's localStorage-ownership
@@ -95,11 +109,16 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
   const primaryEntity = competitorSet?.overall?.find((e) => e.is_primary)
   const primaryEntityName = primaryEntity?.entity || 'Your brand'
 
-  const revenue = seedAnnualRevenue(report.revenue_estimate_usd) ?? DEFAULT_REVENUE
+  // 1b: controlled exactly like LiteFullReportV4.jsx's own revenue/
+  // aiSharePct state — the Adjust Assumptions sliders in ExposureSection
+  // below own these via onRevenueChange/onAiShareChange, so the figure
+  // recomputes live as they're dragged, not just once at mount.
+  const [revenue, setRevenue] = useState(() => seedAnnualRevenue(report.revenue_estimate_usd) ?? DEFAULT_REVENUE)
+  const [aiSharePct, setAiSharePct] = useState(DEFAULT_AI_SHARE_PCT)
   // Exposure-model fix: True Value, not Visibility. This report builds
   // its own pillars payload (cycle_scoring_full.py) and reads the score
   // straight off it — no true_value_score field needed on this side.
-  const exposure = computeExposure({ revenue, aiSharePct: DEFAULT_AI_SHARE_PCT, trueValueScore: pillars.true_value.score })
+  const exposure = computeExposure({ revenue, aiSharePct, trueValueScore: pillars.true_value.score })
   const rank = shareOfMentionsRank(competitorSet?.overall)
   const headline = deriveScoreHeroHeadline(pillars)
 
@@ -112,6 +131,12 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
   // rather than changing VisibilitySection.jsx itself, keeps that
   // shared component reading the one field name lite always has.
   const reportForVisibility = { ...report, visibility_breakdown: { share_of_mentions: competitorSet?.overall || [] } }
+
+  // ExposureSection.jsx reads report.true_value_score (lite's own flat
+  // field) and report.pillars.exposure_reasons/report.scan?.
+  // degraded_reason (both already the same shape here) — only the
+  // first needs adapting, same pattern as reportForVisibility above.
+  const reportForExposure = { ...report, true_value_score: pillars.true_value.score }
 
   const handleViewResponse = readOnly ? undefined : (runId) => {
     if (onNavigate) onNavigate('response', { runId, cycleCode })
@@ -152,7 +177,10 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
 
           <VisibilitySection report={reportForVisibility} open={isOpen('viz')} onToggle={() => toggle('viz')} shareOfMentionsRank={rank} queryCount={report.total_queries} />
           <CompetitorStageSection competitorSet={competitorSet} />
-          <TranscriptSection report={report} open={isOpen('transcript')} onToggle={() => toggle('transcript')} />
+          <TranscriptSection
+            report={report} open={isOpen('transcript')} onToggle={() => toggle('transcript')}
+            browsable fetchIndex={fetchTranscriptIndex} fetchDetail={fetchTranscriptDetail}
+          />
           <AccessibilitySection report={report} open={isOpen('acc')} onToggle={() => toggle('acc')} />
           <TrueValueSection report={report} open={isOpen('tv')} onToggle={() => toggle('tv')} />
 
@@ -164,6 +192,14 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
             <AnalystLayerSection cycleCode={cycleCode} open={isOpen('analyst')} onToggle={() => toggle('analyst')} />
           )}
           <EvidenceSection evidence={report.evidence} onViewResponse={handleViewResponse} open={isOpen('evidence')} onToggle={() => toggle('evidence')} />
+
+          <ExposureSection
+            report={reportForExposure}
+            revenue={revenue} onRevenueChange={setRevenue}
+            aiSharePct={aiSharePct} onAiShareChange={setAiSharePct}
+            exposure={exposure}
+            open={isOpen('exp')} onToggle={() => toggle('exp')}
+          />
 
           <FullAnalysisDarkBand fixCount={(pillars.fixes?.visible || []).filter((f) => f.fix_owner === 'TRUESYNC').length} />
 

@@ -56,7 +56,7 @@ def patched_engine(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
                 id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT, platform TEXT,
-                raw_response TEXT, run_at TEXT
+                raw_response TEXT, run_at TEXT, run_number INTEGER
             )
         """)
         conn.exec_driver_sql("""
@@ -87,6 +87,21 @@ def patched_engine(monkeypatch):
             CREATE TABLE soa_lite_requests (
                 id INTEGER PRIMARY KEY, token TEXT UNIQUE, email TEXT, status TEXT, cycle_id INTEGER,
                 competitor_names TEXT, competitor_source TEXT, created_at TIMESTAMP
+            )
+        """)
+        # 3b: select_also_worth_doing's read-only source — AC3 Actions'
+        # own tables (finding_detector.py/recommendation_mapper.py).
+        # Deliberately empty in every fixture below unless a test seeds
+        # a row itself: nothing generates these automatically.
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_playbook (
+                play_id TEXT PRIMARY KEY, pillar TEXT, failure_mode TEXT, owner TEXT, play_text TEXT
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_recommendations (
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, play_id TEXT,
+                priority_score FLOAT, status TEXT, suppressed BOOLEAN
             )
         """)
     monkeypatch.setattr(full_analysis_router, "engine", engine)
@@ -207,7 +222,7 @@ def test_renders_true_for_a_cycle_with_a_complete_crawl(patched_engine):
     # nothing to fix, so an honestly empty list, not a fabricated one.
     # Ranked fixes live on pillars['fixes'] (FixesTable.jsx's real
     # read path), not a separate top-level field.
-    assert result.pillars["fixes"] == {"visible": [], "remaining_count": 0}
+    assert result.pillars["fixes"] == {"visible": [], "remaining_count": 0, "also_worth_doing": []}
     assert result.evidence is not None
     assert result.evidence["price_observation"]["accurate"] is False
 
@@ -340,3 +355,61 @@ def test_transcript_narrative_boxes_present_when_the_flag_is_on(patched_engine, 
 
     assert result.transcript["right"]
     assert result.transcript["leaked"]
+
+
+# ─── 1a: continuation cycles inherit the audit's own revenue seed ─────────
+
+def test_continuation_cycle_inherits_the_audits_own_revenue_estimate(patched_engine):
+    """The continuation cycle's own scan row never gets a revenue_probe
+    (apps/pipeline/worker.py::process_cycle_crawls skips it deliberately
+    for a continuation, to avoid a second OpenAI call for the same
+    brand) — the audit's own lite-owned scan row already has one."""
+    with patched_engine.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (id, token, status, cycle_id, created_at) "
+            "VALUES (6, 'audit-tok-2', 'complete', 21, '2026-07-01 00:00:00')"
+        )
+        # The audit's OWN scan row — keyed by lite_request_id, not the
+        # continuation cycle's cycle_id, exactly like a real audit run.
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_scan_results (lite_request_id, cycle_id, status, revenue_probe, input_url) "
+            "VALUES (6, NULL, 'complete', ?, 'https://example.com')",
+            (json.dumps({"annual_revenue_usd": 42_000_000.0, "basis": "estimated", "quote": None}),),
+        )
+        _seed_scored_cycle(conn, cycle_code="fc-continuation-revenue", cycle_id=21, source_lite_request_id=6)
+
+    result = full_analysis_router.get_full_analysis_report("fc-continuation-revenue", current_user=CURRENT_USER)
+
+    assert result.rendered is True
+    assert result.revenue_estimate_usd == 42_000_000.0
+
+
+def test_continuation_cycle_with_no_audit_revenue_probe_stays_null(patched_engine):
+    with patched_engine.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (id, token, status, cycle_id, created_at) "
+            "VALUES (7, 'audit-tok-3', 'complete', 22, '2026-07-01 00:00:00')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_scan_results (lite_request_id, cycle_id, status, input_url) "
+            "VALUES (7, NULL, 'complete', 'https://example.com')"
+        )
+        _seed_scored_cycle(conn, cycle_code="fc-continuation-no-revenue", cycle_id=22, source_lite_request_id=7)
+
+    result = full_analysis_router.get_full_analysis_report("fc-continuation-no-revenue", current_user=CURRENT_USER)
+
+    assert result.rendered is True
+    assert result.revenue_estimate_usd is None
+
+
+def test_non_continuation_cycle_never_looks_up_an_audit_revenue_estimate(patched_engine):
+    """A standalone cycle (source_lite_request_id is None) has no audit
+    to fall back to — its own (null, in this fixture) revenue_probe is
+    the only source, never a lookup by coincidental id."""
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn, cycle_code="fc-standalone", cycle_id=23, source_lite_request_id=None)
+
+    result = full_analysis_router.get_full_analysis_report("fc-standalone", current_user=CURRENT_USER)
+
+    assert result.rendered is True
+    assert result.revenue_estimate_usd is None
