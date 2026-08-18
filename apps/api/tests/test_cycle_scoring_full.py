@@ -22,6 +22,13 @@ from app.services.cycle_scoring_full import (
     score_deal_citability_said_full,
 )
 from app.services.lite_crosswalk import RunSignal
+from tests.test_lite_pillars import (  # noqa: F401 — fixture reuse, not re-tested here
+    _FULL_CRAWL_DIMS,
+    _SIX_FIX_CRAWL_DIMS,
+    _NO_MANIFEST_VP_CRAWL_DIMS,
+    _full_credit_signals,
+    _no_manifest_signals,
+)
 from soa_shared.scan_dimensions import (
     DEAL_CITABILITY_RATE_BAND_TABLE,
     FULL_CYCLE_SCORER_VERSION,
@@ -176,6 +183,23 @@ def test_full_fixes_section_skips_na_blocked_and_nothing_to_fix():
         _dim("protocol_feed", 5, 5, fix_human=None),  # at max, no fix text either
     ]
     assert _build_full_fixes_section(dims) == {"visible": [], "remaining_count": 0}
+
+
+def test_full_fixes_section_shares_lite_pillars_is_fixable_gap_floor():
+    """_build_full_fixes_section used to carry its own inline eligibility
+    filter (na/blocked/fix_human, no gap floor) instead of calling
+    lite_pillars._is_fixable — harmless only because the scorer never
+    emits a sub-0.05 gap with real fix_human text, i.e. correct by luck,
+    not by construction. Now that it imports _is_fixable directly, a
+    dimension a rounding error away from full credit (gap 0.02, under
+    the 0.05 floor) is excluded here exactly like it already is on the
+    lite side."""
+    dims = [
+        _dim("catalog_context", 7.98, 8),  # gap 0.02, under the 0.05 floor
+        _dim("deal_citability", 0, 7),
+    ]
+    fixes = _build_full_fixes_section(dims)
+    assert [f["code"] for f in fixes["visible"]] == ["deal_citability"]
 
 
 # ─── N/A member-value rescale at full-cycle volume ────────────────────────
@@ -352,3 +376,63 @@ def test_build_full_cycle_report_scores_end_to_end(db):
 def test_build_full_cycle_report_not_scored_without_a_complete_crawl(db):
     report = build_full_cycle_report(db.connect(), 999)
     assert report["status"] == "not_scored"
+
+
+# ─── 2b, extended: the same guard over full-cycle fixtures ────────────────
+#
+# test_lite_pillars.py's test_every_truesync_gap_on_every_fixture_carries_
+# a_fix_human guards build_pillars_payload against a TrueSync-owned
+# dimension with a real, measured gap but no fix_human — the exact defect
+# 3f92fab fixed (a dimension like that inflates the headline pool while
+# being unrankable). That guard never ran build_full_cycle_pillars, so a
+# future scorer change could reintroduce the same shape on the full-cycle
+# path without either guard catching it. Reuses the lite fixtures
+# directly (same crawl_dimensions/run_signals shape both scorers read)
+# rather than duplicating them.
+
+def test_every_truesync_gap_on_every_full_cycle_fixture_carries_a_fix_human():
+    fixtures = {
+        "full credit": (_FULL_CRAWL_DIMS, _full_credit_signals()),
+        "six fixes": (_SIX_FIX_CRAWL_DIMS, _full_credit_signals()),
+        "no manifest": (_NO_MANIFEST_VP_CRAWL_DIMS, _no_manifest_signals()),
+    }
+    for label, (crawl, signals) in fixtures.items():
+        result = build_full_cycle_pillars(
+            som_pct=100.0, rsi_score=3.0, total_mentions=4, total_queries=4,
+            crawl_dimensions=crawl, run_signals=signals,
+            membership_probe_result="yes",
+        )
+        for d in result["true_value"]["dimensions"] + result["accessibility"]["dimensions"]:
+            if DIMENSIONS_BY_CODE[d["code"]].fix_owner != "TRUESYNC":
+                continue
+            if d["na"] or d.get("blocked"):
+                continue
+            gap = d["max"] - d["earned"]
+            if gap < 0.05:
+                continue
+            assert d.get("fix_human"), (
+                f"{label}: {d['code']} has a {gap:.1f}-point fixable gap but no fix_human — "
+                "it would count toward the full-cycle headline's TrueSync pool while being unrankable"
+            )
+
+
+def test_no_manifest_fixture_reconciles_on_the_full_cycle_path_too():
+    """The invariant 3f92fab pinned for lite (VP ranks #1 at its full
+    gap, the ranked list's visible TrueSync impact equals the pool) held
+    by construction there because _build_fixes_section and
+    _parleo_fixable_points already shared _is_fixable. Pins the same
+    reconciliation on build_full_cycle_pillars now that
+    _build_full_fixes_section shares it too."""
+    result = build_full_cycle_pillars(
+        som_pct=100.0, rsi_score=3.0, total_mentions=4, total_queries=4,
+        crawl_dimensions=_NO_MANIFEST_VP_CRAWL_DIMS, run_signals=_no_manifest_signals(),
+        membership_probe_result="yes",
+    )
+    visible = result["fixes"]["visible"]
+    assert visible[0]["code"] == "value_protocols"
+    assert visible[0]["impact"] == 14.0
+    assert visible[1]["code"] == "deal_citability"
+    assert visible[1]["impact"] == 9.7
+    assert result["parleo_fixable_points"] == 23.7
+    visible_truesync = round(sum(v["impact"] for v in visible if v["fix_owner"] == "TRUESYNC"), 1)
+    assert visible_truesync == result["parleo_fixable_points"]
