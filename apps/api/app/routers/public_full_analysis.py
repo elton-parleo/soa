@@ -47,7 +47,13 @@ def get_public_full_analysis_report(token: str, request: Request):
     ip_hash = _hash_ip(_get_client_ip(request))
     now = datetime.now(timezone.utc)
 
-    with engine.begin() as conn:
+    # engine.connect() + an explicit early commit, NOT engine.begin() —
+    # the view-log insert below must survive even when this request goes
+    # on to 404 (unknown/revoked/expired/not-rendered token), and
+    # engine.begin() rolls back its whole transaction on any exception
+    # raised inside the `with` block, which would silently drop every
+    # rate-limited attempt's own log row and exempt it from the limit.
+    with engine.connect() as conn:
         _enforce_read_rate_limit(conn, ip_hash, now)
 
         # revoked_at IS NULL and the expiry check both live in the WHERE
@@ -69,6 +75,7 @@ def get_public_full_analysis_report(token: str, request: Request):
             INSERT INTO soa_public_share_views (share_id, ip_hash, created_at)
             VALUES (:share_id, :ip_hash, :now)
         """), {"share_id": share_id, "ip_hash": ip_hash, "now": now})
+        conn.commit()
 
         if not row:
             raise HTTPException(status_code=404, detail="Not found.")
