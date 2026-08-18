@@ -2048,7 +2048,11 @@ def test_transcript_null_when_the_cycle_has_no_runs(db):
     assert result["transcript"] is None
 
 
-def test_transcript_present_and_shaped_when_a_run_exists(db):
+def test_transcript_present_and_shaped_when_a_run_exists(db, monkeypatch):
+    # Pinned explicitly (not relying on the ambient config.py default) —
+    # this test's whole point is the OFF state, so it must hold
+    # regardless of which branch/deploy it runs on.
+    monkeypatch.setattr(config, "TRANSCRIPT_NARRATIVE_ENABLED", False)
     with db.begin() as conn:
         _seed_complete_cycle(conn, token="t1")
         conn.exec_driver_sql(

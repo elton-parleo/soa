@@ -268,7 +268,11 @@ def test_continuation_banner_absent_for_a_cycle_created_the_ordinary_way(patched
 
 # ─── "From the transcript" widget — same service as the lite report ───────
 
-def test_transcript_wired_into_the_full_analysis_report(patched_engine):
+def test_transcript_wired_into_the_full_analysis_report(patched_engine, monkeypatch):
+    # Pinned explicitly (not relying on the ambient config.py default) —
+    # this test's whole point is the OFF state, so it must hold
+    # regardless of which branch/deploy it runs on.
+    monkeypatch.setattr(config, "TRANSCRIPT_NARRATIVE_ENABLED", False)
     with patched_engine.begin() as conn:
         _seed_scored_cycle(conn, cycle_code="fc-transcript", cycle_id=40)
         # _seed_scored_cycle's own runs never set raw_response — give
