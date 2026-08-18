@@ -6,7 +6,7 @@ import { dimByCode, pillarEarnedMax, pillarHeadline, PILLAR_VISIBILITY } from '.
 import { DIMENSIONS_BY_CODE, LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
 import { buildSoaIndexRows } from '../soaIndexDerive.js'
 
-export function VisibilitySection({ report, open, onToggle, shareOfMentionsRank }) {
+export function VisibilitySection({ report, open, onToggle, shareOfMentionsRank, queryCount = LITE_QUERY_COUNT }) {
   const pillars = report.pillars
   const dims = pillars.visibility?.dimensions || []
   const som = dimByCode(dims, 'share_of_mentions')
@@ -18,13 +18,20 @@ export function VisibilitySection({ report, open, onToggle, shareOfMentionsRank 
 
   const vis = pillarEarnedMax(pillars.visibility)
   const shareOfMentions = report.visibility_breakdown?.share_of_mentions || []
+  // A scope of just the primary (no competitors — a legacy/invalid
+  // launch; NewCycleFlow.jsx's Step3 now blocks this going forward) has
+  // no real share to report: share_pct would be a trivial, misleading
+  // 100%. Honest unmeasured state instead of a fabricated-looking number.
+  const hasCompetitorSet = shareOfMentions.length >= 2
   const primaryShare = shareOfMentions.find((e) => e.is_primary)
-  const somPct = primaryShare ? primaryShare.share_pct : (som ? Math.round((som.earned / somDim.weight) * 50) : 0)
+  const somPct = hasCompetitorSet
+    ? (primaryShare ? primaryShare.share_pct : (som ? Math.round((som.earned / somDim.weight) * 50) : 0))
+    : null
   const { rows: soaRows, you, projectedLabel } = buildSoaIndexRows(shareOfMentions)
 
   return (
     <ReportSection
-      id="viz" eyebrow={`PILLAR 01 · VISIBILITY · ${LITE_QUERY_COUNT} QUERIES`}
+      id="viz" eyebrow={`PILLAR 01 · VISIBILITY · ${queryCount} QUERIES`}
       title={pillarHeadline(report, PILLAR_VISIBILITY)}
       score={som && rs ? `${Math.round(vis.earned)}/${Math.round(vis.max)}` : null}
       open={open} onToggle={onToggle}
@@ -40,24 +47,32 @@ export function VisibilitySection({ report, open, onToggle, shareOfMentionsRank 
               </span>
             )}
           </div>
-          <div style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 9, lineHeight: 1.55 }}>
-            {somPct}% of all brand mentions were you. 50% share earns all {somDim.weight} points.
-          </div>
-          <div style={{ marginTop: 18 }}>
-            <div style={{ position: 'relative', height: 9, borderRadius: 5, background: 'var(--canvas-dim)', overflow: 'hidden' }}>
-              <i style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(100, (somPct / 50) * 100)}%`, background: 'var(--ink)', borderRadius: 5 }} />
+          {somPct == null ? (
+            <div style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 9, lineHeight: 1.55 }}>
+              Not measurable — no competitor set for this cycle.
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginTop: 9 }}>
-              <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--text-strong)' }}>YOU · {somPct}%</span>
-              <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--faint)' }}>50% EARNS ALL {somDim.weight}</span>
-            </div>
-          </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 9, lineHeight: 1.55 }}>
+                {somPct}% of all brand mentions were you. 50% share earns all {somDim.weight} points.
+              </div>
+              <div style={{ marginTop: 18 }}>
+                <div style={{ position: 'relative', height: 9, borderRadius: 5, background: 'var(--canvas-dim)', overflow: 'hidden' }}>
+                  <i style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(100, (somPct / 50) * 100)}%`, background: 'var(--ink)', borderRadius: 5 }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginTop: 9 }}>
+                  <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--text-strong)' }}>YOU · {somPct}%</span>
+                  <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--faint)' }}>50% EARNS ALL {somDim.weight}</span>
+                </div>
+              </div>
+            </>
+          )}
           <div style={{ marginTop: 16 }}>
             <HowItsScoredButton open={somOpen} onToggle={toggleSom} />
           </div>
           {somOpen && (
             <HowItsScoredPanel>
-              {LITE_QUERY_COUNT} shopper questions, every brand counted, your share of the total. Bigger share, more points. <b style={{ color: 'var(--text-strong)' }}>50% share = all {somDim.weight}.</b> You're at {somPct}%.
+              {queryCount} shopper questions, every brand counted, your share of the total. Bigger share, more points. <b style={{ color: 'var(--text-strong)' }}>50% share = all {somDim.weight}.</b> {somPct == null ? 'No competitor set was measured this run.' : `You're at ${somPct}%.`}
             </HowItsScoredPanel>
           )}
         </div>

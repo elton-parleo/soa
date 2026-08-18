@@ -102,6 +102,50 @@ function studySeriesId(existing) {
   return existing || `series-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+// Bug fix (competitor scope silently empty): handleSuggest and
+// addManualCompetitor below both always set entity_id: null — nothing
+// ever resolved a suggested/manually-typed competitor name to a real
+// entity id before this ran, so Step3's old comparisonSet build
+// (`.filter(c => c.entity_id)`) silently dropped every non-continuation
+// competitor, launching every fresh (non-continuation) cycle with the
+// primary as the ONLY row in scope. Continuation-mode competitors can
+// ALSO arrive with entity_id: null (full_analysis.py's get_audit_
+// continuation: `competitor_entity_ids[i] if i < len(...) else None`
+// — a manual-only competitor from the original audit never got one),
+// so this same resolution step covers both paths.
+//
+// Called once, right before cycle creation ("BEFORE the cycle is
+// created", not eagerly as competitors are added/removed, so the
+// registry never gains a row for a competitor the visitor later
+// deletes from the list). Mirrors EntityCombobox's own dedup-then-
+// create discipline: an exact, case-insensitive name match against the
+// CURRENT registry wins over minting a near-identical row; a fresh
+// fetch (not a stale cached list) is used so a name added by another
+// tab/session in the meantime is still found instead of duplicated.
+async function resolveCompetitorEntityIds(competitors) {
+  const alreadyResolved = competitors.filter((c) => c.entity_id)
+  const unresolved = competitors.filter((c) => !c.entity_id)
+  if (unresolved.length === 0) return alreadyResolved
+
+  const entities = await api.getEntities()
+  const byName = new Map((Array.isArray(entities) ? entities : []).map((e) => [e.name.toLowerCase(), e]))
+
+  const resolved = []
+  for (const c of unresolved) {
+    const key = c.name.toLowerCase()
+    let match = byName.get(key)
+    if (!match) {
+      match = await api.createEntity({
+        name: c.name, type: 'Brand', category: '',
+        website_url: c.domain ? `https://${c.domain}` : null, aliases: [],
+      })
+      byName.set(key, match)
+    }
+    resolved.push({ ...c, entity_id: match.id })
+  }
+  return [...alreadyResolved, ...resolved]
+}
+
 function matchesSearch(entity, query) {
   if (!query) return true
   const q = query.toLowerCase()
@@ -930,17 +974,22 @@ function Step3({ state, setState, onBack, onLaunched }) {
   // already requires a committed study with queries.length > 0 before
   // this step is reachable, but a direct-navigation path arriving here
   // some other way must not be able to launch with a study id and no
-  // actual queries behind it.
-  const isValid = state.cycleCode && availability === 'available' && !!state.studyType?.id && !!state.primaryEntity && state.queries.length > 0
+  // actual queries behind it. hasCompetitor is the SAME discipline
+  // applied to Step1's own competitor list — Step1 never blocked
+  // advancing with zero competitors, so this is the actual gate, not
+  // a redundant one: a scope of just the primary must never launch (the
+  // report would render a meaningless "1st of 1" — see VisibilitySection.jsx).
+  const hasCompetitor = state.competitors.length > 0
+  const isValid = state.cycleCode && availability === 'available' && !!state.studyType?.id && !!state.primaryEntity && state.queries.length > 0 && hasCompetitor
 
   const handleLaunch = async () => {
     setLaunchError(null)
     setLaunching(true)
     try {
+      const resolvedCompetitors = await resolveCompetitorEntityIds(state.competitors)
       const comparisonSet = [
         { entity_id: state.primaryEntity.id, comparison_code: 'M001', role: 'primary' },
-        ...state.competitors
-          .filter(c => c.entity_id)
+        ...resolvedCompetitors
           .map((c, i) => ({ entity_id: c.entity_id, comparison_code: `M${String(i + 2).padStart(3, '0')}`, role: 'competitor' })),
       ]
 
@@ -1024,6 +1073,12 @@ function Step3({ state, setState, onBack, onLaunched }) {
       {launchError && (
         <div style={{ padding: 12, borderRadius: 8, background: T.redLight, color: T.red, fontSize: 13, marginBottom: 16 }}>
           {launchError}
+        </div>
+      )}
+
+      {!hasCompetitor && (
+        <div style={{ padding: 12, borderRadius: 8, background: T.amberLight, color: T.amber, fontSize: 13, marginBottom: 16 }}>
+          Add at least one competitor — a scope of just your own brand can't measure share of voice. Go back to Step 1 to add one.
         </div>
       )}
 

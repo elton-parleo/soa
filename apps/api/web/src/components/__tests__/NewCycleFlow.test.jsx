@@ -29,6 +29,13 @@ const STUDY = { id: 'retailer_sephora', name: 'Sephora Retail' }
 beforeEach(() => {
   vi.clearAllMocks()
   api.getEntities.mockResolvedValue([ACME])
+  // Default for the launch-time competitor-resolution step (see
+  // resolveCompetitorEntityIds in NewCycleFlow.jsx) — a manually-added
+  // "Rival Co" (entity_id: null) has no match in api.getEntities' [ACME]
+  // above, so launch falls through to creating it. Individual tests
+  // that care about the created entity's own shape (the "create a new
+  // primary brand inline" describe block) override this per-test.
+  api.createEntity.mockImplementation((data) => Promise.resolve({ id: 3, ...data }))
   api.getStudies.mockResolvedValue([STUDY])
   api.getQueryRows.mockResolvedValue([{ query_code: 'Q1', query_text: 'Best beauty retailer?' }])
   api.checkCycleCode.mockResolvedValue({ available: true, cycle_code: 'x' })
@@ -46,10 +53,24 @@ async function selectBrand(name) {
   fireEvent.mouseDown(screen.getByText(name))
 }
 
+// Manual-add path (same UI a visitor uses when suggestions are off, or
+// to add one more name) — used here just to get a competitor into
+// state, not to test the manual-add feature itself.
+async function addCompetitor(name) {
+  fireEvent.change(screen.getByPlaceholderText('Add a competitor by name'), { target: { value: name } })
+  fireEvent.click(screen.getByText('Add'))
+  await waitFor(() => expect(screen.getByText(name)).toBeInTheDocument())
+}
+
+// A competitor is required to reach Step 3 launch-ready (Step3 blocks
+// with < 2 total entities — see the "competitor scope required" describe
+// block below), so every test that advances past Step 1 via this helper
+// gets one by default, same as it gets a primary brand.
 async function goToStep2() {
   render(<NewCycleFlow />)
   await waitFor(() => expect(brandInput()).toBeInTheDocument())
   await selectBrand('Acme')
+  await addCompetitor('Rival Co')
   fireEvent.click(screen.getByText('Next: Study & Queries →'))
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Study & Queries' })).toBeInTheDocument())
 }
@@ -114,8 +135,145 @@ describe('NewCycleFlow — step transitions', () => {
     expect(api.createCycle).toHaveBeenCalledTimes(1)
     const payload = api.createCycle.mock.calls[0][0]
     expect(payload.comparison_set[0]).toMatchObject({ entity_id: 1, role: 'primary' })
+    // Bug fix regression: the "Rival Co" competitor goToStep2() added
+    // (manual-add, entity_id: null at add-time) must reach the launch
+    // payload RESOLVED to a real entity id — never dropped by an old
+    // `.filter(c => c.entity_id)` that silently discarded every
+    // unresolved competitor.
+    expect(payload.comparison_set).toHaveLength(2)
+    expect(payload.comparison_set[1]).toMatchObject({ entity_id: 3, comparison_code: 'M002', role: 'competitor' })
     expect(payload.source_lite_request_id).toBeNull()
     expect(payload.prior_cycle_id).toBeNull()
+  })
+})
+
+// ─── Bug fix: competitor scope silently empty ──────────────────────────
+//
+// Root cause (both non-continuation and continuation mode): Step1 always
+// set entity_id: null for a suggested or manually-added competitor
+// (handleSuggest/addManualCompetitor), and a continuation-imported
+// competitor could ALSO arrive with entity_id: null when the source
+// audit's own competitor_entity_ids array was shorter than its
+// competitor_names (full_analysis.py's get_audit_continuation). Step3's
+// old comparisonSet build (`.filter(c => c.entity_id)`) silently dropped
+// every one of those, launching a comparison_set of just the primary —
+// the report then rendered "1st of 1" / 100% share, which reads as a
+// real competitive win rather than "no competitor set was ever created".
+describe('NewCycleFlow — competitor scope required', () => {
+  it('resolves a suggested/manually-added competitor to an EXISTING entity id by exact name match, never creating a duplicate', async () => {
+    api.getEntities.mockResolvedValue([ACME, { id: 7, name: 'Rival Co', category: 'beauty', type: 'Brand' }])
+    api.createCycle.mockResolvedValue({ id: 99, cycle_code: '2026-08-acme-full' })
+    api.launchCrawl.mockResolvedValue({ scan_id: 5, cycle_id: 99, status: 'pending' })
+
+    await goToStep3()
+    await waitFor(() => expect(screen.getByText('AVAILABLE ✓')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Launch Full Analysis'))
+
+    await waitFor(() => expect(api.createCycle).toHaveBeenCalledTimes(1))
+    expect(api.createEntity).not.toHaveBeenCalled()
+    const payload = api.createCycle.mock.calls[0][0]
+    expect(payload.comparison_set).toEqual([
+      { entity_id: 1, comparison_code: 'M001', role: 'primary' },
+      { entity_id: 7, comparison_code: 'M002', role: 'competitor' },
+    ])
+  })
+
+  it('creates a new entity for a competitor with no existing match, then sends its real id', async () => {
+    api.createCycle.mockResolvedValue({ id: 99, cycle_code: '2026-08-acme-full' })
+    api.launchCrawl.mockResolvedValue({ scan_id: 5, cycle_id: 99, status: 'pending' })
+
+    await goToStep3()
+    await waitFor(() => expect(screen.getByText('AVAILABLE ✓')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Launch Full Analysis'))
+
+    await waitFor(() => expect(api.createCycle).toHaveBeenCalledTimes(1))
+    expect(api.createEntity).toHaveBeenCalledWith({
+      name: 'Rival Co', type: 'Brand', category: '', website_url: null, aliases: [],
+    })
+    const payload = api.createCycle.mock.calls[0][0]
+    expect(payload.comparison_set[1]).toMatchObject({ entity_id: 3, role: 'competitor' })
+  })
+
+  it('resolves a continuation-imported competitor whose entity_id arrived null (the audit never resolved it)', async () => {
+    api.getAuditContinuation.mockResolvedValue({
+      lite_request_id: 7, cycle_id: 42, brand_name: 'Acme', brand_entity_id: 1, category: 'beauty',
+      competitors: [{ name: 'Rival Co', entity_id: null, domain: null }],
+      composite: 74, verdict: 'AGENT-READY', audited_at: '2026-08-01',
+      store_url: 'https://acme.com', store_domain: 'acme.com',
+    })
+    api.createCycle.mockResolvedValue({ id: 99, cycle_code: '2026-08-acme-full' })
+
+    render(<NewCycleFlow auditToken="tok123" />)
+    await waitFor(() => expect(screen.getByText(/Continuing from your audit/)).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Next: Study & Queries →'))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Study & Queries' })).toBeInTheDocument())
+    const select = screen.getByRole('combobox')
+    fireEvent.change(select, { target: { value: STUDY.id } })
+    await waitFor(() => expect(screen.getByText('Next: Review & Launch →')).not.toBeDisabled())
+    fireEvent.click(screen.getByText('Next: Review & Launch →'))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Review & Launch' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('AVAILABLE ✓')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Launch Full Analysis'))
+    await waitFor(() => expect(api.createCycle).toHaveBeenCalledTimes(1))
+
+    const payload = api.createCycle.mock.calls[0][0]
+    expect(payload.comparison_set).toHaveLength(2)
+    expect(payload.comparison_set[1]).toMatchObject({ entity_id: 3, role: 'competitor' })
+  })
+
+  it('blocks launch with a clear notice when zero competitors are added, and never calls createCycle', async () => {
+    render(<NewCycleFlow />)
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
+    await selectBrand('Acme')
+    fireEvent.click(screen.getByText('Next: Study & Queries →'))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Study & Queries' })).toBeInTheDocument())
+    const select = screen.getByRole('combobox')
+    fireEvent.change(select, { target: { value: STUDY.id } })
+    await waitFor(() => expect(screen.getByText('Next: Review & Launch →')).not.toBeDisabled())
+    fireEvent.click(screen.getByText('Next: Review & Launch →'))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Review & Launch' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('AVAILABLE ✓')).toBeInTheDocument())
+
+    expect(screen.getByText(/Add at least one competitor/)).toBeInTheDocument()
+    expect(screen.getByText('Launch Full Analysis')).toBeDisabled()
+
+    fireEvent.click(screen.getByText('Launch Full Analysis'))
+    expect(api.createCycle).not.toHaveBeenCalled()
+  })
+
+  it('the notice clears and launch becomes available the instant a competitor is added', async () => {
+    render(<NewCycleFlow />)
+    await waitFor(() => expect(brandInput()).toBeInTheDocument())
+    await selectBrand('Acme')
+    fireEvent.click(screen.getByText('Next: Study & Queries →'))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Study & Queries' })).toBeInTheDocument())
+    const select = screen.getByRole('combobox')
+    fireEvent.change(select, { target: { value: STUDY.id } })
+    await waitFor(() => expect(screen.getByText('Next: Review & Launch →')).not.toBeDisabled())
+    fireEvent.click(screen.getByText('Next: Review & Launch →'))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Review & Launch' })).toBeInTheDocument())
+    expect(screen.getByText(/Add at least one competitor/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('← Back'))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Study & Queries' })).toBeInTheDocument())
+    fireEvent.click(screen.getByText('← Back'))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Brand & Competitors' })).toBeInTheDocument())
+    await addCompetitor('Rival Co')
+    fireEvent.click(screen.getByText('Next: Study & Queries →'))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Study & Queries' })).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Next: Review & Launch →'))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Review & Launch' })).toBeInTheDocument())
+
+    expect(screen.queryByText(/Add at least one competitor/)).not.toBeInTheDocument()
+    // Step3's own cycleCode-availability check only auto-fires on first
+    // mount when state.cycleCode is still unset (it survives the earlier
+    // Step3 visit above) — nudge it the same way a real edit would, via
+    // the cycle-name field's own change handler, to reach 'available'.
+    const codeInput = screen.getByRole('textbox')
+    fireEvent.change(codeInput, { target: { value: `${codeInput.value}-2` } })
+    await waitFor(() => expect(screen.getByText('AVAILABLE ✓')).toBeInTheDocument())
+    expect(screen.getByText('Launch Full Analysis')).not.toBeDisabled()
   })
 })
 
