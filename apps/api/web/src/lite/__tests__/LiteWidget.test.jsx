@@ -426,7 +426,11 @@ function queryNoindexMeta() {
 }
 
 describe('LiteWidget — Stage 9: urlToken seeds the token from the URL', () => {
-  it('polls immediately using urlToken, without requiring a sessionStorage token', async () => {
+  it('polls using urlToken, without requiring a sessionStorage token, once /report reports not-ready', async () => {
+    // Report-first resolution (status-flash fix): /report is now the
+    // first request on a report route, and a 409 ('not ready yet') is
+    // what hands the run back to this unchanged polling path.
+    liteApi.getReport.mockRejectedValue(apiError(409, 'Report is not ready yet.'))
     liteApi.getStatus.mockResolvedValue({
       status: 'running', phase: 'analyzing', progress: { completed_runs: 12, total_runs: 12 },
       events: [
@@ -442,6 +446,7 @@ describe('LiteWidget — Stage 9: urlToken seeds the token from the URL', () => 
   })
 
   it('persists the URL token to sessionStorage so a later /lite visit resumes it', async () => {
+    liteApi.getReport.mockRejectedValue(apiError(409, 'Report is not ready yet.'))
     liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
 
     render(<LiteWidget urlToken="tok-from-url-2" />)
@@ -457,6 +462,9 @@ describe('LiteWidget — Stage 9: urlToken seeds the token from the URL', () => 
   })
 
   it('renders the not-found state on a 404 from getStatus, and stops polling', async () => {
+    // A token that /report couldn't serve (409, run still going) but
+    // /status then 404s on — the status-borne 404 is still terminal.
+    liteApi.getReport.mockRejectedValue(apiError(409, 'Report is not ready yet.'))
     const err = new Error('Not found.')
     err.status = 404
     liteApi.getStatus.mockRejectedValue(err)
@@ -471,6 +479,7 @@ describe('LiteWidget — Stage 9: urlToken seeds the token from the URL', () => 
   })
 
   it('scrubs the dead token from sessionStorage on a 404, so it cannot poison a later /lite or /report visit', async () => {
+    liteApi.getReport.mockRejectedValue(apiError(409, 'Report is not ready yet.'))
     const err = new Error('Not found.')
     err.status = 404
     liteApi.getStatus.mockRejectedValue(err)
@@ -571,6 +580,7 @@ describe('LiteWidget — Stage 9: noindex meta (U4)', () => {
 
   it('S3: is a no-op on the audit host — audit-report.html already bakes noindex in statically', async () => {
     mockAuditHost = true
+    liteApi.getReport.mockRejectedValue(apiError(409, 'Report is not ready yet.'))
     liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
 
     render(<LiteWidget urlToken="tok-audit-noindex" />)
@@ -584,6 +594,7 @@ describe('LiteWidget — Stage 9: noindex meta (U4)', () => {
     staticMeta.name = 'robots'
     staticMeta.content = 'noindex,nofollow'
     document.head.appendChild(staticMeta)
+    liteApi.getReport.mockRejectedValue(apiError(409, 'Report is not ready yet.'))
     liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
 
     render(<LiteWidget urlToken="tok-audit-noindex-2" />)
@@ -640,5 +651,281 @@ describe('LiteWidget — L1/L2: canonical link on the marketing host', () => {
 
     await waitFor(() => expect(queryCanonical()).toHaveAttribute('href', `${PUBLIC_AUDIT_BASE_URL}/r/tok-transition`))
     expect(document.head.querySelectorAll('link[rel="canonical"]')).toHaveLength(1)
+  })
+})
+
+// ─── Report-first resolution (status-flash fix) ─────────────────────────
+//
+// The old dispatch fell through to LiteProgress for anything that wasn't
+// yet a report, so /r/{token} painted the status page for EVERY token —
+// including a report that finished last week — then polled /status, then
+// fetched /report, then finally re-rendered. These tests lock in the new
+// shape: the route resolves first, and only then renders once.
+
+function apiError(status, message) {
+  const err = new Error(message)
+  err.status = status
+  return err
+}
+
+// "LiteProgress never rendered" has to hold for the WHOLE mount, not
+// just at assertion time: a frame that mounts and unmounts inside one
+// React batch is exactly the flash this session removed, and a final
+// queryByTestId() is blind to it. A MutationObserver's records keep the
+// added nodes from every batch, so a transient mount is still recorded
+// long after the node itself is gone.
+function watchMounts(testId) {
+  const selector = `[data-testid="${testId}"]`
+  const state = { everMounted: false }
+  const consume = (records) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (node.nodeType !== 1) continue
+        if (node.matches(selector) || node.querySelector(selector)) state.everMounted = true
+      }
+    }
+  }
+  const observer = new MutationObserver(consume)
+  observer.observe(document.body, { childList: true, subtree: true })
+  // A synchronous first paint happens before the observer can ever fire.
+  if (document.querySelector(selector)) state.everMounted = true
+  return {
+    state,
+    stop() {
+      consume(observer.takeRecords())
+      observer.disconnect()
+      return state.everMounted
+    },
+  }
+}
+
+// A current-version (pillars-bearing) report — the payload shape that
+// reaches LiteFullReportV4, and therefore the one that fires
+// report_viewed on mount.
+const V4_REPORT = {
+  status: 'complete',
+  locked: false,
+  overall: [{ name: 'Allbirds', role: 'primary', metrics: { som: 35, mention_rate: 42 } }],
+  scan: { status: 'complete', degraded_reason: null, degraded_banner_facts: null },
+  scan_status: 'complete',
+  visibility: 62.5, accessibility: 40, composite: 40,
+  brand_icon_url: null,
+  store_domain: 'allbirds.com',
+  visibility_breakdown: {
+    mention_rate: [{ entity: 'Allbirds', is_primary: true, mentioned_queries: 10, total_queries: 24, rate_pct: 42 }],
+    share_of_mentions: [{ entity: 'Allbirds', is_primary: true, mentions: 8, share_pct: 35, domain: 'allbirds.com' }],
+    totals: { total_mentions: 23, total_queries: 24 },
+  },
+  pillars: {
+    visibility: {
+      score: 62.5, max: 100,
+      dimensions: [{ code: 'share_of_mentions', name: 'Share of Mentions', earned: 18, max: 25, na: false, evidence: [] }],
+    },
+    accessibility: {
+      score: 40, max: 100,
+      dimensions: [{ code: 'agent_access', name: 'Agent Access', earned: 5, max: 6, na: false, blocked: false, evidence: [], checks: [] }],
+    },
+    true_value: { score: 17.5, max: 100, dimensions: [] },
+    composite: 40,
+    member_value_na: true,
+    state: 'scored',
+    tv_pct: 12,
+    fixes: { visible: [], remaining_count: 0 },
+    verdict: 'NOT AGENT-READY',
+    gap_areas_total: 4,
+    gap_areas_parleo_fixes: 2,
+    parleo_fixable_points: 13,
+  },
+}
+
+const RUNNING_STATUS = {
+  status: 'running', phase: 'analyzing', progress: { completed_runs: 12, total_runs: 12 },
+  events: [
+    { seq: 1, ts: '2026-01-01T00:00:00Z', kind: 'state', task: 'run', text: 'running' },
+    { seq: 2, ts: '2026-01-01T00:00:01Z', kind: 'log', task: 'scoring', text: 'coding mentions, prices, and incentives…' },
+  ],
+}
+
+describe('LiteWidget — report-first resolution on /r/{token}', () => {
+  it('a finished report costs one getReport, zero getStatus, and never mounts LiteProgress at any point in the lifecycle', async () => {
+    const progress = watchMounts('lite-progress')
+    liteApi.getReport.mockResolvedValue(V4_REPORT)
+
+    render(<LiteWidget urlToken="tok-finished" />)
+
+    await waitFor(() => expect(screen.getByText('Share of Mentions')).toBeInTheDocument())
+
+    expect(progress.stop()).toBe(false)
+    expect(screen.queryByTestId('lite-progress')).not.toBeInTheDocument()
+    expect(liteApi.getReport).toHaveBeenCalledTimes(1)
+    expect(liteApi.getReport).toHaveBeenCalledWith('tok-finished')
+    expect(liteApi.getStatus).not.toHaveBeenCalled()
+
+    // And no status poll starts late, either — the report being in hand
+    // is itself terminal, so the poll effect must never arm.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(liteApi.getStatus).not.toHaveBeenCalled()
+    expect(liteApi.getReport).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the neutral resolving skeleton — not the status page — while the route is still resolving', () => {
+    liteApi.getReport.mockReturnValue(new Promise(() => {})) // never settles
+
+    render(<LiteWidget urlToken="tok-slow" />)
+
+    expect(screen.getByTestId('lite-resolving')).toBeInTheDocument()
+    expect(screen.queryByTestId('lite-progress')).not.toBeInTheDocument()
+    // Never queue/phase copy: the resolving frame must not read as "your
+    // audit is running" for a report that finished hours ago.
+    expect(screen.queryByText('AUDIT QUEUED')).not.toBeInTheDocument()
+    expect(screen.queryByText(/AUDIT RUNNING/)).not.toBeInTheDocument()
+    expect(liteApi.getStatus).not.toHaveBeenCalled()
+  })
+
+  it('persists the URL token to sessionStorage on the report-first path, so a mid-run refresh still resumes', async () => {
+    liteApi.getReport.mockResolvedValue(V4_REPORT)
+
+    render(<LiteWidget urlToken="tok-persist" />)
+
+    await waitFor(() => expect(sessionStorage.getItem('soaLiteToken')).toBe('tok-persist'))
+    await waitFor(() => expect(screen.getByText('Share of Mentions')).toBeInTheDocument())
+    expect(sessionStorage.getItem('soaLiteToken')).toBe('tok-persist')
+  })
+
+  it('renders the expired card directly from the report-first response, with no status call and no progress flash', async () => {
+    const progress = watchMounts('lite-progress')
+    liteApi.getReport.mockResolvedValue({
+      status: 'expired',
+      store_domain: 'oldstore.example.com',
+      store_url: 'https://oldstore.example.com',
+    })
+
+    render(<LiteWidget urlToken="tok-expired-route" />)
+
+    await waitFor(() => expect(screen.getByText('This report has expired')).toBeInTheDocument())
+    expect(progress.stop()).toBe(false)
+    expect(liteApi.getStatus).not.toHaveBeenCalled()
+    expect(liteApi.getReport).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders not-found for an unknown token (404 from /report), with no status call and no progress flash', async () => {
+    const progress = watchMounts('lite-progress')
+    liteApi.getReport.mockRejectedValue(apiError(404, 'Not found.'))
+
+    render(<LiteWidget urlToken="tok-bogus" />)
+
+    await waitFor(() => expect(screen.getByText("We couldn't find this report")).toBeInTheDocument())
+    expect(progress.stop()).toBe(false)
+    expect(liteApi.getStatus).not.toHaveBeenCalled()
+    // Same scrub the /status 404 has always done — a dead token must not
+    // poison a later /lite or /report visit in this tab.
+    expect(sessionStorage.getItem('soaLiteToken')).toBeNull()
+  })
+
+  it('falls back to the unchanged status experience when /report says the run is not ready (409)', async () => {
+    // Doubles as the positive control for watchMounts() above: the same
+    // observer that reports `false` on every finished-report test must
+    // report `true` here, or those assertions prove nothing.
+    const progress = watchMounts('lite-progress')
+    liteApi.getReport.mockRejectedValue(apiError(409, 'Report is not ready yet.'))
+    liteApi.getStatus.mockResolvedValue(RUNNING_STATUS)
+
+    render(<LiteWidget urlToken="tok-running" />)
+
+    // Resolving first — never a progress frame before the route resolves.
+    expect(screen.getByTestId('lite-resolving')).toBeInTheDocument()
+
+    await waitFor(() => expect(screen.getByTestId('lite-progress')).toBeInTheDocument())
+    expect(progress.stop()).toBe(true)
+    expect(screen.queryByTestId('lite-resolving')).not.toBeInTheDocument()
+    expect(liteApi.getStatus).toHaveBeenCalledWith('tok-running')
+    expect(screen.getByText('coding mentions, prices, and incentives…')).toBeInTheDocument()
+  })
+
+  it('an in-progress run that reaches complete still lands on the report through the /status path', async () => {
+    liteApi.getReport
+      .mockRejectedValueOnce(apiError(409, 'Report is not ready yet.'))
+      .mockResolvedValue(V4_REPORT)
+    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'complete' })
+
+    render(<LiteWidget urlToken="tok-just-finished" />)
+
+    await waitFor(() => expect(screen.getByText('Share of Mentions')).toBeInTheDocument())
+    expect(liteApi.getStatus).toHaveBeenCalledWith('tok-just-finished')
+    expect(liteApi.getReport).toHaveBeenCalledTimes(2)
+  })
+
+  it('a transient /report failure falls back to polling rather than dead-ending', async () => {
+    liteApi.getReport.mockRejectedValue(apiError(500, 'Server error.'))
+    liteApi.getStatus.mockResolvedValue(RUNNING_STATUS)
+
+    render(<LiteWidget urlToken="tok-flaky" />)
+
+    await waitFor(() => expect(screen.getByTestId('lite-progress')).toBeInTheDocument())
+    expect(screen.queryByText("We couldn't find this report")).not.toBeInTheDocument()
+  })
+})
+
+describe('LiteWidget — report-first resolution: analytics and side effects', () => {
+  it('fires report_viewed exactly once, and status_viewed never, on a finished report route', async () => {
+    isTokenOwned.mockReturnValue(true)
+    captureSrcParam.mockReturnValue('email')
+    liteApi.getReport.mockResolvedValue(V4_REPORT)
+
+    render(<LiteWidget urlToken="tok-analytics" />)
+
+    await waitFor(() => expect(screen.getByText('Share of Mentions')).toBeInTheDocument())
+
+    const reportViewed = track.mock.calls.filter(([event]) => event === EVENTS.REPORT_VIEWED)
+    expect(reportViewed).toHaveLength(1)
+    // The ?src= capture-and-strip and the owner/visitor determination are
+    // unaffected by the new resolving phase — both still resolve at the
+    // report's own first render.
+    expect(reportViewed[0][1].viewer).toBe('owner')
+    expect(reportViewed[0][1].src).toBe('email')
+    expect(track.mock.calls.filter(([event]) => event === EVENTS.STATUS_VIEWED)).toHaveLength(0)
+  })
+
+  it('fires status_viewed once — and only — when LiteProgress actually mounts for an in-progress run', async () => {
+    liteApi.getReport.mockRejectedValue(apiError(409, 'Report is not ready yet.'))
+    liteApi.getStatus.mockResolvedValue(RUNNING_STATUS)
+
+    render(<LiteWidget urlToken="tok-status-analytics" />)
+
+    // Nothing is tracked for the resolving frame itself.
+    expect(track.mock.calls.filter(([event]) => event === EVENTS.STATUS_VIEWED)).toHaveLength(0)
+
+    await waitFor(() => expect(screen.getByTestId('lite-progress')).toBeInTheDocument())
+    expect(track.mock.calls.filter(([event]) => event === EVENTS.STATUS_VIEWED)).toHaveLength(1)
+    expect(track.mock.calls.filter(([event]) => event === EVENTS.REPORT_VIEWED)).toHaveLength(0)
+  })
+})
+
+describe('LiteWidget — the /lite direct-form path is untouched by report-first resolution', () => {
+  it('never enters resolving and never calls /report first when resuming a sessionStorage token', async () => {
+    sessionStorage.setItem('soaLiteToken', 'tok-lite-resume')
+    liteApi.getStatus.mockResolvedValue(RUNNING_STATUS)
+
+    render(<LiteWidget />)
+
+    expect(screen.queryByTestId('lite-resolving')).not.toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTestId('lite-progress')).toBeInTheDocument())
+    expect(liteApi.getStatus).toHaveBeenCalledWith('tok-lite-resume')
+    expect(liteApi.getReport).not.toHaveBeenCalled()
+  })
+
+  it('a fresh submission still goes form -> status poll -> progress, with no /report call on the way', async () => {
+    liteApi.submit.mockResolvedValue({ token: 'tok-lite-new', status: 'pending' })
+    liteApi.getStatus.mockResolvedValue({ status: 'pending', phase: 'queued', scan_status: null })
+
+    render(<LiteWidget />)
+    expect(screen.queryByTestId('lite-resolving')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'Acme Co' } })
+    fireEvent.click(screen.getByText('Run my free diagnostic'))
+
+    await waitFor(() => expect(screen.getByText('AUDIT QUEUED')).toBeInTheDocument())
+    expect(screen.queryByTestId('lite-resolving')).not.toBeInTheDocument()
+    expect(liteApi.getReport).not.toHaveBeenCalled()
   })
 })

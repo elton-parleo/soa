@@ -405,7 +405,11 @@ export function LiteProgress({ phaseData, storeUrl, error, token }) {
   }, [])
 
   return (
-    <div className="lite-root">
+    // data-testid: the status-flash fix turns "LiteProgress never
+    // mounted on this route" into an assertable fact — a text probe
+    // can't tell an absent status page from one that rendered with
+    // copy the test didn't happen to name.
+    <div className="lite-root" data-testid="lite-progress">
       <div className="lite-shell" style={{ maxWidth: 560 }}>
         <LightCard>
           <LogoHeader />
