@@ -22,7 +22,6 @@ import hashlib
 import json
 import logging
 import os
-import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
@@ -47,6 +46,7 @@ from app.services.cycle_scoring import (
     decode_json_field as _decode_json_field,
 )
 from app.services.lite_pillars import member_value_applicable
+from app.services.share_tokens import generate_public_token
 from app.schemas import (
     PublicLiteEmailRequest,
     PublicLiteProgress,
@@ -310,7 +310,7 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
         org_id = get_or_create_leadgen_org(session)
         session.commit()
 
-    token = uuid.uuid4().hex
+    token = generate_public_token()
     # Part 1 (E1): the run-manifest's very first event, written directly
     # here rather than through apps/pipeline's lite_events.emit_event —
     # apps/api never imports apps/pipeline (the two communicate only

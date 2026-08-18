@@ -17,10 +17,12 @@
 // request modal keyed to a lite token) it is NOT modified — a sibling
 // in ./full-analysis-report mirrors its markup/tokens instead, so lite
 // stays byte-for-byte untouched and carries zero regression risk.
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { computeExposure, seedAnnualRevenue } from '../lite/liteDerive.js'
-import { deriveScoreHeroHeadline } from '../lite/report/reportDerive.js'
+import { deriveScoreHeroHeadline, deriveReportViewedState } from '../lite/report/reportDerive.js'
+import { track, identifyReport, captureSrcParam } from '../lite/analytics.js'
+import { EVENTS } from '../lite/analyticsEvents.js'
 import { VisibilitySection } from '../lite/report/VisibilitySection.jsx'
 import { TranscriptSection } from '../lite/report/TranscriptSection.jsx'
 import { AccessibilitySection } from '../lite/report/AccessibilitySection.jsx'
@@ -40,16 +42,51 @@ import { AnalystLayerSection } from './full-analysis-report/AnalystLayerSection.
 import { EvidenceSection } from './full-analysis-report/EvidenceSection.jsx'
 import { FullAnalysisDarkBand } from './full-analysis-report/FullAnalysisDarkBand.jsx'
 import { FullAnalysisFooter } from './full-analysis-report/FullAnalysisFooter.jsx'
+import { FullAnalysisShareControl } from './full-analysis-report/FullAnalysisShareControl.jsx'
 import { shareOfMentionsRank } from './full-analysis-report/fullAnalysisDerive.js'
 import './full-analysis-report/fullAnalysis.css'
 
 const DEFAULT_REVENUE = 12_000_000
 const DEFAULT_AI_SHARE_PCT = 20
 
-export default function FullAnalysisReport({ cycleCode, report, onNavigate }) {
+// readOnly (the public /fa/{token} viewer, PublicFullAnalysisPage.jsx):
+// strips every path that would otherwise lead into the authed SoA app —
+// AnalystLayerSection calls the authenticated /api/cycles/{code}/metrics
+// directly (the one component in this tree that fetches on its own
+// rather than reading off `report`), so it's the one section omitted
+// outright rather than degraded; "Back to dashboard" and EvidenceSection's
+// "View in Response Explorer" both go through onNavigate, so passing it
+// through as undefined is enough to make both no-ops/hidden (see
+// EvidenceSection.jsx's own `onViewResponse &&` guard). The owner-only
+// FullAnalysisShareControl (create/copy/revoke) is likewise never shown
+// to a visitor who has no session to own anything with.
+//
+// shareToken (readOnly only, from PublicFullAnalysisPage.jsx's URL
+// param): the one allowed pseudonymous analytics id, same registry rule
+// lite's report_token already follows — anyone with the link already
+// has it. The owner view never has an equivalent public handle in
+// scope, so it's simply never passed there, and identifyReport below
+// is skipped rather than reaching for cycleCode as a substitute.
+export default function FullAnalysisReport({ cycleCode, report, onNavigate, readOnly = false, shareToken }) {
   const [open, setOpen] = useState({})
   const isOpen = (key) => open[key] !== false
   const toggle = (key) => setOpen((s) => ({ ...s, [key]: s[key] === false ? true : false }))
+
+  // Q5 (analyticsEvents.js): one report_viewed per mount, mirroring
+  // lite's own owner|visitor split — here it's determined by readOnly
+  // (real auth state) rather than lite's localStorage-ownership
+  // heuristic, since this product actually has an authenticated view to
+  // check against.
+  useEffect(() => {
+    if (readOnly && shareToken) identifyReport(shareToken)
+    track(EVENTS.REPORT_VIEWED, {
+      state: deriveReportViewedState(report.pillars, report.scan?.degraded_reason),
+      viewer: readOnly ? 'visitor' : 'owner',
+      report_type: 'full_analysis',
+      src: captureSrcParam(),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cycleCode])
 
   const pillars = report.pillars
   const platformMatrix = report.platform_matrix || []
@@ -76,7 +113,7 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate }) {
   // shared component reading the one field name lite always has.
   const reportForVisibility = { ...report, visibility_breakdown: { share_of_mentions: competitorSet?.overall || [] } }
 
-  const handleViewResponse = (runId) => {
+  const handleViewResponse = readOnly ? undefined : (runId) => {
     if (onNavigate) onNavigate('response', { runId, cycleCode })
   }
 
@@ -84,16 +121,23 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate }) {
     <div className="grain-overlay fa-report-shell" style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '222px 1fr' }}>
       <FullAnalysisRail
         report={report} primaryEntityName={primaryEntityName} exposure={exposure}
-        active="score" hasContinuation={!!report.continuation}
+        active="score" hasContinuation={!!report.continuation} readOnly={readOnly}
       />
       <div style={{ minWidth: 0 }}>
         <div className="fa-report-content" style={{ maxWidth: 960, margin: '0 auto', padding: '32px 28px 46px' }}>
-          <button
-            onClick={() => onNavigate && onNavigate('dashboard')}
-            style={{ background: 'none', border: 'none', color: 'var(--faint)', fontSize: 12, cursor: 'pointer', padding: 0, marginBottom: 16 }}
-          >
-            ← Back to dashboard
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12 }}>
+            {readOnly ? (
+              <span />
+            ) : (
+              <button
+                onClick={() => onNavigate && onNavigate('dashboard')}
+                style={{ background: 'none', border: 'none', color: 'var(--faint)', fontSize: 12, cursor: 'pointer', padding: 0 }}
+              >
+                ← Back to dashboard
+              </button>
+            )}
+            {!readOnly && <FullAnalysisShareControl cycleCode={cycleCode} />}
+          </div>
 
           <FullAnalysisHero report={report} exposure={exposure} shareOfMentionsRank={rank} headline={headline} platforms={platforms} />
 
@@ -116,7 +160,9 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate }) {
 
           <FixesTable report={report} open={isOpen('fix')} onToggle={() => toggle('fix')} brandName={primaryEntityName} reportToken={null} queryCount={report.total_queries} />
 
-          <AnalystLayerSection cycleCode={cycleCode} open={isOpen('analyst')} onToggle={() => toggle('analyst')} />
+          {!readOnly && (
+            <AnalystLayerSection cycleCode={cycleCode} open={isOpen('analyst')} onToggle={() => toggle('analyst')} />
+          )}
           <EvidenceSection evidence={report.evidence} onViewResponse={handleViewResponse} open={isOpen('evidence')} onToggle={() => toggle('evidence')} />
 
           <FullAnalysisDarkBand fixCount={(pillars.fixes?.visible || []).filter((f) => f.fix_owner === 'TRUESYNC').length} />

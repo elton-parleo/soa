@@ -14,6 +14,15 @@
  *                    audit_submitted
  *   Q4 read quality: report_viewed.state (scored/partial/blocked) vs
  *                    demo_request_submitted
+ *   Q5 FA share loop: the same report_viewed event, reused for Full
+ *                    Analysis's shareable reports (components/
+ *                    FullAnalysisReport.jsx) — report_type distinguishes
+ *                    the two products in one funnel rather than forking
+ *                    a second event; viewer is owner|visitor exactly as
+ *                    above, just determined by real auth state instead
+ *                    of lite's localStorage-ownership heuristic (Full
+ *                    Analysis has an authenticated view to check
+ *                    against, lite never does).
  *
  * Deliberately closed: no prop here ever carries an email, name,
  * company, message, or any other form value — every event about a
@@ -60,7 +69,7 @@ export const EVENT_REGISTRY = {
   [EVENTS.ESTIMATOR_INTERACTED]: [],
   [EVENTS.STATUS_VIEWED]: [],
   [EVENTS.EMAIL_CAPTURED]: [],
-  [EVENTS.REPORT_VIEWED]: ['state', 'viewer', 'src'],
+  [EVENTS.REPORT_VIEWED]: ['state', 'viewer', 'src', 'report_type'],
   [EVENTS.SECTION_VIEWED]: ['section'],
   [EVENTS.SECTION_EXPANDED]: ['section', 'control'],
   [EVENTS.SHARE_COPIED]: ['placement'],

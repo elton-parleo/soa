@@ -436,6 +436,64 @@ class SoaCycle(Base):
 
 
 # ---------------------------------------------------------------------------
+# 3b. soa_cycle_shares / soa_public_share_views — shareable Full Analysis
+# report links. A dedicated table (not nullable columns on SoaCycle) so a
+# cycle can carry more than one link over time (rotation) without a future
+# migration, and a revoke never has to guess which of several links it's
+# revoking. token uses the exact same scheme as SoaLiteRequest.token
+# (uuid4 hex, unique, unguessable) — see app/services/share_tokens.py.
+# ---------------------------------------------------------------------------
+
+class SoaCycleShare(Base):
+    __tablename__ = "soa_cycle_shares"
+    __table_args__ = (
+        Index("ix_soa_cycle_shares_cycle_id", "cycle_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    cycle_id = Column(Integer, ForeignKey("soa_cycles.id"), nullable=False)
+    token = Column(
+        Text,
+        unique=True,
+        nullable=False,
+        comment="Unguessable public access key (uuid4 hex, generated app-side).",
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_by = Column(String, nullable=True)
+    revoked_at = Column(
+        DateTime(timezone=True), nullable=True,
+        comment="Null while active. Set once, never cleared — revoking is permanent; sharing again creates a new row/token.",
+    )
+    expires_at = Column(
+        DateTime(timezone=True), nullable=True,
+        comment="Optional owner-set expiry. Null means the link never expires on its own.",
+    )
+
+    cycle = relationship("SoaCycle")
+
+
+class SoaPublicShareView(Base):
+    """Append-only read log for the public endpoint's own per-IP rate
+    limit — mirrors SoaLiteRequest doubling as its own rate-limit log in
+    public_lite.py::_enforce_rate_limits. No domain meaning beyond "this
+    ip_hash read this share at this time"."""
+
+    __tablename__ = "soa_public_share_views"
+    __table_args__ = (
+        Index("ix_soa_public_share_views_ip_hash_created_at", "ip_hash", "created_at"),
+        Index("ix_soa_public_share_views_share_id", "share_id"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    share_id = Column(
+        Integer, ForeignKey("soa_cycle_shares.id"), nullable=True,
+        comment="Null when the token that generated this view row could not be resolved to a share.",
+    )
+    ip_hash = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# ---------------------------------------------------------------------------
 # 4. soa_cycle_entities — comparison set for a specific cycle
 # ---------------------------------------------------------------------------
 

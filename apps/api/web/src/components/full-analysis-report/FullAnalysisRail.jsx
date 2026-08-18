@@ -41,7 +41,7 @@ function navScore({ id, pillars, composite, totalQueries, transcript }) {
   }
 }
 
-export function FullAnalysisRail({ report, primaryEntityName, exposure, active, hasContinuation }) {
+export function FullAnalysisRail({ report, primaryEntityName, exposure, active, hasContinuation, readOnly = false }) {
   const pillars = report.pillars
   const composite = report.composite
   const vis = pillarEarnedMax(pillars.visibility)
@@ -58,6 +58,12 @@ export function FullAnalysisRail({ report, primaryEntityName, exposure, active, 
 
   const items = NAV_ITEMS.filter((item) => item.id !== 'continuation' || hasContinuation)
     .filter((item) => item.id !== 'transcript' || report.transcript)
+    // readOnly (public /fa/{token} viewer): FullAnalysisReport.jsx
+    // omits <AnalystLayerSection> outright (it fetches the authed
+    // /api/cycles/{code}/metrics directly — the one section with no
+    // public equivalent), so its nav entry would otherwise jump to an
+    // anchor that no longer exists.
+    .filter((item) => item.id !== 'analyst' || !readOnly)
 
   return (
     <div className="fa-report-rail" style={{ borderRight: '1px solid var(--border)', background: 'var(--canvas-dim)' }}>

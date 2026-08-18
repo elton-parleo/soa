@@ -73,6 +73,7 @@ import { LiteProgress, LiteFailed } from './LiteProgress.jsx'
 import { LiteFullReport } from './LiteFullReport.jsx'
 import { LiteFullReportV4 } from './report/LiteFullReportV4.jsx'
 import { LightCard } from './liteTheme.jsx'
+import { ReportNotFoundCard } from './ReportNotFoundCard.jsx'
 import { Wordmark } from '../ds/Wordmark.jsx'
 import { PUBLIC_AUDIT_BASE_URL, isAuditHost, reportUrl } from './publicUrls.js'
 import { upsertMeta, upsertLink, restoreOrRemove } from './headMeta.js'
@@ -161,42 +162,26 @@ function ReportResolving() {
 }
 
 // ─── Not-found state (U1) — unknown/expired token, or a bare /report ────
-// Same design system as the rest of the widget; no stack trace, no
-// redirect loop — just an honest dead end with a way forward.
+// Thin wrapper over the shared ReportNotFoundCard (lite's own copy/CTA
+// unchanged) — see ReportNotFoundCard.jsx for why this is shared with
+// the Full Analysis public route now too.
 function ReportNotFound({ navigate }) {
   return (
-    <div className="lite-root">
-      <div className="lite-shell" style={{ maxWidth: 480 }}>
-        <LightCard>
-          <div className="lite-headline" style={{ fontSize: 20, marginBottom: 8 }}>
-            We couldn't find this report
-          </div>
-          <div className="lite-body lite-muted" style={{ marginBottom: 20 }}>
-            This link may be mistyped, or the report it points to may no
-            longer be available.
-          </div>
-          <button
-            type="button"
-            className="lite-pill lite-pill--solid"
-            onClick={() => {
-              // On the audit host, '/' is the landing page — a fast
-              // client-side transition. A dead /report/{token} link on
-              // the marketing host (H2: /scan no longer exists there)
-              // has nowhere local to send the visitor, so it does a
-              // full navigation out to the audit host's landing page.
-              if (isAuditHost()) {
-                if (navigate) navigate('/')
-                else window.location.href = '/'
-              } else {
-                window.location.href = PUBLIC_AUDIT_BASE_URL
-              }
-            }}
-          >
-            Start a new audit
-          </button>
-        </LightCard>
-      </div>
-    </div>
+    <ReportNotFoundCard
+      onCta={() => {
+        // On the audit host, '/' is the landing page — a fast
+        // client-side transition. A dead /report/{token} link on
+        // the marketing host (H2: /scan no longer exists there)
+        // has nowhere local to send the visitor, so it does a
+        // full navigation out to the audit host's landing page.
+        if (isAuditHost()) {
+          if (navigate) navigate('/')
+          else window.location.href = '/'
+        } else {
+          window.location.href = PUBLIC_AUDIT_BASE_URL
+        }
+      }}
+    />
   )
 }
 

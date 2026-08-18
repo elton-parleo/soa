@@ -16,6 +16,9 @@ vi.mock('../../api.js', () => ({
     getPositions: vi.fn(),
     getMetrics: vi.fn(),
     resumeCycle: vi.fn(),
+    getShareLink: vi.fn(),
+    createShareLink: vi.fn(),
+    revokeShareLink: vi.fn(),
   },
 }))
 
@@ -37,6 +40,9 @@ beforeEach(() => {
     entities: [{ code: 'M001', name: 'Allbirds', role: 'primary' }, { code: 'M002', name: 'Nike', role: 'competitor' }],
     slices: { overall: { M001: { mention_rate: 70, som: 24, rsi: 0.5, position_index: 2.4, pdi: 0.82, deal_citation_rate: 12 } } },
   })
+  // FullAnalysisShareControl's own mount-time fetch, on the new-report
+  // (rendered=true) path — no active link by default.
+  api.getShareLink.mockResolvedValue(null)
 })
 
 // A FULL fixture — every Phase 1 payload key present — used for the

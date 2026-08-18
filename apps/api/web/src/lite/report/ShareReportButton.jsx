@@ -64,9 +64,18 @@ const visuallyHidden = {
   overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0,
 }
 
-export function ShareReportButton({ token, compact = false, style, placement }) {
-  const url = reportUrl(token)
+export function ShareReportButton({
+  token, resolveToken, buildUrl = reportUrl, compact = false, style, placement,
+}) {
+  // resolveToken (Full Analysis): the token doesn't exist yet — unlike
+  // lite, where it's already minted at submit time — so it's created
+  // lazily on first click instead of being known up front. Lite's own
+  // call sites never pass resolveToken, so resolvedToken is seeded
+  // from `token` and available synchronously exactly as before.
+  const [resolvedToken, setResolvedToken] = useState(token || null)
+  const url = resolvedToken ? buildUrl(resolvedToken) : null
   const [copied, setCopied] = useState(false)
+  const [resolving, setResolving] = useState(false)
   const [announce, setAnnounce] = useState('')
   const [fallbackOpen, setFallbackOpen] = useState(false)
   const timeoutRef = useRef(null)
@@ -83,7 +92,25 @@ export function ShareReportButton({ token, compact = false, style, placement }) 
   }, [fallbackOpen])
 
   async function handleCopy() {
-    const ok = await copyToClipboard(url)
+    let shareUrl = url
+    if (!shareUrl && resolveToken) {
+      setResolving(true)
+      try {
+        const created = await resolveToken()
+        setResolvedToken(created)
+        shareUrl = buildUrl(created)
+      } catch (_) {
+        // Nothing to copy — resolveToken's own caller surfaces the
+        // failure (e.g. an alert), this button just stays clickable
+        // for a retry rather than getting stuck disabled.
+        setResolving(false)
+        return
+      }
+      setResolving(false)
+    }
+    if (!shareUrl) return
+
+    const ok = await copyToClipboard(shareUrl)
     if (!ok) {
       setFallbackOpen(true)
       return
@@ -108,9 +135,10 @@ export function ShareReportButton({ token, compact = false, style, placement }) 
           ref={buttonRef}
           type="button"
           onClick={handleCopy}
+          disabled={resolving}
           className="lite-report-mobile-sections-btn"
           aria-label={copied ? 'Link copied' : 'Share report'}
-          style={style}
+          style={{ ...(resolving ? { opacity: 0.6, cursor: 'default' } : {}), ...style }}
         >
           <Glyph name={copied ? 'check' : 'link'} size={13} color={copied ? 'var(--green)' : 'var(--text-strong)'} />
         </button>
@@ -119,17 +147,19 @@ export function ShareReportButton({ token, compact = false, style, placement }) 
           ref={buttonRef}
           type="button"
           onClick={handleCopy}
+          disabled={resolving}
           style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             width: '100%', minHeight: 44, padding: '7px 16px', borderRadius: 999,
             background: 'rgba(255,255,255,.55)', border: '1px solid var(--border-strong)',
             fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 520, letterSpacing: '-0.005em',
-            color: copied ? 'var(--green)' : 'var(--text-strong)', cursor: 'pointer',
+            color: copied ? 'var(--green)' : 'var(--text-strong)', cursor: resolving ? 'default' : 'pointer',
+            ...(resolving ? { opacity: 0.6 } : {}),
             ...style,
           }}
         >
           <Glyph name={copied ? 'check' : 'link'} size={14} color={copied ? 'var(--green)' : 'var(--text-strong)'} />
-          <span>{copied ? 'Copied' : 'Share report'}</span>
+          <span>{copied ? 'Copied' : resolving ? 'Sharing…' : 'Share report'}</span>
         </button>
       )}
 

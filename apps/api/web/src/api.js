@@ -181,6 +181,18 @@ export const api = {
   getFullAnalysisReport: (cycleCode) =>
     get(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}`),
 
+  // Shareable Full Analysis reports (owner side) — see
+  // app/routers/full_analysis.py's share endpoints. getShareLink never
+  // creates; createShareLink is create-or-return-existing.
+  getShareLink: (cycleCode) =>
+    get(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}/share`),
+
+  createShareLink: (cycleCode) =>
+    post(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}/share`, {}),
+
+  revokeShareLink: (cycleCode) =>
+    post(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}/share/revoke`, {}),
+
   getScopeTiers: () =>
     get('/api/scope/tiers'),
 
