@@ -247,6 +247,18 @@ class FullAnalysisReportResponse(BaseModel):
     # shape FixesTable.jsx already reads for lite. Not a separate field.
     evidence: Optional[dict] = None
     what_if: Optional[dict] = None
+    # Part A: generated pillar headlines, extended from lite to Full
+    # Analysis — apps/pipeline/worker.py::_sweep_full_cycle_pillar_
+    # headlines writes this onto the cycle's own soa_lite_scan_results.
+    # dimensions row (the SAME dimensions_raw this response's other
+    # fields above already read from) once metrics + crawl are both
+    # complete. Same {visibility, accessibility, true_value}: {headline,
+    # source} shape as PublicLiteReportResponse.generated_headlines
+    # (PublicLiteGeneratedHeadlines, defined later in this file — a
+    # loose dict here rather than reordering, same convention as
+    # `pillars`/`offers`/`evidence` above). Null on any cycle this
+    # generation hasn't reached yet.
+    generated_headlines: Optional[dict] = None
 
 class QueryCreate(BaseModel):
     """Fields for creating a new query. query_code is auto-generated."""
