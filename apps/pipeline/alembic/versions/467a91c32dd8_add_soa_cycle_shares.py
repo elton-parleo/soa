@@ -1,6 +1,6 @@
 """add_soa_cycle_shares
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: 467a91c32dd8
 Revises: 8c31844a4171
 Create Date: 2026-08-18 00:00:00.000000
 
@@ -28,7 +28,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = 'a1b2c3d4e5f6'
+revision: str = '467a91c32dd8'
 down_revision: Union[str, None] = '8c31844a4171'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

@@ -180,7 +180,7 @@ def test_revoke_with_nothing_active_is_a_no_op_not_an_error(patched_engine):
         _seed_scored_cycle(conn)
 
     response = full_analysis_router.revoke_share_link("fc-1", current_user=CURRENT_USER)
-    assert response.status_code == 204
+    assert response == {"revoked": True}
 
 
 def test_owner_endpoints_are_org_scoped(patched_engine):

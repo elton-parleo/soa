@@ -15,7 +15,7 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 
 from soa_shared.database import engine
@@ -473,7 +473,7 @@ def create_share_link(
     return _share_row_to_response(row)
 
 
-@router.post("/full-analysis/report/{cycle_code}/share/revoke", status_code=204)
+@router.post("/full-analysis/report/{cycle_code}/share/revoke")
 def revoke_share_link(
     cycle_code: str,
     current_user: dict = Depends(get_current_user),
@@ -482,7 +482,13 @@ def revoke_share_link(
     sharing again after a revoke mints a fresh token via create_share_
     link above, it never resurrects the old one. A no-op, not a 404, when
     there's nothing active to revoke: idempotent from the UI's
-    perspective (a stale "Manage link" panel double-clicking Revoke)."""
+    perspective (a stale "Manage link" panel double-clicking Revoke).
+
+    A small JSON body rather than a bare 204 — api.js's shared request()
+    wrapper always calls res.json() unconditionally, and every other
+    call site relies on that; a body-less 204 here would throw there
+    instead of one call site handling "no body" as a special case.
+    """
     org_id = current_user["organization_id"]
     with engine.begin() as conn:
         cycle_id = _get_owned_cycle_id(conn, cycle_code, org_id)
@@ -490,4 +496,4 @@ def revoke_share_link(
             UPDATE soa_cycle_shares SET revoked_at = :now
             WHERE cycle_id = :cid AND revoked_at IS NULL
         """), {"cid": cycle_id, "now": datetime.now(timezone.utc)})
-    return Response(status_code=204)
+    return {"revoked": True}

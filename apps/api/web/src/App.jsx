@@ -13,6 +13,7 @@ import StudyDetail      from './components/StudyDetail.jsx'
 import LiteWidget        from './lite/LiteWidget.jsx'
 import LandingPage       from './lite/LandingPage.jsx'
 import BotsPage          from './lite/BotsPage.jsx'
+import PublicFullAnalysisPage from './components/PublicFullAnalysisPage.jsx'
 import { isAuditHost } from './lite/publicUrls.js'
 
 // ─── Read initial view from URL hash on page load ────────────────────────────
@@ -318,6 +319,17 @@ export default function App() {
   if (pathname === '/report' || pathname.startsWith('/report/')) {
     const token = pathname === '/report' ? '' : decodeURIComponent(pathname.slice('/report/'.length))
     return <LiteWidget urlToken={token} navigate={navigate} />
+  }
+
+  // Shareable Full Analysis reports: /fa/{token}, mirroring /report/
+  // {token}'s naming and same pre-auth treatment — a visitor opening a
+  // shared link has no session either. Not host-gated like the audit
+  // tool's /r/, /s/ (isAuditHost() above) — Full Analysis lives on this
+  // app's own single host, not the dedicated audit.parleo.io host, so
+  // it needs no host branch of its own.
+  if (pathname === '/fa' || pathname.startsWith('/fa/')) {
+    const token = pathname === '/fa' ? '' : decodeURIComponent(pathname.slice('/fa/'.length))
+    return <PublicFullAnalysisPage token={token} />
   }
 
   return (
