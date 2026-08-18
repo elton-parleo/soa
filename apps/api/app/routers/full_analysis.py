@@ -32,12 +32,14 @@ from app.schemas import (
     SuggestCompetitorsRequest,
     SuggestCompetitorsResponse,
     SuggestedCompetitor,
+    TranscriptIndexResponse,
 )
+from app.routers.metrics import build_entity_metrics
 from app.services.competitor_suggestion import (
     generate_competitors,
     select_competitors,
 )
-from app.services.cycle_scoring import build_scan_payload, share_rank_label_for
+from app.services.cycle_scoring import build_scan_payload, share_rank_label_for, _fetch_metrics_rows
 from app.services.cycle_scoring_full import build_full_cycle_report
 from app.services.full_analysis_extras import (
     build_competitor_set,
@@ -46,7 +48,7 @@ from app.services.full_analysis_extras import (
     select_evidence_exemplar,
 )
 from app.services.share_tokens import generate_public_token
-from app.services.transcript_pick import select_transcript
+from app.services.transcript_pick import get_transcript_detail, list_transcript_index, select_transcript
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -410,6 +412,89 @@ def get_full_analysis_report(
         cycle_id, source_lite_request_id = cycle
 
         return _assemble_full_analysis_report(conn, cycle_id, cycle_code, source_lite_request_id)
+
+
+# ─── Transcript browsing (2a) ───────────────────────────────────────────────
+#
+# The report payload keeps only the curated pick + counts (report.
+# transcript, report.total_queries) — these two endpoints are the
+# additive "browse every query" surface behind it. Reused as-is by
+# public_full_analysis.py for the share-token path (same assembly
+# functions, org-scoped lookup here vs. token-scoped there).
+
+def _primary_entity_id(conn, cycle_id: int) -> Optional[int]:
+    row = conn.execute(text("""
+        SELECT entity_id FROM soa_cycle_entities WHERE cycle_id = :cid AND role = 'primary'
+    """), {"cid": cycle_id}).fetchone()
+    return row[0] if row else None
+
+
+def _transcript_narrative_context(conn, cycle_id: int, primary_entity_id: int):
+    """share_pct/share_rank_label/page_price_encoded — transcript_pick.
+    py's narrative-copy inputs. Cycle-level facts that don't change
+    between transcripts, computed once per request via the same calls
+    _assemble_full_analysis_report makes for the curated pick, but
+    WITHOUT the full pillars scoring pass that function also runs —
+    wasteful to repeat on every transcript click during interactive
+    browsing, and these three values don't depend on it."""
+    rows = _fetch_metrics_rows(conn, cycle_id)
+    overall_entity_info: dict = {}
+    overall_metrics: dict = {}
+    for row in rows:
+        name, comp_code, role = row[1], row[13], row[12]
+        overall_entity_info[comp_code] = {"name": name, "role": role}
+        overall_metrics[comp_code] = build_entity_metrics(row)
+
+    competitor_set = build_competitor_set(conn, cycle_id, overall_entity_info, overall_metrics)
+    overall = competitor_set.get("overall", [])
+    primary_share_row = next((r for r in overall if r["is_primary"]), None)
+    primary_name = next((info["name"] for info in overall_entity_info.values() if info["role"] == "primary"), None)
+
+    scan_row = conn.execute(text("""
+        SELECT dimensions FROM soa_lite_scan_results WHERE cycle_id = :cid ORDER BY id DESC LIMIT 1
+    """), {"cid": cycle_id}).fetchone()
+    dimensions_raw = _decode_json_field(scan_row[0], {}) if scan_row else {}
+
+    return (
+        primary_share_row["share_pct"] if primary_share_row else None,
+        share_rank_label_for(overall, primary_name),
+        bool(dimensions_raw.get("offers")),
+    )
+
+
+@router.get("/full-analysis/report/{cycle_code}/transcripts", response_model=TranscriptIndexResponse)
+def get_transcript_index(
+    cycle_code: str, page: int = 1, page_size: int = 25,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = current_user["organization_id"]
+    with engine.connect() as conn:
+        cycle_id = _get_owned_cycle_id(conn, cycle_code, org_id)
+        primary_entity_id = _primary_entity_id(conn, cycle_id)
+        if primary_entity_id is None:
+            return TranscriptIndexResponse(queries=[], page=page, page_size=page_size, total_queries=0)
+        return TranscriptIndexResponse(**list_transcript_index(conn, cycle_id, primary_entity_id, page=page, page_size=page_size))
+
+
+@router.get("/full-analysis/report/{cycle_code}/transcripts/{run_id}", response_model=Optional[dict])
+def get_transcript_detail_route(
+    cycle_code: str, run_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    org_id = current_user["organization_id"]
+    with engine.connect() as conn:
+        cycle_id = _get_owned_cycle_id(conn, cycle_code, org_id)
+        primary_entity_id = _primary_entity_id(conn, cycle_id)
+        if primary_entity_id is None:
+            raise HTTPException(status_code=404, detail="Transcript not found.")
+        share_pct, share_rank_label, page_price_encoded = _transcript_narrative_context(conn, cycle_id, primary_entity_id)
+        detail = get_transcript_detail(
+            conn, cycle_id, primary_entity_id, run_id,
+            share_pct=share_pct, share_rank_label=share_rank_label, page_price_encoded=page_price_encoded,
+        )
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Transcript not found.")
+    return detail
 
 
 # ─── Shareable Full Analysis reports (owner endpoints) ─────────────────────

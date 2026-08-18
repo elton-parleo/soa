@@ -67,7 +67,7 @@ def patched_engine(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
                 id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT, platform TEXT,
-                raw_response TEXT, run_at TEXT
+                raw_response TEXT, run_at TEXT, run_number INTEGER
             )
         """)
         conn.exec_driver_sql("""
@@ -382,3 +382,149 @@ def test_public_payload_never_carries_a_denylisted_key(patched_engine):
 
     hits = _find_denylisted_keys(report.model_dump())
     assert hits == [], f"public payload leaked denylisted key(s): {hits}"
+
+
+# ─── Transcript browsing (2a/2f) — the API surface over transcript_pick.py's
+# ─── list_transcript_index/get_transcript_detail. Selection logic itself is
+# ─── covered exhaustively in test_transcript_browsing.py; these tests are
+# ─── about auth/org/token scoping and owner<->public parity.
+
+def _add_raw_responses(conn, cycle_id=10):
+    """_seed_scored_cycle's own runs never set raw_response (transcript_
+    pick.py's _fetch_candidates requires a non-empty one), run_number
+    (NOT NULL on the real table; transcript browsing's TranscriptIndexRun
+    schema requires it too), or soa_queries.query_text/persona — same
+    follow-up UPDATE test_full_analysis_report_endpoint.py's own
+    transcript test already uses for raw_response, extended here to the
+    two other gaps transcript browsing specifically needs."""
+    conn.exec_driver_sql(
+        "UPDATE soa_runs SET raw_response = 'A generic answer about shoes.', run_number = 1 WHERE cycle_id = ?",
+        (cycle_id,),
+    )
+    conn.exec_driver_sql(
+        "UPDATE soa_queries SET query_text = 'Best shoes?', persona = 'Value-Conscious' "
+        "WHERE id IN (SELECT query_id FROM soa_runs WHERE cycle_id = ?)",
+        (cycle_id,),
+    )
+
+
+def test_owner_transcript_index_lists_the_cycles_queries(patched_engine):
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn)  # 10 runs, 10 distinct queries, all mentioned
+        _add_raw_responses(conn)
+
+    result = full_analysis_router.get_transcript_index("fc-1", current_user=CURRENT_USER)
+
+    assert result.total_queries == 10
+    assert len(result.queries) == 10
+    assert result.curated_run_id is not None
+
+
+def test_owner_transcript_index_is_org_scoped(patched_engine):
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn)
+
+    with pytest.raises(HTTPException) as exc_info:
+        full_analysis_router.get_transcript_index("fc-1", current_user=OTHER_ORG_USER)
+    assert exc_info.value.status_code == 404
+
+
+def test_owner_transcript_detail_matches_a_run_from_the_index(patched_engine):
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn)
+        _add_raw_responses(conn)
+
+    index = full_analysis_router.get_transcript_index("fc-1", current_user=CURRENT_USER)
+    run_id = index.queries[0].runs[0].run_id
+
+    detail = full_analysis_router.get_transcript_detail_route("fc-1", run_id, current_user=CURRENT_USER)
+
+    assert detail["run_id"] == run_id
+    assert "response_text" in detail
+    assert "spans" in detail
+
+
+def test_owner_transcript_detail_404s_for_a_run_id_from_a_different_cycle(patched_engine):
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn, cycle_code="fc-a", cycle_id=10)
+        _seed_scored_cycle(conn, cycle_code="fc-b", cycle_id=20)
+
+    # A real run_id, just not fc-a's — must 404, not leak fc-b's transcript.
+    with pytest.raises(HTTPException) as exc_info:
+        full_analysis_router.get_transcript_detail_route("fc-a", 20000, current_user=CURRENT_USER)
+    assert exc_info.value.status_code == 404
+
+
+def test_public_transcript_index_reachable_via_share_token(patched_engine):
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn)
+        _add_raw_responses(conn)
+    share = full_analysis_router.create_share_link("fc-1", current_user=CURRENT_USER)
+
+    result = public_full_analysis_router.get_public_transcript_index(share.token, _FakeRequest())
+
+    assert result.total_queries == 10
+
+
+def test_public_transcript_index_404s_for_an_unknown_token(patched_engine):
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn)
+
+    with pytest.raises(HTTPException) as exc_info:
+        public_full_analysis_router.get_public_transcript_index("bogus", _FakeRequest())
+    assert exc_info.value.status_code == 404
+
+
+def test_public_transcript_index_404s_after_revoke(patched_engine):
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn)
+    share = full_analysis_router.create_share_link("fc-1", current_user=CURRENT_USER)
+    full_analysis_router.revoke_share_link("fc-1", current_user=CURRENT_USER)
+
+    with pytest.raises(HTTPException) as exc_info:
+        public_full_analysis_router.get_public_transcript_index(share.token, _FakeRequest())
+    assert exc_info.value.status_code == 404
+
+
+def test_public_transcript_detail_matches_the_owner_view_for_the_same_run(patched_engine):
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn)
+        _add_raw_responses(conn)
+    share = full_analysis_router.create_share_link("fc-1", current_user=CURRENT_USER)
+
+    owner_index = full_analysis_router.get_transcript_index("fc-1", current_user=CURRENT_USER)
+    run_id = owner_index.queries[0].runs[0].run_id
+    owner_detail = full_analysis_router.get_transcript_detail_route("fc-1", run_id, current_user=CURRENT_USER)
+    public_detail = public_full_analysis_router.get_public_transcript_detail(share.token, run_id, _FakeRequest())
+
+    assert public_detail["run_id"] == owner_detail["run_id"]
+    assert public_detail["response_text"] == owner_detail["response_text"]
+    assert public_detail["narrative_case"] == owner_detail["narrative_case"]
+
+
+def test_public_transcript_detail_cannot_reach_a_run_id_from_a_different_cycle(patched_engine):
+    """A share token for cycle A must not let a caller fetch cycle B's
+    transcript by guessing its run_id — scoped inside get_transcript_
+    detail itself (it only ever looks at the token's own cycle_id)."""
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn, cycle_code="fc-a", cycle_id=10)
+        _seed_scored_cycle(conn, cycle_code="fc-b", cycle_id=20)
+    share_a = full_analysis_router.create_share_link("fc-a", current_user=CURRENT_USER)
+
+    with pytest.raises(HTTPException) as exc_info:
+        public_full_analysis_router.get_public_transcript_detail(share_a.token, 20000, _FakeRequest())
+    assert exc_info.value.status_code == 404
+
+
+def test_public_transcript_index_rate_limited_per_ip(patched_engine):
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn)
+    share = full_analysis_router.create_share_link("fc-1", current_user=CURRENT_USER)
+
+    ip = "3.3.3.3"
+    for _ in range(public_full_analysis_router.RATE_LIMIT_PER_IP_HOUR):
+        public_full_analysis_router.get_public_transcript_index(share.token, _FakeRequest(ip))
+
+    with pytest.raises(HTTPException) as exc_info:
+        public_full_analysis_router.get_public_transcript_index(share.token, _FakeRequest(ip))
+    assert exc_info.value.status_code == 429

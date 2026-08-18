@@ -56,7 +56,7 @@ def patched_engine(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
                 id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT, platform TEXT,
-                raw_response TEXT, run_at TEXT
+                raw_response TEXT, run_at TEXT, run_number INTEGER
             )
         """)
         conn.exec_driver_sql("""
