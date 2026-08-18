@@ -157,22 +157,87 @@ export function deriveScoreHeroHeadline(pillars) {
   return { plain: "Agents know you. They can't", emphasis: 'read your value.' }
 }
 
-const DEFAULT_PILLAR_HEADLINES = {
-  [PILLAR_VISIBILITY]: 'Agents know who you are',
-  [PILLAR_ACCESSIBILITY]: "Agents can knock, but can't read much",
-  [PILLAR_TRUE_VALUE]: 'Your value leaks before it reaches the answer',
+// Part B: score-derived fallback headlines. Same "next to the
+// readiness thresholds" placement as VISIBILITY_WEAK_THRESHOLD/
+// TRUE_VALUE_STRONG_THRESHOLD above — one definition, so the bands can
+// never drift between the three pillars or between this and any other
+// ratio-based read of the same scores. earned/max ratio, per pillar:
+//   >= .75           -> positive
+//   .40 - .75        -> mixed
+//   <  .40            -> negative (the pre-Part-B hardcoded line, kept
+//                        verbatim so an already-published low score
+//                        keeps reading exactly as it always has)
+// A fallback headline must never assert a result the numbers
+// contradict (the bug this replaces: DEFAULT_HEADLINES was
+// unconditionally negative, rendered even on a 14/18 accessibility
+// score) — every band's line is deliberately checked against its own
+// ratio range before use (see the tests next to this file).
+const HEADLINE_BAND_POSITIVE_THRESHOLD = 0.75
+const HEADLINE_BAND_MIXED_THRESHOLD = 0.40
+
+export const NOT_MEASURABLE_HEADLINE = "Couldn't be measured this run"
+
+const SCORE_BAND_HEADLINES = {
+  [PILLAR_VISIBILITY]: {
+    positive: 'Agents recognize you and bring you up often',
+    mixed: "Agents know you, but don't always mention you",
+    negative: 'Agents know who you are',
+  },
+  [PILLAR_ACCESSIBILITY]: {
+    positive: 'Agents can read most of what you publish',
+    mixed: "Agents can knock, but can't read everything",
+    negative: "Agents can knock, but can't read much",
+  },
+  [PILLAR_TRUE_VALUE]: {
+    positive: 'Your value reaches agents clearly',
+    mixed: "Some of your value reaches the answer, some doesn't",
+    negative: 'Your value leaks before it reaches the answer',
+  },
 }
 
-// Part 3: the report's generated (or registry-default) one-line pillar
-// summary. apps/pipeline/generation/pillar_headlines.py computes and
-// stores this once, at run-completion time — the report only ever
-// reads what's stored here, never regenerates it. Falls back to the
-// pre-Part-3 hardcoded title (DEFAULT_PILLAR_HEADLINES, mirroring that
-// module's own DEFAULT_HEADLINES/NOT_MEASURABLE_HEADLINE verbatim) on
-// an older run, a not-measurable pillar, or a rejected/failed
-// generation for that pillar alone.
+// Exported for direct testing — computes the band straight from the
+// pillar's own earned/max (the SAME pillarEarnedMax every other score
+// display on the report already uses), so the headline can never
+// contradict the number sitting right next to it. max === 0 (nothing
+// measured) reads as not-measurable, not a fabricated negative band.
+export function deriveScoreBandHeadline(report, pillarKey) {
+  const { earned, max } = pillarEarnedMax(report?.pillars?.[pillarKey])
+  if (!max) return NOT_MEASURABLE_HEADLINE
+  const ratio = earned / max
+  const band = ratio >= HEADLINE_BAND_POSITIVE_THRESHOLD ? 'positive' : ratio >= HEADLINE_BAND_MIXED_THRESHOLD ? 'mixed' : 'negative'
+  return SCORE_BAND_HEADLINES[pillarKey][band]
+}
+
+// Part 3 (generation) + Part B (score-derived fallback): the report's
+// per-pillar one-line summary, in priority order —
+//   1. 'generated'     — apps/pipeline/generation/pillar_headlines.py's
+//                         own OpenAI-written, fact-grounded line for
+//                         this run. Stored once, at completion; never
+//                         regenerated here.
+//   2. 'not_measurable' — nothing about this pillar was measured this
+//                         run; the backend already knows this (empty
+//                         facts) and says so directly.
+//   3. 'derived'        — anything else: no generated_headlines at all
+//                         (an older run, or Full Analysis before Part A
+//                         shipped), or the backend's own source says
+//                         generation didn't produce a usable line
+//                         (legacy 'default', or 'derived' — both mean
+//                         "compute a score-derived line here", which is
+//                         the one place that has this pillar's REAL,
+//                         fully-computed score to derive a band from —
+//                         pillar_headlines.py deliberately doesn't
+//                         duplicate that scoring formula, see its own
+//                         module docstring).
+export function resolvePillarHeadline(report, pillarKey) {
+  const gen = report.generated_headlines?.[pillarKey]
+  if (gen?.source === 'generated') return { headline: gen.headline, source: 'generated' }
+  if (gen?.source === 'not_measurable') return { headline: gen.headline || NOT_MEASURABLE_HEADLINE, source: 'not_measurable' }
+  const derived = deriveScoreBandHeadline(report, pillarKey)
+  return { headline: derived, source: derived === NOT_MEASURABLE_HEADLINE ? 'not_measurable' : 'derived' }
+}
+
 export function pillarHeadline(report, pillarKey) {
-  return report.generated_headlines?.[pillarKey]?.headline || DEFAULT_PILLAR_HEADLINES[pillarKey]
+  return resolvePillarHeadline(report, pillarKey).headline
 }
 
 export { PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE, PILLAR_VISIBILITY }

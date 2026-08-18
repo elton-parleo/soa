@@ -6,7 +6,12 @@
  * either renderer.
  */
 import { describe, it, expect } from 'vitest'
-import { buildNavItems, deriveReportViewedState } from '../reportDerive.js'
+import {
+  buildNavItems, deriveReportViewedState,
+  deriveScoreBandHeadline, resolvePillarHeadline,
+  PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE,
+  NOT_MEASURABLE_HEADLINE,
+} from '../reportDerive.js'
 
 function _pillars(overrides = {}) {
   return {
@@ -110,5 +115,82 @@ describe('deriveReportViewedState — analytics report_viewed.state vocabulary',
 
   it('degraded_reason="unreachable" never reads as partial/blocked (matches isPartialRead)', () => {
     expect(deriveReportViewedState(withBlockedDim(), 'unreachable')).toBe('scored')
+  })
+})
+
+describe('deriveScoreBandHeadline — Part B score-derived fallback', () => {
+  function _report(pillarKey, earned, max) {
+    return { pillars: { [pillarKey]: { dimensions: [{ code: 'x', earned, max, na: false }] } } }
+  }
+
+  it('>= .75 is the positive band, per pillar', () => {
+    expect(deriveScoreBandHeadline(_report(PILLAR_VISIBILITY, 30, 40), PILLAR_VISIBILITY))
+      .toBe('Agents recognize you and bring you up often')
+    expect(deriveScoreBandHeadline(_report(PILLAR_ACCESSIBILITY, 15, 18), PILLAR_ACCESSIBILITY))
+      .toBe('Agents can read most of what you publish')
+    expect(deriveScoreBandHeadline(_report(PILLAR_TRUE_VALUE, 30, 40), PILLAR_TRUE_VALUE))
+      .toBe('Your value reaches agents clearly')
+  })
+
+  it('.40 - .75 (inclusive of .40) is the mixed band, per pillar', () => {
+    expect(deriveScoreBandHeadline(_report(PILLAR_VISIBILITY, 25, 40), PILLAR_VISIBILITY))
+      .toBe("Agents know you, but don't always mention you")
+    expect(deriveScoreBandHeadline(_report(PILLAR_ACCESSIBILITY, 8, 20), PILLAR_ACCESSIBILITY))
+      .toBe("Agents can knock, but can't read everything")
+    expect(deriveScoreBandHeadline(_report(PILLAR_TRUE_VALUE, 20, 50), PILLAR_TRUE_VALUE))
+      .toBe("Some of your value reaches the answer, some doesn't")
+  })
+
+  it('< .40 is the negative band — the pre-Part-B line, unchanged', () => {
+    expect(deriveScoreBandHeadline(_report(PILLAR_VISIBILITY, 5, 40), PILLAR_VISIBILITY))
+      .toBe('Agents know who you are')
+    expect(deriveScoreBandHeadline(_report(PILLAR_ACCESSIBILITY, 2, 20), PILLAR_ACCESSIBILITY))
+      .toBe("Agents can knock, but can't read much")
+    expect(deriveScoreBandHeadline(_report(PILLAR_TRUE_VALUE, 3, 40), PILLAR_TRUE_VALUE))
+      .toBe('Your value leaks before it reaches the answer')
+  })
+
+  it('max === 0 (nothing measured) reads as not-measurable, never a fabricated negative band', () => {
+    expect(deriveScoreBandHeadline(_report(PILLAR_VISIBILITY, 0, 0), PILLAR_VISIBILITY)).toBe(NOT_MEASURABLE_HEADLINE)
+  })
+
+  it('the exact regression this fixes: a 14/18 accessibility score never reads the negative line', () => {
+    const headline = deriveScoreBandHeadline(_report(PILLAR_ACCESSIBILITY, 14, 18), PILLAR_ACCESSIBILITY)
+    expect(headline).not.toBe("Agents can knock, but can't read much")
+    expect(headline).toBe('Agents can read most of what you publish')
+  })
+})
+
+describe('resolvePillarHeadline — priority: generated > not_measurable > derived', () => {
+  const report = { pillars: { visibility: { dimensions: [{ code: 'x', earned: 25, max: 40, na: false }] } } }
+
+  it('a generated headline wins outright, regardless of the real score', () => {
+    const withGenerated = { ...report, generated_headlines: { visibility: { headline: 'You hold 35% share.', source: 'generated' } } }
+    expect(resolvePillarHeadline(withGenerated, PILLAR_VISIBILITY)).toEqual({ headline: 'You hold 35% share.', source: 'generated' })
+  })
+
+  it('an explicit not_measurable source is honored verbatim, never overridden by a derived band', () => {
+    const withNotMeasurable = { ...report, generated_headlines: { visibility: { headline: NOT_MEASURABLE_HEADLINE, source: 'not_measurable' } } }
+    expect(resolvePillarHeadline(withNotMeasurable, PILLAR_VISIBILITY)).toEqual({ headline: NOT_MEASURABLE_HEADLINE, source: 'not_measurable' })
+  })
+
+  it('no generated_headlines at all falls through to a score-derived line, source "derived"', () => {
+    expect(resolvePillarHeadline(report, PILLAR_VISIBILITY)).toEqual({
+      headline: "Agents know you, but don't always mention you", source: 'derived',
+    })
+  })
+
+  it('a legacy source value (pre-Part-B "default") also falls through to derivation, not a crash', () => {
+    const legacy = { ...report, generated_headlines: { visibility: { headline: 'Agents know who you are', source: 'default' } } }
+    expect(resolvePillarHeadline(legacy, PILLAR_VISIBILITY)).toEqual({
+      headline: "Agents know you, but don't always mention you", source: 'derived',
+    })
+  })
+
+  it('reports source "not_measurable" (not "derived") when the derived band itself has nothing to measure', () => {
+    const nothingMeasured = { pillars: { visibility: { dimensions: [{ code: 'x', earned: 0, max: 0, na: false }] } } }
+    expect(resolvePillarHeadline(nothingMeasured, PILLAR_VISIBILITY)).toEqual({
+      headline: NOT_MEASURABLE_HEADLINE, source: 'not_measurable',
+    })
   })
 })
