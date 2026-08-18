@@ -29,4 +29,12 @@ async function request(path) {
 export const publicFullAnalysisApi = {
   getReport: (token) =>
     request(`/api/public/full-analysis/${encodeURIComponent(token)}`),
+
+  // Transcript browsing (2a) — same share token, same rate limit as
+  // getReport above.
+  getTranscriptIndex: (token, page = 1) =>
+    request(`/api/public/full-analysis/${encodeURIComponent(token)}/transcripts?page=${page}`),
+
+  getTranscriptDetail: (token, runId) =>
+    request(`/api/public/full-analysis/${encodeURIComponent(token)}/transcripts/${runId}`),
 }

@@ -193,6 +193,14 @@ export const api = {
   revokeShareLink: (cycleCode) =>
     post(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}/share/revoke`, {}),
 
+  // Transcript browsing (2a) — the report payload only ever carries the
+  // curated pick; these back TranscriptSection's picker/prev-next.
+  getTranscriptIndex: (cycleCode, page = 1) =>
+    get(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}/transcripts?page=${page}`),
+
+  getTranscriptDetail: (cycleCode, runId) =>
+    get(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}/transcripts/${runId}`),
+
   getScopeTiers: () =>
     get('/api/scope/tiers'),
 

@@ -19,6 +19,7 @@
 // stays byte-for-byte untouched and carries zero regression risk.
 import { useEffect, useState } from 'react'
 import { api } from '../api.js'
+import { publicFullAnalysisApi } from '../publicFullAnalysisApi.js'
 import { computeExposure, seedAnnualRevenue } from '../lite/liteDerive.js'
 import { deriveScoreHeroHeadline, deriveReportViewedState } from '../lite/report/reportDerive.js'
 import { track, identifyReport, captureSrcParam } from '../lite/analytics.js'
@@ -72,6 +73,18 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
   const [open, setOpen] = useState({})
   const isOpen = (key) => open[key] !== false
   const toggle = (key) => setOpen((s) => ({ ...s, [key]: s[key] === false ? true : false }))
+
+  // Transcript browsing (2b/2c) — same owner-vs-visitor split as every
+  // other fetch in this file: the authed cycleCode path when readOnly is
+  // false, the public share-token path (rate-limited, no session) when
+  // it's true. TranscriptSection never sees cycleCode/shareToken itself,
+  // only these two functions.
+  const fetchTranscriptIndex = readOnly
+    ? (page) => publicFullAnalysisApi.getTranscriptIndex(shareToken, page)
+    : (page) => api.getTranscriptIndex(cycleCode, page)
+  const fetchTranscriptDetail = readOnly
+    ? (runId) => publicFullAnalysisApi.getTranscriptDetail(shareToken, runId)
+    : (runId) => api.getTranscriptDetail(cycleCode, runId)
 
   // Q5 (analyticsEvents.js): one report_viewed per mount, mirroring
   // lite's own owner|visitor split — here it's determined by readOnly
@@ -164,7 +177,10 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
 
           <VisibilitySection report={reportForVisibility} open={isOpen('viz')} onToggle={() => toggle('viz')} shareOfMentionsRank={rank} queryCount={report.total_queries} />
           <CompetitorStageSection competitorSet={competitorSet} />
-          <TranscriptSection report={report} open={isOpen('transcript')} onToggle={() => toggle('transcript')} />
+          <TranscriptSection
+            report={report} open={isOpen('transcript')} onToggle={() => toggle('transcript')}
+            browsable fetchIndex={fetchTranscriptIndex} fetchDetail={fetchTranscriptDetail}
+          />
           <AccessibilitySection report={report} open={isOpen('acc')} onToggle={() => toggle('acc')} />
           <TrueValueSection report={report} open={isOpen('tv')} onToggle={() => toggle('tv')} />
 

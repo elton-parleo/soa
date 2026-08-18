@@ -56,6 +56,11 @@ export const EVENTS = {
   // the preview into the full verbatim answer, not a generic section
   // open.
   TRANSCRIPT_ANSWER_EXPANDED: 'transcript_answer_expanded',
+  // Full Analysis's transcript browsing (2c/2d) — moving off the
+  // curated pick, via prev/next or the query picker. Lite never fires
+  // this (single curated pick only, no browsing UI mounted there yet —
+  // see TranscriptPicker.jsx's own docstring).
+  TRANSCRIPT_NAVIGATED: 'transcript_navigated',
   // Shared (landing + report — the modal fires the same event either way)
   DEMO_REQUEST_SUBMITTED: 'demo_request_submitted',
 }
@@ -76,6 +81,11 @@ export const EVENT_REGISTRY = {
   [EVENTS.CTA_CLICKED]: ['cta', 'placement'],
   [EVENTS.ADJUST_ASSUMPTIONS_USED]: [],
   [EVENTS.TRANSCRIPT_ANSWER_EXPANDED]: [],
+  // direction ('prev'|'next') and picker (true) are mutually exclusive
+  // — exactly one is present per call, describing HOW the navigation
+  // happened; position/platform/narrative_case describe WHERE it
+  // landed. No query/response text ever, per this file's own rule.
+  [EVENTS.TRANSCRIPT_NAVIGATED]: ['direction', 'picker', 'position', 'platform', 'narrative_case'],
   // Union of the landing call (source only) and the report call
   // (source + brand_name + report_token) — the report-only props are
   // simply absent on a landing-fired call.

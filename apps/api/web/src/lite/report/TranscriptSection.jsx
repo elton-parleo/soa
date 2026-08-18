@@ -20,11 +20,20 @@
  * mentions/price observations store no character offsets) — this
  * component only paints them. Capturing spans at coding time instead is
  * a noted follow-up, not done here (see transcript_pick.py's docstring).
+ *
+ * Transcript browsing (2b/2c) is entirely OPT IN via `browsable` +
+ * `fetchIndex`/`fetchDetail` — lite mounts this component exactly as it
+ * always has (no new props), so its render tree and its 15/50-odd
+ * pinned tests are untouched. When browsable, this component owns all
+ * the browsing state (active transcript, index cache, loading/error);
+ * TranscriptPicker.jsx is pure presentation for the nav bar/run
+ * selector/query list.
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MonoTag } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
 import { HowItsScoredButton } from './HowItsScored.jsx'
+import { TranscriptNavBar, TranscriptRunSelector, TranscriptQueryList } from './TranscriptPicker.jsx'
 import { track } from '../analytics.js'
 import { EVENTS } from '../analyticsEvents.js'
 
@@ -105,16 +114,145 @@ function linkify(text, needle, href) {
   return nodes
 }
 
-export function TranscriptSection({ report, open, onToggle }) {
+export function TranscriptSection({ report, open, onToggle, browsable = false, fetchIndex, fetchDetail }) {
   const [showFull, setShowFull] = useState(false)
-  const transcript = report.transcript
+  const [activeTranscript, setActiveTranscript] = useState(report.transcript)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [indexData, setIndexData] = useState(null)
+  const [indexLoading, setIndexLoading] = useState(false)
+  const [indexError, setIndexError] = useState(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState(null)
+  const indexLoadedRef = useRef(false)
+
+  useEffect(() => {
+    setActiveTranscript(report.transcript)
+  }, [report.transcript])
+
+  useEffect(() => {
+    if (browsable && fetchIndex) ensureIndexLoaded()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browsable, fetchIndex])
+
+  // Arrow-key nav only while this section is open and browsable, and
+  // never while the picker's own filter input (or any other field) has
+  // focus — that input needs its arrow keys for text editing, not
+  // section-level query navigation.
+  useEffect(() => {
+    if (!browsable || !open) return undefined
+    function handleKeyDown(e) {
+      const tag = e.target && e.target.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (e.key === 'ArrowLeft') goToOffset(-1)
+      else if (e.key === 'ArrowRight') goToOffset(1)
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browsable, open, indexData, activeTranscript])
+
+  async function ensureIndexLoaded() {
+    if (indexLoadedRef.current || indexLoading || !fetchIndex) return
+    setIndexLoading(true)
+    setIndexError(null)
+    try {
+      let page = 1
+      let acc = []
+      let meta = null
+      for (;;) {
+        const res = await fetchIndex(page)
+        acc = acc.concat(res.queries)
+        meta = res
+        if (acc.length >= res.total_queries || res.queries.length === 0) break
+        page += 1
+      }
+      setIndexData({ queries: acc, total_queries: meta ? meta.total_queries : acc.length, curated_run_id: meta ? meta.curated_run_id : null })
+      indexLoadedRef.current = true
+    } catch (e) {
+      setIndexError(e.message || 'Could not load queries')
+    } finally {
+      setIndexLoading(false)
+    }
+  }
+
+  async function loadRun(runId, navProps) {
+    if (!fetchDetail) return
+    setDetailLoading(true)
+    setDetailError(null)
+    try {
+      const detail = await fetchDetail(runId)
+      setActiveTranscript(detail)
+      track(EVENTS.TRANSCRIPT_NAVIGATED, {
+        ...navProps,
+        position: `${detail.query_index}/${detail.total_queries}`,
+        platform: detail.platform,
+        narrative_case: detail.narrative_case,
+      })
+    } catch (e) {
+      setDetailError(e.message || 'Could not load this transcript')
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  function runForQuery(queryRow) {
+    const curatedRunId = indexData ? indexData.curated_run_id : null
+    return queryRow.runs.find((r) => r.run_id === curatedRunId) || queryRow.runs[0]
+  }
+
+  function handleSelectQuery(queryRow) {
+    const run = runForQuery(queryRow)
+    if (!run) return
+    setPickerOpen(false)
+    loadRun(run.run_id, { picker: true })
+  }
+
+  function handleSelectRun(runId) {
+    loadRun(runId, { picker: true })
+  }
+
+  function handleBackToPick() {
+    setActiveTranscript(report.transcript)
+    setDetailError(null)
+    track(EVENTS.TRANSCRIPT_NAVIGATED, {
+      picker: true,
+      position: `${report.transcript.query_index}/${report.transcript.total_queries}`,
+      platform: report.transcript.platform,
+      narrative_case: report.transcript.narrative_case,
+    })
+  }
+
+  function handleTogglePicker() {
+    const next = !pickerOpen
+    setPickerOpen(next)
+    if (next) ensureIndexLoaded()
+  }
+
+  function goToOffset(delta) {
+    if (!indexData) return
+    const pos = indexData.queries.findIndex((q) => q.index === activeTranscript.query_index)
+    if (pos === -1) return
+    const nextPos = pos + delta
+    if (nextPos < 0 || nextPos >= indexData.queries.length) return
+    const run = runForQuery(indexData.queries[nextPos])
+    if (!run) return
+    loadRun(run.run_id, { direction: delta > 0 ? 'next' : 'prev' })
+  }
+
+  const transcript = activeTranscript
   if (!transcript) return null
 
   const {
     platform, query_text: queryText, query_index: queryIndex, total_queries: totalQueries,
     asked_at: askedAt, response_text: responseText, preview_cutoff: previewCutoff,
-    spans, narrative_case: narrativeCase, right, leaked,
+    spans, narrative_case: narrativeCase, right, leaked, run_id: runId,
   } = transcript
+
+  const isCurated = runId === report.transcript.run_id
+  const activeQueryRow = indexData ? indexData.queries.find((q) => q.runs.some((r) => r.run_id === runId)) : null
+  const currentPos = indexData ? indexData.queries.findIndex((q) => q.index === queryIndex) : -1
+  const canPrev = currentPos > 0
+  const canNext = currentPos !== -1 && currentPos < (indexData ? indexData.queries.length : 0) - 1
 
   // TRANSCRIPT_NARRATIVE_ENABLED (soa_shared/config.py) decides server-
   // side whether right/leaked are in the payload at all — the frontend
@@ -155,7 +293,36 @@ export function TranscriptSection({ report, open, onToggle }) {
         {INTRO_COPY[narrativeCase] || INTRO_COPY.uncoded}
       </p>
 
-      <div style={{ background: 'var(--surface-warm)', border: '1px solid var(--hairline)', borderRadius: 18, padding: '22px 24px' }}>
+      {browsable && (
+        <TranscriptNavBar
+          queryIndex={queryIndex} totalQueries={totalQueries}
+          isCurated={isCurated} pickerOpen={pickerOpen}
+          onTogglePicker={handleTogglePicker}
+          onPrev={() => goToOffset(-1)} onNext={() => goToOffset(1)}
+          onBackToPick={handleBackToPick}
+          canPrev={canPrev} canNext={canNext}
+        />
+      )}
+
+      {browsable && activeQueryRow && (
+        <TranscriptRunSelector runs={activeQueryRow.runs} activeRunId={runId} onSelectRun={handleSelectRun} />
+      )}
+
+      {browsable && pickerOpen && (
+        <TranscriptQueryList
+          queries={indexData ? indexData.queries : []}
+          activeQueryId={activeQueryRow ? activeQueryRow.query_id : null}
+          onSelectQuery={handleSelectQuery}
+          loading={indexLoading} error={indexError}
+          onLoadMore={undefined} hasMore={false}
+        />
+      )}
+
+      {browsable && detailError && (
+        <div style={{ fontSize: 12.5, color: 'var(--red-deep)', marginBottom: 12 }}>Couldn't load that transcript — {detailError}</div>
+      )}
+
+      <div style={{ background: 'var(--surface-warm)', border: '1px solid var(--hairline)', borderRadius: 18, padding: '22px 24px', opacity: browsable && detailLoading ? 0.5 : 1 }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
           <div style={{ background: 'var(--blue)', color: '#fff', borderRadius: '16px 16px 4px 16px', padding: '13px 17px', fontSize: 15, maxWidth: 520 }}>
             {queryText}
