@@ -307,6 +307,68 @@ def build_competitor_set(conn, cycle_id: int, overall_entity_info: Dict[str, Dic
 # fixes at all, so FixesTable can be reused directly with zero forking.
 
 
+# ─── 3b: cross-cutting fixes ("Also worth doing"), read-only ──────────────
+#
+# soa_findings/soa_recommendations (app/services/finding_detector.py,
+# recommendation_mapper.py — the AC3 "Actions" feature) are a genuinely
+# separate subsystem: their own ORM session, their own manually-
+# triggered generation step (ActionsPage.jsx -> POST .../actions/
+# generate), never invoked by Full Analysis report assembly. This
+# function only ever READS whatever already exists for the cycle — it
+# never calls detect_findings()/generate_recommendations(), and never
+# writes. For the large majority of cycles today nothing has been
+# generated yet, so this legitimately returns [] most of the time; that
+# is the honest, additive answer, not a bug. See the 3a investigation
+# note this was scoped from: an "Also worth doing" strip must never
+# render without a stored, real soa_recommendations row behind it.
+#
+# Only Visibility and True Value Delivery have an implemented detector
+# today (VIS-01/05/06/07, TVD-01/03 — finding_detector.DETECTORS) — the
+# anchor map below is deliberately just those two plus Accessibility
+# (present in the playbook's pillar vocabulary even though no detector
+# exists for it yet); Fidelity has no report section to link to, so it
+# maps to no anchor rather than a wrong one.
+_PLAY_PILLAR_TO_SECTION_ANCHOR = {
+    "Visibility": "viz",
+    "Accessibility": "acc",
+    "True Value Delivery": "tv",
+}
+
+
+def select_also_worth_doing(conn, cycle_id: int) -> List[Dict]:
+    """
+    1f (3b): cross-cutting fixes — plays that fired across the whole
+    cycle rather than any single scored dimension (VIS-01's "absent for
+    in-category queries", TVD-01's "list price shown while a promo is
+    live", etc.) — read straight from soa_recommendations JOIN
+    soa_playbook, IF a recommendation already exists for this cycle.
+    Unpointed by design (no dimension-style impact number to attach —
+    priority_score is a ranking signal, not a points value), ordered by
+    that priority_score, dismissed/suppressed rows excluded (a
+    dismissed recommendation is a user decision, not a live fix; a
+    suppressed one is a composite play folded into its constituents).
+    """
+    rows = conn.execute(text("""
+        SELECT r.play_id, r.priority_score, p.pillar, p.failure_mode, p.play_text, p.owner
+        FROM soa_recommendations r
+        JOIN soa_playbook p ON p.play_id = r.play_id
+        WHERE r.cycle_id = :cid AND r.status != 'dismissed' AND NOT r.suppressed
+        ORDER BY r.priority_score DESC, r.play_id
+    """), {"cid": cycle_id}).fetchall()
+
+    return [
+        {
+            "play_id": play_id,
+            "pillar": pillar,
+            "failure_mode": failure_mode,
+            "play_text": play_text,
+            "owner": owner,
+            "section_anchor": _PLAY_PILLAR_TO_SECTION_ANCHOR.get(pillar),
+        }
+        for play_id, _priority_score, pillar, failure_mode, play_text, owner in rows
+    ]
+
+
 # ─── 1g: evidence exemplar ─────────────────────────────────────────────────
 
 def select_evidence_exemplar(conn, cycle_id: int, primary_entity_id: int) -> Optional[Dict]:

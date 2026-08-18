@@ -113,6 +113,19 @@ def patched_engine(monkeypatch):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # 3b: select_also_worth_doing's read-only source (AC3 Actions) —
+        # empty unless a test seeds a row itself.
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_playbook (
+                play_id TEXT PRIMARY KEY, pillar TEXT, failure_mode TEXT, owner TEXT, play_text TEXT
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_recommendations (
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, play_id TEXT,
+                priority_score FLOAT, status TEXT, suppressed BOOLEAN
+            )
+        """)
     monkeypatch.setattr(full_analysis_router, "engine", engine)
     monkeypatch.setattr(public_full_analysis_router, "engine", engine)
     return engine

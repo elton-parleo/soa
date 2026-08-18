@@ -89,6 +89,21 @@ def patched_engine(monkeypatch):
                 competitor_names TEXT, competitor_source TEXT, created_at TIMESTAMP
             )
         """)
+        # 3b: select_also_worth_doing's read-only source — AC3 Actions'
+        # own tables (finding_detector.py/recommendation_mapper.py).
+        # Deliberately empty in every fixture below unless a test seeds
+        # a row itself: nothing generates these automatically.
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_playbook (
+                play_id TEXT PRIMARY KEY, pillar TEXT, failure_mode TEXT, owner TEXT, play_text TEXT
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE soa_recommendations (
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, play_id TEXT,
+                priority_score FLOAT, status TEXT, suppressed BOOLEAN
+            )
+        """)
     monkeypatch.setattr(full_analysis_router, "engine", engine)
     return engine
 
@@ -207,7 +222,7 @@ def test_renders_true_for_a_cycle_with_a_complete_crawl(patched_engine):
     # nothing to fix, so an honestly empty list, not a fabricated one.
     # Ranked fixes live on pillars['fixes'] (FixesTable.jsx's real
     # read path), not a separate top-level field.
-    assert result.pillars["fixes"] == {"visible": [], "remaining_count": 0}
+    assert result.pillars["fixes"] == {"visible": [], "remaining_count": 0, "also_worth_doing": []}
     assert result.evidence is not None
     assert result.evidence["price_observation"]["accurate"] is False
 

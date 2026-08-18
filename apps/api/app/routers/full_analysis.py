@@ -45,6 +45,7 @@ from app.services.full_analysis_extras import (
     build_competitor_set,
     build_platform_matrix,
     build_what_if,
+    select_also_worth_doing,
     select_evidence_exemplar,
 )
 from app.services.share_tokens import generate_public_token
@@ -342,7 +343,12 @@ def _assemble_full_analysis_report(
     )
     # Ranked fixes live on report["pillars"]["fixes"] (cycle_scoring_
     # full.py::_build_full_fixes_section) — the shape FixesTable.jsx
-    # actually reads, not a second top-level field.
+    # actually reads, not a second top-level field. 3b: also_worth_doing
+    # is read-only and additive (see full_analysis_extras.py's own
+    # docstring) — merged in here rather than inside build_full_cycle_
+    # pillars, which stays DB-access-free by design; [] for the common
+    # case where nothing has been generated for this cycle yet.
+    report["pillars"]["fixes"]["also_worth_doing"] = select_also_worth_doing(conn, cycle_id)
     evidence = (
         select_evidence_exemplar(conn, cycle_id, primary_entity_id)
         if primary_entity_id is not None else None
