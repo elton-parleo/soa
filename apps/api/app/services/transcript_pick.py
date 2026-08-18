@@ -45,6 +45,7 @@ from urllib.parse import urlparse
 
 from sqlalchemy import text
 
+import soa_shared.config as config
 from soa_shared.scan_dimensions import PURCHASE_INTENT_STAGES
 
 _STRENGTH_RANK = {"Primary": 3, "Positive": 2, "Neutral": 1, "Negative": 0}
@@ -577,7 +578,7 @@ def _build_payload(
         right, leaked = _narrative_uncoded(candidate)
 
     spans = _locate_spans(candidate, primary)
-    return {
+    payload = {
         "run_id": candidate.run_id,
         "platform": candidate.platform,
         "query_text": candidate.query_text,
@@ -591,8 +592,6 @@ def _build_payload(
         "spans": spans,
         "narrative_case": case,
         "selection_tier": tier,
-        "right": right,
-        "leaked": leaked,
         "facts": {
             "mentioned": candidate.mentioned,
             "position": candidate.position,
@@ -610,6 +609,16 @@ def _build_payload(
             "competitor_deals": candidate.competitor_deals,
         },
     }
+    # TRANSCRIPT_NARRATIVE_ENABLED gate (see soa_shared/config.py): the
+    # clause-building functions above always run — every unit test that
+    # calls them directly exercises the same logic regardless of the
+    # flag — only the payload EXPOSURE of right/leaked is gated. Omitted
+    # entirely when off, never empty strings, so the frontend's presence
+    # check (`right != null`) is unambiguous.
+    if config.TRANSCRIPT_NARRATIVE_ENABLED:
+        payload["right"] = right
+        payload["leaked"] = leaked
+    return payload
 
 
 def select_transcript(

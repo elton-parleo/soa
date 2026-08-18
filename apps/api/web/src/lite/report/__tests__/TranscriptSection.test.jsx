@@ -66,6 +66,42 @@ describe('TranscriptSection — visibility', () => {
   })
 })
 
+describe('TranscriptSection — narrative boxes gated by payload presence (TRANSCRIPT_NARRATIVE_ENABLED)', () => {
+  it('renders the transcript without the duo boxes when right/leaked are absent from the payload', () => {
+    const transcript = _transcript()
+    delete transcript.right
+    delete transcript.leaked
+    const { container } = render(<TranscriptSection report={{ transcript }} open onToggle={() => {}} />)
+
+    // The section itself, the question, and the answer still render —
+    // only the flagged boxes are gone.
+    expect(screen.getByText('Best designer handbags under $500?')).toBeInTheDocument()
+    expect(screen.queryByText(/WHAT WENT RIGHT/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/WHAT LEAKED/)).not.toBeInTheDocument()
+    expect(container.querySelector('[style*="grid-template-columns"]')).not.toBeInTheDocument()
+  })
+
+  it('still shows the provenance line (query index/date) with the boxes absent', () => {
+    const transcript = _transcript()
+    delete transcript.right
+    delete transcript.leaked
+    render(<TranscriptSection report={{ transcript }} open onToggle={() => {}} />)
+    expect(screen.getByText(/Query 14 of 24/)).toBeInTheDocument()
+  })
+
+  it('renders the duo boxes when right/leaked are both present', () => {
+    render(<TranscriptSection report={{ transcript: _transcript() }} open onToggle={() => {}} />)
+    expect(screen.getByText(/WHAT WENT RIGHT/)).toBeInTheDocument()
+    expect(screen.getByText(/WHAT LEAKED/)).toBeInTheDocument()
+  })
+
+  it('treats an explicit null the same as an absent key (no boxes)', () => {
+    const transcript = _transcript({ right: null, leaked: null })
+    render(<TranscriptSection report={{ transcript }} open onToggle={() => {}} />)
+    expect(screen.queryByText(/WHAT WENT RIGHT/)).not.toBeInTheDocument()
+  })
+})
+
 describe('TranscriptSection — narrative_case phrasing', () => {
   it.each([
     ['value_gap', 'value gap shows most clearly'],

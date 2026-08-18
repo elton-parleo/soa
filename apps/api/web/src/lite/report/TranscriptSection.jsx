@@ -116,6 +116,13 @@ export function TranscriptSection({ report, open, onToggle }) {
     spans, narrative_case: narrativeCase, right, leaked,
   } = transcript
 
+  // TRANSCRIPT_NARRATIVE_ENABLED (soa_shared/config.py) decides server-
+  // side whether right/leaked are in the payload at all — the frontend
+  // never reads a flag of its own, it just renders the duo boxes when
+  // both fields are actually present. Omitted (not empty-string) when
+  // the server has the gate off, so this check is unambiguous.
+  const showBoxes = right != null && leaked != null
+
   function toggleFull() {
     setShowFull((v) => {
       const next = !v
@@ -167,18 +174,24 @@ export function TranscriptSection({ report, open, onToggle }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 18 }}>
-        <div style={{ background: 'var(--green-tint)', border: '1px solid var(--hairline)', borderRadius: 13, padding: '15px 17px' }}>
-          <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--text-strong)' }}>◉ WHAT WENT RIGHT</span>
-          <div style={{ marginTop: 8, fontSize: 13.5, color: 'var(--text)', lineHeight: 1.55 }}>{right}</div>
+      {showBoxes && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 18 }}>
+          <div style={{ background: 'var(--green-tint)', border: '1px solid var(--hairline)', borderRadius: 13, padding: '15px 17px' }}>
+            <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--text-strong)' }}>◉ WHAT WENT RIGHT</span>
+            <div style={{ marginTop: 8, fontSize: 13.5, color: 'var(--text)', lineHeight: 1.55 }}>{right}</div>
+          </div>
+          <div style={{ background: 'var(--red-tint)', border: '1px solid var(--hairline)', borderRadius: 13, padding: '15px 17px' }}>
+            <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--red-deep)' }}>◑ WHAT LEAKED</span>
+            <div style={{ marginTop: 8, fontSize: 13.5, color: 'var(--text)', lineHeight: 1.55 }}>{linkify(leaked, 'Price Truth', '#tv')}</div>
+          </div>
         </div>
-        <div style={{ background: 'var(--red-tint)', border: '1px solid var(--hairline)', borderRadius: 13, padding: '15px 17px' }}>
-          <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--red-deep)' }}>◑ WHAT LEAKED</span>
-          <div style={{ marginTop: 8, fontSize: 13.5, color: 'var(--text)', lineHeight: 1.55 }}>{linkify(leaked, 'Price Truth', '#tv')}</div>
-        </div>
-      </div>
+      )}
 
-      <div className="mono-label" style={{ marginTop: 16, fontSize: 9, color: 'var(--faint)' }}>
+      {/* No boxes: the provenance line takes over the duo's own 18px
+          top margin (instead of stacking 18 + 16) so it follows the
+          answer card at the same visual distance either way — never a
+          double gap, never a cramped one. */}
+      <div className="mono-label" style={{ marginTop: showBoxes ? 16 : 18, fontSize: 9, color: 'var(--faint)' }}>
         {legendText ? `▨ ${legendText} · ` : ''}
         {askedLabel ? `Asked ${askedLabel} · ` : ''}Query {queryIndex} of {totalQueries}
       </div>

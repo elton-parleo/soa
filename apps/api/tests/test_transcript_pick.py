@@ -10,12 +10,23 @@ test_full_analysis_extras.py.
 import pytest
 from sqlalchemy import create_engine, text
 
+import soa_shared.config as config
 from app.services.transcript_pick import select_transcript, _attribution, _accuracy, _PrimaryIdentity
 
 CYCLE_ID = 900
 OTHER_CYCLE_ID = 901
 PRIMARY_ID = 901
 COMPETITOR_ID = 902
+
+
+# TRANSCRIPT_NARRATIVE_ENABLED defaults off (soa_shared/config.py) — every
+# clause-content assertion in this file needs right/leaked actually present
+# in the payload, so it's forced on here. The gate itself (payload presence
+# on/off) is tested explicitly below, overriding this back to off/on per
+# test — never relying on the ambient default either way.
+@pytest.fixture(autouse=True)
+def _narrative_enabled(monkeypatch):
+    monkeypatch.setattr(config, "TRANSCRIPT_NARRATIVE_ENABLED", True)
 
 
 @pytest.fixture
@@ -680,3 +691,61 @@ def test_attribution_status_and_net_price_accuracy_are_only_read_inside_the_shar
     # sanity: the two helpers really do exist and really do read these fields
     assert "attribution_status" in functions["_attribution"]
     assert "net_price_accuracy" in functions["_accuracy"]
+
+
+# ═══ TRANSCRIPT_NARRATIVE_ENABLED gate ══════════════════════════════════════
+
+def _seed_value_gap_run(conn):
+    """A minimal value_gap-tier run — any scenario would do; the gate
+    tests only care about which payload KEYS are present, not clause
+    content (that's covered by every other test in this file, run with
+    the flag forced on via the autouse fixture)."""
+    _seed_entities(conn)
+    _run(conn, 1, stage="Ready to Buy", raw_response="Zappos has it for $150.")
+    _mention(conn, 1, PRIMARY_ID, mentioned=1, strength="Primary")
+    obs1 = _price_obs(conn, 1, PRIMARY_ID, stated_price=150, merchant_name="Zappos", merchant_slug="zappos", attribution_status="mapped")
+    _ground_truth(conn, 1, PRIMARY_ID, obs1, stated_price=150, ground_truth_true_cost=100, net_price_accuracy=False)
+
+
+def test_flag_off_omits_right_and_leaked_but_keeps_selection_and_spans(db, monkeypatch):
+    monkeypatch.setattr(config, "TRANSCRIPT_NARRATIVE_ENABLED", False)
+    with db.begin() as conn:
+        _seed_value_gap_run(conn)
+
+    with db.connect() as conn:
+        result = select_transcript(conn, CYCLE_ID, PRIMARY_ID)
+
+    assert "right" not in result
+    assert "leaked" not in result
+    # Diagnostics and the transcript itself are unaffected by the flag.
+    assert result["narrative_case"] == "value_gap"
+    assert result["selection_tier"] in (1, 2)
+    assert result["run_id"] == 1
+    assert result["response_text"]
+    assert result["spans"]  # highlights are still computed with the flag off
+
+
+def test_flag_on_includes_right_and_leaked_as_non_empty_strings(db, monkeypatch):
+    monkeypatch.setattr(config, "TRANSCRIPT_NARRATIVE_ENABLED", True)
+    with db.begin() as conn:
+        _seed_value_gap_run(conn)
+
+    with db.connect() as conn:
+        result = select_transcript(conn, CYCLE_ID, PRIMARY_ID)
+
+    assert "right" in result and result["right"]
+    assert "leaked" in result and result["leaked"]
+
+
+def test_flag_off_never_returns_an_empty_string_placeholder(db, monkeypatch):
+    """The gate must OMIT the keys, never replace them with '' —
+    'not empty strings' per the flag's own contract."""
+    monkeypatch.setattr(config, "TRANSCRIPT_NARRATIVE_ENABLED", False)
+    with db.begin() as conn:
+        _seed_value_gap_run(conn)
+
+    with db.connect() as conn:
+        result = select_transcript(conn, CYCLE_ID, PRIMARY_ID)
+
+    assert result.get("right", "sentinel-not-omitted") == "sentinel-not-omitted"
+    assert result.get("leaked", "sentinel-not-omitted") == "sentinel-not-omitted"

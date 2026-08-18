@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 
 import app.routers.full_analysis as full_analysis_router
+import soa_shared.config as config
 
 CURRENT_USER = {"organization_id": 1, "user_id": "u1"}
 
@@ -284,3 +285,23 @@ def test_transcript_wired_into_the_full_analysis_report(patched_engine):
     assert result.transcript is not None
     assert result.transcript["run_id"] == 40000
     assert "Full Cycle Brand" in result.transcript["response_text"]
+    # TRANSCRIPT_NARRATIVE_ENABLED defaults off — same gate, same
+    # service, as the lite report (see test_public_lite_report.py's
+    # equivalent pair of tests).
+    assert "right" not in result.transcript
+    assert "leaked" not in result.transcript
+
+
+def test_transcript_narrative_boxes_present_when_the_flag_is_on(patched_engine, monkeypatch):
+    monkeypatch.setattr(config, "TRANSCRIPT_NARRATIVE_ENABLED", True)
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn, cycle_code="fc-transcript-on", cycle_id=41)
+        conn.exec_driver_sql(
+            "UPDATE soa_runs SET raw_response = 'Full Cycle Brand is the top pick here.', run_at = '2026-08-07' "
+            "WHERE id = 41000"
+        )
+
+    result = full_analysis_router.get_full_analysis_report("fc-transcript-on", current_user=CURRENT_USER)
+
+    assert result.transcript["right"]
+    assert result.transcript["leaked"]

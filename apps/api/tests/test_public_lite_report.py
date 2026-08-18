@@ -16,6 +16,7 @@ from sqlalchemy import create_engine
 
 import app.routers.public_lite as public_lite
 import app.services.cycle_scoring as cycle_scoring
+import soa_shared.config as config
 
 
 @pytest.fixture
@@ -2065,6 +2066,34 @@ def test_transcript_present_and_shaped_when_a_run_exists(db):
     assert result["transcript"] is not None
     assert result["transcript"]["run_id"] == 701
     assert result["transcript"]["narrative_case"] == "mentioned_no_leak"
+    # TRANSCRIPT_NARRATIVE_ENABLED defaults off (soa_shared/config.py) —
+    # the WHAT WENT RIGHT/WHAT LEAKED boxes' clause logic isn't shipped
+    # on this branch; the transcript itself (question, answer, spans,
+    # diagnostics) always is. Parity: every other key is unaffected.
+    assert "right" not in result["transcript"]
+    assert "leaked" not in result["transcript"]
+    for key in ("run_id", "platform", "query_text", "response_text", "spans", "narrative_case", "selection_tier"):
+        assert key in result["transcript"]
+
+
+def test_transcript_narrative_boxes_present_when_the_flag_is_on(db, monkeypatch):
+    monkeypatch.setattr(config, "TRANSCRIPT_NARRATIVE_ENABLED", True)
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1")
+        conn.exec_driver_sql(
+            "INSERT INTO soa_queries (id, stage, persona, query_text) VALUES (701, 'Ready to Buy', 'Value-Conscious', 'Best deal?')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_runs (id, cycle_id, query_id, status, platform, raw_response, run_at) "
+            "VALUES (701, 1, 701, 'success', 'chatgpt', 'Acme Co is a solid pick around here.', '2026-08-07')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_coded_mentions (run_id, entity_id, mentioned, strength) VALUES (701, 101, 1, 'Primary')"
+        )
+
+    result = public_lite.get_lite_report("t1")
+    assert result["transcript"]["right"]
+    assert result["transcript"]["leaked"]
 
 
 def test_transcript_never_crosses_a_different_cycles_token(db):
