@@ -266,6 +266,37 @@ def test_continuation_banner_absent_for_a_cycle_created_the_ordinary_way(patched
     assert result.continuation is None
 
 
+# ─── Part A: generated pillar headlines, extended to Full Analysis ────────
+
+def test_generated_headlines_reach_the_full_analysis_report_when_present(patched_engine):
+    headlines = {
+        "visibility": {"headline": "You hold 35% share of all brand mentions.", "source": "generated"},
+        "accessibility": {"headline": "Agent Access earns 5 of 5 points.", "source": "generated"},
+        "true_value": {"headline": "Price Truth earns full points on your site.", "source": "generated"},
+    }
+    dims = {**_DIMENSIONS, "generated_headlines": headlines}
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn, cycle_code="fc-headlines", cycle_id=50)
+        conn.exec_driver_sql(
+            "UPDATE soa_lite_scan_results SET dimensions = ? WHERE cycle_id = 50", (json.dumps(dims),),
+        )
+
+    result = full_analysis_router.get_full_analysis_report("fc-headlines", current_user=CURRENT_USER)
+
+    assert result.rendered is True
+    assert result.generated_headlines == headlines
+
+
+def test_generated_headlines_null_when_the_sweep_has_not_reached_this_cycle_yet(patched_engine):
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn, cycle_code="fc-no-headlines", cycle_id=51)
+
+    result = full_analysis_router.get_full_analysis_report("fc-no-headlines", current_user=CURRENT_USER)
+
+    assert result.rendered is True
+    assert result.generated_headlines is None
+
+
 # ─── "From the transcript" widget — same service as the lite report ───────
 
 def test_transcript_wired_into_the_full_analysis_report(patched_engine, monkeypatch):

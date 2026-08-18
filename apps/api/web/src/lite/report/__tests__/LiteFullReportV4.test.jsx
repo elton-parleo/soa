@@ -130,10 +130,13 @@ describe('LiteFullReportV4 — full scored run renders without crashing', () => 
   it('renders the rail, score hero, and every section', () => {
     renderReport()
     expect(screen.getAllByText('Allbirds').length).toBeGreaterThan(0)
-    // Part 3: with no generated_headlines on this fixture, the registry
-    // default renders in both the hero card AND the section header.
-    expect(screen.getAllByText('Agents know who you are').length).toBe(2)
-    expect(screen.getAllByText("Agents can knock, but can't read much").length).toBe(2)
+    // Part B: with no generated_headlines on this fixture, a score-
+    // derived band line renders in both the hero card AND the section
+    // header — visibility 25/40=.625 and accessibility 8/20=.40 both
+    // land in the mixed band; true_value 3/25=.12 stays the negative
+    // (pre-Part-B, unchanged) line.
+    expect(screen.getAllByText("Agents know you, but don't always mention you").length).toBe(2)
+    expect(screen.getAllByText("Agents can knock, but can't read everything").length).toBe(2)
     expect(screen.getAllByText('Your value leaks before it reaches the answer').length).toBe(2)
     expect(screen.getByText('Where you disappear in the funnel')).toBeInTheDocument()
     expect(screen.getByText('Encoded, declared, and kept in sync')).toBeInTheDocument()
@@ -226,11 +229,11 @@ describe('LiteFullReportV4 — H1/H2 honest states', () => {
   })
 })
 
-describe('LiteFullReportV4 — Part 3: generated pillar headlines', () => {
+describe('LiteFullReportV4 — Part 3/B: generated + score-derived pillar headlines', () => {
   const GENERATED_HEADLINES = {
     visibility: { headline: 'You hold 35% share of all brand mentions.', source: 'generated' },
     accessibility: { headline: 'Agent Access earns 5 of 6 points.', source: 'generated' },
-    true_value: { headline: "Couldn't be measured this run", source: 'default' },
+    true_value: { headline: "Couldn't be measured this run", source: 'not_measurable' },
   }
 
   it('renders the stored headline in both the hero card and the matching section header, never regenerating', () => {
@@ -240,15 +243,15 @@ describe('LiteFullReportV4 — Part 3: generated pillar headlines', () => {
     expect(screen.getAllByText('Agent Access earns 5 of 6 points.').length).toBe(2)
     expect(screen.getAllByText("Couldn't be measured this run").length).toBe(2)
 
-    // The pre-Part-3 hardcoded defaults are gone from the DOM entirely
+    // The score-derived fallback lines are gone from the DOM entirely
     // when a real generated headline is present for every pillar.
-    expect(screen.queryByText('Agents know who you are')).not.toBeInTheDocument()
-    expect(screen.queryByText("Agents can knock, but can't read much")).not.toBeInTheDocument()
+    expect(screen.queryByText("Agents know you, but don't always mention you")).not.toBeInTheDocument()
+    expect(screen.queryByText("Agents can knock, but can't read everything")).not.toBeInTheDocument()
   })
 
-  it('falls back to the registry default per pillar when generated_headlines is null (older run)', () => {
+  it('falls back to a score-derived band line per pillar when generated_headlines is null (older run)', () => {
     renderReport({ generated_headlines: null })
-    expect(screen.getAllByText('Agents know who you are').length).toBe(2)
+    expect(screen.getAllByText("Agents know you, but don't always mention you").length).toBe(2)
   })
 
   it('falls back independently per pillar when only some pillars have a generated headline', () => {
@@ -260,7 +263,7 @@ describe('LiteFullReportV4 — Part 3: generated pillar headlines', () => {
       },
     })
     expect(screen.getAllByText('You hold 35% share of all brand mentions.').length).toBe(2)
-    expect(screen.getAllByText("Agents can knock, but can't read much").length).toBe(2)
+    expect(screen.getAllByText("Agents can knock, but can't read everything").length).toBe(2)
     expect(screen.getAllByText('Your value leaks before it reaches the answer').length).toBe(2)
   })
 })
