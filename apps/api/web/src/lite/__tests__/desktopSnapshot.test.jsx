@@ -39,6 +39,10 @@ const REPORT = {
   scan: { status: 'complete', degraded_reason: null, degraded_banner_facts: null },
   scan_status: 'complete',
   visibility: 62.5, accessibility: 40, composite: 40,
+  // Exposure-model fix: the modeled exposure figure reads this, not
+  // `visibility`. Matches this fixture's own pillars.true_value.score
+  // (17.5) — the API serializes exactly that value.
+  true_value_score: 17.5,
   brand_icon_url: null,
   store_domain: 'allbirds.com',
   visibility_breakdown: {

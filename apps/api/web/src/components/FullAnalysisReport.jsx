@@ -59,7 +59,10 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate }) {
   const primaryEntityName = primaryEntity?.entity || 'Your brand'
 
   const revenue = seedAnnualRevenue(report.revenue_estimate_usd) ?? DEFAULT_REVENUE
-  const exposure = computeExposure({ revenue, aiSharePct: DEFAULT_AI_SHARE_PCT, visibility: pillars.visibility.score })
+  // Exposure-model fix: True Value, not Visibility. This report builds
+  // its own pillars payload (cycle_scoring_full.py) and reads the score
+  // straight off it — no true_value_score field needed on this side.
+  const exposure = computeExposure({ revenue, aiSharePct: DEFAULT_AI_SHARE_PCT, trueValueScore: pillars.true_value.score })
   const rank = shareOfMentionsRank(competitorSet?.overall)
   const headline = deriveScoreHeroHeadline(pillars)
 

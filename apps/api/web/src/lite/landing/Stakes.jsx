@@ -9,10 +9,12 @@
  * section imports — see liteDerive.js) instead.
  *
  * Two real inputs: revenue and AI-assisted share. This widget has no
- * specific brand scored yet, so `visibility` (computeExposure's third
- * input) defaults to 0 — full mention-gap, framing the number as "what
- * is exposed if agents can't find you at all," which matches this
- * section's own headline. Always a single point estimate, not the
+ * specific brand scored yet, so `trueValueScore` (computeExposure's
+ * third input) is 0 — full invisibility, framing the number as "what is
+ * exposed if agents can't read any of your value," which matches this
+ * section's own headline. The figure is unchanged by the exposure-model
+ * fix: the substitution multiplier is capped at 1 and invisibility is
+ * already 1 at this ceiling. Always a single point estimate, not the
  * mock's low-high band (that came from AGENT_DISCOVERY_RANGE, dropped
  * along with the rest of the unimplemented model).
  */
@@ -38,7 +40,11 @@ export function Stakes() {
     track(EVENTS.ESTIMATOR_INTERACTED, {})
   }
 
-  const exposure = computeExposure({ revenue, aiSharePct, visibility: 0 })
+  // No brand is scored on the landing, so this is the ceiling: True
+  // Value 0 -> fully invisible value. Same number this widget has
+  // always shown (the substitution multiplier is capped at 1, and
+  // invisibility is already 1 here), now honestly named.
+  const exposure = computeExposure({ revenue, aiSharePct, trueValueScore: 0 })
 
   return (
     <section style={{ padding: '60px 24px 20px' }}>
@@ -86,7 +92,7 @@ export function Stakes() {
             <div style={{ fontSize: 15.5, color: 'var(--dark-text)', lineHeight: 1.5, marginTop: 20, letterSpacing: '-0.008em' }}>Modeled annual revenue exposed to invisible value</div>
             <div className="num lite-display-num" style={{ fontSize: 52, fontWeight: 740, letterSpacing: '-0.038em', lineHeight: 1, color: 'var(--dark-text)', marginTop: 20 }}>{formatCurrency(exposure)}</div>
             <div style={{ fontSize: 13.5, color: 'var(--dark-muted)', lineHeight: 1.62, marginTop: 20, maxWidth: 400 }}>
-              Assumes agents currently find you 0% of the time — the full picture, including what agents already see, comes from a Parleo audit.
+              Assumes agents can currently read none of your value — the full picture, including the value they already see, comes from a Parleo audit.
             </div>
             <div style={{ marginTop: 24 }}>
               <a href="#run" className="lite-stakes-cta" style={{ textDecoration: 'none' }}>

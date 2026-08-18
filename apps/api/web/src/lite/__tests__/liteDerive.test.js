@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   looksLikeUrl, deriveBrandFromUrl, domainFromStoreUrl, accessibilityBadgeText,
   groupDimensionsByFamily, rankDimensionsByGap, computeExposure, formatCurrency,
+  SUBSTITUTION_MULTIPLIER, EXPOSURE_HAIRCUT,
   getScoreBand, getVerdictLine, getDominantRivalPayoff, getIncentiveCitationPayoff,
   seedAnnualRevenue, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX,
 } from '../liteDerive.js'
@@ -148,27 +149,101 @@ describe('rankDimensionsByGap', () => {
   })
 })
 
-describe('computeExposure', () => {
-  it('applies the documented formula: revenue * share * mentionGap * 0.85', () => {
-    // revenue=1,000,000 * share=0.2 * mentionGap=(1-0.6)=0.4 * 0.85 = 68,000
-    const exposure = computeExposure({ revenue: 1_000_000, aiSharePct: 20, visibility: 60 })
-    expect(exposure).toBeCloseTo(68_000, 5)
+describe('computeExposure — True Value driven, with the substitution channel', () => {
+  // Every expectation below is computed BY HAND from the documented
+  // formula, never captured from the implementation:
+  //   invisibility  = 1 - trueValueScore/100
+  //   channelFactor = min(1, invisibility * 1.5)
+  //   exposure      = revenue * aiShare * channelFactor * 0.85
+  const REV = 100_000_000
+  const SHARE = 20  // -> AI-assisted slice = $20,000,000
+
+  it('True Value 10/100: 0.90 * 1.5 = 1.35, capped to 1.0 -> $17,000,000', () => {
+    expect(computeExposure({ revenue: REV, aiSharePct: SHARE, trueValueScore: 10 }))
+      .toBeCloseTo(17_000_000, 5)
   })
 
-  it('treats missing visibility as zero (full mention gap)', () => {
-    const exposure = computeExposure({ revenue: 100, aiSharePct: 100, visibility: null })
-    expect(exposure).toBeCloseTo(100 * 1 * 1 * 0.85, 5)
+  it('True Value 40/100: 0.60 * 1.5 = 0.90 -> $15,300,000', () => {
+    expect(computeExposure({ revenue: REV, aiSharePct: SHARE, trueValueScore: 40 }))
+      .toBeCloseTo(15_300_000, 5)
+  })
+
+  it('True Value 80/100: 0.20 * 1.5 = 0.30 -> $5,100,000', () => {
+    expect(computeExposure({ revenue: REV, aiSharePct: SHARE, trueValueScore: 80 }))
+      .toBeCloseTo(5_100_000, 5)
+  })
+
+  it('True Value 100/100: nothing invisible, nothing exposed -> $0', () => {
+    expect(computeExposure({ revenue: REV, aiSharePct: SHARE, trueValueScore: 100 })).toBe(0)
+  })
+
+  // THE property that was silently false while the input was Visibility:
+  // recovering True Value points has to move the number down. A brand
+  // could previously fix every True Value gap and watch the figure sit
+  // exactly where it was.
+  it('is monotonically non-increasing in trueValueScore, and exactly 0 at 100', () => {
+    let previous = Infinity
+    for (let tv = 0; tv <= 100; tv++) {
+      const exposure = computeExposure({ revenue: REV, aiSharePct: SHARE, trueValueScore: tv })
+      expect(exposure).toBeLessThanOrEqual(previous)
+      previous = exposure
+    }
+    expect(computeExposure({ revenue: REV, aiSharePct: SHARE, trueValueScore: 100 })).toBe(0)
+  })
+
+  it('strictly decreases across the uncapped range — TrueSync points visibly lower the number', () => {
+    const at40 = computeExposure({ revenue: REV, aiSharePct: SHARE, trueValueScore: 40 })
+    const at50 = computeExposure({ revenue: REV, aiSharePct: SHARE, trueValueScore: 50 })
+    expect(at50).toBeLessThan(at40)
+    // 0.50 * 1.5 = 0.75 -> 20,000,000 * 0.75 * 0.85
+    expect(at50).toBeCloseTo(12_750_000, 5)
+  })
+
+  // The cap: exposure can never exceed the AI-assisted revenue slice
+  // itself (less the haircut), however invisible the brand's value is.
+  it('caps the channel factor at 1 — the binding point is trueValueScore 33.3', () => {
+    const sliceLessHaircut = REV * 0.2 * 0.85  // 17,000,000
+    expect(computeExposure({ revenue: REV, aiSharePct: SHARE, trueValueScore: 0 }))
+      .toBeCloseTo(sliceLessHaircut, 5)
+    expect(computeExposure({ revenue: REV, aiSharePct: SHARE, trueValueScore: 33 }))
+      .toBeCloseTo(sliceLessHaircut, 5)
+    // Just past the cap: 0.66 * 1.5 = 0.99 -> 20,000,000 * 0.99 * 0.85
+    expect(computeExposure({ revenue: REV, aiSharePct: SHARE, trueValueScore: 34 }))
+      .toBeCloseTo(16_830_000, 5)
+  })
+
+  it('treats a null trueValueScore (legacy row, no pillars payload) as fully invisible value', () => {
+    // 1 * 1.5 -> capped 1.0; 100 * 1 * 1 * 0.85
+    expect(computeExposure({ revenue: 100, aiSharePct: 100, trueValueScore: null }))
+      .toBeCloseTo(85, 5)
+    expect(computeExposure({ revenue: 100, aiSharePct: 100, trueValueScore: undefined }))
+      .toBeCloseTo(85, 5)
+  })
+
+  it('the landing ceiling (trueValueScore 0) is unchanged by this session — the cap holds it at the old figure', () => {
+    // Stakes.jsx: $20,000,000 revenue, 20% share, trueValueScore 0.
+    // Old formula (visibility 0): 20,000,000 * 0.2 * 1 * 0.85.
+    // New formula: invisibility 1 * 1.5 -> capped 1.0 -> same number.
+    expect(computeExposure({ revenue: 20_000_000, aiSharePct: 20, trueValueScore: 0 }))
+      .toBeCloseTo(3_400_000, 5)
+  })
+
+  it('scales linearly with AI-assisted share', () => {
+    const at10 = computeExposure({ revenue: REV, aiSharePct: 10, trueValueScore: 40 })
+    const at20 = computeExposure({ revenue: REV, aiSharePct: 20, trueValueScore: 40 })
+    expect(at20).toBeCloseTo(at10 * 2, 5)
   })
 
   it('clamps AI share to [0, 100]', () => {
-    const over = computeExposure({ revenue: 100, aiSharePct: 500, visibility: 0 })
-    const under = computeExposure({ revenue: 100, aiSharePct: -20, visibility: 0 })
-    expect(over).toBeCloseTo(100 * 1 * 1 * 0.85, 5)
+    const over = computeExposure({ revenue: 100, aiSharePct: 500, trueValueScore: 0 })
+    const under = computeExposure({ revenue: 100, aiSharePct: -20, trueValueScore: 0 })
+    expect(over).toBeCloseTo(85, 5)
     expect(under).toBe(0)
   })
 
-  it('returns 0 when visibility is 100 (no mention gap)', () => {
-    expect(computeExposure({ revenue: 1_000_000, aiSharePct: 50, visibility: 100 })).toBe(0)
+  it('SUBSTITUTION_MULTIPLIER is the single named knob, and the haircut is unchanged', () => {
+    expect(SUBSTITUTION_MULTIPLIER).toBe(1.5)
+    expect(EXPOSURE_HAIRCUT).toBe(0.85)
   })
 })
 
