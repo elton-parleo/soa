@@ -485,7 +485,10 @@ class SoaPublicShareView(Base):
     )
 
     id = Column(Integer, primary_key=True)
-    share_id = Column(Integer, ForeignKey("soa_cycle_shares.id"), nullable=False)
+    share_id = Column(
+        Integer, ForeignKey("soa_cycle_shares.id"), nullable=True,
+        comment="Null when the token that generated this view row could not be resolved to a share.",
+    )
     ip_hash = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

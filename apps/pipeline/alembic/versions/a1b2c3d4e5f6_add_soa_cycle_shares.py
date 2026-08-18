@@ -17,6 +17,10 @@ soa_public_share_views is a pure append-only read log for the public
 endpoint's own per-IP rate limit (mirrors soa_lite_requests doubling as
 its own rate-limit log in public_lite.py::_enforce_rate_limits) — no
 domain meaning beyond "this ip_hash read this share at this time".
+share_id is nullable so an unresolvable token still gets logged (and
+counts against the requester's rate limit) rather than only real hits —
+otherwise hammering the endpoint with garbage tokens would be exempt
+from the very limit meant to stop hammering it.
 """
 from typing import Sequence, Union
 
@@ -47,7 +51,7 @@ def upgrade() -> None:
     op.create_table(
         "soa_public_share_views",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("share_id", sa.Integer(), sa.ForeignKey("soa_cycle_shares.id"), nullable=False),
+        sa.Column("share_id", sa.Integer(), sa.ForeignKey("soa_cycle_shares.id"), nullable=True),
         sa.Column("ip_hash", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
     )
