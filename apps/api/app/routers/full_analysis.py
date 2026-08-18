@@ -345,4 +345,5 @@ def get_full_analysis_report(
         revenue_estimate_usd=report["revenue_estimate_usd"],
         evidence=evidence,
         what_if=what_if,
+        generated_headlines=dimensions_raw.get("generated_headlines"),
     )

@@ -12,8 +12,9 @@ import pytest
 from generation.pillar_headlines import (
     DEFAULT_HEADLINES,
     NOT_MEASURABLE_HEADLINE,
-    SOURCE_DEFAULT,
+    SOURCE_DERIVED,
     SOURCE_GENERATED,
+    SOURCE_NOT_MEASURABLE,
     build_pillar_facts,
     generate_pillar_headlines,
     _validate_headline,
@@ -158,7 +159,7 @@ def test_generate_pillar_headlines_retries_once_then_falls_back():
 
     assert mock_call.call_count == 2
     for pillar in ("visibility", "accessibility", "true_value"):
-        assert result[pillar]["source"] == SOURCE_DEFAULT
+        assert result[pillar]["source"] == SOURCE_DERIVED
         assert result[pillar]["headline"] == DEFAULT_HEADLINES[pillar]
 
 
@@ -166,7 +167,7 @@ def test_generate_pillar_headlines_never_raises_on_malformed_json():
     with patch("generation.pillar_headlines._call_once") as mock_call:
         mock_call.side_effect = ValueError("bad json")
         result = generate_pillar_headlines(_FULL_DIMENSIONS_RAW, _VIS_METRICS, "key")
-    assert all(result[p]["source"] == SOURCE_DEFAULT for p in ("visibility", "accessibility", "true_value"))
+    assert all(result[p]["source"] == SOURCE_DERIVED for p in ("visibility", "accessibility", "true_value"))
 
 
 def test_generate_pillar_headlines_per_pillar_fallback_on_partial_violation():
@@ -181,7 +182,7 @@ def test_generate_pillar_headlines_per_pillar_fallback_on_partial_violation():
         }
         result = generate_pillar_headlines(_FULL_DIMENSIONS_RAW, _VIS_METRICS, "key")
 
-    assert result["visibility"]["source"] == SOURCE_DEFAULT
+    assert result["visibility"]["source"] == SOURCE_DERIVED
     assert result["visibility"]["headline"] == DEFAULT_HEADLINES["visibility"]
     assert result["accessibility"]["source"] == SOURCE_GENERATED
     assert result["true_value"]["source"] == SOURCE_GENERATED
@@ -193,7 +194,7 @@ def test_generate_pillar_headlines_skips_the_api_call_when_nothing_is_measurable
 
     assert mock_call.call_count == 0
     for pillar in ("visibility", "accessibility", "true_value"):
-        assert result[pillar]["source"] == SOURCE_DEFAULT
+        assert result[pillar]["source"] == SOURCE_NOT_MEASURABLE
         assert result[pillar]["headline"] == NOT_MEASURABLE_HEADLINE
 
 
@@ -217,7 +218,7 @@ def test_generate_pillar_headlines_not_measurable_pillar_never_sent_to_the_model
         result = generate_pillar_headlines(dims, _VIS_METRICS, "key")
 
     assert captured["pillars"] == {"visibility", "accessibility"}
-    assert result["true_value"]["source"] == SOURCE_DEFAULT
+    assert result["true_value"]["source"] == SOURCE_NOT_MEASURABLE
     assert result["true_value"]["headline"] == NOT_MEASURABLE_HEADLINE
 
 
@@ -229,5 +230,5 @@ def test_generate_pillar_headlines_extra_or_missing_keys_in_model_response_are_h
         result = generate_pillar_headlines(_FULL_DIMENSIONS_RAW, _VIS_METRICS, "key")
 
     assert result["visibility"]["source"] == SOURCE_GENERATED
-    assert result["accessibility"]["source"] == SOURCE_DEFAULT
-    assert result["true_value"]["source"] == SOURCE_DEFAULT
+    assert result["accessibility"]["source"] == SOURCE_DERIVED
+    assert result["true_value"]["source"] == SOURCE_DERIVED

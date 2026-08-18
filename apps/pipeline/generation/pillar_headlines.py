@@ -1,9 +1,19 @@
 """
-pillar_headlines.py — Part 3: one OpenAI call per audit that turns the
+pillar_headlines.py — Part 3: one OpenAI call per run that turns the
 run's own facts into three one-line pillar summaries (visibility,
 accessibility, true_value), replacing the report's hardcoded section/
 hero-card titles. Same never-raise, retry-once shape as generation/
 revenue_probe.py.
+
+Cycle-agnostic on purpose: this module takes dimensions_raw/
+visibility_metrics and returns headlines, with no notion of "lite
+audit" vs "full cycle" baked in — worker.py has two callers,
+_run_pillar_headlines (lite, keyed by lite_request_id's single
+running->complete transition) and _sweep_full_cycle_pillar_headlines
+(full cycles, a sweep — see that function's own docstring for why a
+full cycle needs polling instead of a single trigger). Both write the
+SAME shape onto the SAME additive soa_lite_scan_results.dimensions.
+generated_headlines sibling key, on that cycle's own scan row.
 
 Deliberately pipeline-local and leaner than apps/api's
 build_pillars_payload: every fact handed to the model here is either a
@@ -49,7 +59,21 @@ DEFAULT_HEADLINES = {
 NOT_MEASURABLE_HEADLINE = "Couldn't be measured this run"
 
 SOURCE_GENERATED = "generated"
-SOURCE_DEFAULT = "default"
+# A pillar that WAS measurable but generation didn't produce a usable
+# line for it (API failure on both attempts, malformed JSON, or a
+# validation rejection). DEFAULT_HEADLINES below is a payload-
+# completeness placeholder only — apps/api's reportDerive.js::
+# resolvePillarHeadline is the thing that actually decides what a
+# reader sees for this source (a deterministic score-band line derived
+# from the pillar's own earned/max, which this module has no access to
+# for visibility/true_value — see the module docstring), never this
+# static text. Kept here only so the payload always has SOME non-null
+# headline string for a consumer that doesn't do that derivation.
+SOURCE_DERIVED = "derived"
+# Nothing about this pillar was measured this run at all (empty facts)
+# — genuinely different from SOURCE_DERIVED: there's no score to derive
+# a band from, so NOT_MEASURABLE_HEADLINE is the only honest text.
+SOURCE_NOT_MEASURABLE = "not_measurable"
 
 _ACCESSIBILITY_CODES = ("agent_access", "catalog_context", "protocol_feed")
 _TRUE_VALUE_SEEN_CODES = ("price_truth", "member_value", "deal_citability", "value_protocols")
@@ -153,7 +177,7 @@ def _build_prompt(pillars_with_facts: dict) -> str:
     keys = ", ".join(f'"{p}"' for p in pillars_with_facts)
     examples = "\n".join(f'- "{e}"' for e in _FEW_SHOT_EXAMPLES)
 
-    return f"""You are writing one-line summaries for a report measuring how well an AI shopping agent (like ChatGPT) can see and evaluate a brand's store.
+    return f"""You are writing one-line summaries for a report measuring how well AI shopping agents (ChatGPT, Gemini, Claude, and others) can see and evaluate a brand's store.
 
 {chr(10).join(sections)}
 
@@ -239,7 +263,11 @@ def generate_pillar_headlines(dimensions_raw: dict, visibility_metrics: dict, ap
     pillars_with_facts = {p: f for p, f in facts.items() if f}
 
     result = {
-        p: {"headline": NOT_MEASURABLE_HEADLINE if not facts.get(p) else DEFAULT_HEADLINES[p], "source": SOURCE_DEFAULT}
+        p: (
+            {"headline": NOT_MEASURABLE_HEADLINE, "source": SOURCE_NOT_MEASURABLE}
+            if not facts.get(p)
+            else {"headline": DEFAULT_HEADLINES[p], "source": SOURCE_DERIVED}
+        )
         for p in PILLARS
     }
 
@@ -252,7 +280,7 @@ def generate_pillar_headlines(dimensions_raw: dict, visibility_metrics: dict, ap
             parsed = _call_once(pillars_with_facts, api_key)
             break
         except Exception:
-            log.warning(f"[lite] pillar headline generation attempt {attempt} failed", exc_info=True)
+            log.warning(f"pillar headline generation attempt {attempt} failed", exc_info=True)
 
     if not isinstance(parsed, dict):
         return result

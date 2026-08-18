@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../api.js'
 import Sidebar from './Sidebar.jsx'
 
@@ -96,9 +96,27 @@ function cycleDisplayName(cycle_code) {
     .join(' ')
 }
 
-function formatEstRemaining(totalRuns, completedRuns) {
+// Minimum observed progress before an est.-remaining figure is trusted —
+// below this, "runs/sec" is noise (one poll tick, or zero net movement),
+// so the estimate is dropped rather than shown on a guess.
+const EST_MIN_ELAPSED_MS = 5_000
+const EST_MIN_RUNS_OBSERVED = 1
+
+// Derives a "time remaining" estimate from the run rate actually observed
+// since `baseline` was recorded (see CycleDashboard's progressBaselineRef),
+// rather than a fixed assumed seconds-per-run. Returns null — dropped by
+// the caller — whenever there isn't yet enough signal to be honest about
+// a rate: no baseline, too little elapsed time, or zero net progress.
+function formatEstRemaining(totalRuns, completedRuns, baseline) {
+  if (!baseline || totalRuns == null) return null
   const remaining = Math.max(0, totalRuns - completedRuns)
-  const secs = remaining * 7
+  if (remaining === 0) return null
+  const elapsedMs = Date.now() - baseline.at
+  const runsObserved = completedRuns - baseline.completed
+  if (elapsedMs < EST_MIN_ELAPSED_MS || runsObserved < EST_MIN_RUNS_OBSERVED) return null
+  const ratePerSec = runsObserved / (elapsedMs / 1000)
+  if (ratePerSec <= 0) return null
+  const secs = remaining / ratePerSec
   const h = Math.floor(secs / 3600)
   const m = Math.floor((secs % 3600) / 60)
   if (h > 0) return `${h}h ${m}m`
@@ -184,11 +202,11 @@ const PLATFORM_META = {
   perplexity: { icon: '🔍', color: '#0EA5E9' },
 }
 
-function RunningBody({ cycle, onViewCycle }) {
+function RunningBody({ cycle, progressBaseline }) {
   const pct = cycle.total_runs_planned > 0
     ? Math.min(100, (cycle.completed_runs / cycle.total_runs_planned) * 100)
     : 0
-  const estRemaining = formatEstRemaining(cycle.total_runs_planned, cycle.completed_runs)
+  const estRemaining = formatEstRemaining(cycle.total_runs_planned, cycle.completed_runs, progressBaseline)
 
   // Derive likely platforms from study_type as rough heuristic; fall back to placeholders
   const derivedPlatforms = ['chatgpt', 'gemini']
@@ -216,13 +234,25 @@ function RunningBody({ cycle, onViewCycle }) {
           })}
         </div>
       </div>
-      <div style={{ fontSize: 13, color: T.slate }}>◷ Est. {estRemaining} remaining</div>
+      {estRemaining && (
+        <div style={{ fontSize: 13, color: T.slate }}>◷ Est. {estRemaining} remaining</div>
+      )}
+      {/* Disabled while running: FullAnalysisReportGate falls back to the
+          classic MetricsDashboard for a cycle with no complete crawl yet,
+          which renders its own honest "No data for this cycle yet" empty
+          state rather than anything broken — so this disable is a product
+          choice (don't send someone to look at an empty dashboard), not a
+          bug workaround. Revisit if that product call changes. */}
       <button
-        onClick={e => { e.stopPropagation(); onViewCycle && onViewCycle(cycle.cycle_code) }}
-        style={{ width: '100%', padding: '9px 0', background: T.white, border: `1px solid ${T.text}`, color: T.text, borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+        disabled
+        title="Progress updates here; report available when complete"
+        style={{ width: '100%', padding: '9px 0', background: T.offWhite, border: `1px solid ${T.border}`, color: T.slateLight, borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'not-allowed' }}
       >
         View Progress
       </button>
+      <div style={{ fontSize: 11, color: T.slateLight, textAlign: 'center' }}>
+        Progress updates here; report available when complete
+      </div>
     </>
   )
 }
@@ -282,7 +312,7 @@ function CompleteBody({ cycle, onViewCycle }) {
         onClick={e => { e.stopPropagation(); onViewCycle && onViewCycle(cycle.cycle_code) }}
         style={{ width: '100%', padding: '9px 0', background: T.white, border: `1px solid ${T.text}`, color: T.text, borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
       >
-        View Results
+        View Report
       </button>
     </>
   )
@@ -452,10 +482,32 @@ export default function CycleDashboard({ onNewCycle, onViewCycle, onNavigate }) 
   const [liveTimer,    setLiveTimer]    = useState(0)
   const [resuming,     setResuming]     = useState(null) // cycle_code being resumed
 
+  // Est.-remaining baseline per running cycle_code — {at, completed} the
+  // moment we first observed each cycle running, so the estimate reflects
+  // this session's own observed run rate rather than a fixed assumption.
+  // Lives in a ref (not state) so it survives RunningBody's per-second
+  // remount (see `key={liveTimer}` below) without retriggering renders.
+  const progressBaselineRef = useRef({})
+
   const fetchCycles = () =>
     api.getCycles()
       .then(data => { setCycles(data || []); setError(null) })
       .catch(err  => { setCycles([]); console.error('Failed to load cycles:', err); setError(err.message) })
+
+  // Record/clear per-cycle baselines whenever the cycle list changes.
+  useEffect(() => {
+    const runningCodes = new Set()
+    for (const cycle of cycles) {
+      if (cycle.status !== 'running') continue
+      runningCodes.add(cycle.cycle_code)
+      if (!progressBaselineRef.current[cycle.cycle_code]) {
+        progressBaselineRef.current[cycle.cycle_code] = { at: Date.now(), completed: cycle.completed_runs }
+      }
+    }
+    for (const code of Object.keys(progressBaselineRef.current)) {
+      if (!runningCodes.has(code)) delete progressBaselineRef.current[code]
+    }
+  }, [cycles])
 
   // Initial fetch
   useEffect(() => {
@@ -468,11 +520,15 @@ export default function CycleDashboard({ onNewCycle, onViewCycle, onNavigate }) 
     return () => clearInterval(id)
   }, [])
 
-  // Silent auto-refresh every 30s
+  // Poll while any cycle is RUNNING so the progress card reflects live
+  // soa_runs counts (see cycles.py::_live_completed_runs); stop as soon
+  // as nothing is running rather than polling forever on a fixed timer.
+  const hasRunningCycle = cycles.some(c => c.status === 'running')
   useEffect(() => {
-    const id = setInterval(fetchCycles, 30_000)
+    if (!hasRunningCycle) return undefined
+    const id = setInterval(fetchCycles, 5_000)
     return () => clearInterval(id)
-  }, [])
+  }, [hasRunningCycle])
 
   const handleRetry = () => {
     setLoading(true)
@@ -516,7 +572,7 @@ export default function CycleDashboard({ onNewCycle, onViewCycle, onNavigate }) 
     : displayCycles.filter(c => c.status === activeFilter)
 
   const cardBody = (cycle) => {
-    if (cycle.status === 'running')      return <RunningBody      cycle={cycle} onViewCycle={onViewCycle} key={liveTimer} />
+    if (cycle.status === 'running')      return <RunningBody      cycle={cycle} onViewCycle={onViewCycle} progressBaseline={progressBaselineRef.current[cycle.cycle_code]} key={liveTimer} />
     if (cycle.status === 'needs_review') return <NeedsReviewBody  cycle={cycle} onViewCycle={onViewCycle} />
     if (cycle.status === 'complete')     return <CompleteBody      cycle={cycle} onViewCycle={onViewCycle} />
     if (cycle.status === 'failed')       return <FailedBody        cycle={cycle} onViewCycle={onViewCycle} onResume={handleResume} resuming={resuming} />
@@ -619,7 +675,11 @@ export default function CycleDashboard({ onNewCycle, onViewCycle, onNavigate }) 
                     ) : (
                       <>
                         {filtered.map(cycle => (
-                          <CycleCard key={cycle.cycle_code} cycle={cycle} onClick={() => onViewCycle && onViewCycle(cycle.cycle_code)}>
+                          <CycleCard
+                            key={cycle.cycle_code}
+                            cycle={cycle}
+                            onClick={cycle.status === 'running' ? undefined : () => onViewCycle && onViewCycle(cycle.cycle_code)}
+                          >
                             {cardBody(cycle)}
                           </CycleCard>
                         ))}

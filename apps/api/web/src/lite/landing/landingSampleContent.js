@@ -42,10 +42,15 @@ export const SAMPLE_OFFERS = [
 
 // MetricRow items — sample report card. Real earned/max per pillar;
 // subs are the run's own generated_headlines where the report shows
-// one, the registry default headline otherwise.
+// one, a Part-B score-derived band headline otherwise (reportDerive.js
+// ::deriveScoreBandHeadline — the SAME function the live report calls
+// with these same ratios). Accessibility's 14/18 (.778) landed in the
+// pre-Part-B code's unconditionally-negative default — the sample was
+// live proof of the exact bug Part B fixes; now reads its real
+// positive-band line instead.
 export const SAMPLE_PILLAR_ITEMS = [
   { value: 25, suffix: '/32', label: 'Visibility', sub: 'Agents know who you are' },
-  { value: 14, suffix: '/18', label: 'Accessibility', sub: "Agents can knock, but can't read much" },
+  { value: 14, suffix: '/18', label: 'Accessibility', sub: 'Agents can read most of what you publish' },
   { value: 15, suffix: '/50', label: 'True Value', sub: 'Your prices are not machine-readable, while deal details appear on 2/2 pages.', accent: true },
 ]
 

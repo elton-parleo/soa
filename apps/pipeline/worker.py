@@ -1208,6 +1208,83 @@ def _run_pillar_headlines(lite_id: int, cycle_id: int, scan_id: int, dimensions_
         """), {"dimensions": json.dumps(dims), "id": scan_id})
 
 
+def _sweep_full_cycle_pillar_headlines() -> None:
+    """
+    Full-cycle counterpart to _run_pillar_headlines above — Part A
+    (pillar-headline generation extended to Full Analysis, previously
+    lite-only). A SWEEP, not a single state-transition trigger, because
+    a full cycle's query-execution pipeline (soa_cycles.status=
+    'complete', PipelineOrchestrator's own runner/coding/metrics stages)
+    and its crawl (soa_lite_scan_results.status='complete', driven by
+    process_cycle_crawls above) are two independently-timed async
+    processes with no single event to hook — this checks both are done,
+    once per poll pass, for whichever cycle needs it next.
+
+    Written into the SAME soa_lite_scan_results.dimensions JSON blob the
+    lite path already uses (an additive sibling key), on THAT cycle's
+    own scan row (found by cycle_id, latest row wins — the same
+    ORDER BY id DESC LIMIT 1 discipline cycle_scoring_full.py::
+    build_full_cycle_report already reads with). No new storage or
+    schema was needed for the Full Analysis report to pick this up —
+    that function already reads dimensions_raw from exactly this row.
+
+    One cycle per pass (same "don't hog the loop" discipline as
+    process_cycle_crawls/get_next_planned_cycle) — skips any cycle that
+    already has generated_headlines (idempotent; "has this JSON key"
+    isn't portably expressible in SQL across Postgres/SQLite, so this
+    filters in Python, same idiom as decode_json_field elsewhere in this
+    file) and any scan row owned by a lite_request (that's _run_pillar_
+    headlines' own exclusive path, keyed on the lite request's
+    completion, not this sweep's).
+    """
+    api_key = os.environ.get("OPEN_AI_API_KEY")
+    if not api_key:
+        return
+
+    from generation.pillar_headlines import generate_pillar_headlines
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("""
+            SELECT s.cycle_id, s.id, s.dimensions
+            FROM soa_lite_scan_results s
+            JOIN soa_cycles c ON c.id = s.cycle_id
+            WHERE s.lite_request_id IS NULL
+              AND s.cycle_id IS NOT NULL
+              AND s.status = 'complete'
+              AND c.status = 'complete'
+              AND c.cycle_mode = 'query'
+              AND s.id = (
+                  SELECT MAX(s2.id) FROM soa_lite_scan_results s2 WHERE s2.cycle_id = s.cycle_id
+              )
+            ORDER BY s.cycle_id
+        """)).fetchall()
+
+    for cycle_id, scan_id, dimensions_raw in rows:
+        dims = _decode_json_field(dimensions_raw, {})
+        if "generated_headlines" in dims:
+            continue
+
+        try:
+            with engine.connect() as conn:
+                visibility_metrics = _fetch_visibility_metrics(conn, cycle_id)
+
+            headlines = generate_pillar_headlines(dims, visibility_metrics, api_key)
+
+            dims["generated_headlines"] = headlines
+            with engine.begin() as conn:
+                conn.execute(text("""
+                    UPDATE soa_lite_scan_results
+                    SET dimensions = :dimensions, updated_at = NOW()
+                    WHERE id = :id
+                """), {"dimensions": json.dumps(dims), "id": scan_id})
+        except Exception:
+            log.exception(f"[cycle] cycle_id={cycle_id}: pillar headline generation failed unexpectedly")
+
+        # One per pass, regardless of success/failure above — the next
+        # poll pass picks up whatever's next.
+        break
+
+
 # audit.parleo.io migration (U1): single source for the report-ready
 # email's link — same constant name/intent as the frontend's
 # PUBLIC_AUDIT_BASE_URL (apps/api/web/src/lite/publicUrls.js).
@@ -1340,6 +1417,13 @@ def main():
                 process_cycle_crawls()
             except Exception:
                 log.exception("[cycle-crawl] poll iteration failed")
+
+            # Part A: pillar-headline generation extended to Full
+            # Analysis — same isolation as every other sweep above.
+            try:
+                _sweep_full_cycle_pillar_headlines()
+            except Exception:
+                log.exception("[cycle] pillar headline sweep failed")
 
             if not row:
                 time.sleep(POLL_INTERVAL)
