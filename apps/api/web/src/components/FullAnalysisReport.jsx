@@ -22,6 +22,7 @@ import { api } from '../api.js'
 import { computeExposure, seedAnnualRevenue } from '../lite/liteDerive.js'
 import { deriveScoreHeroHeadline } from '../lite/report/reportDerive.js'
 import { VisibilitySection } from '../lite/report/VisibilitySection.jsx'
+import { TranscriptSection } from '../lite/report/TranscriptSection.jsx'
 import { AccessibilitySection } from '../lite/report/AccessibilitySection.jsx'
 import { TrueValueSection } from '../lite/report/TrueValueSection.jsx'
 import { EditorialBand } from '../lite/report/EditorialBand.jsx'
@@ -58,7 +59,10 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate }) {
   const primaryEntityName = primaryEntity?.entity || 'Your brand'
 
   const revenue = seedAnnualRevenue(report.revenue_estimate_usd) ?? DEFAULT_REVENUE
-  const exposure = computeExposure({ revenue, aiSharePct: DEFAULT_AI_SHARE_PCT, visibility: pillars.visibility.score })
+  // Exposure-model fix: True Value, not Visibility. This report builds
+  // its own pillars payload (cycle_scoring_full.py) and reads the score
+  // straight off it — no true_value_score field needed on this side.
+  const exposure = computeExposure({ revenue, aiSharePct: DEFAULT_AI_SHARE_PCT, trueValueScore: pillars.true_value.score })
   const rank = shareOfMentionsRank(competitorSet?.overall)
   const headline = deriveScoreHeroHeadline(pillars)
 
@@ -104,6 +108,7 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate }) {
 
           <VisibilitySection report={reportForVisibility} open={isOpen('viz')} onToggle={() => toggle('viz')} shareOfMentionsRank={rank} queryCount={report.total_queries} />
           <CompetitorStageSection competitorSet={competitorSet} />
+          <TranscriptSection report={report} open={isOpen('transcript')} onToggle={() => toggle('transcript')} />
           <AccessibilitySection report={report} open={isOpen('acc')} onToggle={() => toggle('acc')} />
           <TrueValueSection report={report} open={isOpen('tv')} onToggle={() => toggle('tv')} />
 

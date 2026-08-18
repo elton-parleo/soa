@@ -130,6 +130,20 @@ PLANNED_CYCLE_SCOPE_RESYNC: bool = (
     os.environ.get("PLANNED_CYCLE_SCOPE_RESYNC", "true").lower() == "true"
 )
 
+# "From the transcript" widget's WHAT WENT RIGHT / WHAT LEAKED boxes
+# (app/services/transcript_pick.py) — the clause logic behind them needs
+# more testing (known issues: "named unprompted" firing on brand-named
+# queries; a brand's own domain read as a third-party price source), so
+# it's gated separately from the transcript section itself, which always
+# ships. Off by default: select_transcript still selects the transcript
+# and computes spans/highlights, but omits `right`/`leaked` from the
+# payload entirely (not empty strings) — narrative_case/selection_tier
+# stay present for diagnostics. feat/transcript-narrative-testing flips
+# this default to true; that's the ONLY diff between the two branches.
+TRANSCRIPT_NARRATIVE_ENABLED: bool = (
+    os.environ.get("TRANSCRIPT_NARRATIVE_ENABLED", "false").lower() == "true"
+)
+
 # Pipeline
 SOA_PLATFORMS: str = os.environ.get("SOA_PLATFORMS", "chatgpt,perplexity,gemini,claude")
 SOA_RUNNER_ERROR_ABORT_THRESHOLD: float = float(os.environ.get("SOA_RUNNER_ERROR_ABORT_THRESHOLD", "0.50"))

@@ -32,6 +32,7 @@ from app.services.lite_crosswalk import GAP_THRESHOLD, RunSignal, link_dimension
 from app.services.lite_incentive_citation import build_incentive_citation_payload
 from app.services.lite_pillars import build_pillars_payload, member_value_applicable
 from app.services.lite_visibility import build_visibility_payload
+from app.services.transcript_pick import select_transcript
 from app.schemas import (
     EntityMetrics,
     PublicLiteEntityMetrics,
@@ -88,6 +89,25 @@ def decode_json_field(value, default):
     if isinstance(value, str):
         return json.loads(value) if value else default
     return value if value is not None else default
+
+
+def _ordinal(n: int) -> str:
+    suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def share_rank_label_for(share_of_mentions: list, primary_name: str) -> Optional[str]:
+    """'1st of 6' style label matching the mock's "1st-of-6 rank" copy —
+    ranked by the SAME share_of_mentions rows the visibility pillar
+    already renders, so the transcript widget's copy can never
+    contradict that section's own numbers."""
+    if not share_of_mentions:
+        return None
+    ranked = sorted(share_of_mentions, key=lambda r: -r["mentions"])
+    for i, row in enumerate(ranked):
+        if row["entity"] == primary_name:
+            return f"{_ordinal(i + 1)} of {len(ranked)}"
+    return None
 
 
 def _bare_domain(url) -> Optional[str]:
@@ -568,6 +588,12 @@ def build_cycle_report(conn, cycle_id: int, scan_row) -> dict:
         visibility = pillars_payload["visibility"]["score"]
         accessibility = pillars_payload["accessibility"]["score"]
         composite = pillars_payload["composite"]
+        # Exposure-model fix: the modeled exposure figure is driven by
+        # True Value, not Visibility. Serialized additively (never by
+        # reshaping `visibility`, which the legacy tile and the
+        # Visibility section still read) and already normalized 0-100
+        # by _pillar, so a Member Value N/A run doesn't distort it.
+        true_value_score = pillars_payload["true_value"]["score"]
     else:
         # visibility reuses the same share-of-voice metric already
         # computed for the report (build_entity_metrics' 'som') — no
@@ -575,6 +601,10 @@ def build_cycle_report(conn, cycle_id: int, scan_row) -> dict:
         # the 'overall' slice), so no rebasing was needed for Stage 7 (A2).
         visibility = overall_metrics.get(primary_code, {}).get("som") if primary_code else None
         accessibility = scan_row[1] if scan_complete else None
+        # No pillars payload means no True Value pillar was ever
+        # computed for this row — null, not a zero standing in for one.
+        # The client models maximum gap and labels the figure as such.
+        true_value_score = None
         composite = None
         if visibility is not None:
             composite = (
@@ -641,10 +671,37 @@ def build_cycle_report(conn, cycle_id: int, scan_row) -> dict:
     _attach_v3_linked_reasons(pillars_payload, linked)
     scan_payload = build_scan_payload(scan_row, linked)
 
+    # "From the transcript" widget: renders whenever the cycle has at
+    # least one successful, non-empty-response run for the primary
+    # entity — independent of scan_scorable (it's about the runs
+    # themselves, not the crawl). share_pct/rank_label come from the
+    # SAME visibility_breakdown rows just built above, never recomputed
+    # inside select_transcript, so the widget's copy can never drift
+    # from the visibility pillar's own numbers.
+    transcript_payload = None
+    if primary_entity_id is not None:
+        primary_share_row = next(
+            (r for r in visibility_breakdown["share_of_mentions"] if r["is_primary"]), None,
+        )
+        share_pct = primary_share_row["share_pct"] if primary_share_row else None
+        share_rank_label = share_rank_label_for(
+            visibility_breakdown["share_of_mentions"],
+            entity_info.get(primary_code, {}).get("name") if primary_code else None,
+        )
+        transcript_payload = select_transcript(
+            conn, cycle_id, primary_entity_id,
+            share_pct=share_pct, share_rank_label=share_rank_label,
+            # F1/F2's own gate (engine.py, STATUS_COMPLETE only) — a
+            # non-empty offers list means the PDP encoded at least one
+            # machine-readable price the agent could have quoted.
+            page_price_encoded=bool(dimensions_raw.get("offers")),
+        )
+
     return PublicLiteReportResponse(
         status="complete", locked=False, overall=overall, by_stage=None,
         scan=scan_payload,
         visibility=visibility, accessibility=accessibility, composite=composite,
+        true_value_score=true_value_score,
         scan_status=scan_status,
         visibility_breakdown=visibility_breakdown,
         competitor_source=None,  # stamped by the caller (public_lite.py) when applicable
@@ -659,4 +716,5 @@ def build_cycle_report(conn, cycle_id: int, scan_row) -> dict:
         generated_headlines=dimensions_raw.get("generated_headlines"),
         brand_icon_url=dimensions_raw.get("brand_icon_url"),
         store_domain=store_domain,
+        transcript=transcript_payload,
     ).model_dump()

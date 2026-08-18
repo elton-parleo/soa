@@ -259,6 +259,10 @@ class FullAnalysisReportResponse(BaseModel):
     # `pillars`/`offers`/`evidence` above). Null on any cycle this
     # generation hasn't reached yet.
     generated_headlines: Optional[dict] = None
+    # "From the transcript" widget — same shape/service as PublicLite
+    # ReportResponse.transcript (app/services/transcript_pick.py); one
+    # backend service, one frontend component, both products.
+    transcript: Optional[dict] = None
 
 class QueryCreate(BaseModel):
     """Fields for creating a new query. query_code is auto-generated."""
@@ -1305,6 +1309,16 @@ class PublicLiteReportResponse(BaseModel):
     visibility: Optional[float] = None
     accessibility: Optional[float] = None
     composite: Optional[float] = None
+    # Exposure-model fix (this session): the True Value pillar's own
+    # normalized 0-100 score, the input the modeled exposure figure is
+    # driven by (web/src/lite/liteDerive.js::computeExposure). Additive
+    # and independent of `visibility` above, which stays exactly as it
+    # was for the legacy tile and the Visibility section — the two are
+    # different pillars and the report shows both. Null on any row
+    # without a pillars payload (legacy scorer_version); the client
+    # then models maximum gap and says so rather than showing a number
+    # that pretends to be measured.
+    true_value_score: Optional[float] = None
     scan_status: Optional[str] = None
     visibility_breakdown: Optional[PublicLiteVisibilityBreakdown] = None
     pillars: Optional[PublicLitePillars] = None
@@ -1347,6 +1361,11 @@ class PublicLiteReportResponse(BaseModel):
     # when brand_icon_url is null. Never third-party-sourced itself —
     # this is the merchant's own submitted domain, not a lookup.
     store_domain: Optional[str] = None
+    # "From the transcript" widget: one live query + verbatim response
+    # selected by app/services/transcript_pick.py::select_transcript,
+    # additive/null-safe (see that module's docstring for the selection
+    # cascade). Loose dict, same convention as `pillars` above.
+    transcript: Optional[dict] = None
 
 
 class PublicLiteEmailRequest(BaseModel):

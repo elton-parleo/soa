@@ -6,6 +6,38 @@
 
 export const EDITORIAL_QUOTE = 'The shelf is now an algorithm. Most of your value is still invisible to it.'
 
+// Exposure-model fix (this session): the model line under the exposure
+// figure, and the read-only assumption rows in ADJUST ASSUMPTIONS. It
+// lives here, not in ExposureSection.jsx, for the same reason every
+// other block on this page does — the component renders copy, it never
+// authors it.
+//
+// The old line claimed "the invisibility factor comes from your True
+// Value result" while the code was actually feeding it the VISIBILITY
+// pillar. This wording describes what is now genuinely computed,
+// including the substitution channel and the cap. `body` is a function
+// because one clause is conditional: a row with no True Value pillar
+// (legacy scorer_version) models maximum gap, and the reader has to be
+// told that rather than shown a number implying it was measured.
+export const EXPOSURE_MODEL_COPY = {
+  lead: 'The model:',
+  body: ({ revenueLabel, aiSharePct, measured }) => (
+    `revenue × AI-assisted share × a value-invisibility factor derived from your True Value result`
+    + `, including a substitution allowance for answers where an agent quotes a competitor's price or deal in your place`
+    + ` — capped so exposure never exceeds your AI-assisted revenue. `
+    + `${revenueLabel} annual revenue, ${aiSharePct}% AI-assisted share. `
+    + (measured
+      ? ''
+      : 'This run has no True Value pillar to read, so the figure assumes your value is fully invisible. ')
+    + 'Modeled, not measured — the Full Analysis replaces it with measured price gaps.'
+  ),
+  // Read-only in ADJUST ASSUMPTIONS, deliberately not a slider: it is a
+  // modeling constant, and a per-report knob would make every report's
+  // number incomparable to every other.
+  substitutionAssumption: '1.5× substitution allowance',
+  substitutionAssumptionNote: 'MODELING CONSTANT · NOT ADJUSTABLE',
+}
+
 export const FUNNEL_GATE_COPY = {
   eyebrow: 'NOT IN THIS SAMPLE',
   title: 'Where you disappear in the funnel',

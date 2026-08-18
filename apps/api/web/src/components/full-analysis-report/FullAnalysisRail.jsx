@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { id: 'discovery', icon: 'search', label: 'Discovery' },
   { id: 'matrix', icon: 'grid', label: 'Platform matrix' },
   { id: 'viz', icon: 'eye', label: 'Visibility' },
+  { id: 'transcript', icon: 'doc', label: 'The transcript' },
   { id: 'acc', icon: 'globe', label: 'Accessibility' },
   { id: 'tv', icon: 'tag', label: 'True Value' },
   { id: 'fix', icon: 'check', label: 'Ranked fixes' },
@@ -24,13 +25,14 @@ const NAV_ITEMS = [
   { id: 'truesync', icon: 'refresh', label: 'TrueSync' },
 ]
 
-function navScore({ id, pillars, composite, totalQueries }) {
+function navScore({ id, pillars, composite, totalQueries, transcript }) {
   const vis = pillarEarnedMax(pillars.visibility)
   const acc = pillarEarnedMax(pillars.accessibility)
   const tv = pillarEarnedMax(pillars.true_value)
   switch (id) {
     case 'score': return `${Math.round(composite ?? 0)}/100`
     case 'viz': return `${Math.round(vis.earned)}/${Math.round(vis.max)}`
+    case 'transcript': return transcript ? `${transcript.query_index}/${transcript.total_queries}` : null
     case 'acc': return `${Math.round(acc.earned)}/${Math.round(acc.max)}`
     case 'tv': return `${Math.round(tv.earned)}/${Math.round(tv.max)}`
     case 'fix': return pillars.fixes ? `+${Math.round(pillars.fixes.visible.reduce((s, f) => s + f.impact, 0))}` : null
@@ -55,6 +57,7 @@ export function FullAnalysisRail({ report, primaryEntityName, exposure, active, 
   const unmeasurable = partial ? buildMeasurableContext(pillars).unmeasurable_points : 0
 
   const items = NAV_ITEMS.filter((item) => item.id !== 'continuation' || hasContinuation)
+    .filter((item) => item.id !== 'transcript' || report.transcript)
 
   return (
     <div className="fa-report-rail" style={{ borderRight: '1px solid var(--border)', background: 'var(--canvas-dim)' }}>
@@ -116,7 +119,7 @@ export function FullAnalysisRail({ report, primaryEntityName, exposure, active, 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {items.map(({ id, icon, label }) => {
               const on = active === id
-              const score = navScore({ id, pillars, composite, totalQueries: report.total_queries })
+              const score = navScore({ id, pillars, composite, totalQueries: report.total_queries, transcript: report.transcript })
               return (
                 <a
                   key={id}

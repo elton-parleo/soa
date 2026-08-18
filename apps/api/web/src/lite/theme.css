@@ -2434,3 +2434,71 @@
     padding: 24px 20px 20px !important;
   }
 }
+
+/* ── Report-route resolving skeleton (status-flash fix) — the neutral
+   placeholders ReportResolving (LiteWidget.jsx) holds the report frame
+   with for the single round trip between opening /r/{token} and knowing
+   what that token is. DS tokens only, no copy: this must never read as
+   a progress affordance. It renders outside .lite-root (it mirrors the
+   report shell, not the card views), so the blanket reduced-motion
+   override scoped to `.lite-root *` doesn't reach it — hence its own
+   explicit rule below. ── */
+.lite-resolving-block {
+  background: var(--canvas-dim);
+  box-shadow: inset 0 0 0 1px var(--hairline);
+  border-radius: 10px;
+  animation: lite-resolving-pulse 1.6s ease-in-out infinite;
+}
+.lite-resolving-rail .lite-resolving-block {
+  background: var(--container);
+}
+@keyframes lite-resolving-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lite-resolving-block { animation: none; }
+}
+/* The rail carries the wordmark on desktop; on phone the rail is hidden
+   (same rule as the report's), so the mark in the main column takes
+   over rather than showing twice. */
+.lite-resolving-mark { display: none; }
+@media (max-width: 640px) {
+  .lite-resolving-mark { display: block; }
+}
+
+/* ── Revenue field (lite/RevenueField.jsx) — the log slider plus its
+   typed amount, shared by the report's ADJUST ASSUMPTIONS panel and the
+   landing Stakes widget. Grid areas rather than two DOM copies of the
+   input: desktop puts the amount on the label's right, phone drops it
+   below the track at full width (mobile pass, LM3/RM8 idiom). ── */
+.lite-revenue-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "label amount"
+    "range range"
+    "error error";
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 8px;
+}
+.lite-revenue-field-label { grid-area: label; font-size: 12.5px; }
+.lite-revenue-field-input { grid-area: amount; }
+.lite-revenue-field-range { grid-area: range; }
+.lite-revenue-field-error { grid-area: error; }
+
+@media (max-width: 640px) {
+  .lite-revenue-field {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "label"
+      "range"
+      "amount"
+      "error";
+  }
+  .lite-revenue-field-input {
+    width: 100%;
+    text-align: left !important;
+  }
+}

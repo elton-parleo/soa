@@ -39,6 +39,7 @@ as bare facts (`audit_submitted`, `email_captured`) with no payload.
 | `report_viewed` | `state`, `viewer`, `src` | Report page mounts. `state` is `scored`\|`partial`\|`blocked`\|`expired`. `viewer` is `owner`\|`visitor` (does this browser hold the token from its own submission?). `src` from `captureSrcParam()`. |
 | `section_viewed` | `section` | A report section is ≥50% visible for a continuous 1s, once per section per load. |
 | `section_expanded` | `section`, `control` | A collapsible panel or top-level section opens (closed→open only). Instrumented once inside the shared `useCollapsible` hook and `SectionCollapseButton`, not per call site. |
+| `transcript_answer_expanded` | — | The "From the transcript" widget's "Show the full answer" toggle opens (closed→open only). Separate from `section_expanded` — measures reading past the preview into the full verbatim answer, not the outer section collapsing (which already fires `section_expanded` via `ReportSection`/`SectionCollapseButton`). No response text in the payload, ever. |
 | `share_copied` | `placement` | The share link is successfully copied (`desktop_rail`, `mobile_summary`, `mobile_sticky_bar`). |
 | `cta_clicked` | `cta`, `placement` | A report CTA is clicked. `cta` is `walkthrough`\|`truesync`\|`run_your_free_audit`\|`rerun`. |
 | `adjust_assumptions_used` | — | The exposure section's revenue/AI-share inputs are touched, once per load. |

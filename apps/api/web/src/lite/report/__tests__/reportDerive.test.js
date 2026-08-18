@@ -85,6 +85,23 @@ describe('buildNavItems', () => {
     const items = buildNavItems({ pillars: _pillars(), composite: null, exposure: 100000, active: 'score' })
     expect(items.find((i) => i.id === 'score').score).toBe('0/100')
   })
+
+  it('omits the transcript row entirely when transcript is null/absent', () => {
+    const items = buildNavItems({ pillars: _pillars(), composite: 40, exposure: 100000, active: 'score' })
+    expect(items.find((i) => i.id === 'transcript')).toBeUndefined()
+  })
+
+  it('includes a transcript row scored query_index/total_queries when transcript is present', () => {
+    const items = buildNavItems({
+      pillars: _pillars(), composite: 40, exposure: 100000, active: 'score',
+      transcript: { query_index: 14, total_queries: 24 },
+    })
+    const row = items.find((i) => i.id === 'transcript')
+    expect(row).toBeDefined()
+    expect(row.score).toBe('14/24')
+    // Placed between visibility and accessibility, per the widget's spec.
+    expect(items.map((i) => i.id)).toEqual(['score', 'viz', 'transcript', 'acc', 'tv', 'fix', 'truesync', 'exp'])
+  })
 })
 
 describe('deriveReportViewedState — analytics report_viewed.state vocabulary', () => {

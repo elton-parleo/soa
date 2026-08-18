@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 
 import app.routers.full_analysis as full_analysis_router
+import soa_shared.config as config
 
 CURRENT_USER = {"organization_id": 1, "user_id": "u1"}
 
@@ -35,7 +36,7 @@ def patched_engine(monkeypatch):
             )
         """)
         conn.exec_driver_sql("""
-            CREATE TABLE soa_entities (id INTEGER PRIMARY KEY, name TEXT, slug TEXT, website_url TEXT)
+            CREATE TABLE soa_entities (id INTEGER PRIMARY KEY, name TEXT, slug TEXT, website_url TEXT, aliases TEXT)
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_cycle_entities (
@@ -54,26 +55,28 @@ def patched_engine(monkeypatch):
         conn.exec_driver_sql("CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, stage TEXT, persona TEXT, query_text TEXT)")
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
-                id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT, platform TEXT
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT, platform TEXT,
+                raw_response TEXT, run_at TEXT
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_coded_mentions (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
                 mentioned BOOLEAN, deal_cited BOOLEAN, deal_types TEXT, member_value_cited BOOLEAN,
-                strength TEXT, evidence TEXT
+                strength TEXT, evidence TEXT, position INTEGER
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_price_observations (
                 id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
-                stated_price FLOAT, claimed_net_price FLOAT, member_price_claimed BOOLEAN
+                stated_price FLOAT, claimed_net_price FLOAT, member_price_claimed BOOLEAN,
+                merchant_name TEXT, merchant_slug TEXT, attribution_status TEXT
             )
         """)
         conn.exec_driver_sql("CREATE TABLE soa_pass2_coding_log (id INTEGER PRIMARY KEY, run_id INTEGER, coding_pass_version INTEGER)")
         conn.exec_driver_sql("""
             CREATE TABLE soa_incentive_scores (
-                id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER,
+                id INTEGER PRIMARY KEY, run_id INTEGER, entity_id INTEGER, price_observation_id INTEGER,
                 scoring_grain TEXT, status TEXT, measurement_status TEXT,
                 stated_price FLOAT, ground_truth_true_cost FLOAT,
                 ground_truth_applied_deals TEXT, ground_truth_available_deals TEXT,
@@ -292,3 +295,48 @@ def test_generated_headlines_null_when_the_sweep_has_not_reached_this_cycle_yet(
 
     assert result.rendered is True
     assert result.generated_headlines is None
+
+
+# ─── "From the transcript" widget — same service as the lite report ───────
+
+def test_transcript_wired_into_the_full_analysis_report(patched_engine, monkeypatch):
+    # Pinned explicitly (not relying on the ambient config.py default) —
+    # this test's whole point is the OFF state, so it must hold
+    # regardless of which branch/deploy it runs on.
+    monkeypatch.setattr(config, "TRANSCRIPT_NARRATIVE_ENABLED", False)
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn, cycle_code="fc-transcript", cycle_id=40)
+        # _seed_scored_cycle's own runs never set raw_response — give
+        # exactly one of them a verbatim answer so select_transcript has
+        # something to pick.
+        conn.exec_driver_sql(
+            "UPDATE soa_runs SET raw_response = 'Full Cycle Brand is the top pick here.', run_at = '2026-08-07' "
+            "WHERE id = 40000"
+        )
+
+    result = full_analysis_router.get_full_analysis_report("fc-transcript", current_user=CURRENT_USER)
+
+    assert result.rendered is True
+    assert result.transcript is not None
+    assert result.transcript["run_id"] == 40000
+    assert "Full Cycle Brand" in result.transcript["response_text"]
+    # TRANSCRIPT_NARRATIVE_ENABLED defaults off — same gate, same
+    # service, as the lite report (see test_public_lite_report.py's
+    # equivalent pair of tests).
+    assert "right" not in result.transcript
+    assert "leaked" not in result.transcript
+
+
+def test_transcript_narrative_boxes_present_when_the_flag_is_on(patched_engine, monkeypatch):
+    monkeypatch.setattr(config, "TRANSCRIPT_NARRATIVE_ENABLED", True)
+    with patched_engine.begin() as conn:
+        _seed_scored_cycle(conn, cycle_code="fc-transcript-on", cycle_id=41)
+        conn.exec_driver_sql(
+            "UPDATE soa_runs SET raw_response = 'Full Cycle Brand is the top pick here.', run_at = '2026-08-07' "
+            "WHERE id = 41000"
+        )
+
+    result = full_analysis_router.get_full_analysis_report("fc-transcript-on", current_user=CURRENT_USER)
+
+    assert result.transcript["right"]
+    assert result.transcript["leaked"]

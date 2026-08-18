@@ -117,7 +117,11 @@ describe('LandingPage — truth-rule copy regression guards', () => {
     render(<LandingPage navigate={navigate} />)
 
     expect(screen.getByText('Modeled')).toBeInTheDocument()
-    expect(screen.getByText(/Assumes agents currently find you 0% of the time/)).toBeInTheDocument()
+    // Exposure-model fix: the ceiling this widget assumes is now stated
+    // in the terms the model actually uses (True Value 0 — no value
+    // readable), not the mention-gap terms it used to borrow from
+    // Visibility. The figure itself is unchanged; only the claim is.
+    expect(screen.getByText(/Assumes agents can currently read none of your value/)).toBeInTheDocument()
   })
 
   it('carries the exact methodology provenance', () => {
@@ -130,6 +134,56 @@ describe('LandingPage — truth-rule copy regression guards', () => {
     render(<LandingPage navigate={navigate} />)
 
     expect(screen.getByText(/plus Gemini, Perplexity and Claude in the Full Analysis/)).toBeInTheDocument()
+  })
+})
+
+// ─── Stakes revenue control: $5B ceiling, log track, typed amount ──────
+
+describe('LandingPage — the Stakes estimator reaches large brands', () => {
+  const amount = () => screen.getByLabelText('Annual online revenue (exact amount)')
+  const track = () => screen.getByLabelText('Annual online revenue')
+
+  it('the revenue track carries a log position; the AI-share slider is untouched', () => {
+    render(<LandingPage navigate={navigate} />)
+    expect(track()).toHaveAttribute('max', '1000')
+    expect(track()).toHaveAttribute('step', '1')
+    const share = screen.getByLabelText('AI-assisted share of sales')
+    expect(share).toHaveAttribute('min', '5')
+    expect(share).toHaveAttribute('max', '40')
+  })
+
+  it('typing an amount updates the slider and the modeled figure together', () => {
+    render(<LandingPage navigate={navigate} />)
+    fireEvent.change(amount(), { target: { value: '1.5b' } })
+    fireEvent.blur(amount())
+
+    expect(amount()).toHaveValue('$1.5B')
+    // trueValueScore 0 on the landing: 1,500,000,000 * 0.20 * 1.0 * 0.85
+    expect(screen.getByText('$255,000,000')).toBeInTheDocument()
+  })
+
+  it('renders at the $5B ceiling without the panel overflowing its own width', () => {
+    render(<LandingPage navigate={navigate} />)
+    fireEvent.change(track(), { target: { value: '1000' } })
+
+    expect(amount()).toHaveValue('$5B')
+    // 5,000,000,000 * 0.20 * 1.0 * 0.85. The compact readout is what
+    // keeps the control legible at 360px — the figure below it is the
+    // only long string, and it already wrapped before this session.
+    expect(screen.getByText('$850,000,000')).toBeInTheDocument()
+    for (const el of [amount(), track()]) {
+      expect(el.getAttribute('style') || '').not.toMatch(/width:\s*\d{3,}px/)
+    }
+  })
+
+  it('rejects unreadable input without moving the figure', () => {
+    render(<LandingPage navigate={navigate} />)
+    const before = screen.getByText('$3,400,000')
+    expect(before).toBeInTheDocument()
+    fireEvent.change(amount(), { target: { value: 'abc' } })
+    fireEvent.blur(amount())
+    expect(screen.getByText('$3,400,000')).toBeInTheDocument()
+    expect(amount()).toHaveAttribute('aria-invalid', 'true')
   })
 })
 

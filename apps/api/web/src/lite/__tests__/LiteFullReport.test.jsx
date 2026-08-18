@@ -490,8 +490,13 @@ describe('LiteFullReport — exposure calculator (Stage 21, F2: collapsed by def
     const revenueSlider = screen.getByLabelText('Annual revenue')
     const numeral = () => container.querySelector('.lite-numeral--calc').textContent
     const before = numeral()
-    Object.defineProperty(revenueSlider, 'value', { value: '100000000', configurable: true })
-    revenueSlider.dispatchEvent(new Event('change', { bubbles: true }))
+    // The track carries a 0-1000 log POSITION now, not dollars — a
+    // linear $120K-$5B track would be unsettable below ~$50M. Set via
+    // fireEvent.change rather than defineProperty: the value React
+    // writes back is the position for the SNAPPED revenue, which can
+    // differ by a step or two, and a read-only value property throws
+    // when React tries.
+    fireEvent.change(revenueSlider, { target: { value: '900' } })
     expect(numeral()).not.toBe(before)
   })
 
@@ -520,10 +525,24 @@ describe('LiteFullReport — exposure revenue seeding (Part 5, R3; annual units 
     expect(screen.getByText('revenue estimated by ChatGPT · adjust')).toBeInTheDocument()
   })
 
-  it('clamps an estimate below the slider minimum', () => {
-    const report = { ...baseReport, revenue_estimate_usd: 5000 } // well under the $120,000 floor
+  it('clamps an implausible estimate to the probe\'s own floor, not the slider\'s', () => {
+    // $5,000 is below revenue_probe.py's MIN_PLAUSIBLE_REVENUE_USD, so
+    // it seeds at that floor ($100,000). It is no longer raised to the
+    // slider's $120,000 minimum — the slider's range is what the CONTROL
+    // can show, which is a different question from what a revenue figure
+    // can credibly be.
+    const report = { ...baseReport, revenue_estimate_usd: 5000 }
     render(<LiteFullReport report={report} />)
-    expect(screen.getByText(/\$120,000 annual revenue/)).toBeInTheDocument()
+    expect(screen.getByText(/\$100,000 annual revenue/)).toBeInTheDocument()
+  })
+
+  it('seeds a large estimate at its real size instead of the old $120M ceiling', () => {
+    // The bug this session fixed: a Sephora-scale audit seeded at
+    // $120,000,000 however large the estimate was, and the exposure
+    // figure understated by whatever multiple the brand exceeded it.
+    const report = { ...baseReport, revenue_estimate_usd: 1_000_000_000 }
+    render(<LiteFullReport report={report} />)
+    expect(screen.getByText(/\$1,000,000,000 annual revenue/)).toBeInTheDocument()
   })
 
   it('falls back to the existing static default, with no provenance label, when the probe never ran (revenue_estimate_usd absent)', () => {
@@ -545,8 +564,9 @@ describe('LiteFullReport — exposure revenue seeding (Part 5, R3; annual units 
     render(<LiteFullReport report={report} />)
     fireEvent.click(screen.getByText('revenue estimated by ChatGPT · adjust'))
     const revenueSlider = screen.getByLabelText('Annual revenue')
-    Object.defineProperty(revenueSlider, 'value', { value: '24000000', configurable: true })
-    revenueSlider.dispatchEvent(new Event('change', { bubbles: true }))
+    // Position 500 on the log track is $24,000,000 — see
+    // liteDerive.test.js, which pins that mapping directly.
+    fireEvent.change(revenueSlider, { target: { value: '500' } })
     fireEvent.click(screen.getByText('COLLAPSE'))
 
     expect(screen.getByText(/\$24,000,000 annual revenue/)).toBeInTheDocument()

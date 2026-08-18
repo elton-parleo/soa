@@ -31,7 +31,8 @@ import { useState } from 'react'
 import {
   accessibilityBadgeText, computeExposure, formatCurrency, formatDateStamp,
   getDominantRivalPayoff, getIncentiveCitationPayoff,
-  seedAnnualRevenue, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX,
+  seedAnnualRevenue, REVENUE_SLIDER_STEPS,
+  revenueToSliderPosition, revenueSliderPositionToRevenue,
 } from './liteDerive.js'
 import {
   ENTITY_COLORS, RIVAL_SLATE_RAMP, LightCard, DarkCard, SectionHeader, ReportHeaderBar,
@@ -1721,9 +1722,16 @@ function ExposureCalculator({ revenue, onRevenueChange, aiSharePct, onAiShareCha
       <label className="lite-label" style={{ display: 'block', marginBottom: 8 }}>
         Annual revenue: {formatCurrency(revenue)}
       </label>
+      {/* Log position, not dollars: the $5B ceiling makes a linear
+          track unusable below ~$50M (see liteDerive.js). This legacy
+          template keeps its slider-only control — the typed field is on
+          the V4 report and the landing widget — but the mapping is the
+          same shared one, so its readout can still reach a real figure
+          at any scale. */}
       <input
-        type="range" min={REVENUE_SLIDER_MIN} max={REVENUE_SLIDER_MAX} step={10000} value={revenue}
-        onChange={(e) => onRevenueChange(Number(e.target.value))}
+        type="range" min={0} max={REVENUE_SLIDER_STEPS} step={1}
+        value={revenueToSliderPosition(revenue)}
+        onChange={(e) => onRevenueChange(revenueSliderPositionToRevenue(Number(e.target.value)))}
         className="lite-slider" style={{ marginBottom: 22 }}
         aria-label="Annual revenue"
       />
@@ -1917,7 +1925,12 @@ export function LiteFullReport({ report, onAddStoreUrl, token }) {
   const [revenue, setRevenue] = useState(() => seedAnnualRevenue(report.revenue_estimate_usd) ?? DEFAULT_REVENUE)
   const [revenueTouched, setRevenueTouched] = useState(false)
   const [aiSharePct, setAiSharePct] = useState(DEFAULT_AI_SHARE_PCT)
-  const exposure = computeExposure({ revenue, aiSharePct, visibility: report.visibility })
+  // Exposure-model fix: True Value drives the figure now. This legacy
+  // template only ever renders rows without a pillars payload, so
+  // true_value_score is null here in practice and the model assumes
+  // maximum gap — report.visibility is still shown, unchanged, as its
+  // own tile below; it just no longer masquerades as the exposure input.
+  const exposure = computeExposure({ revenue, aiSharePct, trueValueScore: report.true_value_score })
   const revenueIsEstimated = report.revenue_estimate_usd != null && !revenueTouched
 
   function handleRevenueChange(value) {
