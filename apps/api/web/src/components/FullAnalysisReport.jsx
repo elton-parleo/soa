@@ -106,7 +106,7 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate }) {
           <DiscoverySection scan={report.scan} open={isOpen('discovery')} onToggle={() => toggle('discovery')} />
           <PlatformMatrixSection matrix={platformMatrix} open={isOpen('matrix')} onToggle={() => toggle('matrix')} />
 
-          <VisibilitySection report={reportForVisibility} open={isOpen('viz')} onToggle={() => toggle('viz')} shareOfMentionsRank={rank} />
+          <VisibilitySection report={reportForVisibility} open={isOpen('viz')} onToggle={() => toggle('viz')} shareOfMentionsRank={rank} queryCount={report.total_queries} />
           <CompetitorStageSection competitorSet={competitorSet} />
           <TranscriptSection report={report} open={isOpen('transcript')} onToggle={() => toggle('transcript')} />
           <AccessibilitySection report={report} open={isOpen('acc')} onToggle={() => toggle('acc')} />
@@ -114,7 +114,7 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate }) {
 
           <EditorialBand />
 
-          <FixesTable report={report} open={isOpen('fix')} onToggle={() => toggle('fix')} brandName={primaryEntityName} reportToken={null} />
+          <FixesTable report={report} open={isOpen('fix')} onToggle={() => toggle('fix')} brandName={primaryEntityName} reportToken={null} queryCount={report.total_queries} />
 
           <AnalystLayerSection cycleCode={cycleCode} open={isOpen('analyst')} onToggle={() => toggle('analyst')} />
           <EvidenceSection evidence={report.evidence} onViewResponse={handleViewResponse} open={isOpen('evidence')} onToggle={() => toggle('evidence')} />

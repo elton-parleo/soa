@@ -37,7 +37,12 @@ const DEFAULT_REVENUE = 12_000_000
 const DEFAULT_AI_SHARE_PCT = 20
 
 function shareOfMentionsRank(shareOfMentions) {
-  if (!shareOfMentions || shareOfMentions.length === 0) return null
+  // < 2, not just 0: a scope of just the primary (no competitors — a
+  // legacy/invalid launch, see NewCycleFlow.jsx's own Step3 gate) has
+  // nothing to rank against. "1st of 1" / 100% share is a real number
+  // but a misleading one — an honest null (no rank badge) is correct
+  // here, same as an empty scope.
+  if (!shareOfMentions || shareOfMentions.length < 2) return null
   const sorted = [...shareOfMentions].sort((a, b) => (b.share_pct || 0) - (a.share_pct || 0))
   const idx = sorted.findIndex((e) => e.is_primary)
   if (idx === -1) return null

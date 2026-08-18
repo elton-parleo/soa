@@ -12,6 +12,7 @@ import { FAILURE_POINT_COPY } from './reportContent.js'
 import { isPartialRead, buildMeasurableContext, partialReadFailurePoint } from './reportDerive.js'
 import { DEMO_REQUEST_CTAS } from '../demoRequestCtas.js'
 import { useDemoRequestModal } from '../useDemoRequestModal.js'
+import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
 import { track } from '../analytics.js'
 import { EVENTS } from '../analyticsEvents.js'
 
@@ -32,7 +33,7 @@ function _withDiscoveryFirst(visible) {
   return { ordered, discoveryCode: visible[idx].code }
 }
 
-export function FixesTable({ report, open, onToggle, brandName, reportToken }) {
+export function FixesTable({ report, open, onToggle, brandName, reportToken, queryCount = LITE_QUERY_COUNT }) {
   const demoModal = useDemoRequestModal({ brandName, reportToken })
   const fixes = report.pillars.fixes
   if (!fixes) return null
@@ -109,7 +110,7 @@ export function FixesTable({ report, open, onToggle, brandName, reportToken }) {
             <span className="mono-label" style={{ fontSize: 9, letterSpacing: '.18em', fontWeight: 600, color: 'var(--amber-deep)', border: '1.5px solid var(--amber)', borderRadius: 999, padding: '5px 13px 4px', background: 'rgba(255,255,255,.94)', whiteSpace: 'nowrap' }}>RANKED IN THE FULL ANALYSIS</span>
           </div>
           <div style={{ marginTop: 18, display: 'flex', justifyContent: 'space-between', gap: 22, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6, maxWidth: 430 }}>Ranked across your full catalog instead of a 24-query sample, each with the owner and the effort it takes.</span>
+            <span style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6, maxWidth: 430 }}>Ranked across your full catalog instead of a {queryCount}-query sample, each with the owner and the effort it takes.</span>
             <Button variant="blue" arrow onClick={() => { track(EVENTS.CTA_CLICKED, { cta: 'walkthrough', placement: 'fixes_table' }); demoModal.open('full_analysis_walkthrough') }} style={{ flexShrink: 0 }}>Book your walkthrough</Button>
           </div>
         </div>
