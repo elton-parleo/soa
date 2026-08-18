@@ -141,7 +141,7 @@ PLANNED_CYCLE_SCOPE_RESYNC: bool = (
 # stay present for diagnostics. feat/transcript-narrative-testing flips
 # this default to true; that's the ONLY diff between the two branches.
 TRANSCRIPT_NARRATIVE_ENABLED: bool = (
-    os.environ.get("TRANSCRIPT_NARRATIVE_ENABLED", "false").lower() == "true"
+    os.environ.get("TRANSCRIPT_NARRATIVE_ENABLED", "true").lower() == "true"
 )
 
 # Pipeline
