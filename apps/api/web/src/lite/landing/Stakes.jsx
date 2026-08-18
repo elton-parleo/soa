@@ -20,7 +20,8 @@
  */
 import { useRef, useState } from 'react'
 import { DarkPanel, StatusChip, Button } from '../../ds/index.js'
-import { computeExposure, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX, AI_SHARE_SLIDER_MIN, AI_SHARE_SLIDER_MAX, AI_SHARE_DEFAULT_PCT, formatCurrency } from '../liteDerive.js'
+import { computeExposure, AI_SHARE_SLIDER_MIN, AI_SHARE_SLIDER_MAX, AI_SHARE_DEFAULT_PCT, formatCurrency } from '../liteDerive.js'
+import { RevenueField } from '../RevenueField.jsx'
 import { track } from '../analytics.js'
 import { EVENTS } from '../analyticsEvents.js'
 
@@ -53,19 +54,14 @@ export function Stakes() {
           <div className="lite-stakes-left" style={{ padding: '40px 44px 42px', borderRight: '1px solid var(--dark-border)' }}>
             <div className="section-heading sm on-dark">What is invisible value <span className="accent">costing you?</span></div>
             <div style={{ marginTop: 28 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16 }}>
-                <span style={{ fontSize: 14, color: 'var(--dark-muted)' }}>Annual online revenue</span>
-                <b className="num" style={{ fontSize: 17, fontWeight: 720, letterSpacing: '-0.02em', color: 'var(--dark-text)' }}>{formatCurrency(revenue)}</b>
-              </div>
-              <input
-                type="range"
-                min={REVENUE_SLIDER_MIN}
-                max={REVENUE_SLIDER_MAX}
-                step={REVENUE_SLIDER_MIN}
-                value={revenue}
-                onChange={(e) => { setRevenue(+e.target.value); trackFirstInteraction() }}
-                aria-label="Annual online revenue"
-                style={{ width: '100%', marginTop: 14, accentColor: 'var(--dark-text)' }}
+              <RevenueField
+                label="Annual online revenue"
+                revenue={revenue}
+                onRevenueChange={setRevenue}
+                onInteract={trackFirstInteraction}
+                tone="dark"
+                labelStyle={{ fontSize: 14 }}
+                valueStyle={{ fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em' }}
               />
             </div>
             <div style={{ marginTop: 22, paddingTop: 22, borderTop: '1px solid var(--dark-border)' }}>

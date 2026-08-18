@@ -22,7 +22,8 @@ import { useRef } from 'react'
 import { Glyph, LeakageEstimator } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
 import { useCollapsible } from './Collapsible.jsx'
-import { REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX, AI_SHARE_SLIDER_MIN, AI_SHARE_SLIDER_MAX, formatCurrency } from '../liteDerive.js'
+import { AI_SHARE_SLIDER_MIN, AI_SHARE_SLIDER_MAX, formatCurrency } from '../liteDerive.js'
+import { RevenueField } from '../RevenueField.jsx'
 import { isPartialRead } from './reportDerive.js'
 import { EXPOSURE_MODEL_COPY } from './reportContent.js'
 import { track } from '../analytics.js'
@@ -85,12 +86,11 @@ export function ExposureSection({ report, revenue, onRevenueChange, aiSharePct, 
     >
       {adjOpen && (
         <div className="lite-exposure-adjust-grid" style={{ marginTop: 18, background: 'var(--surface-warm)', border: '1px solid var(--hairline)', borderRadius: 12, padding: '16px 18px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 22 }}>
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>
-              <span>Annual revenue</span><b className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text-strong)' }}>{formatCurrency(revenue)}</b>
-            </div>
-            <input type="range" min={REVENUE_SLIDER_MIN} max={REVENUE_SLIDER_MAX} step={REVENUE_SLIDER_MIN} value={revenue} onChange={(e) => { onRevenueChange(+e.target.value); trackAssumptionsUsedOnce() }} aria-label="Annual revenue" style={{ width: '100%', accentColor: 'var(--blue)' }} />
-          </div>
+          <RevenueField
+            revenue={revenue}
+            onRevenueChange={onRevenueChange}
+            onInteract={trackAssumptionsUsedOnce}
+          />
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>
               <span>AI-assisted share of sales</span><b className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text-strong)' }}>{aiSharePct}%</b>

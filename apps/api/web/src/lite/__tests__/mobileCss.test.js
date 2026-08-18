@@ -200,6 +200,13 @@ describe('RM2-RM9: report section phone stacking', () => {
     }
   })
 
+  it('the revenue field drops its typed amount below the track, full width, on phone', () => {
+    // Grid areas rather than two DOM copies of the input — desktop puts
+    // the amount beside the label, phone stacks label/track/amount.
+    expect(anyBlockMatches(THEME_CSS, '.lite-revenue-field', /grid-template-areas:\s*"label"\s*"range"\s*"amount"/)).toBe(true)
+    expect(anyBlockMatches(THEME_CSS, '.lite-revenue-field-input', /width:\s*100%/)).toBe(true)
+  })
+
   it('shared ReportSection card padding tightens on phone (covers Visibility/Accessibility/FunnelGate/FixesTable/Exposure at once)', () => {
     expect(anyBlockMatches(THEME_CSS, '.lite-report-section', /padding/)).toBe(true)
   })

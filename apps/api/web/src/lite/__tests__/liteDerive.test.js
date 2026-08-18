@@ -4,7 +4,10 @@ import {
   groupDimensionsByFamily, rankDimensionsByGap, computeExposure, formatCurrency,
   SUBSTITUTION_MULTIPLIER, EXPOSURE_HAIRCUT,
   getScoreBand, getVerdictLine, getDominantRivalPayoff, getIncentiveCitationPayoff,
-  seedAnnualRevenue, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX,
+  seedAnnualRevenue, REVENUE_SLIDER_MIN, REVENUE_SLIDER_MAX, REVENUE_SLIDER_STEPS,
+  MIN_PLAUSIBLE_REVENUE_USD, MAX_PLAUSIBLE_REVENUE_USD,
+  revenueSliderPositionToRevenue, revenueToSliderPosition, snapRevenue,
+  parseRevenueInput, clampToPlausibleRevenue, formatCompactCurrency,
 } from '../liteDerive.js'
 
 describe('looksLikeUrl', () => {
@@ -252,12 +255,41 @@ describe('seedAnnualRevenue (Part 5 R3; annual units Report redesign Part 7)', (
     expect(seedAnnualRevenue(12_000_000)).toBe(12_000_000)
   })
 
-  it('clamps below the slider minimum', () => {
-    expect(seedAnnualRevenue(100)).toBe(REVENUE_SLIDER_MIN)
+  // The bug this session fixed: the seed used to be clamped to the
+  // SLIDER's range, so a Sephora-scale audit seeded at $120M however
+  // large the estimate was and the exposure figure understated by
+  // whatever multiple the brand exceeded it — silently, with the
+  // reduced number presented as the estimate. It now clamps only to
+  // revenue_probe.py's own plausibility bounds.
+  it('seeds a $1B estimate as $1B — it used to be cut to the $120M slider ceiling', () => {
+    expect(seedAnnualRevenue(1_000_000_000)).toBe(1_000_000_000)
+    expect(seedAnnualRevenue(1_000_000_000)).toBeGreaterThan(120_000_000)
   })
 
-  it('clamps above the slider maximum', () => {
-    expect(seedAnnualRevenue(999_000_000_000)).toBe(REVENUE_SLIDER_MAX)
+  it('seeds beyond the slider ceiling at the true figure — the track pins, the number does not', () => {
+    expect(seedAnnualRevenue(8_000_000_000)).toBe(8_000_000_000)
+    expect(seedAnnualRevenue(8_000_000_000)).toBeGreaterThan(REVENUE_SLIDER_MAX)
+  })
+
+  it('clamps an implausible estimate to the probe floor, not the slider minimum', () => {
+    expect(seedAnnualRevenue(50_000)).toBe(MIN_PLAUSIBLE_REVENUE_USD)
+    // Explicitly NOT the slider's $120,000 — a control range and a
+    // credibility range are different questions.
+    expect(seedAnnualRevenue(50_000)).not.toBe(REVENUE_SLIDER_MIN)
+  })
+
+  it('clamps an absurd estimate to the probe ceiling', () => {
+    expect(seedAnnualRevenue(200_000_000_000)).toBe(MAX_PLAUSIBLE_REVENUE_USD)
+  })
+
+  it('mirrors revenue_probe.py exactly', () => {
+    expect(MIN_PLAUSIBLE_REVENUE_USD).toBe(100_000)
+    expect(MAX_PLAUSIBLE_REVENUE_USD).toBe(100_000_000_000)
+  })
+
+  it('returns null for garbage, same as today', () => {
+    expect(seedAnnualRevenue('not a number')).toBeNull()
+    expect(seedAnnualRevenue(NaN)).toBeNull()
   })
 
   it('returns null when the probe never ran (null/undefined) — caller falls back to its own default', () => {
@@ -458,5 +490,186 @@ describe('getIncentiveCitationPayoff', () => {
   it('returns null when incentive_citation is absent/empty', () => {
     expect(getIncentiveCitationPayoff(undefined)).toBeNull()
     expect(getIncentiveCitationPayoff([])).toBeNull()
+  })
+})
+
+// ─── Revenue slider: log scale, snapping, typed input ───────────────────
+//
+// $120M was a leftover from the monthly-calculator era ($10M/mo × 12).
+// The ceiling is now $5B, which a LINEAR track cannot carry: at
+// step=$120K the low end would move ~$5M per pixel and most of the
+// brands that run this audit would be unsettable. The track therefore
+// carries a unitless 0-1000 position and revenue is the geometric
+// interpolation between the bounds.
+
+describe('revenue slider — log position <-> value', () => {
+  it('has the new bounds: $120K floor, $5B ceiling', () => {
+    expect(REVENUE_SLIDER_MIN).toBe(120_000)
+    expect(REVENUE_SLIDER_MAX).toBe(5_000_000_000)
+  })
+
+  it('maps the endpoints exactly, with no floating-point drift', () => {
+    expect(revenueSliderPositionToRevenue(0)).toBe(REVENUE_SLIDER_MIN)
+    expect(revenueSliderPositionToRevenue(REVENUE_SLIDER_STEPS)).toBe(REVENUE_SLIDER_MAX)
+    expect(revenueToSliderPosition(REVENUE_SLIDER_MIN)).toBe(0)
+    expect(revenueToSliderPosition(REVENUE_SLIDER_MAX)).toBe(REVENUE_SLIDER_STEPS)
+  })
+
+  it('round-trips position -> revenue -> position across the whole track', () => {
+    // Not exact: the value is snapped to 2 significant figures on the
+    // way out, so the inverse lands a few positions away. The tolerance
+    // is what matters — at 1000 steps, 5 is 0.5% of the track, well
+    // under a pixel of thumb movement on a real slider.
+    let worst = 0
+    for (let pos = 0; pos <= REVENUE_SLIDER_STEPS; pos++) {
+      const back = revenueToSliderPosition(revenueSliderPositionToRevenue(pos))
+      worst = Math.max(worst, Math.abs(back - pos))
+    }
+    expect(worst).toBeLessThanOrEqual(5)
+  })
+
+  it('is monotonically increasing in position', () => {
+    let previous = -Infinity
+    for (let pos = 0; pos <= REVENUE_SLIDER_STEPS; pos += 5) {
+      const revenue = revenueSliderPositionToRevenue(pos)
+      expect(revenue).toBeGreaterThanOrEqual(previous)
+      previous = revenue
+    }
+  })
+
+  // The point of the log scale: equal drags cover equal RATIOS, so the
+  // low end is settable at all. Hand-checked against
+  // min × (max/min)^(pos/1000), then snapped to 2 sig figs.
+  it.each([
+    [0, 120_000],
+    [250, 1_700_000],
+    [500, 24_000_000],
+    [750, 350_000_000],
+    [1000, 5_000_000_000],
+  ])('position %i maps to $%i', (pos, expected) => {
+    expect(revenueSliderPositionToRevenue(pos)).toBe(expected)
+  })
+
+  it('gives the low end usable precision — a full decade of small brands spans hundreds of steps', () => {
+    // $1M to $10M, the band most audited brands sit in, must not
+    // collapse into a handful of positions the way a linear track did.
+    const span = revenueToSliderPosition(10_000_000) - revenueToSliderPosition(1_000_000)
+    expect(span).toBeGreaterThan(180)
+  })
+
+  it('pins the track at its ends for values outside the slider range', () => {
+    // A probe seed below the floor, and a typed figure above the
+    // ceiling: the TRACK pins, and the caller keeps the true value.
+    expect(revenueToSliderPosition(100_000)).toBe(0)
+    expect(revenueToSliderPosition(8_000_000_000)).toBe(REVENUE_SLIDER_STEPS)
+  })
+
+  it('treats garbage as the floor rather than producing NaN positions', () => {
+    expect(revenueToSliderPosition(NaN)).toBe(0)
+    expect(revenueToSliderPosition(undefined)).toBe(0)
+    expect(revenueSliderPositionToRevenue('abc')).toBe(REVENUE_SLIDER_MIN)
+  })
+})
+
+describe('snapRevenue — 2 significant figures', () => {
+  it.each([
+    [2_347_881, 2_300_000],
+    [123_456_789, 120_000_000],
+    [4_999_999_999, 5_000_000_000],
+    [1_749_999, 1_700_000],
+    [120_000, 120_000],
+  ])('snaps %i to %i', (raw, expected) => {
+    expect(snapRevenue(raw)).toBe(expected)
+  })
+
+  it('is a no-op on values already at 2 sig figs', () => {
+    for (const value of [120_000, 2_300_000, 180_000_000, 1_200_000_000, 5_000_000_000]) {
+      expect(snapRevenue(value)).toBe(value)
+    }
+  })
+})
+
+describe('formatCompactCurrency', () => {
+  it.each([
+    [120_000, '$120K'],
+    [2_300_000, '$2.3M'],
+    [25_000_000, '$25M'],
+    [180_000_000, '$180M'],
+    [1_200_000_000, '$1.2B'],
+    [5_000_000_000, '$5B'],
+    [8_000_000_000, '$8B'],
+  ])('renders %i as %s', (value, expected) => {
+    expect(formatCompactCurrency(value)).toBe(expected)
+  })
+
+  it('promotes the unit rather than printing $1000M', () => {
+    // Reachable by typing, not by dragging (a snapped value is never
+    // this shape) — but reachable, so it must not read as "$1000M".
+    expect(formatCompactCurrency(999_999_999)).toBe('$1B')
+  })
+
+  it('renders an unreadable value as an em dash, never NaN', () => {
+    expect(formatCompactCurrency(NaN)).toBe('—')
+    expect(formatCompactCurrency(undefined)).toBe('—')
+  })
+})
+
+describe('parseRevenueInput', () => {
+  it.each([
+    ['100m', 100_000_000],
+    ['1.2b', 1_200_000_000],
+    ['$500,000,000', 500_000_000],
+    ['750000', 750_000],
+    ['750k', 750_000],
+    ['  $1.5B  ', 1_500_000_000],
+    ['8b', 8_000_000_000],
+  ])('parses %s as %i', (text, expected) => {
+    expect(parseRevenueInput(text)).toBe(expected)
+  })
+
+  it.each(['abc', '', '   ', '$', '12x', '1.2.3', '--5'])('rejects %s', (text) => {
+    expect(parseRevenueInput(text)).toBeNull()
+  })
+
+  it('does not clamp — that is a separate decision from "is this a number"', () => {
+    expect(parseRevenueInput('50t')).toBeNull()          // unsupported unit, not a number
+    expect(parseRevenueInput('50000000000000')).toBe(50_000_000_000_000)
+    expect(clampToPlausibleRevenue(50_000_000_000_000)).toBe(MAX_PLAUSIBLE_REVENUE_USD)
+  })
+})
+
+describe('clampToPlausibleRevenue', () => {
+  it('clamps to the probe bounds, not the slider bounds', () => {
+    expect(clampToPlausibleRevenue(50_000)).toBe(MIN_PLAUSIBLE_REVENUE_USD)
+    expect(clampToPlausibleRevenue(200_000_000_000)).toBe(MAX_PLAUSIBLE_REVENUE_USD)
+    // $8B is above the slider ceiling and passes through untouched.
+    expect(clampToPlausibleRevenue(8_000_000_000)).toBe(8_000_000_000)
+  })
+
+  it('returns null for a non-number', () => {
+    expect(clampToPlausibleRevenue('abc')).toBeNull()
+  })
+})
+
+// The mapping changes how you REACH a value, never the value's math.
+// Pinned explicitly so this session cannot have moved the dollar model.
+describe('the exposure model is untouched by the slider rework', () => {
+  it.each([
+    [1_000_000, 20, 0, 170_000],
+    [12_000_000, 20, 40, 1_836_000],
+    [100_000_000, 20, 80, 5_100_000],
+    [20_000_000, 20, 0, 3_400_000],
+  ])('revenue $%i at %i%% share and True Value %i still models $%i', (revenue, aiSharePct, trueValueScore, expected) => {
+    expect(computeExposure({ revenue, aiSharePct, trueValueScore })).toBeCloseTo(expected, 5)
+  })
+
+  it('a seeded $1B report models the $1B figure, not the old $120M one', () => {
+    const seeded = seedAnnualRevenue(1_000_000_000)
+    // 1,000,000,000 * 0.20 * min(1, (1 - 0/100) * 1.5) * 0.85
+    expect(computeExposure({ revenue: seeded, aiSharePct: 20, trueValueScore: 0 }))
+      .toBeCloseTo(170_000_000, 5)
+    // What it used to model, clamped to $120M — 8.3× smaller.
+    expect(computeExposure({ revenue: 120_000_000, aiSharePct: 20, trueValueScore: 0 }))
+      .toBeCloseTo(20_400_000, 5)
   })
 })

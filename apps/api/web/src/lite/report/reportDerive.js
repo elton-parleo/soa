@@ -9,6 +9,7 @@ import {
   VERDICT_AGENT_READY,
 } from '../landing/scanDimensionsRegistry.js'
 import { NAV_IDS } from './useReportSections.js'
+import { formatCompactCurrency } from '../liteDerive.js'
 
 // Partial-read report state (Part 2a): the ONE shared measurable-
 // denominator context every surface — rail, hero, lane chart, pillar
@@ -200,9 +201,12 @@ export const NAV_META = {
   exp: { icon: 'card', label: 'Exposure' },
 }
 
+// Delegates to liteDerive's shared compact formatter — this used to
+// stop at M and would render a $5B-scale exposure as "$5000M" now that
+// the revenue ceiling reaches there.
 function kLabel(n) {
   if (n == null) return '—'
-  return n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : `$${Math.round(n / 1e3)}K`
+  return formatCompactCurrency(n)
 }
 
 export function buildNavItems({ pillars, composite, exposure, active, partial, transcript }) {
