@@ -59,6 +59,24 @@ describe('vercel.json — audit.parleo.io host routing (H1)', () => {
     expect(filesystemIdx).toBeGreaterThanOrEqual(0)
     expect(filesystemIdx).toBeLessThan(audit404Idx)
   })
+
+  // Part 2b: favicon.svg/apple-touch-icon.png/etc. are host-agnostic
+  // real files (unlike robots.txt/sitemap.xml, which need a per-host
+  // dest rewrite because the audit host serves *different* content
+  // under those names) — no route ahead of handle:filesystem should
+  // match them, so filesystem's plain passthrough is what serves them.
+  it('no route before handle:filesystem intercepts the favicon paths', () => {
+    const filesystemIdx = VERCEL_JSON.routes.findIndex((r) => r.handle === 'filesystem')
+    const preFilesystemRoutes = VERCEL_JSON.routes.slice(0, filesystemIdx)
+    const faviconPaths = ['/favicon.svg', '/favicon-32.png', '/favicon-16.png', '/apple-touch-icon.png', '/site.webmanifest']
+    for (const route of preFilesystemRoutes) {
+      if (!route.src) continue
+      const re = new RegExp(route.src)
+      for (const p of faviconPaths) {
+        expect(re.test(p)).toBe(false)
+      }
+    }
+  })
 })
 
 describe('vercel.json — /scan hard removal (H2)', () => {

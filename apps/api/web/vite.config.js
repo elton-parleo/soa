@@ -4,7 +4,8 @@ import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DEFAULT_PUBLIC_AUDIT_BASE_URL } from './src/lite/audit-host.constants.js'
 import {
-  LANDING_META_TITLE, LANDING_META_DESCRIPTION, REPORT_META_TITLE, OG_IMAGE_URL,
+  LANDING_META_TITLE, LANDING_META_DESCRIPTION, REPORT_META_TITLE,
+  OG_IMAGE_URL, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
 } from './src/lite/landingMeta.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -36,14 +37,19 @@ function auditHeadPlugin(auditBaseUrl) {
     meta('property', 'og:description', LANDING_META_DESCRIPTION),
     meta('property', 'og:url', landingUrl),
     meta('property', 'og:type', 'website'),
-    meta('name', 'twitter:card', 'summary'),
+    meta('name', 'twitter:card', OG_IMAGE_URL ? 'summary_large_image' : 'summary'),
     meta('name', 'twitter:title', LANDING_META_TITLE),
     meta('name', 'twitter:description', LANDING_META_DESCRIPTION),
-    // S4: OG_IMAGE_URL is null until a real share-image asset exists —
-    // omit the tags entirely rather than emit a path that 404s on
-    // every unfurl. Flip this on by giving OG_IMAGE_URL a real value.
+    // S4: OG_IMAGE_URL is null only if reset — omit the tags entirely
+    // rather than emit a path that 404s on every unfurl.
     ...(OG_IMAGE_URL
-      ? [meta('property', 'og:image', OG_IMAGE_URL), meta('name', 'twitter:image', OG_IMAGE_URL)]
+      ? [
+          meta('property', 'og:image', OG_IMAGE_URL),
+          meta('property', 'og:image:width', OG_IMAGE_WIDTH),
+          meta('property', 'og:image:height', OG_IMAGE_HEIGHT),
+          meta('property', 'og:image:alt', OG_IMAGE_ALT),
+          meta('name', 'twitter:image', OG_IMAGE_URL),
+        ]
       : []),
   ].join('\n    ')
 

@@ -27,7 +27,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { build } from 'vite'
 
 import {
-  LANDING_META_TITLE, LANDING_META_DESCRIPTION, REPORT_META_TITLE, OG_IMAGE_URL,
+  LANDING_META_TITLE, LANDING_META_DESCRIPTION, REPORT_META_TITLE,
+  OG_IMAGE_URL, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
 } from '../lite/landingMeta.js'
 import { PUBLIC_AUDIT_BASE_URL } from '../lite/publicUrls.js'
 
@@ -64,7 +65,7 @@ describe('built audit.html (landing) — S1', () => {
     expect(auditHtml).toMatch(/<meta property="og:title" content="[^"]*" \/>/)
     expect(auditHtml).toContain(`<meta property="og:url" content="${PUBLIC_AUDIT_BASE_URL}/" />`)
     expect(auditHtml).toContain('<meta property="og:type" content="website" />')
-    expect(auditHtml).toContain('<meta name="twitter:card" content="summary" />')
+    expect(auditHtml).toContain('<meta name="twitter:card" content="summary_large_image" />')
   })
 
   it('metadata-source equality: built title/description exactly match landingMeta.js', () => {
@@ -75,9 +76,22 @@ describe('built audit.html (landing) — S1', () => {
     expect(descMatch[1]).toBe(LANDING_META_DESCRIPTION)
   })
 
-  it('S4: omits og:image/twitter:image while OG_IMAGE_URL is null, never a fabricated path', () => {
-    expect(OG_IMAGE_URL).toBeNull()
-    expect(auditHtml).not.toMatch(/og:image|twitter:image/)
+  // Part 3b: og:image + dimensions + alt, and the URL resolves to a
+  // real PNG in the build output (Vite copies public/ verbatim, so
+  // the absolute OG_IMAGE_URL's path always has a matching file here).
+  it('Part 3b: carries og:image + width/height/alt + twitter:image, resolving to a real PNG', () => {
+    expect(OG_IMAGE_URL).not.toBeNull()
+    expect(auditHtml).toContain(`<meta property="og:image" content="${OG_IMAGE_URL}" />`)
+    expect(auditHtml).toContain(`<meta property="og:image:width" content="${OG_IMAGE_WIDTH}" />`)
+    expect(auditHtml).toContain(`<meta property="og:image:height" content="${OG_IMAGE_HEIGHT}" />`)
+    expect(auditHtml).toContain(`<meta property="og:image:alt" content="${OG_IMAGE_ALT}" />`)
+    expect(auditHtml).toContain(`<meta name="twitter:image" content="${OG_IMAGE_URL}" />`)
+
+    const ogImagePath = new URL(OG_IMAGE_URL).pathname // "/og/audit-landing.png"
+    const builtFile = path.join(outDir, ogImagePath)
+    expect(fs.existsSync(builtFile)).toBe(true)
+    const header = fs.readFileSync(builtFile).subarray(0, 8)
+    expect(header.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe(true) // PNG magic bytes
   })
 
   it('placeholder is fully consumed — no leftover marker in the built output', () => {
@@ -103,5 +117,38 @@ describe('built index.html (main host) — unaffected', () => {
     expect(indexHtml).toContain('<title>SoA Platform</title>')
     expect(indexHtml).not.toContain(LANDING_META_TITLE)
     expect(indexHtml).not.toMatch(/rel="canonical"|property="og:/)
+  })
+})
+
+// Part 2b/2c: the favicon set is declared identically in all three
+// built entries — every host/route shows the same two-bar icon — and
+// the actual files exist in the build output (Vite copies public/ to
+// the dist root verbatim), so a served page's <link> tags never point
+// at a 404.
+describe('favicon set — declared in all three built HTML entries', () => {
+  const FAVICON_TAGS = [
+    '<link rel="icon" type="image/svg+xml" href="/favicon.svg" />',
+    '<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />',
+    '<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />',
+    '<link rel="apple-touch-icon" href="/apple-touch-icon.png" />',
+    '<link rel="manifest" href="/site.webmanifest" />',
+    '<meta name="theme-color" content="#0166FF" />',
+  ]
+
+  it.each([
+    ['index.html', () => indexHtml],
+    ['audit.html', () => auditHtml],
+    ['audit-report.html', () => auditReportHtml],
+  ])('%s declares the full icon set', (_name, getHtml) => {
+    for (const tag of FAVICON_TAGS) {
+      expect(getHtml()).toContain(tag)
+    }
+  })
+
+  it.each([
+    'favicon.svg', 'favicon-32.png', 'favicon-16.png',
+    'apple-touch-icon.png', 'site.webmanifest', 'icon-192.png', 'icon-512.png',
+  ])('%s exists in the build output', (filename) => {
+    expect(fs.existsSync(path.join(outDir, filename))).toBe(true)
   })
 })

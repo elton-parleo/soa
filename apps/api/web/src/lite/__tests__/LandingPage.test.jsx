@@ -7,6 +7,7 @@ import LandingPage from '../LandingPage.jsx'
 import { liteApi } from '../liteApi.js'
 import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
 import { PUBLIC_AUDIT_BASE_URL } from '../publicUrls.js'
+import { OG_IMAGE_URL, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT } from '../landingMeta.js'
 
 vi.mock('../liteApi.js', () => ({
   liteApi: { submit: vi.fn() },
@@ -195,12 +196,20 @@ describe('LandingPage — I2/I3: canonical + OG/Twitter meta on the one indexabl
     expect(canonical).toHaveAttribute('href', `${PUBLIC_AUDIT_BASE_URL}/`)
     expect(document.querySelector('meta[property="og:url"]')).toHaveAttribute('content', `${PUBLIC_AUDIT_BASE_URL}/`)
     expect(document.querySelector('meta[property="og:title"]')).toBeInTheDocument()
-    expect(document.querySelector('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary')
+    expect(document.querySelector('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary_large_image')
     expect(document.title).toContain('Parleo Audit')
+
+    // Part 3b: og:image + dimensions + alt, twitter:image.
+    expect(document.querySelector('meta[property="og:image"]')).toHaveAttribute('content', OG_IMAGE_URL)
+    expect(document.querySelector('meta[property="og:image:width"]')).toHaveAttribute('content', String(OG_IMAGE_WIDTH))
+    expect(document.querySelector('meta[property="og:image:height"]')).toHaveAttribute('content', String(OG_IMAGE_HEIGHT))
+    expect(document.querySelector('meta[property="og:image:alt"]')).toHaveAttribute('content', OG_IMAGE_ALT)
+    expect(document.querySelector('meta[name="twitter:image"]')).toHaveAttribute('content', OG_IMAGE_URL)
 
     unmount()
     expect(document.querySelector('link[rel="canonical"]')).not.toBeInTheDocument()
     expect(document.querySelector('meta[property="og:title"]')).not.toBeInTheDocument()
+    expect(document.querySelector('meta[property="og:image"]')).not.toBeInTheDocument()
   })
 
   it('S2: idempotent against tags the static HTML already baked in — updates in place, never duplicates', () => {
@@ -249,9 +258,36 @@ describe('Leadgen session: landing TrueSync CTA opens RequestFormModal, not a pa
     expect(within(dialog).getByPlaceholderText('Tell us about your loyalty program and deals…')).toBeInTheDocument()
   })
 
-  it('no parleo.io link remains on the landing page', () => {
+  it('the only parleo.io links left are the nav/footer Wordmark — no CTA button hardcodes one', () => {
     render(<LandingPage navigate={navigate} />)
     const parleoLinks = screen.queryAllByRole('link').filter((a) => (a.getAttribute('href') || '').includes('parleo.io'))
-    expect(parleoLinks).toHaveLength(0)
+    expect(parleoLinks).toHaveLength(2)
+    for (const link of parleoLinks) {
+      expect(link).toHaveAttribute('href', 'https://parleo.io')
+      expect(link).toHaveAttribute('aria-label', 'Parleo home')
+    }
+  })
+})
+
+describe('LandingPage — Wordmark links to parleo.io in chrome, not in the sample card', () => {
+  it('the nav and footer Wordmark are both links, opening in a new tab', () => {
+    render(<LandingPage navigate={navigate} />)
+    const links = screen.getAllByRole('link', { name: 'Parleo home' })
+    expect(links).toHaveLength(2)
+    for (const link of links) {
+      expect(link).toHaveAttribute('href', 'https://parleo.io')
+      expect(link).toHaveAttribute('target', '_blank')
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    }
+  })
+
+  it('the Hero sample-report card\'s Wordmark is NOT wrapped in a "Parleo home" link — it depicts a report, not chrome', () => {
+    render(<LandingPage navigate={navigate} />)
+    // Three PARLEO wordmarks render: nav, footer, and the Hero's dark
+    // sample-card preview — only the first two are inside a home link.
+    const parleoTexts = screen.getAllByText('PARLEO')
+    expect(parleoTexts).toHaveLength(3)
+    const wrappedInHomeLink = parleoTexts.filter((el) => el.closest('a[aria-label="Parleo home"]'))
+    expect(wrappedInHomeLink).toHaveLength(2)
   })
 })

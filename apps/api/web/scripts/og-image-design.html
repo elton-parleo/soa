@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<!--
+  Source design for public/og/audit-landing.png (Part 3a). A static,
+  checked-in HTML file rather than a node+satori/resvg script: this
+  card needs the real DS webfont (Inter Tight) rendered with real
+  text-shaping, and neither satori nor sharp/resvg can load a Google
+  Fonts webfont in this repo without adding a new, heavier dependency
+  than a browser already sitting in the toolchain. Regenerate by
+  opening this file in a browser at exactly 1200x630 and screenshotting
+  the <body> — no build step, no new CI infra, matches the brief's own
+  documented fallback for when node+satori/resvg/Playwright isn't
+  viable. Colors are hardcoded from src/ds/tokens.css's :root
+  variables — if those change, update this file's <style> to match by
+  hand (there is no automated link between them).
+
+  Numbers below are the SAME live-run values landingSampleContent.js
+  and SampleReportSection.jsx's ScorePanel already use (Allbirds,
+  composite 59/100, Visibility 25/32, Accessibility 14/18, True Value
+  15/50) — if a sample re-baseline changes those constants, update the
+  numbers here to match and regenerate.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: #F2F0EF;
+    --surface: #FFFFFF;
+    --ink: #1E1E2E;
+    --text-strong: #262836;
+    --muted: #6F6D7A;
+    --faint: #8A8996;
+    --border: #DCD9D6;
+    --hairline: rgba(70, 69, 85, .12);
+    --blue: #0166FF;
+    --blue-lite: #7FB0FF;
+    --font-sans: 'Inter Tight', Inter, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    width: 1200px; height: 630px;
+    background: var(--canvas);
+    font-family: var(--font-sans);
+    overflow: hidden;
+  }
+  .canvas {
+    position: relative;
+    width: 1200px; height: 630px;
+    padding: 56px 64px;
+  }
+  .lockup { display: flex; align-items: center; gap: 12px; }
+  .lockup svg { display: block; flex-shrink: 0; }
+  .lockup span {
+    font-family: var(--font-sans); font-weight: 800; font-size: 26px;
+    letter-spacing: 0.015em; color: var(--ink); line-height: 1;
+  }
+  .card {
+    margin-top: 44px;
+    background: var(--surface);
+    border-radius: 24px;
+    box-shadow: 0 24px 60px -24px rgba(30, 30, 46, .28);
+    padding: 40px 48px;
+    display: flex;
+    gap: 56px;
+    align-items: center;
+  }
+  .score-col { flex: 0 0 260px; }
+  .brand-row { display: flex; align-items: center; gap: 10px; }
+  .brand-dot {
+    width: 26px; height: 26px; border-radius: 8px; background: var(--ink);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 13px;
+  }
+  .brand-name { font-size: 17px; font-weight: 640; color: var(--text-strong); }
+  .score-num { display: flex; align-items: baseline; gap: 6px; margin-top: 18px; }
+  .score-num .big { font-size: 72px; font-weight: 780; letter-spacing: -0.04em; color: var(--text-strong); line-height: 1; }
+  .score-num .max { font-size: 24px; font-weight: 560; color: var(--faint); }
+  .score-label {
+    font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint);
+    margin-top: 10px;
+  }
+  .pillars { flex: 1; display: flex; flex-direction: column; gap: 20px; }
+  .pillar-row { display: flex; align-items: center; gap: 16px; }
+  .pillar-label { flex: 0 0 130px; font-size: 15px; font-weight: 600; color: var(--text-strong); }
+  .pillar-track {
+    flex: 1; height: 12px; border-radius: 6px; background: var(--canvas);
+    box-shadow: inset 0 1px 2px rgba(70,69,85,.14), inset 0 0 0 1px var(--border);
+    position: relative; overflow: hidden;
+  }
+  .pillar-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; }
+  .pillar-score {
+    flex: 0 0 64px; text-align: right; font-family: var(--font-mono);
+    font-size: 14px; font-weight: 600; color: var(--text-strong);
+  }
+  .tagline {
+    position: absolute; left: 64px; bottom: 48px;
+    font-family: var(--font-mono); font-size: 15px; font-weight: 600;
+    letter-spacing: 0.02em; color: var(--muted);
+  }
+  .tagline b { color: var(--text-strong); }
+</style>
+</head>
+<body>
+  <div class="canvas">
+    <div class="lockup">
+      <svg width="34.5" height="30" viewBox="0 0 46 40">
+        <rect x="0" y="0" width="19" height="40" rx="6" fill="#0166FF" />
+        <rect x="27" y="9" width="15" height="22" rx="5" fill="#7FB0FF" />
+      </svg>
+      <span>PARLEO</span>
+    </div>
+
+    <div class="card">
+      <div class="score-col">
+        <div class="brand-row">
+          <div class="brand-dot">A</div>
+          <div class="brand-name">Allbirds</div>
+        </div>
+        <div class="score-num">
+          <span class="big">59</span>
+          <span class="max">/100</span>
+        </div>
+        <div class="score-label">Agentic Value Score</div>
+      </div>
+
+      <div class="pillars">
+        <div class="pillar-row">
+          <div class="pillar-label">Visibility</div>
+          <div class="pillar-track"><div class="pillar-fill" style="width: 78.1%; background: var(--ink);"></div></div>
+          <div class="pillar-score">25/32</div>
+        </div>
+        <div class="pillar-row">
+          <div class="pillar-label">Accessibility</div>
+          <div class="pillar-track"><div class="pillar-fill" style="width: 77.8%; background: rgba(30,30,46,.45);"></div></div>
+          <div class="pillar-score">14/18</div>
+        </div>
+        <div class="pillar-row">
+          <div class="pillar-label">True Value</div>
+          <div class="pillar-track"><div class="pillar-fill" style="width: 30%; background: var(--blue);"></div></div>
+          <div class="pillar-score">15/50</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tagline"><b>Free Agentic Value Audit</b> · audit.parleo.io</div>
+  </div>
+</body>
+</html>
