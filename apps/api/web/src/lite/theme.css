@@ -523,6 +523,13 @@
   outline-offset: 2px;
 }
 
+/* Wordmark-as-chrome link (WordmarkLink.jsx) — subtle, since the mark
+   itself keeps its own colors; focus ring comes from tokens.css's
+   global a:focus-visible rule, not repeated here. */
+.parleo-home-link:hover {
+  opacity: .72;
+}
+
 /* ── Bars ────────────────────────────────────────────────────────── */
 
 .lite-bar-track {

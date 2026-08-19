@@ -28,3 +28,7 @@ export function isAuditHost() {
   return typeof window !== 'undefined' && window.location.hostname === PUBLIC_AUDIT_HOSTNAME
 }
 
+// Every chrome placement of the Wordmark (nav/rail/footer — see
+// WordmarkLink.jsx) links here, never a literal per call site.
+export const PARLEO_HOME_URL = 'https://parleo.io'
+

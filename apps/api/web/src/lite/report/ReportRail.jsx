@@ -1,7 +1,8 @@
-import { Wordmark, Glyph, StatusChip, Button, BrandLogo } from '../../ds/index.js'
+import { Glyph, StatusChip, Button, BrandLogo } from '../../ds/index.js'
 import { pillarEarnedMax, pillarNominalWeight, isAgentReady, isPartialRead, buildMeasurableContext, buildNavItems, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from './reportDerive.js'
 import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
 import { ShareReportButton } from './ShareReportButton.jsx'
+import { WordmarkLink } from '../WordmarkLink.jsx'
 import { track } from '../analytics.js'
 import { EVENTS } from '../analyticsEvents.js'
 
@@ -21,7 +22,7 @@ export function ReportRail({ report, primaryEntityName, exposure, active, focus,
     <div className="lite-report-rail" style={{ borderRight: '1px solid var(--border)', background: 'var(--canvas-dim)' }}>
       <div style={{ position: 'sticky', top: 0, height: '100vh', overflowY: 'auto', overflowX: 'hidden', padding: '22px 18px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div>
-          <Wordmark size={13} />
+          <WordmarkLink size={13} />
           <div className="mono-label" style={{ fontSize: 9.5, color: 'var(--faint)', marginTop: 9 }}>FREE AGENTIC VALUE AUDIT</div>
         </div>
 

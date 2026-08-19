@@ -27,6 +27,15 @@ describe('public/audit-robots.txt', () => {
   it('points at the audit host sitemap', () => {
     expect(robots).toContain('Sitemap: https://audit.parleo.io/sitemap.xml')
   })
+
+  // Part 2c: the favicon set must stay crawlable/fetchable on the
+  // audit host — none of its paths fall under /r/ or /s/, but assert
+  // it directly rather than relying on that being a coincidence.
+  it('does not disallow the favicon set', () => {
+    for (const p of ['/favicon.svg', '/favicon-32.png', '/favicon-16.png', '/apple-touch-icon.png', '/site.webmanifest']) {
+      expect(robots).not.toMatch(new RegExp(`Disallow:\\s*${p.replace('.', '\\.')}`))
+    }
+  })
 })
 
 describe('public/audit-sitemap.xml', () => {
@@ -53,5 +62,11 @@ describe('public/robots.txt (main host, L3)', () => {
 
   it('does not disallow /lite', () => {
     expect(robots).not.toMatch(/Disallow:\s*\/lite/)
+  })
+
+  it('does not disallow the favicon set', () => {
+    for (const p of ['/favicon.svg', '/favicon-32.png', '/favicon-16.png', '/apple-touch-icon.png', '/site.webmanifest']) {
+      expect(robots).not.toMatch(new RegExp(`Disallow:\\s*${p.replace('.', '\\.')}`))
+    }
   })
 })

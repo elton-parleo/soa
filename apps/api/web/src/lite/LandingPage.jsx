@@ -29,7 +29,9 @@ import { TrueSyncSection } from './landing/TrueSyncSection.jsx'
 import { FinalCta } from './landing/FinalCta.jsx'
 import { LandingFooter } from './landing/LandingFooter.jsx'
 import { PUBLIC_AUDIT_BASE_URL } from './publicUrls.js'
-import { LANDING_META_TITLE, LANDING_META_DESCRIPTION, OG_IMAGE_URL } from './landingMeta.js'
+import {
+  LANDING_META_TITLE, LANDING_META_DESCRIPTION, OG_IMAGE_URL, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
+} from './landingMeta.js'
 import { upsertMeta, upsertLink, restoreOrRemove } from './headMeta.js'
 import { track, captureSrcParam } from './analytics.js'
 import { EVENTS } from './analyticsEvents.js'
@@ -52,9 +54,10 @@ function writeSession(key, value) {
 // upsert* updates that static tag in place instead of duplicating it,
 // which also makes this effect correct standalone (e.g. reached via
 // client-side navigation without the static head present at all).
-// No og:image/twitter:image tag while OG_IMAGE_URL is null: no share
-// image asset exists in this repo yet, and a made-up path would just
-// 404 on every unfurl, so it's omitted rather than faked.
+// No og:image/twitter:image tag while OG_IMAGE_URL is null: a made-up
+// path would just 404 on every unfurl, so it's omitted rather than
+// faked (dead branch today — OG_IMAGE_URL is a real asset now — but
+// kept so a future reset back to null degrades safely).
 function useLandingMeta() {
   useEffect(() => {
     const prevTitle = document.title
@@ -68,11 +71,17 @@ function useLandingMeta() {
       upsertMeta('property', 'og:description', LANDING_META_DESCRIPTION),
       upsertMeta('property', 'og:url', landingUrl),
       upsertMeta('property', 'og:type', 'website'),
-      upsertMeta('name', 'twitter:card', 'summary'),
+      upsertMeta('name', 'twitter:card', OG_IMAGE_URL ? 'summary_large_image' : 'summary'),
       upsertMeta('name', 'twitter:title', LANDING_META_TITLE),
       upsertMeta('name', 'twitter:description', LANDING_META_DESCRIPTION),
       ...(OG_IMAGE_URL
-        ? [upsertMeta('property', 'og:image', OG_IMAGE_URL), upsertMeta('name', 'twitter:image', OG_IMAGE_URL)]
+        ? [
+            upsertMeta('property', 'og:image', OG_IMAGE_URL),
+            upsertMeta('property', 'og:image:width', String(OG_IMAGE_WIDTH)),
+            upsertMeta('property', 'og:image:height', String(OG_IMAGE_HEIGHT)),
+            upsertMeta('property', 'og:image:alt', OG_IMAGE_ALT),
+            upsertMeta('name', 'twitter:image', OG_IMAGE_URL),
+          ]
         : []),
     ]
 

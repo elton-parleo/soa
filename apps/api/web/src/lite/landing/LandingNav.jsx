@@ -3,7 +3,8 @@
  * label, sample-report link + Run-my-free-audit button. Ported from the
  * mock's Nav section (Audit Landing.dc.html) verbatim.
  */
-import { Wordmark, Button } from '../../ds/index.js'
+import { Button } from '../../ds/index.js'
+import { WordmarkLink } from '../WordmarkLink.jsx'
 import { SAMPLE_REPORT_URL } from './landingSampleContent.js'
 import { track } from '../analytics.js'
 import { EVENTS } from '../analyticsEvents.js'
@@ -12,7 +13,7 @@ export function LandingNav() {
   return (
     <nav aria-label="Parleo Audit" style={{ position: 'sticky', top: 0, zIndex: 60, background: 'rgba(242,240,239,.86)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--hairline)' }}>
       <div className="lite-landing-nav-row" style={{ maxWidth: 1120, margin: '0 auto', padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 14 }}>
-        <Wordmark size={15} />
+        <WordmarkLink size={15} />
         <span className="lite-landing-nav-sep" style={{ width: 1, height: 15, background: 'var(--border)' }} />
         <span className="lite-landing-nav-label" style={{ fontSize: 13.5, fontWeight: 520, color: 'var(--text)' }}>Free Agentic Value Audit</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 18 }}>

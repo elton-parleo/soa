@@ -415,13 +415,18 @@ describe('LiteFullReportV4 — Part 4: run-tailored exposure reasons', () => {
 })
 
 describe('Leadgen session: every report walkthrough/TrueSync CTA opens RequestFormModal with the right copy, none link to parleo.io', () => {
-  it('no walkthrough/TrueSync anchor to parleo.io remains anywhere in the report', () => {
+  it('no walkthrough/TrueSync anchor to parleo.io remains anywhere in the report — only the rail/footer Wordmark link to it', () => {
     renderReport()
     // #truesync in-page jump links (FixesTable's provenance, etc.) are
     // fine and expected to remain — only an outbound parleo.io href is
-    // the thing this session removed.
+    // the thing this session removed. The rail and footer Wordmark are
+    // the two intentional exceptions, added this session.
     const parleoLinks = screen.queryAllByRole('link').filter((a) => (a.getAttribute('href') || '').includes('parleo.io'))
-    expect(parleoLinks).toHaveLength(0)
+    expect(parleoLinks).toHaveLength(2)
+    for (const link of parleoLinks) {
+      expect(link).toHaveAttribute('href', 'https://parleo.io')
+      expect(link).toHaveAttribute('aria-label', 'Parleo home')
+    }
   })
 
   it('every "Book your walkthrough" button (FunnelGate, FixesTable\'s "N MORE FIXES" upsell, ClosingFork) opens the same full-analysis-walkthrough copy', () => {
@@ -470,6 +475,19 @@ describe('Leadgen session: every report walkthrough/TrueSync CTA opens RequestFo
     // own unit test; this just asserts the modal actually opened wired
     // to a report-context CTA, i.e. the button click reached open().
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+})
+
+describe('LiteFullReportV4 — the rail and footer Wordmark link to parleo.io', () => {
+  it('both are links, opening in a new tab, with the home aria-label', () => {
+    renderReport()
+    const links = screen.getAllByRole('link', { name: 'Parleo home' })
+    expect(links).toHaveLength(2)
+    for (const link of links) {
+      expect(link).toHaveAttribute('href', 'https://parleo.io')
+      expect(link).toHaveAttribute('target', '_blank')
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    }
   })
 })
 

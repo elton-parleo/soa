@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!--
+    Favicon source of truth — the Wordmark's two-bar glyph
+    (src/ds/Wordmark.jsx), text dropped since it's illegible at 16px,
+    on a transparent background, centered with ~10% padding on a 64x64
+    canvas. Hand-derived from the glyph's tight bounding box (0,0 to
+    42,40 across both rects — NOT the Wordmark's own 46-wide viewBox,
+    which has extra right-side padding reserved for the text that
+    isn't rendered here) via translate(6.4 7.619) scale(1.219):
+    scale = (64 * 0.8) / 42, centered on both axes. If Wordmark.jsx's
+    rect coordinates ever change, recompute this transform to match —
+    scripts/generate-favicons.mjs regenerates every PNG from this file,
+    but does not regenerate this file itself.
+  -->
+  <g transform="translate(6.4 7.619) scale(1.219)">
+    <rect x="0" y="0" width="19" height="40" rx="6" fill="#0166FF" />
+    <rect x="27" y="9" width="15" height="22" rx="5" fill="#7FB0FF" />
+  </g>
+</svg>

@@ -1,7 +1,8 @@
-import { Wordmark, ProvenanceLine, Button } from '../../ds/index.js'
+import { ProvenanceLine, Button } from '../../ds/index.js'
 import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
 import { LOGO_PROVIDER_CONFIGURED } from '../../ds/logoProvider.js'
 import { isPartialRead, buildMeasurableContext } from './reportDerive.js'
+import { WordmarkLink } from '../WordmarkLink.jsx'
 
 // Part 5d: report is optional so any pre-existing caller that never
 // passed one keeps rendering byte-identically — the extra provenance
@@ -22,7 +23,7 @@ export function ReportFooter({ auditUrl, report }) {
         </div>
       </div>
       <div style={{ borderTop: '1px solid var(--hairline)', paddingTop: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-        <Wordmark size={12} />
+        <WordmarkLink size={12} />
         <ProvenanceLine confidence="observed" parts={provenanceParts} />
       </div>
       {LOGO_PROVIDER_CONFIGURED ? (
