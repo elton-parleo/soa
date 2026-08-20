@@ -91,6 +91,19 @@ describe('useDemoRequestModal', () => {
     }))
   })
 
+  it('threads the CTA\'s subject line through to submitDemoRequest (Formspree _subject)', async () => {
+    const { result } = renderHook(() => useDemoRequestModal())
+    act(() => result.current.open('full_analysis_walkthrough'))
+
+    await act(async () => {
+      await result.current.onSubmit({ name: 'Jane', email: 'jane@company.com', company: 'Acme', message: '' })
+    })
+
+    expect(demoRequestApi.submitDemoRequest).toHaveBeenCalledWith(expect.objectContaining({
+      subject: 'Demo request — walkthrough',
+    }))
+  })
+
   it('fires demo_request_submitted on a 200 response, with source/brand_name/report_token', async () => {
     const { result } = renderHook(() => useDemoRequestModal({ brandName: 'Allbirds', reportToken: 'tok123' }))
     act(() => result.current.open('truesync'))

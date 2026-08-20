@@ -31,6 +31,7 @@ export function useDemoRequestModal({ brandName, reportToken } = {}) {
       const result = await submitDemoRequest({
         ...values,
         source: cta ? cta.source : undefined,
+        subject: cta ? cta.subject : undefined,
         page_url: typeof window !== 'undefined' ? window.location.href : '',
         brand_name: brandName || undefined,
         report_token: reportToken || undefined,

@@ -151,11 +151,11 @@ describe('RequestFormModal — success and failure states', () => {
     expect(screen.getByLabelText(/^Company/)).toHaveValue('Acme Corp')
   })
 
-  it('renders per-field errors from a 422 response and preserves entered values', async () => {
+  it('surfaces Formspree\'s own error message ({errors: [{message}]}) and preserves entered values', async () => {
     const onSubmit = vi.fn().mockResolvedValue({
       ok: false,
       status: 422,
-      body: { detail: [{ loc: ['body', 'email'], msg: 'email must be a valid email address' }] },
+      body: { errors: [{ field: 'email', message: 'The email field is invalid.', code: 'TYPE_EMAIL' }] },
     })
     renderModal({ onSubmit })
     passTimingGuard()
@@ -163,8 +163,19 @@ describe('RequestFormModal — success and failure states', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
 
-    expect(await screen.findByText('email must be a valid email address')).toBeInTheDocument()
+    expect(await screen.findByText('The email field is invalid.')).toBeInTheDocument()
     expect(screen.getByLabelText(/^Company/)).toHaveValue('Acme Corp')
+  })
+
+  it('surfaces Formspree\'s {error: "message"} shape too', async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ ok: false, status: 500, body: { error: 'Form not found' } })
+    renderModal({ onSubmit })
+    passTimingGuard()
+    fillValidForm()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+
+    expect(await screen.findByText('Form not found')).toBeInTheDocument()
   })
 
   it('disables the button and shows "Sending…" while submitting', async () => {

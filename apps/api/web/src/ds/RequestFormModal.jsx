@@ -7,16 +7,16 @@
  * Deliberately decoupled from the demo-request API: this component
  * only knows how to render a form, validate it client-side, and call
  * the `onSubmit` prop it's given — it has no idea what source/
- * brand_name/report_token/page_url are, or that the endpoint is
- * /api/public/demo-request. That context-gathering lives in lite/
- * (which is allowed to depend on ds/, never the other way around) —
- * see lite/useDemoRequestModal.js.
+ * brand_name/report_token/page_url are, or which endpoint onSubmit
+ * actually calls. That context-gathering lives in lite/ (which is
+ * allowed to depend on ds/, never the other way around) — see
+ * lite/useDemoRequestModal.js, lite/demoRequestApi.js.
  *
  * onSubmit(values) must resolve to { ok, status, body } (never throw —
- * demoRequestApi.js's submitDemoRequest already has this shape). A 422
- * with a FastAPI-style {detail: [{loc, msg}]} body renders per-field
- * errors; any other non-ok result shows the generic failure line with
- * the entered values preserved; ok shows the success state.
+ * demoRequestApi.js's submitDemoRequest already has this shape). Any
+ * non-ok result shows a failure line — Formspree's own JSON error
+ * message when the body has one, else a generic line — with the
+ * entered values preserved; ok shows the success state.
  */
 import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from './Button.jsx'
@@ -34,20 +34,20 @@ const MAX_MESSAGE = 2000
 // guessing a magic number that has to be kept in sync by hand.
 export const MIN_ELAPSED_MS = 1500
 
-const FIELD_LABELS = { name: 'Name', email: 'Email', company: 'Company' }
+const GENERIC_FAILURE_MESSAGE = 'Something went wrong — email us at elton@parleo.io'
 
-function fieldErrorsFromDetail(detail) {
-  const errors = {}
-  if (!Array.isArray(detail)) return errors
-  for (const item of detail) {
-    const loc = item && item.loc
-    if (!Array.isArray(loc) || loc.length === 0) continue
-    const field = loc[loc.length - 1]
-    if (typeof field === 'string' && !errors[field]) {
-      errors[field] = item.msg || 'Invalid value'
-    }
+// Formspree's error body is either {error: "message"} or
+// {errors: [{field, message, code}, ...]} — never the FastAPI-style
+// {detail: [{loc, msg}]} shape this used to read. One line, not
+// per-field: Formspree doesn't hand back a stable field-name-to-error
+// mapping the way our own API did.
+function firstFormspreeErrorMessage(body) {
+  if (!body) return null
+  if (Array.isArray(body.errors) && body.errors.length > 0 && body.errors[0].message) {
+    return body.errors[0].message
   }
-  return errors
+  if (typeof body.error === 'string' && body.error) return body.error
+  return null
 }
 
 function validate(values) {
@@ -202,14 +202,8 @@ export function RequestFormModal({ open, onClose, eyebrow, title, messagePlaceho
       return
     }
 
-    if (result && result.status === 422 && result.body) {
-      setErrors(fieldErrorsFromDetail(result.body.detail))
-      setStatus('form')
-      return
-    }
-
     setStatus('form')
-    setSubmitError('Something went wrong — email us at elton@parleo.io')
+    setSubmitError(firstFormspreeErrorMessage(result && result.body) || GENERIC_FAILURE_MESSAGE)
   }
 
   const submitting = status === 'submitting'
