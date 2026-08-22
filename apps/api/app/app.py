@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.routers import (
     studies, entities, cycles, metrics, scope, actions, full_analysis,
-    public_lite, public_demo, public_full_analysis,
+    truesync, public_lite, public_demo, public_full_analysis,
 )
 from app.auth import verify_token
 
@@ -84,6 +84,15 @@ app.include_router(
 )
 app.include_router(
     full_analysis.router,
+    prefix="/api",
+    dependencies=[Depends(verify_token)],
+)
+
+# Merchant Command Center's mutation proxy. Authed like the routers
+# above; see app/routers/truesync.py for why only writes come through
+# this app at all (the page's reads go straight to TRUESYNC_API_BASE).
+app.include_router(
+    truesync.router,
     prefix="/api",
     dependencies=[Depends(verify_token)],
 )

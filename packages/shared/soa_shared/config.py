@@ -147,3 +147,26 @@ def validate() -> None:
     missing = [k for k in ("SUPABASE_DB_HOST_URL", "SUPABASE_DB_PASSWORD") if not os.environ.get(k)]
     if missing:
         raise RuntimeError(f"Missing required environment variables: {missing}")
+# TrueSync (Merchant Command Center) — the supply app's syndication API,
+# the same service DEAL_ENGINE_BASE_URL points at, reached over its
+# public /api/truesync/* surface.
+#
+# Read endpoints are called straight from the browser: that API answers
+# GETs with Access-Control-Allow-Origin: *, so proxying them here would
+# add a hop and buy nothing. Only mutations go through this app's proxy
+# router (apps/api/app/routers/truesync.py) — partly so TRUESYNC_ADMIN_KEY
+# never reaches a client bundle, and partly because the upstream CORS
+# policy allows GET/POST/HEAD/OPTIONS only, so a browser PUT to
+# /api/truesync/sync-rules fails preflight outright.
+TRUESYNC_API_BASE: str = os.environ.get("TRUESYNC_API_BASE", "https://api.parleo.io")
+
+# Server-side only. Sent as X-TrueSync-Key on proxied mutations; never
+# logged, never echoed back to a caller. Empty is a supported state —
+# the proxy simply omits the header (as of 2026-08-22 the upstream does
+# not enforce it; see the router's module docstring).
+TRUESYNC_ADMIN_KEY: str = os.environ.get("TRUESYNC_ADMIN_KEY", "")
+
+# Generous by design: a publish compiles the record to every enabled
+# channel before answering, which was measured at ~37s against the
+# production API. The read side never uses this.
+SOA_TRUESYNC_TIMEOUT_SECONDS: float = float(os.environ.get("SOA_TRUESYNC_TIMEOUT_SECONDS", "90.0"))
