@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 /**
  * Sync rules — per listing x channel enable/disable.
@@ -19,10 +19,38 @@ import React from 'react'
  * The alternative — defaulting every toggle to "on" because a
  * publication row exists — would be inventing state, which is the one
  * thing this page is not allowed to do.
+ *
+ * That unknown start is also why the first write of a session asks for
+ * confirmation. Everywhere else on this page a toggle's position tells
+ * you what a click will do; here it cannot, so the first click is the
+ * one place an operator can change what publishes to a live surface
+ * without having meant to. One confirm per session, not per click —
+ * enough to establish that these are real writes, not so much that it
+ * becomes something to dismiss on reflex.
  */
 export default function SyncRulesTab({
   rows, channels, channelState, ruleState, onToggle, pendingKey,
 }) {
+  // null when nothing is awaiting confirmation; otherwise the pending
+  // write: { row, channel, next }.
+  const [pendingConfirm, setPendingConfirm] = useState(null)
+  const [confirmedThisSession, setConfirmedThisSession] = useState(false)
+
+  function requestToggle(row, channel, next) {
+    if (confirmedThisSession) {
+      onToggle(row, channel.slug, next)
+      return
+    }
+    setPendingConfirm({ row, channel, next })
+  }
+
+  function confirmPending() {
+    const { row, channel, next } = pendingConfirm
+    setConfirmedThisSession(true)
+    setPendingConfirm(null)
+    onToggle(row, channel.slug, next)
+  }
+
   return (
     <>
       <div className="mcc-banner warn" role="status">
@@ -34,6 +62,33 @@ export default function SyncRulesTab({
           and the state shown afterwards is the one the API returned.
         </span>
       </div>
+
+      {pendingConfirm && (
+        <div className="mcc-confirm" role="alertdialog" aria-modal="false"
+             aria-labelledby="mcc-confirm-title">
+          <div className="mcc-confirm-body">
+            <h3 id="mcc-confirm-title">
+              This is a real write — {pendingConfirm.channel.name} will be{' '}
+              {pendingConfirm.next ? 'enabled' : 'disabled'} for future publishes
+            </h3>
+            <p>
+              Applies to <strong>{pendingConfirm.row.name}</strong>{' '}
+              (<span className="mono">catalog_product_id {pendingConfirm.row.catalogProductId}</span>).
+              It changes what TrueSync publishes to a live surface from now on; it does not
+              publish or withdraw anything right now.
+            </p>
+            <p className="mcc-confirm-note">
+              Asked once per session — later toggles apply immediately.
+            </p>
+          </div>
+          <div className="mcc-confirm-actions">
+            <button className="mcc-btn" onClick={() => setPendingConfirm(null)}>Cancel</button>
+            <button className="mcc-btn primary" onClick={confirmPending}>
+              {pendingConfirm.next ? 'Enable' : 'Disable'} {pendingConfirm.channel.name}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mcc-panel" style={{ marginTop: 14 }}>
         <div className="mcc-panel-head">
@@ -87,7 +142,7 @@ export default function SyncRulesTab({
                             ? 'Current value unknown — TrueSync has no sync-rule read endpoint. Click to set it.'
                             : `Currently ${known ? 'enabled' : 'disabled'} — click to ${known ? 'disable' : 'enable'}`
                       }
-                      onClick={() => onToggle(row, channel.slug, known === undefined ? true : !known)}
+                      onClick={() => requestToggle(row, channel, known === undefined ? true : !known)}
                     />
                   </li>
                 )

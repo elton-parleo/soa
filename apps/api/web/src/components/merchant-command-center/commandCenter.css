@@ -327,6 +327,37 @@
 .mcc-toggle:disabled { opacity: .5; cursor: not-allowed; }
 .mcc-toggle:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
 
+/* ── drawer error panel ──────────────────────────────────────────── */
+/* Deliberately loud: it stands in for the panel the operator asked for,
+   so it must not be mistakable for an empty state. */
+.mcc-drawer-error {
+  margin-top: 18px;
+  border-color: #E0B3AB;
+  background: var(--fail-soft);
+}
+.mcc-drawer-error .mcc-drawer-head h3 { color: #7C2718; }
+.mcc-drawer-error .mcc-section { border-top-color: #E0B3AB; }
+.mcc-drawer-error .mcc-empty { color: #7C2718; font-style: normal; }
+
+/* ── sync-rule first-write confirm ───────────────────────────────── */
+.mcc-confirm {
+  margin-top: 14px;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--brand-accent);
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap;
+}
+.mcc-confirm-body { flex: 1; min-width: 260px; }
+.mcc-confirm-body h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: .95rem; font-weight: 600; margin-bottom: 8px;
+}
+.mcc-confirm-body p { font-size: .85rem; color: var(--ink-soft); margin-top: 6px; }
+.mcc-confirm-note { font-size: .78rem !important; color: var(--ink-faint) !important; }
+.mcc-confirm-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
 /* ── toasts ──────────────────────────────────────────────────────── */
 .mcc-toasts {
   position: fixed; right: 20px; bottom: 20px; z-index: 60;

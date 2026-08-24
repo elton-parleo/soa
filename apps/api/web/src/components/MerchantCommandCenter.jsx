@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Sidebar from './Sidebar.jsx'
 import { api } from '../api.js'
-import { truesyncApi, fetchAllVerifications } from '../truesyncApi.js'
+import { truesyncApi, fetchAllVerifications, withMutationTimeout } from '../truesyncApi.js'
 import SyncMatrix from './merchant-command-center/SyncMatrix.jsx'
 import ListingDrawer from './merchant-command-center/ListingDrawer.jsx'
 import SyncRulesTab from './merchant-command-center/SyncRulesTab.jsx'
+import DrawerErrorBoundary from './merchant-command-center/DrawerErrorBoundary.jsx'
 import {
   orderChannels, channelImplementation, isMutedImplementation,
   latestPublicationByCell, buildCell, buildCatalogRows, summarize,
@@ -68,6 +69,7 @@ export default function MerchantCommandCenter({ onNavigate }) {
   const [ruleState,    setRuleState]    = useState({})
   // "listingId:channelSlug" -> VerificationResponse[], newest first.
   const [verificationsByCell, setVerificationsByCell] = useState({})
+  const drawerRef = useRef(null)
 
   const pushToast = useCallback((kind, message) => {
     const id = `${Date.now()}-${Math.random()}`
@@ -177,12 +179,41 @@ export default function MerchantCommandCenter({ onNavigate }) {
   const accent = brand?.site?.primary_color || null
   const selectedRow = rows.find((r) => r.listingId === selectedId) || null
 
+  /**
+   * Bring the drift inspector into view when a row is selected.
+   *
+   * This is the fix for the "dead click" — the drawer renders BELOW the
+   * matrix, and with five listings on a 900px viewport its top lands
+   * ~157px past the fold. Selecting a row worked correctly and threw
+   * nothing; it just put the result somewhere the operator could not
+   * see, and clicking the row again toggled it shut. Nothing in the
+   * console, nothing on screen.
+   *
+   * 'nearest' rather than 'start': when the drawer is already visible,
+   * switching rows should not yank the page around.
+   */
+  useEffect(() => {
+    const node = drawerRef.current
+    // scrollIntoView is not implemented in jsdom, and this is a
+    // convenience rather than a correctness concern — never let it be
+    // the thing that breaks the page.
+    if (selectedId == null || !node || typeof node.scrollIntoView !== 'function') return
+    const reduceMotion = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    try {
+      node.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'nearest' })
+    } catch (_) {
+      node.scrollIntoView()
+    }
+  }, [selectedId])
+
   // ─── Mutations (all proxied; no optimistic updates) ────────────────
   async function handlePublish(row, channelSlug) {
     const key = `publish:${row.listingId}:${channelSlug || 'all'}`
     setBusy(key)
     try {
-      const result = await api.publishListing(row.listingId, channelSlug)
+      const result = await withMutationTimeout(
+        api.publishListing(row.listingId, channelSlug), 'Publish')
       // Render what the server returned, not what we hoped for: fold
       // the returned PublicationRows straight into state.
       if (Array.isArray(result) && result.length > 0) {
@@ -206,7 +237,8 @@ export default function MerchantCommandCenter({ onNavigate }) {
   async function handleRefreshDiagnostics() {
     setBusy('gmc')
     try {
-      const result = await api.refreshGmcDiagnostics()
+      const result = await withMutationTimeout(
+        api.refreshGmcDiagnostics(), 'Refresh Google diagnostics')
       pushToast('ok', `Google diagnostics refreshed${
         Array.isArray(result) ? ` — ${result.length} record(s)` : ''
       }`)
@@ -230,11 +262,14 @@ export default function MerchantCommandCenter({ onNavigate }) {
     const key = `${row.catalogProductId}:${channelSlug}`
     setBusy(key)
     try {
-      const result = await api.putSyncRule({
-        catalog_product_id: row.catalogProductId,
-        channel_slug: channelSlug,
-        enabled: next,
-      })
+      const result = await withMutationTimeout(
+        api.putSyncRule({
+          catalog_product_id: row.catalogProductId,
+          channel_slug: channelSlug,
+          enabled: next,
+        }),
+        'Sync-rule update',
+      )
       // The echoed `enabled` is the only trustworthy value here, since
       // there is nothing to read the rule back from.
       setRuleState((prev) => ({ ...prev, [key]: !!result?.enabled }))
@@ -388,17 +423,29 @@ export default function MerchantCommandCenter({ onNavigate }) {
                 />
 
                 {selectedRow && (
-                  <ListingDrawer
-                    row={selectedRow}
-                    channels={channels}
-                    channelState={channelState}
-                    cellFor={cellFor}
-                    publications={publications}
-                    verificationsByCell={verificationsByCell}
-                    onClose={() => setSelectedId(null)}
-                    onPublish={handlePublish}
-                    publishPending={String(busy || '').startsWith(`publish:${selectedRow.listingId}`)}
-                  />
+                  <div ref={drawerRef}>
+                    {/* Anything the inspector throws becomes a visible
+                        panel rather than an unmounted subtree — see
+                        DrawerErrorBoundary.jsx. A selected row must
+                        always put something on screen. */}
+                    <DrawerErrorBoundary
+                      resetKey={selectedRow.listingId}
+                      onClose={() => setSelectedId(null)}
+                      context={`listing_id ${selectedRow.listingId} · ${selectedRow.name}`}
+                    >
+                      <ListingDrawer
+                        row={selectedRow}
+                        channels={channels}
+                        channelState={channelState}
+                        cellFor={cellFor}
+                        publications={publications}
+                        verificationsByCell={verificationsByCell}
+                        onClose={() => setSelectedId(null)}
+                        onPublish={handlePublish}
+                        publishPending={String(busy || '').startsWith(`publish:${selectedRow.listingId}`)}
+                      />
+                    </DrawerErrorBoundary>
+                  </div>
                 )}
               </>
             )}

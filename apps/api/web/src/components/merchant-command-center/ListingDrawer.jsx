@@ -4,6 +4,32 @@ import {
   gmcDeepLink, VERIFICATION_LABEL,
 } from './truesyncDerive.js'
 
+/**
+ * Renders any API-supplied value as text, or `fallback` when there is
+ * nothing to show.
+ *
+ * Every scalar in this panel goes through it. The reason is narrow and
+ * concrete: React throws "Objects are not valid as a React child" the
+ * moment a field the API has always sent as a string arrives as an
+ * object, and that throw takes the whole panel down. TrueSync's
+ * verification records are typed as free-form objects and have already
+ * changed shape once (the 2026-08-24 envelope), so treating any single
+ * field's type as settled is not safe.
+ *
+ * null, undefined and '' all read as the fallback — "—" — never as an
+ * empty gap that looks like a rendering bug.
+ */
+function text(value, fallback = '—') {
+  if (value == null || value === '') return fallback
+  const type = typeof value
+  if (type === 'string' || type === 'number' || type === 'boolean') return String(value)
+  try {
+    return JSON.stringify(value)
+  } catch (_) {
+    return fallback
+  }
+}
+
 // Publish status -> the badge vocabulary the mock uses.
 function statusBadge(cell) {
   if (cell.publishState === 'failed') return ['fail', 'Publish failed']
@@ -26,10 +52,21 @@ const SEVERITY_TICK = { dropped: 'bad', approximate: 'warn', lossy: 'warn' }
 
 function ArtifactBlock({ label, value }) {
   if (value == null) return null
+
+  // Circular structures and BigInt both make JSON.stringify throw. A
+  // payload we cannot pretty-print is still worth showing badly.
+  let pretty
+  try {
+    pretty = JSON.stringify(value, null, 2)
+  } catch (err) {
+    pretty = `Could not serialise this payload: ${err?.message || 'unknown error'}`
+  }
+  if (pretty === undefined) pretty = String(value)
+
   return (
     <details className="mcc-artifact">
       <summary>{label}</summary>
-      <pre>{JSON.stringify(value, null, 2)}</pre>
+      <pre>{pretty}</pre>
     </details>
   )
 }
@@ -66,7 +103,26 @@ export default function ListingDrawer({
   const verificationsLoading = verifications === undefined
 
   const channel = channels.find((c) => c.slug === channelSlug)
-  if (!channel) return null
+
+  // Previously `return null`, which made a selected row render nothing
+  // at all — a dead click by another route. If the channel list is
+  // empty or the selected slug has gone away, say so.
+  if (!channel) {
+    return (
+      <div className="mcc-drawer-error mcc-panel" role="alert">
+        <div className="mcc-drawer-head">
+          <h3>{text(row?.name, 'This listing')} — no channel to show</h3>
+          <button className="mcc-btn mcc-drawer-close" onClick={onClose}>Close</button>
+        </div>
+        <div className="mcc-section">
+          <p className="mcc-empty">
+            TrueSync returned no channels, so there is no surface to inspect this
+            listing against.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   const cell = cellFor(row, channel)
   const [badgeKind, badgeText] = statusBadge(cell)
@@ -81,7 +137,7 @@ export default function ListingDrawer({
       {/* ── left: comparison + artifact + timeline ─────────────────── */}
       <div className="mcc-panel">
         <div className="mcc-drawer-head">
-          <h3>{row.name} — {channel.name}</h3>
+          <h3>{text(row.name, `Listing ${text(row.listingId)}`)} — {text(channel.name)}</h3>
           <span className={`mcc-badge ${badgeKind}`}>{badgeText}</span>
           <button className="mcc-btn mcc-drawer-close" onClick={onClose}>Close</button>
         </div>
@@ -96,7 +152,7 @@ export default function ListingDrawer({
               title={c.depth_label}
               onClick={() => setChannelSlug(c.slug)}
             >
-              {c.name}
+              {text(c.name, c.slug)}
             </button>
           ))}
         </div>
@@ -128,13 +184,13 @@ export default function ListingDrawer({
               <tbody>
                 {findings.map((f, i) => (
                   <tr key={`${f.field}-${f.variant}-${i}`}>
-                    <td className="field">{f.field}</td>
-                    <td className="mcc-val">{f.variant || '—'}</td>
-                    <td><span className="mcc-val good">{String(f.expected ?? '—')}</span></td>
+                    <td className="field">{text(f.field)}</td>
+                    <td className="mcc-val">{text(f.variant)}</td>
+                    <td><span className="mcc-val good">{text(f.expected)}</span></td>
                     <td>
                       {f.observed == null
                         ? <span className="mcc-val missing">missing</span>
-                        : <span className="mcc-val bad">{String(f.observed)}</span>}
+                        : <span className="mcc-val bad">{text(f.observed)}</span>}
                     </td>
                   </tr>
                 ))}
@@ -171,13 +227,13 @@ export default function ListingDrawer({
                   </span>
                   <span className="what">
                     <span className={`mcc-dot ${dot}`} style={{ display: 'inline-block', marginRight: 8 }} />
-                    <strong>{p.status}</strong>
-                    {p.spec_version && <span className="mono"> · {p.spec_version}</span>}
-                    {p.error && <div className="detail">{p.error}</div>}
+                    <strong>{text(p.status, 'unknown status')}</strong>
+                    {p.spec_version && <span className="mono"> · {text(p.spec_version)}</span>}
+                    {p.error && <div className="detail">{text(p.error)}</div>}
                     {p.validation && p.validation.ok === false && Array.isArray(p.validation.errors) && p.validation.errors.length > 0 && (
-                      <div className="detail">Validation: {p.validation.errors.join('; ')}</div>
+                      <div className="detail">Validation: {p.validation.errors.map((e) => text(e)).join('; ')}</div>
                     )}
-                    {p.external_ref && <div className="detail mono">{p.external_ref}</div>}
+                    {p.external_ref && <div className="detail mono">{text(p.external_ref)}</div>}
                   </span>
                 </li>
               )
@@ -202,20 +258,26 @@ export default function ListingDrawer({
             </div>
           )}
           <ul className="mcc-timeline">
-            {(verifications || []).map((v) => {
+            {(verifications || []).map((v, i) => {
               const drift = driftFindings(v)
               return (
-                <li key={v.id}>
-                  <span className="when mono">{v.method || '—'}</span>
+                // `id` is not guaranteed — the record carries no
+                // timestamp to fall back on either, so the index is the
+                // only stable remainder.
+                <li key={v?.id ?? i}>
+                  {/* method / phase are what this record has instead of
+                      the created_at + outcome pair the page would
+                      rather show; both render "—" when absent. */}
+                  <span className="when mono">{text(v?.method)}</span>
                   <span className="what">
-                    <strong>{v.phase}</strong>
-                    {v.gtin && <span className="mono"> · {v.gtin}</span>}
+                    <strong>{text(v?.phase, 'unknown phase')}</strong>
+                    {v?.gtin && <span className="mono"> · {text(v.gtin)}</span>}
                     <div className="detail">
                       {drift.length > 0
                         ? `${drift.length} finding${drift.length === 1 ? '' : 's'}`
                         : VERIFICATION_LABEL.verified}
                     </div>
-                    {v.observed && <ArtifactBlock label="Observed payload" value={v.observed} />}
+                    {v?.observed && <ArtifactBlock label="Observed payload" value={v.observed} />}
                   </span>
                 </li>
               )
@@ -237,34 +299,37 @@ export default function ListingDrawer({
               <span>
                 {cell.validation.ok
                   ? 'Payload validates against the channel spec'
-                  : `Validation failed: ${(cell.validation.errors || []).join('; ') || 'no detail given'}`}
+                  : `Validation failed: ${
+                      (Array.isArray(cell.validation.errors) ? cell.validation.errors : [])
+                        .map((e) => text(e)).join('; ') || 'no detail given'
+                    }`}
               </span>
             </li>
           )}
 
           {/* Expressiveness flags are the richest real signal this API
               gives: which fields a protocol could not carry, and why. */}
-          {(cell.expressiveness || []).map((flag, i) => (
-            <li key={`${flag.field}-${i}`}>
-              <span className={`mcc-tick ${SEVERITY_TICK[flag.severity] || 'warn'}`}>
-                {flag.severity === 'dropped' ? '✕' : '!'}
+          {(Array.isArray(cell.expressiveness) ? cell.expressiveness : []).map((flag, i) => (
+            <li key={`${text(flag?.field)}-${i}`}>
+              <span className={`mcc-tick ${SEVERITY_TICK[flag?.severity] || 'warn'}`}>
+                {flag?.severity === 'dropped' ? '✕' : '!'}
               </span>
               <span>
-                <strong>{flag.field}</strong> — {flag.severity}
+                <strong>{text(flag?.field)}</strong> — {text(flag?.severity, 'unspecified')}
                 <br />
-                {flag.note}
+                {text(flag?.note, 'No detail given.')}
               </span>
             </li>
           ))}
 
-          {!cell.validation && (cell.expressiveness || []).length === 0 && (
+          {!cell.validation && (Array.isArray(cell.expressiveness) ? cell.expressiveness : []).length === 0 && (
             <li className="mcc-empty">No compiler output recorded for this channel.</li>
           )}
         </ul>
 
         <div className="meta">
-          <span>Depth: <span className="mono">{channel.depth_label}</span></span>
-          {channel.spec_version && <span>Spec: <span className="mono">{channel.spec_version}</span></span>}
+          <span>Depth: <span className="mono">{text(channel.depth_label)}</span></span>
+          {channel.spec_version && <span>Spec: <span className="mono">{text(channel.spec_version)}</span></span>}
           <span>
             Compiled: <span className="mono">{absoluteTime(current?.compiled_at) || '—'}</span>
           </span>
@@ -275,14 +340,14 @@ export default function ListingDrawer({
             external_ref:{' '}
             {cell.externalRef
               ? (deepLink
-                  ? <a className="mono" href={deepLink} target="_blank" rel="noreferrer">{cell.externalRef}</a>
-                  : <span className="mono">{cell.externalRef}</span>)
+                  ? <a className="mono" href={deepLink} target="_blank" rel="noreferrer">{text(cell.externalRef)}</a>
+                  : <span className="mono">{text(cell.externalRef)}</span>)
               : <span className="mono">—</span>}
           </span>
           {row.catalogProductId != null && (
-            <span>catalog_product_id: <span className="mono">{row.catalogProductId}</span></span>
+            <span>catalog_product_id: <span className="mono">{text(row.catalogProductId)}</span></span>
           )}
-          <span>listing_id: <span className="mono">{row.listingId}</span></span>
+          <span>listing_id: <span className="mono">{text(row.listingId)}</span></span>
           {row.productUrl && (
             <span><a href={row.productUrl} target="_blank" rel="noreferrer">Open product page ↗</a></span>
           )}

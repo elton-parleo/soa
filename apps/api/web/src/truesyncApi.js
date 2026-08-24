@@ -120,8 +120,39 @@ export const truesyncApi = {
       `/api/truesync/listings/${listingId}/verifications` +
       `?channel=${encodeURIComponent(channelSlug)}&limit=${limit}`,
       opts,
-    ),
+    ).then(unwrapVerifications),
 }
+
+/**
+ * The verifications endpoint's payload -> a plain array of records.
+ *
+ * It has shipped in two shapes. On 2026-08-22 it returned a bare
+ * VerificationResponse[]. By 2026-08-24 it returns an envelope:
+ *
+ *   { listing_id, lineage: { <channel>: {...} }, verifications: [...] }
+ *
+ * Both are accepted, because pinning to either one means the page
+ * silently shows an empty verification history the next time the supply
+ * app moves — which is exactly what the envelope change already did:
+ * the old `Array.isArray(rows) ? rows : []` guard turned every response
+ * into [], so the drawer would have kept saying "no verification runs
+ * recorded" even once real runs existed.
+ *
+ * Anything unrecognised resolves to [], which the badge layer reads as
+ * ○ "not yet verified" — the honest reading of "we could not tell".
+ *
+ * The envelope's other half, `lineage` (per-channel publication_id /
+ * status / compiled_at / published_at / spec_version), is deliberately
+ * dropped here: the drawer already gets all of it from the publications
+ * payload it loads for the timeline. Worth revisiting only if the two
+ * ever disagree.
+ */
+export function unwrapVerifications(payload) {
+  if (Array.isArray(payload)) return payload
+  if (payload && Array.isArray(payload.verifications)) return payload.verifications
+  return []
+}
+
 
 /**
  * Every cell's verification history, as "listingId:channelSlug" -> rows.
@@ -149,6 +180,8 @@ export async function fetchAllVerifications(listingIds, channelSlugs, { signal, 
     const batch = jobs.slice(i, i + concurrency)
     await Promise.all(batch.map(async ([listingId, channelSlug]) => {
       try {
+        // getVerifications has already normalised the envelope; this
+        // guard only covers a client that hands back something odd.
         const rows = await truesyncApi.getVerifications(listingId, channelSlug, { signal })
         out[`${listingId}:${channelSlug}`] = Array.isArray(rows) ? rows : []
       } catch (_) {
@@ -157,4 +190,27 @@ export async function fetchAllVerifications(listingIds, channelSlugs, { signal, 
     }))
   }
   return out
+}
+
+
+// How long a proxied mutation may run before the page gives up on it.
+// Publishing compiles a record to every enabled channel before it
+// answers — measured at ~37s against production — so this is generous.
+// It exists because api.js's shared request() has no timeout of its
+// own: without it, a hung backend leaves a button reading "Publishing…"
+// forever, which is a dead control by a slower route.
+export const MUTATION_TIMEOUT_MS = 90000
+
+export function withMutationTimeout(promise, label, timeoutMs = MUTATION_TIMEOUT_MS) {
+  let timer
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new TrueSyncError(
+        `${label} did not complete within ${Math.round(timeoutMs / 1000)}s — it may still be running server-side`,
+        { timedOut: true },
+      )),
+      timeoutMs,
+    )
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }

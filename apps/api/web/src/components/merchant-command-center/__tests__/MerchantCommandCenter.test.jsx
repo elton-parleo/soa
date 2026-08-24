@@ -249,6 +249,14 @@ describe('actions with no API behind them', () => {
 })
 
 
+// The first sync-rule write of a session is gated by a confirm (see the
+// "sync rules ask before the first real write" block below). Tests that
+// are about the write itself clear that gate first.
+async function confirmFirstWrite() {
+  const dialog = await screen.findByRole('alertdialog')
+  fireEvent.click(within(dialog).getByRole('button', { name: /^(enable|disable)/i }))
+}
+
 describe('mutations go through the proxy and render what came back', () => {
   beforeEach(mockHappyPath)
 
@@ -285,6 +293,7 @@ describe('mutations go through the proxy and render what came back', () => {
     expect(toggle).toHaveAttribute('aria-checked', 'mixed')
 
     fireEvent.click(toggle)
+    await confirmFirstWrite()
 
     await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'))
     expect(api.putSyncRule).toHaveBeenCalledWith({
@@ -302,6 +311,7 @@ describe('mutations go through the proxy and render what came back', () => {
     fireEvent.click(await screen.findByRole('switch', {
       name: /model context protocol server sync for cloud wipes 3-pack/i,
     }))
+    await confirmFirstWrite()
 
     await waitFor(() => expect(api.putSyncRule).toHaveBeenCalled())
     const sent = api.putSyncRule.mock.calls[0][0]
@@ -379,5 +389,81 @@ describe('verification data drives the matrix badges', () => {
     expect(screen.getByText('17.99')).toBeInTheDocument()
     expect(screen.getByText('18.99')).toBeInTheDocument()
     expect(screen.getByText('Drift · 1 field')).toBeInTheDocument()
+  })
+})
+
+
+describe('sync rules ask before the first real write of a session', () => {
+  beforeEach(mockHappyPath)
+
+  async function openRules() {
+    render(<MerchantCommandCenter onNavigate={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: 'Sync rules' }))
+  }
+
+  const acpToggle = () => screen.getByRole('switch', {
+    name: /agentic commerce protocol sync for snug-fit diapers/i,
+  })
+
+  it('shows a confirm naming the channel and direction, and writes nothing yet', async () => {
+    await openRules()
+
+    fireEvent.click(acpToggle())
+
+    const confirm = await screen.findByRole('alertdialog')
+    expect(confirm).toHaveTextContent(
+      'This is a real write — Agentic Commerce Protocol will be enabled for future publishes')
+    expect(confirm).toHaveTextContent('Snug-Fit Diapers')
+    expect(confirm).toHaveTextContent('catalog_product_id 27')
+    // Nothing has been sent while the operator is still deciding.
+    expect(api.putSyncRule).not.toHaveBeenCalled()
+  })
+
+  it('performs the write only after confirming', async () => {
+    api.putSyncRule.mockResolvedValue({ catalog_product_id: 27, channel_slug: 'acp', enabled: true })
+    await openRules()
+    fireEvent.click(acpToggle())
+
+    fireEvent.click(within(await screen.findByRole('alertdialog'))
+      .getByRole('button', { name: /^enable/i }))
+
+    await waitFor(() => expect(api.putSyncRule).toHaveBeenCalledWith({
+      catalog_product_id: 27, channel_slug: 'acp', enabled: true,
+    }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  it('sends nothing when the confirm is cancelled', async () => {
+    await openRules()
+    fireEvent.click(acpToggle())
+
+    fireEvent.click(within(await screen.findByRole('alertdialog'))
+      .getByRole('button', { name: /cancel/i }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(api.putSyncRule).not.toHaveBeenCalled()
+    // And the toggle is untouched — still unknown, because nothing was written.
+    expect(acpToggle()).toHaveAttribute('aria-checked', 'mixed')
+  })
+
+  // The point of "once per session": enough to establish that these are
+  // real writes, not so much that it becomes reflex to dismiss.
+  it('asks once — later toggles apply immediately', async () => {
+    api.putSyncRule.mockResolvedValue({ catalog_product_id: 27, channel_slug: 'acp', enabled: true })
+    await openRules()
+
+    fireEvent.click(acpToggle())
+    fireEvent.click(within(await screen.findByRole('alertdialog'))
+      .getByRole('button', { name: /^enable/i }))
+    await waitFor(() => expect(api.putSyncRule).toHaveBeenCalledTimes(1))
+
+    api.putSyncRule.mockResolvedValue({ catalog_product_id: 27, channel_slug: 'mcp', enabled: true })
+    fireEvent.click(screen.getByRole('switch', {
+      name: /model context protocol server sync for snug-fit diapers/i,
+    }))
+
+    await waitFor(() => expect(api.putSyncRule).toHaveBeenCalledTimes(2))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
 })

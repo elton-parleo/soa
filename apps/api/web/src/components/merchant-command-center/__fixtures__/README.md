@@ -12,6 +12,7 @@ including the awkward ones:
 | `channels.json` | `GET /api/truesync/channels` | 7 channels; note there is **no** `is_stub` / tier field, which is why implementation state is derived from publication rows |
 | `merchant-schema-org.json` | `GET /api/truesync/merchants/{slug}/schema-org` | the catalog spine. Payloads trimmed to the three fields the page reads (`@type`, `name`, `image`) — the originals are ~35 KB of JSON-LD |
 | `listings.json` | `GET /api/truesync/listings/{id}` (90–94), keyed by id | canonical records. `offers` (51 entries on listing 90) stripped; nothing on the page reads it. Mixed GTIN coverage is real: 4 of 12 variants on listing 90, 0 of 4 on 91 |
+| `verifications-envelope.json` | `GET /api/truesync/listings/90/verifications` | captured **2026-08-24**, after the endpoint changed shape. It used to return a bare `VerificationResponse[]`; it now returns `{listing_id, lineage, verifications}`. `verifications` is still `[]` in production |
 | `publications.json` | `GET /api/truesync/publications` | newest row per (listing, channel), plus a second older row per channel for listing 90 so the drawer's publish timeline has real history. Payloads kept intact — the drawer renders them |
 
 Two properties of this data drive most of the tests:
@@ -24,3 +25,13 @@ Two properties of this data drive most of the tests:
   the drift-badge tests build their own `VerificationResponse` objects
   to exercise the counting logic against a shape the API has never yet
   emitted.
+
+
+## A note on dates
+
+`verifications-envelope.json` is from **2026-08-24**; everything else is
+from **2026-08-22**. That two-day gap is itself the point: the
+verifications endpoint changed shape between the two captures, with no
+version bump, and the page's original `Array.isArray(rows) ? rows : []`
+guard turned every response into an empty list rather than failing
+loudly. Re-capture these before trusting them.
