@@ -9,7 +9,7 @@ import DrawerErrorBoundary from './merchant-command-center/DrawerErrorBoundary.j
 import {
   orderChannels, channelImplementation, isMutedImplementation,
   latestPublicationByCell, buildCell, buildCatalogRows, summarize,
-  VERIFIED_AT_UNAVAILABLE,
+  relativeTime, absoluteTime, VERIFIED_AT_UNAVAILABLE,
 } from './merchant-command-center/truesyncDerive.js'
 import './merchant-command-center/commandCenter.css'
 
@@ -34,12 +34,15 @@ import './merchant-command-center/commandCenter.css'
  * row reads "never published", no verification reads ○.
  */
 
-// Verify actions the API does not offer. Kept as one named constant so
-// the two buttons that carry it say exactly the same thing, and so
-// deleting it is the single edit needed when the endpoints land.
+// POST /api/truesync/verify-all and POST /api/truesync/listings/{id}/verify
+// both exist upstream as of 2026-08-24 — they were absent when this page
+// was built. The buttons are still not wired (that needs proxy routes of
+// their own), but the tooltip must not go on claiming the API is
+// missing: the operator would read a false statement. One named
+// constant so both buttons say the same thing.
 const VERIFY_WIREUP_PENDING =
-  'Wire-up pending — TrueSync exposes no verify endpoint (no POST /verify-all, ' +
-  'no POST /listings/{id}/verify) as of 2026-08-22'
+  'Not wired up yet — POST /api/truesync/verify-all exists upstream as of 2026-08-24, ' +
+  'but this page has no proxy route for it yet'
 
 function Toasts({ toasts, onDismiss }) {
   if (toasts.length === 0) return null
@@ -315,11 +318,28 @@ export default function MerchantCommandCenter({ onNavigate }) {
               <span><strong>{stats.verifiedCells}</strong> verified</span>
               <span>·</span>
               <span><strong>{stats.driftCells}</strong> with drift</span>
+              {/* Kept out of the drift count on purpose — a record this
+                  page could not read is its own problem, not the
+                  merchant's. Only shown when there are any. */}
+              {stats.unreadableCells > 0 && (
+                <>
+                  <span>·</span>
+                  <span title="Verification records this page could not parse. Not counted as drift.">
+                    <strong>{stats.unreadableCells}</strong> unreadable
+                  </span>
+                </>
+              )}
               <span>·</span>
-              {/* Stated as unavailable rather than filled with a
-                  publish time. VerificationResponse has no timestamp. */}
-              <span title={VERIFIED_AT_UNAVAILABLE} style={{ color: 'var(--ink-faint)' }}>
-                last verified: n/a
+              {/* Real since created_at shipped on VerificationResponse
+                  (2026-08-24); falls back to the honest wording when a
+                  deployment predates it. */}
+              <span
+                style={{ color: 'var(--ink-faint)' }}
+                title={stats.lastVerifiedAt
+                  ? absoluteTime(stats.lastVerifiedAt) || ''
+                  : VERIFIED_AT_UNAVAILABLE}
+              >
+                last verified: {stats.lastVerifiedAt ? relativeTime(stats.lastVerifiedAt) : 'n/a'}
               </span>
             </div>
 
@@ -401,15 +421,28 @@ export default function MerchantCommandCenter({ onNavigate }) {
                     <div className="label">Drifting</div>
                     <div className="value">{stats.driftCells}</div>
                     <div className="sub">
-                      {stats.verifiedCells === 0 && stats.driftCells === 0
+                      {stats.verifiedCells === 0 && stats.driftCells === 0 && stats.unreadableCells === 0
                         ? 'No verification runs recorded'
                         : `${stats.verifiedCells} verified clean`}
+                      {stats.unreadableCells > 0 &&
+                        ` · ${stats.unreadableCells} record${stats.unreadableCells === 1 ? '' : 's'} unreadable`}
                     </div>
                   </div>
                   <div className="mcc-stat">
                     <div className="label">Last verified</div>
-                    <div className="value unavailable">n/a</div>
-                    <div className="sub">{VERIFIED_AT_UNAVAILABLE}</div>
+                    {stats.lastVerifiedAt ? (
+                      <>
+                        <div className="value" style={{ fontSize: '1.15rem', paddingTop: 6 }}>
+                          {relativeTime(stats.lastVerifiedAt)}
+                        </div>
+                        <div className="sub">{absoluteTime(stats.lastVerifiedAt)}</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="value unavailable">n/a</div>
+                        <div className="sub">{VERIFIED_AT_UNAVAILABLE}</div>
+                      </>
+                    )}
                   </div>
                 </div>
 

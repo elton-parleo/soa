@@ -17,6 +17,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
 
 import activeBrand from '../__fixtures__/active-brand.json'
+import gmcEnvelope from '../__fixtures__/verifications-gmc.json'
 import channels from '../__fixtures__/channels.json'
 import publications from '../__fixtures__/publications.json'
 import spine from '../__fixtures__/merchant-schema-org.json'
@@ -174,7 +175,9 @@ describe('no fabricated verification state', () => {
     const { container } = render(<MerchantCommandCenter onNavigate={() => {}} />)
     await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
 
-    const badges = container.querySelectorAll('.mcc-verify')
+    // Scoped to tbody: the legend now carries a '?' marker with the
+    // same class, and this assertion is about cells.
+    const badges = container.querySelectorAll('.mcc-matrix tbody .mcc-verify')
     expect(badges).toHaveLength(35)
     expect([...badges].every((b) => b.textContent === '○')).toBe(true)
     expect([...badges].some((b) => b.classList.contains('verified'))).toBe(false)
@@ -186,7 +189,7 @@ describe('no fabricated verification state', () => {
     render(<MerchantCommandCenter onNavigate={() => {}} />)
     await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
 
-    expect(screen.getByText('The verification API returns no timestamps')).toBeInTheDocument()
+    expect(screen.getByText('No verification run has recorded a timestamp')).toBeInTheDocument()
   })
 
   it('labels a failed cell as failed rather than showing a bare timestamp', async () => {
@@ -244,7 +247,10 @@ describe('actions with no API behind them', () => {
 
     const verifyAll = screen.getByRole('button', { name: /verify all/i })
     expect(verifyAll).toBeDisabled()
-    expect(verifyAll.getAttribute('title')).toMatch(/wire-up pending/i)
+    // The endpoint exists upstream now; the tooltip must say "not wired
+    // up", not claim the API is missing.
+    expect(verifyAll.getAttribute('title')).toMatch(/not wired up yet/i)
+    expect(verifyAll.getAttribute('title')).toContain('/api/truesync/verify-all')
   })
 })
 
@@ -465,5 +471,83 @@ describe('sync rules ask before the first real write of a session', () => {
 
     await waitFor(() => expect(api.putSyncRule).toHaveBeenCalledTimes(2))
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+})
+
+
+/**
+ * The page rendered against real, timestamped verification records.
+ *
+ * This block exists because its absence let a bug through: every
+ * page-level test ran with `fetchAllVerifications` resolving to {}, so
+ * `stats.lastVerifiedAt` was always null and the branches that format a
+ * real timestamp never executed. A missing `absoluteTime` import
+ * therefore passed the whole suite and only surfaced in a browser.
+ */
+describe('page rendered with real verification records', () => {
+  const GMC_ROWS = gmcEnvelope.verifications
+
+  beforeEach(() => {
+    mockHappyPath()
+    fetchAllVerifications.mockResolvedValue({ '90:merchant_center': GMC_ROWS })
+  })
+
+  it('formats last-verified from created_at instead of saying n/a', async () => {
+    const { container } = render(<MerchantCommandCenter onNavigate={() => {}} />)
+    await waitFor(() =>
+      expect(container.querySelector('.mcc-verify.drift')).toBeInTheDocument())
+
+    const tile = [...container.querySelectorAll('.mcc-stat')]
+      .find((el) => el.textContent.includes('Last verified'))
+    expect(tile).not.toHaveTextContent('n/a')
+    expect(tile).not.toHaveTextContent('No verification run has recorded a timestamp')
+    // Both the relative and the absolute rendering are exercised here.
+    expect(tile.textContent).toMatch(/ago/)
+  })
+
+  it('counts the GMC cell as drift, not as unreadable', async () => {
+    const { container } = render(<MerchantCommandCenter onNavigate={() => {}} />)
+    await waitFor(() =>
+      expect(container.querySelector('.mcc-verify.drift')).toBeInTheDocument())
+
+    // The production case: not approved, zero itemised issues.
+    expect(container.querySelectorAll('.mcc-matrix tbody .mcc-verify.unparsed')).toHaveLength(0)
+    const drifting = [...container.querySelectorAll('.mcc-stat')]
+      .find((el) => el.textContent.includes('Drifting'))
+    expect(within(drifting).getByText('1')).toBeInTheDocument()
+    expect(drifting).not.toHaveTextContent('unreadable')
+  })
+
+  it('shows the unreadable indicator separately when a record cannot be parsed', async () => {
+    fetchAllVerifications.mockResolvedValue({
+      '90:merchant_center': GMC_ROWS,
+      '91:schema_org': [{
+        id: 99, phase: 'after', method: 'sidecar_audit',
+        created_at: '2026-08-24T22:10:00Z', drift: { nothing: 'recognisable' },
+      }],
+    })
+
+    const { container } = render(<MerchantCommandCenter onNavigate={() => {}} />)
+    await waitFor(() =>
+      expect(container.querySelector('.mcc-verify.unparsed')).toBeInTheDocument())
+
+    // Separate indicator, and the drift count is unchanged by it.
+    expect(screen.getByText('unreadable')).toBeInTheDocument()
+    const drifting = [...container.querySelectorAll('.mcc-stat')]
+      .find((el) => el.textContent.includes('Drifting'))
+    expect(within(drifting).getByText('1')).toBeInTheDocument()
+    expect(drifting).toHaveTextContent('1 record unreadable')
+  })
+
+  it('opens the GMC drawer on the Merchant Center channel', async () => {
+    render(<MerchantCommandCenter onNavigate={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Snug-Fit Diapers'))
+    fireEvent.click(await screen.findByRole('tab', { name: /google merchant center/i }))
+
+    expect(await screen.findByText(/Merchant Center status/)).toBeInTheDocument()
+    expect(screen.getByText('Not approved')).toBeInTheDocument()
+    expect(screen.queryByText(/unparsed drift record/)).not.toBeInTheDocument()
   })
 })

@@ -198,6 +198,9 @@
 .mcc-verify.verified { color: var(--sync); }
 .mcc-verify.drift { color: var(--drift); font-weight: 600; }
 .mcc-verify.failed { color: var(--fail); font-weight: 600; }
+/* Distinct from drift on purpose: a record we could not read is a gap
+   in this page, not a finding about the merchant's catalog. */
+.mcc-verify.unparsed { color: var(--ink-faint); font-weight: 700; }
 .mcc-stub-label {
   font-size: .66rem; color: var(--ink-faint); font-style: italic;
   max-width: 118px; white-space: normal; line-height: 1.25;
@@ -258,6 +261,34 @@
   font-family: 'IBM Plex Mono', monospace; font-size: .74rem; line-height: 1.5;
   max-height: 340px; overflow: auto; white-space: pre; color: var(--ink);
 }
+
+/* ── GMC diagnostics ─────────────────────────────────────────────── */
+.mcc-gmc-head {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.mcc-gmc-status, .mcc-gmc-when, .mcc-gmc-offer { font-size: .78rem; color: var(--ink-faint); }
+.mcc-gmc-offer { margin-left: auto; }
+
+.mcc-gmc-issues { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.mcc-gmc-issues li { display: flex; gap: 9px; align-items: baseline; font-size: .84rem; }
+.mcc-gmc-issues.compact { margin-top: 6px; gap: 4px; }
+.mcc-gmc-issues.compact li { font-size: .78rem; }
+.mcc-gmc-issue-body { flex: 1; }
+.mcc-gmc-code { font-size: .8rem; color: var(--ink); }
+.mcc-gmc-issues .mcc-tick { margin-left: 8px; font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; }
+.mcc-gmc-issues li.sev-error .mcc-gmc-code { color: var(--fail); }
+.mcc-gmc-issues li.sev-pending .mcc-gmc-code { color: var(--drift); }
+
+/* ── unparsed verification record ────────────────────────────────── */
+.mcc-unparsed {
+  border: 1px dashed var(--line-strong);
+  background: var(--mono-bg);
+  border-radius: 8px; padding: 12px 14px; font-size: .84rem;
+}
+.mcc-unparsed strong { display: block; color: var(--ink); margin-bottom: 4px; }
+.mcc-unparsed .detail { color: var(--ink-soft); font-size: .79rem; margin-top: 3px; }
+
+.mcc-method { color: var(--ink-faint); font-weight: 400; text-transform: none; letter-spacing: 0; }
 
 /* ── timeline ────────────────────────────────────────────────────── */
 .mcc-timeline { list-style: none; margin: 0; padding: 0; }

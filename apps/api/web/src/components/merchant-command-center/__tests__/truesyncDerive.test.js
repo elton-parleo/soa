@@ -212,11 +212,23 @@ describe('verificationBadge — drift badge math', () => {
   })
 
   it('counts findings from a {field:{expected,observed}} drift record', () => {
+    // method matters now: field-level drift belongs to fetch_probe. The
+    // same payload under method: 'gmc_diagnostics' is a contradiction
+    // and routes to the warning path instead — see the case below.
     const badge = verificationBadge([{
-      id: 3, phase: 'post_publish', method: 'gmc_diagnostics',
+      id: 3, phase: 'post_publish', method: 'fetch_probe',
       drift: { price: { expected: '17.99', observed: '18.99' }, gtin: { expected: 'x', observed: null } },
     }])
     expect(badge).toEqual({ kind: 'drift', findingCount: 2 })
+  })
+
+  it('refuses to read field-level drift out of a gmc_diagnostics record', () => {
+    const badge = verificationBadge([{
+      id: 3, phase: 'post_publish', method: 'gmc_diagnostics',
+      drift: { price: { expected: '17.99', observed: '18.99' } },
+    }])
+    expect(badge.kind).toBe('unparsed')
+    expect(badge.findingCount).toBe(0)
   })
 
   it('is ✕ when the check itself failed', () => {
@@ -232,13 +244,14 @@ describe('verificationBadge — drift badge math', () => {
     expect(badge.kind).toBe('verified')
   })
 
-  // An unreadable drift record still means drift. Rounding it down to
-  // "verified" would turn a warning green, which is the worst possible
-  // direction to be wrong in.
+  // An unreadable record must never read as verified — that would turn
+  // a warning green. It must not read as drift either: it is a gap in
+  // this page, not a finding about the catalog. Hence its own kind.
   it('never downgrades an unrecognised drift shape to verified', () => {
     const badge = verificationBadge([{ id: 5, phase: 'post_publish', method: 'live_fetch', drift: { weird: 'shape' } }])
-    expect(badge.kind).toBe('drift')
-    expect(badge.findingCount).toBe(1)
+    expect(badge.kind).toBe('unparsed')
+    expect(badge.kind).not.toBe('verified')
+    expect(badge.findingCount).toBe(0)
   })
 })
 

@@ -137,7 +137,9 @@ describe('drawer renders from records with missing fields', () => {
 
     const history = screen.getByText('Verification history').closest('.mcc-section')
     expect(within(history).getByText('—')).toBeInTheDocument()
-    expect(within(history).getByText('unknown phase')).toBeInTheDocument()
+    // The timeline leads with `outcome` (which shipped 2026-08-24) and
+    // falls back to `phase`; both null here.
+    expect(within(history).getByText('unknown outcome')).toBeInTheDocument()
     // And the panel as a whole survived.
     expect(screen.getByText(/Snug-Fit Diapers — Schema\.org/)).toBeInTheDocument()
   })

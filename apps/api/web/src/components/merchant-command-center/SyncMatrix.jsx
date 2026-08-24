@@ -11,6 +11,9 @@ function segClass(cell) {
   if (cell.publishState === 'published') {
     return cell.verification.kind === 'drift' ? 's-drift'
       : cell.verification.kind === 'failed' ? 's-fail'
+      // 'unparsed' keeps the publish state's own colour: the publish
+      // genuinely succeeded, and only our reading of the verification
+      // failed. The '?' glyph beside it carries that news.
       : 's-sync'
   }
   if (cell.publishState === 'failed') return 's-fail'
@@ -41,6 +44,7 @@ function Cell({ cell, channel }) {
     `${VERIFICATION_LABEL[cell.verification.kind]}${
       cell.verification.findingCount ? ` (${cell.verification.findingCount})` : ''
     }`,
+    cell.verification.reason ? `Reason: ${cell.verification.reason}` : null,
     cell.error ? `Error: ${cell.error}` : null,
     cell.muted ? `Depth: ${channel.depth_label}` : null,
   ].filter(Boolean).join('\n')
@@ -108,6 +112,7 @@ export default function SyncMatrix({
           <span><i className="mcc-seg s-fail" />Failed</span>
           <span><i className="mcc-seg s-pending" />Compiled</span>
           <span><i className="mcc-seg s-hold" />Not published</span>
+          <span><span className="mcc-verify unparsed">?</span>Unreadable record</span>
         </div>
       </div>
 
