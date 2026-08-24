@@ -183,16 +183,16 @@ describe('no fabricated verification state', () => {
     const badges = container.querySelectorAll('.mcc-matrix tbody .mcc-verify')
     expect(badges).toHaveLength(35)
     expect([...badges].every((b) => b.textContent === '○')).toBe(true)
-    expect([...badges].some((b) => b.classList.contains('verified'))).toBe(false)
+    expect([...badges].some((b) => b.classList.contains('clean'))).toBe(false)
 
-    expect(screen.getByText('No verification runs recorded')).toBeInTheDocument()
+    expect(screen.getByText('No fresh verification runs')).toBeInTheDocument()
   })
 
   it('states last-verified as unavailable rather than borrowing a publish time', async () => {
     render(<MerchantCommandCenter onNavigate={() => {}} />)
     await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
 
-    expect(screen.getByText('No verification run has recorded a timestamp')).toBeInTheDocument()
+    expect(screen.getByText('No fresh verification run')).toBeInTheDocument()
   })
 
   it('labels a failed cell as failed rather than showing a bare timestamp', async () => {
@@ -445,17 +445,19 @@ describe('page rendered with real verification records', () => {
     expect(tile.textContent).toMatch(/ago/)
   })
 
-  it('counts the GMC cell as drift, not as unreadable', async () => {
+  it('counts the GMC ghost as acceptance, never as drift', async () => {
     const { container } = render(<MerchantCommandCenter onNavigate={() => {}} />)
     await waitFor(() =>
       expect(container.querySelector('.mcc-verify.drift')).toBeInTheDocument())
 
-    // The production case: not approved, zero itemised issues.
-    expect(container.querySelectorAll('.mcc-matrix tbody .mcc-verify.unparsed')).toHaveLength(0)
+    // The production case: not approved, zero itemised issues. Under
+    // the model this is ACCEPTANCE, not drift — the whole rebuild.
+    expect(container.querySelectorAll('.mcc-matrix tbody .mcc-verify.unreadable')).toHaveLength(0)
     const drifting = [...container.querySelectorAll('.mcc-stat')]
       .find((el) => el.textContent.includes('Drifting'))
-    expect(within(drifting).getByText('1')).toBeInTheDocument()
-    expect(drifting).not.toHaveTextContent('unreadable')
+    expect(within(drifting).getByText('0')).toBeInTheDocument()
+    // It shows up as "not in feed" instead (the 404 ghost).
+    expect(screen.getByText('not in feed')).toBeInTheDocument()
   })
 
   it('shows the unreadable indicator separately when a record cannot be parsed', async () => {
@@ -469,14 +471,13 @@ describe('page rendered with real verification records', () => {
 
     const { container } = render(<MerchantCommandCenter onNavigate={() => {}} />)
     await waitFor(() =>
-      expect(container.querySelector('.mcc-verify.unparsed')).toBeInTheDocument())
+      expect(container.querySelector('.mcc-verify.unreadable')).toBeInTheDocument())
 
-    // Separate indicator, and the drift count is unchanged by it.
+    // Its own indicator, and drift is untouched by it.
     expect(screen.getByText('unreadable')).toBeInTheDocument()
     const drifting = [...container.querySelectorAll('.mcc-stat')]
       .find((el) => el.textContent.includes('Drifting'))
-    expect(within(drifting).getByText('1')).toBeInTheDocument()
-    expect(drifting).toHaveTextContent('1 record unreadable')
+    expect(within(drifting).getByText('0')).toBeInTheDocument()
   })
 
   it('opens the GMC drawer on the Merchant Center channel', async () => {
@@ -486,8 +487,9 @@ describe('page rendered with real verification records', () => {
     fireEvent.click(screen.getByText('Snug-Fit Diapers'))
     fireEvent.click(await screen.findByRole('tab', { name: /google merchant center/i }))
 
-    expect(await screen.findByText(/Merchant Center status/)).toBeInTheDocument()
-    expect(screen.getByText('Not approved')).toBeInTheDocument()
-    expect(screen.queryByText(/unparsed drift record/)).not.toBeInTheDocument()
+    expect(await screen.findByText(/Surface acceptance/)).toBeInTheDocument()
+    const section = screen.getByText(/Surface acceptance/).closest('.mcc-section')
+    expect(within(section).getByText('Not in feed')).toBeInTheDocument()
+    expect(screen.getByText('Drift: unknown')).toBeInTheDocument()
   })
 })

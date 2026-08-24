@@ -112,7 +112,13 @@
 .mcc-main { padding: 20px 24px 48px; }
 
 /* ── stat strip ──────────────────────────────────────────────────── */
-.mcc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+/* auto-fit rather than a fixed 4: the strip gained a fifth tile
+   (surface issues) when the dimensions were separated, and a hardcoded
+   column count left one tile stranded on its own row. */
+.mcc-stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px; margin-bottom: 18px;
+}
 .mcc-stat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
 .mcc-stat .label {
   font-size: .74rem; font-weight: 600; letter-spacing: .06em;
@@ -192,15 +198,28 @@
 .mcc-cell-stack { display: inline-flex; flex-direction: column; align-items: center; gap: 3px; }
 .mcc-cell-row { display: inline-flex; align-items: center; gap: 5px; }
 .mcc-cell-when { font-size: .7rem; color: var(--ink-faint); white-space: nowrap; }
-.mcc-cell.muted .mcc-cell-when, .mcc-cell.muted .mcc-verify { opacity: .55; }
+.mcc-cell.muted .mcc-cell-when, .mcc-cell.muted .mcc-verify, .mcc-cell.muted .mcc-accept { opacity: .55; }
+/* Dimension 2 — drift, and only drift. */
 .mcc-verify { font-size: .82rem; line-height: 1; }
-.mcc-verify.none { color: var(--ink-faint); }
-.mcc-verify.verified { color: var(--sync); }
+.mcc-verify.unknown { color: var(--ink-faint); }
+.mcc-verify.clean { color: var(--sync); }
 .mcc-verify.drift { color: var(--drift); font-weight: 600; }
-.mcc-verify.failed { color: var(--fail); font-weight: 600; }
-/* Distinct from drift on purpose: a record we could not read is a gap
-   in this page, not a finding about the merchant's catalog. */
-.mcc-verify.unparsed { color: var(--ink-faint); font-weight: 700; }
+/* Dimension 4 — distinct from drift on purpose: a record we could not
+   read is a gap in this page, not a finding about the catalog. */
+.mcc-verify.unreadable { color: var(--ink-faint); font-weight: 700; }
+
+/* Dimension 3 — the channel's own verdict, never merged into the drift
+   badge. Amber for the lifecycle states, red only for a genuine
+   rejection, whatever severity the channel reported. */
+.mcc-accept { font-size: .8rem; line-height: 1; }
+.mcc-accept.tone-sync { color: var(--sync); }
+.mcc-accept.tone-drift { color: var(--drift); font-weight: 600; }
+.mcc-accept.tone-fail { color: var(--fail); font-weight: 700; }
+.mcc-accept.tone-hold { color: var(--ink-faint); }
+
+.mcc-stale-note {
+  font-size: .66rem; color: var(--ink-faint); font-style: italic; white-space: nowrap;
+}
 .mcc-stub-label {
   font-size: .66rem; color: var(--ink-faint); font-style: italic;
   max-width: 118px; white-space: normal; line-height: 1.25;
@@ -397,6 +416,17 @@ a.mcc-gmc-offer { color: var(--cobalt); }
 .mcc-confirm-note { font-size: .78rem !important; color: var(--ink-faint) !important; }
 .mcc-confirm-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
+/* ── stale records ───────────────────────────────────────────────── */
+/* Greyed as a whole: these describe a superseded artifact and count
+   towards nothing. */
+.mcc-stale { opacity: .6; }
+.mcc-stale .mcc-timeline .what strong { font-weight: 500; }
+
+.mcc-override {
+  border-left: 2px solid var(--line-strong);
+  padding-left: 8px; margin-top: 4px; font-style: italic;
+}
+
 /* ── toasts ──────────────────────────────────────────────────────── */
 .mcc-toasts {
   position: fixed; right: 20px; bottom: 20px; z-index: 60;
@@ -422,7 +452,7 @@ a.mcc-gmc-offer { color: var(--cobalt); }
 .mcc-loading { text-align: center; padding: 80px 20px; color: var(--ink-soft); font-size: .88rem; }
 
 @media (max-width: 900px) {
-  .mcc-stats { grid-template-columns: repeat(2, 1fr); }
+  .mcc-stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
   .mcc-drawer { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {

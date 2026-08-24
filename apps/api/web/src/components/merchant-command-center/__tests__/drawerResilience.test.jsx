@@ -26,7 +26,8 @@ import ListingDrawer from '../ListingDrawer.jsx'
 import DrawerErrorBoundary from '../DrawerErrorBoundary.jsx'
 import { unwrapVerifications } from '../../../truesyncApi.js'
 import { truesyncApi, fetchAllVerifications } from '../../../truesyncApi.js'
-import { buildCatalogRows, buildCell, latestPublicationByCell, orderChannels } from '../truesyncDerive.js'
+import { buildCatalogRows, latestPublicationByCell, orderChannels } from '../truesyncDerive.js'
+import { aggregateCell } from '../verificationModel.js'
 
 vi.mock('../../../truesyncApi.js', async (importOriginal) => {
   const actual = await importOriginal()
@@ -65,21 +66,31 @@ function drawerProps(overrides = {}) {
   const ordered = orderChannels(channels)
   const rows = buildCatalogRows(spine, Object.fromEntries(
     Object.entries(listings).map(([id, d]) => [Number(id), d])))
-  const byCell = latestPublicationByCell(publications)
+  const pubs = overrides.publications || publications
+  const records = overrides.verificationsByCell || {}
+  const byCell = latestPublicationByCell(pubs)
+
+  // The drawer consumes aggregateCell output and counts nothing itself
+  // — see docs/verification-semantics.md.
+  const cellFor = (row, channel) => aggregateCell(
+    byCell.get(`${row.listingId}:${channel.slug}`),
+    records[`${row.listingId}:${channel.slug}`] || [],
+    { channelSlug: channel.slug },
+  )
+
+  const { verificationsByCell, ...rest } = overrides
   return {
     row: rows[0],
     channels: ordered,
     channelState: Object.fromEntries(ordered.map((c) => [c.slug, { implementation: 'live', muted: false }])),
-    cellFor: (row, channel) => buildCell({
-      publication: byCell.get(`${row.listingId}:${channel.slug}`),
-      verifications: [], implementation: 'live',
-    }),
-    publications,
-    verificationsByCell: {},
+    cellFor,
+    publications: pubs,
     onClose: () => {},
     onPublish: () => {},
     publishPending: false,
-    ...overrides,
+    onVerify: () => {},
+    verifyPending: false,
+    ...rest,
   }
 }
 
@@ -138,26 +149,34 @@ describe('drawer renders from records with missing fields', () => {
       verificationsByCell: { '90:schema_org': [NULL_RECORD] },
     })} />)
 
-    const history = screen.getByText('Verification history').closest('.mcc-section')
-    expect(within(history).getByText('—')).toBeInTheDocument()
-    // The timeline leads with `outcome` (which shipped 2026-08-24) and
-    // falls back to `phase`; both null here.
-    expect(within(history).getByText('unknown outcome')).toBeInTheDocument()
+    // A record with no created_at is stale by the freshness rule, so it
+    // lands in the superseded section and counts for nothing.
+    const stale = screen.getByText(/Superseded verification records/).closest('.mcc-section')
+    expect(within(stale).getAllByText(/pre-dates latest publish/).length).toBeGreaterThan(0)
+    // Drift is unknown, because nothing fresh has run.
+    expect(screen.getByText('Drift: unknown')).toBeInTheDocument()
     // And the panel as a whole survived.
     expect(screen.getByText(/Snug-Fit Diapers — Schema\.org/)).toBeInTheDocument()
   })
 
   it('renders drift findings whose every field is null', () => {
+    // Must be a fresh fetch_probe to reach the comparison table at all:
+    // a record with no method is unreadable, and one with no created_at
+    // is stale. Both are correct under the model — this test is about
+    // what the table does with null FIELDS, not null metadata.
     render(<ListingDrawer {...drawerProps({
       verificationsByCell: { '90:schema_org': [{
         ...NULL_RECORD,
+        method: 'fetch_probe',
+        created_at: '2099-01-01T00:00:00Z',
         drift: { findings: [{ variant: null, field: null, expected: null, observed: null }] },
       }] },
     })} />)
 
-    const comparison = screen.getByText('Master record vs. surface').closest('.mcc-section')
-    expect(within(comparison).getAllByText('—').length).toBeGreaterThan(0)
+    const comparison = screen.getByText(/Drift — master record vs\. surface/).closest('.mcc-section')
     expect(within(comparison).getByText('missing')).toBeInTheDocument()
+    // Null field names render as the em-dash placeholder, not a crash.
+    expect(within(comparison).getAllByText('—').length).toBeGreaterThan(0)
   })
 
   it('survives a record whose fields are objects where strings were expected', () => {
@@ -169,8 +188,9 @@ describe('drawer renders from records with missing fields', () => {
       }] },
     })} />)
 
+    // Survives; the record is unreadable (unknown method shape), which
+    // is its own dimension and not a drift finding.
     expect(screen.getByText(/Snug-Fit Diapers — Schema\.org/)).toBeInTheDocument()
-    expect(screen.getByText('{"nested":"object"}')).toBeInTheDocument()
   })
 
   it('survives a publication row with a null status and no timestamps', () => {

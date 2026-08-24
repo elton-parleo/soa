@@ -1,23 +1,19 @@
 import React, { useEffect, useState } from 'react'
 import {
-  parseVerification, publicationHistoryForCell, relativeTime, absoluteTime,
-  gmcExternalRefs, gmcAccountId, gmcOfferLink, VERIFICATION_LABEL,
+  publicationHistoryForCell, relativeTime, absoluteTime,
+  gmcExternalRefs, gmcAccountId, gmcOfferLink,
 } from './truesyncDerive.js'
+import {
+  PUBLISH_STATE, PUBLISH_STATE_LABEL, ACCEPTANCE, ACCEPTANCE_LABEL, ACCEPTANCE_TONE,
+  STALE_NOTE,
+} from './verificationModel.js'
 
 /**
  * Renders any API-supplied value as text, or `fallback` when there is
- * nothing to show.
- *
- * Every scalar in this panel goes through it. The reason is narrow and
- * concrete: React throws "Objects are not valid as a React child" the
- * moment a field the API has always sent as a string arrives as an
- * object, and that throw takes the whole panel down. TrueSync's
- * verification records are typed as free-form objects and have already
- * changed shape once (the 2026-08-24 envelope), so treating any single
- * field's type as settled is not safe.
- *
- * null, undefined and '' all read as the fallback — "—" — never as an
- * empty gap that looks like a rendering bug.
+ * nothing to show. Every scalar in this panel goes through it — React
+ * throws "Objects are not valid as a React child" the moment a field
+ * the API has always sent as a string arrives as an object, and that
+ * throw takes the whole panel down.
  */
 function text(value, fallback = '—') {
   if (value == null || value === '') return fallback
@@ -30,31 +26,8 @@ function text(value, fallback = '—') {
   }
 }
 
-// Publish status -> the badge vocabulary the mock uses.
-function statusBadge(cell) {
-  if (cell.publishState === 'failed') return ['fail', 'Publish failed']
-  if (cell.publishState === 'never') return ['hold', 'Never published']
-  if (cell.publishState === 'compiled_not_published') return ['hold', 'Compiled — not published']
-  if (cell.publishState === 'withdrawn') return ['hold', 'Withdrawn']
-  if (cell.verification.kind === 'drift') {
-    return ['drift', `Drift · ${cell.verification.findingCount} field${cell.verification.findingCount === 1 ? '' : 's'}`]
-  }
-  if (cell.verification.kind === 'failed') return ['fail', 'Verification failed']
-  if (cell.verification.kind === 'verified') return ['sync', 'In sync']
-  return ['hold', 'Published — not yet verified']
-}
-
-// Expressiveness severity -> the checklist's tick style. These come
-// straight off the publication row: real, live data describing what a
-// protocol could not carry (e.g. "GMC: no amount-off field; carried as
-// sale_price, so the mechanic is lost").
-const SEVERITY_TICK = { dropped: 'bad', approximate: 'warn', lossy: 'warn' }
-
 function ArtifactBlock({ label, value }) {
   if (value == null) return null
-
-  // Circular structures and BigInt both make JSON.stringify throw. A
-  // payload we cannot pretty-print is still worth showing badly.
   let pretty
   try {
     pretty = JSON.stringify(value, null, 2)
@@ -62,7 +35,6 @@ function ArtifactBlock({ label, value }) {
     pretty = `Could not serialise this payload: ${err?.message || 'unknown error'}`
   }
   if (pretty === undefined) pretty = String(value)
-
   return (
     <details className="mcc-artifact">
       <summary>{label}</summary>
@@ -71,227 +43,259 @@ function ArtifactBlock({ label, value }) {
   )
 }
 
-// GMC issue severity -> the page's status colours. 'pending' is its own
-// step rather than a warning: publish -> pending -> approved is the
-// expected happy path, and colouring an in-flight review amber reads as
-// a problem the merchant has to act on.
-const GMC_SEVERITY_CLASS = {
-  error: 'fail',
-  warning: 'drift',
-  pending: 'hold',
-  info: 'hold',
-}
+const EXPRESSIVENESS_TICK = { dropped: 'bad', approximate: 'warn', lossy: 'warn' }
 
-const GMC_SEVERITY_TICK = {
-  error: 'bad',
-  warning: 'warn',
-  pending: 'warn',
-  info: 'ok',
-}
+// ─── Dimension 2 — drift ─────────────────────────────────────────────
 
-/**
- * A gmc_diagnostics record — the traceability beat the drawer spec asks
- * for: publish -> pending -> approved, with the item-level issues
- * Merchant Center reported, severity-coloured.
- *
- * Never rendered through the master-vs-surface table: a GMC record
- * carries an approval state and an issue list, not field comparisons,
- * and forcing it through the field parser is what made every GMC row
- * read as one unit of catalog drift.
- */
-function GmcDiagnosticsRecord({ parsed, record, accountId }) {
-  const offerId = record?.observed?.offerId
-  const offerLink = gmcOfferLink(accountId, offerId)
+function DriftSection({ cell }) {
+  const probe = cell.driftRecord
+
   return (
-    <div className="mcc-gmc">
-      <div className="mcc-gmc-head">
-        <span className={`mcc-badge ${parsed.approved ? 'sync' : 'fail'}`}>
-          {parsed.approved ? 'Approved' : 'Not approved'}
-        </span>
-        {parsed.httpStatus != null && (
-          <span className="mcc-gmc-status mono">HTTP {parsed.httpStatus}</span>
-        )}
-        {record?.created_at && (
-          <span className="mcc-gmc-when" title={absoluteTime(record.created_at) || ''}>
-            {relativeTime(record.created_at) || ''}
-          </span>
-        )}
-        {offerId && (
-          offerLink
-            ? <a className="mcc-gmc-offer mono" href={offerLink} target="_blank" rel="noreferrer">
-                {text(offerId)} ↗
-              </a>
-            : <span className="mcc-gmc-offer mono">{text(offerId)}</span>
-        )}
-      </div>
+    <div className="mcc-section">
+      <h4>
+        Drift — master record vs. surface
+        {probe?.method && <span className="mcc-method mono"> · {text(probe.method)}</span>}
+      </h4>
 
-      {parsed.issues.length === 0 ? (
-        <p className="mcc-empty">
-          {parsed.approved
-            ? 'Merchant Center reports no outstanding item issues.'
-            : 'Merchant Center has not approved this item and reported no itemised issues.'}
-          {parsed.httpStatus === 404 &&
-            ' The item was not found in the account — it has not been accepted into the feed yet.'}
-        </p>
-      ) : (
-        <ul className="mcc-gmc-issues">
-          {parsed.issues.map((issue, i) => (
-            <li key={`${issue.code}-${i}`} className={`sev-${issue.severity}`}>
-              <span className={`mcc-dot ${GMC_SEVERITY_CLASS[issue.severity] || 'hold'}`} />
-              <span className="mcc-gmc-issue-body">
-                <span className="mcc-gmc-code mono">{text(issue.code, 'unnamed issue')}</span>
-                <span className={`mcc-tick ${GMC_SEVERITY_TICK[issue.severity] || 'warn'}`}>
-                  {text(issue.severity)}
-                </span>
-                {issue.description && <div className="detail">{text(issue.description)}</div>}
-                {issue.detail && <div className="detail">{text(issue.detail)}</div>}
+      {!probe && (
+        <div className="mcc-empty">
+          {cell.staleCount > 0
+            ? `No verification run newer than the latest publish. ${cell.staleCount} older record${cell.staleCount === 1 ? '' : 's'} ${cell.staleCount === 1 ? 'pre-dates' : 'pre-date'} it, so drift stays unknown until a fresh run.`
+            : 'No verification run has been recorded for this listing on this channel, so drift is unknown. The badge stays ○.'}
+        </div>
+      )}
+
+      {probe && (
+        <>
+          <div className="mcc-probe">
+            <span className={`mcc-badge ${probe.integrity === false ? 'drift' : 'sync'}`}>
+              {probe.integrity === false ? 'Structured data differs' : 'Structured data matches'}
+            </span>
+            {probe.outcome && <span className="mcc-probe-meta mono">outcome: {text(probe.outcome)}</span>}
+            {probe.bytesIdentical === false && (
+              <span
+                className="mcc-probe-meta"
+                title="The served bytes differ (ordering, whitespace) while the structured data matches — the normal state, not a problem."
+              >
+                bytes differ
               </span>
-            </li>
-          ))}
-        </ul>
+            )}
+            {probe.url && (
+              <a className="mcc-probe-meta mono" href={probe.url} target="_blank" rel="noreferrer">
+                fetched page ↗
+              </a>
+            )}
+          </div>
+
+          {cell.drift === 0 ? (
+            <div className="mcc-empty">Newest verification recorded no drift.</div>
+          ) : (
+            <table className="mcc-kv">
+              <thead>
+                <tr>
+                  <th style={{ width: '22%' }}>Field</th>
+                  <th>Variant</th>
+                  <th>Master record</th>
+                  <th>On surface</th>
+                </tr>
+              </thead>
+              <tbody>
+                {probe.findings.map((f, i) => (
+                  <tr key={`${f.field}-${f.variant}-${i}`}>
+                    <td className="field">{text(f.field)}</td>
+                    <td className="mcc-val">{text(f.variant)}</td>
+                    <td><span className="mcc-val good">{text(f.expected)}</span></td>
+                    <td>
+                      {f.observed == null
+                        ? <span className="mcc-val missing">missing</span>
+                        : <span className="mcc-val bad">{text(f.observed)}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
       )}
     </div>
   )
 }
 
-/**
- * A record no parser understood. Visible and self-describing, and
- * counted as a warning rather than as drift — see verificationBadge().
- */
-function UnparsedRecord({ parsed, record }) {
+// ─── Dimension 3 — surface acceptance ────────────────────────────────
+
+function AcceptanceSection({ cell, accountId }) {
+  if (!cell.hasAcceptanceAuthority) return null
+
+  const record = cell.acceptanceRecord
+  const offerId = record?.record?.observed?.offerId
+  const offerLink = gmcOfferLink(accountId, offerId)
+
   return (
-    <div className="mcc-unparsed" role="status">
-      <strong>
-        Couldn’t parse verification record (method: {text(parsed.method, 'none given')})
-      </strong>
-      <div className="detail">{text(parsed.reason)}</div>
-      <div className="detail">
-        Not counted as drift — this is a gap in this page, not a finding about the catalog.
-      </div>
-      {record?.drift != null && (
-        <ArtifactBlock label="Show the raw drift payload" value={record.drift} />
-      )}
-    </div>
-  )
-}
+    <div className="mcc-section">
+      <h4>
+        Surface acceptance
+        {record?.method && <span className="mcc-method mono"> · {text(record.method)}</span>}
+      </h4>
 
-/**
- * The probe's own verdict, above the comparison table: did the fetch
- * succeed, and did the structured data match.
- *
- * `bytes_identical: false` alongside `integrity: true` is the normal,
- * healthy state — the bytes differ (ordering, whitespace) while the
- * structured data matches. It is stated rather than hidden, but framed
- * as the non-event it is, so nobody reads it as a problem.
- */
-function FetchProbeVerdict({ parsed }) {
-  const probe = parsed.probe
-  if (!probe) return null
-
-  if (!parsed.succeeded) {
-    return (
-      <div className="mcc-unparsed" role="status">
-        <strong>The probe did not complete — nothing was compared.</strong>
-        <div className="detail">
-          {probe.error ? text(probe.error) : `Outcome: ${text(probe.outcome)}`}
+      {!record && (
+        <div className="mcc-empty">
+          {cell.staleCount > 0
+            ? `No acceptance record newer than the latest publish — ${STALE_NOTE}.`
+            : 'The channel has not reported an acceptance state for this item.'}
         </div>
-        <div className="detail">
-          No drift is reported from this run because the surface was never read.
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="mcc-probe">
-      <span className={`mcc-badge ${probe.integrity === false ? 'drift' : 'sync'}`}>
-        {probe.integrity === false ? 'Structured data differs' : 'Structured data matches'}
-      </span>
-      {probe.outcome && <span className="mcc-probe-meta mono">outcome: {text(probe.outcome)}</span>}
-      {probe.bytesIdentical === false && (
-        <span
-          className="mcc-probe-meta"
-          title="The served bytes differ (ordering, whitespace) while the structured data matches — the normal state, not a problem."
-        >
-          bytes differ
-        </span>
       )}
-      {probe.url && (
-        <a className="mcc-probe-meta mono" href={probe.url} target="_blank" rel="noreferrer">
-          fetched page ↗
-        </a>
+
+      {record && (
+        <>
+          <div className="mcc-gmc-head">
+            <span className={`mcc-badge ${ACCEPTANCE_TONE[cell.acceptance]}`}>
+              {ACCEPTANCE_LABEL[cell.acceptance]}
+            </span>
+            {record.httpStatus != null && (
+              <span className="mcc-gmc-status mono">HTTP {record.httpStatus}</span>
+            )}
+            {record.createdAt && (
+              <span className="mcc-gmc-when" title={absoluteTime(record.createdAt) || ''}>
+                {relativeTime(record.createdAt) || ''}
+              </span>
+            )}
+            {offerId && (
+              offerLink
+                ? <a className="mcc-gmc-offer mono" href={offerLink} target="_blank" rel="noreferrer">
+                    {text(offerId)} ↗
+                  </a>
+                : <span className="mcc-gmc-offer mono">{text(offerId)}</span>
+            )}
+          </div>
+
+          {cell.acceptance === ACCEPTANCE.UNAVAILABLE && (
+            <p className="mcc-empty">
+              No acceptance opinion could be obtained: {text(record.reason, 'the publish never landed')}.
+              Nothing is counted for this cell.
+            </p>
+          )}
+
+          {record.issues.length === 0 && cell.acceptance !== ACCEPTANCE.UNAVAILABLE && (
+            <p className="mcc-empty">
+              {cell.acceptance === ACCEPTANCE.APPROVED
+                ? 'No outstanding item issues.'
+                : cell.acceptance === ACCEPTANCE.NOT_FOUND
+                  ? 'The item was not found in the account — it has not been accepted into the feed yet.'
+                  : 'Not approved, and the channel gave no reason.'}
+            </p>
+          )}
+
+          {record.issues.length > 0 && (
+            <ul className="mcc-gmc-issues">
+              {record.issues.map((issue, i) => (
+                <li key={`${issue.code}-${i}`} className={`sev-${issue.tone}`}>
+                  <span className={`mcc-dot ${issue.tone === 'pending' ? 'drift' : 'fail'}`} />
+                  <span className="mcc-gmc-issue-body">
+                    <span className="mcc-gmc-code mono">{text(issue.code, 'unnamed issue')}</span>
+                    <span className={`mcc-tick ${issue.tone === 'pending' ? 'warn' : 'bad'}`}>
+                      {issue.tone === 'pending' ? 'pending review' : 'action needed'}
+                    </span>
+                    {issue.description && <div className="detail">{text(issue.description)}</div>}
+                    {issue.detail && <div className="detail">{text(issue.detail)}</div>}
+                    {/* Stated openly where we override the channel: a
+                        lifecycle code reported as DISAPPROVED is still
+                        just an item awaiting review. */}
+                    {issue.lifecycle && issue.reportedSeverity
+                      && issue.reportedSeverity.toUpperCase() !== 'PENDING' && (
+                      <div className="detail mcc-override">
+                        Reported by the channel as{' '}
+                        <span className="mono">{text(issue.reportedSeverity)}</span> — shown as pending
+                        because this is a lifecycle code, not a policy rejection.
+                      </div>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </div>
   )
 }
 
-// The master-vs-surface comparison, for records that produced real
-// field-level findings.
-function FindingsTable({ findings }) {
+// ─── Dimension 4 — observability ─────────────────────────────────────
+
+function UnreadableSection({ cell }) {
+  if (cell.unreadableCount === 0) return null
+
   return (
-    <table className="mcc-kv">
-      <thead>
-        <tr>
-          <th style={{ width: '22%' }}>Field</th>
-          <th>Variant</th>
-          <th>Master record</th>
-          <th>On surface</th>
-        </tr>
-      </thead>
-      <tbody>
-        {findings.map((f, i) => (
-          <tr key={`${f.field}-${f.variant}-${i}`}>
-            <td className="field">{text(f.field)}</td>
-            <td className="mcc-val">{text(f.variant)}</td>
-            <td><span className="mcc-val good">{text(f.expected)}</span></td>
-            <td>
-              {f.observed == null
-                ? <span className="mcc-val missing">missing</span>
-                : <span className="mcc-val bad">{text(f.observed)}</span>}
-            </td>
-          </tr>
+    <div className="mcc-section">
+      <h4>Records this page could not read</h4>
+      {cell.unreadableRecords.map((record, i) => (
+        <div className="mcc-unparsed" role="status" key={record.record?.id ?? i}>
+          <strong>
+            Couldn’t parse verification record (method: {text(record.method, 'none given')})
+          </strong>
+          <div className="detail">{text(record.reason)}</div>
+          <div className="detail">
+            Not counted as drift and not counted as a surface issue — this is a gap in this
+            page, not a finding about the catalog.
+          </div>
+          {record.record?.drift != null && (
+            <ArtifactBlock label="Show the raw drift payload" value={record.record.drift} />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Stale records ───────────────────────────────────────────────────
+
+function StaleSection({ cell }) {
+  if (cell.staleCount === 0) return null
+
+  return (
+    <div className="mcc-section mcc-stale">
+      <h4>Superseded verification records ({cell.staleCount})</h4>
+      <p className="mcc-empty">
+        These ran before the latest publish at{' '}
+        <span className="mono">{absoluteTime(cell.publishedAt) || '—'}</span>, so they describe an
+        artifact that has since been replaced. They count towards nothing.
+      </p>
+      <ul className="mcc-timeline">
+        {cell.staleRecords.map((record, i) => (
+          <li key={record.record?.id ?? i}>
+            <span className="when mono" title={absoluteTime(record.createdAt) || ''}>
+              {relativeTime(record.createdAt) || text(record.method)}
+            </span>
+            <span className="what">
+              <strong>{text(record.record?.outcome ?? record.kind, 'unknown outcome')}</strong>
+              <span className="mcc-method mono"> · {text(record.method)}</span>
+              <div className="detail">{STALE_NOTE}</div>
+            </span>
+          </li>
         ))}
-      </tbody>
-    </table>
+      </ul>
+    </div>
   )
 }
 
+// ─── The drawer ──────────────────────────────────────────────────────
+
 /**
- * The drift inspector — per-channel detail for one listing, opened by
- * selecting a matrix row. Follows the mock's two-column detail layout:
- * the comparison table on the left, the compiler/validator card on the
- * right.
+ * The drift inspector — per-channel detail for one listing.
  *
- * The mock's separate Publications tab lives here instead, as the
- * publish timeline: every publication event for the selected cell is
- * already in the payload the matrix loaded, so folding it into the
- * drawer costs one map() and puts the log next to the artifact it
- * describes — rather than a fourth tab that reloads the same rows.
+ * Structured as the model is: one section per dimension, in the order
+ * they answer questions. Nothing here counts anything; every number
+ * comes from `aggregateCell` (see docs/verification-semantics.md).
  */
 export default function ListingDrawer({
-  row, channels, channelState, cellFor, publications, verificationsByCell,
+  row, channels, channelState, cellFor, publications,
   onClose, onPublish, publishPending, onVerify, verifyPending,
 }) {
   const [channelSlug, setChannelSlug] = useState(channels[0]?.slug)
 
-  // Reset the channel selection when a different row is opened, so the
-  // drawer never shows row B against the channel tab row A was on.
   useEffect(() => { setChannelSlug(channels[0]?.slug) }, [row.listingId, channels])
-
-  // Verification history comes from the page's matrix-wide load rather
-  // than a fetch of its own — one source, so the drawer can never
-  // disagree with the badge on the row that opened it. `undefined`
-  // means that pass has not finished yet; [] means it finished and
-  // found nothing.
-  const cellKey = `${row.listingId}:${channelSlug}`
-  const verifications = verificationsByCell?.[cellKey]
-  const verificationsLoading = verifications === undefined
 
   const channel = channels.find((c) => c.slug === channelSlug)
 
-  // Previously `return null`, which made a selected row render nothing
-  // at all — a dead click by another route. If the channel list is
-  // empty or the selected slug has gone away, say so.
   if (!channel) {
     return (
       <div className="mcc-drawer-error mcc-panel" role="alert">
@@ -301,8 +305,7 @@ export default function ListingDrawer({
         </div>
         <div className="mcc-section">
           <p className="mcc-empty">
-            TrueSync returned no channels, so there is no surface to inspect this
-            listing against.
+            TrueSync returned no channels, so there is no surface to inspect this listing against.
           </p>
         </div>
       </div>
@@ -310,25 +313,35 @@ export default function ListingDrawer({
   }
 
   const cell = cellFor(row, channel)
-  const [badgeKind, badgeText] = statusBadge(cell)
   const history = publicationHistoryForCell(publications, row.listingId, channel.slug)
   const current = history[0] || null
-  const newestVerification = (verifications || [])[0] || null
-  const parsedNewest = newestVerification ? parseVerification(newestVerification) : null
-  // A Merchant Center publication's external_ref is a semicolon-joined
-  // list of Content API resource names, one per variant — rendered as
-  // individual links rather than one 400-character line.
-  const isGmcChannel = channel.slug === 'merchant_center'
-  const gmcRefs = isGmcChannel ? gmcExternalRefs(cell.externalRef) : []
-  const gmcAccount = isGmcChannel ? gmcAccountId(cell.externalRef) : null
+  const gmcRefs = channel.slug === 'merchant_center' ? gmcExternalRefs(cell.externalRef) : []
+  const gmcAccount = channel.slug === 'merchant_center' ? gmcAccountId(cell.externalRef) : null
+
+  // The headline badge is the publish state plus, where they exist, the
+  // other dimensions as separate chips. Never one merged verdict.
+  const publishTone = cell.publishState === PUBLISH_STATE.PUBLISHED ? 'sync'
+    : cell.publishState === PUBLISH_STATE.FAILED ? 'fail'
+    : 'hold'
 
   return (
     <div className="mcc-drawer">
-      {/* ── left: comparison + artifact + timeline ─────────────────── */}
       <div className="mcc-panel">
         <div className="mcc-drawer-head">
           <h3>{text(row.name, `Listing ${text(row.listingId)}`)} — {text(channel.name)}</h3>
-          <span className={`mcc-badge ${badgeKind}`}>{badgeText}</span>
+          <span className={`mcc-badge ${publishTone}`}>{PUBLISH_STATE_LABEL[cell.publishState]}</span>
+          <span className={`mcc-badge ${cell.badge.kind === 'drift' ? 'drift' : cell.badge.kind === 'clean' ? 'sync' : 'hold'}`}>
+            Drift: {cell.drift == null ? 'unknown' : cell.drift}
+          </span>
+          {cell.hasAcceptanceAuthority && cell.acceptance !== ACCEPTANCE.UNKNOWN && (
+            <span className={`mcc-badge ${ACCEPTANCE_TONE[cell.acceptance]}`}>
+              {ACCEPTANCE_LABEL[cell.acceptance]}
+              {cell.issueCount > 0 && ` · ${cell.issueCount}`}
+            </span>
+          )}
+          {cell.unreadableCount > 0 && (
+            <span className="mcc-badge hold">{cell.unreadableCount} unreadable</span>
+          )}
           <button className="mcc-btn mcc-drawer-close" onClick={onClose}>Close</button>
         </div>
 
@@ -347,54 +360,11 @@ export default function ListingDrawer({
           ))}
         </div>
 
-        {/* What the newest verification says, rendered by the METHOD
-            that produced it. The three shapes are mutually exclusive
-            and each has its own renderer — nothing is forced through
-            the field-comparison parser any more. */}
-        <div className="mcc-section">
-          <h4>
-            {parsedNewest?.kind === 'gmc'
-              ? 'Merchant Center status'
-              : 'Master record vs. surface'}
-            {newestVerification?.method && (
-              <span className="mcc-method mono"> · {text(newestVerification.method)}</span>
-            )}
-          </h4>
+        <DriftSection cell={cell} />
+        <AcceptanceSection cell={cell} accountId={gmcAccount} />
+        <UnreadableSection cell={cell} />
+        <StaleSection cell={cell} />
 
-          {verificationsLoading && <div className="mcc-empty">Loading verification history…</div>}
-
-          {!verificationsLoading && !parsedNewest && (
-            <div className="mcc-empty">
-              No verification run has been recorded for this listing on this channel, so there is
-              nothing to compare. The badge stays ○.
-            </div>
-          )}
-
-          {parsedNewest?.kind === 'gmc' && (
-            <GmcDiagnosticsRecord
-              parsed={parsedNewest}
-              record={newestVerification}
-              accountId={gmcAccount}
-            />
-          )}
-
-          {parsedNewest?.kind === 'unparsed' && (
-            <UnparsedRecord parsed={parsedNewest} record={newestVerification} />
-          )}
-
-          {parsedNewest?.kind === 'findings' && (
-            <>
-              <FetchProbeVerdict parsed={parsedNewest} />
-              {parsedNewest.findings.length > 0
-                ? <FindingsTable findings={parsedNewest.findings} />
-                : parsedNewest.succeeded && (
-                    <div className="mcc-empty">Newest verification recorded no drift.</div>
-                  )}
-            </>
-          )}
-        </div>
-
-        {/* Published artifact — what was actually sent to this surface. */}
         <div className="mcc-section">
           <h4>Published artifact</h4>
           {current?.payload != null
@@ -402,7 +372,6 @@ export default function ListingDrawer({
             : <div className="mcc-empty">Nothing has been compiled for this channel yet.</div>}
         </div>
 
-        {/* The publish timeline — the mock's Publications tab, folded in. */}
         <div className="mcc-section">
           <h4>Publish timeline</h4>
           {history.length === 0 && (
@@ -411,12 +380,9 @@ export default function ListingDrawer({
           <ul className="mcc-timeline">
             {history.map((p) => {
               const at = p.published_at || p.compiled_at
-              const dot = p.status === 'published' ? 'sync'
-                : p.status === 'failed' ? 'fail'
-                : 'hold'
+              const dot = p.status === 'published' ? 'sync' : p.status === 'failed' ? 'fail' : 'hold'
               return (
                 <li key={p.id ?? `${p.channel_slug}-${at}`}>
-                  <span className="mcc-dot" style={{ display: 'none' }} />
                   <span className="when mono" title={absoluteTime(at) || ''}>
                     {relativeTime(at) || '—'}
                   </span>
@@ -428,76 +394,6 @@ export default function ListingDrawer({
                     {p.validation && p.validation.ok === false && Array.isArray(p.validation.errors) && p.validation.errors.length > 0 && (
                       <div className="detail">Validation: {p.validation.errors.map((e) => text(e)).join('; ')}</div>
                     )}
-                    {p.external_ref && <div className="detail mono">{text(p.external_ref)}</div>}
-                  </span>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-
-        {/* Verification timeline. For Merchant Center this is where the
-            item-level diagnostics land (publish -> pending -> approved);
-            the same rendering serves every channel, since the endpoint
-            and its record shape are the same for all of them. */}
-        <div className="mcc-section">
-          <h4>
-            Verification history
-            {channel.slug === 'merchant_center' && ' · Merchant Center item issues'}
-          </h4>
-          {(verifications || []).length === 0 && !verificationsLoading && (
-            <div className="mcc-empty">
-              No verification runs recorded.
-              {channel.slug === 'merchant_center' &&
-                ' Use "Refresh Google diagnostics" above to ask TrueSync to read Merchant Center statuses back.'}
-            </div>
-          )}
-          <ul className="mcc-timeline">
-            {(verifications || []).map((v, i) => {
-              const parsed = parseVerification(v)
-              const when = v?.created_at
-              return (
-                // `id` is not guaranteed; the index is the fallback.
-                <li key={v?.id ?? i}>
-                  {/* created_at shipped with the 2026-08-24 verification
-                      work. Older deployments have none, so the method
-                      still stands in when there is no timestamp. */}
-                  <span className="when mono" title={absoluteTime(when) || ''}>
-                    {relativeTime(when) || text(v?.method)}
-                  </span>
-                  <span className="what">
-                    <strong>{text(v?.outcome ?? v?.phase, 'unknown outcome')}</strong>
-                    <span className="mcc-method mono"> · {text(v?.method)}</span>
-                    {v?.gtin && <span className="mono"> · {text(v.gtin)}</span>}
-
-                    <div className="detail">
-                      {parsed.kind === 'gmc'
-                        ? `${parsed.approved ? 'Approved' : 'Not approved'}`
-                          + (parsed.issues.length
-                              ? ` · ${parsed.issues.length} issue${parsed.issues.length === 1 ? '' : 's'}`
-                              : ' · no itemised issues')
-                          + (parsed.httpStatus != null ? ` · HTTP ${parsed.httpStatus}` : '')
-                        : parsed.kind === 'findings'
-                          ? (!parsed.succeeded
-                              ? `Probe did not complete — ${parsed.probe?.error || parsed.probe?.outcome || 'no detail'}`
-                              : parsed.findings.length > 0
-                                ? `${parsed.findings.length} finding${parsed.findings.length === 1 ? '' : 's'}`
-                                : VERIFICATION_LABEL.verified)
-                          : `Unreadable — ${parsed.reason}`}
-                    </div>
-
-                    {parsed.kind === 'gmc' && parsed.issues.length > 0 && (
-                      <ul className="mcc-gmc-issues compact">
-                        {parsed.issues.map((issue, n) => (
-                          <li key={`${issue.code}-${n}`} className={`sev-${issue.severity}`}>
-                            <span className={`mcc-dot ${GMC_SEVERITY_CLASS[issue.severity] || 'hold'}`} />
-                            <span className="mcc-gmc-code mono">{text(issue.code, 'unnamed issue')}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    {v?.observed && <ArtifactBlock label="Observed payload" value={v.observed} />}
                   </span>
                 </li>
               )
@@ -506,7 +402,6 @@ export default function ListingDrawer({
         </div>
       </div>
 
-      {/* ── right: compiler & validator ────────────────────────────── */}
       <div className="mcc-panel mcc-side">
         <h3>Compiler &amp; validator</h3>
 
@@ -527,11 +422,9 @@ export default function ListingDrawer({
             </li>
           )}
 
-          {/* Expressiveness flags are the richest real signal this API
-              gives: which fields a protocol could not carry, and why. */}
-          {(Array.isArray(cell.expressiveness) ? cell.expressiveness : []).map((flag, i) => (
+          {cell.expressiveness.map((flag, i) => (
             <li key={`${text(flag?.field)}-${i}`}>
-              <span className={`mcc-tick ${SEVERITY_TICK[flag?.severity] || 'warn'}`}>
+              <span className={`mcc-tick ${EXPRESSIVENESS_TICK[flag?.severity] || 'warn'}`}>
                 {flag?.severity === 'dropped' ? '✕' : '!'}
               </span>
               <span>
@@ -542,7 +435,7 @@ export default function ListingDrawer({
             </li>
           ))}
 
-          {!cell.validation && (Array.isArray(cell.expressiveness) ? cell.expressiveness : []).length === 0 && (
+          {!cell.validation && cell.expressiveness.length === 0 && (
             <li className="mcc-empty">No compiler output recorded for this channel.</li>
           )}
         </ul>
@@ -550,12 +443,9 @@ export default function ListingDrawer({
         <div className="meta">
           <span>Depth: <span className="mono">{text(channel.depth_label)}</span></span>
           {channel.spec_version && <span>Spec: <span className="mono">{text(channel.spec_version)}</span></span>}
-          <span>
-            Compiled: <span className="mono">{absoluteTime(current?.compiled_at) || '—'}</span>
-          </span>
-          <span>
-            Published: <span className="mono">{absoluteTime(current?.published_at) || 'never'}</span>
-          </span>
+          <span>Compiled: <span className="mono">{absoluteTime(cell.compiledAt) || '—'}</span></span>
+          <span>Published: <span className="mono">{absoluteTime(cell.publishedAt) || 'never'}</span></span>
+
           {gmcRefs.length > 0 ? (
             <span>
               {`Merchant Center items (${gmcRefs.length}):`}
@@ -566,8 +456,6 @@ export default function ListingDrawer({
                       ? <a className="mono" href={entry.url} target="_blank" rel="noreferrer">
                           {text(entry.offerId, entry.ref)} ↗
                         </a>
-                      // Unmappable refs are still shown, just without a
-                      // link that would land on an error page.
                       : <span className="mono" title="Not a resource name this page can map to a Merchant Center URL">
                           {text(entry.ref)}
                         </span>}
@@ -576,10 +464,9 @@ export default function ListingDrawer({
               </span>
             </span>
           ) : (
-            <span>
-              external_ref: <span className="mono">{text(cell.externalRef)}</span>
-            </span>
+            <span>external_ref: <span className="mono">{text(cell.externalRef)}</span></span>
           )}
+
           {row.catalogProductId != null && (
             <span>catalog_product_id: <span className="mono">{text(row.catalogProductId)}</span></span>
           )}
@@ -597,11 +484,6 @@ export default function ListingDrawer({
           >
             {publishPending ? <><span className="mcc-spinner" /> Publishing…</> : 'Publish now'}
           </button>
-          {/* Fetches the listing's live PDP and records what it served,
-              through the proxy (the upstream 403s without the admin
-              key). Verifies the LISTING across its surfaces, not just
-              the channel currently selected — which is why it is not
-              scoped to `channel` the way Publish now is. */}
           <button
             className="mcc-btn"
             onClick={() => onVerify(row)}

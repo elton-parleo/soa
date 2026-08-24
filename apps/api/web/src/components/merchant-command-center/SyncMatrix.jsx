@@ -1,100 +1,110 @@
 import React from 'react'
+import { relativeTime, absoluteTime } from './truesyncDerive.js'
 import {
-  VERIFICATION_GLYPH, VERIFICATION_LABEL, relativeTime, absoluteTime,
-} from './truesyncDerive.js'
+  PUBLISH_STATE, PUBLISH_STATE_LABEL, ACCEPTANCE, ACCEPTANCE_LABEL, ACCEPTANCE_TONE,
+  STALE_NOTE,
+} from './verificationModel.js'
 
-// Publish state -> the mock's segment vocabulary (sync / drift /
-// pending / hold, plus fail). Drift wins over "published" on the
-// segment itself: a row that published and then drifted is not in sync,
-// and the mock colours that case amber.
-function segClass(cell) {
-  if (cell.publishState === 'published') {
-    return cell.verification.kind === 'drift' ? 's-drift'
-      : cell.verification.kind === 'failed' ? 's-fail'
-      // 'unparsed' keeps the publish state's own colour: the publish
-      // genuinely succeeded, and only our reading of the verification
-      // failed. The '?' glyph beside it carries that news.
-      : 's-sync'
-  }
-  if (cell.publishState === 'failed') return 's-fail'
-  if (cell.publishState === 'compiled_not_published') return 's-pending'
-  return 's-hold'   // never published, or withdrawn
+/**
+ * Publish state -> the mock's segment vocabulary.
+ *
+ * Note what is NOT here: drift, acceptance and readability no longer
+ * colour this segment. The segment says what WE did; the markers beside
+ * it say what was found. Merging them is what let a Merchant Center
+ * "pending review" paint a cell as though the catalog were wrong.
+ */
+const SEG_BY_PUBLISH_STATE = {
+  [PUBLISH_STATE.PUBLISHED]: 's-sync',
+  [PUBLISH_STATE.FAILED]: 's-fail',
+  [PUBLISH_STATE.COMPILED_NOT_PUBLISHED]: 's-pending',
+  [PUBLISH_STATE.NEVER]: 's-hold',
 }
 
-// The word that qualifies a cell's timestamp. Empty for 'published':
-// a time under a green segment already means "published then".
+// The word that qualifies a cell's timestamp. Empty for 'published': a
+// time under a green segment already means "published then".
 const STATE_WORD = {
-  published: '',
-  failed: 'failed',
-  compiled_not_published: 'compiled',
-  withdrawn: 'withdrawn',
+  [PUBLISH_STATE.PUBLISHED]: '',
+  [PUBLISH_STATE.FAILED]: 'failed',
+  [PUBLISH_STATE.COMPILED_NOT_PUBLISHED]: 'compiled',
+}
+
+// Compact acceptance markers. Amber for pending, red only for a genuine
+// disapproval — see docs/verification-semantics.md.
+const ACCEPTANCE_GLYPH = {
+  [ACCEPTANCE.APPROVED]: '◉',
+  [ACCEPTANCE.PENDING]: '◐',
+  [ACCEPTANCE.DISAPPROVED]: '◼',
+  [ACCEPTANCE.NOT_FOUND]: '⌀',
+  [ACCEPTANCE.UNAVAILABLE]: '⌀',
 }
 
 function Cell({ cell, channel }) {
-  const when = relativeTime(cell.at)
-  const glyph = VERIFICATION_GLYPH[cell.verification.kind]
+  const when = relativeTime(cell.publishedAt || cell.compiledAt)
+  const acceptanceGlyph = ACCEPTANCE_GLYPH[cell.acceptance]
 
-  // The whole cell's tooltip. Built from what the API actually said —
-  // publish state, when, the verification badge, and (for a channel
-  // that has never published anything) the channel's own depth label,
-  // so the muted treatment always explains itself.
   const title = [
-    `${channel.name}: ${cell.publishLabel}`,
-    cell.at ? absoluteTime(cell.at) : null,
-    `${VERIFICATION_LABEL[cell.verification.kind]}${
-      cell.verification.findingCount ? ` (${cell.verification.findingCount})` : ''
-    }`,
-    cell.verification.reason ? `Reason: ${cell.verification.reason}` : null,
-    cell.error ? `Error: ${cell.error}` : null,
+    `${channel.name}: ${PUBLISH_STATE_LABEL[cell.publishState]}`,
+    cell.publishReason ? `Reason: ${cell.publishReason}` : null,
+    (cell.publishedAt || cell.compiledAt) ? absoluteTime(cell.publishedAt || cell.compiledAt) : null,
+    '',
+    `Drift: ${cell.badge.label}${cell.badge.count ? ` (${cell.badge.count})` : ''}`,
+    acceptanceGlyph
+      ? `Acceptance: ${ACCEPTANCE_LABEL[cell.acceptance]}${cell.issueCount ? ` — ${cell.issueCount} issue${cell.issueCount === 1 ? '' : 's'}` : ''}`
+      : null,
+    cell.unreadableCount > 0
+      ? `${cell.unreadableCount} record${cell.unreadableCount === 1 ? '' : 's'} this page could not read`
+      : null,
+    cell.staleCount > 0 ? `${cell.staleCount} stale (${STALE_NOTE})` : null,
     cell.muted ? `Depth: ${channel.depth_label}` : null,
-  ].filter(Boolean).join('\n')
+  ].filter((line) => line !== null).join('\n')
 
   return (
     <td className={`cell mcc-cell${cell.muted ? ' muted' : ''}`} title={title}>
       <span className="mcc-cell-stack">
         <span className="mcc-cell-row">
-          <i className={`mcc-seg ${segClass(cell)}`} aria-hidden="true" />
-          <span
-            className={`mcc-verify ${cell.verification.kind}`}
-            aria-label={VERIFICATION_LABEL[cell.verification.kind]}
-          >
-            {glyph}
-            {cell.verification.kind === 'drift' && cell.verification.findingCount > 0 && (
-              <span> {cell.verification.findingCount}</span>
-            )}
+          <i className={`mcc-seg ${SEG_BY_PUBLISH_STATE[cell.publishState] || 's-hold'}`} aria-hidden="true" />
+
+          {/* Dimension 2 — the primary badge, drift and only drift. */}
+          <span className={`mcc-verify ${cell.badge.kind}`} aria-label={`Drift: ${cell.badge.label}`}>
+            {cell.badge.glyph}
+            {cell.badge.count > 0 && <span> {cell.badge.count}</span>}
           </span>
+
+          {/* Dimension 3 — their opinion, never merged into the badge. */}
+          {acceptanceGlyph && (
+            <span
+              className={`mcc-accept tone-${ACCEPTANCE_TONE[cell.acceptance]}`}
+              aria-label={`Acceptance: ${ACCEPTANCE_LABEL[cell.acceptance]}`}
+            >
+              {acceptanceGlyph}
+              {cell.issueCount > 0 && <span> {cell.issueCount}</span>}
+            </span>
+          )}
+
+          {/* Dimension 4 — our own gap. */}
+          {cell.unreadableCount > 0 && (
+            <span className="mcc-verify unreadable" aria-label="Unreadable verification record">?</span>
+          )}
         </span>
 
-        {/* Freshness, always qualified by the state it belongs to. A
-            bare "1d ago" under a failed cell reads as "published 1d
-            ago", which is the opposite of what happened — so only a
-            genuinely published cell gets to show a time on its own. */}
         <span className="mcc-cell-when">
-          {cell.publishState === 'never'
+          {cell.publishState === PUBLISH_STATE.NEVER
             ? 'never published'
             : `${STATE_WORD[cell.publishState] || ''}${when ? ` ${when}` : ''}`.trim() || '—'}
         </span>
 
-        {/* The honest stub treatment: a channel with no successful
-            publication anywhere carries its depth label in the cell, so
-            the column is never silently green or silently blank. */}
-        {cell.muted && (
-          <span className="mcc-stub-label">{channel.depth_label}</span>
+        {/* Freshness, surfaced in the cell so a greyed drawer is never a
+            surprise: these records verified a superseded artifact. */}
+        {cell.staleCount > 0 && cell.badge.kind === 'unknown' && (
+          <span className="mcc-stale-note">{cell.staleCount} stale — re-verify</span>
         )}
+
+        {cell.muted && <span className="mcc-stub-label">{channel.depth_label}</span>}
       </span>
     </td>
   )
 }
 
-/**
- * The syndication matrix — rows are the merchant's listings, columns
- * are the channels the API reports, real surfaces first.
- *
- * Selecting a row opens the drift inspector below it (the mock's
- * interaction pattern): the table stays put and the detail renders
- * underneath, rather than an overlay that hides the matrix you are
- * comparing against.
- */
 export default function SyncMatrix({
   rows, channels, channelState, cellFor, selectedListingId, onSelectRow,
 }) {
@@ -107,12 +117,15 @@ export default function SyncMatrix({
         </span>
         <div className="mcc-spacer" />
         <div className="mcc-legend">
-          <span><i className="mcc-seg s-sync" />In sync</span>
-          <span><i className="mcc-seg s-drift" />Drift</span>
-          <span><i className="mcc-seg s-fail" />Failed</span>
+          <span><i className="mcc-seg s-sync" />Published</span>
           <span><i className="mcc-seg s-pending" />Compiled</span>
           <span><i className="mcc-seg s-hold" />Not published</span>
-          <span><span className="mcc-verify unparsed">?</span>Unreadable record</span>
+          <span><span className="mcc-verify clean">✓</span>No drift</span>
+          <span><span className="mcc-verify drift">⚠</span>Drift</span>
+          <span><span className="mcc-verify unknown">○</span>Unverified</span>
+          <span><span className="mcc-accept tone-drift">◐</span>Pending review</span>
+          <span><span className="mcc-accept tone-fail">◼</span>Not approved</span>
+          <span><span className="mcc-verify unreadable">?</span>Unreadable</span>
         </div>
       </div>
 
@@ -128,7 +141,6 @@ export default function SyncMatrix({
                   <th
                     key={channel.slug}
                     className={`surface${muted ? ' muted' : ''}`}
-                    // Depth label as the column tooltip, per spec.
                     title={`${channel.depth_label}${
                       channel.spec_version ? `\nspec: ${channel.spec_version}` : ''
                     }`}
@@ -176,14 +188,18 @@ export default function SyncMatrix({
                 <td className="mcc-variant">
                   {row.variantCount} {row.variantCount === 1 ? 'variant' : 'variants'}
                   <br />
-                  {/* GTIN coverage, stated as a fraction rather than a
-                      badge — 0 of 12 is a finding, and rounding it into
-                      a tick would hide it. */}
                   <span className="gtin-count">{row.gtinCount} with GTIN</span>
                 </td>
-                {channels.map((channel) => (
-                  <Cell key={channel.slug} cell={cellFor(row, channel)} channel={channel} />
-                ))}
+                {channels.map((channel) => {
+                  const cell = cellFor(row, channel)
+                  return (
+                    <Cell
+                      key={channel.slug}
+                      cell={{ ...cell, muted: channelState[channel.slug]?.muted }}
+                      channel={channel}
+                    />
+                  )
+                })}
               </tr>
             ))}
           </tbody>
@@ -191,9 +207,11 @@ export default function SyncMatrix({
       </div>
 
       <div className="mcc-matrix-foot">
-        Publish state and freshness come from the publication log; the ○ / ✓ / ⚠ / ✕
-        badge comes from verification runs recorded against each surface. A channel
-        that has never published anything is shown muted with its depth label.
+        The bar is what we published. The badge beside it is drift — our own
+        comparison against the master record — and is <em>unknown</em> (○) until a
+        verification run newer than the latest publish exists. A channel's own
+        acceptance verdict and any records this page could not read are shown
+        separately and never counted as drift.
       </div>
     </div>
   )

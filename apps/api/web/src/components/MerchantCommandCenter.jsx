@@ -8,9 +8,11 @@ import SyncRulesTab from './merchant-command-center/SyncRulesTab.jsx'
 import DrawerErrorBoundary from './merchant-command-center/DrawerErrorBoundary.jsx'
 import {
   orderChannels, channelImplementation, isMutedImplementation,
-  latestPublicationByCell, buildCell, buildCatalogRows, summarize,
-  relativeTime, absoluteTime, VERIFIED_AT_UNAVAILABLE,
+  latestPublicationByCell, buildCatalogRows, relativeTime, absoluteTime,
 } from './merchant-command-center/truesyncDerive.js'
+import {
+  aggregateCell, summarize, ACCEPTANCE,
+} from './merchant-command-center/verificationModel.js'
 import './merchant-command-center/commandCenter.css'
 
 /**
@@ -156,18 +158,26 @@ export default function MerchantCommandCenter({ onNavigate }) {
     () => latestPublicationByCell(publications), [publications],
   )
 
-  const cellFor = useCallback((row, channel) => buildCell({
-    publication: publicationByCell.get(`${row.listingId}:${channel.slug}`),
-    // Absent until the verification pass lands (and permanently absent
-    // for a cell whose fetch failed) — buildCell reads that as ○, not
-    // as a clean ✓.
-    verifications: verificationsByCell[`${row.listingId}:${channel.slug}`] || [],
-    implementation: channelState[channel.slug]?.implementation,
-  }), [publicationByCell, channelState, verificationsByCell])
+  /**
+   * One cell, fully described. Everything the UI shows about a cell
+   * comes from here — see docs/verification-semantics.md. Components
+   * render these fields and count nothing themselves.
+   */
+  const cellFor = useCallback((row, channel) => aggregateCell(
+    publicationByCell.get(`${row.listingId}:${channel.slug}`),
+    verificationsByCell[`${row.listingId}:${channel.slug}`] || [],
+    { channelSlug: channel.slug },
+  ), [publicationByCell, verificationsByCell])
 
-  const stats = useMemo(
-    () => summarize(rows, channels, cellFor), [rows, channels, cellFor],
-  )
+  const cells = useMemo(() => {
+    const out = []
+    for (const row of rows) {
+      for (const channel of channels) out.push(cellFor(row, channel))
+    }
+    return out
+  }, [rows, channels, cellFor])
+
+  const stats = useMemo(() => summarize(cells), [cells])
 
   const accent = brand?.site?.primary_color || null
   const selectedRow = rows.find((r) => r.listingId === selectedId) || null
@@ -358,6 +368,9 @@ export default function MerchantCommandCenter({ onNavigate }) {
             </div>
 
             <div className="mcc-context-meta">
+              {/* Every number here comes from summarize(). The four
+                  dimensions are reported separately and never summed
+                  together — see docs/verification-semantics.md. */}
               <span>
                 <strong>{stats.publishedCells}</strong> published
                 <span style={{ color: 'var(--ink-faint)' }}> / {stats.totalCells} cells</span>
@@ -365,27 +378,50 @@ export default function MerchantCommandCenter({ onNavigate }) {
               <span>·</span>
               <span><strong>{stats.verifiedCells}</strong> verified</span>
               <span>·</span>
-              <span><strong>{stats.driftCells}</strong> with drift</span>
-              {/* Kept out of the drift count on purpose — a record this
-                  page could not read is its own problem, not the
-                  merchant's. Only shown when there are any. */}
-              {stats.unreadableCells > 0 && (
+              <span><strong>{stats.driftingCells}</strong> drifting</span>
+
+              {stats.issueCount > 0 && (
                 <>
                   <span>·</span>
-                  <span title="Verification records this page could not parse. Not counted as drift.">
-                    <strong>{stats.unreadableCells}</strong> unreadable
+                  <span title="Surface acceptance issues reported by the channel. Counted separately from drift.">
+                    <strong>{stats.issueCount}</strong> issue{stats.issueCount === 1 ? '' : 's'}
                   </span>
                 </>
               )}
+
+              {stats.notFoundCells > 0 && (
+                <>
+                  <span>·</span>
+                  <span title="Published, but the channel has no record of the item.">
+                    <strong>{stats.notFoundCells}</strong> not in feed
+                  </span>
+                </>
+              )}
+
+              {stats.unreadableCount > 0 && (
+                <>
+                  <span>·</span>
+                  <span title="Verification records this page could not read. Not drift, not issues — our own gap.">
+                    <strong>{stats.unreadableCount}</strong> unreadable
+                  </span>
+                </>
+              )}
+
+              {stats.staleCount > 0 && (
+                <>
+                  <span>·</span>
+                  <span title="Verification records that pre-date the latest publish. They verified a superseded artifact and count for nothing.">
+                    <strong>{stats.staleCount}</strong> stale
+                  </span>
+                </>
+              )}
+
               <span>·</span>
-              {/* Real since created_at shipped on VerificationResponse
-                  (2026-08-24); falls back to the honest wording when a
-                  deployment predates it. */}
               <span
                 style={{ color: 'var(--ink-faint)' }}
                 title={stats.lastVerifiedAt
                   ? absoluteTime(stats.lastVerifiedAt) || ''
-                  : VERIFIED_AT_UNAVAILABLE}
+                  : 'No fresh verification run has recorded a timestamp'}
               >
                 last verified: {stats.lastVerifiedAt ? relativeTime(stats.lastVerifiedAt) : 'n/a'}
               </span>
@@ -468,17 +504,38 @@ export default function MerchantCommandCenter({ onNavigate }) {
                     </div>
                     <div className="sub">Across {channels.length} channels</div>
                   </div>
+
+                  {/* Dimension 2 only. A cell with no fresh probe is
+                      unknown, not clean — it is in neither number. */}
                   <div className="mcc-stat drifting">
                     <div className="label">Drifting</div>
-                    <div className="value">{stats.driftCells}</div>
+                    <div className="value">{stats.driftingCells}</div>
                     <div className="sub">
-                      {stats.verifiedCells === 0 && stats.driftCells === 0 && stats.unreadableCells === 0
-                        ? 'No verification runs recorded'
-                        : `${stats.verifiedCells} verified clean`}
-                      {stats.unreadableCells > 0 &&
-                        ` · ${stats.unreadableCells} record${stats.unreadableCells === 1 ? '' : 's'} unreadable`}
+                      {stats.verifiedCells > 0
+                        ? `${stats.verifiedCells} verified clean`
+                        : 'No fresh verification runs'}
+                      {stats.driftFindings > 0 && ` · ${stats.driftFindings} finding${stats.driftFindings === 1 ? '' : 's'}`}
                     </div>
                   </div>
+
+                  {/* Dimension 3 only. */}
+                  <div className="mcc-stat">
+                    <div className="label">Surface issues</div>
+                    <div
+                      className="value"
+                      style={{ color: stats.disapprovedCells > 0 ? 'var(--fail)' : stats.issueCount > 0 ? 'var(--drift)' : undefined }}
+                    >
+                      {stats.issueCount}
+                    </div>
+                    <div className="sub">
+                      {stats.pendingCells > 0 && `${stats.pendingCells} pending review`}
+                      {stats.pendingCells > 0 && stats.disapprovedCells > 0 && ' · '}
+                      {stats.disapprovedCells > 0 && `${stats.disapprovedCells} not approved`}
+                      {stats.pendingCells === 0 && stats.disapprovedCells === 0 &&
+                        (stats.notFoundCells > 0 ? `${stats.notFoundCells} not in feed` : 'None reported')}
+                    </div>
+                  </div>
+
                   <div className="mcc-stat">
                     <div className="label">Last verified</div>
                     {stats.lastVerifiedAt ? (
@@ -486,12 +543,18 @@ export default function MerchantCommandCenter({ onNavigate }) {
                         <div className="value" style={{ fontSize: '1.15rem', paddingTop: 6 }}>
                           {relativeTime(stats.lastVerifiedAt)}
                         </div>
-                        <div className="sub">{absoluteTime(stats.lastVerifiedAt)}</div>
+                        <div className="sub">
+                          {absoluteTime(stats.lastVerifiedAt)}
+                          {stats.staleCount > 0 && ` · ${stats.staleCount} stale`}
+                        </div>
                       </>
                     ) : (
                       <>
                         <div className="value unavailable">n/a</div>
-                        <div className="sub">{VERIFIED_AT_UNAVAILABLE}</div>
+                        <div className="sub">
+                          No fresh verification run
+                          {stats.staleCount > 0 && ` · ${stats.staleCount} stale`}
+                        </div>
                       </>
                     )}
                   </div>

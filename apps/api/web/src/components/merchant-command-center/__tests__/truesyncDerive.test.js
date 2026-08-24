@@ -1,10 +1,16 @@
 /**
- * Derivation tests for the Merchant Command Center, run against
- * fixtures captured verbatim from the live TrueSync API on 2026-08-22
- * (see ../__fixtures__/README.md).
+ * Derivation tests for channels, publications, catalog rows,
+ * timestamps and Merchant Center links, run against fixtures captured
+ * verbatim from the live TrueSync API (see ../__fixtures__/README.md).
  *
- * The theme throughout: the matrix must never invent a state. Each
- * block below pins one way it could have.
+ * Verification and drift semantics are NOT tested here — they live in
+ * verificationModel.test.js, the executable form of
+ * docs/verification-semantics.md. The blocks that used to cover
+ * buildCell / verificationBadge / driftFindings / summarize were
+ * deleted with the ad-hoc rules they described; the model's table
+ * supersedes them and covers strictly more.
+ *
+ * The theme that remains: the matrix must never invent a state.
  */
 import { describe, it, expect } from 'vitest'
 
@@ -124,152 +130,6 @@ describe('publicationHistoryForCell', () => {
   })
 })
 
-describe('buildCell', () => {
-  const byCell = latestPublicationByCell(publicationsFixture)
-
-  it('reads a published row as published, with its publish time', () => {
-    const cell = buildCell({
-      publication: byCell.get('90:schema_org'), verifications: [], implementation: 'live',
-    })
-    expect(cell.publishState).toBe('published')
-    expect(cell.isPublished).toBe(true)
-    expect(cell.at).toBe(byCell.get('90:schema_org').published_at)
-  })
-
-  it('reads a failed row as failed and keeps the upstream error', () => {
-    const cell = buildCell({
-      publication: byCell.get('90:merchant_center'),
-      verifications: [], implementation: 'not_implemented',
-    })
-    expect(cell.publishState).toBe('failed')
-    expect(cell.isPublished).toBe(false)
-    expect(cell.error).toMatch(/not implemented/i)
-    expect(cell.muted).toBe(true)
-  })
-
-  // The non-negotiable: absence is "never published", never a blank
-  // and never an optimistic green.
-  it('reads a missing row as never published', () => {
-    const cell = buildCell({ publication: undefined, verifications: [], implementation: 'no_data' })
-    expect(cell.publishState).toBe('never')
-    expect(cell.publishLabel).toBe('Never published')
-    expect(cell.isPublished).toBe(false)
-    expect(cell.at).toBeNull()
-  })
-
-  it('falls back to compiled_at for freshness when a row never published', () => {
-    const cell = buildCell({
-      publication: byCell.get('90:acp'), verifications: [], implementation: 'not_implemented',
-    })
-    expect(cell.at).toBe(byCell.get('90:acp').compiled_at)
-  })
-
-  it('treats compiled/validated as compiled-not-published', () => {
-    for (const status of ['compiled', 'validated', 'compiled_not_published']) {
-      const cell = buildCell({
-        publication: { status, compiled_at: '2026-08-21T00:00:00Z' },
-        verifications: [], implementation: 'live',
-      })
-      expect(cell.publishState).toBe('compiled_not_published')
-    }
-  })
-
-  // Real expressiveness data off the live rows — the drawer's side card
-  // is built from it, so an empty array here would empty that card.
-  it('carries the channel expressiveness flags through', () => {
-    const cell = buildCell({
-      publication: byCell.get('90:merchant_center'), verifications: [], implementation: 'not_implemented',
-    })
-    expect(cell.expressiveness.length).toBeGreaterThan(0)
-    expect(cell.expressiveness[0]).toHaveProperty('severity')
-    expect(cell.expressiveness[0]).toHaveProperty('note')
-  })
-})
-
-describe('verificationBadge — drift badge math', () => {
-  it('is ○ when nothing has been verified', () => {
-    expect(verificationBadge([])).toEqual({ kind: 'none', findingCount: 0 })
-    expect(verificationBadge(undefined)).toEqual({ kind: 'none', findingCount: 0 })
-  })
-
-  it('is ✓ when the newest run found no drift', () => {
-    expect(verificationBadge([{ id: 1, phase: 'post_publish', method: 'live_fetch', drift: null }]))
-      .toEqual({ kind: 'verified', findingCount: 0 })
-    expect(verificationBadge([{ id: 1, phase: 'post_publish', method: 'live_fetch', drift: {} }]).kind)
-      .toBe('verified')
-  })
-
-  it('counts findings from a {findings:[...]} drift record', () => {
-    const badge = verificationBadge([{
-      id: 2, phase: 'post_publish', method: 'live_fetch',
-      drift: { findings: [
-        { field: 'price', expected: '17.99', observed: '18.99' },
-        { field: 'count', expected: 96, observed: 84 },
-        { field: 'availability', expected: 'in_stock', observed: 'out_of_stock' },
-      ] },
-    }])
-    expect(badge).toEqual({ kind: 'drift', findingCount: 3 })
-  })
-
-  it('counts findings from a {field:{expected,observed}} drift record', () => {
-    // method matters now: field-level drift belongs to fetch_probe. The
-    // same payload under method: 'gmc_diagnostics' is a contradiction
-    // and routes to the warning path instead — see the case below.
-    const badge = verificationBadge([{
-      id: 3, phase: 'post_publish', method: 'fetch_probe',
-      drift: { price: { expected: '17.99', observed: '18.99' }, gtin: { expected: 'x', observed: null } },
-    }])
-    expect(badge).toEqual({ kind: 'drift', findingCount: 2 })
-  })
-
-  it('refuses to read field-level drift out of a gmc_diagnostics record', () => {
-    const badge = verificationBadge([{
-      id: 3, phase: 'post_publish', method: 'gmc_diagnostics',
-      drift: { price: { expected: '17.99', observed: '18.99' } },
-    }])
-    expect(badge.kind).toBe('unparsed')
-    expect(badge.findingCount).toBe(0)
-  })
-
-  it('is ✕ when the check itself failed', () => {
-    expect(verificationBadge([{ id: 4, phase: 'fetch_failed', method: 'live_fetch', drift: null }]).kind)
-      .toBe('failed')
-  })
-
-  it('reads only the newest run, not the whole history', () => {
-    const badge = verificationBadge([
-      { id: 9, phase: 'post_publish', method: 'live_fetch', drift: null },
-      { id: 8, phase: 'post_publish', method: 'live_fetch', drift: { findings: [{ field: 'price' }] } },
-    ])
-    expect(badge.kind).toBe('verified')
-  })
-
-  // An unreadable record must never read as verified — that would turn
-  // a warning green. It must not read as drift either: it is a gap in
-  // this page, not a finding about the catalog. Hence its own kind.
-  it('never downgrades an unrecognised drift shape to verified', () => {
-    const badge = verificationBadge([{ id: 5, phase: 'post_publish', method: 'live_fetch', drift: { weird: 'shape' } }])
-    expect(badge.kind).toBe('unparsed')
-    expect(badge.kind).not.toBe('verified')
-    expect(badge.findingCount).toBe(0)
-  })
-})
-
-describe('driftFindings', () => {
-  it('normalises both shapes to {variant, field, expected, observed}', () => {
-    expect(driftFindings({ drift: { findings: [{ sku: 'WS-1', field: 'price', master: '1', surface: '2' }] } }))
-      .toEqual([{ variant: 'WS-1', field: 'price', expected: '1', observed: '2' }])
-    expect(driftFindings({ drift: { price: { expected: '1', actual: '2' } } }))
-      .toEqual([{ variant: null, field: 'price', expected: '1', observed: '2' }])
-  })
-
-  it('is empty for no drift', () => {
-    expect(driftFindings({ drift: null })).toEqual([])
-    expect(driftFindings({})).toEqual([])
-    expect(driftFindings(null)).toEqual([])
-  })
-})
-
 describe('buildCatalogRows', () => {
   const rows = buildCatalogRows(spineFixture, detailsById)
 
@@ -308,30 +168,6 @@ describe('buildCatalogRows', () => {
     expect(missing.variantCount).toBe(0)
     // Still nameable, from the spine's own payload.
     expect(missing.name).toBe('Snug-Fit Overnight Diapers')
-  })
-})
-
-describe('summarize', () => {
-  const channels = orderChannels(channelsFixture)
-  const rows = buildCatalogRows(spineFixture, detailsById)
-  const byCell = latestPublicationByCell(publicationsFixture)
-  const cellFor = (row, channel) => buildCell({
-    publication: byCell.get(`${row.listingId}:${channel.slug}`),
-    verifications: [],
-    implementation: channelImplementation(channel.slug, publicationsFixture),
-  })
-
-  it('counts published cells across the whole matrix', () => {
-    const stats = summarize(rows, channels, cellFor)
-    expect(stats.totalCells).toBe(35)
-    // 4 live channels x 5 listings; the other 3 have never published.
-    expect(stats.publishedCells).toBe(20)
-  })
-
-  it('reports zero verified and zero drifting when nothing has been verified', () => {
-    const stats = summarize(rows, channels, cellFor)
-    expect(stats.verifiedCells).toBe(0)
-    expect(stats.driftCells).toBe(0)
   })
 })
 

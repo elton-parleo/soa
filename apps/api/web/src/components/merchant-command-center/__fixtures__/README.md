@@ -15,6 +15,7 @@ including the awkward ones:
 | `verifications-envelope.json` | `GET /api/truesync/listings/90/verifications` | captured **2026-08-24**, after the endpoint changed shape. It used to return a bare `VerificationResponse[]`; it now returns `{listing_id, lineage, verifications}`. `verifications` is still `[]` in production |
 | `verifications-gmc.json` | `GET /api/truesync/listings/90/verifications?channel=merchant_center` | captured **2026-08-24**. Four of the twelve real rows (one per variant upstream), `observed.body.raw` truncated — it is a ~2 KB Google 404 page on every row and the drawer only shows it inside a collapsed block. This is the exact payload that used to mis-parse as catalog drift |
 | `verifications-fetch-probe.json` | `GET /api/truesync/listings/90/verifications?channel=schema_org` | captured **2026-08-24** immediately after triggering a real `POST /listings/90/verify` — a live read of the demo store's own PDP. `observed.jsonld` replaced with a marker (it is the whole PDP JSON-LD, ~24 KB; `merchant-schema-org.json` has the same content) |
+| `verification-records.json` | `GET /api/truesync/listings/{id}/verifications` | **the one the model is tested against.** One representative of every distinct payload the live API has produced, keyed by the classification each must receive under `docs/verification-semantics.md`: `fetch_probe_clean`, `gmc_pending_review` (the lifecycle code Google marks `DISAPPROVED`), `gmc_not_found_ghost` (the `httpStatus: 404` shape), `gmc_publish_failed` |
 | `publications.json` | `GET /api/truesync/publications` | newest row per (listing, channel), plus a second older row per channel for listing 90 so the drawer's publish timeline has real history. Payloads kept intact — the drawer renders them |
 
 Two properties of this data drive most of the tests:
@@ -52,3 +53,13 @@ bump — the verifications envelope on the 24th, and `created_at` /
 matrix's channel treatment picks up on its own (it derives
 implementation state from publication rows rather than a hardcoded
 list). Assume anything here older than a few days is stale.
+
+
+## The model
+
+Verification semantics are defined in `docs/verification-semantics.md`
+and enumerated in `__tests__/verificationModel.test.js`. These fixtures
+exist to keep that table honest against payloads the API has genuinely
+emitted — `verification-records.json` is the one that matters; the
+older `verifications-gmc.json` and `verifications-fetch-probe.json`
+remain as full-envelope captures.
