@@ -41,7 +41,10 @@ vi.mock('../../../truesyncApi.js', async (importOriginal) => {
 })
 vi.mock('../../../AuthContext.jsx', () => ({ useAuth: () => ({ signOut: vi.fn() }) }))
 vi.mock('../../../api.js', () => ({
-  api: { publishListing: vi.fn(), refreshGmcDiagnostics: vi.fn(), putSyncRule: vi.fn() },
+  api: {
+    publishListing: vi.fn(), refreshGmcDiagnostics: vi.fn(), putSyncRule: vi.fn(),
+    verifyListing: vi.fn(), verifyAll: vi.fn(),
+  },
 }))
 
 function mockHappyPath(verifications = {}) {

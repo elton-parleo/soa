@@ -174,9 +174,9 @@ export function isFetchProbe(verification) {
 /**
  * One parsed verification record. Exactly one of these three shapes:
  *
- *   { kind: 'findings',   findings: [...] }   fetch_probe, understood
- *   { kind: 'gmc',        approved, issues, httpStatus }
- *   { kind: 'unparsed',   method, reason }    understood by nobody
+ *   { kind: 'findings',  findings, probe, succeeded }  fetch_probe
+ *   { kind: 'gmc',       approved, issues, httpStatus }
+ *   { kind: 'unparsed',  method, reason }    understood by nobody
  *
  * 'unparsed' is a first-class outcome rather than a fallback that
  * pretends to be a finding. Callers must treat it as "we could not
@@ -203,8 +203,15 @@ export function parseVerification(verification) {
   // drift. An unknown method with a recognisable findings shape is
   // better read than refused; an unknown method with an unrecognisable
   // one goes to the warning path, not the drift count.
-  const findings = fetchProbeFindings(drift)
-  if (findings !== null) return { kind: 'findings', findings }
+  const probe = fetchProbeResult(drift)
+  if (probe !== null) {
+    return {
+      kind: 'findings',
+      findings: probe.findings,
+      probe,
+      succeeded: fetchProbeSucceeded(probe),
+    }
+  }
 
   return {
     kind: 'unparsed',
@@ -283,14 +290,69 @@ function gmcSeverity(code, declared) {
 }
 
 /**
- * A fetch_probe `drift` payload -> field-level findings, or **null**
- * when the payload is not field-level drift at all.
+ * A fetch_probe `drift` payload -> its findings and the surrounding
+ * verdict, or **null** when the payload is not a fetch_probe result.
  *
- * The null return is the whole point of the rewrite. This used to
- * return a single synthetic "(unparsed drift record)" finding, which
- * read downstream as one unit of real drift. Now "I cannot read this"
- * and "I read it and found one problem" are different values, and only
- * the second reaches the badge.
+ * The real shape, captured from a live run against the demo store
+ * (listing 90, verification_id 41, 2026-08-24):
+ *
+ *   { url, error: null, outcome: "ok", findings: [],
+ *     integrity: true, bytes_identical: false }
+ *
+ * `findings` was inferred correctly; the rest was not, and the rest
+ * matters. `outcome` and `error` say whether the probe SUCCEEDED, which
+ * is a different question from whether it found drift. A probe that
+ * could not fetch the page returns no findings — and reading that as
+ * "verified, no drift" would paint a green tick on a check that never
+ * happened. That is the same class of bug as the one that made this
+ * file: an absence being read as evidence.
+ *
+ * `bytes_identical: false` with `integrity: true` is the normal state,
+ * not a problem — the bytes differ (ordering, whitespace) while the
+ * structured data matches, which is exactly what integrity means.
+ *
+ * The null return distinguishes "not a fetch_probe payload" from "a
+ * fetch_probe that found nothing" ([] findings). Callers must not
+ * collapse the two.
+ */
+export function fetchProbeResult(drift) {
+  if (drift == null) return { findings: [], outcome: null, error: null, integrity: null, bytesIdentical: null, url: null }
+  if (typeof drift !== 'object' || Array.isArray(drift)) return null
+
+  const findings = fetchProbeFindings(drift)
+  if (findings === null) return null
+
+  return {
+    findings,
+    outcome: typeof drift.outcome === 'string' ? drift.outcome : null,
+    error: drift.error ?? null,
+    integrity: typeof drift.integrity === 'boolean' ? drift.integrity : null,
+    bytesIdentical: typeof drift.bytes_identical === 'boolean' ? drift.bytes_identical : null,
+    url: typeof drift.url === 'string' ? drift.url : null,
+  }
+}
+
+/**
+ * Did the probe itself succeed? Distinct from "did it find drift".
+ * Unknown (no outcome recorded) counts as succeeded — an older record
+ * that predates the field should not be reported as a failure.
+ */
+export function fetchProbeSucceeded(result) {
+  if (!result) return false
+  if (result.error != null && result.error !== '') return false
+  if (result.outcome != null && result.outcome !== 'ok') return false
+  return true
+}
+
+/**
+ * The field-level findings inside a fetch_probe `drift` payload, or
+ * **null** when the payload is not field-level drift at all.
+ *
+ * The null return is the whole point. This used to return a single
+ * synthetic "(unparsed drift record)" finding, which read downstream as
+ * one unit of real drift. Now "I cannot read this" and "I read it and
+ * found one problem" are different values, and only the second reaches
+ * the badge.
  *
  * An empty object / null drift is "ran, found nothing" — [], not null.
  */
@@ -377,6 +439,18 @@ export function verificationBadge(verifications) {
     // without itemising why (a 404, as production shows today).
     if (parsed.approved) return { kind: 'verified', findingCount: 0 }
     return { kind: 'drift', findingCount: parsed.issues.length, gmc: true }
+  }
+
+  // A probe that could not complete found no drift because it never
+  // looked. That is ✕ (the check failed), never ✓.
+  if (parsed.succeeded === false) {
+    return {
+      kind: 'failed',
+      findingCount: 0,
+      reason: parsed.probe?.error
+        ? String(parsed.probe.error)
+        : `probe outcome: ${parsed.probe?.outcome ?? 'unknown'}`,
+    }
   }
 
   if (parsed.findings.length > 0) {
@@ -563,14 +637,100 @@ export function absoluteTime(iso) {
   })
 }
 
-// merchants.google.com deep link for a GMC publication, when its
-// external_ref actually looks like a Merchant Center resource name
-// (accounts/{account}/products/{product}). Returns null otherwise —
-// a link built out of a ref that isn't one lands on an error page,
-// which is worse than no link.
+/**
+ * merchants.google.com deep links for a Merchant Center publication.
+ *
+ * The real `external_ref` TrueSync records (verified 2026-08-24) is a
+ * SEMICOLON-SEPARATED list of Content API resource names, one per
+ * variant that was sent:
+ *
+ *   accounts/5841611055/productInputs/en~US~90:snug-fit-diapers-s3-small;
+ *   accounts/5841611055/productInputs/en~US~90:snug-fit-diapers-s3-big
+ *
+ * The trailing segment is `{contentLanguage}~{feedLabel}~{offerId}`, and
+ * the offerId is what Merchant Center's item-details view is keyed by.
+ *
+ * An earlier guess at this format (`accounts/{n}/products/{id}`) never
+ * matched, so the drawer silently rendered no link at all. The
+ * null-for-unmappable behaviour is kept deliberately — a link built out
+ * of a ref we did not understand lands the operator on an error page,
+ * which is worse than no link — but the shapes we DO understand now
+ * actually resolve.
+ */
+const GMC_REF_PATTERNS = [
+  // Current: accounts/{account}/productInputs/{lang}~{feedLabel}~{offerId}
+  /^accounts\/(\d+)\/productInputs\/([^~]+)~([^~]+)~(.+)$/,
+  // Older/simpler: accounts/{account}/products/{offerId}
+  /^accounts\/(\d+)\/products\/(.+)$/,
+]
+
 export function gmcDeepLink(externalRef) {
-  if (!externalRef) return null
-  const match = /accounts\/(\d+)\/products\/(.+)$/.exec(externalRef)
-  if (!match) return null
-  return `https://merchants.google.com/mc/items/details?a=${match[1]}&offerId=${encodeURIComponent(match[2])}`
+  const parsed = parseGmcRef(externalRef)
+  return parsed ? parsed.url : null
+}
+
+/**
+ * One resource name -> { ref, account, offerId, language, country, url },
+ * or null when it is not a resource name we can map.
+ */
+export function parseGmcRef(ref) {
+  if (!ref || typeof ref !== 'string') return null
+  const trimmed = ref.trim()
+  if (!trimmed) return null
+
+  const full = GMC_REF_PATTERNS[0].exec(trimmed)
+  if (full) {
+    const [, account, language, country, offerId] = full
+    return { ref: trimmed, account, offerId, language, country, url: gmcItemUrl({ account, offerId, language, country }) }
+  }
+
+  const simple = GMC_REF_PATTERNS[1].exec(trimmed)
+  if (simple) {
+    const [, account, offerId] = simple
+    return { ref: trimmed, account, offerId, language: null, country: null, url: gmcItemUrl({ account, offerId }) }
+  }
+
+  return null
+}
+
+function gmcItemUrl({ account, offerId, language = null, country = null }) {
+  const params = new URLSearchParams({ a: account, offerId })
+  if (language) params.set('language', language)
+  if (country) params.set('country', country)
+  return `https://merchants.google.com/mc/items/details?${params.toString()}`
+}
+
+/**
+ * A publication's whole `external_ref` -> one entry per variant.
+ *
+ * Unmappable refs are kept with `url: null` rather than dropped: the
+ * operator should still see that a ref exists, just without a link they
+ * cannot trust.
+ */
+export function gmcExternalRefs(externalRef) {
+  if (!externalRef || typeof externalRef !== 'string') return []
+  return externalRef
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((ref) => parseGmcRef(ref) || { ref, account: null, offerId: null, language: null, country: null, url: null })
+}
+
+/**
+ * The Merchant Center account id a publication was sent to, taken from
+ * whichever of its refs parses. Lets a diagnostics record — which knows
+ * its own offerId but not the account — build a link of its own.
+ */
+export function gmcAccountId(externalRef) {
+  for (const entry of gmcExternalRefs(externalRef)) {
+    if (entry.account) return entry.account
+  }
+  return null
+}
+
+// A diagnostics record's own offerId + the account from the publication
+// -> a link straight to that item. Null if either half is missing.
+export function gmcOfferLink(accountId, offerId) {
+  if (!accountId || !offerId) return null
+  return gmcItemUrl({ account: String(accountId), offerId: String(offerId) })
 }

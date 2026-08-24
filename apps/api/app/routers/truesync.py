@@ -22,15 +22,16 @@ between a read and a write in truesyncApi.js is which base they hang
 off: TRUESYNC_API_BASE for reads, same-origin for these.
 
 Authenticated — mounted with verify_token in app.py, same as cycles.py.
-That gates who can trigger a mutation from this app; it is NOT a claim
-that the upstream is gated. Probed 2026-08-22: a POST to
-/api/truesync/listings/90/compile with no X-TrueSync-Key returned 200,
-so as of that date the upstream enforces no key at all. The header is
-sent regardless, so this proxy keeps working unchanged once it does.
+That gates who can trigger a mutation from this app.
 
-Only the three mutations the page can actually issue are exposed. This
-is a deliberate allow-list, not a generic pass-through: an open proxy
-to an admin API is exactly the thing an admin key is meant to prevent.
+The upstream now enforces the key too: re-probed 2026-08-24, a POST to
+/api/truesync/listings/90/compile with no X-TrueSync-Key returns 403,
+where on 2026-08-22 the same call returned 200. The header was always
+sent, so nothing here had to change when that landed.
+
+Only the mutations the page can actually issue are exposed. This is a
+deliberate allow-list, not a generic pass-through: an open proxy to an
+admin API is exactly the thing an admin key is meant to prevent.
 """
 import logging
 
@@ -77,6 +78,27 @@ async def publish_listing(listing_id: int, channels: Optional[str] = None):
     optimistic update.
     """
     return _unwrap(*await TrueSyncClient().publish_listing(listing_id, channels))
+
+
+@router.post("/truesync/listings/{listing_id}/verify")
+async def verify_listing(listing_id: int):
+    """
+    Fetch this listing's live PDP and record what it served. Returns the
+    upstream's own summary ({outcome, integrity, findings, ...}) so the
+    page can report the result rather than assume one.
+
+    Both verify routes are newer than the rest of this proxy — they
+    shipped upstream on 2026-08-24 — and unlike the others they are
+    genuinely key-gated: without X-TrueSync-Key the upstream answers
+    403. That is what the proxy is for.
+    """
+    return _unwrap(*await TrueSyncClient().verify_listing(listing_id))
+
+
+@router.post("/truesync/verify-all")
+async def verify_all():
+    """Verify every active listing of the active demo merchant."""
+    return _unwrap(*await TrueSyncClient().verify_all())
 
 
 @router.post("/truesync/gmc/diagnostics/refresh")

@@ -11,11 +11,12 @@
  * merchant_center, 2026-08-24) — the exact payload that mis-parsed.
  */
 import React from 'react'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
 import '@testing-library/jest-dom'
 
 import gmcEnvelope from '../__fixtures__/verifications-gmc.json'
+import fetchProbeEnvelope from '../__fixtures__/verifications-fetch-probe.json'
 import channels from '../__fixtures__/channels.json'
 import publications from '../__fixtures__/publications.json'
 import spine from '../__fixtures__/merchant-schema-org.json'
@@ -26,6 +27,8 @@ import {
   parseVerification, parseGmcDiagnostics, fetchProbeFindings, driftFindings,
   verificationBadge, normaliseGmcIssue, summarize, buildCell, buildCatalogRows,
   latestPublicationByCell, orderChannels, isGmcDiagnostics, isFetchProbe,
+  fetchProbeResult, fetchProbeSucceeded,
+  gmcDeepLink, parseGmcRef, gmcExternalRefs, gmcAccountId, gmcOfferLink,
 } from '../truesyncDerive.js'
 
 const GMC_ROWS = gmcEnvelope.verifications
@@ -237,19 +240,28 @@ function drawerProps(overrides = {}) {
   const ordered = orderChannels(channels)
   const rows = buildCatalogRows(spine, Object.fromEntries(
     Object.entries(listings).map(([id, d]) => [Number(id), d])))
-  const byCell = latestPublicationByCell(publications)
+
+  // cellFor must be built from the SAME publications the drawer is
+  // given, or a test that overrides them silently exercises the
+  // fixture's originals instead — which is exactly what happened while
+  // writing the deep-link test below.
+  const pubs = overrides.publications || publications
+  const verifications = overrides.verificationsByCell || {}
+  const byCell = latestPublicationByCell(pubs)
+
   return {
     row: rows[0],
     channels: ordered,
     channelState: Object.fromEntries(ordered.map((c) => [c.slug, { implementation: 'live', muted: false }])),
     cellFor: (row, channel) => buildCell({
       publication: byCell.get(`${row.listingId}:${channel.slug}`),
-      verifications: overrides.verificationsByCell?.[`${row.listingId}:${channel.slug}`] || [],
+      verifications: verifications[`${row.listingId}:${channel.slug}`] || [],
       implementation: 'live',
     }),
-    publications,
-    verificationsByCell: {},
+    publications: pubs,
+    verificationsByCell: verifications,
     onClose: () => {}, onPublish: () => {}, publishPending: false,
+    onVerify: () => {}, verifyPending: false,
     ...overrides,
   }
 }
@@ -321,5 +333,183 @@ describe('drawer renders each shape with its own renderer', () => {
     })} />)
 
     expect(screen.getByText(/method: none given/)).toBeInTheDocument()
+  })
+})
+
+
+// ─── the real fetch_probe record ─────────────────────────────────────
+
+/**
+ * Captured from an actual POST /api/truesync/listings/90/verify against
+ * production (verification_id 41, 2026-08-24) — a real read of the demo
+ * store's own PDP. Until this ran, the fetch_probe shape was inferred,
+ * which is precisely the habit that produced the GMC mis-parse.
+ */
+describe('real fetch_probe record', () => {
+  const REAL = fetchProbeEnvelope.verifications[0]
+
+  it('is the shape the fixture says it is', () => {
+    expect(REAL.method).toBe('fetch_probe')
+    expect(REAL.outcome).toBe('ok')
+    expect(Object.keys(REAL.drift).sort())
+      .toEqual(['bytes_identical', 'error', 'findings', 'integrity', 'outcome', 'url'])
+  })
+
+  it('parses as findings, not as unreadable', () => {
+    const parsed = parseVerification(REAL)
+    expect(parsed.kind).toBe('findings')
+    expect(parsed.findings).toEqual([])
+    expect(parsed.succeeded).toBe(true)
+  })
+
+  it('carries the verdict the findings array alone does not express', () => {
+    const probe = fetchProbeResult(REAL.drift)
+    expect(probe).toMatchObject({
+      outcome: 'ok', error: null, integrity: true, bytesIdentical: false,
+      url: 'https://trueshopstore.com/products/snug-fit-diapers',
+    })
+  })
+
+  it('reads a clean run as verified', () => {
+    expect(verificationBadge([REAL])).toMatchObject({ kind: 'verified', findingCount: 0 })
+  })
+
+  /**
+   * The bug the real capture exposed. A probe that could not fetch the
+   * page returns zero findings — and the inferred parser would have
+   * read that as "verified, no drift", painting a green tick on a check
+   * that never happened.
+   */
+  it('does NOT read a failed probe as verified just because it found nothing', () => {
+    const failed = { ...REAL, outcome: 'fetch_failed', drift: {
+      ...REAL.drift, outcome: 'fetch_failed', error: 'connection reset', integrity: null,
+    } }
+
+    expect(fetchProbeSucceeded(fetchProbeResult(failed.drift))).toBe(false)
+    const badge = verificationBadge([failed])
+    expect(badge.kind).toBe('failed')
+    expect(badge.kind).not.toBe('verified')
+    expect(badge.findingCount).toBe(0)
+    expect(badge.reason).toContain('connection reset')
+  })
+
+  it('treats a record with no outcome recorded as succeeded, not failed', () => {
+    // Older rows predate the field; absence is not evidence of failure.
+    const legacy = { ...REAL, drift: { findings: [] } }
+    expect(fetchProbeSucceeded(fetchProbeResult(legacy.drift))).toBe(true)
+    expect(verificationBadge([legacy]).kind).toBe('verified')
+  })
+
+  it('renders the probe verdict in the drawer', () => {
+    render(<ListingDrawer {...drawerProps({
+      verificationsByCell: { '90:schema_org': [REAL] },
+    })} />)
+
+    expect(screen.getByText('Structured data matches')).toBeInTheDocument()
+    expect(screen.getByText('outcome: ok')).toBeInTheDocument()
+    // bytes_identical:false alongside integrity:true is the normal
+    // state, stated but not alarming.
+    expect(screen.getByText('bytes differ')).toBeInTheDocument()
+    expect(screen.getByText('Newest verification recorded no drift.')).toBeInTheDocument()
+  })
+
+  it('says nothing was compared when the probe did not complete', () => {
+    render(<ListingDrawer {...drawerProps({
+      verificationsByCell: { '90:schema_org': [{ ...REAL, drift: {
+        ...REAL.drift, outcome: 'fetch_failed', error: 'connection reset',
+      } }] },
+    })} />)
+
+    expect(screen.getByText(/The probe did not complete — nothing was compared/))
+      .toBeInTheDocument()
+    expect(screen.getByText(/the surface was never read/)).toBeInTheDocument()
+    expect(screen.queryByText('Newest verification recorded no drift.')).not.toBeInTheDocument()
+  })
+})
+
+// ─── Merchant Center deep links ──────────────────────────────────────
+
+/**
+ * The real external_ref format, verified against production
+ * publications on 2026-08-24. An earlier guess
+ * (accounts/{n}/products/{id}) never matched anything, so the drawer
+ * silently rendered no link.
+ */
+describe('gmc deep links', () => {
+  const REAL_REF = 'accounts/5841611055/productInputs/en~US~90:snug-fit-diapers-s3-small'
+  const REAL_LIST = [
+    'accounts/5841611055/productInputs/en~US~90:snug-fit-diapers-s3-small',
+    'accounts/5841611055/productInputs/en~US~90:snug-fit-diapers-s3-big',
+  ].join(';')
+
+  it('maps a productInputs resource name to an item-details URL by offerId', () => {
+    const parsed = parseGmcRef(REAL_REF)
+    expect(parsed).toMatchObject({
+      account: '5841611055', offerId: '90:snug-fit-diapers-s3-small',
+      language: 'en', country: 'US',
+    })
+    expect(parsed.url).toContain('merchants.google.com/mc/items/details')
+    expect(parsed.url).toContain('a=5841611055')
+    expect(parsed.url).toContain(`offerId=${encodeURIComponent('90:snug-fit-diapers-s3-small')}`)
+  })
+
+  it('splits the semicolon-joined list into one entry per variant', () => {
+    const entries = gmcExternalRefs(REAL_LIST)
+    expect(entries).toHaveLength(2)
+    expect(entries.map((e) => e.offerId))
+      .toEqual(['90:snug-fit-diapers-s3-small', '90:snug-fit-diapers-s3-big'])
+    expect(entries.every((e) => e.url)).toBe(true)
+  })
+
+  it('keeps an unmappable ref visible but unlinked', () => {
+    const entries = gmcExternalRefs('accounts/1/productInputs/en~US~ok;something-else-entirely')
+    expect(entries).toHaveLength(2)
+    expect(entries[0].url).toBeTruthy()
+    // Shown, but with no link that would land on an error page.
+    expect(entries[1]).toMatchObject({ ref: 'something-else-entirely', url: null })
+  })
+
+  it('keeps the null fallback for refs that are not resource names', () => {
+    expect(gmcDeepLink('deals_api:listing:90')).toBeNull()
+    expect(gmcDeepLink('deal_directory:listing:90')).toBeNull()
+    expect(gmcDeepLink(null)).toBeNull()
+    expect(gmcDeepLink('')).toBeNull()
+    expect(parseGmcRef('nonsense')).toBeNull()
+  })
+
+  it('still maps the older products/ form', () => {
+    expect(gmcDeepLink('accounts/12345/products/online:en:US:sku-1'))
+      .toContain('a=12345')
+  })
+
+  it('finds the account id for a diagnostics record to link its own offer', () => {
+    expect(gmcAccountId(REAL_LIST)).toBe('5841611055')
+    expect(gmcAccountId('deals_api:listing:90')).toBeNull()
+    expect(gmcOfferLink('5841611055', '90:snug-fit-diapers-s6-big'))
+      .toContain(encodeURIComponent('90:snug-fit-diapers-s6-big'))
+    // Either half missing -> no link, never a half-built URL.
+    expect(gmcOfferLink(null, 'x')).toBeNull()
+    expect(gmcOfferLink('123', null)).toBeNull()
+  })
+
+  it('renders one link per variant in the drawer, not a 400-character line', () => {
+    const withRefs = publications.map((p) =>
+      p.listing_id === 90 && p.channel_slug === 'merchant_center'
+        ? { ...p, status: 'published', external_ref: REAL_LIST, published_at: '2026-08-24T21:07:36Z' }
+        : p)
+
+    render(<ListingDrawer {...drawerProps({ publications: withRefs })} />)
+    fireEvent.click(screen.getByRole('tab', { name: /google merchant center/i }))
+
+    expect(screen.getByText('Merchant Center items (2):')).toBeInTheDocument()
+
+    const links = screen.getAllByRole('link', { name: /snug-fit-diapers-s3/ })
+    expect(links).toHaveLength(2)
+    for (const link of links) {
+      expect(link.getAttribute('href')).toContain('merchants.google.com/mc/items/details')
+      expect(link.getAttribute('href')).toContain('a=5841611055')
+    }
+    expect(links[0].getAttribute('href'))
+      .toContain(encodeURIComponent('90:snug-fit-diapers-s3-small'))
   })
 })

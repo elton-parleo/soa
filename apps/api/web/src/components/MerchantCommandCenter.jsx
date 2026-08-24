@@ -34,16 +34,6 @@ import './merchant-command-center/commandCenter.css'
  * row reads "never published", no verification reads ○.
  */
 
-// POST /api/truesync/verify-all and POST /api/truesync/listings/{id}/verify
-// both exist upstream as of 2026-08-24 — they were absent when this page
-// was built. The buttons are still not wired (that needs proxy routes of
-// their own), but the tooltip must not go on claiming the API is
-// missing: the operator would read a false statement. One named
-// constant so both buttons say the same thing.
-const VERIFY_WIREUP_PENDING =
-  'Not wired up yet — POST /api/truesync/verify-all exists upstream as of 2026-08-24, ' +
-  'but this page has no proxy route for it yet'
-
 function Toasts({ toasts, onDismiss }) {
   if (toasts.length === 0) return null
   return (
@@ -237,6 +227,66 @@ export default function MerchantCommandCenter({ onNavigate }) {
     }
   }
 
+  // Every verify mutation ends the same way: re-read the verification
+  // pass so the badges reflect what the run actually recorded. Never an
+  // optimistic update — the page renders the server's answer.
+  const reloadVerifications = useCallback(async (currentRows, currentChannels) => {
+    const listingIds = (currentRows || []).map((r) => r.listingId)
+    const channelSlugs = (currentChannels || []).map((c) => c.slug)
+    if (listingIds.length === 0 || channelSlugs.length === 0) return
+    setVerificationsByCell(await fetchAllVerifications(listingIds, channelSlugs))
+  }, [])
+
+  async function handleVerifyListing(row) {
+    const key = `verify:${row.listingId}`
+    setBusy(key)
+    try {
+      const result = await withMutationTimeout(
+        api.verifyListing(row.listingId), 'Verify')
+      await reloadVerifications(rows, channels)
+
+      // Report what came back, including the unhappy outcomes — a probe
+      // that could not read the page is not a success.
+      const outcome = result?.outcome
+      if (result?.error) {
+        pushToast('err', `${row.name}: ${result.error}`)
+      } else if (outcome && outcome !== 'ok') {
+        pushToast('err', `${row.name}: probe outcome "${outcome}"`)
+      } else {
+        const n = Array.isArray(result?.findings) ? result.findings.length : 0
+        pushToast('ok', n > 0
+          ? `Verified ${row.name} — ${n} finding${n === 1 ? '' : 's'}`
+          : `Verified ${row.name} — no drift`)
+      }
+    } catch (err) {
+      pushToast('err', err.message)   // verbatim, per spec
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  async function handleVerifyAll() {
+    setBusy('verify-all')
+    try {
+      const result = await withMutationTimeout(api.verifyAll(), 'Verify all')
+      await reloadVerifications(rows, channels)
+
+      // The upstream's summary shape is not pinned down, so report a
+      // count when it gives one and stay vague when it does not, rather
+      // than inventing a number.
+      const count = Array.isArray(result)
+        ? result.length
+        : (typeof result?.verified === 'number' ? result.verified : null)
+      pushToast('ok', count != null
+        ? `Verified ${count} listing${count === 1 ? '' : 's'}`
+        : 'Verification run complete')
+    } catch (err) {
+      pushToast('err', err.message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function handleRefreshDiagnostics() {
     setBusy('gmc')
     try {
@@ -250,9 +300,7 @@ export default function MerchantCommandCenter({ onNavigate }) {
       // lineage, verifications for the item issues themselves.
       const pubs = await truesyncApi.getPublications({})
       setPublications(Array.isArray(pubs) ? pubs : [])
-      setVerificationsByCell(await fetchAllVerifications(
-        rows.map((r) => r.listingId), channels.map((c) => c.slug),
-      ))
+      await reloadVerifications(rows, channels)
     } catch (err) {
       pushToast('err', err.message)
     } finally {
@@ -347,10 +395,13 @@ export default function MerchantCommandCenter({ onNavigate }) {
 
             <button
               className="mcc-btn"
-              disabled
-              title={VERIFY_WIREUP_PENDING}
+              onClick={handleVerifyAll}
+              disabled={busy === 'verify-all' || loading || rows.length === 0}
+              title="Fetch every listing's live PDP and record what it served"
             >
-              Verify all
+              {busy === 'verify-all'
+                ? <><span className="mcc-spinner" /> Verifying…</>
+                : 'Verify all'}
             </button>
             <button
               className="mcc-btn primary"
@@ -476,6 +527,8 @@ export default function MerchantCommandCenter({ onNavigate }) {
                         onClose={() => setSelectedId(null)}
                         onPublish={handlePublish}
                         publishPending={String(busy || '').startsWith(`publish:${selectedRow.listingId}`)}
+                        onVerify={handleVerifyListing}
+                        verifyPending={busy === `verify:${selectedRow.listingId}`}
                       />
                     </DrawerErrorBoundary>
                   </div>

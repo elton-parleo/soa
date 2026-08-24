@@ -134,6 +134,25 @@ class TrueSyncClient:
             "POST", f"/api/truesync/listings/{listing_id}/publish", params=params
         )
 
+    async def verify_listing(self, listing_id: int) -> ForwardResult:
+        """
+        POST /listings/{id}/verify — fetches the listing's live PDP and
+        records what it served as a fetch_probe verification. Read-only
+        against the merchant's own store; it appends a verification row
+        and publishes nothing.
+        """
+        return await self.forward(
+            "POST", f"/api/truesync/listings/{listing_id}/verify"
+        )
+
+    async def verify_all(self) -> ForwardResult:
+        """
+        POST /verify-all — the same probe across every active listing of
+        the active demo merchant. Slower than a single verify by roughly
+        the listing count, which is why the timeout is generous.
+        """
+        return await self.forward("POST", "/api/truesync/verify-all")
+
     async def refresh_gmc_diagnostics(
         self, listing_id: Optional[int] = None
     ) -> ForwardResult:

@@ -285,6 +285,15 @@ export const api = {
     post(`/api/truesync/listings/${listingId}/publish` +
       (channels ? `?channels=${encodeURIComponent(channels)}` : ''), {}),
 
+  // Verify fetches the listing's live PDP and records what it served.
+  // Genuinely key-gated upstream (403 without X-TrueSync-Key), so it
+  // could not be called from the browser even if we wanted to.
+  verifyListing: (listingId) =>
+    post(`/api/truesync/listings/${listingId}/verify`, {}),
+
+  verifyAll: () =>
+    post('/api/truesync/verify-all', {}),
+
   refreshGmcDiagnostics: (listingId) =>
     post('/api/truesync/gmc/diagnostics/refresh' +
       (listingId != null ? `?listing_id=${listingId}` : ''), {}),

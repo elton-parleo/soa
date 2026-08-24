@@ -14,6 +14,7 @@ including the awkward ones:
 | `listings.json` | `GET /api/truesync/listings/{id}` (90–94), keyed by id | canonical records. `offers` (51 entries on listing 90) stripped; nothing on the page reads it. Mixed GTIN coverage is real: 4 of 12 variants on listing 90, 0 of 4 on 91 |
 | `verifications-envelope.json` | `GET /api/truesync/listings/90/verifications` | captured **2026-08-24**, after the endpoint changed shape. It used to return a bare `VerificationResponse[]`; it now returns `{listing_id, lineage, verifications}`. `verifications` is still `[]` in production |
 | `verifications-gmc.json` | `GET /api/truesync/listings/90/verifications?channel=merchant_center` | captured **2026-08-24**. Four of the twelve real rows (one per variant upstream), `observed.body.raw` truncated — it is a ~2 KB Google 404 page on every row and the drawer only shows it inside a collapsed block. This is the exact payload that used to mis-parse as catalog drift |
+| `verifications-fetch-probe.json` | `GET /api/truesync/listings/90/verifications?channel=schema_org` | captured **2026-08-24** immediately after triggering a real `POST /listings/90/verify` — a live read of the demo store's own PDP. `observed.jsonld` replaced with a marker (it is the whole PDP JSON-LD, ~24 KB; `merchant-schema-org.json` has the same content) |
 | `publications.json` | `GET /api/truesync/publications` | newest row per (listing, channel), plus a second older row per channel for listing 90 so the drawer's publish timeline has real history. Payloads kept intact — the drawer renders them |
 
 Two properties of this data drive most of the tests:
@@ -21,12 +22,14 @@ Two properties of this data drive most of the tests:
 - `merchant_center`, `acp` and `ucp_uip` have **only failed rows**, each
   carrying `error: "not implemented in Step 2"`. That is what the muted
   "stub" treatment keys off.
-- Real verification records exist as of 2026-08-24, but only for
-  listing 90 on `merchant_center`, and all twelve are
-  `method: gmc_diagnostics`. There is still **no real `fetch_probe`
-  record anywhere**, so the field-comparison tests build their own —
-  which is precisely why the parser routes an unrecognised payload to
-  the warning path instead of guessing at a finding.
+- Both methods are now represented by **real** records:
+  `gmc_diagnostics` (`{approved, issues, httpStatus}`) and `fetch_probe`
+  (`{url, error, outcome, findings, integrity, bytes_identical}`). The
+  `fetch_probe` capture is the one that mattered most — the inferred
+  shape had `findings` right but omitted `outcome`/`error`, so a probe
+  that failed to fetch the page would have been read as "verified, no
+  drift". Both fixtures are clean runs; a *drifting* record of either
+  kind is still synthesised in the tests.
 
 
 ## A note on dates

@@ -186,6 +186,56 @@ def test_sync_rule_is_keyed_by_catalog_product_id(monkeypatch, calls):
     }
 
 
+def test_verify_listing_targets_the_right_route(monkeypatch, calls):
+    patch_httpx(monkeypatch, calls, response=FakeResponse(200, {"outcome": "ok"}))
+
+    asyncio.run(TrueSyncClient(base_url="https://api.example", admin_key=ADMIN_KEY).verify_listing(90))
+
+    assert calls[0]["method"] == "POST"
+    assert calls[0]["url"] == "https://api.example/api/truesync/listings/90/verify"
+    assert calls[0]["params"] is None
+    # This is the route the upstream genuinely 403s without a key.
+    assert calls[0]["headers"]["X-TrueSync-Key"] == ADMIN_KEY
+
+
+def test_verify_all_targets_the_right_route(monkeypatch, calls):
+    patch_httpx(monkeypatch, calls, response=FakeResponse(200, {"verified": 5}))
+
+    asyncio.run(TrueSyncClient(base_url="https://api.example", admin_key=ADMIN_KEY).verify_all())
+
+    assert calls[0]["method"] == "POST"
+    assert calls[0]["url"] == "https://api.example/api/truesync/verify-all"
+    assert calls[0]["headers"]["X-TrueSync-Key"] == ADMIN_KEY
+
+
+def test_verify_surfaces_the_upstream_403_verbatim(monkeypatch, calls):
+    """
+    The realistic failure for these two: a missing or wrong key. The
+    operator needs the upstream's own words, and the key must not be in
+    them.
+    """
+    patch_httpx(monkeypatch, calls, response=FakeResponse(
+        403, None, text='{"detail":"missing or invalid X-TrueSync-Key"}'))
+    monkeypatch.setattr(truesync_router, "TrueSyncClient",
+                        lambda: TrueSyncClient(base_url="https://api.example", admin_key=ADMIN_KEY))
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(truesync_router.verify_listing(90))
+
+    assert exc.value.status_code == 403
+    assert "missing or invalid X-TrueSync-Key" in exc.value.detail
+    assert ADMIN_KEY not in exc.value.detail
+
+
+def test_router_returns_the_verify_summary_unchanged(monkeypatch, calls):
+    summary = {"outcome": "ok", "integrity": True, "findings": [], "verification_id": 41}
+    patch_httpx(monkeypatch, calls, response=FakeResponse(200, summary))
+    monkeypatch.setattr(truesync_router, "TrueSyncClient",
+                        lambda: TrueSyncClient(base_url="https://api.example"))
+
+    assert asyncio.run(truesync_router.verify_listing(90)) == summary
+
+
 def test_an_unconfigured_base_url_fails_cleanly(monkeypatch, calls):
     patch_httpx(monkeypatch, calls, response=FakeResponse(200, []))
     status, data, error = asyncio.run(TrueSyncClient(base_url="", admin_key=ADMIN_KEY).publish_listing(90))
@@ -264,6 +314,8 @@ def test_proxy_routes_are_mounted_and_authenticated():
 
     assert proxy_paths == {
         "/api/truesync/listings/{listing_id}/publish": ["POST"],
+        "/api/truesync/listings/{listing_id}/verify": ["POST"],
+        "/api/truesync/verify-all": ["POST"],
         "/api/truesync/gmc/diagnostics/refresh": ["POST"],
         "/api/truesync/sync-rules": ["PUT"],
     }

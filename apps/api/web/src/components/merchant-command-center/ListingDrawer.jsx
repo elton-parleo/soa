@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import {
   parseVerification, publicationHistoryForCell, relativeTime, absoluteTime,
-  gmcDeepLink, VERIFICATION_LABEL,
+  gmcExternalRefs, gmcAccountId, gmcOfferLink, VERIFICATION_LABEL,
 } from './truesyncDerive.js'
 
 /**
@@ -99,7 +99,9 @@ const GMC_SEVERITY_TICK = {
  * and forcing it through the field parser is what made every GMC row
  * read as one unit of catalog drift.
  */
-function GmcDiagnosticsRecord({ parsed, record }) {
+function GmcDiagnosticsRecord({ parsed, record, accountId }) {
+  const offerId = record?.observed?.offerId
+  const offerLink = gmcOfferLink(accountId, offerId)
   return (
     <div className="mcc-gmc">
       <div className="mcc-gmc-head">
@@ -114,8 +116,12 @@ function GmcDiagnosticsRecord({ parsed, record }) {
             {relativeTime(record.created_at) || ''}
           </span>
         )}
-        {record?.observed?.offerId && (
-          <span className="mcc-gmc-offer mono">{text(record.observed.offerId)}</span>
+        {offerId && (
+          offerLink
+            ? <a className="mcc-gmc-offer mono" href={offerLink} target="_blank" rel="noreferrer">
+                {text(offerId)} ↗
+              </a>
+            : <span className="mcc-gmc-offer mono">{text(offerId)}</span>
         )}
       </div>
 
@@ -169,6 +175,56 @@ function UnparsedRecord({ parsed, record }) {
   )
 }
 
+/**
+ * The probe's own verdict, above the comparison table: did the fetch
+ * succeed, and did the structured data match.
+ *
+ * `bytes_identical: false` alongside `integrity: true` is the normal,
+ * healthy state — the bytes differ (ordering, whitespace) while the
+ * structured data matches. It is stated rather than hidden, but framed
+ * as the non-event it is, so nobody reads it as a problem.
+ */
+function FetchProbeVerdict({ parsed }) {
+  const probe = parsed.probe
+  if (!probe) return null
+
+  if (!parsed.succeeded) {
+    return (
+      <div className="mcc-unparsed" role="status">
+        <strong>The probe did not complete — nothing was compared.</strong>
+        <div className="detail">
+          {probe.error ? text(probe.error) : `Outcome: ${text(probe.outcome)}`}
+        </div>
+        <div className="detail">
+          No drift is reported from this run because the surface was never read.
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mcc-probe">
+      <span className={`mcc-badge ${probe.integrity === false ? 'drift' : 'sync'}`}>
+        {probe.integrity === false ? 'Structured data differs' : 'Structured data matches'}
+      </span>
+      {probe.outcome && <span className="mcc-probe-meta mono">outcome: {text(probe.outcome)}</span>}
+      {probe.bytesIdentical === false && (
+        <span
+          className="mcc-probe-meta"
+          title="The served bytes differ (ordering, whitespace) while the structured data matches — the normal state, not a problem."
+        >
+          bytes differ
+        </span>
+      )}
+      {probe.url && (
+        <a className="mcc-probe-meta mono" href={probe.url} target="_blank" rel="noreferrer">
+          fetched page ↗
+        </a>
+      )}
+    </div>
+  )
+}
+
 // The master-vs-surface comparison, for records that produced real
 // field-level findings.
 function FindingsTable({ findings }) {
@@ -214,7 +270,7 @@ function FindingsTable({ findings }) {
  */
 export default function ListingDrawer({
   row, channels, channelState, cellFor, publications, verificationsByCell,
-  onClose, onPublish, publishPending,
+  onClose, onPublish, publishPending, onVerify, verifyPending,
 }) {
   const [channelSlug, setChannelSlug] = useState(channels[0]?.slug)
 
@@ -259,7 +315,12 @@ export default function ListingDrawer({
   const current = history[0] || null
   const newestVerification = (verifications || [])[0] || null
   const parsedNewest = newestVerification ? parseVerification(newestVerification) : null
-  const deepLink = channel.slug === 'merchant_center' ? gmcDeepLink(cell.externalRef) : null
+  // A Merchant Center publication's external_ref is a semicolon-joined
+  // list of Content API resource names, one per variant — rendered as
+  // individual links rather than one 400-character line.
+  const isGmcChannel = channel.slug === 'merchant_center'
+  const gmcRefs = isGmcChannel ? gmcExternalRefs(cell.externalRef) : []
+  const gmcAccount = isGmcChannel ? gmcAccountId(cell.externalRef) : null
 
   return (
     <div className="mcc-drawer">
@@ -310,7 +371,11 @@ export default function ListingDrawer({
           )}
 
           {parsedNewest?.kind === 'gmc' && (
-            <GmcDiagnosticsRecord parsed={parsedNewest} record={newestVerification} />
+            <GmcDiagnosticsRecord
+              parsed={parsedNewest}
+              record={newestVerification}
+              accountId={gmcAccount}
+            />
           )}
 
           {parsedNewest?.kind === 'unparsed' && (
@@ -318,9 +383,14 @@ export default function ListingDrawer({
           )}
 
           {parsedNewest?.kind === 'findings' && (
-            parsedNewest.findings.length > 0
-              ? <FindingsTable findings={parsedNewest.findings} />
-              : <div className="mcc-empty">Newest verification recorded no drift.</div>
+            <>
+              <FetchProbeVerdict parsed={parsedNewest} />
+              {parsedNewest.findings.length > 0
+                ? <FindingsTable findings={parsedNewest.findings} />
+                : parsedNewest.succeeded && (
+                    <div className="mcc-empty">Newest verification recorded no drift.</div>
+                  )}
+            </>
           )}
         </div>
 
@@ -408,9 +478,11 @@ export default function ListingDrawer({
                               : ' · no itemised issues')
                           + (parsed.httpStatus != null ? ` · HTTP ${parsed.httpStatus}` : '')
                         : parsed.kind === 'findings'
-                          ? (parsed.findings.length > 0
-                              ? `${parsed.findings.length} finding${parsed.findings.length === 1 ? '' : 's'}`
-                              : VERIFICATION_LABEL.verified)
+                          ? (!parsed.succeeded
+                              ? `Probe did not complete — ${parsed.probe?.error || parsed.probe?.outcome || 'no detail'}`
+                              : parsed.findings.length > 0
+                                ? `${parsed.findings.length} finding${parsed.findings.length === 1 ? '' : 's'}`
+                                : VERIFICATION_LABEL.verified)
                           : `Unreadable — ${parsed.reason}`}
                     </div>
 
@@ -484,14 +556,30 @@ export default function ListingDrawer({
           <span>
             Published: <span className="mono">{absoluteTime(current?.published_at) || 'never'}</span>
           </span>
-          <span>
-            external_ref:{' '}
-            {cell.externalRef
-              ? (deepLink
-                  ? <a className="mono" href={deepLink} target="_blank" rel="noreferrer">{text(cell.externalRef)}</a>
-                  : <span className="mono">{text(cell.externalRef)}</span>)
-              : <span className="mono">—</span>}
-          </span>
+          {gmcRefs.length > 0 ? (
+            <span>
+              {`Merchant Center items (${gmcRefs.length}):`}
+              <span className="mcc-reflist">
+                {gmcRefs.map((entry) => (
+                  <span key={entry.ref}>
+                    {entry.url
+                      ? <a className="mono" href={entry.url} target="_blank" rel="noreferrer">
+                          {text(entry.offerId, entry.ref)} ↗
+                        </a>
+                      // Unmappable refs are still shown, just without a
+                      // link that would land on an error page.
+                      : <span className="mono" title="Not a resource name this page can map to a Merchant Center URL">
+                          {text(entry.ref)}
+                        </span>}
+                  </span>
+                ))}
+              </span>
+            </span>
+          ) : (
+            <span>
+              external_ref: <span className="mono">{text(cell.externalRef)}</span>
+            </span>
+          )}
           {row.catalogProductId != null && (
             <span>catalog_product_id: <span className="mono">{text(row.catalogProductId)}</span></span>
           )}
@@ -509,18 +597,18 @@ export default function ListingDrawer({
           >
             {publishPending ? <><span className="mcc-spinner" /> Publishing…</> : 'Publish now'}
           </button>
-          {/* POST /api/truesync/listings/{id}/verify shipped upstream on
-              2026-08-24 ("Fetches this listing's live PDP and records
-              what it served"). Still disabled because this app has no
-              proxy route for it yet — but the tooltip says that, rather
-              than claiming the endpoint does not exist. */}
+          {/* Fetches the listing's live PDP and records what it served,
+              through the proxy (the upstream 403s without the admin
+              key). Verifies the LISTING across its surfaces, not just
+              the channel currently selected — which is why it is not
+              scoped to `channel` the way Publish now is. */}
           <button
             className="mcc-btn"
-            disabled
-            title={'Not wired up yet — POST /api/truesync/listings/{id}/verify exists upstream '
-              + 'as of 2026-08-24, but this page has no proxy route for it yet'}
+            onClick={() => onVerify(row)}
+            disabled={verifyPending}
+            title="Fetch this listing's live PDP and record what it served"
           >
-            Verify now
+            {verifyPending ? <><span className="mcc-spinner" /> Verifying…</> : 'Verify now'}
           </button>
         </div>
       </div>

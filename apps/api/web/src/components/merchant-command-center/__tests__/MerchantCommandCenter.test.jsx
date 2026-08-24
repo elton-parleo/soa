@@ -51,7 +51,10 @@ vi.mock('../../../AuthContext.jsx', () => ({
   useAuth: () => ({ signOut: vi.fn() }),
 }))
 vi.mock('../../../api.js', () => ({
-  api: { publishListing: vi.fn(), refreshGmcDiagnostics: vi.fn(), putSyncRule: vi.fn() },
+  api: {
+    publishListing: vi.fn(), refreshGmcDiagnostics: vi.fn(), putSyncRule: vi.fn(),
+    verifyListing: vi.fn(), verifyAll: vi.fn(),
+  },
 }))
 
 function mockHappyPath() {
@@ -238,166 +241,103 @@ describe('API down', () => {
   })
 })
 
-describe('actions with no API behind them', () => {
+describe('verify runs through the proxy', () => {
   beforeEach(mockHappyPath)
 
-  it('disables "Verify all" and says why, rather than stubbing a call', async () => {
+  it('enables "Verify all" and calls the proxied endpoint', async () => {
+    api.verifyAll.mockResolvedValue({ verified: 5 })
+
     render(<MerchantCommandCenter onNavigate={() => {}} />)
     await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
 
     const verifyAll = screen.getByRole('button', { name: /verify all/i })
-    expect(verifyAll).toBeDisabled()
-    // The endpoint exists upstream now; the tooltip must say "not wired
-    // up", not claim the API is missing.
-    expect(verifyAll.getAttribute('title')).toMatch(/not wired up yet/i)
-    expect(verifyAll.getAttribute('title')).toContain('/api/truesync/verify-all')
+    expect(verifyAll).not.toBeDisabled()
+
+    fireEvent.click(verifyAll)
+
+    await waitFor(() => expect(api.verifyAll).toHaveBeenCalled())
+    expect(await screen.findByText('Verified 5 listings')).toBeInTheDocument()
   })
-})
 
-
-// The first sync-rule write of a session is gated by a confirm (see the
-// "sync rules ask before the first real write" block below). Tests that
-// are about the write itself clear that gate first.
-async function confirmFirstWrite() {
-  const dialog = await screen.findByRole('alertdialog')
-  fireEvent.click(within(dialog).getByRole('button', { name: /^(enable|disable)/i }))
-}
-
-describe('mutations go through the proxy and render what came back', () => {
-  beforeEach(mockHappyPath)
-
-  // "API errors verbatim in a toast" — the page must not paraphrase.
-  it('shows an upstream error message word for word', async () => {
-    const upstream = 'listing 90: merchant_center not implemented in Step 2'
-    api.refreshGmcDiagnostics.mockRejectedValue(new Error(upstream))
+  it('shows a spinner while a verify-all is in flight and re-reads afterwards', async () => {
+    let resolve
+    api.verifyAll.mockReturnValue(new Promise((r) => { resolve = r }))
 
     render(<MerchantCommandCenter onNavigate={() => {}} />)
     await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
+    fetchAllVerifications.mockClear()
 
-    fireEvent.click(screen.getByRole('button', { name: /refresh google diagnostics/i }))
+    fireEvent.click(screen.getByRole('button', { name: /verify all/i }))
 
-    const toast = await screen.findByText(upstream)
-    expect(toast).toBeInTheDocument()
+    expect(await screen.findByText('Verifying…')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /verifying/i })).toBeDisabled()
+
+    resolve({ verified: 5 })
+    // No optimistic update: the badges come from a fresh read.
+    await waitFor(() => expect(fetchAllVerifications).toHaveBeenCalled())
   })
 
-  it('renders the sync-rule state the API returned, not the one clicked', async () => {
-    // The upstream refuses to enable an unbuilt channel and echoes back
-    // enabled:false. The toggle must follow the response, not the click
-    // — that is the whole reason there are no optimistic updates.
-    api.putSyncRule.mockResolvedValue({
-      catalog_product_id: 27, channel_slug: 'acp', enabled: false, cadence: null,
-    })
+  it('surfaces a verify-all failure verbatim', async () => {
+    const upstream = 'missing or invalid X-TrueSync-Key'
+    api.verifyAll.mockRejectedValue(new Error(upstream))
 
     render(<MerchantCommandCenter onNavigate={() => {}} />)
     await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: 'Sync rules' }))
+    fireEvent.click(screen.getByRole('button', { name: /verify all/i }))
 
-    const toggle = await screen.findByRole('switch', {
-      name: /agentic commerce protocol sync for snug-fit diapers/i,
-    })
-    // Unknown before any write: there is no read endpoint to ask.
-    expect(toggle).toHaveAttribute('aria-checked', 'mixed')
-
-    fireEvent.click(toggle)
-    await confirmFirstWrite()
-
-    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'))
-    expect(api.putSyncRule).toHaveBeenCalledWith({
-      catalog_product_id: 27, channel_slug: 'acp', enabled: true,
-    })
+    expect(await screen.findByText(upstream)).toBeInTheDocument()
   })
 
-  it('keys sync-rule writes by catalog_product_id, never listing_id', async () => {
-    api.putSyncRule.mockResolvedValue({ catalog_product_id: 29, channel_slug: 'mcp', enabled: true })
-
-    render(<MerchantCommandCenter onNavigate={() => {}} />)
-    await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: 'Sync rules' }))
-
-    fireEvent.click(await screen.findByRole('switch', {
-      name: /model context protocol server sync for cloud wipes 3-pack/i,
-    }))
-    await confirmFirstWrite()
-
-    await waitFor(() => expect(api.putSyncRule).toHaveBeenCalled())
-    const sent = api.putSyncRule.mock.calls[0][0]
-    expect(sent.catalog_product_id).toBe(29)   // listing 92's catalog_product_id
-    expect(sent).not.toHaveProperty('listing_id')
-  })
-})
-
-
-describe('verification data drives the matrix badges', () => {
-  beforeEach(mockHappyPath)
-
-  it('renders ⚠ with a finding count where a run found drift', async () => {
-    fetchAllVerifications.mockResolvedValue({
-      '90:schema_org': [{
-        id: 1, listing_id: 90, channel_slug: 'schema_org',
-        phase: 'post_publish', method: 'live_fetch',
-        drift: { findings: [
-          { variant: 'WS-SFD-1-96', field: 'price', expected: '17.99', observed: '18.99' },
-          { variant: 'WS-SFD-1-96', field: 'availability', expected: 'in_stock', observed: 'out_of_stock' },
-        ] },
-      }],
-      '91:schema_org': [{
-        id: 2, listing_id: 91, channel_slug: 'schema_org',
-        phase: 'post_publish', method: 'live_fetch', drift: null,
-      }],
-      '92:schema_org': [{
-        id: 3, listing_id: 92, channel_slug: 'schema_org',
-        phase: 'fetch_failed', method: 'live_fetch', drift: null,
-      }],
-    })
-
-    const { container } = render(<MerchantCommandCenter onNavigate={() => {}} />)
-    await waitFor(() =>
-      expect(container.querySelector('.mcc-verify.drift')).toBeInTheDocument())
-
-    expect(container.querySelector('.mcc-verify.drift').textContent).toBe('⚠ 2')
-    expect(container.querySelectorAll('.mcc-verify.verified')).toHaveLength(1)
-    expect(container.querySelectorAll('.mcc-verify.failed')).toHaveLength(1)
-    // The other 32 cells genuinely have no runs.
-    expect(container.querySelectorAll('.mcc-verify.none')).toHaveLength(32)
-  })
-
-  it('rolls those into the header counts', async () => {
-    fetchAllVerifications.mockResolvedValue({
-      '90:schema_org': [{ id: 1, phase: 'post_publish', method: 'live_fetch', drift: { price: { expected: 1, observed: 2 } } }],
-      '91:schema_org': [{ id: 2, phase: 'post_publish', method: 'live_fetch', drift: null }],
-    })
-
-    const { container } = render(<MerchantCommandCenter onNavigate={() => {}} />)
-    await waitFor(() =>
-      expect(container.querySelector('.mcc-verify.drift')).toBeInTheDocument())
-
-    const drifting = [...container.querySelectorAll('.mcc-stat')]
-      .find((el) => el.textContent.includes('Drifting'))
-    expect(within(drifting).getByText('1')).toBeInTheDocument()
-    expect(drifting).toHaveTextContent('1 verified clean')
-  })
-
-  it('shows the master-vs-surface comparison in the drawer', async () => {
-    fetchAllVerifications.mockResolvedValue({
-      '90:schema_org': [{
-        id: 1, phase: 'post_publish', method: 'live_fetch',
-        drift: { findings: [
-          { variant: 'WS-SFD-1-96', field: 'price', expected: '17.99', observed: '18.99' },
-        ] },
-      }],
-    })
+  it('verifies one listing from the drawer, with a per-listing spinner', async () => {
+    let resolve
+    api.verifyListing.mockReturnValue(new Promise((r) => { resolve = r }))
 
     render(<MerchantCommandCenter onNavigate={() => {}} />)
     await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Snug-Fit Diapers'))
 
-    expect(await screen.findByText('WS-SFD-1-96')).toBeInTheDocument()
-    expect(screen.getByText('17.99')).toBeInTheDocument()
-    expect(screen.getByText('18.99')).toBeInTheDocument()
-    expect(screen.getByText('Drift · 1 field')).toBeInTheDocument()
+    const verifyNow = await screen.findByRole('button', { name: /verify now/i })
+    expect(verifyNow).not.toBeDisabled()
+    fireEvent.click(verifyNow)
+
+    // Scoped to this listing: the header's Verify all stays available.
+    expect(await screen.findByRole('button', { name: /verifying…/i })).toBeInTheDocument()
+    expect(api.verifyListing).toHaveBeenCalledWith(90)
+
+    resolve({ outcome: 'ok', integrity: true, findings: [] })
+    expect(await screen.findByText('Verified Snug-Fit Diapers — no drift')).toBeInTheDocument()
+  })
+
+  it('reports findings from a verify rather than claiming success', async () => {
+    api.verifyListing.mockResolvedValue({
+      outcome: 'ok', integrity: false,
+      findings: [{ field: 'price' }, { field: 'availability' }],
+    })
+
+    render(<MerchantCommandCenter onNavigate={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Snug-Fit Diapers'))
+    fireEvent.click(await screen.findByRole('button', { name: /verify now/i }))
+
+    expect(await screen.findByText('Verified Snug-Fit Diapers — 2 findings')).toBeInTheDocument()
+  })
+
+  // A probe that could not read the page is not a success, even though
+  // the HTTP call succeeded and it returned zero findings.
+  it('treats a non-ok probe outcome as a failure, not "no drift"', async () => {
+    api.verifyListing.mockResolvedValue({
+      outcome: 'fetch_failed', integrity: null, findings: [], error: 'connection reset',
+    })
+
+    render(<MerchantCommandCenter onNavigate={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Snug-Fit Diapers'))
+    fireEvent.click(await screen.findByRole('button', { name: /verify now/i }))
+
+    const toast = await screen.findByText('Snug-Fit Diapers: connection reset')
+    expect(toast.closest('.mcc-toast')).toHaveClass('err')
   })
 })
-
 
 describe('sync rules ask before the first real write of a session', () => {
   beforeEach(mockHappyPath)

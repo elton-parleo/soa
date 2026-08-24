@@ -279,6 +279,11 @@
 .mcc-gmc-issues li.sev-error .mcc-gmc-code { color: var(--fail); }
 .mcc-gmc-issues li.sev-pending .mcc-gmc-code { color: var(--drift); }
 
+/* ── fetch_probe verdict ─────────────────────────────────────────── */
+.mcc-probe { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.mcc-probe-meta { font-size: .78rem; color: var(--ink-faint); }
+a.mcc-probe-meta { color: var(--cobalt); }
+
 /* ── unparsed verification record ────────────────────────────────── */
 .mcc-unparsed {
   border: 1px dashed var(--line-strong);
@@ -320,6 +325,9 @@
 }
 .mcc-side .meta .mono { color: var(--ink-soft); word-break: break-all; }
 .mcc-side .meta a { color: var(--cobalt); }
+.mcc-reflist { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+.mcc-reflist a, .mcc-reflist span { font-size: .74rem; word-break: break-all; }
+a.mcc-gmc-offer { color: var(--cobalt); }
 
 /* ── sync rules ──────────────────────────────────────────────────── */
 .mcc-rules { list-style: none; margin: 0; padding: 0; }
