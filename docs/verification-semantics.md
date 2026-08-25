@@ -1,3 +1,5 @@
+Mirror. Canonical lives in `parleo-supply-app` at `docs/truesync/verification-semantics.md` — update both copies together.
+
 # Verification semantics
 
 How the Merchant Command Center decides what a cell is saying.
