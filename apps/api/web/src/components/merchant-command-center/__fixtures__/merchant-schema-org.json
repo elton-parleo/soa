@@ -1,0 +1,73 @@
+[
+  {
+    "listing_id": 90,
+    "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+    "published_at": "2026-08-21T20:16:03.128053+00:00",
+    "spec_version": "schemaorg-merchant-listing-2026-08-18",
+    "payload": {
+      "@type": "ProductGroup",
+      "name": "Snug-Fit Diapers",
+      "image": [
+        "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg"
+      ]
+    }
+  },
+  {
+    "listing_id": 91,
+    "product_url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+    "published_at": "2026-08-21T20:16:23.305701+00:00",
+    "spec_version": "schemaorg-merchant-listing-2026-08-18",
+    "payload": {
+      "@type": "ProductGroup",
+      "name": "Snug-Fit Overnight Diapers",
+      "image": [
+        "https://trueshopstore.com/img/snug-fit-overnight-diapers-1.jpeg"
+      ]
+    }
+  },
+  {
+    "listing_id": 92,
+    "product_url": "https://trueshopstore.com/products/cloud-wipes-3-pack",
+    "published_at": "2026-08-21T20:15:06.387951+00:00",
+    "spec_version": "schemaorg-merchant-listing-2026-08-18",
+    "payload": {
+      "@type": "Product",
+      "name": "Cloud Wipes 3-Pack",
+      "image": [
+        "https://trueshopstore.com/img/cloud-wipes-1.jpeg",
+        "https://trueshopstore.com/img/cloud-wipes-2.jpeg",
+        "https://trueshopstore.com/img/cloud-wipes-3.jpeg"
+      ]
+    }
+  },
+  {
+    "listing_id": 93,
+    "product_url": "https://trueshopstore.com/products/bum-balm-4-oz",
+    "published_at": "2026-08-21T20:15:00.041685+00:00",
+    "spec_version": "schemaorg-merchant-listing-2026-08-18",
+    "payload": {
+      "@type": "Product",
+      "name": "Bum Balm 4 oz",
+      "image": [
+        "https://trueshopstore.com/img/bum-balm-1.jpeg",
+        "https://trueshopstore.com/img/bum-balm-2.jpeg",
+        "https://trueshopstore.com/img/bum-balm-3.jpeg"
+      ]
+    }
+  },
+  {
+    "listing_id": 94,
+    "product_url": "https://trueshopstore.com/products/snug-fit-trial-pack",
+    "published_at": "2026-08-21T20:16:28.575955+00:00",
+    "spec_version": "schemaorg-merchant-listing-2026-08-18",
+    "payload": {
+      "@type": "Product",
+      "name": "Snug-Fit Trial Pack",
+      "image": [
+        "https://trueshopstore.com/img/snug-fit-trial-pack-1.jpeg",
+        "https://trueshopstore.com/img/snug-fit-trial-pack-2.jpeg",
+        "https://trueshopstore.com/img/snug-fit-trial-pack-3.jpeg"
+      ]
+    }
+  }
+]

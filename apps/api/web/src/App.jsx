@@ -10,6 +10,7 @@ import ResponseExplorer  from './components/ResponseExplorer.jsx'
 import ActionsPage       from './components/ActionsPage.jsx'
 import StudyLibrary      from './components/StudyLibrary.jsx'
 import StudyDetail      from './components/StudyDetail.jsx'
+import MerchantCommandCenter from './components/MerchantCommandCenter.jsx'
 import LiteWidget        from './lite/LiteWidget.jsx'
 import LandingPage       from './lite/LandingPage.jsx'
 import BotsPage          from './lite/BotsPage.jsx'
@@ -24,6 +25,7 @@ function getInitialView() {
     'entities', 'metrics',
     'studies', 'study-detail',
     'responses', 'actions',
+    'command-center',
   ]
   return validViews.includes(hash) ? hash : 'dashboard'
 }
@@ -194,6 +196,14 @@ function AppContent() {
             navigateTo(v, params)
           }
         }}
+      />
+    )
+  }
+
+  if (view === 'command-center') {
+    return (
+      <MerchantCommandCenter
+        onNavigate={(v) => navigateTo(v)}
       />
     )
   }

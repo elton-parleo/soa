@@ -1,0 +1,541 @@
+{
+  "90": {
+    "mpn": null,
+    "sku": null,
+    "gtin": null,
+    "brand": "Wiggle & Snug",
+    "title": "Snug-Fit Diapers",
+    "images": [
+      "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg"
+    ],
+    "status": "active",
+    "category": "Diapering",
+    "variants": [
+      {
+        "mpn": null,
+        "sku": "WS-SFD-1-96",
+        "gtin": null,
+        "size": "Size 1",
+        "count": 96,
+        "title": "Snug-Fit Diapers Size 1 \u2014 Small Pack (96 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "pack": "Small Pack",
+          "absorbency": "day"
+        },
+        "list_price": "17.99",
+        "variant_id": "snug-fit-diapers-s1-small",
+        "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFD-1-198",
+        "gtin": null,
+        "size": "Size 1",
+        "count": 198,
+        "title": "Snug-Fit Diapers Size 1 \u2014 Big Pack (198 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "pack": "Big Pack",
+          "absorbency": "day"
+        },
+        "list_price": "31.99",
+        "variant_id": "snug-fit-diapers-s1-big",
+        "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFD-2-92",
+        "gtin": null,
+        "size": "Size 2",
+        "count": 92,
+        "title": "Snug-Fit Diapers Size 2 \u2014 Small Pack (92 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "pack": "Small Pack",
+          "absorbency": "day"
+        },
+        "list_price": "19.99",
+        "variant_id": "snug-fit-diapers-s2-small",
+        "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFD-2-186",
+        "gtin": null,
+        "size": "Size 2",
+        "count": 186,
+        "title": "Snug-Fit Diapers Size 2 \u2014 Big Pack (186 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "pack": "Big Pack",
+          "absorbency": "day"
+        },
+        "list_price": "35.99",
+        "variant_id": "snug-fit-diapers-s2-big",
+        "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFD-3-84",
+        "gtin": "884400137609",
+        "size": "Size 3",
+        "count": 84,
+        "title": "Snug-Fit Diapers Size 3 \u2014 Small Pack (84 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "pack": "Small Pack",
+          "absorbency": "day"
+        },
+        "list_price": "22.99",
+        "variant_id": "snug-fit-diapers-s3-small",
+        "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFD-3-168",
+        "gtin": "884400528827",
+        "size": "Size 3",
+        "count": 168,
+        "title": "Snug-Fit Diapers Size 3 \u2014 Big Pack (168 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "pack": "Big Pack",
+          "absorbency": "day"
+        },
+        "list_price": "39.99",
+        "variant_id": "snug-fit-diapers-s3-big",
+        "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFD-4-74",
+        "gtin": "884400046246",
+        "size": "Size 4",
+        "count": 74,
+        "title": "Snug-Fit Diapers Size 4 \u2014 Small Pack (74 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "pack": "Small Pack",
+          "absorbency": "day"
+        },
+        "list_price": "24.99",
+        "variant_id": "snug-fit-diapers-s4-small",
+        "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFD-4-150",
+        "gtin": "884400937353",
+        "size": "Size 4",
+        "count": 150,
+        "title": "Snug-Fit Diapers Size 4 \u2014 Big Pack (150 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "pack": "Big Pack",
+          "absorbency": "day"
+        },
+        "list_price": "43.99",
+        "variant_id": "snug-fit-diapers-s4-big",
+        "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFD-5-66",
+        "gtin": null,
+        "size": "Size 5",
+        "count": 66,
+        "title": "Snug-Fit Diapers Size 5 \u2014 Small Pack (66 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "pack": "Small Pack",
+          "absorbency": "day"
+        },
+        "list_price": "26.99",
+        "variant_id": "snug-fit-diapers-s5-small",
+        "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFD-5-132",
+        "gtin": null,
+        "size": "Size 5",
+        "count": 132,
+        "title": "Snug-Fit Diapers Size 5 \u2014 Big Pack (132 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "pack": "Big Pack",
+          "absorbency": "day"
+        },
+        "list_price": "47.99",
+        "variant_id": "snug-fit-diapers-s5-big",
+        "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFD-6-58",
+        "gtin": null,
+        "size": "Size 6",
+        "count": 58,
+        "title": "Snug-Fit Diapers Size 6 \u2014 Small Pack (58 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "pack": "Small Pack",
+          "absorbency": "day"
+        },
+        "list_price": "28.99",
+        "variant_id": "snug-fit-diapers-s6-small",
+        "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFD-6-116",
+        "gtin": null,
+        "size": "Size 6",
+        "count": 116,
+        "title": "Snug-Fit Diapers Size 6 \u2014 Big Pack (116 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-diapers-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "pack": "Big Pack",
+          "absorbency": "day"
+        },
+        "list_price": "51.99",
+        "variant_id": "snug-fit-diapers-s6-big",
+        "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "availability": "in_stock"
+      }
+    ],
+    "attributes": {},
+    "product_id": "catalog_product:27",
+    "provenance": {
+      "source": "catalog_spine",
+      "evidence_url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "extracted_by": "truesync.assemble",
+      "last_seen_at": "2026-08-21T16:50:27.081836Z"
+    },
+    "description": "Soft, absorbent everyday diapers with a stretchy waistband.",
+    "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+    "item_group_id": "catalog_product:27",
+    "catalog_product_id": 27
+  },
+  "91": {
+    "mpn": null,
+    "sku": null,
+    "gtin": null,
+    "brand": "Wiggle & Snug",
+    "title": "Snug-Fit Overnight Diapers",
+    "images": [
+      "https://trueshopstore.com/img/snug-fit-overnight-diapers-1.jpeg"
+    ],
+    "status": "active",
+    "category": "Diapering",
+    "variants": [
+      {
+        "mpn": null,
+        "sku": "WS-SFO-3-62",
+        "gtin": null,
+        "size": "Size 3",
+        "count": 62,
+        "title": "Snug-Fit Overnight Diapers Size 3 (62 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-3.jpeg",
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-4.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "absorbency": "overnight"
+        },
+        "list_price": "23.99",
+        "variant_id": "snug-fit-overnight-s3",
+        "product_url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFO-4-54",
+        "gtin": null,
+        "size": "Size 4",
+        "count": 54,
+        "title": "Snug-Fit Overnight Diapers Size 4 (54 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-3.jpeg",
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-4.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "absorbency": "overnight"
+        },
+        "list_price": "25.99",
+        "variant_id": "snug-fit-overnight-s4",
+        "product_url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFO-5-48",
+        "gtin": null,
+        "size": "Size 5",
+        "count": 48,
+        "title": "Snug-Fit Overnight Diapers Size 5 (48 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-3.jpeg",
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-4.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "absorbency": "overnight"
+        },
+        "list_price": "27.99",
+        "variant_id": "snug-fit-overnight-s5",
+        "product_url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+        "availability": "in_stock"
+      },
+      {
+        "mpn": null,
+        "sku": "WS-SFO-6-42",
+        "gtin": null,
+        "size": "Size 6",
+        "count": 42,
+        "title": "Snug-Fit Overnight Diapers Size 6 (42 ct)",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-3.jpeg",
+          "https://trueshopstore.com/img/snug-fit-overnight-diapers-4.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {
+          "absorbency": "overnight"
+        },
+        "list_price": "29.99",
+        "variant_id": "snug-fit-overnight-s6",
+        "product_url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+        "availability": "in_stock"
+      }
+    ],
+    "attributes": {},
+    "product_id": "catalog_product:28",
+    "provenance": {
+      "source": "catalog_spine",
+      "evidence_url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+      "extracted_by": "truesync.assemble",
+      "last_seen_at": "2026-08-21T16:50:27.081836Z"
+    },
+    "description": "Extra-absorbent overnight diapers for up to 12 hours.",
+    "product_url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+    "item_group_id": "catalog_product:28",
+    "catalog_product_id": 28
+  },
+  "92": {
+    "mpn": null,
+    "sku": "WS-CW-3",
+    "gtin": "884400676641",
+    "brand": "Wiggle & Snug",
+    "title": "Cloud Wipes 3-Pack",
+    "images": [
+      "https://trueshopstore.com/img/cloud-wipes-1.jpeg"
+    ],
+    "status": "active",
+    "category": "Diapering",
+    "variants": [
+      {
+        "mpn": null,
+        "sku": "WS-CW-3",
+        "gtin": "884400676641",
+        "size": "3 packs",
+        "count": 216,
+        "title": "Cloud Wipes 3-Pack",
+        "images": [
+          "https://trueshopstore.com/img/cloud-wipes-1.jpeg",
+          "https://trueshopstore.com/img/cloud-wipes-2.jpeg",
+          "https://trueshopstore.com/img/cloud-wipes-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {},
+        "list_price": "9.99",
+        "variant_id": "cloud-wipes-3pack",
+        "product_url": "https://trueshopstore.com/products/cloud-wipes-3-pack",
+        "availability": "in_stock"
+      }
+    ],
+    "attributes": {},
+    "product_id": "catalog_product:29",
+    "provenance": {
+      "source": "catalog_spine",
+      "evidence_url": "https://trueshopstore.com/products/cloud-wipes-3-pack",
+      "extracted_by": "truesync.assemble",
+      "last_seen_at": "2026-08-21T16:50:27.081836Z"
+    },
+    "description": "Fragrance-free wipes, 3 packs of 72.",
+    "product_url": "https://trueshopstore.com/products/cloud-wipes-3-pack",
+    "item_group_id": null,
+    "catalog_product_id": 29
+  },
+  "93": {
+    "mpn": null,
+    "sku": "WS-BB-4",
+    "gtin": "884400896186",
+    "brand": "Wiggle & Snug",
+    "title": "Bum Balm 4 oz",
+    "images": [
+      "https://trueshopstore.com/img/bum-balm-1.jpeg"
+    ],
+    "status": "active",
+    "category": "Diapering",
+    "variants": [
+      {
+        "mpn": null,
+        "sku": "WS-BB-4",
+        "gtin": "884400896186",
+        "size": "4 oz",
+        "count": 1,
+        "title": "Bum Balm 4 oz",
+        "images": [
+          "https://trueshopstore.com/img/bum-balm-1.jpeg",
+          "https://trueshopstore.com/img/bum-balm-2.jpeg",
+          "https://trueshopstore.com/img/bum-balm-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {},
+        "list_price": "12.99",
+        "variant_id": "bum-balm-4oz",
+        "product_url": "https://trueshopstore.com/products/bum-balm-4-oz",
+        "availability": "in_stock"
+      }
+    ],
+    "attributes": {},
+    "product_id": "catalog_product:30",
+    "provenance": {
+      "source": "catalog_spine",
+      "evidence_url": "https://trueshopstore.com/products/bum-balm-4-oz",
+      "extracted_by": "truesync.assemble",
+      "last_seen_at": "2026-08-21T16:50:27.081836Z"
+    },
+    "description": "Zinc-free balm for everyday diaper care.",
+    "product_url": "https://trueshopstore.com/products/bum-balm-4-oz",
+    "item_group_id": null,
+    "catalog_product_id": 30
+  },
+  "94": {
+    "mpn": null,
+    "sku": "WS-SFT-1",
+    "gtin": null,
+    "brand": "Wiggle & Snug",
+    "title": "Snug-Fit Trial Pack",
+    "images": [
+      "https://trueshopstore.com/img/snug-fit-trial-pack-1.jpeg"
+    ],
+    "status": "active",
+    "category": "Diapering",
+    "variants": [
+      {
+        "mpn": null,
+        "sku": "WS-SFT-1",
+        "gtin": null,
+        "size": "20 ct",
+        "count": 20,
+        "title": "Snug-Fit Trial Pack",
+        "images": [
+          "https://trueshopstore.com/img/snug-fit-trial-pack-1.jpeg",
+          "https://trueshopstore.com/img/snug-fit-trial-pack-2.jpeg",
+          "https://trueshopstore.com/img/snug-fit-trial-pack-3.jpeg"
+        ],
+        "currency": "USD",
+        "attributes": {},
+        "list_price": "6.99",
+        "variant_id": "snug-fit-trial-pack",
+        "product_url": "https://trueshopstore.com/products/snug-fit-trial-pack",
+        "availability": "in_stock"
+      }
+    ],
+    "attributes": {},
+    "product_id": "catalog_product:31",
+    "provenance": {
+      "source": "catalog_spine",
+      "evidence_url": "https://trueshopstore.com/products/snug-fit-trial-pack",
+      "extracted_by": "truesync.assemble",
+      "last_seen_at": "2026-08-21T16:50:27.081836Z"
+    },
+    "description": "A small pack to find your size before committing.",
+    "product_url": "https://trueshopstore.com/products/snug-fit-trial-pack",
+    "item_group_id": null,
+    "catalog_product_id": 31
+  }
+}

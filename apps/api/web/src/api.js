@@ -276,4 +276,30 @@ export const api = {
 
   updateRecommendation: (recommendationId, status) =>
     request('PATCH', `/api/recommendations/${recommendationId}`, { status }),
+
+  // Merchant Command Center — the TrueSync MUTATIONS only, through this
+  // app's proxy (app/routers/truesync.py) so TRUESYNC_ADMIN_KEY stays
+  // server-side. The page's reads bypass this client entirely and go
+  // straight to TRUESYNC_API_BASE; see truesyncApi.js for why.
+  publishListing: (listingId, channels) =>
+    post(`/api/truesync/listings/${listingId}/publish` +
+      (channels ? `?channels=${encodeURIComponent(channels)}` : ''), {}),
+
+  // Verify fetches the listing's live PDP and records what it served.
+  // Genuinely key-gated upstream (403 without X-TrueSync-Key), so it
+  // could not be called from the browser even if we wanted to.
+  verifyListing: (listingId) =>
+    post(`/api/truesync/listings/${listingId}/verify`, {}),
+
+  verifyAll: () =>
+    post('/api/truesync/verify-all', {}),
+
+  refreshGmcDiagnostics: (listingId) =>
+    post('/api/truesync/gmc/diagnostics/refresh' +
+      (listingId != null ? `?listing_id=${listingId}` : ''), {}),
+
+  // Keyed by catalog_product_id, not listing_id — that is the upstream's
+  // own key for this endpoint (see app/routers/truesync.py).
+  putSyncRule: (data) =>
+    request('PUT', '/api/truesync/sync-rules', data),
 }

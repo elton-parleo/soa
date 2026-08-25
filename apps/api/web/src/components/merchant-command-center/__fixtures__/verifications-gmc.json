@@ -1,0 +1,144 @@
+{
+  "listing_id": 90,
+  "lineage": {
+    "merchant_center": {
+      "publication_id": 353,
+      "status": "published",
+      "compiled_at": "2026-08-24T21:05:57.609426+00:00",
+      "published_at": "2026-08-24T21:07:36.411013+00:00",
+      "spec_version": "gmc-products-v1-2026-08-18"
+    },
+    "schema_org": {
+      "publication_id": 352,
+      "status": "published",
+      "compiled_at": "2026-08-24T20:54:53.714259+00:00",
+      "published_at": "2026-08-24T20:56:01.511983+00:00",
+      "spec_version": "schemaorg-merchant-listing-2026-08-18"
+    },
+    "deal_directory": {
+      "publication_id": 336,
+      "status": "published",
+      "compiled_at": "2026-08-21T20:14:52.799246+00:00",
+      "published_at": "2026-08-21T20:16:03.869094+00:00",
+      "spec_version": "parleo-internal"
+    },
+    "mcp": {
+      "publication_id": 335,
+      "status": "published",
+      "compiled_at": "2026-08-21T20:14:52.799246+00:00",
+      "published_at": "2026-08-21T20:16:03.718651+00:00",
+      "spec_version": "parleo-internal"
+    },
+    "deals_api": {
+      "publication_id": 334,
+      "status": "published",
+      "compiled_at": "2026-08-21T20:14:52.799246+00:00",
+      "published_at": "2026-08-21T20:16:03.549556+00:00",
+      "spec_version": "parleo-internal"
+    },
+    "ucp_uip": {
+      "publication_id": 333,
+      "status": "failed",
+      "compiled_at": "2026-08-21T20:14:52.799246+00:00",
+      "published_at": null,
+      "spec_version": "ucp-2026-04-08"
+    },
+    "acp": {
+      "publication_id": 332,
+      "status": "failed",
+      "compiled_at": "2026-08-21T20:14:52.799246+00:00",
+      "published_at": null,
+      "spec_version": "acp-feed-stable-2026-08-18"
+    }
+  },
+  "verifications": [
+    {
+      "id": 12,
+      "listing_id": 90,
+      "gtin": null,
+      "channel_slug": "merchant_center",
+      "phase": "after",
+      "method": "gmc_diagnostics",
+      "created_at": "2026-08-24T21:52:05.863831Z",
+      "observed": {
+        "body": {
+          "raw": "<!DOCTYPE html>\n<html lang=en>\n  <meta charset=utf-8>\n  <meta name=viewport content=\"initial-scale=1, minimum-scale=1, width=device-width\">\n  <title>Error 404 (\u2026 [truncated for fixture]"
+        },
+        "offerId": "90:snug-fit-diapers-s6-big",
+        "httpStatus": 404
+      },
+      "drift": {
+        "issues": [],
+        "approved": false,
+        "httpStatus": 404
+      },
+      "outcome": "not_approved"
+    },
+    {
+      "id": 11,
+      "listing_id": 90,
+      "gtin": null,
+      "channel_slug": "merchant_center",
+      "phase": "after",
+      "method": "gmc_diagnostics",
+      "created_at": "2026-08-24T21:52:05.863831Z",
+      "observed": {
+        "body": {
+          "raw": "<!DOCTYPE html>\n<html lang=en>\n  <meta charset=utf-8>\n  <meta name=viewport content=\"initial-scale=1, minimum-scale=1, width=device-width\">\n  <title>Error 404 (\u2026 [truncated for fixture]"
+        },
+        "offerId": "90:snug-fit-diapers-s6-small",
+        "httpStatus": 404
+      },
+      "drift": {
+        "issues": [],
+        "approved": false,
+        "httpStatus": 404
+      },
+      "outcome": "not_approved"
+    },
+    {
+      "id": 10,
+      "listing_id": 90,
+      "gtin": null,
+      "channel_slug": "merchant_center",
+      "phase": "after",
+      "method": "gmc_diagnostics",
+      "created_at": "2026-08-24T21:52:05.863831Z",
+      "observed": {
+        "body": {
+          "raw": "<!DOCTYPE html>\n<html lang=en>\n  <meta charset=utf-8>\n  <meta name=viewport content=\"initial-scale=1, minimum-scale=1, width=device-width\">\n  <title>Error 404 (\u2026 [truncated for fixture]"
+        },
+        "offerId": "90:snug-fit-diapers-s5-big",
+        "httpStatus": 404
+      },
+      "drift": {
+        "issues": [],
+        "approved": false,
+        "httpStatus": 404
+      },
+      "outcome": "not_approved"
+    },
+    {
+      "id": 9,
+      "listing_id": 90,
+      "gtin": null,
+      "channel_slug": "merchant_center",
+      "phase": "after",
+      "method": "gmc_diagnostics",
+      "created_at": "2026-08-24T21:52:05.863831Z",
+      "observed": {
+        "body": {
+          "raw": "<!DOCTYPE html>\n<html lang=en>\n  <meta charset=utf-8>\n  <meta name=viewport content=\"initial-scale=1, minimum-scale=1, width=device-width\">\n  <title>Error 404 (\u2026 [truncated for fixture]"
+        },
+        "offerId": "90:snug-fit-diapers-s5-small",
+        "httpStatus": 404
+      },
+      "drift": {
+        "issues": [],
+        "approved": false,
+        "httpStatus": 404
+      },
+      "outcome": "not_approved"
+    }
+  ]
+}

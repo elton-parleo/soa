@@ -1,0 +1,80 @@
+{
+  "listing_id": 90,
+  "lineage": {
+    "merchant_center": {
+      "publication_id": 357,
+      "status": "published",
+      "compiled_at": "2026-08-24T22:29:30.337946+00:00",
+      "published_at": "2026-08-24T22:30:38.557366+00:00",
+      "spec_version": "gmc-products-v1-2026-08-18"
+    },
+    "schema_org": {
+      "publication_id": 352,
+      "status": "published",
+      "compiled_at": "2026-08-24T20:54:53.714259+00:00",
+      "published_at": "2026-08-24T20:56:01.511983+00:00",
+      "spec_version": "schemaorg-merchant-listing-2026-08-18"
+    },
+    "deal_directory": {
+      "publication_id": 336,
+      "status": "published",
+      "compiled_at": "2026-08-21T20:14:52.799246+00:00",
+      "published_at": "2026-08-21T20:16:03.869094+00:00",
+      "spec_version": "parleo-internal"
+    },
+    "mcp": {
+      "publication_id": 335,
+      "status": "published",
+      "compiled_at": "2026-08-21T20:14:52.799246+00:00",
+      "published_at": "2026-08-21T20:16:03.718651+00:00",
+      "spec_version": "parleo-internal"
+    },
+    "deals_api": {
+      "publication_id": 334,
+      "status": "published",
+      "compiled_at": "2026-08-21T20:14:52.799246+00:00",
+      "published_at": "2026-08-21T20:16:03.549556+00:00",
+      "spec_version": "parleo-internal"
+    },
+    "ucp_uip": {
+      "publication_id": 333,
+      "status": "failed",
+      "compiled_at": "2026-08-21T20:14:52.799246+00:00",
+      "published_at": null,
+      "spec_version": "ucp-2026-04-08"
+    },
+    "acp": {
+      "publication_id": 332,
+      "status": "failed",
+      "compiled_at": "2026-08-21T20:14:52.799246+00:00",
+      "published_at": null,
+      "spec_version": "acp-feed-stable-2026-08-18"
+    }
+  },
+  "verifications": [
+    {
+      "id": 41,
+      "listing_id": 90,
+      "gtin": null,
+      "channel_slug": "schema_org",
+      "phase": "after",
+      "method": "fetch_probe",
+      "created_at": "2026-08-24T22:35:04.189910Z",
+      "observed": {
+        "url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "jsonld": [
+          "[trimmed for fixture \u2014 the full PDP JSON-LD, see merchant-schema-org.json]"
+        ]
+      },
+      "drift": {
+        "url": "https://trueshopstore.com/products/snug-fit-diapers",
+        "error": null,
+        "outcome": "ok",
+        "findings": [],
+        "integrity": true,
+        "bytes_identical": false
+      },
+      "outcome": "ok"
+    }
+  ]
+}
