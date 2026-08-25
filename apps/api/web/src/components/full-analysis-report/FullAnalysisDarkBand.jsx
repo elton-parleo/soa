@@ -7,14 +7,22 @@
  * this is a plain link the caller can point wherever cycle-level
  * "talk to us" actions already live, rather than wiring a lead-gen flow
  * into the paid product.
+ *
+ * fix/full-analysis-rail-nav: this sibling never carried lite's own
+ * TrueSyncBand.jsx id="truesync" — the rail's "TrueSync" nav item, and
+ * FixableHook.jsx's "headline finding" link (shared with lite, always
+ * `#truesync`), both pointed here and found nothing. Confirmed live —
+ * clicking either did nothing.
  */
 import { Glyph } from '../../ds/index.js'
+import { NAV_IDS } from './fullAnalysisNav.js'
 
 export function FullAnalysisDarkBand({ fixCount, contactHref = 'mailto:hello@parleo.com' }) {
   return (
-    <div style={{
+    <div id={NAV_IDS.TRUESYNC} style={{
       background: 'linear-gradient(150deg,#181D28,#12161F)', borderRadius: 20, padding: '30px 34px',
       color: '#fff', marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 20, flexWrap: 'wrap',
+      scrollMarginTop: 26,
     }}>
       <div>
         <div className="mono-label" style={{ fontSize: 9, color: '#6C7482', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>

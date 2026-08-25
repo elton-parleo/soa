@@ -8,6 +8,7 @@
  * scale" instead of a number — never a false-precision delta.
  */
 import { Glyph } from '../../ds/index.js'
+import { NAV_IDS } from './fullAnalysisNav.js'
 
 const PILLAR_LABELS = { visibility: 'Visibility', accessibility: 'Accessibility', true_value: 'True Value' }
 
@@ -38,7 +39,7 @@ function DeltaChip({ delta }) {
 export function ContinuationStrip({ continuation, platformsNote }) {
   if (!continuation) return null
   return (
-    <div id="continuation" style={{
+    <div id={NAV_IDS.CONTINUATION} style={{
       background: 'var(--blue-tint)', border: '1.5px solid rgba(1,102,255,.35)', borderRadius: 16,
       marginBottom: 18, padding: '18px 24px', display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap',
       scrollMarginTop: 26,

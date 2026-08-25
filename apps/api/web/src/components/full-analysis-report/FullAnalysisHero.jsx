@@ -10,6 +10,7 @@
 import { DarkPanel, Glyph, StatusChip, MonoTag } from '../../ds/index.js'
 import { VERDICT_COMPOSITE_THRESHOLD, PILLAR_NAMES } from '../../lite/landing/scanDimensionsRegistry.js'
 import { formatCurrency } from '../../lite/liteDerive.js'
+import { NAV_IDS } from './fullAnalysisNav.js'
 import {
   pillarEarnedMax, pillarNominalWeight, pillarHeadline, isAgentReady,
   PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE,
@@ -56,7 +57,7 @@ export function FullAnalysisHero({ report, exposure, shareOfMentionsRank, headli
   ]
 
   return (
-    <div id="score" style={{ marginBottom: 18, scrollMarginTop: 26 }}>
+    <div id={NAV_IDS.SCORE} style={{ marginBottom: 18, scrollMarginTop: 26 }}>
       <DarkPanel pad={0} radius={18} atmos style={{ overflow: 'hidden', boxShadow: 'var(--shadow-elevated)' }}>
         <div style={{ padding: '28px 32px 26px', borderBottom: '1px solid var(--dark-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -117,7 +118,7 @@ export function FullAnalysisHero({ report, exposure, shareOfMentionsRank, headli
             <div style={{ background: 'rgba(1,102,255,.13)', border: '1px solid rgba(127,176,255,.34)', borderRadius: 13, padding: '15px 17px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Glyph name="card" size={13} color="var(--blue-lite)" /><span className="mono-label" style={{ fontSize: 8.5, color: 'var(--blue-lite)' }}>MODELED EXPOSURE / YEAR</span></div>
               <div className="num" style={{ fontSize: 24, fontWeight: 720, letterSpacing: '-0.026em', color: 'var(--dark-text)', marginTop: 10, lineHeight: 1 }}>{formatCurrency(exposure)}</div>
-              <a href="#exp" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--blue-lite)', fontWeight: 520, marginTop: 6 }}>How we model this<Glyph name="arrowRight" size={12} color="var(--blue-lite)" /></a>
+              <a href={`#${NAV_IDS.EXP}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--blue-lite)', fontWeight: 520, marginTop: 6 }}>How we model this<Glyph name="arrowRight" size={12} color="var(--blue-lite)" /></a>
             </div>
           </div>
         </div>

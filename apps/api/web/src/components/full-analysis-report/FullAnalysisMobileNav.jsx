@@ -12,21 +12,19 @@
  *
  * Reuses, never forks: useSummaryScrolledPast (MobileReportNav.jsx — a
  * generic, ref-only hook, no lite-specific coupling) for the reveal
- * timing, and FullAnalysisRail's own NAV_ITEMS/filterNavItems/navScore
- * for the sheet's item list — one source of truth with the desktop rail,
- * so the two can never list different sections or disagree on a score.
+ * timing, and buildFullAnalysisNavItems (fullAnalysisNav.js) for the
+ * sheet's item list — one source of truth with the desktop rail, so the
+ * two can never list different sections or disagree on a score.
  *
- * `active` is passed straight through from FullAnalysisReport.jsx, which
- * currently hardcodes it to 'score' (Full Analysis has no scroll-spy hook
- * wired yet, unlike lite's useReportSections) — this component highlights
- * whatever it's given, matching the desktop rail's own current behavior
- * rather than adding new scroll-spy machinery out of this bug fix's scope.
+ * `active` is passed straight through from FullAnalysisReport.jsx (real
+ * scroll-spy now — see useActiveNavId.js), so this component highlights
+ * whatever it's given rather than computing its own.
  */
 import { useRef, useState } from 'react'
 import { BrandLogo, Glyph, StatusChip, StateChip } from '../../ds/index.js'
 import { isAgentReady, isPartialRead, buildMeasurableContext } from '../../lite/report/reportDerive.js'
 import { useSummaryScrolledPast } from '../../lite/report/MobileReportNav.jsx'
-import { NAV_ITEMS, filterNavItems, navScore } from './FullAnalysisRail.jsx'
+import { buildFullAnalysisNavItems } from './fullAnalysisNav.js'
 
 const READY_PCT = 60
 
@@ -149,11 +147,11 @@ export function FullAnalysisMobileNav({ report, primaryEntityName, exposure, act
   const pillars = report.pillars
   const composite = report.composite
 
-  const items = filterNavItems(NAV_ITEMS, { hasContinuation, transcript: report.transcript, readOnly })
-    .map(({ id, icon, label }) => ({
-      id, icon, label,
-      score: navScore({ id, pillars, composite, totalQueries: report.total_queries, transcript: report.transcript, exposure }),
-    }))
+  const items = buildFullAnalysisNavItems({
+    pillars, composite, totalQueries: report.total_queries, transcript: report.transcript,
+    exposure, hasContinuation, readOnly,
+    scan: report.scan, platformMatrix: report.platform_matrix, evidence: report.evidence,
+  })
 
   return (
     <div className="lite-report-mobile-nav">

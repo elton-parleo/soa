@@ -9,6 +9,7 @@
 import { StateChip } from '../../ds/index.js'
 import { ReportSection } from '../../lite/report/ReportSection.jsx'
 import { envelopeChipState, envelopeLabel } from './fullAnalysisDerive.js'
+import { NAV_IDS } from './fullAnalysisNav.js'
 
 const AGENT_ACCESS_LABEL = { allowed: 'Admitted', blocked: 'Blocked', partial: 'Partial', unknown: 'Unknown' }
 const AGENT_ACCESS_STATE = { allowed: 'seen', blocked: 'invisible', partial: 'partial', unknown: 'unmeasured' }
@@ -35,7 +36,7 @@ export function PlatformMatrixSection({ matrix, open, onToggle }) {
 
   return (
     <ReportSection
-      id="matrix" eyebrow={`${matrix.length} PLATFORM${matrix.length === 1 ? '' : 'S'} × EVERY PILLAR DIMENSION`}
+      id={NAV_IDS.MATRIX} eyebrow={`${matrix.length} PLATFORM${matrix.length === 1 ? '' : 'S'} × EVERY PILLAR DIMENSION`}
       title="Where the score comes from, agent by agent"
       open={open} onToggle={onToggle}
     >

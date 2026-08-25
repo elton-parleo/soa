@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../../api.js'
 import { ReportSection } from '../../lite/report/ReportSection.jsx'
+import { NAV_IDS } from './fullAnalysisNav.js'
 
 const TABS = [
   { key: 'overall', label: 'Overall' },
@@ -49,7 +50,7 @@ export function AnalystLayerSection({ cycleCode, open, onToggle }) {
   if (error) return null
   if (!data) {
     return (
-      <ReportSection id="analyst" eyebrow="ANALYST LAYER · SAME METRICS AS EVERY PAST CYCLE" title="The six core metrics, every slice" open={open} onToggle={onToggle}>
+      <ReportSection id={NAV_IDS.ANALYST} eyebrow="ANALYST LAYER · SAME METRICS AS EVERY PAST CYCLE" title="The six core metrics, every slice" open={open} onToggle={onToggle}>
         <div style={{ color: 'var(--faint)', fontSize: 13, marginTop: 16 }}>Loading analyst metrics…</div>
       </ReportSection>
     )
@@ -63,7 +64,7 @@ export function AnalystLayerSection({ cycleCode, open, onToggle }) {
   const entities = (data.entities || []).slice().sort((a, b) => (a.role === 'primary' ? -1 : b.role === 'primary' ? 1 : 0))
 
   return (
-    <ReportSection id="analyst" eyebrow="ANALYST LAYER · SAME METRICS AS EVERY PAST CYCLE" title="The six core metrics, every slice" open={open} onToggle={onToggle}>
+    <ReportSection id={NAV_IDS.ANALYST} eyebrow="ANALYST LAYER · SAME METRICS AS EVERY PAST CYCLE" title="The six core metrics, every slice" open={open} onToggle={onToggle}>
       <div className="fa-analyst-tabs" style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 18 }}>
         {TABS.map((t) => (
           <button

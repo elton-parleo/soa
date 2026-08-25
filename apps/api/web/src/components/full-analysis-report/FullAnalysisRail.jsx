@@ -6,58 +6,16 @@
  * CTA, and a fixed lite-only nav id set (buildNavItems/NAV_META) that
  * doesn't include this report's own sections (discovery, matrix,
  * analyst layer, evidence).
+ *
+ * fix/full-analysis-rail-nav: nav items now come from
+ * buildFullAnalysisNavItems (fullAnalysisNav.js) — see that file's own
+ * docstring for why (one registry drives this rail, its phone
+ * replacement, and every full-analysis-only section's own DOM id, so a
+ * nav item and its target can't diverge the way `truesync` just did).
  */
 import { Wordmark, Glyph, StatusChip, StateChip, BrandLogo } from '../../ds/index.js'
-import { pillarEarnedMax, isAgentReady, isPartialRead, buildMeasurableContext, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from '../../lite/report/reportDerive.js'
-import { formatCompactCurrency } from '../../lite/liteDerive.js'
-
-export const NAV_ITEMS = [
-  { id: 'score', icon: 'chart', label: 'The score' },
-  { id: 'continuation', icon: 'refresh', label: 'Vs. your audit' },
-  { id: 'discovery', icon: 'search', label: 'Discovery' },
-  { id: 'matrix', icon: 'grid', label: 'Platform matrix' },
-  { id: 'viz', icon: 'eye', label: 'Visibility' },
-  { id: 'transcript', icon: 'doc', label: 'The transcript' },
-  { id: 'acc', icon: 'globe', label: 'Accessibility' },
-  { id: 'tv', icon: 'tag', label: 'True Value' },
-  { id: 'fix', icon: 'check', label: 'Ranked fixes' },
-  { id: 'analyst', icon: 'layers', label: 'Analyst layer' },
-  { id: 'evidence', icon: 'doc', label: 'Evidence' },
-  { id: 'truesync', icon: 'refresh', label: 'TrueSync' },
-  { id: 'exp', icon: 'card', label: 'Exposure' },
-]
-
-// Exported so FullAnalysisMobileNav.jsx's Sections sheet lists exactly
-// the same items, in the same order, with the same scores as this
-// desktop rail — one source of truth, never a second hand-copied list
-// that could drift.
-export function filterNavItems(items, { hasContinuation, transcript, readOnly }) {
-  return items.filter((item) => item.id !== 'continuation' || hasContinuation)
-    .filter((item) => item.id !== 'transcript' || transcript)
-    // readOnly (public /fa/{token} viewer): FullAnalysisReport.jsx
-    // omits <AnalystLayerSection> outright (it fetches the authed
-    // /api/cycles/{code}/metrics directly — the one section with no
-    // public equivalent), so its nav entry would otherwise jump to an
-    // anchor that no longer exists.
-    .filter((item) => item.id !== 'analyst' || !readOnly)
-}
-
-export function navScore({ id, pillars, composite, totalQueries, transcript, exposure }) {
-  const vis = pillarEarnedMax(pillars.visibility)
-  const acc = pillarEarnedMax(pillars.accessibility)
-  const tv = pillarEarnedMax(pillars.true_value)
-  switch (id) {
-    case 'score': return `${Math.round(composite ?? 0)}/100`
-    case 'viz': return `${Math.round(vis.earned)}/${Math.round(vis.max)}`
-    case 'transcript': return transcript ? `${transcript.query_index}/${transcript.total_queries}` : null
-    case 'acc': return `${Math.round(acc.earned)}/${Math.round(acc.max)}`
-    case 'tv': return `${Math.round(tv.earned)}/${Math.round(tv.max)}`
-    case 'fix': return pillars.fixes ? `+${Math.round(pillars.fixes.visible.reduce((s, f) => s + f.impact, 0))}` : null
-    case 'evidence': return totalQueries ? `${totalQueries}` : null
-    case 'exp': return exposure == null ? '—' : formatCompactCurrency(exposure)
-    default: return null
-  }
-}
+import { pillarEarnedMax, isAgentReady, isPartialRead, buildMeasurableContext } from '../../lite/report/reportDerive.js'
+import { buildFullAnalysisNavItems } from './fullAnalysisNav.js'
 
 export function FullAnalysisRail({ report, primaryEntityName, exposure, active, hasContinuation, readOnly = false }) {
   const pillars = report.pillars
@@ -74,7 +32,11 @@ export function FullAnalysisRail({ report, primaryEntityName, exposure, active, 
   const partial = isPartialRead(pillars, report.scan?.degraded_reason)
   const unmeasurable = partial ? buildMeasurableContext(pillars).unmeasurable_points : 0
 
-  const items = filterNavItems(NAV_ITEMS, { hasContinuation, transcript: report.transcript, readOnly })
+  const items = buildFullAnalysisNavItems({
+    pillars, composite, totalQueries: report.total_queries, transcript: report.transcript,
+    exposure, hasContinuation, readOnly,
+    scan: report.scan, platformMatrix: report.platform_matrix, evidence: report.evidence,
+  })
 
   return (
     <div className="fa-report-rail" style={{ borderRight: '1px solid var(--border)', background: 'var(--canvas-dim)' }}>
@@ -134,9 +96,8 @@ export function FullAnalysisRail({ report, primaryEntityName, exposure, active, 
             <span className="mono-label" style={{ fontSize: 9.5, color: 'var(--faint)' }}>IN THIS REPORT</span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {items.map(({ id, icon, label }) => {
+            {items.map(({ id, icon, label, score }) => {
               const on = active === id
-              const score = navScore({ id, pillars, composite, totalQueries: report.total_queries, transcript: report.transcript, exposure })
               return (
                 <a
                   key={id}

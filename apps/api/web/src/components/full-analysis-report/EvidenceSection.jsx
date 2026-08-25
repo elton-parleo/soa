@@ -9,6 +9,7 @@
 import { useState } from 'react'
 import { Glyph } from '../../ds/index.js'
 import { ReportSection } from '../../lite/report/ReportSection.jsx'
+import { NAV_IDS } from './fullAnalysisNav.js'
 
 export function EvidenceSection({ evidence, onViewResponse, open, onToggle }) {
   const [coding, setCoding] = useState(false)
@@ -17,7 +18,7 @@ export function EvidenceSection({ evidence, onViewResponse, open, onToggle }) {
 
   return (
     <ReportSection
-      id="evidence" eyebrow="EVIDENCE · EVERY NUMBER RESOLVES TO A CODED ANSWER"
+      id={NAV_IDS.EVIDENCE} eyebrow="EVIDENCE · EVERY NUMBER RESOLVES TO A CODED ANSWER"
       title="What an agent actually said"
       extra={<span className="mono-label" style={{ fontSize: 9, background: 'var(--red-tint)', color: 'var(--red-deep)', borderRadius: 999, padding: '4px 10px' }}>PRICE INACCURATE · OFFERS UNCITED</span>}
       open={open} onToggle={onToggle}

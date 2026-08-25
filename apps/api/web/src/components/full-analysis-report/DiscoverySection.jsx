@@ -11,6 +11,7 @@
 import { Glyph } from '../../ds/index.js'
 import { ReportSection } from '../../lite/report/ReportSection.jsx'
 import { buildDiscoverySteps } from './fullAnalysisDerive.js'
+import { NAV_IDS } from './fullAnalysisNav.js'
 
 export function DiscoverySection({ scan, open, onToggle }) {
   const steps = buildDiscoverySteps(scan)
@@ -19,7 +20,7 @@ export function DiscoverySection({ scan, open, onToggle }) {
 
   return (
     <ReportSection
-      id="discovery" eyebrow="FINDING 00 · DISCOVERY · MEASURED"
+      id={NAV_IDS.DISCOVERY} eyebrow="FINDING 00 · DISCOVERY · MEASURED"
       title={allGood ? 'This time, everything opened' : 'What this run could reach'}
       open={open} onToggle={onToggle} accentColor={allGood ? 'var(--green)' : 'var(--amber)'}
     >
