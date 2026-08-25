@@ -18,6 +18,10 @@ const TABS = [
   { key: 'by_persona', label: 'By Persona' },
 ]
 
+// 1f: same sticky-first-column treatment as PlatformMatrixSection —
+// the Metric column stays put while entity columns scroll under it.
+const STICKY_COL_STYLE = { position: 'sticky', left: 0, background: 'var(--surface)', zIndex: 1 }
+
 const METRIC_ROWS = [
   { key: 'mention_rate', label: 'Mention Rate', suffix: '%' },
   { key: 'som', label: 'Share of Mentions', suffix: '%' },
@@ -60,13 +64,13 @@ export function AnalystLayerSection({ cycleCode, open, onToggle }) {
 
   return (
     <ReportSection id="analyst" eyebrow="ANALYST LAYER · SAME METRICS AS EVERY PAST CYCLE" title="The six core metrics, every slice" open={open} onToggle={onToggle}>
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 18 }}>
+      <div className="fa-analyst-tabs" style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 18 }}>
         {TABS.map((t) => (
           <button
             key={t.key} type="button" onClick={() => { setTab(t.key); setSubValue(null) }}
             style={{
-              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase',
-              padding: '9px 14px', borderRadius: 999, cursor: 'pointer',
+              flexShrink: 0, fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase',
+              padding: '9px 14px', borderRadius: 999, cursor: 'pointer', minHeight: 44,
               border: `1px solid ${t.key === tab ? 'var(--ink)' : 'var(--border)'}`,
               background: t.key === tab ? 'var(--ink)' : 'var(--surface)',
               color: t.key === tab ? '#fff' : 'var(--muted)',
@@ -93,33 +97,35 @@ export function AnalystLayerSection({ cycleCode, open, onToggle }) {
           ))}
         </div>
       )}
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5, marginTop: 18 }}>
-        <thead>
-          <tr>
-            <th style={{ textAlign: 'left', padding: '10px', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', fontWeight: 500 }}>Metric</th>
-            {entities.map((e) => (
-              <th key={e.code || e.name} style={{ textAlign: 'left', padding: '10px', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.08em', textTransform: 'uppercase', color: e.role === 'primary' ? 'var(--blue)' : 'var(--faint)', fontWeight: 500 }}>
-                {e.name}{e.role === 'primary' ? ' (you)' : ''}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {METRIC_ROWS.map((m) => (
-            <tr key={m.key}>
-              <td style={{ padding: '10px', borderTop: '1px solid var(--hairline)', fontWeight: 600, color: 'var(--text-strong)' }}>{m.label}</td>
-              {entities.map((e) => {
-                const metrics = entityMetrics[e.code]
-                return (
-                  <td key={e.code || e.name} className="num" style={{ padding: '10px', borderTop: '1px solid var(--hairline)', fontFamily: 'var(--font-mono)', color: e.role === 'primary' ? 'var(--text-strong)' : 'var(--muted)' }}>
-                    {metrics ? fmt(metrics[m.key], m.suffix) : '—'}
-                  </td>
-                )
-              })}
+      <div style={{ overflowX: 'auto', marginTop: 18 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+          <thead>
+            <tr>
+              <th style={{ ...STICKY_COL_STYLE, textAlign: 'left', padding: '10px', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', fontWeight: 500 }}>Metric</th>
+              {entities.map((e) => (
+                <th key={e.code || e.name} style={{ textAlign: 'left', padding: '10px', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.08em', textTransform: 'uppercase', color: e.role === 'primary' ? 'var(--blue)' : 'var(--faint)', fontWeight: 500 }}>
+                  {e.name}{e.role === 'primary' ? ' (you)' : ''}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {METRIC_ROWS.map((m) => (
+              <tr key={m.key}>
+                <td style={{ ...STICKY_COL_STYLE, padding: '10px', borderTop: '1px solid var(--hairline)', fontWeight: 600, color: 'var(--text-strong)' }}>{m.label}</td>
+                {entities.map((e) => {
+                  const metrics = entityMetrics[e.code]
+                  return (
+                    <td key={e.code || e.name} className="num" style={{ padding: '10px', borderTop: '1px solid var(--hairline)', fontFamily: 'var(--font-mono)', color: e.role === 'primary' ? 'var(--text-strong)' : 'var(--muted)' }}>
+                      {metrics ? fmt(metrics[m.key], m.suffix) : '—'}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </ReportSection>
   )
 }

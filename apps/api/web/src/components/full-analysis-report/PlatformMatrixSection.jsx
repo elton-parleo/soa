@@ -23,6 +23,13 @@ function EnvelopeCell({ envelope }) {
   return <StateChip state={state} variant="chip" size="sm">{state === 'unmeasured' ? undefined : envelopeLabel(envelope)}</StateChip>
 }
 
+// 1c: the platform column stays put while the other 6 scroll under it
+// horizontally — the wrapper's own overflow-x:auto is the scroll
+// container position:sticky sticks within, so this works at any width,
+// not just the mobile breakpoint (it's simply invisible until the
+// table is actually wider than its wrapper).
+const STICKY_COL_STYLE = { position: 'sticky', left: 0, background: 'var(--surface)', zIndex: 1 }
+
 export function PlatformMatrixSection({ matrix, open, onToggle }) {
   if (!matrix || matrix.length === 0) return null
 
@@ -36,7 +43,7 @@ export function PlatformMatrixSection({ matrix, open, onToggle }) {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left', padding: '8px 12px', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', fontWeight: 500, borderBottom: '2px solid var(--border-strong)' }}>Platform</th>
+              <th style={{ ...STICKY_COL_STYLE, textAlign: 'left', padding: '8px 12px', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', fontWeight: 500, borderBottom: '2px solid var(--border-strong)' }}>Platform</th>
               {['Share of mentions', 'Rec strength', 'Agent access', 'Price truth · said', 'Deal citability', 'Member value'].map((h) => (
                 <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', fontWeight: 500, borderBottom: '2px solid var(--border-strong)' }}>{h}</th>
               ))}
@@ -45,7 +52,7 @@ export function PlatformMatrixSection({ matrix, open, onToggle }) {
           <tbody>
             {matrix.map((row) => (
               <tr key={row.platform}>
-                <td style={{ padding: '12px', borderTop: '1px solid var(--hairline)', fontWeight: 600, color: 'var(--text-strong)' }}>{row.platform_name}</td>
+                <td style={{ ...STICKY_COL_STYLE, padding: '12px', borderTop: '1px solid var(--hairline)', fontWeight: 600, color: 'var(--text-strong)' }}>{row.platform_name}</td>
                 <td style={{ padding: '12px', borderTop: '1px solid var(--hairline)' }}><EnvelopeCell envelope={row.share_of_mentions} /></td>
                 <td style={{ padding: '12px', borderTop: '1px solid var(--hairline)', fontSize: 12.5, color: 'var(--text)' }}>{row.recommendation_strength_band}</td>
                 <td style={{ padding: '12px', borderTop: '1px solid var(--hairline)' }}>

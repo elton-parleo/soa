@@ -1,18 +1,58 @@
-/* Full Analysis report — responsive collapse per the design mock's own
-   @media(max-width:1000px) rule (design-refs/FullAnalysisReportMock.jsx).
-   Self-contained: scoped to fa-* classes only, never touches any
-   lite-*/.lite-report-* selector in ../../lite/theme.css. */
-@media (max-width: 1000px) {
+/* Full Analysis report — responsive collapse. fix/full-analysis-mobile:
+   moved off the design mock's own @media(max-width:1000px) breakpoint.
+   Two thresholds now, both shared with ../../lite/theme.css rather than
+   invented here:
+
+   768px — the shell/rail/content-padding split (RM1 in theme.css).
+   Widened live from the original 640px match: at 641-767px the 222px
+   rail was still visible (this rule hadn't fired yet) but the content
+   column was too narrow for the desktop grids inside it — genuine
+   horizontal page overflow, confirmed on BOTH this report and lite's
+   own at 768px before the fix. Once the rail hides, those grids (here
+   AND in theme.css) fit the full viewport width fine as-is, so only
+   the rail-hide threshold itself needed to move, not every grid inside.
+
+   640px — every OTHER rule below (hero tiles/pillars/discovery-steps
+   grid-collapse, the headline clamp, the analyst tab scroll) stays at
+   lite's original value, unchanged: these are the same "does this
+   specific grid need to become 1 column" decisions theme.css's own
+   RM2/RM3 rules make for lite's equivalent widgets, still correct on
+   their own once the wider rail-hide split above has already solved
+   the actual overflow.
+
+   Self-contained: scoped to fa- classes only, never touches any
+   lite-report- selector in theme.css. The phone-nav REPLACEMENT for
+   .fa-report-rail (FullAnalysisMobileNav.jsx) deliberately reuses
+   theme.css's own .lite-report-mobile-* classes directly rather than
+   duplicating their display rules here — .lite-report-mobile-nav is
+   already hidden above 768px and shown at/below it by theme.css, at
+   the identical split point this file now uses too.
+
+   BUG NOTE (fix/full-analysis-mobile): this file's comment used to
+   describe two class-name prefixes back to back, glob-style, with a
+   star immediately before a slash between them. CSS comments have no
+   escaping, so a star directly followed by a slash ANYWHERE inside one
+   closes it early, wherever it falls in the prose — the rest of that
+   sentence and everything after it, all the way to this file's real
+   closing marker, then parsed as garbage CSS and broke the whole
+   file's parse (0 rules loaded), silently no-opping every rule below,
+   including the @media block one line down. This is why the report
+   rendered the desktop grid at every width: the breakpoint was never
+   invalid, it was never PARSED. Never place a star immediately before
+   a slash anywhere in a comment in this file — insert a space, a word,
+   or punctuation between them instead. */
+@media (max-width: 768px) {
   .fa-report-shell {
-    grid-template-columns: 1fr !important;
+    display: block !important;
   }
   .fa-report-rail {
-    border-right: none !important;
+    display: none !important;
   }
-  .fa-report-rail > div {
-    position: static !important;
-    height: auto !important;
+  .fa-report-content {
+    padding: 20px 16px 40px !important;
   }
+}
+@media (max-width: 640px) {
   .fa-hero-lanes {
     flex-direction: column !important;
   }
@@ -23,5 +63,22 @@
   .fa-hero-pillars,
   .fa-discovery-steps {
     grid-template-columns: 1fr !important;
+  }
+  /* 1b: the headline carries a desktop min-width:340 (a flex item's
+     hard floor) that doesn't shrink on its own — same fix, same values,
+     as .lite-scorehero-headline in theme.css (RM2) for the identical
+     shape of bug: silently clipped by DarkPanel's own overflow:hidden
+     rather than visibly broken until inspected. */
+  .fa-hero-headline {
+    min-width: 0 !important;
+    font-size: clamp(24px, 7vw, 38px) !important;
+  }
+  /* 1f: analyst layer's slice-tab row scrolls horizontally instead of
+     wrapping — 5 tabs plus (on some tabs) a second sub-value row would
+     otherwise wrap into a tall, awkward stack at 375px. */
+  .fa-analyst-tabs {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
   }
 }
