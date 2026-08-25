@@ -70,7 +70,7 @@ export function FullAnalysisHero({ report, exposure, shareOfMentionsRank, headli
             </span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 40, alignItems: 'flex-end', marginTop: 18, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 340, maxWidth: 560, fontSize: 38, fontWeight: 740, letterSpacing: '-0.034em', lineHeight: 1.1, color: 'var(--dark-text)' }}>
+            <div className="fa-hero-headline" style={{ flex: 1, minWidth: 340, maxWidth: 560, fontSize: 38, fontWeight: 740, letterSpacing: '-0.034em', lineHeight: 1.1, color: 'var(--dark-text)' }}>
               {plain} <em style={{ fontFamily: "'Newsreader',Georgia,serif", fontWeight: 440, fontStyle: 'italic', color: 'var(--blue-lite)', letterSpacing: '-0.008em' }}>{emphasis}</em>
             </div>
             <div style={{ flexShrink: 0 }}><StatusChip tone={isAgentReady(pillars) ? 'success' : 'risk'}>{isAgentReady(pillars) ? 'Agent-ready' : 'Not agent-ready'}</StatusChip></div>
