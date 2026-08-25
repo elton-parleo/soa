@@ -7,7 +7,8 @@
  * verified live against the dev server this session. These tests cover
  * what jsdom CAN exercise: summary content, and the Sections sheet's
  * open/close + item list, which must mirror FullAnalysisRail's own
- * NAV_ITEMS/filterNavItems/navScore exactly (one source of truth).
+ * buildFullAnalysisNavItems() output exactly (fullAnalysisNav.js is the
+ * one registry both consume — fix/full-analysis-rail-nav).
  */
 import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
@@ -73,8 +74,8 @@ describe('FullAnalysisMobileNav — Sections sheet', () => {
     const labels = screen.getAllByRole('link').map((a) => a.textContent)
     // continuation is omitted (hasContinuation=false); transcript is
     // present (report.transcript is set); analyst is present (readOnly
-    // defaults to false) — same filterNavItems rule FullAnalysisRail
-    // itself applies.
+    // defaults to false) — same buildFullAnalysisNavItems() render
+    // rules FullAnalysisRail itself applies (one registry, both rails).
     expect(labels.some((l) => l.includes('The score'))).toBe(true)
     expect(labels.some((l) => l.includes('Vs. your audit'))).toBe(false)
     expect(labels.some((l) => l.includes('The transcript'))).toBe(true)

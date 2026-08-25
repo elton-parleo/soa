@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
 
 import FullAnalysisReportGate from '../FullAnalysisReportGate.jsx'
@@ -366,5 +366,150 @@ describe('FullAnalysisReportGate — exposure widget (1b/1c)', () => {
 
     await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
     expect(screen.getAllByText('$0').length).toBeGreaterThan(0)
+  })
+})
+
+// ─── fix/full-analysis-rail-nav ────────────────────────────────────────────
+//
+// Mismatch found live: the rail's "TrueSync" item, and FixableHook.jsx's
+// own "See the two fixes" link (shared with lite, always href="#truesync"),
+// both pointed at #truesync — FullAnalysisDarkBand.jsx (the sibling of
+// lite's own id="truesync" TrueSyncBand.jsx) never carried that id. A
+// dead link: clicking either did nothing. Fixed by moving every nav
+// item/section id onto one registry (fullAnalysisNav.js) instead of three
+// hand-kept-in-sync places (a nav-item list, a score-text switch, a
+// render-condition predicate).
+function railNavLinks(container) {
+  const heading = screen.getByText('IN THIS REPORT')
+  const list = heading.closest('div').nextElementSibling
+  return [...list.querySelectorAll('a')]
+}
+
+describe('FullAnalysisReportGate — rail nav resolves to real sections (fix/full-analysis-rail-nav)', () => {
+  it('every href="#..." on the page resolves to exactly one element with that id — no dead links', async () => {
+    api.getFullAnalysisReport.mockResolvedValue(FULL_REPORT)
+    const { container } = render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+
+    const hashLinks = [...container.querySelectorAll('a[href^="#"]')]
+    expect(hashLinks.length).toBeGreaterThan(0)
+    for (const link of hashLinks) {
+      const id = link.getAttribute('href').slice(1)
+      expect(container.querySelectorAll(`#${id}`).length, `href="#${id}" should resolve to exactly one element`).toBe(1)
+    }
+  })
+
+  it('"TrueSync" resolves to a real section — the exact dead link found live', async () => {
+    api.getFullAnalysisReport.mockResolvedValue(FULL_REPORT)
+    const { container } = render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+
+    expect(document.getElementById('truesync')).not.toBeNull()
+    const trueSyncLinks = [...container.querySelectorAll('a[href="#truesync"]')]
+    expect(trueSyncLinks.length).toBeGreaterThan(0)
+    expect(screen.getByText('See the two fixes').closest('a')).toHaveAttribute('href', '#truesync')
+  })
+
+  it('every rendered rail item is a real, unique section id — registry entries and DOM ids can never diverge', async () => {
+    api.getFullAnalysisReport.mockResolvedValue(FULL_REPORT)
+    const { container } = render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+
+    const links = railNavLinks(container)
+    expect(links.length).toBeGreaterThan(0)
+    for (const link of links) {
+      const id = link.getAttribute('href').slice(1)
+      expect(container.querySelectorAll(`#${id}`).length).toBe(1)
+    }
+  })
+
+  it('desktop rail and its phone replacement (Sections sheet) list exactly the same ids, in the same order', async () => {
+    api.getFullAnalysisReport.mockResolvedValue(FULL_REPORT)
+    const { container } = render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+
+    const railIds = railNavLinks(container).map((a) => a.getAttribute('href').slice(1))
+
+    // The sheet is closed by default — open it before reading its items.
+    fireEvent.click(screen.getByText('Sections'))
+    const sheetIds = [...container.querySelectorAll('.lite-report-mobile-sheet-item')].map((a) => a.getAttribute('href').slice(1))
+    expect(sheetIds).toEqual(railIds)
+  })
+})
+
+describe('FullAnalysisReportGate — conditional sections omit their nav item, never a dead link', () => {
+  it('no transcript in the payload -> no "The transcript" rail item', async () => {
+    // FULL_REPORT carries no `transcript` key at all.
+    api.getFullAnalysisReport.mockResolvedValue(FULL_REPORT)
+    render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+    expect(screen.queryByText('The transcript')).not.toBeInTheDocument()
+  })
+
+  it('no discovery_trace on scan -> no "Discovery" rail item, no #discovery anchor', async () => {
+    api.getFullAnalysisReport.mockResolvedValue({ ...FULL_REPORT, scan: { ...FULL_REPORT.scan, discovery_trace: null } })
+    render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+    expect(screen.queryByText('Discovery')).not.toBeInTheDocument()
+    expect(document.getElementById('discovery')).toBeNull()
+  })
+
+  it('an empty platform_matrix -> no "Platform matrix" rail item, no #matrix anchor', async () => {
+    api.getFullAnalysisReport.mockResolvedValue({ ...FULL_REPORT, platform_matrix: [] })
+    render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+    expect(screen.queryByText('Platform matrix')).not.toBeInTheDocument()
+    expect(document.getElementById('matrix')).toBeNull()
+  })
+
+  it('no evidence exemplar -> no "Evidence" rail item, no #evidence anchor', async () => {
+    api.getFullAnalysisReport.mockResolvedValue({ ...FULL_REPORT, evidence: null })
+    render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+    expect(screen.queryByText('Evidence')).not.toBeInTheDocument()
+    expect(document.getElementById('evidence')).toBeNull()
+  })
+
+  it('no continuation -> unaffected (already worked before this fix, still true after)', async () => {
+    api.getFullAnalysisReport.mockResolvedValue(FULL_REPORT)
+    render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+    expect(screen.queryByText('Vs. your audit')).not.toBeInTheDocument()
+    expect(document.getElementById('continuation')).toBeNull()
+  })
+})
+
+describe('FullAnalysisReportGate — hash deep-link scrolls to the section on mount', () => {
+  const originalHash = window.location.hash
+
+  afterEach(() => {
+    window.location.hash = originalHash
+  })
+
+  it('a URL carrying #tv scrolls the True Value section into view once the report has rendered', async () => {
+    window.location.hash = '#tv'
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+
+    api.getFullAnalysisReport.mockResolvedValue(FULL_REPORT)
+    render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+
+    expect(scrollIntoView).toHaveBeenCalled()
+    // Called on the #tv element specifically, not just "some" element.
+    const tvEl = document.getElementById('tv')
+    expect(scrollIntoView.mock.instances.some((el) => el === tvEl)).toBe(true)
+  })
+
+  it('no hash in the URL -> no scroll call at all', async () => {
+    window.location.hash = ''
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+
+    api.getFullAnalysisReport.mockResolvedValue(FULL_REPORT)
+    render(<FullAnalysisReportGate cycleCode="new-cycle" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+
+    expect(scrollIntoView).not.toHaveBeenCalled()
   })
 })

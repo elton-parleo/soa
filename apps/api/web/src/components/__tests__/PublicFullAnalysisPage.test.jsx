@@ -7,7 +7,7 @@
  */
 import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
 
 import PublicFullAnalysisPage from '../PublicFullAnalysisPage.jsx'
@@ -82,6 +82,33 @@ describe('PublicFullAnalysisPage — renders the report with no app chrome', () 
     await waitFor(() => expect(screen.getByText('What an agent actually said')).toBeInTheDocument())
     expect(screen.getByText('View coding')).toBeInTheDocument()
     expect(screen.queryByText('View in Response Explorer →')).not.toBeInTheDocument()
+  })
+})
+
+describe('PublicFullAnalysisPage — rail nav (fix/full-analysis-rail-nav, 2e)', () => {
+  it('the TrueSync nav item resolves to a real section on the public route too', async () => {
+    publicFullAnalysisApi.getReport.mockResolvedValue(FULL_REPORT)
+    const { container } = render(<PublicFullAnalysisPage token="tok-123" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+
+    expect(document.getElementById('truesync')).not.toBeNull()
+    expect(container.querySelectorAll('a[href="#truesync"]').length).toBeGreaterThan(0)
+  })
+
+  const originalHash = window.location.hash
+  afterEach(() => { window.location.hash = originalHash })
+
+  it('a shared link carrying a hash (…/fa/{token}#tv) scrolls to that section on load', async () => {
+    window.location.hash = '#tv'
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+
+    publicFullAnalysisApi.getReport.mockResolvedValue(FULL_REPORT)
+    render(<PublicFullAnalysisPage token="tok-123" />)
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+
+    expect(scrollIntoView).toHaveBeenCalled()
+    expect(scrollIntoView.mock.instances.some((el) => el === document.getElementById('tv'))).toBe(true)
   })
 })
 
