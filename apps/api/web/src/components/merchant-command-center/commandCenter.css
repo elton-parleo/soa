@@ -416,6 +416,128 @@ a.mcc-gmc-offer { color: var(--cobalt); }
 .mcc-confirm-note { font-size: .78rem !important; color: var(--ink-faint) !important; }
 .mcc-confirm-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
+/* ── catalog source switcher ─────────────────────────────────────── */
+/* The mock's switcher, restored. A prospect swaps the whole view rather
+   than filtering one, so the control is a real mode switch. */
+.mcc-source-switch {
+  display: flex; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 999px; padding: 3px; flex-wrap: wrap;
+}
+.mcc-source-switch button {
+  border: 0; background: transparent; border-radius: 999px;
+  padding: 7px 14px; font-size: .86rem; font-weight: 500; color: var(--ink-soft);
+  display: flex; align-items: center; gap: 8px;
+}
+.mcc-source-switch button.active { background: var(--ink); color: #F2F3EF; }
+.mcc-source-switch button:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+.mcc-source-switch .tag {
+  font-size: .66rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px;
+}
+.mcc-source-switch .tag.live { background: var(--sync-soft); color: var(--sync); }
+.mcc-source-switch .tag.prospect { background: var(--drift-soft); color: var(--drift); }
+.mcc-source-switch button.active .tag.live { background: rgba(255,255,255,.16); color: #8FE0BC; }
+.mcc-source-switch button.active .tag.prospect { background: rgba(255,255,255,.16); color: #EBC98B; }
+.mcc-source-counts { font-size: .72rem; color: var(--ink-faint); font-weight: 400; }
+.mcc-source-switch button.active .mcc-source-counts { color: rgba(242,243,239,.65); }
+
+/* ── prospect mode ───────────────────────────────────────────────── */
+.mcc-banner.prospect {
+  border: 1px solid #C9CCC2; background: var(--mono-bg); color: var(--ink-soft);
+  margin: 0 0 4px;
+}
+.mcc-prospect-products { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
+.mcc-prospect-product .mcc-panel-head h3 { font-size: 1rem; font-weight: 600; }
+.mcc-prospect-gtin { font-size: .78rem; color: var(--ink-faint); }
+.mcc-prospect-gtin.missing { color: var(--fail); font-style: italic; }
+.mcc-prospect-foot {
+  margin-top: 18px; font-size: .8rem; color: var(--ink-faint); line-height: 1.5; max-width: 70ch;
+}
+
+/* ── observed surfaces ───────────────────────────────────────────── */
+.mcc-surfaces { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.mcc-surface {
+  border: 1px solid var(--line); border-left-width: 3px; border-radius: 8px;
+  padding: 10px 12px; background: var(--panel);
+}
+/* Blocked, absent and disallowed-by-policy are three different facts
+   about three different parties — never one grey badge. */
+.mcc-surface.tone-sync  { border-left-color: var(--sync); }
+.mcc-surface.tone-drift { border-left-color: var(--drift); background: #FEFCF7; }
+.mcc-surface.tone-fail  { border-left-color: var(--fail); background: var(--fail-soft); }
+.mcc-surface.tone-hold  { border-left-color: var(--line-strong); background: var(--mono-bg); }
+
+.mcc-surface-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mcc-surface-name { font-weight: 600; font-size: .86rem; }
+.mcc-surface-meta { font-size: .76rem; color: var(--ink-faint); }
+/* The body size is the finding on a no-structured-data row: a 15 KB
+   "page" and a 1.3 MB page are different stories. */
+.mcc-surface-bytes {
+  font-family: 'IBM Plex Mono', monospace; font-size: .78rem; color: var(--ink-soft);
+  background: var(--mono-bg); border-radius: 4px; padding: 1px 7px;
+}
+.mcc-surface-bytes.emphasis {
+  font-size: .84rem; font-weight: 600; color: var(--ink); background: #fff;
+  border: 1px solid var(--line-strong);
+}
+.mcc-surface-detail { font-size: .79rem; color: var(--ink-soft); margin-top: 5px; line-height: 1.45; }
+.mcc-surface-detail.error { color: var(--fail); }
+.mcc-surface-detail.redirect { color: var(--drift); }
+.mcc-surface-url { margin-top: 5px; }
+.mcc-surface-url a { font-size: .72rem; color: var(--ink-faint); word-break: break-all; }
+.mcc-surface-url a:hover { color: var(--cobalt); }
+.mcc-surface-robots-toggle {
+  margin-left: auto; border: 1px solid var(--line-strong); background: var(--panel);
+  border-radius: 999px; padding: 3px 10px; font-size: .74rem; color: var(--ink-soft);
+}
+.mcc-surface-robots-toggle:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+
+/* ── insufficient surfaces ───────────────────────────────────────── */
+/* Its own state, never rendered as zero-findings-implies-agreement. */
+.mcc-insufficient {
+  border: 1px dashed var(--line-strong); background: var(--mono-bg);
+  border-radius: 8px; padding: 12px 14px; font-size: .85rem;
+}
+.mcc-insufficient strong { display: block; color: var(--ink); margin-bottom: 4px; }
+.mcc-insufficient .detail { color: var(--ink-soft); font-size: .79rem; line-height: 1.45; }
+
+/* ── surface-vs-surface findings ─────────────────────────────────── */
+/* Neither column is styled as correct: there is no master here. */
+.mcc-kv-surfaces .mcc-val.neutral {
+  color: var(--ink); background: var(--mono-bg); border-radius: 4px; padding: 1px 6px;
+}
+.mcc-kv-surfaces .mcc-surface-name { font-size: .78rem; color: var(--ink-soft); font-weight: 500; }
+.mcc-kv-surfaces tr.finding-identifier .field { color: var(--fail); }
+.mcc-finding-note {
+  font-size: .68rem; font-weight: 400; color: var(--fail); text-transform: uppercase;
+  letter-spacing: .04em; margin-top: 2px;
+}
+
+/* ── agent access ────────────────────────────────────────────────── */
+.mcc-robots {
+  margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px;
+}
+.mcc-robots-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.mcc-robots-title { font-size: .76rem; font-weight: 600; color: var(--ink-soft); }
+.mcc-robots-table { width: 100%; border-collapse: collapse; font-size: .76rem; }
+.mcc-robots-table th {
+  text-align: left; font-size: .66rem; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-faint); padding: 4px 8px 4px 0;
+}
+.mcc-robots-table td { padding: 4px 8px 4px 0; border-top: 1px solid var(--line); vertical-align: top; }
+.mcc-robots-role { color: var(--ink-faint); }
+.mcc-robots-rule { color: var(--ink-soft); font-size: .72rem; }
+.mcc-robots-state {
+  font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+}
+.mcc-robots-state.tone-sync { color: var(--sync); }
+.mcc-robots-state.tone-fail { color: var(--fail); }
+.mcc-robots-state.tone-drift { color: var(--drift); }
+.mcc-robots-state.tone-hold { color: var(--ink-faint); }
+.mcc-robots-divergence {
+  margin: 8px 0 0; padding-left: 16px; font-size: .74rem; color: var(--drift); line-height: 1.5;
+}
+
 /* ── stale records ───────────────────────────────────────────────── */
 /* Greyed as a whole: these describe a superseded artifact and count
    towards nothing. */

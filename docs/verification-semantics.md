@@ -102,13 +102,126 @@ same mistake in the other direction. The rule:
 | condition | verdict |
 |---|---|
 | `error` is set | failed |
-| `outcome` ∈ {`fetch_failed`, `failed`, `error`, `timeout`, `publish_failed`, `skipped`, `not_found`} | failed |
+| `outcome` ∈ {`fetch_failed`, `failed`, `error`, `timeout`, `publish_failed`, `skipped`, `not_found`, `blocked_for_agents`, `robots_disallowed`} | failed |
 | `outcome` is `ok`, or absent (legacy records) | succeeded |
 | `outcome` unrecognised, **and** the record carries a comparison result (findings, or a boolean `integrity`) | succeeded |
 | `outcome` unrecognised with nothing to show for it | failed |
 
 The last row keeps the principle: an unfamiliar outcome with no
 comparison behind it is an absence, not a pass.
+
+`blocked_for_agents` and `robots_disallowed` are named explicitly rather
+than left to that catch-all. The verifier now fetches through the same
+platform client the prospect ingest uses, so it can be turned away by our
+own storefront's edge — a CDN rule, a rate limit — and that is a probe
+that did not succeed, not a listing with zero drift. It belongs in
+dimension 4, named, with the reason the fetcher gave.
+
+#### 2b. Prospect drift — *surface versus surface*
+
+A prospect is a brand we have no authorization to publish for. There is
+no master: we never published their catalogue, so nothing authoritative
+exists to measure a live page against. What exists instead is several
+surfaces describing the same physical product, and the question worth
+asking is how far they disagree with **each other**.
+
+That is a different measurement, so it wears a different method:
+`prospect_fetch`, added to `truesync_verifications.method` by migration
+`e4c9a17b3d52`. **It must never be `fetch_probe`.** Dimension 2 above is
+defined as the findings of the newest fresh parseable `fetch_probe`
+record; a surface-vs-surface observation carrying that method name would
+become eligible to answer a question about one of our own listings, which
+is the cross-contamination this whole document exists to prevent.
+
+Prospect rows therefore contribute to **no** dimension of a cell. They
+carry `listing_id = NULL` — a prospect is not one of our listings — and
+`record_ref` of the form `prospect:<brand>:<product>`. They are read by
+`GET /api/truesync/prospects/{slug}/drift`, never by the cell grid.
+
+Findings mirror dimension 2's schema field-for-field, with the
+expected/observed pair replaced by two named surfaces, because nothing
+here knows which side is right:
+
+| fetch_probe finding | prospect_fetch finding |
+|---|---|
+| `variant_key` | `variant_key` |
+| `field` | `field` |
+| `expected` | `surface_a` + `value_a` |
+| `observed` | `surface_b` + `value_b` |
+
+`field` is one of `title`, `gtin`, `gtin_missing`, `price`, `currency`,
+`availability`, `member_price`. `price` reports the **spread** — the
+cheapest surface against the dearest — rather than a pairwise walk.
+`gtin_missing` is a first-class finding rather than an alignment problem
+worked around: a surface that omits the identifier is the one an agent
+trips over first.
+
+The comparison's own `outcome` is `ok`, `drift_detected`, or
+`insufficient_surfaces`. That third value carries the same weight as
+`null` does in dimension 2: **fewer than two readable surfaces is not
+agreement.** One surface cannot disagree with itself, and a run that
+fetched one page and found nothing to report has measured nothing.
+
+##### Per-surface outcomes
+
+A prospect's surfaces belong to other people, and they answer a declared
+crawler very differently from a bare HTTP client. Fetching goes through
+the vendored Agent Scan fetcher (`truesync/vendored/fetcher.py`), which
+declares itself, honours robots, waits between requests, retries a
+429/403/5xx ladder, and recognises a challenge interstitial. Each surface
+records one of:
+
+| outcome | meaning | readable? |
+|---|---|---|
+| `fetched` | a real page came back; extraction decides what is in it | yes |
+| `no_structured_data` | **we fetched a real page and it carried no JSON-LD** | no |
+| `blocked_for_agents` | the surface is up and declined to serve us — challenge interstitial, 403/429, or a 2xx body too short to be a page | no |
+| `robots_disallowed` | robots.txt disallows this path; we did not fetch it | no |
+| `parse_failed` | JSON-LD was present but described no product | no |
+| `fetch_failed` | the page did not load — DNS, timeout, 404/410, 5xx, SSRF guard, redirect loop | no |
+
+**`no_structured_data` and `blocked_for_agents` are the distinction this
+vocabulary exists for.** The first is the most valuable finding a prospect
+ingest can make: a storefront that serves agents nothing. The second is a
+fact about how we asked, not about their markup. Before the platform
+fetcher both arrived as "no structured data", and a demo row could not
+tell you which one it was looking at.
+
+`robots_disallowed` is a policy finding rather than a failure — the
+surface published a rule and we followed it — and it is likewise not
+evidence about their markup.
+
+Every unreadable outcome, `blocked_for_agents` and `robots_disallowed`
+included, counts toward `insufficient_surfaces`. They are more
+informative than an unreachable page, but they carry no opinion about the
+product, and a comparison with nothing to compare has measured nothing.
+
+Each surface also records what the fetcher saw — `http_status`,
+`final_url`, `bytes`, `attempts`, `redirect_chain`, `user_agent` — under
+`observed.surfaces[].transport`. "403 after 3 attempts" is the evidence
+behind a blocked row, and without it the row is an assertion.
+
+##### Agent access policy
+
+Each surface also carries `observed.surfaces[].robots_policy`: what that
+domain's robots.txt says to the six named AI agents — GPTBot,
+OAI-SearchBot, ChatGPT-User, ClaudeBot, PerplexityBot, Google-Extended —
+for the site root and for that surface's own path, plus any divergence
+between an agent's named group and the `*` default.
+
+It costs no extra request: robots.txt is already fetched for our own
+politeness check, and this re-reads the same parsed rules through the
+vendored Agent Access Matrix.
+
+**It is an independent question from every other outcome on the row.** A
+surface can serve us a perfect page and still be closed to every agent a
+shopper would actually use; it can turn us away while welcoming them. A
+retailer blocking GPTBot and ClaudeBot on its product paths will not be
+found by a shopping agent however good its markup is, which makes this
+the finding most likely to explain the rest of the row.
+
+States are `allowed`, `blocked`, `partial`, or `unknown`. `unknown` means
+robots.txt could not be read — never a guess in either direction.
 
 ### 3. Surface acceptance — *their opinion*
 

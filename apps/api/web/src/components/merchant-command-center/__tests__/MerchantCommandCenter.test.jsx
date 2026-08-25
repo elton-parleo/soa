@@ -41,6 +41,10 @@ vi.mock('../../../truesyncApi.js', async (importOriginal) => {
       getMerchantSchemaOrg: vi.fn(),
       getListing: vi.fn(),
       getVerifications: vi.fn(),
+      // Added with the prospect view; the page loads the list alongside
+      // the live merchant, so every page-level test needs it stubbed.
+      getProspects: vi.fn(),
+      getProspectDrift: vi.fn(),
     },
     fetchAllVerifications: vi.fn(),
   }
@@ -66,6 +70,7 @@ function mockHappyPath() {
     Promise.resolve(listings[String(id)]))
   truesyncApi.getVerifications.mockResolvedValue([])
   fetchAllVerifications.mockResolvedValue({})
+  truesyncApi.getProspects.mockResolvedValue({ prospects: [] })
 }
 
 beforeEach(() => { vi.clearAllMocks() })

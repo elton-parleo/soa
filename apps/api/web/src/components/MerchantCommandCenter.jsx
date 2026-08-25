@@ -6,12 +6,14 @@ import SyncMatrix from './merchant-command-center/SyncMatrix.jsx'
 import ListingDrawer from './merchant-command-center/ListingDrawer.jsx'
 import SyncRulesTab from './merchant-command-center/SyncRulesTab.jsx'
 import DrawerErrorBoundary from './merchant-command-center/DrawerErrorBoundary.jsx'
+import CatalogSourceSwitcher from './merchant-command-center/CatalogSourceSwitcher.jsx'
+import ProspectView from './merchant-command-center/ProspectView.jsx'
 import {
   orderChannels, channelImplementation, isMutedImplementation,
   latestPublicationByCell, buildCatalogRows, relativeTime, absoluteTime,
 } from './merchant-command-center/truesyncDerive.js'
 import {
-  aggregateCell, summarize, ACCEPTANCE,
+  aggregateCell, summarize, aggregateProspectProduct, summarizeProspect, ACCEPTANCE,
 } from './merchant-command-center/verificationModel.js'
 import './merchant-command-center/commandCenter.css'
 
@@ -66,6 +68,15 @@ export default function MerchantCommandCenter({ onNavigate }) {
   const [verificationsByCell, setVerificationsByCell] = useState({})
   const drawerRef = useRef(null)
 
+  // Catalog source. null = the live merchant (the sync matrix and the
+  // whole cell model); a slug = a prospect, which is a different view
+  // entirely because nothing about a prospect publishes.
+  const [prospects,      setProspects]      = useState([])
+  const [prospectSlug,   setProspectSlug]   = useState(null)
+  const [prospectDrift,  setProspectDrift]  = useState(null)
+  const [prospectLoading, setProspectLoading] = useState(false)
+  const [prospectError,  setProspectError]  = useState(null)
+
   const pushToast = useCallback((kind, message) => {
     const id = `${Date.now()}-${Math.random()}`
     setToasts((list) => [...list, { id, kind, message }])
@@ -86,6 +97,20 @@ export default function MerchantCommandCenter({ onNavigate }) {
     // The brand, channel and publication reads are independent; the
     // catalog needs the brand's merchant_slug, and each listing's
     // canonical record needs the catalog. Hence two waves.
+    // The prospect list is fetched alongside, and its failure is not
+    // allowed to take the page down: prospects are an additional view,
+    // not a prerequisite for the live merchant's.
+    // Promise.resolve() so that even a synchronous throw here — a
+    // stubbed or misconfigured client — cannot take down the live
+    // merchant's view, which does not depend on this at all.
+    Promise.resolve()
+      .then(() => truesyncApi.getProspects({ signal }))
+      .then((data) => {
+        if (signal?.aborted) return
+        setProspects(Array.isArray(data?.prospects) ? data.prospects : [])
+      })
+      .catch(() => { if (!signal?.aborted) setProspects([]) })
+
     return Promise.all([
       truesyncApi.getActiveBrand({ signal }),
       truesyncApi.getChannels({ signal }),
@@ -144,6 +169,28 @@ export default function MerchantCommandCenter({ onNavigate }) {
     return () => controller.abort()
   }, [load])
 
+  // Prospect drift, loaded on selection rather than up front: it is a
+  // per-prospect report and the live merchant's view never needs it.
+  useEffect(() => {
+    if (prospectSlug == null) {
+      setProspectDrift(null)
+      setProspectError(null)
+      return
+    }
+    const controller = new AbortController()
+    setProspectLoading(true)
+    setProspectError(null)
+    truesyncApi.getProspectDrift(prospectSlug, { signal: controller.signal })
+      .then((data) => { if (!controller.signal.aborted) setProspectDrift(data) })
+      .catch((err) => {
+        if (controller.signal.aborted) return
+        setProspectDrift(null)
+        setProspectError(err.message || 'Prospect drift could not be loaded')
+      })
+      .finally(() => { if (!controller.signal.aborted) setProspectLoading(false) })
+    return () => controller.abort()
+  }, [prospectSlug])
+
   // ─── Derived ───────────────────────────────────────────────────────
   const channelState = useMemo(() => {
     const out = {}
@@ -178,6 +225,17 @@ export default function MerchantCommandCenter({ onNavigate }) {
   }, [rows, channels, cellFor])
 
   const stats = useMemo(() => summarize(cells), [cells])
+
+  // Prospect data goes through the model's own pure functions and is
+  // summarized separately — it contributes nothing to `stats` above,
+  // which is the live merchant's and only the live merchant's.
+  const prospectProducts = useMemo(
+    () => (prospectDrift?.products || []).map(aggregateProspectProduct),
+    [prospectDrift],
+  )
+  const prospectTotals = useMemo(() => summarizeProspect(prospectProducts), [prospectProducts])
+  const activeProspect = prospects.find((p) => p.slug === prospectSlug) || null
+  const inProspectMode = prospectSlug != null
 
   const accent = brand?.site?.primary_color || null
   const selectedRow = rows.find((r) => r.listingId === selectedId) || null
@@ -367,6 +425,23 @@ export default function MerchantCommandCenter({ onNavigate }) {
               </div>
             </div>
 
+            {prospects.length > 0 && (
+              <CatalogSourceSwitcher
+                brandName={brand?.site?.display_name}
+                prospects={prospects}
+                activeSlug={prospectSlug}
+                onSelect={(slug) => {
+                  setProspectSlug(slug)
+                  setSelectedId(null)   // the drawer belongs to the matrix
+                }}
+              />
+            )}
+
+            {/* The live merchant's counts are hidden in prospect mode
+                rather than recomputed: they describe cells that this
+                view does not show, and prospect data contributes to
+                none of them. */}
+            {!inProspectMode && (
             <div className="mcc-context-meta">
               {/* Every number here comes from summarize(). The four
                   dimensions are reported separately and never summed
@@ -426,9 +501,39 @@ export default function MerchantCommandCenter({ onNavigate }) {
                 last verified: {stats.lastVerifiedAt ? relativeTime(stats.lastVerifiedAt) : 'n/a'}
               </span>
             </div>
+            )}
+
+            {inProspectMode && activeProspect && (
+              <div className="mcc-context-meta">
+                <span>
+                  <strong>{activeProspect.products_observed}</strong> of{' '}
+                  {activeProspect.products_configured} products observed
+                </span>
+                <span>·</span>
+                <span><strong>{activeProspect.observations_total}</strong> observations</span>
+                {activeProspect.placeholders > 0 && (
+                  <>
+                    <span>·</span>
+                    <span title="Configured products with no real observation behind them yet">
+                      <strong>{activeProspect.placeholders}</strong> placeholder
+                      {activeProspect.placeholders === 1 ? '' : 's'}
+                    </span>
+                  </>
+                )}
+                <span>·</span>
+                <span style={{ color: 'var(--ink-faint)' }}>
+                  last observed:{' '}
+                  {activeProspect.last_observed_at
+                    ? relativeTime(activeProspect.last_observed_at)
+                    : 'never'}
+                </span>
+              </div>
+            )}
 
             <div className="mcc-spacer" />
 
+            {!inProspectMode && (
+            <>
             <button
               className="mcc-btn"
               onClick={handleVerifyAll}
@@ -448,6 +553,8 @@ export default function MerchantCommandCenter({ onNavigate }) {
                 ? <><span className="mcc-spinner" /> Refreshing…</>
                 : 'Refresh Google diagnostics'}
             </button>
+            </>
+            )}
           </div>
 
           {loadError && (
@@ -459,6 +566,7 @@ export default function MerchantCommandCenter({ onNavigate }) {
             </div>
           )}
 
+          {!inProspectMode && (
           <nav className="mcc-tabs">
             <button
               className={tab === 'catalog' ? 'active' : ''}
@@ -473,11 +581,46 @@ export default function MerchantCommandCenter({ onNavigate }) {
               Sync rules
             </button>
           </nav>
+          )}
 
           <main className="mcc-main">
-            {loading && <div className="mcc-loading">Loading TrueSync catalog…</div>}
+            {/* ── Prospect mode ──────────────────────────────────── */}
+            {inProspectMode && (
+              <>
+                {prospectLoading && (
+                  <div className="mcc-loading">Loading prospect observations…</div>
+                )}
 
-            {!loading && !loadError && rows.length === 0 && (
+                {!prospectLoading && prospectError && (
+                  <div className="mcc-banner error" role="alert">
+                    <span>
+                      <strong>Prospect observations could not be loaded.</strong> {prospectError}
+                    </span>
+                    <button
+                      className="mcc-btn"
+                      onClick={() => setProspectSlug((slug) => slug)}
+                    >
+                      Back to live merchant
+                    </button>
+                  </div>
+                )}
+
+                {!prospectLoading && !prospectError && prospectDrift && (
+                  <ProspectView
+                    prospect={prospectDrift}
+                    products={prospectProducts}
+                    totals={prospectTotals}
+                  />
+                )}
+              </>
+            )}
+
+            {/* ── Live merchant ──────────────────────────────────── */}
+            {!inProspectMode && loading && (
+              <div className="mcc-loading">Loading TrueSync catalog…</div>
+            )}
+
+            {!inProspectMode && !loading && !loadError && rows.length === 0 && (
               <div className="mcc-panel" style={{ padding: '60px 20px', textAlign: 'center' }}>
                 <div style={{ fontWeight: 600, marginBottom: 6 }}>No listings published yet</div>
                 <div className="mcc-empty">
@@ -486,7 +629,7 @@ export default function MerchantCommandCenter({ onNavigate }) {
               </div>
             )}
 
-            {!loading && rows.length > 0 && tab === 'catalog' && (
+            {!inProspectMode && !loading && rows.length > 0 && tab === 'catalog' && (
               <>
                 <div className="mcc-stats">
                   <div className="mcc-stat">
@@ -599,7 +742,7 @@ export default function MerchantCommandCenter({ onNavigate }) {
               </>
             )}
 
-            {!loading && rows.length > 0 && tab === 'rules' && (
+            {!inProspectMode && !loading && rows.length > 0 && tab === 'rules' && (
               <SyncRulesTab
                 rows={rows}
                 channels={channels}

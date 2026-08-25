@@ -1,0 +1,564 @@
+{
+  "slug": "pampers",
+  "prospect": "Pampers",
+  "products": [
+    {
+      "product_key": "pampers-swaddlers-diapers-size-1-198-count",
+      "product_label": "Pampers Swaddlers Diapers Size 1, 198 Count",
+      "configured_surfaces": [
+        "pampers.com",
+        "walmart.com"
+      ],
+      "observed": true,
+      "observed_at": "2026-08-25T21:45:47.734103+00:00",
+      "verification_id": 83,
+      "gtin": "037000863403",
+      "drift": {
+        "outcome": "insufficient_surfaces",
+        "findings": [],
+        "variant_key": "pampers-swaddlers-diapers-size-1-198-count",
+        "surfaces_read": 1,
+        "surfaces_total": 2,
+        "surface_outcomes": {
+          "pampers.com": "ok",
+          "walmart.com": "no_structured_data"
+        }
+      },
+      "surfaces": [
+        {
+          "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+          "error": null,
+          "outcome": "ok",
+          "summary": {
+            "gtin": "037000863403",
+            "brand": null,
+            "price": "9.97",
+            "title": "Preemie",
+            "currency": "usd",
+            "image_count": 1,
+            "availability": "in_stock",
+            "member_prices": [],
+            "description_length": 5
+          },
+          "surface": "pampers.com",
+          "transport": {
+            "bytes": 897075,
+            "attempts": 1,
+            "final_url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+            "user_agent": "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ParleoAuditBot/1.0; +https://bots.parleo.io",
+            "http_status": 200,
+            "redirect_chain": [],
+            "retry_after_seen": null
+          },
+          "raw_jsonld": [
+            "[18 JSON-LD blocks trimmed for fixture]"
+          ],
+          "robots_policy": {
+            "path": "/en-us/products/pampers-swaddlers-diapers",
+            "agents": [
+              {
+                "role": "Model training",
+                "root": "allowed",
+                "rule": "Allow: /",
+                "agent": "GPTBot",
+                "platform": "OpenAI",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "ChatGPT search index",
+                "root": "allowed",
+                "rule": "Allow: /",
+                "agent": "OAI-SearchBot",
+                "platform": "OpenAI",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "On-demand user fetches",
+                "root": "allowed",
+                "rule": "Allow: /",
+                "agent": "ChatGPT-User",
+                "platform": "OpenAI",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "Crawling",
+                "root": "allowed",
+                "rule": "Allow: /",
+                "agent": "ClaudeBot",
+                "platform": "Anthropic",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "Search index",
+                "root": "allowed",
+                "rule": "Allow: /",
+                "agent": "PerplexityBot",
+                "platform": "Perplexity",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "Gemini/AI training control",
+                "root": "allowed",
+                "rule": "Allow: /",
+                "agent": "Google-Extended",
+                "platform": "Google",
+                "product_pages": "allowed"
+              }
+            ],
+            "domain": "www.pampers.com",
+            "divergence": [],
+            "robots_readable": true
+          }
+        },
+        {
+          "url": "https://www.walmart.com/ip/Pampers-Swaddlers-Diapers-Size-1-198-Count-Select-for-More-Options/941540514",
+          "error": null,
+          "outcome": "no_structured_data",
+          "summary": {},
+          "surface": "walmart.com",
+          "transport": {
+            "bytes": 15195,
+            "attempts": 2,
+            "final_url": "https://www.walmart.com/blocked?url=L2lwL1BhbXBlcnMtU3dhZGRsZXJzLURpYXBlcnMtU2l6ZS0xLTE5OC1Db3VudC1TZWxlY3QtZm9yLU1vcmUtT3B0aW9ucy85NDE1NDA1MTQ=&uuid=52b404da-a0ce-11f1-a3a7-98a00f42c79f&vid=&g=b",
+            "user_agent": "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ParleoAuditBot/1.0; +https://bots.parleo.io",
+            "http_status": 200,
+            "redirect_chain": [
+              "https://www.walmart.com/ip/Pampers-Swaddlers-Diapers-Size-1-198-Count-Select-for-More-Options/941540514"
+            ],
+            "retry_after_seen": null
+          },
+          "raw_jsonld": [],
+          "robots_policy": {
+            "path": "/ip/Pampers-Swaddlers-Diapers-Size-1-198-Count-Select-for-More-Options/941540514",
+            "agents": [
+              {
+                "role": "Model training",
+                "root": "allowed",
+                "rule": null,
+                "agent": "GPTBot",
+                "platform": "OpenAI",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "ChatGPT search index",
+                "root": "allowed",
+                "rule": null,
+                "agent": "OAI-SearchBot",
+                "platform": "OpenAI",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "On-demand user fetches",
+                "root": "allowed",
+                "rule": null,
+                "agent": "ChatGPT-User",
+                "platform": "OpenAI",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "Crawling",
+                "root": "allowed",
+                "rule": null,
+                "agent": "ClaudeBot",
+                "platform": "Anthropic",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "Search index",
+                "root": "allowed",
+                "rule": null,
+                "agent": "PerplexityBot",
+                "platform": "Perplexity",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "Gemini/AI training control",
+                "root": "allowed",
+                "rule": null,
+                "agent": "Google-Extended",
+                "platform": "Google",
+                "product_pages": "allowed"
+              }
+            ],
+            "domain": "www.walmart.com",
+            "divergence": [],
+            "robots_readable": true
+          }
+        }
+      ]
+    },
+    {
+      "product_key": "pampers-swaddlers-diapers-size-3-168-count",
+      "product_label": "Pampers Swaddlers Diapers Size 3, 168 Count",
+      "configured_surfaces": [
+        "pampers.com",
+        "amazon.com"
+      ],
+      "observed": true,
+      "observed_at": "2026-08-25T21:45:47.734103+00:00",
+      "verification_id": 84,
+      "gtin": "037000863403",
+      "drift": {
+        "outcome": "insufficient_surfaces",
+        "findings": [],
+        "variant_key": "pampers-swaddlers-diapers-size-3-168-count",
+        "surfaces_read": 1,
+        "surfaces_total": 2,
+        "surface_outcomes": {
+          "amazon.com": "no_structured_data",
+          "pampers.com": "ok"
+        }
+      },
+      "surfaces": [
+        {
+          "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+          "error": null,
+          "outcome": "ok",
+          "summary": {
+            "gtin": "037000863403",
+            "brand": null,
+            "price": "9.97",
+            "title": "Preemie",
+            "currency": "usd",
+            "image_count": 1,
+            "availability": "in_stock",
+            "member_prices": [],
+            "description_length": 5
+          },
+          "surface": "pampers.com",
+          "transport": {
+            "bytes": 897075,
+            "attempts": 1,
+            "final_url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+            "user_agent": "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ParleoAuditBot/1.0; +https://bots.parleo.io",
+            "http_status": 200,
+            "redirect_chain": [],
+            "retry_after_seen": null
+          },
+          "raw_jsonld": [
+            "[18 JSON-LD blocks trimmed for fixture]"
+          ],
+          "robots_policy": {
+            "path": "/en-us/products/pampers-swaddlers-diapers",
+            "agents": [
+              {
+                "role": "Model training",
+                "root": "allowed",
+                "rule": "Allow: /",
+                "agent": "GPTBot",
+                "platform": "OpenAI",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "ChatGPT search index",
+                "root": "allowed",
+                "rule": "Allow: /",
+                "agent": "OAI-SearchBot",
+                "platform": "OpenAI",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "On-demand user fetches",
+                "root": "allowed",
+                "rule": "Allow: /",
+                "agent": "ChatGPT-User",
+                "platform": "OpenAI",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "Crawling",
+                "root": "allowed",
+                "rule": "Allow: /",
+                "agent": "ClaudeBot",
+                "platform": "Anthropic",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "Search index",
+                "root": "allowed",
+                "rule": "Allow: /",
+                "agent": "PerplexityBot",
+                "platform": "Perplexity",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "Gemini/AI training control",
+                "root": "allowed",
+                "rule": "Allow: /",
+                "agent": "Google-Extended",
+                "platform": "Google",
+                "product_pages": "allowed"
+              }
+            ],
+            "domain": "www.pampers.com",
+            "divergence": [],
+            "robots_readable": true
+          }
+        },
+        {
+          "url": "https://www.amazon.com/Pampers-Swaddlers-Hypoallergenic-Pediatrician-Recommended/dp/B08QY6HT97",
+          "error": null,
+          "outcome": "no_structured_data",
+          "summary": {},
+          "surface": "amazon.com",
+          "transport": {
+            "bytes": 258481,
+            "attempts": 2,
+            "final_url": "https://www.amazon.com/clp/B08QY6HT97",
+            "user_agent": "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ParleoAuditBot/1.0; +https://bots.parleo.io",
+            "http_status": 200,
+            "redirect_chain": [
+              "https://www.amazon.com/Pampers-Swaddlers-Hypoallergenic-Pediatrician-Recommended/dp/B08QY6HT97"
+            ],
+            "retry_after_seen": null
+          },
+          "raw_jsonld": [],
+          "robots_policy": {
+            "path": "/Pampers-Swaddlers-Hypoallergenic-Pediatrician-Recommended/dp/B08QY6HT97",
+            "agents": [
+              {
+                "role": "Model training",
+                "root": "blocked",
+                "rule": "Disallow: /",
+                "agent": "GPTBot",
+                "platform": "OpenAI",
+                "product_pages": "blocked"
+              },
+              {
+                "role": "ChatGPT search index",
+                "root": "blocked",
+                "rule": "Disallow: /",
+                "agent": "OAI-SearchBot",
+                "platform": "OpenAI",
+                "product_pages": "blocked"
+              },
+              {
+                "role": "On-demand user fetches",
+                "root": "blocked",
+                "rule": "Disallow: /",
+                "agent": "ChatGPT-User",
+                "platform": "OpenAI",
+                "product_pages": "blocked"
+              },
+              {
+                "role": "Crawling",
+                "root": "blocked",
+                "rule": "Disallow: /",
+                "agent": "ClaudeBot",
+                "platform": "Anthropic",
+                "product_pages": "blocked"
+              },
+              {
+                "role": "Search index",
+                "root": "blocked",
+                "rule": "Disallow: /",
+                "agent": "PerplexityBot",
+                "platform": "Perplexity",
+                "product_pages": "blocked"
+              },
+              {
+                "role": "Gemini/AI training control",
+                "root": "blocked",
+                "rule": "Disallow: /",
+                "agent": "Google-Extended",
+                "platform": "Google",
+                "product_pages": "blocked"
+              }
+            ],
+            "domain": "www.amazon.com",
+            "divergence": [
+              "robots.txt blocks GPTBot specifically \u2014 the general '*' rule allows it",
+              "robots.txt blocks OAI-SearchBot specifically \u2014 the general '*' rule allows it",
+              "robots.txt blocks ChatGPT-User specifically \u2014 the general '*' rule allows it",
+              "robots.txt blocks ClaudeBot specifically \u2014 the general '*' rule allows it",
+              "robots.txt blocks PerplexityBot specifically \u2014 the general '*' rule allows it",
+              "robots.txt blocks Google-Extended specifically \u2014 the general '*' rule allows it"
+            ],
+            "robots_readable": true
+          }
+        }
+      ]
+    },
+    {
+      "product_key": "pampers-swaddlers-diapers-size-3-136-count",
+      "product_label": "Pampers Swaddlers Diapers Size 3, 136 Count",
+      "configured_surfaces": [
+        "target.com",
+        "amazon.com"
+      ],
+      "observed": true,
+      "observed_at": "2026-08-25T21:45:47.734103+00:00",
+      "verification_id": 85,
+      "gtin": null,
+      "drift": {
+        "outcome": "insufficient_surfaces",
+        "findings": [],
+        "variant_key": "pampers-swaddlers-diapers-size-3-136-count",
+        "surfaces_read": 0,
+        "surfaces_total": 2,
+        "surface_outcomes": {
+          "amazon.com": "no_structured_data",
+          "target.com": "no_structured_data"
+        }
+      },
+      "surfaces": [
+        {
+          "url": "https://www.target.com/p/pampers-swaddlers-active-baby-diapers-enormous-pack-size-3-136ct/-/A-53461407",
+          "error": null,
+          "outcome": "no_structured_data",
+          "summary": {},
+          "surface": "target.com",
+          "transport": {
+            "bytes": 1312508,
+            "attempts": 1,
+            "final_url": "https://www.target.com/p/pampers-swaddlers-active-baby-diapers-enormous-pack-size-3-136ct/-/A-53461407",
+            "user_agent": "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ParleoAuditBot/1.0; +https://bots.parleo.io",
+            "http_status": 200,
+            "redirect_chain": [],
+            "retry_after_seen": null
+          },
+          "raw_jsonld": [],
+          "robots_policy": {
+            "path": "/p/pampers-swaddlers-active-baby-diapers-enormous-pack-size-3-136ct/-/A-53461407",
+            "agents": [
+              {
+                "role": "Model training",
+                "root": "allowed",
+                "rule": null,
+                "agent": "GPTBot",
+                "platform": "OpenAI",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "ChatGPT search index",
+                "root": "allowed",
+                "rule": null,
+                "agent": "OAI-SearchBot",
+                "platform": "OpenAI",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "On-demand user fetches",
+                "root": "allowed",
+                "rule": null,
+                "agent": "ChatGPT-User",
+                "platform": "OpenAI",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "Crawling",
+                "root": "allowed",
+                "rule": null,
+                "agent": "ClaudeBot",
+                "platform": "Anthropic",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "Search index",
+                "root": "allowed",
+                "rule": null,
+                "agent": "PerplexityBot",
+                "platform": "Perplexity",
+                "product_pages": "allowed"
+              },
+              {
+                "role": "Gemini/AI training control",
+                "root": "allowed",
+                "rule": null,
+                "agent": "Google-Extended",
+                "platform": "Google",
+                "product_pages": "allowed"
+              }
+            ],
+            "domain": "www.target.com",
+            "divergence": [],
+            "robots_readable": true
+          }
+        },
+        {
+          "url": "https://www.amazon.com/Pampers-Swaddlers-Diapers-Size-Count/dp/B010OVNAFQ",
+          "error": null,
+          "outcome": "no_structured_data",
+          "summary": {},
+          "surface": "amazon.com",
+          "transport": {
+            "bytes": 263181,
+            "attempts": 2,
+            "final_url": "https://www.amazon.com/clp/B010OVNAFQ",
+            "user_agent": "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ParleoAuditBot/1.0; +https://bots.parleo.io",
+            "http_status": 200,
+            "redirect_chain": [
+              "https://www.amazon.com/Pampers-Swaddlers-Diapers-Size-Count/dp/B010OVNAFQ"
+            ],
+            "retry_after_seen": null
+          },
+          "raw_jsonld": [],
+          "robots_policy": {
+            "path": "/Pampers-Swaddlers-Diapers-Size-Count/dp/B010OVNAFQ",
+            "agents": [
+              {
+                "role": "Model training",
+                "root": "blocked",
+                "rule": "Disallow: /",
+                "agent": "GPTBot",
+                "platform": "OpenAI",
+                "product_pages": "blocked"
+              },
+              {
+                "role": "ChatGPT search index",
+                "root": "blocked",
+                "rule": "Disallow: /",
+                "agent": "OAI-SearchBot",
+                "platform": "OpenAI",
+                "product_pages": "blocked"
+              },
+              {
+                "role": "On-demand user fetches",
+                "root": "blocked",
+                "rule": "Disallow: /",
+                "agent": "ChatGPT-User",
+                "platform": "OpenAI",
+                "product_pages": "blocked"
+              },
+              {
+                "role": "Crawling",
+                "root": "blocked",
+                "rule": "Disallow: /",
+                "agent": "ClaudeBot",
+                "platform": "Anthropic",
+                "product_pages": "blocked"
+              },
+              {
+                "role": "Search index",
+                "root": "blocked",
+                "rule": "Disallow: /",
+                "agent": "PerplexityBot",
+                "platform": "Perplexity",
+                "product_pages": "blocked"
+              },
+              {
+                "role": "Gemini/AI training control",
+                "root": "blocked",
+                "rule": "Disallow: /",
+                "agent": "Google-Extended",
+                "platform": "Google",
+                "product_pages": "blocked"
+              }
+            ],
+            "domain": "www.amazon.com",
+            "divergence": [
+              "robots.txt blocks GPTBot specifically \u2014 the general '*' rule allows it",
+              "robots.txt blocks OAI-SearchBot specifically \u2014 the general '*' rule allows it",
+              "robots.txt blocks ChatGPT-User specifically \u2014 the general '*' rule allows it",
+              "robots.txt blocks ClaudeBot specifically \u2014 the general '*' rule allows it",
+              "robots.txt blocks PerplexityBot specifically \u2014 the general '*' rule allows it",
+              "robots.txt blocks Google-Extended specifically \u2014 the general '*' rule allows it"
+            ],
+            "robots_readable": true
+          }
+        }
+      ]
+    }
+  ],
+  "findings_total": 0
+}

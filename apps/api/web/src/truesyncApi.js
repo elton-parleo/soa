@@ -111,6 +111,17 @@ export const truesyncApi = {
   getPublications: ({ limit = 500, ...opts } = {}) =>
     readJson(`/api/truesync/publications?limit=${limit}`, opts),
 
+  // Prospects — brands we observe but have no authorization to publish
+  // for. Slug-keyed, and config rather than DB rows on the supply side,
+  // so the list is small and cheap.
+  getProspects: (opts) =>
+    readJson('/api/truesync/prospects', opts),
+
+  // The surface-vs-surface drift report for one prospect. Read-only
+  // observation of public surfaces; nothing here publishes.
+  getProspectDrift: (slug, opts) =>
+    readJson(`/api/truesync/prospects/${encodeURIComponent(slug)}/drift`, opts),
+
   // Verification history for one listing on one channel, newest first.
   // There is no bulk form and no all-channels form: the endpoint takes
   // exactly one channel (default merchant_center), so a full matrix is

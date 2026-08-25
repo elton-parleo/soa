@@ -7,24 +7,11 @@ import {
   PUBLISH_STATE, PUBLISH_STATE_LABEL, ACCEPTANCE, ACCEPTANCE_LABEL, ACCEPTANCE_TONE,
   STALE_NOTE,
 } from './verificationModel.js'
+import { text, MasterComparisonTable } from './ComparisonTable.jsx'
 
-/**
- * Renders any API-supplied value as text, or `fallback` when there is
- * nothing to show. Every scalar in this panel goes through it — React
- * throws "Objects are not valid as a React child" the moment a field
- * the API has always sent as a string arrives as an object, and that
- * throw takes the whole panel down.
- */
-function text(value, fallback = '—') {
-  if (value == null || value === '') return fallback
-  const type = typeof value
-  if (type === 'string' || type === 'number' || type === 'boolean') return String(value)
-  try {
-    return JSON.stringify(value)
-  } catch (_) {
-    return fallback
-  }
-}
+// `text` and the master-vs-surface table live in ComparisonTable.jsx,
+// shared with the prospect view — the same finding schema with the
+// expected/observed pair renamed. See that file's docstring.
 
 function ArtifactBlock({ label, value }) {
   if (value == null) return null
@@ -90,30 +77,7 @@ function DriftSection({ cell }) {
           {cell.drift === 0 ? (
             <div className="mcc-empty">Newest verification recorded no drift.</div>
           ) : (
-            <table className="mcc-kv">
-              <thead>
-                <tr>
-                  <th style={{ width: '22%' }}>Field</th>
-                  <th>Variant</th>
-                  <th>Master record</th>
-                  <th>On surface</th>
-                </tr>
-              </thead>
-              <tbody>
-                {probe.findings.map((f, i) => (
-                  <tr key={`${f.field}-${f.variant}-${i}`}>
-                    <td className="field">{text(f.field)}</td>
-                    <td className="mcc-val">{text(f.variant)}</td>
-                    <td><span className="mcc-val good">{text(f.expected)}</span></td>
-                    <td>
-                      {f.observed == null
-                        ? <span className="mcc-val missing">missing</span>
-                        : <span className="mcc-val bad">{text(f.observed)}</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <MasterComparisonTable findings={probe.findings} />
           )}
         </>
       )}

@@ -29,6 +29,13 @@
 export const METHOD_FETCH_PROBE = 'fetch_probe'
 export const METHOD_GMC_DIAGNOSTICS = 'gmc_diagnostics'
 
+// §2b. A surface-vs-surface observation of a brand we cannot publish
+// for. Deliberately its own method: dimension 2 is defined as the
+// findings of the newest fresh parseable `fetch_probe`, and a prospect
+// record carrying that name would become eligible to answer a question
+// about one of our own listings. It contributes to NO cell dimension.
+export const METHOD_PROSPECT_FETCH = 'prospect_fetch'
+
 // `live_fetch` is the older spec's name for the same thing. Accepted so
 // a rename on either side cannot silently route records to the wrong
 // parser.
@@ -210,6 +217,14 @@ export function classifyRecord(record, latestPublishedAt = null) {
 
   if (!record || typeof record !== 'object') {
     return { ...base, kind: 'unreadable', reason: 'record is not an object' }
+  }
+
+  // Prospect observations are recognised so they can be excluded
+  // explicitly rather than falling into 'unreadable' and inflating
+  // dimension 4 — they are not a gap in this page, they simply answer a
+  // different question. See docs/verification-semantics.md §2b.
+  if (method === METHOD_PROSPECT_FETCH) {
+    return { ...base, kind: 'prospect', reason: 'prospect observation — not a cell dimension' }
   }
 
   if (method === METHOD_GMC_DIAGNOSTICS) return classifyAcceptance(record, base)
@@ -404,7 +419,10 @@ export function aggregateCell(publication, records = [], { channelSlug = null } 
 
   // Dimension 4 — observability. Fresh unreadable records only: a stale
   // unreadable record is excluded by freshness like everything else.
+  // 'prospect' is deliberately absent from every dimension above and
+  // from this one — see §2b.
   const unreadable = fresh.filter((c) => c.kind === 'unreadable')
+  const prospectRecords = classified.filter((c) => c.kind === 'prospect')
 
   return {
     channelSlug,
@@ -432,6 +450,10 @@ export function aggregateCell(publication, records = [], { channelSlug = null } 
 
     staleCount: stale.length,
     staleRecords: stale,
+
+    // Surfaced so a stray prospect row on a cell is visible rather than
+    // silently dropped, but counted in no dimension.
+    prospectRecordCount: prospectRecords.length,
 
     records: classified,
     lastVerifiedAt: fresh.length > 0 ? fresh[0].createdAt : null,
@@ -522,4 +544,311 @@ export function summarize(cells = []) {
   }
 
   return totals
+}
+
+// ─── §2b. Prospect drift — surface versus surface ────────────────────
+//
+// A prospect is a brand we have no authorization to publish for. There
+// is no master record, so "drift" here means how far several surfaces
+// disagree with EACH OTHER, and no side is treated as right.
+//
+// This lives in the same module as the cell model, and deliberately not
+// in a parallel one: the freshness and readability rules are the same
+// rules, and the reason this file exists is that the same rule written
+// twice becomes two rules.
+
+export const SURFACE_OUTCOME = {
+  OK: 'ok',
+  NO_STRUCTURED_DATA: 'no_structured_data',
+  BLOCKED_FOR_AGENTS: 'blocked_for_agents',
+  ROBOTS_DISALLOWED: 'robots_disallowed',
+  PARSE_FAILED: 'parse_failed',
+  FETCH_FAILED: 'fetch_failed',
+}
+
+// The canonical doc names the readable outcome `fetched`; the live API
+// emits `ok`. Both are accepted so a rename on either side cannot turn
+// a readable surface into an unknown one. Reported as a mismatch.
+const READABLE_OUTCOMES = new Set([SURFACE_OUTCOME.OK, 'fetched'])
+
+/**
+ * Blocked ≠ absent ≠ disallowed-by-policy. Three different facts about
+ * three different parties, and the whole point of this vocabulary is
+ * that they never collapse into one grey badge:
+ *
+ *   no_structured_data  their markup     — a real page carrying no JSON-LD
+ *   blocked_for_agents  their edge       — up, and declined to serve us
+ *   robots_disallowed   their policy     — a published rule we obeyed
+ *   parse_failed        their data       — JSON-LD present, no product in it
+ *   fetch_failed        the network      — the page did not load
+ */
+export const SURFACE_OUTCOME_META = {
+  ok: {
+    label: 'Read', tone: 'sync',
+    detail: 'Fetched and machine-readable data extracted.',
+  },
+  no_structured_data: {
+    label: 'No structured data', tone: 'drift',
+    detail: 'A real page came back and carried no machine-readable product data.',
+  },
+  blocked_for_agents: {
+    label: 'Blocked for agents', tone: 'fail',
+    detail: 'The surface is up and declined to serve us — a challenge, a 403/429, or a body too short to be a page.',
+  },
+  robots_disallowed: {
+    label: 'Disallowed by robots', tone: 'hold',
+    detail: 'robots.txt disallows this path. We did not fetch it — a policy finding, not a fact about their markup.',
+  },
+  parse_failed: {
+    label: 'Parse failed', tone: 'drift',
+    detail: 'Machine-readable data was present but described no product.',
+  },
+  fetch_failed: {
+    label: 'Fetch failed', tone: 'hold',
+    detail: 'The page did not load.',
+  },
+}
+
+const UNKNOWN_OUTCOME_META = {
+  label: 'Unrecognised outcome', tone: 'hold',
+  detail: 'This page has no rendering for this outcome — it is newer than this build.',
+}
+
+export function surfaceOutcomeMeta(outcome) {
+  if (READABLE_OUTCOMES.has(outcome)) return SURFACE_OUTCOME_META.ok
+  return SURFACE_OUTCOME_META[outcome] || UNKNOWN_OUTCOME_META
+}
+
+export function isSurfaceReadable(outcome) {
+  return READABLE_OUTCOMES.has(outcome)
+}
+
+/**
+ * One observed surface -> everything the row needs, with the transport
+ * evidence kept alongside the verdict.
+ *
+ * The evidence is not decoration. "403 after 3 attempts", or a 15KB body
+ * whose final_url is a /blocked path, is what makes an outcome checkable
+ * rather than an assertion — and on live data today it is the only way
+ * to see that a surface classified `no_structured_data` actually served
+ * a wall. This layer reports both and re-classifies neither: inventing a
+ * verdict the API did not give is the thing the model forbids.
+ */
+export function classifySurface(surface) {
+  const outcome = surface?.outcome ?? null
+  const transport = surface?.transport || {}
+  const redirectChain = Array.isArray(transport.redirect_chain) ? transport.redirect_chain : []
+  const finalUrl = transport.final_url ?? null
+  const requestedUrl = surface?.url ?? null
+
+  return {
+    surface: surface?.surface ?? null,
+    url: requestedUrl,
+    outcome,
+    meta: surfaceOutcomeMeta(outcome),
+    readable: isSurfaceReadable(outcome),
+    error: surface?.error ?? null,
+    summary: surface?.summary && typeof surface.summary === 'object' ? surface.summary : {},
+    jsonLdBlocks: Array.isArray(surface?.raw_jsonld) ? surface.raw_jsonld.length : 0,
+
+    transport: {
+      httpStatus: typeof transport.http_status === 'number' ? transport.http_status : null,
+      bytes: typeof transport.bytes === 'number' ? transport.bytes : null,
+      attempts: typeof transport.attempts === 'number' ? transport.attempts : null,
+      finalUrl,
+      redirectChain,
+      userAgent: transport.user_agent ?? null,
+      retryAfterSeen: transport.retry_after_seen ?? null,
+    },
+
+    // A fetch that ended somewhere other than where it was aimed is
+    // worth saying out loud, whatever outcome the fetcher assigned.
+    redirected: redirectChain.length > 0 || (
+      finalUrl != null && requestedUrl != null && finalUrl !== requestedUrl
+    ),
+
+    robotsPolicy: normaliseRobotsPolicy(surface?.robots_policy),
+  }
+}
+
+export const ROBOTS_STATE = { ALLOWED: 'allowed', BLOCKED: 'blocked', PARTIAL: 'partial', UNKNOWN: 'unknown' }
+
+/**
+ * The per-agent robots table for a surface's domain.
+ *
+ * An independent question from every other outcome on the row: a
+ * surface can serve us a perfect page and still be closed to every
+ * agent a shopper actually uses. `unknown` means robots.txt could not
+ * be read — never a guess in either direction.
+ */
+export function normaliseRobotsPolicy(policy) {
+  if (!policy || typeof policy !== 'object') return null
+
+  const agents = (Array.isArray(policy.agents) ? policy.agents : []).map((a) => ({
+    agent: a?.agent ?? null,
+    platform: a?.platform ?? null,
+    role: a?.role ?? null,
+    root: normaliseRobotsState(a?.root),
+    productPages: normaliseRobotsState(a?.product_pages),
+    rule: a?.rule ?? null,
+  }))
+
+  const blockedAgents = agents.filter(
+    (a) => a.root === ROBOTS_STATE.BLOCKED || a.productPages === ROBOTS_STATE.BLOCKED,
+  )
+
+  return {
+    domain: policy.domain ?? null,
+    path: policy.path ?? null,
+    readable: policy.robots_readable === true,
+    agents,
+    divergence: Array.isArray(policy.divergence) ? policy.divergence : [],
+    blockedCount: blockedAgents.length,
+    agentCount: agents.length,
+    // Only ever true when robots.txt was actually readable — an
+    // unreadable robots.txt is not evidence of openness.
+    closedToAllAgents: policy.robots_readable === true
+      && agents.length > 0 && blockedAgents.length === agents.length,
+  }
+}
+
+function normaliseRobotsState(value) {
+  const state = typeof value === 'string' ? value.toLowerCase() : null
+  return Object.values(ROBOTS_STATE).includes(state) ? state : ROBOTS_STATE.UNKNOWN
+}
+
+export const PROSPECT_OUTCOME = {
+  OK: 'ok',
+  DRIFT_DETECTED: 'drift_detected',
+  INSUFFICIENT_SURFACES: 'insufficient_surfaces',
+}
+
+export const PROSPECT_OUTCOME_META = {
+  ok: { label: 'Surfaces agree', tone: 'sync' },
+  drift_detected: { label: 'Drift detected', tone: 'drift' },
+  insufficient_surfaces: { label: 'Not comparable', tone: 'hold' },
+}
+
+/**
+ * One prospect product -> its comparison verdict and its surfaces.
+ *
+ * `insufficient_surfaces` carries exactly the weight `null` carries in
+ * dimension 2: **fewer than two readable surfaces is not agreement.**
+ * One surface cannot disagree with itself, so `findings: []` under that
+ * outcome means nothing was measured — never that everything matched.
+ */
+export function aggregateProspectProduct(product) {
+  const drift = product?.drift && typeof product.drift === 'object' ? product.drift : {}
+  const surfaces = (Array.isArray(product?.surfaces) ? product.surfaces : []).map(classifySurface)
+
+  const outcome = drift.outcome ?? null
+  const findings = (Array.isArray(drift.findings) ? drift.findings : []).map(normaliseProspectFinding)
+  const insufficient = outcome === PROSPECT_OUTCOME.INSUFFICIENT_SURFACES
+
+  // Prefer the API's own counts; fall back to the surfaces we can see.
+  const surfacesRead = typeof drift.surfaces_read === 'number'
+    ? drift.surfaces_read
+    : surfaces.filter((s) => s.readable).length
+  const surfacesTotal = typeof drift.surfaces_total === 'number'
+    ? drift.surfaces_total
+    : surfaces.length
+
+  return {
+    key: product?.product_key ?? null,
+    label: product?.product_label ?? product?.product_key ?? 'Unnamed product',
+    gtin: product?.gtin ?? null,
+    observed: product?.observed === true,
+    observedAt: product?.observed_at ?? null,
+    verificationId: product?.verification_id ?? null,
+    configuredSurfaces: Array.isArray(product?.configured_surfaces) ? product.configured_surfaces : [],
+
+    outcome,
+    outcomeMeta: PROSPECT_OUTCOME_META[outcome] || { label: 'No comparison', tone: 'hold' },
+    insufficient,
+
+    // null, not 0, when nothing was comparable — the same distinction
+    // dimension 2 draws between "no drift" and "not measured".
+    findingCount: insufficient ? null : findings.length,
+    findings,
+
+    surfacesRead,
+    surfacesTotal,
+    surfaces,
+
+    // The row's most explanatory fact, when it applies: a surface that
+    // served us fine but is closed to every agent a shopper uses.
+    agentBlockedSurfaces: surfaces.filter((s) => s.robotsPolicy?.closedToAllAgents),
+  }
+}
+
+/**
+ * A prospect finding. Mirrors dimension 2's schema field-for-field with
+ * the expected/observed pair replaced by two named surfaces, because
+ * nothing here knows which side is right.
+ */
+export function normaliseProspectFinding(finding) {
+  const f = finding && typeof finding === 'object' ? finding : {}
+  return {
+    variantKey: f.variant_key ?? null,
+    field: f.field ?? null,
+    surfaceA: f.surface_a ?? null,
+    valueA: f.value_a ?? null,
+    surfaceB: f.surface_b ?? null,
+    valueB: f.value_b ?? null,
+    // `gtin_missing` is a first-class finding, not an alignment problem
+    // worked around: the surface that omits the identifier is the one an
+    // agent trips over first.
+    missingIdentifier: f.field === 'gtin_missing',
+    severity: f.severity ?? null,
+  }
+}
+
+/**
+ * Header counts for a prospect. Deliberately its own function and its
+ * own numbers: prospect data contributes nothing to the live merchant's
+ * counts, and `summarize()` above never sees it.
+ */
+export function summarizeProspect(products = []) {
+  const totals = {
+    products: 0,
+    observed: 0,
+    comparable: 0,
+    notComparable: 0,
+    withDrift: 0,
+    findingsTotal: 0,
+    surfaces: 0,
+    surfacesReadable: 0,
+    outcomeCounts: {},
+    agentBlockedDomains: new Set(),
+    lastObservedAt: null,
+  }
+
+  for (const product of products) {
+    if (!product) continue
+    totals.products += 1
+    if (product.observed) totals.observed += 1
+    if (product.insufficient) totals.notComparable += 1
+    else if (product.outcome != null) totals.comparable += 1
+
+    if (typeof product.findingCount === 'number' && product.findingCount > 0) {
+      totals.withDrift += 1
+      totals.findingsTotal += product.findingCount
+    }
+
+    for (const surface of product.surfaces) {
+      totals.surfaces += 1
+      if (surface.readable) totals.surfacesReadable += 1
+      const key = surface.outcome ?? 'unknown'
+      totals.outcomeCounts[key] = (totals.outcomeCounts[key] || 0) + 1
+      if (surface.robotsPolicy?.closedToAllAgents && surface.robotsPolicy.domain) {
+        totals.agentBlockedDomains.add(surface.robotsPolicy.domain)
+      }
+    }
+
+    if (product.observedAt && (!totals.lastObservedAt || product.observedAt > totals.lastObservedAt)) {
+      totals.lastObservedAt = product.observedAt
+    }
+  }
+
+  return { ...totals, agentBlockedDomains: [...totals.agentBlockedDomains] }
 }
