@@ -37,6 +37,8 @@ import '../lite/theme.css'
 import { FullAnalysisHero } from './full-analysis-report/FullAnalysisHero.jsx'
 import { FullAnalysisRail } from './full-analysis-report/FullAnalysisRail.jsx'
 import { FullAnalysisMobileNav } from './full-analysis-report/FullAnalysisMobileNav.jsx'
+import { buildFullAnalysisNavItems } from './full-analysis-report/fullAnalysisNav.js'
+import { useActiveNavId } from './full-analysis-report/useActiveNavId.js'
 import { ContinuationStrip } from './full-analysis-report/ContinuationStrip.jsx'
 import { DiscoverySection } from './full-analysis-report/DiscoverySection.jsx'
 import { PlatformMatrixSection } from './full-analysis-report/PlatformMatrixSection.jsx'
@@ -123,6 +125,32 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
   const rank = shareOfMentionsRank(competitorSet?.overall)
   const headline = deriveScoreHeroHeadline(pillars)
 
+  // fix/full-analysis-rail-nav, 2c: real scroll-spy, same mechanism as
+  // lite's own useReportSections (computeActiveSectionId — same ids-
+  // in-order scan, same 140px threshold), parameterized by this
+  // report's own rendered nav ids instead of a hardcoded 'score'
+  // literal that never updated as the reader scrolled.
+  const navCtx = {
+    pillars, composite: report.composite, totalQueries: report.total_queries, transcript: report.transcript,
+    exposure, hasContinuation: !!report.continuation, readOnly,
+    scan: report.scan, platformMatrix, evidence: report.evidence,
+  }
+  const navIds = buildFullAnalysisNavItems(navCtx).map((item) => item.id)
+  const active = useActiveNavId(navIds)
+
+  // 2e: a shared or bookmarked link can carry a hash (…/fa/{token}#tv)
+  // — report is already a prop (not fetched inside this component), so
+  // every section is already in the DOM by this component's first
+  // paint; native browser hash-scroll-on-load fires too early for an
+  // async-rendered SPA (the target doesn't exist yet at that moment),
+  // so this does it explicitly instead of assuming it "just worked".
+  useEffect(() => {
+    if (!window.location.hash) return
+    const el = document.getElementById(window.location.hash.slice(1))
+    if (el) el.scrollIntoView({ block: 'start' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // VisibilitySection.jsx (reused verbatim below) reads its competitor
   // rows from report.visibility_breakdown.share_of_mentions — lite's
   // own field name for exactly the row shape ({entity, is_primary,
@@ -147,11 +175,11 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
     <div className="grain-overlay fa-report-shell" style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '222px 1fr' }}>
       <FullAnalysisRail
         report={report} primaryEntityName={primaryEntityName} exposure={exposure}
-        active="score" hasContinuation={!!report.continuation} readOnly={readOnly}
+        active={active} hasContinuation={!!report.continuation} readOnly={readOnly}
       />
       <FullAnalysisMobileNav
         report={report} primaryEntityName={primaryEntityName} exposure={exposure}
-        active="score" hasContinuation={!!report.continuation} readOnly={readOnly}
+        active={active} hasContinuation={!!report.continuation} readOnly={readOnly}
       />
       <div style={{ minWidth: 0 }}>
         <div className="fa-report-content" style={{ maxWidth: 960, margin: '0 auto', padding: '32px 28px 46px' }}>

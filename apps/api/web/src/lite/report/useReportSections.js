@@ -10,6 +10,7 @@
  * — "score" and "truesync" have no collapse affordance in the mock.
  */
 import { useEffect, useRef, useState } from 'react'
+import { computeActiveSectionId } from './scrollSpy.js'
 
 // Partial-read report state (Part 3a): 'why' (the discovery finding)
 // sits between score and viz — harmless to include unconditionally
@@ -35,11 +36,7 @@ export function useReportSections() {
   useEffect(() => {
     function onScroll() {
       if (lockRef.current) return
-      let cur = NAV_IDS[0]
-      for (const id of NAV_IDS) {
-        const el = document.getElementById(id)
-        if (el && el.getBoundingClientRect().top <= 140) cur = id
-      }
+      const cur = computeActiveSectionId(NAV_IDS)
       if (cur !== activeRef.current) {
         if (focusRef.current) {
           const el = document.getElementById(cur)
