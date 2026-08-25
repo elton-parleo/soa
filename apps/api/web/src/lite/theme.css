@@ -1790,6 +1790,20 @@
    styles otherwise always beat a stylesheet rule regardless of
    selector specificity — this is the one place in the codebase that
    needs it, and only inside these phone/tablet blocks.
+
+   fix/full-analysis-mobile carve-out: RM1's own rail-hide split (the
+   report shell only — .lite-report-shell/.lite-report-rail/.lite-
+   report-mobile-nav/.lite-resolving-mark) moved to 768/769px, inside
+   the G1-policy tablet range above. Confirmed live: at 641-767px the
+   222px rail was still visible (G1's "interim, pending a mobile mock"
+   tablet range, as documented above) but the report's own desktop
+   grids inside it don't fit that width — genuine horizontal page
+   overflow, not the accepted "not yet designed for" gap the rest of
+   this tablet range still is. Every OTHER rule in this section keeps
+   the G1 640px split unchanged; the G1 policy text above still says
+   "tablet 641-1024px" on purpose — this is one scoped exception for
+   the one place that range was actually broken, not a redefinition
+   of the policy itself.
    ════════════════════════════════════════════════════════════════════ */
 
 /* ── G3: tap targets — every button/expander/nav-item link gets a
@@ -1981,8 +1995,20 @@
    report shell's grid collapses to one column; the desktop rail
    (ReportRail.jsx, .lite-report-rail) hides outright; its replacement
    (MobileReportNav.jsx, .lite-report-mobile-nav and its three pieces)
-   is hidden at desktop the same way, symmetrically. ── */
-@media (max-width: 640px) {
+   is hidden at desktop the same way, symmetrically.
+
+   fix/full-analysis-mobile: this split moved from 640/641 to 768/769
+   — confirmed live (both here and on Full Analysis's own /fa/{token})
+   that 641-767px was a real, pre-existing gap: the 222px rail still
+   renders (this rule didn't fire yet), but every other RM-series rule
+   below already collapses its own grids at their OWN 640px thresholds
+   only, so the content column was stuck at a "desktop" width narrower
+   than the desktop grids inside it actually need — genuine horizontal
+   page overflow, not a rendering choice. None of those other rules
+   changed: once the rail is hidden, the desktop grids they already
+   produce fit the full viewport width fine on their own, with room to
+   spare even at exactly 768px (measured live, no overflow). ── */
+@media (max-width: 768px) {
   .lite-report-shell {
     display: block !important;
   }
@@ -1993,7 +2019,7 @@
     padding: 20px 16px 40px !important;
   }
 }
-@media (min-width: 641px) {
+@media (min-width: 769px) {
   .lite-report-mobile-nav {
     display: none !important;
   }
@@ -2463,7 +2489,7 @@
    (same rule as the report's), so the mark in the main column takes
    over rather than showing twice. */
 .lite-resolving-mark { display: none; }
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .lite-resolving-mark { display: block; }
 }
 
