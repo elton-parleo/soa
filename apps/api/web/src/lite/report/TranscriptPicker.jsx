@@ -31,10 +31,16 @@ export function TranscriptCaseChip({ narrativeCase, size = 'sm' }) {
   )
 }
 
+// 44px minimum tap target (step 2's own guardrail) on every side —
+// unconditional, not mobile-only: TranscriptPicker.jsx isn't mounted in
+// lite today (2e — it's its own file specifically so lite CAN adopt it
+// later behind a flag), so there's no shared-component desktop-parity
+// constraint here to preserve; a bigger hit target is a fine default at
+// any width.
 function navBtnStyle(enabled) {
   return {
-    display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26,
-    borderRadius: 8, border: '1px solid var(--border-strong)', background: 'var(--surface)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44,
+    borderRadius: 10, border: '1px solid var(--border-strong)', background: 'var(--surface)',
     cursor: enabled ? 'pointer' : 'default', opacity: enabled ? 1 : 0.4,
   }
 }
@@ -58,7 +64,7 @@ export function TranscriptNavBar({
             PARLEO'S PICK
           </span>
         ) : (
-          <button type="button" onClick={onBackToPick} style={{ background: 'none', border: 'none', color: 'var(--blue)', fontSize: 12, cursor: 'pointer', padding: 0, marginLeft: 4 }}>
+          <button type="button" onClick={onBackToPick} style={{ minHeight: 44, background: 'none', border: 'none', color: 'var(--blue)', fontSize: 12, cursor: 'pointer', padding: '0 4px', marginLeft: 4 }}>
             ← Back to pick
           </button>
         )}
@@ -66,8 +72,8 @@ export function TranscriptNavBar({
       <button
         type="button" onClick={onTogglePicker} aria-expanded={pickerOpen}
         style={{
-          display: 'inline-flex', alignItems: 'center', gap: 7, background: pickerOpen ? 'var(--blue-tint)' : 'var(--surface)',
-          border: '1px solid var(--border-strong)', borderRadius: 999, padding: '6px 12px', cursor: 'pointer',
+          display: 'inline-flex', alignItems: 'center', gap: 7, minHeight: 44, background: pickerOpen ? 'var(--blue-tint)' : 'var(--surface)',
+          border: '1px solid var(--border-strong)', borderRadius: 999, padding: '6px 16px', cursor: 'pointer',
           fontSize: 12, fontWeight: 560, color: 'var(--text-strong)',
         }}
       >
@@ -91,7 +97,7 @@ export function TranscriptRunSelector({ runs, activeRunId, onSelectRun }) {
             onClick={() => onSelectRun(r.run_id)}
             aria-pressed={active}
             style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '4px 10px',
+              display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 44, borderRadius: 999, padding: '4px 14px',
               fontSize: 11.5, fontWeight: 560, cursor: 'pointer',
               border: `1px solid ${active ? 'var(--blue)' : 'var(--border-strong)'}`,
               background: active ? 'var(--blue-tint)' : 'var(--surface)',
@@ -137,7 +143,7 @@ export function TranscriptQueryList({ queries, activeQueryId, onSelectQuery, loa
         onChange={(e) => setFilter(e.target.value)}
         placeholder="Filter queries…"
         aria-label="Filter queries"
-        style={{ width: '100%', boxSizing: 'border-box', padding: '8px 11px', fontSize: 13, borderRadius: 9, border: '1px solid var(--border-strong)', marginBottom: 12 }}
+        style={{ width: '100%', boxSizing: 'border-box', minHeight: 44, padding: '8px 11px', fontSize: 13, borderRadius: 9, border: '1px solid var(--border-strong)', marginBottom: 12 }}
       />
       {error && <div style={{ fontSize: 12.5, color: 'var(--red-deep)' }}>Couldn't load queries — {error}</div>}
       {!error && filtered.length === 0 && !loading && (
@@ -155,7 +161,7 @@ export function TranscriptQueryList({ queries, activeQueryId, onSelectQuery, loa
                 onClick={() => onSelectQuery(q)}
                 aria-current={active}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+                  display: 'flex', alignItems: 'center', gap: 10, width: '100%', minHeight: 44, boxSizing: 'border-box', textAlign: 'left',
                   padding: '8px 10px', borderRadius: 9, border: 'none', cursor: 'pointer', marginBottom: 3,
                   background: active ? 'var(--blue-tint)' : 'transparent',
                 }}
@@ -172,7 +178,7 @@ export function TranscriptQueryList({ queries, activeQueryId, onSelectQuery, loa
       ))}
       {loading && <div style={{ fontSize: 12, color: 'var(--faint)', textAlign: 'center', padding: '8px 0' }}>Loading…</div>}
       {hasMore && !loading && (
-        <button type="button" onClick={onLoadMore} style={{ display: 'block', margin: '6px auto 0', background: 'none', border: 'none', color: 'var(--blue)', fontSize: 12, cursor: 'pointer' }}>
+        <button type="button" onClick={onLoadMore} style={{ display: 'block', minHeight: 44, margin: '6px auto 0', background: 'none', border: 'none', color: 'var(--blue)', fontSize: 12, cursor: 'pointer' }}>
           Load more
         </button>
       )}
