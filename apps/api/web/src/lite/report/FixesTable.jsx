@@ -126,7 +126,7 @@ export function FixesTable({ report, open, onToggle, brandName, reportToken, que
                 <button
                   type="button" onClick={() => toggleExpanded(f.code)} aria-expanded={isExpanded}
                   aria-label={isExpanded ? `Hide the ${subFixes.length} specific checks behind ${f.name}` : `Show the ${subFixes.length} specific checks behind ${f.name}`}
-                  style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 7, border: '1px solid var(--border-strong)', background: isExpanded ? 'var(--blue-tint)' : 'var(--surface)', cursor: 'pointer' }}
+                  style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: 10, border: '1px solid var(--border-strong)', background: isExpanded ? 'var(--blue-tint)' : 'var(--surface)', cursor: 'pointer' }}
                 >
                   <Glyph name="chevronDown" size={11} color="var(--text-strong)" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none' }} />
                 </button>

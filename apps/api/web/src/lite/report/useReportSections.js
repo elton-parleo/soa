@@ -64,12 +64,15 @@ export function useReportSections() {
   // skipped on phone in favor of plain accordion behavior (the section
   // still opens/closes exactly the same; only the scroll-position
   // correction is skipped). Desktop is completely unaffected — the
-  // matchMedia check is false above 640px so this branch is never taken
+  // matchMedia check is false above 768px so this branch is never taken
   // there. jsdom has no matchMedia (see src/test-setup.js), so this
-  // reads as "not phone" in tests, same as desktop.
+  // reads as "not phone" in tests, same as desktop. 768, not 640 —
+  // fix/full-analysis-mobile widened RM1's rail-hide split (theme.css)
+  // to the same 768px threshold, so "is the rail hidden right now"
+  // and "skip the scroll-compensation" stay the same question.
   useEffect(() => {
     if (!focus || !anchorRef.current || vpTopRef.current == null) return
-    const isPhone = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 640px)').matches
+    const isPhone = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 768px)').matches
     if (isPhone) {
       anchorRef.current = null
       vpTopRef.current = null

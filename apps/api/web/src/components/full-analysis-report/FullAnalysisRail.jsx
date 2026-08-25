@@ -11,7 +11,7 @@ import { Wordmark, Glyph, StatusChip, StateChip, BrandLogo } from '../../ds/inde
 import { pillarEarnedMax, isAgentReady, isPartialRead, buildMeasurableContext, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from '../../lite/report/reportDerive.js'
 import { formatCompactCurrency } from '../../lite/liteDerive.js'
 
-const NAV_ITEMS = [
+export const NAV_ITEMS = [
   { id: 'score', icon: 'chart', label: 'The score' },
   { id: 'continuation', icon: 'refresh', label: 'Vs. your audit' },
   { id: 'discovery', icon: 'search', label: 'Discovery' },
@@ -27,7 +27,22 @@ const NAV_ITEMS = [
   { id: 'exp', icon: 'card', label: 'Exposure' },
 ]
 
-function navScore({ id, pillars, composite, totalQueries, transcript, exposure }) {
+// Exported so FullAnalysisMobileNav.jsx's Sections sheet lists exactly
+// the same items, in the same order, with the same scores as this
+// desktop rail — one source of truth, never a second hand-copied list
+// that could drift.
+export function filterNavItems(items, { hasContinuation, transcript, readOnly }) {
+  return items.filter((item) => item.id !== 'continuation' || hasContinuation)
+    .filter((item) => item.id !== 'transcript' || transcript)
+    // readOnly (public /fa/{token} viewer): FullAnalysisReport.jsx
+    // omits <AnalystLayerSection> outright (it fetches the authed
+    // /api/cycles/{code}/metrics directly — the one section with no
+    // public equivalent), so its nav entry would otherwise jump to an
+    // anchor that no longer exists.
+    .filter((item) => item.id !== 'analyst' || !readOnly)
+}
+
+export function navScore({ id, pillars, composite, totalQueries, transcript, exposure }) {
   const vis = pillarEarnedMax(pillars.visibility)
   const acc = pillarEarnedMax(pillars.accessibility)
   const tv = pillarEarnedMax(pillars.true_value)
@@ -59,14 +74,7 @@ export function FullAnalysisRail({ report, primaryEntityName, exposure, active, 
   const partial = isPartialRead(pillars, report.scan?.degraded_reason)
   const unmeasurable = partial ? buildMeasurableContext(pillars).unmeasurable_points : 0
 
-  const items = NAV_ITEMS.filter((item) => item.id !== 'continuation' || hasContinuation)
-    .filter((item) => item.id !== 'transcript' || report.transcript)
-    // readOnly (public /fa/{token} viewer): FullAnalysisReport.jsx
-    // omits <AnalystLayerSection> outright (it fetches the authed
-    // /api/cycles/{code}/metrics directly — the one section with no
-    // public equivalent), so its nav entry would otherwise jump to an
-    // anchor that no longer exists.
-    .filter((item) => item.id !== 'analyst' || !readOnly)
+  const items = filterNavItems(NAV_ITEMS, { hasContinuation, transcript: report.transcript, readOnly })
 
   return (
     <div className="fa-report-rail" style={{ borderRight: '1px solid var(--border)', background: 'var(--canvas-dim)' }}>

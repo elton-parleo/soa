@@ -36,6 +36,7 @@ import '../lite/theme.css'
 
 import { FullAnalysisHero } from './full-analysis-report/FullAnalysisHero.jsx'
 import { FullAnalysisRail } from './full-analysis-report/FullAnalysisRail.jsx'
+import { FullAnalysisMobileNav } from './full-analysis-report/FullAnalysisMobileNav.jsx'
 import { ContinuationStrip } from './full-analysis-report/ContinuationStrip.jsx'
 import { DiscoverySection } from './full-analysis-report/DiscoverySection.jsx'
 import { PlatformMatrixSection } from './full-analysis-report/PlatformMatrixSection.jsx'
@@ -145,6 +146,10 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
   return (
     <div className="grain-overlay fa-report-shell" style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '222px 1fr' }}>
       <FullAnalysisRail
+        report={report} primaryEntityName={primaryEntityName} exposure={exposure}
+        active="score" hasContinuation={!!report.continuation} readOnly={readOnly}
+      />
+      <FullAnalysisMobileNav
         report={report} primaryEntityName={primaryEntityName} exposure={exposure}
         active="score" hasContinuation={!!report.continuation} readOnly={readOnly}
       />
