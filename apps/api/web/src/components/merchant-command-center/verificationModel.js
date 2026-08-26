@@ -27,6 +27,35 @@
 // ─── Methods ─────────────────────────────────────────────────────────
 
 export const METHOD_FETCH_PROBE = 'fetch_probe'
+
+// Which channels can actually be probed, and what probing one means.
+//
+// A probe fetches a surface and compares it to what we published there, so a
+// channel only has one if it HAS a fetchable surface. schema.org's is the
+// merchant's storefront; ACP's is the feed endpoint we serve. Merchant Center
+// has no probe — its opinion comes from Google via gmc_diagnostics, which is
+// a different dimension entirely — and the thin channels publish nowhere to
+// fetch from.
+//
+// This map exists because the drawer used to offer "Verify now" on every
+// channel and route all of them to the schema.org probe. That returned a
+// success toast, wrote a schema_org row, and left the cell you clicked on
+// still unverified — which is exactly as misleading as it sounds.
+export const VERIFY_BY_CHANNEL = {
+  schema_org: {
+    label: 'Verify now',
+    title: "Fetch this listing's live PDP and record what it served",
+  },
+  acp: {
+    label: 'Verify feed',
+    title: 'Fetch the ACP feed from its serving URL and compare it to the '
+      + 'published artifact',
+  },
+}
+
+export function canVerify(channelSlug) {
+  return Object.prototype.hasOwnProperty.call(VERIFY_BY_CHANNEL, channelSlug)
+}
 export const METHOD_GMC_DIAGNOSTICS = 'gmc_diagnostics'
 
 // §2b. A surface-vs-surface observation of a brand we cannot publish

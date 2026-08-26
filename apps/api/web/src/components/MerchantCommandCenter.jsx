@@ -14,8 +14,21 @@ import {
 } from './merchant-command-center/truesyncDerive.js'
 import {
   aggregateCell, summarize, aggregateProspectProduct, summarizeProspect, ACCEPTANCE,
+  VERIFY_BY_CHANNEL,
 } from './merchant-command-center/verificationModel.js'
 import './merchant-command-center/commandCenter.css'
+
+const SCHEMA_ORG_SLUG = 'schema_org'
+const ACP_SLUG = 'acp'
+
+// Which client call probes which channel. Keyed by the same slugs as
+// VERIFY_BY_CHANNEL, which decides whether the button is offered at all —
+// the two are asserted to agree in the test suite, so a channel can never
+// be offered a button that routes nowhere.
+const VERIFIERS = {
+  [SCHEMA_ORG_SLUG]: (listingId) => api.verifyListing(listingId),
+  [ACP_SLUG]: (listingId) => api.verifyListingAcp(listingId),
+}
 
 /**
  * Merchant Command Center — what is live on every agent-readable
@@ -305,12 +318,21 @@ export default function MerchantCommandCenter({ onNavigate }) {
     setVerificationsByCell(await fetchAllVerifications(listingIds, channelSlugs))
   }, [])
 
-  async function handleVerifyListing(row) {
-    const key = `verify:${row.listingId}`
+  async function handleVerifyListing(row, channelSlug = SCHEMA_ORG_SLUG) {
+    // Channel-aware on purpose. Every channel used to route here and get the
+    // schema.org probe, so verifying an ACP cell wrote a schema_org row and
+    // left the ACP cell unverified — with a success toast on top.
+    const verifier = VERIFIERS[channelSlug]
+    if (!verifier) {
+      pushToast('err', `${channelSlug} has no probe to run`)
+      return
+    }
+
+    const key = `verify:${row.listingId}:${channelSlug}`
     setBusy(key)
     try {
       const result = await withMutationTimeout(
-        api.verifyListing(row.listingId), 'Verify')
+        verifier(row.listingId), 'Verify')
       await reloadVerifications(rows, channels)
 
       // Report what came back, including the unhappy outcomes — a probe
@@ -319,12 +341,13 @@ export default function MerchantCommandCenter({ onNavigate }) {
       if (result?.error) {
         pushToast('err', `${row.name}: ${result.error}`)
       } else if (outcome && outcome !== 'ok') {
-        pushToast('err', `${row.name}: probe outcome "${outcome}"`)
+        pushToast('err', `${row.name} · ${channelSlug}: probe outcome "${outcome}"`)
       } else {
         const n = Array.isArray(result?.findings) ? result.findings.length : 0
+        const what = `${row.name} · ${channelSlug}`
         pushToast('ok', n > 0
-          ? `Verified ${row.name} — ${n} finding${n === 1 ? '' : 's'}`
-          : `Verified ${row.name} — no drift`)
+          ? `Verified ${what} — ${n} finding${n === 1 ? '' : 's'}`
+          : `Verified ${what} — no drift`)
       }
     } catch (err) {
       pushToast('err', err.message)   // verbatim, per spec
@@ -734,7 +757,7 @@ export default function MerchantCommandCenter({ onNavigate }) {
                         onPublish={handlePublish}
                         publishPending={String(busy || '').startsWith(`publish:${selectedRow.listingId}`)}
                         onVerify={handleVerifyListing}
-                        verifyPending={busy === `verify:${selectedRow.listingId}`}
+                        verifyPendingFor={(slug) => busy === `verify:${selectedRow.listingId}:${slug}`}
                       />
                     </DrawerErrorBoundary>
                   </div>

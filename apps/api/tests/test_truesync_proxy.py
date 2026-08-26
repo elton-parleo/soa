@@ -301,8 +301,8 @@ def test_router_never_leaks_the_key_in_an_error_detail(monkeypatch, calls):
 def test_proxy_routes_are_mounted_and_authenticated():
     """
     The proxy must sit behind this app's own auth like every other
-    mutation, and must expose ONLY the three allow-listed writes — an
-    open pass-through to an admin API would defeat the point of it.
+    mutation, and must expose ONLY the allow-listed writes — an open
+    pass-through to an admin API would defeat the point of it.
     """
     from app.app import app
 
@@ -315,6 +315,11 @@ def test_proxy_routes_are_mounted_and_authenticated():
     assert proxy_paths == {
         "/api/truesync/listings/{listing_id}/publish": ["POST"],
         "/api/truesync/listings/{listing_id}/verify": ["POST"],
+        # The ACP feed's own probe. Separate from /verify because they fetch
+        # different surfaces: that one the merchant's storefront, this one the
+        # feed we serve. Routing both through /verify is what left the ACP
+        # cell unverified while reporting success.
+        "/api/truesync/listings/{listing_id}/verify-acp": ["POST"],
         "/api/truesync/verify-all": ["POST"],
         "/api/truesync/gmc/diagnostics/refresh": ["POST"],
         "/api/truesync/sync-rules": ["PUT"],

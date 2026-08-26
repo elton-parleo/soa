@@ -5,7 +5,7 @@ import {
 } from './truesyncDerive.js'
 import {
   PUBLISH_STATE, PUBLISH_STATE_LABEL, ACCEPTANCE, ACCEPTANCE_LABEL, ACCEPTANCE_TONE,
-  STALE_NOTE,
+  STALE_NOTE, VERIFY_BY_CHANNEL,
 } from './verificationModel.js'
 import { text, MasterComparisonTable } from './ComparisonTable.jsx'
 
@@ -252,7 +252,7 @@ function StaleSection({ cell }) {
  */
 export default function ListingDrawer({
   row, channels, channelState, cellFor, publications,
-  onClose, onPublish, publishPending, onVerify, verifyPending,
+  onClose, onPublish, publishPending, onVerify, verifyPendingFor,
 }) {
   const [channelSlug, setChannelSlug] = useState(channels[0]?.slug)
 
@@ -281,6 +281,13 @@ export default function ListingDrawer({
   const current = history[0] || null
   const gmcRefs = channel.slug === 'merchant_center' ? gmcExternalRefs(cell.externalRef) : []
   const gmcAccount = channel.slug === 'merchant_center' ? gmcAccountId(cell.externalRef) : null
+
+  // Only channels with a fetchable surface get a Verify button. Offering one
+  // on a channel with no probe is how the ACP cell ended up running the
+  // schema.org probe and reporting success while staying unverified.
+  const verifyAction = VERIFY_BY_CHANNEL[channel.slug] || null
+  const verifyBusy = typeof verifyPendingFor === 'function'
+    && verifyPendingFor(channel.slug)
 
   // The headline badge is the publish state plus, where they exist, the
   // other dimensions as separate chips. Never one merged verdict.
@@ -448,14 +455,18 @@ export default function ListingDrawer({
           >
             {publishPending ? <><span className="mcc-spinner" /> Publishing…</> : 'Publish now'}
           </button>
-          <button
-            className="mcc-btn"
-            onClick={() => onVerify(row)}
-            disabled={verifyPending}
-            title="Fetch this listing's live PDP and record what it served"
-          >
-            {verifyPending ? <><span className="mcc-spinner" /> Verifying…</> : 'Verify now'}
-          </button>
+          {verifyAction && (
+            <button
+              className="mcc-btn"
+              onClick={() => onVerify(row, channel.slug)}
+              disabled={verifyBusy}
+              title={verifyAction.title}
+            >
+              {verifyBusy
+                ? <><span className="mcc-spinner" /> Verifying…</>
+                : verifyAction.label}
+            </button>
+          )}
         </div>
       </div>
     </div>

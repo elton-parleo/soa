@@ -95,6 +95,20 @@ async def verify_listing(listing_id: int):
     return _unwrap(*await TrueSyncClient().verify_listing(listing_id))
 
 
+@router.post("/truesync/listings/{listing_id}/verify-acp")
+async def verify_listing_acp(listing_id: int):
+    """
+    Fetch this listing's ACP feed from its serving URL and record what it
+    served. Same shape of answer as /verify — {outcome, integrity, findings}
+    — but against the `acp` channel, so the ACP cell gets its own badge
+    rather than borrowing schema.org's.
+
+    Key-gated upstream like the other verify routes; that is what the proxy
+    is for.
+    """
+    return _unwrap(*await TrueSyncClient().verify_listing_acp(listing_id))
+
+
 @router.post("/truesync/verify-all")
 async def verify_all():
     """Verify every active listing of the active demo merchant."""

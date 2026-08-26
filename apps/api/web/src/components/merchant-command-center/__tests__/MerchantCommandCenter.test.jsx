@@ -57,7 +57,7 @@ vi.mock('../../../AuthContext.jsx', () => ({
 vi.mock('../../../api.js', () => ({
   api: {
     publishListing: vi.fn(), refreshGmcDiagnostics: vi.fn(), putSyncRule: vi.fn(),
-    verifyListing: vi.fn(), verifyAll: vi.fn(),
+    verifyListing: vi.fn(), verifyListingAcp: vi.fn(), verifyAll: vi.fn(),
   },
 }))
 
@@ -310,7 +310,60 @@ describe('verify runs through the proxy', () => {
     expect(api.verifyListing).toHaveBeenCalledWith(90)
 
     resolve({ outcome: 'ok', integrity: true, findings: [] })
-    expect(await screen.findByText('Verified Snug-Fit Diapers — no drift')).toBeInTheDocument()
+    expect(await screen.findByText('Verified Snug-Fit Diapers · schema_org — no drift')).toBeInTheDocument()
+  })
+
+  // The bug this suite missed: the drawer's Verify button dropped the channel
+  // and always ran the schema.org probe. Verifying the ACP cell reported
+  // success, wrote a schema_org row, and left ACP at "Unverified" — which the
+  // live API showed as 4 rows for ?channel=schema_org and [] for ?channel=acp.
+  it('verifies the ACP cell against the ACP probe, not the schema.org one', async () => {
+    api.verifyListingAcp.mockResolvedValue({ outcome: 'ok', integrity: true, findings: [] })
+
+    render(<MerchantCommandCenter onNavigate={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Snug-Fit Diapers'))
+
+    // The drawer shows one channel at a time, so select ACP's tab first.
+    fireEvent.click(await screen.findByRole('tab', { name: /agentic commerce protocol/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /verify feed/i }))
+
+    expect(api.verifyListingAcp).toHaveBeenCalledWith(90)
+    expect(api.verifyListing).not.toHaveBeenCalled()
+    expect(await screen.findByText('Verified Snug-Fit Diapers · acp — no drift'))
+      .toBeInTheDocument()
+  })
+
+  it('refetches verifications after an ACP verify, so the cell updates', async () => {
+    api.verifyListingAcp.mockResolvedValue({ outcome: 'ok', integrity: true, findings: [] })
+
+    render(<MerchantCommandCenter onNavigate={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Snug-Fit Diapers'))
+
+    fireEvent.click(await screen.findByRole('tab', { name: /agentic commerce protocol/i }))
+    fetchAllVerifications.mockClear()
+    fireEvent.click(await screen.findByRole('button', { name: /verify feed/i }))
+
+    // A toast is not a refresh. Without this the badge stays stale until
+    // someone reloads the page by hand.
+    await waitFor(() => expect(fetchAllVerifications).toHaveBeenCalled())
+  })
+
+  it('offers no verify button on a channel with no probe', async () => {
+    render(<MerchantCommandCenter onNavigate={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('Snug-Fit Diapers'))
+
+    // schema.org has a storefront to fetch.
+    expect(await screen.findByRole('button', { name: /verify now/i })).toBeInTheDocument()
+
+    // The MCP server has no fetchable surface. It used to show "Verify now"
+    // anyway, and clicking it ran the schema.org probe.
+    fireEvent.click(await screen.findByRole('tab', { name: /model context protocol/i }))
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /^verify (now|feed)$/i })).toBeNull()
+    })
   })
 
   it('reports findings from a verify rather than claiming success', async () => {
@@ -324,7 +377,7 @@ describe('verify runs through the proxy', () => {
     fireEvent.click(screen.getByText('Snug-Fit Diapers'))
     fireEvent.click(await screen.findByRole('button', { name: /verify now/i }))
 
-    expect(await screen.findByText('Verified Snug-Fit Diapers — 2 findings')).toBeInTheDocument()
+    expect(await screen.findByText('Verified Snug-Fit Diapers · schema_org — 2 findings')).toBeInTheDocument()
   })
 
   // A probe that could not read the page is not a success, even though

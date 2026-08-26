@@ -291,6 +291,11 @@ export const api = {
   verifyListing: (listingId) =>
     post(`/api/truesync/listings/${listingId}/verify`, {}),
 
+  // The ACP feed's probe. A different surface from verifyListing: that one
+  // fetches the merchant's storefront, this one fetches the feed we serve.
+  verifyListingAcp: (listingId) =>
+    post(`/api/truesync/listings/${listingId}/verify-acp`, {}),
+
   verifyAll: () =>
     post('/api/truesync/verify-all', {}),
 

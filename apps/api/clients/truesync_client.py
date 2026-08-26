@@ -145,6 +145,22 @@ class TrueSyncClient:
             "POST", f"/api/truesync/listings/{listing_id}/verify"
         )
 
+    async def verify_listing_acp(self, listing_id: int) -> ForwardResult:
+        """
+        POST /listings/{id}/verify-acp — fetches the listing's ACP feed from
+        the serving URL on its publication row and compares it to the stored
+        artifact. Writes a fetch_probe verification row against the `acp`
+        channel, exactly as the schema.org probe does against `schema_org`.
+
+        Separate from verify_listing because they probe different surfaces:
+        one fetches the merchant's storefront, the other fetches our own feed
+        endpoint. A single call cannot do both, and pointing the schema.org
+        probe at an ACP cell is what this fixes.
+        """
+        return await self.forward(
+            "POST", f"/api/truesync/listings/{listing_id}/verify-acp"
+        )
+
     async def verify_all(self) -> ForwardResult:
         """
         POST /verify-all — the same probe across every active listing of
