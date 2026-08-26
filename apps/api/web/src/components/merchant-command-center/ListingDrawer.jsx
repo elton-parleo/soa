@@ -6,6 +6,7 @@ import {
 import {
   PUBLISH_STATE, PUBLISH_STATE_LABEL, ACCEPTANCE, ACCEPTANCE_LABEL, ACCEPTANCE_TONE,
   STALE_NOTE, canVerify, verifyLabelFor, surfaceOf, NO_SURFACE_TOOLTIP,
+  extensionStatusOf,
 } from './verificationModel.js'
 import { text, MasterComparisonTable } from './ComparisonTable.jsx'
 
@@ -290,6 +291,11 @@ export default function ListingDrawer({
   const verifyBusy = typeof verifyPendingFor === 'function'
     && verifyPendingFor(channel.slug)
 
+  // Channel-level metadata, not a cell measurement: it contributes to no
+  // dimension and no count, and null means this channel has no extension
+  // facet at all — which is not the same as having one that cannot be filled.
+  const extensionStatus = extensionStatusOf(channel)
+
   // The headline badge is the publish state plus, where they exist, the
   // other dimensions as separate chips. Never one merged verdict.
   const publishTone = cell.publishState === PUBLISH_STATE.PUBLISHED ? 'sync'
@@ -407,7 +413,20 @@ export default function ListingDrawer({
             </li>
           ))}
 
-          {!cell.validation && cell.expressiveness.length === 0 && (
+          {extensionStatus && (
+            <li>
+              <span className={`mcc-tick ${extensionStatus.tone}`}>
+                {extensionStatus.tone === 'neutral' ? '–' : '!'}
+              </span>
+              <span>
+                <strong>extension</strong> — {extensionStatus.label}
+                <br />
+                {extensionStatus.reason || 'No reason recorded.'}
+              </span>
+            </li>
+          )}
+
+          {!cell.validation && cell.expressiveness.length === 0 && !extensionStatus && (
             <li className="mcc-empty">No compiler output recorded for this channel.</li>
           )}
         </ul>

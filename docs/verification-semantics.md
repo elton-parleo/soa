@@ -95,6 +95,57 @@ require touching a classifier, a legend, or a button.
 
 ---
 
+## Extension status — what a facet's artifact can honestly carry
+
+Some channels have a base surface and an **extension facet** on top of it:
+ACP has a promotions API beside its product feed; UCP has capability
+extensions — loyalty, discounts — beside its catalog. A channel that has one
+declares `extension_status`, which answers a narrower question than "did we
+build it": **can this artifact honestly carry that facet's data at all?**
+
+| value | meaning | reason string |
+|---|---|---|
+| `populated` | the facet is built and its fields are present | optional |
+| `deferred` | cut by choice — the material is fine and the work is simply not done | **required** |
+| `insufficient_spec` | the vendored material could not support a faithful build | **required** |
+| `not_applicable` | the schema is sufficient, but the data cannot honestly exist in this artifact class | **required** |
+
+A reason string is REQUIRED for every value except `populated`. A status
+without a reason is the thing this vocabulary exists to prevent — a reader
+cannot tell "we ran out of time" from "the standard cannot express it", and
+those lead to opposite next actions.
+
+### Why `not_applicable` had to exist
+
+Step 8b found a state the first three words could not name. UCP's loyalty
+extension is excellent and fully vendored — but its `loyalty` object is keyed
+by *buyer-asserted eligibility claims* and requires a concrete membership
+`id`. That is resolved buyer context. A static catalog artifact, served to
+nobody in particular, cannot populate it without inventing a buyer.
+
+That is not `insufficient_spec`: the material is not inadequate, and labelling
+it so sends the next reader off to re-retrieve schemas that are already here
+and good. It is not `deferred` either: nothing was cut, and no amount of
+further work on this artifact class would populate it. The honest statement is
+that the question does not apply to a document of this kind — which needs its
+own word, or the first two get stretched until neither means anything.
+
+The distinction that matters when reading the four:
+
+* `deferred` → **we** are the reason. Do the work.
+* `insufficient_spec` → **the material** is the reason. Get better material.
+* `not_applicable` → **the artifact class** is the reason. A different kind of
+  surface would be needed, not more effort and not a better spec.
+
+### It is not a dimension
+
+`extension_status` contributes to no dimension and no header count. It is
+metadata about what a facet could contain, not a measurement of anything, and
+nothing renders it as a verdict. In particular `not_applicable` is **not** a
+warning: nothing is wrong when it is set.
+
+---
+
 ## Four orthogonal dimensions
 
 A cell is described by four dimensions. **No dimension may contribute to

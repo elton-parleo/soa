@@ -5,7 +5,9 @@
     "depth_label": "Fully live on demo store",
     "spec_version": "schemaorg-merchant-listing-2026-08-18",
     "is_active": true,
-    "verification_surface": "fetch_probe"
+    "verification_surface": "fetch_probe",
+    "extension_status": null,
+    "extension_status_reason": null
   },
   {
     "slug": "merchant_center",
@@ -13,7 +15,9 @@
     "depth_label": "Live at API layer; accepted + passing diagnostics (not \"surfaced\")",
     "spec_version": "gmc-products-v1-2026-08-18",
     "is_active": true,
-    "verification_surface": "acceptance"
+    "verification_surface": "acceptance",
+    "extension_status": null,
+    "extension_status_reason": null
   },
   {
     "slug": "acp",
@@ -21,7 +25,9 @@
     "depth_label": "Spec-conformant, self-hosted, validated (not enrolled)",
     "spec_version": "acp-feed-stable-2026-08-18",
     "is_active": true,
-    "verification_surface": "fetch_probe"
+    "verification_surface": "fetch_probe",
+    "extension_status": "deferred",
+    "extension_status_reason": "ACP promotions (specs \u00a72) is a second payload beside the product feed. The material is sufficient; the feed was the demo-relevant column and promotions were cut by choice, not by any obstacle."
   },
   {
     "slug": "ucp_uip",
@@ -29,7 +35,9 @@
     "depth_label": "Spec-conformant, self-hosted (not enrolled)",
     "spec_version": "ucp-2026-04-08",
     "is_active": true,
-    "verification_surface": "none"
+    "verification_surface": "none",
+    "extension_status": "not_applicable",
+    "extension_status_reason": "loyalty extension carries buyer-resolved eligibility claims (membership id); a static catalog artifact cannot populate them without fabricating a buyer; separately, the standard carries no member-price field"
   },
   {
     "slug": "deals_api",
@@ -37,7 +45,9 @@
     "depth_label": "Live today",
     "spec_version": "parleo-internal",
     "is_active": true,
-    "verification_surface": "none"
+    "verification_surface": "none",
+    "extension_status": null,
+    "extension_status_reason": null
   },
   {
     "slug": "mcp",
@@ -45,7 +55,9 @@
     "depth_label": "Live today",
     "spec_version": "parleo-internal",
     "is_active": true,
-    "verification_surface": "none"
+    "verification_surface": "none",
+    "extension_status": null,
+    "extension_status_reason": null
   },
   {
     "slug": "deal_directory",
@@ -53,6 +65,8 @@
     "depth_label": "Exists",
     "spec_version": "parleo-internal",
     "is_active": true,
-    "verification_surface": "none"
+    "verification_surface": "none",
+    "extension_status": null,
+    "extension_status_reason": null
   }
 ]

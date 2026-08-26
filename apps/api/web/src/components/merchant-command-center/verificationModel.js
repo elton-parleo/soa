@@ -115,6 +115,60 @@ function validationReason(validation) {
   return errors.length > 0 ? errors.join('; ') : null
 }
 
+// ─── Extension status (metadata, not a measurement) ──────────────────
+
+// Whether a channel's extension facet can honestly carry its data, and why
+// not when it cannot. Declared per channel by the API; see
+// docs/verification-semantics.md, "Extension status".
+//
+// The four values lead to different next actions, which is the whole point of
+// keeping them apart:
+//   deferred          -> WE are the reason. Do the work.
+//   insufficient_spec -> the MATERIAL is the reason. Get better material.
+//   not_applicable    -> the ARTIFACT CLASS is the reason. Neither more
+//                        effort nor a better spec would change it.
+//
+// `not_applicable` renders NEUTRALLY. Nothing is wrong when it is set, and
+// colouring it amber would turn a correct, settled statement into a standing
+// alarm nobody can clear.
+export const EXTENSION_STATUS = {
+  POPULATED: 'populated',
+  DEFERRED: 'deferred',
+  INSUFFICIENT_SPEC: 'insufficient_spec',
+  NOT_APPLICABLE: 'not_applicable',
+}
+
+export const EXTENSION_STATUS_LABEL = {
+  populated: 'Extension populated',
+  deferred: 'Extension deferred',
+  insufficient_spec: 'Extension: spec material insufficient',
+  not_applicable: 'Extension not applicable to this artifact',
+}
+
+// Tone, deliberately, in the tick vocabulary this panel already uses.
+// insufficient_spec is the only one that is a problem to chase; deferred is
+// outstanding work; not_applicable is a settled fact and gets no colour at
+// all; populated is good news.
+export const EXTENSION_STATUS_TONE = {
+  populated: 'ok',
+  deferred: 'warn',
+  insufficient_spec: 'bad',
+  not_applicable: 'neutral',
+}
+
+export function extensionStatusOf(channel) {
+  const status = channel?.extension_status
+  if (typeof status !== 'string' || !status) return null
+  return {
+    status,
+    label: EXTENSION_STATUS_LABEL[status] || `Extension: ${status}`,
+    tone: EXTENSION_STATUS_TONE[status] || 'warn',
+    // Required for every value but `populated`, so its absence is worth
+    // showing rather than hiding behind an empty span.
+    reason: channel.extension_status_reason || null,
+  }
+}
+
 // ─── Verification surface (which dimensions apply at all) ────────────
 
 // What independent surface exists to check a channel against. The API

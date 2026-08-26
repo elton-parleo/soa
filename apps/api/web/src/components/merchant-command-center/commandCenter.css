@@ -342,6 +342,9 @@ a.mcc-probe-meta { color: var(--cobalt); }
 .mcc-tick.ok { color: var(--sync); }
 .mcc-tick.warn { color: var(--drift); }
 .mcc-tick.bad { color: var(--fail); }
+/* Nothing is wrong: a settled statement, not an alarm. Deliberately
+   quieter than .warn so it cannot be mistaken for something to clear. */
+.mcc-tick.neutral { color: var(--ink-faint); opacity: .6; }
 .mcc-side .meta {
   margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);
   font-size: .78rem; color: var(--ink-faint); display: flex; flex-direction: column; gap: 5px;

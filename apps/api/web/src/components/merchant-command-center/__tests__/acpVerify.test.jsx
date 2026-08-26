@@ -12,7 +12,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
-  classifyRecord, aggregateCell, canVerify, SURFACE,
+  classifyRecord, aggregateCell, canVerify, SURFACE, extensionStatusOf,
 } from '../verificationModel.js'
 
 // The ACP publication this listing actually has. Freshness is measured
@@ -186,5 +186,74 @@ describe('the glyph follows the channel\'s declared surface', () => {
     })
     expect(before.badge.glyph).toBe('–')
     expect(after.badge.glyph).toBe('○')
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// extension status — four values, one of them not a warning
+// ---------------------------------------------------------------------------
+
+describe('extension status renders what it means', () => {
+  it('not_applicable is neutral — nothing is wrong when it is set', () => {
+    const channel = {
+      slug: 'ucp_uip',
+      extension_status: 'not_applicable',
+      extension_status_reason:
+        'loyalty extension carries buyer-resolved eligibility claims (membership id); '
+        + 'a static catalog artifact cannot populate them without fabricating a buyer; '
+        + 'separately, the standard carries no member-price field',
+    }
+    const status = extensionStatusOf(channel)
+    expect(status.status).toBe('not_applicable')
+    expect(status.tone).toBe('neutral')
+    // Emphatically not the tones that mean "chase this".
+    expect(status.tone).not.toBe('warn')
+    expect(status.tone).not.toBe('bad')
+    expect(status.reason).toContain('fabricating a buyer')
+  })
+
+  it('insufficient_spec is the one worth chasing', () => {
+    expect(extensionStatusOf({
+      slug: 'x', extension_status: 'insufficient_spec', extension_status_reason: 'r',
+    }).tone).toBe('bad')
+  })
+
+  it('deferred reads as outstanding work, not as a defect', () => {
+    expect(extensionStatusOf({
+      slug: 'acp', extension_status: 'deferred', extension_status_reason: 'r',
+    }).tone).toBe('warn')
+  })
+
+  it('populated is good news', () => {
+    expect(extensionStatusOf({
+      slug: 'x', extension_status: 'populated',
+    }).tone).toBe('ok')
+  })
+
+  it('a channel with no extension facet declares nothing at all', () => {
+    // Absent is not the same as "has one that cannot be filled", so it must
+    // not render a row that implies a facet exists.
+    expect(extensionStatusOf({ slug: 'schema_org' })).toBeNull()
+    expect(extensionStatusOf({ slug: 'x', extension_status: null })).toBeNull()
+    expect(extensionStatusOf(undefined)).toBeNull()
+  })
+
+  it('an unfamiliar status still renders, with its own name', () => {
+    const status = extensionStatusOf({ slug: 'x', extension_status: 'something_new' })
+    expect(status.label).toContain('something_new')
+    expect(status.tone).toBe('warn')
+  })
+
+  it('it contributes to no cell dimension', () => {
+    // Metadata, not a measurement: a channel carrying not_applicable must not
+    // acquire drift, acceptance or unreadable counts from it.
+    const cell = aggregateCell(
+      { status: 'published', published_at: ACP_PUBLISHED_AT }, [],
+      { channelSlug: 'ucp_uip', verificationSurface: SURFACE.FETCH_PROBE },
+    )
+    expect(cell.drift).toBeNull()
+    expect(cell.unreadableCount).toBe(0)
+    expect(cell.issueCount).toBe(0)
   })
 })
