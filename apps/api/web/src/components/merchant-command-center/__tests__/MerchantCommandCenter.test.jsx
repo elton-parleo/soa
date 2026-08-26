@@ -187,7 +187,15 @@ describe('no fabricated verification state', () => {
     // same class, and this assertion is about cells.
     const badges = container.querySelectorAll('.mcc-matrix tbody .mcc-verify')
     expect(badges).toHaveLength(35)
-    expect([...badges].every((b) => b.textContent === '○')).toBe(true)
+
+    // ○ belongs only to channels that HAVE a probe surface: 5 listings x
+    // schema_org and acp. The other 25 cells cannot be verified at all, and
+    // showing them "not yet verified" was the bug — a prompt nobody could
+    // ever answer, which teaches the reader to ignore the glyph everywhere.
+    const unverified = [...badges].filter((b) => b.textContent === '○')
+    const notApplicable = [...badges].filter((b) => b.textContent === '–')
+    expect(unverified).toHaveLength(10)
+    expect(notApplicable).toHaveLength(25)
     expect([...badges].some((b) => b.classList.contains('clean'))).toBe(false)
 
     expect(screen.getByText('No fresh verification runs')).toBeInTheDocument()

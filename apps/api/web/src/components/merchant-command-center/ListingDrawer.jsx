@@ -5,7 +5,7 @@ import {
 } from './truesyncDerive.js'
 import {
   PUBLISH_STATE, PUBLISH_STATE_LABEL, ACCEPTANCE, ACCEPTANCE_LABEL, ACCEPTANCE_TONE,
-  STALE_NOTE, VERIFY_BY_CHANNEL,
+  STALE_NOTE, canVerify, verifyLabelFor, surfaceOf, NO_SURFACE_TOOLTIP,
 } from './verificationModel.js'
 import { text, MasterComparisonTable } from './ComparisonTable.jsx'
 
@@ -282,10 +282,11 @@ export default function ListingDrawer({
   const gmcRefs = channel.slug === 'merchant_center' ? gmcExternalRefs(cell.externalRef) : []
   const gmcAccount = channel.slug === 'merchant_center' ? gmcAccountId(cell.externalRef) : null
 
-  // Only channels with a fetchable surface get a Verify button. Offering one
-  // on a channel with no probe is how the ACP cell ended up running the
-  // schema.org probe and reporting success while staying unverified.
-  const verifyAction = VERIFY_BY_CHANNEL[channel.slug] || null
+  // Only channels that declare a fetch_probe surface get a Verify button.
+  // The channel is the authority — offering one where no probe exists is how
+  // the ACP cell ended up running the schema.org probe and reporting success
+  // while staying unverified.
+  const verifyAction = canVerify(surfaceOf(channel)) ? verifyLabelFor(channel.slug) : null
   const verifyBusy = typeof verifyPendingFor === 'function'
     && verifyPendingFor(channel.slug)
 

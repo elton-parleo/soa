@@ -11,7 +11,9 @@
  * with the ACP row shaped exactly as the upstream writer produces it.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { classifyRecord, aggregateCell, VERIFY_BY_CHANNEL } from '../verificationModel.js'
+import {
+  classifyRecord, aggregateCell, canVerify, SURFACE,
+} from '../verificationModel.js'
 
 // The ACP publication this listing actually has. Freshness is measured
 // against published_at, so the fixture rows sit on either side of it.
@@ -91,35 +93,98 @@ describe('ACP verification rows classify like any other fetch_probe', () => {
   })
 
   it('the cell aggregates a fresh ACP probe into a real drift number', () => {
-    const cell = aggregateCell(PUBLICATION, [ACP_ROW_FRESH], { channelSlug: 'acp' })
+    const cell = aggregateCell(PUBLICATION, [ACP_ROW_FRESH], { channelSlug: 'acp', verificationSurface: SURFACE.FETCH_PROBE })
     expect(cell.drift).toBe(0)
     expect(cell.drift).not.toBeNull()
   })
 
   it('drift findings reach the cell', () => {
-    const cell = aggregateCell(PUBLICATION, [ACP_ROW_WITH_DRIFT], { channelSlug: 'acp' })
+    const cell = aggregateCell(PUBLICATION, [ACP_ROW_WITH_DRIFT], { channelSlug: 'acp', verificationSurface: SURFACE.FETCH_PROBE })
     expect(cell.drift).toBe(1)
   })
 
   it('a probe older than the publication stays unknown, not zero', () => {
-    const cell = aggregateCell(PUBLICATION, [ACP_ROW_STALE], { channelSlug: 'acp' })
+    const cell = aggregateCell(PUBLICATION, [ACP_ROW_STALE], { channelSlug: 'acp', verificationSurface: SURFACE.FETCH_PROBE })
     expect(cell.drift).toBeNull()
   })
 
   it('no verifications at all is unknown — the state the bug left ACP in', () => {
-    const cell = aggregateCell(PUBLICATION, [], { channelSlug: 'acp' })
+    const cell = aggregateCell(PUBLICATION, [], { channelSlug: 'acp', verificationSurface: SURFACE.FETCH_PROBE })
     expect(cell.drift).toBeNull()
   })
 })
 
-describe('every verifiable channel routes somewhere', () => {
-  it('acp and schema_org are the probe-capable channels', () => {
-    expect(Object.keys(VERIFY_BY_CHANNEL).sort()).toEqual(['acp', 'schema_org'])
+describe('the channel decides whether it can be verified', () => {
+  it('a fetch_probe surface can be verified', () => {
+    expect(canVerify(SURFACE.FETCH_PROBE)).toBe(true)
+    expect(canVerify({ verification_surface: 'fetch_probe' })).toBe(true)
   })
 
-  it('channels with no fetchable surface offer no probe', () => {
-    for (const slug of ['merchant_center', 'ucp_uip', 'mcp', 'deals_api', 'deal_directory']) {
-      expect(VERIFY_BY_CHANNEL[slug]).toBeUndefined()
-    }
+  it('acceptance and none surfaces cannot', () => {
+    expect(canVerify(SURFACE.ACCEPTANCE)).toBe(false)
+    expect(canVerify(SURFACE.NONE)).toBe(false)
+  })
+
+  it('an undeclared channel cannot — never a probe by default', () => {
+    expect(canVerify(undefined)).toBe(false)
+    expect(canVerify({})).toBe(false)
+  })
+})
+
+
+// ---------------------------------------------------------------------------
+// the three surface kinds, end to end through the matrix
+// ---------------------------------------------------------------------------
+
+describe('the glyph follows the channel\'s declared surface', () => {
+  const PUB = { status: 'published', published_at: ACP_PUBLISHED_AT }
+
+  it('fetch_probe with no probe yet is ○ — a prompt somebody can answer', () => {
+    const cell = aggregateCell(PUB, [], {
+      channelSlug: 'acp', verificationSurface: SURFACE.FETCH_PROBE,
+    })
+    expect(cell.driftApplies).toBe(true)
+    expect(cell.badge.glyph).toBe('○')
+  })
+
+  it('acceptance renders the muted dash, never ○', () => {
+    const cell = aggregateCell(PUB, [], {
+      channelSlug: 'merchant_center', verificationSurface: SURFACE.ACCEPTANCE,
+    })
+    expect(cell.driftApplies).toBe(false)
+    expect(cell.drift).toBeNull()
+    expect(cell.badge.glyph).toBe('–')
+    expect(cell.badge.kind).toBe('not_applicable')
+    expect(cell.badge.label).toMatch(/no independent verification surface/i)
+    // Dimension 3 still carries this cell.
+    expect(cell.hasAcceptanceAuthority).toBe(true)
+  })
+
+  it('none renders the muted dash and has no acceptance authority either', () => {
+    const cell = aggregateCell(PUB, [], {
+      channelSlug: 'mcp', verificationSurface: SURFACE.NONE,
+    })
+    expect(cell.badge.glyph).toBe('–')
+    expect(cell.hasAcceptanceAuthority).toBe(false)
+  })
+
+  it('an undeclared channel gets the dash, not a probe it cannot run', () => {
+    const cell = aggregateCell(PUB, [], { channelSlug: 'something_new' })
+    expect(cell.driftApplies).toBe(false)
+    expect(cell.badge.glyph).toBe('–')
+  })
+
+  it('a channel that GAINS a probe needs no change here', () => {
+    // ucp_uip is `none` today. When it goes live the API says fetch_probe and
+    // this side starts rendering ○ with nothing edited — which is the whole
+    // point of the field being the truth.
+    const before = aggregateCell(PUB, [], {
+      channelSlug: 'ucp_uip', verificationSurface: SURFACE.NONE,
+    })
+    const after = aggregateCell(PUB, [], {
+      channelSlug: 'ucp_uip', verificationSurface: SURFACE.FETCH_PROBE,
+    })
+    expect(before.badge.glyph).toBe('–')
+    expect(after.badge.glyph).toBe('○')
   })
 })

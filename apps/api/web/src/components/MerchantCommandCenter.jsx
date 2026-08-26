@@ -14,7 +14,7 @@ import {
 } from './merchant-command-center/truesyncDerive.js'
 import {
   aggregateCell, summarize, aggregateProspectProduct, summarizeProspect, ACCEPTANCE,
-  VERIFY_BY_CHANNEL,
+  surfaceOf, canVerify, verifyLabelFor,
 } from './merchant-command-center/verificationModel.js'
 import './merchant-command-center/commandCenter.css'
 
@@ -226,7 +226,10 @@ export default function MerchantCommandCenter({ onNavigate }) {
   const cellFor = useCallback((row, channel) => aggregateCell(
     publicationByCell.get(`${row.listingId}:${channel.slug}`),
     verificationsByCell[`${row.listingId}:${channel.slug}`] || [],
-    { channelSlug: channel.slug },
+    // The channel declares what can be checked about it; this page does not
+    // decide. A channel that gains a probe upstream starts rendering a drift
+    // badge here with no change on this side.
+    { channelSlug: channel.slug, verificationSurface: surfaceOf(channel) },
   ), [publicationByCell, verificationsByCell])
 
   const cells = useMemo(() => {

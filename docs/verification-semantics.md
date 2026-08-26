@@ -55,6 +55,46 @@ Everything below is a pure function of those two.
 
 ---
 
+## Verification surface — what a channel can be checked against
+
+Before the dimensions, a property of the channel itself: **what independent
+surface exists to check it against.** Every channel declares one.
+
+| `verification_surface` | meaning | channels today |
+|---|---|---|
+| `fetch_probe` | something we can fetch and compare to what we published | `schema_org`, `acp` |
+| `acceptance` | no comparable surface of our own, but a third party renders a verdict | `merchant_center` |
+| `none` | nothing to fetch and nobody to ask | `deals_api`, `mcp`, `deal_directory`, `ucp_uip` |
+
+This exists because the matrix was rendering `○ Unverified` on cells that
+could never become anything else. `○` is supposed to mean "a probe could run
+and none has" — a prompt to act. On a channel with no probe it meant "this
+will be `○` forever", which is not a prompt, and a reader who learns to
+ignore a glyph in one column stops reading it in the column where it matters.
+
+**Dimension 2 applies only to `fetch_probe` channels.** For `acceptance` and
+`none` channels the cell renders no drift glyph at all — a muted dash, with
+the tooltip *"no independent verification surface for this channel yet"*. Not
+`○`, not `✓`, and never `⚠`.
+
+For `merchant_center` the distinction is worth stating plainly, because it
+looks like a gap and is not: drift at our layer is not measurable against
+Google's surface. We cannot fetch what Google renders; we can only ask what
+Google decided. The acceptance dimension carries that cell, and asking it for
+a drift number would be asking a question the surface cannot answer.
+
+`ucp_uip` is `none` today because it publishes nothing. When it goes live it
+becomes `fetch_probe`, on the same terms as ACP — the field moves with the
+implementation, which is why it is derived from the code rather than stored
+as editable data.
+
+**The field is the truth.** No consumer may hardcode a channel list; a
+channel that gains or loses a probe changes this one declaration and
+everything follows. `ucp_uip` moving from `none` to `fetch_probe` must not
+require touching a classifier, a legend, or a button.
+
+---
+
 ## Four orthogonal dimensions
 
 A cell is described by four dimensions. **No dimension may contribute to
@@ -78,6 +118,10 @@ Absence of a publication row is `never` — never a blank, never an
 optimistic green.
 
 ### 2. Drift — *our comparison*
+
+**Only for channels whose `verification_surface` is `fetch_probe`.** On any
+other channel this dimension does not apply, is not `null`, and renders no
+glyph — see the verification-surface section above.
 
 `number | null`. The count of master-vs-surface findings from the newest
 **fresh, parseable `fetch_probe`** record.
@@ -223,6 +267,27 @@ the finding most likely to explain the rest of the row.
 States are `allowed`, `blocked`, `partial`, or `unknown`. `unknown` means
 robots.txt could not be read — never a guess in either direction.
 
+#### 2c. Self-hosted surfaces
+
+`acp` joins dimension 2 on the same terms as `schema_org`: a `fetch_probe`
+record, integrity plus per-variant findings, drift counted the same way.
+
+The difference is whose surface it is. A schema.org probe fetches a page
+built by a storefront we do not control, so drift there is a real
+possibility with a real cause. An ACP probe fetches our own endpoint,
+where both ends are ours, and it can only catch a serving layer that
+reformats, truncates or serves a stale artifact.
+
+That is a weaker check, and the column should not be read as equally
+strong evidence. What it does buy is that `published` stops being a claim
+the database makes about itself: the artifact is fetchable, and the fetch
+is compared to what the publication row says was published.
+
+Findings are keyed by `item_id` and cover `title`, `price`, `sale_price`,
+`availability` and `gtin`. An item on one side only is its own finding —
+`field: "item"`, expected/observed `present`/`absent` — because a feed
+that quietly drops a variant is not a feed that agrees.
+
 ### 3. Surface acceptance — *their opinion*
 
 Only meaningful for channels that have an **acceptance authority** — a
@@ -336,9 +401,15 @@ The cell's primary badge is the **Drift** badge, and only Drift:
 
 | drift | glyph |
 |---|---|
+| not applicable — `verification_surface` is not `fetch_probe` | `–` muted, tooltip "no independent verification surface for this channel yet" |
 | `null` | `○` not yet verified |
 | `0` | `✓` verified — no drift |
 | `n > 0` | `⚠ n` |
+
+The first row is the one that keeps the other three honest. `○` means a probe
+surface exists and no fresh record does; it is a prompt to press Verify. A
+channel with no probe surface must never wear it, or `○` degrades into
+"unknown for reasons unknown" and stops being actionable anywhere.
 
 Alongside it, and never merged into it:
 
@@ -356,8 +427,8 @@ All derived by `summarize(cells)`; no component counts anything.
 | indicator | definition |
 |---|---|
 | Published | cells whose publish state is `published` |
-| Verified | cells with `drift === 0` |
-| Drifting | cells with `drift > 0` |
+| Verified | cells with `drift === 0` — `fetch_probe` channels only |
+| Drifting | cells with `drift > 0` — `fetch_probe` channels only |
 | Issues | total issues across cells with acceptance `pending` or `disapproved` |
 | Unreadable | total `unreadableCount` across cells |
 | Stale | records excluded by the freshness rule |

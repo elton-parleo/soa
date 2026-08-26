@@ -28,20 +28,11 @@
 
 export const METHOD_FETCH_PROBE = 'fetch_probe'
 
-// Which channels can actually be probed, and what probing one means.
-//
-// A probe fetches a surface and compares it to what we published there, so a
-// channel only has one if it HAS a fetchable surface. schema.org's is the
-// merchant's storefront; ACP's is the feed endpoint we serve. Merchant Center
-// has no probe — its opinion comes from Google via gmc_diagnostics, which is
-// a different dimension entirely — and the thin channels publish nowhere to
-// fetch from.
-//
-// This map exists because the drawer used to offer "Verify now" on every
-// channel and route all of them to the schema.org probe. That returned a
-// success toast, wrote a schema_org row, and left the cell you clicked on
-// still unverified — which is exactly as misleading as it sounds.
-export const VERIFY_BY_CHANNEL = {
+// Per-channel copy for the Verify control. Presentation only — WHETHER a
+// channel gets the control is decided by its verification_surface, never
+// by membership of this object. A fetch_probe channel with no entry here
+// still gets a button; it just gets the default wording.
+export const VERIFY_LABELS = {
   schema_org: {
     label: 'Verify now',
     title: "Fetch this listing's live PDP and record what it served",
@@ -53,8 +44,13 @@ export const VERIFY_BY_CHANNEL = {
   },
 }
 
-export function canVerify(channelSlug) {
-  return Object.prototype.hasOwnProperty.call(VERIFY_BY_CHANNEL, channelSlug)
+export const DEFAULT_VERIFY_LABEL = {
+  label: 'Verify now',
+  title: 'Fetch this channel\'s surface and compare it to what we published',
+}
+
+export function verifyLabelFor(channelSlug) {
+  return VERIFY_LABELS[channelSlug] || DEFAULT_VERIFY_LABEL
 }
 export const METHOD_GMC_DIAGNOSTICS = 'gmc_diagnostics'
 
@@ -119,17 +115,46 @@ function validationReason(validation) {
   return errors.length > 0 ? errors.join('; ') : null
 }
 
-// ─── Acceptance authority (dimension 3 applicability) ────────────────
+// ─── Verification surface (which dimensions apply at all) ────────────
 
-// A channel has an acceptance authority when a third party can accept
-// or reject what we sent. Today only Merchant Center can. Every other
-// channel's acceptance is permanently `unknown` and renders nothing —
-// there is nobody to have an opinion.
-const ACCEPTANCE_AUTHORITY_CHANNELS = new Set(['merchant_center'])
-
-export function hasAcceptanceAuthority(channelSlug) {
-  return ACCEPTANCE_AUTHORITY_CHANNELS.has(channelSlug)
+// What independent surface exists to check a channel against. The API
+// declares this per channel (`verification_surface` on /channels); this
+// module never decides it from a list of its own, so a channel that
+// gains a probe changes one declaration upstream and the classifier,
+// the legend, the header counts and the Verify buttons all follow.
+//
+// See docs/verification-semantics.md, "Verification surface".
+export const SURFACE = {
+  FETCH_PROBE: 'fetch_probe',   // we can fetch it and compare
+  ACCEPTANCE: 'acceptance',     // no surface of ours; a third party judges
+  NONE: 'none',                 // nothing to fetch, nobody to ask
 }
+
+// Unknown defaults to NONE, never to a probe. A channel nobody has
+// declared must not acquire a Verify button by accident.
+export function surfaceOf(channel) {
+  if (typeof channel === 'string') return channel || SURFACE.NONE
+  const declared = channel?.verification_surface
+  return typeof declared === 'string' && declared ? declared : SURFACE.NONE
+}
+
+// Dimension 2 applies only where something can be fetched and compared.
+export function driftApplies(verificationSurface) {
+  return surfaceOf(verificationSurface) === SURFACE.FETCH_PROBE
+}
+
+// Dimension 3 applies where a third party renders a verdict.
+export function hasAcceptanceAuthority(verificationSurface) {
+  return surfaceOf(verificationSurface) === SURFACE.ACCEPTANCE
+}
+
+// Whether to offer a Verify control for this channel.
+export function canVerify(verificationSurface) {
+  return driftApplies(verificationSurface)
+}
+
+export const NO_SURFACE_TOOLTIP =
+  'no independent verification surface for this channel yet'
 
 export const ACCEPTANCE = {
   APPROVED: 'approved',
@@ -423,7 +448,11 @@ function pick(...values) {
  * not the newest record overall. A cell can hold both a probe history
  * and an acceptance history, and neither speaks for the other.
  */
-export function aggregateCell(publication, records = [], { channelSlug = null } = {}) {
+export function aggregateCell(
+  publication,
+  records = [],
+  { channelSlug = null, verificationSurface = SURFACE.NONE } = {},
+) {
   const { state: publishState, reason: publishReason } = publishStateOf(publication)
   const latestPublishedAt = publication?.published_at || null
 
@@ -434,13 +463,18 @@ export function aggregateCell(publication, records = [], { channelSlug = null } 
   const fresh = classified.filter((c) => c.fresh)
   const stale = classified.filter((c) => !c.fresh)
 
-  // Dimension 2 — drift. null unless a fresh probe says otherwise.
-  const probe = fresh.find((c) => c.kind === 'probe') || null
-  const drift = probe ? probe.findings.length : null
+  // Dimension 2 — drift. Applies ONLY where something can be fetched and
+  // compared. On an acceptance or none channel it does not apply at all,
+  // which is a different statement from "null" (not yet verified): null is
+  // a prompt to press Verify, and on a channel with no probe that prompt
+  // could never be answered.
+  const applies = driftApplies(verificationSurface)
+  const probe = applies ? (fresh.find((c) => c.kind === 'probe') || null) : null
+  const drift = applies ? (probe ? probe.findings.length : null) : null
 
   // Dimension 3 — acceptance. Only where somebody has the authority to
   // have an opinion.
-  const acceptanceRecord = hasAcceptanceAuthority(channelSlug)
+  const acceptanceRecord = hasAcceptanceAuthority(verificationSurface)
     ? (fresh.find((c) => c.kind === 'acceptance') || null)
     : null
   const acceptance = acceptanceRecord ? acceptanceRecord.state : ACCEPTANCE.UNKNOWN
@@ -472,7 +506,10 @@ export function aggregateCell(publication, records = [], { channelSlug = null } 
     acceptanceRecord,
     issues,
     issueCount: issues.length,
-    hasAcceptanceAuthority: hasAcceptanceAuthority(channelSlug),
+    hasAcceptanceAuthority: hasAcceptanceAuthority(verificationSurface),
+
+    verificationSurface: surfaceOf(verificationSurface),
+    driftApplies: applies,
 
     unreadableCount: unreadable.length,
     unreadableRecords: unreadable,
@@ -486,7 +523,7 @@ export function aggregateCell(publication, records = [], { channelSlug = null } 
 
     records: classified,
     lastVerifiedAt: fresh.length > 0 ? fresh[0].createdAt : null,
-    badge: driftBadge(drift),
+    badge: driftBadge(drift, applies),
   }
 }
 
@@ -500,6 +537,10 @@ export const DRIFT_GLYPH = {
   unknown: '○',
   clean: '✓',
   drift: '⚠',
+  // A channel with no probe surface. Muted, and deliberately not ○: ○ means
+  // "a probe could run and none has", which is a prompt. This is "there is
+  // nothing here to run", which is not.
+  not_applicable: '–',
 }
 
 export const DRIFT_LABEL = {
@@ -513,7 +554,15 @@ export const DRIFT_LABEL = {
  * observability get their own markers; merging them into this one is
  * the mistake the whole model is here to prevent.
  */
-export function driftBadge(drift) {
+export function driftBadge(drift, applies = true) {
+  if (!applies) {
+    return {
+      kind: 'not_applicable',
+      glyph: DRIFT_GLYPH.not_applicable,
+      label: NO_SURFACE_TOOLTIP,
+      count: null,
+    }
+  }
   if (drift == null) return { kind: 'unknown', glyph: DRIFT_GLYPH.unknown, label: DRIFT_LABEL.unknown, count: null }
   if (drift === 0) return { kind: 'clean', glyph: DRIFT_GLYPH.clean, label: DRIFT_LABEL.clean, count: 0 }
   return { kind: 'drift', glyph: DRIFT_GLYPH.drift, label: DRIFT_LABEL.drift, count: drift }
@@ -539,6 +588,10 @@ export function summarize(cells = []) {
     notFoundCells: 0,
     unreadableCount: 0,
     staleCount: 0,
+    // Cells where dimension 2 does not apply at all — acceptance and none
+    // channels alike. Distinct from `null` drift, which means a probe
+    // could have run and has not.
+    driftNotApplicableCells: 0,
     lastVerifiedAt: null,
   }
 
@@ -547,9 +600,13 @@ export function summarize(cells = []) {
     totals.totalCells += 1
     if (cell.publishState === PUBLISH_STATE.PUBLISHED) totals.publishedCells += 1
 
-    // Dimension 2 only.
-    if (cell.drift === 0) totals.verifiedCells += 1
-    if (typeof cell.drift === 'number' && cell.drift > 0) {
+    // Dimension 2 only, and only on channels where it applies — a cell with
+    // no probe surface is neither verified nor drifting, it is out of scope
+    // for the question.
+    if (cell.driftApplies === false) {
+      totals.driftNotApplicableCells += 1
+    } else if (cell.drift === 0) totals.verifiedCells += 1
+    if (cell.driftApplies !== false && typeof cell.drift === 'number' && cell.drift > 0) {
       totals.driftingCells += 1
       totals.driftFindings += cell.drift
     }

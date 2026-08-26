@@ -2,7 +2,7 @@ import React from 'react'
 import { relativeTime, absoluteTime } from './truesyncDerive.js'
 import {
   PUBLISH_STATE, PUBLISH_STATE_LABEL, ACCEPTANCE, ACCEPTANCE_LABEL, ACCEPTANCE_TONE,
-  STALE_NOTE,
+  STALE_NOTE, NO_SURFACE_TOOLTIP,
 } from './verificationModel.js'
 
 /**
@@ -65,7 +65,13 @@ function Cell({ cell, channel }) {
           <i className={`mcc-seg ${SEG_BY_PUBLISH_STATE[cell.publishState] || 's-hold'}`} aria-hidden="true" />
 
           {/* Dimension 2 — the primary badge, drift and only drift. */}
-          <span className={`mcc-verify ${cell.badge.kind}`} aria-label={`Drift: ${cell.badge.label}`}>
+          <span
+            className={`mcc-verify ${cell.badge.kind}`}
+            aria-label={cell.driftApplies === false
+              ? cell.badge.label
+              : `Drift: ${cell.badge.label}`}
+            title={cell.driftApplies === false ? cell.badge.label : undefined}
+          >
             {cell.badge.glyph}
             {cell.badge.count > 0 && <span> {cell.badge.count}</span>}
           </span>
@@ -123,6 +129,9 @@ export default function SyncMatrix({
           <span><span className="mcc-verify clean">✓</span>No drift</span>
           <span><span className="mcc-verify drift">⚠</span>Drift</span>
           <span><span className="mcc-verify unknown">○</span>Unverified</span>
+          <span title={NO_SURFACE_TOOLTIP}>
+            <span className="mcc-verify not_applicable">–</span>No verification surface
+          </span>
           <span><span className="mcc-accept tone-drift">◐</span>Pending review</span>
           <span><span className="mcc-accept tone-fail">◼</span>Not approved</span>
           <span><span className="mcc-verify unreadable">?</span>Unreadable</span>

@@ -4,48 +4,55 @@
     "name": "Schema.org Product/Offer",
     "depth_label": "Fully live on demo store",
     "spec_version": "schemaorg-merchant-listing-2026-08-18",
-    "is_active": true
+    "is_active": true,
+    "verification_surface": "fetch_probe"
   },
   {
     "slug": "merchant_center",
     "name": "Google Merchant Center feed",
     "depth_label": "Live at API layer; accepted + passing diagnostics (not \"surfaced\")",
     "spec_version": "gmc-products-v1-2026-08-18",
-    "is_active": true
+    "is_active": true,
+    "verification_surface": "acceptance"
   },
   {
     "slug": "acp",
     "name": "Agentic Commerce Protocol",
     "depth_label": "Spec-conformant, self-hosted, validated (not enrolled)",
     "spec_version": "acp-feed-stable-2026-08-18",
-    "is_active": true
+    "is_active": true,
+    "verification_surface": "fetch_probe"
   },
   {
     "slug": "ucp_uip",
     "name": "UCP / Universal Incentive Protocol",
     "depth_label": "Spec-conformant, self-hosted (not enrolled)",
     "spec_version": "ucp-2026-04-08",
-    "is_active": true
+    "is_active": true,
+    "verification_surface": "none"
   },
   {
     "slug": "deals_api",
     "name": "Parleo Deals API",
     "depth_label": "Live today",
     "spec_version": "parleo-internal",
-    "is_active": true
+    "is_active": true,
+    "verification_surface": "none"
   },
   {
     "slug": "mcp",
     "name": "Model Context Protocol server",
     "depth_label": "Live today",
     "spec_version": "parleo-internal",
-    "is_active": true
+    "is_active": true,
+    "verification_surface": "none"
   },
   {
     "slug": "deal_directory",
     "name": "Deal directory / affiliate listing",
     "depth_label": "Exists",
     "spec_version": "parleo-internal",
-    "is_active": true
+    "is_active": true,
+    "verification_surface": "none"
   }
 ]

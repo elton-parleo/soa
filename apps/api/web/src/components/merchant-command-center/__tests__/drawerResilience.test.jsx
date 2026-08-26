@@ -27,7 +27,7 @@ import DrawerErrorBoundary from '../DrawerErrorBoundary.jsx'
 import { unwrapVerifications } from '../../../truesyncApi.js'
 import { truesyncApi, fetchAllVerifications } from '../../../truesyncApi.js'
 import { buildCatalogRows, latestPublicationByCell, orderChannels } from '../truesyncDerive.js'
-import { aggregateCell } from '../verificationModel.js'
+import { aggregateCell, surfaceOf } from '../verificationModel.js'
 
 vi.mock('../../../truesyncApi.js', async (importOriginal) => {
   const actual = await importOriginal()
@@ -79,7 +79,7 @@ function drawerProps(overrides = {}) {
   const cellFor = (row, channel) => aggregateCell(
     byCell.get(`${row.listingId}:${channel.slug}`),
     records[`${row.listingId}:${channel.slug}`] || [],
-    { channelSlug: channel.slug },
+    { channelSlug: channel.slug, verificationSurface: surfaceOf(channel) },
   )
 
   const { verificationsByCell, ...rest } = overrides

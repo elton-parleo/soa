@@ -86,6 +86,16 @@ const noMethod = (t) => at(t, { id: 901, method: null, drift: { some: 'payload' 
 // Each row asserts all four dimensions plus the glyph.
 const CHANNEL_GMC = 'merchant_center'
 const CHANNEL_PLAIN = 'schema_org'
+const CHANNEL_NONE = 'mcp'
+
+// What the API declares for each channel. The model never decides this
+// itself, so the tests must state it exactly as /channels would.
+const SURFACE_BY_CHANNEL = {
+  [CHANNEL_PLAIN]: 'fetch_probe',
+  acp: 'fetch_probe',
+  [CHANNEL_GMC]: 'acceptance',
+  [CHANNEL_NONE]: 'none',
+}
 
 const TABLE = [
   // ── no records at all ───────────────────────────────────────────
@@ -145,31 +155,31 @@ const TABLE = [
   // THE case: Google reports a lifecycle code as DISAPPROVED.
   { name: 'GMC pending review (severity DISAPPROVED) — amber pending, drift untouched',
     channel: CHANNEL_GMC, publication: PUBLISHED, records: [gmcPending(AFTER)],
-    expect: { publishState: 'published', drift: null, acceptance: 'pending', issues: 1, unreadable: 0, stale: 0, glyph: '○', tone: 'drift' } },
+    expect: { publishState: 'published', drift: null, acceptance: 'pending', issues: 1, unreadable: 0, stale: 0, glyph: '–', tone: 'drift' } },
 
   { name: 'GMC approved',
     channel: CHANNEL_GMC, publication: PUBLISHED, records: [gmcApproved(AFTER)],
-    expect: { publishState: 'published', drift: null, acceptance: 'approved', issues: 0, unreadable: 0, stale: 0, glyph: '○', tone: 'sync' } },
+    expect: { publishState: 'published', drift: null, acceptance: 'approved', issues: 0, unreadable: 0, stale: 0, glyph: '–', tone: 'sync' } },
 
   { name: 'GMC genuine disapproval — red',
     channel: CHANNEL_GMC, publication: PUBLISHED, records: [gmcDisapproved(AFTER)],
-    expect: { publishState: 'published', drift: null, acceptance: 'disapproved', issues: 1, unreadable: 0, stale: 0, glyph: '○', tone: 'fail' } },
+    expect: { publishState: 'published', drift: null, acceptance: 'disapproved', issues: 1, unreadable: 0, stale: 0, glyph: '–', tone: 'fail' } },
 
   { name: 'GMC lifecycle + genuine together — cell is disapproved',
     channel: CHANNEL_GMC, publication: PUBLISHED, records: [gmcMixed(AFTER)],
-    expect: { publishState: 'published', drift: null, acceptance: 'disapproved', issues: 2, unreadable: 0, stale: 0, glyph: '○', tone: 'fail' } },
+    expect: { publishState: 'published', drift: null, acceptance: 'disapproved', issues: 2, unreadable: 0, stale: 0, glyph: '–', tone: 'fail' } },
 
   { name: 'GMC 404 ghost — not_found, no issues, no drift',
     channel: CHANNEL_GMC, publication: PUBLISHED, records: [gmcGhost(AFTER)],
-    expect: { publishState: 'published', drift: null, acceptance: 'not_found', issues: 0, unreadable: 0, stale: 0, glyph: '○', tone: 'hold' } },
+    expect: { publishState: 'published', drift: null, acceptance: 'not_found', issues: 0, unreadable: 0, stale: 0, glyph: '–', tone: 'hold' } },
 
   { name: 'GMC publish_failed — unavailable, counted nowhere',
     channel: CHANNEL_GMC, publication: FAILED_PUBLISH, records: [gmcPublishFailed(AFTER)],
-    expect: { publishState: 'failed', drift: null, acceptance: 'unavailable', issues: 0, unreadable: 0, stale: 0, glyph: '○', tone: 'hold' } },
+    expect: { publishState: 'failed', drift: null, acceptance: 'unavailable', issues: 0, unreadable: 0, stale: 0, glyph: '–', tone: 'hold' } },
 
   { name: 'STALE GMC pending — acceptance unknown again',
     channel: CHANNEL_GMC, publication: PUBLISHED, records: [gmcPending(BEFORE)],
-    expect: { publishState: 'published', drift: null, acceptance: 'unknown', issues: 0, unreadable: 0, stale: 1, glyph: '○' } },
+    expect: { publishState: 'published', drift: null, acceptance: 'unknown', issues: 0, unreadable: 0, stale: 1, glyph: '–' } },
 
   // Acceptance authority is a property of the channel.
   { name: 'GMC-shaped record on a channel with no acceptance authority — ignored',
@@ -177,18 +187,42 @@ const TABLE = [
     expect: { publishState: 'published', drift: null, acceptance: 'unknown', issues: 0, unreadable: 0, stale: 0, glyph: '○' } },
 
   // ── both dimensions at once, the whole point ────────────────────
-  { name: 'fresh clean probe AND pending acceptance — ✓ drift, amber issue, no contamination',
+  // A stray probe record on an acceptance channel is IGNORED for drift. Drift
+  // at our layer is not measurable against Google's surface, so a probe that
+  // somehow landed there answers a question the channel cannot be asked —
+  // and the acceptance verdict still comes through untouched.
+  { name: 'acceptance channel: a stray probe record does not become a drift number',
     channel: CHANNEL_GMC, publication: PUBLISHED, records: [probeClean(AFTER), gmcPending(AFTER)],
-    expect: { publishState: 'published', drift: 0, acceptance: 'pending', issues: 1, unreadable: 0, stale: 0, glyph: '✓', tone: 'drift' } },
+    expect: { publishState: 'published', drift: null, acceptance: 'pending', issues: 1, unreadable: 0, stale: 0, glyph: '–', tone: 'drift' } },
 
-  { name: 'drifting probe AND approved acceptance — both true at once',
+  { name: 'acceptance channel: a drifting probe record still yields no drift, and approval stands',
     channel: CHANNEL_GMC, publication: PUBLISHED, records: [probeDrift(AFTER, 1), gmcApproved(AFTER)],
-    expect: { publishState: 'published', drift: 1, acceptance: 'approved', issues: 0, unreadable: 0, stale: 0, glyph: '⚠', tone: 'sync' } },
+    expect: { publishState: 'published', drift: null, acceptance: 'approved', issues: 0, unreadable: 0, stale: 0, glyph: '–', tone: 'sync' } },
 
-  { name: 'probe + acceptance + unreadable together — three separate counts',
+  { name: 'acceptance channel: acceptance and unreadable stay separate, drift stays absent',
     channel: CHANNEL_GMC, publication: PUBLISHED,
     records: [probeClean(AFTER), gmcDisapproved(AFTER), unparsed(AFTER)],
-    expect: { publishState: 'published', drift: 0, acceptance: 'disapproved', issues: 1, unreadable: 1, stale: 0, glyph: '✓', tone: 'fail' } },
+    expect: { publishState: 'published', drift: null, acceptance: 'disapproved', issues: 1, unreadable: 1, stale: 0, glyph: '–', tone: 'fail' } },
+
+  // The same no-contamination property, on a channel where dimension 2 does
+  // apply: a probe and an unreadable record must not reach each other.
+  { name: 'fetch_probe channel: a clean probe alongside an unreadable record — separate counts',
+    channel: CHANNEL_PLAIN, publication: PUBLISHED,
+    records: [probeClean(AFTER), unparsed(AFTER)],
+    expect: { publishState: 'published', drift: 0, acceptance: 'unknown', issues: 0, unreadable: 1, stale: 0, glyph: '✓' } },
+
+  // ── the three surface kinds ────────────────────────────────────────────
+  { name: 'surface none: published, no probe, no verdict — a muted dash, never ○',
+    channel: CHANNEL_NONE, publication: PUBLISHED, records: [],
+    expect: { publishState: 'published', drift: null, acceptance: 'unknown', issues: 0, unreadable: 0, stale: 0, glyph: '–' } },
+
+  { name: 'surface none: even a probe record cannot give it a drift number',
+    channel: CHANNEL_NONE, publication: PUBLISHED, records: [probeClean(AFTER)],
+    expect: { publishState: 'published', drift: null, acceptance: 'unknown', issues: 0, unreadable: 0, stale: 0, glyph: '–' } },
+
+  { name: 'surface fetch_probe: published with no probe yet — ○, the actionable unknown',
+    channel: CHANNEL_PLAIN, publication: PUBLISHED, records: [],
+    expect: { publishState: 'published', drift: null, acceptance: 'unknown', issues: 0, unreadable: 0, stale: 0, glyph: '○' } },
 
   // ── unparseable ─────────────────────────────────────────────────
   { name: 'unknown method — unreadable, never drift',
@@ -206,12 +240,15 @@ const TABLE = [
   { name: 'GMC record with an unreadable payload — unreadable, not an acceptance verdict',
     channel: CHANNEL_GMC, publication: PUBLISHED,
     records: [at(AFTER, { method: 'gmc_diagnostics', drift: { unexpected: 'shape' } })],
-    expect: { publishState: 'published', drift: null, acceptance: 'unknown', issues: 0, unreadable: 1, stale: 0, glyph: '○' } },
+    expect: { publishState: 'published', drift: null, acceptance: 'unknown', issues: 0, unreadable: 1, stale: 0, glyph: '–' } },
 ]
 
 describe('the cell model — full matrix', () => {
   it.each(TABLE.map((row) => [row.name, row]))('%s', (_name, row) => {
-    const cell = aggregateCell(row.publication, row.records, { channelSlug: row.channel })
+    const cell = aggregateCell(row.publication, row.records, {
+      channelSlug: row.channel,
+      verificationSurface: row.surface || SURFACE_BY_CHANNEL[row.channel],
+    })
 
     // All four dimensions asserted on every row. A leak between them
     // shows up here or nowhere.
@@ -356,15 +393,23 @@ describe('publish state carries its reason', () => {
 // ─── summarize ───────────────────────────────────────────────────────
 
 describe('summarize keeps the dimensions apart', () => {
+  const cell = (publication, records, channel) => aggregateCell(
+    publication, records,
+    { channelSlug: channel, verificationSurface: SURFACE_BY_CHANNEL[channel] },
+  )
+
   const cells = [
-    aggregateCell(PUBLISHED, [probeClean(AFTER)], { channelSlug: CHANNEL_PLAIN }),
-    aggregateCell(PUBLISHED, [probeDrift(AFTER, 3)], { channelSlug: CHANNEL_PLAIN }),
-    aggregateCell(PUBLISHED, [gmcPending(AFTER)], { channelSlug: CHANNEL_GMC }),
-    aggregateCell(PUBLISHED, [gmcDisapproved(AFTER)], { channelSlug: CHANNEL_GMC }),
-    aggregateCell(PUBLISHED, [gmcGhost(AFTER)], { channelSlug: CHANNEL_GMC }),
-    aggregateCell(PUBLISHED, [unparsed(AFTER)], { channelSlug: CHANNEL_PLAIN }),
-    aggregateCell(PUBLISHED, [probeClean(BEFORE)], { channelSlug: CHANNEL_PLAIN }),
-    aggregateCell(NEVER_PUBLISHED, [], { channelSlug: CHANNEL_PLAIN }),
+    cell(PUBLISHED, [probeClean(AFTER)], CHANNEL_PLAIN),
+    cell(PUBLISHED, [probeDrift(AFTER, 3)], CHANNEL_PLAIN),
+    cell(PUBLISHED, [gmcPending(AFTER)], CHANNEL_GMC),
+    cell(PUBLISHED, [gmcDisapproved(AFTER)], CHANNEL_GMC),
+    cell(PUBLISHED, [gmcGhost(AFTER)], CHANNEL_GMC),
+    cell(PUBLISHED, [unparsed(AFTER)], CHANNEL_PLAIN),
+    cell(PUBLISHED, [probeClean(BEFORE)], CHANNEL_PLAIN),
+    cell(NEVER_PUBLISHED, [], CHANNEL_PLAIN),
+    // A channel with no verification surface at all: counted in neither the
+    // verified nor the drifting bucket, and not silently treated as unknown.
+    cell(PUBLISHED, [], CHANNEL_NONE),
   ]
   const totals = summarize(cells)
 
@@ -379,6 +424,15 @@ describe('summarize keeps the dimensions apart', () => {
     expect(totals.pendingCells).toBe(1)
     expect(totals.disapprovedCells).toBe(1)
     expect(totals.notFoundCells).toBe(1)      // the ghost has no issues to count
+  })
+
+  it('counts cells where drift does not apply in neither drift bucket', () => {
+    // The three GMC cells (acceptance) plus the one none cell. Dimension 2
+    // does not apply to any of them, so none is verified and none is
+    // drifting — and saying that is not the same as saying "unknown".
+    expect(totals.driftNotApplicableCells).toBe(4)
+    expect(totals.verifiedCells).toBe(1)
+    expect(totals.driftingCells).toBe(1)
   })
 
   it('counts unreadable and stale in their own buckets', () => {
@@ -396,7 +450,7 @@ describe('summarize keeps the dimensions apart', () => {
   })
 
   it('counts published cells regardless of any verification', () => {
-    expect(totals.publishedCells).toBe(7)
-    expect(totals.totalCells).toBe(8)
+    expect(totals.publishedCells).toBe(8)   // 9 cells, one never published
+    expect(totals.totalCells).toBe(9)
   })
 })

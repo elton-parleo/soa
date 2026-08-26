@@ -207,6 +207,10 @@
 /* Dimension 4 — distinct from drift on purpose: a record we could not
    read is a gap in this page, not a finding about the catalog. */
 .mcc-verify.unreadable { color: var(--ink-faint); font-weight: 700; }
+/* No verification surface for this channel. Deliberately quieter than
+   .unknown: this is not a prompt to verify, it is the absence of
+   anything to verify against. */
+.mcc-verify.not_applicable { color: var(--ink-faint); opacity: .45; }
 
 /* Dimension 3 — the channel's own verdict, never merged into the drift
    badge. Amber for the lifecycle states, red only for a genuine

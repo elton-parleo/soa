@@ -23,7 +23,7 @@ import {
   buildCatalogRows, latestPublicationByCell, orderChannels,
   gmcDeepLink, parseGmcRef, gmcExternalRefs, gmcAccountId, gmcOfferLink,
 } from '../truesyncDerive.js'
-import { aggregateCell } from '../verificationModel.js'
+import { aggregateCell, surfaceOf } from '../verificationModel.js'
 
 const FRESH = '2099-01-01T00:00:00Z'   // newer than any fixture publish
 const at = (t, record) => ({ ...record, created_at: t })
@@ -56,7 +56,7 @@ function drawerProps(overrides = {}) {
   const cellFor = (row, channel) => aggregateCell(
     byCell.get(`${row.listingId}:${channel.slug}`),
     records[`${row.listingId}:${channel.slug}`] || [],
-    { channelSlug: channel.slug },
+    { channelSlug: channel.slug, verificationSurface: surfaceOf(channel) },
   )
 
   const { records: _r, ...rest } = overrides

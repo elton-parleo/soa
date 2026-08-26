@@ -57,7 +57,7 @@ describe('a prospect record contributes to no cell dimension', () => {
     const cell = aggregateCell(
       { status: 'published', published_at: '2026-08-25T22:00:00Z' },
       [PROSPECT_ROW],
-      { channelSlug: 'schema_org' },
+      { channelSlug: 'schema_org', verificationSurface: 'fetch_probe' },
     )
     expect(cell.drift).toBeNull()
     expect(cell.badge.glyph).toBe('○')
