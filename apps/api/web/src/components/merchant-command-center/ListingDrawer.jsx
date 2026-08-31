@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import {
   publicationHistoryForCell, relativeTime, absoluteTime,
   gmcExternalRefs, gmcAccountId, gmcOfferLink,
+  buildPromotionRows,
 } from './truesyncDerive.js'
 import {
   PUBLISH_STATE, PUBLISH_STATE_LABEL, ACCEPTANCE, ACCEPTANCE_LABEL, ACCEPTANCE_TONE,
@@ -251,6 +252,133 @@ function StaleSection({ cell }) {
  * they answer questions. Nothing here counts anything; every number
  * comes from `aggregateCell` (see docs/verification-semantics.md).
  */
+// ─── Promotions — the other artifact kind in the Merchant Center lane ────────
+//
+// A promotion is compiled from one incentive and published through the same
+// channel as the product feed, so it belongs in this tab rather than a column
+// of its own. Three outcomes, and telling them apart is the whole job:
+//
+//   published + review state  Google's verdict, with its reason verbatim
+//   refused                   WE declined to make the claim. Nothing is wrong,
+//                             so it renders neutrally — the `not_applicable`
+//                             pattern. The reason is the point of the row.
+//   failed                    the payload was rejected, or the call broke
+//
+// The refusal reason is displayed at full weight, not tucked into a tooltip.
+// "store has no subscription mechanic; publishing would be a false public
+// claim" is the sentence that explains why a correct, validated promotion did
+// not go out, and a panel that hides it teaches an operator that promotions
+// silently vanish.
+
+function PromotionReviewBadge({ review, status }) {
+  if (status !== 'published') return null
+  if (!review) {
+    return (
+      <span className="mcc-badge hold" title="No review has been read back yet.">
+        Awaiting review
+      </span>
+    )
+  }
+  return <span className={`mcc-badge ${review.tone}`}>{review.label}</span>
+}
+
+function PromotionRow({ promotion, accountId }) {
+  const { review } = promotion
+
+  return (
+    <li className={`mcc-promo${promotion.refused ? ' mcc-promo-refused' : ''}`}>
+      <div className="mcc-gmc-head">
+        <span className="mcc-promo-mechanic">{text(promotion.mechanic)}</span>
+        {promotion.code && <span className="mcc-promo-code mono">{text(promotion.code)}</span>}
+        <PromotionReviewBadge review={review} status={promotion.status} />
+        {promotion.refused && (
+          <span className="mcc-badge hold" title="Compiled and valid; deliberately not published.">
+            Not published
+          </span>
+        )}
+        {promotion.status === 'failed' && <span className="mcc-badge fail">Failed</span>}
+        {promotion.publishedAt && (
+          <span className="mcc-gmc-when" title={absoluteTime(promotion.publishedAt) || ''}>
+            {relativeTime(promotion.publishedAt) || ''}
+          </span>
+        )}
+      </div>
+
+      {promotion.title && <div className="mcc-promo-title">{text(promotion.title)}</div>}
+
+      {/* The honour gate's reason, verbatim and at full weight. Neutral
+          styling: nothing is wrong, and colouring it as an error would tell
+          an operator to go and fix something that is working as designed. */}
+      {promotion.refused && promotion.reason && (
+        <p className="mcc-promo-reason">{text(promotion.reason)}</p>
+      )}
+
+      {promotion.status === 'failed' && promotion.reason && (
+        <p className="mcc-promo-reason mcc-promo-failed">{text(promotion.reason)}</p>
+      )}
+
+      {/* Google's words, not ours. A rejection without its reason is an
+          instruction to guess. */}
+      {review && review.reasons.length > 0 && (
+        <ul className="mcc-gmc-issues">
+          {review.reasons.map((issue, i) => (
+            <li key={`${issue.code}-${i}`} className={`sev-${review.tone}`}>
+              <span className={`mcc-dot ${review.tone === 'drift' ? 'drift' : 'fail'}`} />
+              <span className="mcc-gmc-issue-body">
+                <span className="mcc-gmc-code mono">{text(issue.code, 'unnamed issue')}</span>
+                {issue.description && <div className="detail">{text(issue.description)}</div>}
+                {issue.detail && <div className="detail">{text(issue.detail)}</div>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {review && review.state === 'LIVE' && review.reasons.length === 0 && (
+        <p className="mcc-empty">Approved and serving. No outstanding issues.</p>
+      )}
+
+      {promotion.externalRef && (
+        <div className="mcc-promo-ref mono" title="Google's promotion resource name">
+          {text(promotion.externalRef)}
+        </div>
+      )}
+
+      <ArtifactBlock label="Show compiled promotion (JSON)" value={promotion.payload} />
+    </li>
+  )
+}
+
+function PromotionsSection({ publications, verifications, listingId, channelSlug, accountId }) {
+  // Promotions ride in the Merchant Center lane only. Rendering the section
+  // on every channel would imply the others have one.
+  if (channelSlug !== 'merchant_center') return null
+
+  const promotions = buildPromotionRows(publications, verifications, listingId)
+
+  return (
+    <div className="mcc-section">
+      <h4>
+        Promotions
+        <span className="mcc-method mono"> · {promotions.length}</span>
+      </h4>
+
+      {promotions.length === 0 ? (
+        <div className="mcc-empty">
+          No promotion has been compiled for this listing. Promotions are built from the
+          master record&apos;s incentives, not from the product feed.
+        </div>
+      ) : (
+        <ul className="mcc-promos">
+          {promotions.map((promotion) => (
+            <PromotionRow key={promotion.recordRef} promotion={promotion} accountId={accountId} />
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 export default function ListingDrawer({
   row, channels, channelState, cellFor, publications,
   onClose, onPublish, publishPending, onVerify, verifyPendingFor,
@@ -340,6 +468,13 @@ export default function ListingDrawer({
 
         <DriftSection cell={cell} />
         <AcceptanceSection cell={cell} accountId={gmcAccount} />
+        <PromotionsSection
+          publications={publications}
+          verifications={cell.promotionRecords}
+          listingId={row.listingId}
+          channelSlug={channel.slug}
+          accountId={gmcAccount}
+        />
         <UnreadableSection cell={cell} />
         <StaleSection cell={cell} />
 

@@ -61,6 +61,15 @@ export const METHOD_GMC_DIAGNOSTICS = 'gmc_diagnostics'
 // about one of our own listings. It contributes to NO cell dimension.
 export const METHOD_PROSPECT_FETCH = 'prospect_fetch'
 
+// Google's review verdict on a PROMOTION, which is a different artifact from
+// the listing this cell is about. It has its own lifecycle (days IN_REVIEW,
+// not minutes), its own notion of success (LIVE, not "no blocking item
+// issues"), and its own section in the drawer. Recognised here for the same
+// reason `prospect_fetch` is: an unclassified method falls into 'unreadable'
+// and inflates dimension 4, reporting a gap in this page's observability
+// where there is none — the record simply answers a different question.
+export const METHOD_GMC_PROMOTION_REVIEW = 'gmc_promotion_review'
+
 // `live_fetch` is the older spec's name for the same thing. Accepted so
 // a rename on either side cannot silently route records to the wrong
 // parser.
@@ -335,6 +344,10 @@ export function classifyRecord(record, latestPublishedAt = null) {
     return { ...base, kind: 'prospect', reason: 'prospect observation — not a cell dimension' }
   }
 
+  if (method === METHOD_GMC_PROMOTION_REVIEW) {
+    return { ...base, kind: 'promotion', reason: 'promotion review — not a listing dimension' }
+  }
+
   if (method === METHOD_GMC_DIAGNOSTICS) return classifyAcceptance(record, base)
   if (FETCH_PROBE_METHODS.has(method)) return classifyProbe(record, base)
 
@@ -540,6 +553,7 @@ export function aggregateCell(
   // from this one — see §2b.
   const unreadable = fresh.filter((c) => c.kind === 'unreadable')
   const prospectRecords = classified.filter((c) => c.kind === 'prospect')
+  const promotionRecords = classified.filter((c) => c.kind === 'promotion')
 
   return {
     channelSlug,
@@ -574,6 +588,11 @@ export function aggregateCell(
     // Surfaced so a stray prospect row on a cell is visible rather than
     // silently dropped, but counted in no dimension.
     prospectRecordCount: prospectRecords.length,
+
+    // The promotion reviews on this cell, in no dimension either. The drawer's
+    // Promotions section reads them; the listing's four dimensions do not.
+    promotionRecords: promotionRecords.map((c) => c.record),
+    promotionRecordCount: promotionRecords.length,
 
     records: classified,
     lastVerifiedAt: fresh.length > 0 ? fresh[0].createdAt : null,

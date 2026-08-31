@@ -278,3 +278,141 @@ export function gmcOfferLink(accountId, offerId) {
   if (!accountId || !offerId) return null
   return gmcItemUrl({ account: String(accountId), offerId: String(offerId) })
 }
+
+// ─── Promotions — the second artifact kind in the Merchant Center lane ───────
+//
+// A promotion is not a listing. It is compiled from one incentive on the
+// master record and published through the same channel, so its publication
+// row carries `record_ref = "promotion:<offer_id>"` beside the listing's
+// `listing:<id>` rather than living under a channel slug of its own.
+//
+// Three things can happen to one, and the panel has to tell them apart:
+//   published                 -> Google has it; the review lifecycle applies
+//   compiled_not_published    -> WE declined to make the claim. Nothing is
+//                                wrong. This is the honour gate, and its
+//                                reason is the most important sentence here.
+//   failed                    -> the payload was rejected or the call broke
+
+export const PROMOTION_REF = /^promotion:(.+)$/
+
+/** The offer id out of a promotion record_ref, or null for a listing row. */
+export function promotionOfferId(recordRef) {
+  const match = PROMOTION_REF.exec(String(recordRef || ''))
+  return match ? match[1] : null
+}
+
+/**
+ * Google's review states, mapped to the tones the acceptance lifecycle
+ * already uses. Read from the same vocabulary the supply app pins in
+ * promotions_v1.discovery.json — LIVE is the only state a shopper can
+ * actually redeem in, so it is the only green one.
+ */
+// The same four tones the acceptance lifecycle uses — `sync`/`drift`/`fail`/
+// `hold` — rather than a second colour vocabulary meaning the same things.
+export const PROMOTION_REVIEW_TONE = {
+  LIVE: 'sync',
+  IN_REVIEW: 'drift',
+  PENDING: 'drift',
+  REJECTED: 'fail',
+  STOPPED: 'fail',
+  EXPIRED: 'hold',
+}
+
+export const PROMOTION_REVIEW_LABEL = {
+  LIVE: 'Live',
+  IN_REVIEW: 'In review',
+  PENDING: 'Pending',
+  REJECTED: 'Rejected',
+  STOPPED: 'Stopped',
+  EXPIRED: 'Expired',
+  UNKNOWN: 'Unknown',
+}
+
+/** The mechanic a promotion payload expresses, for the row's title. */
+export function promotionMechanic(payload) {
+  const attrs = payload?.attributes || {}
+  const value = attrs.couponValueType
+  if (attrs.redemptionRestriction === 'SUBSCRIBE') return 'Subscribe & save'
+  if (String(value || '').startsWith('FREE_GIFT')) return 'Gift with purchase'
+  if (attrs.genericRedemptionCode) return 'Coupon code'
+  if (value === 'PERCENT_OFF' || value === 'MONEY_OFF') return 'Discount'
+  return 'Promotion'
+}
+
+/**
+ * The newest review verification per promotion id.
+ *
+ * Keyed on the observed promotionId rather than the listing, because one
+ * listing can carry three promotions and they are reviewed separately.
+ */
+export function promotionReviewsById(verifications) {
+  const byId = new Map()
+  for (const row of verifications || []) {
+    if (row.method !== 'gmc_promotion_review') continue
+    const id = row.observed?.promotionId
+    if (!id) continue
+    const existing = byId.get(id)
+    if (!existing || (row.id ?? 0) > (existing.id ?? 0)) byId.set(id, row)
+  }
+  return byId
+}
+
+/**
+ * One row per promotion for the drawer, newest publication each.
+ *
+ * A refusal is a first-class row, not an omission. A promotion that silently
+ * did not publish looks exactly like one that was never compiled, and the
+ * whole point of the honour gate is that somebody can see it fired.
+ */
+export function buildPromotionRows(publications, verifications, listingId) {
+  const newest = new Map()
+  for (const row of publications || []) {
+    const offerId = promotionOfferId(row.record_ref)
+    if (!offerId) continue
+    if (listingId != null && row.listing_id !== listingId) continue
+    const existing = newest.get(row.record_ref)
+    if (!existing || (row.id ?? 0) > (existing.id ?? 0)) newest.set(row.record_ref, row)
+  }
+
+  const reviews = promotionReviewsById(verifications)
+
+  return [...newest.values()]
+    .sort((a, b) => String(a.record_ref).localeCompare(String(b.record_ref)))
+    .map((row) => {
+      const payload = row.payload || {}
+      const promotionId = payload.promotionId
+      const review = row.status === 'published' ? reviews.get(promotionId) : null
+      const state = review?.drift?.state || (row.status === 'published' ? 'UNKNOWN' : null)
+
+      return {
+        recordRef: row.record_ref,
+        offerId: promotionOfferId(row.record_ref),
+        promotionId: promotionId || null,
+        mechanic: promotionMechanic(payload),
+        title: payload.attributes?.longTitle || null,
+        code: payload.attributes?.genericRedemptionCode || null,
+        payload,
+        status: row.status,
+        externalRef: row.external_ref || null,
+        // The reason a refusal carries, verbatim. Never rewritten: it is the
+        // sentence that explains why a correct promotion did not go out.
+        reason: row.error || null,
+        compiledAt: row.compiled_at || null,
+        publishedAt: row.published_at || null,
+        // Null until Google has been asked — an unreviewed promotion is not a
+        // rejected one.
+        review: review
+          ? {
+              state,
+              tone: PROMOTION_REVIEW_TONE[state] || 'hold',
+              label: PROMOTION_REVIEW_LABEL[state] || state,
+              reasons: review.drift?.reasons || [],
+              checkedAt: review.created_at || null,
+            }
+          : null,
+        // A refusal is a settled fact, not an outstanding problem. It renders
+        // neutrally, the way `not_applicable` does in the matrix.
+        refused: row.status === 'compiled_not_published',
+      }
+    })
+}

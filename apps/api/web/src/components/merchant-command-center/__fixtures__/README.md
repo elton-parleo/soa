@@ -87,3 +87,33 @@ Outcomes the live data does not yet contain — `blocked_for_agents`,
 `robots_disallowed`, `parse_failed`, `fetch_failed`, and any product with
 actual findings — are built in the tests from the schema the doc
 specifies, and are marked as such there.
+
+## `promotions-publications.json`, `promotions-reviews.json`
+
+The Merchant Center lane's second artifact kind. Unlike the files above,
+these are not live captures — nothing has been published to Google yet.
+The payloads are the real output of the supply app's compiler
+(`truesync/channels/gmc_promotions.py`), emitted from the same brand
+config the store runs on and validated against Google's pinned
+discovery document, so the shapes are true even though the review
+verdicts are constructed. **Re-capture both after the first live push.**
+
+The three publication rows are the three outcomes the panel has to tell
+apart:
+
+| row | status | what it means |
+|---|---|---|
+| `deal_9_mfr_coupon` | `published` | Google has it; the review lifecycle applies |
+| `deal_9_gift_with_purchase` | `published` | as above, and its review is a rejection |
+| `deal_9_subscribe_and_save` | `compiled_not_published` | the honour gate fired |
+
+The third is the important one. It compiled cleanly and validated
+against Google's schema, and we declined to publish it anyway, because
+this store has no subscription to sign up for. Its `error` field
+carries the reason, and the panel renders that sentence at full weight
+and in neutral styling: nothing is wrong.
+
+`promotions-reviews.json` holds one verification per lifecycle state —
+`live`, `in_review`, `rejected` — so a test can mount any of them
+against the same publication. The rejection carries Google's own
+`description` and `detail` verbatim, which is what the drawer displays.
