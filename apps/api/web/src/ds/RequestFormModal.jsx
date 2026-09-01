@@ -21,6 +21,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from './Button.jsx'
 import { Glyph } from './Glyph.jsx'
+import { logAntiSpamGateTripped } from './devWarn.js'
 
 const EMAIL_SHAPE = /[^\s@]+@[^\s@]+\.[^\s@]+/
 const MAX_SHORT_FIELD = 200
@@ -175,9 +176,25 @@ export function RequestFormModal({ open, onClose, eyebrow, title, messagePlaceho
     e.preventDefault()
     if (status === 'submitting') return
 
+    // Anti-spam gate (Part 1c/2): show success without calling onSubmit —
+    // checked as two separate conditions, not a combined ||, so the dev
+    // warning below can name the actual reason. Root cause of the
+    // "success but no request" bug this hardens against: the honeypot
+    // input used to be named/labeled "website", a classic browser-
+    // autofill target — Chrome ignores autocomplete="off" for fields it
+    // recognizes by name/label text, and would silently fill it from a
+    // saved profile on a form shaped like this one, tripping this gate
+    // for real humans who never touched the field. See the honeypot
+    // input below for the fix; MIN_ELAPSED_MS's clock already started
+    // on modal open (the effect above), not module load.
+    if (honeypot.trim() !== '') {
+      logAntiSpamGateTripped('honeypot')
+      setStatus('success')
+      return
+    }
     const elapsed = Date.now() - openedAtRef.current
-    if (honeypot.trim() !== '' || elapsed < MIN_ELAPSED_MS) {
-      // Anti-spam trip (Part 1c): show success without calling the API.
+    if (elapsed < MIN_ELAPSED_MS) {
+      logAntiSpamGateTripped('too_fast')
       setStatus('success')
       return
     }
@@ -293,18 +310,28 @@ export function RequestFormModal({ open, onClose, eyebrow, title, messagePlaceho
               {title}
             </h2>
 
-            {/* Honeypot (Part 1c) — real users never see or fill this;
+            {/* Honeypot (Part 1c/2a) — real users never see or fill this;
                 any client that does trips the same anti-spam path as a
-                too-fast submit, above. Kept off-canvas rather than
-                display:none, which some crawlers skip filling. */}
+                too-fast submit, above. Kept off-canvas via absolute
+                positioning rather than display:none, which some
+                crawlers skip filling. Deliberately NOT named/labeled
+                like a real field (was "website"/"Website" — a classic
+                browser-autofill target on a form shaped like this one;
+                Chrome ignores autocomplete="off" for fields it
+                recognizes that way) — this name/label reads as nothing
+                any autofill heuristic or a scraper's naive field-list
+                would match. Separate from Formspree's own _gotcha
+                honeypot (demoRequestApi.js), which is never a rendered
+                DOM input so it isn't an autofill target at all. */}
             <div aria-hidden="true" style={{ position: 'absolute', left: -9999, top: 'auto', width: 1, height: 1, overflow: 'hidden' }}>
-              <label htmlFor={`${uid}-website`}>Website</label>
+              <label htmlFor={`${uid}-hp`}>Leave this field blank</label>
               <input
-                id={`${uid}-website`}
-                name="website"
+                id={`${uid}-hp`}
+                name="hp_field"
                 type="text"
                 tabIndex={-1}
                 autoComplete="off"
+                aria-hidden="true"
                 value={honeypot}
                 onChange={(e) => setHoneypot(e.target.value)}
               />
