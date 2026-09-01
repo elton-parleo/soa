@@ -929,3 +929,37 @@ describe('LiteWidget — the /lite direct-form path is untouched by report-first
     expect(liteApi.getReport).not.toHaveBeenCalled()
   })
 })
+
+// Part 1c: belt-and-suspenders — the pixel is a static tag in
+// audit.html's raw HTML (outside React's root, see
+// staticHead.build.test.js for the mechanism-level assertion), so
+// nothing here should ever inject one via the DOM either.
+describe('Part 1c: lemlist script element never appears on status/report renders', () => {
+  it('absent while a status/progress view is showing', async () => {
+    mockAuditHost = true
+    sessionStorage.setItem('soaLiteToken', 'tok-status')
+    liteApi.getStatus.mockResolvedValue(RUNNING_STATUS)
+
+    render(<LiteWidget />)
+
+    await waitFor(() => expect(screen.getByTestId('lite-progress')).toBeInTheDocument())
+    expect(document.querySelector('script[src*="lemlist"]')).not.toBeInTheDocument()
+  })
+
+  it('absent while a full report is showing', async () => {
+    mockAuditHost = true
+    sessionStorage.setItem('soaLiteToken', 'tok-report')
+    liteApi.getStatus.mockResolvedValue({ status: 'complete', phase: 'complete', scan_status: 'skipped' })
+    liteApi.getReport.mockResolvedValue({
+      status: 'complete',
+      locked: false,
+      overall: [{ name: 'Acme Co', role: 'primary', metrics: { som: 60 } }],
+      visibility: 60, accessibility: null, composite: 60, scan_status: 'skipped',
+    })
+
+    render(<LiteWidget />)
+
+    await waitFor(() => expect(screen.getByText('Composite score')).toBeInTheDocument())
+    expect(document.querySelector('script[src*="lemlist"]')).not.toBeInTheDocument()
+  })
+})

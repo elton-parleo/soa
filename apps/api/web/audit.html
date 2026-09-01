@@ -15,6 +15,15 @@
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap"
       rel="stylesheet"/>
+    <!-- lemlist visitor tracking (outreach attribution) — landing only,
+         deliberately. This is a static tag in audit.html specifically
+         because Vercel routes audit.parleo.io's "/" (and only "/") to
+         this document (vercel.json) — /r/ and /s/ are a different
+         document (audit-report.html) that never carries this tag, so a
+         merchant's forwarded report link stays tracker-free. See
+         staticHead.build.test.js for the assertion that this holds in
+         the real build output. -->
+    <script async src="https://app.lemlist.com/api/visitors/tracking?k=gIK6DJ%2B%2FIC24uGNBnAo1AkBLPP0TVcAmhqLfj18vyXs%3D&t=tea_64F7BnppD5hii87MN"></script>
   </head>
   <body style="margin:0">
     <div id="root"></div>
