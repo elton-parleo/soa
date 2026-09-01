@@ -152,3 +152,25 @@ describe('favicon set — declared in all three built HTML entries', () => {
     expect(fs.existsSync(path.join(outDir, filename))).toBe(true)
   })
 })
+
+// Part 1: the lemlist visitor-tracking pixel is a static tag in
+// audit.html specifically, because Vercel's routing (vercel.json)
+// sends audit.parleo.io's "/" — and only "/" — to that document; /r/
+// and /s/ are a wholly separate document (audit-report.html) that
+// never carries this tag, so a merchant's forwarded report link stays
+// tracker-free. index.html (every other host) doesn't carry it either
+// — the landing (LandingPage.jsx) never renders there (see App.jsx's
+// isAuditHost() gate).
+describe('lemlist visitor-tracking pixel — landing document only (Part 1)', () => {
+  it('audit.html loads it async', () => {
+    expect(auditHtml).toMatch(/<script async src="https:\/\/app\.lemlist\.com\/api\/visitors\/tracking\?[^"]*"><\/script>/)
+  })
+
+  it('audit-report.html (/r/, /s/) carries no lemlist reference', () => {
+    expect(auditReportHtml).not.toMatch(/lemlist/i)
+  })
+
+  it('index.html (every other host) carries no lemlist reference', () => {
+    expect(indexHtml).not.toMatch(/lemlist/i)
+  })
+})
