@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+from datetime import datetime, timezone
 import re
 import uuid
 from fastapi import APIRouter, Query, HTTPException, UploadFile, File, Depends
@@ -11,6 +12,13 @@ from soa_shared.database import engine
 from soa_shared.constants import QUERY_CONSTRAINTS
 from app.auth import get_current_user
 from app.schemas import (
+    ReviewResolveRequest,
+    ReviewResolveResponse,
+    REVIEW_DEACTIVATED,
+    REVIEW_DISMISSED,
+    REVIEW_INACTIVE_STATUS,
+    REVIEW_LABEL_APPLIED,
+    REVIEW_CORRECTABLE_FIELDS,
     StudyResponse,
     StudyQueryBreakdown,
     QueryCreate,
@@ -288,6 +296,217 @@ def get_generation_status(
         error_message=row[4],
         provenance=provenance,
     )
+
+
+# ─── POST /studies/{study_type}/review/resolve ───────────────────────────────
+
+def _load_job_provenance(conn, study_type: str, org_id: int):
+    """Returns (job_id, provenance_dict). Raises 404 if there is no
+    generation job for this study in this org — the same not-leaking-
+    existence behaviour get_generation_status already has."""
+    row = conn.execute(
+        text("""
+            SELECT id, provenance
+            FROM soa_query_generation_jobs
+            WHERE study_type = :st AND organization_id = :org_id
+        """),
+        {"st": study_type, "org_id": org_id},
+    ).fetchone()
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail="No generation job found for this study.",
+        )
+
+    provenance = row[1]
+    if isinstance(provenance, str):
+        provenance = json.loads(provenance)
+    return row[0], (provenance or {})
+
+
+def _query_row(conn, study_type: str, org_id: int, query_code: str):
+    row = conn.execute(
+        text("""
+            SELECT query_code, status, category, stage, specificity,
+                   persona, study_pattern, subscription_state
+            FROM soa_queries
+            WHERE query_code = :qc AND study_type = :st
+              AND organization_id = :org_id
+        """),
+        {"qc": query_code, "st": study_type, "org_id": org_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Query {query_code} not found in this study.",
+        )
+    return row
+
+
+@router.post(
+    "/studies/{study_type}/review/resolve",
+    response_model=ReviewResolveResponse,
+)
+def resolve_review_finding(
+    study_type: str,
+    data: ReviewResolveRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Records one reviewer decision about one finding, and performs whatever
+    that decision does to the queries themselves.
+
+    Resolutions live under `review_resolutions` inside the existing
+    provenance JSON — no new columns. The whole document is read, mutated
+    and written back, which is why a `json` column serves as well as a
+    `jsonb` one would: nothing here needs a partial update.
+
+    Every resolution stores the values it overwrote, because undo has to
+    restore what was actually there rather than a guess at a default. A
+    query deactivated from 'Active' and one deactivated from 'Retired'
+    both end up 'Paused', and only the record can tell them apart
+    afterwards.
+
+    Deactivation never deletes. It sets REVIEW_INACTIVE_STATUS, and
+    cycles select `status = 'Active'`, so the query stops being run while
+    staying visible and restorable.
+
+    Dismissal changes no query at all. It records that a human looked and
+    disagreed, which is different information from a finding nobody has
+    read yet — and the difference is the entire reason a dismissed
+    finding is stored rather than dropped.
+    """
+    org_id = current_user['organization_id']
+    user_id = current_user.get('user_id')
+    now = datetime.now(timezone.utc).isoformat()
+
+    with engine.connect() as conn:
+        job_id, provenance = _load_job_provenance(conn, study_type, org_id)
+        resolutions = dict(provenance.get('review_resolutions') or {})
+
+        if data.action == 'undo':
+            record = resolutions.pop(data.finding_id, None)
+            if not record:
+                raise HTTPException(
+                    status_code=404,
+                    detail="That finding has no resolution to undo.",
+                )
+            _undo_resolution(conn, study_type, org_id, record)
+
+        elif data.action == 'dismiss':
+            resolutions[data.finding_id] = {
+                'action': REVIEW_DISMISSED,
+                'at': now, 'by': user_id,
+            }
+
+        elif data.action == 'deactivate':
+            changed = []
+            for query_code in data.query_codes:
+                row = _query_row(conn, study_type, org_id, query_code)
+                changed.append({'query_code': query_code, 'prior_status': row[1]})
+                conn.execute(
+                    text("""
+                        UPDATE soa_queries SET status = :status
+                        WHERE query_code = :qc AND study_type = :st
+                          AND organization_id = :org_id
+                    """),
+                    {"status": REVIEW_INACTIVE_STATUS, "qc": query_code,
+                     "st": study_type, "org_id": org_id},
+                )
+            resolutions[data.finding_id] = {
+                'action': REVIEW_DEACTIVATED,
+                'queries': changed,
+                'kept': data.keep_query_code,
+                'status': REVIEW_INACTIVE_STATUS,
+                'at': now, 'by': user_id,
+            }
+
+        elif data.action == 'apply_label':
+            row = _query_row(conn, study_type, org_id, data.query_code)
+            columns = {
+                'query_code': 0, 'status': 1, 'category': 2, 'stage': 3,
+                'specificity': 4, 'persona': 5, 'study_pattern': 6,
+                'subscription_state': 7,
+            }
+            prior_value = row[columns[data.field]]
+            # Interpolating the column name is safe ONLY because
+            # ReviewResolveRequest restricts field to
+            # REVIEW_CORRECTABLE_FIELDS, which is derived from
+            # QUERY_CONSTRAINTS — it can never be caller-supplied text.
+            # The value stays a bound parameter.
+            conn.execute(
+                text(f"""
+                    UPDATE soa_queries SET {data.field} = :value
+                    WHERE query_code = :qc AND study_type = :st
+                      AND organization_id = :org_id
+                """),
+                {"value": data.proposed_value, "qc": data.query_code,
+                 "st": study_type, "org_id": org_id},
+            )
+            resolutions[data.finding_id] = {
+                'action': REVIEW_LABEL_APPLIED,
+                'query_code': data.query_code,
+                'field': data.field,
+                'prior_value': prior_value,
+                'applied_value': data.proposed_value,
+                'at': now, 'by': user_id,
+            }
+
+        provenance = {**provenance, 'review_resolutions': resolutions}
+        conn.execute(
+            text("""
+                UPDATE soa_query_generation_jobs
+                SET provenance = :prov, updated_at = NOW()
+                WHERE id = :id
+            """),
+            {"prov": json.dumps(provenance), "id": job_id},
+        )
+        conn.commit()
+
+    return ReviewResolveResponse(study_type=study_type, provenance=provenance)
+
+
+def _undo_resolution(conn, study_type: str, org_id: int, record: dict):
+    """
+    Puts back exactly what the resolution overwrote. A dismissal touched
+    nothing, so undoing it is only the removal of the record by the
+    caller.
+    """
+    action = record.get('action')
+
+    if action == REVIEW_DEACTIVATED:
+        for entry in record.get('queries') or []:
+            conn.execute(
+                text("""
+                    UPDATE soa_queries SET status = :status
+                    WHERE query_code = :qc AND study_type = :st
+                      AND organization_id = :org_id
+                """),
+                {"status": entry.get('prior_status'),
+                 "qc": entry.get('query_code'),
+                 "st": study_type, "org_id": org_id},
+            )
+
+    elif action == REVIEW_LABEL_APPLIED:
+        field = record.get('field')
+        if field not in REVIEW_CORRECTABLE_FIELDS:
+            # Never reached from a record this endpoint wrote; refuses
+            # rather than interpolating whatever is in the JSON.
+            raise HTTPException(
+                status_code=422,
+                detail=f"Stored resolution names an uncorrectable field: {field}",
+            )
+        conn.execute(
+            text(f"""
+                UPDATE soa_queries SET {field} = :value
+                WHERE query_code = :qc AND study_type = :st
+                  AND organization_id = :org_id
+            """),
+            {"value": record.get('prior_value'),
+             "qc": record.get('query_code'),
+             "st": study_type, "org_id": org_id},
+        )
 
 
 # ─── POST /studies/upload-csv — bulk CSV insert ───────────────────────────────
