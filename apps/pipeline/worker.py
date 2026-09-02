@@ -275,7 +275,7 @@ def process_generation_jobs():
         f"({target_count} queries)"
     )
 
-    from generation.query_generator import generate_query_batch, BATCH_SIZE
+    from generation.query_generator import generate_query_batch, dedupe_exact, BATCH_SIZE
 
     api_key = os.environ.get("OPEN_AI_API_KEY")
     if not api_key:
@@ -284,6 +284,17 @@ def process_generation_jobs():
 
     created_count = 0
     generated_texts = []
+    # Every row already inserted, kept so exact-duplicate removal can span
+    # batches. Duplicates are a CROSS-batch phenomenon here — the model
+    # only ever sees one batch at a time — so deduping inside
+    # generate_query_batch would catch almost none of them. This is the
+    # accumulation point, so this is where it belongs.
+    accepted_rows = []
+    duplicate_drops = []
+    # A batch that contributes nothing new after dedupe makes no progress
+    # toward target_count, and the loop condition is created_count-based:
+    # without this guard an unlucky study could spin on OpenAI forever.
+    stalled_batches = 0
 
     try:
         while created_count < target_count:
@@ -331,9 +342,43 @@ def process_generation_jobs():
                     )
                     break
 
-            _insert_generated_rows(rows, study_type, organization_id, created_by)
-            created_count += len(rows)
-            generated_texts.extend(r['query_text'] for r in rows)
+            # Dedupe the accumulated set, not this batch in isolation.
+            # accepted_rows is already duplicate-free, so it survives
+            # intact and everything after it is what this batch actually
+            # contributes.
+            # accepted_rows is duplicate-free by construction, so every
+            # row dedupe_exact drops from the concatenation came from
+            # this batch — either a repeat of an earlier batch or a
+            # repeat within this one.
+            survivors, batch_drops = dedupe_exact(accepted_rows + rows)
+            new_rows = survivors[len(accepted_rows):]
+
+            if batch_drops:
+                duplicate_drops.extend(batch_drops)
+                log.info(
+                    f"[generation] job {job_id}: dropped {len(batch_drops)} "
+                    f"exact duplicate(s) from this batch"
+                )
+
+            if not new_rows:
+                stalled_batches += 1
+                log.warning(
+                    f"[generation] job {job_id}: batch was entirely duplicates "
+                    f"({stalled_batches} in a row)"
+                )
+                if stalled_batches >= 2:
+                    log.error(
+                        f"[generation] job {job_id}: two consecutive all-duplicate "
+                        f"batches — stopping early with {created_count} queries"
+                    )
+                    break
+                continue
+
+            stalled_batches = 0
+            _insert_generated_rows(new_rows, study_type, organization_id, created_by)
+            accepted_rows.extend(new_rows)
+            created_count += len(new_rows)
+            generated_texts.extend(r['query_text'] for r in new_rows)
 
             # Update progress incrementally
             with engine.connect() as conn:
@@ -366,7 +411,13 @@ def process_generation_jobs():
             """), {"id": job_id})
             conn.commit()
 
-        log.info(f"[generation] job {job_id} complete: {created_count} queries")
+        log.info(
+            f"[generation] job {job_id} complete: {created_count} queries"
+            + (
+                f" ({len(duplicate_drops)} exact duplicate(s) dropped)"
+                if duplicate_drops else ""
+            )
+        )
 
     except Exception as e:
         log.exception(f"[generation] job {job_id} failed")

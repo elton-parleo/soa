@@ -15,6 +15,7 @@ generated.
 
 import json
 import logging
+import re
 from typing import Optional
 from openai import OpenAI
 from soa_shared.constants import QUERY_CONSTRAINTS, QUERY_STAGES
@@ -38,17 +39,85 @@ BATCH_SIZE = 10
 # ELIGIBILITY_CONDITIONING_ENABLED, default off) persona eligibility
 # signal for subscribe-and-save studies — see soa_models.py's column
 # comment ("Null = unconstrained") and constants.py's QUERY_
-# SUBSCRIPTION_STATES docstring. The general generation prompt
-# (_build_prompt) never asks for it — only curated/seeded studies and
-# the SoA Lite prompt (_build_lite_prompt) populate it deliberately —
-# so treating an absent value as invalid rejected 100% of every
-# generally-generated row deterministically, not from any LLM flakiness.
+# SUBSCRIPTION_STATES docstring.
+#
+# It stays in this set even though _build_prompt now DOES ask for it
+# (matching _build_lite_prompt), and the two facts are independent. The
+# original regression — 100% of generally-generated rows rejected
+# deterministically, not from LLM flakiness — was that the prompt never
+# requested the field while the validator demanded it; membership in
+# this set is what actually fixed it, by making an absent value valid
+# rather than invalid. Asking for it in the prompt only raises how often
+# a value is present. A model that omits it on some rows (or on all of
+# them, if a future prompt revision drops the key again) must still
+# produce valid rows, so the nullable treatment is the load-bearing half
+# and is deliberately NOT conditional on the prompt wording.
 _NULLABLE_CONSTRAINED_FIELDS = {'subscription_state'}
 
 
 class LiteGenerationError(Exception):
     """Raised when generate_lite_queries cannot reach LITE_QUERIES_PER_STAGE
     valid queries for every stage even after the targeted shortfall retry."""
+
+
+# Characters stripped off the END of a normalized query. Deliberately
+# generous (terminal punctuation, quotes, dashes, ellipsis): "Which
+# retailer has the best price?" and "Which retailer has the best price"
+# are the same question, and a model asked for fifty questions in five
+# batches will hand back both spellings.
+_TRAILING_PUNCTUATION = '?!.,;:…-–—"\'’”)'
+
+
+def normalize_query_text(value) -> str:
+    """
+    Canonical form used to decide whether two generated questions are
+    the SAME question: lowercased, outer whitespace stripped, internal
+    runs of whitespace collapsed to one space, trailing punctuation
+    removed.
+
+    This is a normalizer, not a similarity measure. It exists to make
+    exact duplicates detectable despite cosmetic drift; questions that
+    differ in wording are the semantic review pass's problem
+    (review_semantic_duplicates), not this function's.
+    """
+    text = (value or '').strip().lower()
+    text = re.sub(r'\s+', ' ', text)
+    return text.rstrip(_TRAILING_PUNCTUATION + ' ')
+
+
+def dedupe_exact(rows: list) -> tuple:
+    """
+    Removes exact duplicates from a list of validated rows, keeping the
+    FIRST occurrence of each. Returns (survivors, dropped) — dropped
+    holds the removed rows themselves (not just their text) so the
+    caller can report exactly what was discarded.
+
+    The key is the normalized query_text ALONE. This is load-bearing and
+    the single most likely thing to be "helpfully" broadened later: it
+    is tempting to key on (query_text, category, stage, ...) so that two
+    rows only collide when they agree on everything. That would be
+    exactly backwards. The observed failures included the SAME question
+    text carrying two different stage labels — a composite key lets
+    precisely those through, while still catching the harmless case
+    where the model repeated itself verbatim in every field. A question
+    asked twice is asked twice regardless of how it was labelled the
+    second time.
+
+    Exact-match removal is the only fully automatic drop in this module.
+    Anything requiring judgement (near-duplicates, off-brief rows) is
+    reported for a human, never silently applied.
+    """
+    seen = set()
+    survivors = []
+    dropped = []
+    for row in rows:
+        key = normalize_query_text(row.get('query_text'))
+        if key in seen:
+            dropped.append(row)
+            continue
+        seen.add(key)
+        survivors.append(row)
+    return survivors, dropped
 
 
 def _build_prompt(
@@ -62,11 +131,18 @@ def _build_prompt(
         for field, vals in QUERY_CONSTRAINTS.items()
     )
 
+    # The FULL already_generated list, not a tail slice. BATCH_SIZE is 10,
+    # so a 50-question study runs five batches: a 20-entry window meant
+    # batch 5 could not see batches 1 and 2 at all, and the model
+    # reproduced questions it had no way to know it had already written.
+    # That is the confirmed cause of the duplicates observed roughly nine
+    # rows apart — one batch's worth of drift. The avoid-text wording is
+    # deliberately unchanged; only the slice is gone.
     avoid_text = ""
     if already_generated:
         avoid_text = (
             "\n\nDo NOT repeat or closely paraphrase these already-generated questions:\n"
-            + "\n".join(f"- {q}" for q in already_generated[-20:])
+            + "\n".join(f"- {q}" for q in already_generated)
         )
 
     return f"""Generate exactly {batch_size} distinct search-style questions for a brand/market research study called "{study_name}".
@@ -83,7 +159,7 @@ Also provide:
 - rationale: one sentence explaining why this query is useful for the study (free text)
 
 Respond with ONLY a JSON array of {batch_size} objects, each with keys:
-query_text, category, stage, specificity, persona, study_pattern, status, soa_focus, rationale.
+query_text, category, stage, specificity, persona, study_pattern, status, subscription_state, soa_focus, rationale.
 No markdown, no explanation, just the JSON array.{avoid_text}"""
 
 
@@ -149,7 +225,12 @@ def _deterministic_failure_reason(row_errors: list, total_rows: int) -> Optional
     )
 
 
-def _call_openai_and_validate(prompt: str, api_key: str) -> tuple:
+def _call_openai_and_validate(
+    prompt: str,
+    api_key: str,
+    temperature: float = 0.8,
+    stamp: Optional[dict] = None,
+) -> tuple:
     """
     Calls OpenAI with a fully-built prompt, parses the JSON response, and
     validates each row via _validate_generated_row.
@@ -161,13 +242,28 @@ def _call_openai_and_validate(prompt: str, api_key: str) -> tuple:
     validation on the same field — see _deterministic_failure_reason;
     None in every other case, including "nothing parsed at all" (that's
     LLM-response noise, still worth a caller's retry).
+
+    temperature defaults to 0.8 — the value this helper has always sent,
+    so every existing caller is unchanged. It is a parameter because the
+    review passes (review_semantic_duplicates, review_coherence) reuse
+    this same helper for classification rather than generation, and
+    classification wants near-zero sampling: at 0.8 the same fifty rows
+    get grouped differently on consecutive runs, which makes an advisory
+    finding impossible for a human to act on or re-check.
+
+    stamp, when given, is merged into every parsed row BEFORE
+    _validate_generated_row sees it. That ordering is the point: a
+    stamped field is still checked against QUERY_CONSTRAINTS like any
+    other, so a caller cannot smuggle an out-of-range value in through
+    the back door — it just stops being something the model gets to
+    decide per row. Default None leaves every row exactly as parsed.
     """
     client = OpenAI(api_key=api_key)
 
     response = client.chat.completions.create(
         model="gpt-5.4-mini",
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.8,
+        temperature=temperature,
     )
 
     content = (response.choices[0].message.content or '').strip()
@@ -198,6 +294,8 @@ def _call_openai_and_validate(prompt: str, api_key: str) -> tuple:
     valid_rows = []
     row_errors = []
     for row in parsed:
+        if stamp and isinstance(row, dict):
+            row = {**row, **stamp}
         cleaned, errors = _validate_generated_row(row)
         if errors:
             log.warning(f"Skipping invalid generated row: {errors} — row={row}")
@@ -227,6 +325,16 @@ def generate_query_batch(
     _call_openai_and_validate. Invalid rows are skipped and logged, never
     raised; a non-None reason means every row failed for the same
     field(s) and the caller should not blindly retry.
+
+    study_pattern is still a model output on THIS path — see the
+    generate_general_queries docstring for why it should not be, and for
+    the stamped alternative. Changing it here means adding a required
+    argument, which means changing this function's call site in
+    worker.py, which breaks an existing test's generate_query_batch mock
+    signature (tests/test_process_generation_jobs.py::
+    test_end_to_end_50_query_study_commits_50_rows_across_batches). The
+    fix lives on the new path instead; this one is left alone
+    deliberately, not by oversight.
     """
     prompt = _build_prompt(study_name, description, batch_size, already_generated)
     return _call_openai_and_validate(prompt, api_key)
