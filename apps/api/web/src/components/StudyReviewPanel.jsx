@@ -246,9 +246,31 @@ function DuplicateGroup({ id, group, lookup, resolution, busy, keepOverride, onK
   const keepText = keepOverride ?? modelKeepText
 
   const keepRow = lookup(keepText)
-  const dropCodes = rows
+  const otherCodes = rows
     .filter(r => r && r.query_text !== keepText)
     .map(r => r.query_code)
+
+  // A group this large should now be impossible — the generator discards
+  // anything over MAX_DUPLICATE_GROUP_SIZE before it reaches provenance.
+  // This stays as the last line of defence if that cap ever regresses,
+  // and because the panel also renders records written before the cap
+  // existed. The failure it exists for rendered a single button reading
+  // "Deactivate PRE_080, PRE_083, PRE_086, PRE_089, PRE_092, PRE_095,
+  // PRE_098, PRE_099, PRE_100, PRE_101" — ten queries destroyed in one
+  // click, the ids overflowing the control.
+  const oversized = texts.length > 3
+  const [selected, setSelected] = useState([])
+
+  // Deactivating ten must never be a shorter path than deactivating one.
+  // Above the threshold the bulk action is withdrawn entirely and each
+  // row has to be picked deliberately.
+  const dropCodes = oversized
+    ? otherCodes.filter(code => selected.includes(code))
+    : otherCodes
+
+  const toggle = (code) => setSelected(prev => (
+    prev.includes(code) ? prev.filter(c => c !== code) : [...prev, code]
+  ))
 
   return (
     <Finding
@@ -275,20 +297,53 @@ function DuplicateGroup({ id, group, lookup, resolution, busy, keepOverride, onK
               keep_query_code: keepRow ? keepRow.query_code : null,
             })}
           >
-            {dropCodes.length
-              ? `Deactivate ${dropCodes.join(', ')}`
-              : 'Deactivate the others'}
+            {/* A count, never an id list, once the group is large enough
+                for the list to stop being readable. */}
+            {oversized
+              ? (dropCodes.length
+                ? `Deactivate ${dropCodes.length} selected`
+                : 'Select queries to deactivate')
+              : (dropCodes.length
+                ? `Deactivate ${dropCodes.join(', ')}`
+                : 'Deactivate the others')}
           </SolidButton>
         </>
       }
     >
+      {oversized && !resolution && (
+        <div style={{
+          padding: '9px 14px', background: T.amberLight,
+          borderBottom: `1px solid ${T.border}`, fontSize: 12, color: T.amberInk,
+        }}>
+          {texts.length} queries in this group — too many to be duplicates of one
+          another. Pick individually, or dismiss it.
+        </div>
+      )}
+
       {texts.map((text, i) => {
         const row = rows[i]
         const isKeep = text === keepText
+        const code = row ? row.query_code : null
         return (
           <QueryLine key={i} row={row} text={text}>
             {resolution ? (
               isKeep ? <KeepChip>Kept</KeepChip> : null
+            ) : oversized ? (
+              isKeep ? <KeepChip>Keep</KeepChip> : (
+                <label style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 12, color: T.textMid, cursor: code ? 'pointer' : 'not-allowed',
+                }}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Deactivate ${code || 'this query'}`}
+                    disabled={!code || busy}
+                    checked={!!code && selected.includes(code)}
+                    onChange={() => code && toggle(code)}
+                  />
+                  Deactivate
+                </label>
+              )
             ) : isKeep ? (
               <KeepChip>Keep</KeepChip>
             ) : (
