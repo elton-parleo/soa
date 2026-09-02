@@ -25,6 +25,17 @@ log = logging.getLogger(__name__)
 
 BATCH_SIZE = 10
 
+# Targeted follow-up calls allowed inside one _fill_stage_buckets pass on
+# the general path (lite uses 1 — see generate_lite_queries).
+RETRY_BUDGET_GENERAL = 2
+
+# Times generate_general_queries will go back for replacements after
+# dedupe removes rows. Bounded because a study whose subject genuinely
+# only supports forty distinct questions will never converge on fifty,
+# and an unbounded loop turns that into an OpenAI bill instead of a
+# reported shortfall.
+REPLACEMENT_ROUNDS = 2
+
 # QUERY_CONSTRAINTS fields the DB allows NULL for (soa_queries.<field>.
 # nullable=True) — absent/None from a generated row means "unconstrained,"
 # not invalid, same skip-when-None convention app/routers/studies.py::
@@ -66,6 +77,14 @@ class LiteGenerationError(Exception):
 # are the same question, and a model asked for fifty questions in five
 # batches will hand back both spellings.
 _TRAILING_PUNCTUATION = '?!.,;:…-–—"\'’”)'
+
+
+def _count_by_stage(rows: list) -> dict:
+    counts: dict = {}
+    for row in rows:
+        stage = row.get('stage')
+        counts[stage] = counts.get(stage, 0) + 1
+    return counts
 
 
 def normalize_query_text(value) -> str:
@@ -340,6 +359,131 @@ def generate_query_batch(
     return _call_openai_and_validate(prompt, api_key)
 
 
+# ─── Stage-distribution enforcement ───────────────────────────────────────
+
+SHORTFALL_RAISE = 'raise'
+SHORTFALL_REPORT = 'report'
+
+
+def _fill_stage_buckets(
+    targets: dict,
+    build_prompt,
+    api_key: str,
+    retry_budget: int,
+    on_shortfall: str,
+    shortfall_message=None,
+    accept_row=None,
+    stamp: Optional[dict] = None,
+    label: str = '',
+) -> dict:
+    """
+    Asks the model for a per-stage distribution and keeps asking, with
+    progressively narrower prompts, until every stage is filled or the
+    retry budget runs out.
+
+    Requesting a distribution in the prompt is not the same as getting
+    one — the model over-delivers on some stages and under-delivers on
+    others — so the counts are enforced here: validated rows are bucketed
+    by stage, a bucket stops accepting rows once it hits its target
+    (excess is discarded rather than silently rebalancing the study), and
+    the remaining shortfall drives the next prompt.
+
+    Arguments:
+      targets       {stage: count} — what the caller wants per stage.
+      build_prompt  callable(shortfall_mapping, accepted_rows) ->
+                    prompt string. Called once with the full targets and
+                    an empty accepted list, then once per retry with only
+                    the stages still short and everything bucketed so
+                    far. Retries need the accepted rows because the whole
+                    point of a follow-up prompt is that it knows what the
+                    earlier calls already produced. The caller owns the
+                    prompt wording; this helper only owns the loop.
+      retry_budget  how many TARGETED follow-up calls are allowed after
+                    the initial one. Lite uses 1, the general path 2.
+      on_shortfall  SHORTFALL_RAISE or SHORTFALL_REPORT. Raise is for
+                    lite, where a lopsided distribution produces a
+                    misleading public report and failing outright is the
+                    honest answer. Report is for general studies, where
+                    hard-failing after five batches would discard
+                    forty-seven good queries to punish a shortfall of
+                    three.
+      shortfall_message  callable(shortfall) -> str, used only by RAISE,
+                    so the caller keeps ownership of its own error text.
+      accept_row    optional callable(row) -> Optional[str]. Returns a
+                    rejection reason to drop the row, or None to keep it.
+                    Runs AFTER validation and before bucketing.
+      stamp         forwarded to _call_openai_and_validate.
+      label         prefix for this helper's log lines, so the lite path
+                    keeps the '[lite]' tag ops already grep for.
+
+    Returns a dict: buckets, shortfall, rejected (list of (row, reason)),
+    and calls (how many model calls were actually made).
+    """
+    buckets = {stage: [] for stage in targets}
+    rejected = []
+    calls = 0
+
+    def _bucket(rows):
+        for row in rows:
+            if accept_row is not None:
+                reason = accept_row(row)
+                if reason:
+                    rejected.append((row, reason))
+                    continue
+            stage = row.get('stage')
+            bucket = buckets.get(stage)
+            if bucket is not None and len(bucket) < targets[stage]:
+                bucket.append(row)
+
+    def _shortfall():
+        return {
+            stage: targets[stage] - len(bucket)
+            for stage, bucket in buckets.items()
+            if len(bucket) < targets[stage]
+        }
+
+    # _call_openai_and_validate's deterministic_failure_reason isn't
+    # separately branched on here — each retry sends a DIFFERENT, narrower
+    # targeted prompt rather than blindly repeating the same request, so
+    # it isn't the "retrying would not help" case that reason exists to
+    # short-circuit.
+    def _accepted():
+        return [row for stage in targets for row in buckets[stage]]
+
+    rows, _reason = _call_openai_and_validate(
+        build_prompt(dict(targets), []), api_key, stamp=stamp,
+    )
+    calls += 1
+    _bucket(rows)
+
+    attempts = 0
+    while attempts < retry_budget:
+        shortfall = _shortfall()
+        if not shortfall:
+            break
+        attempts += 1
+        log.warning(f"{label}stage shortfall after call {calls}: {shortfall} — retrying")
+        rows, _reason = _call_openai_and_validate(
+            build_prompt(shortfall, _accepted()), api_key, stamp=stamp,
+        )
+        calls += 1
+        _bucket(rows)
+
+    shortfall = _shortfall()
+    if shortfall and on_shortfall == SHORTFALL_RAISE:
+        raise LiteGenerationError(
+            shortfall_message(shortfall) if shortfall_message
+            else f"stage shortfall persists: {shortfall}"
+        )
+
+    return {
+        'buckets':   buckets,
+        'shortfall': shortfall,
+        'rejected':  rejected,
+        'calls':     calls,
+    }
+
+
 def _build_lite_prompt(
     brand_name: str,
     competitor_names: list,
@@ -394,6 +538,214 @@ query_text, category, stage, specificity, persona, study_pattern, status, subscr
 No markdown, no explanation, just the JSON array.{avoid_text}"""
 
 
+def _build_general_prompt(
+    study_name: str,
+    description: str,
+    stage_counts: dict,
+    allowed_categories: list,
+    study_pattern: str,
+    already_generated: list,
+) -> str:
+    """
+    The general-study counterpart to _build_lite_prompt. Two things it
+    does that _build_prompt does not:
+
+    Only allowed_categories is rendered into the constraints text, not
+    the whole of QUERY_CATEGORIES. A study about prestige beauty has no
+    business being offered 'Baby Care' as a choice, and the cheapest way
+    to stop a category appearing in the output is to never put it in the
+    prompt. The filter in generate_general_queries is the enforcement;
+    this is the hint.
+
+    study_pattern is stated, not asked for. It is a property of the
+    study, not of each question, and a model that emits it per row will
+    hand back a mix — which changes the coding rubric from query to query
+    while every row still looks individually valid.
+    """
+    constraint_values = dict(QUERY_CONSTRAINTS)
+    constraint_values['category'] = list(allowed_categories)
+    constraints_text = "\n".join(
+        f"- {field}: one of {', '.join(repr(v) for v in vals)}"
+        for field, vals in constraint_values.items()
+        if field != 'study_pattern'
+    )
+
+    distribution_text = "\n".join(
+        f"- {count} {stage!r} stage question(s)"
+        for stage, count in stage_counts.items()
+        if count > 0
+    )
+    total = sum(stage_counts.values())
+
+    avoid_text = ""
+    if already_generated:
+        avoid_text = (
+            "\n\nDo NOT repeat or closely paraphrase these already-generated questions:\n"
+            + "\n".join(f"- {q}" for q in already_generated)
+        )
+
+    return f"""Generate exactly {total} distinct search-style questions for a brand/market research study called "{study_name}".
+
+Study description: {description or 'No additional description provided.'}
+
+Distribute the {total} questions EXACTLY as follows:
+{distribution_text}
+
+Each question becomes one row in a database table. For EACH question provide ALL of these fields. Every field value MUST be one of the exact allowed values listed — do not invent new values:
+
+{constraints_text}
+
+For "category": choose only from the values listed above. Every question must be about a subject that genuinely belongs to one of them — if a question would need a category outside that list, do not ask it.
+For "status": always 'Active'.
+
+Also provide:
+- query_text: the actual question/prompt a user might type into an AI assistant or search engine
+- soa_focus: 1-3 comma-separated metric names this query is designed to test (free text, e.g. "Mention Rate, RSI")
+- rationale: one sentence explaining why this query is useful for the study (free text)
+
+Respond with ONLY a JSON array of {total} objects, each with keys:
+query_text, category, stage, specificity, persona, status, subscription_state, soa_focus, rationale.
+No markdown, no explanation, just the JSON array.{avoid_text}"""
+
+
+def generate_general_queries(
+    study_name: str,
+    description: str,
+    stage_targets: dict,
+    allowed_categories: list,
+    study_pattern: str,
+    api_key: str,
+) -> tuple:
+    """
+    The general-study path: caller-supplied per-stage targets, a
+    caller-supplied category allow-list, and a study_pattern stamped onto
+    every row rather than chosen per row by the model.
+
+    Returns (rows, report). It does NOT raise on shortfall, which is the
+    substantive difference from generate_lite_queries. Lite is a fixed
+    24-question public artifact where a lopsided distribution makes the
+    report itself misleading, so failing is honest. A general study is
+    fifty-odd questions built over several model calls; hard-failing
+    because three Comparison rows are missing throws away forty-seven
+    good queries to punish a shortfall a human can see and fix in a
+    minute. So it reports.
+
+    The report names, per stage, what was requested and what was
+    delivered, plus every row dropped as an exact duplicate, every row
+    dropped for an out-of-list category, and how many replacement rounds
+    ran. Phase-three provenance is assembled on top of it.
+
+    Three things are deliberately NOT done here:
+
+    A row whose category falls outside allowed_categories is DROPPED, not
+    relabelled. Rewriting it to the nearest allowed value is the cheap
+    edit and it is the wrong one: it converts a visible scope violation
+    into a clean-looking row, and the underlying problem — the generator
+    drifted off the brief — disappears from the record. Dropping it
+    leaves the drift visible in the report where someone can act on it.
+
+    Exact duplicates are removed automatically; nothing else is. Rows
+    that merely look similar are the semantic review pass's business, and
+    that pass is advisory.
+
+    Replacement generation is bounded at REPLACEMENT_ROUNDS. Each round
+    re-enters validation, the category filter and dedupe, because a
+    replacement can perfectly well collide with something already kept
+    or wander out of scope itself.
+    """
+    stage_targets = {k: v for k, v in stage_targets.items() if v > 0}
+    allowed = set(allowed_categories)
+
+    def _accept(row):
+        if row.get('category') not in allowed:
+            return f"category {row.get('category')!r} is outside the study's allowed categories"
+        return None
+
+    def _build(shortfall, accepted_rows):
+        # The avoid-list is the FULL keep-list, not just what this
+        # helper pass has bucketed. A replacement round opens a fresh
+        # pass, so its first prompt starts with an empty accepted list —
+        # without kept, a replacement for a deduped row would be written
+        # by a model that cannot see any of the rows it must not repeat,
+        # which is how the duplicate got there in the first place.
+        avoid = [row['query_text'] for row in kept]
+        avoid += [row['query_text'] for row in accepted_rows]
+        return _build_general_prompt(
+            study_name, description, shortfall, allowed_categories,
+            study_pattern, avoid,
+        )
+
+    stamp = {'study_pattern': study_pattern}
+
+    kept: list = []
+    duplicates: list = []
+    category_drops: list = []
+    calls = 0
+    rounds = 0
+    remaining = dict(stage_targets)
+
+    while True:
+        result = _fill_stage_buckets(
+            targets=remaining,
+            build_prompt=_build,
+            api_key=api_key,
+            retry_budget=RETRY_BUDGET_GENERAL,
+            on_shortfall=SHORTFALL_REPORT,
+            accept_row=_accept,
+            stamp=stamp,
+            label='[generation] ',
+        )
+        calls += result['calls']
+        category_drops.extend(result['rejected'])
+
+        fresh = [
+            row for stage in remaining for row in result['buckets'][stage]
+        ]
+        # Dedupe against everything already kept, not just within this
+        # round — a replacement can collide with a row from the round
+        # that asked for it.
+        survivors, dropped = dedupe_exact(kept + fresh)
+        kept = survivors
+        duplicates.extend(dropped)
+
+        delivered = _count_by_stage(kept)
+        remaining = {
+            stage: target - delivered.get(stage, 0)
+            for stage, target in stage_targets.items()
+            if delivered.get(stage, 0) < target
+        }
+
+        if not remaining or rounds >= REPLACEMENT_ROUNDS:
+            break
+        rounds += 1
+        log.info(
+            f"[generation] replacement round {rounds}: still short {remaining}"
+        )
+
+    delivered = _count_by_stage(kept)
+    report = {
+        'requested_by_stage': dict(stage_targets),
+        'delivered_by_stage': {
+            stage: delivered.get(stage, 0) for stage in stage_targets
+        },
+        'shortfall_by_stage': {
+            stage: target - delivered.get(stage, 0)
+            for stage, target in stage_targets.items()
+            if delivered.get(stage, 0) < target
+        },
+        'duplicates_dropped': duplicates,
+        'category_drops': [
+            {'query_text': row.get('query_text'),
+             'category':   row.get('category'),
+             'reason':     reason}
+            for row, reason in category_drops
+        ],
+        'replacement_rounds': rounds,
+        'generation_calls':   calls,
+    }
+    return kept, report
+
+
 def generate_lite_queries(
     brand_name: str,
     competitor_names: list,
@@ -403,59 +755,43 @@ def generate_lite_queries(
     Generates a fixed LITE_QUERY_COUNT-query SoA Lite study: exactly
     LITE_QUERIES_PER_STAGE queries per QUERY_STAGES stage (Stage 25:
     bumped from 3/stage to 6/stage — soa_shared.scan_dimensions is the
-    one place this count is defined). The distribution is enforced here,
-    not just requested in the prompt — validated rows are bucketed by
-    stage, and if any stage is short after the first call, ONE targeted
-    regeneration call asks only for the shortfall stages/counts. If still
-    short after that retry, raises LiteGenerationError: a partial lite
-    study (e.g. 5 Comparison questions instead of 6) would skew the
-    resulting report, so it's better to fail the request outright.
+    one place this count is defined). The distribution is enforced, not
+    just requested in the prompt — see _fill_stage_buckets, which this
+    shares with the general path: validated rows are bucketed by stage,
+    and if any stage is short after the first call, ONE targeted
+    regeneration call (retry_budget=1) asks only for the shortfall
+    stages/counts. If still short after that retry, SHORTFALL_RAISE
+    raises LiteGenerationError with the message this function supplies: a
+    partial lite study (e.g. 5 Comparison questions instead of 6) would
+    skew the resulting report, so it's better to fail the request
+    outright. The general path passes SHORTFALL_REPORT for the opposite
+    reason — see generate_general_queries.
     """
-    buckets: dict = {stage: [] for stage in QUERY_STAGES}
+    targets = {stage: LITE_QUERIES_PER_STAGE for stage in QUERY_STAGES}
 
-    def _bucket(rows):
-        for row in rows:
-            stage = row.get('stage')
-            bucket = buckets.get(stage)
-            if bucket is not None and len(bucket) < LITE_QUERIES_PER_STAGE:
-                bucket.append(row)
-
-    def _already_generated():
-        return [row['query_text'] for bucket in buckets.values() for row in bucket]
-
-    def _shortfall():
-        return {
-            stage: LITE_QUERIES_PER_STAGE - len(bucket)
-            for stage, bucket in buckets.items()
-            if len(bucket) < LITE_QUERIES_PER_STAGE
-        }
-
-    # _call_openai_and_validate's deterministic_failure_reason isn't
-    # separately branched on here — the lite prompt already asks for
-    # every QUERY_CONSTRAINTS field explicitly (including
-    # subscription_state), and the existing shortfall-retry below
-    # already sends a DIFFERENT, narrower targeted prompt rather than
-    # blindly repeating the same request, so it isn't the "retrying
-    # would not help" case that reason exists to short-circuit.
-    initial_counts = {stage: LITE_QUERIES_PER_STAGE for stage in QUERY_STAGES}
-    prompt = _build_lite_prompt(brand_name, competitor_names, initial_counts, [])
-    rows, _reason = _call_openai_and_validate(prompt, api_key)
-    _bucket(rows)
-
-    shortfall = _shortfall()
-    if shortfall:
-        log.warning(f"[lite] stage shortfall after first call: {shortfall} — retrying")
-        retry_prompt = _build_lite_prompt(
-            brand_name, competitor_names, shortfall, _already_generated(),
+    def _build(shortfall, accepted_rows):
+        return _build_lite_prompt(
+            brand_name,
+            competitor_names,
+            shortfall,
+            [row['query_text'] for row in accepted_rows],
         )
-        retry_rows, _reason = _call_openai_and_validate(retry_prompt, api_key)
-        _bucket(retry_rows)
 
-    shortfall = _shortfall()
-    if shortfall:
-        raise LiteGenerationError(
+    def _message(shortfall):
+        return (
             f"Could not generate {LITE_QUERIES_PER_STAGE} valid queries for "
             f"stage(s) {list(shortfall.keys())} after retry — shortfall={shortfall}"
         )
 
+    result = _fill_stage_buckets(
+        targets=targets,
+        build_prompt=_build,
+        api_key=api_key,
+        retry_budget=1,
+        on_shortfall=SHORTFALL_RAISE,
+        shortfall_message=_message,
+        label='[lite] ',
+    )
+
+    buckets = result['buckets']
     return [row for stage in QUERY_STAGES for row in buckets[stage]]
