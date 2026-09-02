@@ -34,7 +34,11 @@ def db(monkeypatch):
                 id INTEGER PRIMARY KEY, study_type TEXT UNIQUE, study_name TEXT,
                 description TEXT, target_count INTEGER, created_count INTEGER DEFAULT 0,
                 status TEXT, error_message TEXT, organization_id INTEGER, created_by TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP,
+                study_pattern TEXT, retailer_names TEXT, allowed_categories TEXT,
+                stage_targets TEXT, rotate_named_retailer BOOLEAN,
+                naming_rule_enabled BOOLEAN, personas TEXT, specificity_mode TEXT,
+                provenance TEXT
             )
         """)
         conn.exec_driver_sql("""

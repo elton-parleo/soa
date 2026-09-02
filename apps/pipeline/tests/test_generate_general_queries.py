@@ -306,7 +306,7 @@ def test_a_stage_that_loses_rows_to_dedupe_is_refilled_by_a_targeted_prompt():
 
     with patch("generation.query_generator._build_general_prompt") as mock_build, \
          patch("generation.query_generator._call_openai_and_validate", side_effect=_capture):
-        mock_build.side_effect = lambda name, desc, shortfall, cats, pattern, avoid: (
+        mock_build.side_effect = lambda name, desc, shortfall, cats, pattern, avoid, **kw: (
             seen_shortfalls.append(dict(shortfall)) or "prompt"
         )
         rows, report = generate_general_queries(
@@ -380,7 +380,7 @@ def test_a_replacement_uses_the_full_keep_list_as_the_avoid_list():
 
     with patch("generation.query_generator._build_general_prompt") as mock_build, \
          patch("generation.query_generator._call_openai_and_validate", side_effect=_capture):
-        mock_build.side_effect = lambda name, desc, shortfall, cats, pattern, avoid: (
+        mock_build.side_effect = lambda name, desc, shortfall, cats, pattern, avoid, **kw: (
             seen_avoid.append(list(avoid)) or "prompt"
         )
         generate_general_queries(
@@ -400,3 +400,140 @@ def test_zero_target_stages_are_ignored_entirely():
 
     assert 'Research' not in report['requested_by_stage']
     assert report['shortfall_by_stage'] == {}
+
+
+# ─── the rest of the study brief ──────────────────────────────────────────
+
+def test_the_naming_rule_confines_names_to_the_late_funnel():
+    """Generalises the rule already hardcoded in _build_lite_prompt: a
+    mention in an Awareness answer only means something if the question
+    did not put the name there."""
+    prompt = _build_general_prompt(
+        "S", "d", {'Awareness': 2}, ALLOWED, 'retailer', [],
+        retailer_names=['Sephora', 'Ulta Beauty'], naming_rule_enabled=True,
+    )
+    assert "Sephora" in prompt
+    assert "only 'Comparison' and 'Ready to Buy' questions may name a retailer" in prompt
+    assert "WITHOUT" in prompt
+
+
+def test_turning_the_naming_rule_off_drops_the_late_funnel_confinement():
+    prompt = _build_general_prompt(
+        "S", "d", {'Awareness': 2}, ALLOWED, 'retailer', [],
+        retailer_names=['Sephora'], naming_rule_enabled=False,
+    )
+    assert "Sephora" in prompt
+    assert "may name a retailer" not in prompt
+
+
+def test_the_naming_rule_with_no_retailers_asks_for_category_level_questions():
+    prompt = _build_general_prompt(
+        "S", "d", {'Awareness': 2}, ALLOWED, 'retailer', [],
+        retailer_names=[], naming_rule_enabled=True,
+    )
+    assert "Do not name specific retailers or brands" in prompt
+
+
+def test_only_the_requested_personas_are_offered():
+    prompt = _build_general_prompt(
+        "S", "d", {'Awareness': 2}, ALLOWED, 'retailer', [],
+        personas=['Beauty Enthusiast'],
+    )
+    assert "'Beauty Enthusiast'" in prompt
+    assert "'Value-Conscious'" not in prompt
+
+
+def test_no_persona_list_offers_all_of_them():
+    from soa_shared.constants import QUERY_PERSONAS
+    prompt = _build_general_prompt("S", "d", {'Awareness': 2}, ALLOWED, 'retailer', [])
+    for persona in QUERY_PERSONAS:
+        assert repr(persona) in prompt
+
+
+def test_specificity_mode_changes_the_instruction():
+    match = _build_general_prompt(
+        "S", "d", {'Awareness': 2}, ALLOWED, 'retailer', [],
+        specificity_mode='match_to_stage',
+    )
+    even = _build_general_prompt(
+        "S", "d", {'Awareness': 2}, ALLOWED, 'retailer', [],
+        specificity_mode='even_split',
+    )
+    assert "match it to where the question sits in the funnel" in match
+    assert "spread the questions roughly evenly" in even
+    assert match != even
+
+
+def test_an_unrecognised_specificity_mode_falls_back_rather_than_omitting():
+    prompt = _build_general_prompt(
+        "S", "d", {'Awareness': 2}, ALLOWED, 'retailer', [],
+        specificity_mode='nonsense',
+    )
+    assert "match it to where the question sits in the funnel" in prompt
+
+
+def test_the_retailer_list_is_rotated_between_calls():
+    """Asking the model to spread mentions is necessary and not
+    sufficient. Handed the same order every time it reaches for whatever
+    is first, which is how one retailer ended up named in ten of eleven
+    head-to-heads."""
+    seen_orders = []
+    batches = [[] for _ in range(20)]
+
+    def _capture(prompt, api_key, temperature=0.8, stamp=None):
+        return ([], None)
+
+    with patch("generation.query_generator._build_general_prompt") as mock_build, \
+         patch("generation.query_generator._call_openai_and_validate", side_effect=_capture):
+        mock_build.side_effect = lambda *a, **kw: (
+            seen_orders.append(list(kw.get('retailer_names') or [])) or "prompt"
+        )
+        generate_general_queries(
+            study_name="S", description="d", stage_targets={'Awareness': 2},
+            allowed_categories=ALLOWED, study_pattern='retailer', api_key="k",
+            retailer_names=['Sephora', 'Ulta', 'Nordstrom'],
+            rotate_named_retailer=True,
+        )
+
+    assert seen_orders[0] == ['Sephora', 'Ulta', 'Nordstrom']
+    assert seen_orders[1] == ['Ulta', 'Nordstrom', 'Sephora']
+    assert seen_orders[2] == ['Nordstrom', 'Sephora', 'Ulta']
+    assert seen_orders[3] == ['Sephora', 'Ulta', 'Nordstrom']   # wraps
+
+
+def test_rotation_off_keeps_the_callers_order():
+    seen_orders = []
+
+    def _capture(prompt, api_key, temperature=0.8, stamp=None):
+        return ([], None)
+
+    with patch("generation.query_generator._build_general_prompt") as mock_build, \
+         patch("generation.query_generator._call_openai_and_validate", side_effect=_capture):
+        mock_build.side_effect = lambda *a, **kw: (
+            seen_orders.append(list(kw.get('retailer_names') or [])) or "prompt"
+        )
+        generate_general_queries(
+            study_name="S", description="d", stage_targets={'Awareness': 2},
+            allowed_categories=ALLOWED, study_pattern='retailer', api_key="k",
+            retailer_names=['Sephora', 'Ulta'], rotate_named_retailer=False,
+        )
+
+    assert all(order == ['Sephora', 'Ulta'] for order in seen_orders)
+
+
+def test_the_report_echoes_the_brief_that_produced_it():
+    """A record of what happened is not much use without a record of what
+    was asked for."""
+    targets = {'Awareness': 1}
+    with patch("generation.query_generator._call_openai_and_validate") as mock_call:
+        mock_call.return_value = ([_row('Awareness')], None)
+        _, report = generate_general_queries(
+            study_name="S", description="d", stage_targets=targets,
+            allowed_categories=ALLOWED, study_pattern='retailer', api_key="k",
+            retailer_names=['Sephora'], naming_rule_enabled=False,
+            specificity_mode='even_split',
+        )
+
+    assert report['retailers_named'] == ['Sephora']
+    assert report['naming_rule_enabled'] is False
+    assert report['specificity_mode'] == 'even_split'

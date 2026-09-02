@@ -609,6 +609,18 @@ class GenerationStatusResponse(BaseModel):
     # doesn't change what any caller currently relies on.
     error_message: Optional[str] = None
 
+    # What actually happened during generation: per-stage requested vs
+    # delivered, the exact duplicates that were dropped, the rows dropped
+    # for an out-of-scope category, and the advisory findings from the
+    # semantic-duplicate and coherence review passes. Null until the
+    # worker finishes.
+    #
+    # Untyped on purpose. Pinning a Pydantic model to it would make every
+    # new field in build_provenance_record a schema change here too, and
+    # this is a report for a human to read, not a contract anything
+    # branches on. See generation/query_generator.py for its shape.
+    provenance: Optional[dict] = None
+
 
 # ─── Scope SKUs ──────────────────────
 # Additive: optional SKU-level measurement scope nested under entities.

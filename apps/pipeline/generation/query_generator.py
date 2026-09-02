@@ -585,6 +585,22 @@ query_text, category, stage, specificity, persona, study_pattern, status, subscr
 No markdown, no explanation, just the JSON array.{avoid_text}"""
 
 
+SPECIFICITY_MATCH_TO_STAGE = 'match_to_stage'
+SPECIFICITY_EVEN_SPLIT = 'even_split'
+
+_SPECIFICITY_INSTRUCTIONS = {
+    SPECIFICITY_MATCH_TO_STAGE: (
+        "For \"specificity\": match it to where the question sits in the "
+        "funnel — early-funnel questions are broad, and questions close to "
+        "purchase are narrow and concrete."
+    ),
+    SPECIFICITY_EVEN_SPLIT: (
+        "For \"specificity\": spread the questions roughly evenly across the "
+        "allowed values, independently of stage."
+    ),
+}
+
+
 def _build_general_prompt(
     study_name: str,
     description: str,
@@ -592,25 +608,47 @@ def _build_general_prompt(
     allowed_categories: list,
     study_pattern: str,
     already_generated: list,
+    retailer_names: Optional[list] = None,
+    naming_rule_enabled: bool = True,
+    personas: Optional[list] = None,
+    specificity_mode: str = SPECIFICITY_MATCH_TO_STAGE,
 ) -> str:
     """
-    The general-study counterpart to _build_lite_prompt. Two things it
-    does that _build_prompt does not:
+    The general-study counterpart to _build_lite_prompt.
 
     Only allowed_categories is rendered into the constraints text, not
     the whole of QUERY_CATEGORIES. A study about prestige beauty has no
     business being offered 'Baby Care' as a choice, and the cheapest way
     to stop a category appearing in the output is to never put it in the
     prompt. The filter in generate_general_queries is the enforcement;
-    this is the hint.
+    this is the hint. personas narrows the same way when the caller
+    supplied a list — but unlike category it is NOT enforced by a drop:
+    a persona label outside the requested set is a mislabelled row, not a
+    question about the wrong subject, and throwing away an otherwise good
+    question over it costs more than it saves.
 
     study_pattern is stated, not asked for. It is a property of the
     study, not of each question, and a model that emits it per row will
     hand back a mix — which changes the coding rubric from query to query
     while every row still looks individually valid.
+
+    retailer_names are the entities to name in question text. The list is
+    presented in a ROTATED order per call (see generate_general_queries)
+    rather than always in the caller's order: a model handed the same
+    list every time tends to reach for the first name in it, which is how
+    a study ends up naming one retailer in ten of eleven head-to-heads —
+    and such a study cannot be reused with a different primary entity,
+    which is the whole point of reuse across cycles.
+
+    naming_rule_enabled generalises the rule already hardcoded in
+    _build_lite_prompt: names appear only in Comparison and Ready to Buy
+    questions, so an Awareness or Research mention has to be earned by
+    the answer rather than prompted by the question.
     """
     constraint_values = dict(QUERY_CONSTRAINTS)
     constraint_values['category'] = list(allowed_categories)
+    if personas:
+        constraint_values['persona'] = list(personas)
     constraints_text = "\n".join(
         f"- {field}: one of {', '.join(repr(v) for v in vals)}"
         for field, vals in constraint_values.items()
@@ -631,6 +669,34 @@ def _build_general_prompt(
             + "\n".join(f"- {q}" for q in already_generated)
         )
 
+    specificity_text = _SPECIFICITY_INSTRUCTIONS.get(
+        specificity_mode, _SPECIFICITY_INSTRUCTIONS[SPECIFICITY_MATCH_TO_STAGE],
+    )
+
+    names = list(retailer_names or [])
+    if names:
+        naming_text = (
+            f"\nThe retailers to name are: {', '.join(names)}. "
+            f"Spread the mentions across all of them — do not lead with the "
+            f"same one every time."
+        )
+        if naming_rule_enabled:
+            naming_text += (
+                f"\n\nCritical rule on naming: only 'Comparison' and 'Ready to Buy' "
+                f"questions may name a retailer. 'Awareness' and 'Research' questions "
+                f"must describe the shopper's need in category-level terms WITHOUT "
+                f"naming any of them, so that a mention in a good answer is earned "
+                f"rather than prompted by the question itself."
+            )
+    elif naming_rule_enabled:
+        naming_text = (
+            "\nDo not name specific retailers or brands in any question — describe "
+            "the shopper's need in category-level terms, so that any mention in a "
+            "good answer is earned rather than prompted."
+        )
+    else:
+        naming_text = ""
+
     return f"""Generate exactly {total} distinct search-style questions for a brand/market research study called "{study_name}".
 
 Study description: {description or 'No additional description provided.'}
@@ -644,6 +710,8 @@ Each question becomes one row in a database table. For EACH question provide ALL
 
 For "category": choose only from the values listed above. Every question must be about a subject that genuinely belongs to one of them — if a question would need a category outside that list, do not ask it.
 For "status": always 'Active'.
+{specificity_text}
+{naming_text}
 
 Also provide:
 - query_text: the actual question/prompt a user might type into an AI assistant or search engine
@@ -662,6 +730,11 @@ def generate_general_queries(
     allowed_categories: list,
     study_pattern: str,
     api_key: str,
+    retailer_names: Optional[list] = None,
+    rotate_named_retailer: bool = True,
+    naming_rule_enabled: bool = True,
+    personas: Optional[list] = None,
+    specificity_mode: str = SPECIFICITY_MATCH_TO_STAGE,
 ) -> tuple:
     """
     The general-study path: caller-supplied per-stage targets, a
@@ -733,6 +806,21 @@ def generate_general_queries(
         seen_keys.add(key)
         return None
 
+    names = list(retailer_names or [])
+    prompt_calls = {'n': 0}
+
+    def _rotated_names():
+        """Presents the retailer list starting from a different name on
+        each call. Asking the model to spread mentions is necessary and
+        not sufficient — handed the same order every time it reaches for
+        whatever is first, which is exactly how one retailer ended up
+        named in ten of eleven head-to-heads. Rotating the ORDER costs
+        nothing and does not depend on the model cooperating."""
+        if not names or not rotate_named_retailer:
+            return names
+        offset = prompt_calls['n'] % len(names)
+        return names[offset:] + names[:offset]
+
     def _build(shortfall, accepted_rows):
         # The avoid-list is the FULL keep-list, not just what this
         # helper pass has bucketed. A replacement round opens a fresh
@@ -742,10 +830,16 @@ def generate_general_queries(
         # which is how the duplicate got there in the first place.
         avoid = [row['query_text'] for row in kept]
         avoid += [row['query_text'] for row in accepted_rows]
-        return _build_general_prompt(
+        prompt = _build_general_prompt(
             study_name, description, shortfall, allowed_categories,
             study_pattern, avoid,
+            retailer_names=_rotated_names(),
+            naming_rule_enabled=naming_rule_enabled,
+            personas=personas,
+            specificity_mode=specificity_mode,
         )
+        prompt_calls['n'] += 1
+        return prompt
 
     stamp = {'study_pattern': study_pattern}
 
@@ -808,6 +902,9 @@ def generate_general_queries(
         'category_drops': category_drops,
         'replacement_rounds': rounds,
         'generation_calls':   calls,
+        'retailers_named':    names,
+        'naming_rule_enabled': naming_rule_enabled,
+        'specificity_mode':   specificity_mode,
     }
     return kept, report
 
@@ -819,6 +916,11 @@ def generate_and_review_study(
     allowed_categories: list,
     study_pattern: str,
     api_key: str,
+    retailer_names: Optional[list] = None,
+    rotate_named_retailer: bool = True,
+    naming_rule_enabled: bool = True,
+    personas: Optional[list] = None,
+    specificity_mode: str = SPECIFICITY_MATCH_TO_STAGE,
 ) -> tuple:
     """
     The whole general path in one call: generate, then review, then
@@ -841,6 +943,11 @@ def generate_and_review_study(
         allowed_categories=allowed_categories,
         study_pattern=study_pattern,
         api_key=api_key,
+        retailer_names=retailer_names,
+        rotate_named_retailer=rotate_named_retailer,
+        naming_rule_enabled=naming_rule_enabled,
+        personas=personas,
+        specificity_mode=specificity_mode,
     )
 
     semantic_groups = review_semantic_duplicates(rows, api_key)
@@ -1142,6 +1249,15 @@ def build_provenance_record(
         'shortfall_by_stage':  report.get('shortfall_by_stage', {}),
         'replacement_rounds':  report.get('replacement_rounds', 0),
         'generation_calls':    report.get('generation_calls', 0),
+
+        # Echoed from the brief. A record of what happened is not much
+        # use without a record of what was asked for — reading "one
+        # retailer named in ten of eleven" only means something next to
+        # the list of retailers that were supposed to be spread across
+        # them, and next to whether rotation was even switched on.
+        'retailers_named':     report.get('retailers_named', []),
+        'naming_rule_enabled': report.get('naming_rule_enabled'),
+        'specificity_mode':    report.get('specificity_mode'),
 
         # Automatic — these rows are not in the study.
         'exact_duplicates_dropped': [

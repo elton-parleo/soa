@@ -8,6 +8,11 @@ every generation-status response silently omitted it regardless of
 whether the job actually recorded one. StudyDetail.jsx already reads
 status.error_message and has always gotten undefined as a result — this
 is a pre-existing gap this fix closes, not new behavior.
+
+The fixture's CREATE TABLE mirrors the real soa_query_generation_jobs,
+study-brief columns included (migration 3f8e2a91c7d4), because the router
+selects provenance off the row. Only the DDL grew — every assertion below
+is unchanged.
 """
 import pytest
 from fastapi import HTTPException
@@ -26,7 +31,11 @@ def patched_engine(monkeypatch):
             CREATE TABLE soa_query_generation_jobs (
                 id INTEGER PRIMARY KEY, study_type TEXT UNIQUE, study_name TEXT,
                 description TEXT, target_count INTEGER, created_count INTEGER DEFAULT 0,
-                status TEXT, error_message TEXT, organization_id INTEGER, created_by TEXT
+                status TEXT, error_message TEXT, organization_id INTEGER, created_by TEXT,
+                study_pattern TEXT, retailer_names TEXT, allowed_categories TEXT,
+                stage_targets TEXT, rotate_named_retailer BOOLEAN,
+                naming_rule_enabled BOOLEAN, personas TEXT, specificity_mode TEXT,
+                provenance TEXT
             )
         """)
     monkeypatch.setattr(studies_router, "engine", engine)
