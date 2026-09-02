@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api.js'
 import Sidebar from './Sidebar.jsx'
+import GenerationReport from './GenerationReport.jsx'
 
 // ─── Design tokens (verbatim from CycleDashboard.jsx) ────────────────────────
 const T = {
@@ -491,6 +492,13 @@ export default function StudyDetail({ studyType, onNavigate }) {
                 </div>
               </>
             )
+          )}
+
+          {/* Generation report — what the job actually did. Rendered on a
+              completed job only: a report on a run still in progress
+              would be describing something that has not happened yet. */}
+          {genStatus?.status === 'complete' && (
+            <GenerationReport provenance={genStatus.provenance} />
           )}
 
           {/* Tabs row */}

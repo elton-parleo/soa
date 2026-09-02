@@ -11,6 +11,16 @@ the job with 0 queries once both attempts came back empty. These tests
 lock down the fix: a deterministic failure short-circuits the retry
 entirely, and a job that truly ends up with nothing is marked 'failed'
 with a human-readable reason, never 'complete'.
+
+_insert_job leaves study_pattern NULL, so every test here exercises the
+LEGACY generation path (the multi-batch generate_query_batch loop). That
+is deliberate and is the behaviour being locked down: a job queued before
+the study brief existed — or by a client that sends only
+study_name/description/target_count — must keep running exactly as it did
+when it was queued, not be reinterpreted under rules nobody agreed to.
+The briefed path has its own file (test_briefed_generation.py). Only the
+fixture's CREATE TABLE grew, to mirror the real table after migration
+3f8e2a91c7d4; every assertion below is unchanged.
 """
 from unittest.mock import patch
 
@@ -35,7 +45,11 @@ def db(monkeypatch):
                 id INTEGER PRIMARY KEY, study_type TEXT UNIQUE, study_name TEXT,
                 description TEXT, target_count INTEGER, created_count INTEGER DEFAULT 0,
                 status TEXT, error_message TEXT, organization_id INTEGER, created_by TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP,
+                study_pattern TEXT, retailer_names TEXT, allowed_categories TEXT,
+                stage_targets TEXT, rotate_named_retailer BOOLEAN,
+                naming_rule_enabled BOOLEAN, personas TEXT, specificity_mode TEXT,
+                provenance TEXT
             )
         """)
         conn.exec_driver_sql("""

@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import re
 import uuid
 from fastapi import APIRouter, Query, HTTPException, UploadFile, File, Depends
@@ -126,6 +127,13 @@ def _slugify_study_name(name: str) -> str:
     return f"{slug}_{suffix}"
 
 
+def _as_json(value):
+    """None stays None — a NULL column means "the client said nothing",
+    which is not the same as an empty list and is read differently
+    downstream."""
+    return None if value is None else json.dumps(value)
+
+
 # ─── POST /studies/generate — create AI generation job ───────────────────────
 
 @router.post("/studies/generate", response_model=StudyGenerateResponse, status_code=201)
@@ -139,6 +147,25 @@ def generate_study(
 
     Returns immediately with the new study_type so the frontend can redirect
     to the (initially empty) study detail page and poll for progress.
+
+    The structured fields on StudyGenerateRequest (study_pattern,
+    retailer_names, allowed_categories, stage_targets,
+    rotate_named_retailer, naming_rule_enabled, personas,
+    specificity_mode) are stored on the job row, because the API and the
+    pipeline share nothing else — an input accepted here and not written
+    down is one the generator can never see.
+
+    study_pattern being NULL is meaningful downstream, not merely absent:
+    it is how worker.py tells a job carrying a brief from one queued by a
+    client that sends only name/description/target_count, and runs each
+    under the rules it was created under. So it is passed through as
+    whatever the client sent, never defaulted here.
+
+    Nothing about generation happens in this request. The response goes
+    out before a single query exists, which is why it carries no
+    provenance record — that is written to the job row when the worker
+    finishes and read back through
+    GET /studies/{study_type}/generation-status.
     """
     org_id  = current_user['organization_id']
     user_id = current_user['user_id']
@@ -151,11 +178,17 @@ def generate_study(
                     study_type, study_name, description,
                     target_count, status,
                     organization_id, created_by,
+                    study_pattern, retailer_names, allowed_categories,
+                    stage_targets, rotate_named_retailer,
+                    naming_rule_enabled, personas, specificity_mode,
                     created_at
                 ) VALUES (
                     :study_type, :study_name, :description,
                     :target_count, 'pending',
                     :org_id, :user_id,
+                    :study_pattern, :retailer_names, :allowed_categories,
+                    :stage_targets, :rotate_named_retailer,
+                    :naming_rule_enabled, :personas, :specificity_mode,
                     NOW()
                 )
                 RETURNING id, status
@@ -167,10 +200,28 @@ def generate_study(
                 "target_count": data.target_count,
                 "org_id":       org_id,
                 "user_id":      user_id,
+                "study_pattern": data.study_pattern,
+                # json.dumps rather than the raw list: the JSON columns
+                # are sa.JSON, and this is the same write/read-back
+                # convention soa_lite_requests.competitor_names already
+                # uses (worker.py json.loads-es it when the driver hands
+                # back a string).
+                "retailer_names":     _as_json(data.retailer_names),
+                "allowed_categories": _as_json(data.allowed_categories),
+                "stage_targets":      _as_json(data.stage_targets),
+                "rotate_named_retailer": data.rotate_named_retailer,
+                "naming_rule_enabled":   data.naming_rule_enabled,
+                "personas":              _as_json(data.personas),
+                "specificity_mode":      data.specificity_mode,
             },
         )
-        conn.commit()
+        # Read the RETURNING row BEFORE committing, not after. Both
+        # orders work on Postgres, but committing with the cursor still
+        # open is an error on sqlite, which is what the tests run on —
+        # and reading a result you have already committed away is the
+        # odder of the two orders regardless.
         row = result.fetchone()
+        conn.commit()
 
     return StudyGenerateResponse(
         study_type=study_type,
@@ -193,6 +244,12 @@ def get_generation_status(
     """
     Returns the current status of a generation job for a study_type.
     Frontend polls this while status is 'pending' or 'running'.
+
+    Also the only place the provenance record surfaces: what the study
+    asked for, what it got, what was removed automatically and what the
+    advisory review passes flagged for a human. It is null until the
+    worker finishes, so a poll mid-run correctly reports nothing rather
+    than a half-built record.
     Returns 404 if no job exists for this study_type in this org (e.g.
     CSV-uploaded studies have no generation job — this is normal; also
     returned when study_type exists in another org — avoids leaking existence).
@@ -203,7 +260,7 @@ def get_generation_status(
         row = conn.execute(
             text("""
                 SELECT study_type, status, target_count,
-                       created_count, error_message
+                       created_count, error_message, provenance
                 FROM soa_query_generation_jobs
                 WHERE study_type = :st
                   AND organization_id = :org_id
@@ -217,12 +274,19 @@ def get_generation_status(
             detail="No generation job found for this study.",
         )
 
+    # None until the worker finishes — a poll during 'pending' or
+    # 'running' gets no provenance, which is correct rather than missing.
+    provenance = row[5]
+    if isinstance(provenance, str):
+        provenance = json.loads(provenance)
+
     return GenerationStatusResponse(
         study_type=row[0],
         status=row[1],
         target_count=row[2],
         created_count=row[3],
         error_message=row[4],
+        provenance=provenance,
     )
 
 

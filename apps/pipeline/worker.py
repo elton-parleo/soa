@@ -238,6 +238,136 @@ def _insert_generated_rows(
         conn.commit()
 
 
+def _job_json(value):
+    """Job-row JSON column -> Python. Postgres' JSON type hands back a
+    parsed object; sqlite (and any driver storing it as TEXT) hands back
+    a string. Same defensive read soa_lite_requests.competitor_names
+    already uses in _process_one_lite_request."""
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            log.warning(f"[generation] unreadable JSON on job row: {value[:200]!r}")
+            return None
+    return value
+
+
+def _record_provenance(job_id: int, provenance: dict):
+    """
+    Never raises. Provenance is a report ABOUT a study that already
+    exists; failing the job because the report could not be written would
+    destroy the thing the report is about. Logged loudly and dropped.
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE soa_query_generation_jobs
+                SET provenance = :prov, updated_at = NOW()
+                WHERE id = :id
+            """), {"prov": json.dumps(provenance), "id": job_id})
+            conn.commit()
+    except Exception:
+        log.exception(
+            f"[generation] job {job_id}: could not record provenance — the "
+            f"study itself is unaffected"
+        )
+
+
+def _run_briefed_generation(
+    job_id, study_type, study_name, description, target_count,
+    organization_id, created_by, study_pattern, retailer_names,
+    allowed_categories, stage_targets, rotate_named_retailer,
+    naming_rule_enabled, personas, specificity_mode, api_key,
+):
+    """
+    Generation for a job carrying a study brief.
+
+    The difference from the legacy path is not just extra prompt detail.
+    This one enforces the per-stage distribution rather than requesting
+    it, stamps study_pattern instead of letting the model pick per row,
+    drops out-of-scope categories, removes exact duplicates and asks for
+    targeted replacements, and then runs two advisory review passes whose
+    findings are recorded for a human and applied to nothing.
+
+    A shortfall is reported, not raised: the study still gets created
+    with whatever was generated. Failing forty-seven good queries because
+    three are missing is worse than saying three are missing, and the
+    provenance record says it in a form someone can act on.
+    """
+    from generation.query_generator import generate_and_review_study
+    from soa_shared.constants import QUERY_CATEGORIES, QUERY_STAGES
+
+    # Falling back rather than failing: these are shaping inputs, and a
+    # job that reached here has a study_pattern, so the brief is real
+    # even if a field of it is absent.
+    if not stage_targets:
+        # Even split, remainder to the earliest stages — the same shape
+        # the modal's Balanced preset produces.
+        base, extra = divmod(target_count, len(QUERY_STAGES))
+        stage_targets = {
+            stage: base + (1 if i < extra else 0)
+            for i, stage in enumerate(QUERY_STAGES)
+        }
+    if not allowed_categories:
+        allowed_categories = list(QUERY_CATEGORIES)
+
+    try:
+        rows, provenance = generate_and_review_study(
+            study_name=study_name,
+            description=description,
+            stage_targets=stage_targets,
+            allowed_categories=allowed_categories,
+            study_pattern=study_pattern,
+            api_key=api_key,
+            retailer_names=retailer_names,
+            rotate_named_retailer=rotate_named_retailer,
+            naming_rule_enabled=naming_rule_enabled,
+            personas=personas,
+            specificity_mode=specificity_mode,
+        )
+    except Exception as e:
+        log.exception(f"[generation] job {job_id} failed")
+        _mark_generation_failed(job_id, str(e))
+        return
+
+    if not rows:
+        # Same honest-failure discipline as the legacy path: a job that
+        # produced nothing is 'failed', never 'complete' with 0 queries
+        # for the frontend to render as an oddly empty study.
+        _record_provenance(job_id, provenance)
+        _mark_generation_failed(
+            job_id, "Generation produced no usable queries.",
+        )
+        return
+
+    try:
+        _insert_generated_rows(rows, study_type, organization_id, created_by)
+
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE soa_query_generation_jobs
+                SET created_count = :cc, status = 'complete', updated_at = NOW()
+                WHERE id = :id
+            """), {"cc": len(rows), "id": job_id})
+            conn.commit()
+    except Exception as e:
+        log.exception(f"[generation] job {job_id} failed during insert")
+        _mark_generation_failed(job_id, str(e))
+        return
+
+    # After the status update, deliberately. A poll that sees 'complete'
+    # and no provenance yet reads as "not recorded"; one that sees
+    # provenance on a job still 'running' would be a record of something
+    # unfinished.
+    _record_provenance(job_id, provenance)
+
+    shortfall = provenance.get('shortfall_by_stage') or {}
+    log.info(
+        f"[generation] job {job_id} complete: {len(rows)} queries"
+        + (f" (short by stage: {shortfall})" if shortfall else "")
+    )
+
+
 def process_generation_jobs():
     """
     Polls soa_query_generation_jobs for status='pending', processes one job
@@ -249,7 +379,10 @@ def process_generation_jobs():
     with engine.connect() as conn:
         row = conn.execute(text("""
             SELECT id, study_type, study_name, description, target_count,
-                   organization_id, created_by
+                   organization_id, created_by,
+                   study_pattern, retailer_names, allowed_categories,
+                   stage_targets, rotate_named_retailer,
+                   naming_rule_enabled, personas, specificity_mode
             FROM soa_query_generation_jobs
             WHERE status = 'pending'
             ORDER BY created_at ASC
@@ -260,7 +393,10 @@ def process_generation_jobs():
             return
 
         (job_id, study_type, study_name, description, target_count,
-         organization_id, created_by) = row
+         organization_id, created_by,
+         study_pattern, retailer_names, allowed_categories,
+         stage_targets, rotate_named_retailer,
+         naming_rule_enabled, personas, specificity_mode) = row
 
         # Mark running
         conn.execute(text("""
@@ -275,15 +411,60 @@ def process_generation_jobs():
         f"({target_count} queries)"
     )
 
-    from generation.query_generator import generate_query_batch, BATCH_SIZE
+    from generation.query_generator import generate_query_batch, dedupe_exact, BATCH_SIZE
 
     api_key = os.environ.get("OPEN_AI_API_KEY")
     if not api_key:
         _mark_generation_failed(job_id, "OPEN_AI_API_KEY not set")
         return
 
+    # study_pattern is the discriminator, not a convenience: it is NULL
+    # exactly when the job was queued before the study brief existed (or
+    # by a client that sends only name/description/target_count). Such a
+    # job is generated the way it would have been the day it was queued —
+    # a pending row must not be retroactively reinterpreted under rules
+    # nobody agreed to when they submitted it. There is also no honest
+    # default available: every study_pattern value changes the coding
+    # rubric, so picking one on the job's behalf would silently decide
+    # something the requester never said.
+    if study_pattern:
+        _run_briefed_generation(
+            job_id=job_id,
+            study_type=study_type,
+            study_name=study_name,
+            description=description,
+            target_count=target_count,
+            organization_id=organization_id,
+            created_by=created_by,
+            study_pattern=study_pattern,
+            retailer_names=_job_json(retailer_names),
+            allowed_categories=_job_json(allowed_categories),
+            stage_targets=_job_json(stage_targets),
+            rotate_named_retailer=(
+                True if rotate_named_retailer is None else bool(rotate_named_retailer)
+            ),
+            naming_rule_enabled=(
+                True if naming_rule_enabled is None else bool(naming_rule_enabled)
+            ),
+            personas=_job_json(personas),
+            specificity_mode=specificity_mode,
+            api_key=api_key,
+        )
+        return
+
     created_count = 0
     generated_texts = []
+    # Every row already inserted, kept so exact-duplicate removal can span
+    # batches. Duplicates are a CROSS-batch phenomenon here — the model
+    # only ever sees one batch at a time — so deduping inside
+    # generate_query_batch would catch almost none of them. This is the
+    # accumulation point, so this is where it belongs.
+    accepted_rows = []
+    duplicate_drops = []
+    # A batch that contributes nothing new after dedupe makes no progress
+    # toward target_count, and the loop condition is created_count-based:
+    # without this guard an unlucky study could spin on OpenAI forever.
+    stalled_batches = 0
 
     try:
         while created_count < target_count:
@@ -331,9 +512,43 @@ def process_generation_jobs():
                     )
                     break
 
-            _insert_generated_rows(rows, study_type, organization_id, created_by)
-            created_count += len(rows)
-            generated_texts.extend(r['query_text'] for r in rows)
+            # Dedupe the accumulated set, not this batch in isolation.
+            # accepted_rows is already duplicate-free, so it survives
+            # intact and everything after it is what this batch actually
+            # contributes.
+            # accepted_rows is duplicate-free by construction, so every
+            # row dedupe_exact drops from the concatenation came from
+            # this batch — either a repeat of an earlier batch or a
+            # repeat within this one.
+            survivors, batch_drops = dedupe_exact(accepted_rows + rows)
+            new_rows = survivors[len(accepted_rows):]
+
+            if batch_drops:
+                duplicate_drops.extend(batch_drops)
+                log.info(
+                    f"[generation] job {job_id}: dropped {len(batch_drops)} "
+                    f"exact duplicate(s) from this batch"
+                )
+
+            if not new_rows:
+                stalled_batches += 1
+                log.warning(
+                    f"[generation] job {job_id}: batch was entirely duplicates "
+                    f"({stalled_batches} in a row)"
+                )
+                if stalled_batches >= 2:
+                    log.error(
+                        f"[generation] job {job_id}: two consecutive all-duplicate "
+                        f"batches — stopping early with {created_count} queries"
+                    )
+                    break
+                continue
+
+            stalled_batches = 0
+            _insert_generated_rows(new_rows, study_type, organization_id, created_by)
+            accepted_rows.extend(new_rows)
+            created_count += len(new_rows)
+            generated_texts.extend(r['query_text'] for r in new_rows)
 
             # Update progress incrementally
             with engine.connect() as conn:
@@ -366,7 +581,13 @@ def process_generation_jobs():
             """), {"id": job_id})
             conn.commit()
 
-        log.info(f"[generation] job {job_id} complete: {created_count} queries")
+        log.info(
+            f"[generation] job {job_id} complete: {created_count} queries"
+            + (
+                f" ({len(duplicate_drops)} exact duplicate(s) dropped)"
+                if duplicate_drops else ""
+            )
+        )
 
     except Exception as e:
         log.exception(f"[generation] job {job_id} failed")

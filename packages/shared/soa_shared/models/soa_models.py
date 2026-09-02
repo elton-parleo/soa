@@ -1210,6 +1210,38 @@ class SoaQueryGenerationJob(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=True)
 
+    # ─── The study brief ──────────────────────────────────────────────
+    #
+    # What the Create Study with AI modal collected. The API and the
+    # pipeline share nothing but this table, so a structured input that
+    # is not stored here is one the generator can never see.
+    #
+    # All nullable, and study_pattern doubles as the worker's path
+    # discriminator: NULL means the job predates the brief (or came from
+    # a client sending only name/description/target_count), and it is
+    # generated exactly as it would have been when it was queued. A job
+    # runs under the rules it was created under.
+    study_pattern = Column(String, nullable=True)
+    # Names written into question text. No roles — the
+    # primary-versus-competitor decision belongs to soa_cycle_entities
+    # at cycle creation, not to a generation request.
+    retailer_names = Column(JSON, nullable=True)
+    allowed_categories = Column(JSON, nullable=True)
+    # {stage: count}. target_count above is its sum; the modal derives
+    # one from the other so they cannot disagree.
+    stage_targets = Column(JSON, nullable=True)
+    rotate_named_retailer = Column(Boolean, nullable=True)
+    naming_rule_enabled = Column(Boolean, nullable=True)
+    personas = Column(JSON, nullable=True)
+    specificity_mode = Column(String, nullable=True)
+
+    # The return leg: what was generated, what was dropped automatically,
+    # and what the advisory review passes flagged. Stored rather than
+    # returned from POST /studies/generate because rows never reach the
+    # client before persistence — that response is sent before a single
+    # query exists. generation-status reads it back off this row.
+    provenance = Column(JSON, nullable=True)
+
     __table_args__ = (
         CheckConstraint(
             "status IN ('pending', 'running', 'complete', 'failed')",
