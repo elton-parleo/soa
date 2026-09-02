@@ -1,0 +1,118 @@
+[
+  {
+    "id": 701,
+    "record_ref": "promotion:deal:9:mfr_coupon",
+    "listing_id": 94,
+    "channel_slug": "merchant_center",
+    "payload": {
+      "promotionId": "deal_9_mfr_coupon",
+      "contentLanguage": "en",
+      "targetCountry": "US",
+      "redemptionChannel": [
+        "ONLINE"
+      ],
+      "attributes": {
+        "longTitle": "$3.00 off Snug-Fit Diapers",
+        "productApplicability": "SPECIFIC_PRODUCTS",
+        "itemIdInclusion": [
+          "online:94:s3-big",
+          "online:94:s4-big"
+        ],
+        "moneyOffAmount": {
+          "amountMicros": "3000000",
+          "currencyCode": "USD"
+        },
+        "couponValueType": "MONEY_OFF",
+        "offerType": "GENERIC_CODE",
+        "genericRedemptionCode": "SNUG3",
+        "promotionUrl": "https://trueshopstore.com/promotions"
+      }
+    },
+    "validation": {
+      "ok": true,
+      "errors": []
+    },
+    "expressiveness": [],
+    "spec_version": "gmc-promotions-2026-08-26",
+    "status": "published",
+    "external_ref": "accounts/5551212/promotions/deal_9_mfr_coupon",
+    "compiled_at": "2026-08-27T09:12:04.118233Z",
+    "published_at": "2026-08-27T09:12:41.902118Z",
+    "error": null
+  },
+  {
+    "id": 702,
+    "record_ref": "promotion:deal:9:gift_with_purchase",
+    "listing_id": 94,
+    "channel_slug": "merchant_center",
+    "payload": {
+      "promotionId": "deal_9_gift_with_purchase",
+      "contentLanguage": "en",
+      "targetCountry": "US",
+      "redemptionChannel": [
+        "ONLINE"
+      ],
+      "attributes": {
+        "longTitle": "Free gift with Snug-Fit Diapers",
+        "productApplicability": "SPECIFIC_PRODUCTS",
+        "itemIdInclusion": [
+          "online:94:s3-big",
+          "online:94:s4-big"
+        ],
+        "freeGiftDescription": "Free Cloud Wipes",
+        "couponValueType": "FREE_GIFT",
+        "offerType": "NO_CODE",
+        "promotionUrl": "https://trueshopstore.com/promotions"
+      }
+    },
+    "validation": {
+      "ok": true,
+      "errors": []
+    },
+    "expressiveness": [],
+    "spec_version": "gmc-promotions-2026-08-26",
+    "status": "published",
+    "external_ref": "accounts/5551212/promotions/deal_9_gift_with_purchase",
+    "compiled_at": "2026-08-27T09:12:04.118233Z",
+    "published_at": "2026-08-27T09:12:42.551903Z",
+    "error": null
+  },
+  {
+    "id": 703,
+    "record_ref": "promotion:deal:9:subscribe_and_save",
+    "listing_id": 94,
+    "channel_slug": "merchant_center",
+    "payload": {
+      "promotionId": "deal_9_subscribe_and_save",
+      "contentLanguage": "en",
+      "targetCountry": "US",
+      "redemptionChannel": [
+        "ONLINE"
+      ],
+      "attributes": {
+        "longTitle": "Subscribe and save on Snug-Fit Diapers",
+        "productApplicability": "SPECIFIC_PRODUCTS",
+        "itemIdInclusion": [
+          "online:94:s3-big",
+          "online:94:s4-big"
+        ],
+        "percentOff": "15",
+        "couponValueType": "PERCENT_OFF",
+        "offerType": "NO_CODE",
+        "redemptionRestriction": "SUBSCRIBE",
+        "promotionUrl": "https://trueshopstore.com/promotions"
+      }
+    },
+    "validation": {
+      "ok": true,
+      "errors": []
+    },
+    "expressiveness": [],
+    "spec_version": "gmc-promotions-2026-08-26",
+    "status": "compiled_not_published",
+    "external_ref": null,
+    "compiled_at": "2026-08-27T09:12:04.118233Z",
+    "published_at": null,
+    "error": "store has no subscription mechanic; publishing would be a false public claim"
+  }
+]

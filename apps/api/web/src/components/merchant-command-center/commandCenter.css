@@ -587,3 +587,37 @@ a.mcc-gmc-offer { color: var(--cobalt); }
 @media (prefers-reduced-motion: reduce) {
   .mcc * { transition: none !important; animation: none !important; }
 }
+
+/* ─── Promotions section ──────────────────────────────────────────────
+   The Merchant Center lane's second artifact kind. Styled off the
+   acceptance rows it sits beside, with one deliberate difference: a
+   promotion we declined to publish renders NEUTRALLY. Nothing is wrong
+   when the honour gate fires — colouring it as an error would send an
+   operator to fix something working as designed — so it gets the muted
+   left rule that `not_applicable` uses in the matrix, not the red one. */
+.mcc-promos { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+
+.mcc-promo {
+  border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+}
+.mcc-promo-refused { border-left: 3px solid var(--line-strong); background: #FAFAF8; }
+
+.mcc-promo-mechanic { font-weight: 600; font-size: .85rem; }
+.mcc-promo-code {
+  font-size: .78rem; background: #EDEEE9; border-radius: 4px; padding: 1px 7px;
+  color: var(--ink-soft);
+}
+.mcc-promo-title { font-size: .85rem; color: var(--ink-soft); margin-top: 6px; }
+
+/* Full weight, not a tooltip: this sentence is why a correct, validated
+   promotion did not go out, and a panel that buries it teaches an
+   operator that promotions silently vanish. */
+.mcc-promo-reason {
+  margin: 8px 0 0; font-size: .82rem; line-height: 1.5; color: var(--ink-soft);
+  border-left: 2px solid var(--line-strong); padding-left: 10px;
+}
+.mcc-promo-failed { color: var(--fail); border-left-color: var(--fail); }
+
+.mcc-promo-ref {
+  margin-top: 8px; font-size: .72rem; color: var(--ink-faint); word-break: break-all;
+}

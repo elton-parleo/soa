@@ -1,0 +1,108 @@
+{
+  "live": {
+    "id": 9001,
+    "gtin": null,
+    "listing_id": 94,
+    "channel_slug": "merchant_center",
+    "phase": "after",
+    "method": "gmc_promotion_review",
+    "observed": {
+      "promotionId": "deal_9_mfr_coupon",
+      "destinationStatuses": [
+        {
+          "reportingContext": "SHOPPING_ADS",
+          "status": "LIVE"
+        }
+      ],
+      "itemLevelIssues": []
+    },
+    "drift": {
+      "state": "LIVE",
+      "colour": "green",
+      "approved": true,
+      "reasons": [],
+      "destinationStates": [
+        "LIVE"
+      ]
+    },
+    "created_at": "2026-08-27T11:40:18.220417Z"
+  },
+  "in_review": {
+    "id": 9002,
+    "gtin": null,
+    "listing_id": 94,
+    "channel_slug": "merchant_center",
+    "phase": "after",
+    "method": "gmc_promotion_review",
+    "observed": {
+      "promotionId": "deal_9_mfr_coupon",
+      "destinationStatuses": [
+        {
+          "reportingContext": "SHOPPING_ADS",
+          "status": "IN_REVIEW"
+        }
+      ],
+      "itemLevelIssues": []
+    },
+    "drift": {
+      "state": "IN_REVIEW",
+      "colour": "amber",
+      "approved": false,
+      "reasons": [],
+      "destinationStates": [
+        "IN_REVIEW"
+      ]
+    },
+    "created_at": "2026-08-27T11:40:18.220417Z"
+  },
+  "rejected": {
+    "id": 9003,
+    "gtin": null,
+    "listing_id": 94,
+    "channel_slug": "merchant_center",
+    "phase": "after",
+    "method": "gmc_promotion_review",
+    "observed": {
+      "promotionId": "deal_9_gift_with_purchase",
+      "destinationStatuses": [
+        {
+          "reportingContext": "SHOPPING_ADS",
+          "status": "REJECTED"
+        }
+      ],
+      "itemLevelIssues": [
+        {
+          "severity": "DISAPPROVED",
+          "code": "promotion_landing_page_missing_promotion",
+          "description": "Promotion not found on landing page",
+          "detail": "We could not find this promotion on the landing page you provided.",
+          "documentation": "https://support.google.com/merchants/answer/6396268",
+          "applicableCountries": [
+            "US"
+          ]
+        }
+      ]
+    },
+    "drift": {
+      "state": "REJECTED",
+      "colour": "red",
+      "approved": false,
+      "reasons": [
+        {
+          "severity": "DISAPPROVED",
+          "code": "promotion_landing_page_missing_promotion",
+          "description": "Promotion not found on landing page",
+          "detail": "We could not find this promotion on the landing page you provided.",
+          "documentation": "https://support.google.com/merchants/answer/6396268",
+          "applicableCountries": [
+            "US"
+          ]
+        }
+      ],
+      "destinationStates": [
+        "REJECTED"
+      ]
+    },
+    "created_at": "2026-08-27T11:40:18.220417Z"
+  }
+}
