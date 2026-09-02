@@ -589,6 +589,99 @@ class StudyGenerateRequest(BaseModel):
         return v
 
 
+# ─── Post-generation review ──────────────────────────────────────────────────
+
+# What a resolved finding did. Stored inside the provenance JSON so review
+# state survives a reload and so the record of who decided what exists for
+# any study numbers are later published from.
+REVIEW_DISMISSED = 'dismissed'
+REVIEW_DEACTIVATED = 'deactivated'
+REVIEW_LABEL_APPLIED = 'label_applied'
+
+REVIEW_ACTIONS = ('dismiss', 'deactivate', 'apply_label', 'undo')
+
+# Deactivation sets this rather than deleting the row. Cycles select
+# `status = 'Active'` (see routers/cycles.py), so anything else takes the
+# query out of every future cycle while leaving it visible and
+# restorable.
+#
+# 'Paused' rather than 'Retired', though QUERY_STATUSES allows both: the
+# review screen promises the action is reversible, and Retired reads as
+# end-of-life. A reviewer undoing their own decision a minute later
+# should not have to wonder whether they just un-retired something.
+REVIEW_INACTIVE_STATUS = 'Paused'
+
+# Fields a label_mismatch correction may write. Deliberately excludes
+# 'status': changing it is what `deactivate` is for, and letting a
+# "correction" reach it would make the two actions overlap in a way the
+# undo record could not tell apart.
+REVIEW_CORRECTABLE_FIELDS = tuple(
+    f for f in QUERY_CONSTRAINTS if f != 'status'
+)
+
+
+class ReviewResolveRequest(BaseModel):
+    """
+    One reviewer decision about one finding.
+
+    finding_id is derived from the finding's position in the provenance
+    record (dup:0, coh:out_of_scope:2, ...) rather than stored on it —
+    provenance is written once by the worker and these ids have to be
+    reproducible from it without rewriting what the worker wrote.
+    """
+    finding_id:     str
+    action:         str
+
+    # deactivate
+    query_codes:    Optional[List[str]] = None
+    keep_query_code: Optional[str] = None
+
+    # apply_label
+    query_code:     Optional[str] = None
+    field:          Optional[str] = None
+    proposed_value: Optional[str] = None
+
+    @field_validator('action')
+    @classmethod
+    def validate_action(cls, v):
+        if v not in REVIEW_ACTIONS:
+            raise ValueError(f"action must be one of {', '.join(REVIEW_ACTIONS)}")
+        return v
+
+    @field_validator('field')
+    @classmethod
+    def validate_field(cls, v):
+        if v is None:
+            return v
+        if v not in REVIEW_CORRECTABLE_FIELDS:
+            raise ValueError(
+                f"field must be one of {', '.join(REVIEW_CORRECTABLE_FIELDS)}"
+            )
+        return v
+
+    @model_validator(mode='after')
+    def check_action_arguments(self):
+        if self.action == 'deactivate' and not self.query_codes:
+            raise ValueError('deactivate requires query_codes')
+        if self.action == 'apply_label':
+            if not self.query_code or not self.field:
+                raise ValueError('apply_label requires query_code and field')
+            allowed = QUERY_CONSTRAINTS.get(self.field, [])
+            if self.proposed_value not in allowed:
+                raise ValueError(
+                    f"proposed_value {self.proposed_value!r} is not valid for "
+                    f"{self.field}"
+                )
+        return self
+
+
+class ReviewResolveResponse(BaseModel):
+    study_type: str
+    # The whole record back, so the client re-renders from stored truth
+    # rather than from what it hoped the write did.
+    provenance: Optional[dict] = None
+
+
 class StudyGenerateResponse(BaseModel):
     study_type: str
     study_name: str

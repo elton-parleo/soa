@@ -52,7 +52,7 @@ def _counts(rows):
     return counts
 
 
-def _generate(targets, batches, allowed=ALLOWED, pattern='retailer'):
+def _generate(targets, batches, allowed=ALLOWED, pattern='retailer', **kwargs):
     with patch("generation.query_generator._call_openai_and_validate") as mock_call:
         mock_call.side_effect = [(b, None) for b in batches]
         rows, report = generate_general_queries(
@@ -62,6 +62,7 @@ def _generate(targets, batches, allowed=ALLOWED, pattern='retailer'):
             allowed_categories=allowed,
             study_pattern=pattern,
             api_key="k",
+            **kwargs,
         )
     return rows, report, mock_call
 
@@ -537,3 +538,118 @@ def test_the_report_echoes_the_brief_that_produced_it():
     assert report['retailers_named'] == ['Sephora']
     assert report['naming_rule_enabled'] is False
     assert report['specificity_mode'] == 'even_split'
+
+
+# ─── unbranded studies (empty retailer list) ──────────────────────────────
+#
+# An empty retailer list is not a degraded study, it is the strictest form
+# of a share-of-mentions measurement: nothing in any question can prompt a
+# mention, so every mention in an answer has been earned. These lock down
+# that the generator actually produces that, rather than quietly emitting
+# whatever the model defaults to when told nothing about naming.
+
+def test_unbranded_prompt_forbids_naming_anyone_with_the_rule_on():
+    prompt = _build_general_prompt(
+        "S", "d", {'Awareness': 2}, ALLOWED, 'retailer', [],
+        retailer_names=[], naming_rule_enabled=True,
+    )
+    assert "UNBRANDED" in prompt
+    assert "Do not name specific retailers or brands" in prompt
+
+
+def test_unbranded_prompt_forbids_naming_anyone_with_the_rule_OFF_too():
+    """The gap this closes. The naming rule governs WHERE names may
+    appear; with no names there is nothing to govern, so the rule's value
+    cannot make naming acceptable. The old code emitted no naming
+    instruction at all in this combination, and silence means the model
+    decides — and what it decides is to invent retailers."""
+    prompt = _build_general_prompt(
+        "S", "d", {'Awareness': 2}, ALLOWED, 'retailer', [],
+        retailer_names=[], naming_rule_enabled=False,
+    )
+    assert "UNBRANDED" in prompt
+    assert "Do not name specific retailers or brands" in prompt
+
+
+def test_unbranded_comparison_questions_weigh_products_not_retailers():
+    """'Comparison' normally means retailer-vs-retailer. Handed that stage
+    with no names, a model either invents some or produces something
+    shapeless, so the prompt has to say what a comparison compares
+    instead."""
+    for rule in (True, False):
+        prompt = _build_general_prompt(
+            "S", "d", {'Comparison': 4}, ALLOWED, 'retailer', [],
+            retailer_names=[], naming_rule_enabled=rule,
+        )
+        assert "weigh PRODUCTS" in prompt
+        assert "never one retailer against another" in prompt
+
+
+def test_unbranded_prompt_names_no_retailer_anywhere():
+    prompt = _build_general_prompt(
+        "S", "d", {'Awareness': 2}, ALLOWED, 'retailer', [],
+        retailer_names=[], naming_rule_enabled=False,
+    )
+    assert "The retailers to name are" not in prompt
+    for name in ('Sephora', 'Ulta', 'Nordstrom'):
+        assert name not in prompt
+
+
+def test_rotation_is_a_no_op_on_an_empty_list():
+    """`% len(names)` on an empty list raises ZeroDivisionError, so this
+    is the difference between an unbranded study and a crash on the very
+    first prompt."""
+    seen = []
+
+    def _capture(prompt, api_key, temperature=0.8, stamp=None):
+        return ([], None)
+
+    with patch("generation.query_generator._build_general_prompt") as mock_build, \
+         patch("generation.query_generator._call_openai_and_validate", side_effect=_capture):
+        mock_build.side_effect = lambda *a, **kw: (
+            seen.append(list(kw.get('retailer_names') or [])) or "prompt"
+        )
+        generate_general_queries(
+            study_name="S", description="d", stage_targets={'Awareness': 2},
+            allowed_categories=ALLOWED, study_pattern='retailer', api_key="k",
+            retailer_names=[], rotate_named_retailer=True,
+        )
+
+    assert len(seen) > 1                      # several prompts were built
+    assert all(order == [] for order in seen)
+
+
+def test_rotation_is_a_no_op_when_retailer_names_is_none():
+    seen = []
+
+    def _capture(prompt, api_key, temperature=0.8, stamp=None):
+        return ([], None)
+
+    with patch("generation.query_generator._build_general_prompt") as mock_build, \
+         patch("generation.query_generator._call_openai_and_validate", side_effect=_capture):
+        mock_build.side_effect = lambda *a, **kw: (
+            seen.append(list(kw.get('retailer_names') or [])) or "prompt"
+        )
+        generate_general_queries(
+            study_name="S", description="d", stage_targets={'Awareness': 1},
+            allowed_categories=ALLOWED, study_pattern='retailer', api_key="k",
+            retailer_names=None, rotate_named_retailer=True,
+        )
+
+    assert all(order == [] for order in seen)
+
+
+def test_an_unbranded_study_generates_end_to_end_with_no_names_in_any_question():
+    targets = {'Awareness': 2, 'Comparison': 2}
+    batch = [
+        _row('Awareness', "-0"), _row('Awareness', "-1"),
+        _row('Comparison', "-0"), _row('Comparison', "-1"),
+    ]
+    rows, report, _ = _generate(targets, [batch], pattern='retailer')
+
+    assert _counts(rows) == {'Awareness': 2, 'Comparison': 2}
+    assert report['shortfall_by_stage'] == {}
+    assert report['retailers_named'] == []
+    for row in rows:
+        for name in ('Sephora', 'Ulta', 'Nordstrom'):
+            assert name not in row['query_text']

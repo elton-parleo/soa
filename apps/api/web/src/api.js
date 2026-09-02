@@ -86,6 +86,12 @@ export const api = {
   getGenerationStatus: (studyType) =>
     get(`/api/studies/${studyType}/generation-status`),
 
+  // One reviewer decision about one finding. Returns the whole updated
+  // provenance record so the panel re-renders from stored truth rather
+  // than from what it hoped the write did.
+  resolveReviewFinding: (studyType, body) =>
+    post(`/api/studies/${studyType}/review/resolve`, body),
+
   uploadStudyCsv: async (file) => {
     const formData = new FormData()
     formData.append('file', file)

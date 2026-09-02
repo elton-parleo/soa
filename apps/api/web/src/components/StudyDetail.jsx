@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api.js'
 import Sidebar from './Sidebar.jsx'
 import GenerationReport from './GenerationReport.jsx'
+import StudyReviewPanel from './StudyReviewPanel.jsx'
 
 // ─── Design tokens (verbatim from CycleDashboard.jsx) ────────────────────────
 const T = {
@@ -492,6 +493,29 @@ export default function StudyDetail({ studyType, onNavigate }) {
                 </div>
               </>
             )
+          )}
+
+          {/* Post-generation review, above the query table. Completed
+              jobs only: findings about a run still in progress would be
+              describing something that has not finished happening.
+              Non-blocking by construction — the rows are already
+              persisted by the time anything here can be read. */}
+          {genStatus?.status === 'complete' && (
+            <StudyReviewPanel
+              studyType={studyType}
+              provenance={genStatus.provenance}
+              queries={queries}
+              onResolved={(provenance) => {
+                // Re-render from the record the server actually stored,
+                // not from what the click hoped it would do.
+                setGenStatus(s => ({ ...s, provenance }))
+                // A resolution can change a query's status or a label, so
+                // the table under this panel is now stale.
+                api.getQueryRows(studyType)
+                  .then(data => { if (data) setQueries(data) })
+                  .catch(() => {})
+              }}
+            />
           )}
 
           {/* Generation report — what the job actually did. Rendered on a

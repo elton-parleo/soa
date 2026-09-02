@@ -67,6 +67,14 @@ async function fillName(value) {
   fireEvent.change(screen.getByLabelText('Study Name'), { target: { value } })
 }
 
+// Names the first retailer, taking the study out of its unbranded state.
+// An empty list IS the unbranded study, so a freshly-opened modal is
+// unbranded until something is picked.
+async function pickRetailer(name = 'Sephora') {
+  fireEvent.focus(screen.getByLabelText('Retailer 1'))
+  fireEvent.mouseDown(await screen.findByText(name))
+}
+
 // ─── pure helpers ─────────────────────────────────────────────────────────
 
 describe('inferCategories', () => {
@@ -305,6 +313,11 @@ describe('questions by stage', () => {
 describe('retailers to name', () => {
   it('offers no roles — no primary, no competitor', async () => {
     await renderModal()
+    // A retailer has to be named for this helper line to be on screen: with
+    // an empty list the study is unbranded and a line about how names are
+    // used has nothing to describe. The assertions are unchanged — this
+    // only puts the form into the state the line belongs to.
+    await pickRetailer()
     expect(screen.queryByText(/primary entity is chosen at cycle creation/i)).toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: /primary/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('radio', { name: /competitor/i })).not.toBeInTheDocument()
@@ -325,6 +338,7 @@ describe('retailers to name', () => {
 
   it('defaults the rotation checkbox on', async () => {
     await renderModal()
+    await pickRetailer()   // rotation is hidden while the study is unbranded
     expect(screen.getByRole('checkbox', { name: /Rotate which retailer is named first/ })).toBeChecked()
   })
 })
@@ -337,34 +351,48 @@ describe('the naming rule', () => {
     ).toBeChecked()
   })
 
-  it('blocks submit when turned off with no retailers listed', async () => {
+  it('accepts an empty retailer list with the rule turned off', async () => {
+    // Reversed rule. This combination used to be a blocking validation
+    // error. It is a legitimate study: with no names anywhere the naming
+    // rule has nothing to govern, so its value cannot make the study
+    // invalid either way.
     await renderModal()
     await fillName('A study')
-    expect(screen.getByRole('button', { name: /Generate Questions/ })).toBeEnabled()
 
     fireEvent.click(
       screen.getByRole('checkbox', { name: /Only name entities in Comparison and Ready to Buy/ })
     )
 
-    expect(await screen.findByText(/no retailers are listed/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Generate Questions/ })).toBeDisabled()
+    expect(screen.queryByText(/no retailers are listed/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Generate Questions/ })).toBeEnabled()
   })
 
-  it('clears once a retailer is named', async () => {
+  it('accepts an empty retailer list with the rule left on', async () => {
     await renderModal()
     await fillName('A study')
-    fireEvent.click(
-      screen.getByRole('checkbox', { name: /Only name entities in Comparison and Ready to Buy/ })
-    )
-    await screen.findByText(/no retailers are listed/)
-
-    fireEvent.focus(screen.getByLabelText('Retailer 1'))
-    fireEvent.mouseDown(await screen.findByText('Sephora'))
-
-    await waitFor(() =>
-      expect(screen.queryByText(/no retailers are listed/)).not.toBeInTheDocument()
-    )
     expect(screen.getByRole('button', { name: /Generate Questions/ })).toBeEnabled()
+  })
+
+  it('is inert rather than hidden while the study is unbranded', async () => {
+    // A control that vanishes leaves the reader wondering where it went;
+    // one that greys out with a reason teaches how the fields relate.
+    await renderModal()
+
+    const box = screen.getByRole('checkbox', { name: /Only name entities in Comparison and Ready to Buy/ })
+    expect(box).toBeInTheDocument()
+    expect(box).toBeDisabled()
+    expect(screen.getByText('Not applicable')).toBeInTheDocument()
+    expect(screen.getByText(/No retailers are named anywhere in this study/)).toBeInTheDocument()
+  })
+
+  it('becomes live again once a retailer is named', async () => {
+    await renderModal()
+    await pickRetailer()
+
+    const box = screen.getByRole('checkbox', { name: /Only name entities in Comparison and Ready to Buy/ })
+    expect(box).toBeEnabled()
+    expect(screen.queryByText('Not applicable')).not.toBeInTheDocument()
+    expect(screen.getByText(/Awareness and Research questions describe the need/)).toBeInTheDocument()
   })
 })
 
@@ -440,5 +468,88 @@ describe('the generation payload', () => {
   it('needs a study name before it will submit', async () => {
     await renderModal()
     expect(screen.getByRole('button', { name: /Generate Questions/ })).toBeDisabled()
+  })
+})
+
+
+// ─── unbranded studies ────────────────────────────────────────────────────
+//
+// An empty retailer list IS the unbranded study. There is deliberately no
+// mode control: a toggle claiming "this is unbranded" could disagree with
+// a list that has three retailers in it, and a control that can contradict
+// the state it describes will eventually misreport it — the same reason
+// the categories field has no auto-versus-manual toggle.
+
+describe('the unbranded state', () => {
+  it('offers no mode control — the list is the only truth', async () => {
+    await renderModal()
+    expect(screen.queryByRole('checkbox', { name: /unbranded/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /unbranded/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^unbranded$/i })).not.toBeInTheDocument()
+  })
+
+  it('shows the panel, hides rotation and disables the naming rule when empty', async () => {
+    await renderModal()
+
+    expect(screen.getByText('Unbranded study — no retailers named')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('checkbox', { name: /Rotate which retailer is named first/ })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', { name: /Only name entities in Comparison and Ready to Buy/ })
+    ).toBeDisabled()
+  })
+
+  it('names the three consequences, as information rather than a problem', async () => {
+    await renderModal()
+    const panel = screen.getByText(/Every question describes the need without naming a retailer/)
+
+    expect(panel).toHaveTextContent(/every retailer mention has to be earned/i)
+    expect(panel).toHaveTextContent(/weigh products and buying criteria rather than one retailer against another/i)
+    expect(panel).toHaveTextContent(/strictest way to measure share of mentions/i)
+
+    // Never framed as an error or a warning: no error copy, and being
+    // unbranded is not on its own a reason submit is blocked.
+    expect(screen.queryByText(/no retailers are listed/i)).not.toBeInTheDocument()
+    await fillName('An unbranded study')
+    expect(screen.getByRole('button', { name: /Generate Questions/ })).toBeEnabled()
+  })
+
+  it('restores all three the moment a retailer is added back', async () => {
+    await renderModal()
+    await pickRetailer()
+
+    expect(screen.queryByText('Unbranded study — no retailers named')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', { name: /Rotate which retailer is named first/ })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', { name: /Only name entities in Comparison and Ready to Buy/ })
+    ).toBeEnabled()
+  })
+
+  it('returns to unbranded when the last retailer is removed', async () => {
+    await renderModal()
+    await pickRetailer()
+    expect(screen.queryByText('Unbranded study — no retailers named')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove retailer 1' }))
+
+    expect(await screen.findByText('Unbranded study — no retailers named')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('checkbox', { name: /Rotate which retailer is named first/ })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('checkbox', { name: /Only name entities in Comparison and Ready to Buy/ })
+    ).toBeDisabled()
+  })
+
+  it('submits an empty retailer list rather than blocking', async () => {
+    await renderModal()
+    await fillName('An unbranded study')
+    fireEvent.click(screen.getByRole('button', { name: /Generate Questions/ }))
+
+    await waitFor(() => expect(api.generateStudy).toHaveBeenCalled())
+    expect(api.generateStudy.mock.calls[0][0].retailer_names).toEqual([])
   })
 })
