@@ -139,6 +139,28 @@ def generate_study(
 
     Returns immediately with the new study_type so the frontend can redirect
     to the (initially empty) study detail page and poll for progress.
+
+    The structured fields on StudyGenerateRequest (study_pattern,
+    retailer_names, allowed_categories, stage_targets,
+    rotate_named_retailer, naming_rule_enabled, personas,
+    specificity_mode) are validated on the way in and then go no further,
+    because there is nowhere to put them. Generation is asynchronous: this
+    route writes one row to soa_query_generation_jobs and returns, and the
+    only columns that row has are study_type, study_name, description,
+    target_count, created_count, status, error_message, organization_id,
+    created_by and the timestamps. Carrying the structured payload across
+    to the worker means new columns, which means an Alembic migration.
+
+    target_count is the one part that does survive, and the modal derives
+    it from the sum of the per-stage cells — so the stage distribution
+    already determines how big the study is, even though the per-stage
+    split itself does not reach the generator yet.
+
+    The same gap is why no provenance record comes back from here: rows do
+    not reach the client before persistence at all, so there is no
+    response to attach one to. It would have to be persisted on the job
+    row and read back through the generation-status endpoint, which is the
+    same migration.
     """
     org_id  = current_user['organization_id']
     user_id = current_user['user_id']

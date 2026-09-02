@@ -3,13 +3,27 @@ import re
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, field_validator, model_validator
-from typing import List, Optional
+from typing import Dict, List, Optional
 from soa_shared.constants import QUERY_CONSTRAINTS
 from soa_shared.scan_dimensions import VERDICT_AGENT_READY, VERDICT_NOT_AGENT_READY
 
 # ─── Shared constraint validator ──────────────────────────────────────────────
 
 _CONSTRAINED_FIELDS = ('category', 'stage', 'specificity', 'persona', 'status', 'study_pattern')
+
+# Read off QUERY_CONSTRAINTS rather than re-listed here — adding a value
+# is a constants edit plus a migration plus a redeploy, and nothing in
+# this layer should need touching for it.
+QUERY_CATEGORIES = QUERY_CONSTRAINTS['category']
+QUERY_STAGES = QUERY_CONSTRAINTS['stage']
+QUERY_PERSONAS = QUERY_CONSTRAINTS['persona']
+QUERY_STUDY_PATTERNS = QUERY_CONSTRAINTS['study_pattern']
+
+# How specificity is spread across a generated study. Not a soa_queries
+# column and not in QUERY_CONSTRAINTS: it is an instruction to the
+# generator about how to CHOOSE specificity per row, not a value stored
+# on any row, so it needs no CHECK constraint and no migration.
+SPECIFICITY_MODES = ('match_to_stage', 'even_split')
 
 
 def _check_constraint(field_name: str, v):
@@ -481,15 +495,97 @@ def normalize_rsi(value) -> Optional[float]:
 # ─── AI Study Generation ───────────────────────────────────────────────────────
 
 class StudyGenerateRequest(BaseModel):
+    """
+    Every field below study_name/description/target_count is additive and
+    optional, so a client that predates the structured Create Study modal
+    keeps working unchanged — it sends three fields and gets exactly the
+    behavior it always got.
+
+    IMPORTANT, and the reason none of these are required: the structured
+    fields are ACCEPTED but not yet acted on. POST /studies/generate does
+    not generate anything; it writes a row to soa_query_generation_jobs
+    and returns, and the pipeline worker picks the job up later. That
+    table has columns for study_name, description and target_count and
+    for nothing else, so the only way these values can reach the worker
+    is to be persisted alongside the job — which is a schema change.
+    Until that migration exists, target_count (derived from the per-stage
+    cells) is the only part of the structured payload that survives the
+    hop. See the comment in routers/studies.py::generate_study.
+    """
     study_name:   str
     description:  Optional[str] = None
     target_count: int = 50
+
+    study_pattern:         Optional[str] = None
+    retailer_names:        Optional[List[str]] = None
+    allowed_categories:    Optional[List[str]] = None
+    # {stage: count}. The modal derives target_count from the sum of
+    # these rather than carrying a separate total, so the two cannot
+    # disagree.
+    stage_targets:         Optional[Dict[str, int]] = None
+    rotate_named_retailer: Optional[bool] = None
+    naming_rule_enabled:   Optional[bool] = None
+    personas:              Optional[List[str]] = None
+    specificity_mode:      Optional[str] = None
 
     @field_validator('target_count')
     @classmethod
     def validate_count(cls, v):
         if v < 1 or v > 100:
             raise ValueError('target_count must be between 1 and 100')
+        return v
+
+    @field_validator('study_pattern')
+    @classmethod
+    def validate_pattern(cls, v):
+        if v is not None and v not in QUERY_STUDY_PATTERNS:
+            raise ValueError(
+                f"study_pattern must be one of {', '.join(QUERY_STUDY_PATTERNS)}"
+            )
+        return v
+
+    @field_validator('allowed_categories')
+    @classmethod
+    def validate_categories(cls, v):
+        if v is None:
+            return v
+        unknown = [c for c in v if c not in QUERY_CATEGORIES]
+        if unknown:
+            raise ValueError(
+                f"unknown categor{'y' if len(unknown) == 1 else 'ies'}: "
+                f"{', '.join(unknown)}"
+            )
+        return v
+
+    @field_validator('stage_targets')
+    @classmethod
+    def validate_stage_targets(cls, v):
+        if v is None:
+            return v
+        unknown = [s for s in v if s not in QUERY_STAGES]
+        if unknown:
+            raise ValueError(f"unknown stage(s): {', '.join(unknown)}")
+        if any(count < 0 for count in v.values()):
+            raise ValueError('stage_targets counts must not be negative')
+        return v
+
+    @field_validator('personas')
+    @classmethod
+    def validate_personas(cls, v):
+        if v is None:
+            return v
+        unknown = [p for p in v if p not in QUERY_PERSONAS]
+        if unknown:
+            raise ValueError(f"unknown persona(s): {', '.join(unknown)}")
+        return v
+
+    @field_validator('specificity_mode')
+    @classmethod
+    def validate_specificity_mode(cls, v):
+        if v is not None and v not in SPECIFICITY_MODES:
+            raise ValueError(
+                f"specificity_mode must be one of {', '.join(SPECIFICITY_MODES)}"
+            )
         return v
 
 

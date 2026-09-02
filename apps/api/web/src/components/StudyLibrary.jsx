@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../api.js'
 import Sidebar from './Sidebar.jsx'
+import CreateStudyModal from './CreateStudyModal.jsx'
 
 // ─── Design tokens (verbatim from CycleDashboard.jsx) ────────────────────────
 const T = {
@@ -282,11 +283,9 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
   const [uploadSuccess,  setUploadSuccess]  = useState(null)
   const fileInputRef = useRef(null)
 
-  // AI generation modal state
-  const [aiModalOpen,   setAiModalOpen]   = useState(false)
-  const [aiForm,        setAiForm]        = useState({ study_name: '', target_count: 50, description: '' })
-  const [aiSubmitting,  setAiSubmitting]  = useState(false)
-  const [aiError,       setAiError]       = useState(null)
+  // AI generation modal — the form itself lives in CreateStudyModal.jsx,
+  // which owns its own field state, validation and submit.
+  const [aiModalOpen, setAiModalOpen] = useState(false)
 
   function loadStudies() {
     api.getStudies()
@@ -341,48 +340,6 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
     const matchStatus = statusFilter === 'all' || s.status === statusFilter
     return matchCat && matchStatus
   })
-
-  async function handleGenerateStudy() {
-    if (!aiForm.study_name.trim()) return
-    setAiSubmitting(true)
-    setAiError(null)
-    try {
-      const result = await api.generateStudy({
-        study_name:   aiForm.study_name.trim(),
-        description:  aiForm.description.trim() || null,
-        target_count: Number(aiForm.target_count) || 50,
-      })
-      setAiModalOpen(false)
-      onSelectStudy(result.study_type)
-    } catch (err) {
-      setAiError(err.message)
-    } finally {
-      setAiSubmitting(false)
-    }
-  }
-
-  const inputStyle = {
-    width: '100%',
-    padding: '9px 12px',
-    fontSize: 13,
-    color: T.text,
-    background: T.white,
-    border: `1px solid ${T.border}`,
-    borderRadius: 8,
-    outline: 'none',
-    fontFamily: "'DM Sans', sans-serif",
-    boxSizing: 'border-box',
-  }
-
-  const modalLabelStyle = {
-    display: 'block',
-    fontSize: 11,
-    fontWeight: 700,
-    color: T.slate,
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-    marginBottom: 6,
-  }
 
   const selectStyle = {
     padding: '7px 10px',
@@ -581,130 +538,11 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
     </div>
 
     {/* AI generation modal — rendered outside the main div so it overlays correctly */}
-    {aiModalOpen && (
-      <div
-        onClick={() => { if (!aiSubmitting) setAiModalOpen(false) }}
-        style={{
-          position: 'fixed', inset: 0,
-          background: 'rgba(0,0,0,0.4)',
-          zIndex: 100,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}
-      >
-        <div
-          onClick={e => e.stopPropagation()}
-          style={{
-            background: T.white,
-            borderRadius: 12,
-            width: 440,
-            maxWidth: '90vw',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.16)',
-            fontFamily: "'DM Sans', sans-serif",
-          }}
-        >
-          {/* Modal header */}
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '24px 24px 0',
-          }}>
-            <span style={{ fontSize: 18, fontWeight: 700, color: T.text }}>
-              Create Study with AI
-            </span>
-            <button
-              onClick={() => { if (!aiSubmitting) setAiModalOpen(false) }}
-              disabled={aiSubmitting}
-              style={{
-                background: 'none', border: 'none', cursor: aiSubmitting ? 'not-allowed' : 'pointer',
-                fontSize: 18, color: T.slate, lineHeight: 1, padding: 4, fontFamily: 'inherit',
-              }}
-            >×</button>
-          </div>
-
-          {/* Modal body */}
-          <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <label style={modalLabelStyle}>Study Name</label>
-              <input
-                type="text"
-                value={aiForm.study_name}
-                onChange={e => setAiForm(f => ({ ...f, study_name: e.target.value }))}
-                placeholder="e.g. Brand study"
-                style={inputStyle}
-              />
-            </div>
-
-            <div>
-              <label style={modalLabelStyle}>Number of Questions</label>
-              <input
-                type="number"
-                min={1} max={100}
-                value={aiForm.target_count}
-                onChange={e => setAiForm(f => ({
-                  ...f,
-                  target_count: Math.min(100, Math.max(1, Number(e.target.value) || 1)),
-                }))}
-                placeholder="e.g. 50"
-                style={inputStyle}
-              />
-              <div style={{ fontSize: 11, color: T.slate, marginTop: 4 }}>Maximum 100 questions</div>
-            </div>
-
-            <div>
-              <label style={modalLabelStyle}>Study Description</label>
-              <textarea
-                rows={4}
-                value={aiForm.description}
-                onChange={e => setAiForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="Describe what you want to learn about..."
-                style={{ ...inputStyle, resize: 'vertical' }}
-              />
-            </div>
-
-            {aiError && (
-              <div style={{
-                background: '#FEE2E2', border: '1px solid #FECACA',
-                borderRadius: 8, padding: '10px 14px',
-                fontSize: 13, color: '#991B1B',
-              }}>
-                {aiError}
-              </div>
-            )}
-          </div>
-
-          {/* Modal footer */}
-          <div style={{
-            padding: '16px 24px',
-            borderTop: `1px solid ${T.border}`,
-            display: 'flex', justifyContent: 'flex-end', gap: 12,
-          }}>
-            <button
-              onClick={() => { if (!aiSubmitting) setAiModalOpen(false) }}
-              disabled={aiSubmitting}
-              style={{
-                padding: '9px 18px', background: T.white, color: T.text,
-                border: `1px solid ${T.border}`, borderRadius: 8,
-                fontWeight: 600, fontSize: 13, fontFamily: 'inherit',
-                cursor: aiSubmitting ? 'not-allowed' : 'pointer',
-                opacity: aiSubmitting ? 0.6 : 1,
-              }}
-            >Cancel</button>
-            <button
-              onClick={handleGenerateStudy}
-              disabled={aiSubmitting || !aiForm.study_name.trim()}
-              style={{
-                padding: '9px 18px', background: T.text, color: T.white,
-                border: 'none', borderRadius: 8,
-                fontWeight: 700, fontSize: 13, fontFamily: 'inherit',
-                cursor: (aiSubmitting || !aiForm.study_name.trim()) ? 'not-allowed' : 'pointer',
-                opacity: (aiSubmitting || !aiForm.study_name.trim()) ? 0.6 : 1,
-              }}
-            >
-              {aiSubmitting ? '⏳ Generating...' : '✨ Generate Questions'}
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
+    <CreateStudyModal
+      open={aiModalOpen}
+      onClose={() => setAiModalOpen(false)}
+      onCreated={studyType => { setAiModalOpen(false); onSelectStudy(studyType) }}
+    />
     </>
   )
 }
