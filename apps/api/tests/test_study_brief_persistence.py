@@ -242,3 +242,39 @@ def test_provenance_is_scoped_to_the_callers_org(patched_engine):
     with pytest.raises(HTTPException) as exc:
         studies_router.get_generation_status("other_org_study", current_user=CURRENT_USER)
     assert exc.value.status_code == 404
+
+
+# ─── unbranded studies: an empty retailer list is valid ───────────────────
+#
+# Reversed rule. An empty list is a fully unbranded, category-level study
+# where every question describes the need without naming anyone — the
+# strictest form of a share-of-mentions measurement, not a degraded one.
+# The naming rule governs WHERE names may appear, so with no names its
+# value cannot make the study invalid either way.
+
+def test_an_empty_retailer_list_is_accepted_with_the_naming_rule_off(patched_engine):
+    result = _generate({**FULL_BRIEF, 'retailer_names': [],
+                        'naming_rule_enabled': False})
+    row = _job(patched_engine, result.study_type)
+
+    assert json.loads(row[1]) == []
+    assert bool(row[5]) is False
+
+
+def test_an_empty_retailer_list_is_accepted_with_the_naming_rule_on(patched_engine):
+    result = _generate({**FULL_BRIEF, 'retailer_names': [],
+                        'naming_rule_enabled': True})
+    row = _job(patched_engine, result.study_type)
+
+    assert json.loads(row[1]) == []
+    assert bool(row[5]) is True
+
+
+def test_the_schema_itself_rejects_neither_combination():
+    """No cross-field validator may reintroduce the old block."""
+    for rule in (True, False, None):
+        req = StudyGenerateRequest(
+            study_name="Unbranded", retailer_names=[], naming_rule_enabled=rule,
+        )
+        assert req.retailer_names == []
+        assert req.naming_rule_enabled is rule

@@ -688,14 +688,36 @@ def _build_general_prompt(
                 f"naming any of them, so that a mention in a good answer is earned "
                 f"rather than prompted by the question itself."
             )
-    elif naming_rule_enabled:
-        naming_text = (
-            "\nDo not name specific retailers or brands in any question — describe "
-            "the shopper's need in category-level terms, so that any mention in a "
-            "good answer is earned rather than prompted."
-        )
     else:
-        naming_text = ""
+        # An UNBRANDED study: no retailers to name anywhere. This is the
+        # strictest form of a share-of-mentions measurement, not a
+        # degraded one — nothing in the question can prompt a mention, so
+        # every mention in an answer has been earned.
+        #
+        # Emitted regardless of naming_rule_enabled, which is the fix for
+        # a real gap: the rule governs WHERE names may appear, so with no
+        # names there is nothing for it to govern, and the old code left
+        # the prompt completely silent about naming whenever the rule was
+        # off. Silent means the model decides, and what it decides is to
+        # invent retailers — the one thing an unbranded study must not
+        # contain.
+        #
+        # The Comparison-stage sentence is the other half. 'Comparison'
+        # normally means retailer-vs-retailer, and a model handed that
+        # stage with no names to use will either invent some or produce
+        # something shapeless. Saying what a comparison compares INSTEAD
+        # is what keeps the stage meaningful.
+        naming_text = (
+            "\nThis is an UNBRANDED study. Do not name specific retailers or "
+            "brands in any question, at any stage — not even as an example. "
+            "Every question must describe the shopper's need in category-level "
+            "terms, so that any retailer or brand a good answer mentions has "
+            "been earned by the answer rather than prompted by the question."
+            "\n\n'Comparison' stage questions must still genuinely compare — but "
+            "they weigh PRODUCTS, product types and buying criteria against each "
+            "other (formulation, price tier, ingredients, longevity, value, "
+            "suitability for a need), never one retailer against another."
+        )
 
     return f"""Generate exactly {total} distinct search-style questions for a brand/market research study called "{study_name}".
 
@@ -816,6 +838,11 @@ def generate_general_queries(
         whatever is first, which is exactly how one retailer ended up
         named in ten of eleven head-to-heads. Rotating the ORDER costs
         nothing and does not depend on the model cooperating."""
+        # `not names` guards the unbranded study: an empty list has
+        # nothing to rotate, and `% len(names)` on it would raise
+        # ZeroDivisionError on the very first prompt. Returning the empty
+        # list unchanged is what makes rotation a no-op rather than a
+        # crash, whatever rotate_named_retailer says.
         if not names or not rotate_named_retailer:
             return names
         offset = prompt_calls['n'] % len(names)

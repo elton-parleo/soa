@@ -250,6 +250,12 @@ describe('a fresh open starts from defaults', () => {
     await renderPage()
     await openModal()
 
+    // Naming a retailer takes the study out of its unbranded state, which
+    // is what puts the rotation control on screen at all. Every assertion
+    // below is unchanged.
+    fireEvent.focus(screen.getByLabelText('Retailer 1'))
+    fireEvent.mouseDown(await screen.findByText('Sephora'))
+
     fireEvent.click(screen.getByRole('checkbox', { name: /Rotate which retailer is named first/ }))
     fireEvent.click(screen.getByRole('button', { name: '⊕ Add retailer' }))
     fireEvent.click(screen.getByRole('button', { name: /Advanced/ }))
@@ -257,6 +263,11 @@ describe('a fresh open starts from defaults', () => {
     closeModal()
 
     await openModal()
+    // The reopened form is unbranded again, so rotation is gone with it —
+    // that IS the reset. Naming one puts it back, defaulted on.
+    expect(screen.queryByRole('checkbox', { name: /Rotate which retailer is named first/ })).not.toBeInTheDocument()
+    fireEvent.focus(screen.getByLabelText('Retailer 1'))
+    fireEvent.mouseDown(await screen.findByText('Sephora'))
     expect(screen.getByRole('checkbox', { name: /Rotate which retailer is named first/ })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: /Only name entities in Comparison/ })).toBeChecked()
     expect(screen.queryByLabelText('Retailer 2')).not.toBeInTheDocument()

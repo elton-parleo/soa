@@ -170,14 +170,18 @@ function Chip({ label, selected, onClick }) {
   )
 }
 
-function Checkbox({ checked, onChange, title, children }) {
+function Checkbox({ checked, onChange, title, children, disabled = false }) {
   return (
-    <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
+    <label style={{
+      display: 'flex', gap: 10, alignItems: 'flex-start',
+      cursor: disabled ? 'not-allowed' : 'pointer',
+    }}>
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={e => onChange(e.target.checked)}
-        style={{ marginTop: 2, cursor: 'pointer' }}
+        style={{ marginTop: 2, cursor: disabled ? 'not-allowed' : 'pointer' }}
       />
       <span>
         <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>{title}</span>
@@ -377,14 +381,25 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
   const overCeiling = total > MAX_QUESTIONS
 
   const namedRetailers = retailers.map(r => (r || '').trim()).filter(Boolean)
-  // Turning the naming rule OFF is an affirmative statement that entity
-  // names should appear throughout the study. Doing that with nobody to
-  // name produces a study with no comparison questions at all, which is
-  // worth stopping at the form rather than discovering fifty rows later.
-  const namingRuleConflict = !namingRule && namedRetailers.length === 0
+  // An empty retailer list IS the unbranded study. It is a valid, and in
+  // fact the strictest, share-of-mentions shape: no question names
+  // anyone, so every mention in an answer has been earned rather than
+  // prompted.
+  //
+  // Deliberately derived from the list rather than set by a mode control.
+  // A toggle claiming "this is unbranded" could disagree with a list that
+  // has three retailers in it, and a control that can contradict the
+  // state it describes will eventually misreport it — the same reason the
+  // categories field has no auto-versus-manual toggle.
+  //
+  // This used to be a blocking validation error when combined with the
+  // naming rule being off. That rule was wrong and is reversed: an empty
+  // list is valid whatever the naming rule says, because with no names
+  // anywhere the rule has nothing to govern either way.
+  const unbranded = namedRetailers.length === 0
 
   const canSubmit = (
-    !!studyName.trim() && total > 0 && !overCeiling && !namingRuleConflict && !submitting
+    !!studyName.trim() && total > 0 && !overCeiling && !submitting
   )
 
   function toggleCategory(category) {
@@ -521,6 +536,29 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
           {/* 3. Retailers to name */}
           <div>
             <label style={labelStyle}>Retailers to name in comparison questions</label>
+
+            {/* Informational, never an error or a warning. An unbranded
+                study is a deliberate and valid choice — the strictest
+                share-of-mentions shape there is — so this states its three
+                consequences in the app's informational blue rather than
+                the amber or red the form uses for things needing fixing. */}
+            {unbranded && (
+              <div style={{
+                border: '1px solid #BFDBFE', background: '#EFF6FF',
+                borderRadius: 8, padding: '13px 15px', marginBottom: 10,
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.indigo, marginBottom: 5 }}>
+                  Unbranded study — no retailers named
+                </div>
+                <div style={{ fontSize: 12, color: T.textMid, lineHeight: 1.55 }}>
+                  Every question describes the need without naming a retailer, so every retailer
+                  mention has to be earned. Comparison questions will weigh products and buying
+                  criteria rather than one retailer against another. This is the strictest way to
+                  measure share of mentions.
+                </div>
+              </div>
+            )}
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {retailers.map((value, i) => (
                 <RetailerPicker
@@ -544,20 +582,32 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
                 fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
               }}
             >⊕ Add retailer</button>
-            <div style={helperStyle}>
-              These names are written into question text. The primary entity is chosen at cycle
-              creation, not here — this list has no roles.
-            </div>
-            <div style={{ marginTop: 12 }}>
-              <Checkbox
-                checked={rotateFirstNamed}
-                onChange={setRotateFirstNamed}
-                title="Rotate which retailer is named first"
-              >
-                A study that names the same retailer first in ten of eleven head-to-heads cannot be
-                reused with a different primary entity, and reuse across cycles is the point.
-              </Checkbox>
-            </div>
+            {!unbranded && (
+              <div style={helperStyle}>
+                These names are written into question text. The primary entity is chosen at cycle
+                creation, not here — this list has no roles.
+              </div>
+            )}
+
+            {/* Rotation is HIDDEN rather than made inert, unlike the naming
+                rule below. The difference is whether the control still
+                means anything: the naming rule has a subject (where names
+                may appear) that survives having no names, so it is worth
+                showing greyed with a reason. Spreading head-to-heads over
+                an empty list has no subject at all — there is nothing to
+                explain, so there is nothing to show. */}
+            {!unbranded && (
+              <div style={{ marginTop: 12 }}>
+                <Checkbox
+                  checked={rotateFirstNamed}
+                  onChange={setRotateFirstNamed}
+                  title="Rotate which retailer is named first"
+                >
+                  A study that names the same retailer first in ten of eleven head-to-heads cannot be
+                  reused with a different primary entity, and reuse across cycles is the point.
+                </Checkbox>
+              </div>
+            )}
           </div>
 
           {/* 4. Categories */}
@@ -643,25 +693,40 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
             )}
           </div>
 
-          {/* 6. Naming rule */}
+          {/* 6. Naming rule — inert, not hidden, when unbranded.
+              A control that vanishes leaves the reader wondering where it
+              went; one that greys out with a reason teaches how the
+              fields relate. The rule governs WHERE names may appear, so
+              with no names it has nothing to govern — that is worth
+              saying, not worth hiding. */}
           <div>
-            <Checkbox
-              checked={namingRule}
-              onChange={setNamingRule}
-              title="Only name entities in Comparison and Ready to Buy questions"
-            >
-              Awareness and Research questions describe the need without naming a retailer, so a
-              mention there has to be earned rather than prompted.
-            </Checkbox>
-            {namingRuleConflict && (
+            {unbranded && (
               <div style={{
-                marginTop: 8, background: T.redLight, border: `1px solid #FECACA`,
-                borderRadius: 8, padding: '9px 12px', fontSize: 12, color: '#991B1B',
+                display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8,
               }}>
-                Turning this off tells the generator to name retailers throughout the study, but no
-                retailers are listed. Add at least one above, or leave the rule on.
+                <span style={labelStyle}>Naming rule</span>
+                <span
+                  style={{
+                    fontSize: 10, fontWeight: 700, letterSpacing: '0.04em',
+                    textTransform: 'uppercase', color: T.slate, background: T.white,
+                    border: `1px solid ${T.border}`, borderRadius: 4, padding: '2px 7px',
+                    marginBottom: 6,
+                  }}
+                >Not applicable</span>
               </div>
             )}
+            <div style={{ opacity: unbranded ? 0.55 : 1 }}>
+              <Checkbox
+                checked={namingRule}
+                onChange={setNamingRule}
+                disabled={unbranded}
+                title="Only name entities in Comparison and Ready to Buy questions"
+              >
+                {unbranded
+                  ? 'No retailers are named anywhere in this study, so there is nothing for this rule to restrict.'
+                  : 'Awareness and Research questions describe the need without naming a retailer, so a mention there has to be earned rather than prompted.'}
+              </Checkbox>
+            </div>
           </div>
 
           {/* 7. What to ask about */}
