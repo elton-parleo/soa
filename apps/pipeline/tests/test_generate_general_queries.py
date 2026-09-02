@@ -288,9 +288,9 @@ def test_exact_duplicates_are_removed_and_reported():
     assert len(report['duplicates_dropped']) == 1
 
 
-def test_a_replacement_round_targets_the_stage_that_lost_rows():
-    """Dedupe removed a Research row, so the replacement prompt must ask
-    for Research — not for a fresh slice of the whole distribution."""
+def test_a_stage_that_loses_rows_to_dedupe_is_refilled_by_a_targeted_prompt():
+    """Dedupe removed a Research row, so the next prompt must ask for
+    Research — not for a fresh slice of the whole distribution."""
     targets = {'Awareness': 2, 'Research': 2}
     seen_shortfalls = []
 
@@ -299,11 +299,10 @@ def test_a_replacement_round_targets_the_stage_that_lost_rows():
         _row('Research', "-dup"), _row('Research', "-dup"),   # collide
     ]
     replacement = [_row('Research', "-new")]
+    batches = [first, replacement]
 
     def _capture(prompt, api_key, temperature=0.8, stamp=None):
-        return (batches.pop(0), None)
-
-    batches = [first, replacement]
+        return (batches.pop(0), None) if batches else ([], None)
 
     with patch("generation.query_generator._build_general_prompt") as mock_build, \
          patch("generation.query_generator._call_openai_and_validate", side_effect=_capture):
@@ -315,23 +314,35 @@ def test_a_replacement_round_targets_the_stage_that_lost_rows():
             allowed_categories=ALLOWED, study_pattern='retailer', api_key="k",
         )
 
-    # First call asks for the full distribution; the replacement round
-    # asks for Research only.
     assert seen_shortfalls[0] == {'Awareness': 2, 'Research': 2}
-    assert seen_shortfalls[-1] == {'Research': 1}
-    assert report['replacement_rounds'] == 1
+    assert seen_shortfalls[1] == {'Research': 1}   # Awareness is full
     assert _counts(rows) == {'Awareness': 2, 'Research': 2}
+    assert len(report['duplicates_dropped']) == 1
+
+
+def test_a_duplicate_never_costs_a_stage_one_of_its_slots():
+    """Deduping after bucketing looks equivalent and is not. Awareness
+    wants two; the model returns the same question twice plus a third,
+    unique one. Bucketing first fills the cap on the duplicate pair and
+    throws the good row away as overflow."""
+    targets = {'Awareness': 2}
+    batch = [_row('Awareness', "-a"), _row('Awareness', "-a"), _row('Awareness', "-b")]
+
+    rows, report, mock_call = _generate(targets, [batch] + [[]] * 10)
+
+    assert [r['query_text'] for r in rows] == [
+        "Question about Awareness-a", "Question about Awareness-b",
+    ]
+    assert report['shortfall_by_stage'] == {}
+    assert mock_call.call_count == 1          # no wasted round-trip
 
 
 def test_a_replacement_that_collides_is_itself_deduped():
     """A replacement can perfectly well repeat something already kept, so
     it re-enters dedupe rather than being trusted."""
     targets = {'Awareness': 2}
-    batches = [
-        [_row('Awareness', "-a"), _row('Awareness', "-a")],   # one survives
-        [_row('Awareness', "-a")],                            # replacement collides
-        [_row('Awareness', "-a")],
-        [_row('Awareness', "-a")],
+    batches = [[_row('Awareness', "-a"), _row('Awareness', "-a")]] + [
+        [_row('Awareness', "-a")] for _ in range(20)
     ]
     rows, report, _ = _generate(targets, batches)
 

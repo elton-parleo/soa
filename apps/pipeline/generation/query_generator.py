@@ -11,6 +11,20 @@ acceptable there (see generate_lite_queries): a report built from a
 lopsided stage distribution would be misleading, so a persistent
 shortfall raises LiteGenerationError instead of returning whatever was
 generated.
+
+The general path (generate_general_queries, and generate_and_review_study
+which wraps it) shares that distribution enforcement via
+_fill_stage_buckets but reports a residual shortfall rather than raising,
+and adds a caller-supplied category allow-list plus a stamped
+study_pattern.
+
+Removal discipline across this module: exact-match duplicates are the
+ONLY thing removed automatically, and rows outside the category
+allow-list are dropped — never relabelled — so a scope violation stays
+visible. The two review passes (review_semantic_duplicates,
+review_coherence) are advisory: they produce findings for a human and
+change nothing, and they degrade to no findings rather than failing a
+study that has already generated.
 """
 
 import json
@@ -244,6 +258,68 @@ def _deterministic_failure_reason(row_errors: list, total_rows: int) -> Optional
     )
 
 
+def _call_openai_for_json(
+    prompt: str,
+    api_key: str,
+    temperature: float = 0.8,
+) -> Optional[list]:
+    """
+    One OpenAI call, one JSON array out. Returns None when the response
+    cannot be read as a list. Errors from the call itself still
+    propagate — see the comment in the body.
+
+    This is the raw call that _call_openai_and_validate wraps with
+    soa_queries row validation. The review passes need the call without
+    the validation: their output is groups and verdicts, not query rows,
+    so putting it through _validate_generated_row would reject every item
+    on fields that have no meaning for it. Sharing this layer keeps them
+    on the same client, the same fence-stripping, and the same
+    temperature parameter, which is what actually matters.
+    """
+    # A transport/API exception is deliberately NOT caught here. It used
+    # to propagate out of _call_openai_and_validate and therefore out of
+    # generate_lite_queries, and lite feeds the live public audit tool —
+    # turning a raised error into an empty list would convert it into a
+    # LiteGenerationError about a stage shortfall, which is a different
+    # failure wearing the wrong name. The review passes catch it
+    # themselves, because for them a failed call must degrade quietly.
+    client = OpenAI(api_key=api_key)
+
+    response = client.chat.completions.create(
+        model="gpt-5.4-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=temperature,
+    )
+
+    content = (response.choices[0].message.content or '').strip()
+
+    # Strip markdown code fences if the model added them
+    if content.startswith('```'):
+        content = content.split('\n', 1)[1]
+        content = content.rsplit('```', 1)[0]
+
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError as e:
+        log.error(f"Failed to parse OpenAI response as JSON: {e}")
+        log.error(f"Raw content: {content[:500]}")
+        return None
+
+    # Handle both raw array and {"questions": [...]} shapes
+    if isinstance(parsed, dict):
+        for key in ('questions', 'queries', 'items', 'data',
+                    'groups', 'findings', 'results'):
+            if key in parsed:
+                parsed = parsed[key]
+                break
+
+    if not isinstance(parsed, list):
+        log.error(f"Expected JSON array, got: {type(parsed)}")
+        return None
+
+    return parsed
+
+
 def _call_openai_and_validate(
     prompt: str,
     api_key: str,
@@ -277,37 +353,8 @@ def _call_openai_and_validate(
     the back door — it just stops being something the model gets to
     decide per row. Default None leaves every row exactly as parsed.
     """
-    client = OpenAI(api_key=api_key)
-
-    response = client.chat.completions.create(
-        model="gpt-5.4-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=temperature,
-    )
-
-    content = (response.choices[0].message.content or '').strip()
-
-    # Strip markdown code fences if the model added them
-    if content.startswith('```'):
-        content = content.split('\n', 1)[1]
-        content = content.rsplit('```', 1)[0]
-
-    try:
-        parsed = json.loads(content)
-    except json.JSONDecodeError as e:
-        log.error(f"Failed to parse OpenAI response as JSON: {e}")
-        log.error(f"Raw content: {content[:500]}")
-        return [], None
-
-    # Handle both raw array and {"questions": [...]} shapes
-    if isinstance(parsed, dict):
-        for key in ('questions', 'queries', 'items', 'data'):
-            if key in parsed:
-                parsed = parsed[key]
-                break
-
-    if not isinstance(parsed, list):
-        log.error(f"Expected JSON array, got: {type(parsed)}")
+    parsed = _call_openai_for_json(prompt, api_key, temperature)
+    if parsed is None:
         return [], None
 
     valid_rows = []
@@ -656,9 +703,34 @@ def generate_general_queries(
     stage_targets = {k: v for k, v in stage_targets.items() if v > 0}
     allowed = set(allowed_categories)
 
+    kept: list = []
+    duplicates: list = []
+    category_drops: list = []
+    seen_keys: set = set()
+
     def _accept(row):
+        """Runs before a row is bucketed, so a rejected row never
+        occupies a slot. Deduping AFTER bucketing looks equivalent and
+        is not: a stage capped at two rows that receives the same
+        question twice fills up on the duplicate pair and discards a
+        third, unique, perfectly good row as overflow — then goes back to
+        the model for a replacement it already had in hand."""
         if row.get('category') not in allowed:
-            return f"category {row.get('category')!r} is outside the study's allowed categories"
+            reason = (
+                f"category {row.get('category')!r} is outside the study's "
+                f"allowed categories"
+            )
+            category_drops.append({
+                'query_text': row.get('query_text'),
+                'category':   row.get('category'),
+                'reason':     reason,
+            })
+            return reason
+        key = normalize_query_text(row.get('query_text'))
+        if key in seen_keys:
+            duplicates.append(row)
+            return "exact duplicate of a question already generated"
+        seen_keys.add(key)
         return None
 
     def _build(shortfall, accepted_rows):
@@ -677,9 +749,6 @@ def generate_general_queries(
 
     stamp = {'study_pattern': study_pattern}
 
-    kept: list = []
-    duplicates: list = []
-    category_drops: list = []
     calls = 0
     rounds = 0
     remaining = dict(stage_targets)
@@ -696,14 +765,16 @@ def generate_general_queries(
             label='[generation] ',
         )
         calls += result['calls']
-        category_drops.extend(result['rejected'])
 
         fresh = [
             row for stage in remaining for row in result['buckets'][stage]
         ]
-        # Dedupe against everything already kept, not just within this
-        # round — a replacement can collide with a row from the round
-        # that asked for it.
+        # _accept has already rejected anything colliding with seen_keys,
+        # so this pass should find nothing. It stays as the belt to
+        # _accept's braces: dedupe_exact is the module's definition of a
+        # duplicate, and a future edit to _accept that stops matching it
+        # should surface as a reported duplicate rather than as a
+        # duplicate row in a study.
         survivors, dropped = dedupe_exact(kept + fresh)
         kept = survivors
         duplicates.extend(dropped)
@@ -734,16 +805,359 @@ def generate_general_queries(
             if delivered.get(stage, 0) < target
         },
         'duplicates_dropped': duplicates,
-        'category_drops': [
-            {'query_text': row.get('query_text'),
-             'category':   row.get('category'),
-             'reason':     reason}
-            for row, reason in category_drops
-        ],
+        'category_drops': category_drops,
         'replacement_rounds': rounds,
         'generation_calls':   calls,
     }
     return kept, report
+
+
+def generate_and_review_study(
+    study_name: str,
+    description: str,
+    stage_targets: dict,
+    allowed_categories: list,
+    study_pattern: str,
+    api_key: str,
+) -> tuple:
+    """
+    The whole general path in one call: generate, then review, then
+    account for what happened. Returns (rows, provenance).
+
+    The ordering is the reason this is a function rather than three calls
+    at the call site. Both review passes run on the rows that SURVIVED
+    exact dedupe — reviewing the pre-dedupe set would report every
+    removed duplicate a second time as a semantic one, burying the
+    findings that need a human under the ones already handled.
+
+    rows is exactly what generate_general_queries returned: the reviews
+    are advisory and remove nothing. A caller that persists rows should
+    persist these and surface the provenance alongside them.
+    """
+    rows, report = generate_general_queries(
+        study_name=study_name,
+        description=description,
+        stage_targets=stage_targets,
+        allowed_categories=allowed_categories,
+        study_pattern=study_pattern,
+        api_key=api_key,
+    )
+
+    semantic_groups = review_semantic_duplicates(rows, api_key)
+    coherence_findings = review_coherence(
+        rows, study_name, description, allowed_categories, api_key,
+    )
+
+    provenance = build_provenance_record(
+        rows, report, semantic_groups, coherence_findings,
+    )
+    return rows, provenance
+
+
+# ─── Review passes ────────────────────────────────────────────────────────
+#
+# Both are ADVISORY. Exact-match dedupe is the only fully automatic
+# removal in this module; everything below produces findings for a human
+# to look at and produces no side effects at all. That line is
+# deliberate: a semantic judgement or a scope judgement made by a model
+# at generation time, applied silently, is indistinguishable afterwards
+# from the generator having simply written fewer questions.
+#
+# Both run at REVIEW_TEMPERATURE. These are classification tasks, not
+# generation: at the generation default of 0.8 the same fifty rows get
+# grouped differently on consecutive runs, and an advisory finding a
+# reviewer cannot reproduce is worse than none.
+#
+# Both degrade to empty findings on any malformed or unreadable model
+# output. A review pass that fails must never block study creation —
+# it is a second opinion, and the study is already generated by the time
+# it runs.
+
+REVIEW_TEMPERATURE = 0
+
+COHERENCE_OK = 'ok'
+COHERENCE_LABEL_MISMATCH = 'label_mismatch'
+COHERENCE_OUT_OF_SCOPE = 'out_of_scope'
+_COHERENCE_VERDICTS = {
+    COHERENCE_OK, COHERENCE_LABEL_MISMATCH, COHERENCE_OUT_OF_SCOPE,
+}
+
+
+def _numbered_questions(rows: list) -> str:
+    return "\n".join(
+        f"{i + 1}. {row.get('query_text', '')}" for i, row in enumerate(rows)
+    )
+
+
+def _build_semantic_duplicate_prompt(rows: list) -> str:
+    return f"""Below is a numbered list of questions from a single market research study.
+
+{_numbered_questions(rows)}
+
+Find GROUPS of questions that are semantically redundant — questions that are asking the same thing in different words, such that a respondent would give substantially the same answer to every question in the group.
+
+Group them. Do NOT compare every possible pair; work by reading the list and collecting the ones that belong together.
+
+Two questions belong in the same group when they seek the same information, even if the wording, framing or emphasis differs. For example, "What's the best prestige vitamin C serum for brightening dull skin?" and "Which prestige vitamin C serum works best for brightening and uneven tone?" are the same question — same product type, same job to be done — and belong in one group. Two questions that share vocabulary but seek different information do NOT belong in the same group.
+
+Return ONLY a JSON array. Each element is one group:
+- members: array of the question numbers in this group (at least 2)
+- keep: the ONE question number in this group that best represents it
+- reason: one short sentence saying what makes them redundant
+
+Return an empty array if no group of questions is redundant.
+No markdown, no explanation, just the JSON array."""
+
+
+def review_semantic_duplicates(rows: list, api_key: str) -> list:
+    """
+    Advisory review of the rows that survived exact dedupe: which of them
+    are the same question written twice?
+
+    The model is asked to GROUP, not to compare pairs. Across fifty items
+    that is the difference between a task models do reliably and one they
+    do not: exhaustive pairwise comparison is 1,225 judgements, and a
+    model asked for it produces a plausible-looking list that is mostly
+    noise. Grouping is one pass over the list.
+
+    The case this exists for looks like two questions asking for the best
+    prestige vitamin C serum, one phrased for brightening dull skin and
+    one for brightening and uneven tone. Different surface text, so exact
+    matching cannot see it; overlapping vocabulary, so string similarity
+    calls it ambiguous either way.
+
+    Returns findings ONLY. Never mutates rows, never drops anything.
+    Returns [] if there is nothing to review or the model output cannot
+    be read.
+    """
+    if len(rows) < 2:
+        return []
+
+    parsed = _safe_review_call(
+        _build_semantic_duplicate_prompt(rows), api_key, "semantic duplicate",
+    )
+    if not parsed:
+        return []
+
+    findings = []
+    for group in parsed:
+        if not isinstance(group, dict):
+            continue
+        members = _valid_indexes(group.get('members'), len(rows))
+        if len(members) < 2:
+            continue
+        keep = _valid_indexes([group.get('keep')], len(rows))
+        # A recommendation outside its own group is not a
+        # recommendation; fall back to the first member rather than
+        # discarding an otherwise usable finding.
+        keep_index = keep[0] if keep and keep[0] in members else members[0]
+        findings.append({
+            'members':      members,
+            'member_texts': [rows[i].get('query_text') for i in members],
+            'keep':         keep_index,
+            'keep_text':    rows[keep_index].get('query_text'),
+            'reason':       str(group.get('reason') or '').strip(),
+        })
+    return findings
+
+
+def _build_coherence_prompt(
+    rows: list,
+    study_name: str,
+    description: str,
+    allowed_categories: list,
+) -> str:
+    categories_text = ", ".join(repr(c) for c in allowed_categories)
+    return f"""You are reviewing the questions in a market research study for coherence with the study's own brief.
+
+Study name: {study_name}
+Study description: {description or 'No additional description provided.'}
+Allowed categories: {categories_text}
+
+Here are the questions, each with the category it was labelled with:
+
+{chr(10).join(
+    f"{i + 1}. [{row.get('category')}] {row.get('query_text', '')}"
+    for i, row in enumerate(rows)
+)}
+
+Classify EACH question into exactly ONE of these three verdicts:
+
+- "ok": the question fits the study's stated subject, and its label is right.
+
+- "label_mismatch": the question's SUBJECT genuinely belongs to this study, but a field on it carries the wrong value. Name the field and the corrected value.
+
+- "out_of_scope": the question's SUBJECT does not belong to this study at all.
+
+The distinction between the last two is the whole point of this review, and the tempting answer is usually the wrong one. Ask first whether the question's subject belongs in this study. Only if it does may you call a wrong label a label_mismatch.
+
+Worked example. A study of prestige beauty products contains "Where can I get the best price on a Dyson Airwrap?", labelled category 'Skincare'. The cheap answer is label_mismatch with a corrected category of 'Haircare', after which the row looks clean. That answer is wrong. A hair-styling appliance is not a prestige beauty product, so the question does not belong in this study whatever it is labelled; the real defect is that the generator drifted off the brief, and relabelling it hides that. The correct verdict is out_of_scope.
+
+So: when a question's subject sits outside the study's stated scope, it is out_of_scope even if some allowed category label would technically fit it.
+
+Return ONLY a JSON array with one element per question:
+- index: the question number
+- verdict: "ok", "label_mismatch" or "out_of_scope"
+- field: for label_mismatch only, the name of the field that is wrong
+- proposed_value: for label_mismatch only, the corrected value for that field
+- reason: for out_of_scope only, one short sentence on why the subject does not belong
+
+No markdown, no explanation, just the JSON array."""
+
+
+def review_coherence(
+    rows: list,
+    study_name: str,
+    description: str,
+    allowed_categories: list,
+    api_key: str,
+) -> list:
+    """
+    Advisory review of each row against the study's own brief: does this
+    question belong in this study, and is it labelled correctly?
+
+    Returns one finding per row the model classified as something other
+    than ok. Never mutates rows and never applies a proposed correction —
+    a label_mismatch is a suggestion for a human, and an out_of_scope row
+    is a signal that the generator drifted, which is worth seeing rather
+    than tidying away.
+
+    Returns [] if there is nothing to review or the model output cannot
+    be read.
+    """
+    if not rows:
+        return []
+
+    parsed = _safe_review_call(
+        _build_coherence_prompt(rows, study_name, description, allowed_categories),
+        api_key,
+        "coherence",
+    )
+    if not parsed:
+        return []
+
+    findings = []
+    for item in parsed:
+        if not isinstance(item, dict):
+            continue
+        indexes = _valid_indexes([item.get('index')], len(rows))
+        if not indexes:
+            continue
+        index = indexes[0]
+        verdict = item.get('verdict')
+        if verdict not in _COHERENCE_VERDICTS or verdict == COHERENCE_OK:
+            continue
+        finding = {
+            'index':      index,
+            'query_text': rows[index].get('query_text'),
+            'category':   rows[index].get('category'),
+            'verdict':    verdict,
+            'reason':     str(item.get('reason') or '').strip(),
+        }
+        if verdict == COHERENCE_LABEL_MISMATCH:
+            finding['field'] = item.get('field')
+            finding['proposed_value'] = item.get('proposed_value')
+        findings.append(finding)
+    return findings
+
+
+def _safe_review_call(prompt: str, api_key: str, label: str) -> Optional[list]:
+    """
+    Runs a review prompt at REVIEW_TEMPERATURE and swallows every
+    failure, returning None. A review pass is a second opinion on a study
+    that already exists; letting it raise would mean a flaky OpenAI call
+    could fail a study creation that had otherwise completely succeeded.
+    """
+    try:
+        return _call_openai_for_json(prompt, api_key, temperature=REVIEW_TEMPERATURE)
+    except Exception as e:
+        log.error(f"{label} review failed, degrading to no findings: {e}")
+        return None
+
+
+def _valid_indexes(values, length: int) -> list:
+    """
+    Converts the model's 1-based question numbers into 0-based row
+    indexes, discarding anything out of range or not a number. Order is
+    preserved and repeats are collapsed.
+
+    The model is given a 1-based list because that is what a human
+    reading the same list sees, and the findings are for humans. Nothing
+    downstream should have to know that, so the conversion happens here
+    and findings carry ordinary row indexes.
+    """
+    if not isinstance(values, (list, tuple)):
+        return []
+    seen = set()
+    out = []
+    for value in values:
+        if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+            continue
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            continue
+        index = number - 1
+        if index < 0 or index >= length or index in seen:
+            continue
+        seen.add(index)
+        out.append(index)
+    return out
+
+
+def build_provenance_record(
+    rows: list,
+    report: dict,
+    semantic_groups: Optional[list] = None,
+    coherence_findings: Optional[list] = None,
+) -> dict:
+    """
+    Everything that happened to a generated study, in one structure: what
+    was asked for, what was delivered, what was removed automatically and
+    what was merely flagged.
+
+    The automatic/advisory split is the reason this exists. Exact
+    duplicates are gone by the time anyone sees the study, so the record
+    names them and their text. Semantic groups, coherence findings and
+    category drops are judgements — the first two applied to nothing at
+    all, the third having dropped a row rather than quietly rewriting it
+    — and a reviewer needs to be able to tell those apart at a glance.
+    """
+    semantic_groups = semantic_groups or []
+    coherence_findings = coherence_findings or []
+
+    by_outcome: dict = {
+        COHERENCE_LABEL_MISMATCH: [],
+        COHERENCE_OUT_OF_SCOPE: [],
+    }
+    for finding in coherence_findings:
+        by_outcome.setdefault(finding.get('verdict'), []).append(finding)
+
+    duplicates = report.get('duplicates_dropped') or []
+
+    return {
+        'rows_generated':      len(rows),
+        'requested_by_stage':  report.get('requested_by_stage', {}),
+        'delivered_by_stage':  report.get('delivered_by_stage', {}),
+        'shortfall_by_stage':  report.get('shortfall_by_stage', {}),
+        'replacement_rounds':  report.get('replacement_rounds', 0),
+        'generation_calls':    report.get('generation_calls', 0),
+
+        # Automatic — these rows are not in the study.
+        'exact_duplicates_dropped': [
+            {'query_text': row.get('query_text'), 'stage': row.get('stage')}
+            for row in duplicates
+        ],
+        'category_drops': report.get('category_drops', []),
+
+        # Advisory — nothing was applied.
+        'semantic_duplicate_groups': semantic_groups,
+        'coherence_findings_by_outcome': {
+            COHERENCE_LABEL_MISMATCH: by_outcome.get(COHERENCE_LABEL_MISMATCH, []),
+            COHERENCE_OUT_OF_SCOPE:   by_outcome.get(COHERENCE_OUT_OF_SCOPE, []),
+        },
+        'coherence_ok_count': len(rows) - len(coherence_findings),
+    }
 
 
 def generate_lite_queries(
