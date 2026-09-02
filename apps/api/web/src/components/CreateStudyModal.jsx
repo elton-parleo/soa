@@ -312,15 +312,45 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
   const stages = useMemo(() => constraints?.stage || [], [constraints])
   const allCategories = useMemo(() => constraints?.category || [], [constraints])
 
+  // Everything this form holds, back to its defaults, every time the modal
+  // opens.
+  //
+  // This has to live here rather than in whatever opened it. `open` is a
+  // prop and the early return below is AFTER the hooks, so the component
+  // stays mounted while closed and keeps every field — a second open would
+  // otherwise show the previous study's name, chips and stage counts. The
+  // page that renders this used to do the clearing on its way in, which
+  // meant a page reaching into form state it did not own, and that seam is
+  // exactly what broke: the setters moved in here and the reset was left
+  // behind pointing at nothing.
   useEffect(() => {
     if (!open) return
+
+    setStudyName('')
+    setDescription('')
+    setRetailers([''])
+    setRotateFirstNamed(true)
+    setCategories([])
+    setPreset('balanced')
+    setStageCounts({})
+    setNamingRule(true)
+    setPersonas([])
+    setSpecificityMode(SPECIFICITY_MODES[0].value)
+    setAdvancedOpen(false)
+    setInferenceLocked(false)
+    setResetAvailable(false)
+    setSubmitting(false)
     setError(null)
+
     api.getQueryConstraints()
       .then(data => {
         setConstraints(data)
         const stageList = data?.stage || []
         setStageCounts(distribute(stageList, DEFAULT_TOTAL, 'balanced'))
-        if (!studyPattern && data?.study_pattern?.length) {
+        // Unconditionally, not "only if unset": this is a fresh open, so a
+        // pattern picked during the last one is stale, not a value worth
+        // preserving.
+        if (data?.study_pattern?.length) {
           setStudyPattern(data.study_pattern[0])
         }
       })

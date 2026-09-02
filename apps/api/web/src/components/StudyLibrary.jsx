@@ -284,7 +284,15 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
   const fileInputRef = useRef(null)
 
   // AI generation modal — the form itself lives in CreateStudyModal.jsx,
-  // which owns its own field state, validation and submit.
+  // which owns its own field state, validation, submit AND its reset to
+  // defaults when it opens. This page knows only whether it is open.
+  //
+  // It used to also clear the form and the error here before opening, and
+  // those two setters were deleted along with the state they belonged to
+  // when the modal was rebuilt — leaving a handler that threw
+  // "setAiForm is not defined" before it ever reached setAiModalOpen, so
+  // the button did nothing at all. The reset still has to happen; it just
+  // belongs to whoever owns the state.
   const [aiModalOpen, setAiModalOpen] = useState(false)
 
   function loadStudies() {
@@ -394,11 +402,7 @@ export default function StudyLibrary({ onNavigate, onSelectStudy }) {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
               <button
-                onClick={() => {
-                  setAiForm({ study_name: '', target_count: 50, description: '' })
-                  setAiError(null)
-                  setAiModalOpen(true)
-                }}
+                onClick={() => setAiModalOpen(true)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
                   padding: '10px 16px', borderRadius: 8,
