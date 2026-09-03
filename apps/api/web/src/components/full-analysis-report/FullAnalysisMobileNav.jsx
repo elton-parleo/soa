@@ -24,7 +24,8 @@
  */
 import { useRef, useState } from 'react'
 import { BrandLogo, Glyph, StatusChip, StateChip } from '../../ds/index.js'
-import { isAgentReady, isPartialRead, buildMeasurableContext } from '../../lite/report/reportDerive.js'
+import { isPartialRead, buildMeasurableContext } from '../../lite/report/reportDerive.js'
+import { compositeLabel, verdictDisplay } from './withheld.js'
 import { useSummaryScrolledPast } from '../../lite/report/MobileReportNav.jsx'
 import { NAV_ITEMS, filterNavItems, navScore } from './FullAnalysisRail.jsx'
 
@@ -59,7 +60,7 @@ function MobileSummaryBlock({ report, primaryEntityName, summaryRef }) {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-        <StatusChip tone={isAgentReady(pillars) ? 'success' : 'risk'} size="sm">{isAgentReady(pillars) ? 'Agent-ready' : 'Not agent-ready'}</StatusChip>
+        <StatusChip tone={verdictDisplay(pillars).tone} size="sm">{verdictDisplay(pillars).label}</StatusChip>
         {partial ? (
           <StateChip state="partial" variant="chip" size="sm">{Math.round(unmeasurable)} pts unread this run</StateChip>
         ) : (

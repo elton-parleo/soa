@@ -21,7 +21,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api.js'
 import { publicFullAnalysisApi } from '../publicFullAnalysisApi.js'
 import { computeExposure, seedAnnualRevenue } from '../lite/liteDerive.js'
-import { deriveScoreHeroHeadline, deriveReportViewedState } from '../lite/report/reportDerive.js'
+import { deriveReportViewedState } from '../lite/report/reportDerive.js'
 import { track, identifyReport, captureSrcParam } from '../lite/analytics.js'
 import { EVENTS } from '../lite/analyticsEvents.js'
 import { VisibilitySection } from '../lite/report/VisibilitySection.jsx'
@@ -32,6 +32,7 @@ import { EditorialBand } from '../lite/report/EditorialBand.jsx'
 import { FixesTable } from '../lite/report/FixesTable.jsx'
 import { FixableHook } from '../lite/report/FixableHook.jsx'
 import { ExposureSection } from '../lite/report/ExposureSection.jsx'
+import { ReportSection } from '../lite/report/ReportSection.jsx'
 import '../lite/theme.css'
 
 import { FullAnalysisHero } from './full-analysis-report/FullAnalysisHero.jsx'
@@ -47,6 +48,7 @@ import { FullAnalysisDarkBand } from './full-analysis-report/FullAnalysisDarkBan
 import { FullAnalysisFooter } from './full-analysis-report/FullAnalysisFooter.jsx'
 import { FullAnalysisShareControl } from './full-analysis-report/FullAnalysisShareControl.jsx'
 import { shareOfMentionsRank } from './full-analysis-report/fullAnalysisDerive.js'
+import { EXPOSURE_WITHHELD_COPY, exposureDisplay, heroHeadlineSafe } from './full-analysis-report/withheld.js'
 import './full-analysis-report/fullAnalysis.css'
 
 const DEFAULT_REVENUE = 12_000_000
@@ -120,8 +122,14 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
   // its own pillars payload (cycle_scoring_full.py) and reads the score
   // straight off it — no true_value_score field needed on this side.
   const exposure = computeExposure({ revenue, aiSharePct, trueValueScore: pillars.true_value.score })
+  // #2: one decision, made once, shared by the hero tile, the rail/mobile
+  // nav chips, and the Exposure section below — see withheld.js.
+  const exposureView = exposureDisplay(pillars, exposure)
   const rank = shareOfMentionsRank(competitorSet?.overall)
-  const headline = deriveScoreHeroHeadline(pillars)
+  // #4: deriveScoreHeroHeadline reads `tv.earned === 0` as a measured
+  // silence ("They never talk about your value") — false on a run where
+  // the said side was measured and only the seen side was blocked.
+  const headline = heroHeadlineSafe(pillars)
 
   // VisibilitySection.jsx (reused verbatim below) reads its competitor
   // rows from report.visibility_breakdown.share_of_mentions — lite's
@@ -146,11 +154,11 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
   return (
     <div className="grain-overlay fa-report-shell" style={{ minHeight: '100vh', display: 'grid', gridTemplateColumns: '222px 1fr' }}>
       <FullAnalysisRail
-        report={report} primaryEntityName={primaryEntityName} exposure={exposure}
+        report={report} primaryEntityName={primaryEntityName} exposure={exposureView.value}
         active="score" hasContinuation={!!report.continuation} readOnly={readOnly}
       />
       <FullAnalysisMobileNav
-        report={report} primaryEntityName={primaryEntityName} exposure={exposure}
+        report={report} primaryEntityName={primaryEntityName} exposure={exposureView.value}
         active="score" hasContinuation={!!report.continuation} readOnly={readOnly}
       />
       <div style={{ minWidth: 0 }}>
@@ -169,7 +177,7 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
             {!readOnly && <FullAnalysisShareControl cycleCode={cycleCode} />}
           </div>
 
-          <FullAnalysisHero report={report} exposure={exposure} shareOfMentionsRank={rank} headline={headline} platforms={platforms} />
+          <FullAnalysisHero report={report} exposure={exposureView.value} shareOfMentionsRank={rank} headline={headline} platforms={platforms} />
 
           {report.continuation && (
             <ContinuationStrip continuation={report.continuation} platformsNote={report.continuation.audit_platforms_note} />
@@ -198,13 +206,25 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
           )}
           <EvidenceSection evidence={report.evidence} onViewResponse={handleViewResponse} open={isOpen('evidence')} onToggle={() => toggle('evidence')} />
 
-          <ExposureSection
-            report={reportForExposure}
-            revenue={revenue} onRevenueChange={setRevenue}
-            aiSharePct={aiSharePct} onAiShareChange={setAiSharePct}
-            exposure={exposure}
-            open={isOpen('exp')} onToggle={() => toggle('exp')}
-          />
+          {/* #2, second render site. ExposureSection is a SHARED lite
+              component and stays untouched — suppressing here, rather
+              than teaching it (or computeExposure) about withholding,
+              keeps lite bit-for-bit unchanged. The section anchor is
+              preserved so the rail's "Exposure" nav row still lands
+              somewhere that explains itself. */}
+          {exposureView.suppressed ? (
+            <ReportSection id="exp" eyebrow="EXPOSURE · NOT MODELED THIS RUN" title="What the gap is worth" open={isOpen('exp')} onToggle={() => toggle('exp')}>
+              <div style={{ marginTop: 16, fontSize: 13, color: 'var(--muted)', lineHeight: 1.65 }}>{EXPOSURE_WITHHELD_COPY}</div>
+            </ReportSection>
+          ) : (
+            <ExposureSection
+              report={reportForExposure}
+              revenue={revenue} onRevenueChange={setRevenue}
+              aiSharePct={aiSharePct} onAiShareChange={setAiSharePct}
+              exposure={exposureView.value}
+              open={isOpen('exp')} onToggle={() => toggle('exp')}
+            />
+          )}
 
           <FullAnalysisDarkBand fixCount={(pillars.fixes?.visible || []).filter((f) => f.fix_owner === 'TRUESYNC').length} />
 

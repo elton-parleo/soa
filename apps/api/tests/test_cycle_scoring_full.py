@@ -528,3 +528,201 @@ def test_no_manifest_fixture_reconciles_on_the_full_cycle_path_too():
     assert result["parleo_fixable_points"] == 23.7
     visible_truesync = round(sum(v["impact"] for v in visible if v["fix_owner"] == "TRUESYNC"), 1)
     assert visible_truesync == result["parleo_fixable_points"]
+
+
+# ─── Degraded (blocked/failed) crawls ────────────────────────────────────
+#
+# A store that refuses our reader used to get NO Full Analysis at all:
+# build_full_cycle_report required status == 'complete', so the render
+# gate fell back to the classic MetricsDashboard and said nothing about
+# why. These lock the widened gate (lite's own scan_scorable set) plus
+# the three-state withholding that has to come with it — scoring a
+# blocked run WITHOUT withholding would be worse than the fallback,
+# since compute_composite's denominator never shrinks for an unmeasured
+# dimension and compute_verdict would then assert a failing verdict from
+# data that was never measured.
+
+_DEGRADED_REASON = (
+    "the store root and every sampled product page were rate-limited or "
+    "blocked this run — nothing could be measured on-site"
+)
+
+# Mirrors scan/engine.py's real degraded output: the five PDP-dependent
+# dimensions synthesized as coverage='blocked', and the two that need no
+# product page (agent_access, value_protocols — requires_pdp=False)
+# real-scored exactly as on a complete run. agent_access scores a
+# genuine 0 here: a store that 403s a cryptographically verified reader
+# has actually failed agent access, and that refusal IS the measurement.
+_BLOCKED_DIMENSIONS = {
+    "scorer_version": "5",
+    "degraded_reason": "blocked",
+    "agent_access": {"score": 0, "max": 5, "coverage": "full", "evidence": ["robots.txt itself refused our reader (HTTP 403)"]},
+    "value_protocols_seen": {"score": 0, "max": 14, "coverage": "full", "evidence": ["no protocol profile found"]},
+    "catalog_context": {"score": 0.0, "max": 8, "coverage": "blocked", "evidence": [_DEGRADED_REASON], "fix": None, "fix_human": None},
+    "protocol_feed": {"score": 0.0, "max": 5, "coverage": "blocked", "evidence": [_DEGRADED_REASON], "fix": None, "fix_human": None},
+    "price_truth_seen": {"score": 0.0, "max": 7, "coverage": "blocked", "evidence": [_DEGRADED_REASON], "fix": None, "fix_human": None},
+    "member_value_seen": {"score": 0.0, "max": 5, "coverage": "blocked", "evidence": [_DEGRADED_REASON], "fix": None, "fix_human": None},
+    "deal_citability_seen": {"score": 0.0, "max": 7, "coverage": "blocked", "evidence": [_DEGRADED_REASON], "fix": None, "fix_human": None},
+}
+
+
+def _seed_cycle(conn, cycle_id, *, scan_status, dimensions, runs=40, entity_id=601):
+    conn.exec_driver_sql(
+        "INSERT INTO soa_entities (id, name, slug) VALUES (?, 'Blocked Brand', 'blocked-brand')", (entity_id,)
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_cycle_entities (cycle_id, entity_id, comparison_code, role) VALUES (?, ?, 'M001', 'primary')",
+        (cycle_id, entity_id),
+    )
+    conn.exec_driver_sql(
+        "INSERT INTO soa_metrics_results "
+        "(cycle_id, entity_id, slice_type, slice_value, total_runs, total_mentions, "
+        " mention_rate, soa_pct, position_index, rsi_score) "
+        "VALUES (?, ?, 'overall', 'overall', ?, ?, 1.0, 1.0, 1.0, 3.0)",
+        (cycle_id, entity_id, runs, runs),
+    )
+    if scan_status is not None:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_scan_results "
+            "(cycle_id, lite_request_id, status, dimensions, membership_probe, input_url) "
+            "VALUES (?, NULL, ?, ?, ?, 'https://blocked-brand.example.com')",
+            (cycle_id, scan_status, json.dumps(dimensions) if dimensions else None,
+             json.dumps({"result": "yes", "raw_evidence": None})),
+        )
+    base = cycle_id * 1000
+    for i in range(runs):
+        qid = base + i
+        conn.exec_driver_sql("INSERT INTO soa_queries (id, stage) VALUES (?, 'Ready to Buy')", (qid,))
+        conn.exec_driver_sql(
+            "INSERT INTO soa_runs (id, cycle_id, query_id, status) VALUES (?, ?, ?, 'success')", (qid, cycle_id, qid)
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_coded_mentions (run_id, entity_id, mentioned, deal_cited, deal_types, member_value_cited) "
+            "VALUES (?, ?, 1, 1, ?, 1)",
+            (qid, entity_id, json.dumps(["member_price"])),
+        )
+        conn.exec_driver_sql("INSERT INTO soa_pass2_coding_log (run_id, coding_pass_version) VALUES (?, 2)", (qid,))
+
+
+@pytest.mark.parametrize("scan_status", ["blocked", "failed"])
+def test_degraded_crawl_scores_instead_of_refusing_to_render(db, scan_status):
+    """The widened gate: a blocked/failed crawl carries real degraded
+    dimensions, so it scores through the same pillars machinery rather
+    than falling back to the classic dashboard with no explanation."""
+    with db.begin() as conn:
+        _seed_cycle(conn, 88, scan_status=scan_status, dimensions=_BLOCKED_DIMENSIONS)
+
+    with db.connect() as conn:
+        report = build_full_cycle_report(conn, 88)
+
+    assert report["status"] == "complete"
+    assert report["degraded_reason"] == "blocked"
+    pillars = report["pillars"]
+
+    # Visibility is answer-side and entirely unaffected by the crawl —
+    # it must still carry real, scored numbers. This is the whole reason
+    # rendering a degraded report beats falling back.
+    assert pillars["visibility"]["score"] > 0
+
+    # Withheld, not fabricated.
+    assert pillars["state"] == "unverified"
+    assert pillars["composite"] is None
+    assert pillars["verdict"] is None
+    assert pillars["tv_pct"] is None
+    assert pillars["unmeasured_count"] == 2
+
+
+def test_degraded_crawl_marks_dimensions_not_measurable(db):
+    with db.begin() as conn:
+        _seed_cycle(conn, 89, scan_status="blocked", dimensions=_BLOCKED_DIMENSIONS)
+    with db.connect() as conn:
+        pillars = build_full_cycle_report(conn, 89)["pillars"]
+
+    acc = {d["code"]: d for d in pillars["accessibility"]["dimensions"]}
+    assert acc["catalog_context"]["blocked"] is True
+    assert acc["protocol_feed"]["blocked"] is True
+    # Excluded from the applicable max rather than averaged in as zeros:
+    # only agent_access (real-scored, requires_pdp=False) counts.
+    assert pillars["accessibility"]["dimensions"] is not None
+    assert acc["agent_access"]["blocked"] is False
+
+    tv = {d["code"]: d for d in pillars["true_value"]["dimensions"]}
+    for code in ("price_truth", "member_value", "deal_citability"):
+        assert tv[code]["blocked"] is True, code
+        # max 0.0 == out of the applicable denominator entirely.
+        assert tv[code]["max"] == 0.0, code
+        assert tv[code]["checks"], f"{code} should carry NOT MEASURABLE checks"
+
+    # The said side is REAL on a blocked run — measured from run signals,
+    # which have nothing to do with whether a product page was fetchable.
+    # It stays attached and visible, uncounted, rather than vanishing.
+    assert tv["deal_citability"]["said"]["earned"] > 0
+    assert tv["deal_citability"]["said_envelope"] is not None
+    assert tv["price_truth"]["said"] is not None
+
+
+def test_degraded_crawl_never_recommends_fixes_for_unread_dimensions(db):
+    """_build_full_fixes_section skips na/blocked (see the existing
+    unit coverage above) — end-to-end here, so a blocked dimension can
+    never surface a ranked fix telling the client to repair something we
+    never actually looked at."""
+    with db.begin() as conn:
+        _seed_cycle(conn, 90, scan_status="blocked", dimensions=_BLOCKED_DIMENSIONS)
+    with db.connect() as conn:
+        pillars = build_full_cycle_report(conn, 90)["pillars"]
+
+    fixed_codes = {f["code"] for f in pillars["fixes"]["visible"]}
+    assert not (fixed_codes & {"catalog_context", "protocol_feed", "price_truth", "member_value", "deal_citability"})
+
+
+def test_composite_withheld_when_only_accessibility_is_blocked(db):
+    """The middle state: True Value is clean, so tv_pct stays real while
+    composite/verdict are withheld."""
+    dims = dict(_FULL_CYCLE_DIMENSIONS)
+    dims["catalog_context"] = {"score": 0.0, "max": 8, "coverage": "blocked", "evidence": [_DEGRADED_REASON], "fix": None, "fix_human": None}
+    with db.begin() as conn:
+        _seed_cycle(conn, 91, scan_status="complete", dimensions=dims)
+    with db.connect() as conn:
+        pillars = build_full_cycle_report(conn, 91)["pillars"]
+
+    assert pillars["state"] == "composite_withheld"
+    assert pillars["composite"] is None
+    assert pillars["verdict"] is None
+    assert pillars["tv_pct"] is not None
+    assert pillars["unmeasured_count"] == 1
+
+
+# ─── Gate reasons ────────────────────────────────────────────────────────
+#
+# The gate used to answer "no crawl attached yet" for every not_scored,
+# including runs whose crawl was demonstrably attached and finished.
+
+def test_reason_distinguishes_no_scan_row_from_a_non_scorable_one(db):
+    with db.begin() as conn:
+        _seed_cycle(conn, 92, scan_status=None, dimensions=None, entity_id=602)
+
+    with db.connect() as conn:
+        no_row = build_full_cycle_report(conn, 92)
+    assert no_row["status"] == "not_scored"
+    assert no_row["reason"] == "no crawl attached yet"
+
+    with db.begin() as conn:
+        _seed_cycle(conn, 93, scan_status="running", dimensions=None, entity_id=603)
+    with db.connect() as conn:
+        running = build_full_cycle_report(conn, 93)
+    assert running["status"] == "not_scored"
+    assert running["reason"] == "crawl still in progress"
+    assert "no crawl attached" not in running["reason"]
+
+
+def test_blocked_scan_reports_its_own_degraded_reason_not_a_missing_crawl(db):
+    """The bug this replaces: a blocked crawl reported 'no crawl attached
+    yet', which was both wrong and unactionable."""
+    with db.begin() as conn:
+        _seed_cycle(conn, 94, scan_status="blocked", dimensions=_BLOCKED_DIMENSIONS)
+    with db.connect() as conn:
+        report = build_full_cycle_report(conn, 94)
+
+    assert report["status"] == "complete"
+    assert report["degraded_reason"] == "blocked"
+    assert report.get("reason") is None

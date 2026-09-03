@@ -11,9 +11,13 @@ import { DarkPanel, Glyph, StatusChip, MonoTag } from '../../ds/index.js'
 import { VERDICT_COMPOSITE_THRESHOLD, PILLAR_NAMES } from '../../lite/landing/scanDimensionsRegistry.js'
 import { formatCurrency } from '../../lite/liteDerive.js'
 import {
-  pillarEarnedMax, pillarNominalWeight, pillarHeadline, isAgentReady,
+  pillarEarnedMax, pillarNominalWeight,
   PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE,
 } from '../../lite/report/reportDerive.js'
+import {
+  WITHHELD_LABEL, PILLAR_BAND_COPY,
+  exposureDisplay, isPillarBlocked, measurableFraction, pillarHeadlineSafe, verdictDisplay,
+} from './withheld.js'
 
 function PaceLane({ label, earned, fullMax, isTrueValue }) {
   const pace = (VERDICT_COMPOSITE_THRESHOLD / 100) * fullMax
@@ -48,11 +52,20 @@ export function FullAnalysisHero({ report, exposure, shareOfMentionsRank, headli
   const tv = pillarEarnedMax(pillars.true_value)
   const composite = report.composite
   const shortOfReady = composite != null ? Math.max(0, Math.round(VERDICT_COMPOSITE_THRESHOLD - composite)) : null
+  // #1/#2/#3: every withheld-value read on this report goes through
+  // withheld.js — see that module's header for why these are not six
+  // independent local branches.
+  const verdict = verdictDisplay(pillars)
+  const exposureView = exposureDisplay(pillars, exposure)
+
+  const pillarBand = (key) => (
+    isPillarBlocked(pillars, key) ? PILLAR_BAND_COPY[key](measurableFraction(pillars, key)) : null
+  )
 
   const pillarCards = [
-    { key: PILLAR_VISIBILITY, icon: 'eye', ...vis, sub: pillarHeadline(report, PILLAR_VISIBILITY) },
-    { key: PILLAR_ACCESSIBILITY, icon: 'globe', ...acc, sub: pillarHeadline(report, PILLAR_ACCESSIBILITY) },
-    { key: PILLAR_TRUE_VALUE, icon: 'tag', ...tv, sub: pillarHeadline(report, PILLAR_TRUE_VALUE), accent: true },
+    { key: PILLAR_VISIBILITY, icon: 'eye', ...vis, sub: pillarHeadlineSafe(report, PILLAR_VISIBILITY), band: pillarBand(PILLAR_VISIBILITY) },
+    { key: PILLAR_ACCESSIBILITY, icon: 'globe', ...acc, sub: pillarHeadlineSafe(report, PILLAR_ACCESSIBILITY), band: pillarBand(PILLAR_ACCESSIBILITY) },
+    { key: PILLAR_TRUE_VALUE, icon: 'tag', ...tv, sub: pillarHeadlineSafe(report, PILLAR_TRUE_VALUE), band: pillarBand(PILLAR_TRUE_VALUE), accent: true },
   ]
 
   return (
@@ -73,7 +86,7 @@ export function FullAnalysisHero({ report, exposure, shareOfMentionsRank, headli
             <div className="fa-hero-headline" style={{ flex: 1, minWidth: 340, maxWidth: 560, fontSize: 38, fontWeight: 740, letterSpacing: '-0.034em', lineHeight: 1.1, color: 'var(--dark-text)' }}>
               {plain} <em style={{ fontFamily: "'Newsreader',Georgia,serif", fontWeight: 440, fontStyle: 'italic', color: 'var(--blue-lite)', letterSpacing: '-0.008em' }}>{emphasis}</em>
             </div>
-            <div style={{ flexShrink: 0 }}><StatusChip tone={isAgentReady(pillars) ? 'success' : 'risk'}>{isAgentReady(pillars) ? 'Agent-ready' : 'Not agent-ready'}</StatusChip></div>
+            <div style={{ flexShrink: 0 }}><StatusChip tone={verdict.tone}>{verdict.label}</StatusChip></div>
           </div>
 
           <div style={{ marginTop: 26, padding: '22px 24px 20px', background: 'rgba(242,240,239,.055)', border: '1px solid var(--dark-border)', borderRadius: 15 }}>
@@ -116,8 +129,15 @@ export function FullAnalysisHero({ report, exposure, shareOfMentionsRank, headli
             </div>
             <div style={{ background: 'rgba(1,102,255,.13)', border: '1px solid rgba(127,176,255,.34)', borderRadius: 13, padding: '15px 17px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><Glyph name="card" size={13} color="var(--blue-lite)" /><span className="mono-label" style={{ fontSize: 8.5, color: 'var(--blue-lite)' }}>MODELED EXPOSURE / YEAR</span></div>
-              <div className="num" style={{ fontSize: 24, fontWeight: 720, letterSpacing: '-0.026em', color: 'var(--dark-text)', marginTop: 10, lineHeight: 1 }}>{formatCurrency(exposure)}</div>
-              <a href="#exp" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--blue-lite)', fontWeight: 520, marginTop: 6 }}>How we model this<Glyph name="arrowRight" size={12} color="var(--blue-lite)" /></a>
+              {/* #2: SUPPRESSED, not zeroed — formatCurrency(null) renders
+                  "$0", which prices a number we never observed just as
+                  falsely as the saturated maximum does. */}
+              <div className="num" style={{ fontSize: 24, fontWeight: 720, letterSpacing: '-0.026em', color: 'var(--dark-text)', marginTop: 10, lineHeight: 1 }}>
+                {exposureView.suppressed ? WITHHELD_LABEL : formatCurrency(exposureView.value)}
+              </div>
+              {exposureView.suppressed
+                ? <div style={{ fontSize: 11.5, color: 'var(--dark-faint)', marginTop: 6 }}>Not modeled — True Value unmeasured this run</div>
+                : <a href="#exp" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--blue-lite)', fontWeight: 520, marginTop: 6 }}>How we model this<Glyph name="arrowRight" size={12} color="var(--blue-lite)" /></a>}
             </div>
           </div>
         </div>
@@ -140,6 +160,15 @@ export function FullAnalysisHero({ report, exposure, shareOfMentionsRank, headli
                     <i style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, background: p.accent ? 'var(--blue-lite)' : 'rgba(242,240,239,.55)', borderRadius: 3 }} />
                   </div>
                   <div className="mono-label" style={{ fontSize: 9, color: p.accent ? 'var(--blue-lite)' : 'var(--dark-faint)', marginTop: 11, lineHeight: 1.6 }}>{p.sub}</div>
+                  {/* Item 5: the per-pillar band, INLINE with the score it
+                      qualifies. A page-level banner would leave "0" sitting
+                      alone next to "/14" with the explanation elsewhere —
+                      the same silent downgrade in a different costume. */}
+                  {p.band && (
+                    <div style={{ fontSize: 10.5, color: 'var(--dark-faint)', marginTop: 9, paddingTop: 9, borderTop: '1px solid var(--dark-border)', lineHeight: 1.55 }}>
+                      {p.band}
+                    </div>
+                  )}
                 </div>
               )
             })}
