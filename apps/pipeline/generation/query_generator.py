@@ -1028,19 +1028,153 @@ def _build_semantic_duplicate_prompt(rows: list) -> str:
 
 {_numbered_questions(rows)}
 
-Find GROUPS of questions that are semantically redundant — questions that are asking the same thing in different words, such that a respondent would give substantially the same answer to every question in the group.
+Find GROUPS of questions that are REDUNDANT — the same question asked twice in different words.
+
+The test for a group is deletion. A set of questions is a group only if DELETING ANY ONE OF THEM would lose no information the remaining members do not already cover. If removing a question would cost the study an answer it would not otherwise get, that question does not belong in the group.
 
 Group them. Do NOT compare every possible pair; work by reading the list and collecting the ones that belong together.
 
-Two questions belong in the same group when they seek the same information, even if the wording, framing or emphasis differs. For example, "What's the best prestige vitamin C serum for brightening dull skin?" and "Which prestige vitamin C serum works best for brightening and uneven tone?" are the same question — same product type, same job to be done — and belong in one group. Two questions that share vocabulary but seek different information do NOT belong in the same group.
+These are NOT redundancy, and none of them is a reason to group:
+- A shared topic. Twenty questions about prestige beauty are twenty questions.
+- A shared category. Everything filed under Skincare is not one question.
+- A shared retailer. "Mentions Sephora" is not a redundancy.
+- A shared question shape. "What is the best X for Y?" asked about six different products is six questions.
+
+Two checks on your own reason text, before you return a group:
+- If the reason needs the word "different" or "distinct" to describe the members, they are not redundant. You have found a topic cluster. Do not return it.
+- If the reason has to join several subjects with "or" — selection, pricing, promotions or loyalty — you are describing a theme that spans several questions, not one question asked twice. Do not return it.
+
+Output that must NEVER be produced, both real and both wrong:
+- "These are all distinct prestige beauty topic questions about different products, ingredients, routines, or use cases." — this says the members are distinct. Distinct questions are not duplicates.
+- "These all ask about Sephora vs Ulta prestige skincare selection, pricing, promotions, or loyalty value" — four subjects joined by "or" is a topic cluster.
+
+A correct group looks like this: one question asking whether Sephora's loyalty program makes prestige skincare cheaper, and another asking whether joining Sephora's rewards program lowers what you pay for prestige skincare. Same question, same answer, different words. Delete either one and nothing is lost.
+
+Genuine groups are small — two questions, occasionally three. If you find yourself collecting seven or twenty questions into one group, you have switched from finding duplicates to sorting by topic. Stop and discard that group.
+
+Returning an empty array is a perfectly good answer, and the expected one for a well-formed study. Do not manufacture groups to appear thorough.
 
 Return ONLY a JSON array. Each element is one group:
 - members: array of the question numbers in this group (at least 2)
 - keep: the ONE question number in this group that best represents it
 - reason: one short sentence saying what makes them redundant
 
-Return an empty array if no group of questions is redundant.
 No markdown, no explanation, just the JSON array."""
+
+
+# ─── Guards on the semantic duplicate pass ───────────────────────────────
+#
+# These run in code, after the model responds, and none of them depends on
+# the model cooperating. That is the point. The failure they exist for was
+# a model that grouped 46 of 52 queries into five "duplicate" groups and
+# wrote, as its own justification for the largest of them, "These are all
+# distinct prestige beauty topic questions about different products,
+# ingredients, routines, or use cases." It asserted the members were
+# distinct and recommended deleting 21 of 22 in the same breath. A prompt
+# change alone cannot be trusted against a model willing to write that.
+
+# Genuine redundancy is two questions, occasionally three. Twenty-two is
+# not a duplicate group by any reading.
+MAX_DUPLICATE_GROUP_SIZE = 3
+
+# Words that, in a reason for grouping, deny the grouping. Substring
+# match, case-insensitive, deliberately crude — "differently" and
+# "differences" carry the same signal and should also be caught. The
+# false positive this admits ("indifferent") does not occur in this
+# vocabulary, and catching a real one matters more than dodging it.
+_REDUNDANCY_DENYING_WORDS = ('different', 'distinct')
+
+DISCARD_OVERSIZED = 'oversized'
+DISCARD_MIXED_LABELS = 'mixed_labels'
+DISCARD_REASON_DENIES_REDUNDANCY = 'reason_denies_redundancy'
+
+
+def _duplicate_group_discard_reasons(finding: dict, rows: list) -> list:
+    """
+    Every guard a group trips, or [] if it survives. Returns all of them
+    rather than the first, because a group that is both oversized AND
+    self-contradicting says something different about the pass than one
+    that is merely large.
+    """
+    tripped = []
+    members = finding.get('members') or []
+
+    if len(members) > MAX_DUPLICATE_GROUP_SIZE:
+        tripped.append(DISCARD_OVERSIZED)
+
+    # Two questions filed under different categories are almost never the
+    # same question, and the same holds for funnel stage: an Awareness
+    # question and a Research question are asked by different shoppers at
+    # different moments even when the words overlap. The failing group
+    # one mixed Skincare, Makeup and Fragrance across Awareness and
+    # Research, and this guard alone would have caught it.
+    categories = {rows[i].get('category') for i in members if i < len(rows)}
+    stages = {rows[i].get('stage') for i in members if i < len(rows)}
+    if len(categories) > 1 or len(stages) > 1:
+        tripped.append(DISCARD_MIXED_LABELS)
+
+    reason = (finding.get('reason') or '').lower()
+    if any(word in reason for word in _REDUNDANCY_DENYING_WORDS):
+        tripped.append(DISCARD_REASON_DENIES_REDUNDANCY)
+
+    return tripped
+
+
+def _apply_duplicate_group_guards(findings: list, rows: list) -> tuple:
+    """
+    Splits candidate groups into (kept, discarded).
+
+    An oversized group is DISCARDED, never truncated to its first three
+    members. The model's ordering carries no signal about which members
+    are the real pair, so truncation would invent a finding out of an
+    arbitrary slice — and the observed failure had two genuine pairs
+    buried inside a nine-member group, which truncation would have
+    replaced with three unrelated queries wearing a duplicate label.
+    Discarding loses those pairs; fabricating a different finding is
+    worse, and the count recorded in provenance is what makes the loss
+    visible.
+    """
+    kept, discarded = [], []
+    for finding in findings:
+        tripped = _duplicate_group_discard_reasons(finding, rows)
+        if not tripped:
+            kept.append(finding)
+            continue
+        record = {
+            'size': len(finding.get('members') or []),
+            'guards': tripped,
+            'reason': finding.get('reason', ''),
+        }
+        discarded.append(record)
+        log.warning(
+            f"[review] discarded a semantic duplicate group of "
+            f"{record['size']} on {', '.join(tripped)} — reason was: "
+            f"{record['reason']!r}"
+        )
+    return kept, discarded
+
+
+class DuplicateReviewFindings(list):
+    """
+    The kept findings, carrying what the guards threw away.
+
+    A plain list subclass rather than a (findings, discards) tuple
+    deliberately: review_semantic_duplicates' return type is part of an
+    existing contract — callers compare it to [], take len() of it and
+    index into it, and generate_and_review_study's own tests patch the
+    function with a two-argument stand-in that returns a bare list.
+    Widening the signature or the return type would break those. A list
+    that is still a list, with an extra attribute the composition reads
+    through getattr, changes nothing for any existing caller and lets a
+    mocked plain [] report zero discards truthfully.
+    """
+    def __init__(self, findings=(), discarded=()):
+        super().__init__(findings)
+        self.discarded = list(discarded)
+
+    @property
+    def discarded_count(self):
+        return len(self.discarded)
 
 
 def review_semantic_duplicates(rows: list, api_key: str) -> list:
@@ -1060,18 +1194,27 @@ def review_semantic_duplicates(rows: list, api_key: str) -> list:
     matching cannot see it; overlapping vocabulary, so string similarity
     calls it ambiguous either way.
 
-    Returns findings ONLY. Never mutates rows, never drops anything.
+    What the model returns is then put through _apply_duplicate_group_guards
+    before anyone sees it — a size cap, a same-category/same-stage check
+    and a self-contradiction check on the reason text. The prompt asks for
+    redundancy; the guards are what make the answer trustworthy when it
+    does not. Discarded groups never reach the review panel, and their
+    count reaches provenance so a study where this pass misbehaved reads
+    differently from one that genuinely had nothing to report.
+
+    Returns findings ONLY. Never mutates rows, never drops a QUERY —
+    "discard" here means discarding a model finding, not a question.
     Returns [] if there is nothing to review or the model output cannot
     be read.
     """
     if len(rows) < 2:
-        return []
+        return DuplicateReviewFindings()
 
     parsed = _safe_review_call(
         _build_semantic_duplicate_prompt(rows), api_key, "semantic duplicate",
     )
     if not parsed:
-        return []
+        return DuplicateReviewFindings()
 
     findings = []
     for group in parsed:
@@ -1092,7 +1235,14 @@ def review_semantic_duplicates(rows: list, api_key: str) -> list:
             'keep_text':    rows[keep_index].get('query_text'),
             'reason':       str(group.get('reason') or '').strip(),
         })
-    return findings
+
+    kept, discarded = _apply_duplicate_group_guards(findings, rows)
+    if discarded:
+        log.warning(
+            f"[review] semantic duplicate pass: kept {len(kept)} group(s), "
+            f"discarded {len(discarded)}"
+        )
+    return DuplicateReviewFindings(kept, discarded)
 
 
 def _build_coherence_prompt(
@@ -1244,6 +1394,7 @@ def build_provenance_record(
     report: dict,
     semantic_groups: Optional[list] = None,
     coherence_findings: Optional[list] = None,
+    discarded_duplicate_groups: Optional[list] = None,
 ) -> dict:
     """
     Everything that happened to a generated study, in one structure: what
@@ -1257,8 +1408,17 @@ def build_provenance_record(
     all, the third having dropped a row rather than quietly rewriting it
     — and a reviewer needs to be able to tell those apart at a glance.
     """
-    semantic_groups = semantic_groups or []
-    coherence_findings = coherence_findings or []
+    # Read the carried discards BEFORE normalising, and normalise on
+    # `is None` rather than truthiness. A DuplicateReviewFindings that
+    # kept nothing is an empty list and therefore falsy, so `or []` would
+    # swap it for a bare list and throw the discards away — in exactly
+    # the case they matter most, where every group the model returned was
+    # thrown out and the count is the only thing distinguishing that from
+    # a clean study.
+    if discarded_duplicate_groups is None:
+        discarded_duplicate_groups = list(getattr(semantic_groups, 'discarded', None) or [])
+    semantic_groups = semantic_groups if semantic_groups is not None else []
+    coherence_findings = coherence_findings if coherence_findings is not None else []
 
     by_outcome: dict = {
         COHERENCE_LABEL_MISMATCH: [],
@@ -1294,7 +1454,15 @@ def build_provenance_record(
         'category_drops': report.get('category_drops', []),
 
         # Advisory — nothing was applied.
-        'semantic_duplicate_groups': semantic_groups,
+        'semantic_duplicate_groups': list(semantic_groups),
+
+        # Groups the guards threw out before a human could see them.
+        # Recorded because the alternative is indistinguishable from a
+        # clean study: a pass that returned five topic clusters and a
+        # pass that correctly found nothing both surface zero findings,
+        # and only this number tells them apart after the fact.
+        'semantic_groups_discarded': len(discarded_duplicate_groups),
+        'semantic_group_discards': discarded_duplicate_groups,
         'coherence_findings_by_outcome': {
             COHERENCE_LABEL_MISMATCH: by_outcome.get(COHERENCE_LABEL_MISMATCH, []),
             COHERENCE_OUT_OF_SCOPE:   by_outcome.get(COHERENCE_OUT_OF_SCOPE, []),

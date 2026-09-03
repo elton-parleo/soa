@@ -442,3 +442,105 @@ describe('the proposed-correction line after it has been applied', () => {
     expect(within(fix).getByText('Fragrance')).toBeInTheDocument()
   })
 })
+
+
+// ─── oversized duplicate groups ───────────────────────────────────────────
+//
+// The generator now discards anything over three members before it
+// reaches provenance, so these should be unreachable. The UI guard stays
+// as the last line of defence if that cap regresses, and because records
+// written before the cap existed still render here.
+//
+// The failure it exists for rendered one button reading "Deactivate
+// PRE_080, PRE_083, PRE_086, PRE_089, PRE_092, PRE_095, PRE_098, PRE_099,
+// PRE_100, PRE_101" — ten queries destroyed in a single click.
+
+const TEN_TEXTS = Array.from({ length: 10 }, (_, i) => `Big group question ${i}?`)
+const TEN_CODES = ['PRE_080','PRE_083','PRE_086','PRE_089','PRE_092',
+                   'PRE_095','PRE_098','PRE_099','PRE_100','PRE_101']
+
+const BIG_GROUP_PROVENANCE = {
+  ...PROVENANCE,
+  semantic_duplicate_groups: [{
+    members: TEN_TEXTS.map((_, i) => i),
+    keep: 0,
+    member_texts: TEN_TEXTS,
+    keep_text: TEN_TEXTS[0],
+    reason: 'These all ask about Sephora vs Ulta prestige skincare selection, pricing, promotions, or loyalty value',
+  }],
+  coherence_findings_by_outcome: { label_mismatch: [], out_of_scope: [] },
+}
+
+const BIG_GROUP_QUERIES = TEN_TEXTS.map((text, i) => ({
+  query_code: TEN_CODES[i], query_text: text, category: 'Skincare',
+  stage: 'Ready to Buy', specificity: 'Narrow', persona: 'Value-Conscious',
+  status: 'Active',
+}))
+
+describe('a duplicate group larger than three', () => {
+  it('shows a count on the control, never an id list', () => {
+    expand(BIG_GROUP_PROVENANCE, BIG_GROUP_QUERIES)
+
+    expect(
+      screen.getByRole('button', { name: 'Select queries to deactivate' })
+    ).toBeInTheDocument()
+
+    // The exact string from the failure must not be renderable.
+    expect(screen.queryByRole('button', { name: /PRE_080, PRE_083/ })).not.toBeInTheDocument()
+    TEN_CODES.forEach(code => {
+      expect(screen.queryByRole('button', { name: new RegExp(`Deactivate ${code}$`) }))
+        .not.toBeInTheDocument()
+    })
+  })
+
+  it('offers no single bulk action — the button does nothing until rows are picked', () => {
+    expand(BIG_GROUP_PROVENANCE, BIG_GROUP_QUERIES)
+    expect(screen.getByRole('button', { name: 'Select queries to deactivate' })).toBeDisabled()
+  })
+
+  it('requires per-row selection, one checkbox per non-kept member', () => {
+    expand(BIG_GROUP_PROVENANCE, BIG_GROUP_QUERIES)
+
+    // Nine, not ten: the kept member is not offered for deactivation.
+    const boxes = screen.getAllByRole('checkbox', { name: /^Deactivate PRE_/ })
+    expect(boxes).toHaveLength(9)
+    expect(screen.getByText('Keep')).toBeInTheDocument()
+  })
+
+  it('counts up as rows are picked, and sends only those', async () => {
+    expand(BIG_GROUP_PROVENANCE, BIG_GROUP_QUERIES)
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Deactivate PRE_083' }))
+    expect(screen.getByRole('button', { name: 'Deactivate 1 selected' })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Deactivate PRE_086' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Deactivate 2 selected' }))
+
+    await waitFor(() => expect(api.resolveReviewFinding).toHaveBeenCalled())
+    expect(api.resolveReviewFinding.mock.calls[0][1]).toEqual({
+      finding_id: 'dup:0',
+      action: 'deactivate',
+      query_codes: ['PRE_083', 'PRE_086'],
+      keep_query_code: 'PRE_080',
+    })
+  })
+
+  it('says why it is asking for individual picks', () => {
+    expand(BIG_GROUP_PROVENANCE, BIG_GROUP_QUERIES)
+    expect(
+      screen.getByText(/10 queries in this group — too many to be duplicates of one another/)
+    ).toBeInTheDocument()
+  })
+
+  it('still offers dismissal, which is the likely right answer here', () => {
+    expand(BIG_GROUP_PROVENANCE, BIG_GROUP_QUERIES)
+    expect(screen.getByRole('button', { name: 'Dismiss — not duplicates' })).toBeInTheDocument()
+  })
+
+  it('leaves a group of two on the direct path', () => {
+    // The ordinary case is unchanged: no checkboxes, ids on the button.
+    expand()
+    expect(screen.getByRole('button', { name: 'Deactivate PRE_048' })).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: /^Deactivate PRE_/ })).not.toBeInTheDocument()
+  })
+})
