@@ -31,7 +31,7 @@ describe('submitDemoRequest', () => {
     await submitDemoRequest({
       name: 'Jane Smith', email: 'jane@company.com', company: 'Acme Corp', message: 'hi',
       source: 'truesync', subject: 'Demo request — TrueSync',
-      page_url: 'https://audit.parleo.io/r/tok123', brand_name: 'Allbirds', report_token: 'tok123',
+      brand_name: 'Allbirds', report_token: 'tok123',
     })
 
     expect(global.fetch).toHaveBeenCalledTimes(1)
@@ -48,7 +48,7 @@ describe('submitDemoRequest', () => {
     await submitDemoRequest({
       name: 'Jane Smith', email: 'jane@company.com', company: 'Acme Corp', message: 'hi',
       source: 'truesync', subject: 'Demo request — TrueSync',
-      page_url: 'https://audit.parleo.io/r/tok123', brand_name: 'Allbirds', report_token: 'tok123',
+      brand_name: 'Allbirds', report_token: 'tok123',
     })
 
     const formData = global.fetch.mock.calls[0][1].body
@@ -57,11 +57,24 @@ describe('submitDemoRequest', () => {
     expect(formData.get('company')).toBe('Acme Corp')
     expect(formData.get('message')).toBe('hi')
     expect(formData.get('source')).toBe('truesync')
-    expect(formData.get('page_url')).toBe('https://audit.parleo.io/r/tok123')
     expect(formData.get('brand_name')).toBe('Allbirds')
     expect(formData.get('report_token')).toBe('tok123')
     expect(formData.get('_subject')).toBe('Demo request — TrueSync')
     expect(formData.get('_gotcha')).toBe('')
+  })
+
+  it('never sends a page_url field — the only URL in the payload, and a primary spam-classifier signal', async () => {
+    global.fetch.mockResolvedValue(jsonResponse(200, { ok: true }))
+
+    await submitDemoRequest({
+      name: 'Jane Smith', email: 'jane@company.com', company: 'Acme Corp', message: 'hi',
+      source: 'truesync', subject: 'Demo request — TrueSync',
+      brand_name: 'Allbirds', report_token: 'tok123',
+      page_url: 'https://audit.parleo.io/r/tok123', // even if a caller still passes one
+    })
+
+    const formData = global.fetch.mock.calls[0][1].body
+    expect(formData.get('page_url')).toBeNull()
   })
 
   it('omits brand_name/report_token when not opened from a report (landing)', async () => {
@@ -70,7 +83,7 @@ describe('submitDemoRequest', () => {
     await submitDemoRequest({
       name: 'Jane', email: 'jane@company.com', company: 'Acme', message: '',
       source: 'landing_truesync', subject: 'Demo request — TrueSync',
-      page_url: 'https://audit.parleo.io/', brand_name: undefined, report_token: undefined,
+      brand_name: undefined, report_token: undefined,
     })
 
     const formData = global.fetch.mock.calls[0][1].body

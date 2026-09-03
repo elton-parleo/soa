@@ -7,7 +7,7 @@
  * Deliberately decoupled from the demo-request API: this component
  * only knows how to render a form, validate it client-side, and call
  * the `onSubmit` prop it's given — it has no idea what source/
- * brand_name/report_token/page_url are, or which endpoint onSubmit
+ * brand_name/report_token are, or which endpoint onSubmit
  * actually calls. That context-gathering lives in lite/ (which is
  * allowed to depend on ds/, never the other way around) — see
  * lite/useDemoRequestModal.js, lite/demoRequestApi.js.

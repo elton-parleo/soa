@@ -16,6 +16,10 @@
  *   must never be gateable by environment (no import.meta.env/VITE_
  *   reference), so a submission can never be silently disabled in any
  *   mode.
+ * - own-account Formspree form + dropped visited-page-URL field: no
+ *   reference to the old shared form id anywhere, and the removed
+ *   payload field (a spam-classifier signal, confirmed via dashboard
+ *   access) doesn't survive in the functional modal/payload modules.
  *
  * The oaiq/demo-request walk() helper walks the whole src/ tree like
  * analytics.test.js's posthog-import-boundary test, excluding test
@@ -88,5 +92,36 @@ describe('no orphaned references left behind by the Formspree retarget', () => {
     const offenders = []
     walk(srcRoot, offenders, /\/api\/public\/demo-request/)
     expect(offenders).toEqual([])
+  })
+})
+
+// Moved off the marketing site's shared Formspree form onto our own
+// account's — the old form id must not survive anywhere.
+describe('no reference to the old shared Formspree form id', () => {
+  it('no file references the old form id', () => {
+    const srcRoot = path.join(__dirname, '../..')
+    const offenders = []
+    walk(srcRoot, offenders, /xyklyajq/)
+    expect(offenders).toEqual([])
+  })
+})
+
+// The submission payload's only URL field was a primary spam-classifier
+// signal (confirmed by dashboard access — submissions were landing in
+// Formspree's spam tab) and redundant besides (report_token + brand_name
+// already reconstruct the report link). Scoped to the functional modal/
+// payload modules, not the test files — the payload test itself is
+// expected to reference the field by name in its own absence assertion.
+describe('the visited-page-URL field never made it back into the modal/payload modules', () => {
+  const MODULES = [
+    '../../ds/RequestFormModal.jsx',
+    '../demoRequestApi.js',
+    '../useDemoRequestModal.js',
+    '../demoRequestCtas.js',
+  ].map((p) => path.join(__dirname, p))
+
+  it.each(MODULES)('%s has no page_url reference', (file) => {
+    const src = fs.readFileSync(file, 'utf8')
+    expect(src).not.toMatch(/page_url/)
   })
 })
