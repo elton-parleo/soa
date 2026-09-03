@@ -168,4 +168,38 @@ describe('Full Analysis — withheld values are never reconstructed', () => {
     // elsewhere on the page.
     expect(container.textContent).toMatch(/measurable this run/i)
   })
+
+  it('never blames the store for a degraded reason that is not the store', async () => {
+    // The bands name a CAUSE, and three different reasons reach them
+    // (scan/engine.py::_derive_status). 'blocked' is the only one where
+    // the store refused anything: 'no_product_pages_found' means the
+    // store responded NORMALLY and discovery simply found no product
+    // URLs, which engine.py is explicit is "never a site-blame" and may
+    // be our reader's limitation. 11 cycles in the database are that
+    // case. A band that hardcoded the 403 wording would accuse every
+    // one of them of something that did not happen.
+    const report = {
+      ...UNVERIFIED_REPORT,
+      reason: 'no_product_pages_found',
+      scan: { degraded_reason: 'no_product_pages_found' },
+    }
+    const { container } = render(
+      <FullAnalysisReport cycleCode="no-pdp-cycle" report={report} readOnly />,
+    )
+    await waitFor(() => expect(screen.getByText('AGENTIC VALUE SCORE')).toBeInTheDocument())
+
+    expect(container.textContent).not.toMatch(/403/)
+    expect(container.textContent).not.toMatch(/bot protection/i)
+    expect(container.textContent).not.toMatch(/did not serve|refus/i)
+    expect(container.textContent).toMatch(/responded normally/i)
+    expect(container.textContent).toMatch(/could not locate product pages/i)
+  })
+
+  it('does name the refusal when the store actually refused', async () => {
+    const container = await renderUnverified()  // scan.degraded_reason: 'blocked'
+    expect(container.textContent).toMatch(/HTTP 403/)
+    expect(container.textContent).toMatch(/cryptographically verified agent reader/i)
+    // The earned zero is stated as earned, not apologized for.
+    expect(container.textContent).toMatch(/that refusal is itself the Agent Access result/i)
+  })
 })

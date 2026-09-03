@@ -15,8 +15,8 @@ import {
   PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE,
 } from '../../lite/report/reportDerive.js'
 import {
-  WITHHELD_LABEL, PILLAR_BAND_COPY,
-  exposureDisplay, isPillarBlocked, measurableFraction, pillarHeadlineSafe, verdictDisplay,
+  WITHHELD_LABEL,
+  exposureDisplay, pillarBand, pillarHeadlineSafe, verdictDisplay,
 } from './withheld.js'
 
 function PaceLane({ label, earned, fullMax, isTrueValue }) {
@@ -58,14 +58,10 @@ export function FullAnalysisHero({ report, exposure, shareOfMentionsRank, headli
   const verdict = verdictDisplay(pillars)
   const exposureView = exposureDisplay(pillars, exposure)
 
-  const pillarBand = (key) => (
-    isPillarBlocked(pillars, key) ? PILLAR_BAND_COPY[key](measurableFraction(pillars, key)) : null
-  )
-
   const pillarCards = [
-    { key: PILLAR_VISIBILITY, icon: 'eye', ...vis, sub: pillarHeadlineSafe(report, PILLAR_VISIBILITY), band: pillarBand(PILLAR_VISIBILITY) },
-    { key: PILLAR_ACCESSIBILITY, icon: 'globe', ...acc, sub: pillarHeadlineSafe(report, PILLAR_ACCESSIBILITY), band: pillarBand(PILLAR_ACCESSIBILITY) },
-    { key: PILLAR_TRUE_VALUE, icon: 'tag', ...tv, sub: pillarHeadlineSafe(report, PILLAR_TRUE_VALUE), band: pillarBand(PILLAR_TRUE_VALUE), accent: true },
+    { key: PILLAR_VISIBILITY, icon: 'eye', ...vis, sub: pillarHeadlineSafe(report, PILLAR_VISIBILITY), band: pillarBand(report, PILLAR_VISIBILITY) },
+    { key: PILLAR_ACCESSIBILITY, icon: 'globe', ...acc, sub: pillarHeadlineSafe(report, PILLAR_ACCESSIBILITY), band: pillarBand(report, PILLAR_ACCESSIBILITY) },
+    { key: PILLAR_TRUE_VALUE, icon: 'tag', ...tv, sub: pillarHeadlineSafe(report, PILLAR_TRUE_VALUE), band: pillarBand(report, PILLAR_TRUE_VALUE), accent: true },
   ]
 
   return (

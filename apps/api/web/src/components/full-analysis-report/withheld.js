@@ -160,26 +160,87 @@ export function measurableFraction(pillars, pillarKey) {
   return { measurable: max, nominal: pillarNominalWeight(pillarKey) }
 }
 
-// ─── DRAFT COPY — NOT FINAL ──────────────────────────────────────────────
+/**
+ * The band a blocked pillar renders inline with its score, or null when
+ * that pillar was fully measured. Resolves the degraded_reason itself so
+ * no call site has to remember that the cause is part of the copy —
+ * forgetting it is how a "your edge returned 403" line would end up on
+ * a store that responded normally.
+ */
+export function pillarBand(report, pillarKey) {
+  const pillars = report?.pillars
+  if (!isPillarBlocked(pillars, pillarKey)) return null
+  const build = PILLAR_BAND_COPY[pillarKey]
+  if (!build) return null
+  const reason = report?.scan?.degraded_reason || report?.reason || 'unknown'
+  return build(reason, measurableFraction(pillars, pillarKey))
+}
+
+// ─── User-facing copy ───────────────────────────────────────────────────
 //
-// Placeholders pending the product owner's rewrite. The framing to
-// preserve: the store's edge returned HTTP 403 to a cryptographically
-// verified agent reader (Web Bot Auth). That is a finding about the
-// store's own configuration, not a failure of our scan, and the wording
-// must not apologize for the scan or blame the reader.
+// Keyed by degraded_reason, not just by pillar. Three reasons reach a
+// withheld report (scan/engine.py::_derive_status) and they are NOT
+// interchangeable:
+//
+//   blocked                 robots/sitemap/pages answered 403 or 429.
+//                           Naming the refusal is accurate — we have the
+//                           response codes.
+//   no_product_pages_found  the store responded NORMALLY; discovery just
+//                           found no product URLs to sample. engine.py is
+//                           explicit that this is "never a site-blame"
+//                           and "can be our reader's limitation" — so
+//                           this copy must not imply the store refused
+//                           anything. 11 cycles in the database are this
+//                           case today.
+//   unreachable             nothing answered at all (network/DNS).
+//
+// `null` covers rows written before degraded_reason existed (14 cycles):
+// we know the crawl degraded but not why, so the copy states the effect
+// and asserts no cause.
+//
+// Asserting one cause for all four would be the same failure this module
+// exists to prevent — claiming something specific we did not observe —
+// so the reason is threaded through rather than assumed.
+
+const ACCESSIBILITY_CAUSE = {
+  blocked: 'Your edge returned HTTP 403 to a cryptographically verified agent reader, robots.txt included. That refusal is itself the Agent Access result, and it is scored as one.',
+  no_product_pages_found: 'Your store responded normally, but our reader could not locate product pages to sample — that may be a limit of our discovery rather than anything about your setup.',
+  unreachable: 'Nothing answered at this address while the analysis ran, so no on-site check could be attempted.',
+  unknown: 'Some of your on-site pages could not be read during this run.',
+}
+
+const TRUE_VALUE_CAUSE = {
+  blocked: 'Price, member value and deal encoding are read from product pages your edge did not serve us.',
+  no_product_pages_found: 'Price, member value and deal encoding are read from product pages our reader could not locate this run.',
+  unreachable: 'Price, member value and deal encoding are read from product pages that never responded this run.',
+  unknown: 'Price, member value and deal encoding are read from product pages that could not be read this run.',
+}
+
 export const WITHHELD_HERO_HEADLINE = {
-  plain: 'DRAFT — Agents know you.',
-  emphasis: 'What your store tells them could not be read this run.',
+  plain: 'We measured how agents talk about you.',
+  emphasis: 'We could not measure what your store tells them.',
 }
 
 export const PILLAR_BAND_COPY = {
-  accessibility: ({ measurable, nominal }) =>
-    `DRAFT — ${measurable} of ${nominal} points measurable this run. Your bot protection returned HTTP 403 to a cryptographically verified agent reader (Web Bot Auth), including on robots.txt. Agent access is scored on that refusal — it is the measurement. Catalog and protocol checks need pages we were not served.`,
-  true_value: ({ measurable, nominal }) =>
-    `DRAFT — ${measurable} of ${nominal} points measurable this run. Price, member value, and deal encoding are checked on product pages your edge did not serve us, so they are unscored rather than scored zero. What agents said about your value was measured and is shown below, uncounted.`,
-  visibility: ({ measurable, nominal }) =>
-    `DRAFT — ${measurable} of ${nominal} points measurable this run.`,
+  accessibility: (reason, { measurable, nominal }) => (
+    `${measurable} of ${nominal} points measurable this run. ${ACCESSIBILITY_CAUSE[reason] || ACCESSIBILITY_CAUSE.unknown} `
+    + 'The catalog and protocol checks read pages we never saw, so they are unscored rather than scored zero.'
+  ),
+  true_value: (reason, { measurable, nominal }) => (
+    `${measurable} of ${nominal} points measurable this run. ${TRUE_VALUE_CAUSE[reason] || TRUE_VALUE_CAUSE.unknown} `
+    + 'They are unscored rather than scored zero. What agents actually said about your value was measured across every '
+    + 'query in this run — shown below, and deliberately left out of the score rather than counted on half its evidence.'
+  ),
+  // Visibility is scored entirely from what agents said, so it has no
+  // crawl-derived dimension and never reaches this band today. Kept as a
+  // cause-neutral fallback so a future crawl-fed visibility dimension
+  // cannot render an empty string.
+  visibility: (reason, { measurable, nominal }) => (
+    `${measurable} of ${nominal} points measurable this run.`
+  ),
 }
 
 export const EXPOSURE_WITHHELD_COPY =
-  'DRAFT — Exposure is modeled from your True Value score, which could not be measured this run. Showing a figure here would price a number we did not observe. Re-run once a verified agent reader is allowed through.'
+  'Exposure is modeled from your True Value score, and True Value could not be measured this run. Putting a figure '
+  + 'here would price something we did not observe. Your answer-side results above are unaffected — they were measured '
+  + 'normally. Re-run once those pages can be read and this estimate has its input back.'
