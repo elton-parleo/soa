@@ -53,6 +53,7 @@ from app.services.lite_pillars import (
     _TRUE_VALUE_SPLIT_CODES,
     _VALUE_PROTOCOLS_CODE,
     CHECK_FAIL,
+    _blocked_checks,
     _crawl_dim_row,
     _deal_citability_checks,
     _dim_by_code,
@@ -336,7 +337,13 @@ def build_full_cycle_pillars(
         dim = DIMENSIONS_BY_CODE[code]
         seen = crawl_dimensions.get(f"{code}_seen") or {}
         said = said_by_code[code]
-        seen_row = _sub_lens(seen.get("score") or 0.0, seen.get("max") or 0.0, (seen.get("coverage") or "full") == "na", seen.get("evidence") or [])
+        seen_coverage = seen.get("coverage") or "full"
+        seen_blocked = seen_coverage == "blocked"
+        seen_row = _sub_lens(
+            seen.get("score") or 0.0, seen.get("max") or 0.0,
+            seen_coverage == "na", seen.get("evidence") or [],
+            extra={"blocked": True} if seen_blocked else None,
+        )
         said_row = _sub_lens(said["earned"], said["max"], said["na"], said.get("evidence") or [], extra=said)
         said_envelope = said_result_to_envelope(said)
 
@@ -347,6 +354,32 @@ def build_full_cycle_pillars(
                 # No live checks on the N/A path — same convention as
                 # lite_pillars.py's own member_value_na branch.
                 "checks": None,
+                "fix": None, "fix_human": None,
+            })
+            continue
+
+        if seen_blocked:
+            # Ported verbatim in semantics from lite_pillars.py's own
+            # seen_blocked branch: the encode sub-lens is NOT MEASURABLE,
+            # so the WHOLE dimension leaves the applicable max rather
+            # than being scored as a zero against a max that still
+            # counts the seen half. Without this the blocked seen wing
+            # silently averaged in as 0/seen_max — the exact "renders
+            # but fabricates" failure the render gate used to prevent
+            # by refusing to render at all.
+            #
+            # said's own row (and full's said_envelope) stay ATTACHED,
+            # real but uncounted: deal_citability's said can carry a
+            # genuine full-cycle signal from hundreds of run_signals
+            # even on a run where no product page was readable. Lite
+            # drops it from the composite for methodology parity (the
+            # dimension is defined as seen+said against a combined max)
+            # while keeping it visible — same choice here.
+            true_value_dims.append({
+                "code": code, "name": dim.name, "earned": 0.0, "max": 0.0,
+                "na": False, "blocked": True,
+                "seen": seen_row, "said": said_row, "said_envelope": said_envelope,
+                "checks": _blocked_checks(code, seen.get("evidence") or []),
                 "fix": None, "fix_human": None,
             })
             continue
@@ -394,15 +427,51 @@ def build_full_cycle_pillars(
     })
 
     total_earned = visibility_earned + accessibility_earned + true_value_earned
-    composite = compute_composite(total_earned, member_value_na=member_value_na)
-    verdict = compute_verdict(composite, true_value_earned, true_value_applicable_max)
+    raw_composite = compute_composite(total_earned, member_value_na=member_value_na)
+
     # TrueValueSection.jsx reads pillars.tv_pct for its "why not agent-
     # ready" copy and pillars.state to pick between that branch and a
-    # "verdict withheld" one lite uses for an unverified/degraded run —
-    # a full-cycle report is only ever built once the crawl AND cycle
-    # are complete (build_full_cycle_report's own render-gate), so
-    # state is always 'scored' here, never withheld.
-    tv_pct = round(100 * true_value_earned / true_value_applicable_max) if true_value_applicable_max else None
+    # "verdict withheld" one lite uses for an unverified/degraded run.
+    #
+    # This USED to hardcode state='scored', on the reasoning that a
+    # full-cycle report only ever gets built once the crawl AND cycle
+    # are complete. That invariant is gone: build_full_cycle_report now
+    # also scores a 'blocked'/'failed' crawl (lite's own scan_scorable
+    # gate), so the three-state machine lite_pillars.py already uses has
+    # to come with it — otherwise compute_composite's denominator, a
+    # STATIC registry constant that never shrinks for a blocked
+    # dimension, silently converts unmeasured dimensions into an
+    # artificially low score and compute_verdict then asserts a failing
+    # verdict from data that was never measured.
+    #
+    #   scored:             nothing blocked — the numbers are trustworthy.
+    #   composite_withheld: accessibility has a blocked dimension but
+    #                       True Value is clean — tv_pct stays real,
+    #                       composite/verdict withheld rather than
+    #                       fabricated.
+    #   unverified:         True Value's OWN applicable set has a blocked
+    #                       dimension — neither composite nor tv_pct
+    #                       means anything this run.
+    unmeasured_count = sum(1 for d in accessibility_dims if d["blocked"])
+    true_value_blocked = any(d.get("blocked") for d in true_value_dims)
+    if true_value_blocked:
+        state = "unverified"
+    elif unmeasured_count > 0:
+        state = "composite_withheld"
+    else:
+        state = "scored"
+
+    if state == "scored":
+        composite = raw_composite
+        verdict = compute_verdict(composite, true_value_earned, true_value_applicable_max)
+    else:
+        composite = None
+        verdict = None
+
+    if state == "unverified":
+        tv_pct = None
+    else:
+        tv_pct = round(100 * true_value_earned / true_value_applicable_max) if true_value_applicable_max else None
 
     # Same table-driven exposure reasons lite_pillars.py computes,
     # ported wholesale from its exposure_reasons_ctx construction — the
@@ -440,8 +509,16 @@ def build_full_cycle_pillars(
         "scorer_version": FULL_CYCLE_SCORER_VERSION,
         "exposure_reasons": exposure_reasons,
         "fixes": fixes,
-        "state": "scored",
+        "state": state,
         "tv_pct": tv_pct,
+        # unmeasured_count is emitted ONLY on a withheld run. Lite emits
+        # it unconditionally, but its only consumer (TrueValueSection.
+        # jsx's composite_withheld branch) reads it only when state !=
+        # 'scored', and this branch's regression bar is that a
+        # 'complete' scan's payload stays byte-identical to today —
+        # which an unconditional new key would break for every existing
+        # report. Deliberate, documented divergence from lite.
+        **({"unmeasured_count": unmeasured_count} if state != "scored" else {}),
         # FixableHook.jsx's headline band — GAP_AREA_COUNT/PARLEO_OWNED_
         # GAP_AREA_COUNT are fixed registry constants (not per-run), same
         # ones lite_pillars.py's build_pillars_payload surfaces;
@@ -451,6 +528,22 @@ def build_full_cycle_pillars(
         "gap_areas_parleo_fixes": PARLEO_OWNED_GAP_AREA_COUNT,
         "parleo_fixable_points": _parleo_fixable_points(fixable_dims),
     }
+
+
+# Mirrors cycle_scoring.py's own scan_scorable gate for the lite path:
+# a 'blocked' or 'failed' scan under the current scorer version carries
+# a real, honestly-degraded dimensions dict (scan/engine.py's
+# _degraded_dimensions — every crawl-derived dimension coverage=
+# 'blocked'), so it scores through the same pillars machinery instead of
+# being refused a render and silently falling back to the classic
+# MetricsDashboard.
+SCORABLE_SCAN_STATUSES = ("complete", "blocked", "failed")
+
+_NOT_SCORED_REASONS = {
+    "pending": "crawl queued, not started yet",
+    "running": "crawl still in progress",
+    "skipped": "no store URL on this cycle — nothing to crawl",
+}
 
 
 def build_full_cycle_report(conn, cycle_id: int) -> dict:
@@ -473,8 +566,18 @@ def build_full_cycle_report(conn, cycle_id: int) -> dict:
         LIMIT 1
     """), {"cid": cycle_id}).fetchone()
 
-    if not scan_row or scan_row[0] != "complete":
-        return {"status": "not_scored", "cycle_id": cycle_id}
+    if not scan_row:
+        return {"status": "not_scored", "cycle_id": cycle_id, "reason": "no crawl attached yet"}
+
+    if scan_row[0] not in SCORABLE_SCAN_STATUSES:
+        # 'pending'/'running' (crawl queued or in flight) and 'skipped'
+        # (cycle carried no store_url). Distinguished from the no-row
+        # case above so the gate's reason stops claiming "no crawl
+        # attached yet" for a crawl that is demonstrably attached.
+        return {
+            "status": "not_scored", "cycle_id": cycle_id,
+            "reason": _NOT_SCORED_REASONS.get(scan_row[0], f"crawl {scan_row[0]}"),
+        }
 
     dimensions_raw = decode_json_field(scan_row[3], {})
 
@@ -495,7 +598,10 @@ def build_full_cycle_report(conn, cycle_id: int) -> dict:
         total_queries = max(total_queries, overall_metrics[comp_code].get("total_runs") or 0)
 
     if primary_code is None:
-        return {"status": "not_scored", "cycle_id": cycle_id}
+        return {
+            "status": "not_scored", "cycle_id": cycle_id,
+            "reason": "no primary entity resolved for this cycle",
+        }
 
     primary_entity_row = conn.execute(text("""
         SELECT entity_id FROM soa_cycle_entities WHERE cycle_id = :cid AND role = 'primary'
@@ -525,6 +631,15 @@ def build_full_cycle_report(conn, cycle_id: int) -> dict:
         "pillars": pillars,
         "scorer_version": FULL_CYCLE_SCORER_VERSION,
         "total_queries": total_queries,
+        # The scan's own honest account of why this run is degraded
+        # ('blocked' | 'failed' | 'no_product_pages_found') — carried so
+        # the router can flag a rendered-but-degraded report without
+        # re-reading the scan row. Emitted ONLY when actually degraded,
+        # same reason as unmeasured_count below: a clean run's payload
+        # must stay byte-identical to what it produced before this
+        # branch. Read it with .get().
+        **({"degraded_reason": dimensions_raw["degraded_reason"]}
+           if dimensions_raw.get("degraded_reason") else {}),
         # Report-copy layer inputs (Phase 4, full_analysis_extras.py) —
         # already fetched above for pillars scoring, returned rather
         # than re-queried by the router.

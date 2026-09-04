@@ -8,8 +8,9 @@
  * analyst layer, evidence).
  */
 import { Wordmark, Glyph, StatusChip, StateChip, BrandLogo } from '../../ds/index.js'
-import { pillarEarnedMax, isAgentReady, isPartialRead, buildMeasurableContext, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from '../../lite/report/reportDerive.js'
+import { pillarEarnedMax, isPartialRead, buildMeasurableContext, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from '../../lite/report/reportDerive.js'
 import { formatCompactCurrency } from '../../lite/liteDerive.js'
+import { WITHHELD_LABEL, compositeLabel, isWithheld, verdictDisplay } from './withheld.js'
 
 export const NAV_ITEMS = [
   { id: 'score', icon: 'chart', label: 'The score' },
@@ -47,14 +48,16 @@ export function navScore({ id, pillars, composite, totalQueries, transcript, exp
   const acc = pillarEarnedMax(pillars.accessibility)
   const tv = pillarEarnedMax(pillars.true_value)
   switch (id) {
-    case 'score': return `${Math.round(composite ?? 0)}/100`
+    // #5: `composite ?? 0` rendered "0/100" in the nav while the hero
+    // beside it rendered "—" for the same withheld value.
+    case 'score': return compositeLabel(composite, { withMax: true })
     case 'viz': return `${Math.round(vis.earned)}/${Math.round(vis.max)}`
     case 'transcript': return transcript ? `${transcript.query_index}/${transcript.total_queries}` : null
     case 'acc': return `${Math.round(acc.earned)}/${Math.round(acc.max)}`
     case 'tv': return `${Math.round(tv.earned)}/${Math.round(tv.max)}`
     case 'fix': return pillars.fixes ? `+${Math.round(pillars.fixes.visible.reduce((s, f) => s + f.impact, 0))}` : null
     case 'evidence': return totalQueries ? `${totalQueries}` : null
-    case 'exp': return exposure == null ? '—' : formatCompactCurrency(exposure)
+    case 'exp': return isWithheld(exposure) ? WITHHELD_LABEL : formatCompactCurrency(exposure)
     default: return null
   }
 }
@@ -118,7 +121,7 @@ export function FullAnalysisRail({ report, primaryEntityName, exposure, active, 
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
-            <StatusChip tone={isAgentReady(pillars) ? 'success' : 'risk'} size="sm">{isAgentReady(pillars) ? 'Agent-ready' : 'Not agent-ready'}</StatusChip>
+            <StatusChip tone={verdictDisplay(pillars).tone} size="sm">{verdictDisplay(pillars).label}</StatusChip>
           </div>
           <div style={{ display: 'flex', justifyContent: 'center', marginTop: 10 }}>
             {partial ? (

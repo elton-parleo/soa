@@ -309,9 +309,12 @@ def _assemble_full_analysis_report(
     report = build_full_cycle_report(conn, cycle_id)
 
     if report["status"] != "complete":
+        # build_full_cycle_report now names its own reason — "no crawl
+        # attached yet" is one of several, not a blanket for every
+        # not_scored (a queued, running, or skipped crawl IS attached).
         return FullAnalysisReportResponse(
             cycle_code=cycle_code, rendered=False,
-            reason="no crawl attached yet" if report["status"] == "not_scored" else report["status"],
+            reason=report.get("reason") or report["status"],
         )
 
     continuation = (
@@ -382,6 +385,12 @@ def _assemble_full_analysis_report(
 
     return FullAnalysisReportResponse(
         cycle_code=cycle_code, rendered=True,
+        # A rendered report can now be honestly degraded: the crawl was
+        # blocked or failed, so some dimensions are NOT MEASURABLE and
+        # composite/verdict may be withheld (pillars.state). These two
+        # let the report say so without re-deriving it from `scan`.
+        degraded=report.get("degraded_reason") is not None,
+        reason=report.get("degraded_reason"),
         composite=report["pillars"]["composite"],
         verdict=report["pillars"]["verdict"],
         scorer_version=report["scorer_version"],

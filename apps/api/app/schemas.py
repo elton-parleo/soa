@@ -231,7 +231,15 @@ class FullAnalysisContinuation(BaseModel):
 class FullAnalysisReportResponse(BaseModel):
     cycle_code: str
     rendered: bool
+    # On rendered=False, why the gate refused. On rendered=True, the
+    # scan's own degraded_reason ('blocked'/'failed'/'no_product_pages_
+    # found') when the report rendered but some dimensions could not be
+    # measured — None on a clean run.
     reason: Optional[str] = None
+    # True when this rendered report is honestly degraded: some
+    # dimensions are NOT MEASURABLE and composite/verdict may be
+    # withheld (see pillars.state).
+    degraded: Optional[bool] = None
     composite: Optional[int] = None
     verdict: Optional[str] = None
     scorer_version: Optional[str] = None

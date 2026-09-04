@@ -25,6 +25,14 @@ function _report(overrides = {}) {
     scan: { degraded_reason: null },
     pillars: {
       state: 'scored',
+      // A scored report ALWAYS carries a real verdict — cycle_scoring_
+      // full.py sets state and verdict together. This fixture used to
+      // omit it and still assert "Not agent-ready", which passed only
+      // because the old chip was a binary (`verdict === AGENT_READY`)
+      // that read a MISSING verdict as a failing one. That is the bug
+      // withheld.js::verdictDisplay fixes, so the fixture now carries
+      // the verdict a scored payload actually has.
+      verdict: 'NOT AGENT-READY',
       visibility: { score: 91, max: 100, dimensions: [] },
       accessibility: { score: 78, max: 100, dimensions: [] },
       true_value: { score: 21, max: 100, dimensions: [] },
