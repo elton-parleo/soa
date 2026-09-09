@@ -142,48 +142,72 @@ def test_the_gtin_secondary_is_the_published_gtin(snapshot):
         r for r in rows
         if r["query_text"].endswith("Size 3 small pack (84 ct) cost?")
     )
-    assert row["expected_answer"]["secondary"] == [
-        {"type": "gtin", "value": "884400137609"},
-    ]
-
-
-# ── catalog accuracy: the pack-count template ─────────────────────────────
-
-def test_the_pack_count_question_never_states_its_own_answer(snapshot):
-    """The price question names the variant as '(84 ct)'. Asking 'how many
-    come in the ... (84 ct)?' would be a question containing its answer."""
-    rows, _ = _accuracy(snapshot)
-    counts = [r for r in rows if r["expected_answer"]["type"] == "pack_count"]
-
-    assert counts, "expected pack-count questions"
-    for row in counts:
-        assert " ct)" not in row["query_text"]
-        assert str(row["expected_answer"]["value"]) not in row["query_text"]
-
-
-def test_the_pack_count_template_is_frozen(snapshot):
-    rows, _ = _accuracy(snapshot)
-    texts = {r["query_text"] for r in rows}
-    assert (
-        "How many come in the Wiggle & Snug Snug-Fit Diapers Size 3 small pack?"
-        in texts
+    assert {"type": "gtin", "value": "884400137609"} in (
+        row["expected_answer"]["secondary"]
     )
 
 
-def test_no_pack_count_question_where_the_product_name_already_carries_it(snapshot):
-    """Cloud Wipes 3-Pack has one variant, so it has no count-free way to
-    name it — and its title says 3-Pack anyway."""
-    rows, _ = _accuracy(snapshot)
-    counts = [r for r in rows if r["expected_answer"]["type"] == "pack_count"]
-    assert not any("Cloud Wipes" in r["query_text"] for r in counts)
-    assert not any("Bum Balm" in r["query_text"] for r in counts)
+# ── catalog accuracy: pack count is a secondary, not a question ───────────
+
+def test_one_question_per_variant_and_no_pack_count_question(snapshot):
+    """Two questions per variant put the default Wiggle & Snug study at
+    103 against the study's own 100 cap, and a feature whose defaults
+    open on a red tally has the wrong defaults."""
+    rows, report = _accuracy(snapshot)
+
+    assert len(rows) == 19
+    assert report["count"] == 19
+    assert {r["expected_answer"]["type"] for r in rows} == {"price"}
+    assert not any(r["query_text"].startswith("How many come in") for r in rows)
 
 
-def test_pack_count_covers_the_multi_variant_products_only(snapshot):
+def test_the_pack_count_rides_on_the_price_question(snapshot):
     rows, _ = _accuracy(snapshot)
-    counts = [r for r in rows if r["expected_answer"]["type"] == "pack_count"]
-    # 12 diaper variants + 4 overnight variants.
-    assert len(counts) == 16
+    row = next(
+        r for r in rows
+        if r["query_text"].endswith("Size 3 small pack (84 ct) cost?")
+    )
+    assert {"type": "pack_count", "value": 84} in row["expected_answer"]["secondary"]
+
+
+def test_both_secondaries_ride_on_one_question_where_the_record_has_both(snapshot):
+    rows, _ = _accuracy(snapshot)
+    row = next(r for r in rows if "Cloud Wipes" in r["query_text"])
+    assert row["expected_answer"]["secondary"] == [
+        {"type": "gtin", "value": "884400676641"},
+        {"type": "pack_count", "value": 216},
+    ]
+
+
+def test_a_single_unit_variant_carries_no_pack_count_secondary(snapshot):
+    """Bum Balm is one 4 oz jar. "How many come in it" is not a question
+    about anything."""
+    rows, _ = _accuracy(snapshot)
+    row = next(r for r in rows if "Bum Balm" in r["query_text"])
+    assert not any(
+        item["type"] == "pack_count"
+        for item in row["expected_answer"].get("secondary") or []
+    )
+
+
+def test_the_report_separates_a_restated_count_from_a_volunteered_one(snapshot):
+    """
+    The price question names a multi-variant variant BY its count, so an
+    assistant restating 84 is echoing the question rather than knowing
+    it. Recorded as two populations so the report can say which is which
+    — a rate that mixes them is not measuring knowledge.
+    """
+    _rows, report = _accuracy(snapshot)
+    secondary = report["secondary"]
+
+    assert secondary["gtin"] == 6
+    assert secondary["pack_count"] == 18
+    # Only the two single-variant products with a real count state no
+    # count in their subject.
+    assert sorted(secondary["pack_count_volunteered"]) == [
+        "cloud-wipes-3pack", "snug-fit-trial-pack",
+    ]
+    assert len(secondary["pack_count_restated"]) == 16
 
 
 # ── catalog accuracy: provenance and source_ref ───────────────────────────

@@ -193,11 +193,23 @@ def test_brand_direct_is_additive_and_stamped(snapshot):
 def test_the_catalog_tiers_are_additive(snapshot):
     rows, _prov, config, _s, _b = _build(snapshot, ALL_ON)
 
-    # 50 stage + 12 brand-direct + 35 accuracy (19 price, 16 pack count)
-    # + 6 value.
-    assert config["catalog_accuracy"]["count"] == 35
+    # 50 stage + 12 brand-direct + 19 accuracy (one price question per
+    # variant, pack count riding as a secondary) + 6 value.
+    assert config["catalog_accuracy"]["count"] == 19
     assert config["value_incentives"]["count"] == 6
-    assert len(rows) == 50 + 12 + 35 + 6
+    assert len(rows) == 50 + 12 + 19 + 6
+
+
+def test_the_default_study_lands_inside_the_hundred_question_cap(snapshot):
+    """The reason pack count stopped being its own question. A feature
+    whose defaults open on a red tally has the wrong defaults."""
+    from generation.syndicated_study import tally
+
+    _rows, _prov, config, _s, _b = _build(snapshot, ALL_ON)
+    config["category_control"]["stage_total"] = 50
+
+    assert tally(config)["total"] == 87
+    assert tally(config)["total"] < 100
 
 
 def test_the_resolved_config_records_which_variants_were_sampled(snapshot):
@@ -273,8 +285,8 @@ def test_the_tally_splits_by_who_wrote_the_question(snapshot):
 
     assert ss.tally(config) == {
         "ai_written": 62,       # 50 stage + 12 brand-direct
-        "from_catalog": 41,     # 35 accuracy + 6 value
-        "total": 103,
+        "from_catalog": 25,     # 19 accuracy + 6 value
+        "total": 87,
     }
 
 

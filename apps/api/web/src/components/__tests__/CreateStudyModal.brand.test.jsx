@@ -200,7 +200,9 @@ describe('in brand mode', () => {
     await renderModal()
     await enableBrand()
 
-    expect(screen.getByTestId('tier-catalog_accuracy')).toHaveTextContent('35 questions')
+    // One price question per variant; GTIN and pack count ride along on
+    // it as secondary expectations rather than as questions of their own.
+    expect(screen.getByTestId('tier-catalog_accuracy')).toHaveTextContent('19 questions')
     expect(screen.getByTestId('tier-value_incentives')).toHaveTextContent('6 questions')
     expect(screen.getByTestId('tier-brand_direct')).toHaveTextContent('12 questions')
   })
@@ -247,6 +249,11 @@ describe('the examples', () => {
     expect(examples).toHaveTextContent('Expected: $17.99')
   })
 
+  it('show the pack count as a second expectation on the price question', async () => {
+    const examples = await openExamples()
+    expect(examples).toHaveTextContent('96 count')
+  })
+
   it('show the value tier\'s real code and what it takes off', async () => {
     const examples = await openExamples()
     expect(examples).toHaveTextContent(
@@ -277,16 +284,35 @@ describe('the examples', () => {
 // ── the tally ────────────────────────────────────────────────────────────
 
 describe('the tally', () => {
+  it('opens green on the defaults, inside the shared 100', async () => {
+    await renderModal()
+    fireEvent.change(screen.getByLabelText('Study Name'), {
+      target: { value: 'Wiggle & Snug' },
+    })
+    await enableBrand()
+
+    // 50 stage + 12 brand-direct AI-written; 19 accuracy + 6 value from
+    // the catalog. A feature whose defaults open on a red tally has the
+    // wrong defaults, which is why pack count stopped being its own
+    // question.
+    expect(screen.getByTestId('tally')).toHaveTextContent(
+      '62 AI-written + 25 from the catalog = 87 questions — within the 100 limit',
+    )
+    expect(screen.getByText(/Generate Questions/i)).not.toBeDisabled()
+  })
+
   it('names both halves and measures them against the shared 100', async () => {
     await renderModal()
     await enableBrand()
+    // Push the stage counts past what the catalog leaves room for.
+    fireEvent.change(document.getElementById('stage-Awareness'), {
+      target: { value: '30' },
+    })
 
-    // 50 stage + 12 brand-direct AI-written; 35 accuracy + 6 value from
-    // the catalog.
-    expect(screen.getByTestId('tally')).toHaveTextContent(
-      '62 AI-written + 41 from the catalog = 103 questions '
+    await waitFor(() => expect(screen.getByTestId('tally')).toHaveTextContent(
+      '79 AI-written + 25 from the catalog = 104 questions '
       + '— over the 100 limit, reduce a stage or untick a tier',
-    )
+    ))
   })
 
   it('comes back within the limit when a tier is unticked', async () => {
@@ -302,7 +328,12 @@ describe('the tally', () => {
   it('blocks submission while over the shared ceiling', async () => {
     await renderModal()
     await enableBrand()
-    expect(screen.getByText(/Generate Questions/i)).toBeDisabled()
+    fireEvent.change(document.getElementById('stage-Awareness'), {
+      target: { value: '30' },
+    })
+
+    await waitFor(() =>
+      expect(screen.getByText(/Generate Questions/i)).toBeDisabled())
   })
 
   it('counts the control tier as adding nothing', async () => {
@@ -328,8 +359,6 @@ describe('the brand-mode request', () => {
       target: { value: 'Wiggle & Snug' },
     })
     await enableBrand()
-    // Under the cap, so the button is live.
-    fireEvent.click(screen.getByLabelText('Catalog accuracy'))
     await waitFor(() =>
       expect(screen.getByText(/Generate Questions/i)).not.toBeDisabled())
     submit()
@@ -340,7 +369,7 @@ describe('the brand-mode request', () => {
     expect(payload.syndicated_merchant).toBe('wiggle-and-snug')
     expect(payload.tier_config).toEqual({
       brand_direct: { enabled: true, count: 12 },
-      catalog_accuracy: { enabled: false },
+      catalog_accuracy: { enabled: true },
       value_incentives: { enabled: true },
       category_control: { enabled: false },
     })
@@ -352,7 +381,6 @@ describe('the brand-mode request', () => {
       target: { value: 'Wiggle & Snug' },
     })
     await enableBrand()
-    fireEvent.click(screen.getByLabelText('Catalog accuracy'))
     await waitFor(() =>
       expect(screen.getByText(/Generate Questions/i)).not.toBeDisabled())
     submit()
@@ -390,7 +418,7 @@ describe('when TrueSync cannot be reached', () => {
 
     // The catalog tier is unaffected; the value tier simply has nothing
     // to build, which is a smaller loss than the block going dark.
-    expect(screen.getByTestId('tier-catalog_accuracy')).toHaveTextContent('35 questions')
+    expect(screen.getByTestId('tier-catalog_accuracy')).toHaveTextContent('19 questions')
     expect(screen.getByTestId('tier-value_incentives')).toHaveTextContent('0 questions')
   })
 

@@ -62,7 +62,7 @@ CATALOG_SPECIFICITY = 'Narrow'
 
 # ─── Naming ────────────────────────────────────────────────────────────────
 
-def variant_display(product, variant, *, with_count: bool = True) -> str:
+def variant_display(product, variant) -> str:
     """
     The words that distinguish this variant from its siblings.
 
@@ -77,8 +77,11 @@ def variant_display(product, variant, *, with_count: bool = True) -> str:
     Snug Cloud Wipes 3-Pack cost?" is the question; "...Cloud Wipes
     3-Pack 3 packs (216 ct) cost?" is a machine talking.
 
-    with_count=False is for the pack-count question, which must not state
-    its own answer in the question.
+    The count is part of the display, and that is a deliberate cost: it
+    is what makes "Size 3 small pack (84 ct)" unambiguous to an
+    assistant, and it is also why the pack-count secondary riding on this
+    question is weak evidence on a multi-variant product. See
+    build_catalog_accuracy's KNOWN WEAKNESS note.
     """
     if len(product.variants) <= 1:
         return ''
@@ -95,16 +98,16 @@ def variant_display(product, variant, *, with_count: bool = True) -> str:
     if pack:
         parts.append(str(pack).strip().lower())
 
-    if with_count and variant.count and variant.count > 1:
+    if variant.count and variant.count > 1:
         parts.append(f"({variant.count} ct)")
 
     return ' '.join(parts)
 
 
-def _subject(brand: Optional[str], product, variant, *, with_count: bool = True) -> str:
+def _subject(brand: Optional[str], product, variant) -> str:
     """'Wiggle & Snug Snug-Fit Diapers Size 3 small pack (84 ct)'"""
     words = [w for w in (brand, product.title) if w]
-    display = variant_display(product, variant, with_count=with_count)
+    display = variant_display(product, variant)
     if display:
         words.append(display)
     return ' '.join(words)
@@ -309,19 +312,43 @@ def build_catalog_accuracy(
     cap: int = DEFAULT_VARIANT_CAP,
 ) -> tuple:
     """
-    Price per sampled variant, plus pack count where the variant has one
-    to ask about. Returns (rows, tier_report).
+    ONE question per sampled variant — the price — carrying GTIN and pack
+    count as secondary expectations. Returns (rows, tier_report).
 
-    GTIN is attached to the price question as a SECONDARY expectation and
-    is never asked. An assistant that volunteers the right GTIN is
-    demonstrating catalog-level grounding a price alone does not prove;
-    an assistant that does not is not wrong, because nobody asked it for
-    an identifier. Keeping it out of the denominator is what lets it be
-    reported as the bonus signal it is.
+    A secondary expectation is not asked for. It is scored only where the
+    answer volunteered the quantity, and it never touches the price
+    outcome or the tier's headline accuracy. An assistant that volunteers
+    the right GTIN or the right count is demonstrating catalog-level
+    grounding a price alone does not prove; one that does not is not
+    wrong, because nobody asked it.
+
+    Pack count used to be a second question per variant, and stopped
+    being one because of arithmetic the feature has to live inside: two
+    questions per variant put Wiggle & Snug's default study at 103
+    against the study's own 100 cap, and a feature whose defaults open on
+    a red tally has the wrong defaults. One question per variant puts it
+    at 87.
+
+    KNOWN WEAKNESS, and it is why pack count is a bonus signal rather
+    than a rate to lean on: the price question names a multi-variant
+    variant BY its count — "Size 3 small pack (84 ct)" — so an assistant
+    restating 84 is echoing the question, not demonstrating knowledge of
+    it. Only a single-variant product, whose subject carries no count,
+    gives a genuinely volunteered answer. The tier report records both
+    populations separately so the report can say which is which, and a
+    standalone pack-count probe that asks without stating is the honest
+    version of this measurement — a future checkbox, not built. See
+    docs/expected-answer-vocabulary.md.
     """
     sampled = sample_variants(snapshot, cap)
     rows: List[dict] = []
     skipped_no_price: List[str] = []
+    # Split by whether the price question states the count it is also
+    # scoring. See the KNOWN WEAKNESS note above — a restated count and a
+    # volunteered one are different evidence, and the report can only say
+    # so if the builder writes down which is which.
+    echoed_counts: List[str] = []
+    volunteered_counts: List[str] = []
 
     for product, variant in sampled:
         amount = ea.normalize_money(variant.list_price)
@@ -333,8 +360,15 @@ def build_catalog_accuracy(
             skipped_no_price.append(variant.variant_id)
         else:
             expectation = ea.price(amount, variant.currency or 'USD')
+            secondary = []
             if variant.gtin:
-                expectation = ea.with_secondary(expectation, [ea.gtin(variant.gtin)])
+                secondary.append(ea.gtin(variant.gtin))
+            if variant.count and variant.count > 1:
+                secondary.append(ea.pack_count(variant.count))
+                (echoed_counts if variant_display(product, variant)
+                 else volunteered_counts).append(variant.variant_id)
+            if secondary:
+                expectation = ea.with_secondary(expectation, secondary)
 
             subject = _subject(snapshot.brand, product, variant)
             rows.append(_row(
@@ -355,36 +389,27 @@ def build_catalog_accuracy(
                 ),
             ))
 
-        # The count question is asked only where the variant display can
-        # name the variant WITHOUT stating the count — otherwise the
-        # question contains its own answer. That is why variant_display
-        # takes with_count at all.
-        countless = variant_display(product, variant, with_count=False)
-        if variant.count and variant.count > 1 and countless:
-            subject = _subject(snapshot.brand, product, variant, with_count=False)
-            rows.append(_row(
-                query_text=f"How many come in the {subject}?",
-                tier='catalog_accuracy',
-                provenance='catalog',
-                expected_answer=ea.pack_count(variant.count),
-                source_ref=_source_ref(snapshot, product, variant=variant),
-                category=category,
-                persona=persona,
-                study_pattern=study_pattern,
-                soa_focus='Catalog Accuracy, Pack Size Accuracy',
-                rationale=(
-                    f"The published record states {variant.count} units for "
-                    f"{variant.variant_id}."
-                ),
-            ))
-
     report = {
         'sampled_variants': [v.variant_id for _p, v in sampled],
         'variants_available': snapshot.variant_count,
         'variant_cap': cap,
         'sampled': len(sampled) < snapshot.variant_count,
         'skipped_no_price': skipped_no_price,
+        # One question per sampled variant, by construction. Recorded
+        # anyway rather than implied: `count` is what the modal's tally
+        # and the report's header read, and a reader should not have to
+        # re-derive it from a rule.
         'count': len(rows),
+        'secondary': {
+            'gtin': sum(
+                1 for row in rows
+                for item in row['expected_answer'].get('secondary') or []
+                if item['type'] == 'gtin'
+            ),
+            'pack_count': len(echoed_counts) + len(volunteered_counts),
+            'pack_count_volunteered': volunteered_counts,
+            'pack_count_restated': echoed_counts,
+        },
     }
     return rows, report
 

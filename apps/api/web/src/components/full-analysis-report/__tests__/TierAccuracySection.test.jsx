@@ -27,6 +27,20 @@ function tier(overrides = {}) {
     unscoreable_rate: 0.0714,
     visibility: { runs: 14, mentioned: 11, rate: 0.7857 },
     source_attribution: { brand_domain: 4, retailer: 8, none: 2 },
+    secondary: [
+      {
+        type: 'gtin', label: 'GTIN volunteered',
+        counts: { exact: 1, stale: 0, wrong: 0, absent: 13, unscoreable: 0 },
+        scored: 1, samples: 14, accuracy: 1, staleness: 0,
+        answered_rate: 0.0714, unscoreable_rate: 0,
+      },
+      {
+        type: 'pack_count', label: 'Pack count',
+        counts: { exact: 8, stale: 0, wrong: 2, absent: 4, unscoreable: 0 },
+        scored: 10, samples: 14, accuracy: 0.8, staleness: 0,
+        answered_rate: 0.7143, unscoreable_rate: 0,
+      },
+    ],
     surfaces: [{
       platform: 'chatgpt',
       counts: { exact: 6, stale: 2, wrong: 2, absent: 3, unscoreable: 1 },
@@ -256,5 +270,43 @@ describe('the drill-down', () => {
     // The label appears in the tier table and again in the per-surface
     // table — both as plain text, neither as a control.
     expect(screen.getAllByText('Catalog accuracy').length).toBeGreaterThan(0)
+  })
+})
+
+// ── secondary signals ────────────────────────────────────────────────────
+
+describe('the volunteered-alongside table', () => {
+  it('gives each secondary its own row, rate and sample', () => {
+    renderSection()
+    const row = screen.getByTestId('secondary-row-catalog_accuracy-pack_count')
+    expect(row).toHaveTextContent('Pack count')
+    expect(row).toHaveTextContent('80%')
+    expect(row).toHaveTextContent('n=10 stated')
+    expect(row).toHaveTextContent('n=14 answers')
+  })
+
+  it('keeps GTIN and pack count as separate rows', () => {
+    renderSection()
+    expect(screen.getByTestId('secondary-row-catalog_accuracy-gtin')).toBeInTheDocument()
+    expect(screen.getByTestId('secondary-row-catalog_accuracy-pack_count')).toBeInTheDocument()
+  })
+
+  it('says neither moves the accuracy above it', () => {
+    renderSection()
+    expect(screen.getByText(/Neither is asked for, so neither moves the accuracy/))
+      .toBeInTheDocument()
+  })
+
+  it('warns that a restated pack count is an echo, not knowledge', () => {
+    renderSection()
+    expect(screen.getByText(/echoing\s+the question rather than knowing it/))
+      .toBeInTheDocument()
+  })
+
+  it('is omitted entirely when no tier carries a secondary', () => {
+    renderSection({
+      tierAccuracy: section({ tiers: [tier({ secondary: [] })] }),
+    })
+    expect(screen.queryByText(/Volunteered alongside/)).not.toBeInTheDocument()
   })
 })

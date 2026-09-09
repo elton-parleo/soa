@@ -94,12 +94,6 @@ describe('variant display', () => {
     expect(variantDisplay(product, variant)).toBe('Size 3 small pack (84 ct)')
   })
 
-  it('drops the count when the question must not state its own answer', () => {
-    const product = snapshot().products[0]
-    const variant = product.variants.find(v => v.variantId === 'snug-fit-diapers-s3-small')
-    expect(variantDisplay(product, variant, { withCount: false })).toBe('Size 3 small pack')
-  })
-
   it('is empty for a single-variant product, which has nothing to distinguish', () => {
     const product = snapshot().products.find(p => p.title === 'Cloud Wipes 3-Pack')
     expect(variantDisplay(product, product.variants[0])).toBe('')
@@ -124,13 +118,6 @@ describe('catalog accuracy', () => {
     )
   })
 
-  it('uses the frozen pack-count template', () => {
-    const { questions } = buildCatalogAccuracy(snapshot())
-    expect(texts(questions)).toContain(
-      'How many come in the Wiggle & Snug Snug-Fit Diapers Size 3 small pack?',
-    )
-  })
-
   it('asks a single-variant product by name alone', () => {
     const { questions } = buildCatalogAccuracy(snapshot())
     expect(texts(questions)).toContain(
@@ -138,10 +125,27 @@ describe('catalog accuracy', () => {
     )
   })
 
-  it('shows the published price to the cent, with the GTIN riding along', () => {
+  it('shows the published price to the cent, with both secondaries riding along', () => {
     const { questions } = buildCatalogAccuracy(snapshot())
     const q = questions.find(x => x.text.endsWith('Size 3 small pack (84 ct) cost?'))
-    expect(q.expected).toEqual(['Expected: $22.99', 'GTIN 884400137609'])
+    expect(q.expected).toEqual([
+      'Expected: $22.99', 'GTIN 884400137609', '84 count',
+    ])
+  })
+
+  it('shows the pack count as a second expectation, not a second question', () => {
+    const { questions } = buildCatalogAccuracy(snapshot())
+    expect(questions.every(q => q.text.endsWith('cost?'))).toBe(true)
+    const wipes = questions.find(x => x.text.includes('Cloud Wipes'))
+    expect(wipes.expected).toEqual([
+      'Expected: $11.99', 'GTIN 884400676641', '216 count',
+    ])
+  })
+
+  it('carries no pack count for a single-unit variant', () => {
+    const { questions } = buildCatalogAccuracy(snapshot())
+    const balm = questions.find(x => x.text.includes('Bum Balm'))
+    expect(balm.expected).toEqual(['Expected: $12.99', 'GTIN 884400896186'])
   })
 
   it('never asks for a GTIN', () => {
@@ -149,15 +153,8 @@ describe('catalog accuracy', () => {
     expect(texts(questions).some(t => t.toUpperCase().includes('GTIN'))).toBe(false)
   })
 
-  it('never states the pack count inside the pack-count question', () => {
-    const { questions } = buildCatalogAccuracy(snapshot())
-    const counts = questions.filter(q => q.text.startsWith('How many come in'))
-    expect(counts.length).toBeGreaterThan(0)
-    for (const q of counts) expect(q.text).not.toContain(' ct)')
-  })
-
-  it('emits 19 price plus 16 pack-count questions for this catalog', () => {
-    expect(buildCatalogAccuracy(snapshot()).count).toBe(35)
+  it('emits exactly one question per variant', () => {
+    expect(buildCatalogAccuracy(snapshot()).count).toBe(19)
   })
 })
 
@@ -275,8 +272,19 @@ describe('the tally', () => {
     const preview = tierPreview(snapshot(), { enabled, stageTotal: 50 })
     expect(tally(preview, 50)).toEqual({
       aiWritten: 62,     // 50 stage + 12 brand-direct
-      fromCatalog: 41,   // 35 accuracy + 6 value
-      total: 103,
+      fromCatalog: 25,   // 19 accuracy + 6 value
+      total: 87,
+    })
+  })
+
+  it('lands inside the shared 100 cap on the default study', () => {
+    // The whole reason pack count stopped being its own question: at 103
+    // this modal opened on a red tally, and a feature whose defaults are
+    // over its own limit has the wrong defaults.
+    const preview = tierPreview(snapshot(), { enabled, stageTotal: 50 })
+    expect(tallyText(preview, 50, 100)).toEqual({
+      tone: 'ok',
+      text: '62 AI-written + 25 from the catalog = 87 questions — within the 100 limit',
     })
   })
 
@@ -303,25 +311,25 @@ describe('the tally', () => {
       enabled: { catalog_accuracy: true, value_incentives: true }, stageTotal: 50,
     })
     expect(tallyText(preview, 50, 100).text).toBe(
-      '50 AI-written + 41 from the catalog = 91 questions — within the 100 limit',
+      '50 AI-written + 25 from the catalog = 75 questions — within the 100 limit',
     )
   })
 
   it('says what to do when the shared 100 cap is exceeded', () => {
-    const preview = tierPreview(snapshot(), { enabled, stageTotal: 50 })
-    expect(tallyText(preview, 50, 100)).toEqual({
+    const preview = tierPreview(snapshot(), { enabled, stageTotal: 70 })
+    expect(tallyText(preview, 70, 100)).toEqual({
       tone: 'off',
-      text: '62 AI-written + 41 from the catalog = 103 questions — '
+      text: '82 AI-written + 25 from the catalog = 107 questions — '
         + 'over the 100 limit, reduce a stage or untick a tier',
     })
   })
 
   it('the cap is shared: catalog questions count against the same 100', () => {
     const preview = tierPreview(snapshot(), {
-      enabled: { catalog_accuracy: true }, stageTotal: 70,
+      enabled: { catalog_accuracy: true }, stageTotal: 85,
     })
-    expect(tally(preview, 70).total).toBe(105)
-    expect(tallyText(preview, 70, 100).tone).toBe('off')
+    expect(tally(preview, 85).total).toBe(104)
+    expect(tallyText(preview, 85, 100).tone).toBe('off')
   })
 
   it('is empty rather than misleading when nothing is allocated', () => {

@@ -178,7 +178,7 @@ export function catalogReadback(snapshot) {
 
 // ─── Naming — mirrors catalog_tiers.variant_display ──────────────────────
 
-export function variantDisplay(product, variant, { withCount = true } = {}) {
+export function variantDisplay(product, variant) {
   // A variant display exists to distinguish variants; with one variant
   // there is nothing to distinguish.
   if (product.variants.length <= 1) return ''
@@ -189,15 +189,19 @@ export function variantDisplay(product, variant, { withCount = true } = {}) {
   const pack = variant.attributes?.pack
   if (pack) parts.push(String(pack).trim().toLowerCase())
 
-  if (withCount && variant.count && variant.count > 1) {
+  // The count is part of the display, deliberately: it is what makes
+  // "Size 3 small pack (84 ct)" unambiguous. It is also why the
+  // pack-count secondary is weak evidence on a multi-variant product —
+  // see the Python module's KNOWN WEAKNESS note.
+  if (variant.count && variant.count > 1) {
     parts.push(`(${variant.count} ct)`)
   }
   return parts.join(' ')
 }
 
-export function subjectOf(brand, product, variant, { withCount = true } = {}) {
+export function subjectOf(brand, product, variant) {
   const words = [brand, product.title].filter(Boolean)
-  const display = variantDisplay(product, variant, { withCount })
+  const display = variantDisplay(product, variant)
   if (display) words.push(display)
   return words.join(' ')
 }
@@ -255,6 +259,15 @@ export function sampleVariants(snapshot, cap = DEFAULT_VARIANT_CAP) {
 
 // ─── Tier: catalog accuracy ──────────────────────────────────────────────
 
+/**
+ * ONE question per sampled variant — the price — carrying GTIN and pack
+ * count as secondary expectations that ride along and are never asked.
+ *
+ * Pack count used to be a second question per variant. It stopped being
+ * one because two questions per variant put Wiggle & Snug's default
+ * study at 103 against the shared 100 cap, and a feature whose defaults
+ * open on a red tally has the wrong defaults.
+ */
 export function buildCatalogAccuracy(snapshot, cap = DEFAULT_VARIANT_CAP) {
   const questions = []
   if (!snapshot?.available) return { questions, count: 0, sampled: 0 }
@@ -262,23 +275,16 @@ export function buildCatalogAccuracy(snapshot, cap = DEFAULT_VARIANT_CAP) {
   const sampled = sampleVariants(snapshot, cap)
   for (const { product, variant } of sampled) {
     const amount = normalizeMoney(variant.listPrice)
-    if (amount !== null) {
-      const expected = [`Expected: $${amount}`]
-      if (variant.gtin) expected.push(`GTIN ${variant.gtin}`)
-      questions.push({
-        text: `What does the ${subjectOf(snapshot.brand, product, variant)} cost?`,
-        expected,
-      })
-    }
+    if (amount === null) continue
 
-    // Never states its own answer — see the Python module.
-    const countless = variantDisplay(product, variant, { withCount: false })
-    if (variant.count && variant.count > 1 && countless) {
-      questions.push({
-        text: `How many come in the ${subjectOf(snapshot.brand, product, variant, { withCount: false })}?`,
-        expected: [`Expected: ${variant.count}`],
-      })
-    }
+    const expected = [`Expected: $${amount}`]
+    if (variant.gtin) expected.push(`GTIN ${variant.gtin}`)
+    if (variant.count && variant.count > 1) expected.push(`${variant.count} count`)
+
+    questions.push({
+      text: `What does the ${subjectOf(snapshot.brand, product, variant)} cost?`,
+      expected,
+    })
   }
   return { questions, count: questions.length, sampled: sampled.length }
 }

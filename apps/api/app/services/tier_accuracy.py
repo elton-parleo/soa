@@ -49,6 +49,16 @@ TIER_LABELS = {
 
 SCORED_OUTCOMES = ('exact', 'stale', 'wrong')
 
+EXPECTATION_OUTCOMES = ('exact', 'stale', 'wrong', 'absent', 'unscoreable')
+
+# What a secondary expectation is called in the report. Both are bonus
+# signals: the question did not ask for either, so neither can move the
+# tier's headline accuracy, and both are reported with their own sample.
+SECONDARY_LABELS = {
+    'gtin': 'GTIN volunteered',
+    'pack_count': 'Pack count',
+}
+
 
 def _rate(numerator: int, denominator: int):
     """A rate, or None when there is nothing to divide. None renders as
@@ -106,6 +116,35 @@ def _source_rows(conn, cycle_id: int):
         WHERE cycle_id = :cycle_id
         GROUP BY tier, platform, source_attribution
     """), {"cycle_id": cycle_id}).fetchall()
+
+
+def _secondary_rows(conn, cycle_id: int):
+    """
+    The secondary outcomes, aggregated in Python rather than in SQL.
+
+    secondary_results is a JSON array, and the two dialects this runs on
+    disagree about how to unnest one — Postgres in production, sqlite in
+    the tests. Reading the column and counting here keeps the tests
+    running the same code production runs, which matters more than the
+    scan: a cycle's outcome rows number in the hundreds, and this reads
+    one narrow column of them.
+    """
+    rows = conn.execute(text("""
+        SELECT tier, secondary_results
+        FROM soa_expectation_outcomes
+        WHERE cycle_id = :cycle_id AND secondary_results IS NOT NULL
+    """), {"cycle_id": cycle_id}).fetchall()
+
+    counts = {}
+    for tier, payload in rows:
+        for item in _json(payload) or []:
+            kind = item.get('type')
+            outcome = item.get('outcome')
+            if not kind or outcome not in EXPECTATION_OUTCOMES:
+                continue
+            counts.setdefault(tier, {}).setdefault(kind, _empty_counts())
+            counts[tier][kind][outcome] += 1
+    return counts
 
 
 # ─── Layer 1: visibility per tier x surface ────────────────────────────────
@@ -245,6 +284,9 @@ def build_tier_accuracy(conn, cycle_id: int, *, primary_entity_id=None,
                 'surfaces': {},
                 'visibility': {'runs': 0, 'mentioned': 0},
                 'source_attribution': {},
+                # Bonus signals — the question asked for neither, so
+                # neither moves this tier's headline accuracy.
+                'secondary_counts': {},
             }
         return tiers[tier]
 
@@ -262,6 +304,10 @@ def build_tier_accuracy(conn, cycle_id: int, *, primary_entity_id=None,
         tier, platform, outcome, n = row[0], row[1], row[2], row[3]
         tier_entry(tier)['counts'][outcome] += n
         surface_entry(tier, platform)['counts'][outcome] += n
+
+    secondary_counts = _secondary_rows(conn, cycle_id)
+    for tier, by_kind in secondary_counts.items():
+        tier_entry(tier)['secondary_counts'] = by_kind
 
     for row in _source_rows(conn, cycle_id):
         tier, _platform, attribution, n = row[0], row[1], row[2], row[3]
@@ -289,6 +335,20 @@ def build_tier_accuracy(conn, cycle_id: int, *, primary_entity_id=None,
             continue
         entry.update(_summarise(entry['counts']))
         finish_visibility(entry['visibility'])
+        # Same rate rules as everything else: absent and unscoreable
+        # outside the denominator, inside the sample count. That is only
+        # possible because the comparator records absent secondaries
+        # rather than dropping them — without a denominator, "right nine
+        # times out of ten" and "volunteered nine times in a thousand"
+        # are the same number.
+        entry['secondary'] = [
+            {
+                'type': kind,
+                'label': SECONDARY_LABELS.get(kind, kind),
+                **_summarise(counts),
+            }
+            for kind, counts in sorted(entry.pop('secondary_counts').items())
+        ]
         surfaces = []
         for surface in sorted(entry['surfaces'].values(), key=lambda s: s['platform']):
             surface.update(_summarise(surface['counts']))

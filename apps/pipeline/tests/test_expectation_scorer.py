@@ -336,8 +336,20 @@ def test_a_volunteered_secondary_is_stored_beside_the_outcome(db):
     ]
 
 
-def test_an_unvolunteered_secondary_leaves_the_column_null(db):
+def test_an_unvolunteered_secondary_is_stored_as_absent(db):
+    """The report gives each secondary its own column with the same rate
+    rules as everything else, and it cannot have a denominator if the
+    absents are thrown away."""
     seed(db, expectation=ea.with_secondary(PRICE, [ea.gtin('884400137609')]))
+    score(db)
+    (row,) = outcomes(db)
+    assert json.loads(row['secondary_results']) == [
+        {'type': 'gtin', 'outcome': 'absent', 'reason': 'the answer stated no GTIN'},
+    ]
+
+
+def test_a_question_with_no_secondary_leaves_the_column_null(db):
+    seed(db, expectation=PRICE)
     score(db)
     (row,) = outcomes(db)
     assert row['secondary_results'] is None

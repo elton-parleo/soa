@@ -65,7 +65,8 @@ export const TIER_ROWS = [
   {
     key: 'catalog_accuracy',
     title: 'Catalog accuracy',
-    description: 'Price and pack count for every sampled variant, answer known to the cent.',
+    description: 'Price for every sampled variant, answer known to the cent. '
+      + 'Pack count and GTIN are scored too, where the answer volunteers them.',
     source: 'Built from the catalog, not by AI',
     sourceTone: 'catalog',
     additive: true,

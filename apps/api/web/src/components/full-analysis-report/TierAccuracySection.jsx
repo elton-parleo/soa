@@ -226,6 +226,54 @@ export function TierAccuracySection({ tierAccuracy, open, onToggle, onDrillDown 
         </table>
       </div>
 
+      {/* Secondary expectations. The question asked for neither, so
+          neither can move the accuracy above — they are shown here, with
+          their own samples, as the bonus signals they are.
+
+          Pack count in particular is weak evidence on a multi-variant
+          product: the price question names the variant BY its count
+          ("Size 3 small pack (84 ct)"), so an assistant restating 84 is
+          echoing the question. The caption says so rather than letting
+          a high number be read as knowledge. */}
+      {tiers.some((t) => (t.secondary || []).length > 0) && (
+        <div style={{ overflowX: 'auto', marginTop: 24 }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: 6 }}>
+            Volunteered alongside — not asked for
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr>
+                <th style={HEAD}>Tier</th>
+                <th style={HEAD}>Signal</th>
+                <th style={HEAD}>Right when stated</th>
+                <th style={HEAD}>Stated at all</th>
+                {OUTCOME_ORDER.map((o) => <th key={o} style={HEAD}>{OUTCOME_LABELS[o]}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {tiers.flatMap((tier) => (tier.secondary || []).map((signal) => (
+                <tr key={`${tier.tier}:${signal.type}`} data-testid={`secondary-row-${tier.tier}-${signal.type}`}>
+                  <td style={{ ...CELL, color: 'var(--muted)' }}>{tier.label}</td>
+                  <td style={{ ...CELL, fontWeight: 600, color: 'var(--text-strong)' }}>{signal.label}</td>
+                  <td style={CELL}><Rate rate={signal.accuracy} samples={signal.scored} label="stated" /></td>
+                  <td style={CELL}><Rate rate={signal.answered_rate} samples={signal.samples} label="answers" /></td>
+                  {OUTCOME_ORDER.map((o) => (
+                    <td key={o} style={{ ...CELL, color: 'var(--muted)' }}>{signal.counts?.[o] ?? 0}</td>
+                  ))}
+                </tr>
+              )))}
+            </tbody>
+          </table>
+          <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.55 }}>
+            Neither is asked for, so neither moves the accuracy above. Read pack
+            count carefully: on a product with several sizes the price question
+            names the variant by its count, so an answer restating it is echoing
+            the question rather than knowing it. A standalone pack-count probe
+            that asks without stating is not built yet.
+          </div>
+        </div>
+      )}
+
       <div style={{ overflowX: 'auto', marginTop: 24 }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: 6 }}>
           By surface

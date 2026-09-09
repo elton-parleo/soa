@@ -210,7 +210,7 @@ def test_a_rebuild_replaces_the_old_catalog_questions(db, snapshot):
 
     accuracy = [q for q in questions(db) if q[1] == "catalog_accuracy"]
     assert "What does the old Size 3 pack cost?" not in [q[0] for q in accuracy]
-    assert len(accuracy) == 35
+    assert len(accuracy) == 19
 
 
 def test_the_rebuilt_questions_are_asked_of_the_current_record(db, snapshot):

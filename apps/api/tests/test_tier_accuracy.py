@@ -84,7 +84,8 @@ _next_id = [0]
 
 def seed_outcome(conn, *, tier='catalog_accuracy', platform='chatgpt',
                  outcome='exact', source_attribution='brand_domain',
-                 query_id=1, answer='It costs $22.99.', matched_at=None):
+                 query_id=1, answer='It costs $22.99.', matched_at=None,
+                 secondary=None):
     _next_id[0] += 1
     run_id = _next_id[0]
     conn.execute(text("""
@@ -100,16 +101,18 @@ def seed_outcome(conn, *, tier='catalog_accuracy', platform='chatgpt',
         INSERT INTO soa_expectation_outcomes (
             run_id, query_id, cycle_id, platform, tier,
             expected_answer, extraction, outcome, outcome_reason,
-            source_attribution, matched_published_at
+            source_attribution, matched_published_at, secondary_results
         ) VALUES (
             :rid, :qid, 1, :platform, :tier,
-            :expected, '{}', :outcome, 'because', :attribution, :matched
+            :expected, '{}', :outcome, 'because', :attribution, :matched,
+            :secondary
         )
     """), {
         "rid": run_id, "qid": query_id, "platform": platform, "tier": tier,
         "expected": json.dumps({"type": "price", "amount": "22.99", "currency": "USD"}),
         "outcome": outcome, "attribution": source_attribution,
         "matched": matched_at,
+        "secondary": json.dumps(secondary) if secondary else None,
     })
     conn.commit()
     return run_id
@@ -410,3 +413,87 @@ def test_a_long_answer_is_excerpted_with_the_run_id_kept(conn):
     (row,) = tier_accuracy.per_question_outcomes(conn, 1)
     assert len(row['answer_excerpt']) == tier_accuracy.ANSWER_EXCERPT_CHARS + 1
     assert row['run_id']
+
+
+# ── secondary expectations, as their own column ───────────────────────────
+#
+# pack_count rides on the price question rather than being asked, exactly
+# as gtin does. Neither can move the tier's headline accuracy — the
+# question did not ask for either — so both are reported beside it with
+# their own sample.
+
+def _sec(kind, outcome):
+    return [{"type": kind, "outcome": outcome, "reason": "because"}]
+
+
+def secondary_of(section, tier_name, kind):
+    tier = tier_of(section, tier_name)
+    return next(s for s in tier["secondary"] if s["type"] == kind)
+
+
+def test_pack_count_is_reported_as_its_own_column_within_the_tier(conn):
+    seed_outcome(conn, outcome='exact', secondary=_sec('pack_count', 'exact'))
+    seed_outcome(conn, outcome='exact', secondary=_sec('pack_count', 'exact'))
+    seed_outcome(conn, outcome='exact', secondary=_sec('pack_count', 'wrong'))
+
+    pack = secondary_of(build(conn), 'catalog_accuracy', 'pack_count')
+    assert pack['label'] == 'Pack count'
+    assert pack['accuracy'] == round(2 / 3, 4)
+    assert pack['scored'] == 3
+
+
+def test_a_secondary_carries_its_own_sample_count(conn):
+    """Same rule as every other rate here: a rate over three samples and a
+    rate over three hundred are not the same claim."""
+    seed_outcome(conn, secondary=_sec('pack_count', 'exact'))
+    seed_outcome(conn, secondary=_sec('pack_count', 'absent'))
+
+    pack = secondary_of(build(conn), 'catalog_accuracy', 'pack_count')
+    assert pack['samples'] == 2
+    assert pack['scored'] == 1
+    assert pack['accuracy'] == 1.0
+
+
+def test_an_absent_secondary_stays_out_of_its_denominator_and_in_its_sample(conn):
+    """Recording the absents is what gives this column a denominator at
+    all — without them, "right nine times out of ten" and "volunteered
+    nine times in a thousand" are the same number."""
+    for _ in range(9):
+        seed_outcome(conn, secondary=_sec('pack_count', 'absent'))
+    seed_outcome(conn, secondary=_sec('pack_count', 'exact'))
+
+    pack = secondary_of(build(conn), 'catalog_accuracy', 'pack_count')
+    assert pack['accuracy'] == 1.0
+    assert pack['scored'] == 1
+    assert pack['samples'] == 10
+    assert pack['counts']['absent'] == 9
+
+
+def test_a_secondary_never_moves_the_tiers_headline_accuracy(conn):
+    """The question asked for a price. A wrong count on a right price is
+    a right price."""
+    seed_outcome(conn, outcome='exact', secondary=_sec('pack_count', 'wrong'))
+    seed_outcome(conn, outcome='exact', secondary=_sec('gtin', 'wrong'))
+
+    tier = tier_of(build(conn), 'catalog_accuracy')
+    assert tier['accuracy'] == 1.0
+    assert tier['scored'] == 2
+
+
+def test_gtin_and_pack_count_are_reported_separately(conn):
+    seed_outcome(conn, secondary=[
+        {"type": "gtin", "outcome": "absent", "reason": "r"},
+        {"type": "pack_count", "outcome": "exact", "reason": "r"},
+    ])
+    section = build(conn)
+
+    assert [s['type'] for s in tier_of(section, 'catalog_accuracy')['secondary']] == [
+        'gtin', 'pack_count',
+    ]
+    assert secondary_of(section, 'catalog_accuracy', 'gtin')['accuracy'] is None
+    assert secondary_of(section, 'catalog_accuracy', 'pack_count')['accuracy'] == 1.0
+
+
+def test_a_tier_with_no_secondaries_reports_an_empty_list(conn):
+    seed_outcome(conn, tier='value_incentives', outcome='exact')
+    assert tier_of(build(conn), 'value_incentives')['secondary'] == []

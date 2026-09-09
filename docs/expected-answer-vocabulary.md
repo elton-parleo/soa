@@ -94,7 +94,9 @@ an identifier; a near-miss is a different product.
 
 GTIN is never the primary expectation of a question. It rides along on a
 price question as a secondary expectation and is scored as a bonus
-signal — see *Secondary expectations*.
+signal — see *Secondary expectations*. Unlike `pack_count`, a GTIN never
+appears in the question text, so a volunteered one is unambiguous
+evidence.
 
 ### `pack_count`
 
@@ -105,6 +107,32 @@ signal — see *Secondary expectations*.
 An integer count of units. Only set where the record states a count.
 
 **Compared:** exact integer.
+
+**Secondary only, for now.** No question asks for a pack count. It rides
+on the variant's price question as a secondary expectation, the same way
+`gtin` does, and is scored only where the answer volunteered it.
+
+It was briefly a question of its own — "How many come in the {brand}
+{product} {variant}?" — and stopped being one for a reason worth writing
+down, because it is the kind of reason that gets forgotten and reverted.
+Two questions per variant put Wiggle & Snug's default study at 103
+against the study's own 100-question cap: the feature's own defaults
+opened on a red tally. One question per variant puts it at 87.
+
+**Read the pack-count column carefully.** On a product with several
+sizes, the price question names the variant *by* its count — "Size 3
+small pack (84 ct)" — so an answer restating 84 is echoing the question
+rather than demonstrating it knows. Only a single-variant product, whose
+subject carries no count, produces a genuinely volunteered answer. The
+tier report records the two populations separately
+(`pack_count_volunteered` and `pack_count_restated` on `tier_config`) so
+the report can say which is which.
+
+The honest version of this measurement is a standalone probe that asks
+without stating — a question naming the variant by size and pack format
+only. That is a **future checkbox, not built**, and it should be built
+before anyone quotes a pack-count accuracy number as evidence of
+anything.
 
 ### `code`
 
@@ -185,21 +213,30 @@ A question may carry one primary expectation and, in
 `expected_answer.secondary`, a list of further typed expectations that
 the question does **not** ask about.
 
-The catalog-accuracy tier uses exactly one of these: a price question for
-a variant that has a GTIN attaches `gtin` as a secondary.
+The catalog-accuracy tier uses two: a price question attaches `gtin`
+where the record carries one, and `pack_count` where the variant has a
+count above one. So the tier is **one question per sampled variant**,
+carrying up to three expectations.
 
 Secondary expectations:
 
 * are **not** asked for in the question text,
-* do **not** contribute to the accuracy denominator,
-* are scored only where the answer volunteered the quantity, and the
-  result is reported as a bonus signal.
+* do **not** contribute to the tier's headline accuracy — a wrong GTIN
+  or a wrong count on a right price is still a right price,
+* are reported in their own column, with their own sample count, under
+  the same rate rules as everything else.
 
 The reason they exist at all is that an assistant that volunteers the
-right GTIN is demonstrating catalog-level grounding that a price alone
-does not prove. The reason they are kept out of the denominator is that
-an assistant is not wrong for failing to recite an identifier nobody
-asked for.
+right GTIN or the right count is demonstrating catalog-level grounding
+that a price alone does not prove.
+
+**Every secondary outcome is recorded, `absent` included.** It used to be
+dropped, on the argument that an assistant is not wrong for failing to
+recite an identifier nobody asked for — but that was an argument about
+how to *report* it, answered in the wrong place. The report now gives
+each secondary its own column, and a column without a denominator cannot
+tell "right nine times out of ten" from "volunteered nine times in a
+thousand".
 
 ---
 

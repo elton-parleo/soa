@@ -471,18 +471,26 @@ def compare_with_secondary(expectation: dict, extraction: dict, **kwargs) -> Ver
     The primary verdict, plus results for expectations the question did
     NOT ask about.
 
-    Secondary results never touch the outcome. They are scored only where
-    the answer volunteered the quantity — an `absent` secondary is dropped
-    rather than recorded, because an assistant is not wrong for failing to
-    recite an identifier nobody asked it for, and a row of absents would
-    read like one.
+    Secondary results NEVER touch the primary outcome. A wrong GTIN on a
+    correct price is a correct price; an absent count on a correct price
+    is a correct price. That separation is the whole reason they are
+    secondary.
+
+    Every secondary outcome is recorded, `absent` included. It used to be
+    dropped, on the argument that an assistant is not wrong for failing
+    to recite an identifier nobody asked for and a row of absents would
+    read like one — but that was an argument about how to REPORT it, and
+    it was answered in the wrong place. The report now gives each
+    secondary its own column with the same rate rules as everything else
+    (absent outside the denominator, inside the sample count), and it
+    cannot do that without a denominator. Dropping the absents left the
+    reader unable to tell "volunteered and got it right nine times out of
+    ten" from "volunteered nine times out of a thousand".
     """
     verdict = compare(expectation, extraction, **kwargs)
 
     for item in expectation.get('secondary') or []:
         result = compare(item, extraction, **kwargs)
-        if result.outcome == ABSENT:
-            continue
         verdict.secondary.append({
             'type': item.get('type'),
             'outcome': result.outcome,

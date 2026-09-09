@@ -462,9 +462,13 @@ def test_a_volunteered_gtin_is_recorded_as_a_bonus_signal():
     ]
 
 
-def test_an_unvolunteered_gtin_is_dropped_rather_than_recorded_absent():
-    """An assistant is not wrong for failing to recite an identifier
-    nobody asked it for, and a row of absents would read like one."""
+def test_an_unvolunteered_secondary_is_recorded_as_absent():
+    """
+    Recorded, not dropped. The report gives each secondary its own column
+    with the same rate rules as everything else, and it cannot tell
+    "volunteered and got it right nine times out of ten" from
+    "volunteered nine times out of a thousand" without a denominator.
+    """
     expectation = ea.with_secondary(PRICE, [GTIN])
     result = cmp.compare_with_secondary(
         expectation,
@@ -474,7 +478,62 @@ def test_an_unvolunteered_gtin_is_dropped_rather_than_recorded_absent():
         source_ref=SIZE_3_SMALL,
     )
     assert result.outcome == cmp.EXACT
-    assert result.secondary == []
+    assert result.secondary == [
+        {'type': 'gtin', 'outcome': cmp.ABSENT, 'reason': 'the answer stated no GTIN'},
+    ]
+
+
+def test_a_pack_count_secondary_rides_along_with_the_gtin():
+    """One question per variant now carries both, and neither can move
+    the price outcome."""
+    expectation = ea.with_secondary(PRICE, [GTIN, ea.pack_count(84)])
+    result = cmp.compare_with_secondary(
+        expectation,
+        extraction(
+            prices=[{'amount': '22.99', 'currency': 'USD',
+                     'attributed_product': 'Size 3 Small Pack'}],
+            pack_counts=[{'value': 84, 'attributed_product': 'Size 3 Small Pack'}],
+        ),
+        source_ref=SIZE_3_SMALL, history=HISTORY,
+    )
+    assert result.outcome == cmp.EXACT
+    assert [(s['type'], s['outcome']) for s in result.secondary] == [
+        ('gtin', cmp.ABSENT), ('pack_count', cmp.EXACT),
+    ]
+
+
+def test_a_wrong_pack_count_never_moves_the_price_outcome():
+    """An answer with the right price and the wrong count has still
+    stated the right price. That separation is the whole reason a
+    secondary is secondary."""
+    expectation = ea.with_secondary(PRICE, [ea.pack_count(84)])
+    result = cmp.compare_with_secondary(
+        expectation,
+        extraction(
+            prices=[{'amount': '22.99', 'currency': 'USD',
+                     'attributed_product': 'Size 3 Small Pack'}],
+            pack_counts=[{'value': 92, 'attributed_product': 'Size 3 Small Pack'}],
+        ),
+        source_ref=SIZE_3_SMALL, history=HISTORY,
+    )
+    assert result.outcome == cmp.EXACT
+    assert result.secondary == [{
+        'type': 'pack_count', 'outcome': cmp.WRONG,
+        'reason': 'stated 92; the record says 84',
+    }]
+
+
+def test_an_absent_pack_count_never_moves_the_price_outcome():
+    expectation = ea.with_secondary(PRICE, [ea.pack_count(84)])
+    result = cmp.compare_with_secondary(
+        expectation,
+        extraction(prices=[
+            {'amount': '22.99', 'currency': 'USD', 'attributed_product': 'Size 3 Small Pack'},
+        ]),
+        source_ref=SIZE_3_SMALL, history=HISTORY,
+    )
+    assert result.outcome == cmp.EXACT
+    assert result.secondary[0]['outcome'] == cmp.ABSENT
 
 
 def test_a_wrong_volunteered_gtin_is_recorded_but_does_not_change_the_outcome():
