@@ -26,6 +26,7 @@ import {
   buildValueIncentives,
   catalogCounts,
   catalogReadback,
+  countDisambiguates,
   normalizeMoney,
   sampleVariants,
   subjectOf,
@@ -91,7 +92,20 @@ describe('variant display', () => {
   it('names what distinguishes a variant from its siblings', () => {
     const product = snapshot().products[0]
     const variant = product.variants.find(v => v.variantId === 'snug-fit-diapers-s3-small')
-    expect(variantDisplay(product, variant)).toBe('Size 3 small pack (84 ct)')
+    expect(variantDisplay(product, variant)).toBe('Size 3 small pack')
+  })
+
+  it('leaves the count out when something else already tells the variant apart', () => {
+    const product = snapshot().products[0]
+    const variant = product.variants.find(v => v.variantId === 'snug-fit-diapers-s3-small')
+    // "Size 3 small pack" is already unambiguous against "Size 3 big pack".
+    expect(countDisambiguates(product, variant)).toBe(false)
+    expect(variantDisplay(product, variant)).not.toContain('ct')
+  })
+
+  it('names the overnight range by size alone', () => {
+    const product = snapshot().products.find(p => p.title === 'Snug-Fit Overnight Diapers')
+    expect(variantDisplay(product, product.variants[0])).toBe('Size 3')
   })
 
   it('is empty for a single-variant product, which has nothing to distinguish', () => {
@@ -114,7 +128,7 @@ describe('catalog accuracy', () => {
   it('uses the frozen price template', () => {
     const { questions } = buildCatalogAccuracy(snapshot())
     expect(texts(questions)).toContain(
-      'What does the Wiggle & Snug Snug-Fit Diapers Size 3 small pack (84 ct) cost?',
+      'What does the Wiggle & Snug Snug-Fit Diapers Size 3 small pack cost?',
     )
   })
 
@@ -127,7 +141,7 @@ describe('catalog accuracy', () => {
 
   it('shows the published price to the cent, with both secondaries riding along', () => {
     const { questions } = buildCatalogAccuracy(snapshot())
-    const q = questions.find(x => x.text.endsWith('Size 3 small pack (84 ct) cost?'))
+    const q = questions.find(x => x.text.endsWith('Size 3 small pack cost?'))
     expect(q.expected).toEqual([
       'Expected: $22.99', 'GTIN 884400137609', '84 count',
     ])
@@ -361,5 +375,57 @@ describe('tier previews', () => {
       expect(preview[tier].count).toBe(0)
       expect(preview[tier].example).toBeNull()
     }
+  })
+})
+
+// ── when the count IS the only handle ────────────────────────────────────
+
+describe('a product disambiguated only by count', () => {
+  // Same shape as the Python fixture in test_catalog_tiers.py: three
+  // variants sharing a size, differing only in how many are in the box.
+  const countOnly = {
+    merchant: 'wiggle-and-snug',
+    listings: [{
+      listing_id: 600,
+      product_id: 'catalog_product:600',
+      title: 'Cloud Wipes Refill',
+      brand: 'Wiggle & Snug',
+      published_at: '2026-09-01T00:00:00+00:00',
+      variants: [100, 200, 300].map((count, index) => ({
+        variant_id: `cloud-wipes-refill-${count}`,
+        title: `Cloud Wipes Refill (${count} ct)`,
+        size: 'Standard',
+        count,
+        attributes: {},
+        list_price: `${9 + index}.99`,
+        currency: 'USD',
+        gtin: null,
+      })),
+    }],
+  }
+
+  const refills = () => snapshot({ catalog: countOnly, incentives: null })
+
+  it('keeps the count in the wording', () => {
+    const { questions } = buildCatalogAccuracy(refills())
+    expect(texts(questions).sort()).toEqual([
+      'What does the Wiggle & Snug Cloud Wipes Refill Standard (100 ct) cost?',
+      'What does the Wiggle & Snug Cloud Wipes Refill Standard (200 ct) cost?',
+      'What does the Wiggle & Snug Cloud Wipes Refill Standard (300 ct) cost?',
+    ])
+  })
+
+  it('says so through countDisambiguates', () => {
+    const product = refills().products[0]
+    expect(countDisambiguates(product, product.variants[0])).toBe(true)
+  })
+
+  it('falls back to the count when there are no attributes at all', () => {
+    const bare = JSON.parse(JSON.stringify(countOnly))
+    for (const v of bare.listings[0].variants) v.size = null
+    const { questions } = buildCatalogAccuracy(snapshot({ catalog: bare, incentives: null }))
+    expect(texts(questions)).toContain(
+      'What does the Wiggle & Snug Cloud Wipes Refill (100 ct) cost?',
+    )
   })
 })

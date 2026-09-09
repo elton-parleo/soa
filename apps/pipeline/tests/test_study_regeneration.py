@@ -219,7 +219,7 @@ def test_the_rebuilt_questions_are_asked_of_the_current_record(db, snapshot):
 
     texts = [q[0] for q in questions(db)]
     assert (
-        "What does the Wiggle & Snug Snug-Fit Diapers Size 3 small pack (84 ct) cost?"
+        "What does the Wiggle & Snug Snug-Fit Diapers Size 3 small pack cost?"
         in texts
     )
 

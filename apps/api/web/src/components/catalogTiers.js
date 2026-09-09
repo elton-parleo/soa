@@ -178,23 +178,58 @@ export function catalogReadback(snapshot) {
 
 // ─── Naming — mirrors catalog_tiers.variant_display ──────────────────────
 
+function attributeParts(variant) {
+  const parts = []
+  if (variant.size) parts.push(String(variant.size).trim())
+  const pack = variant.attributes?.pack
+  if (pack) parts.push(String(pack).trim().toLowerCase())
+  return parts
+}
+
+function attributeKey(variant) {
+  return attributeParts(variant).map(p => p.toLowerCase()).join('|')
+}
+
+/**
+ * Whether this variant's count has to appear in the question to name it.
+ *
+ * True only when its other attributes do not tell it from a sibling —
+ * shared with one, or absent entirely. On Wiggle & Snug this is never
+ * true: "Size 3 small pack" already stands apart from "Size 3 big pack".
+ *
+ * A question that names a variant BY its count and then scores whether
+ * the answer knows the count is scoring an echo. Dropping the count
+ * wherever something else identifies the variant turns that echo into a
+ * real, volunteered answer.
+ */
+export function countDisambiguates(product, variant) {
+  if (product.variants.length <= 1) return false
+  const key = attributeKey(variant)
+  if (!key) return true
+  return product.variants.filter(v => attributeKey(v) === key).length > 1
+}
+
+/**
+ * Exactly the phrases the question uses to name this variant, count
+ * rendered bare. One function behind both the wording and the
+ * wrong-product-attribution guard, so the two cannot disagree about what
+ * identifies a variant.
+ */
+export function namingParts(product, variant) {
+  if (product.variants.length <= 1) return []
+  const parts = attributeParts(variant)
+  if (variant.count && variant.count > 1 && countDisambiguates(product, variant)) {
+    parts.push(String(variant.count))
+  }
+  return parts
+}
+
 export function variantDisplay(product, variant) {
   // A variant display exists to distinguish variants; with one variant
   // there is nothing to distinguish.
-  if (product.variants.length <= 1) return ''
-
-  const parts = []
-  if (variant.size) parts.push(String(variant.size).trim())
-
-  const pack = variant.attributes?.pack
-  if (pack) parts.push(String(pack).trim().toLowerCase())
-
-  // The count is part of the display, deliberately: it is what makes
-  // "Size 3 small pack (84 ct)" unambiguous. It is also why the
-  // pack-count secondary is weak evidence on a multi-variant product —
-  // see the Python module's KNOWN WEAKNESS note.
-  if (variant.count && variant.count > 1) {
-    parts.push(`(${variant.count} ct)`)
+  const parts = namingParts(product, variant)
+  if (parts.length && variant.count && String(variant.count) === parts[parts.length - 1]) {
+    parts[parts.length - 1] = `(${variant.count} ct)`
   }
   return parts.join(' ')
 }

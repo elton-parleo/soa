@@ -30,18 +30,30 @@ from soa_shared import expected_answers as ea
 #
 # attribution / attribution_rivals are exactly what
 # catalog_tiers._attribution_hints writes for this variant against the
-# real Wiggle & Snug catalog: what tells it apart, and what its eleven
-# siblings say that it does not.
+# real Wiggle & Snug catalog: the words the question uses to name it, and
+# the words its eleven siblings use that it does not.
+#
+# No counts, on either side. The question does not state one — "Size 3
+# small pack" is already unambiguous — so an answer's count is a claim
+# being scored rather than an identifier we handed over.
 SIZE_3_SMALL = {
     'merchant_slug': 'wiggle-and-snug',
     'listing_id': 90,
     'variant_id': 'snug-fit-diapers-s3-small',
     'published_at': '2026-09-04T20:49:40+00:00',
-    'attribution': ['Size 3', 'Small Pack', '84'],
+    'attribution': ['Size 3', 'small pack'],
     'attribution_rivals': [
-        'Size 1', '96', 'Big Pack', '198', 'Size 2', '92', '186', '168',
-        'Size 4', '74', '150', 'Size 5', '66', '132', 'Size 6', '58', '116',
+        'big pack', 'Size 1', 'Size 2', 'Size 4', 'Size 5', 'Size 6',
     ],
+}
+
+# The other case: a product whose variants share a size and differ only
+# in count, so the count IS in the question and IS an identifier.
+STANDARD_100 = {
+    'merchant_slug': 'wiggle-and-snug',
+    'variant_id': 'cloud-wipes-refill-100',
+    'attribution': ['Standard', '100'],
+    'attribution_rivals': ['200', '300'],
 }
 
 # Oldest first, as GET /merchants/{slug}/price-history serves it. The
@@ -556,3 +568,69 @@ def test_an_unknown_expectation_type_is_unscoreable_not_wrong():
     """It is a failure of ours, not the assistant's."""
     result = cmp.compare({'type': 'shipping_speed'}, extraction())
     assert result.outcome == cmp.UNSCOREABLE
+
+
+# ═══ The guard follows the wording ════════════════════════════════════════
+
+def test_a_wrong_volunteered_count_does_not_void_the_price_it_came_with():
+    """
+    The bug that dropping counts from the guard fixes, and the reason the
+    two lists have to follow the question's wording rather than the
+    record's fields.
+
+    "Size 3 small pack, 92 ct" names the right variant and volunteers the
+    wrong count. 92 is Size 2 small pack's count — so with counts in the
+    rival set this looked like a claim about Size 2, voided its own
+    attribution, and took the price measurement down with it. The thing
+    being measured must not be able to erase the measurement.
+    """
+    result = verdict(PRICE, extraction(prices=[
+        {'amount': '22.99', 'currency': 'USD',
+         'attributed_product': 'Snug-Fit Size 3 small pack, 92 ct'},
+    ]), history=HISTORY)
+    assert result.outcome == cmp.EXACT
+
+
+def test_that_wrong_count_still_scores_wrong_as_a_secondary():
+    """It is not ignored — it is scored where it belongs, beside the price
+    rather than instead of it."""
+    expectation = ea.with_secondary(PRICE, [ea.pack_count(84)])
+    result = cmp.compare_with_secondary(
+        expectation,
+        extraction(
+            prices=[{'amount': '22.99', 'currency': 'USD',
+                     'attributed_product': 'Size 3 small pack, 92 ct'}],
+            pack_counts=[{'value': 92, 'attributed_product': 'Size 3 small pack'}],
+        ),
+        source_ref=SIZE_3_SMALL, history=HISTORY,
+    )
+    assert result.outcome == cmp.EXACT
+    assert result.secondary == [{
+        'type': 'pack_count', 'outcome': cmp.WRONG,
+        'reason': 'stated 92; the record says 84',
+    }]
+
+
+def test_the_pack_format_still_catches_the_wrong_variant():
+    """Dropping the count from the guard does not weaken it: 'big pack'
+    is what told the siblings apart all along."""
+    result = verdict(PRICE, extraction(prices=[
+        {'amount': '22.99', 'currency': 'USD',
+         'attributed_product': 'Snug-Fit Diapers Size 3 big pack'},
+    ]), history=HISTORY)
+    assert result.outcome == cmp.ABSENT
+
+
+def test_a_count_stated_by_the_question_is_still_an_identifier():
+    """Where the count IS the handle, it works as one on both sides."""
+    right = cmp.compare(PRICE, extraction(prices=[
+        {'amount': '22.99', 'currency': 'USD',
+         'attributed_product': 'Cloud Wipes Refill Standard 100 ct'},
+    ]), source_ref=STANDARD_100)
+    assert right.outcome == cmp.EXACT
+
+    sibling = cmp.compare(PRICE, extraction(prices=[
+        {'amount': '22.99', 'currency': 'USD',
+         'attributed_product': 'Cloud Wipes Refill Standard 200 ct'},
+    ]), source_ref=STANDARD_100)
+    assert sibling.outcome == cmp.ABSENT

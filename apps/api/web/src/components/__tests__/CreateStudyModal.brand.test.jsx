@@ -240,7 +240,7 @@ describe('the examples', () => {
   it('are real questions about real Wiggle & Snug variants', async () => {
     const examples = await openExamples()
     expect(examples).toHaveTextContent(
-      'What does the Wiggle & Snug Snug-Fit Diapers Size 1 small pack (96 ct) cost?',
+      'What does the Wiggle & Snug Snug-Fit Diapers Size 1 small pack cost?',
     )
   })
 

@@ -4,9 +4,9 @@ The catalog-built question tiers.
 Two of the four tiers are built here, from the published record and with
 no model call at all:
 
-  catalog_accuracy   price per sampled variant, GTIN riding along as a
-                     secondary expectation, pack count where the variant
-                     has one to ask about
+  catalog_accuracy   one price question per sampled variant, with GTIN
+                     and pack count riding along as secondary
+                     expectations rather than being asked
   value_incentives   one question per mechanic the record actually has —
                      coupon code, member price, points
 
@@ -62,30 +62,16 @@ CATALOG_SPECIFICITY = 'Narrow'
 
 # ─── Naming ────────────────────────────────────────────────────────────────
 
-def variant_display(product, variant) -> str:
+def _attribute_parts(product, variant) -> List[str]:
     """
-    The words that distinguish this variant from its siblings.
+    The variant's non-count attributes, as the question would say them:
+    its size, and its pack format.
 
     Built from the record's structured fields rather than by chipping the
     product title off the front of the variant title. Both would work on
     Wiggle & Snug; only this one keeps working on a merchant whose
     variant titles are not prefixed with the product name.
-
-    Empty string for a single-variant product, which is the point of the
-    function: a variant display exists to distinguish variants, and with
-    one variant there is nothing to distinguish. "What does the Wiggle &
-    Snug Cloud Wipes 3-Pack cost?" is the question; "...Cloud Wipes
-    3-Pack 3 packs (216 ct) cost?" is a machine talking.
-
-    The count is part of the display, and that is a deliberate cost: it
-    is what makes "Size 3 small pack (84 ct)" unambiguous to an
-    assistant, and it is also why the pack-count secondary riding on this
-    question is weak evidence on a multi-variant product. See
-    build_catalog_accuracy's KNOWN WEAKNESS note.
     """
-    if len(product.variants) <= 1:
-        return ''
-
     parts = []
     if variant.size:
         parts.append(str(variant.size).strip())
@@ -98,9 +84,82 @@ def variant_display(product, variant) -> str:
     if pack:
         parts.append(str(pack).strip().lower())
 
-    if variant.count and variant.count > 1:
-        parts.append(f"({variant.count} ct)")
+    return parts
 
+
+def _attribute_key(product, variant) -> tuple:
+    return tuple(part.lower() for part in _attribute_parts(product, variant))
+
+
+def count_disambiguates(product, variant) -> bool:
+    """
+    Whether this variant's count has to appear in the question to name it.
+
+    True only when the variant's other attributes do not tell it from a
+    sibling — either because they are shared with one ("Standard", twice,
+    at two counts) or because the record states none at all. On Wiggle &
+    Snug this is never true: "Size 3 small pack" is already unambiguous
+    against "Size 3 big pack", and every overnight size stands alone.
+
+    This is the whole reason the count usually stays out of the wording.
+    A question that names a variant BY its count and then scores whether
+    the answer knows the count is scoring an echo — see
+    build_catalog_accuracy's note on the pack-count secondary. Dropping
+    the count wherever something else identifies the variant turns that
+    echo into a real, volunteered answer.
+    """
+    if len(product.variants) <= 1:
+        return False
+
+    key = _attribute_key(product, variant)
+    if not key:
+        # Nothing else to go on: the count is the only handle there is.
+        return True
+    return sum(
+        1 for sibling in product.variants
+        if _attribute_key(product, sibling) == key
+    ) > 1
+
+
+def _naming_parts(product, variant) -> List[str]:
+    """
+    Exactly the phrases the question uses to name this variant, count
+    rendered bare.
+
+    ONE function behind both the question wording and the
+    wrong-product-attribution guard, so the two cannot disagree about
+    what identifies a variant. The guard's job is to reject an answer
+    that attributed a quantity to a DIFFERENT variant, and it can only do
+    that against the words the question actually used — a guard checking
+    a phrase the question never said is checking something the answer had
+    no reason to say either.
+    """
+    if len(product.variants) <= 1:
+        return []
+
+    parts = _attribute_parts(product, variant)
+    if variant.count and variant.count > 1 and count_disambiguates(product, variant):
+        parts.append(str(variant.count))
+    return parts
+
+
+def variant_display(product, variant) -> str:
+    """
+    The words that distinguish this variant from its siblings.
+
+    Empty string for a single-variant product, which is the point of the
+    function: a variant display exists to distinguish variants, and with
+    one variant there is nothing to distinguish. "What does the Wiggle &
+    Snug Cloud Wipes 3-Pack cost?" is the question; "...Cloud Wipes
+    3-Pack 3 packs (216 ct) cost?" is a machine talking.
+
+    The count appears only where count_disambiguates says it must. Where
+    it does appear it is rendered "(84 ct)"; _naming_parts carries the
+    same phrase bare, for the attribution guard.
+    """
+    parts = _naming_parts(product, variant)
+    if parts and variant.count and str(variant.count) == parts[-1]:
+        parts = parts[:-1] + [f"({variant.count} ct)"]
     return ' '.join(parts)
 
 
@@ -225,20 +284,26 @@ def _row(
 
 def _discriminators(product, variant) -> List[str]:
     """
-    The phrases that tell this variant apart from its siblings: its size,
-    its pack format, its count.
+    The phrases that tell this variant apart from its siblings — exactly
+    the ones the question uses to name it.
+
+    _naming_parts, not a separate list. The count is in here only where
+    it is in the wording, and that symmetry is load-bearing in a way
+    worth spelling out: where the question does NOT state the count, an
+    answer's count is a claim being scored, not an identifier we handed
+    over. Leaving it in the rival set would let an answer that names the
+    right variant and volunteers the WRONG count — "Size 3 small pack,
+    92 ct" — look like a claim about Size 2, void its own attribution,
+    and take the price measurement down with it. The thing we are
+    measuring must not be able to erase the measurement.
 
     Empty for a single-variant product — there is nothing to tell apart,
     which is the same reason variant_display returns '' there. That
-    emptiness is load-bearing: it makes attribution matching a no-op for
-    products where any mention of the product IS a mention of the variant.
+    emptiness is load-bearing too: it makes attribution matching a no-op
+    for products where any mention of the product IS a mention of the
+    variant.
     """
-    if len(product.variants) <= 1:
-        return []
-    parts = [variant.size, (variant.attributes or {}).get('pack')]
-    if variant.count and variant.count > 1:
-        parts.append(str(variant.count))
-    return [str(p).strip() for p in parts if p]
+    return _naming_parts(product, variant)
 
 
 def _attribution_hints(product, variant) -> dict:
@@ -329,15 +394,20 @@ def build_catalog_accuracy(
     a red tally has the wrong defaults. One question per variant puts it
     at 87.
 
-    KNOWN WEAKNESS, and it is why pack count is a bonus signal rather
-    than a rate to lean on: the price question names a multi-variant
-    variant BY its count — "Size 3 small pack (84 ct)" — so an assistant
-    restating 84 is echoing the question, not demonstrating knowledge of
-    it. Only a single-variant product, whose subject carries no count,
-    gives a genuinely volunteered answer. The tier report records both
-    populations separately so the report can say which is which, and a
-    standalone pack-count probe that asks without stating is the honest
-    version of this measurement — a future checkbox, not built. See
+    The question names the variant by whatever actually tells it apart,
+    and states the count only where nothing else does — see
+    count_disambiguates. That is what makes the pack-count secondary
+    worth reading: a question phrased "Size 3 small pack" and answered
+    "84" has been answered, whereas "Size 3 small pack (84 ct)" answered
+    "84" is an echo. On Wiggle & Snug every one of the 18 counts is
+    volunteered under this rule and none is restated.
+
+    Where the count IS the only handle — a product whose variants share a
+    size and differ only in how many are in the box — it stays in the
+    wording, and the tier report records that variant under
+    pack_count_restated so nobody reads its "right" as knowledge. The
+    honest measurement for those is a standalone probe that asks without
+    stating: a future checkbox, not built. See
     docs/expected-answer-vocabulary.md.
     """
     sampled = sample_variants(snapshot, cap)
@@ -365,7 +435,9 @@ def build_catalog_accuracy(
                 secondary.append(ea.gtin(variant.gtin))
             if variant.count and variant.count > 1:
                 secondary.append(ea.pack_count(variant.count))
-                (echoed_counts if variant_display(product, variant)
+                # Restated only where the question had to name the variant
+                # by its count. Everywhere else the answer volunteered it.
+                (echoed_counts if count_disambiguates(product, variant)
                  else volunteered_counts).append(variant.variant_id)
             if secondary:
                 expectation = ea.with_secondary(expectation, secondary)

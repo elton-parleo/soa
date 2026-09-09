@@ -94,7 +94,7 @@ def test_the_price_template_is_frozen(snapshot):
     rows, _ = _accuracy(snapshot)
     texts = {r["query_text"] for r in rows}
     assert (
-        "What does the Wiggle & Snug Snug-Fit Diapers Size 3 small pack (84 ct) cost?"
+        "What does the Wiggle & Snug Snug-Fit Diapers Size 3 small pack cost?"
         in texts
     )
 
@@ -113,7 +113,7 @@ def test_the_price_expectation_is_the_published_price_to_the_cent(snapshot):
     rows, _ = _accuracy(snapshot)
     row = next(
         r for r in rows
-        if r["query_text"].endswith("Size 3 small pack (84 ct) cost?")
+        if r["query_text"].endswith("Size 3 small pack cost?")
     )
     assert row["expected_answer"]["type"] == "price"
     assert row["expected_answer"]["amount"] == "22.99"
@@ -140,7 +140,7 @@ def test_the_gtin_secondary_is_the_published_gtin(snapshot):
     rows, _ = _accuracy(snapshot)
     row = next(
         r for r in rows
-        if r["query_text"].endswith("Size 3 small pack (84 ct) cost?")
+        if r["query_text"].endswith("Size 3 small pack cost?")
     )
     assert {"type": "gtin", "value": "884400137609"} in (
         row["expected_answer"]["secondary"]
@@ -165,7 +165,7 @@ def test_the_pack_count_rides_on_the_price_question(snapshot):
     rows, _ = _accuracy(snapshot)
     row = next(
         r for r in rows
-        if r["query_text"].endswith("Size 3 small pack (84 ct) cost?")
+        if r["query_text"].endswith("Size 3 small pack cost?")
     )
     assert {"type": "pack_count", "value": 84} in row["expected_answer"]["secondary"]
 
@@ -190,24 +190,40 @@ def test_a_single_unit_variant_carries_no_pack_count_secondary(snapshot):
     )
 
 
-def test_the_report_separates_a_restated_count_from_a_volunteered_one(snapshot):
+def test_every_wiggle_and_snug_count_is_volunteered_not_restated(snapshot):
     """
-    The price question names a multi-variant variant BY its count, so an
-    assistant restating 84 is echoing the question rather than knowing
-    it. Recorded as two populations so the report can say which is which
-    — a rate that mixes them is not measuring knowledge.
+    No Wiggle & Snug question states a count, because none has to:
+    "Size 3 small pack" already tells that variant from "Size 3 big
+    pack", and every overnight size stands alone. So every one of the 18
+    counts an answer states is an answer, not an echo.
     """
     _rows, report = _accuracy(snapshot)
     secondary = report["secondary"]
 
     assert secondary["gtin"] == 6
     assert secondary["pack_count"] == 18
-    # Only the two single-variant products with a real count state no
-    # count in their subject.
-    assert sorted(secondary["pack_count_volunteered"]) == [
-        "cloud-wipes-3pack", "snug-fit-trial-pack",
-    ]
-    assert len(secondary["pack_count_restated"]) == 16
+    assert len(secondary["pack_count_volunteered"]) == 18
+    assert secondary["pack_count_restated"] == []
+
+
+def test_no_wiggle_and_snug_question_states_a_count(snapshot):
+    """The other half of the same fact, asserted on the wording rather
+    than on the bookkeeping — the two could disagree, and this is the
+    side a reader of the study actually sees."""
+    rows, _report = _accuracy(snapshot)
+    for row in rows:
+        assert " ct)" not in row["query_text"], row["query_text"]
+
+
+def test_the_overnight_range_is_named_by_size_alone(snapshot):
+    """Four sizes, no pack format, no two alike — the size is the whole
+    handle."""
+    rows, _ = _accuracy(snapshot)
+    texts = {r["query_text"] for r in rows}
+    assert (
+        "What does the Wiggle & Snug Snug-Fit Overnight Diapers Size 3 cost?"
+        in texts
+    )
 
 
 # ── catalog accuracy: provenance and source_ref ───────────────────────────
@@ -223,7 +239,7 @@ def test_source_ref_carries_the_record_published_at_not_now(snapshot):
     rows, _ = _accuracy(snapshot)
     row = next(
         r for r in rows
-        if r["query_text"].endswith("Size 3 small pack (84 ct) cost?")
+        if r["query_text"].endswith("Size 3 small pack cost?")
     )
     ref = row["source_ref"]
     assert ref["merchant_slug"] == "wiggle-and-snug"
@@ -527,3 +543,131 @@ def test_every_row_carries_the_studys_pattern(snapshot):
     caller omit it and discover the omission at the INSERT."""
     rows = _accuracy(snapshot)[0] + _value(snapshot)[0]
     assert {r["study_pattern"] for r in rows} == {STUDY_PATTERN}
+
+
+# ── when the count IS the only handle ─────────────────────────────────────
+
+def _count_only_payload():
+    """
+    A product whose variants share every attribute except how many are in
+    the box. Nothing but the count tells them apart, so the count has to
+    be in the question — and the answer restating it proves nothing.
+    """
+    return {
+        "merchant": "wiggle-and-snug",
+        "listings": [{
+            "listing_id": 600,
+            "product_id": "catalog_product:600",
+            "title": "Cloud Wipes Refill",
+            "brand": "Wiggle & Snug",
+            "published_at": "2026-09-01T00:00:00+00:00",
+            "variants": [
+                {
+                    "variant_id": f"cloud-wipes-refill-{count}",
+                    "title": f"Cloud Wipes Refill ({count} ct)",
+                    "size": "Standard",
+                    "count": count,
+                    "attributes": {},
+                    "list_price": f"{9 + index}.99",
+                    "currency": "USD",
+                    "gtin": None,
+                }
+                for index, count in enumerate((100, 200, 300))
+            ],
+        }],
+    }
+
+
+@pytest.fixture
+def count_only(payloads):
+    return build_snapshot(_count_only_payload(), merchants=payloads["merchants"])
+
+
+def test_the_count_stays_in_the_wording_when_it_is_the_sole_disambiguator(count_only):
+    rows, _report = _accuracy(count_only)
+    texts = sorted(r["query_text"] for r in rows)
+    assert texts == [
+        "What does the Wiggle & Snug Cloud Wipes Refill Standard (100 ct) cost?",
+        "What does the Wiggle & Snug Cloud Wipes Refill Standard (200 ct) cost?",
+        "What does the Wiggle & Snug Cloud Wipes Refill Standard (300 ct) cost?",
+    ]
+
+
+def test_a_count_the_question_states_is_recorded_as_restated(count_only):
+    """So nobody reads its "right" as knowledge. This is the population
+    the future standalone probe exists for."""
+    _rows, report = _accuracy(count_only)
+    secondary = report["secondary"]
+
+    assert secondary["pack_count"] == 3
+    assert secondary["pack_count_volunteered"] == []
+    assert sorted(secondary["pack_count_restated"]) == [
+        "cloud-wipes-refill-100",
+        "cloud-wipes-refill-200",
+        "cloud-wipes-refill-300",
+    ]
+
+
+def test_count_disambiguates_says_which_case_a_variant_is_in(snapshot, count_only):
+    diapers = snapshot.products[0]
+    size_3_small = next(
+        v for v in diapers.variants if v.variant_id == "snug-fit-diapers-s3-small"
+    )
+    assert ct.count_disambiguates(diapers, size_3_small) is False
+
+    refill = count_only.products[0]
+    assert ct.count_disambiguates(refill, refill.variants[0]) is True
+
+
+def test_a_variant_with_no_attributes_at_all_falls_back_to_its_count(payloads):
+    """An empty attribute set names nothing, so the count is the only
+    handle there is — the same case as a shared attribute set, reached a
+    different way."""
+    payload = _count_only_payload()
+    for variant in payload["listings"][0]["variants"]:
+        variant["size"] = None
+
+    snapshot = build_snapshot(payload, merchants=payloads["merchants"])
+    rows, report = _accuracy(snapshot)
+
+    assert "What does the Wiggle & Snug Cloud Wipes Refill (100 ct) cost?" in {
+        r["query_text"] for r in rows
+    }
+    assert len(report["secondary"]["pack_count_restated"]) == 3
+
+
+# ── the attribution guard follows the wording ─────────────────────────────
+
+def test_the_attribution_hints_are_exactly_the_words_the_question_used(snapshot):
+    """One function behind both, so a guard can never check a phrase the
+    question never said — the answer had no reason to say it either."""
+    rows, _ = _accuracy(snapshot)
+    row = next(
+        r for r in rows if r["query_text"].endswith("Size 3 small pack cost?")
+    )
+    assert row["source_ref"]["attribution"] == ["Size 3", "small pack"]
+
+
+def test_no_count_reaches_the_guard_where_no_count_reaches_the_question(snapshot):
+    """
+    Where the question does not state the count, an answer's count is a
+    claim being scored — not an identifier. Leaving it among the rivals
+    would let a right variant with a WRONG volunteered count look like a
+    claim about a sibling and void its own price measurement: the thing
+    being measured erasing the measurement.
+    """
+    rows, _ = _accuracy(snapshot)
+    for row in rows:
+        ref = row["source_ref"]
+        for phrase in ref.get("attribution", []) + ref.get("attribution_rivals", []):
+            assert not phrase.isdigit(), (row["query_text"], phrase)
+
+
+def test_the_guard_keeps_the_count_where_the_question_states_it(count_only):
+    rows, _ = _accuracy(count_only)
+    row = next(r for r in rows if "(100 ct)" in r["query_text"])
+    ref = row["source_ref"]
+
+    assert ref["attribution"] == ["Standard", "100"]
+    # Its siblings' counts are what it must not be confused with.
+    assert sorted(ref["attribution_rivals"]) == ["200", "300"]

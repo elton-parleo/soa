@@ -94,9 +94,8 @@ an identifier; a near-miss is a different product.
 
 GTIN is never the primary expectation of a question. It rides along on a
 price question as a secondary expectation and is scored as a bonus
-signal — see *Secondary expectations*. Unlike `pack_count`, a GTIN never
-appears in the question text, so a volunteered one is unambiguous
-evidence.
+signal — see *Secondary expectations*. A GTIN never appears in a question,
+so a stated one is always volunteered.
 
 ### `pack_count`
 
@@ -110,7 +109,7 @@ An integer count of units. Only set where the record states a count.
 
 **Secondary only, for now.** No question asks for a pack count. It rides
 on the variant's price question as a secondary expectation, the same way
-`gtin` does, and is scored only where the answer volunteered it.
+`gtin` does, and is scored where the answer states it.
 
 It was briefly a question of its own — "How many come in the {brand}
 {product} {variant}?" — and stopped being one for a reason worth writing
@@ -119,20 +118,46 @@ Two questions per variant put Wiggle & Snug's default study at 103
 against the study's own 100-question cap: the feature's own defaults
 opened on a red tally. One question per variant puts it at 87.
 
-**Read the pack-count column carefully.** On a product with several
-sizes, the price question names the variant *by* its count — "Size 3
-small pack (84 ct)" — so an answer restating 84 is echoing the question
-rather than demonstrating it knows. Only a single-variant product, whose
-subject carries no count, produces a genuinely volunteered answer. The
-tier report records the two populations separately
-(`pack_count_volunteered` and `pack_count_restated` on `tier_config`) so
-the report can say which is which.
+### The count stays out of the question wherever it can
 
-The honest version of this measurement is a standalone probe that asks
-without stating — a question naming the variant by size and pack format
-only. That is a **future checkbox, not built**, and it should be built
-before anyone quotes a pack-count accuracy number as evidence of
-anything.
+A question that names a variant *by* its count and then scores whether
+the answer knows the count is scoring an echo. So the price question
+names the variant by whatever actually tells it apart, and states the
+count **only when nothing else does**:
+
+* `Size 3 small pack` — unambiguous against `Size 3 big pack`, so no
+  count.
+* `Size 3` for the overnight range — four sizes, no two alike, so no
+  count.
+* `Standard (100 ct)` for a product whose variants share a size and
+  differ only in how many are in the box. Here the count *is* the handle
+  and has to be said.
+
+On Wiggle & Snug the count is never needed: all **18** pack-count
+secondaries are volunteered, none restated.
+
+Where the count does appear in the wording, that variant is recorded
+under `pack_count_restated` on `tier_config` (against
+`pack_count_volunteered` for the rest), so nobody reads its "right" as
+knowledge. The honest measurement for those is a standalone probe that
+asks without stating — a **future checkbox, not built**.
+
+### The attribution guard follows the wording
+
+The phrases the wrong-product-attribution guard checks are *exactly* the
+phrases the question used to name the variant — one function behind both,
+so a guard can never test a phrase the question never said.
+
+This is why the count leaves the guard wherever it leaves the wording,
+and it is load-bearing rather than tidy. Where the question does not
+state the count, an answer's count is a **claim being scored**, not an
+identifier we handed over. Leave it among the rival phrases and an answer
+that names the right variant while volunteering the *wrong* count —
+"Size 3 small pack, 92 ct", where 92 is Size 2's — reads as a claim about
+a sibling, voids its own attribution, and takes the price measurement
+down with it. The thing being measured must not be able to erase the
+measurement. That wrong count is still scored; it is scored as a
+`pack_count` secondary, beside the price rather than instead of it.
 
 ### `code`
 
@@ -256,9 +281,11 @@ the direction that puts a shopper at the wrong shelf. This case is in the
 comparator's test matrix by name.
 
 Attribution matching is deliberately loose on wording and strict on
-identity: the extracted product string is matched against the variant's
-title, its size and its count, and a match needs the distinguishing parts
-(size, count) not merely the product family.
+identity. The extracted product string must contain at least one of the
+phrases the question used to name the variant, and none of the phrases
+its siblings use and it does not. Those phrases are the question's own —
+see *The attribution guard follows the wording* above — so on Wiggle &
+Snug that is the size and the pack format, and never the count.
 
 ---
 
