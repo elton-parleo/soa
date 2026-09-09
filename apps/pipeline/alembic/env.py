@@ -70,6 +70,21 @@ def include_object(object, name, type_, reflected, compare_to):
 
 
 def _make_url() -> URL:
+    # Explicit, opt-in escape hatch, and the ONLY way to point these
+    # migrations anywhere but Supabase. It exists so a migration can be
+    # round-tripped (upgrade, downgrade, upgrade) against a scratch
+    # Postgres before it is ever run against the real database — which
+    # is not something the mock-based migration tests can prove, since
+    # they assert what op.* was called with rather than what Postgres
+    # then did with it.
+    #
+    # Unset in every deployed environment, so the default path below is
+    # unchanged: absent this variable, alembic still cannot be aimed at
+    # anything except Supabase by accident.
+    override = os.getenv("ALEMBIC_DATABASE_URL")
+    if override:
+        return override
+
     host = os.getenv("SUPABASE_DB_HOST_URL")
     password = os.getenv("SUPABASE_DB_PASSWORD")
     if not host or not password:

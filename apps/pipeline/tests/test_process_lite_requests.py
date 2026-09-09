@@ -104,6 +104,7 @@ def db(monkeypatch):
                 notes TEXT, platforms TEXT, runs_per_query INTEGER,
                 organization_id INTEGER, created_by TEXT,
                 source_lite_request_id INTEGER, study_series_id TEXT, prior_cycle_id INTEGER,
+                extraction_validation TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
             )
         """)

@@ -94,6 +94,7 @@ def db(monkeypatch):
                 organization_id INTEGER, created_by TEXT,
                 cycle_mode TEXT DEFAULT 'query', truecost_tiers TEXT,
                 source_lite_request_id INTEGER, study_series_id TEXT, prior_cycle_id INTEGER,
+                extraction_validation TEXT,
                 created_at TIMESTAMP, updated_at TIMESTAMP
             )
         """)
@@ -120,6 +121,7 @@ def db(monkeypatch):
                 soa_focus TEXT, rationale TEXT, status TEXT, organization_id INTEGER,
                 created_by TEXT, membership_program TEXT, tier_name TEXT,
                 subscription_state TEXT, expected_incentive TEXT, new_customer BOOLEAN,
+                tier TEXT, expected_answer TEXT, provenance TEXT, source_ref TEXT,
                 created_at TIMESTAMP, updated_at TIMESTAMP
             )
         """)

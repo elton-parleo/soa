@@ -33,6 +33,7 @@ def patched_engine(monkeypatch):
                 organization_id INTEGER, created_by TEXT,
                 cycle_mode TEXT DEFAULT 'query', truecost_tiers TEXT,
                 source_lite_request_id INTEGER, study_series_id TEXT, prior_cycle_id INTEGER,
+                extraction_validation TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
             )
         """)

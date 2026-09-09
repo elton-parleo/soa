@@ -31,6 +31,7 @@ def patched_engine(monkeypatch):
                 study_type TEXT, study_pattern TEXT,
                 organization_id INTEGER, created_by TEXT,
                 cycle_mode TEXT DEFAULT 'query', truecost_tiers TEXT,
+                extraction_validation TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
             )
         """)
