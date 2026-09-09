@@ -114,6 +114,10 @@ class PipelineOrchestrator:
         # emitted) — the two are separate stage methods on the same
         # instance, called in sequence by run_pipeline().
         self._pass2_observations_written = 0
+        # Layer 2's outcome histogram for this run, threaded the same way
+        # and for the same reason: the stage that computes it and the
+        # stage that reports it are different methods on one object.
+        self._expectation_outcomes = {}
 
         # Guard: refuse to rerun a fully complete cycle unless user passed explicit override flags
         if (
@@ -408,6 +412,8 @@ class PipelineOrchestrator:
         if self._lite_request_id is not None:
             await self._run_pass2_recode()
 
+        await self._run_expectation_scoring()
+
         return CodingStageResult(
             coded=summary.coded,
             needs_review=summary.needs_review_count,
@@ -465,6 +471,50 @@ class PipelineOrchestrator:
             )
         except Exception:
             logger.exception("Stage 2b (pass-2 recode) failed unexpectedly for cycle %s", self.cycle_code)
+
+    async def _run_expectation_scoring(self) -> None:
+        """
+        Stage 2c: Layer 2 accuracy scoring, for questions carrying a
+        typed expectation.
+
+        NOT lite-gated, unlike pass 2. Whether a study is grounded in a
+        published catalog is a property of the study, not of the customer
+        tier that commissioned it — and the gate is already the right one
+        by construction: scoreable_run_ids selects on expected_answer
+        being non-null, so a cycle with no grounded questions does nothing
+        and costs nothing.
+
+        Layer 1 has already run on every tier and is untouched here. This
+        adds one extraction call per run whose query carries an
+        expectation — so a Wiggle & Snug study is roughly its
+        catalog-question count times platforms times runs-per-query extra
+        calls, which is worth stating out loud because it is not small.
+
+        Never raises. A bug here must not fail Stage 2 or the pipeline:
+        Layer 2 is a second measurement over answers that already exist,
+        and losing it costs an accuracy rate, not the report.
+        """
+        try:
+            from scoring.expectation_batch import score_cycle
+
+            summary = await score_cycle(
+                self.cycle.id, concurrency=config.LITE_QUERY_CONCURRENCY,
+            )
+            if summary.total == 0:
+                return
+
+            self._expectation_outcomes = summary.by_outcome
+            logger.info(
+                "Stage 2c (expectation scoring) complete for cycle %s: "
+                "%d/%d scored, outcomes %s",
+                self.cycle_code, summary.succeeded, summary.total,
+                summary.by_outcome,
+            )
+        except Exception:
+            logger.exception(
+                "Stage 2c (expectation scoring) failed unexpectedly for cycle %s",
+                self.cycle_code,
+            )
 
     async def _run_stage_metrics(self) -> MetricsStageResult:
         """

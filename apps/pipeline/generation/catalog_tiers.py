@@ -214,6 +214,56 @@ def _row(
     }
 
 
+def _discriminators(product, variant) -> List[str]:
+    """
+    The phrases that tell this variant apart from its siblings: its size,
+    its pack format, its count.
+
+    Empty for a single-variant product — there is nothing to tell apart,
+    which is the same reason variant_display returns '' there. That
+    emptiness is load-bearing: it makes attribution matching a no-op for
+    products where any mention of the product IS a mention of the variant.
+    """
+    if len(product.variants) <= 1:
+        return []
+    parts = [variant.size, (variant.attributes or {}).get('pack')]
+    if variant.count and variant.count > 1:
+        parts.append(str(variant.count))
+    return [str(p).strip() for p in parts if p]
+
+
+def _attribution_hints(product, variant) -> dict:
+    """
+    What an answer's own words must (and must not) contain for a quantity
+    to count as being about THIS variant.
+
+    Two lists, because one is not enough. `attribution` alone would let
+    "Size 3 Big Pack" satisfy a Size 3 Small Pack question — they share a
+    size. `attribution_rivals` is what the siblings say and this variant
+    does not, so a stated attribution carrying one of those is a claim
+    about a different shelf, whatever else it also says.
+
+    Written at generation time rather than derived at scoring time
+    because the record can change underneath: a variant renamed after the
+    study was written should still be scored on what the question
+    actually asked about.
+    """
+    mine = _discriminators(product, variant)
+    if not mine:
+        return {}
+
+    lowered = {m.lower() for m in mine}
+    rivals = []
+    for sibling in product.variants:
+        if sibling.variant_id == variant.variant_id:
+            continue
+        for phrase in _discriminators(product, sibling):
+            if phrase.lower() not in lowered and phrase not in rivals:
+                rivals.append(phrase)
+
+    return {'attribution': mine, 'attribution_rivals': rivals}
+
+
 def _source_ref(snapshot, product, *, variant=None, offer_id=None) -> dict:
     """
     What the expectation was read from, and when that record was
@@ -231,6 +281,16 @@ def _source_ref(snapshot, product, *, variant=None, offer_id=None) -> dict:
     }
     if variant is not None:
         ref['variant_id'] = variant.variant_id
+        # What an answer's own words must contain for a quantity to count
+        # as being ABOUT this variant rather than one of its siblings.
+        # Only the distinguishing parts — size and count — never the
+        # product family, which every sibling shares.
+        #
+        # Written at generation time rather than derived at scoring time
+        # because the record can change underneath: a variant renamed
+        # after the study was written should still be scored on what the
+        # question actually asked about.
+        ref.update(_attribution_hints(product, variant))
     if offer_id is not None:
         ref['offer_id'] = offer_id
     return ref
