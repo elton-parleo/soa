@@ -111,6 +111,33 @@ export const truesyncApi = {
   getPublications: ({ limit = 500, ...opts } = {}) =>
     readJson(`/api/truesync/publications?limit=${limit}`, opts),
 
+  // ─── The study generator's catalog reads ────────────────────────
+  //
+  // Four public GETs that serve stored artifacts and never assemble,
+  // compile or reach the Deal Engine. That serve-on-read property is
+  // what makes them groundable: a generator reading a freshly
+  // recomputed price would be checking the system against itself.
+  //
+  // These are the same endpoints apps/pipeline/clients/truesync_catalog.py
+  // reads server-side at generation time. The modal reads them here so
+  // its examples can be true for the selected brand BEFORE anything is
+  // generated — see components/catalogTiers.js on why that is a mirror
+  // and not a server round-trip.
+
+  // Every merchant with a published TrueSync catalog. Not
+  // /demo/active-brand, which is scoped to whichever storefront is
+  // currently up: a brand swap changes the demo, not which records were
+  // published, and a study must keep reading its brand's catalog after
+  // the demo moves on.
+  getMerchants: (opts) =>
+    readJson('/api/truesync/merchants', opts),
+
+  getMerchantCatalog: (merchantSlug, opts) =>
+    readJson(`/api/truesync/merchants/${encodeURIComponent(merchantSlug)}/catalog`, opts),
+
+  getMerchantIncentives: (merchantSlug, opts) =>
+    readJson(`/api/truesync/merchants/${encodeURIComponent(merchantSlug)}/incentives`, opts),
+
   // Prospects — brands we observe but have no authorization to publish
   // for. Slug-keyed, and config rather than DB rows on the supply side,
   // so the list is small and cheap.

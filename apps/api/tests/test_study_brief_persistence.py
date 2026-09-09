@@ -279,3 +279,85 @@ def test_the_schema_itself_rejects_neither_combination():
         )
         assert req.retailer_names == []
         assert req.naming_rule_enabled is rule
+
+
+# ─── the syndicated brand lands on the row too ────────────────────────────
+#
+# Same reason as everything above: the API and the pipeline share nothing
+# but this table, so a brand accepted here and not written down is a brand
+# the generator can never ground in.
+
+def _brand_job(engine, study_type):
+    with engine.connect() as conn:
+        return conn.execute(text("""
+            SELECT syndicated_merchant, tier_config
+            FROM soa_query_generation_jobs WHERE study_type = :st
+        """), {"st": study_type}).fetchone()
+
+
+TIER_CONFIG = {
+    "brand_direct": {"enabled": True, "count": 12},
+    "catalog_accuracy": {"enabled": True},
+    "value_incentives": {"enabled": True},
+    "category_control": {"enabled": False},
+}
+
+
+def test_the_syndicated_brand_and_tier_config_are_persisted(patched_engine):
+    result = _generate({
+        **FULL_BRIEF,
+        "syndicated_merchant": "wiggle-and-snug",
+        "tier_config": TIER_CONFIG,
+    })
+    merchant, tier_config = _brand_job(patched_engine, result.study_type)
+
+    assert merchant == "wiggle-and-snug"
+    assert json.loads(tier_config) == TIER_CONFIG
+
+
+def test_an_untoggled_study_writes_both_columns_null(patched_engine):
+    """The toggle being off is not a tier_config of all-false; it is the
+    absence of one, which is exactly what every client predating the
+    toggle sends."""
+    result = _generate(FULL_BRIEF)
+    assert _brand_job(patched_engine, result.study_type) == (None, None)
+
+
+def test_a_tier_that_needs_a_catalog_is_rejected_without_a_brand():
+    """Accepting it and then quietly building nothing would hand back a
+    study that looks like it has tiers and does not."""
+    with pytest.raises(Exception) as exc:
+        StudyGenerateRequest(
+            study_name="X", tier_config={"catalog_accuracy": {"enabled": True}},
+        )
+    assert "syndicated_merchant" in str(exc.value)
+
+
+def test_the_control_tier_alone_needs_no_brand():
+    """It is a tag on the study's own questions, and reads no catalog."""
+    request = StudyGenerateRequest(
+        study_name="X", tier_config={"category_control": {"enabled": True}},
+    )
+    assert request.syndicated_merchant is None
+
+
+def test_an_unknown_tier_is_rejected_before_it_reaches_the_row():
+    with pytest.raises(Exception) as exc:
+        StudyGenerateRequest(
+            study_name="X", syndicated_merchant="wiggle-and-snug",
+            tier_config={"price_accuracy": {"enabled": True}},
+        )
+    assert "price_accuracy" in str(exc.value)
+
+
+def test_the_tier_names_are_read_off_the_shared_vocabulary_not_relisted():
+    """Same discipline as the constraints test above: one source of truth
+    for what a tier is, shared with the model, the migration and the
+    scorer."""
+    from soa_shared.expected_answers import QUERY_TIERS
+
+    for tier in QUERY_TIERS:
+        StudyGenerateRequest(
+            study_name="X", syndicated_merchant="wiggle-and-snug",
+            tier_config={tier: {"enabled": True}},
+        )

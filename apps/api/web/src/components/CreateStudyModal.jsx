@@ -1,5 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { api } from '../api.js'
+import { truesyncApi } from '../truesyncApi.js'
+import {
+  DEFAULT_BRAND_DIRECT_COUNT,
+  buildSnapshot,
+  catalogReadback,
+  tallyText,
+  tierPreview,
+} from './catalogTiers.js'
 
 // ─── Design tokens (verbatim from StudyLibrary.jsx) ──────────────────────────
 const T = {
@@ -33,6 +41,60 @@ export const SPECIFICITY_MODES = [
   { value: 'even_split', label: 'Even split',
     hint: 'Roughly equal numbers of Broad, Mid and Narrow questions.' },
 ]
+
+// ─── The syndicated-brand tiers ──────────────────────────────────────────────
+//
+// Order is the order they are shown, which is the order they were
+// designed in: the tier a shopper's question sounds most like first, the
+// control last.
+//
+// `additive` is the field that matters. Three tiers add questions to the
+// study; category_control is a TAG on the stage-count questions the study
+// was already going to have, and the tally has to say so or the number
+// stops adding up in front of the user.
+export const TIER_ROWS = [
+  {
+    key: 'brand_direct',
+    title: 'Brand-direct',
+    description: "Shoppers asking for this brand by name — products, sizes, where to buy.",
+    source: 'Written by AI from the catalog',
+    sourceTone: 'ai',
+    additive: true,
+    defaultOn: true,
+  },
+  {
+    key: 'catalog_accuracy',
+    title: 'Catalog accuracy',
+    description: 'Price and pack count for every sampled variant, answer known to the cent.',
+    source: 'Built from the catalog, not by AI',
+    sourceTone: 'catalog',
+    additive: true,
+    defaultOn: true,
+  },
+  {
+    key: 'value_incentives',
+    title: 'Value & incentives',
+    description: 'Whether the member price, coupon code or points survive into the answer.',
+    source: 'Built from live incentives, not by AI',
+    sourceTone: 'catalog',
+    additive: true,
+    defaultOn: true,
+  },
+  {
+    key: 'category_control',
+    title: 'Category control',
+    description: '"Best diapers for a newborn" with no brand named. No expected answer — '
+      + 'this brand is not expected to win these; they show what unbranded questions return.',
+    source: 'Written by AI',
+    sourceTone: 'control',
+    additive: false,
+    defaultOn: false,
+  },
+]
+
+export const DEFAULT_TIER_STATE = Object.fromEntries(
+  TIER_ROWS.map(row => [row.key, row.defaultOn]),
+)
 
 // ─── Stage distribution presets ──────────────────────────────────────────────
 //
@@ -296,6 +358,22 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
   const [specificityMode, setSpecificityMode] = useState(SPECIFICITY_MODES[0].value)
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
+  // ─── Syndicated brand ──────────────────────────────────────────────
+  //
+  // brandOn defaults FALSE and stays false until a brand is chosen. That
+  // is the whole compatibility promise: an existing user who opens this
+  // modal and never touches the block sends exactly the payload they
+  // sent before it existed.
+  const [brandOn, setBrandOn] = useState(false)
+  const [merchants, setMerchants] = useState([])
+  const [merchantsError, setMerchantsError] = useState(null)
+  const [merchantSlug, setMerchantSlug] = useState('')
+  const [tierState, setTierState] = useState(DEFAULT_TIER_STATE)
+  const [catalog, setCatalog] = useState(null)
+  const [catalogError, setCatalogError] = useState(null)
+  const [catalogLoading, setCatalogLoading] = useState(false)
+  const [examplesOpen, setExamplesOpen] = useState(false)
+
   // Category inference. `locked` is permanent for the session once the
   // user touches a chip; `resetAvailable` is what the reset control's
   // visibility hangs on.
@@ -345,6 +423,13 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
     setResetAvailable(false)
     setSubmitting(false)
     setError(null)
+    setBrandOn(false)
+    setMerchantSlug('')
+    setTierState(DEFAULT_TIER_STATE)
+    setCatalog(null)
+    setCatalogError(null)
+    setCatalogLoading(false)
+    setExamplesOpen(false)
 
     api.getQueryConstraints()
       .then(data => {
@@ -362,6 +447,18 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
     api.getEntities()
       .then(res => setEntities(Array.isArray(res) ? res : []))
       .catch(() => setEntities([]))
+
+    // The brand list, from TrueSync. A failure here is not an error the
+    // form has to recover from — it means there is no brand to ground
+    // in, so the block says so and the study is generated ungrounded,
+    // which is a valid study and the only one that existed until now.
+    setMerchantsError(null)
+    truesyncApi.getMerchants()
+      .then(rows => setMerchants(Array.isArray(rows) ? rows : []))
+      .catch(err => {
+        setMerchants([])
+        setMerchantsError(err?.message || 'TrueSync is unreachable')
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
@@ -377,8 +474,70 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
     setCategories(prev => (sameMembers(prev, inferred) ? prev : inferred))
   }, [inferred, inferenceLocked])
 
-  const total = Object.values(stageCounts).reduce((a, b) => a + (Number(b) || 0), 0)
+  // ─── The catalog read for the selected brand ───────────────────────
+  //
+  // Two reads, on the brand select rather than on every keystroke. They
+  // are what makes the examples true: a tier row that showed an invented
+  // question would be a promise about a study nobody is going to get.
+  useEffect(() => {
+    if (!open || !brandOn || !merchantSlug) {
+      setCatalog(null)
+      setCatalogError(null)
+      return undefined
+    }
+
+    const controller = new AbortController()
+    setCatalogLoading(true)
+    setCatalogError(null)
+
+    Promise.all([
+      truesyncApi.getMerchantCatalog(merchantSlug, { signal: controller.signal }),
+      // The incentives read is allowed to fail on its own: without it the
+      // value tier has nothing to build, which is a smaller loss than the
+      // whole block going dark.
+      truesyncApi.getMerchantIncentives(merchantSlug, { signal: controller.signal })
+        .catch(() => null),
+    ])
+      .then(([catalogPayload, incentivesPayload]) => {
+        if (controller.signal.aborted) return
+        setCatalog(buildSnapshot(catalogPayload, {
+          merchants, incentives: incentivesPayload,
+        }))
+      })
+      .catch(err => {
+        if (controller.signal.aborted) return
+        setCatalog(null)
+        setCatalogError(err?.message || 'Could not read that brand\'s catalog')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCatalogLoading(false)
+      })
+
+    return () => controller.abort()
+  }, [open, brandOn, merchantSlug, merchants])
+
+  const stageTotal = Object.values(stageCounts).reduce((a, b) => a + (Number(b) || 0), 0)
+
+  // Live per-tier counts and examples, computed from the catalog the
+  // browser already holds — see components/catalogTiers.js.
+  const preview = useMemo(() => {
+    if (!brandOn || !catalog) return null
+    return tierPreview(catalog, { enabled: tierState, stageTotal })
+  }, [brandOn, catalog, tierState, stageTotal])
+
+  // The tally, and the ceiling it is measured against. Catalog-built
+  // questions count against the SAME 100 as the AI-written ones: they are
+  // questions in the same study, run on the same surfaces, at the same
+  // cost per run.
+  const catalogTotal = preview
+    ? (preview.catalog_accuracy.count + preview.value_incentives.count
+       + preview.brand_direct.count)
+    : 0
+  const total = stageTotal + catalogTotal
   const overCeiling = total > MAX_QUESTIONS
+  const tally = preview
+    ? tallyText(preview, stageTotal, MAX_QUESTIONS)
+    : null
 
   const namedRetailers = retailers.map(r => (r || '').trim()).filter(Boolean)
   // An empty retailer list IS the unbranded study. It is a valid, and in
@@ -398,8 +557,15 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
   // anywhere the rule has nothing to govern either way.
   const unbranded = namedRetailers.length === 0
 
+  // stageTotal, not total. Catalog-built questions are additive to a
+  // study, not a study on their own: target_count is what the generator
+  // distributes across stages and the API requires it to be at least 1,
+  // so a study of nothing but catalog questions would be rejected at the
+  // request rather than here. Saying so in the form is better than
+  // letting the button submit into a 422.
+  const noStageQuestions = stageTotal === 0
   const canSubmit = (
-    !!studyName.trim() && total > 0 && !overCeiling && !submitting
+    !!studyName.trim() && !noStageQuestions && !overCeiling && !submitting
   )
 
   function toggleCategory(category) {
@@ -435,6 +601,30 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
     ))
   }
 
+  function toggleTier(key) {
+    setTierState(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  /**
+   * The brand half of the request, or nothing at all.
+   *
+   * Nothing at all is the point. With the toggle off — or on but with no
+   * brand chosen — this returns {}, so the spread below produces exactly
+   * the payload this modal sent before the block existed, key for key.
+   */
+  function brandPayload() {
+    if (!brandOn || !merchantSlug) return {}
+    return {
+      syndicated_merchant: merchantSlug,
+      tier_config: Object.fromEntries(TIER_ROWS.map(row => [
+        row.key,
+        row.key === 'brand_direct'
+          ? { enabled: !!tierState[row.key], count: DEFAULT_BRAND_DIRECT_COUNT }
+          : { enabled: !!tierState[row.key] },
+      ])),
+    }
+  }
+
   async function handleSubmit() {
     if (!canSubmit) return
     setSubmitting(true)
@@ -443,7 +633,12 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
       const result = await api.generateStudy({
         study_name:   studyName.trim(),
         description:  description.trim() || null,
-        target_count: total,
+        // The STAGE total, not the grand total. This is the number the
+        // generator distributes across stages; catalog-built questions
+        // are not generated from it and would inflate every stage bucket
+        // if they were folded in here. The shared 100 ceiling is enforced
+        // on the grand total above, where the user can see it.
+        target_count: stageTotal,
         study_pattern: studyPattern || null,
         retailer_names: namedRetailers,
         allowed_categories: categories,
@@ -452,6 +647,7 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
         naming_rule_enabled: namingRule,
         personas,
         specificity_mode: specificityMode,
+        ...brandPayload(),
       })
       onCreated(result.study_type)
     } catch (err) {
@@ -610,6 +806,207 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
             )}
           </div>
 
+          {/* 3b. Syndicated brand.
+
+              Off by default and inert until a brand is chosen — the two
+              conditions are separate on purpose. The toggle says "I want
+              a grounded study"; the select says which catalog. Sending a
+              tier_config with no merchant would name tiers nothing could
+              build, so brandPayload() sends neither until both are
+              settled, and the untoggled request is byte-for-byte the
+              request this modal sent before the block existed. */}
+          <div>
+            <label style={labelStyle}>Syndicated brand</label>
+
+            <div style={{
+              border: `1px solid ${T.border}`, background: T.offWhite,
+              borderRadius: 8, padding: '12px 14px',
+            }}>
+              <Checkbox
+                checked={brandOn}
+                onChange={setBrandOn}
+                disabled={!!merchantsError}
+                title="Ground questions in a brand's published catalog"
+              >
+                Adds questions about the brand&apos;s real products with the published
+                answer attached, so the report can score accuracy, not just mentions.
+              </Checkbox>
+            </div>
+
+            {merchantsError && (
+              <div style={helperStyle}>
+                No syndicated brands available — TrueSync could not be reached
+                ({merchantsError}). The study will be generated exactly as it is today.
+              </div>
+            )}
+
+            {brandOn && (
+              <div style={{ marginTop: 10 }}>
+                <select
+                  aria-label="Syndicated brand"
+                  value={merchantSlug}
+                  onChange={e => setMerchantSlug(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">Choose a syndicated brand…</option>
+                  {merchants.map(m => (
+                    <option key={m.slug} value={m.slug}>
+                      {m.domain ? `${m.display_name} (${m.domain})` : m.display_name}
+                    </option>
+                  ))}
+                </select>
+
+                {catalogLoading && (
+                  <div style={helperStyle}>Reading the published catalog…</div>
+                )}
+
+                {catalogError && (
+                  <div style={helperStyle}>
+                    Could not read that catalog ({catalogError}). Pick another brand, or
+                    untick this to generate the study ungrounded.
+                  </div>
+                )}
+
+                {/* The read-back. Counts, and then the one sentence that
+                    says what these numbers are: a snapshot of a record,
+                    not a live feed. An expectation written today is
+                    checked against today's record for as long as the
+                    study exists, so a republished price means the study
+                    is asking about a price that changed — which is a
+                    regeneration, not a refresh. */}
+                {catalog && !catalogLoading && (
+                  <div
+                    data-testid="catalog-readback"
+                    style={{ ...helperStyle, marginTop: 8, marginBottom: 10 }}
+                  >
+                    Catalog read from TrueSync just now —{' '}
+                    <b style={{ color: T.text, fontWeight: 600 }}>
+                      {catalogReadback(catalog)}
+                    </b>. Republish the catalog and regenerate to refresh the expected answers.
+                  </div>
+                )}
+
+                {catalog && !catalogLoading && TIER_ROWS.map(row => {
+                  const tier = preview?.[row.key]
+                  const on = !!tierState[row.key]
+                  return (
+                    <div
+                      key={row.key}
+                      data-testid={`tier-${row.key}`}
+                      style={{
+                        display: 'flex', gap: 12, alignItems: 'flex-start',
+                        border: `1px solid ${T.border}`, borderRadius: 8,
+                        padding: '11px 14px', background: T.white, marginBottom: 7,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        aria-label={row.title}
+                        onChange={() => toggleTier(row.key)}
+                        style={{ marginTop: 2, cursor: 'pointer' }}
+                      />
+                      <div style={{ flex: 1 }}>
+                        <div style={{
+                          display: 'flex', justifyContent: 'space-between', gap: 8,
+                          fontSize: 13, fontWeight: 600, color: T.text, marginBottom: 2,
+                        }}>
+                          <span>{row.title}</span>
+                          <span style={{ fontWeight: 400, color: T.slate }}>
+                            {!on ? ''
+                              : row.additive
+                                ? `${tier?.count ?? 0} question${tier?.count === 1 ? '' : 's'}`
+                                : 'uses the stage counts above'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 12, color: T.slate, lineHeight: 1.5 }}>
+                          {row.description}
+                        </div>
+                        <span style={{
+                          display: 'inline-block', marginTop: 6, fontSize: 10,
+                          fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
+                          borderRadius: 4, padding: '2px 7px',
+                          background: row.sourceTone === 'catalog' ? '#DCFCE7'
+                            : row.sourceTone === 'ai' ? '#EFF6FF' : '#F1F5F9',
+                          color: row.sourceTone === 'catalog' ? '#14532D'
+                            : row.sourceTone === 'ai' ? T.indigo : T.slate,
+                        }}>{row.source}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* Examples, live-computed from THIS brand's catalog. The
+                    catalog-built ones are the exact strings the generator
+                    will write, because both sides run the same rules over
+                    the same record (see catalogTiers.js). The
+                    brand-direct one is labelled illustrative, because its
+                    wording is written by a model at generation time and
+                    showing an invented sentence as the real question is
+                    the one dishonesty this panel exists to avoid. */}
+                {catalog && !catalogLoading && (
+                  <div style={{ borderTop: `1px solid ${T.border}`, marginTop: 10, paddingTop: 10 }}>
+                    <button
+                      type="button"
+                      aria-expanded={examplesOpen}
+                      onClick={() => setExamplesOpen(o => !o)}
+                      style={{
+                        background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                        fontFamily: 'inherit', fontSize: 13, fontWeight: 600, color: T.textMid,
+                      }}
+                    >{examplesOpen ? '▾' : '▸'} Examples of what gets asked</button>
+
+                    {examplesOpen && (
+                      <div data-testid="tier-examples" style={{ paddingTop: 12 }}>
+                        {TIER_ROWS.filter(row => tierState[row.key] && preview?.[row.key]?.example)
+                          .map(row => {
+                            const example = preview[row.key].example
+                            return (
+                              <div key={row.key} style={{ marginBottom: 10 }}>
+                                <div style={{ fontSize: 13, color: T.text, marginBottom: 4 }}>
+                                  {example.text}
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                  {example.expected.map(chip => (
+                                    <span
+                                      key={chip}
+                                      style={{
+                                        fontSize: 12, padding: '2px 9px', borderRadius: 99,
+                                        border: `1px solid ${example.illustrative ? T.border : '#BBF7D0'}`,
+                                        background: example.illustrative ? T.white : '#DCFCE7',
+                                        color: example.illustrative ? T.slate : '#14532D',
+                                      }}
+                                    >{chip}</span>
+                                  ))}
+                                </div>
+                                {example.illustrative && (
+                                  <div style={{ ...helperStyle, marginTop: 4 }}>
+                                    Wording is written by AI at generation time — the
+                                    expectation is what is fixed.
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        {TIER_ROWS.every(row => !tierState[row.key] || !preview?.[row.key]?.example) && (
+                          <div style={helperStyle}>
+                            Nothing to show — every tier with a fixed question is unticked.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div style={helperStyle}>
+                  Accuracy and value questions carry their expected answer from the
+                  published record. Every question carries its tier, so the report can
+                  split visibility by tier and track it against publish and approval dates.
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* 4. Categories */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -679,16 +1076,48 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
               marginTop: 10, fontSize: 13,
             }}>
               <span style={{ color: T.slate, fontSize: 11 }}>{presetHint}</span>
-              <span style={{ fontWeight: 700, color: overCeiling ? T.red : T.text }}>
-                {total} question{total === 1 ? '' : 's'} total
-              </span>
+              {!tally && (
+                <span style={{ fontWeight: 700, color: overCeiling ? T.red : T.text }}>
+                  {total} question{total === 1 ? '' : 's'} total
+                </span>
+              )}
             </div>
-            {overCeiling && (
+
+            {/* The tally, once a catalog is contributing. It names both
+                halves because they are written by different things and
+                the user is choosing how much of each to have — and it
+                measures both against the SAME 100, because they are
+                questions in one study, run on the same surfaces, at the
+                same cost per run. */}
+            {tally && (
+              <div
+                data-testid="tally"
+                style={{
+                  marginTop: 9, borderRadius: 6, padding: '7px 11px', fontSize: 12,
+                  background: tally.tone === 'ok' ? '#DCFCE7' : T.amberLight,
+                  color: tally.tone === 'ok' ? '#14532D' : '#78350F',
+                }}
+              >{tally.text}</div>
+            )}
+
+            {overCeiling && !tally && (
               <div style={{
                 marginTop: 8, background: T.amberLight, border: `1px solid #FDE68A`,
                 borderRadius: 8, padding: '9px 12px', fontSize: 12, color: '#92400E',
               }}>
                 That is over the {MAX_QUESTIONS}-question ceiling. Lower one of the stages.
+              </div>
+            )}
+
+            {noStageQuestions && (
+              <div style={{
+                marginTop: 8, background: T.amberLight, border: '1px solid #FDE68A',
+                borderRadius: 8, padding: '9px 12px', fontSize: 12, color: '#92400E',
+              }}>
+                {catalogTotal > 0
+                  ? 'Catalog questions are added to a study, not a study on their own — '
+                    + 'allocate at least one question to a stage.'
+                  : 'No questions allocated yet.'}
               </div>
             )}
           </div>

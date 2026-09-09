@@ -189,6 +189,7 @@ def generate_study(
                     study_pattern, retailer_names, allowed_categories,
                     stage_targets, rotate_named_retailer,
                     naming_rule_enabled, personas, specificity_mode,
+                    syndicated_merchant, tier_config,
                     created_at
                 ) VALUES (
                     :study_type, :study_name, :description,
@@ -197,6 +198,7 @@ def generate_study(
                     :study_pattern, :retailer_names, :allowed_categories,
                     :stage_targets, :rotate_named_retailer,
                     :naming_rule_enabled, :personas, :specificity_mode,
+                    :syndicated_merchant, :tier_config,
                     NOW()
                 )
                 RETURNING id, status
@@ -221,6 +223,17 @@ def generate_study(
                 "naming_rule_enabled":   data.naming_rule_enabled,
                 "personas":              _as_json(data.personas),
                 "specificity_mode":      data.specificity_mode,
+                # NULL/NULL is the toggle being off, and is what every
+                # client that predates it sends. The worker branches on
+                # syndicated_merchant alone: with no merchant there is no
+                # catalog read and no tier machinery in the path at all.
+                "syndicated_merchant":   data.syndicated_merchant,
+                # What the modal ASKED for. The worker rewrites this
+                # column with the resolved config once the study exists —
+                # sampled variant ids, per-tier counts, expected-nulls
+                # notes — because a request is not evidence of what a
+                # study contains.
+                "tier_config":           _as_json(data.tier_config),
             },
         )
         # Read the RETURNING row BEFORE committing, not after. Both
