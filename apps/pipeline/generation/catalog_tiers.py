@@ -1,0 +1,598 @@
+"""
+The catalog-built question tiers.
+
+Two of the four tiers are built here, from the published record and with
+no model call at all:
+
+  catalog_accuracy   price per sampled variant, GTIN riding along as a
+                     secondary expectation, pack count where the variant
+                     has one to ask about
+  value_incentives   one question per mechanic the record actually has —
+                     coupon code, member price, points
+
+The other two are elsewhere because they are model work:
+brand_direct is the existing generator prompt extended with this catalog
+as context (generation/query_generator.py), and category_control is a tag
+applied to the study's ordinary stage-count questions rather than any new
+generation at all.
+
+Why templates and not a model. These questions exist so an answer can be
+compared to a published number. A model asked to write them would
+paraphrase — "roughly what does the size 3 pack run?" — and a paraphrase
+moves the goalposts between one run of a study and the next, which is
+exactly what a longitudinal measure cannot afford. Fixed wording also
+means the question text itself is evidence: read it back in six months
+and it still says which variant it asked about.
+
+WORDING IS FROZEN. The templates below are mirrored, deliberately and by
+hand, in apps/api/web/src/components/catalogTiers.js so the Create Study
+modal can show true examples for the selected brand before anything is
+generated. Both sides assert the same literal strings against the same
+Wiggle & Snug fixture (tests/test_catalog_tiers.py and
+CreateStudyModal.brand.test.jsx), so an edit to one that is not made to
+the other fails a test rather than drifting quietly into a study.
+"""
+import logging
+from typing import List, Optional
+
+from soa_shared import expected_answers as ea
+
+logger = logging.getLogger(__name__)
+
+# The catalog-accuracy tier's ceiling, counted in VARIANTS sampled, not
+# in questions emitted. The brief says "cap the tier at 20 questions; if
+# the catalog has more variants, sample..." — two sentences that only
+# agree if the thing being sampled and capped is the variant, which is
+# also what makes the cap stable when a second template (pack count)
+# applies to some variants and not others. tier_config records both the
+# sampled variants and the resulting question count, so the reading is
+# visible in the data rather than only in this comment.
+DEFAULT_VARIANT_CAP = 20
+
+# What the brand-direct tier asks for when the caller does not say.
+DEFAULT_BRAND_DIRECT_COUNT = 12
+
+# Catalog-built questions are all bottom-of-funnel by construction: a
+# price, a code, a pack count and a member price are the things a shopper
+# asks when they have decided what to buy and are deciding whether to buy
+# it here.
+CATALOG_STAGE = 'Ready to Buy'
+CATALOG_SPECIFICITY = 'Narrow'
+
+
+# ─── Naming ────────────────────────────────────────────────────────────────
+
+def variant_display(product, variant, *, with_count: bool = True) -> str:
+    """
+    The words that distinguish this variant from its siblings.
+
+    Built from the record's structured fields rather than by chipping the
+    product title off the front of the variant title. Both would work on
+    Wiggle & Snug; only this one keeps working on a merchant whose
+    variant titles are not prefixed with the product name.
+
+    Empty string for a single-variant product, which is the point of the
+    function: a variant display exists to distinguish variants, and with
+    one variant there is nothing to distinguish. "What does the Wiggle &
+    Snug Cloud Wipes 3-Pack cost?" is the question; "...Cloud Wipes
+    3-Pack 3 packs (216 ct) cost?" is a machine talking.
+
+    with_count=False is for the pack-count question, which must not state
+    its own answer in the question.
+    """
+    if len(product.variants) <= 1:
+        return ''
+
+    parts = []
+    if variant.size:
+        parts.append(str(variant.size).strip())
+
+    # The record's own shopper-facing attribute, lower-cased: 'Small Pack'
+    # is a label in a catalog, 'small pack' is how it is said out loud,
+    # and these questions are meant to read like something typed into an
+    # assistant.
+    pack = (variant.attributes or {}).get('pack')
+    if pack:
+        parts.append(str(pack).strip().lower())
+
+    if with_count and variant.count and variant.count > 1:
+        parts.append(f"({variant.count} ct)")
+
+    return ' '.join(parts)
+
+
+def _subject(brand: Optional[str], product, variant, *, with_count: bool = True) -> str:
+    """'Wiggle & Snug Snug-Fit Diapers Size 3 small pack (84 ct)'"""
+    words = [w for w in (brand, product.title) if w]
+    display = variant_display(product, variant, with_count=with_count)
+    if display:
+        words.append(display)
+    return ' '.join(words)
+
+
+# ─── Sampling ──────────────────────────────────────────────────────────────
+
+def _price_spread_order(variants: List) -> List:
+    """
+    A product's variants ordered so that taking the first N spans its
+    price range: cheapest, dearest, second-cheapest, second-dearest, ...
+
+    Taking the first N of a plain price sort would sample only the bottom
+    of the range, and a study that only ever asks about the cheapest pack
+    cannot tell you whether the assistant knows the dear one.
+
+    Variants with no parseable price sort last, in catalog order. They are
+    not dropped: a variant whose price will not parse is a finding about
+    the record, and one that never appears in a study is a finding nobody
+    sees.
+    """
+    priced, unpriced = [], []
+    for variant in variants:
+        amount = ea.normalize_money(variant.list_price)
+        (priced if amount is not None else unpriced).append((amount, variant))
+
+    priced.sort(key=lambda pair: float(pair[0]))
+    ordered = []
+    low, high = 0, len(priced) - 1
+    while low <= high:
+        ordered.append(priced[low][1])
+        if low != high:
+            ordered.append(priced[high][1])
+        low += 1
+        high -= 1
+    return ordered + [variant for _amount, variant in unpriced]
+
+
+def sample_variants(snapshot, cap: int = DEFAULT_VARIANT_CAP) -> List:
+    """
+    Up to `cap` variants, covering every product at least once and
+    spreading across each product's price points.
+
+    Round-robin across products, taking one variant from each in turn.
+    That ordering is what makes the coverage guarantee hold: taking a
+    product's variants in a block would spend the whole cap on the first
+    product with more variants than the cap.
+
+    Returns [(product, variant), ...] in catalog order rather than in the
+    order they were picked, so the generated questions read down the
+    catalog rather than zig-zagging through it.
+
+    When a catalog has MORE products than the cap, not every product can
+    be covered — the guarantee is arithmetically impossible, and the
+    round-robin degrades to "the first `cap` products, one variant each",
+    which is the closest thing to it. tier_config records exactly which
+    variants were taken either way, so what was measured is never a
+    matter of re-deriving this function.
+    """
+    queues = [_price_spread_order(p.variants) for p in snapshot.products]
+    picked = set()
+    index = 0
+    while len(picked) < cap and any(queues):
+        progressed = False
+        for queue in queues:
+            if index < len(queue):
+                progressed = True
+                picked.add(queue[index].variant_id)
+                if len(picked) >= cap:
+                    break
+        if not progressed:
+            break
+        index += 1
+
+    return [
+        (product, variant)
+        for product, variant in snapshot.variants()
+        if variant.variant_id in picked
+    ]
+
+
+# ─── Row construction ──────────────────────────────────────────────────────
+
+def _row(
+    *, query_text, tier, provenance, expected_answer, source_ref,
+    category, persona, stage=CATALOG_STAGE, specificity=CATALOG_SPECIFICITY,
+    soa_focus, rationale,
+) -> dict:
+    """
+    One row in the same shape worker.py's _insert_generated_rows already
+    writes, plus the four grounding columns. study_pattern is stamped by
+    the caller, exactly as it is for AI-written rows.
+    """
+    return {
+        'query_text':      query_text,
+        'category':        category,
+        'stage':           stage,
+        'specificity':     specificity,
+        'persona':         persona,
+        'status':          'Active',
+        'soa_focus':       soa_focus,
+        'rationale':       rationale,
+        'tier':            tier,
+        'expected_answer': ea.validate(expected_answer),
+        'provenance':      provenance,
+        'source_ref':      source_ref,
+    }
+
+
+def _source_ref(snapshot, product, *, variant=None, offer_id=None) -> dict:
+    """
+    What the expectation was read from, and when that record was
+    published.
+
+    published_at is the RECORD's, never now(): it is what a later
+    comparison says the claim was made against, and it is what phase 2
+    plots publish and approval markers from without needing a re-run.
+    """
+    ref = {
+        'merchant_slug': snapshot.merchant_slug,
+        'listing_id':    product.listing_id,
+        'product_id':    product.product_id,
+        'published_at':  product.published_at,
+    }
+    if variant is not None:
+        ref['variant_id'] = variant.variant_id
+    if offer_id is not None:
+        ref['offer_id'] = offer_id
+    return ref
+
+
+# ─── Tier: catalog accuracy ────────────────────────────────────────────────
+
+def build_catalog_accuracy(
+    snapshot, *, category, persona, cap: int = DEFAULT_VARIANT_CAP,
+) -> tuple:
+    """
+    Price per sampled variant, plus pack count where the variant has one
+    to ask about. Returns (rows, tier_report).
+
+    GTIN is attached to the price question as a SECONDARY expectation and
+    is never asked. An assistant that volunteers the right GTIN is
+    demonstrating catalog-level grounding a price alone does not prove;
+    an assistant that does not is not wrong, because nobody asked it for
+    an identifier. Keeping it out of the denominator is what lets it be
+    reported as the bonus signal it is.
+    """
+    sampled = sample_variants(snapshot, cap)
+    rows: List[dict] = []
+    skipped_no_price: List[str] = []
+
+    for product, variant in sampled:
+        amount = ea.normalize_money(variant.list_price)
+        if amount is None:
+            # A variant with no parseable published price has no price
+            # expectation to carry. Recorded rather than silently
+            # dropped — an unparseable stored price is a finding about
+            # the record, and this is where it becomes visible.
+            skipped_no_price.append(variant.variant_id)
+        else:
+            expectation = ea.price(amount, variant.currency or 'USD')
+            if variant.gtin:
+                expectation = ea.with_secondary(expectation, [ea.gtin(variant.gtin)])
+
+            subject = _subject(snapshot.brand, product, variant)
+            rows.append(_row(
+                query_text=f"What does the {subject} cost?",
+                tier='catalog_accuracy',
+                provenance='catalog',
+                expected_answer=expectation,
+                source_ref=_source_ref(snapshot, product, variant=variant),
+                category=category,
+                persona=persona,
+                soa_focus='Catalog Accuracy, Price Accuracy',
+                rationale=(
+                    f"The published list price for {variant.variant_id} is "
+                    f"{amount} {variant.currency or 'USD'}; the answer either "
+                    f"states it, states a price we published before, or states "
+                    f"one we never did."
+                ),
+            ))
+
+        # The count question is asked only where the variant display can
+        # name the variant WITHOUT stating the count — otherwise the
+        # question contains its own answer. That is why variant_display
+        # takes with_count at all.
+        countless = variant_display(product, variant, with_count=False)
+        if variant.count and variant.count > 1 and countless:
+            subject = _subject(snapshot.brand, product, variant, with_count=False)
+            rows.append(_row(
+                query_text=f"How many come in the {subject}?",
+                tier='catalog_accuracy',
+                provenance='catalog',
+                expected_answer=ea.pack_count(variant.count),
+                source_ref=_source_ref(snapshot, product, variant=variant),
+                category=category,
+                persona=persona,
+                soa_focus='Catalog Accuracy, Pack Size Accuracy',
+                rationale=(
+                    f"The published record states {variant.count} units for "
+                    f"{variant.variant_id}."
+                ),
+            ))
+
+    report = {
+        'sampled_variants': [v.variant_id for _p, v in sampled],
+        'variants_available': snapshot.variant_count,
+        'variant_cap': cap,
+        'sampled': len(sampled) < snapshot.variant_count,
+        'skipped_no_price': skipped_no_price,
+        'count': len(rows),
+    }
+    return rows, report
+
+
+# ─── Tier: value & incentives ──────────────────────────────────────────────
+
+def _code_expectation(incentive) -> Optional[dict]:
+    """
+    The typed expectation for one coded offer, or None if the record does
+    not state a value we could compare.
+
+    A code with no comparable value is skipped rather than asked with a
+    presence-only expectation. "SNUG3 exists" is not the claim that
+    matters — the claim that matters is what a shopper saves by typing
+    it, and an answer that gets the code right and the saving wrong is
+    the failure this tier exists to catch.
+    """
+    code = incentive.get('promo_code')
+    if not code:
+        return None
+
+    value = incentive.get('value') or {}
+    if value.get('discount_amount') is not None:
+        return ea.code(code, 'amount_off', value['discount_amount'])
+    if value.get('discount_percent') is not None:
+        return ea.code(code, 'percent_off', value['discount_percent'])
+    if value.get('member_price') is not None:
+        return ea.code(code, 'member_price', value['member_price'])
+    return None
+
+
+def _points_expectation(rule) -> Optional[dict]:
+    if rule.get('points_multiplier') is not None:
+        return ea.points(
+            'per_dollar', rate=rule['points_multiplier'],
+            program_name=rule.get('program_name'),
+        )
+    if rule.get('points') is not None:
+        return ea.points(
+            'fixed', total=rule['points'], program_name=rule.get('program_name'),
+        )
+    return None
+
+
+def _code_question_text(snapshot, incentive) -> str:
+    """
+    How a shopper would ask about THIS code.
+
+    Two codes on one brand need two questions a shopper would actually
+    type differently, or the study contains a question whose right answer
+    depends on which code the assistant happened to reach for. The record
+    already says what makes each code different — who it is for, and what
+    it applies to — so the wording is read off that rather than invented.
+    """
+    brand = snapshot.brand
+    conditions = incentive.get('conditions') or {}
+    if conditions.get('new_customer_only') or incentive.get('eligibility_kind') == 'new_customer':
+        return (
+            f"Is there a first-order promo code for {brand}, and what does "
+            f"it take off?"
+        )
+
+    # A code confined to one product is asked about that product. Confined
+    # to several, or to none, it is asked about the brand.
+    scope = incentive.get('variant_scope') or []
+    scoped_products = {
+        product.title
+        for product, variant in snapshot.variants()
+        if variant.variant_id in scope
+    }
+    if len(scoped_products) == 1:
+        return (
+            f"Are there any promo codes for {brand} "
+            f"{scoped_products.pop()} right now, and what do they take off?"
+        )
+
+    return (
+        f"Are there any promo codes for {brand} right now, and what do "
+        f"they take off?"
+    )
+
+
+def build_value_incentives(snapshot, *, category, persona) -> tuple:
+    """
+    One question per mechanic the record actually has. Returns
+    (rows, tier_report).
+
+    A brand with no subscribe-and-save gets no subscribe-and-save
+    question — not a question it is expected to fail. A tier that
+    manufactures questions a brand cannot possibly satisfy does not
+    measure the assistant, it measures the brand's product mix, and it
+    does it in a way that looks like an assistant failure on the report.
+
+    Mechanics are counted per DISTINCT thing a shopper encounters:
+    nineteen offers that all say WELCOME10 are one code, and one question.
+    """
+    rows: List[dict] = []
+    mechanics = {'code': 0, 'member_price': 0, 'points': 0}
+
+    # ── Codes ────────────────────────────────────────────────────────
+    seen_codes, seen_texts = set(), set()
+    for incentive in snapshot.incentives:
+        expectation = _code_expectation(incentive)
+        if expectation is None:
+            continue
+        if expectation['code'] in seen_codes:
+            continue
+        seen_codes.add(expectation['code'])
+
+        product = next(
+            (p for p in snapshot.products if p.listing_id == incentive.get('listing_id')),
+            snapshot.products[0] if snapshot.products else None,
+        )
+        if product is None:
+            continue
+
+        text = _code_question_text(snapshot, incentive)
+        if text in seen_texts:
+            # Two codes that a shopper would ask about in exactly the
+            # same words are one question, not two. Keeping both would
+            # put a question in the study whose "right" answer depends on
+            # which of two codes the assistant happened to name.
+            continue
+        seen_texts.add(text)
+
+        rows.append(_row(
+            query_text=text,
+            tier='value_incentives',
+            provenance='catalog',
+            expected_answer=expectation,
+            source_ref=_source_ref(
+                snapshot, product, offer_id=incentive.get('offer_id'),
+            ),
+            category=category,
+            persona=persona,
+            soa_focus='Value Survival, Deal Citation',
+            rationale=(
+                f"The published record carries {expectation['code']} at "
+                f"{ea.describe(expectation)}."
+            ),
+        ))
+        mechanics['code'] += 1
+
+    # ── Member price, on one sampled variant per product that has one ─
+    #
+    # Per product rather than once for the whole brand: a member price is
+    # a per-variant number, and asking about exactly one of nineteen
+    # would measure whether the assistant knows that one.
+    for product in snapshot.products:
+        candidates = [
+            v for v in _price_spread_order(product.variants)
+            if v.member_price and v.member_tier_name
+        ]
+        if not candidates:
+            continue
+        variant = candidates[0]
+        amount = ea.normalize_money(variant.member_price)
+        if amount is None:
+            continue
+
+        subject = _subject(snapshot.brand, product, variant)
+        rows.append(_row(
+            query_text=(
+                f"What do {variant.member_tier_name} members pay for the {subject}?"
+            ),
+            tier='value_incentives',
+            provenance='catalog',
+            expected_answer=ea.member_price(
+                amount, variant.member_tier_name, variant.currency or 'USD',
+            ),
+            source_ref=_source_ref(snapshot, product, variant=variant),
+            category=category,
+            persona=persona,
+            soa_focus='Value Survival, Member Value Cited',
+            rationale=(
+                f"The published record states {amount} for "
+                f"{variant.member_tier_name} on {variant.variant_id}."
+            ),
+        ))
+        mechanics['member_price'] += 1
+
+    # ── Points ───────────────────────────────────────────────────────
+    #
+    # One question per distinct RULE, not per variant carrying it. A
+    # brand that earns one point per dollar earns it on everything; asked
+    # nineteen times it is one fact measured nineteen ways.
+    seen_rules = set()
+    for product in snapshot.products:
+        for variant in product.variants:
+            for rule in variant.points_rules:
+                expectation = _points_expectation(rule)
+                if expectation is None:
+                    continue
+                # A per_dollar rate is brand-wide; a fixed total is about
+                # one variant, so it is keyed with the variant.
+                key = (
+                    expectation['rule']['kind'],
+                    expectation['rule'].get('rate'),
+                    expectation['rule'].get('points'),
+                    variant.variant_id if expectation['rule']['kind'] == 'fixed' else None,
+                )
+                if key in seen_rules:
+                    continue
+                seen_rules.add(key)
+
+                program = rule.get('program_name') or snapshot.program_name or 'the rewards programme'
+                if expectation['rule']['kind'] == 'per_dollar':
+                    text = (
+                        f"How many {program} points do you earn per dollar on "
+                        f"{snapshot.brand} products?"
+                    )
+                else:
+                    text = (
+                        f"How many {program} points does the "
+                        f"{_subject(snapshot.brand, product, variant)} earn?"
+                    )
+
+                rows.append(_row(
+                    query_text=text,
+                    tier='value_incentives',
+                    provenance='catalog',
+                    expected_answer=expectation,
+                    source_ref=_source_ref(
+                        snapshot, product, variant=variant,
+                        offer_id=rule.get('offer_id'),
+                    ),
+                    category=category,
+                    persona=persona,
+                    soa_focus='Value Survival, Loyalty Points Cited',
+                    rationale=(
+                        f"The published record states {ea.describe(expectation)}."
+                    ),
+                ))
+                mechanics['points'] += 1
+
+    report = {
+        'mechanics': mechanics,
+        'mechanics_absent': [k for k, v in mechanics.items() if v == 0],
+        'count': len(rows),
+    }
+    return rows, report
+
+
+# ─── Expected nulls ────────────────────────────────────────────────────────
+#
+# What the study says it expects to see nothing from, written down BEFORE
+# the run so a zero can be read as predicted rather than explained after
+# the fact. Rendered in the report header; see A7.
+
+def expected_nulls(snapshot, tier: str) -> str:
+    brand = snapshot.brand or 'this brand'
+    if tier == 'category_control':
+        return (
+            f"Near zero. {brand} is not expected to win unbranded category "
+            f"questions; these show what the category returns without it."
+        )
+    if tier == 'value_incentives':
+        absent = []
+        if not snapshot.code_count:
+            absent.append('no promo code')
+        if not any(v.member_price for _p, v in snapshot.variants()):
+            absent.append('no member price')
+        if absent:
+            return (
+                f"Partial: the published record carries {' and '.join(absent)}, "
+                f"so those mechanics are not asked about at all."
+            )
+        return (
+            "Surfaces without feed enrollment show crawl-derived data only, so "
+            "a member price may be absent there while present elsewhere."
+        )
+    if tier == 'catalog_accuracy':
+        return (
+            "Surfaces without feed enrollment show crawl-derived data only. An "
+            "absent price on those is a distribution gap, not an accuracy failure."
+        )
+    return (
+        f"Zero until {brand} is retrievable at all on a surface; visibility "
+        f"gates everything below it."
+    )
