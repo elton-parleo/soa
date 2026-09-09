@@ -307,17 +307,18 @@ def _delete_tier_questions(study_type: str, tiers: list) -> int:
     """
     if not tiers:
         return 0
+    # An expanding bindparam rather than a dialect branch: SQLAlchemy
+    # renders it as a plain IN list on both Postgres and sqlite, so the
+    # tests run the same statement production does.
+    statement = text("""
+        DELETE FROM soa_queries
+        WHERE study_type = :study_type
+          AND tier IN :tiers
+    """).bindparams(bindparam("tiers", expanding=True))
+
     with engine.connect() as conn:
-        result = conn.execute(text("""
-            DELETE FROM soa_queries
-            WHERE study_type = :study_type
-              AND tier = ANY(:tiers)
-        """) if engine.dialect.name == "postgresql" else text("""
-            DELETE FROM soa_queries
-            WHERE study_type = :study_type
-              AND tier IN :tiers
-        """).bindparams(bindparam("tiers", expanding=True)),
-            {"study_type": study_type, "tiers": list(tiers)},
+        result = conn.execute(
+            statement, {"study_type": study_type, "tiers": list(tiers)},
         )
         conn.commit()
         return result.rowcount or 0
