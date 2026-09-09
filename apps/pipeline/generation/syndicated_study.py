@@ -206,7 +206,8 @@ def build_syndicated_study(
     # ── Catalog accuracy ─────────────────────────────────────────────
     if config['catalog_accuracy']['enabled']:
         accuracy_rows, accuracy_report = ct.build_catalog_accuracy(
-            snapshot, category=category, persona=persona, cap=variant_cap,
+            snapshot, category=category, persona=persona,
+            study_pattern=study_pattern, cap=variant_cap,
         )
         rows.extend(accuracy_rows)
         config['catalog_accuracy'].update(accuracy_report)
@@ -215,6 +216,7 @@ def build_syndicated_study(
     if config['value_incentives']['enabled']:
         value_rows, value_report = ct.build_value_incentives(
             snapshot, category=category, persona=persona,
+            study_pattern=study_pattern,
         )
         rows.extend(value_rows)
         config['value_incentives'].update(value_report)

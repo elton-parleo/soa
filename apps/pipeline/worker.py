@@ -41,7 +41,7 @@ from soa_shared.models.soa_models import (
     LITE_STATUS_IDENTIFYING_COMPETITORS,
     LITE_STATUS_RUNNING,
 )
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 logging.basicConfig(
     level=logging.INFO,
@@ -290,6 +290,138 @@ def _record_provenance(job_id: int, provenance: dict):
         )
 
 
+def _delete_tier_questions(study_type: str, tiers: list) -> int:
+    """
+    Removes the questions of the named tiers for this study, so a rebuild
+    replaces them rather than doubling them.
+
+    Deletes, and does not soft-retire. A regenerated study is asked
+    against the record as it is NOW, and leaving the old questions
+    Retired alongside would leave a study whose report has two prices for
+    one variant and no way to say which one it measured.
+
+    Their soa_runs and soa_expectation_outcomes rows are left alone, on
+    purpose: a past cycle's measurements are evidence of what was true
+    then, and deleting them to tidy up a regeneration would destroy the
+    history the whole feature exists to build.
+    """
+    if not tiers:
+        return 0
+    with engine.connect() as conn:
+        result = conn.execute(text("""
+            DELETE FROM soa_queries
+            WHERE study_type = :study_type
+              AND tier = ANY(:tiers)
+        """) if engine.dialect.name == "postgresql" else text("""
+            DELETE FROM soa_queries
+            WHERE study_type = :study_type
+              AND tier IN :tiers
+        """).bindparams(bindparam("tiers", expanding=True)),
+            {"study_type": study_type, "tiers": list(tiers)},
+        )
+        conn.commit()
+        return result.rowcount or 0
+
+
+def _run_regeneration(
+    job_id, study_type, syndicated_merchant, tier_config, regenerate,
+    organization_id, created_by, api_key, **kwargs,
+):
+    """
+    Rebuild only the named tiers of an existing study, from the catalog as
+    it is now.
+
+    The study's own stage-count questions are never touched: they exist
+    with or without a brand, the control tier is a tag on them, and
+    rewriting them is creating a different study rather than refreshing
+    this one against a record.
+
+    A failure leaves the study as it was. The delete and the rebuild are
+    ordered rebuild-first for exactly that reason — a TrueSync outage
+    between them would otherwise leave a study with its catalog questions
+    gone and nothing in their place.
+    """
+    from clients.truesync_catalog import TrueSyncCatalogClient
+    from generation import catalog_tiers as ct
+    from generation.query_generator import generate_brand_direct
+    from generation.syndicated_study import normalize_tier_config, _primary_category, _primary_persona
+
+    tiers = list(regenerate.get("tiers") or [])
+    config = normalize_tier_config(tier_config)
+    category = _primary_category(kwargs.get("allowed_categories"))
+    persona = _primary_persona(kwargs.get("personas"))
+
+    snapshot = TrueSyncCatalogClient().snapshot(
+        syndicated_merchant, with_history=False,
+    )
+    if not snapshot.available:
+        _mark_generation_failed(
+            job_id,
+            f"Could not read {syndicated_merchant}'s catalog: {snapshot.error}. "
+            f"The study is unchanged.",
+        )
+        return
+
+    rows = []
+    if "catalog_accuracy" in tiers:
+        built, report = ct.build_catalog_accuracy(
+            snapshot, category=category, persona=persona,
+            study_pattern=kwargs.get('study_pattern'),
+        )
+        rows.extend(built)
+        config["catalog_accuracy"].update(report)
+    if "value_incentives" in tiers:
+        built, report = ct.build_value_incentives(
+            snapshot, category=category, persona=persona,
+            study_pattern=kwargs.get('study_pattern'),
+        )
+        rows.extend(built)
+        config["value_incentives"].update(report)
+    if "brand_direct" in tiers:
+        built, report = generate_brand_direct(
+            snapshot,
+            study_name=kwargs.get("study_name"),
+            description=kwargs.get("description"),
+            stage_targets=kwargs.get("stage_targets") or {},
+            allowed_categories=kwargs.get("allowed_categories") or [],
+            study_pattern=kwargs.get("study_pattern"),
+            api_key=api_key,
+            count=config["brand_direct"].get("count"),
+            personas=kwargs.get("personas"),
+        )
+        rows.extend(built)
+        config["brand_direct"]["count"] = len(built)
+
+    for tier in tiers:
+        if config.get(tier):
+            config[tier]["expected_nulls"] = ct.expected_nulls(snapshot, tier)
+    config["merchant"] = {
+        "slug": snapshot.merchant_slug, "brand": snapshot.brand,
+        "domain": snapshot.domain, "products": snapshot.product_count,
+        "variants": snapshot.variant_count, "gtins": snapshot.gtin_count,
+        "codes": snapshot.code_count, "read_at": snapshot.read_at,
+    }
+    # Consumed: the marker is gone from what gets written back, so a
+    # worker restart cannot regenerate the same study twice.
+    config.pop("regenerate", None)
+
+    removed = _delete_tier_questions(study_type, tiers)
+    _insert_generated_rows(rows, study_type, organization_id, created_by)
+
+    with engine.connect() as conn:
+        conn.execute(text("""
+            UPDATE soa_query_generation_jobs
+            SET tier_config = :config, status = 'complete', updated_at = NOW()
+            WHERE id = :id
+        """), {"config": json.dumps(config), "id": job_id})
+        conn.commit()
+
+    log.info(
+        "[generation] job %s regenerated %s for %r: %d removed, %d written",
+        job_id, ", ".join(tiers), study_type, removed, len(rows),
+    )
+
+
 def _run_syndicated_generation(
     *, job_id, syndicated_merchant, tier_config, stage_targets, **kwargs,
 ):
@@ -529,6 +661,31 @@ def process_generation_jobs():
     # default available: every study_pattern value changes the coding
     # rubric, so picking one on the job's behalf would silently decide
     # something the requester never said.
+    # A regenerate request reuses this job row rather than creating a
+    # second one (study_type is unique on this table), carrying its
+    # marker inside tier_config — which the rebuild consumes by writing
+    # the resolved config back without it.
+    parsed_tier_config = _job_json(tier_config)
+    regenerate = (parsed_tier_config or {}).get("regenerate")
+    if regenerate and syndicated_merchant:
+        _run_regeneration(
+            job_id=job_id,
+            study_type=study_type,
+            syndicated_merchant=syndicated_merchant,
+            tier_config=parsed_tier_config,
+            regenerate=regenerate,
+            organization_id=organization_id,
+            created_by=created_by,
+            api_key=api_key,
+            study_name=study_name,
+            description=description,
+            study_pattern=study_pattern,
+            allowed_categories=_job_json(allowed_categories),
+            stage_targets=_job_json(stage_targets),
+            personas=_job_json(personas),
+        )
+        return
+
     if study_pattern:
         _run_briefed_generation(
             job_id=job_id,

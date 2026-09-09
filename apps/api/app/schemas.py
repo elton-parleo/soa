@@ -760,6 +760,20 @@ class ReviewResolveResponse(BaseModel):
     provenance: Optional[dict] = None
 
 
+class RegenerateStudyRequest(BaseModel):
+    """
+    What POST /studies/{study_type}/regenerate takes.
+
+    One field, and it is a choice rather than a default. The
+    catalog-built tiers are always rebuilt — carrying the currently
+    published answer is what they are for. Rebuilding the AI-written tier
+    produces DIFFERENT question wording, which breaks run-over-run
+    comparability with everything before it, so it happens only when
+    someone says so.
+    """
+    regenerate_ai: bool = False
+
+
 class StudyGenerateResponse(BaseModel):
     study_type: str
     study_name: str
@@ -791,6 +805,13 @@ class GenerationStatusResponse(BaseModel):
     # this is a report for a human to read, not a contract anything
     # branches on. See generation/query_generator.py for its shape.
     provenance: Optional[dict] = None
+
+    # The brand this study is grounded in, and the resolved tier config
+    # the worker wrote back. Both null on every study generated without a
+    # syndicated brand. The study page reads syndicated_merchant to
+    # decide whether "Regenerate from catalog" means anything here.
+    syndicated_merchant: Optional[str] = None
+    tier_config: Optional[Dict[str, Any]] = None
 
 
 # ─── Scope SKUs ──────────────────────

@@ -30,6 +30,10 @@ FIXTURE_PATH = os.path.join(
 
 CATEGORY = "Baby Care"
 PERSONA = "Value-Conscious Parent"
+# study_pattern is a property of the study, never of a question, and is
+# NOT NULL on soa_queries — so the builders take it as a required keyword
+# rather than letting a caller omit it and fail at the INSERT.
+STUDY_PATTERN = "brand_at_retail"
 
 
 @pytest.fixture
@@ -50,12 +54,15 @@ def snapshot(payloads):
 
 def _accuracy(snapshot, **kwargs):
     return ct.build_catalog_accuracy(
-        snapshot, category=CATEGORY, persona=PERSONA, **kwargs,
+        snapshot, category=CATEGORY, persona=PERSONA,
+        study_pattern=STUDY_PATTERN, **kwargs,
     )
 
 
 def _value(snapshot):
-    return ct.build_value_incentives(snapshot, category=CATEGORY, persona=PERSONA)
+    return ct.build_value_incentives(
+        snapshot, category=CATEGORY, persona=PERSONA, study_pattern=STUDY_PATTERN,
+    )
 
 
 # ── the fixture is the catalog the mock describes ─────────────────────────
@@ -488,3 +495,11 @@ def test_expected_nulls_name_the_mechanics_a_brand_actually_lacks(payloads):
     note = ct.expected_nulls(snapshot, "value_incentives")
     assert "no promo code" in note
     assert "no member price" in note
+
+
+def test_every_row_carries_the_studys_pattern(snapshot):
+    """NOT NULL on soa_queries, and a property of the study rather than
+    of a question — so the builders require it rather than letting a
+    caller omit it and discover the omission at the INSERT."""
+    rows = _accuracy(snapshot)[0] + _value(snapshot)[0]
+    assert {r["study_pattern"] for r in rows} == {STUDY_PATTERN}

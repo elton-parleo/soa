@@ -190,13 +190,18 @@ def sample_variants(snapshot, cap: int = DEFAULT_VARIANT_CAP) -> List:
 
 def _row(
     *, query_text, tier, provenance, expected_answer, source_ref,
-    category, persona, stage=CATALOG_STAGE, specificity=CATALOG_SPECIFICITY,
+    category, persona, study_pattern,
+    stage=CATALOG_STAGE, specificity=CATALOG_SPECIFICITY,
     soa_focus, rationale,
 ) -> dict:
     """
     One row in the same shape worker.py's _insert_generated_rows already
-    writes, plus the four grounding columns. study_pattern is stamped by
-    the caller, exactly as it is for AI-written rows.
+    writes, plus the four grounding columns.
+
+    study_pattern is a REQUIRED keyword rather than something a caller
+    can forget: it is NOT NULL on soa_queries, it is a property of the
+    study and never of a question, and a row emitted without it fails at
+    the INSERT rather than anywhere a reader would look.
     """
     return {
         'query_text':      query_text,
@@ -204,6 +209,7 @@ def _row(
         'stage':           stage,
         'specificity':     specificity,
         'persona':         persona,
+        'study_pattern':   study_pattern,
         'status':          'Active',
         'soa_focus':       soa_focus,
         'rationale':       rationale,
@@ -299,7 +305,8 @@ def _source_ref(snapshot, product, *, variant=None, offer_id=None) -> dict:
 # ─── Tier: catalog accuracy ────────────────────────────────────────────────
 
 def build_catalog_accuracy(
-    snapshot, *, category, persona, cap: int = DEFAULT_VARIANT_CAP,
+    snapshot, *, category, persona, study_pattern,
+    cap: int = DEFAULT_VARIANT_CAP,
 ) -> tuple:
     """
     Price per sampled variant, plus pack count where the variant has one
@@ -338,6 +345,7 @@ def build_catalog_accuracy(
                 source_ref=_source_ref(snapshot, product, variant=variant),
                 category=category,
                 persona=persona,
+                study_pattern=study_pattern,
                 soa_focus='Catalog Accuracy, Price Accuracy',
                 rationale=(
                     f"The published list price for {variant.variant_id} is "
@@ -362,6 +370,7 @@ def build_catalog_accuracy(
                 source_ref=_source_ref(snapshot, product, variant=variant),
                 category=category,
                 persona=persona,
+                study_pattern=study_pattern,
                 soa_focus='Catalog Accuracy, Pack Size Accuracy',
                 rationale=(
                     f"The published record states {variant.count} units for "
@@ -458,7 +467,7 @@ def _code_question_text(snapshot, incentive) -> str:
     )
 
 
-def build_value_incentives(snapshot, *, category, persona) -> tuple:
+def build_value_incentives(snapshot, *, category, persona, study_pattern) -> tuple:
     """
     One question per mechanic the record actually has. Returns
     (rows, tier_report).
@@ -511,6 +520,7 @@ def build_value_incentives(snapshot, *, category, persona) -> tuple:
             ),
             category=category,
             persona=persona,
+            study_pattern=study_pattern,
             soa_focus='Value Survival, Deal Citation',
             rationale=(
                 f"The published record carries {expectation['code']} at "
@@ -549,6 +559,7 @@ def build_value_incentives(snapshot, *, category, persona) -> tuple:
             source_ref=_source_ref(snapshot, product, variant=variant),
             category=category,
             persona=persona,
+            study_pattern=study_pattern,
             soa_focus='Value Survival, Member Value Cited',
             rationale=(
                 f"The published record states {amount} for "
@@ -604,6 +615,7 @@ def build_value_incentives(snapshot, *, category, persona) -> tuple:
                     ),
                     category=category,
                     persona=persona,
+                    study_pattern=study_pattern,
                     soa_focus='Value Survival, Loyalty Points Cited',
                     rationale=(
                         f"The published record states {ea.describe(expectation)}."

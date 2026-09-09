@@ -216,6 +216,16 @@ export const api = {
       + (tier ? `?tier=${encodeURIComponent(tier)}` : ''),
     ),
 
+  // Rebuild a grounded study's catalog questions against the record as
+  // it is published now. regenerateAi is the caller's decision because
+  // rewriting AI-written questions breaks run-over-run comparability —
+  // see RegenerateStudyModal.jsx.
+  regenerateStudy: (studyType, regenerateAi = false) =>
+    post(
+      `/api/studies/${encodeURIComponent(studyType)}/regenerate`,
+      { regenerate_ai: !!regenerateAi },
+    ),
+
   getScopeTiers: () =>
     get('/api/scope/tiers'),
 
