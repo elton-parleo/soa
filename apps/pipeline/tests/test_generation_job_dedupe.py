@@ -47,7 +47,8 @@ def db(monkeypatch):
                 id INTEGER PRIMARY KEY, query_code TEXT UNIQUE, query_text TEXT, category TEXT,
                 stage TEXT, specificity TEXT, persona TEXT, study_type TEXT, study_pattern TEXT,
                 soa_focus TEXT, rationale TEXT, status TEXT, organization_id INTEGER,
-                created_by TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_by TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                tier TEXT, expected_answer TEXT, provenance TEXT, source_ref TEXT
             )
         """)
     monkeypatch.setattr(worker, "engine", engine)

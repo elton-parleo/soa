@@ -35,7 +35,8 @@ def patched_engine(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_cycles (
-                id INTEGER PRIMARY KEY, organization_id INTEGER
+                id INTEGER PRIMARY KEY, organization_id INTEGER,
+                extraction_validation TEXT
             )
         """)
         conn.exec_driver_sql("""

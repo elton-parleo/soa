@@ -99,7 +99,8 @@ def db(monkeypatch):
                 query_text TEXT, category TEXT, stage TEXT, specificity TEXT,
                 persona TEXT, study_type TEXT, study_pattern TEXT, status TEXT,
                 subscription_state TEXT, soa_focus TEXT, rationale TEXT,
-                organization_id INTEGER, created_by TEXT, created_at TIMESTAMP
+                organization_id INTEGER, created_by TEXT, created_at TIMESTAMP,
+                tier TEXT, expected_answer TEXT, provenance TEXT, source_ref TEXT
             )
         """)
         conn.execute(text("""

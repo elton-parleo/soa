@@ -34,7 +34,8 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_cycles (
-                id INTEGER PRIMARY KEY, source_lite_request_id INTEGER
+                id INTEGER PRIMARY KEY, source_lite_request_id INTEGER,
+                extraction_validation TEXT
             )
         """)
         conn.exec_driver_sql("""

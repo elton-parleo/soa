@@ -18,7 +18,8 @@ def patched_engine(monkeypatch):
             CREATE TABLE soa_cycles (
                 id INTEGER PRIMARY KEY, cycle_code TEXT UNIQUE, status TEXT,
                 study_type TEXT, platforms TEXT, runs_per_query INTEGER,
-                cycle_mode TEXT, created_at TIMESTAMP
+                cycle_mode TEXT, created_at TIMESTAMP,
+                extraction_validation TEXT
             )
         """)
     monkeypatch.setattr(worker, "engine", engine)

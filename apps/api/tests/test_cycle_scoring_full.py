@@ -368,7 +368,9 @@ def db(monkeypatch):
             )
         """)
         conn.exec_driver_sql("""
-            CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, stage TEXT)
+            CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, stage TEXT,
+                tier TEXT, expected_answer TEXT, provenance TEXT, source_ref TEXT
+            )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT)

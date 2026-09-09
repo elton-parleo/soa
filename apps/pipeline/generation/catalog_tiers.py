@@ -596,3 +596,132 @@ def expected_nulls(snapshot, tier: str) -> str:
         f"Zero until {brand} is retrievable at all on a surface; visibility "
         f"gates everything below it."
     )
+
+
+# ─── Brand-direct: the catalog as prompt context ───────────────────────────
+#
+# The generation itself is a model call and lives in query_generator.py
+# with every other model call. What lives here is the CONTEXT — the part
+# read off the record — because that is what makes the tier grounded
+# rather than merely branded.
+
+MAX_CONTEXT_VARIANTS_PER_PRODUCT = 6
+
+
+def build_catalog_context(snapshot) -> str:
+    """
+    The catalog as a block of prompt text: brand, domain, products and
+    their variants.
+
+    Deliberately names real products and real variants and nothing else.
+    A generator handed only a brand name writes questions about products
+    the brand does not sell, and a study that asks about a product nobody
+    makes measures nothing at all — an assistant "failing" it is right.
+
+    Variants are truncated per product. The point of the list is to teach
+    the model the SHAPE of the range (sizes, pack formats) so its
+    questions sound like a shopper's; twelve near-identical lines teach
+    that no better than six and crowd out the next product.
+
+    No prices. Brand-direct questions expect a brand mention, not a
+    number, and a price in the context is an invitation to write a
+    question whose answer the study is not scoring — which would be a
+    catalog-accuracy question with no expectation attached.
+    """
+    if not snapshot or not snapshot.available or not snapshot.products:
+        return ''
+
+    lines = [f"The brand is {snapshot.brand}."]
+    if snapshot.domain:
+        lines.append(f"Its own store is {snapshot.domain}.")
+    lines.append("These are the products it actually sells, as published:")
+
+    for product in snapshot.products:
+        lines.append(f"- {product.title}")
+        shown = product.variants[:MAX_CONTEXT_VARIANTS_PER_PRODUCT]
+        for variant in shown:
+            display = variant_display(product, variant)
+            if display:
+                lines.append(f"    - {display}")
+        remaining = len(product.variants) - len(shown)
+        if remaining > 0:
+            lines.append(f"    - (and {remaining} more variant(s) in the same range)")
+
+    if snapshot.program_name and snapshot.tiers:
+        tier_names = ', '.join(t.get('name') for t in snapshot.tiers if t.get('name'))
+        lines.append(
+            f"It runs a loyalty programme called {snapshot.program_name} "
+            f"with tiers: {tier_names}."
+        )
+
+    return "\n".join(lines)
+
+
+def brand_direct_stage_targets(stage_targets: dict, count: int) -> dict:
+    """
+    `count` questions split between Research and Ready to Buy in the same
+    proportion the study itself uses.
+
+    Those two stages and no others, because a brand-direct question names
+    the brand: an Awareness question that names the brand it is measuring
+    prompts the very mention it is supposed to detect, and a Comparison
+    question that names one brand and no other is not a comparison.
+
+    A study that allocated nothing to either stage still gets an even
+    split rather than nothing — the tier was asked for, and refusing to
+    build it because of an unrelated stage allocation would be a silent
+    no.
+    """
+    stages = ['Research', 'Ready to Buy']
+    weights = [max(0, int(stage_targets.get(s) or 0)) for s in stages]
+    if not any(weights):
+        weights = [1, 1]
+
+    total_weight = sum(weights)
+    counts = [count * w // total_weight for w in weights]
+
+    # Remainder to the earliest stage, the same convention the modal's
+    # presets use, so a 12/5/7 split never quietly becomes 11.
+    remainder = count - sum(counts)
+    index = 0
+    while remainder > 0:
+        counts[index % len(stages)] += 1
+        remainder -= 1
+        index += 1
+
+    return {stage: n for stage, n in zip(stages, counts) if n > 0}
+
+
+def stamp_brand_direct(rows: List[dict], snapshot) -> List[dict]:
+    """
+    The four grounding columns on rows a model wrote.
+
+    Applied after generation rather than through the generator's `stamp`
+    hook, because that hook merges into a row BEFORE validation and
+    validation returns only the fields it knows about — a tier stamped
+    that way would be validated and then dropped.
+
+    The expectation is brand_mention and nothing stronger. These questions
+    ask where to buy and what the range is; there is no single published
+    number a right answer must contain, and attaching one would score an
+    assistant wrong for answering the question it was asked.
+    """
+    if not snapshot or not snapshot.brand:
+        return rows
+
+    expectation = ea.brand_mention(snapshot.brand, snapshot.domain)
+    source_ref = {
+        'merchant_slug': snapshot.merchant_slug,
+        'published_at': max(
+            (p.published_at for p in snapshot.products if p.published_at),
+            default=None,
+        ),
+        'listing_ids': [p.listing_id for p in snapshot.products],
+    }
+
+    for row in rows:
+        row['tier'] = 'brand_direct'
+        row['provenance'] = 'ai_from_catalog'
+        row['expected_answer'] = dict(expectation)
+        row['source_ref'] = dict(source_ref)
+    return rows

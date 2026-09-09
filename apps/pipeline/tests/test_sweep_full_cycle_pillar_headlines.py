@@ -26,7 +26,8 @@ def db(monkeypatch):
     with engine.begin() as conn:
         conn.exec_driver_sql("""
             CREATE TABLE soa_cycles (
-                id INTEGER PRIMARY KEY, cycle_code TEXT, status TEXT, cycle_mode TEXT DEFAULT 'query'
+                id INTEGER PRIMARY KEY, cycle_code TEXT, status TEXT, cycle_mode TEXT DEFAULT 'query',
+                extraction_validation TEXT
             )
         """)
         conn.exec_driver_sql("""

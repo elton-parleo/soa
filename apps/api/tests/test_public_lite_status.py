@@ -34,7 +34,8 @@ def db(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_cycles (
                 id INTEGER PRIMARY KEY, status TEXT,
-                completed_runs INTEGER, total_runs_planned INTEGER
+                completed_runs INTEGER, total_runs_planned INTEGER,
+                extraction_validation TEXT
             )
         """)
         conn.exec_driver_sql("""

@@ -612,6 +612,7 @@ def _build_general_prompt(
     naming_rule_enabled: bool = True,
     personas: Optional[list] = None,
     specificity_mode: str = SPECIFICITY_MATCH_TO_STAGE,
+    catalog_context: Optional[str] = None,
 ) -> str:
     """
     The general-study counterpart to _build_lite_prompt.
@@ -719,6 +720,26 @@ def _build_general_prompt(
             "suitability for a need), never one retailer against another."
         )
 
+    # The catalog, when the study is grounded in one. Placed AFTER the
+    # naming rules and BEFORE the field spec so it reads as subject
+    # matter rather than as another constraint — and stated as a closed
+    # world, because the failure it exists to prevent is a question about
+    # a product the brand does not sell. A study that asks about a
+    # product nobody makes measures nothing: an assistant that "fails" it
+    # is right, and the row is noise in every rate it lands in.
+    catalog_text = ""
+    if catalog_context:
+        catalog_text = (
+            f"\n\nGround every question in this brand's real, published catalog:"
+            f"\n\n{catalog_context}\n\n"
+            f"Only ask about products and variants that appear above. Do not "
+            f"invent a product, a size, a pack format or a sub-brand, and do "
+            f"not ask about a category the list does not cover. Write the way "
+            f"a shopper types — they say 'size 3 diapers', not 'Size 3 — Small "
+            f"Pack (84 ct)' — but the thing they are asking about must be one "
+            f"of the real ones."
+        )
+
     return f"""Generate exactly {total} distinct search-style questions for a brand/market research study called "{study_name}".
 
 Study description: {description or 'No additional description provided.'}
@@ -733,7 +754,7 @@ Each question becomes one row in a database table. For EACH question provide ALL
 For "category": choose only from the values listed above. Every question must be about a subject that genuinely belongs to one of them — if a question would need a category outside that list, do not ask it.
 For "status": always 'Active'.
 {specificity_text}
-{naming_text}
+{naming_text}{catalog_text}
 
 Also provide:
 - query_text: the actual question/prompt a user might type into an AI assistant or search engine
@@ -757,6 +778,7 @@ def generate_general_queries(
     naming_rule_enabled: bool = True,
     personas: Optional[list] = None,
     specificity_mode: str = SPECIFICITY_MATCH_TO_STAGE,
+    catalog_context: Optional[str] = None,
 ) -> tuple:
     """
     The general-study path: caller-supplied per-stage targets, a
@@ -864,6 +886,7 @@ def generate_general_queries(
             naming_rule_enabled=naming_rule_enabled,
             personas=personas,
             specificity_mode=specificity_mode,
+            catalog_context=catalog_context,
         )
         prompt_calls['n'] += 1
         return prompt
@@ -932,6 +955,7 @@ def generate_general_queries(
         'retailers_named':    names,
         'naming_rule_enabled': naming_rule_enabled,
         'specificity_mode':   specificity_mode,
+        'catalog_grounded':   bool(catalog_context),
     }
     return kept, report
 
@@ -986,6 +1010,85 @@ def generate_and_review_study(
         rows, report, semantic_groups, coherence_findings,
     )
     return rows, provenance
+
+
+# ─── Brand-direct: the same generator, handed a catalog ───────────────────
+
+def generate_brand_direct(
+    snapshot,
+    *,
+    study_name: str,
+    description: str,
+    stage_targets: dict,
+    allowed_categories: list,
+    study_pattern: str,
+    api_key: str,
+    count: int = None,
+    personas: Optional[list] = None,
+    specificity_mode: str = SPECIFICITY_MATCH_TO_STAGE,
+) -> tuple:
+    """
+    Questions a shopper asks about this brand BY NAME, written by the
+    model with the published catalog in front of it.
+
+    Returns (rows, report). Rows carry tier='brand_direct',
+    provenance='ai_from_catalog' and a brand_mention expectation.
+
+    Deliberately generate_general_queries and not a new generator. The
+    stage enforcement, the category drop, the exact-dedupe, the
+    replacement rounds and the row validation are all things this tier
+    needs and none of them is different because a catalog is in the
+    prompt. What IS different is two arguments: the catalog goes in as
+    context, and retailer_names goes in EMPTY.
+
+    Empty retailer names is the load-bearing one. These questions name
+    the brand under measurement and must name nobody else — a
+    brand-direct question that also names Amazon is measuring a
+    head-to-head, and the mention it detects was prompted rather than
+    earned. The unbranded branch of _build_general_prompt already says
+    exactly that to the model, so this tier gets it by construction.
+
+    Only Research and Ready to Buy, per brand_direct_stage_targets: an
+    Awareness question that names the brand it is measuring prompts the
+    very mention it exists to detect.
+    """
+    from generation.catalog_tiers import (
+        DEFAULT_BRAND_DIRECT_COUNT,
+        brand_direct_stage_targets,
+        build_catalog_context,
+        stamp_brand_direct,
+    )
+
+    if not snapshot or not snapshot.available or not snapshot.brand:
+        return [], {'count': 0, 'skipped': 'no catalog to ground in'}
+
+    requested = DEFAULT_BRAND_DIRECT_COUNT if count is None else int(count)
+    if requested <= 0:
+        return [], {'count': 0, 'requested': requested}
+
+    targets = brand_direct_stage_targets(stage_targets or {}, requested)
+    context = build_catalog_context(snapshot)
+
+    rows, report = generate_general_queries(
+        study_name=study_name,
+        description=description,
+        stage_targets=targets,
+        allowed_categories=allowed_categories,
+        study_pattern=study_pattern,
+        api_key=api_key,
+        retailer_names=[],
+        rotate_named_retailer=False,
+        naming_rule_enabled=False,
+        personas=personas,
+        specificity_mode=specificity_mode,
+        catalog_context=context,
+    )
+
+    stamp_brand_direct(rows, snapshot)
+    report['count'] = len(rows)
+    report['requested'] = requested
+    report['stage_targets'] = targets
+    return rows, report
 
 
 # ─── Review passes ────────────────────────────────────────────────────────

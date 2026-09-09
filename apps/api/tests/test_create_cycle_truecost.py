@@ -40,7 +40,8 @@ def patched_engine(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_queries (
                 id INTEGER PRIMARY KEY, study_type TEXT, status TEXT,
-                study_pattern TEXT, organization_id INTEGER
+                study_pattern TEXT, organization_id INTEGER,
+                tier TEXT, expected_answer TEXT, provenance TEXT, source_ref TEXT
             )
         """)
         conn.exec_driver_sql("""
