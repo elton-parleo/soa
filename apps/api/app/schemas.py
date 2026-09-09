@@ -286,6 +286,21 @@ class FullAnalysisReportResponse(BaseModel):
     # ReportResponse.transcript (app/services/transcript_pick.py); one
     # backend service, one frontend component, both products.
     transcript: Optional[dict] = None
+    # Tier segmentation and Layer 2 accuracy —
+    # app/services/tier_accuracy.py::build_tier_accuracy.
+    #
+    # NULL on every cycle of a study generated without a syndicated
+    # brand, which is every cycle that existed before the tiers did. Null
+    # rather than an empty section on purpose: rendering an empty
+    # accuracy panel would invite a reader to conclude something about a
+    # measurement that was never taken.
+    #
+    # Loose dict, same convention as `pillars`/`offers` above: the shape
+    # carries per-tier counts, per-surface splits and the header context
+    # (expected nulls, the validated agreement rate), and pinning a model
+    # would make every field the aggregation adds a schema change here
+    # too.
+    tier_accuracy: Optional[dict] = None
 
 # Shareable Full Analysis reports (soa_cycle_shares) — owner-facing
 # create/get response. The frontend builds the copyable URL itself

@@ -207,6 +207,15 @@ export const api = {
   getTranscriptDetail: (cycleCode, runId) =>
     get(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}/transcripts/${runId}`),
 
+  // The per-question drill-down behind the tier section. Owner-only:
+  // it carries raw answer text, which the public share payload
+  // deliberately does not.
+  getTierOutcomes: (cycleCode, tier) =>
+    get(
+      `/api/full-analysis/report/${encodeURIComponent(cycleCode)}/tier-outcomes`
+      + (tier ? `?tier=${encodeURIComponent(tier)}` : ''),
+    ),
+
   getScopeTiers: () =>
     get('/api/scope/tiers'),
 

@@ -41,6 +41,8 @@ import { FullAnalysisMobileNav } from './full-analysis-report/FullAnalysisMobile
 import { ContinuationStrip } from './full-analysis-report/ContinuationStrip.jsx'
 import { DiscoverySection } from './full-analysis-report/DiscoverySection.jsx'
 import { PlatformMatrixSection } from './full-analysis-report/PlatformMatrixSection.jsx'
+import { TierAccuracySection } from './full-analysis-report/TierAccuracySection.jsx'
+import { TierDrillDown } from './full-analysis-report/TierDrillDown.jsx'
 import { CompetitorStageSection } from './full-analysis-report/CompetitorStageSection.jsx'
 import { AnalystLayerSection } from './full-analysis-report/AnalystLayerSection.jsx'
 import { EvidenceSection } from './full-analysis-report/EvidenceSection.jsx'
@@ -74,6 +76,9 @@ const DEFAULT_AI_SHARE_PCT = 20
 // is skipped rather than reaching for cycleCode as a substitute.
 export default function FullAnalysisReport({ cycleCode, report, onNavigate, readOnly = false, shareToken }) {
   const [open, setOpen] = useState({})
+  // Which tier's per-question outcomes are open, or null. Owner-only —
+  // see the drill-down's own render guard below.
+  const [drillTier, setDrillTier] = useState(null)
   const isOpen = (key) => open[key] !== false
   const toggle = (key) => setOpen((s) => ({ ...s, [key]: s[key] === false ? true : false }))
 
@@ -189,6 +194,28 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
           <PlatformMatrixSection matrix={platformMatrix} open={isOpen('matrix')} onToggle={() => toggle('matrix')} />
 
           <VisibilitySection report={reportForVisibility} open={isOpen('viz')} onToggle={() => toggle('viz')} shareOfMentionsRank={rank} queryCount={report.total_queries} />
+
+          {/* Tier segmentation, immediately after visibility, because
+              that is the question it extends: visibility says whether
+              you were mentioned, this says whether what was said was
+              true. Renders nothing at all on a study with no syndicated
+              brand — see TierAccuracySection.jsx.
+
+              The drill-down is owner-only. It carries raw answer text,
+              which the public share payload deliberately does not, so a
+              visitor gets the rates and not the transcripts. */}
+          <TierAccuracySection
+            tierAccuracy={report.tier_accuracy}
+            open={isOpen('tiers')} onToggle={() => toggle('tiers')}
+            onDrillDown={readOnly ? undefined : setDrillTier}
+          />
+          {!readOnly && drillTier && (
+            <TierDrillDown
+              tier={drillTier} cycleCode={cycleCode}
+              onClose={() => setDrillTier(null)}
+              onViewResponse={handleViewResponse}
+            />
+          )}
           <CompetitorStageSection competitorSet={competitorSet} />
           <TranscriptSection
             report={report} open={isOpen('transcript')} onToggle={() => toggle('transcript')}
