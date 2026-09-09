@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "generate:favicons": "node scripts/generate-favicons.mjs",
-    "generate:og-image": "node scripts/generate-og-image.mjs"
+    "generate:og-image": "node scripts/generate-og-image.mjs",
+    "shot": "vite --config vite.shot.config.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.1",
