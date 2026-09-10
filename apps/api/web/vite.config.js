@@ -2,7 +2,7 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DEFAULT_PUBLIC_AUDIT_BASE_URL } from './src/lite/audit-host.constants.js'
+import { DEFAULT_PUBLIC_AUDIT_BASE_URL, normalizeBasePath } from './src/lite/audit-host.constants.js'
 import { OPENAI_PIXEL_ID, OPENAI_PIXEL_DEBUG } from './src/lite/openaiPixel.constants.js'
 import {
   LANDING_META_TITLE, LANDING_META_DESCRIPTION, REPORT_META_TITLE,
@@ -121,24 +121,17 @@ function auditHeadPlugin(auditBaseUrl) {
   }
 }
 
-// The audit surface is moving from its own host (audit.parleo.io) to a
-// subpath of the marketing site (parleo.io/audit), served by a SECOND
-// Vercel project built from this same repo behind a proxy. That project
-// sets VITE_BASE_PATH=/audit/; the existing project sets nothing and
-// keeps building at '/'. Normalized to exactly one leading and one
-// trailing slash so '/audit', 'audit/', and '//audit//' all mean the
-// same thing — Vite's `base` reaches the client as import.meta.env
-// .BASE_URL, which publicUrls.js's AUDIT_BASE_PATH re-normalizes and
-// every same-origin audit navigation is built from.
-function normalizeBasePath(value) {
-  const trimmed = String(value || '').trim()
-  if (!trimmed) return '/'
-  return `/${trimmed.replace(/^\/+/, '').replace(/\/+$/, '')}/`.replace(/^\/\/+/, '/')
-}
-
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
   const auditBaseUrl = (env.VITE_PUBLIC_AUDIT_BASE_URL || DEFAULT_PUBLIC_AUDIT_BASE_URL).replace(/\/$/, '')
+  // The audit surface is moving from its own host (audit.parleo.io) to
+  // a subpath of the marketing site (parleo.io/audit), served by a
+  // SECOND Vercel project built from this same repo behind a proxy.
+  // That project sets VITE_BASE_PATH=/audit/; the existing project sets
+  // nothing and keeps building at '/'. Vite's `base` reaches the client
+  // as import.meta.env.BASE_URL, which publicUrls.js's AUDIT_BASE_PATH
+  // re-normalizes (same shared helper) and every same-origin audit
+  // navigation is built from.
   const basePath = normalizeBasePath(env.VITE_BASE_PATH)
 
   return {

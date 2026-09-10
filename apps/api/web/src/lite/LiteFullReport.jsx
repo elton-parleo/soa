@@ -44,6 +44,7 @@ import {
   VERDICT_AGENT_READY, VERDICT_COMPOSITE_THRESHOLD, VERDICT_TRUE_VALUE_RATIO_THRESHOLD,
 } from './landing/scanDimensionsRegistry.js'
 import { DegradedRunBanner } from './DegradedRunBanner.jsx'
+import { auditPath } from './publicUrls.js'
 
 const DEFAULT_REVENUE = 12_000_000
 const DEFAULT_AI_SHARE_PCT = 20
@@ -118,7 +119,7 @@ function PreviousMethodologyNotice() {
       </div>
       <div className="lite-body lite-muted" style={{ fontSize: 12.5, marginTop: 4 }}>
         This report predates the current three-pillar score.{' '}
-        <a href="/" className="lite-mono" style={{ color: 'var(--accent-ink)', fontWeight: 700 }}>
+        <a href={auditPath('/')} className="lite-mono" style={{ color: 'var(--accent-ink)', fontWeight: 700 }}>
           Re-run for the current three-pillar score
         </a>
       </div>

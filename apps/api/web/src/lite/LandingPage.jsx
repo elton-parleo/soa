@@ -28,7 +28,7 @@ import { Grounded } from './landing/Grounded.jsx'
 import { TrueSyncSection } from './landing/TrueSyncSection.jsx'
 import { FinalCta } from './landing/FinalCta.jsx'
 import { LandingFooter } from './landing/LandingFooter.jsx'
-import { PUBLIC_AUDIT_BASE_URL } from './publicUrls.js'
+import { PUBLIC_AUDIT_BASE_URL, auditPath } from './publicUrls.js'
 import {
   LANDING_META_TITLE, LANDING_META_DESCRIPTION, OG_IMAGE_PATH, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
 } from './landingMeta.js'
@@ -138,8 +138,10 @@ export default function LandingPage({ navigate }) {
   function handleSubmitted(token, { storeUrl } = {}) {
     writeSession(STORAGE_KEY, token)
     writeSession(STORAGE_KEY_STORE_URL, storeUrl || null)
-    // This page only ever renders on the audit host (App.jsx), so '/r/'
-    // is always the right canonical prefix here.
+    // This page only ever renders on the audit surface (App.jsx), so
+    // '/r/' is always the right canonical prefix here — through
+    // auditPath(), because that surface may be served under a base
+    // path (parleo.io/audit) rather than at a host root.
     //
     // withOppref: the ad-click parameter arrives on THIS page's URL and
     // would be dropped by a bare pushState path, leaving the run's own
@@ -147,7 +149,7 @@ export default function LandingPage({ navigate }) {
     // already covers the in-tab case; this covers the copied/reloaded
     // URL. oppref only — never src, which analytics.js strips on
     // purpose so a copied link stays canonical.
-    navigate(withOppref(`/r/${token}`))
+    navigate(withOppref(auditPath(`/r/${token}`)))
   }
 
   return (

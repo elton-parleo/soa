@@ -75,7 +75,7 @@ import { LiteFullReportV4 } from './report/LiteFullReportV4.jsx'
 import { LightCard } from './liteTheme.jsx'
 import { ReportNotFoundCard } from './ReportNotFoundCard.jsx'
 import { Wordmark } from '../ds/Wordmark.jsx'
-import { PUBLIC_AUDIT_BASE_URL, isAuditHost, reportUrl } from './publicUrls.js'
+import { PUBLIC_AUDIT_BASE_URL, auditPath, isAuditHost, reportUrl } from './publicUrls.js'
 import { upsertMeta, upsertLink, restoreOrRemove } from './headMeta.js'
 import { track, identifyReport, captureSrcParam, isTokenOwned } from './analytics.js'
 import { EVENTS } from './analyticsEvents.js'
@@ -170,14 +170,16 @@ function ReportNotFound({ navigate }) {
   return (
     <ReportNotFoundCard
       onCta={() => {
-        // On the audit host, '/' is the landing page — a fast
-        // client-side transition. A dead /report/{token} link on
-        // the marketing host (H2: /scan no longer exists there)
-        // has nowhere local to send the visitor, so it does a
-        // full navigation out to the audit host's landing page.
+        // On the audit surface, auditPath('/') is the landing page —
+        // a fast client-side transition. ('/' at the root of
+        // audit.parleo.io, '/audit/' when the surface is served under
+        // parleo.io/audit.) A dead /report/{token} link on the
+        // marketing host (H2: /scan no longer exists there) has
+        // nowhere local to send the visitor, so it does a full
+        // navigation out to the audit tool's landing page.
         if (isAuditHost()) {
-          if (navigate) navigate('/')
-          else window.location.href = '/'
+          if (navigate) navigate(auditPath('/'))
+          else window.location.href = auditPath('/')
         } else {
           window.location.href = PUBLIC_AUDIT_BASE_URL
         }
@@ -341,13 +343,16 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
     // U2: canonical, shareable URL from the first second of the run —
     // history push, no reload (navigate is a no-op-free optional prop so
     // any caller/test that doesn't pass one keeps today's exact behavior).
-    // This widget renders on both hosts (the /lite embed on the
-    // marketing host, and /r//s on the audit host), so the prefix has
-    // to match whichever one is actually serving the page.
+    // This widget renders on both surfaces (the /lite embed on the
+    // marketing host, and /r//s on the audit surface), so the prefix
+    // has to match whichever one is actually serving the page —
+    // auditPath() on the audit branch, because that surface may itself
+    // be served under a base path (parleo.io/audit). The marketing
+    // host's /report/ prefix is not base-aware and must not become so.
     // withOppref: a re-run started from an ad-attributed report must
     // not silently drop the parameter on the way to the new token's
     // URL — same reasoning as LandingPage.jsx's submit path.
-    if (navigate) navigate(withOppref(isAuditHost() ? `/r/${newToken}` : `/report/${newToken}`))
+    if (navigate) navigate(withOppref(isAuditHost() ? auditPath(`/r/${newToken}`) : `/report/${newToken}`))
   }
 
   function resetToForm(prefillBrandName) {
