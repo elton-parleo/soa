@@ -30,61 +30,98 @@ function findRoute(predicate) {
   return VERCEL_JSON.routes.find(predicate)
 }
 
-describe('vercel.json — audit.parleo.io host routing (H1)', () => {
-  it('has host-conditional rules for the audit host, not a redirect', () => {
-    const audit404 = findRoute((r) => r.status === 404 && r.has?.some((h) => h.type === 'host' && h.value === 'audit.parleo.io'))
-    expect(audit404).toBeDefined()
-    expect(audit404.dest).toBeUndefined() // a real 404, no fallback content
+describe('vercel.json — audit.parleo.io is now redirects only', () => {
+  const AUDIT_HOST_ROUTE = findRoute((r) => r.has?.some((h) => h.type === 'host' && h.value === 'audit.parleo.io'))
+
+  it('has exactly one rule for the retired host, and it is a 308', () => {
+    const hostRoutes = VERCEL_JSON.routes.filter((r) => r.has?.some((h) => h.value === 'audit.parleo.io'))
+    expect(hostRoutes).toHaveLength(1)
+    expect(hostRoutes[0].status).toBe(308)
+    expect(hostRoutes[0].headers.Location).toBe('https://parleo.io/audit/$1')
+    // A redirect, never content: the retired host must not serve a
+    // document of its own any more, or two addresses would render the
+    // same page and split their ranking.
+    expect(hostRoutes[0].dest).toBeUndefined()
   })
 
-  it('S1: serves the landing page from its own audit.html document, not index.html', () => {
-    const landingRoute = findRoute((r) => r.has?.some((h) => h.type === 'host' && h.value === 'audit.parleo.io') && r.dest === '/audit.html')
-    expect(landingRoute).toBeDefined()
-    expect(new RegExp(landingRoute.src).test('/')).toBe(true)
-    expect(new RegExp(landingRoute.src).test('/r/abc123')).toBe(false)
-    expect(new RegExp(landingRoute.src).test('/bots')).toBe(false)
+  it('matches every path on that host — no carve-outs', () => {
+    const re = new RegExp(AUDIT_HOST_ROUTE.src)
+    for (const p of ['/', '/r/abc', '/s/run-1', '/robots.txt', '/sitemap.xml', '/favicon.svg', '/lite', '/anything']) {
+      expect(re.test(p)).toBe(true)
+    }
   })
 
-  it('S3: serves /r/ and /s/ from their own audit-report.html document, not audit.html or index.html', () => {
-    const reportRoute = findRoute((r) => r.has?.some((h) => h.type === 'host' && h.value === 'audit.parleo.io') && r.dest === '/audit-report.html')
-    expect(reportRoute).toBeDefined()
-    expect(new RegExp(reportRoute.src).test('/r/abc123')).toBe(true)
-    expect(new RegExp(reportRoute.src).test('/s/abc123')).toBe(true)
-    expect(new RegExp(reportRoute.src).test('/')).toBe(false)
-    expect(new RegExp(reportRoute.src).test('/lite')).toBe(false)
+  // The /api route is deliberately ahead of the redirect, so a client
+  // still calling the API on the old host keeps working rather than
+  // being bounced to a marketing URL that cannot answer it.
+  it('sits after the /api function route so the API still answers there', () => {
+    const apiIdx = VERCEL_JSON.routes.findIndex((r) => r.dest === '/api/index.py')
+    const redirectIdx = VERCEL_JSON.routes.indexOf(AUDIT_HOST_ROUTE)
+    expect(apiIdx).toBeGreaterThanOrEqual(0)
+    expect(apiIdx).toBeLessThan(redirectIdx)
   })
 
-  it('serves audit-specific robots.txt and sitemap.xml, not the main-host files', () => {
-    // Both files are now reachable two ways — by host on
-    // audit.parleo.io, and by prefix under /audit/ — so these look up
-    // the host-conditioned rule specifically rather than "the route
-    // whose dest is this file".
-    const robots = findRoute((r) => r.dest === '/audit-robots.txt' && r.has)
-    const sitemap = findRoute((r) => r.dest === '/audit-sitemap.xml' && r.has)
-    expect(robots?.has?.some((h) => h.value === 'audit.parleo.io')).toBe(true)
-    expect(sitemap?.has?.some((h) => h.value === 'audit.parleo.io')).toBe(true)
-  })
-
-  it('places handle:filesystem before the audit-host 404 catch-all, so real static assets are served first', () => {
+  it('sits before handle:filesystem, so the host never serves a real file', () => {
     const filesystemIdx = VERCEL_JSON.routes.findIndex((r) => r.handle === 'filesystem')
-    const audit404Idx = VERCEL_JSON.routes.findIndex(
-      (r) => r.status === 404 && r.has?.some((h) => h.value === 'audit.parleo.io'),
+    expect(VERCEL_JSON.routes.indexOf(AUDIT_HOST_ROUTE)).toBeLessThan(filesystemIdx)
+  })
+
+  it('leaves no audit.parleo.io rule that serves content or 404s', () => {
+    for (const route of VERCEL_JSON.routes) {
+      if (!route.has?.some((h) => h.value === 'audit.parleo.io')) continue
+      expect(route.status).toBe(308)
+    }
+  })
+})
+
+describe('vercel.json — the /audit prefix serves the surface (unchanged)', () => {
+  it('S1: serves the landing from its own audit.html document, not index.html', () => {
+    const landingRoute = findRoute((r) => r.dest === '/audit.html')
+    expect(landingRoute).toBeDefined()
+    expect(new RegExp(landingRoute.src).test('/audit/')).toBe(true)
+    expect(new RegExp(landingRoute.src).test('/audit')).toBe(true)
+    expect(new RegExp(landingRoute.src).test('/audit/r/abc123')).toBe(false)
+    expect(new RegExp(landingRoute.src).test('/audit/bots')).toBe(false)
+  })
+
+  it('S3: serves /audit/r/ and /audit/s/ from their own audit-report.html document', () => {
+    const reportRoute = findRoute((r) => r.dest === '/audit-report.html')
+    expect(reportRoute).toBeDefined()
+    expect(new RegExp(reportRoute.src).test('/audit/r/abc123')).toBe(true)
+    expect(new RegExp(reportRoute.src).test('/audit/s/abc123')).toBe(true)
+    expect(new RegExp(reportRoute.src).test('/audit/')).toBe(false)
+    expect(new RegExp(reportRoute.src).test('/audit/lite')).toBe(false)
+  })
+
+  it('serves audit-specific robots.txt and sitemap.xml under the prefix', () => {
+    const robots = findRoute((r) => r.dest === '/audit-robots.txt')
+    const sitemap = findRoute((r) => r.dest === '/audit-sitemap.xml')
+    expect(new RegExp(robots.src).test('/audit/robots.txt')).toBe(true)
+    expect(new RegExp(sitemap.src).test('/audit/sitemap.xml')).toBe(true)
+  })
+
+  it('places handle:filesystem before the trailing audit 404, so real assets are served first', () => {
+    const filesystemIdx = VERCEL_JSON.routes.findIndex((r) => r.handle === 'filesystem')
+    const trailing404Idx = VERCEL_JSON.routes.findIndex(
+      (r, i) => i > filesystemIdx && r.status === 404 && new RegExp(r.src).test('/audit/x'),
     )
     expect(filesystemIdx).toBeGreaterThanOrEqual(0)
-    expect(filesystemIdx).toBeLessThan(audit404Idx)
+    expect(trailing404Idx).toBeGreaterThan(filesystemIdx)
   })
 
   // Part 2b: favicon.svg/apple-touch-icon.png/etc. are host-agnostic
-  // real files (unlike robots.txt/sitemap.xml, which need a per-host
-  // dest rewrite because the audit host serves *different* content
-  // under those names) — no route ahead of handle:filesystem should
-  // match them, so filesystem's plain passthrough is what serves them.
-  it('no route before handle:filesystem intercepts the favicon paths', () => {
+  // real files — no route ahead of handle:filesystem should intercept
+  // them on the hosts that serve content, so filesystem's plain
+  // passthrough is what serves them. The audit.parleo.io 308 is
+  // excluded by inspection, not by accident: it matches every path,
+  // which is the point, and it only applies to the retired host.
+  it('no content-host route before handle:filesystem intercepts the favicon paths', () => {
     const filesystemIdx = VERCEL_JSON.routes.findIndex((r) => r.handle === 'filesystem')
     const preFilesystemRoutes = VERCEL_JSON.routes.slice(0, filesystemIdx)
     const faviconPaths = ['/favicon.svg', '/favicon-32.png', '/favicon-16.png', '/apple-touch-icon.png', '/site.webmanifest']
     for (const route of preFilesystemRoutes) {
       if (!route.src) continue
+      if (route.has?.some((h) => h.value === 'audit.parleo.io')) continue
       const re = new RegExp(route.src)
       for (const p of faviconPaths) {
         expect(re.test(p)).toBe(false)
@@ -143,7 +180,13 @@ function serve(reqPath, host, { carryRewrite }) {
     const m = new RegExp(route.src).exec(subject)
     if (!m) continue
 
-    if (route.status) return String(route.status)
+    if (route.status) {
+      const location = route.headers?.Location
+      if (location) {
+        return `${route.status} ${location.replace(/\$(\d)/g, (_, i) => m[Number(i)] ?? '')}`
+      }
+      return String(route.status)
+    }
     if (route.dest) {
       if (route.dest === '/api/index.py') return 'function'
       current = route.dest.replace(/\$(\d)/g, (_, i) => m[Number(i)] ?? '')
@@ -214,15 +257,48 @@ describe.each(SEMANTICS)('routing simulation — %s', (_label, opts) => {
     expect(serve('/api/full-analysis/audit/tok', 'soa-app.parleo.io', opts)).toBe('function')
   })
 
-  it('leaves the audit.parleo.io host rules exactly as they were', () => {
-    expect(serve('/', 'audit.parleo.io', opts)).toBe('file:/audit.html')
-    expect(serve('/r/abc123', 'audit.parleo.io', opts)).toBe('file:/audit-report.html')
-    expect(serve('/s/run-1', 'audit.parleo.io', opts)).toBe('file:/audit-report.html')
-    expect(serve('/robots.txt', 'audit.parleo.io', opts)).toBe('file:/audit-robots.txt')
-    expect(serve('/sitemap.xml', 'audit.parleo.io', opts)).toBe('file:/audit-sitemap.xml')
-    expect(serve('/favicon.svg', 'audit.parleo.io', opts)).toBe('file:/favicon.svg')
-    expect(serve('/lite', 'audit.parleo.io', opts)).toBe('404')
-    expect(serve('/scan', 'audit.parleo.io', opts)).toBe('404')
+  // Cutover: the retired host used to serve the audit tool itself.
+  // Every one of those paths is now a 308 to the matching
+  // parleo.io/audit address, and nothing on that host serves content
+  // or 404s any more — an unknown path redirects too and meets the
+  // real 404 that parleo.io/audit already returns.
+  it.each([
+    ['/', 'https://parleo.io/audit/'],
+    ['/r/abc123', 'https://parleo.io/audit/r/abc123'],
+    ['/s/run-1', 'https://parleo.io/audit/s/run-1'],
+    ['/robots.txt', 'https://parleo.io/audit/robots.txt'],
+    ['/sitemap.xml', 'https://parleo.io/audit/sitemap.xml'],
+    ['/favicon.svg', 'https://parleo.io/audit/favicon.svg'],
+    ['/lite', 'https://parleo.io/audit/lite'],
+    ['/scan', 'https://parleo.io/audit/scan'],
+    ['/anything/at/all', 'https://parleo.io/audit/anything/at/all'],
+  ])('308s audit.parleo.io%s to %s', (p, location) => {
+    expect(serve(p, 'audit.parleo.io', opts)).toBe(`308 ${location}`)
+  })
+
+  it('never serves content or a 404 on the retired host', () => {
+    for (const p of ['/', '/r/abc', '/lite', '/scan', '/favicon.svg', '/nothing']) {
+      const result = serve(p, 'audit.parleo.io', opts)
+      expect(result.startsWith('308 https://parleo.io/audit/')).toBe(true)
+    }
+  })
+
+  // Deliberately ahead of the redirect: a client still calling the API
+  // on the old host keeps getting a real answer instead of being
+  // bounced to a marketing URL that cannot serve it.
+  it('keeps the API answering on the retired host', () => {
+    expect(serve('/api/public/soa-lite', 'audit.parleo.io', opts)).toBe('function')
+    expect(serve('/api/public/soa-lite/abc/status', 'audit.parleo.io', opts)).toBe('function')
+  })
+
+  // The redirect carries a host condition, so it must be invisible
+  // everywhere else. This is the assertion that would catch it losing
+  // that condition and swallowing the whole site.
+  it('does not touch any other host', () => {
+    for (const p of ['/', '/lite', '/report/tok', '/favicon.svg']) {
+      expect(serve(p, 'soa-app.parleo.io', opts)).not.toMatch(/^308/)
+      expect(serve(p, NEW_PROJECT, opts)).not.toMatch(/^308/)
+    }
   })
 
   it('leaves the marketing/authed host exactly as it was', () => {
