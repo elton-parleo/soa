@@ -25,6 +25,7 @@ import { CompleteReadBand } from './CompleteReadBand.jsx'
 import { TrueSyncBand } from './TrueSyncBand.jsx'
 import { ExposureSection } from './ExposureSection.jsx'
 import { ClosingFork } from './ClosingFork.jsx'
+import { auditPath, isAuditHost, PUBLIC_AUDIT_BASE_URL } from '../publicUrls.js'
 import { ReportGrounded } from './ReportGrounded.jsx'
 import { ReportFooter } from './ReportFooter.jsx'
 import { useReportSections, NAV_IDS } from './useReportSections.js'
@@ -68,7 +69,15 @@ export function LiteFullReportV4({ report, token }) {
   const shareOfMentions = report.visibility_breakdown?.share_of_mentions || []
   const rank = shareOfMentionsRank(shareOfMentions)
   const headline = deriveScoreHeroHeadline(report.pillars)
-  const auditUrl = typeof window !== 'undefined' ? `${window.location.origin}/` : '/'
+  // The report footer's "Run yours free" link. Built from the audit
+  // surface's own base, never from window.location.origin: this
+  // document renders under /audit/ on parleo.io, where the origin's
+  // root is the MARKETING home, not the audit landing — and on
+  // soa-app.parleo.io's /report/{token}, where the origin's root is
+  // the authed dashboard. Same shape as ReportNotFound's CTA in
+  // LiteWidget.jsx: a same-origin path on the audit surface, an
+  // absolute URL to the canonical address anywhere else.
+  const auditUrl = isAuditHost() ? auditPath('/') : `${PUBLIC_AUDIT_BASE_URL}/`
   const truesyncPoints = report.pillars.parleo_fixable_points
   const partial = isPartialRead(report.pillars, report.scan?.degraded_reason)
 
