@@ -31,6 +31,7 @@ import {
   OG_IMAGE_URL, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
 } from '../lite/landingMeta.js'
 import { PUBLIC_AUDIT_BASE_URL } from '../lite/publicUrls.js'
+import { OPENAI_PIXEL_ID } from '../lite/openaiPixel.constants.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const WEB_ROOT = path.resolve(__dirname, '../..')
@@ -172,5 +173,62 @@ describe('lemlist visitor-tracking pixel — landing document only (Part 1)', ()
 
   it('index.html (every other host) carries no lemlist reference', () => {
     expect(indexHtml).not.toMatch(/lemlist/i)
+  })
+})
+
+// The OpenAI (ChatGPT Ads) Measurement Pixel. Unlike lemlist, this one
+// IS on audit-report.html — the single, deliberate exception to the
+// "/r/ and /s/ carry no tracker" rule, because audit_score_rendered
+// can only be observed where a score actually renders (see the comment
+// above the marker in audit-report.html). What these assertions pin
+// down is that it appears EXACTLY once per audit document — the ID
+// lives in one constants file and is written in by one build plugin,
+// so a second copy pasted into a head would be a real regression —
+// that index.html (every other host) never gains it, and that the
+// loader still precedes the font stylesheet, since the inline queue
+// must exist before the async SDK lands.
+describe('OpenAI Measurement Pixel — both audit documents (not index.html)', () => {
+  const LOADER_SRC = 'https://bzrcdn.openai.com/sdk/oaiq.min.js'
+
+  function countOf(html, needle) {
+    return html.split(needle).length - 1
+  }
+
+  it.each([
+    ['audit.html', () => auditHtml],
+    ['audit-report.html', () => auditReportHtml],
+  ])('%s carries exactly one loader and one init with the pixel ID', (_name, getHtml) => {
+    const html = getHtml()
+    expect(countOf(html, LOADER_SRC)).toBe(1)
+    expect(countOf(html, 'oaiq("init"')).toBe(1)
+    expect(countOf(html, OPENAI_PIXEL_ID)).toBe(1)
+    // Shape check on top of the count: the ID has to be the init
+    // call's pixelId, not merely present somewhere in the document.
+    expect(html).toMatch(new RegExp(`oaiq\\("init", \\{\\s*pixelId: "${OPENAI_PIXEL_ID}",`))
+  })
+
+  it.each([
+    ['audit.html', () => auditHtml],
+    ['audit-report.html', () => auditReportHtml],
+  ])('%s loads the pixel before the fonts.googleapis stylesheet', (_name, getHtml) => {
+    const html = getHtml()
+    const loaderAt = html.indexOf(LOADER_SRC)
+    const fontsAt = html.indexOf('fonts.googleapis.com/css2')
+    expect(loaderAt).toBeGreaterThan(-1)
+    expect(fontsAt).toBeGreaterThan(-1)
+    expect(loaderAt).toBeLessThan(fontsAt)
+  })
+
+  it.each([
+    ['audit.html', () => auditHtml],
+    ['audit-report.html', () => auditReportHtml],
+  ])('%s fully consumes the marker', (_name, getHtml) => {
+    expect(getHtml()).not.toContain('<!--OPENAI_PIXEL-->')
+  })
+
+  it('index.html (every other host) carries no oaiq or openai.com reference', () => {
+    expect(indexHtml).not.toMatch(/oaiq/i)
+    expect(indexHtml).not.toMatch(/openai\.com/i)
+    expect(indexHtml).not.toContain(OPENAI_PIXEL_ID)
   })
 })

@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DEFAULT_PUBLIC_AUDIT_BASE_URL } from './src/lite/audit-host.constants.js'
+import { OPENAI_PIXEL_ID, OPENAI_PIXEL_DEBUG } from './src/lite/openaiPixel.constants.js'
 import {
   LANDING_META_TITLE, LANDING_META_DESCRIPTION, REPORT_META_TITLE,
   OG_IMAGE_URL, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
@@ -21,6 +22,42 @@ function escapeAttr(value) {
 function meta(attr, key, content) {
   return `<meta ${attr}="${escapeAttr(key)}" content="${escapeAttr(content)}" />`
 }
+
+// The OpenAI (ChatGPT Ads) Measurement Pixel loader, built once here
+// and written into BOTH audit documents at the <!--OPENAI_PIXEL-->
+// marker — same single-source discipline as the meta tags below, so
+// the pixel ID exists as a literal in exactly one file
+// (openaiPixel.constants.js) rather than being pasted into two HTML
+// heads that can then drift.
+//
+// Inline and synchronous on purpose: the loader has to define the
+// oaiq queue before the async SDK arrives, which is the documented
+// pattern. Placed above the font stylesheet (marker position in the
+// HTML) so init runs early enough to capture ?oppref= off the landing
+// URL before any client-side navigation rewrites it.
+//
+// index.html carries no marker, so this string never reaches the
+// marketing host's document. Asserted in staticHead.build.test.js.
+const OPENAI_PIXEL_TAG = `<script>
+      (function (w, d, s, u) {
+        if (w.oaiq) return;
+        var q = function () {
+          q.q.push(arguments);
+        };
+        q.q = [];
+        w.oaiq = q;
+        var js = d.createElement(s);
+        js.async = true;
+        js.src = u;
+        var f = d.getElementsByTagName(s)[0];
+        f.parentNode.insertBefore(js, f);
+      })(window, document, "script", "https://bzrcdn.openai.com/sdk/oaiq.min.js");
+
+      oaiq("init", {
+        pixelId: ${JSON.stringify(OPENAI_PIXEL_ID)},
+        debug: ${OPENAI_PIXEL_DEBUG},
+      });
+    </script>`
 
 // S1: builds the exact <head> block for audit.html/audit-report.html
 // from landingMeta.js — the only place either the landing or the
@@ -65,10 +102,14 @@ function auditHeadPlugin(auditBaseUrl) {
     transformIndexHtml(html, ctx) {
       const filename = ctx.filename || ''
       if (filename.endsWith('audit-report.html')) {
-        return html.replace('<!--AUDIT_HEAD-->', reportTags)
+        return html
+          .replace('<!--AUDIT_HEAD-->', reportTags)
+          .replace('<!--OPENAI_PIXEL-->', OPENAI_PIXEL_TAG)
       }
       if (filename.endsWith('audit.html')) {
-        return html.replace('<!--AUDIT_HEAD-->', landingTags)
+        return html
+          .replace('<!--AUDIT_HEAD-->', landingTags)
+          .replace('<!--OPENAI_PIXEL-->', OPENAI_PIXEL_TAG)
       }
       return html
     },
