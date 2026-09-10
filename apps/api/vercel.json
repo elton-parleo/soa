@@ -14,6 +14,26 @@
       "dest": "/api/index.py"
     },
     {
+      "src": "^/audit/?$",
+      "dest": "/audit.html"
+    },
+    {
+      "src": "^/audit/(r/.*|s/.*)$",
+      "dest": "/audit-report.html"
+    },
+    {
+      "src": "^/audit/robots\\.txt$",
+      "dest": "/audit-robots.txt"
+    },
+    {
+      "src": "^/audit/sitemap\\.xml$",
+      "dest": "/audit-sitemap.xml"
+    },
+    {
+      "src": "^/audit/(.*)$",
+      "dest": "/$1"
+    },
+    {
       "src": "^/robots\\.txt$",
       "has": [{ "type": "host", "value": "audit.parleo.io" }],
       "dest": "/audit-robots.txt"
@@ -35,6 +55,10 @@
     },
     {
       "handle": "filesystem"
+    },
+    {
+      "src": "^/audit(/.*)?$",
+      "status": 404
     },
     {
       "src": "^/.*$",

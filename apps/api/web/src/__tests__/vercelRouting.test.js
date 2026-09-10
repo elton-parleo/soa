@@ -45,8 +45,12 @@ describe('vercel.json — audit.parleo.io host routing (H1)', () => {
   })
 
   it('serves audit-specific robots.txt and sitemap.xml, not the main-host files', () => {
-    const robots = findRoute((r) => r.dest === '/audit-robots.txt')
-    const sitemap = findRoute((r) => r.dest === '/audit-sitemap.xml')
+    // Both files are now reachable two ways — by host on
+    // audit.parleo.io, and by prefix under /audit/ — so these look up
+    // the host-conditioned rule specifically rather than "the route
+    // whose dest is this file".
+    const robots = findRoute((r) => r.dest === '/audit-robots.txt' && r.has)
+    const sitemap = findRoute((r) => r.dest === '/audit-sitemap.xml' && r.has)
     expect(robots?.has?.some((h) => h.value === 'audit.parleo.io')).toBe(true)
     expect(sitemap?.has?.some((h) => h.value === 'audit.parleo.io')).toBe(true)
   })
