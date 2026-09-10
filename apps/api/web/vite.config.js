@@ -2,11 +2,11 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DEFAULT_PUBLIC_AUDIT_BASE_URL } from './src/lite/audit-host.constants.js'
+import { DEFAULT_PUBLIC_AUDIT_BASE_URL, normalizeBasePath } from './src/lite/audit-host.constants.js'
 import { OPENAI_PIXEL_ID, OPENAI_PIXEL_DEBUG } from './src/lite/openaiPixel.constants.js'
 import {
   LANDING_META_TITLE, LANDING_META_DESCRIPTION, REPORT_META_TITLE,
-  OG_IMAGE_URL, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
+  OG_IMAGE_PATH, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
 } from './src/lite/landingMeta.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -66,6 +66,11 @@ const OPENAI_PIXEL_TAG = `<script>
 // can never drift into disagreement.
 function auditHeadPlugin(auditBaseUrl) {
   const landingUrl = `${auditBaseUrl}/`
+  // S4: landingMeta.js exports a root-relative PATH; the absolute URL
+  // is composed here from this build's own audit base, exactly as
+  // LandingPage.jsx's useLandingMeta composes it from the client's
+  // PUBLIC_AUDIT_BASE_URL. One path literal, two env-aware bases.
+  const ogImageUrl = OG_IMAGE_PATH ? `${auditBaseUrl}${OG_IMAGE_PATH}` : null
   const landingTags = [
     `<title>${escapeAttr(LANDING_META_TITLE)}</title>`,
     `<link rel="canonical" href="${escapeAttr(landingUrl)}" />`,
@@ -74,18 +79,18 @@ function auditHeadPlugin(auditBaseUrl) {
     meta('property', 'og:description', LANDING_META_DESCRIPTION),
     meta('property', 'og:url', landingUrl),
     meta('property', 'og:type', 'website'),
-    meta('name', 'twitter:card', OG_IMAGE_URL ? 'summary_large_image' : 'summary'),
+    meta('name', 'twitter:card', ogImageUrl ? 'summary_large_image' : 'summary'),
     meta('name', 'twitter:title', LANDING_META_TITLE),
     meta('name', 'twitter:description', LANDING_META_DESCRIPTION),
-    // S4: OG_IMAGE_URL is null only if reset — omit the tags entirely
+    // S4: OG_IMAGE_PATH is null only if reset — omit the tags entirely
     // rather than emit a path that 404s on every unfurl.
-    ...(OG_IMAGE_URL
+    ...(ogImageUrl
       ? [
-          meta('property', 'og:image', OG_IMAGE_URL),
+          meta('property', 'og:image', ogImageUrl),
           meta('property', 'og:image:width', OG_IMAGE_WIDTH),
           meta('property', 'og:image:height', OG_IMAGE_HEIGHT),
           meta('property', 'og:image:alt', OG_IMAGE_ALT),
-          meta('name', 'twitter:image', OG_IMAGE_URL),
+          meta('name', 'twitter:image', ogImageUrl),
         ]
       : []),
   ].join('\n    ')
@@ -119,8 +124,18 @@ function auditHeadPlugin(auditBaseUrl) {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
   const auditBaseUrl = (env.VITE_PUBLIC_AUDIT_BASE_URL || DEFAULT_PUBLIC_AUDIT_BASE_URL).replace(/\/$/, '')
+  // The audit surface is moving from its own host (audit.parleo.io) to
+  // a subpath of the marketing site (parleo.io/audit), served by a
+  // SECOND Vercel project built from this same repo behind a proxy.
+  // That project sets VITE_BASE_PATH=/audit/; the existing project sets
+  // nothing and keeps building at '/'. Vite's `base` reaches the client
+  // as import.meta.env.BASE_URL, which publicUrls.js's AUDIT_BASE_PATH
+  // re-normalizes (same shared helper) and every same-origin audit
+  // navigation is built from.
+  const basePath = normalizeBasePath(env.VITE_BASE_PATH)
 
   return {
+    base: basePath,
     plugins: [react(), auditHeadPlugin(auditBaseUrl)],
     server: {
       port: 5173,

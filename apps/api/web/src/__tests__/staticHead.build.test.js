@@ -28,10 +28,16 @@ import { build } from 'vite'
 
 import {
   LANDING_META_TITLE, LANDING_META_DESCRIPTION, REPORT_META_TITLE,
-  OG_IMAGE_URL, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
+  OG_IMAGE_PATH, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
 } from '../lite/landingMeta.js'
 import { PUBLIC_AUDIT_BASE_URL } from '../lite/publicUrls.js'
 import { OPENAI_PIXEL_ID } from '../lite/openaiPixel.constants.js'
+
+// landingMeta.js exports the share card as a root-relative path; both
+// consumers compose the absolute URL from their own env-aware audit
+// base (vite.config.js's plugin, LandingPage.jsx's useLandingMeta).
+// This default-build expectation composes it the same way.
+const OG_IMAGE_URL = `${PUBLIC_AUDIT_BASE_URL}${OG_IMAGE_PATH}`
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const WEB_ROOT = path.resolve(__dirname, '../..')
@@ -79,17 +85,16 @@ describe('built audit.html (landing) — S1', () => {
 
   // Part 3b: og:image + dimensions + alt, and the URL resolves to a
   // real PNG in the build output (Vite copies public/ verbatim, so
-  // the absolute OG_IMAGE_URL's path always has a matching file here).
+  // OG_IMAGE_PATH always has a matching file here).
   it('Part 3b: carries og:image + width/height/alt + twitter:image, resolving to a real PNG', () => {
-    expect(OG_IMAGE_URL).not.toBeNull()
+    expect(OG_IMAGE_PATH).not.toBeNull()
     expect(auditHtml).toContain(`<meta property="og:image" content="${OG_IMAGE_URL}" />`)
     expect(auditHtml).toContain(`<meta property="og:image:width" content="${OG_IMAGE_WIDTH}" />`)
     expect(auditHtml).toContain(`<meta property="og:image:height" content="${OG_IMAGE_HEIGHT}" />`)
     expect(auditHtml).toContain(`<meta property="og:image:alt" content="${OG_IMAGE_ALT}" />`)
     expect(auditHtml).toContain(`<meta name="twitter:image" content="${OG_IMAGE_URL}" />`)
 
-    const ogImagePath = new URL(OG_IMAGE_URL).pathname // "/og/audit-landing.png"
-    const builtFile = path.join(outDir, ogImagePath)
+    const builtFile = path.join(outDir, OG_IMAGE_PATH)
     expect(fs.existsSync(builtFile)).toBe(true)
     const header = fs.readFileSync(builtFile).subarray(0, 8)
     expect(header.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe(true) // PNG magic bytes
