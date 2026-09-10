@@ -201,6 +201,23 @@ describe('favicon set — declared in all three built HTML entries', () => {
   ])('%s exists in the build output', (filename) => {
     expect(fs.existsSync(path.join(outDir, filename))).toBe(true)
   })
+
+  // Cutover: the manifest's icon srcs are relative, so they resolve
+  // against the manifest's OWN url — /icon-192.png at a host root and
+  // /audit/icon-192.png under the prefix — instead of always at the
+  // origin root, where the prefixed build would have 404'd them.
+  it('the manifest declares its icons relatively, and they resolve on both builds', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(outDir, 'site.webmanifest'), 'utf8'))
+    expect(manifest.icons.length).toBeGreaterThan(0)
+    for (const icon of manifest.icons) {
+      expect(icon.src.startsWith('/')).toBe(false)
+      expect(fs.existsSync(path.join(outDir, icon.src))).toBe(true)
+      expect(new URL(icon.src, 'https://soa-app.parleo.io/site.webmanifest').href)
+        .toBe(`https://soa-app.parleo.io/${icon.src}`)
+      expect(new URL(icon.src, 'https://parleo.io/audit/site.webmanifest').href)
+        .toBe(`https://parleo.io/audit/${icon.src}`)
+    }
+  })
 })
 
 // Part 1: the lemlist visitor-tracking pixel is a static tag in

@@ -1,5 +1,18 @@
+# NOTE: crawlers only read robots.txt at the ORIGIN ROOT. This file is
+# served at https://parleo.io/audit/robots.txt (vercel.json's prefixed
+# route), which no crawler will ever fetch as a directive — the file
+# that actually governs the audit surface is the MARKETING REPO's
+# robots.txt at https://parleo.io/robots.txt, and it must carry:
+#
+#   Disallow: /audit/r/
+#   Disallow: /audit/s/
+#   Sitemap: https://parleo.io/audit/sitemap.xml
+#
+# This copy is kept because it is the source of those rules and stays
+# fetchable for reference, and because the paths below are the ones
+# that were authoritative while the tool lived on its own host.
 User-agent: *
 Disallow: /r/
 Disallow: /s/
 
-Sitemap: https://audit.parleo.io/sitemap.xml
+Sitemap: https://parleo.io/audit/sitemap.xml
