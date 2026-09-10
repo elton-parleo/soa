@@ -30,8 +30,16 @@
       "dest": "/audit-sitemap.xml"
     },
     {
-      "src": "^/audit/(.*)$",
+      "src": "^/audit/((?:assets|og)/.*)$",
       "dest": "/$1"
+    },
+    {
+      "src": "^/audit/([^/]+\\.(?:png|svg|ico|webmanifest|json|txt|xml|webp|avif|woff2?|ttf))$",
+      "dest": "/$1"
+    },
+    {
+      "src": "^/audit(/.*)?$",
+      "status": 404
     },
     {
       "src": "^/robots\\.txt$",
