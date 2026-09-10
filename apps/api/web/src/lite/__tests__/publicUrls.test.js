@@ -12,6 +12,8 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
+import { DEFAULT_PUBLIC_AUDIT_BASE_URL } from '../audit-host.constants.js'
+
 async function loadPublicUrls(env = {}) {
   vi.resetModules()
   for (const [key, value] of Object.entries(env)) {
@@ -134,5 +136,63 @@ describe('isAuditHost — build time first, hostname second', () => {
     })
     expect(window.location.hostname).not.toBe('audit.parleo.io')
     expect(isAuditHost()).toBe(false)
+  })
+})
+
+// Cutover: parleo.io/audit is the canonical address, and the literal
+// that says so is the single most consequential line in this change —
+// it is what the worker email, the Copy-link button, every canonical
+// tag and the OG image all resolve through when no override is set.
+//
+// It needs its own test precisely because the repo's dev convention
+// sets VITE_PUBLIC_AUDIT_BASE_URL (see web/.env.local), which
+// overrides the default and would otherwise hide a regression here
+// behind a green suite. Clearing the override to '' rather than
+// reading the ambient env is what makes these assertions say the same
+// thing on every machine.
+describe('cutover — the canonical audit address', () => {
+  const CANONICAL = 'https://parleo.io/audit'
+
+  it('is the literal default, with no trailing slash', () => {
+    expect(DEFAULT_PUBLIC_AUDIT_BASE_URL).toBe(CANONICAL)
+  })
+
+  it('is what PUBLIC_AUDIT_BASE_URL resolves to when nothing overrides it', async () => {
+    const { PUBLIC_AUDIT_BASE_URL } = await loadPublicUrls({ VITE_PUBLIC_AUDIT_BASE_URL: '' })
+    expect(PUBLIC_AUDIT_BASE_URL).toBe(CANONICAL)
+  })
+
+  it('puts report links under the /audit path, not at a bare origin', async () => {
+    const { reportUrl } = await loadPublicUrls({ VITE_PUBLIC_AUDIT_BASE_URL: '' })
+    expect(reportUrl('tok123')).toBe('https://parleo.io/audit/r/tok123')
+    expect(reportUrl('a b&c')).toBe(`https://parleo.io/audit/r/${encodeURIComponent('a b&c')}`)
+  })
+
+  // A consequence, not a goal: the base URL now carries a path, so the
+  // hostname derived from it is the marketing host. isAuditHost()'s
+  // fallback is kept (a bundle without the build flag must never claim
+  // to be the audit surface), but its job is now to answer false on
+  // soa-app.parleo.io — audit.parleo.io never reaches it, because
+  // vercel.json 308s that host before the bundle is served.
+  it('leaves PUBLIC_AUDIT_HOSTNAME as the marketing host', async () => {
+    const { PUBLIC_AUDIT_HOSTNAME } = await loadPublicUrls({ VITE_PUBLIC_AUDIT_BASE_URL: '' })
+    expect(PUBLIC_AUDIT_HOSTNAME).toBe('parleo.io')
+  })
+
+  it('does not make the default build claim to be the audit surface', async () => {
+    const { isAuditHost } = await loadPublicUrls({ VITE_PUBLIC_AUDIT_BASE_URL: '' })
+    // jsdom serves these from localhost — i.e. neither parleo.io nor
+    // soa-app.parleo.io, which is the point: without the build flag,
+    // nothing but an exact hostname match may return true.
+    expect(window.location.hostname).not.toBe('parleo.io')
+    expect(isAuditHost()).toBe(false)
+  })
+
+  it('still yields root-relative navigation under the default build', async () => {
+    // The canonical address has a path now; the SAME-ORIGIN prefix is a
+    // separate question and is still driven by BASE_URL alone.
+    const { auditPath, AUDIT_BASE_PATH } = await loadPublicUrls({ VITE_PUBLIC_AUDIT_BASE_URL: '' })
+    expect(AUDIT_BASE_PATH).toBe('/')
+    expect(auditPath('/r/abc')).toBe('/r/abc')
   })
 })

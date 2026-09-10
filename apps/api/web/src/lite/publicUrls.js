@@ -1,22 +1,24 @@
 /**
- * Stage: audit.parleo.io migration (U1-U3). Single source for the
- * public audit tool's origin — every absolute URL the product emits
- * (report-link email, Copy-link button, OG/share URLs, SAMPLE_REPORT_URL)
- * must be built from this constant rather than window.location.origin
- * or a hardcoded string, so they stay correct regardless of which host
- * happens to be serving the page that builds them (e.g. the /lite embed
- * still runs on the marketing host, but the links it produces must
- * always point at the audit host).
+ * Single source for the public audit tool's canonical address — every
+ * absolute URL the product emits (report-link email, Copy-link button,
+ * OG/share URLs, SAMPLE_REPORT_URL) must be built from this constant
+ * rather than window.location.origin or a hardcoded string, so they
+ * stay correct regardless of which host happens to be serving the page
+ * that builds them (e.g. the /lite embed still runs on
+ * soa-app.parleo.io, but the links it produces must always point at
+ * the canonical audit address).
  *
- * parleo.io/audit migration: the same file is also the single source
- * for the audit surface's same-origin PREFIX. The tool is moving to a
- * subpath of the marketing site, served by a second Vercel project
- * built from this repo with VITE_BASE_PATH=/audit/ behind a proxy, so
- * a client-side navigation to the landing or a report is no longer
- * necessarily rooted at '/'. auditPath() builds those paths and
- * stripAuditBase() reads them back; both are identities under the
- * default build, which is why the existing project's behavior is
- * untouched.
+ * Cutover: that address is now https://parleo.io/audit — a base URL
+ * with a path, not a bare origin. audit.parleo.io 308s to it and
+ * serves nothing itself.
+ *
+ * This file is also the single source for the audit surface's
+ * same-origin PREFIX, which is a different question from the canonical
+ * address: the surface is served under /audit/ by the soa-audit
+ * project (VITE_BASE_PATH=/audit/) and at the root by any build
+ * without it. auditPath() builds those same-origin paths and
+ * stripAuditBase() reads them back; both are identities when the base
+ * is '/'.
  */
 import { DEFAULT_PUBLIC_AUDIT_BASE_URL, normalizeBasePath } from './audit-host.constants.js'
 
@@ -83,12 +85,19 @@ export function stripAuditBase(pathname) {
 // True when this page is the public audit surface. Decided at BUILD
 // time first — a VITE_AUDIT_BUILD=1 bundle is the audit tool wherever
 // it is served from, which is what makes parleo.io/audit, the
-// project's own *.vercel.app URL, and preview URLs all behave the same
-// — and by hostname second, because the existing project keeps serving
-// audit.parleo.io by host until that host is retired. Used by
-// components that render on both the audit surface and the marketing
-// host's /lite embed to pick the right same-origin path prefix for
-// client-side navigation (see auditPath above).
+// project's own *.vercel.app URL, and preview URLs all behave the same.
+//
+// The hostname fallback is kept, but after the cutover its only job is
+// to answer FALSE. PUBLIC_AUDIT_HOSTNAME is now 'parleo.io' (the
+// canonical base URL's host), and the default build is served on
+// soa-app.parleo.io — the authed dashboard, the /lite embed,
+// /report/{token}, /fa/{token}, /bots — so the comparison is false
+// there and those routes keep their own behavior. audit.parleo.io no
+// longer reaches this branch at all: vercel.json 308s every path on
+// that host before the bundle is ever served. The fallback stays
+// because it is what makes that "false" explicit rather than
+// accidental, and because a bundle built without the flag must never
+// claim to be the audit surface just because it happens to load.
 export function isAuditHost() {
   if (IS_AUDIT_BUILD) return true
   return typeof window !== 'undefined' && window.location.hostname === PUBLIC_AUDIT_HOSTNAME
