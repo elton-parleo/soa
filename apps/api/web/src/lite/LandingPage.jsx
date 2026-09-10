@@ -30,7 +30,7 @@ import { FinalCta } from './landing/FinalCta.jsx'
 import { LandingFooter } from './landing/LandingFooter.jsx'
 import { PUBLIC_AUDIT_BASE_URL } from './publicUrls.js'
 import {
-  LANDING_META_TITLE, LANDING_META_DESCRIPTION, OG_IMAGE_URL, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
+  LANDING_META_TITLE, LANDING_META_DESCRIPTION, OG_IMAGE_PATH, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
 } from './landingMeta.js'
 import { upsertMeta, upsertLink, restoreOrRemove } from './headMeta.js'
 import { track, captureSrcParam } from './analytics.js'
@@ -47,6 +47,15 @@ function writeSession(key, value) {
   } catch (_) {}
 }
 
+// landingMeta.js exports the share card as a root-relative PATH; the
+// absolute URL is composed here from the client's env-aware
+// PUBLIC_AUDIT_BASE_URL, exactly as vite.config.js's auditHeadPlugin
+// composes it from the build's own audit base. One path literal, two
+// env-aware bases — which is what keeps the tag correct both on
+// audit.parleo.io today and on parleo.io/audit under the base-path
+// build.
+const OG_IMAGE_URL = OG_IMAGE_PATH ? `${PUBLIC_AUDIT_BASE_URL}${OG_IMAGE_PATH}` : null
+
 // I2/I3, S1/S2: canonical + OG/Twitter tags, only on the landing page
 // (the one indexable/shareable page on this host — /r/ and /s/ get a
 // minimal noindex head instead, see LiteWidget.jsx). The audit host's
@@ -57,7 +66,7 @@ function writeSession(key, value) {
 // client-side navigation without the static head present at all).
 // No og:image/twitter:image tag while OG_IMAGE_URL is null: a made-up
 // path would just 404 on every unfurl, so it's omitted rather than
-// faked (dead branch today — OG_IMAGE_URL is a real asset now — but
+// faked (dead branch today — OG_IMAGE_PATH is a real asset now — but
 // kept so a future reset back to null degrades safely).
 function useLandingMeta() {
   useEffect(() => {

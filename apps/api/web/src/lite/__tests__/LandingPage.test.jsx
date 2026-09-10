@@ -7,7 +7,13 @@ import LandingPage from '../LandingPage.jsx'
 import { liteApi } from '../liteApi.js'
 import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
 import { PUBLIC_AUDIT_BASE_URL } from '../publicUrls.js'
-import { OG_IMAGE_URL, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT } from '../landingMeta.js'
+import { OG_IMAGE_PATH, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT } from '../landingMeta.js'
+
+// landingMeta.js exports the share card as a root-relative path now;
+// the absolute URL is composed per-consumer from the env-aware audit
+// base (see LandingPage.jsx), so the expectation is composed the same
+// way rather than re-hardcoding an origin here.
+const OG_IMAGE_URL = `${PUBLIC_AUDIT_BASE_URL}${OG_IMAGE_PATH}`
 
 vi.mock('../liteApi.js', () => ({
   liteApi: { submit: vi.fn() },
