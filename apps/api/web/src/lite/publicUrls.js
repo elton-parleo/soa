@@ -28,6 +28,18 @@ export const PUBLIC_AUDIT_BASE_URL = (
 
 export const PUBLIC_AUDIT_HOSTNAME = new URL(PUBLIC_AUDIT_BASE_URL).hostname
 
+// The canonical address as DISPLAY text — scheme stripped, no trailing
+// slash: 'parleo.io/audit'. The landing's mock browser chrome
+// (Hero.jsx, SampleReportSection.jsx) and the footer label print this
+// instead of a literal.
+//
+// It exists because three hardcoded copies of the old address are
+// exactly what went stale at the cutover: the code that BUILT urls all
+// moved with one constant, and the strings that merely SHOWED the
+// address did not. Anything that displays the address is a consumer of
+// the same single source now.
+export const PUBLIC_AUDIT_DISPLAY = PUBLIC_AUDIT_BASE_URL.replace(/^https?:\/\//, '')
+
 // The path prefix this bundle is served under, with exactly one
 // leading and one trailing slash: '/' under the existing project's
 // build, '/audit/' under a VITE_BASE_PATH=/audit/ build. Vite hands it
