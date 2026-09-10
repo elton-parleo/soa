@@ -265,7 +265,14 @@ function useLitePathname() {
 
   function navigate(path) {
     window.history.pushState({}, '', path)
-    setPathname(path)
+    // Read the pathname back off history rather than trusting the
+    // argument: callers may pass a path WITH a query string (see
+    // withOppref in lite/openaiPixel.js), and this state feeds the
+    // route matching below — where '/r/' + '/s/' slice the token
+    // straight out of it. Storing the raw argument would make
+    // navigate('/r/tok?oppref=x') yield the token "tok?oppref=x" and
+    // 404 the report, with a perfectly correct-looking address bar.
+    setPathname(window.location.pathname)
   }
 
   return [pathname, navigate]

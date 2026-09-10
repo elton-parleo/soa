@@ -35,6 +35,7 @@ import {
 import { upsertMeta, upsertLink, restoreOrRemove } from './headMeta.js'
 import { track, captureSrcParam } from './analytics.js'
 import { EVENTS } from './analyticsEvents.js'
+import { withOppref } from './openaiPixel.js'
 
 function writeSession(key, value) {
   try {
@@ -130,7 +131,14 @@ export default function LandingPage({ navigate }) {
     writeSession(STORAGE_KEY_STORE_URL, storeUrl || null)
     // This page only ever renders on the audit host (App.jsx), so '/r/'
     // is always the right canonical prefix here.
-    navigate(`/r/${token}`)
+    //
+    // withOppref: the ad-click parameter arrives on THIS page's URL and
+    // would be dropped by a bare pushState path, leaving the run's own
+    // report URL unattributed in the address bar. The pixel's cookie
+    // already covers the in-tab case; this covers the copied/reloaded
+    // URL. oppref only — never src, which analytics.js strips on
+    // purpose so a copied link stays canonical.
+    navigate(withOppref(`/r/${token}`))
   }
 
   return (

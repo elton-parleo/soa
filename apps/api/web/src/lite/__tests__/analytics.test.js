@@ -130,6 +130,21 @@ describe('captureSrcParam()', () => {
     expect(mod.captureSrcParam()).toBe('email')
   })
 
+  // Pins the behavior the OpenAI pixel's oppref handling depends on:
+  // captureSrcParam deletes ONLY src, so an ad-click parameter sitting
+  // beside it on a report URL survives into the address bar untouched.
+  // This is why openaiPixel.js needs no cooperation from this module —
+  // if someone ever "tidied" this into a whitelist-and-rebuild, the
+  // pixel would silently lose attribution and this test would fail
+  // first.
+  it('leaves ?oppref= in the address bar while stripping src', async () => {
+    window.history.replaceState(null, '', '/r/tok123?oppref=abc&src=email')
+    const { captureSrcParam } = await import('../analytics.js')
+    expect(captureSrcParam()).toBe('email')
+    expect(window.location.search).toBe('?oppref=abc')
+    expect(window.location.pathname).toBe('/r/tok123')
+  })
+
   it('returns "direct" when no src param was ever seen this session', async () => {
     window.history.replaceState(null, '', '/')
     const { captureSrcParam } = await import('../analytics.js')
@@ -199,6 +214,35 @@ describe('posthog-js import boundary', () => {
           if (/from ['"]posthog-js['"]/.test(src) || /require\(['"]posthog-js['"]\)/.test(src)) {
             offenders.push(rel)
           }
+        }
+      }
+    }
+    walk(srcRoot)
+    expect(offenders).toEqual([])
+  })
+})
+
+// The same boundary as posthog-js above, for the ad-measurement SDK:
+// openaiPixel.js is the one module in src/ allowed to reference oaiq,
+// so every rule about when the conversion may fire (owner-only,
+// numeric composite, once per session) lives in one reviewable place
+// and no component can reach past it. The inline SDK loader is
+// written by vite.config.js, which is outside src/ and therefore
+// outside this walk by construction.
+describe('OpenAI pixel (oaiq) boundary', () => {
+  it('no file under src other than openaiPixel.js references oaiq', () => {
+    const srcRoot = path.join(__dirname, '../..')
+    const offenders = []
+    function walk(dir) {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === 'node_modules' || entry.name === 'dist') continue
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          walk(full)
+        } else if (/\.(js|jsx)$/.test(entry.name) && !/\.test\.(js|jsx)$/.test(entry.name) && !dir.includes('__tests__')) {
+          const rel = path.relative(srcRoot, full)
+          if (rel === 'lite/openaiPixel.js') continue
+          if (/oaiq/i.test(fs.readFileSync(full, 'utf8'))) offenders.push(rel)
         }
       }
     }

@@ -79,3 +79,61 @@ as bare facts (`audit_submitted`, `email_captured`) with no payload.
   the-bar link stays canonical (no lingering `?src=email` from a
   re-share). The share button builds its URL independently and never
   carries `src`.
+
+## The OpenAI ad-conversion pixel
+
+Separate system, separate destination, one event. The OpenAI (ChatGPT
+Ads) Measurement Pixel is **not** PostHog and does not go through
+`track()` — `audit_score_rendered` is deliberately absent from
+`EVENT_REGISTRY`, and is documented in a comment block in
+[`analyticsEvents.js`](../apps/api/web/src/lite/analyticsEvents.js) so
+that file stays the complete list of what this app emits and where it
+goes.
+
+| Event | Payload | Fired when |
+|---|---|---|
+| `audit_score_rendered` | `custom_event_name`, `event_id` (`audit_score_rendered:{token}`) | A numeric composite score has rendered on the report page **and** this browser is the one that commissioned the run (`isTokenOwned`). Once per token per browser session. |
+
+- **Owned by one module**,
+  [`apps/api/web/src/lite/openaiPixel.js`](../apps/api/web/src/lite/openaiPixel.js),
+  the only file allowed to touch `window.oaiq` — same grep-enforced
+  boundary as `analytics.js` and `posthog-js`. The SDK loader itself is
+  inline in the served HTML of both audit documents, written in at
+  build time by `vite.config.js` from
+  [`openaiPixel.constants.js`](../apps/api/web/src/lite/openaiPixel.constants.js),
+  because the `oaiq` queue must exist before the async SDK arrives.
+- **Both audit documents carry it, including `/r/` and `/s/`.** This is
+  the one explicit exception to the rule that the report document
+  carries no tracker (the landing's outreach-attribution pixel is still
+  landing-only, and the build test still asserts it). The conversion
+  being measured can only be observed where a score renders, and the
+  report page is the only place that happens.
+- **Why the score, not the submit.** The conversion is the moment the
+  visitor receives what the ad promised. A withheld composite
+  (`report.composite == null` — a blocked read, or a partial read that
+  still has pillar scores) renders an em dash or a measurable-earned
+  subtotal, never a composite, and never fires.
+- **Owner only.** A forwarded share link opening the same report is a
+  reader, not a conversion; counting it would inflate the ad's measured
+  performance with traffic the ad never bought.
+- **No transaction data.** No `amount`, `currency`, `plan_id`, or
+  `contents` — this is a free diagnostic with nothing sold. No `user`
+  object on init. The run token is the only identifier, on the same
+  grounds `report_token` is allowed above: it is already the report's
+  own public handle.
+- **Deduped twice.** A `sessionStorage` key per token stops a reload or
+  remount re-firing within a session; the `event_id` lets OpenAI
+  collapse duplicates server-side on the first event per key.
+  `sessionStorage` rather than `localStorage` is deliberate — a
+  genuinely new session on the same report may attribute again if the
+  click window still covers it.
+- **`?oppref=`** is captured by the SDK on init and persisted in a
+  first-party `__oppref` cookie on the audit host, so it already
+  survives client-side navigation. `withOppref()` additionally carries
+  it through our `pushState` paths (landing submit, report re-run) so
+  the address bar keeps it. Only `oppref`, and only on those two
+  navigations — share links, the Copy-link button, the report-ready
+  email, and `reportUrl()` all keep producing the bare canonical URL.
+- **Verbose SDK logging** is on for the initial rollout
+  (`OPENAI_PIXEL_DEBUG = true`). Flip that one constant to `false`
+  once the conversion is confirmed live.

@@ -41,6 +41,14 @@ beforeEach(() => {
   sessionStorage.clear()
   mockAuditHost = false
   setPath('/')
+  // Report-first resolution (see LiteWidget.jsx): a token-bearing route
+  // fires getReport(token) on mount before it renders anything. Every
+  // test below is about the /status + LiteProgress path, so the default
+  // here is the 409 "not ready yet" that falls through to exactly that.
+  // A bare vi.fn() returning undefined makes the widget call .then() on
+  // undefined and throws before any assertion runs — individual tests
+  // still override this when they want a 200 or a 404.
+  liteApi.getReport.mockRejectedValue(Object.assign(new Error('Report is not ready yet'), { status: 409 }))
 })
 
 describe('App — /bots routing (W4)', () => {
@@ -168,6 +176,39 @@ describe('App — post-submit navigation lands on /report/{token} (U2)', () => {
 
     await waitFor(() => expect(window.location.pathname).toBe('/r/tok-audit-submitted'))
     await waitFor(() => expect(screen.getByText('AUDIT QUEUED')).toBeInTheDocument())
+  })
+
+  // OpenAI pixel: an ad click arrives with ?oppref= on the landing
+  // URL, and withOppref carries it onto the pushed /r/ path so the
+  // address bar keeps the attribution. That makes this the first
+  // navigate() call in the app that passes a path WITH a query string,
+  // which is why navigate() reads the pathname back off history rather
+  // than trusting its argument — storing the raw path here would slice
+  // the token as "tok-oppref-submitted?oppref=test-oppref-123" and
+  // 404 the report behind a perfectly correct-looking URL.
+  it('carries ?oppref= onto /r/{token} without it leaking into the token', async () => {
+    setHostname('audit.parleo.io')
+    setPath('/?oppref=test-oppref-123')
+    liteApi.submit.mockResolvedValue({ token: 'tok-oppref-submitted', status: 'pending' })
+    liteApi.getStatus.mockResolvedValue({
+      status: 'pending', phase: 'queued', scan_status: null,
+      events: [{ seq: 1, ts: '2026-01-01T00:00:00Z', kind: 'state', task: 'run', text: 'queued' }],
+    })
+
+    render(<App />)
+    const primaryInputs = screen.getAllByLabelText('Your brand or store URL')
+    fireEvent.change(primaryInputs[0], { target: { value: 'Acme Co' } })
+    const submitButtons = screen.getAllByRole('button', { name: 'Run my free audit' }).filter((btn) => btn.closest('form'))
+    fireEvent.click(submitButtons[0])
+
+    // The address bar keeps oppref...
+    await waitFor(() => expect(window.location.search).toBe('?oppref=test-oppref-123'))
+    expect(window.location.pathname).toBe('/r/tok-oppref-submitted')
+
+    // ...and the route still resolves to the real token, not a token
+    // with a query string glued to the end of it.
+    await waitFor(() => expect(screen.getByText('AUDIT QUEUED')).toBeInTheDocument())
+    expect(liteApi.getStatus).toHaveBeenCalledWith('tok-oppref-submitted')
   })
 })
 

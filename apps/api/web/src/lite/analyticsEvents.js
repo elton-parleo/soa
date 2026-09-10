@@ -65,6 +65,37 @@ export const EVENTS = {
   DEMO_REQUEST_SUBMITTED: 'demo_request_submitted',
 }
 
+// ─── Emitted, but NOT to PostHog ──────────────────────────────────────
+//
+// audit_score_rendered
+//   Destination: the OpenAI (ChatGPT Ads) Measurement Pixel, via
+//   lite/openaiPixel.js — never posthog.capture(), and therefore
+//   deliberately absent from EVENTS and EVENT_REGISTRY above (track()
+//   would drop it, which is the correct behavior: it is not ours to
+//   send to PostHog).
+//
+//   It is recorded here anyway so that THIS FILE remains the one
+//   complete answer to "what does this app emit, and where does it
+//   go" — an ad conversion that existed only inside a component's
+//   useEffect would be exactly the kind of untracked emission this
+//   registry exists to prevent.
+//
+//   Fires: once per token per browser session, from the report_viewed
+//   effect in report/LiteFullReportV4.jsx, when a numeric
+//   report.composite has rendered AND isTokenOwned(token) — i.e. the
+//   browser that commissioned the run is looking at its own finished
+//   score. A withheld composite never fires it; a share-link visitor
+//   never fires it.
+//
+//   Payload: custom_event_name + an event_id of
+//   `audit_score_rendered:{token}` for server-side dedupe. No amount,
+//   currency, plan_id or contents — this is a free diagnostic with no
+//   transaction attached. The run token is the only identifier, on
+//   the same grounds report_token is allowed above: it is already the
+//   report's own public handle.
+//
+//   See docs/analytics.md ("The OpenAI ad-conversion pixel").
+
 // event name -> array of allowed prop keys. A key not listed here is
 // dropped by track(); an event name not listed here is dropped whole.
 export const EVENT_REGISTRY = {

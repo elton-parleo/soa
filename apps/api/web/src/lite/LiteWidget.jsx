@@ -79,6 +79,7 @@ import { PUBLIC_AUDIT_BASE_URL, isAuditHost, reportUrl } from './publicUrls.js'
 import { upsertMeta, upsertLink, restoreOrRemove } from './headMeta.js'
 import { track, identifyReport, captureSrcParam, isTokenOwned } from './analytics.js'
 import { EVENTS } from './analyticsEvents.js'
+import { withOppref } from './openaiPixel.js'
 
 export { LiteForm, LiteProgress, LiteFailed, LiteFullReport }
 
@@ -343,7 +344,10 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
     // This widget renders on both hosts (the /lite embed on the
     // marketing host, and /r//s on the audit host), so the prefix has
     // to match whichever one is actually serving the page.
-    if (navigate) navigate(isAuditHost() ? `/r/${newToken}` : `/report/${newToken}`)
+    // withOppref: a re-run started from an ad-attributed report must
+    // not silently drop the parameter on the way to the new token's
+    // URL — same reasoning as LandingPage.jsx's submit path.
+    if (navigate) navigate(withOppref(isAuditHost() ? `/r/${newToken}` : `/report/${newToken}`))
   }
 
   function resetToForm(prefillBrandName) {

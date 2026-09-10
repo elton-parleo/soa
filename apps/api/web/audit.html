@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- OpenAI (ChatGPT Ads) Measurement Pixel. Written in at build
+         time by vite.config.js's auditHeadPlugin from
+         src/lite/openaiPixel.constants.js, so the pixel ID lives in
+         exactly one place rather than being copy-pasted into two HTML
+         documents. Deliberately ahead of the font stylesheet and the
+         lemlist tag: the inline loader has to define the oaiq queue
+         before the async SDK arrives, which is the documented pattern.
+         index.html (every other host) carries no marker and gets
+         nothing — see staticHead.build.test.js. -->
+    <!--OPENAI_PIXEL-->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />

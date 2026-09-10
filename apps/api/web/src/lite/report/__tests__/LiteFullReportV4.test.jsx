@@ -8,6 +8,7 @@ import { splitExposureDollars } from '../ExposureSection.jsx'
 import { DIMENSIONS_BY_CODE } from '../../landing/scanDimensionsRegistry.js'
 import { EDITORIAL_QUOTE } from '../reportContent.js'
 import { track, identifyReport, captureSrcParam, isTokenOwned } from '../../analytics.js'
+import { trackAuditScoreRendered } from '../../openaiPixel.js'
 import { EVENTS } from '../../analyticsEvents.js'
 
 vi.mock('../../analytics.js', () => ({
@@ -15,6 +16,12 @@ vi.mock('../../analytics.js', () => ({
   identifyReport: vi.fn(),
   captureSrcParam: vi.fn(() => 'direct'),
   isTokenOwned: vi.fn(() => true),
+}))
+
+vi.mock('../../openaiPixel.js', () => ({
+  trackAuditScoreRendered: vi.fn(() => true),
+  withOppref: vi.fn((p) => p),
+  isOpenAIPixelAvailable: vi.fn(() => true),
 }))
 
 // Canonical sample numbers used throughout this stage's mocks:
@@ -117,8 +124,10 @@ const FULL_REPORT = {
 beforeEach(() => {
   track.mockClear()
   identifyReport.mockClear()
+  trackAuditScoreRendered.mockClear()
   captureSrcParam.mockReturnValue('direct')
   isTokenOwned.mockReturnValue(true)
+  sessionStorage.clear()
 })
 
 function renderReport(overrides = {}) {
@@ -792,5 +801,76 @@ describe('LiteFullReportV4 — the unranked-remainder strip accounts for the Tru
     // pool, which is the reconciliation this session was about.
     expect(screen.getByText(/Incentive sync and protocol declarations are worth/))
       .toHaveTextContent('up to 24 points')
+  })
+})
+
+// ─── OpenAI ad conversion: audit_score_rendered ───────────────────────
+//
+// The gate is deliberately narrower than report_viewed's: that event
+// fires for every reader of every read state, this one fires only when
+// the browser that commissioned the run is looking at a real numeric
+// score. Both halves are asserted negatively as well as positively,
+// because the failure mode of an over-firing conversion is invisible
+// in the product and expensive in the ad account.
+describe('LiteFullReportV4 — the OpenAI conversion fires once, owner-only, score-only', () => {
+  it('owner with a numeric composite fires exactly once, with the token', () => {
+    isTokenOwned.mockReturnValue(true)
+
+    renderReport({ composite: 40 })
+
+    expect(trackAuditScoreRendered).toHaveBeenCalledTimes(1)
+    expect(trackAuditScoreRendered).toHaveBeenCalledWith('tok-full')
+  })
+
+  it('a rerender with an unrelated prop change does not fire it again', () => {
+    isTokenOwned.mockReturnValue(true)
+
+    const { rerender } = renderReport({ composite: 40 })
+    expect(trackAuditScoreRendered).toHaveBeenCalledTimes(1)
+
+    // Same token, different report content — the effect keys on
+    // [token] alone precisely so this cannot re-fire.
+    rerender(
+      <LiteFullReportV4
+        report={{ ...FULL_REPORT, composite: 40, product_name: 'A Completely Different Product' }}
+        token="tok-full"
+      />,
+    )
+    rerender(
+      <LiteFullReportV4
+        report={{ ...FULL_REPORT, composite: 40, revenue_estimate_usd: 99_000_000 }}
+        token="tok-full"
+      />,
+    )
+
+    expect(trackAuditScoreRendered).toHaveBeenCalledTimes(1)
+  })
+
+  it('owner with a withheld composite (partial read) fires zero times', () => {
+    isTokenOwned.mockReturnValue(true)
+
+    renderReport({ composite: null })
+
+    expect(trackAuditScoreRendered).not.toHaveBeenCalled()
+    // report_viewed still fires — the two events are independent, and
+    // a partial read is still a read worth measuring in PostHog.
+    expect(track).toHaveBeenCalledWith(EVENTS.REPORT_VIEWED, expect.objectContaining({ viewer: 'owner' }))
+  })
+
+  it('a visitor with a numeric composite fires zero times', () => {
+    isTokenOwned.mockReturnValue(false)
+
+    renderReport({ composite: 40 })
+
+    expect(trackAuditScoreRendered).not.toHaveBeenCalled()
+    expect(track).toHaveBeenCalledWith(EVENTS.REPORT_VIEWED, expect.objectContaining({ viewer: 'visitor' }))
+  })
+
+  it('a visitor with a withheld composite fires zero times', () => {
+    isTokenOwned.mockReturnValue(false)
+
+    renderReport({ composite: null })
+
+    expect(trackAuditScoreRendered).not.toHaveBeenCalled()
   })
 })
