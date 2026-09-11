@@ -9,8 +9,22 @@
  * from drifting between the two.
  */
 
-/** The single literal default for the audit tool's public origin. */
-export const DEFAULT_PUBLIC_AUDIT_BASE_URL = 'https://audit.parleo.io'
+/**
+ * The single literal default for the audit tool's public address.
+ *
+ * Cutover: this is now parleo.io/audit, the canonical home. It is a
+ * base URL WITH A PATH, not a bare origin — everything downstream
+ * appends to it (`${base}/r/{token}`, `${base}/og/...`), which was
+ * already true when it was a bare origin, so nothing had to change to
+ * accommodate the path. What DID change as a consequence:
+ * PUBLIC_AUDIT_HOSTNAME (publicUrls.js) is now 'parleo.io' rather than
+ * 'audit.parleo.io' — see the note on isAuditHost().
+ *
+ * audit.parleo.io still exists, but it no longer serves this bundle:
+ * vercel.json 308s every path on that host to the matching
+ * parleo.io/audit path.
+ */
+export const DEFAULT_PUBLIC_AUDIT_BASE_URL = 'https://parleo.io/audit'
 
 /**
  * Normalizes a base path to exactly one leading and one trailing

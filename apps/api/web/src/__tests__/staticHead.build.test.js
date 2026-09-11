@@ -30,14 +30,22 @@ import {
   LANDING_META_TITLE, LANDING_META_DESCRIPTION, REPORT_META_TITLE,
   OG_IMAGE_PATH, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
 } from '../lite/landingMeta.js'
-import { PUBLIC_AUDIT_BASE_URL } from '../lite/publicUrls.js'
+import { DEFAULT_PUBLIC_AUDIT_BASE_URL } from '../lite/audit-host.constants.js'
 import { OPENAI_PIXEL_ID } from '../lite/openaiPixel.constants.js'
+
+// Deliberately the DEFAULT constant, not publicUrls.js's env-aware
+// PUBLIC_AUDIT_BASE_URL: this file builds with the overrides cleared
+// (see beforeAll), so the expectations have to come from the same
+// place the build's own fallback does. Reading the env-aware value
+// here would compare the build against whatever happened to be in the
+// developer's shell.
+const AUDIT_BASE_URL = DEFAULT_PUBLIC_AUDIT_BASE_URL
 
 // landingMeta.js exports the share card as a root-relative path; both
 // consumers compose the absolute URL from their own env-aware audit
 // base (vite.config.js's plugin, LandingPage.jsx's useLandingMeta).
 // This default-build expectation composes it the same way.
-const OG_IMAGE_URL = `${PUBLIC_AUDIT_BASE_URL}${OG_IMAGE_PATH}`
+const OG_IMAGE_URL = `${AUDIT_BASE_URL}${OG_IMAGE_PATH}`
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const WEB_ROOT = path.resolve(__dirname, '../..')
@@ -46,8 +54,20 @@ let outDir
 let auditHtml
 let auditReportHtml
 let indexHtml
+const clearedEnv = {}
+
+// The DEFAULT build means exactly that: none of the three vars the
+// soa-audit project sets. A developer's shell (or web/.env.local)
+// routinely carries VITE_PUBLIC_AUDIT_BASE_URL, and inheriting it here
+// would quietly turn this file into a test of that value instead —
+// which is how a regression in the default itself could ship green.
+const OVERRIDES = ['VITE_PUBLIC_AUDIT_BASE_URL', 'VITE_BASE_PATH', 'VITE_AUDIT_BUILD']
 
 beforeAll(async () => {
+  for (const key of OVERRIDES) {
+    clearedEnv[key] = process.env[key]
+    delete process.env[key]
+  }
   outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-head-build-'))
   await build({
     root: WEB_ROOT,
@@ -61,18 +81,42 @@ beforeAll(async () => {
 }, 60_000)
 
 afterAll(() => {
+  for (const [key, value] of Object.entries(clearedEnv)) {
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
   if (outDir) fs.rmSync(outDir, { recursive: true, force: true })
 })
 
 describe('built audit.html (landing) — S1', () => {
   it('has the title, canonical, and OG/Twitter tags baked in', () => {
     expect(auditHtml).toContain(`<title>${LANDING_META_TITLE}</title>`)
-    expect(auditHtml).toContain(`<link rel="canonical" href="${PUBLIC_AUDIT_BASE_URL}/" />`)
+    expect(auditHtml).toContain(`<link rel="canonical" href="${AUDIT_BASE_URL}/" />`)
     expect(auditHtml).toContain(`content="${LANDING_META_DESCRIPTION}"`)
     expect(auditHtml).toMatch(/<meta property="og:title" content="[^"]*" \/>/)
-    expect(auditHtml).toContain(`<meta property="og:url" content="${PUBLIC_AUDIT_BASE_URL}/" />`)
+    expect(auditHtml).toContain(`<meta property="og:url" content="${AUDIT_BASE_URL}/" />`)
     expect(auditHtml).toContain('<meta property="og:type" content="website" />')
     expect(auditHtml).toContain('<meta name="twitter:card" content="summary_large_image" />')
+  })
+
+  // Cutover: composing the expectation from the constant proves the
+  // plumbing, but not that the constant is right. This is the literal
+  // pin — the default build's own head, spelled out, so a change to
+  // the canonical address has to be a deliberate edit here too.
+  it('cutover: the default build emits parleo.io/audit, not the retired host', () => {
+    expect(auditHtml).toContain('<link rel="canonical" href="https://parleo.io/audit/" />')
+    expect(auditHtml).toContain('<meta property="og:url" content="https://parleo.io/audit/" />')
+    expect(auditHtml).toContain('<meta property="og:image" content="https://parleo.io/audit/og/audit-landing.png" />')
+    expect(auditHtml).toContain('<meta name="twitter:image" content="https://parleo.io/audit/og/audit-landing.png" />')
+
+    // No emitted URL may still point at audit.parleo.io. Scoped to
+    // attribute values because audit.html's lemlist comment names the
+    // host while explaining the routing that redirects it.
+    const emitted = [...auditHtml.matchAll(/(?:href|content|src)="([^"]*)"/g)].map((m) => m[1])
+    expect(emitted.length).toBeGreaterThan(0)
+    for (const value of emitted) {
+      expect(value).not.toContain('audit.parleo.io')
+    }
   })
 
   it('metadata-source equality: built title/description exactly match landingMeta.js', () => {
@@ -156,6 +200,23 @@ describe('favicon set — declared in all three built HTML entries', () => {
     'apple-touch-icon.png', 'site.webmanifest', 'icon-192.png', 'icon-512.png',
   ])('%s exists in the build output', (filename) => {
     expect(fs.existsSync(path.join(outDir, filename))).toBe(true)
+  })
+
+  // Cutover: the manifest's icon srcs are relative, so they resolve
+  // against the manifest's OWN url — /icon-192.png at a host root and
+  // /audit/icon-192.png under the prefix — instead of always at the
+  // origin root, where the prefixed build would have 404'd them.
+  it('the manifest declares its icons relatively, and they resolve on both builds', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(outDir, 'site.webmanifest'), 'utf8'))
+    expect(manifest.icons.length).toBeGreaterThan(0)
+    for (const icon of manifest.icons) {
+      expect(icon.src.startsWith('/')).toBe(false)
+      expect(fs.existsSync(path.join(outDir, icon.src))).toBe(true)
+      expect(new URL(icon.src, 'https://soa-app.parleo.io/site.webmanifest').href)
+        .toBe(`https://soa-app.parleo.io/${icon.src}`)
+      expect(new URL(icon.src, 'https://parleo.io/audit/site.webmanifest').href)
+        .toBe(`https://parleo.io/audit/${icon.src}`)
+    }
   })
 })
 
