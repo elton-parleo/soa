@@ -27,7 +27,7 @@ vi.mock('../../analytics.js', () => ({
 }))
 
 vi.mock('../../openaiPixel.js', () => ({
-  trackAuditScoreRendered: vi.fn(() => true),
+  trackReportContentsViewed: vi.fn(() => true),
   withOppref: vi.fn((p) => p),
   isOpenAIPixelAvailable: vi.fn(() => true),
 }))
