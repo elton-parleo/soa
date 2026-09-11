@@ -18,15 +18,15 @@
          HTML — comments included.)
 
          The OpenAI pixel is an exception in kind, not in degree. The
-         conversion it measures — audit_score_rendered, fired by
-         src/lite/openaiPixel.js once a numeric composite has actually
-         rendered — can only be observed on THIS document, because the
-         report page is the only place a score exists at all. Putting
-         it anywhere else would mean measuring something other than
-         the conversion. And it fires only for the browser that
-         submitted the run (isTokenOwned): a share-link visitor
-         reading someone else's report never fires it, so the
-         forwarded-link case stays silent here too.
+         conversion it measures here — contents_viewed, fired by
+         src/lite/openaiPixel.js once the report has rendered — can
+         only be observed on THIS document, because the report is the
+         only thing there is to view. Putting it anywhere else would
+         mean measuring something other than the conversion. And it
+         fires only for the browser that submitted the run
+         (isTokenOwned): a share-link visitor reading someone else's
+         report never fires it, so the forwarded-link case stays
+         silent here too.
 
          Written in at build time by vite.config.js's auditHeadPlugin
          from src/lite/openaiPixel.constants.js. -->

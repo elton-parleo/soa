@@ -82,18 +82,37 @@ as bare facts (`audit_submitted`, `email_captured`) with no payload.
 
 ## The OpenAI ad-conversion pixel
 
-Separate system, separate destination, one event. The OpenAI (ChatGPT
-Ads) Measurement Pixel is **not** PostHog and does not go through
-`track()` — `audit_score_rendered` is deliberately absent from
-`EVENT_REGISTRY`, and is documented in a comment block in
+Separate system, separate destination. The OpenAI (ChatGPT Ads)
+Measurement Pixel is **not** PostHog and does not go through `track()`
+— these events are deliberately absent from `EVENT_REGISTRY`, and are
+documented in a comment block in
 [`analyticsEvents.js`](../apps/api/web/src/lite/analyticsEvents.js) so
 that file stays the complete list of what this app emits and where it
 goes.
 
-| Event | Payload | Fired when |
-|---|---|---|
-| `audit_score_rendered` | `custom_event_name`, `event_id` (`audit_score_rendered:{token}`) | A numeric composite score has rendered on the report page **and** this browser is the one that commissioned the run (`isTokenOwned`). Once per token per browser session. |
+Three **standard** OpenAI events, matching the conversions defined on
+this pixel in Ads Manager. Standard names carry meaning for conversion
+reporting and campaign optimization in a way a custom name cannot,
+which is why the earlier one-off custom event was retired rather than
+kept alongside them.
 
+| Event | Shape | Fired when | Dedup key |
+|---|---|---|---|
+| `lead_created` | `{ type: 'customer_action' }` | The status page's email capture succeeded ([`LiteProgress.jsx`](../apps/api/web/src/lite/LiteProgress.jsx), success path only). The first moment a run has a person behind it rather than a store URL. | run token |
+| `appointment_scheduled` | `{ type: 'customer_action' }` | A demo request succeeded ([`useDemoRequestModal.js`](../apps/api/web/src/lite/useDemoRequestModal.js), ok-only branch — never on a honeypot trip or a 422). | run token, or a random per-submission id when the modal opened from the landing page |
+| `contents_viewed` | `{ type: 'contents', contents: [{ id, name, content_type }] }` | The report rendered for its owner ([`LiteFullReportV4.jsx`](../apps/api/web/src/lite/report/LiteFullReportV4.jsx), gated on `isTokenOwned`). | run token |
+
+- **Once per key per browser session.** A `sessionStorage` key
+  (`oaiq:{event}:{key}`) stops a reload or remount re-firing within a
+  session; the `event_id` on every call lets OpenAI collapse
+  duplicates server-side on the first event per key. `sessionStorage`
+  rather than `localStorage` is deliberate — a genuinely new session
+  may attribute again if the click window still covers it.
+- **`contents_viewed` includes partial reads.** An earlier version
+  required a numeric composite, which withheld the conversion for
+  every partial read — that measured our scoring confidence rather
+  than the visitor's experience. A partial read is still a viewed
+  report. A share-link visitor is still not a conversion.
 - **Owned by one module**,
   [`apps/api/web/src/lite/openaiPixel.js`](../apps/api/web/src/lite/openaiPixel.js),
   the only file allowed to touch `window.oaiq` — same grep-enforced
@@ -105,28 +124,17 @@ goes.
 - **Both audit documents carry it, including `/r/` and `/s/`.** This is
   the one explicit exception to the rule that the report document
   carries no tracker (the landing's outreach-attribution pixel is still
-  landing-only, and the build test still asserts it). The conversion
-  being measured can only be observed where a score renders, and the
-  report page is the only place that happens.
-- **Why the score, not the submit.** The conversion is the moment the
-  visitor receives what the ad promised. A withheld composite
-  (`report.composite == null` — a blocked read, or a partial read that
-  still has pillar scores) renders an em dash or a measurable-earned
-  subtotal, never a composite, and never fires.
-- **Owner only.** A forwarded share link opening the same report is a
-  reader, not a conversion; counting it would inflate the ad's measured
-  performance with traffic the ad never bought.
-- **No transaction data.** No `amount`, `currency`, `plan_id`, or
-  `contents` — this is a free diagnostic with nothing sold. No `user`
-  object on init. The run token is the only identifier, on the same
-  grounds `report_token` is allowed above: it is already the report's
-  own public handle.
-- **Deduped twice.** A `sessionStorage` key per token stops a reload or
-  remount re-firing within a session; the `event_id` lets OpenAI
-  collapse duplicates server-side on the first event per key.
-  `sessionStorage` rather than `localStorage` is deliberate — a
-  genuinely new session on the same report may attribute again if the
-  click window still covers it.
+  landing-only, and the build test still asserts it). `contents_viewed`
+  can only be observed where the report renders.
+- **No transaction data, no PII.** No `amount`, `currency`, `plan_id`,
+  or `contents` on the two `customer_action` events; `contents_viewed`
+  carries only `id`, `name` and `content_type` per item. No `user`
+  object on init. `custom_event_name` is valid only for custom events
+  and none of these carry it. `lead_created` never sends the email
+  address it is about — the run token is the identifier, on the same
+  grounds `report_token` is allowed above.
+- **Audit submit is not a conversion** in this mapping.
+  `audit_submitted` stays a PostHog-only event.
 - **`?oppref=`** is captured by the SDK on init and persisted in a
   first-party `__oppref` cookie on the audit host, so it already
   survives client-side navigation. `withOppref()` additionally carries
@@ -134,6 +142,5 @@ goes.
   the address bar keeps it. Only `oppref`, and only on those two
   navigations — share links, the Copy-link button, the report-ready
   email, and `reportUrl()` all keep producing the bare canonical URL.
-- **Verbose SDK logging** is on for the initial rollout
-  (`OPENAI_PIXEL_DEBUG = true`). Flip that one constant to `false`
-  once the conversion is confirmed live.
+- **Verbose SDK logging** is on (`OPENAI_PIXEL_DEBUG = true`). Flip
+  that one constant to `false` once the conversions are confirmed live.

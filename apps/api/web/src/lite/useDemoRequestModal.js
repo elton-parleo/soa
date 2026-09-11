@@ -12,6 +12,7 @@ import { DEMO_REQUEST_CTAS } from './demoRequestCtas.js'
 import { submitDemoRequest } from './demoRequestApi.js'
 import { track } from './analytics.js'
 import { EVENTS } from './analyticsEvents.js'
+import { trackAppointmentScheduled, newRequestId } from './openaiPixel.js'
 
 export function useDemoRequestModal({ brandName, reportToken } = {}) {
   const [ctaKey, setCtaKey] = useState(null)
@@ -23,6 +24,10 @@ export function useDemoRequestModal({ brandName, reportToken } = {}) {
 
   const onSubmit = useCallback(
     async (values) => {
+      // Generated once, before the request, so the OpenAI dedup key is
+      // stable for THIS submission. Only used when there's no
+      // reportToken to key on (the landing page's modal).
+      const requestId = newRequestId()
       const result = await submitDemoRequest({
         ...values,
         source: cta ? cta.source : undefined,
@@ -39,6 +44,10 @@ export function useDemoRequestModal({ brandName, reportToken } = {}) {
           brand_name: brandName || undefined,
           report_token: reportToken || undefined,
         })
+        // OpenAI ad conversion, inside the same ok-only branch and for
+        // the same reasons: a honeypot trip never reaches this closure
+        // at all, and a 422/failure leaves result.ok false.
+        trackAppointmentScheduled({ reportToken, requestId })
       }
       return result
     },

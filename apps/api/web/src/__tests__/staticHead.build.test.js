@@ -270,7 +270,7 @@ describe('lemlist visitor-tracking pixel — landing document only (Part 1)', ()
 
 // The OpenAI (ChatGPT Ads) Measurement Pixel. Unlike lemlist, this one
 // IS on audit-report.html — the single, deliberate exception to the
-// "/r/ and /s/ carry no tracker" rule, because audit_score_rendered
+// "/r/ and /s/ carry no tracker" rule, because contents_viewed
 // can only be observed where a score actually renders (see the comment
 // above the marker in audit-report.html). What these assertions pin
 // down is that it appears EXACTLY once per audit document — the ID

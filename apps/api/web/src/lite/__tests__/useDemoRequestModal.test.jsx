@@ -13,15 +13,27 @@ import { useDemoRequestModal } from '../useDemoRequestModal.js'
 import * as demoRequestApi from '../demoRequestApi.js'
 import { track } from '../analytics.js'
 import { EVENTS } from '../analyticsEvents.js'
+import { trackAppointmentScheduled, newRequestId } from '../openaiPixel.js'
 
 vi.mock('../analytics.js', () => ({
   track: vi.fn(),
+}))
+
+vi.mock('../openaiPixel.js', () => ({
+  trackAppointmentScheduled: vi.fn(() => true),
+  trackLeadCreated: vi.fn(() => true),
+  trackReportContentsViewed: vi.fn(() => true),
+  newRequestId: vi.fn(() => 'req-generated-1'),
+  withOppref: vi.fn((path) => path),
+  isOpenAIPixelAvailable: vi.fn(() => true),
 }))
 
 beforeEach(() => {
   vi.spyOn(demoRequestApi, 'submitDemoRequest').mockResolvedValue({ ok: true, status: 200, body: { ok: true } })
   window.history.pushState(null, '', '/r/tok123')
   track.mockClear()
+  trackAppointmentScheduled.mockClear()
+  newRequestId.mockClear()
 })
 
 describe('useDemoRequestModal', () => {
@@ -104,5 +116,88 @@ describe('useDemoRequestModal', () => {
     })
 
     expect(track).not.toHaveBeenCalled()
+  })
+})
+
+
+// ─── OpenAI ad conversion: appointment_scheduled ────────────────────────
+//
+// The hook already guarantees that nothing fires except on a real 200
+// — a honeypot trip never reaches this closure at all, and a 422
+// leaves result.ok false. These pin that the ad conversion inherits
+// that guarantee rather than re-deriving it, plus the one piece of
+// logic this event adds: which id becomes the dedup key, given the
+// modal opens both from report surfaces (token) and from the landing
+// page (nothing durable).
+describe('useDemoRequestModal — appointment_scheduled', () => {
+  it('a 200 from a report surface fires with that report token', async () => {
+    const { result } = renderHook(() => useDemoRequestModal({ brandName: 'Allbirds', reportToken: 'tok-r' }))
+    await act(async () => {
+      await result.current.onSubmit({ email: 'a@b.com' })
+    })
+
+    expect(trackAppointmentScheduled).toHaveBeenCalledTimes(1)
+    expect(trackAppointmentScheduled).toHaveBeenCalledWith({
+      reportToken: 'tok-r',
+      requestId: 'req-generated-1',
+    })
+  })
+
+  it('a 200 from the landing page (no report token) fires with a generated requestId', async () => {
+    const { result } = renderHook(() => useDemoRequestModal({}))
+    await act(async () => {
+      await result.current.onSubmit({ email: 'a@b.com' })
+    })
+
+    expect(newRequestId).toHaveBeenCalledTimes(1)
+    expect(trackAppointmentScheduled).toHaveBeenCalledTimes(1)
+    expect(trackAppointmentScheduled).toHaveBeenCalledWith({
+      reportToken: undefined,
+      requestId: 'req-generated-1',
+    })
+  })
+
+  it('a non-ok result fires nothing — neither PostHog nor the pixel', async () => {
+    demoRequestApi.submitDemoRequest.mockResolvedValue({ ok: false, status: 422, body: {} })
+    const { result } = renderHook(() => useDemoRequestModal({ reportToken: 'tok-r' }))
+    await act(async () => {
+      await result.current.onSubmit({ email: 'a@b.com' })
+    })
+
+    expect(trackAppointmentScheduled).not.toHaveBeenCalled()
+    expect(track).not.toHaveBeenCalled()
+  })
+
+  it('a missing result fires nothing', async () => {
+    demoRequestApi.submitDemoRequest.mockResolvedValue(undefined)
+    const { result } = renderHook(() => useDemoRequestModal({ reportToken: 'tok-r' }))
+    await act(async () => {
+      await result.current.onSubmit({ email: 'a@b.com' })
+    })
+
+    expect(trackAppointmentScheduled).not.toHaveBeenCalled()
+  })
+
+  // The id is generated before the request, so it is stable for that
+  // one submission rather than regenerated per call — which is what
+  // makes it usable as a dedup key at all.
+  it('generates the requestId once per submission, before the request', async () => {
+    const order = []
+    newRequestId.mockImplementation(() => {
+      order.push('generate')
+      return 'req-generated-1'
+    })
+    demoRequestApi.submitDemoRequest.mockImplementation(async () => {
+      order.push('submit')
+      return { ok: true, status: 200, body: { ok: true } }
+    })
+
+    const { result } = renderHook(() => useDemoRequestModal({}))
+    await act(async () => {
+      await result.current.onSubmit({ email: 'a@b.com' })
+    })
+
+    expect(order).toEqual(['generate', 'submit'])
+    expect(newRequestId).toHaveBeenCalledTimes(1)
   })
 })

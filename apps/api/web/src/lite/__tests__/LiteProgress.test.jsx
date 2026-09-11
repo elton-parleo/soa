@@ -8,9 +8,19 @@ import { fileURLToPath } from 'node:url'
 
 import { LiteProgress, LiteFailed, projectEvents, estimateRemainingMinutes } from '../LiteProgress.jsx'
 import { liteApi } from '../liteApi.js'
+import { trackLeadCreated } from '../openaiPixel.js'
 
 vi.mock('../liteApi.js', () => ({
   liteApi: { setEmail: vi.fn() },
+}))
+
+vi.mock('../openaiPixel.js', () => ({
+  trackLeadCreated: vi.fn(() => true),
+  trackAppointmentScheduled: vi.fn(() => true),
+  trackReportContentsViewed: vi.fn(() => true),
+  newRequestId: vi.fn(() => 'req-test'),
+  withOppref: vi.fn((path) => path),
+  isOpenAIPixelAvailable: vi.fn(() => true),
 }))
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -382,6 +392,78 @@ describe('LiteProgress — email band, verbatim copy, unchanged (P6)', () => {
     fireEvent.change(screen.getByPlaceholderText('you@company.com'), { target: { value: 'visitor@example.com' } })
     await act(async () => { fireEvent.click(screen.getByText('Email me the report')) })
     expect(await screen.findByText(/We'll email your report to/)).toBeInTheDocument()
+  })
+})
+
+// ─── OpenAI ad conversion: lead_created ─────────────────────────────────
+//
+// Email capture is the first moment a run has a person behind it
+// rather than a store URL, which is what makes it the lead. The call
+// sits inside the try, after the await, so the failure case is the
+// one that actually needs pinning: a rejected setEmail must report no
+// lead at all, not a lead the CRM will never be able to contact.
+describe('LiteProgress — the email card fires lead_created on success only', () => {
+  beforeEach(() => {
+    trackLeadCreated.mockClear()
+    // mockReset, not mockClear: this file's other suites leave call
+    // history AND a queued mockRejectedValueOnce behind, and both
+    // would leak into the assertions here.
+    liteApi.setEmail.mockReset()
+  })
+
+  function renderEmailCard(token = 'tok-lead') {
+    return render(
+      <LiteProgress phaseData={{ status: 'running', events: [ev(1, 'state', 'run', 'running')] }} token={token} />,
+    )
+  }
+
+  async function submitEmail(value = 'visitor@example.com') {
+    fireEvent.change(screen.getByPlaceholderText('you@company.com'), { target: { value } })
+    await act(async () => { fireEvent.click(screen.getByText('Email me the report')) })
+  }
+
+  it('a successful setEmail fires it once, with the run token', async () => {
+    liteApi.setEmail.mockResolvedValue({})
+    renderEmailCard('tok-lead')
+    await submitEmail()
+
+    expect(await screen.findByText(/We'll email your report to/)).toBeInTheDocument()
+    expect(trackLeadCreated).toHaveBeenCalledTimes(1)
+    expect(trackLeadCreated).toHaveBeenCalledWith('tok-lead')
+  })
+
+  it('a rejected setEmail fires nothing', async () => {
+    liteApi.setEmail.mockRejectedValue(new Error('nope'))
+    renderEmailCard('tok-lead-fail')
+    await submitEmail()
+
+    expect(await screen.findByText('nope')).toBeInTheDocument()
+    expect(trackLeadCreated).not.toHaveBeenCalled()
+  })
+
+  // A rejected submit leaves the form mounted and retryable; the
+  // retry is the real conversion and must still report.
+  it('a retry after a failure fires it once', async () => {
+    liteApi.setEmail.mockRejectedValueOnce(new Error('nope')).mockResolvedValue({})
+    renderEmailCard('tok-lead-retry')
+    await submitEmail()
+    expect(trackLeadCreated).not.toHaveBeenCalled()
+
+    await submitEmail()
+    expect(await screen.findByText(/We'll email your report to/)).toBeInTheDocument()
+    expect(trackLeadCreated).toHaveBeenCalledTimes(1)
+    expect(trackLeadCreated).toHaveBeenCalledWith('tok-lead-retry')
+  })
+
+  // An invalid address never reaches the API, so it never reaches the
+  // conversion either.
+  it('a client-side validation failure fires nothing', async () => {
+    liteApi.setEmail.mockResolvedValue({})
+    renderEmailCard('tok-lead-invalid')
+    await submitEmail('not-an-email')
+
+    expect(liteApi.setEmail).not.toHaveBeenCalled()
+    expect(trackLeadCreated).not.toHaveBeenCalled()
   })
 })
 
