@@ -20,4 +20,4 @@ export const OPENAI_PIXEL_ID = 'UGrzczfCw4YFL1c76AUUoH'
  * conversion can be verified in a real browser console; flip to false
  * once the event is confirmed live.
  */
-export const OPENAI_PIXEL_DEBUG = true
+export const OPENAI_PIXEL_DEBUG = false
