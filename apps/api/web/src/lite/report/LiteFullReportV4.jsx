@@ -30,7 +30,7 @@ import { ReportFooter } from './ReportFooter.jsx'
 import { useReportSections, NAV_IDS } from './useReportSections.js'
 import { deriveScoreHeroHeadline, isPartialRead, deriveReportViewedState } from './reportDerive.js'
 import { track, identifyReport, captureSrcParam, isTokenOwned } from '../analytics.js'
-import { trackAuditScoreRendered } from '../openaiPixel.js'
+import { trackReportContentsViewed } from '../openaiPixel.js'
 import { EVENTS } from '../analyticsEvents.js'
 import { useSectionViewTracking } from './useSectionViewTracking.js'
 
@@ -85,27 +85,30 @@ export function LiteFullReportV4({ report, token }) {
     // OpenAI (ChatGPT Ads) conversion — deliberately NOT a PostHog
     // event and not in EVENT_REGISTRY; it goes to the measurement
     // pixel only (see openaiPixel.js, and the note under EVENTS in
-    // analyticsEvents.js). Both conditions are load-bearing:
+    // analyticsEvents.js).
     //
-    //   composite is a number — the conversion is "a score rendered",
-    //     so a withheld composite must not fire it. report.composite
-    //     is null on a blocked read AND on a partial read that still
-    //     has pillar scores; ScoreHero shows an em dash or a
-    //     measurable-earned subtotal in that case, never a composite.
-    //     Neither is the thing the ad promised.
-    //   isTokenOwned — only the browser that commissioned the run.
-    //     A forwarded share link opening the same report is a reader,
-    //     not a conversion, and counting it would inflate the ad's
-    //     measured performance with traffic the ad never bought.
-    if (typeof report.composite === 'number' && isTokenOwned(token)) {
-      trackAuditScoreRendered(token)
+    // Ownership is now the ONLY gate. The earlier version also
+    // required a numeric composite, which withheld the conversion for
+    // every partial read — that measured our scoring confidence
+    // rather than the visitor's experience. A partial read is still a
+    // viewed report, so contents_viewed fires for it.
+    //
+    // isTokenOwned stays: a forwarded share link opening the same
+    // report is a reader, not a conversion, and counting it would
+    // inflate the ad's measured performance with traffic the ad never
+    // bought.
+    if (isTokenOwned(token)) {
+      trackReportContentsViewed({ token, brandName: primaryEntityName })
     }
-    // Fires once per mount only — a token/report change means a
-    // genuinely different report page, not a re-render of this one.
-    // `report` stays out of the dep array on purpose: keying on
-    // [token] is the first line of defense against a rerender
-    // re-firing the conversion, and openaiPixel.js's per-token
-    // sessionStorage guard is the second.
+    // Fires once per mount only — a token change means a genuinely
+    // different report page, not a re-render of this one. `report`
+    // and the values derived from it (primaryEntityName) stay out of
+    // the dep array on purpose: keying on [token] is the first line
+    // of defense against a rerender re-firing the conversion, and
+    // openaiPixel.js's per-key sessionStorage guard is the second.
+    // Both are read from this render's closure, which is the render
+    // that introduced this token — the same staleness profile
+    // `report` already had here, not a new one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 

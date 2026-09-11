@@ -7,7 +7,7 @@ import LiteWidget from '../LiteWidget.jsx'
 import { liteApi } from '../liteApi.js'
 import { PUBLIC_AUDIT_BASE_URL } from '../publicUrls.js'
 import { track, isTokenOwned, captureSrcParam } from '../analytics.js'
-import { trackAuditScoreRendered } from '../openaiPixel.js'
+import { trackReportContentsViewed } from '../openaiPixel.js'
 import { EVENTS } from '../analyticsEvents.js'
 
 vi.mock('../liteApi.js', () => ({
@@ -28,7 +28,10 @@ vi.mock('../analytics.js', () => ({
 }))
 
 vi.mock('../openaiPixel.js', () => ({
-  trackAuditScoreRendered: vi.fn(() => true),
+  trackReportContentsViewed: vi.fn(() => true),
+  trackLeadCreated: vi.fn(() => true),
+  trackAppointmentScheduled: vi.fn(() => true),
+  newRequestId: vi.fn(() => 'req-test'),
   withOppref: vi.fn((p) => p),
   isOpenAIPixelAvailable: vi.fn(() => true),
 }))
@@ -971,14 +974,16 @@ describe('Part 1c: lemlist script element never appears on status/report renders
   })
 })
 
-// ─── OpenAI ad conversion: the terminal non-score states ──────────────
+// ─── OpenAI ad conversion: the terminal non-report states ─────────────
 //
 // LiteFullReportV4's own suite covers the report-rendered cases. What
 // this file can prove that it cannot is that the states which never
 // reach that component — an expired report (ReportExpired) and a
 // failed run (the retry view) — produce no conversion at all. Neither
-// puts a score on screen, so neither is the thing the ad bought.
-describe('LiteWidget — audit_score_rendered never fires without a rendered score', () => {
+// renders a report, so neither is the thing the ad bought. Note the
+// owner is set here: ownership alone is the gate at the call site
+// now, so these would fire if the dispatch ever leaked.
+describe('LiteWidget — contents_viewed never fires without a rendered report', () => {
   it('an expired report fires zero conversions', async () => {
     isTokenOwned.mockReturnValue(true)
     sessionStorage.setItem('soaLiteToken', 'tok-expired-conv')
@@ -992,7 +997,7 @@ describe('LiteWidget — audit_score_rendered never fires without a rendered sco
     render(<LiteWidget />)
 
     await waitFor(() => expect(screen.getByText('This report has expired')).toBeInTheDocument())
-    expect(trackAuditScoreRendered).not.toHaveBeenCalled()
+    expect(trackReportContentsViewed).not.toHaveBeenCalled()
   })
 
   it('a failed run fires zero conversions', async () => {
@@ -1003,6 +1008,6 @@ describe('LiteWidget — audit_score_rendered never fires without a rendered sco
     render(<LiteWidget />)
 
     await waitFor(() => expect(screen.getByText('Something went wrong')).toBeInTheDocument())
-    expect(trackAuditScoreRendered).not.toHaveBeenCalled()
+    expect(trackReportContentsViewed).not.toHaveBeenCalled()
   })
 })

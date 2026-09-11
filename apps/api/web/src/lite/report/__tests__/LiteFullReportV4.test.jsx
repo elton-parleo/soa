@@ -8,7 +8,7 @@ import { splitExposureDollars } from '../ExposureSection.jsx'
 import { DIMENSIONS_BY_CODE } from '../../landing/scanDimensionsRegistry.js'
 import { EDITORIAL_QUOTE } from '../reportContent.js'
 import { track, identifyReport, captureSrcParam, isTokenOwned } from '../../analytics.js'
-import { trackAuditScoreRendered } from '../../openaiPixel.js'
+import { trackReportContentsViewed } from '../../openaiPixel.js'
 import { EVENTS } from '../../analyticsEvents.js'
 
 vi.mock('../../analytics.js', () => ({
@@ -19,7 +19,10 @@ vi.mock('../../analytics.js', () => ({
 }))
 
 vi.mock('../../openaiPixel.js', () => ({
-  trackAuditScoreRendered: vi.fn(() => true),
+  trackReportContentsViewed: vi.fn(() => true),
+  trackLeadCreated: vi.fn(() => true),
+  trackAppointmentScheduled: vi.fn(() => true),
+  newRequestId: vi.fn(() => 'req-test'),
   withOppref: vi.fn((p) => p),
   isOpenAIPixelAvailable: vi.fn(() => true),
 }))
@@ -124,7 +127,7 @@ const FULL_REPORT = {
 beforeEach(() => {
   track.mockClear()
   identifyReport.mockClear()
-  trackAuditScoreRendered.mockClear()
+  trackReportContentsViewed.mockClear()
   captureSrcParam.mockReturnValue('direct')
   isTokenOwned.mockReturnValue(true)
   sessionStorage.clear()
@@ -804,29 +807,37 @@ describe('LiteFullReportV4 — the unranked-remainder strip accounts for the Tru
   })
 })
 
-// ─── OpenAI ad conversion: audit_score_rendered ───────────────────────
+// ─── OpenAI ad conversion: contents_viewed ────────────────────────────
 //
-// The gate is deliberately narrower than report_viewed's: that event
-// fires for every reader of every read state, this one fires only when
-// the browser that commissioned the run is looking at a real numeric
-// score. Both halves are asserted negatively as well as positively,
-// because the failure mode of an over-firing conversion is invisible
-// in the product and expensive in the ad account.
-describe('LiteFullReportV4 — the OpenAI conversion fires once, owner-only, score-only', () => {
-  it('owner with a numeric composite fires exactly once, with the token', () => {
+// Ownership is the only gate. The earlier version of this event also
+// required a numeric composite, which withheld the conversion for
+// every partial read — that measured our scoring confidence rather
+// than the visitor's experience, so the partial case below is the one
+// that changed meaning and is asserted positively now.
+describe('LiteFullReportV4 — contents_viewed fires once, owner-only, partial reads included', () => {
+  it('owner with a numeric composite fires exactly once, with the token and brand name', () => {
     isTokenOwned.mockReturnValue(true)
 
     renderReport({ composite: 40 })
 
-    expect(trackAuditScoreRendered).toHaveBeenCalledTimes(1)
-    expect(trackAuditScoreRendered).toHaveBeenCalledWith('tok-full')
+    expect(trackReportContentsViewed).toHaveBeenCalledTimes(1)
+    expect(trackReportContentsViewed).toHaveBeenCalledWith({ token: 'tok-full', brandName: 'Allbirds' })
+  })
+
+  it('owner with a withheld composite (partial read) ALSO fires once', () => {
+    isTokenOwned.mockReturnValue(true)
+
+    renderReport({ composite: null })
+
+    expect(trackReportContentsViewed).toHaveBeenCalledTimes(1)
+    expect(trackReportContentsViewed).toHaveBeenCalledWith({ token: 'tok-full', brandName: 'Allbirds' })
   })
 
   it('a rerender with an unrelated prop change does not fire it again', () => {
     isTokenOwned.mockReturnValue(true)
 
     const { rerender } = renderReport({ composite: 40 })
-    expect(trackAuditScoreRendered).toHaveBeenCalledTimes(1)
+    expect(trackReportContentsViewed).toHaveBeenCalledTimes(1)
 
     // Same token, different report content — the effect keys on
     // [token] alone precisely so this cannot re-fire.
@@ -843,18 +854,7 @@ describe('LiteFullReportV4 — the OpenAI conversion fires once, owner-only, sco
       />,
     )
 
-    expect(trackAuditScoreRendered).toHaveBeenCalledTimes(1)
-  })
-
-  it('owner with a withheld composite (partial read) fires zero times', () => {
-    isTokenOwned.mockReturnValue(true)
-
-    renderReport({ composite: null })
-
-    expect(trackAuditScoreRendered).not.toHaveBeenCalled()
-    // report_viewed still fires — the two events are independent, and
-    // a partial read is still a read worth measuring in PostHog.
-    expect(track).toHaveBeenCalledWith(EVENTS.REPORT_VIEWED, expect.objectContaining({ viewer: 'owner' }))
+    expect(trackReportContentsViewed).toHaveBeenCalledTimes(1)
   })
 
   it('a visitor with a numeric composite fires zero times', () => {
@@ -862,7 +862,7 @@ describe('LiteFullReportV4 — the OpenAI conversion fires once, owner-only, sco
 
     renderReport({ composite: 40 })
 
-    expect(trackAuditScoreRendered).not.toHaveBeenCalled()
+    expect(trackReportContentsViewed).not.toHaveBeenCalled()
     expect(track).toHaveBeenCalledWith(EVENTS.REPORT_VIEWED, expect.objectContaining({ viewer: 'visitor' }))
   })
 
@@ -871,6 +871,17 @@ describe('LiteFullReportV4 — the OpenAI conversion fires once, owner-only, sco
 
     renderReport({ composite: null })
 
-    expect(trackAuditScoreRendered).not.toHaveBeenCalled()
+    expect(trackReportContentsViewed).not.toHaveBeenCalled()
+  })
+
+  // The brand name is derived from report.overall inside the
+  // component; a fixture with no primary entity must still produce a
+  // usable name rather than undefined.
+  it('falls back to the component default when there is no primary entity', () => {
+    isTokenOwned.mockReturnValue(true)
+
+    renderReport({ composite: 40, overall: [] })
+
+    expect(trackReportContentsViewed).toHaveBeenCalledWith({ token: 'tok-full', brandName: 'Your brand' })
   })
 })

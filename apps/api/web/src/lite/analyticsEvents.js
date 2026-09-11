@@ -67,34 +67,41 @@ export const EVENTS = {
 
 // ─── Emitted, but NOT to PostHog ──────────────────────────────────────
 //
-// audit_score_rendered
-//   Destination: the OpenAI (ChatGPT Ads) Measurement Pixel, via
-//   lite/openaiPixel.js — never posthog.capture(), and therefore
-//   deliberately absent from EVENTS and EVENT_REGISTRY above (track()
-//   would drop it, which is the correct behavior: it is not ours to
-//   send to PostHog).
+// Three STANDARD OpenAI (ChatGPT Ads) Measurement Pixel conversions,
+// emitted by lite/openaiPixel.js — never posthog.capture(), and
+// therefore deliberately absent from EVENTS and EVENT_REGISTRY above
+// (track() would drop them, which is correct: they are not ours to
+// send to PostHog). Standard names, not custom ones, because only
+// those carry meaning for conversion reporting and campaign
+// optimization in Ads Manager.
 //
-//   It is recorded here anyway so that THIS FILE remains the one
-//   complete answer to "what does this app emit, and where does it
-//   go" — an ad conversion that existed only inside a component's
-//   useEffect would be exactly the kind of untracked emission this
-//   registry exists to prevent.
+//   lead_created           The status page's email capture succeeded
+//                          (LiteProgress.jsx, success path only).
+//                          The first moment a run has a person behind
+//                          it rather than a store URL. The address
+//                          itself is never sent.
+//   appointment_scheduled  A demo request succeeded
+//                          (useDemoRequestModal.js, ok-only branch —
+//                          never on a honeypot trip or a 422).
+//   contents_viewed        The report rendered for its owner
+//                          (report/LiteFullReportV4.jsx, gated on
+//                          isTokenOwned). Partial reads included: a
+//                          partial read is still a viewed report.
+//                          A share-link visitor never fires it.
 //
-//   Fires: once per token per browser session, from the report_viewed
-//   effect in report/LiteFullReportV4.jsx, when a numeric
-//   report.composite has rendered AND isTokenOwned(token) — i.e. the
-//   browser that commissioned the run is looking at its own finished
-//   score. A withheld composite never fires it; a share-link visitor
-//   never fires it.
+// Each is sent at most once per key per browser SESSION, and carries
+// an event_id so OpenAI dedupes server-side on the first event per
+// key. The key is the run token, except for a demo request from the
+// landing page, which has no token and uses a random per-submission
+// id instead. No amount, currency, or PII on any of them.
 //
-//   Payload: custom_event_name + an event_id of
-//   `audit_score_rendered:{token}` for server-side dedupe. No amount,
-//   currency, plan_id or contents — this is a free diagnostic with no
-//   transaction attached. The run token is the only identifier, on
-//   the same grounds report_token is allowed above: it is already the
-//   report's own public handle.
+// They are listed here, in the registry's own file, so THIS FILE
+// remains the one complete answer to "what does this app emit, and
+// where does it go" — ad conversions that existed only inside
+// component effects would be exactly the kind of untracked emission
+// this registry exists to prevent.
 //
-//   See docs/analytics.md ("The OpenAI ad-conversion pixel").
+// See docs/analytics.md ("The OpenAI ad-conversion pixel").
 
 // event name -> array of allowed prop keys. A key not listed here is
 // dropped by track(); an event name not listed here is dropped whole.
