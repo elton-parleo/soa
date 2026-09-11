@@ -10,6 +10,7 @@ import { EDITORIAL_QUOTE } from '../reportContent.js'
 import { track, identifyReport, captureSrcParam, isTokenOwned } from '../../analytics.js'
 import { trackReportContentsViewed } from '../../openaiPixel.js'
 import { EVENTS } from '../../analyticsEvents.js'
+import { PUBLIC_AUDIT_BASE_URL } from '../../publicUrls.js'
 
 vi.mock('../../analytics.js', () => ({
   track: vi.fn(),
@@ -430,12 +431,24 @@ describe('Leadgen session: every report walkthrough/TrueSync CTA opens RequestFo
   it('no walkthrough/TrueSync anchor to parleo.io remains anywhere in the report — only the rail/footer Wordmark link to it', () => {
     renderReport()
     // #truesync in-page jump links (FixesTable's provenance, etc.) are
-    // fine and expected to remain — only an outbound parleo.io href is
+    // fine and expected to remain — only an outbound MARKETING href is
     // the thing this session removed. The rail and footer Wordmark are
     // the two intentional exceptions, added this session.
-    const parleoLinks = screen.queryAllByRole('link').filter((a) => (a.getAttribute('href') || '').includes('parleo.io'))
-    expect(parleoLinks).toHaveLength(2)
-    for (const link of parleoLinks) {
+    //
+    // Cutover: a bare substring match on 'parleo.io' stopped being able
+    // to express that. The canonical audit address is now
+    // https://parleo.io/audit, so the footer's "Run yours free" CTA
+    // contains 'parleo.io' while being the opposite of what this case
+    // guards against — it points AT the audit tool, not out to
+    // marketing. Excluding the audit base keeps the original intent
+    // exactly; the CTA's own correctness is pinned separately, in
+    // reportFooterAuditLink.test.jsx.
+    const marketingLinks = screen.queryAllByRole('link').filter((a) => {
+      const href = a.getAttribute('href') || ''
+      return href.includes('parleo.io') && !href.startsWith(PUBLIC_AUDIT_BASE_URL)
+    })
+    expect(marketingLinks).toHaveLength(2)
+    for (const link of marketingLinks) {
       expect(link).toHaveAttribute('href', 'https://parleo.io')
       expect(link).toHaveAttribute('aria-label', 'Parleo home')
     }
