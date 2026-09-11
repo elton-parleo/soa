@@ -174,6 +174,22 @@ describe('cutover — the canonical audit address', () => {
   // to be the audit surface), but its job is now to answer false on
   // soa-app.parleo.io — audit.parleo.io never reaches it, because
   // vercel.json 308s that host before the bundle is served.
+  // Anything that DISPLAYS the address is a consumer of the same
+  // single source now. Three hardcoded copies of the old address are
+  // what went stale at the cutover: the code that built URLs all moved
+  // with one constant, and the strings that merely showed it did not.
+  it('exposes the address as display text, scheme stripped', async () => {
+    const { PUBLIC_AUDIT_DISPLAY } = await loadPublicUrls({ VITE_PUBLIC_AUDIT_BASE_URL: '' })
+    expect(PUBLIC_AUDIT_DISPLAY).toBe('parleo.io/audit')
+  })
+
+  it('strips the scheme whatever the override is', async () => {
+    const { PUBLIC_AUDIT_DISPLAY } = await loadPublicUrls({
+      VITE_PUBLIC_AUDIT_BASE_URL: 'http://audit.localhost:8000',
+    })
+    expect(PUBLIC_AUDIT_DISPLAY).toBe('audit.localhost:8000')
+  })
+
   it('leaves PUBLIC_AUDIT_HOSTNAME as the marketing host', async () => {
     const { PUBLIC_AUDIT_HOSTNAME } = await loadPublicUrls({ VITE_PUBLIC_AUDIT_BASE_URL: '' })
     expect(PUBLIC_AUDIT_HOSTNAME).toBe('parleo.io')

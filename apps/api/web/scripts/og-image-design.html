@@ -148,7 +148,11 @@
       </div>
     </div>
 
-    <div class="tagline"><b>Free Agentic Value Audit</b> · audit.parleo.io</div>
+    <!-- The address shown here must match the canonical audit address
+         (src/lite/audit-host.constants.js). It cannot import it — this
+         file is rendered standalone by headless Chrome, outside the
+         bundle — so ogImageTagline.test.js asserts the two agree. -->
+    <div class="tagline"><b>Free Agentic Value Audit</b> · parleo.io/audit</div>
   </div>
 </body>
 </html>

@@ -7,6 +7,7 @@
  */
 import { BrowserChrome, BrandLogo, StatusChip, MetricRow, OfferFeed, Button, SectionHeading } from '../../ds/index.js'
 import { SAMPLE_REPORT_URL, SAMPLE_PILLAR_ITEMS, SAMPLE_OFFERS } from './landingSampleContent.js'
+import { PUBLIC_AUDIT_DISPLAY } from '../publicUrls.js'
 import { track } from '../analytics.js'
 import { EVENTS } from '../analyticsEvents.js'
 
@@ -66,7 +67,7 @@ export function SampleReportSection() {
           Every gap you have,
         </SectionHeading>
         <div style={{ marginTop: 30 }}>
-          <BrowserChrome url="audit.parleo.io/r/allbirds" chip="SAMPLE" shadow="elevated" radius={16}>
+          <BrowserChrome url={`${PUBLIC_AUDIT_DISPLAY}/r/allbirds`} chip="SAMPLE" shadow="elevated" radius={16}>
             <div className="lite-sample-grid" style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 0, background: 'var(--surface)' }}>
               <ScorePanel />
               <div style={{ padding: '24px 26px' }}>

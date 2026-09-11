@@ -13,6 +13,7 @@
 import { Glyph, Button, BrowserChrome, Wordmark, BrandLogo } from '../../ds/index.js'
 import { LiteForm } from '../LiteForm.jsx'
 import { SAMPLE_REPORT_URL } from './landingSampleContent.js'
+import { PUBLIC_AUDIT_DISPLAY } from '../publicUrls.js'
 import { track } from '../analytics.js'
 import { EVENTS } from '../analyticsEvents.js'
 
@@ -75,7 +76,7 @@ export function Hero({ onSubmitted, initialStoreUrl = '' }) {
 
         <div style={{ position: 'relative' }}>
           <a href={SAMPLE_REPORT_URL} onClick={() => track(EVENTS.SAMPLE_REPORT_CLICKED, { placement: 'hero' })} style={{ display: 'block', textDecoration: 'none' }}>
-            <BrowserChrome url="audit.parleo.io/allbirds">
+            <BrowserChrome url={`${PUBLIC_AUDIT_DISPLAY}/allbirds`}>
               <div>
                 <div className="atmos-cool-dark" style={{ position: 'relative', isolation: 'isolate', background: 'var(--ink)', padding: '15px 20px 16px', overflow: 'hidden' }}>
                   <div style={{ position: 'relative', zIndex: 1 }}>

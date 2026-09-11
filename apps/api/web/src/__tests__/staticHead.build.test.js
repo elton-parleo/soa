@@ -162,6 +162,32 @@ describe('built audit-report.html (/r/, /s/) — S3', () => {
   })
 })
 
+// The guard that would have caught the three display strings. Every
+// URL-BUILDING consumer moved with the constant at the cutover; the
+// strings that merely SHOWED the address were literals and silently
+// kept advertising the retired host. Minification drops comments, so
+// what survives into the bundle is string literals only — which makes
+// "the retired host appears nowhere in the built JS" both meaningful
+// and cheap.
+describe('cutover — the retired host is gone from the built bundle', () => {
+  it('appears in no shipped JS', () => {
+    const assetsDir = path.join(outDir, 'assets')
+    const jsFiles = fs.readdirSync(assetsDir).filter((f) => f.endsWith('.js'))
+    expect(jsFiles.length).toBeGreaterThan(0)
+    for (const file of jsFiles) {
+      const source = fs.readFileSync(path.join(assetsDir, file), 'utf8')
+      expect(source).not.toContain('audit.parleo.io')
+      expect(source).toContain(AUDIT_BASE_URL)
+    }
+  })
+
+  it('appears in none of the shipped static files either', () => {
+    for (const file of ['audit-sitemap.xml', 'audit-robots.txt', 'robots.txt', 'site.webmanifest']) {
+      expect(fs.readFileSync(path.join(outDir, file), 'utf8')).not.toContain('audit.parleo.io')
+    }
+  })
+})
+
 describe('built index.html (main host) — unaffected', () => {
   it('keeps its generic title, no audit-specific tags', () => {
     expect(indexHtml).toContain('<title>SoA Platform</title>')
