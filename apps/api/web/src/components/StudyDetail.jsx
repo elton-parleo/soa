@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api.js'
+import RegenerateStudyModal from './RegenerateStudyModal.jsx'
 import Sidebar from './Sidebar.jsx'
 import GenerationReport from './GenerationReport.jsx'
 import StudyReviewPanel from './StudyReviewPanel.jsx'
@@ -210,8 +211,15 @@ export default function StudyDetail({ studyType, onNavigate }) {
   const [genStatus,           setGenStatus]           = useState(null)
   const [constraints,         setConstraints]         = useState({})
   const [constraintsLoading,  setConstraintsLoading]  = useState(true)
+  // Offered only for a study grounded in a syndicated brand — the
+  // generation-status payload carries the brand, so a study without one
+  // never sees the control at all.
+  const [regenerateOpen,      setRegenerateOpen]      = useState(false)
 
   const studyName = studyDisplayName(studyType ?? '')
+  // The brand a study is grounded in, read off the generation-status
+  // payload — the same poll the progress banner already reads.
+  const syndicatedMerchant = genStatus?.syndicated_merchant || null
 
   useEffect(() => {
     if (!studyType) return
@@ -428,26 +436,56 @@ export default function StudyDetail({ studyType, onNavigate }) {
                 {studyName}
               </h1>
             </div>
-            <button
-              disabled
-              title="Coming soon"
-              style={{
-                padding: '9px 18px',
-                background: T.text,
-                color: T.white,
-                border: 'none',
-                borderRadius: 8,
-                fontWeight: 700,
-                fontSize: 13,
-                cursor: 'not-allowed',
-                flexShrink: 0,
-                opacity: 0.45,
-                pointerEvents: 'none',
-              }}
-            >
-              + Add Query
-            </button>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexShrink: 0 }}>
+              {/* Only for a grounded study. There is nothing to
+                  regenerate FROM without a published catalog, and a
+                  control that does nothing is worse than no control. */}
+              {syndicatedMerchant && (
+                <button
+                  onClick={() => setRegenerateOpen(true)}
+                  disabled={genStatus?.status === 'running' || genStatus?.status === 'pending'}
+                  style={{
+                    padding: '9px 16px', background: T.white, color: T.text,
+                    border: `1px solid ${T.border}`, borderRadius: 8,
+                    fontWeight: 600, fontSize: 13, fontFamily: 'inherit',
+                    cursor: 'pointer',
+                  }}
+                >Regenerate from catalog</button>
+              )}
+              <button
+                disabled
+                title="Coming soon"
+                style={{
+                  padding: '9px 18px',
+                  background: T.text,
+                  color: T.white,
+                  border: 'none',
+                  borderRadius: 8,
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'not-allowed',
+                  flexShrink: 0,
+                  opacity: 0.45,
+                  pointerEvents: 'none',
+                }}
+              >
+                + Add Query
+              </button>
+            </div>
           </div>
+
+          <RegenerateStudyModal
+            open={regenerateOpen}
+            studyType={studyType}
+            merchant={syndicatedMerchant}
+            onClose={() => setRegenerateOpen(false)}
+            onStarted={() => {
+              // Put the page straight into its generating state rather
+              // than waiting up to three seconds for the poll to notice.
+              setGenStatus((prev) => ({ ...(prev || {}), status: 'pending' }))
+              setToast('Regenerating from the catalog…')
+            }}
+          />
 
           {/* Generation progress banner */}
           {genStatus && genStatus.status !== 'complete' && (

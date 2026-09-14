@@ -33,13 +33,26 @@ def patched_engine(monkeypatch):
                 organization_id INTEGER, created_by TEXT,
                 cycle_mode TEXT DEFAULT 'query', truecost_tiers TEXT,
                 source_lite_request_id INTEGER, study_series_id TEXT, prior_cycle_id INTEGER,
+                extraction_validation TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE IF NOT EXISTS soa_expectation_outcomes (
+                id INTEGER PRIMARY KEY, run_id INTEGER UNIQUE, query_id INTEGER,
+                cycle_id INTEGER, platform TEXT, tier TEXT,
+                expected_answer TEXT, extraction TEXT, outcome TEXT,
+                outcome_reason TEXT, domain_cited BOOLEAN,
+                source_attribution TEXT, secondary_results TEXT,
+                record_published_at TIMESTAMP, matched_published_at TIMESTAMP,
+                extraction_model TEXT, scored_at TIMESTAMP
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_queries (
                 id INTEGER PRIMARY KEY, study_type TEXT, status TEXT,
-                study_pattern TEXT, organization_id INTEGER
+                study_pattern TEXT, organization_id INTEGER,
+                tier TEXT, expected_answer TEXT, provenance TEXT, source_ref TEXT
             )
         """)
         conn.exec_driver_sql("""

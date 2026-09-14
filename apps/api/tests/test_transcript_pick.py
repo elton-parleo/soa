@@ -42,7 +42,9 @@ def db():
             )
         """)
         conn.exec_driver_sql("""
-            CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, stage TEXT, persona TEXT, query_text TEXT)
+            CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, stage TEXT, persona TEXT, query_text TEXT,
+                tier TEXT, expected_answer TEXT, provenance TEXT, source_ref TEXT
+            )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (

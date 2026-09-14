@@ -1,0 +1,2968 @@
+{
+ "_source": "Generated from the live canonical records at https://api.parleo.io/api/truesync/listings/{90,91,92,93,94} on 2026-09-09, projected through the same transformation the supply app's Part B endpoints apply. Real data in the real response shape.",
+ "merchants": [
+  {
+   "slug": "wiggle-and-snug",
+   "display_name": "Wiggle & Snug",
+   "domain": "trueshopstore.com",
+   "last_published_at": "2026-09-04T20:49:40.991623+00:00",
+   "published_listings": 5
+  }
+ ],
+ "catalog": {
+  "merchant": "wiggle-and-snug",
+  "listings": [
+   {
+    "listing_id": 90,
+    "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+    "published_at": "2026-09-04T20:49:40.991623+00:00",
+    "spec_version": "schemaorg-merchant-listing-2026-08-18",
+    "product_id": "catalog_product:27",
+    "title": "Snug-Fit Diapers",
+    "brand": "Wiggle & Snug",
+    "variants": [
+     {
+      "variant_id": "snug-fit-diapers-s1-small",
+      "title": "Snug-Fit Diapers Size 1 — Small Pack (96 ct)",
+      "size": "Size 1",
+      "count": 96,
+      "attributes": {
+       "pack": "Small Pack",
+       "absorbency": "day"
+      },
+      "list_price": "17.99",
+      "currency": "USD",
+      "gtin": null
+     },
+     {
+      "variant_id": "snug-fit-diapers-s1-big",
+      "title": "Snug-Fit Diapers Size 1 — Big Pack (198 ct)",
+      "size": "Size 1",
+      "count": 198,
+      "attributes": {
+       "pack": "Big Pack",
+       "absorbency": "day"
+      },
+      "list_price": "31.99",
+      "currency": "USD",
+      "gtin": null
+     },
+     {
+      "variant_id": "snug-fit-diapers-s2-small",
+      "title": "Snug-Fit Diapers Size 2 — Small Pack (92 ct)",
+      "size": "Size 2",
+      "count": 92,
+      "attributes": {
+       "pack": "Small Pack",
+       "absorbency": "day"
+      },
+      "list_price": "19.99",
+      "currency": "USD",
+      "gtin": null
+     },
+     {
+      "variant_id": "snug-fit-diapers-s2-big",
+      "title": "Snug-Fit Diapers Size 2 — Big Pack (186 ct)",
+      "size": "Size 2",
+      "count": 186,
+      "attributes": {
+       "pack": "Big Pack",
+       "absorbency": "day"
+      },
+      "list_price": "35.99",
+      "currency": "USD",
+      "gtin": null
+     },
+     {
+      "variant_id": "snug-fit-diapers-s3-small",
+      "title": "Snug-Fit Diapers Size 3 — Small Pack (84 ct)",
+      "size": "Size 3",
+      "count": 84,
+      "attributes": {
+       "pack": "Small Pack",
+       "absorbency": "day"
+      },
+      "list_price": "22.99",
+      "currency": "USD",
+      "gtin": "884400137609"
+     },
+     {
+      "variant_id": "snug-fit-diapers-s3-big",
+      "title": "Snug-Fit Diapers Size 3 — Big Pack (168 ct)",
+      "size": "Size 3",
+      "count": 168,
+      "attributes": {
+       "pack": "Big Pack",
+       "absorbency": "day"
+      },
+      "list_price": "39.99",
+      "currency": "USD",
+      "gtin": "884400528827"
+     },
+     {
+      "variant_id": "snug-fit-diapers-s4-small",
+      "title": "Snug-Fit Diapers Size 4 — Small Pack (74 ct)",
+      "size": "Size 4",
+      "count": 74,
+      "attributes": {
+       "pack": "Small Pack",
+       "absorbency": "day"
+      },
+      "list_price": "24.99",
+      "currency": "USD",
+      "gtin": "884400046246"
+     },
+     {
+      "variant_id": "snug-fit-diapers-s4-big",
+      "title": "Snug-Fit Diapers Size 4 — Big Pack (150 ct)",
+      "size": "Size 4",
+      "count": 150,
+      "attributes": {
+       "pack": "Big Pack",
+       "absorbency": "day"
+      },
+      "list_price": "43.99",
+      "currency": "USD",
+      "gtin": "884400937353"
+     },
+     {
+      "variant_id": "snug-fit-diapers-s5-small",
+      "title": "Snug-Fit Diapers Size 5 — Small Pack (66 ct)",
+      "size": "Size 5",
+      "count": 66,
+      "attributes": {
+       "pack": "Small Pack",
+       "absorbency": "day"
+      },
+      "list_price": "26.99",
+      "currency": "USD",
+      "gtin": null
+     },
+     {
+      "variant_id": "snug-fit-diapers-s5-big",
+      "title": "Snug-Fit Diapers Size 5 — Big Pack (132 ct)",
+      "size": "Size 5",
+      "count": 132,
+      "attributes": {
+       "pack": "Big Pack",
+       "absorbency": "day"
+      },
+      "list_price": "47.99",
+      "currency": "USD",
+      "gtin": null
+     },
+     {
+      "variant_id": "snug-fit-diapers-s6-small",
+      "title": "Snug-Fit Diapers Size 6 — Small Pack (58 ct)",
+      "size": "Size 6",
+      "count": 58,
+      "attributes": {
+       "pack": "Small Pack",
+       "absorbency": "day"
+      },
+      "list_price": "28.99",
+      "currency": "USD",
+      "gtin": null
+     },
+     {
+      "variant_id": "snug-fit-diapers-s6-big",
+      "title": "Snug-Fit Diapers Size 6 — Big Pack (116 ct)",
+      "size": "Size 6",
+      "count": 116,
+      "attributes": {
+       "pack": "Big Pack",
+       "absorbency": "day"
+      },
+      "list_price": "51.99",
+      "currency": "USD",
+      "gtin": null
+     }
+    ]
+   },
+   {
+    "listing_id": 91,
+    "product_url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+    "published_at": "2026-08-28T18:01:14.698561+00:00",
+    "spec_version": "schemaorg-merchant-listing-2026-08-18",
+    "product_id": "catalog_product:28",
+    "title": "Snug-Fit Overnight Diapers",
+    "brand": "Wiggle & Snug",
+    "variants": [
+     {
+      "variant_id": "snug-fit-overnight-s3",
+      "title": "Snug-Fit Overnight Diapers Size 3 (62 ct)",
+      "size": "Size 3",
+      "count": 62,
+      "attributes": {
+       "absorbency": "overnight"
+      },
+      "list_price": "23.99",
+      "currency": "USD",
+      "gtin": null
+     },
+     {
+      "variant_id": "snug-fit-overnight-s4",
+      "title": "Snug-Fit Overnight Diapers Size 4 (54 ct)",
+      "size": "Size 4",
+      "count": 54,
+      "attributes": {
+       "absorbency": "overnight"
+      },
+      "list_price": "25.99",
+      "currency": "USD",
+      "gtin": null
+     },
+     {
+      "variant_id": "snug-fit-overnight-s5",
+      "title": "Snug-Fit Overnight Diapers Size 5 (48 ct)",
+      "size": "Size 5",
+      "count": 48,
+      "attributes": {
+       "absorbency": "overnight"
+      },
+      "list_price": "27.99",
+      "currency": "USD",
+      "gtin": null
+     },
+     {
+      "variant_id": "snug-fit-overnight-s6",
+      "title": "Snug-Fit Overnight Diapers Size 6 (42 ct)",
+      "size": "Size 6",
+      "count": 42,
+      "attributes": {
+       "absorbency": "overnight"
+      },
+      "list_price": "29.99",
+      "currency": "USD",
+      "gtin": null
+     }
+    ]
+   },
+   {
+    "listing_id": 92,
+    "product_url": "https://trueshopstore.com/products/cloud-wipes-3-pack",
+    "published_at": "2026-08-28T18:58:45.042456+00:00",
+    "spec_version": "schemaorg-merchant-listing-2026-08-18",
+    "product_id": "catalog_product:29",
+    "title": "Cloud Wipes 3-Pack",
+    "brand": "Wiggle & Snug",
+    "variants": [
+     {
+      "variant_id": "cloud-wipes-3pack",
+      "title": "Cloud Wipes 3-Pack",
+      "size": "3 packs",
+      "count": 216,
+      "attributes": {},
+      "list_price": "11.99",
+      "currency": "USD",
+      "gtin": "884400676641"
+     }
+    ]
+   },
+   {
+    "listing_id": 93,
+    "product_url": "https://trueshopstore.com/products/bum-balm-4-oz",
+    "published_at": "2026-08-28T18:03:06.090934+00:00",
+    "spec_version": "schemaorg-merchant-listing-2026-08-18",
+    "product_id": "catalog_product:30",
+    "title": "Bum Balm 4 oz",
+    "brand": "Wiggle & Snug",
+    "variants": [
+     {
+      "variant_id": "bum-balm-4oz",
+      "title": "Bum Balm 4 oz",
+      "size": "4 oz",
+      "count": 1,
+      "attributes": {},
+      "list_price": "12.99",
+      "currency": "USD",
+      "gtin": "884400896186"
+     }
+    ]
+   },
+   {
+    "listing_id": 94,
+    "product_url": "https://trueshopstore.com/products/snug-fit-trial-pack",
+    "published_at": "2026-08-28T18:03:15.242390+00:00",
+    "spec_version": "schemaorg-merchant-listing-2026-08-18",
+    "product_id": "catalog_product:31",
+    "title": "Snug-Fit Trial Pack",
+    "brand": "Wiggle & Snug",
+    "variants": [
+     {
+      "variant_id": "snug-fit-trial-pack",
+      "title": "Snug-Fit Trial Pack",
+      "size": "20 ct",
+      "count": 20,
+      "attributes": {},
+      "list_price": "6.99",
+      "currency": "USD",
+      "gtin": null
+     }
+    ]
+   }
+  ]
+ },
+ "incentives": {
+  "merchant": "wiggle-and-snug",
+  "program_name": "Member Rewards",
+  "tiers": [
+   {
+    "name": "Member",
+    "rank": 1
+   },
+   {
+    "name": "Member+",
+    "rank": 2
+   }
+  ],
+  "listings": [
+   {
+    "listing_id": 90,
+    "published_at": "2026-09-04T20:49:40.991623+00:00",
+    "incentives": [
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-diapers-s1-small",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-diapers-s1-small"
+      ],
+      "value": {
+       "discount_percent": "10.0",
+       "effective_net_price": "16.19"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s1-small",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s1-small"
+      ],
+      "value": {
+       "effective_net_price": "16.19",
+       "points": 16,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-diapers-s1-small",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s1-small"
+      ],
+      "value": {
+       "discount_percent": "5.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-diapers-s1-big",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-diapers-s1-big"
+      ],
+      "value": {
+       "discount_percent": "10.0",
+       "effective_net_price": "28.79"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s1-big",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s1-big"
+      ],
+      "value": {
+       "effective_net_price": "28.79",
+       "points": 28,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-diapers-s1-big",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s1-big"
+      ],
+      "value": {
+       "discount_percent": "5.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-diapers-s2-small",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-diapers-s2-small"
+      ],
+      "value": {
+       "discount_percent": "10.0",
+       "effective_net_price": "17.99"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s2-small",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s2-small"
+      ],
+      "value": {
+       "effective_net_price": "17.99",
+       "points": 17,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-diapers-s2-small",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s2-small"
+      ],
+      "value": {
+       "discount_percent": "5.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-diapers-s2-big",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-diapers-s2-big"
+      ],
+      "value": {
+       "discount_percent": "10.0",
+       "effective_net_price": "32.39"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s2-big",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s2-big"
+      ],
+      "value": {
+       "effective_net_price": "32.39",
+       "points": 32,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-diapers-s2-big",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s2-big"
+      ],
+      "value": {
+       "discount_percent": "5.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-diapers-s3-small",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-diapers-s3-small"
+      ],
+      "value": {
+       "discount_percent": "10.0",
+       "effective_net_price": "20.69"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s3-small",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s3-small"
+      ],
+      "value": {
+       "effective_net_price": "20.69",
+       "points": 20,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-diapers-s3-small",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s3-small"
+      ],
+      "value": {
+       "discount_percent": "5.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-diapers-s3-big",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-diapers-s3-big"
+      ],
+      "value": {
+       "discount_percent": "10.0",
+       "effective_net_price": "35.99"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s3-big",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s3-big"
+      ],
+      "value": {
+       "effective_net_price": "35.99",
+       "points": 35,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-diapers-s3-big",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s3-big"
+      ],
+      "value": {
+       "discount_percent": "5.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-diapers-s4-small",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-diapers-s4-small"
+      ],
+      "value": {
+       "discount_percent": "10.0",
+       "effective_net_price": "22.49"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s4-small",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s4-small"
+      ],
+      "value": {
+       "effective_net_price": "22.49",
+       "points": 22,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-diapers-s4-small",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s4-small"
+      ],
+      "value": {
+       "discount_percent": "5.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-diapers-s4-big",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-diapers-s4-big"
+      ],
+      "value": {
+       "discount_percent": "10.0",
+       "effective_net_price": "39.59"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s4-big",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s4-big"
+      ],
+      "value": {
+       "effective_net_price": "39.59",
+       "points": 39,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-diapers-s4-big",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s4-big"
+      ],
+      "value": {
+       "discount_percent": "5.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-diapers-s5-small",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-diapers-s5-small"
+      ],
+      "value": {
+       "discount_percent": "10.0",
+       "effective_net_price": "24.29"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s5-small",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s5-small"
+      ],
+      "value": {
+       "effective_net_price": "24.29",
+       "points": 24,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-diapers-s5-small",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s5-small"
+      ],
+      "value": {
+       "discount_percent": "5.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-diapers-s5-big",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-diapers-s5-big"
+      ],
+      "value": {
+       "discount_percent": "10.0",
+       "effective_net_price": "43.19"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s5-big",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s5-big"
+      ],
+      "value": {
+       "effective_net_price": "43.19",
+       "points": 43,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-diapers-s5-big",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s5-big"
+      ],
+      "value": {
+       "discount_percent": "5.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-diapers-s6-small",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-diapers-s6-small"
+      ],
+      "value": {
+       "discount_percent": "10.0",
+       "effective_net_price": "26.09"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s6-small",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s6-small"
+      ],
+      "value": {
+       "effective_net_price": "26.09",
+       "points": 26,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-diapers-s6-small",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s6-small"
+      ],
+      "value": {
+       "discount_percent": "5.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-diapers-s6-big",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-diapers-s6-big"
+      ],
+      "value": {
+       "discount_percent": "10.0",
+       "effective_net_price": "46.79"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s6-big",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s6-big"
+      ],
+      "value": {
+       "effective_net_price": "46.79",
+       "points": 46,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-diapers-s6-big",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s6-big"
+      ],
+      "value": {
+       "discount_percent": "5.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "brand_incentive:1",
+      "source_ref": "brand_incentive:1",
+      "mechanic": "subscribe_and_save",
+      "owner": "brand",
+      "funding": "brand",
+      "eligibility_kind": "subscription",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s1-small",
+       "snug-fit-diapers-s1-big",
+       "snug-fit-diapers-s2-small",
+       "snug-fit-diapers-s2-big",
+       "snug-fit-diapers-s3-small",
+       "snug-fit-diapers-s3-big",
+       "snug-fit-diapers-s4-small",
+       "snug-fit-diapers-s4-big",
+       "snug-fit-diapers-s5-small",
+       "snug-fit-diapers-s5-big",
+       "snug-fit-diapers-s6-small",
+       "snug-fit-diapers-s6-big"
+      ],
+      "value": {
+       "discount_percent": "15.00"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": false,
+       "new_customer_only": false,
+       "subscription_required": true
+      },
+      "valid_from": null,
+      "valid_until": null
+     },
+     {
+      "offer_id": "brand_incentive:2",
+      "source_ref": "brand_incentive:2",
+      "mechanic": "mfr_coupon",
+      "owner": "brand",
+      "funding": "brand",
+      "eligibility_kind": "public",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "SNUG3",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-diapers-s1-small",
+       "snug-fit-diapers-s1-big",
+       "snug-fit-diapers-s2-small",
+       "snug-fit-diapers-s2-big",
+       "snug-fit-diapers-s3-small",
+       "snug-fit-diapers-s3-big",
+       "snug-fit-diapers-s4-small",
+       "snug-fit-diapers-s4-big",
+       "snug-fit-diapers-s5-small",
+       "snug-fit-diapers-s5-big",
+       "snug-fit-diapers-s6-small",
+       "snug-fit-diapers-s6-big"
+      ],
+      "value": {
+       "discount_amount": "3.00"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": false,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": null,
+      "valid_until": null
+     },
+     {
+      "offer_id": "brand_incentive:3",
+      "source_ref": "brand_incentive:3",
+      "mechanic": "gift_with_purchase",
+      "owner": "brand",
+      "funding": "brand",
+      "eligibility_kind": "public",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-diapers-s1-small",
+       "snug-fit-diapers-s1-big",
+       "snug-fit-diapers-s2-small",
+       "snug-fit-diapers-s2-big",
+       "snug-fit-diapers-s3-small",
+       "snug-fit-diapers-s3-big",
+       "snug-fit-diapers-s4-small",
+       "snug-fit-diapers-s4-big",
+       "snug-fit-diapers-s5-small",
+       "snug-fit-diapers-s5-big",
+       "snug-fit-diapers-s6-small",
+       "snug-fit-diapers-s6-big"
+      ],
+      "value": {
+       "spend_item_count": "2"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": false,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": null,
+      "valid_until": null
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "snug-fit-diapers-s1-small",
+      "list_price": "17.99",
+      "currency": "USD",
+      "member_prices": [],
+      "entitled_member_price": null,
+      "entitled_tier_name": null,
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s1-small",
+        "points": 16,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s1-big",
+      "list_price": "31.99",
+      "currency": "USD",
+      "member_prices": [],
+      "entitled_member_price": null,
+      "entitled_tier_name": null,
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s1-big",
+        "points": 28,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s2-small",
+      "list_price": "19.99",
+      "currency": "USD",
+      "member_prices": [],
+      "entitled_member_price": null,
+      "entitled_tier_name": null,
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s2-small",
+        "points": 17,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s2-big",
+      "list_price": "35.99",
+      "currency": "USD",
+      "member_prices": [],
+      "entitled_member_price": null,
+      "entitled_tier_name": null,
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s2-big",
+        "points": 32,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s3-small",
+      "list_price": "22.99",
+      "currency": "USD",
+      "member_prices": [],
+      "entitled_member_price": null,
+      "entitled_tier_name": null,
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s3-small",
+        "points": 20,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s3-big",
+      "list_price": "39.99",
+      "currency": "USD",
+      "member_prices": [],
+      "entitled_member_price": null,
+      "entitled_tier_name": null,
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s3-big",
+        "points": 35,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s4-small",
+      "list_price": "24.99",
+      "currency": "USD",
+      "member_prices": [],
+      "entitled_member_price": null,
+      "entitled_tier_name": null,
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s4-small",
+        "points": 22,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s4-big",
+      "list_price": "43.99",
+      "currency": "USD",
+      "member_prices": [],
+      "entitled_member_price": null,
+      "entitled_tier_name": null,
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s4-big",
+        "points": 39,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s5-small",
+      "list_price": "26.99",
+      "currency": "USD",
+      "member_prices": [],
+      "entitled_member_price": null,
+      "entitled_tier_name": null,
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s5-small",
+        "points": 24,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s5-big",
+      "list_price": "47.99",
+      "currency": "USD",
+      "member_prices": [],
+      "entitled_member_price": null,
+      "entitled_tier_name": null,
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s5-big",
+        "points": 43,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s6-small",
+      "list_price": "28.99",
+      "currency": "USD",
+      "member_prices": [],
+      "entitled_member_price": null,
+      "entitled_tier_name": null,
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s6-small",
+        "points": 26,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s6-big",
+      "list_price": "51.99",
+      "currency": "USD",
+      "member_prices": [],
+      "entitled_member_price": null,
+      "entitled_tier_name": null,
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-diapers-s6-big",
+        "points": 46,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "listing_id": 91,
+    "published_at": "2026-08-28T18:01:14.698561+00:00",
+    "incentives": [
+     {
+      "offer_id": "wiggle-and-snug:deal:1631:snug-fit-overnight-s3",
+      "source_ref": "deal:1631",
+      "mechanic": "amount_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "public",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-overnight-s3"
+      ],
+      "value": {
+       "discount_amount": "5.0",
+       "effective_net_price": "17.79"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": false,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T20:14:51.429300Z",
+      "valid_until": "2026-08-28T20:14:51.429300Z"
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-overnight-s3",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-overnight-s3"
+      ],
+      "value": {
+       "discount_percent": "5.0",
+       "effective_net_price": "17.79"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-overnight-s3",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-overnight-s3"
+      ],
+      "value": {
+       "effective_net_price": "17.79",
+       "points": 18,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-overnight-s3",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-overnight-s3"
+      ],
+      "value": {
+       "discount_percent": "10.0"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1631:snug-fit-overnight-s4",
+      "source_ref": "deal:1631",
+      "mechanic": "amount_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "public",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-overnight-s4"
+      ],
+      "value": {
+       "discount_amount": "5.0",
+       "effective_net_price": "19.69"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": false,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T20:14:51.429300Z",
+      "valid_until": "2026-08-28T20:14:51.429300Z"
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-overnight-s4",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-overnight-s4"
+      ],
+      "value": {
+       "discount_percent": "5.0",
+       "effective_net_price": "19.69"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-overnight-s4",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-overnight-s4"
+      ],
+      "value": {
+       "effective_net_price": "19.69",
+       "points": 19,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-overnight-s4",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-overnight-s4"
+      ],
+      "value": {
+       "discount_percent": "10.0"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1631:snug-fit-overnight-s5",
+      "source_ref": "deal:1631",
+      "mechanic": "amount_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "public",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-overnight-s5"
+      ],
+      "value": {
+       "discount_amount": "5.0",
+       "effective_net_price": "21.59"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": false,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T20:14:51.429300Z",
+      "valid_until": "2026-08-28T20:14:51.429300Z"
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-overnight-s5",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-overnight-s5"
+      ],
+      "value": {
+       "discount_percent": "5.0",
+       "effective_net_price": "21.59"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-overnight-s5",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-overnight-s5"
+      ],
+      "value": {
+       "effective_net_price": "21.59",
+       "points": 21,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-overnight-s5",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-overnight-s5"
+      ],
+      "value": {
+       "discount_percent": "10.0"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1631:snug-fit-overnight-s6",
+      "source_ref": "deal:1631",
+      "mechanic": "amount_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "public",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-overnight-s6"
+      ],
+      "value": {
+       "discount_amount": "5.0",
+       "effective_net_price": "23.49"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": false,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T20:14:51.429300Z",
+      "valid_until": "2026-08-28T20:14:51.429300Z"
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-overnight-s6",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-overnight-s6"
+      ],
+      "value": {
+       "discount_percent": "5.0",
+       "effective_net_price": "23.49"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-overnight-s6",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-overnight-s6"
+      ],
+      "value": {
+       "effective_net_price": "23.49",
+       "points": 23,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-overnight-s6",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-overnight-s6"
+      ],
+      "value": {
+       "discount_percent": "10.0"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "snug-fit-overnight-s3",
+      "list_price": "23.99",
+      "currency": "USD",
+      "member_prices": [
+       {
+        "tier_name": "Member+",
+        "program_name": "Member Rewards",
+        "price": "17.79",
+        "basis": "effective_net_price",
+        "offer_id": "wiggle-and-snug:deal:1630:snug-fit-overnight-s3"
+       }
+      ],
+      "entitled_member_price": "17.79",
+      "entitled_tier_name": "Member+",
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-overnight-s3",
+        "points": 18,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-overnight-s4",
+      "list_price": "25.99",
+      "currency": "USD",
+      "member_prices": [
+       {
+        "tier_name": "Member+",
+        "program_name": "Member Rewards",
+        "price": "19.69",
+        "basis": "effective_net_price",
+        "offer_id": "wiggle-and-snug:deal:1630:snug-fit-overnight-s4"
+       }
+      ],
+      "entitled_member_price": "19.69",
+      "entitled_tier_name": "Member+",
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-overnight-s4",
+        "points": 19,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-overnight-s5",
+      "list_price": "27.99",
+      "currency": "USD",
+      "member_prices": [
+       {
+        "tier_name": "Member+",
+        "program_name": "Member Rewards",
+        "price": "21.59",
+        "basis": "effective_net_price",
+        "offer_id": "wiggle-and-snug:deal:1630:snug-fit-overnight-s5"
+       }
+      ],
+      "entitled_member_price": "21.59",
+      "entitled_tier_name": "Member+",
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-overnight-s5",
+        "points": 21,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-overnight-s6",
+      "list_price": "29.99",
+      "currency": "USD",
+      "member_prices": [
+       {
+        "tier_name": "Member+",
+        "program_name": "Member Rewards",
+        "price": "23.49",
+        "basis": "effective_net_price",
+        "offer_id": "wiggle-and-snug:deal:1630:snug-fit-overnight-s6"
+       }
+      ],
+      "entitled_member_price": "23.49",
+      "entitled_tier_name": "Member+",
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-overnight-s6",
+        "points": 23,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "listing_id": 92,
+    "published_at": "2026-08-28T18:58:45.042456+00:00",
+    "incentives": [
+     {
+      "offer_id": "wiggle-and-snug:deal:1631:cloud-wipes-3pack",
+      "source_ref": "deal:1631",
+      "mechanic": "amount_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "public",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "cloud-wipes-3pack"
+      ],
+      "value": {
+       "discount_amount": "5.0",
+       "effective_net_price": "6.39"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": false,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T20:14:51.429300Z",
+      "valid_until": "2026-08-28T20:14:51.429300Z"
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:cloud-wipes-3pack",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "cloud-wipes-3pack"
+      ],
+      "value": {
+       "discount_percent": "5.0",
+       "effective_net_price": "6.39"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:cloud-wipes-3pack",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "cloud-wipes-3pack"
+      ],
+      "value": {
+       "effective_net_price": "6.39",
+       "points": 6,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:cloud-wipes-3pack",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "cloud-wipes-3pack"
+      ],
+      "value": {
+       "discount_percent": "10.0"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "cloud-wipes-3pack",
+      "list_price": "11.99",
+      "currency": "USD",
+      "member_prices": [
+       {
+        "tier_name": "Member+",
+        "program_name": "Member Rewards",
+        "price": "6.39",
+        "basis": "effective_net_price",
+        "offer_id": "wiggle-and-snug:deal:1630:cloud-wipes-3pack"
+       }
+      ],
+      "entitled_member_price": "6.39",
+      "entitled_tier_name": "Member+",
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:cloud-wipes-3pack",
+        "points": 6,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "listing_id": 93,
+    "published_at": "2026-08-28T18:03:06.090934+00:00",
+    "incentives": [
+     {
+      "offer_id": "wiggle-and-snug:deal:1631:bum-balm-4oz",
+      "source_ref": "deal:1631",
+      "mechanic": "amount_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "public",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "bum-balm-4oz"
+      ],
+      "value": {
+       "discount_amount": "5.0",
+       "effective_net_price": "7.34"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": false,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T20:14:51.429300Z",
+      "valid_until": "2026-08-28T20:14:51.429300Z"
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:bum-balm-4oz",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "bum-balm-4oz"
+      ],
+      "value": {
+       "discount_percent": "5.0",
+       "effective_net_price": "7.34"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:bum-balm-4oz",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "bum-balm-4oz"
+      ],
+      "value": {
+       "effective_net_price": "7.34",
+       "points": 7,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:bum-balm-4oz",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "bum-balm-4oz"
+      ],
+      "value": {
+       "discount_percent": "10.0"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "brand_incentive:4",
+      "source_ref": "brand_incentive:4",
+      "mechanic": "member_price",
+      "owner": "brand",
+      "funding": "brand",
+      "eligibility_kind": "public",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "bum-balm-4oz"
+      ],
+      "value": {
+       "member_price": "10.99"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": false,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": null,
+      "valid_until": null
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "bum-balm-4oz",
+      "list_price": "12.99",
+      "currency": "USD",
+      "member_prices": [
+       {
+        "tier_name": null,
+        "program_name": null,
+        "price": "10.99",
+        "basis": "member_price",
+        "offer_id": "brand_incentive:4"
+       },
+       {
+        "tier_name": "Member+",
+        "program_name": "Member Rewards",
+        "price": "7.34",
+        "basis": "effective_net_price",
+        "offer_id": "wiggle-and-snug:deal:1630:bum-balm-4oz"
+       }
+      ],
+      "entitled_member_price": "10.99",
+      "entitled_tier_name": null,
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:bum-balm-4oz",
+        "points": 7,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "listing_id": 94,
+    "published_at": "2026-08-28T18:03:15.242390+00:00",
+    "incentives": [
+     {
+      "offer_id": "wiggle-and-snug:deal:1631:snug-fit-trial-pack",
+      "source_ref": "deal:1631",
+      "mechanic": "amount_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "public",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-trial-pack"
+      ],
+      "value": {
+       "discount_amount": "5.0",
+       "effective_net_price": "1.64"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": false,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T20:14:51.429300Z",
+      "valid_until": "2026-08-28T20:14:51.429300Z"
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1630:snug-fit-trial-pack",
+      "source_ref": "deal:1630",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "tier",
+      "program_name": "Member Rewards",
+      "tier_name": "Member+",
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-trial-pack"
+      ],
+      "value": {
+       "discount_percent": "5.0",
+       "effective_net_price": "1.64"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false,
+       "scope_categories": [
+        "Diapering"
+       ]
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1629:snug-fit-trial-pack",
+      "source_ref": "deal:1629",
+      "mechanic": "points_earn",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "member",
+      "program_name": "Member Rewards",
+      "tier_name": null,
+      "promo_code": null,
+      "redemption": "AUTOMATIC",
+      "variant_scope": [
+       "snug-fit-trial-pack"
+      ],
+      "value": {
+       "effective_net_price": "1.64",
+       "points": 1,
+       "points_multiplier": "1.0"
+      },
+      "conditions": {
+       "is_stackable": true,
+       "is_evergreen": true,
+       "new_customer_only": false,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     },
+     {
+      "offer_id": "wiggle-and-snug:deal:1627:snug-fit-trial-pack",
+      "source_ref": "deal:1627",
+      "mechanic": "percent_off",
+      "owner": "merchant",
+      "funding": "unknown",
+      "eligibility_kind": "new_customer",
+      "program_name": null,
+      "tier_name": null,
+      "promo_code": "WELCOME10",
+      "redemption": "PROMO_CODE",
+      "variant_scope": [
+       "snug-fit-trial-pack"
+      ],
+      "value": {
+       "discount_percent": "10.0"
+      },
+      "conditions": {
+       "is_stackable": false,
+       "is_evergreen": true,
+       "new_customer_only": true,
+       "subscription_required": false
+      },
+      "valid_from": "2026-08-20T02:58:28.533337Z",
+      "valid_until": null
+     }
+    ],
+    "variants": [
+     {
+      "variant_id": "snug-fit-trial-pack",
+      "list_price": "6.99",
+      "currency": "USD",
+      "member_prices": [
+       {
+        "tier_name": "Member+",
+        "program_name": "Member Rewards",
+        "price": "1.64",
+        "basis": "effective_net_price",
+        "offer_id": "wiggle-and-snug:deal:1630:snug-fit-trial-pack"
+       }
+      ],
+      "entitled_member_price": "1.64",
+      "entitled_tier_name": "Member+",
+      "points": [
+       {
+        "offer_id": "wiggle-and-snug:deal:1629:snug-fit-trial-pack",
+        "points": 1,
+        "points_multiplier": "1.0",
+        "program_name": "Member Rewards",
+        "tier_name": null
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "price_history": {
+  "merchant": "wiggle-and-snug",
+  "listings": [
+   {
+    "listing_id": 90,
+    "variants": [
+     {
+      "variant_id": "snug-fit-diapers-s1-small",
+      "history": [
+       {
+        "record_id": 900,
+        "published_at": "2026-09-04T20:49:40.991623+00:00",
+        "list_price": "17.99",
+        "currency": "USD",
+        "member_price": null,
+        "member_tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s1-big",
+      "history": [
+       {
+        "record_id": 900,
+        "published_at": "2026-09-04T20:49:40.991623+00:00",
+        "list_price": "31.99",
+        "currency": "USD",
+        "member_price": null,
+        "member_tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s2-small",
+      "history": [
+       {
+        "record_id": 900,
+        "published_at": "2026-09-04T20:49:40.991623+00:00",
+        "list_price": "19.99",
+        "currency": "USD",
+        "member_price": null,
+        "member_tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s2-big",
+      "history": [
+       {
+        "record_id": 900,
+        "published_at": "2026-09-04T20:49:40.991623+00:00",
+        "list_price": "35.99",
+        "currency": "USD",
+        "member_price": null,
+        "member_tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s3-small",
+      "history": [
+       {
+        "record_id": 900,
+        "published_at": "2026-09-04T20:49:40.991623+00:00",
+        "list_price": "22.99",
+        "currency": "USD",
+        "member_price": null,
+        "member_tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s3-big",
+      "history": [
+       {
+        "record_id": 900,
+        "published_at": "2026-09-04T20:49:40.991623+00:00",
+        "list_price": "39.99",
+        "currency": "USD",
+        "member_price": null,
+        "member_tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s4-small",
+      "history": [
+       {
+        "record_id": 900,
+        "published_at": "2026-09-04T20:49:40.991623+00:00",
+        "list_price": "24.99",
+        "currency": "USD",
+        "member_price": null,
+        "member_tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s4-big",
+      "history": [
+       {
+        "record_id": 900,
+        "published_at": "2026-09-04T20:49:40.991623+00:00",
+        "list_price": "43.99",
+        "currency": "USD",
+        "member_price": null,
+        "member_tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s5-small",
+      "history": [
+       {
+        "record_id": 900,
+        "published_at": "2026-09-04T20:49:40.991623+00:00",
+        "list_price": "26.99",
+        "currency": "USD",
+        "member_price": null,
+        "member_tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s5-big",
+      "history": [
+       {
+        "record_id": 900,
+        "published_at": "2026-09-04T20:49:40.991623+00:00",
+        "list_price": "47.99",
+        "currency": "USD",
+        "member_price": null,
+        "member_tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s6-small",
+      "history": [
+       {
+        "record_id": 900,
+        "published_at": "2026-09-04T20:49:40.991623+00:00",
+        "list_price": "28.99",
+        "currency": "USD",
+        "member_price": null,
+        "member_tier_name": null
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-diapers-s6-big",
+      "history": [
+       {
+        "record_id": 900,
+        "published_at": "2026-09-04T20:49:40.991623+00:00",
+        "list_price": "51.99",
+        "currency": "USD",
+        "member_price": null,
+        "member_tier_name": null
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "listing_id": 91,
+    "variants": [
+     {
+      "variant_id": "snug-fit-overnight-s3",
+      "history": [
+       {
+        "record_id": 910,
+        "published_at": "2026-08-28T18:01:14.698561+00:00",
+        "list_price": "23.99",
+        "currency": "USD",
+        "member_price": "17.79",
+        "member_tier_name": "Member+"
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-overnight-s4",
+      "history": [
+       {
+        "record_id": 910,
+        "published_at": "2026-08-28T18:01:14.698561+00:00",
+        "list_price": "25.99",
+        "currency": "USD",
+        "member_price": "19.69",
+        "member_tier_name": "Member+"
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-overnight-s5",
+      "history": [
+       {
+        "record_id": 910,
+        "published_at": "2026-08-28T18:01:14.698561+00:00",
+        "list_price": "27.99",
+        "currency": "USD",
+        "member_price": "21.59",
+        "member_tier_name": "Member+"
+       }
+      ]
+     },
+     {
+      "variant_id": "snug-fit-overnight-s6",
+      "history": [
+       {
+        "record_id": 910,
+        "published_at": "2026-08-28T18:01:14.698561+00:00",
+        "list_price": "29.99",
+        "currency": "USD",
+        "member_price": "23.49",
+        "member_tier_name": "Member+"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "listing_id": 92,
+    "variants": [
+     {
+      "variant_id": "cloud-wipes-3pack",
+      "history": [
+       {
+        "record_id": 920,
+        "published_at": "2026-08-28T18:58:45.042456+00:00",
+        "list_price": "11.99",
+        "currency": "USD",
+        "member_price": "6.39",
+        "member_tier_name": "Member+"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "listing_id": 93,
+    "variants": [
+     {
+      "variant_id": "bum-balm-4oz",
+      "history": [
+       {
+        "record_id": 930,
+        "published_at": "2026-08-28T18:03:06.090934+00:00",
+        "list_price": "12.99",
+        "currency": "USD",
+        "member_price": "10.99",
+        "member_tier_name": null
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "listing_id": 94,
+    "variants": [
+     {
+      "variant_id": "snug-fit-trial-pack",
+      "history": [
+       {
+        "record_id": 940,
+        "published_at": "2026-08-28T18:03:15.242390+00:00",
+        "list_price": "6.99",
+        "currency": "USD",
+        "member_price": "1.64",
+        "member_tier_name": "Member+"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -49,6 +49,7 @@ from app.services.full_analysis_extras import (
     select_evidence_exemplar,
 )
 from app.services.share_tokens import generate_public_token
+from app.services.tier_accuracy import build_tier_accuracy, per_question_outcomes
 from app.services.transcript_pick import get_transcript_detail, list_transcript_index, select_transcript
 
 log = logging.getLogger(__name__)
@@ -290,6 +291,14 @@ def _audit_revenue_estimate(conn, source_lite_request_id: int) -> float | None:
     return revenue_probe.get("annual_revenue_usd")
 
 
+def _cycle_study_type(conn, cycle_id: int) -> Optional[str]:
+    row = conn.execute(
+        text("SELECT study_type FROM soa_cycles WHERE id = :cycle_id"),
+        {"cycle_id": cycle_id},
+    ).fetchone()
+    return row[0] if row else None
+
+
 def _assemble_full_analysis_report(
     conn, cycle_id: int, cycle_code: str, source_lite_request_id: int | None,
 ) -> FullAnalysisReportResponse:
@@ -408,6 +417,18 @@ def _assemble_full_analysis_report(
         what_if=what_if,
         generated_headlines=dimensions_raw.get("generated_headlines"),
         transcript=transcript_payload,
+        # Tier segmentation, when this cycle's study was grounded in a
+        # syndicated brand. None otherwise, and the section is simply
+        # absent — the report renders exactly as it did before.
+        tier_accuracy=build_tier_accuracy(
+            conn, cycle_id,
+            primary_entity_id=primary_entity_id,
+            # Read here rather than threaded through
+            # build_full_cycle_report, which does not carry it: the study
+            # is what holds the brand and the expected-nulls notes, and
+            # the cycle is a run OF a study.
+            study_type=_cycle_study_type(conn, cycle_id),
+        ),
     )
 
 
@@ -510,6 +531,37 @@ def get_transcript_detail_route(
     if detail is None:
         raise HTTPException(status_code=404, detail="Transcript not found.")
     return detail
+
+
+@router.get("/full-analysis/report/{cycle_code}/tier-outcomes")
+def get_tier_outcomes(
+    cycle_code: str, tier: Optional[str] = None, limit: int = 500,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    The per-question drill-down behind the tier section: one row per
+    scored (question x surface x sample), with its outcome, the
+    expectation it was compared against, the extraction that was compared,
+    and an excerpt of the stored answer.
+
+    Owner-only, like every other endpoint in this router — the drill-down
+    carries raw answer text, which the public share payload deliberately
+    does not.
+
+    This is what "every rate must trace back to stored answers" means as
+    a thing a person can click: every number in the report's tier section
+    is a count of these rows.
+    """
+    org_id = current_user["organization_id"]
+    with engine.connect() as conn:
+        cycle_id = _get_owned_cycle_id(conn, cycle_code, org_id)
+        return {
+            "cycle_code": cycle_code,
+            "tier": tier,
+            "outcomes": per_question_outcomes(
+                conn, cycle_id, tier=tier, limit=min(max(limit, 1), 2000),
+            ),
+        }
 
 
 # ─── Shareable Full Analysis reports (owner endpoints) ─────────────────────

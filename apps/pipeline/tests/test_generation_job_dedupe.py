@@ -34,6 +34,7 @@ def db(monkeypatch):
                 id INTEGER PRIMARY KEY, study_type TEXT UNIQUE, study_name TEXT,
                 description TEXT, target_count INTEGER, created_count INTEGER DEFAULT 0,
                 status TEXT, error_message TEXT, organization_id INTEGER, created_by TEXT,
+                syndicated_merchant TEXT, tier_config TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP,
                 study_pattern TEXT, retailer_names TEXT, allowed_categories TEXT,
                 stage_targets TEXT, rotate_named_retailer BOOLEAN,
@@ -46,7 +47,8 @@ def db(monkeypatch):
                 id INTEGER PRIMARY KEY, query_code TEXT UNIQUE, query_text TEXT, category TEXT,
                 stage TEXT, specificity TEXT, persona TEXT, study_type TEXT, study_pattern TEXT,
                 soa_focus TEXT, rationale TEXT, status TEXT, organization_id INTEGER,
-                created_by TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_by TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                tier TEXT, expected_answer TEXT, provenance TEXT, source_ref TEXT
             )
         """)
     monkeypatch.setattr(worker, "engine", engine)

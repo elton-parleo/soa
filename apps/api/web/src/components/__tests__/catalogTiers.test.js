@@ -1,0 +1,431 @@
+/**
+ * The mirror check.
+ *
+ * catalogTiers.js is a deliberate reimplementation of
+ * apps/pipeline/generation/catalog_tiers.py, because the modal has to
+ * show the user what the generator will produce, before it produces it,
+ * from data the browser already holds.
+ *
+ * What keeps the two honest is this file and its Python twin
+ * (apps/pipeline/tests/test_catalog_tiers.py) asserting the SAME literal
+ * question strings against the SAME fixture — which is imported from the
+ * pipeline's test directory rather than copied here, so there is one
+ * fixture and not two that can disagree.
+ *
+ * If you change a template on one side and not the other, one of these
+ * two suites goes red. If you change both, it was deliberate.
+ */
+import { describe, it, expect } from 'vitest'
+
+import fixture from '../../../../../pipeline/tests/fixtures/wiggle_and_snug_catalog.json'
+import {
+  DEFAULT_VARIANT_CAP,
+  brandDirectExample,
+  buildCatalogAccuracy,
+  buildSnapshot,
+  buildValueIncentives,
+  catalogCounts,
+  catalogReadback,
+  countDisambiguates,
+  normalizeMoney,
+  sampleVariants,
+  subjectOf,
+  tally,
+  tallyText,
+  tierPreview,
+  variantDisplay,
+} from '../catalogTiers.js'
+
+function snapshot(overrides = {}) {
+  return buildSnapshot(overrides.catalog || fixture.catalog, {
+    merchants: fixture.merchants,
+    incentives: 'incentives' in overrides ? overrides.incentives : fixture.incentives,
+  })
+}
+
+const texts = questions => questions.map(q => q.text)
+
+// ── the read-back line the modal renders ─────────────────────────────────
+
+describe('the catalog read-back', () => {
+  it('counts the catalog the design mock describes, from the record', () => {
+    expect(catalogCounts(snapshot())).toMatchObject({
+      products: 5, variants: 19, gtins: 6, codes: 2, tiers: 2,
+      programName: 'Member Rewards',
+    })
+  })
+
+  it('renders as one line', () => {
+    expect(catalogReadback(snapshot())).toBe(
+      '5 products, 19 variants, 6 GTINs, 2 live codes, Member Rewards (2 tiers)',
+    )
+  })
+
+  it('reads the brand off the published records, not the merchant row', () => {
+    expect(snapshot().brand).toBe('Wiggle & Snug')
+    expect(snapshot().domain).toBe('trueshopstore.com')
+  })
+})
+
+// ── money stays a string ─────────────────────────────────────────────────
+
+describe('money', () => {
+  it.each([
+    ['22.99', '22.99'],
+    ['$22.99', '22.99'],
+    ['18.9', '18.90'],
+    ['1,234.50', '1234.50'],
+  ])('normalises %s to %s', (raw, expected) => {
+    expect(normalizeMoney(raw)).toBe(expected)
+  })
+
+  it.each([null, undefined, '', 'free', 'call for pricing'])(
+    'returns null for %s rather than a number', raw => {
+      expect(normalizeMoney(raw)).toBeNull()
+    },
+  )
+})
+
+// ── naming ───────────────────────────────────────────────────────────────
+
+describe('variant display', () => {
+  it('names what distinguishes a variant from its siblings', () => {
+    const product = snapshot().products[0]
+    const variant = product.variants.find(v => v.variantId === 'snug-fit-diapers-s3-small')
+    expect(variantDisplay(product, variant)).toBe('Size 3 small pack')
+  })
+
+  it('leaves the count out when something else already tells the variant apart', () => {
+    const product = snapshot().products[0]
+    const variant = product.variants.find(v => v.variantId === 'snug-fit-diapers-s3-small')
+    // "Size 3 small pack" is already unambiguous against "Size 3 big pack".
+    expect(countDisambiguates(product, variant)).toBe(false)
+    expect(variantDisplay(product, variant)).not.toContain('ct')
+  })
+
+  it('names the overnight range by size alone', () => {
+    const product = snapshot().products.find(p => p.title === 'Snug-Fit Overnight Diapers')
+    expect(variantDisplay(product, product.variants[0])).toBe('Size 3')
+  })
+
+  it('is empty for a single-variant product, which has nothing to distinguish', () => {
+    const product = snapshot().products.find(p => p.title === 'Cloud Wipes 3-Pack')
+    expect(variantDisplay(product, product.variants[0])).toBe('')
+    expect(subjectOf('Wiggle & Snug', product, product.variants[0]))
+      .toBe('Wiggle & Snug Cloud Wipes 3-Pack')
+  })
+})
+
+// ── catalog accuracy: the same strings the Python asserts ────────────────
+
+describe('catalog accuracy', () => {
+  it('asks one price question per variant', () => {
+    const { questions } = buildCatalogAccuracy(snapshot())
+    const prices = questions.filter(q => q.text.endsWith('cost?'))
+    expect(prices).toHaveLength(19)
+  })
+
+  it('uses the frozen price template', () => {
+    const { questions } = buildCatalogAccuracy(snapshot())
+    expect(texts(questions)).toContain(
+      'What does the Wiggle & Snug Snug-Fit Diapers Size 3 small pack cost?',
+    )
+  })
+
+  it('asks a single-variant product by name alone', () => {
+    const { questions } = buildCatalogAccuracy(snapshot())
+    expect(texts(questions)).toContain(
+      'What does the Wiggle & Snug Cloud Wipes 3-Pack cost?',
+    )
+  })
+
+  it('shows the published price to the cent, with both secondaries riding along', () => {
+    const { questions } = buildCatalogAccuracy(snapshot())
+    const q = questions.find(x => x.text.endsWith('Size 3 small pack cost?'))
+    expect(q.expected).toEqual([
+      'Expected: $22.99', 'GTIN 884400137609', '84 count',
+    ])
+  })
+
+  it('shows the pack count as a second expectation, not a second question', () => {
+    const { questions } = buildCatalogAccuracy(snapshot())
+    expect(questions.every(q => q.text.endsWith('cost?'))).toBe(true)
+    const wipes = questions.find(x => x.text.includes('Cloud Wipes'))
+    expect(wipes.expected).toEqual([
+      'Expected: $11.99', 'GTIN 884400676641', '216 count',
+    ])
+  })
+
+  it('carries no pack count for a single-unit variant', () => {
+    const { questions } = buildCatalogAccuracy(snapshot())
+    const balm = questions.find(x => x.text.includes('Bum Balm'))
+    expect(balm.expected).toEqual(['Expected: $12.99', 'GTIN 884400896186'])
+  })
+
+  it('never asks for a GTIN', () => {
+    const { questions } = buildCatalogAccuracy(snapshot())
+    expect(texts(questions).some(t => t.toUpperCase().includes('GTIN'))).toBe(false)
+  })
+
+  it('emits exactly one question per variant', () => {
+    expect(buildCatalogAccuracy(snapshot()).count).toBe(19)
+  })
+})
+
+// ── the sampling rule ────────────────────────────────────────────────────
+
+describe('sampling at 40 variants', () => {
+  const forty = {
+    merchant: 'wiggle-and-snug',
+    listings: Array.from({ length: 4 }, (_, p) => ({
+      listing_id: 500 + p,
+      title: `Product ${p}`,
+      brand: 'Wiggle & Snug',
+      published_at: '2026-09-01T00:00:00+00:00',
+      variants: Array.from({ length: 10 }, (_, v) => ({
+        variant_id: `p${p}-v${v}`,
+        title: `Product ${p} variant ${v}`,
+        size: `Size ${v}`,
+        count: 10 + v,
+        attributes: {},
+        list_price: `${p * 10 + v + 1}.00`,
+        currency: 'USD',
+        gtin: null,
+      })),
+    })),
+  }
+
+  it('caps at twenty variants', () => {
+    const s = snapshot({ catalog: forty, incentives: null })
+    expect(sampleVariants(s, DEFAULT_VARIANT_CAP)).toHaveLength(20)
+  })
+
+  it('covers every product at least once', () => {
+    const s = snapshot({ catalog: forty, incentives: null })
+    const products = new Set(
+      sampleVariants(s).map(({ variant }) => variant.variantId.split('-')[0]),
+    )
+    expect([...products].sort()).toEqual(['p0', 'p1', 'p2', 'p3'])
+  })
+
+  it('spreads across price points rather than taking the cheapest', () => {
+    const s = snapshot({ catalog: forty, incentives: null })
+    const picked = new Set(sampleVariants(s).map(({ variant }) => variant.variantId))
+    for (let p = 0; p < 4; p += 1) {
+      expect(picked.has(`p${p}-v0`)).toBe(true)   // cheapest of this product
+      expect(picked.has(`p${p}-v9`)).toBe(true)   // dearest of this product
+    }
+  })
+})
+
+// ── value & incentives ───────────────────────────────────────────────────
+
+describe('value and incentives', () => {
+  it('asks one question per mechanic the record has', () => {
+    expect(buildValueIncentives(snapshot()).mechanics).toEqual({
+      code: 2, member_price: 3, points: 1,
+    })
+  })
+
+  it('gives the two codes two questions a shopper would type differently', () => {
+    const { questions } = buildValueIncentives(snapshot())
+    const codes = questions.filter(q => q.text.includes('promo code'))
+    expect(new Set(texts(codes))).toEqual(new Set([
+      'Is there a first-order promo code for Wiggle & Snug, and what does it take off?',
+      'Are there any promo codes for Wiggle & Snug Snug-Fit Diapers right now, and what do they take off?',
+    ]))
+  })
+
+  it('shows what a code is worth, not only that it exists', () => {
+    const { questions } = buildValueIncentives(snapshot())
+    const snug3 = questions.find(q => q.expected[0].includes('SNUG3'))
+    expect(snug3.expected).toEqual(['Expected: SNUG3, $3.00 off'])
+  })
+
+  it('uses the frozen member-price template and names the tier', () => {
+    const { questions } = buildValueIncentives(snapshot())
+    expect(texts(questions)).toContain(
+      'What do Member+ members pay for the Wiggle & Snug Cloud Wipes 3-Pack?',
+    )
+  })
+
+  it('asks about points once, not once per variant', () => {
+    const { questions } = buildValueIncentives(snapshot())
+    const points = questions.filter(q => q.text.includes('points'))
+    expect(texts(points)).toEqual([
+      'How many Member Rewards points do you earn per dollar on Wiggle & Snug products?',
+    ])
+  })
+
+  it('builds nothing at all when the incentives read failed', () => {
+    expect(buildValueIncentives(snapshot({ incentives: null })).count).toBe(0)
+  })
+})
+
+// ── brand-direct is illustrative, and says so ────────────────────────────
+
+describe('brand-direct', () => {
+  it('is marked illustrative, because AI writes the wording', () => {
+    const example = brandDirectExample(snapshot())
+    expect(example.illustrative).toBe(true)
+    expect(example.expected).toEqual([
+      'Expected: brand named, trueshopstore.com cited',
+    ])
+  })
+})
+
+// ── the tally ────────────────────────────────────────────────────────────
+
+describe('the tally', () => {
+  const enabled = {
+    brand_direct: true, catalog_accuracy: true,
+    value_incentives: true, category_control: false,
+  }
+
+  it('splits by who wrote the question', () => {
+    const preview = tierPreview(snapshot(), { enabled, stageTotal: 50 })
+    expect(tally(preview, 50)).toEqual({
+      aiWritten: 62,     // 50 stage + 12 brand-direct
+      fromCatalog: 25,   // 19 accuracy + 6 value
+      total: 87,
+    })
+  })
+
+  it('lands inside the shared 100 cap on the default study', () => {
+    // The whole reason pack count stopped being its own question: at 103
+    // this modal opened on a red tally, and a feature whose defaults are
+    // over its own limit has the wrong defaults.
+    const preview = tierPreview(snapshot(), { enabled, stageTotal: 50 })
+    expect(tallyText(preview, 50, 100)).toEqual({
+      tone: 'ok',
+      text: '62 AI-written + 25 from the catalog = 87 questions — within the 100 limit',
+    })
+  })
+
+  it('counts the control tier as a tag, adding nothing', () => {
+    const preview = tierPreview(snapshot(), {
+      enabled: { category_control: true }, stageTotal: 50,
+    })
+    expect(preview.category_control.count).toBe(50)
+    expect(preview.category_control.additive).toBe(false)
+    expect(tally(preview, 50)).toEqual({
+      aiWritten: 50, fromCatalog: 0, total: 50,
+    })
+  })
+
+  it('reads as today\'s line when no tier is on', () => {
+    const preview = tierPreview(snapshot(), { enabled: {}, stageTotal: 50 })
+    expect(tallyText(preview, 50, 100)).toEqual({
+      tone: 'ok', text: '50 questions total — within the 100 limit',
+    })
+  })
+
+  it('names both halves once the catalog contributes', () => {
+    const preview = tierPreview(snapshot(), {
+      enabled: { catalog_accuracy: true, value_incentives: true }, stageTotal: 50,
+    })
+    expect(tallyText(preview, 50, 100).text).toBe(
+      '50 AI-written + 25 from the catalog = 75 questions — within the 100 limit',
+    )
+  })
+
+  it('says what to do when the shared 100 cap is exceeded', () => {
+    const preview = tierPreview(snapshot(), { enabled, stageTotal: 70 })
+    expect(tallyText(preview, 70, 100)).toEqual({
+      tone: 'off',
+      text: '82 AI-written + 25 from the catalog = 107 questions — '
+        + 'over the 100 limit, reduce a stage or untick a tier',
+    })
+  })
+
+  it('the cap is shared: catalog questions count against the same 100', () => {
+    const preview = tierPreview(snapshot(), {
+      enabled: { catalog_accuracy: true }, stageTotal: 85,
+    })
+    expect(tally(preview, 85).total).toBe(104)
+    expect(tallyText(preview, 85, 100).tone).toBe('off')
+  })
+
+  it('is empty rather than misleading when nothing is allocated', () => {
+    const preview = tierPreview(snapshot(), { enabled: {}, stageTotal: 0 })
+    expect(tallyText(preview, 0, 100)).toEqual({
+      tone: 'off', text: 'No questions allocated yet',
+    })
+  })
+})
+
+// ── per-tier examples ────────────────────────────────────────────────────
+
+describe('tier previews', () => {
+  it('gives each enabled tier one true example from this brand\'s catalog', () => {
+    const preview = tierPreview(snapshot(), {
+      enabled: {
+        brand_direct: true, catalog_accuracy: true, value_incentives: true,
+      },
+      stageTotal: 50,
+    })
+    expect(preview.catalog_accuracy.example.text).toContain('Wiggle & Snug')
+    expect(preview.value_incentives.example.text).toContain('Wiggle & Snug')
+    expect(preview.brand_direct.example.text).toContain('Wiggle & Snug')
+  })
+
+  it('gives a disabled tier no example and no count', () => {
+    const preview = tierPreview(snapshot(), { enabled: {}, stageTotal: 50 })
+    for (const tier of ['brand_direct', 'catalog_accuracy', 'value_incentives']) {
+      expect(preview[tier].count).toBe(0)
+      expect(preview[tier].example).toBeNull()
+    }
+  })
+})
+
+// ── when the count IS the only handle ────────────────────────────────────
+
+describe('a product disambiguated only by count', () => {
+  // Same shape as the Python fixture in test_catalog_tiers.py: three
+  // variants sharing a size, differing only in how many are in the box.
+  const countOnly = {
+    merchant: 'wiggle-and-snug',
+    listings: [{
+      listing_id: 600,
+      product_id: 'catalog_product:600',
+      title: 'Cloud Wipes Refill',
+      brand: 'Wiggle & Snug',
+      published_at: '2026-09-01T00:00:00+00:00',
+      variants: [100, 200, 300].map((count, index) => ({
+        variant_id: `cloud-wipes-refill-${count}`,
+        title: `Cloud Wipes Refill (${count} ct)`,
+        size: 'Standard',
+        count,
+        attributes: {},
+        list_price: `${9 + index}.99`,
+        currency: 'USD',
+        gtin: null,
+      })),
+    }],
+  }
+
+  const refills = () => snapshot({ catalog: countOnly, incentives: null })
+
+  it('keeps the count in the wording', () => {
+    const { questions } = buildCatalogAccuracy(refills())
+    expect(texts(questions).sort()).toEqual([
+      'What does the Wiggle & Snug Cloud Wipes Refill Standard (100 ct) cost?',
+      'What does the Wiggle & Snug Cloud Wipes Refill Standard (200 ct) cost?',
+      'What does the Wiggle & Snug Cloud Wipes Refill Standard (300 ct) cost?',
+    ])
+  })
+
+  it('says so through countDisambiguates', () => {
+    const product = refills().products[0]
+    expect(countDisambiguates(product, product.variants[0])).toBe(true)
+  })
+
+  it('falls back to the count when there are no attributes at all', () => {
+    const bare = JSON.parse(JSON.stringify(countOnly))
+    for (const v of bare.listings[0].variants) v.size = null
+    const { questions } = buildCatalogAccuracy(snapshot({ catalog: bare, incentives: null }))
+    expect(texts(questions)).toContain(
+      'What does the Wiggle & Snug Cloud Wipes Refill (100 ct) cost?',
+    )
+  })
+})

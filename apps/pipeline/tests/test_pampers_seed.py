@@ -91,6 +91,7 @@ def sqlite_session():
                 subscription_state TEXT,
                 expected_incentive TEXT,
                 new_customer BOOLEAN,
+                tier TEXT, expected_answer TEXT, provenance TEXT, source_ref TEXT,
                 created_at TIMESTAMP,
                 updated_at TIMESTAMP
             )

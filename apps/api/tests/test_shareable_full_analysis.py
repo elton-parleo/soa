@@ -42,7 +42,20 @@ def patched_engine(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_cycles (
                 id INTEGER PRIMARY KEY, cycle_code TEXT UNIQUE, organization_id INTEGER,
-                source_lite_request_id INTEGER, platforms TEXT, runs_per_query INTEGER
+                source_lite_request_id INTEGER, platforms TEXT, runs_per_query INTEGER,
+                extraction_validation TEXT,
+                study_type TEXT
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE IF NOT EXISTS soa_expectation_outcomes (
+                id INTEGER PRIMARY KEY, run_id INTEGER UNIQUE, query_id INTEGER,
+                cycle_id INTEGER, platform TEXT, tier TEXT,
+                expected_answer TEXT, extraction TEXT, outcome TEXT,
+                outcome_reason TEXT, domain_cited BOOLEAN,
+                source_attribution TEXT, secondary_results TEXT,
+                record_published_at TIMESTAMP, matched_published_at TIMESTAMP,
+                extraction_model TEXT, scored_at TIMESTAMP
             )
         """)
         conn.exec_driver_sql("""
@@ -63,7 +76,7 @@ def patched_engine(monkeypatch):
                 deal_citation_rate FLOAT, platform_dist_index FLOAT
             )
         """)
-        conn.exec_driver_sql("CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, stage TEXT, persona TEXT, query_text TEXT)")
+        conn.exec_driver_sql("CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, stage TEXT, persona TEXT, query_text TEXT, tier TEXT, expected_answer TEXT, provenance TEXT, source_ref TEXT)")
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
                 id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT, platform TEXT,

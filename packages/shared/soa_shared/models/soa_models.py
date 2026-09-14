@@ -36,6 +36,11 @@ from soa_shared.constants import (
     QUERY_SUBSCRIPTION_STATES,
     QUERY_EXPECTED_INCENTIVES,
 )
+from soa_shared.expected_answers import (
+    EXPECTATION_OUTCOMES,
+    QUERY_PROVENANCES,
+    QUERY_TIERS,
+)
 
 
 def _in_list(values: list) -> str:
@@ -177,10 +182,24 @@ class SoaQuery(Base):
             f"expected_incentive IS NULL OR expected_incentive IN {_in_list(QUERY_EXPECTED_INCENTIVES)}",
             name="ck_soa_queries_expected_incentive",
         ),
+        # NULL is the normal state, not a violation: it is every query
+        # generated without a syndicated brand, which is every query that
+        # existed before the tiers did.
+        CheckConstraint(
+            f"tier IS NULL OR tier IN {_in_list(QUERY_TIERS)}",
+            name="ck_soa_queries_tier",
+        ),
+        CheckConstraint(
+            f"provenance IS NULL OR provenance IN {_in_list(QUERY_PROVENANCES)}",
+            name="ck_soa_queries_provenance",
+        ),
         Index("ix_soa_queries_category_stage_status", "category", "stage", "status"),
         Index("ix_soa_queries_study_type", "study_type"),
         Index("ix_soa_queries_study_pattern", "study_pattern"),
         Index("ix_soa_queries_organization_id", "organization_id"),
+        # The report segments by (study, tier); the study_type index
+        # above cannot serve that on its own.
+        Index("ix_soa_queries_study_type_tier", "study_type", "tier"),
     )
 
     id = Column(Integer, primary_key=True)
@@ -255,6 +274,61 @@ class SoaQuery(Base):
         Boolean,
         nullable=True,
         comment="True if this persona is a new/first-time customer. Null = unconstrained.",
+    )
+
+    # ─── Syndicated-brand grounding ───────────────────────────────────
+    #
+    # All four are NULL on every query generated without a syndicated
+    # brand — which is every query that existed before these columns did.
+    # NULL is the untouched state, and no backfill invents one: a query
+    # written with no brand in view has no tier it belongs to, and
+    # labelling it would make the report's tier segmentation a fiction.
+    #
+    # See docs/expected-answer-vocabulary.md and
+    # soa_shared/expected_answers.py.
+
+    tier = Column(
+        Text,
+        nullable=True,
+        comment=(
+            "Which syndicated-brand tier this question belongs to: "
+            "brand_direct, catalog_accuracy, value_incentives, "
+            "category_control. NULL for a study generated without a brand."
+        ),
+    )
+
+    expected_answer = Column(
+        JSON,
+        nullable=True,
+        comment=(
+            "The typed expectation a correct answer must contain — one of "
+            "the seven shapes in soa_shared/expected_answers.py, never free "
+            "text. NULL means Layer 2 does not score this question; Layer 1 "
+            "mention coding runs on it either way. category_control questions "
+            "deliberately carry none."
+        ),
+    )
+
+    provenance = Column(
+        Text,
+        nullable=True,
+        comment=(
+            "How this question came to exist: 'catalog' (template-built from "
+            "the published record, no AI), 'ai_from_catalog' (written by AI "
+            "with the catalog as context), 'ai' (written by AI, ungrounded)."
+        ),
+    )
+
+    source_ref = Column(
+        JSON,
+        nullable=True,
+        comment=(
+            "What the expectation was read from: {merchant_slug, listing_id, "
+            "product_id, variant_id | offer_id, published_at}. published_at is "
+            "the record's, not this row's — it is what a later comparison "
+            "says the claim was made against, and it is what phase 2's "
+            "publish/approval markers will be plotted from without a re-run."
+        ),
     )
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -415,6 +489,21 @@ class SoaCycle(Base):
             "The cycle this one continues from in its study_series_id "
             "series — e.g. the audit's own cycle, for the first Full "
             "Analysis run off it. Null for a series' first cycle."
+        ),
+    )
+
+    extraction_validation = Column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Hand-validation of the Layer 2 extractor for this cycle: "
+            "{sample_size, agreed, agreement_rate, validated_by, "
+            "validated_at, notes}. NULL until a human records it, and the "
+            "report renders it as 'not validated' rather than as a number. "
+            "Never estimated and never inferred from the extractor's own "
+            "confidence — a validated agreement rate nobody validated is the "
+            "single most damaging number this system could print. Written by "
+            "scripts/validate_extractions.py --record."
         ),
     )
 
@@ -1242,6 +1331,39 @@ class SoaQueryGenerationJob(Base):
     # query exists. generation-status reads it back off this row.
     provenance = Column(JSON, nullable=True)
 
+    # ─── Syndicated brand ─────────────────────────────────────────────
+    #
+    # This row IS the study's definition — there is no soa_studies table;
+    # a study is a study_type, and this is the row that made one. So the
+    # brand a study is grounded in, and which tiers were enabled when it
+    # was generated, live here rather than on soa_cycles (a cycle is a
+    # RUN of a study, and two runs of one study must not be able to
+    # disagree about what the study is).
+    #
+    # NULL/absent means the toggle was off: an ordinary study, generated
+    # exactly as it would have been before these columns existed.
+
+    syndicated_merchant = Column(
+        String,
+        nullable=True,
+        comment=(
+            "TrueSync merchant slug the study is grounded in, e.g. "
+            "'wiggle-and-snug'. NULL when the syndicated-brand toggle was off."
+        ),
+    )
+
+    tier_config = Column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Which tiers were enabled and how they were built: "
+            "{<tier>: {enabled, count, expected_nulls, sampled_variants?}}. "
+            "sampled_variants records exactly which variants the "
+            "catalog_accuracy cap selected, so a regeneration can be compared "
+            "against what was asked last time rather than guessed at."
+        ),
+    )
+
     __table_args__ = (
         CheckConstraint(
             "status IN ('pending', 'running', 'complete', 'failed')",
@@ -1843,3 +1965,144 @@ class SoaDemoRequest(Base):
     )
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# ---------------------------------------------------------------------------
+# 6d. soa_expectation_outcomes — Layer 2 output, one row per scored
+# (question x surface x sample), i.e. one per soa_runs row whose query
+# carries a typed expectation.
+#
+# Layer 1 (soa_coded_mentions) is untouched and runs on every tier; the
+# tier tag on soa_queries is what segments it. Layer 2 runs ONLY where
+# soa_queries.expected_answer is non-null, and it never re-derives
+# mentioned/position/strength — there is nothing here for those to drift
+# from, by construction, exactly as pass 2 is separated from pass 1.
+#
+# The grain is soa_runs, not a copy of it. A run row already stores
+# raw_response permanently and is the unique (cycle, query, platform,
+# run_number) slot, so `run_id` IS "question x surface x sample" and the
+# answer text reached from it can never disagree with the answer that was
+# scored. Storing a second copy of a multi-kilobyte answer beside every
+# outcome would buy nothing except the chance of the two differing.
+# ---------------------------------------------------------------------------
+
+class SoaExpectationOutcome(Base):
+    __tablename__ = "soa_expectation_outcomes"
+    __table_args__ = (
+        CheckConstraint(
+            f"outcome IN {_in_list(EXPECTATION_OUTCOMES)}",
+            name="ck_soa_expectation_outcomes_outcome",
+        ),
+        # One verdict per run. A re-score replaces the row rather than
+        # appending a second one, so a rate can never double-count a run
+        # that was scored twice.
+        UniqueConstraint(
+            "run_id", name="uq_soa_expectation_outcomes_run",
+        ),
+        Index("ix_soa_expectation_outcomes_query_id", "query_id"),
+        Index("ix_soa_expectation_outcomes_cycle_tier", "cycle_id", "tier"),
+        Index("ix_soa_expectation_outcomes_outcome", "outcome"),
+    )
+
+    id = Column(Integer, primary_key=True)
+
+    run_id = Column(
+        Integer, ForeignKey("soa_runs.id"), nullable=False, index=True,
+        comment="The scored answer. soa_runs.raw_response is the stored text every rate traces back to.",
+    )
+    # Denormalised from the run's query and cycle so the aggregation reads
+    # one table. They are copies of immutable facts (a run never changes
+    # which query or cycle it belongs to), which is the only kind of
+    # denormalisation that cannot drift.
+    query_id = Column(Integer, ForeignKey("soa_queries.id"), nullable=False)
+    cycle_id = Column(Integer, ForeignKey("soa_cycles.id"), nullable=False)
+    platform = Column(Text, nullable=False, comment="The surface. Copied from the run.")
+    tier = Column(Text, nullable=True, comment="Copied from the query at scoring time.")
+
+    expected_answer = Column(
+        JSON,
+        nullable=False,
+        comment=(
+            "The expectation AS IT WAS when this outcome was decided. A copy, "
+            "not a join: republishing the record rewrites the question's "
+            "expectation, and an outcome that then read through to the new one "
+            "would silently restate what it had compared against."
+        ),
+    )
+    extraction = Column(
+        JSON,
+        nullable=False,
+        comment=(
+            "What the extraction pass transcribed, in the fixed schema from "
+            "parser/expectation_prompts.py. Contains no verdict — no "
+            "'correct', no 'matches'. The comparison that follows is ordinary "
+            "deterministic Python, so a stored extraction is re-checkable, not "
+            "merely re-runnable."
+        ),
+    )
+
+    outcome = Column(
+        Text, nullable=False,
+        comment=(
+            "exact | stale | wrong | absent | unscoreable. unscoreable is its "
+            "own bucket and is never folded into wrong: 'the assistant was "
+            "incorrect' and 'we could not tell what it said' are different "
+            "facts, and merging them inflates the error rate with our own "
+            "extraction failures."
+        ),
+    )
+    outcome_reason = Column(
+        Text, nullable=True,
+        comment="One line of why, for the drill-down. Display only; nothing branches on it.",
+    )
+
+    domain_cited = Column(
+        Boolean, nullable=True,
+        comment=(
+            "Whether the brand's own domain was among the answer's cited "
+            "sources. Kept SEPARATE from the exact/wrong decision on a "
+            "brand_mention expectation — 'did it know the brand' and 'did it "
+            "send the shopper to the brand's own store' are different "
+            "questions, and folding the second into the first loses the "
+            "source-attribution measure the report reports. NULL where the "
+            "surface exposes no sources at all."
+        ),
+    )
+    source_attribution = Column(
+        Text, nullable=True,
+        comment="brand_domain | retailer | none — derived from the extraction's sources_cited.",
+    )
+
+    secondary_results = Column(
+        JSON,
+        nullable=True,
+        comment=(
+            "Outcomes for expectations the question did not ask about (the "
+            "GTIN riding along on a price question). A bonus signal, "
+            "deliberately outside the accuracy denominator: an assistant is "
+            "not wrong for failing to recite an identifier nobody asked for."
+        ),
+    )
+
+    record_published_at = Column(
+        DateTime(timezone=True), nullable=True,
+        comment=(
+            "published_at of the record the expectation was read from — what "
+            "the claim was compared against. Stored so phase 2 can plot "
+            "outcomes against TrueSync publish/approval markers with no re-run."
+        ),
+    )
+    matched_published_at = Column(
+        DateTime(timezone=True), nullable=True,
+        comment=(
+            "For a 'stale' outcome, the published_at of the PRIOR record whose "
+            "value the answer actually matched. NULL for every other outcome. "
+            "This is what makes staleness attributable to a specific past "
+            "publication rather than a general accusation of being behind."
+        ),
+    )
+
+    extraction_model = Column(Text, nullable=True)
+    scored_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    run = relationship("SoaRun")

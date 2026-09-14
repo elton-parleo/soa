@@ -18,7 +18,19 @@ def patched_engine(monkeypatch):
             CREATE TABLE soa_cycles (
                 id INTEGER PRIMARY KEY, cycle_code TEXT UNIQUE, status TEXT,
                 study_type TEXT, platforms TEXT, runs_per_query INTEGER,
-                cycle_mode TEXT, created_at TIMESTAMP
+                cycle_mode TEXT, created_at TIMESTAMP,
+                extraction_validation TEXT
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE IF NOT EXISTS soa_expectation_outcomes (
+                id INTEGER PRIMARY KEY, run_id INTEGER UNIQUE, query_id INTEGER,
+                cycle_id INTEGER, platform TEXT, tier TEXT,
+                expected_answer TEXT, extraction TEXT, outcome TEXT,
+                outcome_reason TEXT, domain_cited BOOLEAN,
+                source_attribution TEXT, secondary_results TEXT,
+                record_published_at TIMESTAMP, matched_published_at TIMESTAMP,
+                extraction_model TEXT, scored_at TIMESTAMP
             )
         """)
     monkeypatch.setattr(worker, "engine", engine)

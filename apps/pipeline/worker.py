@@ -41,7 +41,7 @@ from soa_shared.models.soa_models import (
     LITE_STATUS_IDENTIFYING_COMPETITORS,
     LITE_STATUS_RUNNING,
 )
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 logging.basicConfig(
     level=logging.INFO,
@@ -212,12 +212,14 @@ def _insert_generated_rows(
                     specificity, persona, study_type, study_pattern,
                     soa_focus, rationale, status,
                     organization_id, created_by,
+                    tier, expected_answer, provenance, source_ref,
                     created_at
                 ) VALUES (
                     :query_code, :query_text, :category, :stage,
                     :specificity, :persona, :study_type, :study_pattern,
                     :soa_focus, :rationale, :status,
                     :organization_id, :created_by,
+                    :tier, :expected_answer, :provenance, :source_ref,
                     NOW()
                 )
             """), {
@@ -234,8 +236,23 @@ def _insert_generated_rows(
                 "status":          row['status'],
                 "organization_id": organization_id,
                 "created_by":      created_by,
+                # NULL on every row from an ungrounded study, which is
+                # every row this function wrote before the tiers existed.
+                # json.dumps rather than the raw dict, the same
+                # write-convention the JSON columns on the job row use.
+                "tier":            row.get('tier'),
+                "expected_answer": _as_json_column(row.get('expected_answer')),
+                "provenance":      row.get('provenance'),
+                "source_ref":      _as_json_column(row.get('source_ref')),
             })
         conn.commit()
+
+
+def _as_json_column(value):
+    """Python -> a JSON column. None stays None: a NULL expected_answer
+    means "this question is not scored by Layer 2", which is not the same
+    fact as an empty object and is read differently by the scorer."""
+    return None if value is None else json.dumps(value)
 
 
 def _job_json(value):
@@ -273,11 +290,191 @@ def _record_provenance(job_id: int, provenance: dict):
         )
 
 
+def _delete_tier_questions(study_type: str, tiers: list) -> int:
+    """
+    Removes the questions of the named tiers for this study, so a rebuild
+    replaces them rather than doubling them.
+
+    Deletes, and does not soft-retire. A regenerated study is asked
+    against the record as it is NOW, and leaving the old questions
+    Retired alongside would leave a study whose report has two prices for
+    one variant and no way to say which one it measured.
+
+    Their soa_runs and soa_expectation_outcomes rows are left alone, on
+    purpose: a past cycle's measurements are evidence of what was true
+    then, and deleting them to tidy up a regeneration would destroy the
+    history the whole feature exists to build.
+    """
+    if not tiers:
+        return 0
+    # An expanding bindparam rather than a dialect branch: SQLAlchemy
+    # renders it as a plain IN list on both Postgres and sqlite, so the
+    # tests run the same statement production does.
+    statement = text("""
+        DELETE FROM soa_queries
+        WHERE study_type = :study_type
+          AND tier IN :tiers
+    """).bindparams(bindparam("tiers", expanding=True))
+
+    with engine.connect() as conn:
+        result = conn.execute(
+            statement, {"study_type": study_type, "tiers": list(tiers)},
+        )
+        conn.commit()
+        return result.rowcount or 0
+
+
+def _run_regeneration(
+    job_id, study_type, syndicated_merchant, tier_config, regenerate,
+    organization_id, created_by, api_key, **kwargs,
+):
+    """
+    Rebuild only the named tiers of an existing study, from the catalog as
+    it is now.
+
+    The study's own stage-count questions are never touched: they exist
+    with or without a brand, the control tier is a tag on them, and
+    rewriting them is creating a different study rather than refreshing
+    this one against a record.
+
+    A failure leaves the study as it was. The delete and the rebuild are
+    ordered rebuild-first for exactly that reason — a TrueSync outage
+    between them would otherwise leave a study with its catalog questions
+    gone and nothing in their place.
+    """
+    from clients.truesync_catalog import TrueSyncCatalogClient
+    from generation import catalog_tiers as ct
+    from generation.query_generator import generate_brand_direct
+    from generation.syndicated_study import normalize_tier_config, _primary_category, _primary_persona
+
+    tiers = list(regenerate.get("tiers") or [])
+    config = normalize_tier_config(tier_config)
+    category = _primary_category(kwargs.get("allowed_categories"))
+    persona = _primary_persona(kwargs.get("personas"))
+
+    snapshot = TrueSyncCatalogClient().snapshot(
+        syndicated_merchant, with_history=False,
+    )
+    if not snapshot.available:
+        _mark_generation_failed(
+            job_id,
+            f"Could not read {syndicated_merchant}'s catalog: {snapshot.error}. "
+            f"The study is unchanged.",
+        )
+        return
+
+    rows = []
+    if "catalog_accuracy" in tiers:
+        built, report = ct.build_catalog_accuracy(
+            snapshot, category=category, persona=persona,
+            study_pattern=kwargs.get('study_pattern'),
+        )
+        rows.extend(built)
+        config["catalog_accuracy"].update(report)
+    if "value_incentives" in tiers:
+        built, report = ct.build_value_incentives(
+            snapshot, category=category, persona=persona,
+            study_pattern=kwargs.get('study_pattern'),
+        )
+        rows.extend(built)
+        config["value_incentives"].update(report)
+    if "brand_direct" in tiers:
+        built, report = generate_brand_direct(
+            snapshot,
+            study_name=kwargs.get("study_name"),
+            description=kwargs.get("description"),
+            stage_targets=kwargs.get("stage_targets") or {},
+            allowed_categories=kwargs.get("allowed_categories") or [],
+            study_pattern=kwargs.get("study_pattern"),
+            api_key=api_key,
+            count=config["brand_direct"].get("count"),
+            personas=kwargs.get("personas"),
+        )
+        rows.extend(built)
+        config["brand_direct"]["count"] = len(built)
+
+    for tier in tiers:
+        if config.get(tier):
+            config[tier]["expected_nulls"] = ct.expected_nulls(snapshot, tier)
+    config["merchant"] = {
+        "slug": snapshot.merchant_slug, "brand": snapshot.brand,
+        "domain": snapshot.domain, "products": snapshot.product_count,
+        "variants": snapshot.variant_count, "gtins": snapshot.gtin_count,
+        "codes": snapshot.code_count, "read_at": snapshot.read_at,
+    }
+    # Consumed: the marker is gone from what gets written back, so a
+    # worker restart cannot regenerate the same study twice.
+    config.pop("regenerate", None)
+
+    removed = _delete_tier_questions(study_type, tiers)
+    _insert_generated_rows(rows, study_type, organization_id, created_by)
+
+    with engine.connect() as conn:
+        conn.execute(text("""
+            UPDATE soa_query_generation_jobs
+            SET tier_config = :config, status = 'complete', updated_at = NOW()
+            WHERE id = :id
+        """), {"config": json.dumps(config), "id": job_id})
+        conn.commit()
+
+    log.info(
+        "[generation] job %s regenerated %s for %r: %d removed, %d written",
+        job_id, ", ".join(tiers), study_type, removed, len(rows),
+    )
+
+
+def _run_syndicated_generation(
+    *, job_id, syndicated_merchant, tier_config, stage_targets, **kwargs,
+):
+    """
+    The grounded path: read the brand's published catalog, then build the
+    four tiers over it.
+
+    The catalog read is not allowed to fail the job. TrueSync is a
+    separate service on a separate deploy, and a study whose stage
+    questions generated perfectly well should not be thrown away because
+    a third-party endpoint was down for the thirty seconds this ran —
+    build_syndicated_study records the unavailability on tier_config and
+    generates the study's ungrounded form.
+
+    with_history=False: expectations are written against the CURRENT
+    record. Prior values are the scorer's business, read at scoring time,
+    because history fetched now is a picture of the past as it looked
+    before anything republished.
+    """
+    from clients.truesync_catalog import TrueSyncCatalogClient
+    from generation.syndicated_study import build_syndicated_study
+
+    snapshot = TrueSyncCatalogClient().snapshot(
+        syndicated_merchant, with_history=False,
+    )
+    if not snapshot.available:
+        log.warning(
+            "[generation] job %s: catalog for %r unavailable (%s)",
+            job_id, syndicated_merchant, snapshot.error,
+        )
+
+    rows, provenance, resolved = build_syndicated_study(
+        snapshot=snapshot,
+        tier_config=tier_config,
+        stage_targets=stage_targets,
+        **kwargs,
+    )
+
+    # The stage total is what the tally splits on, and it is knowable only
+    # here — build_syndicated_study sees per-tier counts, not the brief.
+    resolved.setdefault('category_control', {})['stage_total'] = sum(
+        (stage_targets or {}).values()
+    )
+    return rows, provenance, resolved
+
+
 def _run_briefed_generation(
     job_id, study_type, study_name, description, target_count,
     organization_id, created_by, study_pattern, retailer_names,
     allowed_categories, stage_targets, rotate_named_retailer,
     naming_rule_enabled, personas, specificity_mode, api_key,
+    syndicated_merchant=None, tier_config=None,
 ):
     """
     Generation for a job carrying a study brief.
@@ -311,20 +508,43 @@ def _run_briefed_generation(
     if not allowed_categories:
         allowed_categories = list(QUERY_CATEGORIES)
 
+    # No brand chosen -> the path this function has always taken, reached
+    # by the same call with the same arguments. That identity is the
+    # whole guarantee for existing users: an untoggled modal is not a
+    # near-copy of today's behaviour, it is today's behaviour.
+    resolved_tier_config = None
     try:
-        rows, provenance = generate_and_review_study(
-            study_name=study_name,
-            description=description,
-            stage_targets=stage_targets,
-            allowed_categories=allowed_categories,
-            study_pattern=study_pattern,
-            api_key=api_key,
-            retailer_names=retailer_names,
-            rotate_named_retailer=rotate_named_retailer,
-            naming_rule_enabled=naming_rule_enabled,
-            personas=personas,
-            specificity_mode=specificity_mode,
-        )
+        if syndicated_merchant:
+            rows, provenance, resolved_tier_config = _run_syndicated_generation(
+                job_id=job_id,
+                syndicated_merchant=syndicated_merchant,
+                tier_config=tier_config,
+                study_name=study_name,
+                description=description,
+                stage_targets=stage_targets,
+                allowed_categories=allowed_categories,
+                study_pattern=study_pattern,
+                api_key=api_key,
+                retailer_names=retailer_names,
+                rotate_named_retailer=rotate_named_retailer,
+                naming_rule_enabled=naming_rule_enabled,
+                personas=personas,
+                specificity_mode=specificity_mode,
+            )
+        else:
+            rows, provenance = generate_and_review_study(
+                study_name=study_name,
+                description=description,
+                stage_targets=stage_targets,
+                allowed_categories=allowed_categories,
+                study_pattern=study_pattern,
+                api_key=api_key,
+                retailer_names=retailer_names,
+                rotate_named_retailer=rotate_named_retailer,
+                naming_rule_enabled=naming_rule_enabled,
+                personas=personas,
+                specificity_mode=specificity_mode,
+            )
     except Exception as e:
         log.exception(f"[generation] job {job_id} failed")
         _mark_generation_failed(job_id, str(e))
@@ -346,9 +566,22 @@ def _run_briefed_generation(
         with engine.connect() as conn:
             conn.execute(text("""
                 UPDATE soa_query_generation_jobs
-                SET created_count = :cc, status = 'complete', updated_at = NOW()
+                SET created_count = :cc,
+                    tier_config = COALESCE(:tier_config, tier_config),
+                    status = 'complete',
+                    updated_at = NOW()
                 WHERE id = :id
-            """), {"cc": len(rows), "id": job_id})
+            """), {
+                "cc": len(rows),
+                # The RESOLVED config, replacing what the modal asked
+                # for: it carries the sampled variant ids, the per-tier
+                # counts actually built, the expected-nulls notes and any
+                # tier that was asked for and could not be. Rewriting the
+                # request with the result is the point — the request is
+                # not evidence of what the study contains.
+                "tier_config": _as_json_column(resolved_tier_config),
+                "id": job_id,
+            })
             conn.commit()
     except Exception as e:
         log.exception(f"[generation] job {job_id} failed during insert")
@@ -382,7 +615,8 @@ def process_generation_jobs():
                    organization_id, created_by,
                    study_pattern, retailer_names, allowed_categories,
                    stage_targets, rotate_named_retailer,
-                   naming_rule_enabled, personas, specificity_mode
+                   naming_rule_enabled, personas, specificity_mode,
+                   syndicated_merchant, tier_config
             FROM soa_query_generation_jobs
             WHERE status = 'pending'
             ORDER BY created_at ASC
@@ -396,7 +630,8 @@ def process_generation_jobs():
          organization_id, created_by,
          study_pattern, retailer_names, allowed_categories,
          stage_targets, rotate_named_retailer,
-         naming_rule_enabled, personas, specificity_mode) = row
+         naming_rule_enabled, personas, specificity_mode,
+         syndicated_merchant, tier_config) = row
 
         # Mark running
         conn.execute(text("""
@@ -427,6 +662,31 @@ def process_generation_jobs():
     # default available: every study_pattern value changes the coding
     # rubric, so picking one on the job's behalf would silently decide
     # something the requester never said.
+    # A regenerate request reuses this job row rather than creating a
+    # second one (study_type is unique on this table), carrying its
+    # marker inside tier_config — which the rebuild consumes by writing
+    # the resolved config back without it.
+    parsed_tier_config = _job_json(tier_config)
+    regenerate = (parsed_tier_config or {}).get("regenerate")
+    if regenerate and syndicated_merchant:
+        _run_regeneration(
+            job_id=job_id,
+            study_type=study_type,
+            syndicated_merchant=syndicated_merchant,
+            tier_config=parsed_tier_config,
+            regenerate=regenerate,
+            organization_id=organization_id,
+            created_by=created_by,
+            api_key=api_key,
+            study_name=study_name,
+            description=description,
+            study_pattern=study_pattern,
+            allowed_categories=_job_json(allowed_categories),
+            stage_targets=_job_json(stage_targets),
+            personas=_job_json(personas),
+        )
+        return
+
     if study_pattern:
         _run_briefed_generation(
             job_id=job_id,
@@ -449,6 +709,8 @@ def process_generation_jobs():
             personas=_job_json(personas),
             specificity_mode=specificity_mode,
             api_key=api_key,
+            syndicated_merchant=syndicated_merchant,
+            tier_config=_job_json(tier_config),
         )
         return
 

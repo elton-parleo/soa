@@ -35,7 +35,8 @@ def patched_engine(monkeypatch):
                 study_pattern TEXT, retailer_names TEXT, allowed_categories TEXT,
                 stage_targets TEXT, rotate_named_retailer BOOLEAN,
                 naming_rule_enabled BOOLEAN, personas TEXT, specificity_mode TEXT,
-                provenance TEXT
+                provenance TEXT,
+                syndicated_merchant TEXT, tier_config TEXT
             )
         """)
     monkeypatch.setattr(studies_router, "engine", engine)

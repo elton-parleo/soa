@@ -207,6 +207,25 @@ export const api = {
   getTranscriptDetail: (cycleCode, runId) =>
     get(`/api/full-analysis/report/${encodeURIComponent(cycleCode)}/transcripts/${runId}`),
 
+  // The per-question drill-down behind the tier section. Owner-only:
+  // it carries raw answer text, which the public share payload
+  // deliberately does not.
+  getTierOutcomes: (cycleCode, tier) =>
+    get(
+      `/api/full-analysis/report/${encodeURIComponent(cycleCode)}/tier-outcomes`
+      + (tier ? `?tier=${encodeURIComponent(tier)}` : ''),
+    ),
+
+  // Rebuild a grounded study's catalog questions against the record as
+  // it is published now. regenerateAi is the caller's decision because
+  // rewriting AI-written questions breaks run-over-run comparability —
+  // see RegenerateStudyModal.jsx.
+  regenerateStudy: (studyType, regenerateAi = false) =>
+    post(
+      `/api/studies/${encodeURIComponent(studyType)}/regenerate`,
+      { regenerate_ai: !!regenerateAi },
+    ),
+
   getScopeTiers: () =>
     get('/api/scope/tiers'),
 

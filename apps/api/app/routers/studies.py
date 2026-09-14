@@ -24,6 +24,7 @@ from app.schemas import (
     QueryCreate,
     QueryUpdate,
     StudyGenerateRequest,
+    RegenerateStudyRequest,
     StudyGenerateResponse,
     GenerationStatusResponse,
     STUDY_TYPE_NAMES,
@@ -189,6 +190,7 @@ def generate_study(
                     study_pattern, retailer_names, allowed_categories,
                     stage_targets, rotate_named_retailer,
                     naming_rule_enabled, personas, specificity_mode,
+                    syndicated_merchant, tier_config,
                     created_at
                 ) VALUES (
                     :study_type, :study_name, :description,
@@ -197,6 +199,7 @@ def generate_study(
                     :study_pattern, :retailer_names, :allowed_categories,
                     :stage_targets, :rotate_named_retailer,
                     :naming_rule_enabled, :personas, :specificity_mode,
+                    :syndicated_merchant, :tier_config,
                     NOW()
                 )
                 RETURNING id, status
@@ -221,6 +224,17 @@ def generate_study(
                 "naming_rule_enabled":   data.naming_rule_enabled,
                 "personas":              _as_json(data.personas),
                 "specificity_mode":      data.specificity_mode,
+                # NULL/NULL is the toggle being off, and is what every
+                # client that predates it sends. The worker branches on
+                # syndicated_merchant alone: with no merchant there is no
+                # catalog read and no tier machinery in the path at all.
+                "syndicated_merchant":   data.syndicated_merchant,
+                # What the modal ASKED for. The worker rewrites this
+                # column with the resolved config once the study exists —
+                # sampled variant ids, per-tier counts, expected-nulls
+                # notes — because a request is not evidence of what a
+                # study contains.
+                "tier_config":           _as_json(data.tier_config),
             },
         )
         # Read the RETURNING row BEFORE committing, not after. Both
@@ -237,6 +251,108 @@ def generate_study(
         job_id=row[0],
         status=row[1],
     )
+
+
+# ─── POST /studies/{study_type}/regenerate ───────────────────────────────────
+
+@router.post("/studies/{study_type}/regenerate", status_code=202)
+def regenerate_study(
+    study_type: str,
+    data: RegenerateStudyRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Rebuild this study's grounded questions from the catalog as it is NOW.
+
+    The catalog-built tiers are always rebuilt: their whole purpose is to
+    carry the currently published answer, so a study whose brand
+    republished is asking about a price that changed, and refreshing it
+    is not a choice — it is what "regenerate" means.
+
+    The AI-written tier is rebuilt only if the caller asks. Its wording is
+    a model's, so regenerating it produces different questions, and a
+    study whose questions changed cannot be compared run-over-run with the
+    one before it. That is a real cost and the user is the one who should
+    decide to pay it.
+
+    What is NEVER rebuilt here is the study's own stage-count questions —
+    the ones that exist with or without a brand, and that the control tier
+    is a tag on. Rewriting those is creating a different study, not
+    refreshing this one against a record.
+
+    Asynchronous by design: it hands the work to the same worker that
+    generated the study, using the same code, rather than growing a second
+    implementation of the tier builders inside the API. Poll
+    generation-status as the modal already does.
+    """
+    org_id = current_user["organization_id"]
+
+    with engine.connect() as conn:
+        row = conn.execute(text("""
+            SELECT id, syndicated_merchant, tier_config, status
+            FROM soa_query_generation_jobs
+            WHERE study_type = :study_type AND organization_id = :org_id
+        """), {"study_type": study_type, "org_id": org_id}).fetchone()
+
+        if row is None:
+            raise HTTPException(status_code=404, detail="Study not found.")
+
+        job_id, merchant, tier_config, status = row
+        if not merchant:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "This study is not grounded in a syndicated brand, so it "
+                    "has no catalog questions to rebuild."
+                ),
+            )
+        if status in ("pending", "running"):
+            raise HTTPException(
+                status_code=409,
+                detail="This study is already generating. Wait for it to finish.",
+            )
+
+        config = json.loads(tier_config) if isinstance(tier_config, str) else (tier_config or {})
+
+        # Only tiers that were enabled in the first place. Regenerating a
+        # tier the study never had would add questions to a study nobody
+        # asked to change the shape of.
+        tiers = [
+            tier for tier in ("catalog_accuracy", "value_incentives")
+            if isinstance(config.get(tier), dict) and config[tier].get("enabled")
+        ]
+        if data.regenerate_ai and isinstance(config.get("brand_direct"), dict) \
+                and config["brand_direct"].get("enabled"):
+            tiers.append("brand_direct")
+
+        if not tiers:
+            raise HTTPException(
+                status_code=400,
+                detail="This study has no grounded tiers enabled to rebuild.",
+            )
+
+        # The marker lives inside tier_config, which the worker rewrites
+        # with the resolved config once it is done — so consuming it is
+        # automatic and there is no second column to leave stale.
+        config["regenerate"] = {
+            "tiers": tiers,
+            "requested_by": current_user["user_id"],
+        }
+
+        conn.execute(text("""
+            UPDATE soa_query_generation_jobs
+            SET tier_config = :config, status = 'pending',
+                error_message = NULL, updated_at = NOW()
+            WHERE id = :id
+        """), {"config": json.dumps(config), "id": job_id})
+        conn.commit()
+
+    return {
+        "study_type": study_type,
+        "status": "pending",
+        "tiers": tiers,
+        "syndicated_merchant": merchant,
+    }
 
 
 # ─── GET /studies/{study_type}/generation-status ─────────────────────────────
@@ -268,7 +384,8 @@ def get_generation_status(
         row = conn.execute(
             text("""
                 SELECT study_type, status, target_count,
-                       created_count, error_message, provenance
+                       created_count, error_message, provenance,
+                       syndicated_merchant, tier_config
                 FROM soa_query_generation_jobs
                 WHERE study_type = :st
                   AND organization_id = :org_id
@@ -288,7 +405,17 @@ def get_generation_status(
     if isinstance(provenance, str):
         provenance = json.loads(provenance)
 
+    tier_config = row[7]
+    if isinstance(tier_config, str):
+        tier_config = json.loads(tier_config)
+
     return GenerationStatusResponse(
+        # Additive, and read by the study page to decide whether to offer
+        # "Regenerate from catalog" at all: there is nothing to
+        # regenerate FROM without a published catalog, and a control that
+        # does nothing is worse than no control.
+        syndicated_merchant=row[6],
+        tier_config=tier_config,
         study_type=row[0],
         status=row[1],
         target_count=row[2],

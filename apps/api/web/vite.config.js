@@ -121,6 +121,43 @@ function auditHeadPlugin(auditBaseUrl) {
   }
 }
 
+// The screenshot harness (screenshot-harness/) renders CreateStudyModal
+// on its own against stubbed api/truesyncApi modules, so the modal can be
+// seen and screenshotted without a login or a backend. It has its own
+// config (vite.shot.config.js) and its own root, so it is already outside
+// this build by construction.
+//
+// "Outside by construction" is not the same as "cannot get in". Nothing
+// under src/ imports it today; one careless import from a component would
+// pull a module that stubs out the real API client into a production
+// bundle, and nothing would say so. This plugin is the guard: any module
+// under screenshot-harness/ that enters THIS build's graph fails the
+// build, loudly, with the file that pulled it in.
+//
+// It lives here rather than in vitest.config.js on purpose. The test
+// suite renders components in isolation and has no business being told
+// what it may import; the production bundle does.
+const HARNESS_DIR = 'screenshot-harness'
+
+function forbidScreenshotHarness() {
+  return {
+    name: 'forbid-screenshot-harness',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      const looksLikeHarness =
+        source.includes(HARNESS_DIR) || (importer || '').includes(HARNESS_DIR)
+      if (!looksLikeHarness) return null
+      throw new Error(
+        `Production build refused: ${source} is part of the dev-only `
+        + `screenshot harness (${HARNESS_DIR}/)`
+        + (importer ? `, imported by ${importer}` : '')
+        + '. The harness stubs out api.js and truesyncApi.js and must never '
+        + 'reach a deployed bundle. Run it with `npm run shot` instead.',
+      )
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), 'VITE_')
   const auditBaseUrl = (env.VITE_PUBLIC_AUDIT_BASE_URL || DEFAULT_PUBLIC_AUDIT_BASE_URL).replace(/\/$/, '')
@@ -136,7 +173,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: basePath,
-    plugins: [react(), auditHeadPlugin(auditBaseUrl)],
+    plugins: [forbidScreenshotHarness(), react(), auditHeadPlugin(auditBaseUrl)],
     server: {
       port: 5173,
       proxy: {

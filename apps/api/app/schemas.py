@@ -3,8 +3,9 @@ import re
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, field_validator, model_validator
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from soa_shared.constants import QUERY_CONSTRAINTS
+from soa_shared.expected_answers import QUERY_TIERS
 from soa_shared.scan_dimensions import VERDICT_AGENT_READY, VERDICT_NOT_AGENT_READY
 
 # ─── Shared constraint validator ──────────────────────────────────────────────
@@ -285,6 +286,21 @@ class FullAnalysisReportResponse(BaseModel):
     # ReportResponse.transcript (app/services/transcript_pick.py); one
     # backend service, one frontend component, both products.
     transcript: Optional[dict] = None
+    # Tier segmentation and Layer 2 accuracy —
+    # app/services/tier_accuracy.py::build_tier_accuracy.
+    #
+    # NULL on every cycle of a study generated without a syndicated
+    # brand, which is every cycle that existed before the tiers did. Null
+    # rather than an empty section on purpose: rendering an empty
+    # accuracy panel would invite a reader to conclude something about a
+    # measurement that was never taken.
+    #
+    # Loose dict, same convention as `pillars`/`offers` above: the shape
+    # carries per-tier counts, per-surface splits and the header context
+    # (expected nulls, the validated agreement rate), and pinning a model
+    # would make every field the aggregation adds a schema change here
+    # too.
+    tier_accuracy: Optional[dict] = None
 
 # Shareable Full Analysis reports (soa_cycle_shares) — owner-facing
 # create/get response. The frontend builds the copyable URL itself
@@ -536,6 +552,21 @@ class StudyGenerateRequest(BaseModel):
     personas:              Optional[List[str]] = None
     specificity_mode:      Optional[str] = None
 
+    # ─── Syndicated brand ─────────────────────────────────────────────
+    #
+    # Both NULL means the toggle was off, which is the state every client
+    # that predates it sends and the state the modal sends when the user
+    # leaves it off. The pipeline branches on syndicated_merchant alone:
+    # a tier_config with no merchant grounds nothing, so it is rejected
+    # here rather than silently ignored there.
+    syndicated_merchant:   Optional[str] = None
+    # {tier: {enabled: bool, count?: int}}. Untyped beyond that on
+    # purpose — the worker rewrites this column with the RESOLVED config
+    # (sampled variant ids, per-tier counts, expected-nulls notes), and
+    # pinning a model to the request shape would make every field the
+    # worker adds a schema change here too.
+    tier_config:           Optional[Dict[str, Any]] = None
+
     @field_validator('target_count')
     @classmethod
     def validate_count(cls, v):
@@ -595,6 +626,45 @@ class StudyGenerateRequest(BaseModel):
                 f"specificity_mode must be one of {', '.join(SPECIFICITY_MODES)}"
             )
         return v
+
+    @field_validator('tier_config')
+    @classmethod
+    def validate_tier_config(cls, v):
+        if v is None:
+            return v
+        unknown = [t for t in v if t not in QUERY_TIERS]
+        if unknown:
+            raise ValueError(
+                f"unknown tier(s): {', '.join(unknown)}; must be one of "
+                f"{', '.join(QUERY_TIERS)}"
+            )
+        return v
+
+    @model_validator(mode='after')
+    def validate_tiers_have_a_brand(self):
+        """
+        Tiers without a merchant are rejected rather than ignored.
+
+        Three of the four tiers read a published catalog and cannot be
+        built without one; accepting the request and then quietly
+        building nothing would hand back a study that looks like it has
+        tiers and does not. The exception is category_control, which is a
+        tag on the study's own questions and needs no catalog at all.
+        """
+        if self.syndicated_merchant or not self.tier_config:
+            return self
+        needs_catalog = [
+            tier for tier, entry in self.tier_config.items()
+            if tier != 'category_control' and (
+                entry.get('enabled') if isinstance(entry, dict) else entry
+            )
+        ]
+        if needs_catalog:
+            raise ValueError(
+                f"tier(s) {', '.join(sorted(needs_catalog))} need a "
+                f"syndicated_merchant to read a catalog from"
+            )
+        return self
 
 
 # ─── Post-generation review ──────────────────────────────────────────────────
@@ -690,6 +760,20 @@ class ReviewResolveResponse(BaseModel):
     provenance: Optional[dict] = None
 
 
+class RegenerateStudyRequest(BaseModel):
+    """
+    What POST /studies/{study_type}/regenerate takes.
+
+    One field, and it is a choice rather than a default. The
+    catalog-built tiers are always rebuilt — carrying the currently
+    published answer is what they are for. Rebuilding the AI-written tier
+    produces DIFFERENT question wording, which breaks run-over-run
+    comparability with everything before it, so it happens only when
+    someone says so.
+    """
+    regenerate_ai: bool = False
+
+
 class StudyGenerateResponse(BaseModel):
     study_type: str
     study_name: str
@@ -721,6 +805,13 @@ class GenerationStatusResponse(BaseModel):
     # this is a report for a human to read, not a contract anything
     # branches on. See generation/query_generator.py for its shape.
     provenance: Optional[dict] = None
+
+    # The brand this study is grounded in, and the resolved tier config
+    # the worker wrote back. Both null on every study generated without a
+    # syndicated brand. The study page reads syndicated_merchant to
+    # decide whether "Regenerate from catalog" means anything here.
+    syndicated_merchant: Optional[str] = None
+    tier_config: Optional[Dict[str, Any]] = None
 
 
 # ─── Scope SKUs ──────────────────────

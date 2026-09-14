@@ -85,6 +85,7 @@ def db(monkeypatch):
                 study_name TEXT, description TEXT, target_count INTEGER,
                 created_count INTEGER DEFAULT 0, status TEXT, error_message TEXT,
                 organization_id INTEGER, created_by TEXT,
+                syndicated_merchant TEXT, tier_config TEXT,
                 created_at TIMESTAMP, updated_at TIMESTAMP,
                 study_pattern TEXT, retailer_names TEXT, allowed_categories TEXT,
                 stage_targets TEXT, rotate_named_retailer BOOLEAN,
@@ -98,7 +99,8 @@ def db(monkeypatch):
                 query_text TEXT, category TEXT, stage TEXT, specificity TEXT,
                 persona TEXT, study_type TEXT, study_pattern TEXT, status TEXT,
                 subscription_state TEXT, soa_focus TEXT, rationale TEXT,
-                organization_id INTEGER, created_by TEXT, created_at TIMESTAMP
+                organization_id INTEGER, created_by TEXT, created_at TIMESTAMP,
+                tier TEXT, expected_answer TEXT, provenance TEXT, source_ref TEXT
             )
         """)
         conn.execute(text("""

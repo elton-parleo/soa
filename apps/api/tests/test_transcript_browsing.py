@@ -31,7 +31,7 @@ def db():
     with engine.begin() as conn:
         conn.exec_driver_sql("CREATE TABLE soa_entities (id INTEGER PRIMARY KEY, name TEXT, slug TEXT, aliases TEXT, website_url TEXT)")
         conn.exec_driver_sql("CREATE TABLE soa_cycle_entities (id INTEGER PRIMARY KEY, cycle_id INTEGER, entity_id INTEGER, role TEXT)")
-        conn.exec_driver_sql("CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, stage TEXT, persona TEXT, query_text TEXT)")
+        conn.exec_driver_sql("CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, stage TEXT, persona TEXT, query_text TEXT, tier TEXT, expected_answer TEXT, provenance TEXT, source_ref TEXT)")
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
                 id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT,
