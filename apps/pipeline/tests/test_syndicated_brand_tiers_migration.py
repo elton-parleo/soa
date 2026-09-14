@@ -49,10 +49,10 @@ def _downgrade_calls():
 
 # ── revision metadata ─────────────────────────────────────────────────────
 
-def test_chains_off_the_study_brief_migration():
+def test_chains_off_the_lead_notified_at_migration():
     mod = _load_migration()
     assert mod.revision == "a9f3c21b7e40"
-    assert mod.down_revision == "3f8e2a91c7d4"
+    assert mod.down_revision == "a9f3c2d81b47"
 
 
 def test_is_the_single_head():

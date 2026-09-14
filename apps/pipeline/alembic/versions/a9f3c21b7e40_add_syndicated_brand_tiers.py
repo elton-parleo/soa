@@ -1,7 +1,7 @@
 """add_syndicated_brand_tiers
 
 Revision ID: a9f3c21b7e40
-Revises: 3f8e2a91c7d4
+Revises: a9f3c2d81b47
 Create Date: 2026-09-09 10:45:00.000000
 
 Purely additive. Every column added here is nullable with no server
@@ -39,7 +39,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a9f3c21b7e40"
-down_revision: Union[str, None] = "3f8e2a91c7d4"
+down_revision: Union[str, None] = "a9f3c2d81b47"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
