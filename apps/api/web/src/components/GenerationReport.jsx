@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { tierCounts, tierCountsText, TIER_LABELS } from './generationTierCounts.js'
 
 // ─── Design tokens (verbatim from StudyDetail.jsx) ───────────────────────────
 const T = {
@@ -31,10 +32,17 @@ const T = {
  * kinds together would make the second look like work already done, which
  * is the one impression that would stop anyone acting on it.
  */
-export default function GenerationReport({ provenance }) {
+export default function GenerationReport({ provenance, tierConfig }) {
   const [open, setOpen] = useState(false)
 
   if (!provenance) return null
+
+  // The live tier config when the page has one, the snapshot taken at
+  // generation otherwise. They differ after a tier is regenerated, and
+  // it is the live one that describes the study now sitting in the
+  // table below this report.
+  const counts = tierCounts(tierConfig || provenance.tiers)
+  const countsText = tierCountsText(counts)
 
   const shortfall = provenance.shortfall_by_stage || {}
   const duplicates = provenance.exact_duplicates_dropped || []
@@ -44,16 +52,32 @@ export default function GenerationReport({ provenance }) {
   const labelMismatches = byOutcome.label_mismatch || []
   const outOfScope = byOutcome.out_of_scope || []
 
+  // The brand-direct tier's own automatic drops. Same standing as an
+  // exact duplicate: the question is not in the study, and this report
+  // is the only place it still exists.
+  const brandTier = tierConfig?.brand_direct || provenance.tiers?.brand_direct || {}
+  const brandMissing = brandTier.brand_missing_drops || []
+  const intentDupes = brandTier.intent_duplicate_drops || []
+
   const removedCount = duplicates.length + categoryDrops.length
+    + brandMissing.length + intentDupes.length
   const flaggedCount = semanticGroups.length + labelMismatches.length + outOfScope.length
   const shortStages = Object.keys(shortfall)
 
   const nothingToReport = !removedCount && !flaggedCount && !shortStages.length
 
-  const summary = nothingToReport
-    ? `${provenance.rows_generated} questions generated, nothing removed or flagged.`
+  // counts.total covers every tier; rows_generated covers the stage
+  // questions alone, and for a grounded study those are different
+  // numbers. Saying the smaller one here is what made the report
+  // undercount an 87-question study as 50.
+  const generated = counts ? counts.total : provenance.rows_generated
+  const shortTiers = counts?.shortfalls || []
+
+  const summary = nothingToReport && !shortTiers.length
+    ? `${generated} questions generated, nothing removed or flagged.`
     : [
-      `${provenance.rows_generated} questions generated`,
+      `${generated} questions generated`,
+      shortTiers.length ? `${shortTiers.length} tier short` : null,
       removedCount ? `${removedCount} removed` : null,
       flaggedCount ? `${flaggedCount} flagged for review` : null,
       shortStages.length ? `short on ${shortStages.join(', ')}` : null,
@@ -93,6 +117,10 @@ export default function GenerationReport({ provenance }) {
           padding: '4px 16px 16px', display: 'flex', flexDirection: 'column', gap: 18,
         }}>
 
+          {counts && (
+            <TierCounts counts={counts} text={countsText} />
+          )}
+
           <Distribution provenance={provenance} shortfall={shortfall} />
 
           {/* ─── Already removed ─── */}
@@ -115,6 +143,26 @@ export default function GenerationReport({ provenance }) {
                 >
                   {categoryDrops.map((d, i) => (
                     <Line key={i} muted={d.category}>{d.query_text}</Line>
+                  ))}
+                </Group>
+              )}
+              {brandMissing.length > 0 && (
+                <Group
+                  label={`${brandMissing.length} brand-direct question${brandMissing.length === 1 ? '' : 's'} that did not name the brand`}
+                  hint="These carry a brand-mention expectation, so a question that never names the brand cannot be answered correctly. Regenerated rather than patched."
+                >
+                  {brandMissing.map((d, i) => (
+                    <Line key={i}>{d.query_text}</Line>
+                  ))}
+                </Group>
+              )}
+              {intentDupes.length > 0 && (
+                <Group
+                  label={`${intentDupes.length} brand-direct question${intentDupes.length === 1 ? '' : 's'} the catalog tier already asks`}
+                  hint="Same question, different words — it would measure one published number twice and score the second copy against a brand mention."
+                >
+                  {intentDupes.map((d, i) => (
+                    <Line key={i}>{d.query_text}</Line>
                   ))}
                 </Group>
               )}
@@ -176,6 +224,59 @@ export default function GenerationReport({ provenance }) {
               found anything worth a second look.
             </div>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function TierCounts({ counts, text }) {
+  const cells = [
+    { label: 'stage', value: counts.stage },
+    { label: 'brand-direct', value: counts.brandDirect },
+    ...counts.byTier.map(t => ({
+      label: TIER_LABELS[t.tier] || t.tier, value: t.count, catalog: true,
+    })),
+  ].filter(c => c.value > 0)
+
+  return (
+    <div>
+      <SectionTitle>Questions in this study</SectionTitle>
+      <div style={{
+        fontSize: 13, color: T.text, marginTop: 6, fontWeight: 600,
+      }}>{text}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+        {cells.map(cell => (
+          <div
+            key={cell.label}
+            style={{
+              border: `1px solid ${T.border}`, borderRadius: 8,
+              padding: '6px 10px', fontSize: 12,
+              background: cell.catalog ? T.offWhite : T.white,
+            }}
+          >
+            <strong style={{ color: T.text }}>{cell.value}</strong>{' '}
+            <span style={{ color: T.textMid }}>{cell.label}</span>
+          </div>
+        ))}
+      </div>
+      {counts.shortfalls.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          {counts.shortfalls.map(s => (
+            <div
+              key={s.tier}
+              style={{
+                fontSize: 12, color: '#92400E', background: T.amberLight,
+                border: '1px solid #FDE68A', borderRadius: 8,
+                padding: '6px 10px', marginTop: 4,
+              }}
+            >
+              {s.reason
+                ? `${TIER_LABELS[s.tier] || s.tier} could not be built — ${s.reason}`
+                : `${TIER_LABELS[s.tier] || s.tier} is ${s.short} short: `
+                  + `${s.delivered} of ${s.requested} requested`}
+            </div>
+          ))}
         </div>
       )}
     </div>

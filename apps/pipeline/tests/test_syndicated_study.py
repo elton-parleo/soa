@@ -73,9 +73,19 @@ def _brand_rows(n=12):
     ]
 
 
-def _build(snapshot, tier_config, *, stage_rows=None, brand_rows=None, **kwargs):
+_UNSET = object()
+
+
+def _build(
+    snapshot, tier_config, *,
+    stage_rows=None, brand_rows=None, personas=_UNSET, **kwargs,
+):
     stage_rows = _stage_rows() if stage_rows is None else stage_rows
     brand_rows = _brand_rows() if brand_rows is None else brand_rows
+    # _UNSET rather than a default of ["Value-Conscious Parent"], so a
+    # test can ask for personas=None — the case the whole persona
+    # fallback exists for — without it reading as "not specified".
+    personas = ["Value-Conscious Parent"] if personas is _UNSET else personas
 
     with patch.object(
         ss, "generate_and_review_study",
@@ -93,7 +103,7 @@ def _build(snapshot, tier_config, *, stage_rows=None, brand_rows=None, **kwargs)
             study_pattern="brand_at_retail",
             api_key="k",
             tier_config=tier_config,
-            personas=["Value-Conscious Parent"],
+            personas=personas,
             **kwargs,
         )
     return result + (stage_call, brand_call)
@@ -312,3 +322,102 @@ def test_a_disabled_tier_contributes_nothing_even_with_a_count_on_it():
     assert ss.tally(config) == {
         "ai_written": 50, "from_catalog": 0, "total": 50,
     }
+
+
+# ── the persona stamped on catalog-built rows ─────────────────────────────
+#
+# soa_queries.persona is NOT NULL and CHECKed against QUERY_PERSONAS, so
+# a builder always has to write something. What it used to write, with no
+# personas in the brief, was the literal 'Value-Conscious' — a real enum
+# value from the beauty verticals, and the wrong one for a Baby Care
+# study. The first real brand-mode study came out with model-written
+# questions labelled 'Value-Conscious Parent' and catalog-built questions
+# labelled 'Value-Conscious': one study, two populations, and every report
+# that segments by persona showing half of each.
+
+def test_the_brief_is_what_decides_the_persona_when_it_names_one():
+    assert ss._primary_persona(["Sensitive-Skin Baby Parent"]) == (
+        "Sensitive-Skin Baby Parent"
+    )
+
+
+def test_a_persona_outside_the_enum_is_ignored_rather_than_written():
+    """It would fail the CHECK constraint on insert, taking the whole
+    study with it — and a study is worth more than a label."""
+    assert ss._primary_persona(
+        ["Diaper Enthusiast"], [{"persona": "Value-Conscious Parent"}],
+    ) == "Value-Conscious Parent"
+
+
+def test_with_no_brief_the_study_s_own_questions_decide():
+    rows = (
+        [{"persona": "Value-Conscious Parent"}] * 30
+        + [{"persona": "New / First-Time Parent"}] * 20
+    )
+    assert ss._primary_persona(None, rows) == "Value-Conscious Parent"
+
+
+def test_the_persona_is_never_a_value_the_enum_does_not_contain():
+    from soa_shared.constants import QUERY_PERSONAS
+    for personas, rows in (
+        (None, None),
+        ([], []),
+        (["nonsense"], [{"persona": "nonsense"}]),
+    ):
+        assert ss._primary_persona(personas, rows) in QUERY_PERSONAS
+
+
+def test_catalog_rows_carry_the_same_persona_as_the_study_s_own_questions(snapshot):
+    """The end-to-end form of the defect: with no personas in the brief,
+    every row in the study — model-written and template-built — has to
+    land on one persona."""
+    rows, _prov, _config, _stage, _brand = _build(
+        snapshot, ALL_ON, personas=None,
+    )
+    assert {row["persona"] for row in rows} == {"Value-Conscious Parent"}
+
+
+def test_a_named_persona_still_wins_over_the_study_s_questions(snapshot):
+    rows, _prov, _config, _stage, _brand = _build(
+        snapshot, ALL_ON, personas=["Eco-Conscious Parent"],
+    )
+    catalog = [r for r in rows if r.get("tier") in
+               ("catalog_accuracy", "value_incentives")]
+    assert catalog
+    assert {r["persona"] for r in catalog} == {"Eco-Conscious Parent"}
+
+
+# ── brand-direct sees the catalog tiers ───────────────────────────────────
+
+def test_brand_direct_is_handed_the_catalog_questions_to_avoid(snapshot):
+    rows, _prov, _config, _stage, brand_call = _build(snapshot, ALL_ON)
+    texts = brand_call.call_args.kwargs["catalog_texts"]
+    assert texts, "brand-direct must know what the catalog tiers are asking"
+
+    catalog = [r["query_text"] for r in rows if r.get("tier") in
+               ("catalog_accuracy", "value_incentives")]
+    assert sorted(texts) == sorted(catalog)
+
+
+def test_the_question_order_is_unchanged_by_building_the_catalog_first(snapshot):
+    """Catalog tiers are built before brand-direct now, so brand-direct
+    can see them — but the study still reads stage, then brand-direct,
+    then catalog."""
+    rows, _prov, _config, _stage, _brand = _build(snapshot, ALL_ON)
+    # generate_brand_direct is mocked here, so its rows never reach
+    # stamp_brand_direct and carry no tier — their text is what
+    # identifies them.
+    kinds = [
+        row.get("tier") or (
+            "brand_direct" if row["query_text"].startswith("brand question")
+            else "stage"
+        )
+        for row in rows
+    ]
+    first_brand = kinds.index("brand_direct")
+    first_catalog = min(
+        kinds.index(t) for t in ("catalog_accuracy", "value_incentives")
+        if t in kinds
+    )
+    assert first_brand < first_catalog
+    assert all(k == "stage" for k in kinds[:first_brand])

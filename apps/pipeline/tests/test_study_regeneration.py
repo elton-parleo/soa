@@ -147,17 +147,27 @@ def job(db):
         """), {"st": STUDY_TYPE}).fetchone()
 
 
-def run(snapshot, brand_rows=None):
+def run(snapshot, brand_rows=None, capture=None):
     """Runs the worker with the catalog stubbed to `snapshot` and
-    brand-direct generation stubbed to `brand_rows`."""
+    brand-direct generation stubbed to `brand_rows`.
+
+    `capture`, when given, is a dict the stubbed generate_brand_direct
+    writes its kwargs into — the only way to see what the tier was told
+    about the rest of the study, since the stub is what replaces the
+    model call."""
     class FakeClient:
         def snapshot(self, _slug, **_kwargs):
             return snapshot
 
+    def _fake_brand_direct(*args, **kwargs):
+        if capture is not None:
+            capture.update(kwargs)
+        return (brand_rows if brand_rows is not None else [], {})
+
     with patch("clients.truesync_catalog.TrueSyncCatalogClient", FakeClient), \
          patch(
              "generation.query_generator.generate_brand_direct",
-             return_value=(brand_rows if brand_rows is not None else [], {}),
+             side_effect=_fake_brand_direct,
          ):
         worker.process_generation_jobs()
 
@@ -274,3 +284,100 @@ def test_an_unreadable_catalog_leaves_every_question_in_place(db):
     assert status == "failed"
     assert "504 from TrueSync" in error
     assert "unchanged" in error
+
+
+# ── brand-direct knows what the rest of the study is asking ───────────────
+#
+# A brand-direct-only regeneration is the common case and the one that
+# fixes a study rather than replacing it: the catalog questions are not
+# rebuilt, so they exist only in the database. If the tier cannot see
+# them it will happily write a price question the catalog tier already
+# asks, which measures one published number twice and scores the second
+# copy against a brand mention.
+
+def test_regenerating_brand_direct_alone_still_sees_the_catalog_questions(db, snapshot):
+    seen = {}
+    seed(db, tiers=["brand_direct"])
+    run(snapshot, capture=seen)
+
+    assert sorted(seen["catalog_texts"]) == sorted([
+        "What does the old Size 3 pack cost?",
+        "Any promo codes?",
+    ])
+
+
+def test_a_rebuilt_catalog_tier_is_what_brand_direct_sees_not_the_old_one(db, snapshot):
+    """Both tiers regenerating together: the questions that will exist
+    when this finishes are the new ones, and the stale row about to be
+    deleted must not be what brand-direct works around."""
+    seen = {}
+    seed(db, tiers=["brand_direct", "catalog_accuracy"])
+    run(snapshot, capture=seen)
+
+    assert "What does the old Size 3 pack cost?" not in seen["catalog_texts"]
+    # value_incentives is not being rebuilt, so its question stays and is
+    # still something brand-direct has to avoid.
+    assert "Any promo codes?" in seen["catalog_texts"]
+    assert any("cost?" in t for t in seen["catalog_texts"])
+
+
+def test_the_rebuilt_rows_carry_the_studys_own_persona(db, snapshot):
+    seed(db, tiers=["catalog_accuracy", "value_incentives"])
+    run(snapshot)
+
+    with db.connect() as conn:
+        personas = {
+            row[0] for row in conn.execute(text("""
+                SELECT DISTINCT persona FROM soa_queries WHERE study_type = :st
+            """), {"st": STUDY_TYPE})
+        }
+    assert personas == {"Value-Conscious Parent"}
+
+
+def test_with_no_personas_in_the_brief_the_existing_questions_decide(db, snapshot):
+    """The C80512 shape: the brief named no personas, so a rebuilt
+    catalog row has to take the persona the study's own questions already
+    carry rather than a default from another vertical."""
+    seed(db, tiers=["catalog_accuracy"])
+    with db.begin() as conn:
+        conn.execute(text("""
+            UPDATE soa_query_generation_jobs SET personas = :p WHERE id = 1
+        """), {"p": json.dumps([])})
+        conn.execute(text("""
+            UPDATE soa_queries SET persona = 'Sensitive-Skin Baby Parent'
+            WHERE study_type = :st
+        """), {"st": STUDY_TYPE})
+
+    run(snapshot)
+
+    with db.connect() as conn:
+        rebuilt = {
+            row[0] for row in conn.execute(text("""
+                SELECT persona FROM soa_queries
+                WHERE study_type = :st AND tier = 'catalog_accuracy'
+            """), {"st": STUDY_TYPE})
+        }
+    assert rebuilt == {"Sensitive-Skin Baby Parent"}
+
+
+def test_a_brand_direct_shortfall_is_recorded_on_the_tier(db, snapshot):
+    seed(db, tiers=["brand_direct"])
+
+    class FakeClient:
+        def snapshot(self, _slug, **_kwargs):
+            return snapshot
+
+    with patch("clients.truesync_catalog.TrueSyncCatalogClient", FakeClient), \
+         patch(
+             "generation.query_generator.generate_brand_direct",
+             return_value=([], {"requested": 12, "shortfall": 12,
+                                "brand_missing_drops": [{"query_text": "no brand here"}]}),
+         ):
+        worker.process_generation_jobs()
+
+    config = json.loads(job(db)[1])
+    assert config["brand_direct"]["shortfall"] == 12
+    assert config["brand_direct"]["requested"] == 12
+    assert config["brand_direct"]["brand_missing_drops"] == [
+        {"query_text": "no brand here"},
+    ]
