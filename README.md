@@ -99,6 +99,36 @@ cd web && npm install && npm run dev
 3. Set env vars:
    - `DATABASE_URL_POOLED` (Supabase Transaction pooler URL)
    - `USE_POOLED_DB=true`
+   - the email vars below
+
+### Email env vars
+
+Both outbound senders in `apps/api` (`app/services/demo_request_email.py`
+and `app/services/lead_notification_email.py`) post to Resend's HTTP API
+directly. Neither ever raises: if `RESEND_API_KEY` or `EMAIL_FROM` is
+missing they log a warning, return `False`, and the request they hang off
+succeeds anyway — so a missing var degrades to "no notification", never to
+a failed submission.
+
+| Var | Used by | Default if unset |
+| --- | --- | --- |
+| `RESEND_API_KEY` | both senders | none — no email is sent |
+| `EMAIL_FROM` | both senders | none — no email is sent |
+| `LEAD_NOTIFY_EMAIL` | both audit notifications — audit-started (a visitor starts an audit run) and new-audit-lead (they later enter their email) | falls back to `DEMO_REQUEST_NOTIFY`, then `leads@parleo.io` |
+| `DEMO_REQUEST_NOTIFY` | demo-request notification (the "Book your walkthrough" / "Talk to us about TrueSync" form) | `elton@parleo.io` |
+| `PUBLIC_AUDIT_BASE_URL` | the report link inside every notification | `https://parleo.io/audit` |
+
+`LEAD_NOTIFY_EMAIL` exists so audit notifications can be routed to a
+different alias than demo requests; leave it unset to send both to the
+same place.
+
+Note on volume: an audit-started email goes out for **every accepted
+POST /api/public/soa-lite**, not only for runs that become leads. The
+per-IP and global rate limits in `public_lite.py`
+(`RATE_LIMIT_PER_IP_HOUR`, `RATE_LIMIT_PER_IP_DAY`,
+`GLOBAL_RATE_LIMIT_PER_HOUR`) are the only cap on how many that can be.
+Rejected requests — failed captcha, tripped rate limit — send nothing,
+since they raise before the row is written.
 
 ### Railway (apps/pipeline)
 1. Connect repo to Railway

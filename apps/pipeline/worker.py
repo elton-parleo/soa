@@ -1821,10 +1821,22 @@ def _sweep_full_cycle_pillar_headlines() -> None:
         break
 
 
-# audit.parleo.io migration (U1): single source for the report-ready
-# email's link — same constant name/intent as the frontend's
-# PUBLIC_AUDIT_BASE_URL (apps/api/web/src/lite/publicUrls.js).
-PUBLIC_AUDIT_BASE_URL = os.environ.get("PUBLIC_AUDIT_BASE_URL", "https://audit.parleo.io").rstrip("/")
+# Single source for the report-ready email's link — same variable
+# name/intent as the frontend's PUBLIC_AUDIT_BASE_URL
+# (apps/api/web/src/lite/publicUrls.js).
+#
+# Cutover: the canonical audit address is https://parleo.io/audit, so
+# the fallback below now names it. The ENVIRONMENT VARIABLE STILL
+# WINS — if PUBLIC_AUDIT_BASE_URL is set on Railway it overrides this
+# entirely, so updating this literal is a safety net, not the fix.
+# Setting the variable is the fix, and it is listed for the deploy.
+#
+# audit.parleo.io keeps working for links already in inboxes:
+# apps/api/vercel.json 308s every path on that host to the matching
+# parleo.io/audit path, query string included, so an old
+# /r/{token}?src=email link still lands on the right report with its
+# attribution intact.
+PUBLIC_AUDIT_BASE_URL = os.environ.get("PUBLIC_AUDIT_BASE_URL", "https://parleo.io/audit").rstrip("/")
 
 
 def _send_pending_report_emails():

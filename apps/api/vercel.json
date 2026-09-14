@@ -14,31 +14,44 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/robots\\.txt$",
+      "src": "^/(.*)$",
       "has": [{ "type": "host", "value": "audit.parleo.io" }],
-      "dest": "/audit-robots.txt"
+      "status": 308,
+      "headers": { "Location": "https://parleo.io/audit/$1" }
     },
     {
-      "src": "^/sitemap\\.xml$",
-      "has": [{ "type": "host", "value": "audit.parleo.io" }],
-      "dest": "/audit-sitemap.xml"
-    },
-    {
-      "src": "^/$",
-      "has": [{ "type": "host", "value": "audit.parleo.io" }],
+      "src": "^/audit/?$",
       "dest": "/audit.html"
     },
     {
-      "src": "^/(r/.*|s/.*)$",
-      "has": [{ "type": "host", "value": "audit.parleo.io" }],
+      "src": "^/audit/(r/.*|s/.*)$",
       "dest": "/audit-report.html"
+    },
+    {
+      "src": "^/audit/robots\\.txt$",
+      "dest": "/audit-robots.txt"
+    },
+    {
+      "src": "^/audit/sitemap\\.xml$",
+      "dest": "/audit-sitemap.xml"
+    },
+    {
+      "src": "^/audit/((?:assets|og)/.*)$",
+      "dest": "/$1"
+    },
+    {
+      "src": "^/audit/([^/]+\\.(?:png|svg|ico|webmanifest|json|txt|xml|webp|avif|woff2?|ttf))$",
+      "dest": "/$1"
+    },
+    {
+      "src": "^/audit(/.*)?$",
+      "status": 404
     },
     {
       "handle": "filesystem"
     },
     {
-      "src": "^/.*$",
-      "has": [{ "type": "host", "value": "audit.parleo.io" }],
+      "src": "^/audit(/.*)?$",
       "status": 404
     },
     {

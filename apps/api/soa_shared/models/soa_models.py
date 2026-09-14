@@ -1786,6 +1786,21 @@ class SoaLiteRequest(Base):
         ),
     )
 
+    lead_notified_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment=(
+            "Set once the internal 'new lead' notification has been sent "
+            "for the address currently in `email` (apps/api/app/services/"
+            "lead_notification_email.py). Null means not notified yet. "
+            "Dedupes the notification against PATCH /email retries: "
+            "set_lite_email only sends when the stored email actually "
+            "changed (NULL -> something, or a different address), and "
+            "stamps this on a successful send — a failed send leaves it "
+            "NULL rather than silently claiming the lead was reported."
+        ),
+    )
+
     ip_hash = Column(
         Text,
         nullable=True,

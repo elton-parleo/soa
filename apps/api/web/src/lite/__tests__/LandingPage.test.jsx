@@ -6,8 +6,14 @@ import '@testing-library/jest-dom'
 import LandingPage from '../LandingPage.jsx'
 import { liteApi } from '../liteApi.js'
 import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
-import { PUBLIC_AUDIT_BASE_URL } from '../publicUrls.js'
-import { OG_IMAGE_URL, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT } from '../landingMeta.js'
+import { PARLEO_HOME_URL, PUBLIC_AUDIT_BASE_URL } from '../publicUrls.js'
+import { OG_IMAGE_PATH, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT } from '../landingMeta.js'
+
+// landingMeta.js exports the share card as a root-relative path now;
+// the absolute URL is composed per-consumer from the env-aware audit
+// base (see LandingPage.jsx), so the expectation is composed the same
+// way rather than re-hardcoding an origin here.
+const OG_IMAGE_URL = `${PUBLIC_AUDIT_BASE_URL}${OG_IMAGE_PATH}`
 
 vi.mock('../liteApi.js', () => ({
   liteApi: { submit: vi.fn() },
@@ -258,13 +264,31 @@ describe('Leadgen session: landing TrueSync CTA opens RequestFormModal, not a pa
     expect(within(dialog).getByPlaceholderText('Tell us about your loyalty program and deals…')).toBeInTheDocument()
   })
 
-  it('the only parleo.io links left are the nav/footer Wordmark — no CTA button hardcodes one', () => {
+  // Cutover: this used to be able to say "the only parleo.io links are
+  // the Wordmarks", because the audit tool lived on its own host and
+  // every audit link pointed there. The canonical address is now
+  // parleo.io/audit, so sample-report links are parleo.io links too
+  // and counting them would be counting the wrong thing.
+  //
+  // The rule this test actually exists for is unchanged: no CTA may
+  // hardcode a link to the marketing home. So it checks that the only
+  // links to PARLEO_HOME_URL itself are the two Wordmarks, and that
+  // every other parleo.io link is an audit URL composed from
+  // PUBLIC_AUDIT_BASE_URL rather than a literal someone typed in.
+  it('the only marketing-home links are the nav/footer Wordmark — no CTA button hardcodes one', () => {
     render(<LandingPage navigate={navigate} />)
-    const parleoLinks = screen.queryAllByRole('link').filter((a) => (a.getAttribute('href') || '').includes('parleo.io'))
-    expect(parleoLinks).toHaveLength(2)
-    for (const link of parleoLinks) {
-      expect(link).toHaveAttribute('href', 'https://parleo.io')
+    const hrefs = screen.queryAllByRole('link').map((a) => a.getAttribute('href') || '')
+
+    const homeLinks = screen.queryAllByRole('link').filter((a) => a.getAttribute('href') === PARLEO_HOME_URL)
+    expect(homeLinks).toHaveLength(2)
+    for (const link of homeLinks) {
       expect(link).toHaveAttribute('aria-label', 'Parleo home')
+    }
+
+    for (const href of hrefs) {
+      if (!href.includes('parleo.io')) continue
+      if (href === PARLEO_HOME_URL) continue
+      expect(href.startsWith(`${PUBLIC_AUDIT_BASE_URL}/`)).toBe(true)
     }
   })
 })

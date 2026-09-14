@@ -3,10 +3,16 @@ Tests for PATCH /api/public/soa-lite/{token}/email
 (app/routers/public_lite.py::set_lite_email) — email is always stored,
 even before the report is ready; returns the full report inline once
 complete, else {status, phase} (same shape as GET /status).
+
+The internal "new lead" notification this endpoint now fires is a pure
+side effect: every test here patches the sender out (see the autouse
+_no_lead_emails fixture), and the dedupe/wiring tests at the bottom
+assert it can never change the response either way.
 """
 import json
 import pytest
 from datetime import datetime, timezone
+from unittest.mock import patch
 from fastapi import HTTPException
 from sqlalchemy import create_engine, event
 
@@ -27,7 +33,8 @@ def db(monkeypatch):
             CREATE TABLE soa_lite_requests (
                 id INTEGER PRIMARY KEY, token TEXT UNIQUE, email TEXT,
                 status TEXT, cycle_id INTEGER, updated_at TIMESTAMP,
-                competitor_names TEXT, competitor_source TEXT, events TEXT DEFAULT '[]'
+                competitor_names TEXT, competitor_source TEXT, events TEXT DEFAULT '[]',
+                brand_name TEXT, store_url TEXT, lead_notified_at TIMESTAMP
             )
         """)
         conn.exec_driver_sql("""
@@ -113,8 +120,25 @@ def db(monkeypatch):
     return engine
 
 
+@pytest.fixture(autouse=True)
+def _no_lead_emails():
+    """Nothing in this file should reach Resend — a developer with
+    RESEND_API_KEY set in their environment must not send real mail by
+    running the suite. Tests that care about the notification override
+    this with their own patch.object inside the test body."""
+    with patch.object(public_lite, "send_lead_notification", return_value=False):
+        yield
+
+
 def _email(v="visitor@example.com"):
     return PublicLiteEmailRequest(email=v)
+
+
+def _notified_at(db, token="t1"):
+    with db.connect() as conn:
+        return conn.exec_driver_sql(
+            "SELECT lead_notified_at FROM soa_lite_requests WHERE token = ?", (token,)
+        ).fetchone()[0]
 
 
 # ─── 404 ──────────────────────────────────────────────────────────────────
@@ -295,3 +319,146 @@ def test_email_patch_and_get_report_serialize_the_same_fixes_shape(db):
 
     assert patch_result["pillars"]["fixes"] == get_result["pillars"]["fixes"]
     assert patch_result["pillars"]["fixes"]["visible"][0]["code"] == "catalog_context"
+
+
+# ─── internal "new lead" notification ────────────────────────────────────
+# One notification per lead, not one per PATCH retry: the widget's PATCH
+# is idempotent and a visitor can repeat it, so the gate is whether the
+# stored address actually changed. The send happens after the storing
+# transaction has committed, so it can never roll the email back and
+# never changes the response.
+
+def test_first_email_notifies_once_with_the_lead_fields_and_stamps_notified_at(db):
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, status, brand_name, store_url, competitor_names) "
+            "VALUES ('t1', 'running', 'Allbirds', 'https://allbirds.com', '[\"Rothys\", \"Vessi\"]')"
+        )
+
+    with patch.object(public_lite, "send_lead_notification", return_value=True) as mock_send:
+        public_lite.set_lite_email("t1", _email("visitor@example.com"))
+
+    assert mock_send.call_count == 1
+    fields = mock_send.call_args[0][0]
+    assert fields["brand_name"] == "Allbirds"
+    assert fields["email"] == "visitor@example.com"
+    assert fields["competitors"] == ["Rothys", "Vessi"]
+    assert fields["store_url"] == "https://allbirds.com"
+    assert fields["status"] == "running"
+    assert fields["token"] == "t1"
+    assert fields["submitted_at"]
+
+    assert _notified_at(db) is not None
+
+
+def test_repeating_the_same_email_does_not_notify_again(db):
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, status, brand_name) VALUES ('t1', 'running', 'Allbirds')"
+        )
+
+    with patch.object(public_lite, "send_lead_notification", return_value=True) as mock_send:
+        public_lite.set_lite_email("t1", _email("visitor@example.com"))
+        public_lite.set_lite_email("t1", _email("visitor@example.com"))
+        public_lite.set_lite_email("t1", _email("visitor@example.com"))
+
+    assert mock_send.call_count == 1
+
+
+def test_a_different_email_notifies_again(db):
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, status, brand_name) VALUES ('t1', 'running', 'Allbirds')"
+        )
+
+    with patch.object(public_lite, "send_lead_notification", return_value=True) as mock_send:
+        public_lite.set_lite_email("t1", _email("typo@example.com"))
+        public_lite.set_lite_email("t1", _email("corrected@example.com"))
+
+    assert mock_send.call_count == 2
+    assert [c[0][0]["email"] for c in mock_send.call_args_list] == [
+        "typo@example.com", "corrected@example.com",
+    ]
+
+
+def test_failed_send_leaves_notified_at_null_but_still_stores_the_email(db):
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, status, brand_name) VALUES ('t1', 'pending', 'Allbirds')"
+        )
+
+    with patch.object(public_lite, "send_lead_notification", return_value=False):
+        result = public_lite.set_lite_email("t1", _email("visitor@example.com"))
+
+    # The stored email is the source of truth — a send failure never
+    # rolls it back, and never shows up in the response.
+    assert result["status"] == "pending"
+    assert result["phase"] == "queued"
+    with db.connect() as conn:
+        stored = conn.exec_driver_sql(
+            "SELECT email FROM soa_lite_requests WHERE token = 't1'"
+        ).fetchone()[0]
+    assert stored == "visitor@example.com"
+    assert _notified_at(db) is None
+
+
+def test_send_outcome_never_changes_the_response(db):
+    """The sender never raises (its own contract — see
+    test_lead_notification_email.py); what this endpoint adds on top is
+    that whether it succeeded or failed is invisible to the caller."""
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, status, brand_name) VALUES ('t1', 'generating', 'Allbirds')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, status, brand_name) VALUES ('t2', 'generating', 'Allbirds')"
+        )
+
+    with patch.object(public_lite, "send_lead_notification", return_value=True):
+        sent = public_lite.set_lite_email("t1", _email())
+    with patch.object(public_lite, "send_lead_notification", return_value=False):
+        unsent = public_lite.set_lite_email("t2", _email())
+
+    assert sent == unsent
+
+
+def test_response_shape_is_unchanged_for_the_not_complete_case(db):
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, status, brand_name) VALUES ('t1', 'generating', 'Allbirds')"
+        )
+
+    with patch.object(public_lite, "send_lead_notification", return_value=True):
+        result = public_lite.set_lite_email("t1", _email())
+    status = public_lite.get_lite_status("t1").model_dump()
+
+    # The documented contract: the same shape GET /status returns.
+    assert set(result) == set(status)
+    assert result["status"] == status["status"] == "generating"
+    assert "lead_notified_at" not in result
+
+
+def test_response_shape_is_unchanged_for_the_complete_case(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn)
+
+    with patch.object(public_lite, "send_lead_notification", return_value=True):
+        patch_result = public_lite.set_lite_email("t1", _email())
+    report = public_lite.get_lite_report("t1")
+
+    assert patch_result == report
+    assert "lead_notified_at" not in patch_result
+
+
+def test_lead_notification_carries_a_null_store_url_through_unchanged(db):
+    """store_url is optional on the row — the sender renders "(none)"
+    rather than the caller having to substitute anything."""
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, status, brand_name) VALUES ('t1', 'running', 'Allbirds')"
+        )
+
+    with patch.object(public_lite, "send_lead_notification", return_value=True) as mock_send:
+        public_lite.set_lite_email("t1", _email())
+
+    assert mock_send.call_args[0][0]["store_url"] is None

@@ -15,7 +15,7 @@ import LiteWidget        from './lite/LiteWidget.jsx'
 import LandingPage       from './lite/LandingPage.jsx'
 import BotsPage          from './lite/BotsPage.jsx'
 import PublicFullAnalysisPage from './components/PublicFullAnalysisPage.jsx'
-import { isAuditHost } from './lite/publicUrls.js'
+import { isAuditHost, stripAuditBase } from './lite/publicUrls.js'
 
 // ─── Read initial view from URL hash on page load ────────────────────────────
 function getInitialView() {
@@ -265,15 +265,23 @@ function useLitePathname() {
 
   function navigate(path) {
     window.history.pushState({}, '', path)
-    setPathname(path)
+    // Read the pathname back off history rather than trusting the
+    // argument: callers may pass a path WITH a query string (see
+    // withOppref in lite/openaiPixel.js), and this state feeds the
+    // route matching below — where '/r/' + '/s/' slice the token
+    // straight out of it. Storing the raw argument would make
+    // navigate('/r/tok?oppref=x') yield the token "tok?oppref=x" and
+    // 404 the report, with a perfectly correct-looking address bar.
+    setPathname(window.location.pathname)
   }
 
   return [pathname, navigate]
 }
 
-// Non-audit paths on audit.parleo.io must 404, not redirect (H1) — the
-// edge (vercel.json) already returns a real HTTP 404 for everything but
-// '/', '/r/*', '/s/*' before the SPA bundle even loads; this is a
+// Non-audit paths on the audit surface must 404, not redirect (H1) —
+// the edge (vercel.json) already returns a real HTTP 404 for everything
+// but the landing, '/r/*' and '/s/*' (under the surface's base path,
+// wherever that is) before the SPA bundle even loads; this is a
 // client-side backstop for the same rule (e.g. local dev without the
 // edge config in front of it).
 function AuditHostNotFound() {
@@ -290,18 +298,27 @@ function AuditHostNotFound() {
 export default function App() {
   const [pathname, navigate] = useLitePathname()
 
-  // audit.parleo.io migration (H1): this host serves ONLY the public
-  // audit tool — landing at '/', report/status at '/r/<token>' and
-  // '/s/<id>' (both are the same token-driven LiteWidget state machine;
-  // 'status' isn't a distinct internal route, see LiteWidget.jsx). No
-  // other path on this host reaches the authed dashboard, /lite, or
-  // /bots — checked first and exclusively, before any other routing.
+  // audit.parleo.io migration (H1), extended for parleo.io/audit: the
+  // audit surface serves ONLY the public audit tool — landing at '/',
+  // report/status at '/r/<token>' and '/s/<id>' (both are the same
+  // token-driven LiteWidget state machine; 'status' isn't a distinct
+  // internal route, see LiteWidget.jsx). No other path on this surface
+  // reaches the authed dashboard, /lite, or /bots — checked first and
+  // exclusively, before any other routing.
+  //
+  // Matched against the base-stripped path, not the raw pathname, so
+  // the same three routes hold whether the surface is served at the
+  // root of audit.parleo.io or under parleo.io/audit (stripAuditBase
+  // is the identity under the default build, and reads both '/audit'
+  // and '/audit/' as '/' under the prefixed one). Every navigation
+  // back out goes through auditPath() at its own call site.
   if (isAuditHost()) {
-    if (pathname === '/') {
+    const auditRoute = stripAuditBase(pathname)
+    if (auditRoute === '/') {
       return <LandingPage navigate={navigate} />
     }
-    if (pathname.startsWith('/r/') || pathname.startsWith('/s/')) {
-      const token = decodeURIComponent(pathname.slice(3))
+    if (auditRoute.startsWith('/r/') || auditRoute.startsWith('/s/')) {
+      const token = decodeURIComponent(auditRoute.slice(3))
       return <LiteWidget urlToken={token} navigate={navigate} />
     }
     return <AuditHostNotFound />

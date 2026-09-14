@@ -3,6 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- OpenAI (ChatGPT Ads) Measurement Pixel — the ONE deliberate
+         exception to the Aug 19 decision that /r/ and /s/ carry no
+         tracker.
+
+         That decision STILL HOLDS unchanged for the landing's
+         outreach-attribution visitor pixel: this document does not
+         carry it, and staticHead.build.test.js asserts it can never
+         gain one, so a merchant's forwarded report link stays out of
+         outreach tooling. (That tag is named in audit.html's own
+         comment and in the build test; it is deliberately not named
+         here, because the assertion guarding this document is a
+         case-insensitive match on its name across the whole served
+         HTML — comments included.)
+
+         The OpenAI pixel is an exception in kind, not in degree. The
+         conversion it measures here — contents_viewed, fired by
+         src/lite/openaiPixel.js once the report has rendered — can
+         only be observed on THIS document, because the report is the
+         only thing there is to view. Putting it anywhere else would
+         mean measuring something other than the conversion. And it
+         fires only for the browser that submitted the run
+         (isTokenOwned): a share-link visitor reading someone else's
+         report never fires it, so the forwarded-link case stays
+         silent here too.
+
+         Written in at build time by vite.config.js's auditHeadPlugin
+         from src/lite/openaiPixel.constants.js. -->
+    <!--OPENAI_PIXEL-->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />

@@ -1107,9 +1107,11 @@ def test_sweep_sends_report_ready_email_exactly_once(db):
     assert len(fake.calls) == 1
     to, report_url, brand_name = fake.calls[0]
     assert to == "visitor@example.com"
-    # U1/U3, audit.parleo.io migration: PUBLIC_AUDIT_BASE_URL + /r/{token}.
+    # Cutover: PUBLIC_AUDIT_BASE_URL + /r/{token}, where the canonical
+    # base is now https://parleo.io/audit — so the emailed link carries
+    # the /audit path segment, not a bare audit host.
     # ?src=email: analytics attribution (docs/analytics.md).
-    assert report_url == "https://audit.parleo.io/r/mail0001?src=email"
+    assert report_url == "https://parleo.io/audit/r/mail0001?src=email"
     assert brand_name == "Acme"
     assert _sent_at_by_token(db.connect(), "mail0001") is not None
 

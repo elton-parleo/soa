@@ -45,6 +45,10 @@ from app.services.cycle_scoring import (
     build_scan_payload as _build_scan_payload,
     decode_json_field as _decode_json_field,
 )
+from app.services.lead_notification_email import (
+    send_audit_started_notification,
+    send_lead_notification,
+)
 from app.services.lite_pillars import member_value_applicable
 from app.services.share_tokens import generate_public_token
 from app.schemas import (
@@ -343,7 +347,38 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
             "events":      initial_events,
         })
 
+    # Committed. Best-effort and cannot change the 201 below — see
+    # _notify_audit_started.
+    _notify_audit_started(
+        token=token, brand_name=data.brand_name, store_url=data.store_url,
+        competitors=data.competitor_names, submitted_at=now,
+    )
+
     return PublicLiteSubmitResponse(token=token, status="pending")
+
+
+def _notify_audit_started(*, token, brand_name, store_url, competitors, submitted_at) -> None:
+    """
+    Tells us an audit is under way the moment the row exists, rather than
+    only if the visitor later attaches an email (_notify_new_lead). One
+    per accepted POST — a POST always creates a fresh row, so unlike the
+    lead notification there is nothing to dedupe against and no stamp to
+    keep.
+
+    Reached only after the INSERT has committed, and only on the success
+    path: a failed captcha or a tripped rate limit raises above this,
+    before any row exists, so a rejected request is never announced. The
+    sender never raises and its 10 s httpx timeout bounds what it can add
+    to the request; its result is discarded, so nothing here can change
+    the 201 the caller gets.
+    """
+    send_audit_started_notification({
+        "brand_name": brand_name,
+        "store_url": store_url,
+        "competitors": competitors,
+        "token": token,
+        "submitted_at": str(submitted_at),
+    })
 
 
 # ─── GET /api/public/soa-lite/{token}/status ─────────────────────────────
@@ -460,11 +495,20 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
     never gated on it (see get_lite_report). Returns the full report
     inline only when already complete (saves the widget a round trip);
     otherwise returns the same {status, phase} shape as GET /status.
+
+    The internal "new lead" notification is a side effect only, sent
+    AFTER the transaction below has committed — same ordering (and the
+    same reason) as public_demo.py::submit_demo_request: the stored
+    email is the source of truth, so a slow or failing Resend call must
+    never be able to roll it back, and its result only ever affects
+    lead_notified_at, never the response. The 10 s httpx timeout in
+    lead_notification_email.py bounds what it can add to the request.
     """
     with engine.begin() as conn:
         row = conn.execute(text("""
             SELECT lr.id, lr.status, lr.cycle_id, c.status, c.total_runs_planned,
-                   lr.competitor_names, lr.competitor_source, lr.events
+                   lr.competitor_names, lr.competitor_source, lr.events,
+                   lr.brand_name, lr.email, lr.lead_notified_at, lr.store_url
             FROM soa_lite_requests lr
             LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
             WHERE lr.token = :token
@@ -474,11 +518,14 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
             raise HTTPException(status_code=404, detail="Not found.")
 
         (lite_request_id, lite_status, cycle_id, cycle_status, total_runs_planned,
-         competitor_names, competitor_source, events_raw) = row
+         competitor_names, competitor_source, events_raw,
+         brand_name, previous_email, lead_notified_at, store_url) = row
 
         conn.execute(text("""
             UPDATE soa_lite_requests SET email = :email, updated_at = NOW() WHERE token = :token
         """), {"email": data.email, "token": token})
+
+        competitors = _decode_json_field(competitor_names, None)
 
         if lite_status != 'complete':
             live_counts = _fetch_live_progress_counts(conn, cycle_id) if cycle_id else None
@@ -488,12 +535,64 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
             # shape of what the widget already reads from this response.
             scan_row = _fetch_scan_row(conn, lite_request_id)
             scan_payload = _build_scan_payload(scan_row, {})
-            return PublicLiteStatusResponse(
+            payload = PublicLiteStatusResponse(
                 status=lite_status, phase=phase, progress=progress,
-                competitors=_decode_json_field(competitor_names, None), competitor_source=competitor_source,
+                competitors=competitors, competitor_source=competitor_source,
                 events=_decode_json_field(events_raw, []),
                 degraded_reason=(scan_payload or {}).get('degraded_reason'),
                 degraded_banner_facts=(scan_payload or {}).get('degraded_banner_facts'),
             ).model_dump()
+        else:
+            payload = _build_report_payload(conn, lite_request_id, cycle_id)
 
-        return _build_report_payload(conn, lite_request_id, cycle_id)
+    # Committed. Everything below is best-effort and cannot change `payload`.
+    _notify_new_lead(
+        token=token, brand_name=brand_name, email=data.email,
+        previous_email=previous_email, lead_notified_at=lead_notified_at,
+        lite_status=lite_status, competitors=competitors, store_url=store_url,
+    )
+
+    return payload
+
+
+def _notify_new_lead(*, token, brand_name, email, previous_email, lead_notified_at,
+                     lite_status, competitors, store_url) -> None:
+    """
+    One notification per lead, not one per PATCH retry. The widget's
+    PATCH is idempotent and a visitor can repeat it (a re-submit, a
+    reload, a retried request), so the gate is whether the address
+    actually CHANGED: a first email (previous was NULL) or a corrected
+    one both deserve a notification, a repeat of the same address does
+    not. lead_notified_at records that a send for the address now on
+    the row succeeded.
+
+    Best-effort, exactly like the demo-request notification: a failed
+    send leaves lead_notified_at NULL and is not retried — the row
+    itself is the backstop, and the sender never raises, so nothing
+    here can affect the response the caller already has.
+    """
+    email_changed = previous_email is None or previous_email != email
+    if not email_changed:
+        log.info(
+            "[public_lite] email unchanged for token=%s — no lead notification "
+            "(previously notified at %s)",
+            token, lead_notified_at,
+        )
+        return
+
+    sent = send_lead_notification({
+        "brand_name": brand_name,
+        "email": email,
+        "competitors": competitors,
+        "store_url": store_url,
+        "status": lite_status,
+        "token": token,
+        "submitted_at": str(datetime.now(timezone.utc)),
+    })
+
+    if sent:
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE soa_lite_requests SET lead_notified_at = :now WHERE token = :token"),
+                {"now": datetime.now(timezone.utc), "token": token},
+            )

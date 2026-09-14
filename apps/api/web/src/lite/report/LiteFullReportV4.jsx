@@ -25,11 +25,13 @@ import { CompleteReadBand } from './CompleteReadBand.jsx'
 import { TrueSyncBand } from './TrueSyncBand.jsx'
 import { ExposureSection } from './ExposureSection.jsx'
 import { ClosingFork } from './ClosingFork.jsx'
+import { auditPath, isAuditHost, PUBLIC_AUDIT_BASE_URL } from '../publicUrls.js'
 import { ReportGrounded } from './ReportGrounded.jsx'
 import { ReportFooter } from './ReportFooter.jsx'
 import { useReportSections, NAV_IDS } from './useReportSections.js'
 import { deriveScoreHeroHeadline, isPartialRead, deriveReportViewedState } from './reportDerive.js'
 import { track, identifyReport, captureSrcParam, isTokenOwned } from '../analytics.js'
+import { trackReportContentsViewed } from '../openaiPixel.js'
 import { EVENTS } from '../analyticsEvents.js'
 import { useSectionViewTracking } from './useSectionViewTracking.js'
 
@@ -67,7 +69,15 @@ export function LiteFullReportV4({ report, token }) {
   const shareOfMentions = report.visibility_breakdown?.share_of_mentions || []
   const rank = shareOfMentionsRank(shareOfMentions)
   const headline = deriveScoreHeroHeadline(report.pillars)
-  const auditUrl = typeof window !== 'undefined' ? `${window.location.origin}/` : '/'
+  // The report footer's "Run yours free" link. Built from the audit
+  // surface's own base, never from window.location.origin: this
+  // document renders under /audit/ on parleo.io, where the origin's
+  // root is the MARKETING home, not the audit landing — and on
+  // soa-app.parleo.io's /report/{token}, where the origin's root is
+  // the authed dashboard. Same shape as ReportNotFound's CTA in
+  // LiteWidget.jsx: a same-origin path on the audit surface, an
+  // absolute URL to the canonical address anywhere else.
+  const auditUrl = isAuditHost() ? auditPath('/') : `${PUBLIC_AUDIT_BASE_URL}/`
   const truesyncPoints = report.pillars.parleo_fixable_points
   const partial = isPartialRead(report.pillars, report.scan?.degraded_reason)
 
@@ -80,8 +90,34 @@ export function LiteFullReportV4({ report, token }) {
       viewer: isTokenOwned(token) ? 'owner' : 'visitor',
       src: captureSrcParam(),
     })
-    // Fires once per mount only — a token/report change means a
-    // genuinely different report page, not a re-render of this one.
+
+    // OpenAI (ChatGPT Ads) conversion — deliberately NOT a PostHog
+    // event and not in EVENT_REGISTRY; it goes to the measurement
+    // pixel only (see openaiPixel.js, and the note under EVENTS in
+    // analyticsEvents.js).
+    //
+    // Ownership is now the ONLY gate. The earlier version also
+    // required a numeric composite, which withheld the conversion for
+    // every partial read — that measured our scoring confidence
+    // rather than the visitor's experience. A partial read is still a
+    // viewed report, so contents_viewed fires for it.
+    //
+    // isTokenOwned stays: a forwarded share link opening the same
+    // report is a reader, not a conversion, and counting it would
+    // inflate the ad's measured performance with traffic the ad never
+    // bought.
+    if (isTokenOwned(token)) {
+      trackReportContentsViewed({ token, brandName: primaryEntityName })
+    }
+    // Fires once per mount only — a token change means a genuinely
+    // different report page, not a re-render of this one. `report`
+    // and the values derived from it (primaryEntityName) stay out of
+    // the dep array on purpose: keying on [token] is the first line
+    // of defense against a rerender re-firing the conversion, and
+    // openaiPixel.js's per-key sessionStorage guard is the second.
+    // Both are read from this render's closure, which is the render
+    // that introduced this token — the same staleness profile
+    // `report` already had here, not a new one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 

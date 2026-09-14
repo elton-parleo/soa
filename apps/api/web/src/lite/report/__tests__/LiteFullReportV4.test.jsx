@@ -8,13 +8,24 @@ import { splitExposureDollars } from '../ExposureSection.jsx'
 import { DIMENSIONS_BY_CODE } from '../../landing/scanDimensionsRegistry.js'
 import { EDITORIAL_QUOTE } from '../reportContent.js'
 import { track, identifyReport, captureSrcParam, isTokenOwned } from '../../analytics.js'
+import { trackReportContentsViewed } from '../../openaiPixel.js'
 import { EVENTS } from '../../analyticsEvents.js'
+import { PUBLIC_AUDIT_BASE_URL } from '../../publicUrls.js'
 
 vi.mock('../../analytics.js', () => ({
   track: vi.fn(),
   identifyReport: vi.fn(),
   captureSrcParam: vi.fn(() => 'direct'),
   isTokenOwned: vi.fn(() => true),
+}))
+
+vi.mock('../../openaiPixel.js', () => ({
+  trackReportContentsViewed: vi.fn(() => true),
+  trackLeadCreated: vi.fn(() => true),
+  trackAppointmentScheduled: vi.fn(() => true),
+  newRequestId: vi.fn(() => 'req-test'),
+  withOppref: vi.fn((p) => p),
+  isOpenAIPixelAvailable: vi.fn(() => true),
 }))
 
 // Canonical sample numbers used throughout this stage's mocks:
@@ -117,8 +128,10 @@ const FULL_REPORT = {
 beforeEach(() => {
   track.mockClear()
   identifyReport.mockClear()
+  trackReportContentsViewed.mockClear()
   captureSrcParam.mockReturnValue('direct')
   isTokenOwned.mockReturnValue(true)
+  sessionStorage.clear()
 })
 
 function renderReport(overrides = {}) {
@@ -418,12 +431,24 @@ describe('Leadgen session: every report walkthrough/TrueSync CTA opens RequestFo
   it('no walkthrough/TrueSync anchor to parleo.io remains anywhere in the report — only the rail/footer Wordmark link to it', () => {
     renderReport()
     // #truesync in-page jump links (FixesTable's provenance, etc.) are
-    // fine and expected to remain — only an outbound parleo.io href is
+    // fine and expected to remain — only an outbound MARKETING href is
     // the thing this session removed. The rail and footer Wordmark are
     // the two intentional exceptions, added this session.
-    const parleoLinks = screen.queryAllByRole('link').filter((a) => (a.getAttribute('href') || '').includes('parleo.io'))
-    expect(parleoLinks).toHaveLength(2)
-    for (const link of parleoLinks) {
+    //
+    // Cutover: a bare substring match on 'parleo.io' stopped being able
+    // to express that. The canonical audit address is now
+    // https://parleo.io/audit, so the footer's "Run yours free" CTA
+    // contains 'parleo.io' while being the opposite of what this case
+    // guards against — it points AT the audit tool, not out to
+    // marketing. Excluding the audit base keeps the original intent
+    // exactly; the CTA's own correctness is pinned separately, in
+    // reportFooterAuditLink.test.jsx.
+    const marketingLinks = screen.queryAllByRole('link').filter((a) => {
+      const href = a.getAttribute('href') || ''
+      return href.includes('parleo.io') && !href.startsWith(PUBLIC_AUDIT_BASE_URL)
+    })
+    expect(marketingLinks).toHaveLength(2)
+    for (const link of marketingLinks) {
       expect(link).toHaveAttribute('href', 'https://parleo.io')
       expect(link).toHaveAttribute('aria-label', 'Parleo home')
     }
@@ -792,5 +817,84 @@ describe('LiteFullReportV4 — the unranked-remainder strip accounts for the Tru
     // pool, which is the reconciliation this session was about.
     expect(screen.getByText(/Incentive sync and protocol declarations are worth/))
       .toHaveTextContent('up to 24 points')
+  })
+})
+
+// ─── OpenAI ad conversion: contents_viewed ────────────────────────────
+//
+// Ownership is the only gate. The earlier version of this event also
+// required a numeric composite, which withheld the conversion for
+// every partial read — that measured our scoring confidence rather
+// than the visitor's experience, so the partial case below is the one
+// that changed meaning and is asserted positively now.
+describe('LiteFullReportV4 — contents_viewed fires once, owner-only, partial reads included', () => {
+  it('owner with a numeric composite fires exactly once, with the token and brand name', () => {
+    isTokenOwned.mockReturnValue(true)
+
+    renderReport({ composite: 40 })
+
+    expect(trackReportContentsViewed).toHaveBeenCalledTimes(1)
+    expect(trackReportContentsViewed).toHaveBeenCalledWith({ token: 'tok-full', brandName: 'Allbirds' })
+  })
+
+  it('owner with a withheld composite (partial read) ALSO fires once', () => {
+    isTokenOwned.mockReturnValue(true)
+
+    renderReport({ composite: null })
+
+    expect(trackReportContentsViewed).toHaveBeenCalledTimes(1)
+    expect(trackReportContentsViewed).toHaveBeenCalledWith({ token: 'tok-full', brandName: 'Allbirds' })
+  })
+
+  it('a rerender with an unrelated prop change does not fire it again', () => {
+    isTokenOwned.mockReturnValue(true)
+
+    const { rerender } = renderReport({ composite: 40 })
+    expect(trackReportContentsViewed).toHaveBeenCalledTimes(1)
+
+    // Same token, different report content — the effect keys on
+    // [token] alone precisely so this cannot re-fire.
+    rerender(
+      <LiteFullReportV4
+        report={{ ...FULL_REPORT, composite: 40, product_name: 'A Completely Different Product' }}
+        token="tok-full"
+      />,
+    )
+    rerender(
+      <LiteFullReportV4
+        report={{ ...FULL_REPORT, composite: 40, revenue_estimate_usd: 99_000_000 }}
+        token="tok-full"
+      />,
+    )
+
+    expect(trackReportContentsViewed).toHaveBeenCalledTimes(1)
+  })
+
+  it('a visitor with a numeric composite fires zero times', () => {
+    isTokenOwned.mockReturnValue(false)
+
+    renderReport({ composite: 40 })
+
+    expect(trackReportContentsViewed).not.toHaveBeenCalled()
+    expect(track).toHaveBeenCalledWith(EVENTS.REPORT_VIEWED, expect.objectContaining({ viewer: 'visitor' }))
+  })
+
+  it('a visitor with a withheld composite fires zero times', () => {
+    isTokenOwned.mockReturnValue(false)
+
+    renderReport({ composite: null })
+
+    expect(trackReportContentsViewed).not.toHaveBeenCalled()
+  })
+
+  // The brand name is derived from report.overall inside the
+  // component; a fixture with no primary entity must still produce a
+  // usable name rather than undefined.
+  it('falls back to the component default when there is no primary entity', () => {
+    isTokenOwned.mockReturnValue(true)
+
+    renderReport({ composite: 40, overall: [] })
+
+    expect(trackReportContentsViewed).toHaveBeenCalledWith({ token: 'tok-full', brandName: 'Your brand' })
   })
 })

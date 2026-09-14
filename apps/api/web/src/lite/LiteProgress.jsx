@@ -25,6 +25,7 @@ import { validateEmail } from './validation.js'
 import { DegradedRunBanner } from './DegradedRunBanner.jsx'
 import { track } from './analytics.js'
 import { EVENTS } from './analyticsEvents.js'
+import { trackLeadCreated } from './openaiPixel.js'
 
 const STALL_THRESHOLD_MS = 90_000
 const MAX_CONSOLE_HEIGHT_PX = 260
@@ -342,6 +343,11 @@ function StatusEmailCard({ token }) {
       await liteApi.setEmail(token, email.trim())
       setSubmittedEmail(email.trim())
       track(EVENTS.EMAIL_CAPTURED, {})
+      // OpenAI ad conversion: the first moment this run has a person
+      // behind it rather than a store URL. Inside the try on purpose —
+      // a failed setEmail must not report a lead. The address itself
+      // never leaves; openaiPixel.js sends the token only.
+      trackLeadCreated(token)
     } catch (err2) {
       setSubmitError(err2.message || 'Something went wrong. Please try again.')
     } finally {

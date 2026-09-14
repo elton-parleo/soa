@@ -65,6 +65,44 @@ export const EVENTS = {
   DEMO_REQUEST_SUBMITTED: 'demo_request_submitted',
 }
 
+// ─── Emitted, but NOT to PostHog ──────────────────────────────────────
+//
+// Three STANDARD OpenAI (ChatGPT Ads) Measurement Pixel conversions,
+// emitted by lite/openaiPixel.js — never posthog.capture(), and
+// therefore deliberately absent from EVENTS and EVENT_REGISTRY above
+// (track() would drop them, which is correct: they are not ours to
+// send to PostHog). Standard names, not custom ones, because only
+// those carry meaning for conversion reporting and campaign
+// optimization in Ads Manager.
+//
+//   lead_created           The status page's email capture succeeded
+//                          (LiteProgress.jsx, success path only).
+//                          The first moment a run has a person behind
+//                          it rather than a store URL. The address
+//                          itself is never sent.
+//   appointment_scheduled  A demo request succeeded
+//                          (useDemoRequestModal.js, ok-only branch —
+//                          never on a honeypot trip or a 422).
+//   contents_viewed        The report rendered for its owner
+//                          (report/LiteFullReportV4.jsx, gated on
+//                          isTokenOwned). Partial reads included: a
+//                          partial read is still a viewed report.
+//                          A share-link visitor never fires it.
+//
+// Each is sent at most once per key per browser SESSION, and carries
+// an event_id so OpenAI dedupes server-side on the first event per
+// key. The key is the run token, except for a demo request from the
+// landing page, which has no token and uses a random per-submission
+// id instead. No amount, currency, or PII on any of them.
+//
+// They are listed here, in the registry's own file, so THIS FILE
+// remains the one complete answer to "what does this app emit, and
+// where does it go" — ad conversions that existed only inside
+// component effects would be exactly the kind of untracked emission
+// this registry exists to prevent.
+//
+// See docs/analytics.md ("The OpenAI ad-conversion pixel").
+
 // event name -> array of allowed prop keys. A key not listed here is
 // dropped by track(); an event name not listed here is dropped whole.
 export const EVENT_REGISTRY = {

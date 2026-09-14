@@ -28,9 +28,24 @@ import { build } from 'vite'
 
 import {
   LANDING_META_TITLE, LANDING_META_DESCRIPTION, REPORT_META_TITLE,
-  OG_IMAGE_URL, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
+  OG_IMAGE_PATH, OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT, OG_IMAGE_ALT,
 } from '../lite/landingMeta.js'
-import { PUBLIC_AUDIT_BASE_URL } from '../lite/publicUrls.js'
+import { DEFAULT_PUBLIC_AUDIT_BASE_URL } from '../lite/audit-host.constants.js'
+import { OPENAI_PIXEL_ID } from '../lite/openaiPixel.constants.js'
+
+// Deliberately the DEFAULT constant, not publicUrls.js's env-aware
+// PUBLIC_AUDIT_BASE_URL: this file builds with the overrides cleared
+// (see beforeAll), so the expectations have to come from the same
+// place the build's own fallback does. Reading the env-aware value
+// here would compare the build against whatever happened to be in the
+// developer's shell.
+const AUDIT_BASE_URL = DEFAULT_PUBLIC_AUDIT_BASE_URL
+
+// landingMeta.js exports the share card as a root-relative path; both
+// consumers compose the absolute URL from their own env-aware audit
+// base (vite.config.js's plugin, LandingPage.jsx's useLandingMeta).
+// This default-build expectation composes it the same way.
+const OG_IMAGE_URL = `${AUDIT_BASE_URL}${OG_IMAGE_PATH}`
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const WEB_ROOT = path.resolve(__dirname, '../..')
@@ -39,8 +54,20 @@ let outDir
 let auditHtml
 let auditReportHtml
 let indexHtml
+const clearedEnv = {}
+
+// The DEFAULT build means exactly that: none of the three vars the
+// soa-audit project sets. A developer's shell (or web/.env.local)
+// routinely carries VITE_PUBLIC_AUDIT_BASE_URL, and inheriting it here
+// would quietly turn this file into a test of that value instead —
+// which is how a regression in the default itself could ship green.
+const OVERRIDES = ['VITE_PUBLIC_AUDIT_BASE_URL', 'VITE_BASE_PATH', 'VITE_AUDIT_BUILD']
 
 beforeAll(async () => {
+  for (const key of OVERRIDES) {
+    clearedEnv[key] = process.env[key]
+    delete process.env[key]
+  }
   outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'audit-head-build-'))
   await build({
     root: WEB_ROOT,
@@ -54,18 +81,42 @@ beforeAll(async () => {
 }, 60_000)
 
 afterAll(() => {
+  for (const [key, value] of Object.entries(clearedEnv)) {
+    if (value === undefined) delete process.env[key]
+    else process.env[key] = value
+  }
   if (outDir) fs.rmSync(outDir, { recursive: true, force: true })
 })
 
 describe('built audit.html (landing) — S1', () => {
   it('has the title, canonical, and OG/Twitter tags baked in', () => {
     expect(auditHtml).toContain(`<title>${LANDING_META_TITLE}</title>`)
-    expect(auditHtml).toContain(`<link rel="canonical" href="${PUBLIC_AUDIT_BASE_URL}/" />`)
+    expect(auditHtml).toContain(`<link rel="canonical" href="${AUDIT_BASE_URL}/" />`)
     expect(auditHtml).toContain(`content="${LANDING_META_DESCRIPTION}"`)
     expect(auditHtml).toMatch(/<meta property="og:title" content="[^"]*" \/>/)
-    expect(auditHtml).toContain(`<meta property="og:url" content="${PUBLIC_AUDIT_BASE_URL}/" />`)
+    expect(auditHtml).toContain(`<meta property="og:url" content="${AUDIT_BASE_URL}/" />`)
     expect(auditHtml).toContain('<meta property="og:type" content="website" />')
     expect(auditHtml).toContain('<meta name="twitter:card" content="summary_large_image" />')
+  })
+
+  // Cutover: composing the expectation from the constant proves the
+  // plumbing, but not that the constant is right. This is the literal
+  // pin — the default build's own head, spelled out, so a change to
+  // the canonical address has to be a deliberate edit here too.
+  it('cutover: the default build emits parleo.io/audit, not the retired host', () => {
+    expect(auditHtml).toContain('<link rel="canonical" href="https://parleo.io/audit/" />')
+    expect(auditHtml).toContain('<meta property="og:url" content="https://parleo.io/audit/" />')
+    expect(auditHtml).toContain('<meta property="og:image" content="https://parleo.io/audit/og/audit-landing.png" />')
+    expect(auditHtml).toContain('<meta name="twitter:image" content="https://parleo.io/audit/og/audit-landing.png" />')
+
+    // No emitted URL may still point at audit.parleo.io. Scoped to
+    // attribute values because audit.html's lemlist comment names the
+    // host while explaining the routing that redirects it.
+    const emitted = [...auditHtml.matchAll(/(?:href|content|src)="([^"]*)"/g)].map((m) => m[1])
+    expect(emitted.length).toBeGreaterThan(0)
+    for (const value of emitted) {
+      expect(value).not.toContain('audit.parleo.io')
+    }
   })
 
   it('metadata-source equality: built title/description exactly match landingMeta.js', () => {
@@ -78,17 +129,16 @@ describe('built audit.html (landing) — S1', () => {
 
   // Part 3b: og:image + dimensions + alt, and the URL resolves to a
   // real PNG in the build output (Vite copies public/ verbatim, so
-  // the absolute OG_IMAGE_URL's path always has a matching file here).
+  // OG_IMAGE_PATH always has a matching file here).
   it('Part 3b: carries og:image + width/height/alt + twitter:image, resolving to a real PNG', () => {
-    expect(OG_IMAGE_URL).not.toBeNull()
+    expect(OG_IMAGE_PATH).not.toBeNull()
     expect(auditHtml).toContain(`<meta property="og:image" content="${OG_IMAGE_URL}" />`)
     expect(auditHtml).toContain(`<meta property="og:image:width" content="${OG_IMAGE_WIDTH}" />`)
     expect(auditHtml).toContain(`<meta property="og:image:height" content="${OG_IMAGE_HEIGHT}" />`)
     expect(auditHtml).toContain(`<meta property="og:image:alt" content="${OG_IMAGE_ALT}" />`)
     expect(auditHtml).toContain(`<meta name="twitter:image" content="${OG_IMAGE_URL}" />`)
 
-    const ogImagePath = new URL(OG_IMAGE_URL).pathname // "/og/audit-landing.png"
-    const builtFile = path.join(outDir, ogImagePath)
+    const builtFile = path.join(outDir, OG_IMAGE_PATH)
     expect(fs.existsSync(builtFile)).toBe(true)
     const header = fs.readFileSync(builtFile).subarray(0, 8)
     expect(header.equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))).toBe(true) // PNG magic bytes
@@ -109,6 +159,32 @@ describe('built audit-report.html (/r/, /s/) — S3', () => {
 
   it('placeholder is fully consumed', () => {
     expect(auditReportHtml).not.toContain('<!--AUDIT_HEAD-->')
+  })
+})
+
+// The guard that would have caught the three display strings. Every
+// URL-BUILDING consumer moved with the constant at the cutover; the
+// strings that merely SHOWED the address were literals and silently
+// kept advertising the retired host. Minification drops comments, so
+// what survives into the bundle is string literals only — which makes
+// "the retired host appears nowhere in the built JS" both meaningful
+// and cheap.
+describe('cutover — the retired host is gone from the built bundle', () => {
+  it('appears in no shipped JS', () => {
+    const assetsDir = path.join(outDir, 'assets')
+    const jsFiles = fs.readdirSync(assetsDir).filter((f) => f.endsWith('.js'))
+    expect(jsFiles.length).toBeGreaterThan(0)
+    for (const file of jsFiles) {
+      const source = fs.readFileSync(path.join(assetsDir, file), 'utf8')
+      expect(source).not.toContain('audit.parleo.io')
+      expect(source).toContain(AUDIT_BASE_URL)
+    }
+  })
+
+  it('appears in none of the shipped static files either', () => {
+    for (const file of ['audit-sitemap.xml', 'audit-robots.txt', 'robots.txt', 'site.webmanifest']) {
+      expect(fs.readFileSync(path.join(outDir, file), 'utf8')).not.toContain('audit.parleo.io')
+    }
   })
 })
 
@@ -151,6 +227,23 @@ describe('favicon set — declared in all three built HTML entries', () => {
   ])('%s exists in the build output', (filename) => {
     expect(fs.existsSync(path.join(outDir, filename))).toBe(true)
   })
+
+  // Cutover: the manifest's icon srcs are relative, so they resolve
+  // against the manifest's OWN url — /icon-192.png at a host root and
+  // /audit/icon-192.png under the prefix — instead of always at the
+  // origin root, where the prefixed build would have 404'd them.
+  it('the manifest declares its icons relatively, and they resolve on both builds', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(outDir, 'site.webmanifest'), 'utf8'))
+    expect(manifest.icons.length).toBeGreaterThan(0)
+    for (const icon of manifest.icons) {
+      expect(icon.src.startsWith('/')).toBe(false)
+      expect(fs.existsSync(path.join(outDir, icon.src))).toBe(true)
+      expect(new URL(icon.src, 'https://soa-app.parleo.io/site.webmanifest').href)
+        .toBe(`https://soa-app.parleo.io/${icon.src}`)
+      expect(new URL(icon.src, 'https://parleo.io/audit/site.webmanifest').href)
+        .toBe(`https://parleo.io/audit/${icon.src}`)
+    }
+  })
 })
 
 // Part 1: the lemlist visitor-tracking pixel is a static tag in
@@ -172,5 +265,62 @@ describe('lemlist visitor-tracking pixel — landing document only (Part 1)', ()
 
   it('index.html (every other host) carries no lemlist reference', () => {
     expect(indexHtml).not.toMatch(/lemlist/i)
+  })
+})
+
+// The OpenAI (ChatGPT Ads) Measurement Pixel. Unlike lemlist, this one
+// IS on audit-report.html — the single, deliberate exception to the
+// "/r/ and /s/ carry no tracker" rule, because contents_viewed
+// can only be observed where a score actually renders (see the comment
+// above the marker in audit-report.html). What these assertions pin
+// down is that it appears EXACTLY once per audit document — the ID
+// lives in one constants file and is written in by one build plugin,
+// so a second copy pasted into a head would be a real regression —
+// that index.html (every other host) never gains it, and that the
+// loader still precedes the font stylesheet, since the inline queue
+// must exist before the async SDK lands.
+describe('OpenAI Measurement Pixel — both audit documents (not index.html)', () => {
+  const LOADER_SRC = 'https://bzrcdn.openai.com/sdk/oaiq.min.js'
+
+  function countOf(html, needle) {
+    return html.split(needle).length - 1
+  }
+
+  it.each([
+    ['audit.html', () => auditHtml],
+    ['audit-report.html', () => auditReportHtml],
+  ])('%s carries exactly one loader and one init with the pixel ID', (_name, getHtml) => {
+    const html = getHtml()
+    expect(countOf(html, LOADER_SRC)).toBe(1)
+    expect(countOf(html, 'oaiq("init"')).toBe(1)
+    expect(countOf(html, OPENAI_PIXEL_ID)).toBe(1)
+    // Shape check on top of the count: the ID has to be the init
+    // call's pixelId, not merely present somewhere in the document.
+    expect(html).toMatch(new RegExp(`oaiq\\("init", \\{\\s*pixelId: "${OPENAI_PIXEL_ID}",`))
+  })
+
+  it.each([
+    ['audit.html', () => auditHtml],
+    ['audit-report.html', () => auditReportHtml],
+  ])('%s loads the pixel before the fonts.googleapis stylesheet', (_name, getHtml) => {
+    const html = getHtml()
+    const loaderAt = html.indexOf(LOADER_SRC)
+    const fontsAt = html.indexOf('fonts.googleapis.com/css2')
+    expect(loaderAt).toBeGreaterThan(-1)
+    expect(fontsAt).toBeGreaterThan(-1)
+    expect(loaderAt).toBeLessThan(fontsAt)
+  })
+
+  it.each([
+    ['audit.html', () => auditHtml],
+    ['audit-report.html', () => auditReportHtml],
+  ])('%s fully consumes the marker', (_name, getHtml) => {
+    expect(getHtml()).not.toContain('<!--OPENAI_PIXEL-->')
+  })
+
+  it('index.html (every other host) carries no oaiq or openai.com reference', () => {
+    expect(indexHtml).not.toMatch(/oaiq/i)
+    expect(indexHtml).not.toMatch(/openai\.com/i)
+    expect(indexHtml).not.toContain(OPENAI_PIXEL_ID)
   })
 })
