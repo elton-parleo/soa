@@ -99,6 +99,28 @@ cd web && npm install && npm run dev
 3. Set env vars:
    - `DATABASE_URL_POOLED` (Supabase Transaction pooler URL)
    - `USE_POOLED_DB=true`
+   - the email vars below
+
+### Email env vars
+
+Both outbound senders in `apps/api` (`app/services/demo_request_email.py`
+and `app/services/lead_notification_email.py`) post to Resend's HTTP API
+directly. Neither ever raises: if `RESEND_API_KEY` or `EMAIL_FROM` is
+missing they log a warning, return `False`, and the request they hang off
+succeeds anyway — so a missing var degrades to "no notification", never to
+a failed submission.
+
+| Var | Used by | Default if unset |
+| --- | --- | --- |
+| `RESEND_API_KEY` | both senders | none — no email is sent |
+| `EMAIL_FROM` | both senders | none — no email is sent |
+| `LEAD_NOTIFY_EMAIL` | new-audit-lead notification (a visitor enters their email during an audit run) | falls back to `DEMO_REQUEST_NOTIFY`, then `leads@parleo.io` |
+| `DEMO_REQUEST_NOTIFY` | demo-request notification (the "Book your walkthrough" / "Talk to us about TrueSync" form) | `elton@parleo.io` |
+| `PUBLIC_AUDIT_BASE_URL` | the report link inside both notifications | `https://audit.parleo.io` |
+
+`LEAD_NOTIFY_EMAIL` exists so lead notifications can be routed to a
+different alias than demo requests; leave it unset to send both to the
+same place.
 
 ### Railway (apps/pipeline)
 1. Connect repo to Railway
