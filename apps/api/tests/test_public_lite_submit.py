@@ -57,6 +57,17 @@ def db(monkeypatch):
     return engine
 
 
+@pytest.fixture(autouse=True)
+def _no_audit_started_emails():
+    """Nothing in this file should reach Resend — a developer with
+    RESEND_API_KEY set in their environment must not send real mail by
+    running the suite. Tests that care about the notification override
+    this with their own patch.object inside the test body. Mirrors
+    _no_lead_emails in test_public_lite_email.py."""
+    with patch.object(public_lite, "send_audit_started_notification", return_value=False):
+        yield
+
+
 def _submit_data(**overrides):
     data = dict(brand_name="Acme Co", competitor_names=["Rival Co"], captcha_token="tok")
     data.update(overrides)
@@ -244,3 +255,81 @@ def test_under_all_limits_succeeds(db):
 
     result = public_lite.submit_lite_request(_submit_data(), FakeRequest(ip="203.0.113.42"))
     assert result.status == "pending"
+
+
+# ─── internal "audit started" notification ───────────────────────────────
+# Sent the moment the row exists, so we hear about a run even if the
+# visitor never comes back to attach an email. One per accepted POST: a
+# POST always creates a fresh row, so there is nothing to dedupe against
+# (unlike the lead notification, which guards against PATCH retries).
+# The send happens after the INSERT has committed and its result is
+# discarded, so it can neither roll the row back nor change the 201.
+
+def test_successful_submit_notifies_once_with_the_audit_fields(db):
+    with patch.object(public_lite, "send_audit_started_notification", return_value=True) as mock_send:
+        result = public_lite.submit_lite_request(
+            _submit_data(brand_name="Allbirds", competitor_names=["Rothys", "Vessi"],
+                         store_url="allbirds.com"),
+            FakeRequest(ip="203.0.113.77"),
+        )
+
+    assert mock_send.call_count == 1
+    fields = mock_send.call_args[0][0]
+    assert fields["brand_name"] == "Allbirds"
+    assert fields["store_url"] == "https://allbirds.com"
+    assert fields["competitors"] == ["Rothys", "Vessi"]
+    assert fields["token"] == result.token
+    assert fields["submitted_at"]
+
+
+def test_notification_carries_a_null_store_url_when_none_was_given(db):
+    with patch.object(public_lite, "send_audit_started_notification", return_value=True) as mock_send:
+        public_lite.submit_lite_request(_submit_data(), FakeRequest(ip="203.0.113.78"))
+
+    assert mock_send.call_args[0][0]["store_url"] is None
+
+
+def test_captcha_failure_never_notifies(db, monkeypatch):
+    monkeypatch.setattr(public_lite, "CAPTCHA_SECRET", "secret")
+    monkeypatch.setattr(public_lite, "CAPTCHA_VERIFY_URL", "https://captcha.example/verify")
+
+    with patch.object(public_lite, "send_audit_started_notification") as mock_send:
+        with patch.object(public_lite, "_verify_captcha", return_value=False):
+            with pytest.raises(HTTPException):
+                public_lite.submit_lite_request(_submit_data(), FakeRequest())
+
+    mock_send.assert_not_called()
+
+
+def test_rate_limited_request_never_notifies(db):
+    ip_hash = public_lite._hash_ip("203.0.113.42")
+    now = datetime.now(timezone.utc)
+    with db.begin() as conn:
+        for i in range(3):  # trips the 3/hour per-IP cap
+            _insert_lite_row(conn, ip_hash, now - timedelta(minutes=i))
+
+    with patch.object(public_lite, "send_audit_started_notification") as mock_send:
+        with pytest.raises(HTTPException) as exc_info:
+            public_lite.submit_lite_request(_submit_data(), FakeRequest(ip="203.0.113.42"))
+
+    assert exc_info.value.status_code == 429
+    mock_send.assert_not_called()
+
+
+def test_failed_send_still_returns_the_same_201_body_and_keeps_the_row(db):
+    with patch.object(public_lite, "send_audit_started_notification", return_value=False):
+        result = public_lite.submit_lite_request(
+            _submit_data(brand_name="Allbirds"), FakeRequest(ip="203.0.113.79"),
+        )
+
+    # Response contract unchanged: {token, status}, 201 from the route.
+    assert result.model_dump() == {"token": result.token, "status": "pending"}
+    route = next(r for r in public_lite.router.routes if r.path == "/soa-lite" and "POST" in r.methods)
+    assert route.status_code == 201
+
+    # The row is the backstop — a send failure never rolls it back.
+    with db.connect() as conn:
+        row = conn.exec_driver_sql(
+            "SELECT brand_name, status FROM soa_lite_requests WHERE token = ?", (result.token,)
+        ).fetchone()
+    assert row == ("Allbirds", "pending")

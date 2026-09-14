@@ -45,7 +45,10 @@ from app.services.cycle_scoring import (
     build_scan_payload as _build_scan_payload,
     decode_json_field as _decode_json_field,
 )
-from app.services.lead_notification_email import send_lead_notification
+from app.services.lead_notification_email import (
+    send_audit_started_notification,
+    send_lead_notification,
+)
 from app.services.lite_pillars import member_value_applicable
 from app.services.share_tokens import generate_public_token
 from app.schemas import (
@@ -344,7 +347,38 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
             "events":      initial_events,
         })
 
+    # Committed. Best-effort and cannot change the 201 below — see
+    # _notify_audit_started.
+    _notify_audit_started(
+        token=token, brand_name=data.brand_name, store_url=data.store_url,
+        competitors=data.competitor_names, submitted_at=now,
+    )
+
     return PublicLiteSubmitResponse(token=token, status="pending")
+
+
+def _notify_audit_started(*, token, brand_name, store_url, competitors, submitted_at) -> None:
+    """
+    Tells us an audit is under way the moment the row exists, rather than
+    only if the visitor later attaches an email (_notify_new_lead). One
+    per accepted POST — a POST always creates a fresh row, so unlike the
+    lead notification there is nothing to dedupe against and no stamp to
+    keep.
+
+    Reached only after the INSERT has committed, and only on the success
+    path: a failed captcha or a tripped rate limit raises above this,
+    before any row exists, so a rejected request is never announced. The
+    sender never raises and its 10 s httpx timeout bounds what it can add
+    to the request; its result is discarded, so nothing here can change
+    the 201 the caller gets.
+    """
+    send_audit_started_notification({
+        "brand_name": brand_name,
+        "store_url": store_url,
+        "competitors": competitors,
+        "token": token,
+        "submitted_at": str(submitted_at),
+    })
 
 
 # ─── GET /api/public/soa-lite/{token}/status ─────────────────────────────
@@ -474,7 +508,7 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
         row = conn.execute(text("""
             SELECT lr.id, lr.status, lr.cycle_id, c.status, c.total_runs_planned,
                    lr.competitor_names, lr.competitor_source, lr.events,
-                   lr.brand_name, lr.email, lr.lead_notified_at
+                   lr.brand_name, lr.email, lr.lead_notified_at, lr.store_url
             FROM soa_lite_requests lr
             LEFT JOIN soa_cycles c ON c.id = lr.cycle_id
             WHERE lr.token = :token
@@ -485,7 +519,7 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
 
         (lite_request_id, lite_status, cycle_id, cycle_status, total_runs_planned,
          competitor_names, competitor_source, events_raw,
-         brand_name, previous_email, lead_notified_at) = row
+         brand_name, previous_email, lead_notified_at, store_url) = row
 
         conn.execute(text("""
             UPDATE soa_lite_requests SET email = :email, updated_at = NOW() WHERE token = :token
@@ -515,14 +549,14 @@ def set_lite_email(token: str, data: PublicLiteEmailRequest):
     _notify_new_lead(
         token=token, brand_name=brand_name, email=data.email,
         previous_email=previous_email, lead_notified_at=lead_notified_at,
-        lite_status=lite_status, competitors=competitors,
+        lite_status=lite_status, competitors=competitors, store_url=store_url,
     )
 
     return payload
 
 
 def _notify_new_lead(*, token, brand_name, email, previous_email, lead_notified_at,
-                     lite_status, competitors) -> None:
+                     lite_status, competitors, store_url) -> None:
     """
     One notification per lead, not one per PATCH retry. The widget's
     PATCH is idempotent and a visitor can repeat it (a re-submit, a
@@ -550,6 +584,7 @@ def _notify_new_lead(*, token, brand_name, email, previous_email, lead_notified_
         "brand_name": brand_name,
         "email": email,
         "competitors": competitors,
+        "store_url": store_url,
         "status": lite_status,
         "token": token,
         "submitted_at": str(datetime.now(timezone.utc)),

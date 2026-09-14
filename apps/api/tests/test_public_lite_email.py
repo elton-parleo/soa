@@ -34,7 +34,7 @@ def db(monkeypatch):
                 id INTEGER PRIMARY KEY, token TEXT UNIQUE, email TEXT,
                 status TEXT, cycle_id INTEGER, updated_at TIMESTAMP,
                 competitor_names TEXT, competitor_source TEXT, events TEXT DEFAULT '[]',
-                brand_name TEXT, lead_notified_at TIMESTAMP
+                brand_name TEXT, store_url TEXT, lead_notified_at TIMESTAMP
             )
         """)
         conn.exec_driver_sql("""
@@ -317,8 +317,8 @@ def test_email_patch_and_get_report_serialize_the_same_fixes_shape(db):
 def test_first_email_notifies_once_with_the_lead_fields_and_stamps_notified_at(db):
     with db.begin() as conn:
         conn.exec_driver_sql(
-            "INSERT INTO soa_lite_requests (token, status, brand_name, competitor_names) "
-            "VALUES ('t1', 'running', 'Allbirds', '[\"Rothys\", \"Vessi\"]')"
+            "INSERT INTO soa_lite_requests (token, status, brand_name, store_url, competitor_names) "
+            "VALUES ('t1', 'running', 'Allbirds', 'https://allbirds.com', '[\"Rothys\", \"Vessi\"]')"
         )
 
     with patch.object(public_lite, "send_lead_notification", return_value=True) as mock_send:
@@ -329,6 +329,7 @@ def test_first_email_notifies_once_with_the_lead_fields_and_stamps_notified_at(d
     assert fields["brand_name"] == "Allbirds"
     assert fields["email"] == "visitor@example.com"
     assert fields["competitors"] == ["Rothys", "Vessi"]
+    assert fields["store_url"] == "https://allbirds.com"
     assert fields["status"] == "running"
     assert fields["token"] == "t1"
     assert fields["submitted_at"]
@@ -433,3 +434,17 @@ def test_response_shape_is_unchanged_for_the_complete_case(db):
 
     assert patch_result == report
     assert "lead_notified_at" not in patch_result
+
+
+def test_lead_notification_carries_a_null_store_url_through_unchanged(db):
+    """store_url is optional on the row — the sender renders "(none)"
+    rather than the caller having to substitute anything."""
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, status, brand_name) VALUES ('t1', 'running', 'Allbirds')"
+        )
+
+    with patch.object(public_lite, "send_lead_notification", return_value=True) as mock_send:
+        public_lite.set_lite_email("t1", _email())
+
+    assert mock_send.call_args[0][0]["store_url"] is None
