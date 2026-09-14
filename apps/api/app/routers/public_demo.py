@@ -67,7 +67,7 @@ def _enforce_rate_limit(conn, ip_hash: str, now: datetime) -> None:
 def _report_url(report_token):
     if not report_token:
         return None
-    base = os.getenv("PUBLIC_AUDIT_BASE_URL", "https://audit.parleo.io").rstrip("/")
+    base = os.getenv("PUBLIC_AUDIT_BASE_URL", "https://parleo.io/audit").rstrip("/")
     return f"{base}/r/{report_token}"
 
 

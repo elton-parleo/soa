@@ -53,7 +53,7 @@ def _notify_address() -> str:
 
 
 def _report_url(token: str) -> str:
-    base = os.getenv("PUBLIC_AUDIT_BASE_URL", "https://audit.parleo.io").rstrip("/")
+    base = os.getenv("PUBLIC_AUDIT_BASE_URL", "https://parleo.io/audit").rstrip("/")
     return f"{base}/r/{token}"
 
 

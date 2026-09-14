@@ -116,7 +116,7 @@ a failed submission.
 | `EMAIL_FROM` | both senders | none — no email is sent |
 | `LEAD_NOTIFY_EMAIL` | new-audit-lead notification (a visitor enters their email during an audit run) | falls back to `DEMO_REQUEST_NOTIFY`, then `leads@parleo.io` |
 | `DEMO_REQUEST_NOTIFY` | demo-request notification (the "Book your walkthrough" / "Talk to us about TrueSync" form) | `elton@parleo.io` |
-| `PUBLIC_AUDIT_BASE_URL` | the report link inside both notifications | `https://audit.parleo.io` |
+| `PUBLIC_AUDIT_BASE_URL` | the report link inside both notifications | `https://parleo.io/audit` |
 
 `LEAD_NOTIFY_EMAIL` exists so lead notifications can be routed to a
 different alias than demo requests; leave it unset to send both to the

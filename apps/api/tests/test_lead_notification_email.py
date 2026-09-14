@@ -141,7 +141,7 @@ def test_success_sends_correct_recipient_subject_reply_to_and_fields(monkeypatch
     assert captured["headers"]["Authorization"] == "Bearer key123"
     for expected in [
         "Allbirds", "visitor@company.com", "Rothys, Vessi", "running",
-        "tok123", "https://audit.parleo.io/r/tok123", "2026-09-14 12:00:00",
+        "tok123", "https://parleo.io/audit/r/tok123", "2026-09-14 12:00:00",
     ]:
         assert expected in payload["text"], expected
         assert expected in payload["html"], expected
@@ -149,12 +149,12 @@ def test_success_sends_correct_recipient_subject_reply_to_and_fields(monkeypatch
 
 def test_report_url_honours_public_audit_base_url(monkeypatch):
     _configured(monkeypatch)
-    monkeypatch.setenv("PUBLIC_AUDIT_BASE_URL", "https://parleo.io/audit/")
+    monkeypatch.setenv("PUBLIC_AUDIT_BASE_URL", "https://staging.parleo.io/audit/")
     captured = _capture_post(monkeypatch)
 
     lne.send_lead_notification(FIELDS)
 
-    assert "https://parleo.io/audit/r/tok123" in captured["json"]["text"]
+    assert "https://staging.parleo.io/audit/r/tok123" in captured["json"]["text"]
 
 
 @pytest.mark.parametrize("competitors", [None, []])
