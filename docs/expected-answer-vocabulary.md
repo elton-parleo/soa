@@ -230,6 +230,43 @@ the assistant know the brand" and "did it send the shopper to the brand's
 own store rather than a retailer" — and folding the second into the first
 loses the source-attribution measure the report reports.
 
+#### The question has to name the brand
+
+A `brand_mention` expectation is the only one a question can make
+**unmeetable by its own wording**. Every other type asks for a published
+value and an answer either states it or does not. This one asks whether
+the brand came up — and if the question never said the brand, a correct,
+helpful, complete answer has no reason to say it either. The row then
+scores `absent` against an assistant that did nothing wrong, and the
+tier's visibility rate measures the questions rather than the assistant.
+
+This is not hypothetical. The first brand-mode study generated twelve
+brand-direct questions and not one of them named the brand: the tier
+reached the generator through the prompt's *unbranded* mode, which tells
+the model not to name a brand at any stage, and the model complied. All
+twelve were unscoreable from the moment they were written.
+
+So the rule, enforced in `generation/brand_direct_guard.py` and not only
+requested in the prompt:
+
+> Every `brand_direct` question must contain the brand name. A question
+> that does not is rejected and regenerated; if the retries run out, the
+> tier reports a **shortfall**. It never pads its count with a question
+> it cannot score.
+
+Matching tolerates typography and nothing else — `Wiggle & Snug`,
+`wiggle and snug` and `WIGGLE & SNUG` are the same brand typed three
+ways; `Wiggle` on its own is not the brand.
+
+The same guard rejects a brand-direct question that **restates a catalog
+question**: same ask (price, code, member price, points) about the same
+product, in different words. Left in, it would measure one published
+number twice and score the second copy against a brand mention, which is
+not what it measured. A question that asks something the catalog tiers
+never ask — where to buy, whether the brand makes a thing, whether it
+suits a need — is never a duplicate, however many product words it
+shares.
+
 ---
 
 ## Secondary expectations

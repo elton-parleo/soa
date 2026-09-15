@@ -560,7 +560,10 @@ export default function StudyDetail({ studyType, onNavigate }) {
               completed job only: a report on a run still in progress
               would be describing something that has not happened yet. */}
           {genStatus?.status === 'complete' && (
-            <GenerationReport provenance={genStatus.provenance} />
+            <GenerationReport
+              provenance={genStatus.provenance}
+              tierConfig={genStatus.tier_config}
+            />
           )}
 
           {/* Tabs row */}

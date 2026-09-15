@@ -33,6 +33,7 @@ import re
 from typing import Optional
 from openai import OpenAI
 from soa_shared.constants import QUERY_CONSTRAINTS, QUERY_STAGES
+from generation import brand_direct_guard as bdg
 from soa_shared.scan_dimensions import LITE_QUERIES_PER_STAGE
 
 log = logging.getLogger(__name__)
@@ -613,6 +614,7 @@ def _build_general_prompt(
     personas: Optional[list] = None,
     specificity_mode: str = SPECIFICITY_MATCH_TO_STAGE,
     catalog_context: Optional[str] = None,
+    brand_direct: Optional[str] = None,
 ) -> str:
     """
     The general-study counterpart to _build_lite_prompt.
@@ -645,6 +647,16 @@ def _build_general_prompt(
     _build_lite_prompt: names appear only in Comparison and Ready to Buy
     questions, so an Awareness or Research mention has to be earned by
     the answer rather than prompted by the question.
+
+    brand_direct is the THIRD naming mode and the reason there are three
+    rather than two. The tier needs questions that name one brand and no
+    other — which is neither the named-retailers mode (several names,
+    spread around) nor the unbranded mode (no names anywhere). It used to
+    borrow the unbranded branch on the strength of "names nobody else",
+    and that branch says, in as many words, not to name a brand at any
+    stage. The model obeyed. Every question in the first real brand-mode
+    study omitted the brand, which made its brand_mention expectation
+    unmeetable: a correct answer and a useless one scored the same.
     """
     constraint_values = dict(QUERY_CONSTRAINTS)
     constraint_values['category'] = list(allowed_categories)
@@ -675,7 +687,39 @@ def _build_general_prompt(
     )
 
     names = list(retailer_names or [])
-    if names:
+    if brand_direct:
+        # One brand, named in every question, and no other. Stated as a
+        # requirement on the TEXT rather than as a topic, because the
+        # expectation attached to these rows is brand_mention: a question
+        # that does not name the brand cannot be answered in a way that
+        # meets it, so an unbranded question here is not a weaker
+        # question, it is an unscoreable one.
+        #
+        # The intents are listed because "ask about the brand" produces
+        # either price questions (which the catalog tier already asks,
+        # against a published number, and which would be measured twice
+        # and scored against the wrong expectation here) or nothing in
+        # particular. Naming the shapes a shopper actually types is what
+        # makes the tier a measurement rather than filler.
+        naming_text = (
+            f"\nEvery question must name the brand {brand_direct} in the "
+            f"question text, spelled exactly that way, and must name no "
+            f"other brand and no retailer. A question that does not contain "
+            f"the words {brand_direct!r} will be discarded."
+            f"\n\nWrite what a shopper who already knows the brand types: "
+            f"where to buy it, whether it makes a particular kind of product, "
+            f"whether it suits a particular need (sensitive skin, overnight, "
+            f"newborn, travel), how it compares with alternatives in general "
+            f"terms without naming one, whether it offers a subscription or "
+            f"auto-delivery, and whether a line is still available or has "
+            f"been discontinued."
+            f"\n\nDo NOT ask what anything costs, what a pack contains, what "
+            f"a promo code is, or what a loyalty tier is worth. Those are "
+            f"asked elsewhere in this study directly against the published "
+            f"record. Asked again here they measure the same fact twice and "
+            f"score it against an expectation that is not about a number."
+        )
+    elif names:
         naming_text = (
             f"\nThe retailers to name are: {', '.join(names)}. "
             f"Spread the mentions across all of them — do not lead with the "
@@ -779,6 +823,8 @@ def generate_general_queries(
     personas: Optional[list] = None,
     specificity_mode: str = SPECIFICITY_MATCH_TO_STAGE,
     catalog_context: Optional[str] = None,
+    require_brand: Optional[str] = None,
+    catalog_texts: Optional[list] = None,
 ) -> tuple:
     """
     The general-study path: caller-supplied per-stage targets, a
@@ -816,6 +862,18 @@ def generate_general_queries(
     re-enters validation, the category filter and dedupe, because a
     replacement can perfectly well collide with something already kept
     or wander out of scope itself.
+
+    require_brand and catalog_texts add two more DROPS on the same
+    machinery, used only by the brand-direct tier. A row that does not
+    name the brand, or that asks a question the catalog tier already
+    asks, is rejected before it occupies a slot — so the stage stays
+    short, the retry loop asks again, and the replacement rounds are the
+    bound on how long that goes on. What they are NOT is a rewrite: a
+    question quietly patched to contain the brand is a question nobody
+    wrote, and one relabelled out of a duplicate is still the duplicate.
+    If the retries run out the shortfall is reported, which is the
+    honest end state for a tier that could not produce twelve scoreable
+    questions.
     """
     stage_targets = {k: v for k, v in stage_targets.items() if v > 0}
     allowed = set(allowed_categories)
@@ -823,7 +881,13 @@ def generate_general_queries(
     kept: list = []
     duplicates: list = []
     category_drops: list = []
+    brand_missing: list = []
+    intent_duplicates: list = []
     seen_keys: set = set()
+    catalog_keys = (
+        bdg.catalog_intents(catalog_texts, require_brand)
+        if catalog_texts else []
+    )
 
     def _accept(row):
         """Runs before a row is bucketed, so a rejected row never
@@ -847,6 +911,23 @@ def generate_general_queries(
         if key in seen_keys:
             duplicates.append(row)
             return "exact duplicate of a question already generated"
+        # Both brand checks run AFTER the cheap ones and BEFORE the row
+        # is remembered as seen: a rejected row must not reserve its own
+        # text against the replacement written to take its place.
+        if require_brand and not bdg.names_brand(row.get('query_text'), require_brand):
+            brand_missing.append({
+                'query_text': row.get('query_text'),
+                'reason': f"{bdg.BRAND_MISSING} ({require_brand})",
+            })
+            return f"{bdg.BRAND_MISSING} ({require_brand})"
+        if catalog_keys and bdg.is_intent_duplicate(
+            row.get('query_text'), catalog_keys, require_brand,
+        ):
+            intent_duplicates.append({
+                'query_text': row.get('query_text'),
+                'reason': bdg.INTENT_DUPLICATE,
+            })
+            return bdg.INTENT_DUPLICATE
         seen_keys.add(key)
         return None
 
@@ -877,7 +958,8 @@ def generate_general_queries(
         # without kept, a replacement for a deduped row would be written
         # by a model that cannot see any of the rows it must not repeat,
         # which is how the duplicate got there in the first place.
-        avoid = [row['query_text'] for row in kept]
+        avoid = list(catalog_texts or [])
+        avoid += [row['query_text'] for row in kept]
         avoid += [row['query_text'] for row in accepted_rows]
         prompt = _build_general_prompt(
             study_name, description, shortfall, allowed_categories,
@@ -887,6 +969,7 @@ def generate_general_queries(
             personas=personas,
             specificity_mode=specificity_mode,
             catalog_context=catalog_context,
+            brand_direct=require_brand,
         )
         prompt_calls['n'] += 1
         return prompt
@@ -950,6 +1033,8 @@ def generate_general_queries(
         },
         'duplicates_dropped': duplicates,
         'category_drops': category_drops,
+        'brand_missing_drops': brand_missing,
+        'intent_duplicate_drops': intent_duplicates,
         'replacement_rounds': rounds,
         'generation_calls':   calls,
         'retailers_named':    names,
@@ -1026,6 +1111,7 @@ def generate_brand_direct(
     count: int = None,
     personas: Optional[list] = None,
     specificity_mode: str = SPECIFICITY_MATCH_TO_STAGE,
+    catalog_texts: Optional[list] = None,
 ) -> tuple:
     """
     Questions a shopper asks about this brand BY NAME, written by the
@@ -1038,15 +1124,25 @@ def generate_brand_direct(
     stage enforcement, the category drop, the exact-dedupe, the
     replacement rounds and the row validation are all things this tier
     needs and none of them is different because a catalog is in the
-    prompt. What IS different is two arguments: the catalog goes in as
-    context, and retailer_names goes in EMPTY.
+    prompt. What IS different is the arguments: the catalog goes in as
+    context, the brand goes in as a naming REQUIREMENT, and the catalog
+    tiers' own questions go in as the intents not to restate.
 
-    Empty retailer names is the load-bearing one. These questions name
-    the brand under measurement and must name nobody else — a
-    brand-direct question that also names Amazon is measuring a
-    head-to-head, and the mention it detects was prompted rather than
-    earned. The unbranded branch of _build_general_prompt already says
-    exactly that to the model, so this tier gets it by construction.
+    require_brand is the correction to how this tier was first built. It
+    passed retailer_names=[] and leaned on the unbranded branch of
+    _build_general_prompt for "names nobody else" — but that branch also
+    says, in as many words, not to name a brand at any stage, and the
+    model did as it was told. All twelve questions in the first real
+    brand-mode study omitted the brand, and a brand_mention expectation
+    on a question that never names the brand cannot be met by a correct
+    answer. The prompt now asks for the opposite; names_brand is what
+    makes it true rather than requested.
+
+    catalog_texts are the questions the catalog tiers are asking in this
+    same study. They are handed over for two different jobs: the model
+    sees them in the avoid-list, and every candidate is checked against
+    their INTENT afterwards, because a price question with the words
+    moved around reads as a new question and measures an old one.
 
     Only Research and Ready to Buy, per brand_direct_stage_targets: an
     Awareness question that names the brand it is measuring prompts the
@@ -1082,12 +1178,19 @@ def generate_brand_direct(
         personas=personas,
         specificity_mode=specificity_mode,
         catalog_context=context,
+        require_brand=snapshot.brand,
+        catalog_texts=list(catalog_texts or []),
     )
 
     stamp_brand_direct(rows, snapshot)
     report['count'] = len(rows)
     report['requested'] = requested
     report['stage_targets'] = targets
+    # Stated as one number on the tier rather than left to be inferred
+    # from a per-stage mapping. A tier that asked for twelve and produced
+    # nine is a fact the study's own report has to be able to say out
+    # loud — otherwise nine reads as the plan.
+    report['shortfall'] = max(0, requested - len(rows))
     return rows, report
 
 

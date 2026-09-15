@@ -32,7 +32,10 @@ silence: an unavailable catalog is recorded on tier_config where the
 report and the study page can both say so.
 """
 import logging
+from collections import Counter
 from typing import Optional
+
+from soa_shared.constants import QUERY_PERSONAS
 
 from generation import catalog_tiers as ct
 from generation.query_generator import (
@@ -81,11 +84,55 @@ def _primary_category(allowed_categories) -> str:
     return 'General'
 
 
-def _primary_persona(personas) -> str:
+def _primary_persona(personas, rows=None) -> str:
+    """
+    The persona stamped on catalog-built rows. Always a QUERY_PERSONAS
+    value, because soa_queries.persona is NOT NULL and carries a CHECK
+    against that list — a builder that invents a label writes a row the
+    database refuses, or worse, one it accepts and no report can segment.
+
+    Three sources, in the order of how much they know:
+
+    1. The brief, when the study named personas. That is the study
+       saying who it is about, and nothing here should second-guess it.
+
+    2. The study's OWN questions, when it did not. Personas are optional
+       in the modal and most studies leave them empty, so this is the
+       common path rather than the fallback. The model picked a persona
+       per question from the same enum and picked it knowing the subject;
+       the most frequent of those is what this study is about, arrived at
+       from the study's own output rather than guessed.
+
+    3. The first enum value, reachable only for a study with no
+       questions at all.
+
+    Step 2 is the fix for a real defect. This used to end at a hardcoded
+    'Value-Conscious' — a valid enum value, from the beauty verticals,
+    and the wrong one for every study outside them. The first real
+    brand-mode study was Baby Care: its model-written questions were
+    'Value-Conscious Parent' and its catalog-built questions were
+    'Value-Conscious', so the two halves of one study segmented into two
+    different populations and neither was complete.
+    """
     for persona in personas or []:
-        if persona:
+        if persona in QUERY_PERSONAS:
             return persona
-    return 'Value-Conscious'
+        if persona:
+            logger.warning(
+                "[generation] ignoring persona %r: not in QUERY_PERSONAS", persona,
+            )
+
+    # Counter preserves first-seen order among equal counts, so a tie
+    # resolves to whichever persona the study asked about first rather
+    # than to whatever the hash order happens to be that run.
+    counts = Counter(
+        row.get('persona') for row in rows or []
+        if row.get('persona') in QUERY_PERSONAS
+    )
+    if counts:
+        return counts.most_common(1)[0][0]
+
+    return QUERY_PERSONAS[0]
 
 
 def build_syndicated_study(
@@ -118,7 +165,6 @@ def build_syndicated_study(
     """
     config = normalize_tier_config(tier_config)
     category = _primary_category(allowed_categories)
-    persona = _primary_persona(personas)
 
     generate_kwargs = {
         'study_name': study_name,
@@ -145,6 +191,11 @@ def build_syndicated_study(
         naming_rule_enabled=naming_rule_enabled,
         **generate_kwargs,
     )
+
+    # After the generation call, not before: with no personas in the
+    # brief this reads the study's own questions to find out who the
+    # study is about, and there were no questions to read until now.
+    persona = _primary_persona(personas, rows)
 
     if config['category_control']['enabled']:
         # A TAG, not a generation. These questions were going to exist;
@@ -188,38 +239,57 @@ def build_syndicated_study(
         'read_at': snapshot.read_at,
     }
 
+    # ── The catalog tiers, BUILT FIRST ───────────────────────────────
+    #
+    # Built before brand-direct and appended after it, so the study's
+    # question order is unchanged (stage, then brand-direct, then
+    # catalog) while brand-direct gets to see them.
+    #
+    # It has to see them. These are templates over the record and they
+    # are the questions with a published number behind them; a
+    # brand-direct question that asks the same thing in different words
+    # measures that number twice and scores the second copy against a
+    # brand_mention expectation, which is not what it measured. Building
+    # them first is what makes the catalog tier the authority on its own
+    # questions and brand-direct the tier that has to work around them.
+    catalog_rows = []
+
+    if config['catalog_accuracy']['enabled']:
+        accuracy_rows, accuracy_report = ct.build_catalog_accuracy(
+            snapshot, category=category, persona=persona,
+            study_pattern=study_pattern, cap=variant_cap,
+        )
+        catalog_rows.extend(accuracy_rows)
+        config['catalog_accuracy'].update(accuracy_report)
+
+    if config['value_incentives']['enabled']:
+        value_rows, value_report = ct.build_value_incentives(
+            snapshot, category=category, persona=persona,
+            study_pattern=study_pattern,
+        )
+        catalog_rows.extend(value_rows)
+        config['value_incentives'].update(value_report)
+
     # ── Brand-direct ─────────────────────────────────────────────────
     if config['brand_direct']['enabled']:
         brand_rows, brand_report = generate_brand_direct(
             snapshot,
             stage_targets=stage_targets,
             count=config['brand_direct'].get('count'),
+            catalog_texts=[row['query_text'] for row in catalog_rows],
             **generate_kwargs,
         )
         rows.extend(brand_rows)
         config['brand_direct'].update({
             'count': len(brand_rows),
             'requested': brand_report.get('requested'),
+            'shortfall': brand_report.get('shortfall'),
             'stage_targets': brand_report.get('stage_targets'),
+            'brand_missing_drops': brand_report.get('brand_missing_drops') or [],
+            'intent_duplicate_drops': brand_report.get('intent_duplicate_drops') or [],
         })
 
-    # ── Catalog accuracy ─────────────────────────────────────────────
-    if config['catalog_accuracy']['enabled']:
-        accuracy_rows, accuracy_report = ct.build_catalog_accuracy(
-            snapshot, category=category, persona=persona,
-            study_pattern=study_pattern, cap=variant_cap,
-        )
-        rows.extend(accuracy_rows)
-        config['catalog_accuracy'].update(accuracy_report)
-
-    # ── Value & incentives ───────────────────────────────────────────
-    if config['value_incentives']['enabled']:
-        value_rows, value_report = ct.build_value_incentives(
-            snapshot, category=category, persona=persona,
-            study_pattern=study_pattern,
-        )
-        rows.extend(value_rows)
-        config['value_incentives'].update(value_report)
+    rows.extend(catalog_rows)
 
     # ── Expected nulls, written BEFORE the run ───────────────────────
     #

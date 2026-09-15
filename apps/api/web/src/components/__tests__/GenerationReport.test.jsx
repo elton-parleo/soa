@@ -220,3 +220,113 @@ describe('a partial record', () => {
     expect(screen.getByText(/10 questions generated/)).toBeInTheDocument()
   })
 })
+
+// ─── Syndicated studies: the study is more than its stage questions ───────
+//
+// provenance.rows_generated is what the general generator returned — the
+// stage questions. The catalog tiers are built afterwards by code that
+// never touches that number, so for a grounded study the two differ. The
+// first real brand-mode study had 87 questions and this report said 50.
+
+const TIER_CONFIG = {
+  brand_direct:     { enabled: true, count: 12, requested: 12 },
+  catalog_accuracy: { enabled: true, count: 19 },
+  value_incentives: { enabled: true, count: 6 },
+  category_control: { enabled: false, stage_total: 50 },
+}
+
+const STAGE_ONLY = {
+  rows_generated: 50,
+  requested_by_stage: { Research: 25, 'Ready to Buy': 25 },
+  delivered_by_stage: { Research: 25, 'Ready to Buy': 25 },
+  shortfall_by_stage: {},
+  exact_duplicates_dropped: [],
+  category_drops: [],
+  semantic_duplicate_groups: [],
+  coherence_findings_by_outcome: { label_mismatch: [], out_of_scope: [] },
+}
+
+describe('a study built from catalog tiers', () => {
+  it('counts every tier in the collapsed summary, not just the stage half', () => {
+    render(<GenerationReport provenance={STAGE_ONLY} tierConfig={TIER_CONFIG} />)
+    expect(screen.getByText(/87 questions generated/)).toBeInTheDocument()
+    expect(screen.queryByText(/50 questions generated/)).not.toBeInTheDocument()
+  })
+
+  it('shows the breakdown that adds up to the total', () => {
+    render(<GenerationReport provenance={STAGE_ONLY} tierConfig={TIER_CONFIG} />)
+    fireEvent.click(screen.getByRole('button', { name: /Generation report/ }))
+    expect(
+      screen.getByText('50 stage + 12 brand-direct + 25 from the catalog = 87'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('catalog accuracy')).toBeInTheDocument()
+    expect(screen.getByText('value & incentives')).toBeInTheDocument()
+  })
+
+  it('falls back to the snapshot taken at generation when the page has no live config', () => {
+    render(<GenerationReport provenance={{ ...STAGE_ONLY, tiers: TIER_CONFIG }} />)
+    expect(screen.getByText(/87 questions generated/)).toBeInTheDocument()
+  })
+
+  it('prefers the live config, which is what a regenerated tier updates', () => {
+    render(
+      <GenerationReport
+        provenance={{ ...STAGE_ONLY, tiers: TIER_CONFIG }}
+        tierConfig={{ ...TIER_CONFIG, brand_direct: { enabled: true, count: 8 } }}
+      />,
+    )
+    expect(screen.getByText(/83 questions generated/)).toBeInTheDocument()
+  })
+
+  it('says so when a tier came up short, instead of letting it read as the plan', () => {
+    render(
+      <GenerationReport
+        provenance={STAGE_ONLY}
+        tierConfig={{
+          ...TIER_CONFIG,
+          brand_direct: { enabled: true, count: 9, requested: 12, shortfall: 3 },
+        }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Generation report/ }))
+    expect(
+      screen.getByText('brand-direct is 3 short: 9 of 12 requested'),
+    ).toBeInTheDocument()
+  })
+
+  it('lists the brand-direct questions it threw away and why', () => {
+    render(
+      <GenerationReport
+        provenance={STAGE_ONLY}
+        tierConfig={{
+          ...TIER_CONFIG,
+          brand_direct: {
+            enabled: true, count: 12, requested: 12,
+            brand_missing_drops: [
+              { query_text: 'Which diaper brands are best for sensitive skin?' },
+            ],
+            intent_duplicate_drops: [
+              { query_text: 'How much does the Size 3 small pack cost?' },
+            ],
+          },
+        }}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Generation report/ }))
+    expect(
+      screen.getByText('Which diaper brands are best for sensitive skin?'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('How much does the Size 3 small pack cost?'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/did not name the brand/)).toBeInTheDocument()
+    expect(screen.getByText(/the catalog tier already asks/)).toBeInTheDocument()
+  })
+
+  it('leaves an ungrounded study exactly as it was', () => {
+    render(<GenerationReport provenance={STAGE_ONLY} />)
+    expect(screen.getByText(/50 questions generated/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Generation report/ }))
+    expect(screen.queryByText(/Questions in this study/i)).not.toBeInTheDocument()
+  })
+})

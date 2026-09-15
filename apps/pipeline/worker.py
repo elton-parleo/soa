@@ -324,6 +324,28 @@ def _delete_tier_questions(study_type: str, tiers: list) -> int:
         return result.rowcount or 0
 
 
+def _existing_questions(study_type: str) -> list:
+    """
+    The study's current questions, as {tier, query_text, persona}.
+
+    Regeneration rebuilds some tiers and leaves the rest standing, so
+    "the rest" have to be readable. Two callers need them: the persona
+    stamped on rebuilt catalog rows has to match the persona the study
+    already uses, and brand-direct has to know which questions the
+    catalog tiers are asking so it does not ask them again in different
+    words — and on a brand-direct-only regeneration those questions are
+    not being rebuilt, so the database is the only place they exist.
+    """
+    with engine.connect() as conn:
+        return [
+            dict(row) for row in conn.execute(text("""
+                SELECT tier, query_text, persona
+                FROM soa_queries
+                WHERE study_type = :study_type
+            """), {"study_type": study_type}).mappings()
+        ]
+
+
 def _run_regeneration(
     job_id, study_type, syndicated_merchant, tier_config, regenerate,
     organization_id, created_by, api_key, **kwargs,
@@ -350,7 +372,12 @@ def _run_regeneration(
     tiers = list(regenerate.get("tiers") or [])
     config = normalize_tier_config(tier_config)
     category = _primary_category(kwargs.get("allowed_categories"))
-    persona = _primary_persona(kwargs.get("personas"))
+
+    existing = _existing_questions(study_type)
+    # The study's own rows, not a default: a rebuilt catalog question
+    # that lands on a different persona from the rest of the study splits
+    # one study into two populations in every report that segments by it.
+    persona = _primary_persona(kwargs.get("personas"), existing)
 
     snapshot = TrueSyncCatalogClient().snapshot(
         syndicated_merchant, with_history=False,
@@ -363,22 +390,37 @@ def _run_regeneration(
         )
         return
 
+    CATALOG_TIERS = ("catalog_accuracy", "value_incentives")
+
     rows = []
+    rebuilt_catalog = []
     if "catalog_accuracy" in tiers:
         built, report = ct.build_catalog_accuracy(
             snapshot, category=category, persona=persona,
             study_pattern=kwargs.get('study_pattern'),
         )
-        rows.extend(built)
+        rebuilt_catalog.extend(built)
         config["catalog_accuracy"].update(report)
     if "value_incentives" in tiers:
         built, report = ct.build_value_incentives(
             snapshot, category=category, persona=persona,
             study_pattern=kwargs.get('study_pattern'),
         )
-        rows.extend(built)
+        rebuilt_catalog.extend(built)
         config["value_incentives"].update(report)
+    rows.extend(rebuilt_catalog)
+
     if "brand_direct" in tiers:
+        # Every catalog question that will exist when this finishes: the
+        # ones just rebuilt, plus the ones staying exactly where they
+        # are. On a brand-direct-only regeneration — the common case,
+        # and the one that fixes a study rather than replacing it — the
+        # second set is all of them.
+        catalog_texts = [row["query_text"] for row in rebuilt_catalog]
+        catalog_texts += [
+            row["query_text"] for row in existing
+            if row.get("tier") in CATALOG_TIERS and row.get("tier") not in tiers
+        ]
         built, report = generate_brand_direct(
             snapshot,
             study_name=kwargs.get("study_name"),
@@ -389,9 +431,16 @@ def _run_regeneration(
             api_key=api_key,
             count=config["brand_direct"].get("count"),
             personas=kwargs.get("personas"),
+            catalog_texts=catalog_texts,
         )
         rows.extend(built)
-        config["brand_direct"]["count"] = len(built)
+        config["brand_direct"].update({
+            "count": len(built),
+            "requested": report.get("requested"),
+            "shortfall": report.get("shortfall"),
+            "brand_missing_drops": report.get("brand_missing_drops") or [],
+            "intent_duplicate_drops": report.get("intent_duplicate_drops") or [],
+        })
 
     for tier in tiers:
         if config.get(tier):
