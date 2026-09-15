@@ -31,7 +31,11 @@ from sqlalchemy import bindparam, text
 
 from soa_shared.scan_dimensions import PILLAR_WEIGHTS, SCORER_VERSION
 from app.routers.metrics import build_entity_metrics
-from app.services.cycle_scoring import FIRST_PILLARS_SCORER_VERSION, decode_json_field
+from app.services.cycle_scoring import (
+    FIRST_PILLARS_SCORER_VERSION,
+    build_scan_payload,
+    decode_json_field,
+)
 from app.services.lite_crosswalk import RunSignal
 from app.services.lite_pillars import build_pillars_payload
 
@@ -48,6 +52,15 @@ SCORE_PENDING = "pending"
 SCORE_NOT_MEASURABLE = "not_measurable"
 SCORE_EXPIRED = "expired"
 SCORE_UNAVAILABLE = "unavailable"
+# The crawl could not fully read the store this run (the scan reached a
+# non-'complete' terminal state and recorded why). Distinct from
+# 'unavailable', which says only that no score came out: this one knows
+# the reason and can show it. Whether a composite exists alongside it
+# depends on the scorer — a current-version run withholds the composite
+# when a dimension went unmeasured, while a legacy-scorer row still
+# produces its visibility-only figure — so this state does NOT imply a
+# null score, and callers must read composite_score to know.
+SCORE_PARTIAL_READ = "partial_read"
 
 # Mirrors build_cycle_report's own scan-status gates.
 _SCORABLE_SCAN_STATUSES = ("complete", "blocked", "failed")
@@ -204,6 +217,26 @@ def _fetch_run_signals_batch(conn, cycle_ids: List[int]) -> Dict[int, List[RunSi
     return signals_by_cycle
 
 
+def degraded_reason_for(scan_row) -> Optional[str]:
+    """
+    Why the crawl came up short this run, or None.
+
+    Pure over an already-fetched scan row — no query — and delegates to
+    the very same build_scan_payload the public status page and report
+    call, so the internal list can never word this differently from what
+    the visitor was told. Only ever non-null for a scan that reached a
+    non-'complete' terminal state; build_scan_payload populates it
+    nowhere else.
+
+    Guards the no-scan-row case explicitly: a LEFT JOIN that matched
+    nothing yields a TUPLE OF NONES, which is truthy, so
+    build_scan_payload's own `if not scan_row` check does not catch it.
+    """
+    if not scan_row or scan_row[0] is None:
+        return None
+    return (build_scan_payload(tuple(scan_row), {}) or {}).get("degraded_reason")
+
+
 # ─── Pillar breakdown ────────────────────────────────────────────────────
 
 
@@ -289,6 +322,7 @@ def _score_one(scan_row, metrics_rows: list, primary_entity_id: Optional[int],
             "scorer_version": scorer_version,
             "score_state": SCORE_EXPIRED,
             "pillars": None,
+            "degraded_reason": None,
         }
 
     pillars_payload = None
@@ -322,19 +356,36 @@ def _score_one(scan_row, metrics_rows: list, primary_entity_id: Optional[int],
                 else visibility
             )
 
-    return {
-        "composite_score": composite,
-        "scorer_version": scorer_version,
+    # The same degraded_reason the public status page and report show,
+    # from the same pure function over the same already-fetched scan row
+    # — no extra query, and no second definition of "degraded". Only
+    # ever populated for a scan that reached a non-'complete' terminal
+    # state; build_scan_payload returns it nowhere else.
+    degraded_reason = degraded_reason_for(scan_row)
+
+    if degraded_reason:
+        # Takes precedence over both available and unavailable: knowing
+        # the crawl came up short is the more useful thing to say, and
+        # it is true whether or not a composite survived.
+        score_state = SCORE_PARTIAL_READ
+    elif composite is not None:
+        score_state = SCORE_AVAILABLE
+    else:
         # composite is None at the CURRENT scorer version whenever
         # build_pillars_payload withheld it (state 'composite_withheld'
         # — an accessibility dimension went unmeasured this run — or
         # 'unverified' — a True Value encode wing was blocked). That is
         # a real, honest "we could not score this", distinct from a row
-        # that simply has no scan or no primary entity, but both are
-        # 'unavailable' to the list; pillars_state below tells them
-        # apart in the detail drawer.
-        "score_state": SCORE_AVAILABLE if composite is not None else SCORE_UNAVAILABLE,
+        # that simply has no scan or no primary entity; pillars_state
+        # tells those apart in the detail drawer.
+        score_state = SCORE_UNAVAILABLE
+
+    return {
+        "composite_score": composite,
+        "scorer_version": scorer_version,
+        "score_state": score_state,
         "pillars": pillars_payload,
+        "degraded_reason": degraded_reason,
     }
 
 
@@ -350,9 +401,9 @@ def score_cycles(conn, scan_row_by_cycle_id: Dict[int, tuple]) -> Dict[int, dict
     fetch_probe, input_url.
 
     Returns cycle_id -> {composite_score, scorer_version, score_state,
-    pillars}. Callers overlay the request-status-derived states
-    (pending / not_measurable) themselves — this function only knows
-    about scan and scorer facts.
+    pillars, degraded_reason}. Callers overlay the request-status-derived
+    states (pending / not_measurable) themselves — this function only
+    knows about scan and scorer facts.
     """
     cycle_ids = [cid for cid in scan_row_by_cycle_id if cid is not None]
     if not cycle_ids:
@@ -391,5 +442,6 @@ def score_cycles(conn, scan_row_by_cycle_id: Dict[int, tuple]) -> Dict[int, dict
                 "scorer_version": None,
                 "score_state": SCORE_UNAVAILABLE,
                 "pillars": None,
+                "degraded_reason": None,
             }
     return out

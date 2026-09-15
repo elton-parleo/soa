@@ -55,8 +55,10 @@ from app.services.lite_score_batch import (
     SCORE_AVAILABLE,
     SCORE_EXPIRED,
     SCORE_NOT_MEASURABLE,
+    SCORE_PARTIAL_READ,
     SCORE_PENDING,
     SCORE_UNAVAILABLE,
+    degraded_reason_for,
     pillar_breakdown,
     score_cycles,
 )
@@ -153,6 +155,10 @@ class LiteRequestListItem(BaseModel):
     composite_score: Optional[float] = None
     scorer_version: Optional[str] = None
     score_state: str = SCORE_UNAVAILABLE
+    # Why the crawl came up short this run, when it did — the same
+    # string the public status page and report show. Non-null exactly
+    # when score_state is 'partial_read'.
+    degraded_reason: Optional[str] = None
 
     # ip_hash is deliberately absent from this model — see the module
     # docstring and test_lite_requests.py's leak tests.
@@ -485,6 +491,12 @@ def _shape_row(row) -> dict:
     pages_fetched = decode_json_field(scan[4], None)
     continuation = row[_CONTINUATION_SLICE]
 
+    # Pure over the scan row already in hand — no query, and the same
+    # function (and therefore the same wording) the public status page
+    # and report use. Populated only for a scan that reached a
+    # non-'complete' terminal state; null everywhere else.
+    degraded_reason = degraded_reason_for(scan)
+
     return {
         "id": row[0],
         "token": row[1],
@@ -518,30 +530,48 @@ def _shape_row(row) -> dict:
         "continuation_cycle_id": continuation[0],
         "continuation_cycle_code": continuation[1],
         "continuation_cycle_status": continuation[2],
+        "degraded_reason": degraded_reason,
     }
 
 
-def _score_state_for(status: str, scored: Optional[dict]) -> dict:
+def _score_state_for(status: str, scored: Optional[dict], degraded_reason: Optional[str]) -> dict:
     """
     Overlays the request's own status onto what the scorer found. An
     in-progress row has no score yet by definition; a failed row never
     will. Only a row past both of those gates reports what the scorer
     actually returned.
+
+    degraded_reason rides along on every terminal row that has one, even
+    where the request's own status wins the score_state — a failed row
+    whose crawl was blocked should still be able to SAY the crawl was
+    blocked in the drawer.
     """
     if status in LITE_IN_PROGRESS_STATUSES:
-        return {"composite_score": None, "scorer_version": None, "score_state": SCORE_PENDING}
+        return {
+            "composite_score": None,
+            "scorer_version": None,
+            "score_state": SCORE_PENDING,
+            "degraded_reason": None,
+        }
     if status == LITE_STATUS_FAILED:
         return {
             "composite_score": None,
             "scorer_version": (scored or {}).get("scorer_version"),
             "score_state": SCORE_NOT_MEASURABLE,
+            "degraded_reason": degraded_reason,
         }
     if not scored:
-        return {"composite_score": None, "scorer_version": None, "score_state": SCORE_UNAVAILABLE}
+        return {
+            "composite_score": None,
+            "scorer_version": None,
+            "score_state": SCORE_PARTIAL_READ if degraded_reason else SCORE_UNAVAILABLE,
+            "degraded_reason": degraded_reason,
+        }
     return {
         "composite_score": scored.get("composite_score"),
         "scorer_version": scored.get("scorer_version"),
         "score_state": scored.get("score_state", SCORE_UNAVAILABLE),
+        "degraded_reason": degraded_reason,
     }
 
 
@@ -650,7 +680,9 @@ def list_lite_requests(
         scored_by_cycle = score_cycles(conn, scan_row_by_cycle_id) if scan_row_by_cycle_id else {}
 
     for item in shaped:
-        item.update(_score_state_for(item["status"], scored_by_cycle.get(item["cycle_id"])))
+        item.update(_score_state_for(
+            item["status"], scored_by_cycle.get(item["cycle_id"]), item["degraded_reason"],
+        ))
 
     return LiteRequestListResponse(
         items=[LiteRequestListItem(**item) for item in shaped],
@@ -727,15 +759,21 @@ def get_lite_request(lite_request_id: int):
             elif report is not None:
                 pillars = report.get("pillars")
                 composite = report.get("composite")
+                if item["degraded_reason"]:
+                    state = SCORE_PARTIAL_READ
+                elif composite is not None:
+                    state = SCORE_AVAILABLE
+                else:
+                    state = SCORE_UNAVAILABLE
                 scored = {
                     "composite_score": composite,
                     "scorer_version": (
                         decode_json_field(scan_row[3], {}) or {}
                     ).get("scorer_version") or "1",
-                    "score_state": SCORE_AVAILABLE if composite is not None else SCORE_UNAVAILABLE,
+                    "score_state": state,
                 }
 
-    item.update(_score_state_for(item["status"], scored))
+    item.update(_score_state_for(item["status"], scored, item["degraded_reason"]))
     item["pillars"] = pillar_breakdown(pillars)
     item["pillars_state"] = (pillars or {}).get("state")
 

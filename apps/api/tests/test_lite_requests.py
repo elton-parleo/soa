@@ -22,8 +22,10 @@ from sqlalchemy import create_engine
 import app.routers.lite_requests as lite_requests
 from app.services.lite_score_batch import (
     SCORE_NOT_MEASURABLE,
+    SCORE_PARTIAL_READ,
     SCORE_PENDING,
     SCORE_UNAVAILABLE,
+    degraded_reason_for,
 )
 from soa_shared.org_helpers import LEADGEN_ORG_NAME
 
@@ -613,3 +615,104 @@ def test_complete_row_without_a_cycle_is_unavailable_not_pending(db):
     item = _list().items[0]
     assert item.score_state == SCORE_UNAVAILABLE
     assert item.composite_score is None
+
+
+# ─── Partial read (degraded crawl) ───────────────────────────────────────
+
+# engine.py writes degraded_reason as a sibling key inside the same
+# `dimensions` jsonb, and build_scan_payload only reads it for a scan
+# that reached a non-'complete' terminal state.
+_DEGRADED_DIMENSIONS = {
+    "degraded_reason": "every sampled product URL returned a challenge page",
+    "degraded_banner_facts": {"sampled": 14, "readable": 0},
+    "scorer_version": "5",
+}
+
+
+def _insert_scan(conn, lite_request_id, status="complete", dimensions=None, total_score=None):
+    conn.exec_driver_sql(
+        "INSERT INTO soa_lite_scan_results "
+        "(lite_request_id, status, total_score, integrity_capped, dimensions) "
+        "VALUES (?, ?, ?, 0, ?)",
+        (
+            lite_request_id, status, total_score,
+            json.dumps(dimensions) if dimensions is not None else None,
+        ),
+    )
+
+
+def test_degraded_scan_reports_partial_read_with_its_reason(db):
+    with db.begin() as conn:
+        _insert(conn, token="t1", status="complete", cycle_id=None)
+        _insert_scan(conn, 1, status="blocked", dimensions=_DEGRADED_DIMENSIONS)
+
+    item = _list().items[0]
+    assert item.score_state == SCORE_PARTIAL_READ
+    assert item.degraded_reason == _DEGRADED_DIMENSIONS["degraded_reason"]
+    assert item.scan_status == "blocked"
+
+
+def test_non_degraded_scan_does_not_report_partial_read(db):
+    with db.begin() as conn:
+        _insert(conn, token="t1", status="complete", cycle_id=None)
+        # A completed scan: build_scan_payload never populates
+        # degraded_reason on this path, whatever the dimensions hold.
+        _insert_scan(conn, 1, status="complete", dimensions=_DEGRADED_DIMENSIONS, total_score=71)
+
+    item = _list().items[0]
+    assert item.degraded_reason is None
+    assert item.score_state != SCORE_PARTIAL_READ
+    assert item.score_state == SCORE_UNAVAILABLE
+
+
+def test_row_with_no_scan_row_at_all_is_not_partial_read(db):
+    """A LEFT JOIN that matched nothing yields a tuple of Nones, which is
+    truthy — the guard in degraded_reason_for is what keeps that from
+    being read as a degraded scan."""
+    with db.begin() as conn:
+        _insert(conn, token="t1", status="complete", cycle_id=None)
+
+    item = _list().items[0]
+    assert item.degraded_reason is None
+    assert item.score_state == SCORE_UNAVAILABLE
+
+
+def test_failed_row_still_reports_why_its_crawl_came_up_short(db):
+    """The request's own status wins the score_state, but the reason
+    still rides along so the drawer can show it."""
+    with db.begin() as conn:
+        _insert(conn, token="t1", status="failed", cycle_id=None, error_message="FetchError")
+        _insert_scan(conn, 1, status="blocked", dimensions=_DEGRADED_DIMENSIONS)
+
+    item = _list().items[0]
+    assert item.score_state == SCORE_NOT_MEASURABLE
+    assert item.degraded_reason == _DEGRADED_DIMENSIONS["degraded_reason"]
+
+
+def test_in_progress_row_never_reports_a_degraded_reason(db):
+    """Mid-run the crawl has not come up short — it has not finished."""
+    with db.begin() as conn:
+        _insert(conn, token="t1", status="running", cycle_id=None)
+        _insert_scan(conn, 1, status="running", dimensions=_DEGRADED_DIMENSIONS)
+
+    item = _list().items[0]
+    assert item.score_state == SCORE_PENDING
+    assert item.degraded_reason is None
+
+
+def test_detail_carries_the_degraded_reason_too(db):
+    with db.begin() as conn:
+        _insert(conn, token="t1", status="complete", cycle_id=None)
+        _insert_scan(conn, 1, status="blocked", dimensions=_DEGRADED_DIMENSIONS)
+
+    detail = lite_requests.get_lite_request(1)
+    assert detail.score_state == SCORE_PARTIAL_READ
+    assert detail.degraded_reason == _DEGRADED_DIMENSIONS["degraded_reason"]
+
+
+def test_degraded_reason_for_guards_the_empty_join_tuple():
+    assert degraded_reason_for(None) is None
+    assert degraded_reason_for((None,) * 9) is None
+    assert degraded_reason_for(
+        ("blocked", None, None, json.dumps(_DEGRADED_DIMENSIONS), None, None, None, None, None)
+    ) == _DEGRADED_DIMENSIONS["degraded_reason"]

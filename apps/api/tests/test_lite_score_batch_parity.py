@@ -32,6 +32,7 @@ import app.routers.public_lite as public_lite
 from app.services.cycle_scoring import build_cycle_report
 from app.services.lite_score_batch import (
     SCORE_EXPIRED,
+    SCORE_PARTIAL_READ,
     pillar_breakdown,
     score_cycles,
 )
@@ -125,11 +126,15 @@ def seeded(db):
         )
         # 5. No scan row at all -> fallback with accessibility unknown.
         _seed_generic_cycle(conn, "parity-noscan", cycle_id=73, entity_id=503, scan=False)
-        # 6. A blocked crawl at the current scorer version.
+        # 6. A blocked crawl at the current scorer version. Carries a
+        #    real degraded_reason, the way engine.py writes one, so the
+        #    partial-read branch is genuinely exercised rather than
+        #    merely reachable.
         blocked = dict(_V3_CRAWL_DIMENSIONS)
         blocked["catalog_context"] = {
             **(blocked.get("catalog_context") or {}), "coverage": "blocked",
         }
+        blocked["degraded_reason"] = "every sampled product URL returned a challenge page"
         _seed_generic_cycle(
             conn, "parity-blocked", cycle_id=74, entity_id=504,
             dimensions=blocked, scan_status="blocked",
@@ -198,6 +203,7 @@ def test_the_fixture_actually_covers_every_scoring_branch(seeded):
     versions = {row["scorer_version"] for row in actual.values()}
 
     assert SCORE_EXPIRED in states, "no retired-scorer row in the fixture"
+    assert SCORE_PARTIAL_READ in states, "no degraded-crawl row in the fixture"
     assert "available" in states
     assert "5" in versions and "1" in versions, "both current and legacy scorers must be covered"
     assert any(row["pillars"] is not None for row in actual.values())
@@ -264,3 +270,35 @@ def test_batched_path_issues_a_fixed_number_of_queries_regardless_of_page_size(s
         f"expected at most 6 statements for the whole page, got {len(statements)}:\n"
         + "\n---\n".join(statements)
     )
+
+
+def test_partial_read_is_driven_by_the_reason_not_by_the_missing_score(seeded):
+    """
+    partial_read and unavailable both mean "no number in the Score
+    cell", so the distinction is only worth having if it tracks the
+    reason rather than the absence. Every partial_read row must carry a
+    degraded_reason, and no other state may.
+    """
+    _, actual = _both_paths(seeded)
+
+    partial = {cid: r for cid, r in actual.items() if r["score_state"] == SCORE_PARTIAL_READ}
+    assert partial, "fixture has no degraded row"
+
+    for cycle_id, row in actual.items():
+        if row["score_state"] == SCORE_PARTIAL_READ:
+            assert row["degraded_reason"], f"cycle {cycle_id} is partial_read with no reason"
+        else:
+            assert not row["degraded_reason"], (
+                f"cycle {cycle_id} carries a degraded_reason but reports "
+                f"{row['score_state']!r} rather than partial_read"
+            )
+
+
+def test_a_completed_scan_never_reports_a_degraded_reason(seeded):
+    """build_scan_payload only reads degraded_reason on its
+    non-'complete' branch — asserted here so a future change to that
+    function cannot start flagging healthy rows as partial reads."""
+    _, actual = _both_paths(seeded)
+    for cycle_id, row in actual.items():
+        if row["score_state"] == "available":
+            assert row["degraded_reason"] is None, cycle_id

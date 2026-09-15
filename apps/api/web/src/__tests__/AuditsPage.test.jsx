@@ -15,6 +15,7 @@ import {
   leadFlags,
   openUrl,
   rangeCutoff,
+  rowPill,
   scoreCell,
   shouldPoll,
   statusPill,
@@ -304,5 +305,75 @@ describe('rangeCutoff', () => {
   it('returns null for all time, so no bound is sent at all', () => {
     expect(rangeCutoff('all', now)).toBeNull()
     expect(rangeCutoff('', now)).toBeNull()
+  })
+})
+
+
+// ─── Partial read (degraded crawl) ────────────────────────────────────────────
+
+const DEGRADED = 'every sampled product URL returned a challenge page'
+
+describe('rowPill', () => {
+  it('shows the amber Partial read pill when the crawl came up short', () => {
+    const pill = rowPill(row({ status: 'complete', score_state: 'partial_read' }))
+    expect(pill.label).toBe('Partial read')
+    // The mock's amber pair, not the green "Complete" one.
+    expect(pill.bg).toBe('#FEF3C7')
+    expect(pill.color).toBe('#92400E')
+  })
+
+  it('leaves a healthy row on its own status pill', () => {
+    const healthy = rowPill(row({ status: 'complete', score_state: 'available' }))
+    expect(healthy).toEqual(statusPill('complete'))
+    expect(healthy.label).toBe('Complete')
+  })
+
+  it.each([
+    ['running', 'pending'],
+    ['failed', 'not_measurable'],
+    ['complete', 'expired'],
+    ['complete', 'unavailable'],
+  ])('leaves a %s row in state %s on its status pill', (status, score_state) => {
+    expect(rowPill(row({ status, score_state }))).toEqual(statusPill(status))
+  })
+
+  it('does not throw on a missing row', () => {
+    expect(() => rowPill(undefined)).not.toThrow()
+  })
+})
+
+describe('scoreCell for a partial read', () => {
+  it('says Partial read when the degraded crawl left no composite', () => {
+    expect(scoreCell(row({ score_state: 'partial_read', composite_score: null })))
+      .toEqual({ kind: 'muted', label: 'Partial read' })
+  })
+
+  it('still shows a number when one survived, and reads the bar amber', () => {
+    // A legacy-scorer row produces a visibility-only figure even from a
+    // degraded crawl — the mock shows exactly this (a score beside a
+    // Partial read pill).
+    const cell = scoreCell(row({ score_state: 'partial_read', composite_score: 62 }))
+    expect(cell).toMatchObject({ kind: 'score', value: 62, partial: true })
+  })
+
+  it('does not mark a healthy row partial', () => {
+    expect(scoreCell(row({ score_state: 'available', composite_score: 62 })).partial)
+      .toBeUndefined()
+  })
+})
+
+describe('statusSubline for a partial read', () => {
+  it('names the reason the crawl came up short, ahead of the duration', () => {
+    expect(statusSubline(row({
+      status: 'complete', score_state: 'partial_read',
+      degraded_reason: DEGRADED, duration_seconds: 372,
+    }))).toBe(DEGRADED)
+  })
+
+  it('still shows the duration for a row whose crawl read the store', () => {
+    expect(statusSubline(row({
+      status: 'complete', score_state: 'available',
+      degraded_reason: null, duration_seconds: 372, duration_is_estimate: false,
+    }))).toBe('Ran in 6m 12s')
   })
 })

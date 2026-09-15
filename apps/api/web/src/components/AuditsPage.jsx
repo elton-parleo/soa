@@ -74,9 +74,9 @@ const STATUS_CHIPS = [
 // ─── Pure helpers (exported for tests) ────────────────────────────────────────
 
 /**
- * One pill per LITE_STATUSES. The mock's sixth pill, "Partial read", is
- * deliberately absent: it is not a DB status at all but a UI state
- * derived from the report payload, and this PR renders statuses.
+ * One pill per LITE_STATUSES. Takes a bare status, so it maps the DB's
+ * own vocabulary and nothing else — the mock's amber "Partial read"
+ * pill is NOT a status and lives in rowPill below.
  */
 export function statusPill(status) {
   switch (status) {
@@ -138,6 +138,20 @@ export function scoreCell(row) {
       return { kind: 'muted', label: 'Not measurable' }
     case 'expired':
       return { kind: 'muted', label: 'Expired' }
+    case 'partial_read':
+      // A degraded crawl usually leaves no composite at all, but a
+      // legacy-scorer row still produces its visibility-only figure —
+      // show the number when there is one, exactly as the mock does,
+      // and let the amber pill carry the caveat.
+      if (row.composite_score === null || row.composite_score === undefined) {
+        return { kind: 'muted', label: 'Partial read' }
+      }
+      return {
+        kind: 'score',
+        value: Math.round(row.composite_score),
+        low: row.composite_score < LOW_SCORE_THRESHOLD,
+        partial: true,
+      }
     default:
       return { kind: 'none', label: '—' }
   }
@@ -152,6 +166,23 @@ export function openUrl(row) {
   if (!row || !row.token) return null
   if (row.status === 'complete') return reportUrl(row.token)
   return `${PUBLIC_AUDIT_BASE_URL}/s/${encodeURIComponent(row.token)}`
+}
+
+/**
+ * The pill a ROW actually shows. Identical to statusPill for every row
+ * whose crawl read the store, and the mock's amber "Partial read"
+ * for one whose crawl came up short.
+ *
+ * Partial read is deliberately not a seventh LITE_STATUSES value — such
+ * a row IS complete, and its status pill saying so while the score says
+ * nothing is exactly the gap this fills. degraded_reason is the same
+ * string the visitor's own status page showed them.
+ */
+export function rowPill(row) {
+  if (row && row.score_state === 'partial_read') {
+    return { label: 'Partial read', bg: T.amberLight, color: '#92400E', pulse: false }
+  }
+  return statusPill(row && row.status)
 }
 
 /** Poll only while something on screen can actually change. */
@@ -221,6 +252,9 @@ export function competitorTag(row) {
 
 /** The status column's second line. */
 export function statusSubline(row) {
+  // The reason the crawl came up short outranks the duration: it is
+  // the thing a partial-read row exists to tell you.
+  if (row.degraded_reason) return row.degraded_reason
   if (IN_PROGRESS_STATUSES.includes(row.status)) {
     const parts = []
     if (row.current_task_text) parts.push(row.current_task_text)
@@ -238,8 +272,8 @@ export function statusSubline(row) {
 
 // ─── Small presentational pieces ──────────────────────────────────────────────
 
-function Pill({ status }) {
-  const pill = statusPill(status)
+function Pill({ row }) {
+  const pill = rowPill(row)
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px',
@@ -295,7 +329,7 @@ function ScoreCell({ row }) {
           <div style={{
             display: 'block', height: '100%',
             width: `${Math.min(100, Math.max(0, cell.value))}%`,
-            background: cell.low ? T.amber : T.teal,
+            background: cell.low || cell.partial ? T.amber : T.teal,
           }} />
         </div>
       </div>
@@ -893,7 +927,7 @@ export default function AuditsPage({ onNavigate }) {
                     </td>
 
                     <td style={cellStyle}>
-                      <Pill status={row.status} />
+                      <Pill row={row} />
                       {subline && (
                         <div style={{ fontSize: 11, color: T.slate, marginTop: 4 }}>{subline}</div>
                       )}
