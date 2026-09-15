@@ -357,4 +357,20 @@ export const api = {
   // own key for this endpoint (see app/routers/truesync.py).
   putSyncRule: (data) =>
     request('PUT', '/api/truesync/sync-rules', data),
+
+  // Audits — the internal, read-only view over soa_lite_requests
+  // (app/routers/lite_requests.py). Params are dropped when empty so
+  // the query string only ever carries filters that are actually set.
+  getLiteRequests: (params = {}) => {
+    const search = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === '' || value === false) return
+      search.set(key, String(value))
+    })
+    const qs = search.toString()
+    return get(`/api/lite-requests${qs ? `?${qs}` : ''}`)
+  },
+
+  getLiteRequest: (liteRequestId) =>
+    get(`/api/lite-requests/${liteRequestId}`),
 }
