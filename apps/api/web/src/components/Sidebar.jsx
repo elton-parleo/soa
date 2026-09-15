@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { id: 'studies',   label: 'Studies'         },
   { id: 'entities',  label: 'Entity Registry' },
   { id: 'command-center', label: 'Command Center' },
+  { id: 'audits',    label: 'Audits'          },
 ]
 
 // ─── Shared Sidebar component ─────────────────────────────────────────────────

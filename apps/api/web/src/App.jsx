@@ -11,6 +11,7 @@ import ActionsPage       from './components/ActionsPage.jsx'
 import StudyLibrary      from './components/StudyLibrary.jsx'
 import StudyDetail      from './components/StudyDetail.jsx'
 import MerchantCommandCenter from './components/MerchantCommandCenter.jsx'
+import AuditsPage        from './components/AuditsPage.jsx'
 import LiteWidget        from './lite/LiteWidget.jsx'
 import LandingPage       from './lite/LandingPage.jsx'
 import BotsPage          from './lite/BotsPage.jsx'
@@ -25,7 +26,7 @@ function getInitialView() {
     'entities', 'metrics',
     'studies', 'study-detail',
     'responses', 'actions',
-    'command-center',
+    'command-center', 'audits',
   ]
   return validViews.includes(hash) ? hash : 'dashboard'
 }
@@ -204,6 +205,17 @@ function AppContent() {
     return (
       <MerchantCommandCenter
         onNavigate={(v) => navigateTo(v)}
+      />
+    )
+  }
+
+  // Internal Audits list. Passes params through to navigateTo so the
+  // "Start" link can hand NewCycleFlow the audit token it already
+  // accepts, and the continuation link can open its cycle.
+  if (view === 'audits') {
+    return (
+      <AuditsPage
+        onNavigate={(v, params) => navigateTo(v, params)}
       />
     )
   }
