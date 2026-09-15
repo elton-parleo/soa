@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.routers import (
     studies, entities, cycles, metrics, scope, actions, full_analysis,
-    truesync, public_lite, public_demo, public_full_analysis,
+    truesync, lite_requests, public_lite, public_demo, public_full_analysis,
 )
 from app.auth import verify_token
 
@@ -93,6 +93,17 @@ app.include_router(
 # this app at all (the page's reads go straight to TRUESYNC_API_BASE).
 app.include_router(
     truesync.router,
+    prefix="/api",
+    dependencies=[Depends(verify_token)],
+)
+
+# Internal Audits list — an authenticated, read-only view over
+# soa_lite_requests. Authed exactly like the routers above; it is
+# deliberately NOT scoped to the caller's organization (the rows live
+# under 'Parleo Lead Gen', never the caller's own org) — see
+# app/routers/lite_requests.py's module docstring.
+app.include_router(
+    lite_requests.router,
     prefix="/api",
     dependencies=[Depends(verify_token)],
 )

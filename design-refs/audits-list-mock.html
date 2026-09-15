@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SoA app — Audits list (design mock)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Tokens — verbatim from CycleDashboard.jsx / Sidebar.jsx */
+  :root{
+    --navy:#0D1829; --navyMid:#162032; --navyBdr:#1E2D42;
+    --white:#FFFFFF; --offWhite:#F8FAFC;
+    --slate:#64748B; --slateLight:#94A3B8;
+    --border:#E2E8F0; --borderDark:#CBD5E1;
+    --text:#0F172A; --textMid:#334155;
+    --teal:#0D9488; --tealLight:#CCFBF1;
+    --indigo:#4F46E5;
+    --green:#16A34A; --greenLight:#DCFCE7;
+    --amber:#D97706; --amberLight:#FEF3C7;
+    --red:#DC2626; --redLight:#FEE2E2;
+    --blue:#1D4ED8; --blueLight:#DBEAFE;
+    --sidebarText:#94A3B8;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--offWhite);color:var(--text);font-family:'DM Sans',system-ui,sans-serif;font-size:14px;line-height:1.45}
+  a{color:inherit}
+  button{font:inherit}
+
+  /* ── Sidebar (existing component, Audits added) ── */
+  .sidebar{position:fixed;top:0;left:0;width:200px;height:100vh;background:var(--navy);display:flex;flex-direction:column;z-index:10}
+  .brand{padding:24px 20px 16px}
+  .brand .row{display:flex;align-items:center;gap:8px}
+  .brand .word{font-size:16px;font-weight:700;color:#fff;letter-spacing:.06em}
+  .brand .sub{color:var(--sidebarText);font-size:11px;margin-top:2px}
+  .nav{flex:1;padding:8px 0}
+  .nav div{padding:10px 20px;font-size:13px;color:var(--sidebarText);border-left:3px solid transparent;cursor:pointer}
+  .nav div.active{color:#fff;font-weight:600;background:var(--navyMid);border-left-color:var(--teal)}
+  .nav .new{display:inline-block;margin-left:8px;font-size:9px;font-weight:700;color:var(--navy);background:var(--teal);padding:1px 5px;border-radius:4px;vertical-align:middle}
+  .sidebar .foot{padding:16px 20px;border-top:1px solid var(--navyBdr);font-size:12px;color:var(--sidebarText)}
+
+  /* ── Page ── */
+  .main{margin-left:200px;padding:32px 36px 60px;min-height:100vh}
+  .page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:20px}
+  .page-head h1{font-size:22px;font-weight:700;margin:0 0 4px}
+  .page-head p{margin:0;color:var(--slate);font-size:13px;max-width:60ch}
+  .btn{padding:10px 16px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--textMid);font-weight:600;font-size:13px;cursor:pointer}
+  .btn.primary{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .btn.small{padding:6px 10px;font-size:12px;font-weight:500}
+  .btn.danger{color:var(--red);border-color:#FECACA}
+
+  /* ── Summary strip ── */
+  .strip{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
+  .stat{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+  .stat .l{font-size:12px;color:var(--slate)}
+  .stat .v{font-size:24px;font-weight:700;margin-top:2px;line-height:1.1}
+  .stat .d{font-size:12px;color:var(--slate);margin-top:4px}
+  .stat .d b{color:var(--green);font-weight:600}
+  .stat .d b.down{color:var(--red)}
+
+  /* ── Filters ── */
+  .filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .search{flex:1;min-width:260px;max-width:420px;display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--slateLight);font-size:13px}
+  .search span{color:var(--text)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{padding:6px 10px;border-radius:999px;border:1px solid var(--border);background:#fff;font-size:12px;color:var(--textMid);cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+  .chip .n{color:var(--slateLight)}
+  .chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .chip.on .n{color:var(--slateLight)}
+  .toggle{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--textMid)}
+  .toggle .sw{width:30px;height:16px;border-radius:999px;background:var(--teal);position:relative}
+  .toggle .sw::after{content:"";position:absolute;top:2px;right:2px;width:12px;height:12px;border-radius:50%;background:#fff}
+  .toggle .sw.off{background:var(--borderDark)}
+  .toggle .sw.off::after{right:auto;left:2px}
+  .meta-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--slate);margin-bottom:8px}
+
+  /* ── Table ── */
+  .table-wrap{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  table{width:100%;border-collapse:collapse;table-layout:fixed}
+  thead th{text-align:left;font-size:11px;font-weight:600;color:var(--slate);padding:10px 12px;background:var(--offWhite);border-bottom:1px solid var(--border);white-space:nowrap}
+  thead th.sort{color:var(--text)}
+  thead th.sort::after{content:" ↓";color:var(--slateLight)}
+  tbody td{padding:11px 12px;border-bottom:1px solid var(--border);vertical-align:top;font-size:13px}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr{cursor:pointer}
+  tbody tr:hover td{background:#FBFCFE}
+  tbody tr.selected td{background:#F0FDFA}
+  tbody tr.selected td:first-child{box-shadow:inset 3px 0 0 var(--teal)}
+  .brandcell{display:flex;gap:10px;align-items:flex-start;min-width:0}
+  .logo{width:28px;height:28px;border-radius:6px;background:var(--offWhite);border:1px solid var(--border);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--textMid);flex:none}
+  .brand-name{font-weight:600}
+  .url{color:var(--slate);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .url.none{color:var(--slateLight);font-style:italic}
+  .email{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .email.none{color:var(--slateLight);font-weight:400}
+  .flags{display:flex;gap:6px;margin-top:3px;font-size:11px;color:var(--slate)}
+  .flags .ok{color:var(--green)}
+  .flags .wait{color:var(--amber)}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap}
+  .pill i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+  .pill.complete{background:var(--greenLight);color:#166534}
+  .pill.running,.pill.generating,.pill.identifying{background:var(--blueLight);color:var(--blue)}
+  .pill.running i{animation:pulse 1.2s infinite}
+  .pill.pending{background:#F1F5F9;color:var(--slate)}
+  .pill.failed{background:var(--redLight);color:#991B1B}
+  .pill.partial{background:var(--amberLight);color:#92400E}
+  @keyframes pulse{50%{opacity:.3}}
+  @media (prefers-reduced-motion:reduce){.pill.running i{animation:none}}
+  .step{font-size:11px;color:var(--slate);margin-top:4px}
+  .score{display:flex;align-items:center;gap:8px}
+  .score .n{font-weight:700;font-size:15px;min-width:24px}
+  .bar{height:6px;width:64px;background:var(--border);border-radius:3px;overflow:hidden}
+  .bar i{display:block;height:100%;background:var(--teal)}
+  .bar i.low{background:var(--amber)}
+  .score.na{color:var(--slateLight);font-size:12px}
+  .comp{font-size:12px;color:var(--textMid)}
+  .comp .src{display:inline-block;margin-left:4px;font-size:10px;padding:1px 5px;border-radius:4px;background:var(--offWhite);border:1px solid var(--border);color:var(--slate);vertical-align:middle}
+  .when{white-space:nowrap}
+  .when .rel{color:var(--slate);font-size:12px}
+  .fa{font-size:12px}
+  .fa a{color:var(--indigo);text-decoration:none;font-weight:600}
+  .fa .none{color:var(--slateLight)}
+  .acts{display:flex;gap:6px;justify-content:flex-end}
+  .icon{width:28px;height:28px;border:1px solid var(--border);border-radius:6px;background:#fff;display:grid;place-items:center;color:var(--textMid);cursor:pointer;font-size:13px}
+  .err{margin-top:6px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:6px 8px;font-family:var(--mono);font-size:11px;color:#991B1B;white-space:normal}
+  .pager{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-top:1px solid var(--border);font-size:12px;color:var(--slate);background:var(--offWhite)}
+  .pager .pg{display:flex;gap:4px}
+  .pager .pg span{padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:#fff}
+  .pager .pg span.cur{background:var(--navy);color:#fff;border-color:var(--navy)}
+
+  /* ── Detail drawer ── */
+  .drawer{position:fixed;top:0;right:0;width:440px;height:100vh;background:#fff;border-left:1px solid var(--border);box-shadow:-8px 0 24px rgba(15,23,42,.06);display:flex;flex-direction:column;z-index:20}
+  .drawer .dh{padding:20px 22px 14px;border-bottom:1px solid var(--border)}
+  .drawer .dh .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .drawer h2{margin:0;font-size:18px;font-weight:700}
+  .drawer .dh .tok{font-family:var(--mono);font-size:11px;color:var(--slate);margin-top:4px}
+  .drawer .body{flex:1;overflow:auto;padding:16px 22px 24px}
+  .sec{margin-bottom:20px}
+  .sec h3{font-size:12px;font-weight:600;color:var(--slate);margin:0 0 8px}
+  .kv{display:grid;grid-template-columns:130px 1fr;row-gap:7px;column-gap:12px;font-size:13px}
+  .kv .k{color:var(--slate)}
+  .kv .v{color:var(--text);min-width:0;word-break:break-word}
+  .kv .v.mono{font-family:var(--mono);font-size:12px}
+  .kv .v.muted{color:var(--slateLight)}
+  .drawer .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .timeline{border-left:2px solid var(--border);margin-left:5px;padding-left:14px;display:flex;flex-direction:column;gap:10px}
+  .ev{position:relative;font-size:12px}
+  .ev::before{content:"";position:absolute;left:-20px;top:5px;width:8px;height:8px;border-radius:50%;background:var(--borderDark)}
+  .ev.done::before{background:var(--teal)}
+  .ev.err::before{background:var(--red)}
+  .ev .t{color:var(--slateLight);font-family:var(--mono);font-size:11px;margin-right:8px}
+  .ev .task{font-weight:600;color:var(--textMid);margin-right:6px}
+  .dims{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .dim{border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+  .dim .l{font-size:11px;color:var(--slate)}
+  .dim .v{font-weight:700;font-size:15px}
+  .dim .v small{font-weight:400;color:var(--slateLight);font-size:11px}
+  .note{background:var(--amberLight);border:1px solid #FDE68A;border-radius:8px;padding:8px 10px;font-size:12px;color:#92400E}
+
+  /* ── Mock annotations (not part of the UI) ── */
+  .annot{margin-top:36px;border-top:2px dashed var(--borderDark);padding-top:24px;max-width:960px}
+  .annot h2{font-size:15px;margin:0 0 6px}
+  .annot p{color:var(--slate);font-size:13px;margin:0 0 14px}
+  .annot table{table-layout:auto;background:#fff;border:1px solid var(--border);border-radius:8px}
+  .annot td,.annot th{font-size:12px;padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+  .annot th{background:var(--offWhite);text-align:left;color:var(--slate);font-weight:600}
+  .annot code{font-family:var(--mono);font-size:11px;background:var(--offWhite);padding:1px 4px;border-radius:3px}
+  .annot .warn{color:#92400E}
+
+  @media (max-width:1180px){ .drawer{display:none} }
+</style>
+</head>
+<body>
+
+<!-- ───────────── Sidebar ───────────── -->
+<aside class="sidebar">
+  <div class="brand">
+    <div class="row">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="8" height="20" rx="1.5" fill="hsl(213,99%,50%)"/><rect x="14" y="6" width="8" height="12" rx="1.5" fill="hsl(213,99%,50%)" opacity=".4"/></svg>
+      <span class="word">PARLEO</span>
+    </div>
+    <div class="sub">SoA Diagnostic</div>
+  </div>
+  <nav class="nav">
+    <div>Cycles</div>
+    <div>Studies</div>
+    <div>Entity Registry</div>
+    <div>Command Center</div>
+    <div class="active">Audits<span class="new">NEW</span></div>
+  </nav>
+  <div class="foot">Log Out</div>
+</aside>
+
+<!-- ───────────── Main ───────────── -->
+<main class="main">
+
+  <div class="page-head">
+    <div>
+      <h1>Audits</h1>
+      <p>Every audit submitted at parleo.io/audit, with the email the visitor left on the status page. One row per <code style="font-family:var(--mono);font-size:12px">soa_lite_requests</code> row.</p>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn">Export CSV</button>
+      <button class="btn primary">Open audit tool</button>
+    </div>
+  </div>
+
+  <div class="strip">
+    <div class="stat"><div class="l">Audits, last 30 days</div><div class="v">184</div><div class="d"><b>+22%</b> vs prior 30 days</div></div>
+    <div class="stat"><div class="l">Leads captured</div><div class="v">61</div><div class="d">33% of audits left an email</div></div>
+    <div class="stat"><div class="l">In progress now</div><div class="v">3</div><div class="d">oldest started 4 min ago</div></div>
+    <div class="stat"><div class="l">Failed, last 7 days</div><div class="v">5</div><div class="d"><b class="down">2 blocked</b> at the crawl step</div></div>
+    <div class="stat"><div class="l">Full Analyses started</div><div class="v">7</div><div class="d">from audits in this window</div></div>
+  </div>
+
+  <div class="filters">
+    <div class="search">⌕ <span>vuori</span><span style="color:var(--slateLight);margin-left:auto">brand, email, token, store URL</span></div>
+    <div class="chips">
+      <span class="chip on">All <span class="n">184</span></span>
+      <span class="chip">Complete <span class="n">168</span></span>
+      <span class="chip">In progress <span class="n">3</span></span>
+      <span class="chip">Failed <span class="n">13</span></span>
+    </div>
+    <label class="toggle"><span class="sw"></span>Leads only</label>
+    <span class="chip">Last 30 days ▾</span>
+    <span class="chip">Competitor source ▾</span>
+  </div>
+
+  <div class="meta-row">
+    <span>Showing 1–10 of 184 · sorted by newest</span>
+    <span>Auto-refreshes every 30 s while an audit is in progress</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <colgroup>
+        <col style="width:20%"><col style="width:19%"><col style="width:12%"><col style="width:11%"><col style="width:16%"><col style="width:10%"><col style="width:7%"><col style="width:5%">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Brand</th><th>Lead</th><th>Status</th><th>Score</th><th>Competitors</th><th class="sort">Submitted</th><th>Full Analysis</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td><div class="brandcell"><div class="logo">V</div><div style="min-width:0"><div class="brand-name">Vuori</div><div class="url">vuoriclothing.com</div></div></div></td>
+          <td><div class="email">m.tanaka@vuori.com</div><div class="flags"><span class="ok">✓ Report emailed</span><span class="ok">✓ Team notified</span></div></td>
+          <td><span class="pill complete"><i></i>Complete</span><div class="step">Ran in 6m 12s</div></td>
+          <td><div class="score"><span class="n">41</span><div class="bar"><i style="width:41%"></i></div></div></td>
+          <td class="comp">Lululemon, Alo Yoga, Rhone, Ten Thousand, Outdoor Voices<span class="src">mixed · 2 manual</span></td>
+          <td class="when">Sep 15, 09:42<div class="rel">18 min ago</div></td>
+          <td class="fa"><a href="#">Start ›</a></td>
+          <td><div class="acts"><span class="icon" title="Open report">↗</span><span class="icon" title="Copy report link">⧉</span></div></td>
+        </tr>
+
+        <tr class="selected">
+          <td><div class="brandcell"><div class="logo">A</div><div style="min-width:0"><div class="brand-name">Allbirds</div><div class="url">allbirds.com</div></div></div></td>
+          <td><div class="email">jordan.p@allbirds.com</div><div class="flags"><span class="ok">✓ Report emailed</span><span class="ok">✓ Team notified</span></div></td>
+          <td><span class="pill complete"><i></i>Complete</span><div class="step">Ran in 7m 40s</div></td>
+          <td><div class="score"><span class="n">58</span><div class="bar"><i style="width:58%"></i></div></div></td>
+          <td class="comp">Rothy's, Veja, On, Hoka, Nike<span class="src">generated</span></td>
+          <td class="when">Sep 15, 08:10<div class="rel">1 h ago</div></td>
+          <td class="fa"><a href="#">CYC-0412 ›</a><div style="color:var(--slate)">running</div></td>
+          <td><div class="acts"><span class="icon">↗</span><span class="icon">⧉</span></div></td>
+        </tr>
+
+        <tr>
+          <td><div class="brandcell"><div class="logo">C</div><div style="min-width:0"><div class="brand-name">Chewy</div><div class="url">chewy.com</div></div></div></td>
+          <td><div class="email none">No email yet</div><div class="flags"><span>Report ready · not sent</span></div></td>
+          <td><span class="pill complete"><i></i>Complete</span><div class="step">Ran in 5m 55s</div></td>
+          <td><div class="score"><span class="n">63</span><div class="bar"><i style="width:63%"></i></div></div></td>
+          <td class="comp">Petco, PetSmart, Amazon, Walmart, Petflow<span class="src">generated</span></td>
+          <td class="when">Sep 14, 22:31<div class="rel">11 h ago</div></td>
+          <td class="fa"><span class="none">—</span></td>
+          <td><div class="acts"><span class="icon">↗</span><span class="icon">⧉</span></div></td>
+        </tr>
+
+        <tr>
+          <td><div class="brandcell"><div class="logo">G</div><div style="min-width:0"><div class="brand-name">Glossier</div><div class="url">glossier.com</div></div></div></td>
+          <td><div class="email">priya@glossier.com</div><div class="flags"><span class="wait">Report email queued</span><span class="ok">✓ Team notified</span></div></td>
+          <td><span class="pill running"><i></i>Running</span><div class="step">Scoring · 24/24 queries done</div></td>
+          <td><div class="score na">Pending</div></td>
+          <td class="comp">Rare Beauty, Ilia, Merit, Milk Makeup, Fenty<span class="src">generated</span></td>
+          <td class="when">Sep 15, 09:51<div class="rel">9 min ago</div></td>
+          <td class="fa"><span class="none">—</span></td>
+          <td><div class="acts"><span class="icon" title="Open status page">↗</span><span class="icon">⧉</span></div></td>
+        </tr>
+
+        <tr>
+          <td><div class="brandcell"><div class="logo">B</div><div style="min-width:0"><div class="brand-name">Brooklinen</div><div class="url">brooklinen.com</div></div></div></td>
+          <td><div class="email none">No email yet</div></td>
+          <td><span class="pill identifying"><i></i>Identifying competitors</span><div class="step">Started 1 min ago</div></td>
+          <td><div class="score na">Pending</div></td>
+          <td class="comp" style="color:var(--slateLight)">Generating…</td>
+          <td class="when">Sep 15, 09:58<div class="rel">1 min ago</div></td>
+          <td class="fa"><span class="none">—</span></td>
+          <td><div class="acts"><span class="icon">↗</span><span class="icon">⧉</span></div></td>
+        </tr>
+
+        <tr>
+          <td><div class="brandcell"><div class="logo">S</div><div style="min-width:0"><div class="brand-name">Sephora</div><div class="url">sephora.com</div></div></div></td>
+          <td><div class="email">d.okafor@sephora.com</div><div class="flags"><span class="ok">✓ Team notified</span><span>No report to send</span></div></td>
+          <td><span class="pill failed"><i></i>Failed</span><div class="step">Crawl step · blocked</div><div class="err">FetchError: challenge page detected on 14/14 sampled URLs (vendor: Akamai)</div></td>
+          <td><div class="score na">Not measurable</div></td>
+          <td class="comp">Ulta, Nordstrom, Macy's, Bluemercury, Amazon<span class="src">generated</span></td>
+          <td class="when">Sep 14, 16:03<div class="rel">18 h ago</div></td>
+          <td class="fa"><span class="none">—</span></td>
+          <td><div class="acts"><span class="icon" title="Retry">↻</span><span class="icon">⧉</span></div></td>
+        </tr>
+
+        <tr>
+          <td><div class="brandcell"><div class="logo">H</div><div style="min-width:0"><div class="brand-name">Hydro Flask</div><div class="url none">no store URL given</div></div></div></td>
+          <td><div class="email">tom@hydroflask.com</div><div class="flags"><span class="ok">✓ Report emailed</span><span class="ok">✓ Team notified</span></div></td>
+          <td><span class="pill partial"><i></i>Partial read</span><div class="step">Complete · 36/67 measurable</div></td>
+          <td><div class="score"><span class="n">27</span><div class="bar"><i class="low" style="width:27%"></i></div></div></td>
+          <td class="comp">Stanley, Yeti, Owala, Klean Kanteen, S'well<span class="src">generated</span></td>
+          <td class="when">Sep 14, 11:20<div class="rel">Yesterday</div></td>
+          <td class="fa"><a href="#">Start ›</a></td>
+          <td><div class="acts"><span class="icon">↗</span><span class="icon">⧉</span></div></td>
+        </tr>
+
+        <tr>
+          <td><div class="brandcell"><div class="logo">P</div><div style="min-width:0"><div class="brand-name">Pampers</div><div class="url">pampers.com</div></div></div></td>
+          <td><div class="email">bryan.towne@pg.com</div><div class="flags"><span class="ok">✓ Report emailed</span><span class="ok">✓ Team notified</span></div></td>
+          <td><span class="pill complete"><i></i>Complete</span><div class="step">Ran in 8m 02s</div></td>
+          <td><div class="score"><span class="n">52</span><div class="bar"><i style="width:52%"></i></div></div></td>
+          <td class="comp">Huggies, Honest, Coterie, Hello Bello, Luvs<span class="src">manual</span></td>
+          <td class="when">Sep 12, 14:47<div class="rel">3 d ago</div></td>
+          <td class="fa"><a href="#">CYC-0398 ›</a><div style="color:var(--green)">complete</div></td>
+          <td><div class="acts"><span class="icon">↗</span><span class="icon">⧉</span></div></td>
+        </tr>
+
+        <tr>
+          <td><div class="brandcell"><div class="logo">O</div><div style="min-width:0"><div class="brand-name">Outdoor Voices</div><div class="url">outdoorvoices.com</div></div></div></td>
+          <td><div class="email none">No email yet</div></td>
+          <td><span class="pill complete"><i></i>Complete</span><div class="step">Ran in 6m 31s</div></td>
+          <td><div class="score"><span class="n">34</span><div class="bar"><i class="low" style="width:34%"></i></div></div></td>
+          <td class="comp">Lululemon, Vuori, Alo Yoga, Girlfriend Collective, Athleta<span class="src">generated</span></td>
+          <td class="when">Sep 12, 09:15<div class="rel">3 d ago</div></td>
+          <td class="fa"><span class="none">—</span></td>
+          <td><div class="acts"><span class="icon">↗</span><span class="icon">⧉</span></div></td>
+        </tr>
+
+        <tr>
+          <td><div class="brandcell"><div class="logo">T</div><div style="min-width:0"><div class="brand-name">test brand 123</div><div class="url none">no store URL given</div></div></div></td>
+          <td><div class="email none">No email yet</div></td>
+          <td><span class="pill failed"><i></i>Failed</span><div class="step">Entity resolution</div><div class="err">EntityResolutionError: no candidate above confidence 0.6 for "test brand 123"</div></td>
+          <td><div class="score na">—</div></td>
+          <td class="comp"><span style="color:var(--slateLight)">none</span></td>
+          <td class="when">Sep 11, 23:58<div class="rel">4 d ago</div></td>
+          <td class="fa"><span class="none">—</span></td>
+          <td><div class="acts"><span class="icon">↻</span><span class="icon">⧉</span></div></td>
+        </tr>
+
+      </tbody>
+    </table>
+    <div class="pager">
+      <span>10 per page</span>
+      <div class="pg"><span>‹</span><span class="cur">1</span><span>2</span><span>3</span><span>…</span><span>19</span><span>›</span></div>
+    </div>
+  </div>
+
+  <!-- ───────────── Annotations for the design review (not UI) ───────────── -->
+  <section class="annot">
+    <h2>Mock notes: where each column comes from</h2>
+    <p>Everything below is grounded in <code>packages/shared/soa_shared/models/soa_models.py</code> on <code>main</code>. Items marked ⚠ are not persisted on <code>soa_lite_requests</code> today and would need a join or a small schema addition.</p>
+    <table>
+      <tr><th>UI element</th><th>Source</th><th>Notes</th></tr>
+      <tr><td>Brand, store URL</td><td><code>brand_name</code>, <code>store_url</code></td><td>Raw visitor input. Monogram falls back when no logo (same ladder as the report: <code>brand_icon_url</code> → logo.dev → favicon → monogram).</td></tr>
+      <tr><td>Lead email + flags</td><td><code>email</code>, <code>report_email_sent_at</code>, <code>lead_notified_at</code></td><td>"No email yet" = NULL. "Report ready · not sent" = complete + email NULL. "Queued" = email set, complete, <code>report_email_sent_at</code> NULL (sweep will pick it up).</td></tr>
+      <tr><td>Status pill</td><td><code>status</code> (<code>LITE_STATUSES</code>)</td><td>pending → identifying_competitors → generating → running → complete | failed. "Partial read" is a UI state derived from the report payload, not a DB status. ⚠ </td></tr>
+      <tr><td>Step / progress line</td><td><code>events</code> JSON (latest <code>state</code>/<code>done</code> event per task)</td><td>Same event log the public status page reads. Query count from the <code>queries</code>/<code>scoring</code> tasks.</td></tr>
+      <tr><td>Duration</td><td><code>created_at</code> → <code>updated_at</code></td><td>Approximation; <code>updated_at</code> also moves on email PATCH. Exact end time is the <code>report</code> done-event <code>ts</code>.</td></tr>
+      <tr><td>Score</td><td>⚠ not a column</td><td>Agentic Value Score is computed in the report payload (<code>SCORER_VERSION</code>). Options: (a) compute on read via the existing lite report builder, (b) add <code>composite_score</code> + <code>scorer_version</code> to <code>soa_lite_requests</code> when scoring finishes. (b) is cheaper for a list view and lets old-scorer rows show as "expired" like the report does.</td></tr>
+      <tr><td>Competitors + source tag</td><td><code>competitor_names</code>, <code>competitor_source</code></td><td>"mixed · 2 manual" = count of visitor-entered names (first ≤2 in the list are manual per the Stage 13 comment; verify ordering before relying on it).</td></tr>
+      <tr><td>Error trace</td><td><code>error_message</code></td><td>Shown inline only for failed rows, same styling as the Cycles card error trace.</td></tr>
+      <tr><td>Full Analysis column</td><td>join <code>soa_cycles.source_lite_request_id = soa_lite_requests.id</code></td><td>Shows the cycle code + status when a continuation exists; "Start" opens the existing NewCycleFlow prefilled from the audit (brand entity, competitor entity ids, study series).</td></tr>
+      <tr><td>Open report / copy link</td><td><code>token</code></td><td><code>PUBLIC_AUDIT_BASE_URL/r/{token}</code>; status page <code>/s/{token}</code> while in progress. Never show <code>ip_hash</code> in the list.</td></tr>
+      <tr><td>Summary strip</td><td>aggregates over the same table</td><td>Leads captured = <code>email IS NOT NULL</code>. Trend deltas are optional for v1.</td></tr>
+      <tr><td>Access</td><td>existing Supabase JWT + org gate</td><td>Rows live under the "Parleo Lead Gen" org (<code>organization_id</code>); this view needs a new authed router, e.g. <code>GET /api/lite-requests</code>, separate from the public unauthenticated lane.</td></tr>
+    </table>
+  </section>
+</main>
+
+<!-- ───────────── Detail drawer (selected row: Allbirds) ───────────── -->
+<aside class="drawer">
+  <div class="dh">
+    <div class="top">
+      <div>
+        <h2>Allbirds</h2>
+        <div class="tok">token b41eb699…7440 · lite-b41eb699</div>
+      </div>
+      <span class="icon" title="Close">✕</span>
+    </div>
+    <div class="actions">
+      <button class="btn small primary">Open report</button>
+      <button class="btn small">Copy link</button>
+      <button class="btn small">Resend report email</button>
+    </div>
+  </div>
+  <div class="body">
+
+    <div class="sec">
+      <h3>Lead</h3>
+      <div class="kv">
+        <div class="k">Email</div><div class="v">jordan.p@allbirds.com</div>
+        <div class="k">Captured</div><div class="v">Sep 15, 08:14 (4 min after submit)</div>
+        <div class="k">Team notified</div><div class="v">Sep 15, 08:14 → elton@parleo.io</div>
+        <div class="k">Report emailed</div><div class="v">Sep 15, 08:18 via Resend</div>
+        <div class="k">Demo requested</div><div class="v muted">Not tracked here (Formspree)</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>Result</h3>
+      <div class="dims">
+        <div class="dim"><div class="l">Agentic Value</div><div class="v">58 <small>/ 100</small></div></div>
+        <div class="dim"><div class="l">Visibility</div><div class="v">21 <small>/ 32</small></div></div>
+        <div class="dim"><div class="l">Accessibility</div><div class="v">13 <small>/ 18</small></div></div>
+        <div class="dim"><div class="l">True Value</div><div class="v">24 <small>/ 50</small></div></div>
+        <div class="dim"><div class="l">Scan score</div><div class="v">71</div></div>
+        <div class="dim"><div class="l">Pages fetched</div><div class="v">42</div></div>
+      </div>
+      <div class="note" style="margin-top:8px">Pillar scores come from the report payload, not from this table. See mock notes.</div>
+    </div>
+
+    <div class="sec">
+      <h3>Request</h3>
+      <div class="kv">
+        <div class="k">Submitted</div><div class="v">Sep 15, 08:10 · from parleo.io/audit</div>
+        <div class="k">Store URL</div><div class="v">https://www.allbirds.com</div>
+        <div class="k">Competitors</div><div class="v">Rothy's, Veja, On, Hoka, Nike <span class="src" style="font-size:11px;color:var(--slate)">(generated)</span></div>
+        <div class="k">Brand entity</div><div class="v mono">soa_entities #1187</div>
+        <div class="k">Cycle</div><div class="v mono">soa_cycles #2291 (lite)</div>
+        <div class="k">Scan</div><div class="v">complete · not integrity-capped</div>
+        <div class="k">Rate-limit key</div><div class="v mono muted">ip_hash 9f3a…c21e</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>Full Analysis</h3>
+      <div class="kv">
+        <div class="k">Continuation</div><div class="v"><a href="#" style="color:var(--indigo);font-weight:600;text-decoration:none">CYC-0412</a> · running · started Sep 15, 09:02</div>
+        <div class="k">Study series</div><div class="v mono">allbirds-2026q3</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>Run log</h3>
+      <div class="timeline">
+        <div class="ev done"><span class="t">08:10:04</span><span class="task">crawl</span>42 pages read, robots honored</div>
+        <div class="ev done"><span class="t">08:10:51</span><span class="task">probe_fetch</span>ChatGPT opened sampled PDP · quoted_price</div>
+        <div class="ev done"><span class="t">08:11:08</span><span class="task">competitors</span>5 generated</div>
+        <div class="ev done"><span class="t">08:11:40</span><span class="task">queries</span>24 generated</div>
+        <div class="ev done"><span class="t">08:17:12</span><span class="task">scoring</span>24/24 runs coded</div>
+        <div class="ev done"><span class="t">08:17:44</span><span class="task">report</span>ready · scorer v4</div>
+      </div>
+    </div>
+
+  </div>
+</aside>
+
+</body>
+</html>
