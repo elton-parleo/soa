@@ -1,0 +1,183 @@
+"""
+The ops re-score entry point.
+
+The behaviour worth holding is the narrowing and the check that it
+narrowed: --tier brand_direct must select brand-direct runs and no
+others, and the script must be able to say afterwards that nothing else
+moved. "Catalog accuracy is unchanged" is a claim somebody will put in a
+report, so it is verified by the thing that does the re-scoring rather
+than by whoever ran it.
+"""
+from datetime import datetime, timezone
+from collections import Counter
+
+import pytest
+from sqlalchemy import create_engine, event, text
+
+from scripts import rescore_cycle as rc
+
+
+@pytest.fixture
+def db(monkeypatch):
+    engine = create_engine("sqlite:///:memory:")
+
+    @event.listens_for(engine, "connect")
+    def _now(dbapi_conn, _):
+        dbapi_conn.create_function(
+            "NOW", 0, lambda: datetime.now(timezone.utc).isoformat(),
+        )
+
+    with engine.begin() as c:
+        c.exec_driver_sql("""
+            CREATE TABLE soa_cycles (id INTEGER PRIMARY KEY, cycle_code TEXT)
+        """)
+        c.exec_driver_sql("""
+            CREATE TABLE soa_queries (
+                id INTEGER PRIMARY KEY, tier TEXT, expected_answer TEXT
+            )
+        """)
+        c.exec_driver_sql("""
+            CREATE TABLE soa_runs (
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER
+            )
+        """)
+        c.exec_driver_sql("""
+            CREATE TABLE soa_expectation_outcomes (
+                id INTEGER PRIMARY KEY, run_id INTEGER, cycle_id INTEGER,
+                tier TEXT, outcome TEXT
+            )
+        """)
+        c.execute(text(
+            "INSERT INTO soa_cycles (id, cycle_code) VALUES (1, :code)"
+        ), {"code": "20260915-113207-wiggle-snug-full"})
+    monkeypatch.setattr(rc, "engine", engine)
+    return engine
+
+
+def seed(db, *, tier, outcome, n=1, expectation='{"type": "brand_mention"}'):
+    with db.begin() as c:
+        for _ in range(n):
+            qid = c.execute(text(
+                "INSERT INTO soa_queries (tier, expected_answer) "
+                "VALUES (:t, :e) RETURNING id"
+            ), {"t": tier, "e": expectation}).scalar()
+            rid = c.execute(text(
+                "INSERT INTO soa_runs (cycle_id, query_id) "
+                "VALUES (1, :q) RETURNING id"
+            ), {"q": qid}).scalar()
+            c.execute(text(
+                "INSERT INTO soa_expectation_outcomes "
+                "(run_id, cycle_id, tier, outcome) VALUES (:r, 1, :t, :o)"
+            ), {"r": rid, "t": tier, "o": outcome})
+
+
+def test_a_cycle_is_named_by_its_code_not_its_id(db):
+    with db.connect() as conn:
+        assert rc.cycle_id(conn, "20260915-113207-wiggle-snug-full") == 1
+
+
+def test_an_unknown_cycle_stops_rather_than_scoring_nothing_quietly(db):
+    with db.connect() as conn:
+        with pytest.raises(SystemExit):
+            rc.cycle_id(conn, "20260915-113207")
+
+
+def test_only_the_named_tiers_runs_are_selected(db):
+    seed(db, tier="brand_direct", outcome="exact", n=3)
+    seed(db, tier="catalog_accuracy", outcome="exact", n=5)
+    seed(db, tier="value_incentives", outcome="exact", n=2)
+
+    with db.connect() as conn:
+        assert len(rc.run_ids_for(conn, 1, ["brand_direct"])) == 3
+        assert len(rc.run_ids_for(conn, 1, ["catalog_accuracy"])) == 5
+        assert len(rc.run_ids_for(conn, 1, ["brand_direct", "value_incentives"])) == 5
+
+
+def test_a_question_with_no_expectation_is_never_scored(db):
+    """A category-control question carries a tier and no expectation.
+    Scoring it would write a row for a question nothing was expected
+    of."""
+    seed(db, tier="category_control", outcome="exact", n=4, expectation=None)
+    with db.connect() as conn:
+        assert rc.run_ids_for(conn, 1, ["category_control"]) == []
+
+
+def test_the_default_leaves_the_control_tier_out(db):
+    import argparse
+    parser = argparse.ArgumentParser()
+    # The same default the script computes.
+    from soa_shared.expected_answers import QUERY_TIERS
+    default = [t for t in QUERY_TIERS if t != "category_control"]
+    assert "category_control" not in default
+    assert default == ["brand_direct", "catalog_accuracy", "value_incentives"]
+
+
+def test_the_counts_are_per_tier_and_per_outcome(db):
+    seed(db, tier="brand_direct", outcome="exact", n=63)
+    seed(db, tier="brand_direct", outcome="absent", n=3)
+    seed(db, tier="catalog_accuracy", outcome="exact", n=19)
+
+    with db.connect() as conn:
+        counts = rc.outcome_counts(conn, 1)
+    assert counts["brand_direct"] == {"exact": 63, "absent": 3}
+    assert counts["catalog_accuracy"] == {"exact": 19}
+
+
+# ── the check that makes "unchanged" a statement rather than a hope ───────
+
+def test_a_tier_nobody_asked_for_moving_is_reported():
+    before = {"brand_direct": Counter({"exact": 63}),
+              "catalog_accuracy": Counter({"exact": 19, "stale": 2})}
+    after = {"brand_direct": Counter({"echoed": 63}),
+             "catalog_accuracy": Counter({"exact": 21})}
+    assert rc.diff_untouched(before, after, {"brand_direct"}) == ["catalog_accuracy"]
+
+
+def test_the_targeted_tier_changing_is_the_whole_point(db):
+    before = {"brand_direct": Counter({"exact": 63, "absent": 3}),
+              "catalog_accuracy": Counter({"exact": 19})}
+    after = {"brand_direct": Counter({"grounded": 2, "echoed": 16,
+                                      "misattributed": 13, "fabricated": 6,
+                                      "acknowledged_unknown": 26, "absent": 3}),
+             "catalog_accuracy": Counter({"exact": 19})}
+    assert rc.diff_untouched(before, after, {"brand_direct"}) == []
+
+
+def test_a_tier_appearing_where_there_was_none_counts_as_moving():
+    before = {"brand_direct": Counter({"exact": 1})}
+    after = {"brand_direct": Counter({"echoed": 1}),
+             "value_incentives": Counter({"exact": 4})}
+    assert rc.diff_untouched(before, after, {"brand_direct"}) == ["value_incentives"]
+
+
+# ── the dry run writes nothing ────────────────────────────────────────────
+
+def test_the_dry_run_makes_no_model_call_and_no_write(db, capsys, monkeypatch):
+    seed(db, tier="brand_direct", outcome="exact", n=66)
+    seed(db, tier="catalog_accuracy", outcome="exact", n=19)
+
+    def _explode(*a, **kw):
+        raise AssertionError("a dry run must not score anything")
+    monkeypatch.setattr("scoring.expectation_batch.score_runs", _explode)
+
+    code = rc.main([
+        "--cycle", "20260915-113207-wiggle-snug-full",
+        "--tier", "brand_direct", "--dry-run",
+    ])
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "runs to score:    66" in out
+    assert "66 extraction calls" in out
+    with db.connect() as conn:
+        assert rc.outcome_counts(conn, 1)["brand_direct"] == {"exact": 66}
+
+
+def test_a_dry_run_on_a_tier_with_nothing_to_score_says_so(db, capsys):
+    seed(db, tier="catalog_accuracy", outcome="exact", n=5)
+    code = rc.main([
+        "--cycle", "20260915-113207-wiggle-snug-full",
+        "--tier", "brand_direct", "--dry-run",
+    ])
+    assert code == 0
+    assert "nothing to do." in capsys.readouterr().out
