@@ -2,14 +2,22 @@
 Layer 2, step 2 and 3: compare, then classify.
 
 Given a typed expectation, a stored extraction record, and the
-publication history for what the expectation was read from, decide which
-of five outcomes this (question x surface x sample) is:
+publication history for what the expectation was read from, decide what
+this (question x surface x sample) is.
+
+For an expectation naming a published VALUE — a price, a code, a count —
+one of five:
 
     exact        matches the currently published record
     stale        matches a PRIOR published value
     wrong        matches no published value, ever
     absent       the quantity was not addressed
     unscoreable  extraction could not confidently read the answer
+
+For a brand-direct question, which names no value at all, one of the
+brand assessments in scoring/brand_direct_classifier.py. Scoring those on
+presence is what let an answer reading "not a real or widely recognized
+brand" count as a success.
 
 Deterministic. No model, no network, no clock. The same stored extraction
 produces the same verdict today and in six months, which is what makes a
@@ -32,6 +40,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from soa_shared import expected_answers as ea
+from scoring import brand_direct_classifier as bdc
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +64,10 @@ class Verdict:
     #: know the brand" and "did it send the shopper to the brand's own
     #: store" are different questions.
     domain_cited: Optional[bool] = None
+    #: The right promotion code, the wrong terms. Wrong, but a different
+    #: kind of wrong from a code that does not exist, and counted apart
+    #: from it — see the `code` branch of compare().
+    near_miss: bool = False
     secondary: List[dict] = field(default_factory=list)
 
 
@@ -317,9 +330,17 @@ def _prior_match(history, values, *, member: bool = False) -> Optional[str]:
 # ─── The classifier ────────────────────────────────────────────────────────
 
 def compare(expectation: dict, extraction: dict, *, history=None,
-            source_ref=None, brand_domain=None) -> Verdict:
+            source_ref=None, brand_domain=None, tier=None,
+            brand_facts=None) -> Verdict:
     """
-    One (question x surface x sample) -> one of five outcomes.
+    One (question x surface x sample) -> one outcome.
+
+    Which vocabulary the outcome comes from depends on the tier. A
+    catalog or value question names a published number and lands in
+    exact/stale/wrong/absent/unscoreable. A brand-direct question names
+    no number at all, and landing it in the same five is what produced a
+    95% success rate on a brand two of 66 answers had actually read: see
+    scoring/brand_direct_classifier.py.
 
     `history` is [{published_at, list_price, member_price, ...}, ...] for
     the variant, oldest first, as
@@ -332,11 +353,23 @@ def compare(expectation: dict, extraction: dict, *, history=None,
         extraction.get('sources_cited'), brand_domain,
     )
 
-    def verdict(outcome, reason, matched_at=None):
+    def verdict(outcome, reason, matched_at=None, near_miss=False):
         return Verdict(
             outcome=outcome, reason=reason, matched_published_at=matched_at,
             source_attribution=source_attribution, domain_cited=domain_cited,
+            near_miss=near_miss,
         )
+
+    # The brand axis, for the one tier that has no number behind it.
+    # Placed before the unscoreable check rather than after because the
+    # classifier makes that call itself, in the same order and for the
+    # same reason — our failure to read an answer is never a result about
+    # the assistant.
+    if bdc.is_brand_direct(tier, expectation):
+        outcome, reason = bdc.classify(
+            extraction, expectation, brand_facts=brand_facts,
+        )
+        return verdict(outcome, reason)
 
     # An extraction that could not read the answer decides nothing else.
     # Checked FIRST, before any comparison: a garbled answer that happens
@@ -403,10 +436,18 @@ def compare(expectation: dict, extraction: dict, *, history=None,
         if value_matched:
             return verdict(EXACT, f"stated {ea.describe(expectation)}")
         if code_seen:
+            # The right code, the wrong value. Still wrong — the shopper
+            # is told they will save an amount they will not save — but a
+            # different KIND of wrong from naming a code that does not
+            # exist, and one worth counting on its own: it says the code
+            # reached the assistant and its terms did not. Recorded as a
+            # flag beside the outcome rather than as a sixth outcome, so
+            # the accuracy denominator does not move.
             return verdict(
                 WRONG,
                 f"named {expectation['code']} but not "
                 f"{ea.describe(expectation)}",
+                near_miss=True,
             )
         if extraction.get('codes'):
             others = ', '.join(

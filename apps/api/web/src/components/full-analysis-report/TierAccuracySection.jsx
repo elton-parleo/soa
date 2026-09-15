@@ -142,6 +142,106 @@ function Unavailable({ study }) {
   )
 }
 
+/**
+ * What to call a tier in the first column. The label when the service
+ * gave one, the tier key when it did not, and 'Untiered' for the rows
+ * that carry no tier at all — questions written before the tiers
+ * existed, which soa_queries.tier is nullable for.
+ */
+const BRAND_NOTE = {
+  grounded: 'cited the brand\u2019s own record',
+  echoed: 'named the brand, nothing checkable behind it',
+  misattributed: 'named the brand, described a different one',
+  fabricated: 'stated facts the record does not carry',
+  acknowledged_unknown: 'said it could not find or verify the brand',
+}
+
+/**
+ * The brand-direct tier, as the split it is rather than as an accuracy.
+ *
+ * There is no published value for one of these answers to match, so
+ * exact/stale/wrong never described them; scoring on presence is what let
+ * an answer reading "not a real or widely recognized brand" count beside
+ * one that cited the brand's own loyalty page.
+ *
+ * Per surface as well as per tier, because the two fail differently —
+ * one substitutes a product from another brand, the other invents one —
+ * and a blended number describes neither.
+ */
+function BrandSplit({ tiers }) {
+  const brand = (tiers || []).filter((t) => t.assessments)
+  if (!brand.length) return null
+
+  return (
+    <div data-testid="brand-direct-split" style={{ marginTop: 28 }}>
+      <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.65, marginBottom: 12 }}>
+        Brand-direct questions name no published number, so they are not
+        scored right or wrong. They are sorted by what the answer did with
+        the brand. <strong style={{ color: 'var(--text-strong)' }}>Grounded</strong> cited
+        your own record; <strong style={{ color: 'var(--text-strong)' }}>brand echoed</strong> named
+        you and nothing more — which is all the old visibility number ever
+        measured.
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr>
+              <th style={HEAD}>Brand-direct</th>
+              {brand[0].assessments.map((a) => (
+                <th key={a.outcome} style={HEAD}>{a.label}</th>
+              ))}
+              <th style={HEAD}>Assessed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {brand.flatMap((tier) => [
+              <tr key={tier.tier} data-testid="brand-split-total">
+                <td style={{ ...CELL, fontWeight: 600, color: 'var(--text-strong)' }}>
+                  All surfaces
+                </td>
+                {tier.assessments.map((a) => (
+                  <td key={a.outcome} style={CELL} title={BRAND_NOTE[a.outcome]}>
+                    <Rate rate={a.rate} samples={a.count} label="runs" />
+                  </td>
+                ))}
+                <td style={{ ...CELL, color: 'var(--muted)' }}>
+                  {tier.assessed} of {tier.samples}
+                </td>
+              </tr>,
+              ...(tier.surfaces || []).filter((s) => s.assessments).map((surface) => (
+                <tr key={`${tier.tier}:${surface.platform}`}
+                    data-testid={`brand-split-${surface.platform}`}>
+                  <td style={{ ...CELL, color: 'var(--muted)' }}>{surface.platform}</td>
+                  {surface.assessments.map((a) => (
+                    <td key={a.outcome} style={CELL}>
+                      <Rate rate={a.rate} samples={a.count} label="runs" />
+                    </td>
+                  ))}
+                  <td style={{ ...CELL, color: 'var(--muted)' }}>
+                    {surface.assessed} of {surface.samples}
+                  </td>
+                </tr>
+              )),
+            ])}
+          </tbody>
+        </table>
+      </div>
+      {brand.map((tier) => tier.counts?.absent > 0 && (
+        <div key={tier.tier} style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 8 }}>
+          {tier.counts.absent} answer{tier.counts.absent === 1 ? '' : 's'} never
+          named the brand at all, and {tier.counts.absent === 1 ? 'is' : 'are'} outside
+          the denominator above — nothing can be said about how a brand was
+          treated in an answer that did not mention it.
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function tierName(tier) {
+  return tier.label || tier.tier || 'Untiered'
+}
+
 export function TierAccuracySection({ tierAccuracy, open, onToggle, onDrillDown }) {
   if (!tierAccuracy || !(tierAccuracy.tiers || []).length) return null
 
@@ -180,6 +280,18 @@ export function TierAccuracySection({ tierAccuracy, open, onToggle, onDrillDown 
         </div>
       )}
 
+      {/* What the headline leaves out, and why. A rate that quietly drops
+          rows is worse than one that never excluded them. */}
+      {tierAccuracy.low_information && (
+        <div data-testid="low-information" style={{ marginTop: 8, fontSize: 11.5, color: 'var(--faint)', lineHeight: 1.6 }}>
+          {tierAccuracy.low_information.scored} question
+          {tierAccuracy.low_information.scored === 1 ? ' is' : 's are'} kept out of
+          that figure as low-information{' '}
+          ({tierAccuracy.low_information.exact} of {tierAccuracy.low_information.scored} answered
+          exactly right). {tierAccuracy.low_information.note}
+        </div>
+      )}
+
       <div style={{ overflowX: 'auto', marginTop: 20 }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
@@ -194,19 +306,33 @@ export function TierAccuracySection({ tierAccuracy, open, onToggle, onDrillDown 
             </tr>
           </thead>
           <tbody>
-            {tiers.map((tier) => (
-              <tr key={tier.tier} data-testid={`tier-row-${tier.tier}`}>
+            {tiers.map((tier, index) => (
+              <tr key={tier.tier ?? `tier-${index}`} data-testid={`tier-row-${tier.tier}`}>
                 <td style={{ ...CELL, fontWeight: 600, color: 'var(--text-strong)' }}>
-                  {onDrillDown ? (
+                  {/* A button with nothing in it is a button nobody can
+                      click, and a drill-down keyed on a tier of null
+                      cannot be opened — the endpoint filters on the tier
+                      and the panel mounts on a truthy one. Both of those
+                      present as a name that does nothing when clicked,
+                      which is the failure this row is not allowed to
+                      have. So: always a name, and a control only where
+                      there is something behind it. */}
+                  {onDrillDown && tier.tier ? (
                     <button
                       type="button"
                       onClick={() => onDrillDown(tier.tier)}
                       style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', font: 'inherit', color: 'var(--text-strong)', textDecoration: 'underline' }}
-                    >{tier.label}</button>
-                  ) : tier.label}
+                    >{tierName(tier)}</button>
+                  ) : tierName(tier)}
                 </td>
                 <td style={CELL}>
-                  <Rate rate={tier.visibility?.rate} samples={tier.visibility?.runs} label="runs" />
+                  {/* Retired for brand-direct. It counted whether the
+                      brand was named, which the split below now calls
+                      'Brand echoed' — a word that does not read as a
+                      score. See tier_accuracy.py. */}
+                  {tier.visibility_retired
+                    ? <span style={{ fontSize: 11.5, color: 'var(--faint)' }}>see below</span>
+                    : <Rate rate={tier.visibility?.rate} samples={tier.visibility?.runs} label="runs" />}
                 </td>
                 <td style={CELL}>
                   {/* category_control carries no expectation by design,
@@ -218,13 +344,25 @@ export function TierAccuracySection({ tierAccuracy, open, onToggle, onDrillDown 
                   <Rate rate={tier.staleness} samples={tier.scored} label="scored" />
                 </td>
                 {OUTCOME_ORDER.map((o) => (
-                  <td key={o} style={{ ...CELL, color: 'var(--muted)' }}>{tier.counts?.[o] ?? 0}</td>
+                  <td key={o} style={{ ...CELL, color: 'var(--muted)' }}>
+                    {tier.assessments ? '—' : (tier.counts?.[o] ?? 0)}
+                    {/* The right code with the wrong terms. Still inside
+                        `wrong`, counted apart from it — the code reached
+                        the assistant and its value did not. */}
+                    {o === 'wrong' && tier.near_miss > 0 && (
+                      <span style={{ fontSize: 11, color: 'var(--faint)' }}>
+                        {' '}({tier.near_miss} near miss)
+                      </span>
+                    )}
+                  </td>
                 ))}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      <BrandSplit tiers={tiers} />
 
       {/* Secondary expectations. The question asked for neither, so
           neither can move the accuracy above — they are shown here, with

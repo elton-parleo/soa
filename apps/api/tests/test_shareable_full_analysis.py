@@ -55,6 +55,7 @@ def patched_engine(monkeypatch):
                 outcome_reason TEXT, domain_cited BOOLEAN,
                 source_attribution TEXT, secondary_results TEXT,
                 record_published_at TIMESTAMP, matched_published_at TIMESTAMP,
+                near_miss BOOLEAN,
                 extraction_model TEXT, scored_at TIMESTAMP
             )
         """)

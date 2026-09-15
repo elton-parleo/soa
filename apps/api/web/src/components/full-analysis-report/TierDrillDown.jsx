@@ -32,7 +32,7 @@
  * None of that is a substitute for fixing what throws. It is what makes
  * the next thing that throws say so.
  */
-import { Component, useEffect, useMemo, useState } from 'react'
+import { Component, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api.js'
 import { StateChip } from '../../ds/index.js'
 
@@ -42,6 +42,16 @@ const OUTCOME_STATE = {
   wrong: 'invisible',
   absent: 'unmeasured',
   unscoreable: 'unmeasured',
+  // The brand axis. `grounded` is the only one that reads as a success,
+  // because it is the only one where the answer showed where it got what
+  // it said. `echoed` is amber rather than green on purpose: the brand
+  // was named and nothing behind it was checkable, which is what the old
+  // scoring was calling a hit.
+  grounded: 'seen',
+  echoed: 'partial',
+  misattributed: 'invisible',
+  fabricated: 'invisible',
+  acknowledged_unknown: 'unmeasured',
 }
 
 const OUTCOME_LABEL = {
@@ -50,11 +60,27 @@ const OUTCOME_LABEL = {
   wrong: 'Wrong',
   absent: 'Not addressed',
   unscoreable: 'Unreadable',
+  grounded: 'Grounded',
+  echoed: 'Brand echoed',
+  misattributed: 'Misattributed',
+  fabricated: 'Fabricated',
+  acknowledged_unknown: 'Said it could not find us',
 }
 
-// The five outcomes in the order the tier table lists them, so the chips
-// and the columns above them read the same way round.
-export const OUTCOMES = ['exact', 'stale', 'wrong', 'absent', 'unscoreable']
+// Two vocabularies, because a brand-direct question names no published
+// value for an answer to match. Mirrors expected_answers.
+// outcomes_for_tier — the tier decides, not the row, so a tier with none
+// of an outcome still shows it as a zero.
+export const VALUE_OUTCOMES = ['exact', 'stale', 'wrong', 'absent', 'unscoreable']
+
+export const BRAND_OUTCOMES = [
+  'grounded', 'echoed', 'misattributed', 'fabricated', 'acknowledged_unknown',
+  'absent', 'unscoreable',
+]
+
+export function outcomesForTier(tier) {
+  return tier === 'brand_direct' ? BRAND_OUTCOMES : VALUE_OUTCOMES
+}
 
 /**
  * Anything a row hands us, rendered as text and never as itself.
@@ -136,7 +162,7 @@ class RenderBoundary extends Component {
 
 // ─── Filters ──────────────────────────────────────────────────────────────
 
-function FilterChips({ counts, total, active, onChange }) {
+function FilterChips({ counts, total, active, onChange, outcomes }) {
   const chip = (key, label, n) => {
     const on = active === key
     const empty = n === 0
@@ -176,7 +202,7 @@ function FilterChips({ counts, total, active, onChange }) {
           is a finding — "nothing in this tier went stale" is the kind of
           thing a reader should be able to see rather than infer from an
           absent chip. */}
-      {OUTCOMES.map((o) => chip(o, OUTCOME_LABEL[o], counts[o] || 0))}
+      {outcomes.map((o) => chip(o, OUTCOME_LABEL[o] || o, counts[o] || 0))}
     </div>
   )
 }
@@ -245,6 +271,16 @@ export function TierDrillDown({ tier, cycleCode, onClose, onViewResponse }) {
   const [error, setError] = useState(null)
   const [filter, setFilter] = useState('all')
   const [failures, setFailures] = useState([])
+  const panel = useRef(null)
+
+  // The panel mounts BELOW the tier table, which on a long report can be
+  // off the bottom of the viewport — and a panel you cannot see is
+  // indistinguishable from a click that did nothing. Scrolling to it is
+  // what makes opening it observable.
+  useEffect(() => {
+    if (!panel.current?.scrollIntoView) return
+    panel.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [tier])
 
   useEffect(() => {
     let cancelled = false
@@ -276,6 +312,18 @@ export function TierDrillDown({ tier, cycleCode, onClose, onViewResponse }) {
     return out
   }, [rows])
 
+  // The tier's vocabulary, plus anything the rows actually contain that
+  // it does not. Those extras are rows scored before the vocabulary
+  // changed — a brand-direct cycle scored on presence still says `exact`
+  // until it is re-scored — and hiding them would leave 66 entries with
+  // six chips that all read zero and no way to filter any of them.
+  const outcomes = useMemo(() => {
+    const base = outcomesForTier(tier)
+    const extra = [...new Set((rows || []).map((r) => r?.outcome))]
+      .filter((o) => o && !base.includes(o))
+    return [...base, ...extra]
+  }, [tier, rows])
+
   const shown = useMemo(
     () => (rows || []).filter((row) => filter === 'all' || row?.outcome === filter),
     [rows, filter],
@@ -285,6 +333,7 @@ export function TierDrillDown({ tier, cycleCode, onClose, onViewResponse }) {
 
   return (
     <div
+      ref={panel}
       data-testid="tier-drilldown"
       style={{
         border: '1px solid var(--hairline)', borderRadius: 10, padding: 18,
@@ -327,6 +376,7 @@ export function TierDrillDown({ tier, cycleCode, onClose, onViewResponse }) {
             <FilterChips
               counts={counts} total={rows.length}
               active={filter} onChange={setFilter}
+              outcomes={outcomes}
             />
 
             {failures.length > 0 && (

@@ -105,6 +105,53 @@ brand_mentioned: true if the answer names the brand under discussion at all, \
 false if it does not. This is presence, not endorsement — a passing, negative \
 or dismissive mention is still true.
 
+CANNOT-FIND STATEMENT
+brand_unknown_statement: the answer's own words, quoted, where it says it \
+cannot find, cannot verify, does not recognise or has no information about \
+the brand or the product — e.g. "I could not find any information about that \
+brand". Null if the answer makes no such statement.
+
+  Quote it; do not paraphrase and do not summarise. An answer that simply \
+does not mention the brand has made no such statement and this is null. An \
+answer that hedges about one detail ("I am not sure of the current price") has \
+not said it cannot find the brand, and this is null.
+
+OTHER BRANDS NAMED
+other_brands_named: every brand OTHER than the one under discussion that the \
+answer names, with the words the answer used to relate it.
+  name: the other brand, as written, e.g. "Some Other Label".
+  presented_as: the answer's own phrase for what it is — "closest match", \
+"similar product", "alternative", "instead", "comparison". Null if the answer \
+names it with no such framing.
+
+  Transcribe the relationship the answer states. Do not decide whether the \
+substitution was reasonable; that is not being asked.
+
+BRAND-SPECIFIC CLAIMS
+brand_claims: every specific factual claim the answer makes ABOUT the brand \
+under discussion that is not one of the quantities above — where it is sold, \
+who owns it, whether it is exclusive to a retailer, what its loyalty tiers are \
+called, when it launched.
+  claim: the claim in the answer's own words.
+  kind: "retail" for where it is sold or who sells it, "ownership" for who \
+owns or manufactures it, "loyalty" for programme or tier names, "other" for \
+anything else.
+
+  A claim is a statement of fact about the brand. "It is a private label sold \
+at a discount grocer" is a claim; "it might suit sensitive skin" is not. \
+Record what the answer asserts, not whether it is true — you are not being \
+told what is true.
+
+LOYALTY TIERS NAMED
+loyalty_tiers_named: every loyalty programme tier or level the answer \
+names for the brand under discussion, as written — e.g. ["Bronze", \
+"Silver"]. Empty when the answer names none.
+
+  The tiers, not the programme. "Acme Rewards has two tiers, Bronze and \
+Silver" gives ["Bronze", "Silver"] and not "Acme Rewards". A tier \
+belonging to some other company's programme is not this brand's tier and \
+does not go here.
+
 SOURCES CITED
 sources_cited: the bare domains of every source the answer cites or links to, \
 e.g. ["example-shop.com", "a-retailer.com"]. Only domains actually written out in \
@@ -239,13 +286,41 @@ def build_extraction_schema() -> dict:
                 },
             },
             "brand_mentioned": {"type": "boolean"},
+            "brand_unknown_statement": {"type": ["string", "null"]},
+            "other_brands_named": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "presented_as": {"type": ["string", "null"]},
+                    },
+                    "required": ["name", "presented_as"],
+                    "additionalProperties": False,
+                },
+            },
+            "loyalty_tiers_named": {"type": "array", "items": {"type": "string"}},
+            "brand_claims": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "claim": {"type": "string"},
+                        "kind": {"type": ["string", "null"]},
+                    },
+                    "required": ["claim", "kind"],
+                    "additionalProperties": False,
+                },
+            },
             "sources_cited": {"type": "array", "items": {"type": "string"}},
             "extraction_confident": {"type": "boolean"},
             "extraction_note": {"type": ["string", "null"]},
         },
         "required": [
             "prices", "codes", "pack_counts", "gtins", "member_prices", "points",
-            "brand_mentioned", "sources_cited",
+            "brand_mentioned", "brand_unknown_statement",
+            "other_brands_named", "loyalty_tiers_named", "brand_claims",
+            "sources_cited",
             "extraction_confident", "extraction_note",
         ],
         "additionalProperties": False,
@@ -262,6 +337,10 @@ EMPTY_EXTRACTION = {
     "member_prices": [],
     "points": [],
     "brand_mentioned": False,
+    "brand_unknown_statement": None,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
     "sources_cited": [],
     "extraction_confident": False,
     "extraction_note": "no answer text to read",

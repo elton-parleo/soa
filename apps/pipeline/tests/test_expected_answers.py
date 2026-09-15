@@ -227,11 +227,29 @@ def test_the_seven_types_are_the_seven_the_document_names():
     ]
 
 
-def test_the_five_outcomes_include_unscoreable_as_its_own_bucket():
-    assert ea.EXPECTATION_OUTCOMES == [
+def test_the_five_value_outcomes_include_unscoreable_as_its_own_bucket():
+    assert ea.VALUE_OUTCOMES == [
         "exact", "stale", "wrong", "absent", "unscoreable",
     ]
-    assert "unscoreable" in ea.EXPECTATION_OUTCOMES
+    assert "unscoreable" in ea.VALUE_OUTCOMES
+
+
+def test_brand_direct_is_classified_on_its_own_axis():
+    """A brand-direct question names no published value, so exact/stale/
+    wrong cannot describe it. Scoring it on presence is what let 63 of 66
+    runs count as successes on a brand two of them had read."""
+    assert ea.outcomes_for_tier("brand_direct") == ea.BRAND_OUTCOMES
+    for tier in ("catalog_accuracy", "value_incentives", "category_control", None):
+        assert ea.outcomes_for_tier(tier) == ea.VALUE_OUTCOMES
+
+
+def test_the_two_vocabularies_share_only_their_honest_absences():
+    assert set(ea.VALUE_OUTCOMES) & set(ea.BRAND_OUTCOMES) == {"absent", "unscoreable"}
+
+
+def test_the_constraint_admits_every_value_either_axis_can_produce():
+    for outcome in ea.VALUE_OUTCOMES + ea.BRAND_OUTCOMES:
+        assert outcome in ea.EXPECTATION_OUTCOMES
 
 
 def test_the_four_tiers():
