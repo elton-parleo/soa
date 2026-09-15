@@ -207,11 +207,16 @@ export function rangeCutoff(range, now = Date.now()) {
  */
 export function competitorTag(row) {
   if (!row.competitor_source) return null
-  if (row.manual_competitor_count === null || row.manual_competitor_count === undefined) {
-    return row.competitor_source
-  }
-  if (row.manual_competitor_count === 0) return row.competitor_source
-  return `${row.competitor_source} · ${row.manual_competitor_count} manual`
+
+  const count = row.manual_competitor_count
+  // Null for 'mixed' rows, whose split the API cannot recover — the
+  // bare source tag is all there is to say about those.
+  if (count === null || count === undefined) return row.competitor_source
+  // Everywhere the count IS derivable it is either none of them or all
+  // of them, so "manual · 2 manual" would just stutter the source word
+  // back. Name the count only when it adds something.
+  if (count === 0) return row.competitor_source
+  return `${row.competitor_source} · all ${count}`
 }
 
 /** The status column's second line. */
@@ -238,7 +243,10 @@ function Pill({ status }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 8px',
-      borderRadius: 999, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+      borderRadius: 999, fontSize: 11, fontWeight: 600,
+      // NOT nowrap: "Identifying competitors" is wider than the 12%
+      // Status column at 1280px and would otherwise bleed into Score.
+      maxWidth: '100%',
       background: pill.bg, color: pill.color,
     }}>
       <i style={{
@@ -250,14 +258,25 @@ function Pill({ status }) {
   )
 }
 
-/** Same palette and shape as the Cycles card's error trace (CycleDashboard
- *  FailedBody), compacted to sit inside a table cell. */
-function ErrorTrace({ message }) {
+/**
+ * Same palette and shape as the Cycles card's error trace (CycleDashboard
+ * FailedBody), compacted to sit inside a table cell.
+ *
+ * Clamped to three lines, which the mock does not do: a real trace
+ * wrapped inside a 12%-wide column made the failed row three times
+ * taller than every other row and broke the scan-down rhythm of the
+ * list. The full, unclamped text is one click away in the drawer.
+ */
+function ErrorTrace({ message, clamp = true }) {
   if (!message) return null
   return (
     <div style={{
       marginTop: 6, background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 6,
       padding: '6px 8px', fontFamily: MONO, fontSize: 11, color: '#991B1B',
+      ...(clamp ? {
+        display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+        overflow: 'hidden',
+      } : { whiteSpace: 'pre-wrap' }),
     }}>
       {message}
     </div>
@@ -478,6 +497,12 @@ function Drawer({ detail, loading, error, onClose }) {
                 </div>
               )}
             </Section>
+
+            {row.error_message && (
+              <Section title="Error">
+                <ErrorTrace message={row.error_message} clamp={false} />
+              </Section>
+            )}
 
             <Section title="Request">
               <div style={KV_GRID}>

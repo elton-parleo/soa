@@ -270,7 +270,13 @@ describe('formatDuration', () => {
 describe('competitorTag', () => {
   it('shows the manual count where the API could derive it exactly', () => {
     expect(competitorTag(row({ competitor_source: 'manual', manual_competitor_count: 2 })))
-      .toBe('manual · 2 manual')
+      .toBe('manual · all 2')
+  })
+
+  it('does not stutter the source word back as the count unit', () => {
+    // "manual · 2 manual" read as a bug in the rendered table.
+    expect(competitorTag(row({ competitor_source: 'manual', manual_competitor_count: 5 })))
+      .not.toContain('manual · 5 manual')
   })
 
   it('shows only the source for a mixed row, whose split is unknowable', () => {
