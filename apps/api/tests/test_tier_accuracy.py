@@ -497,3 +497,76 @@ def test_gtin_and_pack_count_are_reported_separately(conn):
 def test_a_tier_with_no_secondaries_reports_an_empty_list(conn):
     seed_outcome(conn, tier='value_incentives', outcome='exact')
     assert tier_of(build(conn), 'value_incentives')['secondary'] == []
+
+
+# ── the stale row, end to end ─────────────────────────────────────────────
+#
+# Catalog accuracy's drill-down went unresponsive on a real cycle while
+# the value tier's opened; the difference between them was two stale
+# outcomes. These lock the service side of that path — the shapes the
+# matched-prior-publish fields can actually arrive in, and what the
+# browser is handed for each.
+
+def test_a_stale_row_carries_everything_the_drill_down_renders(conn):
+    seed_outcome(
+        conn, outcome='stale', matched_at='2026-08-15T00:00:00+00:00',
+        answer='It costs $15.99.',
+    )
+    (row,) = tier_accuracy.per_question_outcomes(conn, 1)
+
+    assert row['outcome'] == 'stale'
+    assert row['matched_published_at'].startswith('2026-08-15')
+    for field in ('run_id', 'query_code', 'query_text', 'platform',
+                  'run_number', 'outcome_reason', 'answer_excerpt'):
+        assert row[field] is not None, field
+
+
+def test_a_timestamp_reaches_the_browser_as_a_string_whatever_the_driver_gives(conn):
+    """sqlite hands back a string and Postgres hands back a datetime. The
+    browser must not be the place that difference first shows up."""
+    seed_outcome(
+        conn, outcome='stale',
+        matched_at=datetime(2026, 8, 15, 14, 2, 11, tzinfo=timezone.utc),
+    )
+    (row,) = tier_accuracy.per_question_outcomes(conn, 1)
+    assert isinstance(row['matched_published_at'], str)
+    assert row['matched_published_at'].startswith('2026-08-15')
+
+
+def test_a_stale_row_with_no_matched_publish_is_null_not_missing(conn):
+    """The field is how a stale outcome is attributed to a specific past
+    publish. Absent and null are the same to the renderer, but only one
+    of them is a key it can read."""
+    seed_outcome(conn, outcome='stale', matched_at=None)
+    (row,) = tier_accuracy.per_question_outcomes(conn, 1)
+    assert 'matched_published_at' in row
+    assert row['matched_published_at'] is None
+
+
+def test_an_unreadable_expected_answer_is_null_rather_than_an_exception(conn):
+    """The column is JSON, and _json returns None on anything it cannot
+    parse. A row that cannot be described is still a row that has to be
+    listed — it is evidence that something is wrong."""
+    seed_outcome(conn, outcome='stale')
+    conn.execute(text(
+        "UPDATE soa_expectation_outcomes SET expected_answer = 'not json'"
+    ))
+    conn.commit()
+    (row,) = tier_accuracy.per_question_outcomes(conn, 1)
+    assert row['expected_answer'] is None
+    assert row['outcome'] == 'stale'
+
+
+def test_a_tier_with_stale_rows_lists_them_all(conn):
+    """The reported cycle: catalog accuracy with two stale outcomes among
+    its exacts, filtered to that tier."""
+    seed_outcome(conn, outcome='exact', query_id=1)
+    seed_outcome(conn, outcome='stale', query_id=2,
+                 matched_at='2026-08-15T00:00:00+00:00')
+    seed_outcome(conn, outcome='stale', query_id=3,
+                 matched_at='2026-07-02T00:00:00+00:00')
+    seed_outcome(conn, tier='value_incentives', outcome='exact', query_id=4)
+
+    rows = tier_accuracy.per_question_outcomes(conn, 1, tier='catalog_accuracy')
+    assert [r['outcome'] for r in rows] == ['exact', 'stale', 'stale']
+    assert all(r['tier'] == 'catalog_accuracy' for r in rows)
