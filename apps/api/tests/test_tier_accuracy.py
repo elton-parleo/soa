@@ -40,6 +40,7 @@ def conn():
                 outcome_reason TEXT, domain_cited BOOLEAN,
                 source_attribution TEXT, secondary_results TEXT,
                 record_published_at TIMESTAMP, matched_published_at TIMESTAMP,
+                near_miss BOOLEAN,
                 extraction_model TEXT, scored_at TIMESTAMP
             )
         """)
@@ -85,7 +86,7 @@ _next_id = [0]
 def seed_outcome(conn, *, tier='catalog_accuracy', platform='chatgpt',
                  outcome='exact', source_attribution='brand_domain',
                  query_id=1, answer='It costs $22.99.', matched_at=None,
-                 secondary=None):
+                 secondary=None, expected=None, near_miss=None):
     _next_id[0] += 1
     run_id = _next_id[0]
     conn.execute(text("""
@@ -101,18 +102,22 @@ def seed_outcome(conn, *, tier='catalog_accuracy', platform='chatgpt',
         INSERT INTO soa_expectation_outcomes (
             run_id, query_id, cycle_id, platform, tier,
             expected_answer, extraction, outcome, outcome_reason,
-            source_attribution, matched_published_at, secondary_results
+            source_attribution, matched_published_at, secondary_results,
+            near_miss
         ) VALUES (
             :rid, :qid, 1, :platform, :tier,
             :expected, '{}', :outcome, 'because', :attribution, :matched,
-            :secondary
+            :secondary, :near_miss
         )
     """), {
         "rid": run_id, "qid": query_id, "platform": platform, "tier": tier,
-        "expected": json.dumps({"type": "price", "amount": "22.99", "currency": "USD"}),
+        "expected": json.dumps(
+            expected or {"type": "price", "amount": "22.99", "currency": "USD"}
+        ),
         "outcome": outcome, "attribution": source_attribution,
         "matched": matched_at,
         "secondary": json.dumps(secondary) if secondary else None,
+        "near_miss": near_miss,
     })
     conn.commit()
     return run_id
@@ -253,18 +258,31 @@ def test_outcomes_split_by_surface(conn):
 def test_visibility_is_segmented_by_the_tier_of_the_question(conn):
     """Layer 1 is not re-derived — the tier is a GROUP BY, which is the
     whole point of stamping it on the question."""
-    run_a = seed_outcome(conn, tier='brand_direct', query_id=1)
-    run_b = seed_outcome(conn, tier='brand_direct', query_id=1)
+    run_a = seed_outcome(conn, tier='catalog_accuracy', query_id=1)
+    run_b = seed_outcome(conn, tier='catalog_accuracy', query_id=1)
     run_c = seed_outcome(conn, tier='category_control', query_id=2)
     seed_mention(conn, run_a, mentioned=True)
     seed_mention(conn, run_b, mentioned=False)
     seed_mention(conn, run_c, mentioned=False)
 
     section = build(conn, primary_entity_id=9)
-    assert tier_of(section, 'brand_direct')['visibility'] == {
+    assert tier_of(section, 'catalog_accuracy')['visibility'] == {
         'runs': 2, 'mentioned': 1, 'rate': 0.5,
     }
     assert tier_of(section, 'category_control')['visibility']['rate'] == 0.0
+
+
+def test_the_brand_direct_tier_reports_no_visibility_at_all(conn):
+    """It measured whether the brand was named, which is what `echoed`
+    counts — in a word that does not read as a score. Two numbers for one
+    fact, one of them called visibility, is how 63 of 66 runs on a brand
+    nobody could find came to look like 95% visible."""
+    run = seed_outcome(conn, tier='brand_direct', outcome='echoed', query_id=1)
+    seed_mention(conn, run, mentioned=True)
+
+    entry = tier_of(build(conn, primary_entity_id=9), 'brand_direct')
+    assert 'visibility' not in entry
+    assert 'Brand echoed' in entry['visibility_retired']
 
 
 def test_visibility_is_omitted_when_there_is_no_primary_entity(conn):
@@ -497,3 +515,286 @@ def test_gtin_and_pack_count_are_reported_separately(conn):
 def test_a_tier_with_no_secondaries_reports_an_empty_list(conn):
     seed_outcome(conn, tier='value_incentives', outcome='exact')
     assert tier_of(build(conn), 'value_incentives')['secondary'] == []
+
+
+# ── the stale row, end to end ─────────────────────────────────────────────
+#
+# Catalog accuracy's drill-down went unresponsive on a real cycle while
+# the value tier's opened; the difference between them was two stale
+# outcomes. These lock the service side of that path — the shapes the
+# matched-prior-publish fields can actually arrive in, and what the
+# browser is handed for each.
+
+def test_a_stale_row_carries_everything_the_drill_down_renders(conn):
+    seed_outcome(
+        conn, outcome='stale', matched_at='2026-08-15T00:00:00+00:00',
+        answer='It costs $15.99.',
+    )
+    (row,) = tier_accuracy.per_question_outcomes(conn, 1)
+
+    assert row['outcome'] == 'stale'
+    assert row['matched_published_at'].startswith('2026-08-15')
+    for field in ('run_id', 'query_code', 'query_text', 'platform',
+                  'run_number', 'outcome_reason', 'answer_excerpt'):
+        assert row[field] is not None, field
+
+
+def test_a_timestamp_reaches_the_browser_as_a_string_whatever_the_driver_gives(conn):
+    """sqlite hands back a string and Postgres hands back a datetime. The
+    browser must not be the place that difference first shows up."""
+    seed_outcome(
+        conn, outcome='stale',
+        matched_at=datetime(2026, 8, 15, 14, 2, 11, tzinfo=timezone.utc),
+    )
+    (row,) = tier_accuracy.per_question_outcomes(conn, 1)
+    assert isinstance(row['matched_published_at'], str)
+    assert row['matched_published_at'].startswith('2026-08-15')
+
+
+def test_a_stale_row_with_no_matched_publish_is_null_not_missing(conn):
+    """The field is how a stale outcome is attributed to a specific past
+    publish. Absent and null are the same to the renderer, but only one
+    of them is a key it can read."""
+    seed_outcome(conn, outcome='stale', matched_at=None)
+    (row,) = tier_accuracy.per_question_outcomes(conn, 1)
+    assert 'matched_published_at' in row
+    assert row['matched_published_at'] is None
+
+
+def test_an_unreadable_expected_answer_is_null_rather_than_an_exception(conn):
+    """The column is JSON, and _json returns None on anything it cannot
+    parse. A row that cannot be described is still a row that has to be
+    listed — it is evidence that something is wrong."""
+    seed_outcome(conn, outcome='stale')
+    conn.execute(text(
+        "UPDATE soa_expectation_outcomes SET expected_answer = 'not json'"
+    ))
+    conn.commit()
+    (row,) = tier_accuracy.per_question_outcomes(conn, 1)
+    assert row['expected_answer'] is None
+    assert row['outcome'] == 'stale'
+
+
+def test_a_tier_with_stale_rows_lists_them_all(conn):
+    """The reported cycle: catalog accuracy with two stale outcomes among
+    its exacts, filtered to that tier."""
+    seed_outcome(conn, outcome='exact', query_id=1)
+    seed_outcome(conn, outcome='stale', query_id=2,
+                 matched_at='2026-08-15T00:00:00+00:00')
+    seed_outcome(conn, outcome='stale', query_id=3,
+                 matched_at='2026-07-02T00:00:00+00:00')
+    seed_outcome(conn, tier='value_incentives', outcome='exact', query_id=4)
+
+    rows = tier_accuracy.per_question_outcomes(conn, 1, tier='catalog_accuracy')
+    assert [r['outcome'] for r in rows] == ['exact', 'stale', 'stale']
+    assert all(r['tier'] == 'catalog_accuracy' for r in rows)
+
+
+# ── the brand-direct split ────────────────────────────────────────────────
+#
+# Fixtures are the shape cycle 20260915-113207-wiggle-snug-full produced:
+# 66 runs, 33 per surface, of which 2 cited the brand's own record.
+
+BRAND_CYCLE = {
+    'chatgpt': {
+        'acknowledged_unknown': 14, 'misattributed': 11, 'echoed': 4,
+        'grounded': 2, 'fabricated': 0, 'absent': 2,
+    },
+    'gemini': {
+        'acknowledged_unknown': 12, 'fabricated': 6, 'echoed': 12,
+        'misattributed': 2, 'grounded': 0, 'absent': 1,
+    },
+}
+
+
+def seed_brand_cycle(conn):
+    query_id = 100
+    for platform, counts in BRAND_CYCLE.items():
+        for outcome, n in counts.items():
+            for _ in range(n):
+                query_id += 1
+                seed_outcome(
+                    conn, tier='brand_direct', platform=platform,
+                    outcome=outcome, query_id=query_id,
+                    expected={"type": "brand_mention", "brand": "Wiggle & Snug",
+                              "domain": "trueshopstore.com"},
+                    source_attribution=(
+                        'brand_domain' if outcome == 'grounded' else 'retailer'
+                    ),
+                )
+
+
+def test_the_brand_tier_is_reported_as_the_split_and_not_as_an_accuracy(conn):
+    seed_brand_cycle(conn)
+    entry = tier_of(build(conn), 'brand_direct')
+
+    assert entry['accuracy'] is None
+    assert entry['staleness'] is None
+    assert entry['wrong_rate'] is None
+    assert [a['outcome'] for a in entry['assessments']] == [
+        'grounded', 'echoed', 'misattributed', 'fabricated',
+        'acknowledged_unknown',
+    ]
+
+
+def test_the_split_counts_every_assessed_run_and_no_others(conn):
+    seed_brand_cycle(conn)
+    entry = tier_of(build(conn), 'brand_direct')
+
+    assert entry['samples'] == 66
+    # The three that never named the brand stay out of the denominator,
+    # exactly as absent stays out of accuracy elsewhere.
+    assert entry['assessed'] == 63
+    assert sum(a['count'] for a in entry['assessments']) == 63
+    assert entry['counts']['absent'] == 3
+
+
+def test_two_runs_in_sixty_six_read_the_record(conn):
+    seed_brand_cycle(conn)
+    entry = tier_of(build(conn), 'brand_direct')
+
+    grounded = next(a for a in entry['assessments'] if a['outcome'] == 'grounded')
+    assert grounded['count'] == 2
+    assert entry['grounded_rate'] == round(2 / 63, 4)
+
+
+def test_the_answers_that_invented_or_substituted_are_their_own_number(conn):
+    """13 misattributed + 6 fabricated. Under the old scoring all 19 of
+    these were `exact`."""
+    seed_brand_cycle(conn)
+    entry = tier_of(build(conn), 'brand_direct')
+    assert entry['counts']['misattributed'] == 13
+    assert entry['counts']['fabricated'] == 6
+    assert entry['harmful_rate'] == round(19 / 63, 4)
+
+
+def test_the_split_is_reported_per_surface(conn):
+    """The two surfaces fail differently — ChatGPT substitutes another
+    product, Gemini invents one — and a blended number says neither."""
+    seed_brand_cycle(conn)
+    surfaces = {s['platform']: s for s in tier_of(build(conn), 'brand_direct')['surfaces']}
+
+    assert set(surfaces) == {'chatgpt', 'gemini'}
+    chatgpt = {a['outcome']: a['count'] for a in surfaces['chatgpt']['assessments']}
+    gemini = {a['outcome']: a['count'] for a in surfaces['gemini']['assessments']}
+    assert chatgpt['grounded'] == 2 and gemini['grounded'] == 0
+    assert chatgpt['misattributed'] == 11 and gemini['fabricated'] == 6
+    assert 'visibility' not in surfaces['chatgpt']
+
+
+def test_an_outcome_from_the_wrong_vocabulary_is_not_folded_in(conn):
+    """A catalog outcome on a brand-direct row would land in a
+    denominator that does not describe it."""
+    seed_brand_cycle(conn)
+    seed_outcome(conn, tier='brand_direct', outcome='stale', query_id=999)
+    entry = tier_of(build(conn), 'brand_direct')
+    assert entry['samples'] == 66
+    assert 'stale' not in entry['counts']
+
+
+# ── value survival, and what an assistant can guess ───────────────────────
+
+POINTS_GUESSABLE = {"type": "points", "rule": {"kind": "per_dollar", "rate": "1.00"},
+                    "program_name": "Member Rewards"}
+POINTS_REAL = {"type": "points", "rule": {"kind": "per_dollar", "rate": "3"},
+               "program_name": "Member Rewards"}
+CODE = {"type": "code", "code": "SNUG3", "value_kind": "percent_off", "value": "15.0"}
+
+
+def test_a_guessable_points_rule_stays_out_of_the_value_headline(conn):
+    """One point per dollar is what almost every programme does. An
+    assistant that says so has shown nothing about whether it read this
+    record, and a headline it moves is measuring the industry."""
+    seed_outcome(conn, tier='value_incentives', outcome='exact',
+                 expected=POINTS_GUESSABLE, query_id=1)
+    seed_outcome(conn, tier='value_incentives', outcome='wrong',
+                 expected=CODE, query_id=2)
+
+    section = build(conn)
+    assert section['value_survival'] == 0.0
+    assert section['value_survival_samples'] == 1
+    # The tier's own accuracy, over everything, is unchanged beside it.
+    assert section['value_survival_all'] == 0.5
+
+
+def test_the_excluded_rows_are_reported_rather_than_dropped(conn):
+    """Silently removing rows from a published rate is its own lie."""
+    seed_outcome(conn, tier='value_incentives', outcome='exact',
+                 expected=POINTS_GUESSABLE, query_id=1)
+    seed_outcome(conn, tier='value_incentives', outcome='wrong',
+                 expected=POINTS_GUESSABLE, query_id=2)
+    seed_outcome(conn, tier='value_incentives', outcome='exact',
+                 expected=CODE, query_id=3)
+
+    low = build(conn)['low_information']
+    assert low['scored'] == 2
+    assert low['exact'] == 1
+    assert low['rate'] == 0.5
+    assert 'category default' in low['note']
+
+
+def test_a_real_points_rate_is_not_excluded(conn):
+    """Three points per dollar is this brand's, not the industry's."""
+    seed_outcome(conn, tier='value_incentives', outcome='exact',
+                 expected=POINTS_REAL, query_id=1)
+    section = build(conn)
+    assert section['value_survival'] == 1.0
+    assert section['value_survival_samples'] == 1
+    assert section['low_information'] is None
+
+
+def test_the_exclusion_is_decided_by_what_we_published_not_by_the_answer(conn):
+    """Both of these are the same expectation. One was answered right and
+    one wrong, and both are excluded — otherwise the rule could be
+    applied to results somebody disliked."""
+    seed_outcome(conn, tier='value_incentives', outcome='exact',
+                 expected=POINTS_GUESSABLE, query_id=1)
+    seed_outcome(conn, tier='value_incentives', outcome='wrong',
+                 expected=POINTS_GUESSABLE, query_id=2)
+    section = build(conn)
+    assert section['value_survival'] is None
+    assert section['value_survival_samples'] == 0
+
+
+# ── near-miss codes ───────────────────────────────────────────────────────
+
+def test_a_near_miss_code_is_counted_apart_from_the_rest_of_wrong(conn):
+    """The right code with the wrong terms: the code reached the
+    assistant and its value did not."""
+    seed_outcome(conn, tier='value_incentives', outcome='wrong',
+                 expected=CODE, near_miss=True, query_id=1)
+    seed_outcome(conn, tier='value_incentives', outcome='wrong',
+                 expected=CODE, query_id=2)
+
+    entry = tier_of(build(conn), 'value_incentives')
+    assert entry['near_miss'] == 1
+    # And still inside wrong. Moving it out would change a denominator to
+    # make a number look better.
+    assert entry['counts']['wrong'] == 2
+    assert entry['wrong_rate'] == 1.0
+
+
+def test_a_tier_with_no_near_misses_reports_zero_not_nothing(conn):
+    seed_outcome(conn, tier='catalog_accuracy', outcome='wrong')
+    assert tier_of(build(conn), 'catalog_accuracy')['near_miss'] == 0
+
+
+# ── the guarantee the re-score rests on ───────────────────────────────────
+
+def test_the_catalog_tier_is_untouched_by_any_of_this(conn):
+    """The brand tier is re-scored in place on top of these changes.
+    Catalog accuracy has to come out of that with the numbers it went in
+    with, and it does because nothing above reads or writes its rows."""
+    for outcome in ('exact', 'exact', 'exact', 'stale', 'wrong', 'absent'):
+        seed_outcome(conn, tier='catalog_accuracy', outcome=outcome,
+                     query_id=hash(outcome) % 50 + 1)
+    seed_brand_cycle(conn)
+
+    entry = tier_of(build(conn), 'catalog_accuracy')
+    assert entry['counts'] == {
+        'exact': 3, 'stale': 1, 'wrong': 1, 'absent': 1, 'unscoreable': 0,
+    }
+    assert entry['accuracy'] == 0.6
+    assert entry['staleness'] == 0.2
+    assert entry['scored'] == 5
+    assert entry['samples'] == 6

@@ -258,6 +258,56 @@ Matching tolerates typography and nothing else — `Wiggle & Snug`,
 `wiggle and snug` and `WIGGLE & SNUG` are the same brand typed three
 ways; `Wiggle` on its own is not the brand.
 
+#### Naming the brand is not a result
+
+A `brand_mention` expectation was scored on presence: `exact` if the
+answer named the brand, `absent` if not. Cycle
+20260915-113207-wiggle-snug-full is what that produces — 63 of 66 runs
+`exact`, on a brand that two of those answers had actually read:
+
+| What the answer said | Old outcome |
+| --- | --- |
+| "not a real or widely recognized brand of diapers" | `exact` |
+| "a private label brand sold exclusively at Kohl's", tiers "Snuggle Friend, Pal, Bestie" | `exact` |
+| "the closest match I found is Beezpro's Snug Fit Padded underwear" | `exact` |
+| cited trueshopstore.com/loyalty, named Member and Member+ | `exact` |
+
+So brand-direct questions are no longer scored on the value axis at all.
+They are classified on their own, by what the answer did with the brand —
+`grounded`, `echoed`, `misattributed`, `fabricated`,
+`acknowledged_unknown`, plus `absent` and `unscoreable`, which mean here
+what they mean everywhere. The rules and their precedence live in
+`scoring/brand_direct_classifier.py`; the classifier reads only
+transcribed fields and the published record, and asks no model whether an
+answer was good.
+
+Two consequences worth stating:
+
+**Visibility is retired for this tier**, not renamed. It was the pass-1
+mention rate over these runs — "was the brand named" — which is precisely
+what `echoed` counts. Two numbers for one fact, one of them called
+visibility, is how 63 of 66 came to look like a score.
+
+**`misattributed` outranks `acknowledged_unknown`** when both apply, and
+both usually do. An answer that says "I cannot verify Wiggle & Snug, but
+here is Huggies Snug & Dry" leaves the reader holding Huggies. The
+admission is a mitigation, not the result.
+
+#### Guessable expectations
+
+`points` at **one per dollar** is the category default. An answer that
+gets it right has not shown it read the record, so `is_low_information`
+marks it and the **value-survival headline excludes it** — reported
+separately, with its own count, because silently dropping rows from a
+published rate is its own kind of lie. Judged on the expectation, never
+on the answer, so which rows are excluded is fixed before anything is
+scored.
+
+A `code` answered with the **right code and the wrong terms** is still
+`wrong` — the shopper is told they will save an amount they will not
+save. It carries a `near_miss` flag beside the outcome, counted apart
+and never moved out of the denominator.
+
 The same guard rejects a brand-direct question that **restates a catalog
 question**: same ask (price, code, member price, points) about the same
 product, in different words. Left in, it would measure one published

@@ -310,3 +310,141 @@ describe('the volunteered-alongside table', () => {
     expect(screen.queryByText(/Volunteered alongside/)).not.toBeInTheDocument()
   })
 })
+
+// ─── The brand-direct split ───────────────────────────────────────────────
+//
+// Shaped as tier_accuracy.py now produces it for cycle
+// 20260915-113207-wiggle-snug-full: 66 runs, 33 per surface, two of which
+// cited the brand's own record.
+
+function assessments(counts, assessed) {
+  const order = ['grounded', 'echoed', 'misattributed', 'fabricated', 'acknowledged_unknown']
+  const label = {
+    grounded: 'Grounded', echoed: 'Brand echoed', misattributed: 'Misattributed',
+    fabricated: 'Fabricated', acknowledged_unknown: 'Said it could not find us',
+  }
+  return order.map((o) => ({
+    outcome: o, label: label[o], count: counts[o] || 0,
+    rate: assessed ? Math.round(((counts[o] || 0) / assessed) * 10000) / 10000 : null,
+  }))
+}
+
+const BRAND_TIER = {
+  tier: 'brand_direct', label: 'Brand-direct',
+  counts: {
+    grounded: 2, echoed: 16, misattributed: 13, fabricated: 6,
+    acknowledged_unknown: 26, absent: 3, unscoreable: 0,
+  },
+  assessments: assessments(
+    { grounded: 2, echoed: 16, misattributed: 13, fabricated: 6, acknowledged_unknown: 26 },
+    63,
+  ),
+  assessed: 63, samples: 66, scored: 63,
+  accuracy: null, staleness: null, wrong_rate: null,
+  grounded_rate: 0.0317, harmful_rate: 0.3016,
+  visibility_retired: 'Reported as Brand echoed below. Naming the brand is not the same as knowing it.',
+  source_attribution: { brand_domain: 2, retailer: 37, none: 27 },
+  secondary: [], near_miss: 0,
+  surfaces: [
+    {
+      platform: 'chatgpt', assessed: 31, samples: 33,
+      counts: { grounded: 2, echoed: 4, misattributed: 11, fabricated: 0, acknowledged_unknown: 14, absent: 2 },
+      assessments: assessments(
+        { grounded: 2, echoed: 4, misattributed: 11, fabricated: 0, acknowledged_unknown: 14 }, 31),
+    },
+    {
+      platform: 'gemini', assessed: 32, samples: 33,
+      counts: { grounded: 0, echoed: 12, misattributed: 2, fabricated: 6, acknowledged_unknown: 12, absent: 1 },
+      assessments: assessments(
+        { grounded: 0, echoed: 12, misattributed: 2, fabricated: 6, acknowledged_unknown: 12 }, 32),
+    },
+  ],
+}
+
+describe('the brand-direct tier', () => {
+  const withBrand = (extra = {}) => section({ tiers: [BRAND_TIER, tier()], ...extra })
+
+  it('is shown as a split, with every assessment named', () => {
+    render(<TierAccuracySection tierAccuracy={withBrand()} open onToggle={() => {}} />)
+    // The column headers, not the prose above them — the prose names two
+    // of these as well, which is the point of scoping to the table.
+    const headers = within(screen.getByTestId('brand-direct-split'))
+      .getAllByRole('columnheader').map((h) => h.textContent)
+    expect(headers).toEqual([
+      'Brand-direct', 'Grounded', 'Brand echoed', 'Misattributed',
+      'Fabricated', 'Said it could not find us', 'Assessed',
+    ])
+  })
+
+  it('prints no accuracy or staleness for it — there is no number to match', () => {
+    render(<TierAccuracySection tierAccuracy={withBrand()} open onToggle={() => {}} />)
+    const row = screen.getByTestId('tier-row-brand_direct')
+    // The catalog tier's 60% is still in the table; the brand row shows
+    // state chips where its accuracy would be, never a zero.
+    expect(within(row).queryByText('60%')).not.toBeInTheDocument()
+    expect(within(row).getAllByText(/no sample|—|see below/).length).toBeGreaterThan(0)
+  })
+
+  it('retires visibility rather than printing a second number for one fact', () => {
+    render(<TierAccuracySection tierAccuracy={withBrand()} open onToggle={() => {}} />)
+    const row = screen.getByTestId('tier-row-brand_direct')
+    expect(within(row).getByText('see below')).toBeInTheDocument()
+  })
+
+  it('splits by surface, because the two fail differently', () => {
+    render(<TierAccuracySection tierAccuracy={withBrand()} open onToggle={() => {}} />)
+    expect(screen.getByTestId('brand-split-chatgpt')).toBeInTheDocument()
+    expect(screen.getByTestId('brand-split-gemini')).toBeInTheDocument()
+    // Two grounded runs, both on one surface.
+    expect(within(screen.getByTestId('brand-split-chatgpt'))).toBeTruthy()
+  })
+
+  it('says how many answers never named the brand and kept them out', () => {
+    render(<TierAccuracySection tierAccuracy={withBrand()} open onToggle={() => {}} />)
+    expect(screen.getByTestId('brand-direct-split'))
+      .toHaveTextContent('3 answers never named the brand at all')
+  })
+
+  it('is absent entirely from a study that has no brand-direct tier', () => {
+    render(<TierAccuracySection tierAccuracy={section()} open onToggle={() => {}} />)
+    expect(screen.queryByTestId('brand-direct-split')).not.toBeInTheDocument()
+  })
+})
+
+describe('the value-survival headline', () => {
+  it('says what it leaves out and why', () => {
+    render(
+      <TierAccuracySection
+        open onToggle={() => {}}
+        tierAccuracy={section({
+          value_survival: 0.5, value_survival_samples: 4,
+          low_information: {
+            scored: 2, exact: 2, rate: 1,
+            note: 'Points at one per dollar is the category default.',
+          },
+        })}
+      />,
+    )
+    const note = screen.getByTestId('low-information')
+    expect(note).toHaveTextContent('2 questions are kept out of that figure')
+    expect(note).toHaveTextContent('category default')
+  })
+
+  it('says nothing when nothing was excluded', () => {
+    render(<TierAccuracySection tierAccuracy={section()} open onToggle={() => {}} />)
+    expect(screen.queryByTestId('low-information')).not.toBeInTheDocument()
+  })
+})
+
+describe('near-miss codes', () => {
+  it('are counted beside wrong rather than inside it silently', () => {
+    render(
+      <TierAccuracySection
+        open onToggle={() => {}}
+        tierAccuracy={section({ tiers: [tier({ near_miss: 1 })] })}
+      />,
+    )
+    expect(screen.getByTestId('tier-row-catalog_accuracy'))
+      .toHaveTextContent('(1 near miss)')
+  })
+})

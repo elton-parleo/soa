@@ -74,7 +74,7 @@ def test_is_the_single_head():
         if down:
             down_revisions.add(down.group(1))
 
-    assert revisions - down_revisions == {"a9f3c21b7e40"}
+    assert revisions - down_revisions == {"b4c7e19d2a08"}
 
 
 # ── upgrade: soa_queries ──────────────────────────────────────────────────
@@ -139,7 +139,7 @@ def test_constraint_text_matches_the_shared_vocabulary():
     diverging without anyone noticing.
     """
     from soa_shared.expected_answers import (
-        EXPECTATION_OUTCOMES, QUERY_PROVENANCES, QUERY_TIERS,
+        VALUE_OUTCOMES, QUERY_PROVENANCES, QUERY_TIERS,
     )
 
     mock_op = _upgrade_calls()
@@ -158,8 +158,15 @@ def test_constraint_text_matches_the_shared_vocabulary():
         arg for arg in table_call.args[1:]
         if getattr(arg, "name", None) == "ck_soa_expectation_outcomes_outcome"
     )
-    for value in EXPECTATION_OUTCOMES:
+    # The value vocabulary, as it stood on the day this migration was
+    # written. b4c7e19d2a08 widens the same constraint to admit the
+    # brand-direct assessments; this literal is not updated to match,
+    # because a migration is the record of what the database was asked to
+    # accept then, not a view of what it accepts now.
+    for value in VALUE_OUTCOMES:
         assert f"'{value}'" in str(outcome_constraint.sqltext)
+    for value in ("grounded", "echoed", "misattributed"):
+        assert f"'{value}'" not in str(outcome_constraint.sqltext)
 
 
 # ── upgrade: the study definition row and the cycle ───────────────────────

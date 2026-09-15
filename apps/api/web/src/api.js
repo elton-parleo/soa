@@ -20,6 +20,19 @@ export function setApiToken(token) {
   _accessToken = token
 }
 
+/**
+ * A 401 that has already triggered sign-out and reload. Callers should
+ * not treat it as a failure of the thing they asked for — nothing is
+ * wrong with the request; the session ended.
+ */
+export class AuthExpiredError extends Error {
+  constructor() {
+    super('Your session expired. Reloading to sign in again…')
+    this.name = 'AuthExpiredError'
+    this.authExpired = true
+  }
+}
+
 async function request(method, path, body) {
   const opts = {
     method,
@@ -44,7 +57,19 @@ async function request(method, path, body) {
       // The auth provider clears the token via onAuthStateChange.
       await supabase.auth.signOut()
       window.location.reload()
-      return
+      // THROW, never `return`. This used to resolve the promise with
+      // undefined, which made every caller that reads a field off the
+      // body — `data.outcomes`, `data.rows` — throw a TypeError inside
+      // its own .then, while the reload wiped the console entry and the
+      // half-rendered UI on its way out. The visible result was a
+      // control that did nothing, no error anywhere, and a session that
+      // had quietly worked ten minutes earlier.
+      //
+      // A reload is in flight either way; what changes is that the
+      // caller now has something to render in the moment before it
+      // lands, and something to log if the reload is blocked (a test
+      // environment, a stubbed location, an open beforeunload dialog).
+      throw new AuthExpiredError()
     }
     let detail = `${method} ${path} → ${res.status}`
     try {

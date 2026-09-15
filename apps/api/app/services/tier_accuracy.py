@@ -34,6 +34,8 @@ so it needs no re-run when it comes.
 """
 from sqlalchemy import text
 
+from soa_shared import expected_answers as ea
+
 # Display order, and the order the report renders them in: the tier a
 # shopper's question sounds most like first, the control last.
 TIER_ORDER = [
@@ -69,13 +71,79 @@ def _rate(numerator: int, denominator: int):
     return round(numerator / denominator, 4)
 
 
-def _empty_counts() -> dict:
-    return {outcome: 0 for outcome in
-            ('exact', 'stale', 'wrong', 'absent', 'unscoreable')}
+BRAND_ASSESSMENTS = ('grounded', 'echoed', 'misattributed', 'fabricated',
+                    'acknowledged_unknown')
+
+BRAND_OUTCOMES = BRAND_ASSESSMENTS + ('absent', 'unscoreable')
+
+BRAND_LABELS = {
+    'grounded':             'Grounded',
+    'echoed':               'Brand echoed',
+    'misattributed':        'Misattributed',
+    'fabricated':           'Fabricated',
+    'acknowledged_unknown': 'Said it could not find us',
+    'absent':               'Brand not named',
+    'unscoreable':          'Unreadable',
+}
+
+# The brand-direct tier has no accuracy, and printing one would be
+# inventing a number. What it has is a split, and these are the two ends
+# of it: an answer that read our record, and answers that did not and
+# said something anyway.
+BRAND_GOOD = ('grounded',)
+BRAND_HARMFUL = ('misattributed', 'fabricated')
 
 
-def _summarise(counts: dict) -> dict:
-    scored = sum(counts[o] for o in SCORED_OUTCOMES)
+def _empty_counts(tier=None) -> dict:
+    return {outcome: 0 for outcome in _vocabulary(tier)}
+
+
+def _vocabulary(tier):
+    return BRAND_OUTCOMES if tier == 'brand_direct' else EXPECTATION_OUTCOMES
+
+
+def _summarise_brand(counts: dict) -> dict:
+    """
+    The brand-direct tier, reported as the split it is.
+
+    No accuracy and no staleness — there is no published value for an
+    answer to match, and the five value outcomes never described this
+    tier. `visibility` is gone from here too: it measured whether the
+    brand was named, which is what `echoed` now says in a word that does
+    not sound like a result.
+    """
+    total = sum(counts.values())
+    # Everything we could read and that named the brand. `absent` and
+    # `unscoreable` stay outside, exactly as they stay outside accuracy.
+    assessed = sum(counts.get(o, 0) for o in BRAND_ASSESSMENTS)
+    return {
+        'counts': dict(counts),
+        'assessed': assessed,
+        'samples': total,
+        'rates': {
+            outcome: _rate(counts.get(outcome, 0), assessed)
+            for outcome in BRAND_ASSESSMENTS
+        },
+        'grounded_rate': _rate(
+            sum(counts.get(o, 0) for o in BRAND_GOOD), assessed,
+        ),
+        'harmful_rate': _rate(
+            sum(counts.get(o, 0) for o in BRAND_HARMFUL), assessed,
+        ),
+        'answered_rate': _rate(assessed, total - counts.get('unscoreable', 0)),
+        'unscoreable_rate': _rate(counts.get('unscoreable', 0), total),
+        # Stated rather than left to be inferred from a missing column.
+        'accuracy': None,
+        'staleness': None,
+        'wrong_rate': None,
+        'scored': assessed,
+    }
+
+
+def _summarise(counts: dict, tier=None) -> dict:
+    if tier == 'brand_direct':
+        return _summarise_brand(counts)
+    scored = sum(counts.get(o, 0) for o in SCORED_OUTCOMES)
     total = sum(counts.values())
     return {
         'counts': dict(counts),
@@ -83,18 +151,18 @@ def _summarise(counts: dict) -> dict:
         # except `answered_rate`, which is over everything.
         'scored': scored,
         'samples': total,
-        'accuracy': _rate(counts['exact'], scored),
-        'staleness': _rate(counts['stale'], scored),
-        'wrong_rate': _rate(counts['wrong'], scored),
+        'accuracy': _rate(counts.get('exact', 0), scored),
+        'staleness': _rate(counts.get('stale', 0), scored),
+        'wrong_rate': _rate(counts.get('wrong', 0), scored),
         # How often the assistant addressed the quantity at all. Kept
         # beside accuracy rather than folded into it: an assistant that
         # is right whenever it answers but answers a third of the time is
         # a different result from one that answers everything.
-        'answered_rate': _rate(scored, total - counts['unscoreable']),
+        'answered_rate': _rate(scored, total - counts.get('unscoreable', 0)),
         # Our own failure rate, published rather than hidden. A rising
         # unscoreable share is the signal that the extractor is
         # degrading, and it is only visible if it is printed.
-        'unscoreable_rate': _rate(counts['unscoreable'], total),
+        'unscoreable_rate': _rate(counts.get('unscoreable', 0), total),
     }
 
 
@@ -280,7 +348,7 @@ def build_tier_accuracy(conn, cycle_id: int, *, primary_entity_id=None,
             tiers[tier] = {
                 'tier': tier,
                 'label': TIER_LABELS.get(tier, tier),
-                'counts': _empty_counts(),
+                'counts': _empty_counts(tier),
                 'surfaces': {},
                 'visibility': {'runs': 0, 'mentioned': 0},
                 'source_attribution': {},
@@ -295,13 +363,18 @@ def build_tier_accuracy(conn, cycle_id: int, *, primary_entity_id=None,
         if platform not in entry['surfaces']:
             entry['surfaces'][platform] = {
                 'platform': platform,
-                'counts': _empty_counts(),
+                'counts': _empty_counts(tier),
                 'visibility': {'runs': 0, 'mentioned': 0},
             }
         return entry['surfaces'][platform]
 
     for row in outcome_rows:
         tier, platform, outcome, n = row[0], row[1], row[2], row[3]
+        # An outcome from the wrong vocabulary for this tier is a bug
+        # upstream, not a number to fold in silently — it would land in a
+        # denominator that does not describe it.
+        if outcome not in _vocabulary(tier):
+            continue
         tier_entry(tier)['counts'][outcome] += n
         surface_entry(tier, platform)['counts'][outcome] += n
 
@@ -333,8 +406,29 @@ def build_tier_accuracy(conn, cycle_id: int, *, primary_entity_id=None,
         entry = tiers.get(tier)
         if entry is None:
             continue
-        entry.update(_summarise(entry['counts']))
-        finish_visibility(entry['visibility'])
+        entry.update(_summarise(entry['counts'], tier))
+        entry['assessments'] = (
+            [
+                {'outcome': o, 'label': BRAND_LABELS[o],
+                 'count': entry['counts'].get(o, 0),
+                 'rate': entry['rates'][o]}
+                for o in BRAND_ASSESSMENTS
+            ] if tier == 'brand_direct' else None
+        )
+        if tier == 'brand_direct':
+            # Visibility is retired here, not renamed and kept. It was the
+            # pass-1 mention rate over this tier's runs — "was the brand
+            # named" — which is exactly what `echoed` counts, in a word
+            # that does not read as a result. Two numbers for one fact,
+            # one of them called visibility, is how 63 of 66 came to look
+            # like a score.
+            entry.pop('visibility', None)
+            entry['visibility_retired'] = (
+                'Reported as Brand echoed below. Naming the brand is not '
+                'the same as knowing it.'
+            )
+        else:
+            finish_visibility(entry['visibility'])
         # Same rate rules as everything else: absent and unscoreable
         # outside the denominator, inside the sample count. That is only
         # possible because the comparator records absent secondaries
@@ -351,8 +445,17 @@ def build_tier_accuracy(conn, cycle_id: int, *, primary_entity_id=None,
         ]
         surfaces = []
         for surface in sorted(entry['surfaces'].values(), key=lambda s: s['platform']):
-            surface.update(_summarise(surface['counts']))
-            finish_visibility(surface['visibility'])
+            surface.update(_summarise(surface['counts'], tier))
+            if tier == 'brand_direct':
+                surface['assessments'] = [
+                    {'outcome': o, 'label': BRAND_LABELS[o],
+                     'count': surface['counts'].get(o, 0),
+                     'rate': surface['rates'][o]}
+                    for o in BRAND_ASSESSMENTS
+                ]
+                surface.pop('visibility', None)
+            else:
+                finish_visibility(surface['visibility'])
             surfaces.append(surface)
         entry['surfaces'] = surfaces
         ordered.append(entry)
@@ -360,6 +463,10 @@ def build_tier_accuracy(conn, cycle_id: int, *, primary_entity_id=None,
     value_tier = next(
         (t for t in ordered if t['tier'] == 'value_incentives'), None,
     )
+    survival = _value_survival(conn, cycle_id)
+    near_miss = _near_miss_counts(conn, cycle_id)
+    for entry in ordered:
+        entry['near_miss'] = near_miss.get(entry['tier'], 0)
 
     return {
         'tiers': ordered,
@@ -368,10 +475,85 @@ def build_tier_accuracy(conn, cycle_id: int, *, primary_entity_id=None,
         # member price, the code and the points survive into the answer"
         # is a question about the value tier, and blending catalog prices
         # into it would answer a different one.
-        'value_survival': value_tier['accuracy'] if value_tier else None,
-        'value_survival_samples': value_tier['scored'] if value_tier else 0,
+        #
+        # Computed over the expectations an assistant could not simply
+        # guess — see _value_survival. The tier's own accuracy, over
+        # everything, stays on the tier row beside it.
+        'value_survival': survival['rate'],
+        'value_survival_samples': survival['scored'],
+        'value_survival_all': value_tier['accuracy'] if value_tier else None,
+        'low_information': survival['low_information'],
         'study': _study_context(conn, study_type),
         'extraction_validation': _extraction_validation(conn, cycle_id),
+    }
+
+
+def _near_miss_counts(conn, cycle_id: int) -> dict:
+    """
+    Per tier, how many wrong answers named the right promotion code and
+    got its terms wrong.
+
+    Counted apart from the rest of `wrong` because they are a different
+    finding: the code reached the assistant and its value did not. Still
+    inside `wrong` — separating them from the denominator would be moving
+    a number to make it look better.
+    """
+    rows = conn.execute(text("""
+        SELECT tier, COUNT(*) AS n
+        FROM soa_expectation_outcomes
+        WHERE cycle_id = :cycle_id AND near_miss = TRUE
+        GROUP BY tier
+    """), {"cycle_id": cycle_id}).fetchall()
+    return {row[0]: row[1] for row in rows}
+
+
+def _value_survival(conn, cycle_id: int) -> dict:
+    """
+    The value tier's exact rate over expectations an assistant could not
+    have guessed.
+
+    One point per dollar is what almost every loyalty programme on earth
+    does. An assistant that says so has demonstrated nothing about
+    whether it read this brand's record, and a headline that such an
+    answer moves is measuring the industry. So those rows are excluded
+    from the headline — and reported, with their own count, because
+    silently dropping rows from a published rate is its own kind of lie.
+
+    Judged on the EXPECTATION, never on the answer: is_low_information
+    reads what we published, so which rows are excluded is fixed before
+    anything is scored.
+    """
+    rows = conn.execute(text("""
+        SELECT outcome, expected_answer
+        FROM soa_expectation_outcomes
+        WHERE cycle_id = :cycle_id AND tier = 'value_incentives'
+    """), {"cycle_id": cycle_id}).fetchall()
+
+    exact = scored = 0
+    excluded = {'scored': 0, 'exact': 0}
+    for outcome, expected in rows:
+        if outcome not in SCORED_OUTCOMES:
+            continue
+        if ea.is_low_information(_json(expected)):
+            excluded['scored'] += 1
+            excluded['exact'] += 1 if outcome == 'exact' else 0
+            continue
+        scored += 1
+        exact += 1 if outcome == 'exact' else 0
+
+    return {
+        'rate': _rate(exact, scored),
+        'scored': scored,
+        'low_information': {
+            'scored': excluded['scored'],
+            'exact': excluded['exact'],
+            'rate': _rate(excluded['exact'], excluded['scored']),
+            'note': (
+                'Points at one per dollar is the category default. An answer '
+                'that gets it right has not shown it read the record, so '
+                'these are kept out of the headline and reported here.'
+            ),
+        } if excluded['scored'] else None,
     }
 
 

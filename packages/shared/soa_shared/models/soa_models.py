@@ -2044,11 +2044,15 @@ class SoaExpectationOutcome(Base):
     outcome = Column(
         Text, nullable=False,
         comment=(
-            "exact | stale | wrong | absent | unscoreable. unscoreable is its "
-            "own bucket and is never folded into wrong: 'the assistant was "
-            "incorrect' and 'we could not tell what it said' are different "
-            "facts, and merging them inflates the error rate with our own "
-            "extraction failures."
+            "For a value expectation: exact | stale | wrong | absent | "
+            "unscoreable. For a brand-direct question, which names no "
+            "published value: grounded | echoed | misattributed | fabricated "
+            "| acknowledged_unknown | absent | unscoreable. The row's tier "
+            "says which vocabulary applies — see expected_answers."
+            "outcomes_for_tier. unscoreable is its own bucket in both and is "
+            "never folded into wrong: 'the assistant was incorrect' and 'we "
+            "could not tell what it said' are different facts, and merging "
+            "them inflates the error rate with our own extraction failures."
         ),
     )
     outcome_reason = Column(
@@ -2101,6 +2105,12 @@ class SoaExpectationOutcome(Base):
             "publication rather than a general accusation of being behind."
         ),
     )
+
+    #: The right promotion code with the wrong terms. Wrong, and counted
+    #: as wrong — this is a flag beside the outcome, not a sixth outcome,
+    #: so that separating it cannot quietly move the accuracy
+    #: denominator. Null on every row scored before it existed.
+    near_miss = Column(Boolean, nullable=True)
 
     extraction_model = Column(Text, nullable=True)
     scored_at = Column(DateTime(timezone=True), server_default=func.now())

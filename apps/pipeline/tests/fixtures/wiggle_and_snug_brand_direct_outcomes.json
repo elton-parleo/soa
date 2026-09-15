@@ -1,0 +1,2423 @@
+{
+  "cycle_code": "20260915-113207-wiggle-snug-full",
+  "tier": "brand_direct",
+  "outcomes": [
+    {
+      "run_id": 10807,
+      "query_code": "WIG_138",
+      "query_text": "What makes Wiggle & Snug Snug-Fit Diapers different from other everyday diapers?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "support.pampers.com",
+          "honest.com",
+          "huggies.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I couldn’t verify an official product page for **“Wiggle & Snug Snug-Fit Diapers”** by that exact name, but if you’re describing a snug-fit everyday diaper line, the main difference is usually the **fit-first design**…"
+    },
+    {
+      "run_id": 10809,
+      "query_code": "WIG_138",
+      "query_text": "What makes Wiggle & Snug Snug-Fit Diapers different from other everyday diapers?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "huggies.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "**Wiggle & Snug Snug-Fit Diapers** appear to be positioned as an everyday diaper with a stronger focus on **fit during movement**—not just basic absorbency…"
+    },
+    {
+      "run_id": 10808,
+      "query_code": "WIG_138",
+      "query_text": "What makes Wiggle & Snug Snug-Fit Diapers different from other everyday diapers?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "huggies.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I couldn’t find an official product page for **“Wiggle & Snug Snug-Fit Diapers”** by that exact name, so I can’t verify brand-specific claims…"
+    },
+    {
+      "run_id": 10626,
+      "query_code": "WIG_138",
+      "query_text": "What makes Wiggle & Snug Snug-Fit Diapers different from other everyday diapers?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Based on the name \"Wiggle & Snug Snug-Fit Diapers,\" the key differentiators from other *everyday* diapers would likely revolve around **enhanced fit, comfort, and mobility**…"
+    },
+    {
+      "run_id": 10629,
+      "query_code": "WIG_138",
+      "query_text": "What makes Wiggle & Snug Snug-Fit Diapers different from other everyday diapers?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Wiggle & Snug Snug-Fit Diapers aim to differentiate themselves from other everyday diapers primarily through their **emphasis on a superior, customized fit**…"
+    },
+    {
+      "run_id": 10630,
+      "query_code": "WIG_138",
+      "query_text": "What makes Wiggle & Snug Snug-Fit Diapers different from other everyday diapers?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Based on the name \"Wiggle & Snug Snug-Fit Diapers,\" the key differentiators from other everyday diapers would likely revolve around superior fit, comfort, and enhanced performance tailored for active babies…"
+    },
+    {
+      "run_id": 10810,
+      "query_code": "WIG_139",
+      "query_text": "Does Wiggle & Snug sell wipes and diaper cream too, or only diapers?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I couldn’t verify a current product catalog for **Wiggle & Snug** from the web results I found. I don’t see reliable evidence that they sell **wipes** or **diaper cream** in addition to diapers."
+    },
+    {
+      "run_id": 10811,
+      "query_code": "WIG_139",
+      "query_text": "Does Wiggle & Snug sell wipes and diaper cream too, or only diapers?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I couldn’t verify an official **Wiggle & Snug** product catalog from the web results I found. The searches turned up other baby brands and diaper/wipe pages, but not a clear Wiggle & Snug listing…"
+    },
+    {
+      "run_id": 10814,
+      "query_code": "WIG_139",
+      "query_text": "Does Wiggle & Snug sell wipes and diaper cream too, or only diapers?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I couldn’t reliably verify a current store/brand listing for **“Wiggle & Snug”** from public search results, so I don’t want to guess."
+    },
+    {
+      "run_id": 10628,
+      "query_code": "WIG_139",
+      "query_text": "Does Wiggle & Snug sell wipes and diaper cream too, or only diapers?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Yes, Wiggle & Snug typically sells **wipes and diaper cream in addition to their diapers.**\n\nThey are a private label brand (often associated with supermarkets like Aldi), and their baby care range usually includes all three essential items."
+    },
+    {
+      "run_id": 10631,
+      "query_code": "WIG_139",
+      "query_text": "Does Wiggle & Snug sell wipes and diaper cream too, or only diapers?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Yes, Wiggle & Snug sells **wipes and diaper cream** in addition to their diapers. They aim to be a comprehensive baby care brand."
+    },
+    {
+      "run_id": 10632,
+      "query_code": "WIG_139",
+      "query_text": "Does Wiggle & Snug sell wipes and diaper cream too, or only diapers?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Yes, **Wiggle & Snug sells wipes and diaper cream in addition to their diapers.**\n\nThey aim to provide a more complete range of baby care essentials, often focusing on natural and gentle ingredients for all their products."
+    },
+    {
+      "run_id": 10812,
+      "query_code": "WIG_140",
+      "query_text": "Is Wiggle & Snug Snug-Fit Diapers good for newborns?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "pampers.com",
+          "support.pampers.com",
+          "healthychildren.org"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I **wouldn’t give Wiggle & Snug Snug-Fit Diapers a clear “yes” for a newborn unless you can verify the basics**, because I couldn’t find reliable official product information for that exact brand/name…"
+    },
+    {
+      "run_id": 10813,
+      "query_code": "WIG_140",
+      "query_text": "Is Wiggle & Snug Snug-Fit Diapers good for newborns?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [
+          {
+            "value": null,
+            "attributed_product": "a small pack first"
+          }
+        ],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "target.com",
+          "healthychildren.org",
+          "mayoclinic.org"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "**Short answer:** *Maybe, but I wouldn’t call Wiggle & Snug Snug-Fit Diapers a “yes” for newborns unless you can verify the size, materials, and fit.* I couldn’t find a reliable official product page… searches mostly turned up unrelated products or Huggies “Snug” diapers."
+    },
+    {
+      "run_id": 10815,
+      "query_code": "WIG_140",
+      "query_text": "Is Wiggle & Snug Snug-Fit Diapers good for newborns?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "target.com",
+          "healthychildren.org"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I couldn’t verify a diaper brand/product specifically called **“Wiggle & Snug Snug-Fit Diapers”** from reliable sources, so I’d double-check the exact name on the package. If you meant **Huggies Little Snugglers** or **Huggies Snug & Dry**, then **yes, they can be suitable for newborns**…"
+    },
+    {
+      "run_id": 10635,
+      "query_code": "WIG_140",
+      "query_text": "Is Wiggle & Snug Snug-Fit Diapers good for newborns?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I haven't been able to find any information on a diaper brand specifically called \"Wiggle & Snug Snug-Fit Diapers\" in my knowledge base. It's possible this is a very new brand, a regional brand, a store-specific brand, or even a hypothetical name."
+    },
+    {
+      "run_id": 10637,
+      "query_code": "WIG_140",
+      "query_text": "Is Wiggle & Snug Snug-Fit Diapers good for newborns?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I haven't been able to find information on a specific, widely recognized diaper brand called \"Wiggle & Snug Snug-Fit Diapers\" in my knowledge base. This suggests it might be a very new, regional, store-specific, or perhaps even a fictional brand."
+    },
+    {
+      "run_id": 10636,
+      "query_code": "WIG_140",
+      "query_text": "Is Wiggle & Snug Snug-Fit Diapers good for newborns?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "It seems that **\"Wiggle & Snug Snug-Fit Diapers\" is not a real or widely recognized brand of diapers.**\n\nAs an AI, I don't have personal experiences, but I can access a vast amount of information. I've checked my knowledge base for established diaper brands and reviews, and \"Wiggle & Snug\" doesn't appear as an existing product."
+    },
+    {
+      "run_id": 10816,
+      "query_code": "WIG_141",
+      "query_text": "Are Wiggle & Snug Snug-Fit Overnight Diapers a better choice for nighttime leaks?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "babylist.com",
+          "babygearlab.com",
+          "albeebaby.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "**Maybe—but I’d treat them as “worth trying,” not automatically “better.”** I couldn’t find strong independent testing specifically for **Wiggle & Snug Snug-Fit Overnight Diapers**…"
+    },
+    {
+      "run_id": 10818,
+      "query_code": "WIG_141",
+      "query_text": "Are Wiggle & Snug Snug-Fit Overnight Diapers a better choice for nighttime leaks?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "babylist.com",
+          "support.pampers.com",
+          "albeebaby.com",
+          "babygearlab.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "**Maybe—but I’d be cautious about calling Wiggle & Snug Snug-Fit Overnight Diapers “better” unless you can verify their absorbency and fit for your child.** I couldn’t find strong independent testing for that exact product…"
+    },
+    {
+      "run_id": 10817,
+      "query_code": "WIG_141",
+      "query_text": "Are Wiggle & Snug Snug-Fit Overnight Diapers a better choice for nighttime leaks?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "consumerreports.org",
+          "cvs.com",
+          "goodhousekeeping.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "**Probably—but only if the fit is right and your baby is out-wetting regular diapers.** I couldn’t verify independent testing specifically for **Wiggle & Snug Snug-Fit Overnight Diapers**…"
+    },
+    {
+      "run_id": 10640,
+      "query_code": "WIG_141",
+      "query_text": "Are Wiggle & Snug Snug-Fit Overnight Diapers a better choice for nighttime leaks?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "\"Wiggle & Snug\" is not a widely recognized or prominent diaper brand in most major markets. It's possible it's:\n\n1.  **A very new, small, or regional brand.**\n2.  **A private label or store brand**…"
+    },
+    {
+      "run_id": 10643,
+      "query_code": "WIG_141",
+      "query_text": "Are Wiggle & Snug Snug-Fit Overnight Diapers a better choice for nighttime leaks?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "It's difficult to give a definitive \"yes, they are better\" without knowing more about \"Wiggle & Snug Snug-Fit Overnight Diapers,\" as it's not a widely recognized major brand of diapers that I have specific performance data for."
+    },
+    {
+      "run_id": 10641,
+      "query_code": "WIG_141",
+      "query_text": "Are Wiggle & Snug Snug-Fit Overnight Diapers a better choice for nighttime leaks?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I haven't been able to find any information about a diaper brand specifically called **\"Wiggle & Snug Snug-Fit Overnight Diapers\"** in my knowledge base. It's possible it's a very new brand, a regional brand, a store-specific brand, or perhaps a slight misremembering of a name."
+    },
+    {
+      "run_id": 10819,
+      "query_code": "WIG_142",
+      "query_text": "Is Wiggle & Snug Cloud Wipes 3-Pack suitable for sensitive baby skin?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [
+          {
+            "value": 3,
+            "attributed_product": "Bc Babycare “Cloud Moist Baby Wipes”"
+          },
+          {
+            "value": 240,
+            "attributed_product": "Bc Babycare “Cloud Moist Baby Wipes”"
+          }
+        ],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "target.com",
+          "publications.aap.org"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Yes—**it appears suitable for sensitive baby skin**, *assuming you mean the Bc Babycare “Cloud Moist Baby Wipes” 3-pack / 240 count listing*. I couldn’t verify a product specifically branded **“Wiggle & Snug Cloud Wipes”**…"
+    },
+    {
+      "run_id": 10820,
+      "query_code": "WIG_142",
+      "query_text": "Is Wiggle & Snug Cloud Wipes 3-Pack suitable for sensitive baby skin?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 2,
+      "outcome": "absent",
+      "outcome_reason": "the answer did not name Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [
+          {
+            "value": 3,
+            "attributed_product": "Cloud Moist Baby Wipes / Cloud Wipes 3-Pack"
+          }
+        ],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": false,
+        "sources_cited": [
+          "target.com",
+          "bcbabycare.com",
+          "nationaleczema.org"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Yes—**it appears suitable for sensitive baby skin**, assuming you mean the **Cloud Moist Baby Wipes / Cloud Wipes 3-Pack** listing…"
+    },
+    {
+      "run_id": 10821,
+      "query_code": "WIG_142",
+      "query_text": "Is Wiggle & Snug Cloud Wipes 3-Pack suitable for sensitive baby skin?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [
+          {
+            "value": 3,
+            "attributed_product": "Bc Babycare “Cloud” baby wipes 3-pack"
+          }
+        ],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "bcbabycare.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Yes—**it appears suitable for sensitive baby skin**, assuming you mean the **Bc Babycare “Cloud” baby wipes 3-pack**…"
+    },
+    {
+      "run_id": 10644,
+      "query_code": "WIG_142",
+      "query_text": "Is Wiggle & Snug Cloud Wipes 3-Pack suitable for sensitive baby skin?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [
+          {
+            "value": 3,
+            "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+          }
+        ],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "While I don't have real-time access to the absolute latest ingredient list and specific certifications for \"Wiggle & Snug Cloud Wipes 3-Pack\" at this very moment, I can give you general guidance…"
+    },
+    {
+      "run_id": 10648,
+      "query_code": "WIG_142",
+      "query_text": "Is Wiggle & Snug Cloud Wipes 3-Pack suitable for sensitive baby skin?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [
+          {
+            "value": 3,
+            "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+          }
+        ],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "To determine if Wiggle & Snug Cloud Wipes 3-Pack are suitable for sensitive baby skin, you would typically look for the following characteristics and claims on the product packaging or description…"
+    },
+    {
+      "run_id": 10647,
+      "query_code": "WIG_142",
+      "query_text": "Is Wiggle & Snug Cloud Wipes 3-Pack suitable for sensitive baby skin?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [
+          {
+            "value": 3,
+            "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+          }
+        ],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "To determine if Wiggle & Snug Cloud Wipes 3-Pack are suitable for sensitive baby skin, we would typically look for specific claims and features on the product packaging or official description…"
+    },
+    {
+      "run_id": 10830,
+      "query_code": "WIG_144",
+      "query_text": "Is Wiggle & Snug Member Rewards still available, and what are the tiers called?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [
+          {
+            "amount": null,
+            "tier": "member pricing",
+            "attributed_product": "selected products"
+          }
+        ],
+        "points": [
+          {
+            "value": "1",
+            "per_dollar": true,
+            "program": "Member Rewards"
+          },
+          {
+            "value": "1",
+            "per_dollar": true,
+            "program": "Member Rewards"
+          }
+        ],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "trueshopstore.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "brand_domain",
+      "domain_cited": true,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Yes — **Wiggle & Snug Member Rewards is still available**. The current Member Rewards page says it’s **free to join**, members earn points on every order, and it lists two tiers. ([trueshopstore.com](https://trueshopstore.com/loyalty))\n\nThe tiers are:\n\n1. **Member** — free to join; earns **1 point per $1 spent**…\n2. **Member+** — requires **$150+ spend per year**…"
+    },
+    {
+      "run_id": 10822,
+      "query_code": "WIG_144",
+      "query_text": "Is Wiggle & Snug Member Rewards still available, and what are the tiers called?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [
+          {
+            "amount": "150",
+            "currency": null,
+            "attributed_product": "Member+ tier"
+          }
+        ],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [
+          {
+            "value": "1",
+            "per_dollar": true,
+            "program": "Wiggle & Snug Member Rewards"
+          }
+        ],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "trueshopstore.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "brand_domain",
+      "domain_cited": true,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Yes — **Wiggle & Snug Member Rewards is still available**. It’s described as **free to join**, with members earning **1 point per $1 spent**… ([trueshopstore.com](https://trueshopstore.com/loyalty))\n\nThe tiers are:\n\n1. **Member** — free to join\n2. **Member+** — for **$150+ spend per year**"
+    },
+    {
+      "run_id": 10833,
+      "query_code": "WIG_144",
+      "query_text": "Is Wiggle & Snug Member Rewards still available, and what are the tiers called?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "deals.parleo.io"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Yes — **Wiggle & Snug** is still listed in Parleo’s current merchant-loyalty directory… ([deals.parleo.io](https://deals.parleo.io/?utm_source=openai))\n\nThe **Member Rewards** tiers are:\n\n1. **Wiggle**\n2. **Snug**\n3. **Cuddle**"
+    },
+    {
+      "run_id": 10646,
+      "query_code": "WIG_144",
+      "query_text": "Is Wiggle & Snug Member Rewards still available, and what are the tiers called?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "It appears that **Wiggle & Snug does not currently offer a member rewards program called 'Wiggle & Snug Member Rewards' with specific tiers.**\n\nI've checked their official website and common sources, and there is no mention of such a program or its tiers."
+    },
+    {
+      "run_id": 10650,
+      "query_code": "WIG_144",
+      "query_text": "Is Wiggle & Snug Member Rewards still available, and what are the tiers called?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [
+          {
+            "value": "Snuggle Points",
+            "per_dollar": null,
+            "program": "Wiggle & Snug Member Rewards"
+          }
+        ],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Yes, the **Wiggle & Snug Member Rewards** program (often referred to simply as \"Wiggle & Snug Rewards\") is **still available**.\n\nThe tiers in their rewards program are called:\n\n*   **Snuggle Friend**\n*   **Snuggle Pal**\n*   **Snuggle Bestie**\n\nMembers earn \"Snuggle Points\" for purchases…"
+    },
+    {
+      "run_id": 10651,
+      "query_code": "WIG_144",
+      "query_text": "Is Wiggle & Snug Member Rewards still available, and what are the tiers called?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [
+          {
+            "amount": "5%",
+            "tier": "Kohl's Rewards Member",
+            "attributed_product": "Wiggle & Snug items at Kohl's"
+          },
+          {
+            "amount": "7.5%",
+            "tier": "Kohl's Rewards Credit Cardholder",
+            "attributed_product": "Wiggle & Snug products"
+          }
+        ],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "It seems there might be a slight misunderstanding. **Wiggle & Snug is a private label brand sold exclusively at Kohl's.**\n\nTherefore, there isn't a separate \"Wiggle & Snug Member Rewards\" program. Instead, when you purchase Wiggle & Snug items at Kohl's, you earn rewards through the **Kohl's Rewards program**."
+    },
+    {
+      "run_id": 10823,
+      "query_code": "WIG_145",
+      "query_text": "What size of Wiggle & Snug Snug-Fit Diapers should I buy for a 15 lb baby?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "huggies.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "For a **15 lb baby**, buy **Size 2**.\n\nThe current Snug & Dry size chart lists:\n\n- **Size 1:** 8–14 lb\n- **Size 2:** **12–18 lb**\n- **Size 3:** 16–28 lb ([huggies.com](https://www.huggies.com/en-us/diapers/snug-and-dry))"
+    },
+    {
+      "run_id": 10824,
+      "query_code": "WIG_145",
+      "query_text": "What size of Wiggle & Snug Snug-Fit Diapers should I buy for a 15 lb baby?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 2,
+      "outcome": "absent",
+      "outcome_reason": "the answer did not name Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": false,
+        "sources_cited": [
+          "huggies.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "For a **15 lb baby**, buy **Size 2** Snug-Fit diapers if the brand’s chart is like Huggies Snug & Dry: **Size 2 = 12–18 lb**…"
+    },
+    {
+      "run_id": 10825,
+      "query_code": "WIG_145",
+      "query_text": "What size of Wiggle & Snug Snug-Fit Diapers should I buy for a 15 lb baby?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "bcbabycare.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "For a **15 lb baby**, I’d buy **Size 2** **if Wiggle & Snug Snug-Fit uses the common diaper weight ranges**: **Size 2 = 12–18 lb**… ([bcbabycare.com](https://www.bcbabycare.com/products/cloud-skin-diaper))"
+    },
+    {
+      "run_id": 10649,
+      "query_code": "WIG_145",
+      "query_text": "What size of Wiggle & Snug Snug-Fit Diapers should I buy for a 15 lb baby?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "For a 15 lb baby, you should generally buy **Size 2** Wiggle & Snug Snug-Fit Diapers.\n\nSize 2 typically fits babies between **12-18 lbs**."
+    },
+    {
+      "run_id": 10652,
+      "query_code": "WIG_145",
+      "query_text": "What size of Wiggle & Snug Snug-Fit Diapers should I buy for a 15 lb baby?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "For a 15 lb baby, you would typically buy **Wiggle & Snug Snug-Fit Diapers in Size 2**.\n\nSize 2 generally fits babies from around 12 to 18 lbs…"
+    },
+    {
+      "run_id": 10653,
+      "query_code": "WIG_145",
+      "query_text": "What size of Wiggle & Snug Snug-Fit Diapers should I buy for a 15 lb baby?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "For a 15 lb baby, you would typically buy **Size 2** Wiggle & Snug Snug-Fit Diapers.\n\nSize 2 usually covers babies in the range of **12-18 lbs**…"
+    },
+    {
+      "run_id": 10826,
+      "query_code": "WIG_146",
+      "query_text": "Which Wiggle & Snug Snug-Fit Overnight Diapers size should I get for a baby who leaks at night?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 1,
+      "outcome": "absent",
+      "outcome_reason": "the answer did not name Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": false,
+        "sources_cited": [
+          "support.pampers.com",
+          "albeebaby.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "For a baby who **leaks at night**, the best starting move is usually:\n\n**Buy the Snug-Fit Overnight Diaper one size larger than your baby’s daytime diaper**…"
+    },
+    {
+      "run_id": 10827,
+      "query_code": "WIG_146",
+      "query_text": "Which Wiggle & Snug Snug-Fit Overnight Diapers size should I get for a baby who leaks at night?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "babylist.com",
+          "albeebaby.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "For a baby who **leaks at night**, start with **one size larger than their daytime diaper** in the Wiggle & Snug Snug-Fit Overnight Diapers—**but only if the bigger size still seals at the legs and waist**…"
+    },
+    {
+      "run_id": 10828,
+      "query_code": "WIG_146",
+      "query_text": "Which Wiggle & Snug Snug-Fit Overnight Diapers size should I get for a baby who leaks at night?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "pampers.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "For a baby who **leaks at night**, the usual move is to buy **one size larger than their daytime diaper** in the Wiggle & Snug Snug-Fit Overnight Diapers…"
+    },
+    {
+      "run_id": 10655,
+      "query_code": "WIG_146",
+      "query_text": "Which Wiggle & Snug Snug-Fit Overnight Diapers size should I get for a baby who leaks at night?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "When a baby leaks at night, it's often a sign that you need to adjust either the **size** of the diaper or how it's **fitted**, even when using an overnight-specific diaper like the Wiggle & Snug Snug-Fit Overnight Diapers…"
+    },
+    {
+      "run_id": 10656,
+      "query_code": "WIG_146",
+      "query_text": "Which Wiggle & Snug Snug-Fit Overnight Diapers size should I get for a baby who leaks at night?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "To determine the best Wiggle & Snug Snug-Fit Overnight Diapers size for a baby who leaks at night, we need to consider a few factors…"
+    },
+    {
+      "run_id": 10658,
+      "query_code": "WIG_146",
+      "query_text": "Which Wiggle & Snug Snug-Fit Overnight Diapers size should I get for a baby who leaks at night?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "It's frustrating when babies leak at night, especially with overnight diapers! To get the best size for Wiggle & Snug Snug-Fit Overnight Diapers, you'll need two key pieces of information…"
+    },
+    {
+      "run_id": 10829,
+      "query_code": "WIG_147",
+      "query_text": "Does Wiggle & Snug have a subscription for Snug-Fit Diapers?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I couldn’t find any official evidence that **Wiggle & Snug** offers a subscription for **Snug-Fit Diapers**. Searches for the exact brand/product name didn’t turn up an official Wiggle & Snug diaper product page or subscription listing…"
+    },
+    {
+      "run_id": 10831,
+      "query_code": "WIG_147",
+      "query_text": "Does Wiggle & Snug have a subscription for Snug-Fit Diapers?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "carthealth.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I **couldn’t verify that Wiggle & Snug offers a subscription for “Snug-Fit Diapers.”** I searched for the exact brand/product terms, but the results I found were for other diaper brands/retailers…"
+    },
+    {
+      "run_id": 10832,
+      "query_code": "WIG_147",
+      "query_text": "Does Wiggle & Snug have a subscription for Snug-Fit Diapers?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I couldn’t verify a **Wiggle & Snug subscription for Snug-Fit Diapers** from public search results. I didn’t find an official Wiggle & Snug product page or subscription page for that diaper line."
+    },
+    {
+      "run_id": 10660,
+      "query_code": "WIG_147",
+      "query_text": "Does Wiggle & Snug have a subscription for Snug-Fit Diapers?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I cannot find any information about a company named \"Wiggle & Snug\" that manufactures \"Snug-Fit Diapers\" or offers a subscription service for them.\n\nIt's possible this is a fictional brand or a very new/small local company…"
+    },
+    {
+      "run_id": 10661,
+      "query_code": "WIG_147",
+      "query_text": "Does Wiggle & Snug have a subscription for Snug-Fit Diapers?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I couldn't find any information about a brand called \"Wiggle & Snug\" that offers Snug-Fit Diapers or a subscription service for them. It's possible this is a fictional brand, a very new brand without an online presence, or a private label."
+    },
+    {
+      "run_id": 10662,
+      "query_code": "WIG_147",
+      "query_text": "Does Wiggle & Snug have a subscription for Snug-Fit Diapers?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Based on current information, **Wiggle & Snug does not appear to offer a direct subscription service for their Snug-Fit Diapers** through their own website or primary retail channels.\n\nTheir products are typically sold as one-time purchases through various online retailers."
+    },
+    {
+      "run_id": 10834,
+      "query_code": "WIG_148",
+      "query_text": "Is Wiggle & Snug Snug-Fit Trial Pack still available to buy?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [
+          {
+            "amount": "255.00",
+            "currency": "Rs.",
+            "attributed_product": "Beezpro’s “Snug Fit Padded underwear Single Piece Trial Pack (Mixed colors only)”"
+          }
+        ],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "beezpro.in"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "As of **September 15, 2026**, I **couldn’t verify an active listing for an exact product named “Wiggle & Snug Snug-Fit Trial Pack.”**… The closest match I found is **Beezpro’s “Snug Fit Padded underwear Single Piece Trial Pack (Mixed colors only)”**…"
+    },
+    {
+      "run_id": 10835,
+      "query_code": "WIG_148",
+      "query_text": "Is Wiggle & Snug Snug-Fit Trial Pack still available to buy?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [
+          {
+            "amount": "255.00",
+            "currency": null,
+            "attributed_product": "Beezpro “Snug Fit Padded underwear Single Piece Trial Pack”"
+          }
+        ],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "beezpro.in"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I couldn’t find an exact product/brand page for **“Wiggle & Snug”**, but if you mean the **Beezpro “Snug Fit Padded underwear Single Piece Trial Pack”**, it **appears to still be listed for purchase**…"
+    },
+    {
+      "run_id": 10837,
+      "query_code": "WIG_148",
+      "query_text": "Is Wiggle & Snug Snug-Fit Trial Pack still available to buy?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "beezpro.in"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I **can’t verify that “Wiggle & Snug Snug-Fit Trial Pack” is still available to buy** under that exact brand/name… The closest matching live product page I found is **Beezpro’s “Snug Fit Padded underwear Single Piece Trial Pack”**…"
+    },
+    {
+      "run_id": 10663,
+      "query_code": "WIG_148",
+      "query_text": "Is Wiggle & Snug Snug-Fit Trial Pack still available to buy?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "wiggleandsnug.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Based on my most recent check, I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**\n\nWiggle & Snug primarily sells individual swaddles and sleepwear products…"
+    },
+    {
+      "run_id": 10664,
+      "query_code": "WIG_148",
+      "query_text": "Is Wiggle & Snug Snug-Fit Trial Pack still available to buy?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I can't find any information about a brand called \"Wiggle & Snug\" or a product specifically named \"Snug-Fit Trial Pack\" being currently available for purchase through major retailers or online searches."
+    },
+    {
+      "run_id": 10666,
+      "query_code": "WIG_148",
+      "query_text": "Is Wiggle & Snug Snug-Fit Trial Pack still available to buy?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "none",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I'm having trouble finding any information about a brand called **\"Wiggle & Snug\"** that offers a **\"Snug-Fit Trial Pack.\"**… There *is* a well-known sports and outdoor retailer called **Wiggle**…"
+    },
+    {
+      "run_id": 10836,
+      "query_code": "WIG_149",
+      "query_text": "Is Wiggle & Snug Bum Balm 4 oz still available, or has it been discontinued?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [
+          {
+            "amount": "15.99",
+            "currency": "USD",
+            "attributed_product": "Dabble & Dollop Hug & Heal™ Bum Balm"
+          }
+        ],
+        "codes": [],
+        "pack_counts": [
+          {
+            "value": 4,
+            "attributed_product": "Wiggle & Snug Bum Balm"
+          },
+          {
+            "value": 3,
+            "attributed_product": "Dabble & Dollop Hug & Heal™ Bum Balm"
+          }
+        ],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "dabbleanddollop.com",
+          "wildcarrotherbals.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "I **couldn’t verify a current product called “Wiggle & Snug Bum Balm 4 oz”** in the sources I checked… If you mean **Dabble & Dollop Hug & Heal™ Bum Balm**, it appears to be an active/current product…"
+    },
+    {
+      "run_id": 10838,
+      "query_code": "WIG_149",
+      "query_text": "Is Wiggle & Snug Bum Balm 4 oz still available, or has it been discontinued?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [
+          {
+            "value": 4,
+            "attributed_product": "Baby Bum Balm"
+          }
+        ],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "amallow.com",
+          "instacart.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "As of **September 15, 2026**, I don’t see evidence that **Baby Bum Balm 4 oz** has been discontinued. The product appears to still be available under the **Amallow** brand… I **did not find a reliable current product page specifically for “Wiggle & Snug Bum Balm 4 oz.”**"
+    },
+    {
+      "run_id": 10839,
+      "query_code": "WIG_149",
+      "query_text": "Is Wiggle & Snug Bum Balm 4 oz still available, or has it been discontinued?",
+      "tier": "brand_direct",
+      "platform": "chatgpt",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [
+          {
+            "amount": "38",
+            "currency": "USD",
+            "attributed_product": "Amallow Baby Bum Balm, 4 oz"
+          },
+          {
+            "amount": "29.99",
+            "currency": "USD",
+            "attributed_product": "Wild Carrot Herbals Baby Bum Balm - 4 oz Size"
+          }
+        ],
+        "codes": [],
+        "pack_counts": [
+          {
+            "value": 4,
+            "attributed_product": "Amallow Baby Bum Balm, 4 oz"
+          },
+          {
+            "value": 4,
+            "attributed_product": "Wild Carrot Herbals Baby Bum Balm - 4 oz Size"
+          }
+        ],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "amallow.com",
+          "instacart.com",
+          "wildcarrotherbals.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "As of **September 15, 2026**, I **couldn’t verify a current product under the exact name “Wiggle & Snug Bum Balm 4 oz.”**… **Amallow Baby Bum Balm, 4 oz** appears to still be listed by Amallow, priced at **$38**…"
+    },
+    {
+      "run_id": 10667,
+      "query_code": "WIG_149",
+      "query_text": "Is Wiggle & Snug Bum Balm 4 oz still available, or has it been discontinued?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 1,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [
+          {
+            "value": 4,
+            "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+          }
+        ],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "etsy.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "Wiggle & Snug Bum Balm 4 oz appears to be a product offered by independent sellers, often on platforms like Etsy, rather than a widely distributed brand.\n\nTherefore, its availability can vary greatly."
+    },
+    {
+      "run_id": 10668,
+      "query_code": "WIG_149",
+      "query_text": "Is Wiggle & Snug Bum Balm 4 oz still available, or has it been discontinued?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 2,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [
+          {
+            "value": 4,
+            "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+          }
+        ],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "amazon.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "It appears that Wiggle & Snug Bum Balm 4 oz has been **discontinued**.\n\nMost retail listings (like on Amazon) show it as \"currently unavailable\" and have been for some time…"
+    },
+    {
+      "run_id": 10672,
+      "query_code": "WIG_149",
+      "query_text": "Is Wiggle & Snug Bum Balm 4 oz still available, or has it been discontinued?",
+      "tier": "brand_direct",
+      "platform": "gemini",
+      "run_number": 3,
+      "outcome": "exact",
+      "outcome_reason": "named Wiggle & Snug",
+      "expected_answer": {
+        "type": "brand_mention",
+        "brand": "Wiggle & Snug",
+        "domain": "trueshopstore.com"
+      },
+      "extraction": {
+        "prices": [],
+        "codes": [],
+        "pack_counts": [
+          {
+            "value": 4,
+            "attributed_product": "Wiggle & Giggle Organic Baby Bum Balm 4 oz"
+          }
+        ],
+        "gtins": [],
+        "member_prices": [],
+        "points": [],
+        "brand_mentioned": true,
+        "sources_cited": [
+          "amazon.com"
+        ],
+        "extraction_confident": true,
+        "extraction_note": null
+      },
+      "secondary_results": null,
+      "source_attribution": "retailer",
+      "domain_cited": false,
+      "record_published_at": "2026-09-04 20:49:38.763754+00:00",
+      "matched_published_at": null,
+      "answer_excerpt": "It seems you might be looking for **Wiggle & Giggle Organic Baby Bum Balm 4 oz**!\n\nWhile I don't find a product specifically named \"Wiggle & **Snug** Bum Balm,\" the **Wiggle & Giggle Organic Baby Bum Balm 4 oz** is a very popular and similarly named product."
+    }
+  ]
+}

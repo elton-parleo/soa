@@ -50,11 +50,70 @@ CODE_VALUE_KINDS = ['amount_off', 'percent_off', 'member_price']
 # (fixed). They are different claims and are compared differently.
 POINTS_RULE_KINDS = ['per_dollar', 'fixed']
 
-# The five outcomes a scored (question x surface x sample) lands in.
+# The five outcomes a scored (question x surface x sample) lands in when
+# the expectation names a published VALUE — a price, a code, a count.
 # `unscoreable` is its own bucket and is never folded into `wrong`: they
 # are different facts, and merging them inflates the error rate with our
 # own extraction failures.
-EXPECTATION_OUTCOMES = ['exact', 'stale', 'wrong', 'absent', 'unscoreable']
+VALUE_OUTCOMES = ['exact', 'stale', 'wrong', 'absent', 'unscoreable']
+
+# Brand-direct answers are classified on a different axis, because there
+# is no published number for them to match. The old arrangement scored
+# them on presence alone — `exact` if the brand was named, `absent` if
+# not — and that turned out to score the worst answer in the study as a
+# success: Gemini replying that Wiggle & Snug "is not a real or widely
+# recognized brand" names the brand, so it counted as exact.
+#
+# Presence was never the measurement. What a brand-direct question asks
+# is whether an assistant knows this brand, and there are at least four
+# distinguishable ways for the answer to be about it:
+#
+#   grounded             it cited the brand's own domain. The strongest
+#                        result the tier can produce, and the only one
+#                        where the answer shows where it got what it
+#                        said.
+#   echoed               it named the brand and said nothing checkable.
+#                        Not a failure, not a success — this is what
+#                        "visibility" was actually measuring all along,
+#                        which is why the report now calls it that
+#                        instead of visibility.
+#   misattributed        it named the brand and then described a
+#                        different one: Huggies Snug & Dry, Bc Babycare,
+#                        Beezpro, offered as "the closest match". The
+#                        brand appears and everything specific about it
+#                        belongs to somebody else.
+#   fabricated           it stated brand-specific facts that are not in
+#                        the record and cited nothing — a private label
+#                        at Aldi, an exclusive at Kohl's, loyalty tiers
+#                        called Snuggle Friend, Pal and Bestie.
+#   acknowledged_unknown it said it could not find, verify or recognise
+#                        the brand or the product. The honest answer, and
+#                        the one most worth telling apart from the rest:
+#                        an assistant that says it does not know is a
+#                        very different result from one that invents.
+#
+# `absent` (the brand never came up at all) and `unscoreable` (we could
+# not read the answer) mean here what they mean everywhere else.
+BRAND_ASSESSMENTS = [
+    'grounded', 'echoed', 'misattributed', 'fabricated', 'acknowledged_unknown',
+]
+
+BRAND_OUTCOMES = BRAND_ASSESSMENTS + ['absent', 'unscoreable']
+
+# Every value the outcome column may hold, across both vocabularies. A
+# row's tier says which of the two applies; nothing reads this union
+# except the schema constraint and the tests that keep it honest.
+EXPECTATION_OUTCOMES = VALUE_OUTCOMES + BRAND_ASSESSMENTS
+
+
+def outcomes_for_tier(tier):
+    """Which vocabulary a tier's rows are classified in.
+
+    brand_direct and nothing else: catalog accuracy and value both
+    compare against a published number, and a question with no number
+    behind it is the only thing the brand axis can describe.
+    """
+    return BRAND_OUTCOMES if tier == 'brand_direct' else VALUE_OUTCOMES
 
 # The four question tiers. `null` on a query means it was generated
 # without a syndicated brand — which is every query that existed before
@@ -369,6 +428,40 @@ def is_scoreable(expectation: Any) -> bool:
     except ExpectedAnswerError:
         return False
     return True
+
+
+# Values an assistant can land on without knowing anything about this
+# brand, because they are the category default. One point per dollar is
+# what almost every loyalty programme in the world does; an answer that
+# says so has not demonstrated that it read our record, and counting it
+# as a success inflates the one rate the tier exists to produce.
+#
+# Judged on the RULE, never on the answer: this is a property of what we
+# published, decided before anything is scored, so it cannot be applied
+# selectively to results somebody dislikes.
+# Normalised, so '1', '1.0' and '1.00' are one value rather than three
+# spellings the check has to remember.
+GUESSABLE_POINTS_RATES = {'1.00'}
+
+
+def is_low_information(expectation: Any) -> bool:
+    """
+    Whether a correct answer to this expectation proves nothing.
+
+    Such an expectation is still asked, still scored, and still reported
+    — with its own sample count, in its own column. What it does not do
+    is enter the value-survival headline, because a headline that moves
+    when an assistant guesses the industry default is measuring the
+    industry rather than the assistant.
+    """
+    if not isinstance(expectation, dict):
+        return False
+    if expectation.get('type') != 'points':
+        return False
+    rule = expectation.get('rule')
+    if not isinstance(rule, dict) or rule.get('kind') != 'per_dollar':
+        return False
+    return normalize_money(rule.get('rate')) in GUESSABLE_POINTS_RATES
 
 
 def describe(expectation: dict) -> str:

@@ -78,12 +78,55 @@ class HistoryCache:
         return self._by_merchant[merchant_slug].get(variant_id)
 
 
+class BrandFactsCache:
+    """
+    What the record publishes about a brand, for the brand-direct
+    classifier to check claims against.
+
+    Same one-read-per-merchant-per-batch discipline as HistoryCache, and
+    the same degradation: if the catalog cannot be read, the facts are
+    empty and the classifier simply has less to contradict. It never
+    guesses — a claim the record cannot speak to is reported as unsourced,
+    never as disproved.
+    """
+
+    def __init__(self, client: TrueSyncCatalogClient = None) -> None:
+        self._client = client or TrueSyncCatalogClient()
+        self._by_merchant = {}
+
+    def for_merchant(self, merchant_slug):
+        if not merchant_slug:
+            return {}
+        if merchant_slug not in self._by_merchant:
+            snapshot = self._client.snapshot(merchant_slug, with_history=False)
+            if not snapshot.available:
+                logger.warning(
+                    "[expectation] no catalog for %s (%s) — brand claims can "
+                    "only be checked for whether they were sourced",
+                    merchant_slug, snapshot.error,
+                )
+                self._by_merchant[merchant_slug] = {}
+            else:
+                self._by_merchant[merchant_slug] = {
+                    'domain': snapshot.domain,
+                    'tier_names': [
+                        t.get('name') for t in (snapshot.tiers or []) if t.get('name')
+                    ],
+                    'product_titles': [p.title for p in (snapshot.products or [])],
+                }
+        return self._by_merchant[merchant_slug]
+
+
 class ExpectationScorer:
 
     def __init__(self, client: ExpectationClient = None,
-                 history: HistoryCache = None) -> None:
+                 history: HistoryCache = None,
+                 brand_facts: BrandFactsCache = None) -> None:
         self.client = client or ExpectationClient()
         self.history = history if history is not None else HistoryCache()
+        self.brand_facts = (
+            brand_facts if brand_facts is not None else BrandFactsCache()
+        )
 
     # ─── Reading ──────────────────────────────────────────────────────
 
@@ -131,6 +174,7 @@ class ExpectationScorer:
             ),
             "record_published_at": source_ref.get('published_at'),
             "matched_published_at": verdict.matched_published_at,
+            "near_miss": verdict.near_miss or None,
             "extraction_model": model,
         }
 
@@ -145,13 +189,13 @@ class ExpectationScorer:
                     expected_answer, extraction, outcome, outcome_reason,
                     domain_cited, source_attribution, secondary_results,
                     record_published_at, matched_published_at,
-                    extraction_model, scored_at
+                    near_miss, extraction_model, scored_at
                 ) VALUES (
                     :run_id, :query_id, :cycle_id, :platform, :tier,
                     :expected_answer, :extraction, :outcome, :outcome_reason,
                     :domain_cited, :source_attribution, :secondary_results,
                     :record_published_at, :matched_published_at,
-                    :extraction_model, NOW()
+                    :near_miss, :extraction_model, NOW()
                 )
             """), payload)
             conn.commit()
@@ -180,7 +224,7 @@ class ExpectationScorer:
                 **EMPTY_EXTRACTION,
                 'extraction_note': f"run status {run.status!r}, no answer text",
             }
-            verdict = cmp.compare(expectation, extraction)
+            verdict = cmp.compare(expectation, extraction, tier=run.tier)
             try:
                 self._store(run=run, expectation=expectation,
                             extraction=extraction, verdict=verdict, model=None)
@@ -199,11 +243,17 @@ class ExpectationScorer:
             source_ref.get('merchant_slug'), source_ref.get('variant_id'),
         ) if self.history else None
 
+        facts = self.brand_facts.for_merchant(
+            source_ref.get('merchant_slug'),
+        ) if self.brand_facts else {}
+
         verdict = cmp.compare_with_secondary(
             expectation, result.record,
             history=history,
             source_ref=source_ref,
             brand_domain=expectation.get('domain') or source_ref.get('domain'),
+            tier=run.tier,
+            brand_facts=facts,
         )
 
         try:
