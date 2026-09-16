@@ -1,0 +1,75 @@
+{
+  "row": 31,
+  "seed": 4,
+  "query_code": "WIG_141",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "**Probably—but only if the fit is right and your baby is out-wetting regular diapers.** I couldn’t verify independent testing specifically for **Wiggle & Snug Snug-Fit Overnight Diapers**, so I wouldn’t call them *definitively* better than other overnight brands. But **an overnight diaper with a snug leg/waist fit is generally a better choice for nighttime leaks than a regular daytime diaper**, because overnight diapers are designed to absorb and hold more liquid for longer stretches. Consumer Reports and BabyGearLab both emphasize absorbency and leak containment as the key reasons to use overnight diapers. ([consumerreports.org](https://www.consumerreports.org/babies-kids/diapers/best-overnight-diapers-a7855497906/?utm_source=openai))\n\nThey’re a **good option to try** if your leaks are from:\n- A diaper that is **fully saturated by morning**\n- Leaks during long sleep stretches — 8–12 hours\n- A baby/toddler who moves a lot and needs a more secure fit\n- Waist or leg gaps in the current diaper\n\nThey may **not** fix the problem if:\n- The size is wrong — too small can leak at the waistband; too large can gap at the legs. ([cvs.com](https://www.cvs.com/shop/baby-kids/diapers-wipes/diapers/overnight-diapers?utm_source=openai))\n- Pajamas/onesies are too tight and compress the diaper\n- Your child is a very heavy wetter and needs a **booster pad** or a size-up overnight diaper\n- Leaks happen mostly in one position — for example, tummy sleepers or boys may need extra front absorbency\n\n**Best practical approach:** buy a small pack and test for 3–5 nights. If the diaper is soaked but clothes stay dry, it’s doing its job. If it still leaks, try **one size up for nighttime** or add an overnight booster pad. Good Housekeeping also notes that finding the right overnight diaper often comes down to trying different brands and sizes because fit varies by child. ([goodhousekeeping.com](https://www.goodhousekeeping.com/what-to-buy/g63666620/best-overnight-diapers/?utm_source=openai))\n\n**Bottom line:** Wiggle & Snug Snug-Fit Overnight Diapers are likely worth trying for nighttime leaks, but the “better” choice is the one that gives your child a snug-but-not-tight fit and enough absorbency to last until morning.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Consumer Reports",
+        "presented_as": "source",
+        "relation": "citation_only"
+      },
+      {
+        "name": "BabyGearLab",
+        "presented_as": "source",
+        "relation": "citation_only"
+      },
+      {
+        "name": "Good Housekeeping",
+        "presented_as": "source",
+        "relation": "citation_only"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "consumerreports.org",
+      "cvs.com",
+      "goodhousekeeping.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [],
+    "postprocess": [
+      "unknown-statement span labelled a disclaimer",
+      "a claim span was labelled a disclaimer"
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "consumerreports.org",
+      "cvs.com",
+      "goodhousekeeping.com"
+    ],
+    "other_brands": {
+      "Consumer Reports": "citation_only",
+      "BabyGearLab": "citation_only",
+      "Good Housekeeping": "citation_only"
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

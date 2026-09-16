@@ -1,0 +1,52 @@
+{
+  "row": 30,
+  "seed": 4,
+  "query_code": "WIG_174",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "You earn **1 Member Rewards point per $1 spent** on eligible Wiggle & Snug products. ([thewiggles.com](https://thewiggles.com/pages/rewards))",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [
+      {
+        "value": "1",
+        "per_dollar": true,
+        "program": "Member Rewards"
+      }
+    ],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "thewiggles.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "thewiggles.com"
+    ],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

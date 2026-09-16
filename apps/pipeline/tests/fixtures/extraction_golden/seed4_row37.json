@@ -1,0 +1,73 @@
+{
+  "row": 37,
+  "seed": 4,
+  "query_code": "WIG_174",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "You earn **1 Member Rewards point per dollar** spent on Wiggle & Snug products.\n\nThis is because Wiggle & Snug is a Wiggle own-brand, and Wiggle typically awards 1 point per £1 / €1 / $1 spent on all Wiggle own-brand items.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [
+      {
+        "value": "1",
+        "per_dollar": true,
+        "program": "Member Rewards"
+      }
+    ],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Wiggle",
+        "presented_as": "source",
+        "relation": "comparison"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "is a Wiggle own-brand",
+        "sentence": "This is because Wiggle & Snug is a Wiggle own-brand, and Wiggle typically awards 1 point per £1 / €1 / $1 spent on all Wiggle own-brand items.",
+        "kind": "assertion",
+        "lexicon_hedged": true,
+        "modality": "asserted",
+        "claim_kind": "ownership"
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [],
+    "postprocess": [
+      "1 sentence(s) where the lexicon and the label disagree on modality"
+    ],
+    "needs_review": [
+      {
+        "sentence": "This is because Wiggle & Snug is a Wiggle own-brand, and Wiggle typically awards 1 point per £1 / €1 / $1 spent on all Wiggle own-brand items.",
+        "lexicon": "hedged",
+        "label": "asserted"
+      }
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {
+      "Wiggle": "comparison"
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

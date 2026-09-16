@@ -43,6 +43,7 @@ with it.
 import re
 from typing import Optional
 
+from parser.span_segmenter import segment
 from soa_shared import expected_answers as ea
 
 # ─── Modality ──────────────────────────────────────────────────────────────
@@ -388,9 +389,28 @@ def normalize(record: dict, *, answer_text, brand, brand_domain=None) -> dict:
     # suggestion, and counting it twice would turn a cited answer into an
     # unsourced availability claim.
     sources = {_domain_root(d) for d in record.get('sources_cited') or []}
+
+    # Seed from retailer_mentions when the record already has them.
+    # recommended_retailers holds only the ones a previous pass called a
+    # recommendation, so rebuilding from it drops every retailer that was
+    # a source or showed the product unavailable — which made running
+    # this over its own output lose data, and made the golden set of an
+    # already-processed sample unreachable.
+    existing = record.get('retailer_mentions')
+    if existing:
+        incoming = [(m.get('name'), m.get('role')) for m in existing
+                    if isinstance(m, dict) and m.get('name')]
+    else:
+        incoming = [(name, None) for name in record.get('recommended_retailers') or []]
+
     mentioned, demoted = [], []
-    for retailer in record.get('recommended_retailers') or []:
+    for retailer, role in incoming:
         if not retailer:
+            continue
+        if role and role != 'recommendation':
+            # A role an earlier pass established on evidence this pass
+            # cannot see. Kept.
+            mentioned.append({'name': retailer, 'role': role})
             continue
         if _domain_root(retailer) in sources or _flat(retailer).strip() in sources:
             # A retailer a price came FROM is a source. Recorded with
@@ -401,10 +421,11 @@ def normalize(record: dict, *, answer_text, brand, brand_domain=None) -> dict:
             demoted.append(str(retailer))
             mentioned.append({'name': retailer, 'role': 'source'})
             continue
-        mentioned.append({'name': retailer, 'role': None})
+        mentioned.append({'name': retailer, 'role': role})
     record['retailer_mentions'] = _dedupe(mentioned, lambda m: _flat(m['name']))
     record['recommended_retailers'] = [
-        m['name'] for m in record['retailer_mentions'] if m['role'] is None
+        m['name'] for m in record['retailer_mentions']
+        if m['role'] in (None, 'recommendation')
     ]
     if demoted:
         notes.append('retailers that were sources: ' + ', '.join(demoted))
@@ -457,82 +478,72 @@ def normalize(record: dict, *, answer_text, brand, brand_domain=None) -> dict:
     return record
 
 
-def apply_labels(record: dict, labels: dict) -> dict:
+def apply_labels(record: dict, labels: dict, *, answer_text=None,
+                 brand=None) -> dict:
     """
     The labeller's answer, merged onto the transcription.
 
-    Matched on the sentence text, normalised, because that is the only
-    key both sides share — the labeller is handed spans and returns them
-    with labels attached, and a span it renamed is a span nobody can
-    match. Anything it did not label keeps no label at all, which
-    asserted_claims reads as "not a claim".
+    Matched on SPAN ID. The spans were cut by span_segmenter before the
+    call, so the text a label is attached to is ours, verbatim, and the
+    labeller could not have merged two of them or run one past a clause
+    break — which is what the previous three arrangements each did.
 
-    A sentence labelled `unknown_statement` becomes the record's
-    brand_unknown_statement and leaves brand_claims. A sentence labelled
-    `disclaimer` or `instruction` leaves brand_claims too and becomes
-    neither: an instruction to check the packaging is not a claim about
-    the brand, and one sample scored `fabricated` on exactly that.
+    brand_claims and brand_unknown_statement are DERIVED here, from the
+    spans, rather than taken from the transcription. The transcription's
+    own versions of them are kept as a cross-check: where the two
+    disagree, the row says so.
     """
     record = dict(record or {})
     labels = labels or {}
     notes = list(record.get('postprocess') or [])
 
-    by_sentence = {}
-    for item in labels.get('brand_sentences') or []:
-        if isinstance(item, dict) and item.get('sentence'):
-            by_sentence[_flat(item['sentence'])] = item
+    spans = segment(answer_text) if answer_text else []
+    by_id = {span['id']: span for span in spans}
+    labelled = {}
+    unknown_ids = []
+    for item in labels.get('spans') or []:
+        if not isinstance(item, dict):
+            continue
+        span_id = item.get('span_id')
+        if span_id not in by_id:
+            # A label for a span we never sent. Recorded rather than
+            # applied: the id is the only handle, and one that does not
+            # resolve is a label attached to nothing.
+            unknown_ids.append(span_id)
+            continue
+        labelled[span_id] = item
+    if unknown_ids:
+        notes.append(f'labels for unknown span ids: {unknown_ids}')
 
-    # ── the unknown-statement candidate ───────────────────────────────
-    statement = record.get('brand_unknown_statement')
-    promoted = []
-    if statement:
-        label = by_sentence.get(_flat(statement))
-        kind = (label or {}).get('kind')
-        if kind == 'unknown_statement':
-            pass                                   # stays exactly where it is
-        elif kind in ('assertion',):
-            record['brand_unknown_statement'] = None
-            promoted.append({
-                'claim': statement, 'sentence': statement,
-                'kind': 'assertion', 'modality': (label or {}).get('modality'),
-                'lexicon_hedged': is_hedged(statement),
-                'claim_kind': claim_kind(statement),
-            })
-            notes.append('unknown-statement span labelled an assertion')
-        elif kind in ('disclaimer', 'instruction'):
-            record['brand_unknown_statement'] = None
-            notes.append(f'unknown-statement span labelled a {kind}')
-        # No label at all: left alone. An unlabelled candidate is not
-        # evidence of anything, and moving it on a failed call is how the
-        # last two rounds went wrong.
+    if spans:
+        claims, statement = [], None
+        for span_id, span in sorted(by_id.items()):
+            label = labelled.get(span_id)
+            if not label:
+                continue
+            kind, modality = label.get('kind'), label.get('modality')
+            if kind == 'unknown_statement' and statement is None:
+                statement = span['text']
+            elif kind == 'assertion':
+                claims.append({
+                    'claim': span['text'], 'sentence': span['text'],
+                    'span_id': span_id, 'kind': kind, 'modality': modality,
+                    'claim_kind': claim_kind(span['text']),
+                    'lexicon_hedged': is_hedged(span['text']),
+                })
+        # The transcription's own reading, kept beside the spans so a
+        # disagreement is visible instead of being resolved by whichever
+        # field is read first.
+        record['transcribed_unknown_statement'] = record.get('brand_unknown_statement')
+        record['brand_unknown_statement'] = statement
+        record['brand_claims'] = claims
 
-    # ── the claims ────────────────────────────────────────────────────
-    claims, unknown_from_claims = [], None
-    for claim in record.get('brand_claims') or []:
-        if not isinstance(claim, dict):
-            continue
-        label = by_sentence.get(_flat(claim.get('sentence') or claim.get('claim')))
-        if not label:
-            claims.append(claim)
-            continue
-        kind, modality = label.get('kind'), label.get('modality')
-        if kind == 'unknown_statement':
-            # The labeller found the cannot-find sentence in the claims
-            # list. Two samples had it there.
-            if not record.get('brand_unknown_statement'):
-                unknown_from_claims = claim.get('sentence') or claim.get('claim')
-            notes.append('a claim span was labelled an unknown statement')
-            continue
-        if kind in ('disclaimer', 'instruction'):
-            notes.append(f'a claim span was labelled a {kind}')
-            continue
-        claims.append({**claim, 'kind': kind, 'modality': modality,
-                       'claim_kind': claim.get('kind') or claim_kind(
-                           claim.get('sentence') or claim.get('claim'))})
-
-    if unknown_from_claims:
-        record['brand_unknown_statement'] = unknown_from_claims
-    record['brand_claims'] = claims + promoted
+    record['spans'] = spans
+    record['span_labels'] = [
+        {'span_id': i, 'text': by_id[i]['text'],
+         'kind': labelled[i].get('kind'), 'modality': labelled[i].get('modality')}
+        for i in sorted(labelled) if i in by_id
+    ]
 
     # ── other brands ──────────────────────────────────────────────────
     relations = {
@@ -546,9 +557,6 @@ def apply_labels(record: dict, labels: dict) -> dict:
             continue
         entry['relation'] = relations.get(_flat(entry['name']))
         if entry['relation'] == 'not_a_brand':
-            # A shop, the brand's own site, or its parent. Recorded in
-            # the note and out of the list: a retailer sitting in
-            # other_brands is a misattribution waiting to be found.
             notes.append(f"not a brand: {entry['name']}")
             continue
         kept.append(entry)
@@ -560,9 +568,6 @@ def apply_labels(record: dict, labels: dict) -> dict:
         for item in labels.get('retailers') or []
         if isinstance(item, dict) and item.get('name')
     }
-    # Labels for the ones still unlabelled; a role the deterministic pass
-    # already established — a retailer that was demonstrably a source —
-    # is not up for relabelling.
     mentions = record.get('retailer_mentions')
     if mentions is None:
         mentions = [{'name': name, 'role': None}
@@ -571,23 +576,60 @@ def apply_labels(record: dict, labels: dict) -> dict:
         {'name': m['name'], 'role': m.get('role') or roles.get(_flat(m['name']))}
         for m in mentions
     ]
-    # The old flat list keeps only what the labeller called a
-    # recommendation. "Amazon listings show it currently unavailable" is
-    # the opposite of one, and it drove a fabricated verdict.
     record['recommended_retailers'] = [
         m['name'] for m in record['retailer_mentions']
         if m['role'] == 'recommendation'
     ]
 
-    disagreements = needs_review(record)
-    if disagreements:
-        notes.append(
-            f'{len(disagreements)} sentence(s) where the lexicon and the '
-            f'label disagree on modality'
-        )
-    record['needs_review'] = disagreements
+    review = needs_review(record)
+    review.extend(coverage_gaps(record, brand=brand))
+    if review:
+        notes.append(f'{len(review)} span(s) need review')
+    record['needs_review'] = review
     record['postprocess'] = notes
     return record
+
+
+def coverage_gaps(record, *, brand=None) -> list:
+    """
+    Every span naming the brand that came back without a label, plus the
+    places the transcription and the spans disagree.
+
+    A span the labeller declined says "none" and is fine. A span it never
+    mentioned is the failure this exists for: one answer's entire
+    headline — "It appears that Wiggle & Snug Bum Balm 4 oz has been
+    discontinued" — reached neither the claims nor the unknown statement
+    on the previous arrangement, and nothing anywhere recorded that it
+    had gone missing.
+
+    The transcription mismatch is here rather than in a note for the same
+    reason. A cannot-find statement the transcriber read one way and the
+    spans read another is a disagreement about what the answer said, and
+    that belongs in front of a person.
+    """
+    gaps = []
+    labelled = {item['span_id'] for item in record.get('span_labels') or []}
+    for span in record.get('spans') or []:
+        if span['id'] in labelled:
+            continue
+        if brand and not ea.names_brand(span['text'], brand):
+            continue
+        if not brand:
+            continue
+        gaps.append({
+            'reason': 'a span naming the brand came back unlabelled',
+            'span_id': span['id'], 'text': span['text'],
+        })
+
+    transcribed = record.get('transcribed_unknown_statement')
+    derived = record.get('brand_unknown_statement')
+    if transcribed and _flat(transcribed) != _flat(derived or ''):
+        gaps.append({
+            'reason': ('the transcription read a cannot-find statement the '
+                       'spans did not'),
+            'transcribed': transcribed, 'from_spans': derived,
+        })
+    return gaps
 
 
 def asserted_claims(record) -> list:

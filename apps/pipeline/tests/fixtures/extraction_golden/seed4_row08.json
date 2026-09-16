@@ -1,0 +1,56 @@
+{
+  "row": 8,
+  "seed": 4,
+  "query_code": "WIG_138",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn’t find an official product page for **“Wiggle & Snug Snug-Fit Diapers”** by that exact name, so I can’t verify brand-specific claims. But based on the “Snug-Fit” positioning, the likely difference is that they’re designed to prioritize **active-baby fit** over a basic one-size everyday diaper feel.\n\n**What would make them different from standard everyday diapers:**\n\n- **Closer, movement-friendly fit:** A snug waist and leg fit helps the diaper stay in place as babies crawl, roll, wiggle, or sleep.\n- **Better leak control through fit:** Many leaks happen when gaps form around the legs or waist, so a more contoured fit can help reduce side leaks and blowouts.\n- **Stretchy comfort:** Snug-fit diapers usually emphasize flexible tabs, waistbands, or side panels so the diaper feels secure without being tight.\n- **Less shifting/sagging:** A secure fit helps keep the absorbent core positioned where it needs to be.\n- **Everyday usability:** Unlike overnight or specialty diapers, they’re likely meant for regular day-to-day wear while offering a more secure fit.\n\nFor comparison, major everyday diapers often advertise similar baseline features like wetness indicators, hypoallergenic materials, stretch components, leak barriers, and absorbent cores. ([huggies.com](https://www.huggies.com/en-us/diapers/snug-and-dry?utm_source=openai)) So the key distinction for **Snug-Fit** would be its emphasis on **staying comfortably in place during movement**, rather than just absorbency alone.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t find an official product page for **“Wiggle & Snug Snug-Fit Diapers”** by that exact name, so I can’t verify brand-specific claims.",
+    "other_brands_named": [
+      {
+        "name": "Huggies",
+        "presented_as": "source",
+        "relation": "citation_only"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "huggies.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "huggies.com"
+    ],
+    "other_brands": {
+      "Huggies": "citation_only"
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

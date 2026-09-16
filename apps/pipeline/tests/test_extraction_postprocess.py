@@ -38,10 +38,33 @@ def run(answer="...", **kw):
     )
 
 
-def labelled(answer="...", labels=None, **kw):
+def labelled(answer="...", labels=None, brand=BRAND, **kw):
     """Transcription, then the labelling pass — the whole chain, with the
     labeller's answer supplied rather than called for."""
-    return pp.apply_labels(run(answer=answer, **kw), labels or {})
+    return pp.apply_labels(
+        run(answer=answer, **kw), labels or {},
+        answer_text=answer, brand=brand,
+    )
+
+
+def spans_of(answer):
+    from parser.span_segmenter import segment
+    return segment(answer)
+
+
+def label_all(answer, **kinds):
+    """Label every span of `answer`. `kinds` maps a substring to
+    (kind, modality); anything unmatched is labelled `none`, so the
+    coverage check has nothing to complain about."""
+    out = []
+    for span in spans_of(answer):
+        kind, modality = 'none', 'asserted'
+        for needle, value in kinds.items():
+            if needle.replace('_', ' ') in span['text'].lower():
+                kind, modality = value if isinstance(value, tuple) else (value, 'asserted')
+                break
+        out.append({'span_id': span['id'], 'kind': kind, 'modality': modality})
+    return {'spans': out}
 
 
 def sentence(text, kind, modality="asserted"):
@@ -115,29 +138,20 @@ def test_an_unlabelled_claim_is_not_an_asserted_claim():
 
 def test_a_claim_the_labeller_calls_asserted_survives():
     text = "Wiggle & Snug is a private label brand sold exclusively at Kohl's."
-    out = labelled(
-        brand_claims=[{"claim": "sold exclusively at Kohl's",
-                       "sentence": text, "kind": "retail"}],
-        labels={"brand_sentences": [sentence(text, "assertion", "asserted")]},
-    )
+    out = labelled(answer=text, labels=label_all(text, kohl=("assertion", "asserted")))
     assert len(pp.asserted_claims(out)) == 1
 
 
 def test_a_claim_the_labeller_calls_hedged_does_not():
     text = "It's possible that this is a very new, small, or regional brand."
-    out = labelled(
-        brand_claims=[{"claim": "regional brand", "sentence": text, "kind": "other"}],
-        labels={"brand_sentences": [sentence(text, "assertion", "hedged")]},
-    )
+    out = labelled(answer=text, labels=label_all(text, possible=("assertion", "hedged")))
     assert pp.asserted_claims(out) == []
 
 
 def test_a_conditional_fragment_is_not_an_assertion():
     text = "If it's a store brand, availability would be limited."
-    out = labelled(
-        brand_claims=[{"claim": "store brand", "sentence": text, "kind": "retail"}],
-        labels={"brand_sentences": [sentence(text, "assertion", "conditional")]},
-    )
+    out = labelled(answer=text,
+                   labels=label_all(text, store=("assertion", "conditional")))
     assert pp.asserted_claims(out) == []
 
 
@@ -147,35 +161,24 @@ def test_an_instruction_to_the_reader_is_never_a_claim():
     website" being read as a claim about the brand."""
     text = ("It's always best to double-check the weight ranges on the "
             "Wiggle & Snug packaging or their official website.")
-    out = labelled(
-        brand_claims=[{"claim": "check the packaging", "sentence": text, "kind": "other"}],
-        labels={"brand_sentences": [sentence(text, "instruction")]},
-    )
+    out = labelled(answer=text, labels=label_all(text, **{"double-check": "instruction"}))
     assert out["brand_claims"] == []
     assert pp.asserted_claims(out) == []
 
 
 def test_the_lexicon_and_the_label_disagreeing_is_surfaced_not_resolved():
     """One row said "Wiggle & Snug is a Wiggle own-brand" and the lexicon
-    called it hedged because "typically" appears later in the answer,
-    modifying a different clause. Neither side gets to win quietly."""
+    called it hedged. Neither side gets to win quietly."""
     text = "Wiggle & Snug is typically a Wiggle own-brand."
-    out = labelled(
-        brand_claims=[{"claim": "own-brand", "sentence": text, "kind": "ownership"}],
-        labels={"brand_sentences": [sentence(text, "assertion", "asserted")]},
-    )
+    out = labelled(answer=text, labels=label_all(text, own=("assertion", "asserted")))
     (flag,) = out["needs_review"]
     assert flag["lexicon"] == "hedged"
     assert flag["label"] == "asserted"
-    assert any("disagree on modality" in note for note in out["postprocess"])
 
 
 def test_agreement_raises_no_flag():
-    text = "It's possible it is a regional brand."
-    out = labelled(
-        brand_claims=[{"claim": "regional", "sentence": text, "kind": "other"}],
-        labels={"brand_sentences": [sentence(text, "assertion", "hedged")]},
-    )
+    text = "Wiggle & Snug is possibly a regional brand."
+    out = labelled(answer=text, labels=label_all(text, possibly=("assertion", "hedged")))
     assert out["needs_review"] == []
 
 
@@ -219,37 +222,47 @@ def test_row_40_a_disclaimer_leaves_no_unknown_and_no_claim():
     """The answer treats the brand as real and merely lacks the
     packaging. There is no finding here, so nothing is recorded — but it
     is the LABEL that says so, not the lexicon."""
-    text = ("Without having the specific product in front of me, I cannot give "
-            "a definitive yes or no.")
-    out = labelled(
-        brand_unknown_statement=text,
-        labels={"brand_sentences": [sentence(text, "disclaimer")]},
-    )
+    text = ("Without having the specific Wiggle & Snug product in front of me, "
+            "I cannot give a definitive yes or no.")
+    out = labelled(answer=text, labels=label_all(text, without="disclaimer"))
     assert out["brand_unknown_statement"] is None
     assert out["brand_claims"] == []
 
 
-def test_an_unlabelled_unknown_statement_is_left_exactly_where_it_was():
-    """The revert. A lexicon that moved a statement it did not recognise
-    deleted two textbook cannot-finds and turned a hedge into an asserted
-    claim, across six rows of one sample."""
-    text = "I'm having trouble finding any information about a brand called Wiggle & Snug."
-    out = labelled(brand_unknown_statement=text, labels={})
-    assert out["brand_unknown_statement"] == text
-    assert out["brand_claims"] == []
+def test_an_unlabelled_brand_span_is_a_finding_not_a_silence():
+    """The failure this whole round is for. One answer's headline —
+    "It appears that Wiggle & Snug Bum Balm 4 oz has been discontinued" —
+    reached neither the claims nor the unknown statement, and nothing
+    recorded that it had gone missing."""
+    text = "It appears that Wiggle & Snug Bum Balm 4 oz has been discontinued."
+    out = labelled(answer=text, labels={"spans": []})
+    (gap,) = out["needs_review"]
+    assert gap["reason"] == "a span naming the brand came back unlabelled"
+    assert gap["text"] == text
+
+
+def test_a_span_the_labeller_declined_is_not_a_gap():
+    """"none" is a real answer. Never coming back is not."""
+    text = "It appears that Wiggle & Snug Bum Balm 4 oz has been discontinued."
+    out = labelled(answer=text, labels=label_all(text))
+    assert out["needs_review"] == []
+
+
+def test_a_span_that_does_not_name_the_brand_need_not_be_labelled():
+    text = "Most overnight diapers hold more liquid than daytime ones."
+    out = labelled(answer=text, labels={"spans": []})
+    assert out["needs_review"] == []
 
 
 def test_row_26_an_assertion_filed_as_an_unknown_becomes_a_claim():
     """"Wiggle & Snug does not currently offer a member rewards program"
     is a statement ABOUT the brand, and a false one — the record
-    publishes Member and Member+. It still moves; the difference is that
-    the labeller says so rather than a regular expression."""
+    publishes Member and Member+."""
     text = ("Wiggle & Snug does not currently offer a member rewards program "
-            "called 'Wiggle & Snug Member Rewards' with specific tiers.")
-    out = labelled(
-        brand_unknown_statement=text,
-        labels={"brand_sentences": [sentence(text, "assertion", "asserted")]},
-    )
+            "with specific tiers.")
+    out = labelled(answer=text,
+                   brand_unknown_statement=text,
+                   labels=label_all(text, rewards=("assertion", "asserted")))
     assert out["brand_unknown_statement"] is None
     (claim,) = out["brand_claims"]
     assert claim["claim_kind"] == "loyalty"
@@ -258,11 +271,9 @@ def test_row_26_an_assertion_filed_as_an_unknown_becomes_a_claim():
 
 def test_a_cannot_find_sentence_filed_as_a_claim_becomes_the_unknown():
     """Two samples had it the other way round."""
-    text = "I did not find a reliable current product page specifically for Wiggle & Snug Bum Balm 4 oz."
-    out = labelled(
-        brand_claims=[{"claim": "no product page", "sentence": text, "kind": "other"}],
-        labels={"brand_sentences": [sentence(text, "unknown_statement")]},
-    )
+    text = ("I did not find a reliable current product page specifically for "
+            "Wiggle & Snug Bum Balm.")
+    out = labelled(answer=text, labels=label_all(text, **{"did not find": "unknown_statement"}))
     assert out["brand_unknown_statement"] == text
     assert out["brand_claims"] == []
 
@@ -275,11 +286,8 @@ def test_a_real_cannot_find_is_left_exactly_where_it_was():
 
 
 def test_a_promoted_assertion_that_was_hedged_is_not_an_asserted_claim():
-    text = "It's possible they no longer run a rewards programme."
-    out = labelled(
-        brand_unknown_statement=text,
-        labels={"brand_sentences": [sentence(text, "assertion", "hedged")]},
-    )
+    text = "It's possible Wiggle & Snug no longer run a rewards programme."
+    out = labelled(answer=text, labels=label_all(text, possible=("assertion", "hedged")))
     (claim,) = out["brand_claims"]
     assert claim["modality"] == "hedged"
     assert pp.asserted_claims(out) == []

@@ -49,22 +49,27 @@ DOMAIN = 'trueshopstore.com'
 # raising an entry is a deliberate act.
 #
 # The four fields short of 1.000 are short for one reason, and it is not
-# the code: seed 1 was drawn from the FIRST extractor, which had no
-# `sizes` field and no `recommended_retailers`, so "4 oz" is sitting in
-# pack_counts and three recommended shops are sitting in sources_cited.
-# Nothing downstream can know that a bare 4 attributed to a balm means
-# ounces. Those were fixed in the extractor and seeds 2 and 3 show it —
-# seed 3 scores 1.000. They stay in the golden set because a gate that
-# only contains rows the code can win is not a gate.
+# the code: EVERY remaining miss is in seed 1, drawn from the first
+# extractor, which had no `sizes` field and no `recommended_retailers` —
+# so "4 oz" is sitting in pack_counts and three recommended shops are
+# sitting in sources_cited. Nothing downstream can know that a bare 4
+# attributed to a balm means ounces. Those were fixed in the extractor,
+# and seeds 2, 3 and 4 all scoring 1.000 is what says so. Seed 1 stays in
+# the golden set because a gate that only contains rows the code can win
+# is not a gate.
+#
+# What the gate does NOT cover: the labeller. It replays the golden
+# labels, so it measures the code around them. Labelling accuracy is
+# measured by drawing a sample and reading it.
 BASELINE = {
     'brand_mentioned': 1.0,
-    'sizes': 0.966,
-    'prices': 0.991,
-    'pack_counts': 0.966,
+    'sizes': 0.974,
+    'prices': 0.993,
+    'pack_counts': 0.974,
     'member_prices': 1.0,
-    'sources_cited': 0.991,
+    'sources_cited': 0.993,
     'other_brands': 1.0,
-    'retailers': 0.991,
+    'retailers': 0.993,
 }
 
 FIELDS = tuple(BASELINE)

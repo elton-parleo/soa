@@ -32,7 +32,16 @@ cycle 20260915-113207-wiggle-snug-full, with the label the review
 settled on.
 """
 
-BRAND_SENTENCE_KINDS = ('unknown_statement', 'assertion', 'disclaimer', 'instruction')
+# `none` is the fifth, and it is what makes the coverage check possible.
+# Every span is offered to the labeller, including the ones that are not
+# about the brand at all; a span it declines has to say so, because
+# "labelled none" and "never came back" are different facts and only one
+# of them is a finding.
+from parser.span_segmenter import segment
+
+BRAND_SENTENCE_KINDS = (
+    'unknown_statement', 'assertion', 'disclaimer', 'instruction', 'none',
+)
 MODALITIES = ('asserted', 'hedged', 'conditional')
 # Four of these were specified; `not_a_brand` is a fifth, added because
 # two reviewed rows could not be expressed without it. One answer named
@@ -59,7 +68,21 @@ from a fixed list. There is no other allowed output.
 
 You are given the answer for context and the spans to label.
 
-BRAND SENTENCES — two labels each, `kind` and `modality`.
+You are given the answer, and then the answer cut into numbered SPANS.
+The spans are ours. Label each one by its id. You cannot merge two spans,
+extend one, quote a different piece of text, or return a span id that was
+not given to you — the only thing coming back is an id and two words from
+the lists below.
+
+That is not a style preference. Choosing where a sentence stops used to
+be part of this job, and it merged "It seems there might be a slight
+misunderstanding." with the flat claim that followed, so the first
+sentence's hedge suppressed the second sentence's claim; it ran a
+cannot-find statement past a "but" and swallowed a product claim with it;
+and it dropped whole sentences, including one answer's entire headline.
+The cutting is done before you see it now.
+
+SPANS — two labels each, `kind` and `modality`.
 
 kind:
   "unknown_statement"  the sentence says the brand or the product could \
@@ -96,12 +119,13 @@ a definitive yes or no."
 Snug packaging or their official website."
       "Send me the link and I can check that specific listing."
 
-  A bare product name — "Wiggle & Snug Snug-Fit Overnight Diapers" — is \
-none of these. Label its kind "assertion" ONLY if the sentence says \
-something about it; a name on its own is not a sentence about the brand \
-and should be labelled "instruction" only if it is one. When nothing \
-fits, use "assertion" with modality "conditional" and it will be \
-reviewed.
+  "none"  the span is not about the brand under discussion: a heading, \
+a bare product name, a sentence about somebody else, a list item of \
+general advice. Most spans in a long answer are this.
+
+  Use "none" rather than forcing a span into one of the other four. It \
+is a real answer, not a failure to decide — and a span you simply do not \
+return at all is neither, which is why every span has to come back.
 
 modality:
   "asserted"     stated flatly, no hedge.
@@ -155,9 +179,9 @@ discontinued there.
   "unavailable" is never "recommendation". An answer reporting that a \
 shop does not have something is not sending anybody to that shop.
 
-Label every span you are given, in the order you are given them. Do not \
-add spans, do not drop spans, and do not return any value that is not in \
-the lists above."""
+Return one entry for EVERY span id you were given, in order, and no \
+others. Do not add spans, do not drop spans, and do not return any value \
+that is not in the lists above."""
 
 
 def build_labeling_prompt() -> str:
@@ -175,16 +199,21 @@ def build_labeling_schema() -> dict:
     return {
         "type": "object",
         "properties": {
-            "brand_sentences": {
+            "spans": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "sentence": {"type": "string"},
+                        # The id we gave it. Never the text: a labeller
+                        # that hands back its own quotation is a labeller
+                        # that can paraphrase, and a label on words
+                        # nobody said cannot be checked against the
+                        # stored answer.
+                        "span_id": {"type": "integer"},
                         "kind": {"type": "string", "enum": list(BRAND_SENTENCE_KINDS)},
                         "modality": {"type": "string", "enum": list(MODALITIES)},
                     },
-                    "required": ["sentence", "kind", "modality"],
+                    "required": ["span_id", "kind", "modality"],
                     "additionalProperties": False,
                 },
             },
@@ -215,44 +244,54 @@ def build_labeling_schema() -> dict:
                 },
             },
         },
-        "required": ["brand_sentences", "other_brands", "retailers"],
+        "required": ["spans", "other_brands", "retailers"],
         "additionalProperties": False,
     }
 
 
-def spans_to_label(record: dict) -> dict:
+def spans_to_label(record: dict, answer_text=None) -> dict:
     """
-    What to hand the labeller: every span the transcription produced, in
-    a stable order.
+    What to hand the labeller: the ANSWER, cut up by the segmenter, plus
+    the names the transcription found.
 
-    The unknown-statement candidate goes in with the claims, as one more
-    brand sentence — which is the point. Deciding whether a sentence is a
-    cannot-find or an assertion about the brand is the same decision, and
-    splitting it across two fields is what let a lexicon answer half of
-    it.
+    The spans no longer come from the transcription. They come from
+    span_segmenter.segment, which means they are verbatim, they are in
+    order, they cover the answer, and — the part that matters — a span
+    that names the brand and comes back unlabelled is visible as a gap
+    rather than as an absence nobody can see.
+
+    `answer_text` is optional only so an older stored record can still be
+    relabelled from the sentences it happens to carry. Every live caller
+    passes the answer.
     """
-    sentences = []
-    statement = record.get('brand_unknown_statement')
-    if statement:
-        sentences.append(str(statement))
-    for claim in record.get('brand_claims') or []:
-        if isinstance(claim, dict):
-            text = claim.get('sentence') or claim.get('claim')
-            if text:
-                sentences.append(str(text))
-
-    seen, unique = set(), []
-    for text in sentences:
-        key = ' '.join(text.lower().split())
-        if key not in seen:
-            seen.add(key)
-            unique.append(text)
+    if answer_text:
+        spans = segment(answer_text)
+    else:
+        sentences = []
+        statement = record.get('brand_unknown_statement')
+        if statement:
+            sentences.append(str(statement))
+        for claim in record.get('brand_claims') or []:
+            if isinstance(claim, dict):
+                text = claim.get('sentence') or claim.get('claim')
+                if text:
+                    sentences.append(str(text))
+        seen, unique = set(), []
+        for text in sentences:
+            key = ' '.join(text.lower().split())
+            if key not in seen:
+                seen.add(key)
+                unique.append(text)
+        spans = [{'id': i, 'text': t} for i, t in enumerate(unique, start=1)]
 
     return {
-        'brand_sentences': unique,
+        'spans': spans,
         'other_brands': [
             e['name'] for e in record.get('other_brands_named') or []
             if isinstance(e, dict) and e.get('name')
         ],
-        'retailers': list(record.get('recommended_retailers') or []),
+        'retailers': [
+            m['name'] for m in record.get('retailer_mentions') or []
+            if isinstance(m, dict) and m.get('name')
+        ] or list(record.get('recommended_retailers') or []),
     }

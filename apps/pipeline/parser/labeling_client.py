@@ -47,7 +47,7 @@ class LabelingResult:
     usage: dict = field(default_factory=dict)
 
 
-EMPTY_LABELS = {'brand_sentences': [], 'other_brands': [], 'retailers': []}
+EMPTY_LABELS = {'spans': [], 'other_brands': [], 'retailers': []}
 
 
 class LabelingClient:
@@ -59,14 +59,19 @@ class LabelingClient:
         self._client = AsyncOpenAI(api_key=config.OPEN_AI_API_KEY)
 
     async def label(self, record: dict, *, answer_text: str) -> LabelingResult:
-        spans = spans_to_label(record)
+        spans = spans_to_label(record, answer_text)
         if not any(spans.values()):
             # Nothing to label is not a failure and is not a call.
             return LabelingResult(labels=dict(EMPTY_LABELS), model=self.model)
 
         t0 = time.monotonic()
         last_error = None
-        payload = json.dumps({'answer': answer_text, 'spans': spans}, ensure_ascii=False)
+        payload = json.dumps({
+            'answer': answer_text,
+            'spans': [{'id': sp['id'], 'text': sp['text']} for sp in spans['spans']],
+            'other_brands': spans['other_brands'],
+            'retailers': spans['retailers'],
+        }, ensure_ascii=False)
 
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:

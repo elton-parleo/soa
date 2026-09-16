@@ -1,0 +1,67 @@
+{
+  "row": 7,
+  "seed": 4,
+  "query_code": "WIG_144",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Yes — **Wiggle & Snug** is still listed in Parleo’s current merchant-loyalty directory; the directory says its data is updated hourly and includes **Wiggle & Snug** in the tracked merchants list. ([deals.parleo.io](https://deals.parleo.io/?utm_source=openai))\n\nThe **Member Rewards** tiers are:\n\n1. **Wiggle**\n2. **Snug**\n3. **Cuddle**",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Parleo",
+        "presented_as": "source",
+        "relation": "citation_only"
+      }
+    ],
+    "loyalty_tiers_named": [
+      "Wiggle",
+      "Snug",
+      "Cuddle"
+    ],
+    "brand_claims": [
+      {
+        "claim": "is still listed in Parleo’s current merchant-loyalty directory",
+        "sentence": "Yes — **Wiggle & Snug** is still listed in Parleo’s current merchant-loyalty directory; the directory says its data is updated hourly and includes **Wiggle & Snug** in the tracked merchants list.",
+        "kind": "assertion",
+        "lexicon_hedged": false,
+        "modality": "asserted",
+        "claim_kind": "retail"
+      }
+    ],
+    "sources_cited": [
+      "deals.parleo.io"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "deals.parleo.io"
+    ],
+    "other_brands": {
+      "Parleo": "citation_only"
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

@@ -1,0 +1,42 @@
+{
+  "row": 16,
+  "seed": 4,
+  "query_code": "WIG_146",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "To determine the best Wiggle & Snug Snug-Fit Overnight Diapers size for a baby who leaks at night, we need to consider a few factors. Leaks are often a sign that the diaper isn't providing adequate absorbency or a proper fit.\n\nHere's a step-by-step guide:\n\n**First, consider why the current diaper might be leaking:**\n\n1.  **Too Small:** This is the most common reason for leaks.\n    *   **Signs:** Red marks around the waist or thighs, diaper doesn't cover the baby's bottom completely, diaper feels overly saturated very quickly, frequent \"blowouts\" up the back or out the legs.\n    *   **Problem:** Not enough absorbent material for the volume, or the leg cuffs are stretched too tight, causing gaps when the baby moves or compresses the diaper.\n2.  **Too Big:** Less common for leaks, but can happen.\n    *   **Signs:** Gaps around the legs or waist, even when fastened snugly.\n    *   **Problem:** Liquid escapes through these gaps before it can be absorbed.\n3.  **Absorbency Maxed Out:** Even with a good fit, some babies are super wetters, especially overnight.\n    *   **Signs:** The diaper is completely soaked through, but there are no obvious gaps or red marks. It just can't hold any more.\n\n**Which Size to Get for a Leaking Baby:**\n\nBased on the reasons above, here's the advice:\n\n1.  **If your baby is approaching the top of their current diaper's weight range, OR you see red marks/tightness/poor coverage:**\n    *   **ACTION: Size Up.**\n    *   **Why:** A larger size means more absorbent material and a more generous fit around the waist and legs. This often solves leaks by providing extra capacity and better coverage.\n\n2.  **If your baby is well within their current diaper's weight range, but the diaper is just completely saturated by morning (no gaps/red marks):**\n    *   **ACTION: Size Up.**\n    *   **Why:** Even if the fit seems okay, moving up a size provides significantly more absorbency, which is key for overnight leakers. The \"Snug-Fit\" design of Wiggle & Snug should still provide a good fit even when sizing up for absorbency.\n\n3.  **If you notice significant gaps around the legs or waist even when fastening snugly (and your baby is not unusually thin for their weight):**\n    *   **ACTION: Double-check the fit of the current size, ensuring the leg cuffs are pulled out and not tucked in. If gaps persist, you *might* need to size down, but this is rare for leaks.**\n    *   **Why:** For a \"snug-fit\" diaper, gaps are less likely, but if they occur, it means the diaper isn't conforming properly. However, for overnight leaks, sizing *up* often resolves this by providing more material to fill those spaces. Only size down if you're certain the current size is *too big*.\n\n**General Recommendation:**\n\nFor a baby who leaks at night, the **most common and effective solution is to size up.** Even if your baby is technically still within the weight range of their current size, a larger diaper will offer more absorbent material and a potentially better overall fit for overnight protection.\n\n**Don't forget to also:**\n\n*   **Ensure the leg cuffs are fully extended** and not tucked in, forming a seal around the thighs.\n*   **Pull the diaper up high enough** in the back and front.\n*   **Consider adding a diaper booster pad** inside the diaper for extra absorbency if sizing up still isn't quite enough.\n\nCheck the Wiggle & Snug weight chart, and if your baby is anywhere near the upper end of their current size or showing any signs of tightness/saturation, go for the next size up.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

@@ -1,0 +1,96 @@
+{
+  "row": 21,
+  "seed": 4,
+  "query_code": "WIG_161",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn’t find a product named **“Wiggle & Snug Snug-Fit Diapers.”** The closest match is **Huggies Snug & Dry Diapers Big Pack, Size 6 — 60 ct**, which shows an **MSRP of $18.99**. ([brickseek.com](https://brickseek.com/target-inventory-checker?sku=007-04-0171&utm_source=openai))\n\nPrices can vary by store/location; for example, Kroger/King Soopers lists the same 60-count UPC but says **“Prices May Vary.”** ([kingsoopers.com](https://www.kingsoopers.com/p/huggies-snug-dry-size-6-big-diapers/0003600043133?utm_source=openai))",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "18.99",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Diapers Big Pack, Size 6 — 60 ct"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 60,
+        "attributed_product": "Huggies Snug & Dry Diapers Big Pack, Size 6 — 60 ct"
+      },
+      {
+        "value": 60,
+        "attributed_product": "the same 60-count UPC"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t find a product named **“Wiggle & Snug Snug-Fit Diapers.”**",
+    "other_brands_named": [
+      {
+        "name": "Huggies",
+        "presented_as": "closest_match",
+        "relation": "closest_match_described"
+      },
+      {
+        "name": "Kroger/King Soopers",
+        "presented_as": "source",
+        "relation": "citation_only"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "brickseek.com",
+      "kingsoopers.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [],
+    "postprocess": [
+      "not product sizes: 6 Size, 6 Size"
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "18.99",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Diapers Big Pack, Size 6 — 60 ct"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 60,
+        "attributed_product": "Huggies Snug & Dry Diapers Big Pack, Size 6 — 60 ct"
+      },
+      {
+        "value": 60,
+        "attributed_product": "the same 60-count UPC"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "brickseek.com",
+      "kingsoopers.com"
+    ],
+    "other_brands": {
+      "Huggies": "closest_match_described",
+      "Kroger/King Soopers": "citation_only"
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

@@ -1,0 +1,79 @@
+{
+  "row": 35,
+  "seed": 4,
+  "query_code": "WIG_171",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Member+ members pay **$23.19** for the Wiggle & Snug Snug-Fit Overnight Diapers Size 3 at buybuy BABY.\n\nThe regular price is $28.99.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "28.99",
+        "currency": "USD",
+        "attributed_product": "the Wiggle & Snug Snug-Fit Overnight Diapers Size 3"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [
+      {
+        "amount": "23.19",
+        "tier": "Member+",
+        "attributed_product": "the Wiggle & Snug Snug-Fit Overnight Diapers Size 3"
+      }
+    ],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [
+      "Member+"
+    ],
+    "brand_claims": [
+      {
+        "claim": "at buybuy BABY",
+        "sentence": "Member+ members pay **$23.19** for the Wiggle & Snug Snug-Fit Overnight Diapers Size 3 at buybuy BABY.",
+        "kind": "assertion",
+        "lexicon_hedged": false,
+        "modality": "asserted",
+        "claim_kind": "retail"
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [],
+    "postprocess": [
+      "not product sizes: 3 Size"
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "28.99",
+        "currency": "USD",
+        "attributed_product": "the Wiggle & Snug Snug-Fit Overnight Diapers Size 3"
+      }
+    ],
+    "pack_counts": [],
+    "member_prices": [
+      {
+        "amount": "23.19",
+        "tier": "Member+",
+        "attributed_product": "the Wiggle & Snug Snug-Fit Overnight Diapers Size 3"
+      }
+    ],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

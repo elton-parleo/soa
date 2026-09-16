@@ -1,0 +1,80 @@
+{
+  "row": 24,
+  "seed": 4,
+  "query_code": "WIG_141",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "**Maybe—but I’d treat them as “worth trying,” not automatically “better.”** I couldn’t find strong independent testing specifically for **Wiggle & Snug Snug-Fit Overnight Diapers**, so the key question is whether they combine **higher overnight absorbency** with a **good fit on your child’s body**.\n\nIn general, **overnight diapers are a better choice than regular daytime diapers for nighttime leaks** because they’re designed for longer wear, extra absorbency, moisture-wicking, and leak barriers; Babylist notes many overnight diapers have roughly **25–50% more capacity** than regular diapers. ([babylist.com](https://www.babylist.com/hello-baby/best-overnight-diapers?utm_source=openai)) Fit matters just as much: BabyGearLab’s testing found top overnight performers tend to have better adjustability, stretchy tabs, and elastic around the back, while Consumer Reports notes that absorption speed affects leak risk—not all overnight diapers perform equally. ([babygearlab.com](https://www.babygearlab.com/topics/diapering-potty/best-overnight-diaper?utm_source=openai))\n\n**So Wiggle & Snug would be a good pick if:**\n- Your current diaper is soaked by morning.\n- Leaks are happening at the waist/legs because the diaper shifts overnight.\n- The Wiggle & Snug version has **overnight-level absorbency**, **double leak guards**, and a **snug but not tight** waist/leg fit.\n- You can buy a small pack first and test 3–5 nights.\n\n**If leaks continue**, try these before switching again: use **one size up in overnight diapers**, make sure leg cuffs are pulled out, fasten tabs evenly, use a fresh diaper right before sleep, and avoid tight pajamas/sleep sacks that compress the diaper. Some leak guides also suggest booster pads for very heavy wetters, placed toward the front for boys and center/back for girls. ([albeebaby.com](https://www.albeebaby.com/blogs/from-the-cradle/overnight-diaper-leaks?utm_source=openai))\n\n**Bottom line:** If Wiggle & Snug fits your baby better than your current brand, it may reduce nighttime leaks. But if your child is a heavy wetter, I’d compare it against well-tested overnight options rather than assuming the “snug-fit” label alone will solve leaks.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Babylist",
+        "presented_as": "source",
+        "relation": "citation_only"
+      },
+      {
+        "name": "BabyGearLab",
+        "presented_as": "source",
+        "relation": "citation_only"
+      },
+      {
+        "name": "Consumer Reports",
+        "presented_as": "source",
+        "relation": "citation_only"
+      },
+      {
+        "name": "Albee Baby",
+        "presented_as": "source",
+        "relation": "citation_only"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "babylist.com",
+      "babygearlab.com",
+      "albeebaby.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [],
+    "postprocess": [
+      "unknown-statement span labelled a disclaimer"
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "babylist.com",
+      "babygearlab.com",
+      "albeebaby.com"
+    ],
+    "other_brands": {
+      "Babylist": "citation_only",
+      "BabyGearLab": "citation_only",
+      "Consumer Reports": "citation_only",
+      "Albee Baby": "citation_only"
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

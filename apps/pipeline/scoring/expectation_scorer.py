@@ -271,7 +271,10 @@ class ExpectationScorer:
             labels = await self.labeler.label(
                 result.record, answer_text=run.raw_response,
             )
-            result.record = apply_labels(result.record, labels.labels)
+            result.record = apply_labels(
+                result.record, labels.labels,
+                answer_text=run.raw_response, brand=brand,
+            )
             if labels.error:
                 logger.warning(
                     "[expectation] run %s: labelling failed (%s) — spans are "

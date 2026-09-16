@@ -434,7 +434,7 @@ def test_a_failed_labelling_call_leaves_the_spans_unlabelled_not_asserted(db):
         async def label(self, record, *, answer_text):
             from parser.labeling_client import LabelingResult
             return LabelingResult(
-                labels={'brand_sentences': [], 'other_brands': [], 'retailers': []},
+                labels={'spans': [], 'other_brands': [], 'retailers': []},
                 error='boom',
             )
 
@@ -448,8 +448,10 @@ def test_a_failed_labelling_call_leaves_the_spans_unlabelled_not_asserted(db):
     from parser.extraction_postprocess import asserted_claims
     (row,) = outcomes(db)
     stored = json.loads(row['extraction'])
-    assert stored['brand_claims'][0].get('modality') is None
+    # No labels means no claims — never "claims nobody classified".
     assert asserted_claims(stored) == []
+    # And the answer's spans are on the row, so the gap is visible.
+    assert stored['spans']
 
 
 def test_the_domain_never_reaches_the_prompt():
