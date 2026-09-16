@@ -1,9 +1,9 @@
 {
   "row": 12,
+  "seed": 3,
   "query_code": "WIG_171",
   "platform": "chatgpt",
   "run_number": 2,
-  "seed": 3,
   "reviewed": true,
   "flagged_by_review": false,
   "answer": "(no answer text)",

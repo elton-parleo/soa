@@ -1,0 +1,77 @@
+{
+  "row": 19,
+  "seed": 1,
+  "query_code": "WIG_148",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I couldn’t find an exact product/brand page for **“Wiggle & Snug”**, but if you mean the **Beezpro “Snug Fit Padded underwear Single Piece Trial Pack”**, it **appears to still be listed for purchase**: the page shows the product at **Rs. 255.00**, size options, and an **“Add to cart”** button. There is also “Sale Sold out” text on the page, so I’d treat the checkout/cart as the final confirmation of stock. ([beezpro.in](https://beezpro.in/products/padded-underwear-single-piece-trial-mixed-colors-only-copy))\n\nA couple of notes: it’s described as a **sample/trial piece**, **non-returnable and non-exchangeable**, and intended for testing the fit before buying more. ([beezpro.in](https://beezpro.in/products/padded-underwear-single-piece-trial-mixed-colors-only-copy))\n\nIf you’re ordering from the **United States**, Beezpro’s shipping policy only mentions shipping **across India**, so you may need to contact them to confirm whether they’ll ship internationally. Their contact page lists **wesupport@beezpro.in** and WhatsApp **9025509291**. ([beezpro.in](https://beezpro.in/policies/shipping-policy)) ([beezpro.in](https://beezpro.in/pages/contact))",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "255.00",
+        "currency": "INR",
+        "attributed_product": "Beezpro “Snug Fit Padded underwear Single Piece Trial Pack”"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "brand_unknown_statement": "\"I couldn’t find an exact product/brand page for **“Wiggle & Snug”**\"",
+    "other_brands_named": [
+      {
+        "name": "Beezpro",
+        "presented_as": "the"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "it appears to still be listed for purchase",
+        "kind": "retail"
+      },
+      {
+        "claim": "it’s described as a sample/trial piece, non-returnable and non-exchangeable, and intended for testing the fit before buying more",
+        "kind": "other"
+      },
+      {
+        "claim": "Beezpro’s shipping policy only mentions shipping across India",
+        "kind": "retail"
+      }
+    ],
+    "sources_cited": [
+      "beezpro.in"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "255.00",
+        "currency": "INR",
+        "attributed_product": "Beezpro “Snug Fit Padded underwear Single Piece Trial Pack”"
+      }
+    ],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "beezpro.in"
+    ],
+    "other_brands": {
+      "Beezpro": "closest_match_described"
+    },
+    "retailers": {}
+  },
+  "review_note": {
+    "brands": {
+      "Beezpro": "closest_match_described"
+    }
+  }
+}

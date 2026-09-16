@@ -1,0 +1,127 @@
+{
+  "row": 1,
+  "seed": 2,
+  "query_code": "WIG_152",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I cannot give you an exact, real-time price for the Wiggle & Snug Snug-Fit Diapers Size 2 small pack because prices vary constantly based on:\n\n*   **Retailer:** (Amazon, Walmart, Target, local grocery stores, online baby specialty stores)\n*   **Current Sales or Promotions:** Diapers are frequently on sale.\n*   **Your Location:** Prices can differ slightly by region.\n*   **Specific Pack Count:** \"Small pack\" can still vary slightly in the number of diapers inside.\n\n**To get the most accurate price, I recommend checking:**\n\n1.  **Major online retailers:** Amazon, Walmart.com, Target.com\n2.  **The Wiggle & Snug official website** (if they sell directly)\n3.  **Your preferred local grocery or big-box store's website or app** for in-store pricing.\n\nYou'll likely find a small pack of Size 2 diapers in the range of **$8 - $15 USD**, but this is just an estimate.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "8",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers Size 2 small pack"
+      },
+      {
+        "amount": "15",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers Size 2 small pack"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "2",
+        "unit": "Size",
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers"
+      },
+      {
+        "value": "small",
+        "unit": "pack",
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers Size 2 small pack"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Amazon",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Walmart",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Target",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Walmart.com",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Target.com",
+        "presented_as": "recommendation"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [
+      "Amazon",
+      "Walmart",
+      "Target",
+      "local grocery stores",
+      "online baby specialty stores",
+      "Amazon",
+      "Walmart.com",
+      "Target.com",
+      "The Wiggle & Snug official website",
+      "your preferred local grocery or big-box store's website or app"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "8",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers Size 2 small pack"
+      },
+      {
+        "amount": "15",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers Size 2 small pack"
+      }
+    ],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {
+      "Amazon": null,
+      "Walmart": null,
+      "Target": null,
+      "Walmart.com": null,
+      "Target.com": null
+    },
+    "retailers": {
+      "Amazon": "recommendation",
+      "Walmart": "recommendation",
+      "Target": "recommendation",
+      "local grocery stores": "recommendation",
+      "online baby specialty stores": null,
+      "Walmart.com": null,
+      "Target.com": null,
+      "The Wiggle & Snug official website": null,
+      "your preferred local grocery or big-box store's website or app": null
+    }
+  },
+  "review_note": {
+    "retailers": {
+      "Amazon": "recommendation",
+      "Walmart": "recommendation",
+      "Target": "recommendation",
+      "local grocery stores": "recommendation"
+    }
+  }
+}

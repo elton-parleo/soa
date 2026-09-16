@@ -30,9 +30,13 @@ def test_every_label_is_one_of_a_fixed_list():
         'unknown_statement', 'assertion', 'disclaimer', 'instruction',
     ]
     assert sentence['modality']['enum'] == ['asserted', 'hedged', 'conditional']
+    # Five, not the four originally specified. The fifth exists because
+    # two reviewed rows could not be expressed without it: a shop listed
+    # as a brand, and the brand's own parent presented as its owner.
     assert schema['properties']['other_brands']['items']['properties'][
         'relation']['enum'] == [
-        'closest_match_described', 'spelling_guess', 'citation_only', 'comparison',
+        'closest_match_described', 'spelling_guess', 'citation_only',
+        'comparison', 'not_a_brand',
     ]
     assert schema['properties']['retailers']['items']['properties'][
         'role']['enum'] == ['recommendation', 'source', 'unavailable']
@@ -151,6 +155,18 @@ def test_labels_are_matched_on_the_sentence_however_it_is_spaced():
         ]},
     )
     assert record['brand_claims'][0]['modality'] == 'asserted'
+
+
+def test_a_name_labelled_not_a_brand_leaves_the_list():
+    record = pp.apply_labels(
+        {'other_brands_named': [{'name': 'Walmart.com'}, {'name': 'Huggies'}]},
+        {'other_brands': [
+            {'name': 'Walmart.com', 'relation': 'not_a_brand'},
+            {'name': 'Huggies', 'relation': 'comparison'},
+        ]},
+    )
+    assert [e['name'] for e in record['other_brands_named']] == ['Huggies']
+    assert any('not a brand: Walmart.com' in n for n in record['postprocess'])
 
 
 def test_a_retailer_labelled_unavailable_is_not_a_recommendation():

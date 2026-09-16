@@ -1,0 +1,41 @@
+{
+  "row": 26,
+  "seed": 2,
+  "query_code": "WIG_144",
+  "platform": "gemini",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "It appears that **Wiggle & Snug does not currently offer a member rewards program called 'Wiggle & Snug Member Rewards' with specific tiers.**\n\nI've checked their official website and common sources, and there is no mention of such a program or its tiers. Many companies offer newsletters for exclusive discounts or early access to sales, so signing up for their email list would be the best way to stay informed about any potential future loyalty programs or current promotions.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "\"Wiggle & Snug does not currently offer a member rewards program called 'Wiggle & Snug Member Rewards' with specific tiers.\"",
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": {
+    "unknown": null
+  }
+}

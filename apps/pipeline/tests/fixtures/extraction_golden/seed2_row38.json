@@ -1,0 +1,39 @@
+{
+  "row": 38,
+  "seed": 2,
+  "query_code": "WIG_145",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "For a 15 lb baby, you would typically buy **Wiggle & Snug Snug-Fit Diapers in Size 2**.\n\nSize 2 generally fits babies from around 12 to 18 lbs, making it a good fit for a 15 lb baby, allowing for a \"snug fit\" without being too tight and providing a little room for growth.\n\nWhile a Size 1 (usually 8-14 lbs) might still fit, it would be at the very top of the range and could be too snug or quickly outgrown, potentially leading to leaks.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

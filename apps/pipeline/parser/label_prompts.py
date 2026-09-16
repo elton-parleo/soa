@@ -34,8 +34,21 @@ settled on.
 
 BRAND_SENTENCE_KINDS = ('unknown_statement', 'assertion', 'disclaimer', 'instruction')
 MODALITIES = ('asserted', 'hedged', 'conditional')
+# Four of these were specified; `not_a_brand` is a fifth, added because
+# two reviewed rows could not be expressed without it. One answer named
+# "Wiggle", the UK sports retailer, as Wiggle & Snug's parent company —
+# the review's ruling is that this is an assertion ABOUT the brand, not
+# another brand. Another listed Amazon, Walmart, Target, Walmart.com and
+# Target.com as other brands; they are shops, and two of them are the
+# same shop twice.
+#
+# Without a value meaning "this name does not belong in this list", the
+# labeller has to pick one of the four and the name stays — and a
+# retailer sitting in other_brands is a misattribution waiting to be
+# found.
 OTHER_BRAND_RELATIONS = (
     'closest_match_described', 'spelling_guess', 'citation_only', 'comparison',
+    'not_a_brand',
 )
 RETAILER_ROLES = ('recommendation', 'source', 'unavailable')
 
@@ -124,6 +137,10 @@ it — including a brand the answer names in order to say it is NOT the \
 one being asked about.
       "Wiggle" the UK sports retailer, where the answer distinguishes it \
 from Wiggle & Snug.
+  "not_a_brand"   the name is not another brand at all: a shop ("Amazon", \
+"Walmart.com"), the brand's own website, or the brand's own parent \
+presented as its owner. A shop belongs in the retailer list and an \
+owner is a statement about the brand; neither is a rival.
 
 RETAILER MENTIONS — one `role` each.
 

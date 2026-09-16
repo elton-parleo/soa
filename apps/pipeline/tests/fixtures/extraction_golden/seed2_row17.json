@@ -1,0 +1,61 @@
+{
+  "row": 17,
+  "seed": 2,
+  "query_code": "WIG_140",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I haven't been able to find information on a specific, widely recognized diaper brand called \"Wiggle & Snug Snug-Fit Diapers\" in my knowledge base. This suggests it might be a very new, regional, store-specific, or perhaps even a fictional brand.\n\nBecause of this, I can't give you a specific review of that particular product.\n\nHowever, I can give you general advice on what to look for when choosing diapers for newborns, which you can apply to \"Wiggle & Snug\" or any other brand you're considering:\n\n**Key Considerations for Newborn Diapers:**\n\n1.  **Umbilical Cord Cut-Out:** Newborns have a healing umbilical stump. Many newborn-sized diapers feature a small cut-out or a dip in the front to avoid irritating it and allow it to air dry. This is a big plus.\n2.  **Softness:** Newborn skin is incredibly delicate. Look for diapers that feel very soft and gentle to the touch.\n3.  **Wetness Indicator:** A line on the outside of the diaper that changes color when wet is extremely helpful for new parents. It lets you know when to change the diaper without having to unfasten and check repeatedly.\n4.  **Good Fit:**\n    *   **Leg Cuffs:** They should be snug enough to prevent leaks around the thighs without leaving red marks.\n    *   **Waistband:** Should fit snugly but allow two fingers to slide underneath.\n    *   **Size:** Newborn sizes are usually for babies up to 10 lbs (4.5 kg), but fit varies by brand and baby's build. You might start with newborn and quickly move to size 1.\n5.  **Absorbency:** While newborns pee and poop frequently (meaning frequent changes), good absorbency is still important to prevent leaks and keep sensitive skin drier.\n6.  **Hypoallergenic/Fragrance-Free:** Many parents prefer diapers without added fragrances, lotions, or harsh chemicals for newborns to minimize the risk of skin irritation or allergies.\n7.  **Breathability:** Materials that allow air circulation can help prevent diaper rash.\n8.  **Trial and Error:** What works wonderfully for one baby might not for another. It's often recommended to buy small packs of a few different brands to see which fits your baby best, causes no irritation, and you find easy to use.\n\nIf you have purchased or are considering \"Wiggle & Snug Snug-Fit Diapers,\" I recommend checking for these features and perhaps reading any available customer reviews on the retailer's website if it's a store brand. Good luck!",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "10",
+        "unit": "lbs",
+        "attributed_product": "newborn sizes"
+      },
+      {
+        "value": "4.5",
+        "unit": "kg",
+        "attributed_product": "newborn sizes"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "\"I haven't been able to find information on a specific, widely recognized diaper brand called \"Wiggle & Snug Snug-Fit Diapers\" in my knowledge base.\"",
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "it might be a very new, regional, store-specific, or perhaps even a fictional brand",
+        "kind": "other"
+      },
+      {
+        "claim": "if it's a store brand",
+        "kind": "retail"
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": {
+    "unknown": "keep"
+  }
+}

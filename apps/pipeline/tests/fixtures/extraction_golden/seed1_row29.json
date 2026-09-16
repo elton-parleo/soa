@@ -1,0 +1,92 @@
+{
+  "row": 29,
+  "seed": 1,
+  "query_code": "WIG_171",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Wiggle & Snug is a private label brand primarily sold at **Woolworths** in Australia. The \"Member+\" program you're referring to is likely the **Everyday Extra** subscription offered by Woolworths.\n\nEveryday Extra doesn't provide a specific, reduced price *on the Wiggle & Snug Snug-Fit Overnight Diapers Size 3 itself*. Instead, Everyday Extra members receive:\n\n*   **10% off one shop at Woolworths per month** (up to a certain value).\n\nSo, if an Everyday Extra member purchases the Wiggle & Snug Snug-Fit Overnight Diapers Size 3 as part of their monthly 10% off shop, they would effectively pay **10% less than the standard listed price** for that product (and everything else in that shop).\n\nThe **standard price** for a pack of 28 Wiggle & Snug Snug-Fit Overnight Diapers Size 3 is typically around **$11.00 - $12.00 AUD**.\n\nTherefore, if a member used their 10% discount on an $11.00 pack, they would effectively pay **$9.90 AUD**.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "11.00",
+        "currency": "AUD",
+        "attributed_product": "a pack of 28 Wiggle & Snug Snug-Fit Overnight Diapers Size 3"
+      },
+      {
+        "amount": "12.00",
+        "currency": "AUD",
+        "attributed_product": "a pack of 28 Wiggle & Snug Snug-Fit Overnight Diapers Size 3"
+      },
+      {
+        "amount": "9.90",
+        "currency": "AUD",
+        "attributed_product": "an $11.00 pack"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 28,
+        "attributed_product": "a pack of 28 Wiggle & Snug Snug-Fit Overnight Diapers Size 3"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [
+      {
+        "amount": "10% less than the standard listed price",
+        "tier": "Everyday Extra members",
+        "attributed_product": "Wiggle & Snug Snug-Fit Overnight Diapers Size 3"
+      },
+      {
+        "amount": "9.90",
+        "tier": "Everyday Extra member",
+        "attributed_product": "an $11.00 pack"
+      }
+    ],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "11.00",
+        "currency": "AUD",
+        "attributed_product": "a pack of 28 Wiggle & Snug Snug-Fit Overnight Diapers Size 3"
+      },
+      {
+        "amount": "12.00",
+        "currency": "AUD",
+        "attributed_product": "a pack of 28 Wiggle & Snug Snug-Fit Overnight Diapers Size 3"
+      },
+      {
+        "amount": "9.90",
+        "currency": "AUD",
+        "attributed_product": "an $11.00 pack"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 28,
+        "attributed_product": "a pack of 28 Wiggle & Snug Snug-Fit Overnight Diapers Size 3"
+      }
+    ],
+    "member_prices": [
+      {
+        "amount": "9.90",
+        "tier": "Everyday Extra member",
+        "attributed_product": "an $11.00 pack"
+      }
+    ],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

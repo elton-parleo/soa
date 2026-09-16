@@ -1,0 +1,83 @@
+{
+  "row": 35,
+  "seed": 2,
+  "query_code": "WIG_152",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn’t verify an exact product named **“Wiggle & Snug Snug-Fit Diapers”** in current listings.\n\nIf you meant the **Huggies Snug & Dry Baby Diapers, Size 2 small pack — 38 count**, the current Walmart listing shows **$11.50** (**30.3¢ per diaper**). ([walmart.com](https://www.walmart.com/browse/shop-by-brand/baby/3734780_8278971?utm_source=openai))",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "11.50",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Baby Diapers, Size 2 small pack — 38 count"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 38,
+        "attributed_product": "Huggies Snug & Dry Baby Diapers, Size 2 small pack"
+      }
+    ],
+    "sizes": [
+      {
+        "value": "2",
+        "unit": "Size",
+        "attributed_product": "Huggies Snug & Dry Baby Diapers"
+      },
+      {
+        "value": "30.3",
+        "unit": "¢ per diaper",
+        "attributed_product": "Huggies Snug & Dry Baby Diapers, Size 2 small pack — 38 count"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t verify an exact product named “Wiggle & Snug Snug-Fit Diapers” in current listings.",
+    "other_brands_named": [
+      {
+        "name": "Huggies",
+        "presented_as": "closest_match"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "walmart.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "11.50",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Baby Diapers, Size 2 small pack — 38 count"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 38,
+        "attributed_product": "Huggies Snug & Dry Baby Diapers, Size 2 small pack"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "walmart.com"
+    ],
+    "other_brands": {
+      "Huggies": null
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

@@ -1,0 +1,43 @@
+{
+  "row": 5,
+  "seed": 1,
+  "query_code": "WIG_174",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "You earn **1 Member Rewards point per $1** spent on Wiggle & Snug products. ([deals.parleo.io](https://deals.parleo.io/merchants/wiggle-and-snug))",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [
+      {
+        "value": "1",
+        "per_dollar": true,
+        "program": "Member Rewards"
+      }
+    ],
+    "brand_mentioned": true,
+    "sources_cited": [
+      "deals.parleo.io"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "deals.parleo.io"
+    ],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

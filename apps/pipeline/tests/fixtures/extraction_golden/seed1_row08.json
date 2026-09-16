@@ -1,0 +1,37 @@
+{
+  "row": 8,
+  "seed": 1,
+  "query_code": "WIG_141",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I haven't been able to find any information about a diaper brand specifically called **\"Wiggle & Snug Snug-Fit Overnight Diapers\"** in my knowledge base. It's possible it's a very new brand, a regional brand, a store-specific brand, or perhaps a slight misremembering of a name.\n\nTherefore, I can't directly tell you if \"Wiggle & Snug\" is a better choice for nighttime leaks compared to other well-known brands.\n\nHowever, I can give you general advice on **what makes an overnight diaper effective for preventing leaks**, which can help you evaluate any brand, including the one you're asking about if you find more information:\n\n**Key Features of a Good Overnight Diaper for Leak Protection:**\n\n1.  **Superior Absorbency:**\n    *   **Extra Absorbent Core:** Overnight diapers typically have more absorbent material, often with super-absorbent polymers (SAPs) designed to hold a large volume of liquid over an extended period (10-12+ hours).\n    *   **Even Distribution:** The absorbency should be distributed well across the diaper to prevent saturation in one spot and subsequent leaks.\n\n2.  **Snug (but Comfortable) Fit:**\n    *   **Stretchy Waistbands & Leg Cuffs:** These help create a secure seal around the waist and thighs without being too tight, accommodating movement during sleep and preventing gaps where leaks can occur.\n    *   **High Back:** A higher rise in the back can be particularly helpful for back sleepers or babies who produce a lot of urine.\n    *   **Double Leg Gathers/Leak Guards:** These extra barriers around the legs are crucial for catching any liquid that might escape the primary absorbent core.\n\n3.  **Softness and Breathability:**\n    *   While not directly related to leaks, a soft, breathable outer layer is important for your baby's comfort and to prevent skin irritation during extended wear.\n\n4.  **Wetness Indicator (Helpful, but not leak-proof):**\n    *   Many overnight diapers include a line that changes color to indicate wetness, which can be useful for knowing when to change without fully undressing the baby.\n\n**Tips for Preventing Nighttime Leaks (Regardless of Diaper Brand):**\n\n*   **Size Up:** Often, going up one size for an overnight diaper can provide extra absorbency and a bit more room, which can prevent leaks, especially for heavy wetters.\n*   **Change Right Before Bed:** Ensure your baby goes to bed in a fresh, dry diaper.\n*   **Consider a Diaper Booster Pad:** These are thin, extra absorbent pads you can place inside any diaper for added protection.\n*   **Check the Fit:** Make sure the diaper is snug around the waist and legs, and the ruffles are pulled out and not tucked in.\n\nIf you can provide more details about \"Wiggle & Snug Snug-Fit Overnight Diapers\" – like where you saw them, the manufacturer, or if there's another name associated with them – I might be able to find more specific information for you!",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "brand_unknown_statement": "\"I haven't been able to find any information about a diaper brand specifically called **\"Wiggle & Snug Snug-Fit Overnight Diapers\"** in my knowledge base.\"",
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

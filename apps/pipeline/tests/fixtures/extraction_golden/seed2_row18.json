@@ -1,0 +1,39 @@
+{
+  "row": 18,
+  "seed": 2,
+  "query_code": "WIG_139",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn’t reliably verify a current store/brand listing for **“Wiggle & Snug”** from public search results, so I don’t want to guess.\n\nIf you send me the website/product page you’re looking at, I can check quickly. As a rule, don’t assume it’s more than diapers unless their shop/category page specifically lists **wipes** and **diaper cream**.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t reliably verify a current store/brand listing for “Wiggle & Snug” from public search results, so I don’t want to guess.",
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

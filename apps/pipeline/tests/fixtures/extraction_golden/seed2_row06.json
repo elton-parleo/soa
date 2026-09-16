@@ -1,0 +1,39 @@
+{
+  "row": 6,
+  "seed": 2,
+  "query_code": "WIG_146",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "It's frustrating when babies leak at night, especially with overnight diapers! To get the best size for Wiggle & Snug Snug-Fit Overnight Diapers, you'll need two key pieces of information:\n\n1.  **Your baby's current weight.**\n2.  **The specific Wiggle & Snug size chart.** (Diaper sizes can vary slightly between brands.)\n\nHowever, since your baby is experiencing leaks, here's a general strategy and some common reasons for leaks that can help you decide:\n\n**1. Start with Your Baby's Current Weight & The Size Chart:**\n\n*   **Always check the weight range on the Wiggle & Snug package or website.** This is the primary indicator.\n\n**2. Analyze WHY Your Baby Might Be Leaking:**\n\nThe way your baby is leaking will guide your decision:\n\n*   **Scenario A: Leaking because the diaper is too small (most common for overnight leaks):**\n    *   **Signs:** Red marks on thighs or waist, the diaper looks overly stretched or tight, wetness seeps *through* the material (not just around gaps), or the diaper feels completely saturated and heavy very quickly.\n    *   **Solution:** **Go up a size.** Even if your baby is technically within the weight range of their current size, if they are at the *top end* of that range or are a heavy wetter, moving up will provide more absorbency and a larger fit. A bigger diaper often means more absorbent material and a larger surface area to distribute wetness.\n\n*   **Scenario B: Leaking because the diaper is too big or poorly fitted:**\n    *   **Signs:** Gaps around the legs or waist, the diaper sags significantly, or wetness is escaping *around the edges* (like the leg cuffs) without the diaper being fully saturated.\n    *   **Solution:** Ensure you're getting a snug fit around the legs and waist. If you're currently in a larger size and these are the symptoms, you *might* need to go down a size (though less common for overnight leaks where capacity is key). More likely, it's a fit issue that can be solved by pulling the leg ruffles out and ensuring the tabs are secure.\n\n**General Rule of Thumb for Overnight Leaks:**\n\nIf your baby is consistently leaking at night, especially from saturation or \"overflow,\" the **first thing to try is going up to the next size.**\n\n*   Even if your baby is technically still within the weight range of their current size (e.g., they weigh 15 lbs and the Size 3 goes up to 18 lbs), if they're a heavy wetter at night, a **Size 4** (which typically starts around 16-22 lbs) will offer more absorbency and a larger fit, which can significantly reduce leaks.\n\n**Before buying a whole new pack:**\n\n*   **Double-check the fit of the current diaper:** Make sure the leg ruffles are pulled out and not tucked in, and that the tabs are secured firmly but comfortably around the waist.\n*   **Consider a diaper booster/doubler:** These thin, absorbent pads can be placed inside any diaper to add extra absorbency, especially in the front for boys or the middle for girls. This can be a great temporary solution before committing to a larger size.\n*   **Limit liquids right before bed (if appropriate for baby's age and feeding schedule).**\n\n**In summary, if your baby is leaking at night with Snug-Fit Overnight Diapers, your best bet is usually to try the next size up, even if they are still within the weight range of their current size, to get increased absorbency and a better, more secure fit for heavy wetters.**",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

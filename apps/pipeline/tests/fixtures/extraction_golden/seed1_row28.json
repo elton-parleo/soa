@@ -1,0 +1,59 @@
+{
+  "row": 28,
+  "seed": 1,
+  "query_code": "WIG_153",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn’t find an exact product named **“Wiggle & Snug Snug-Fit Diapers Size 2 Big Pack.”**  \n\nIf you meant **Huggies Snug & Dry Diapers, Size 2, Big Pack, 96 count**, the listed cost is **$35.08**. ([readysupply.com](https://readysupply.com/product/huggies-snug-and-dry-diapers-size-2-big-pack-96-count/))",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "35.08",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Diapers, Size 2, Big Pack, 96 count"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 96,
+        "attributed_product": "Huggies Snug & Dry Diapers, Size 2, Big Pack, 96 count"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [
+      "readysupply.com"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "35.08",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Diapers, Size 2, Big Pack, 96 count"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 96,
+        "attributed_product": "Huggies Snug & Dry Diapers, Size 2, Big Pack, 96 count"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "readysupply.com"
+    ],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

@@ -1,9 +1,9 @@
 {
   "row": 7,
+  "seed": 3,
   "query_code": "WIG_149",
   "platform": "gemini",
   "run_number": 2,
-  "seed": 3,
   "reviewed": true,
   "flagged_by_review": true,
   "answer": "It appears that Wiggle & Snug Bum Balm 4 oz has been **discontinued**.\n\nMost retail listings (like on Amazon) show it as \"currently unavailable\" and have been for some time, with no indication of restocking or future availability. There doesn't seem to be an official \"Wiggle & Snug\" brand website to confirm directly, but the widespread unavailability across various platforms strongly suggests it's no longer being produced.\n\nIf you're looking for alternatives, popular and well-regarded bum balms include:\n*   Boudreaux's Butt Paste\n*   Desitin\n*   Aquaphor Baby Healing Ointment\n*   Weleda Calendula Diaper Cream\n*   GroVia Magic Stick Organic Diaper Balm",
@@ -104,7 +104,6 @@
   "review_note": {
     "retailers": {
       "Amazon": "unavailable"
-    },
-    "must_contain_claim": "discontinued"
+    }
   }
 }

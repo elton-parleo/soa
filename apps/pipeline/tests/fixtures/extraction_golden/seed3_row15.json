@@ -1,9 +1,9 @@
 {
   "row": 15,
+  "seed": 3,
   "query_code": "WIG_174",
   "platform": "gemini",
   "run_number": 3,
-  "seed": 3,
   "reviewed": true,
   "flagged_by_review": true,
   "answer": "You earn **1 Member Rewards point per dollar** spent on Wiggle & Snug products.\n\nThis is because Wiggle & Snug is a Wiggle own-brand, and Wiggle typically awards 1 point per £1 / €1 / $1 spent on all Wiggle own-brand items.",
@@ -59,13 +59,13 @@
     "member_prices": [],
     "sources_cited": [],
     "other_brands": {
-      "Wiggle": null
+      "Wiggle": "comparison"
     },
     "retailers": {}
   },
   "review_note": {
-    "modality": {
-      "own-brand": "asserted"
+    "brands": {
+      "Wiggle": "comparison"
     }
   }
 }

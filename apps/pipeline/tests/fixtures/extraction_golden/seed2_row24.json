@@ -1,0 +1,39 @@
+{
+  "row": 24,
+  "seed": 2,
+  "query_code": "WIG_138",
+  "platform": "gemini",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Based on the name \"Wiggle & Snug Snug-Fit Diapers,\" the key differentiators from other *everyday* diapers would likely revolve around **enhanced fit, comfort, and mobility**, often leading to superior leak protection.\n\nHere's a breakdown of what makes them different:\n\n1.  **Superior, Adaptive Fit (The \"Snug-Fit\" Core):**\n    *   **Contoured Design:** Unlike more rectangular, basic diapers, Snug-Fit diapers are likely designed to more closely follow a baby's natural body shape, especially around the hips, bottom, and thighs.\n    *   **360-Degree Elastic Waistband:** Many basic diapers have elastic only at the back. A \"Snug-Fit\" diaper would likely feature elastic that goes all the way around the waist, providing a gentle, consistent hold that adapts as the baby moves, sits, or stands.\n    *   **Flexible Side Panels & Tabs:** The side panels and closure tabs are probably made from super-stretchy, soft materials that move with the baby's body without digging in or creating gaps.\n    *   **Less Bulk:** A truly snug fit often means the diaper isn't overly bulky, especially between the legs, allowing for more natural movement.\n\n2.  **Enhanced Comfort:**\n    *   **Softer Materials:** \"Snug\" also implies comfort. These diapers would likely use ultra-soft, breathable materials on both the inner and outer layers to be gentle on sensitive skin and reduce irritation.\n    *   **Breathability:** Advanced materials would allow for better airflow, reducing heat and humidity inside the diaper, which can prevent rashes.\n    *   **Less Chafing/Red Marks:** A better, more adaptive fit means less friction and pressure points that can cause red marks or chafing, especially around the leg cuffs and waist.\n\n3.  **Superior Leak Protection:**\n    *   **Minimized Gaps:** The primary benefit of a snug fit is that it minimizes gaps around the legs and waist where leaks and blowouts typically occur. The diaper moves *with* the baby, maintaining a seal even during active play.\n    *   **Advanced Leg Cuffs:** Expect features like double leg cuffs or exceptionally soft, stretchy cuffs that hug the thighs without being restrictive.\n\n4.  **Improved Mobility:**\n    *   Because the diaper fits like a second skin and moves with the baby, it won't bunch up, sag, or restrict a baby's ability to crawl, walk, run, or play comfortably. This is particularly important for active \"wigglers.\"\n\n5.  **Advanced Absorbency (Often Paired with Premium Fit):**\n    *   While not explicitly stated in \"Snug-Fit,\" premium diapers focusing on fit often also include highly efficient, thin absorbent cores that pull wetness away quickly and keep the diaper feeling dry, contributing to both comfort and leak protection without adding bulk.\n\n**In essence, while everyday diapers focus on basic containment and absorbency at an accessible price point, Wiggle & Snug Snug-Fit Diapers aim to provide a more premium experience by prioritizing:**\n\n*   **A customized, body-hugging fit.**\n*   **Maximum comfort for the baby.**\n*   **Exceptional leak security, even for active babies.**\n*   **Unrestricted movement for playtime and development.**",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

@@ -173,11 +173,45 @@ SIZE_UNITS = {
 }
 
 
+# Who a measurement can be ABOUT and still not be a product size. A
+# weight in kilograms is a product size when it is a tub and a baby's
+# when it is a baby, and the unit cannot tell them apart — "4.5 kg"
+# attributed to "newborn sizes" is a size chart.
+#
+# Matched as "what is left after removing these words", never as "does
+# the attribution contain one": "Baby Bum Balm" is a product whose name
+# starts with the word baby, and a rule that dropped it would lose a real
+# size to catch a fake one.
+NON_PRODUCT_WORDS = {
+    'a', 'an', 'the', 'your', 'my', 'for', 'of', 'up', 'to', 'and', 'or',
+    'baby', 'babies', 'newborn', 'newborns', 'infant', 'infants',
+    'toddler', 'toddlers', 'child', 'children', 'kid', 'kids',
+    'size', 'sizes', 'range', 'ranges', 'weight', 'weights', 'chart',
+}
+
+
+def names_a_product(attributed) -> bool:
+    """Whether the attribution names a thing that is sold, rather than a
+    person or a size chart. An empty attribution counts: an answer about
+    one product that says "it is 4 oz" has attributed that by context."""
+    words = set(_flat(attributed).split())
+    if not words:
+        return True
+    # A bare number is not a product noun either: "weight range for Size
+    # 3" leaves nothing but the 3, and a size chart is not a product.
+    return any(
+        word not in NON_PRODUCT_WORDS and not word.isdigit()
+        for word in words
+    )
+
+
 def is_product_size(entry) -> bool:
     if not isinstance(entry, dict):
         return False
     unit = _flat(entry.get('unit')).strip()
-    return bool(unit) and unit in SIZE_UNITS
+    if not unit or unit not in SIZE_UNITS:
+        return False
+    return names_a_product(entry.get('attributed_product'))
 
 
 # ─── Hygiene ───────────────────────────────────────────────────────────────
@@ -354,15 +388,24 @@ def normalize(record: dict, *, answer_text, brand, brand_domain=None) -> dict:
     # suggestion, and counting it twice would turn a cited answer into an
     # unsourced availability claim.
     sources = {_domain_root(d) for d in record.get('sources_cited') or []}
-    retailers, demoted = [], []
+    mentioned, demoted = [], []
     for retailer in record.get('recommended_retailers') or []:
         if not retailer:
             continue
         if _domain_root(retailer) in sources or _flat(retailer).strip() in sources:
+            # A retailer a price came FROM is a source. Recorded with
+            # that role rather than deleted: the row should say what
+            # every retailer the answer named was, and a name that
+            # vanishes here is a name the labelling pass never sees and
+            # nobody can check afterwards.
             demoted.append(str(retailer))
+            mentioned.append({'name': retailer, 'role': 'source'})
             continue
-        retailers.append(retailer)
-    record['recommended_retailers'] = _dedupe(retailers, _flat)
+        mentioned.append({'name': retailer, 'role': None})
+    record['retailer_mentions'] = _dedupe(mentioned, lambda m: _flat(m['name']))
+    record['recommended_retailers'] = [
+        m['name'] for m in record['retailer_mentions'] if m['role'] is None
+    ]
     if demoted:
         notes.append('retailers that were sources: ' + ', '.join(demoted))
 
@@ -497,9 +540,19 @@ def apply_labels(record: dict, labels: dict) -> dict:
         for item in labels.get('other_brands') or []
         if isinstance(item, dict) and item.get('name')
     }
+    kept = []
     for entry in record.get('other_brands_named') or []:
-        if isinstance(entry, dict) and entry.get('name'):
-            entry['relation'] = relations.get(_flat(entry['name']))
+        if not isinstance(entry, dict) or not entry.get('name'):
+            continue
+        entry['relation'] = relations.get(_flat(entry['name']))
+        if entry['relation'] == 'not_a_brand':
+            # A shop, the brand's own site, or its parent. Recorded in
+            # the note and out of the list: a retailer sitting in
+            # other_brands is a misattribution waiting to be found.
+            notes.append(f"not a brand: {entry['name']}")
+            continue
+        kept.append(entry)
+    record['other_brands_named'] = kept
 
     # ── retailers ─────────────────────────────────────────────────────
     roles = {
@@ -507,9 +560,16 @@ def apply_labels(record: dict, labels: dict) -> dict:
         for item in labels.get('retailers') or []
         if isinstance(item, dict) and item.get('name')
     }
+    # Labels for the ones still unlabelled; a role the deterministic pass
+    # already established — a retailer that was demonstrably a source —
+    # is not up for relabelling.
+    mentions = record.get('retailer_mentions')
+    if mentions is None:
+        mentions = [{'name': name, 'role': None}
+                    for name in record.get('recommended_retailers') or []]
     record['retailer_mentions'] = [
-        {'name': name, 'role': roles.get(_flat(name))}
-        for name in record.get('recommended_retailers') or []
+        {'name': m['name'], 'role': m.get('role') or roles.get(_flat(m['name']))}
+        for m in mentions
     ]
     # The old flat list keeps only what the labeller called a
     # recommendation. "Amazon listings show it currently unavailable" is

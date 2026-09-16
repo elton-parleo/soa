@@ -1,0 +1,80 @@
+{
+  "row": 4,
+  "seed": 2,
+  "query_code": "WIG_173",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "For Member+ members (who are typically new subscribers signing up for a plan), the Wiggle & Snug Snug-Fit Trial Pack itself is advertised as **FREE**.\n\nHowever, members **pay for the shipping**, which is usually around **£2.99** (this can vary slightly, so it's always good to check the current offer on their website).\n\nIt's important to note that taking the trial pack typically enrolls you in their subscription service, which you would then manage or cancel if you don't wish to continue.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "2.99",
+        "currency": "GBP",
+        "attributed_product": "shipping"
+      },
+      {
+        "amount": "2.99",
+        "currency": "GBP",
+        "attributed_product": "the shipping"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [
+      {
+        "amount": "FREE",
+        "tier": "Member+",
+        "attributed_product": "the Wiggle & Snug Snug-Fit Trial Pack"
+      }
+    ],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [
+      "Member+"
+    ],
+    "brand_claims": [
+      {
+        "claim": "For Member+ members (who are typically new subscribers signing up for a plan), the Wiggle & Snug Snug-Fit Trial Pack itself is advertised as FREE.",
+        "kind": "other"
+      },
+      {
+        "claim": "taking the trial pack typically enrolls you in their subscription service",
+        "kind": "other"
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "2.99",
+        "currency": "GBP",
+        "attributed_product": "shipping"
+      },
+      {
+        "amount": "2.99",
+        "currency": "GBP",
+        "attributed_product": "the shipping"
+      }
+    ],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": {
+    "members": []
+  }
+}

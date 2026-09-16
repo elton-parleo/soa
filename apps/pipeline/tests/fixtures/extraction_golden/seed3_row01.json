@@ -1,9 +1,9 @@
 {
   "row": 1,
+  "seed": 3,
   "query_code": "WIG_162",
   "platform": "chatgpt",
   "run_number": 3,
-  "seed": 3,
   "reviewed": true,
   "flagged_by_review": true,
   "answer": "I couldn’t verify a product with the exact name **“Wiggle & Snug Snug-Fit Overnight Diapers Size 3.”**  \n\nIf you mean the closest matching Target/up&up listing I found — **Disposable Overnight Diapers Giant Pack, Size 3, 66ct** — it costs **$15.79**, or about **$0.24 per diaper**. ([registry.thebump.com](https://registry.thebump.com/krystal-diaz-ernesto-jimenez-january-2025-ca/68167788))",
@@ -65,7 +65,7 @@
     "retailers": {}
   },
   "review_note": {
-    "other_brands": {
+    "brands": {
       "Target/up&up": "closest_match_described"
     }
   }

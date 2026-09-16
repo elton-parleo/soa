@@ -1,0 +1,64 @@
+{
+  "row": 33,
+  "seed": 2,
+  "query_code": "WIG_138",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn’t verify an official product page for **“Wiggle & Snug Snug-Fit Diapers”** by that exact name, but if you’re describing a snug-fit everyday diaper line, the main difference is usually the **fit-first design**: it’s made to stay secure while a baby wiggles, crawls, rolls, or sleeps—rather than just offering basic absorbency.\n\nWhat typically sets them apart from standard everyday diapers:\n\n- **Snug, flexible fit:** Stretchy sides/waist help the diaper move with the baby and reduce gaps at the waist and legs.\n- **Better leak/blowout control:** A closer fit helps keep messes contained; major diaper brands also emphasize leg cuffs, absorbent cores, and snug waist/leg fit as key leak-prevention features. ([support.pampers.com](https://support.pampers.com/hc/en-us/articles/21678052813597-How-can-I-prevent-diaper-leakage-and-protect-my-baby-s-skin?utm_source=openai))\n- **Everyday comfort:** Softer materials and flexible panels are meant for all-day wear, not just overnight or special-use protection.\n- **Less sagging/bulk:** Some modern “snug-fit” diapers use absorbent channels or thinner cores to keep the diaper from drooping as it fills. Honest, for example, markets channel technology and flexible stretch wings as part of its leak-protection system. ([honest.com](https://honest.com/products/honest-clean-conscious-diaper%C2%AE-turtle-time-size-1?utm_source=openai))\n- **Designed for active babies:** The key idea is protection that keeps up with movement—especially once babies start crawling or walking. Huggies notes that active diapers should fit extra-snug at the legs and waist to help prevent leaks. ([huggies.com](https://www.huggies.com/en-ca/resources/parenting/everyday-diaper-tips/different-types-of-diapers-you-will-need-for-your-baby?utm_source=openai))\n\n**In short:** Wiggle & Snug Snug-Fit Diapers would likely differ from ordinary everyday diapers by prioritizing a **secure, movement-friendly fit**—helping prevent leaks without feeling tight or uncomfortable.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "“I couldn’t verify an official product page for **“Wiggle & Snug Snug-Fit Diapers”** by that exact name”",
+    "other_brands_named": [
+      {
+        "name": "Pampers",
+        "presented_as": "source"
+      },
+      {
+        "name": "Honest",
+        "presented_as": "source"
+      },
+      {
+        "name": "Huggies",
+        "presented_as": "source"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "support.pampers.com",
+      "honest.com",
+      "huggies.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "support.pampers.com",
+      "honest.com",
+      "huggies.com"
+    ],
+    "other_brands": {
+      "Pampers": null,
+      "Honest": null,
+      "Huggies": null
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

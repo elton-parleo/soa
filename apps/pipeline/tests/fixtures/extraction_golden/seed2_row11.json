@@ -1,0 +1,143 @@
+{
+  "row": 11,
+  "seed": 2,
+  "query_code": "WIG_162",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I couldn’t find an exact product called **“Wiggle & Snug Snug-Fit Overnight Diapers Size 3.”** The closest match I found is **Huggies Overnites Nighttime Diapers, Size 3**, which uses a **SnugFit waistband**.\n\nCurrent prices I found:\n\n- **Walmart:** **$26.19** for **24 ct** — about **$1.09/diaper**. ([walmart.com](https://www.walmart.com/ip/579943386?classType=VARIANT))  \n- **Walmart:** **$37.99** for **66 ct** — about **$0.58/diaper**. ([walmart.com](https://www.walmart.com/ip/579943386?classType=VARIANT))  \n- **Target:** Huggies Overnites Size 3 is listed as **132 ct**, with the product family priced **$11.29–$52.99** depending on size/count. ([target.com](https://www.target.com/p/-/A-85971869))\n\nIf you meant a different retailer’s “Wiggle & Snug” item, send me the store name or a link and I’ll check that exact price.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "26.19",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Nighttime Diapers, Size 3, 24 ct"
+      },
+      {
+        "amount": "37.99",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Nighttime Diapers, Size 3, 66 ct"
+      },
+      {
+        "amount": "11.29",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Size 3, product family"
+      },
+      {
+        "amount": "52.99",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Size 3, product family"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 24,
+        "attributed_product": "Huggies Overnites Nighttime Diapers, Size 3"
+      },
+      {
+        "value": 66,
+        "attributed_product": "Huggies Overnites Nighttime Diapers, Size 3"
+      },
+      {
+        "value": 132,
+        "attributed_product": "Huggies Overnites Size 3"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t find an exact product called “Wiggle & Snug Snug-Fit Overnight Diapers Size 3.”",
+    "other_brands_named": [
+      {
+        "name": "Huggies",
+        "presented_as": "closest_match"
+      },
+      {
+        "name": "Walmart",
+        "presented_as": "source"
+      },
+      {
+        "name": "Target",
+        "presented_as": "source"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "The closest match I found is Huggies Overnites Nighttime Diapers, Size 3, which uses a SnugFit waistband.",
+        "kind": "other"
+      }
+    ],
+    "sources_cited": [
+      "walmart.com",
+      "target.com"
+    ],
+    "recommended_retailers": [
+      "Walmart",
+      "Target"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "26.19",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Nighttime Diapers, Size 3, 24 ct"
+      },
+      {
+        "amount": "37.99",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Nighttime Diapers, Size 3, 66 ct"
+      },
+      {
+        "amount": "11.29",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Size 3, product family"
+      },
+      {
+        "amount": "52.99",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Size 3, product family"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 24,
+        "attributed_product": "Huggies Overnites Nighttime Diapers, Size 3"
+      },
+      {
+        "value": 66,
+        "attributed_product": "Huggies Overnites Nighttime Diapers, Size 3"
+      },
+      {
+        "value": 132,
+        "attributed_product": "Huggies Overnites Size 3"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "walmart.com",
+      "target.com"
+    ],
+    "other_brands": {
+      "Huggies": null,
+      "Walmart": null,
+      "Target": null
+    },
+    "retailers": {
+      "Walmart": "source",
+      "Target": "source"
+    }
+  },
+  "review_note": {
+    "retailers": "all_source"
+  }
+}

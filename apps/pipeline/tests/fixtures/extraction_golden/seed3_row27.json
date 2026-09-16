@@ -1,9 +1,9 @@
 {
   "row": 27,
+  "seed": 3,
   "query_code": "WIG_149",
   "platform": "chatgpt",
   "run_number": 2,
-  "seed": 3,
   "reviewed": true,
   "flagged_by_review": true,
   "answer": "As of **September 15, 2026**, I don’t see evidence that **Baby Bum Balm 4 oz** has been discontinued. The product appears to still be available under the **Amallow** brand: Amallow’s official product page lists **Baby Bum Balm** with a **4 oz** jar, a price, “Add to cart,” and “100+ bought this month.” ([amallow.com](https://amallow.com/products/baby-bum-balm?utm_source=openai)) It also appears on Amallow’s “All Products” page with an **Add to cart** option. ([amallow.com](https://amallow.com/collections/all-products?utm_source=openai))\n\nI **did not find a reliable current product page specifically for “Wiggle & Snug Bum Balm 4 oz.”** The closest/current matching product listings I found are for **“Amallow Baby Bum Balm … 4 oz”**—including Instacart and baby-registry pages pointing to Amazon listings. ([instacart.com](https://www.instacart.com/products/118315679-amallow-baby-bum-balm-4-oz?utm_source=openai))\n\n**Bottom line:** It looks **still available, not discontinued**—but likely as **Amallow Baby Bum Balm 4 oz**, not “Wiggle & Snug.” If you’re seeing “Wiggle & Snug” on an old receipt/listing, it may be a retailer/store label, a mistaken listing title, or an older third-party listing.",
@@ -123,6 +123,6 @@
     "retailers": {}
   },
   "review_note": {
-    "unknown_is": "unknown_statement"
+    "unknown": "keep"
   }
 }
