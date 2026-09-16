@@ -1,0 +1,57 @@
+{
+  "row": 18,
+  "seed": 4,
+  "query_code": "WIG_147",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I **couldn’t verify that Wiggle & Snug offers a subscription for “Snug-Fit Diapers.”** I searched for the exact brand/product terms, but the results I found were for other diaper brands/retailers with subscription options, not an official Wiggle & Snug Snug-Fit Diapers page. ([carthealth.com](https://carthealth.com/products/huggies-snug-dry-diapers?utm_source=openai))\n\nIf you send me the Wiggle & Snug product page link, I can check it directly and tell you whether there’s a subscription or “subscribe & save” option.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t verify that Wiggle & Snug offers a subscription for “Snug-Fit Diapers.”",
+    "other_brands_named": [
+      {
+        "name": "Huggies",
+        "presented_as": "source",
+        "relation": "citation_only"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "carthealth.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "carthealth.com"
+    ],
+    "other_brands": {
+      "Huggies": "citation_only"
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

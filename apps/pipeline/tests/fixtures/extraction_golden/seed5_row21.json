@@ -1,0 +1,94 @@
+{
+  "row": 21,
+  "seed": 5,
+  "query_code": "WIG_154",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "The **Size 3 small pack** costs **$9.99** — that’s **$0.40 per diaper** for the 25-count pack. ([target.com](https://www.target.com/p/-/A-94793999?utm_source=openai))",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "9.99",
+        "currency": "USD",
+        "attributed_product": "Size 3 small pack"
+      },
+      {
+        "amount": "0.40",
+        "currency": "USD",
+        "attributed_product": "the 25-count pack"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 25,
+        "attributed_product": "the 25-count pack"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "target.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": false,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "transcribed_unknown_statement": null,
+    "spans": [
+      {
+        "id": 1,
+        "text": "The **Size 3 small pack** costs **$9.99** — that’s **$0.40 per diaper** for the 25-count pack. ([target.com](https://www.target.com/p/-/A-94793999?utm_source=openai))"
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "The **Size 3 small pack** costs **$9.99** — that’s **$0.40 per diaper** for the 25-count pack. ([target.com](https://www.target.com/p/-/A-94793999?utm_source=openai))",
+        "kind": "none",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": false,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "9.99",
+        "currency": "USD",
+        "attributed_product": "Size 3 small pack"
+      },
+      {
+        "amount": "0.40",
+        "currency": "USD",
+        "attributed_product": "the 25-count pack"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 25,
+        "attributed_product": "the 25-count pack"
+      }
+    ],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [
+      "target.com"
+    ],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

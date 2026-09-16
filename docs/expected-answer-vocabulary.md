@@ -293,6 +293,106 @@ both usually do. An answer that says "I cannot verify Wiggle & Snug, but
 here is Huggies Snug & Dry" leaves the reader holding Huggies. The
 admission is a mitigation, not the result.
 
+#### The extractor is frozen
+
+Five hand-checks, five rounds of corrections, and a golden set of 200
+reviewed rows. **No further extractor change without a golden regression
+showing why** — the eval is the thing that says a change is needed, and
+the gate is the thing that says it worked.
+
+```
+cd apps/pipeline && python3 scripts/eval_extraction_golden.py --idempotency --gate
+```
+
+The settled division of labour:
+
+| | decides |
+| --- | --- |
+| `span_segmenter` | where a span starts and stops. Verbatim, numbered, covering the answer. |
+| the transcriber | what quantities the answer states — prices, sizes, counts, codes, names. |
+| the labeller | what each span **is**: `kind` × `modality`, `relation`, `role`, from closed enums, by span id. |
+| the post-processor | everything mechanical, and every fail-safe. |
+
+**Three fail-safes, one principle.** Where the evidence is missing,
+disputed, or malformed, the pipeline takes the reading that cannot
+manufacture a finding:
+
+- an **unlabelled** span is not a claim;
+- a **disputed** span — lexicon and labeller disagreeing on modality —
+  counts as hedged, and lands in `hedged_unsourced` rather than
+  `fabricated`;
+- a **malformed** code is not a code.
+
+All three are still surfaced in `needs_review`. Defaulting decides only
+what the classifier does while a human has not looked yet. The costs are
+not symmetric: scoring a hedge as an assertion puts a false accusation in
+a report; scoring an assertion as a hedge leaves a true one in a queue.
+
+#### The model transcribes spans; the code classifies them
+
+Two hand-checks of forty stored answers each: ten disagreements, then
+eight. The second set is what settled the division of labour, because
+four of the eight were the model applying a rule the prompt had spelled
+out — and applying it differently to two answers of the same shape **in
+the same run**. "It's possible that…" went in as a claim on one; "It
+might be a fictional product" was correctly left out of another.
+
+So every judgement moved into `parser/extraction_postprocess.py`, which
+runs on every extraction before it is stored:
+
+| Decision | Rule |
+| --- | --- |
+| **Hedged?** | The quoted sentence carries a hedge marker (*possible, likely, might, could, perhaps, appears, seems, if it*, …). A hedged claim is recorded and is **not** a claim — the classifier ignores it for `fabricated`. |
+| **Cannot-find?** | The quoted sentence matches the can't-find lexicon and is **not** a disclaimer about our own reach (*real-time, in front of me, knowledge cutoff*). |
+| **An assertion filed as a cannot-find** | Moved into `brand_claims` with a kind inferred from its words. "Wiggle & Snug does not currently offer a member rewards program" is a false claim about the brand, not an admission of ignorance. |
+| **Currency** | A table: `$`→USD, `£`→GBP, `€`→EUR, `Rs.`/`₹`→INR. Anything it cannot read makes the run **unscoreable** — never a raw string. |
+| **`brand_mentioned`** | `ea.names_brand`, the same function the generation guard uses. |
+| **`closest_match`** | Kept only if the answer attributed something to that brand — a price, a claim or a citation. A bare alternate-spelling guess describes nothing and is dropped. |
+| **Hygiene** | Dedupe; a retailer a price came from is a source, not a suggestion; the brand and its own domain are never "other brands". |
+
+`may` is the one marker written as a rule rather than a word: it is also
+a month, so it hedges only when not followed by a number. "The line
+launched in May 2024" is the claim it is.
+
+Every decision is recorded in `postprocess` on the stored record, so the
+next hand-check reads what the code decided rather than only what it
+produced.
+
+#### What the extractor transcribes, and what it does not
+
+Forty stored answers from cycle 20260915 were read by hand against their
+extractions. Ten disagreed, and the corrections are these:
+
+| Rule | Why |
+| --- | --- |
+| A **size** is not a pack count. `4 oz`, `3.4 fl oz`, `100 ml` go in `sizes` with their unit. | Four of the ten. A size read as a count is a wrong number attached to a real product — worse than a missing one, because it scores an assistant against a quantity nobody asked about. |
+| A **recommendation** is not a citation. "Check Amazon, Walmart or Target" goes in `recommended_retailers`; `sources_cited` stays empty. | A citation says where the answer got something. A recommendation says where to go. An answer that names three shops and links to none has cited nothing. |
+| A **hedge** is not a claim. "It's possible", "likely", "might be" never reach `brand_claims`. | A possibility is not an assertion, and one row was classified `fabricated` on three hedged sentences alone. |
+| `brand_unknown_statement` means **can't-find**, not a freshness disclaimer. | "I don't have real-time access to the latest ingredient list" says your knowledge has a date on it. The same answer went on to describe the brand as real. |
+| A bare **`$` is USD**, every time, including inside a range. | The extractor read it as USD in some rows and null in others. |
+| `presented_as` is one of **four words** — `closest_match`, `comparison`, `recommendation`, `source`. | It was free text and came back holding sentence fragments. |
+
+**`brand_mentioned` is no longer asked of the model.** It is
+`ea.names_brand(answer, brand)` — a case-insensitive substring on the
+normalized forms, computed after the call returns. The model got it wrong
+in both directions on one cycle: `false` on an answer reading "on
+eligible Wiggle & Snug products", `true` on one that only ever said
+"Wonder" and "The Wiggles". Both changed an outcome. A string is in a
+string or it is not.
+
+That function is the **same object** the generator's guard uses to reject
+a brand-direct question that does not name the brand. If the two drifted,
+a question could pass the guard and then be scored against a different
+idea of naming.
+
+`recommended_retailers` is not only a correction — it is a signal. An
+answer that tells a shopper to buy this brand at three retailers, cites
+nothing, and does **not** say it could not find the brand has made an
+unsourced claim about where the brand is sold, and is classified
+`fabricated`. The two exemptions are deliberate: a cited answer is
+sourced, and "I could not find this brand — you could try Amazon" is a
+suggestion to go looking, not an assertion that it is there.
+
 #### Guessable expectations
 
 `points` at **one per dollar** is the category default. An answer that

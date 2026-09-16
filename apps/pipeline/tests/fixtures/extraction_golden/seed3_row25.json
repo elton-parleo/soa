@@ -1,0 +1,62 @@
+{
+  "row": 25,
+  "seed": 3,
+  "query_code": "WIG_148",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I'm having trouble finding any information about a brand called **\"Wiggle & Snug\"** that offers a **\"Snug-Fit Trial Pack.\"**\n\nIt's possible that:\n\n1.  **The brand name might be slightly different.** Could it be \"Wiggle and Snuggle\" or something similar?\n2.  **It's a very niche or new product/brand** that isn't widely listed online yet.\n3.  **It might be a discontinued item** that no longer appears in active listings.\n4.  **It could be a fictional product or a local/private label item** not sold widely.\n\nThere *is* a well-known sports and outdoor retailer called **Wiggle**, but they don't sell products that fit the description of a \"Snug-Fit Trial Pack\" from a brand called \"Wiggle & Snug.\"\n\nCould you provide any more details about where you heard about this product or what kind of product it is (e.g., babywear, intimate apparel, pet accessories)? That might help in locating it!",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "they don't sell products that fit the description of a \"Snug-Fit Trial Pack\" from a brand called \"Wiggle & Snug.\"",
+        "sentence": "There *is* a well-known sports and outdoor retailer called **Wiggle**, but they don't sell products that fit the description of a \"Snug-Fit Trial Pack\" from a brand called \"Wiggle & Snug.\"",
+        "kind": "retail",
+        "hedged": false
+      },
+      {
+        "claim": "I'm having trouble finding any information about a brand called **\"Wiggle & Snug\"** that offers a **\"Snug-Fit Trial Pack.\"**",
+        "sentence": "I'm having trouble finding any information about a brand called **\"Wiggle & Snug\"** that offers a **\"Snug-Fit Trial Pack.\"**",
+        "kind": "other",
+        "hedged": false
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": [
+      "unknown statement was an assertion, moved to claims",
+      "dropped other brands: Wiggle (is the brand)"
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": {
+    "unknown": "keep",
+    "brands": {
+      "Wiggle": "comparison"
+    }
+  }
+}

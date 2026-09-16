@@ -1,0 +1,77 @@
+{
+  "row": 1,
+  "seed": 4,
+  "query_code": "WIG_159",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Assuming you mean **Huggies Snug & Dry Big Pack Diapers, Size 5**, H-E-B lists them at **$20.47** for **62 diapers** — about **$0.33 per diaper**. Prices may vary by store, curbside, or delivery. ([heb.com](https://www.heb.com/product-detail/huggies-snug-amp-dry-disney-mickey-mouse-big-pack-diapers-size-5-over-27-lbs-/790866))",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "20.47",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Big Pack Diapers, Size 5"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 62,
+        "attributed_product": "Huggies Snug & Dry Big Pack Diapers, Size 5"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Huggies",
+        "presented_as": "closest_match",
+        "relation": "closest_match_described"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "heb.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": false,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": false,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "20.47",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Big Pack Diapers, Size 5"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 62,
+        "attributed_product": "Huggies Snug & Dry Big Pack Diapers, Size 5"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "heb.com"
+    ],
+    "other_brands": {
+      "Huggies": "closest_match_described"
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

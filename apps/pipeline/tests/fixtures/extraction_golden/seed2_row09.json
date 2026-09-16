@@ -1,0 +1,84 @@
+{
+  "row": 9,
+  "seed": 2,
+  "query_code": "WIG_142",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Yes—**it appears suitable for sensitive baby skin**, *assuming you mean the Bc Babycare “Cloud Moist Baby Wipes” 3-pack / 240 count listing*. I couldn’t verify a product specifically branded **“Wiggle & Snug Cloud Wipes”**, but the 3-pack “Cloud Moist” wipes are listed as **hypoallergenic**, **unscented**, **recommended for sensitive skin**, and **safe to use on sensitive skin**. Target’s product details also say they contain **99% purified water**, are **0 alcohol / 0 fragrance / 0 parabens / 0 dyes**, and are **dermatologist-tested**. ([target.com](https://www.target.com/p/-/A-1006780196))\n\nA couple of cautions: babies can still react to a specific preservative or ingredient even when wipes are marketed as sensitive/hypoallergenic. The AAP advises checking ingredients if your child has allergies or sensitive skin, and recommends alcohol- and fragrance-free wipes for diaper-rash prevention. ([publications.aap.org](https://publications.aap.org/aapnews/news/16696/How-to-use-disposable-wipes-safely?utm_source=openai))\n\n**Practical recommendation:** Try them on a small area first, stop using if redness/rash worsens, and for active irritation consider plain water + soft cloth until skin calms. Also, **do not flush** these wipes.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 3,
+        "attributed_product": "Bc Babycare “Cloud Moist Baby Wipes”"
+      },
+      {
+        "value": 240,
+        "attributed_product": "Bc Babycare “Cloud Moist Baby Wipes”"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "“I couldn’t verify a product specifically branded **“Wiggle & Snug Cloud Wipes”**,”",
+    "other_brands_named": [
+      {
+        "name": "Bc Babycare",
+        "presented_as": "closest_match"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "it appears suitable for sensitive baby skin",
+        "kind": "other"
+      },
+      {
+        "claim": "listed as hypoallergenic, unscented, recommended for sensitive skin, and safe to use on sensitive skin",
+        "kind": "other"
+      },
+      {
+        "claim": "Target’s product details also say they contain 99% purified water, are 0 alcohol / 0 fragrance / 0 parabens / 0 dyes, and are dermatologist-tested",
+        "kind": "retail"
+      }
+    ],
+    "sources_cited": [
+      "target.com",
+      "publications.aap.org"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [
+      {
+        "value": 3,
+        "attributed_product": "Bc Babycare “Cloud Moist Baby Wipes”"
+      },
+      {
+        "value": 240,
+        "attributed_product": "Bc Babycare “Cloud Moist Baby Wipes”"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "target.com",
+      "publications.aap.org"
+    ],
+    "other_brands": {
+      "Bc Babycare": null
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

@@ -1,0 +1,93 @@
+{
+  "row": 29,
+  "seed": 2,
+  "query_code": "WIG_163",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I cannot give you the exact, real-time price for Wiggle & Snug Snug-Fit Overnight Diapers Size 4 because:\n\n1.  **Prices vary by retailer:** Amazon, Walmart, Target, your local grocery store, etc., will all have different prices.\n2.  **Prices change frequently:** Sales, promotions, and supply chain issues can impact pricing daily.\n3.  **Pack size matters:** The cost will depend on whether you're buying a small pack, a mega box, or a bulk subscription.\n4.  **Region:** Prices can even vary slightly by location.\n\n**To get the most accurate current price, I recommend you:**\n\n*   **Check major online retailers:** Amazon, Walmart.com, Target.com, etc.\n*   **Visit the website of your preferred local store:** Many stores allow you to check prices and availability online.\n*   **Check the Wiggle & Snug brand website** (if they have one and sell directly).",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "4",
+        "unit": null,
+        "attributed_product": "Wiggle & Snug Snug-Fit Overnight Diapers"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Amazon",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Walmart",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Target",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Walmart.com",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Target.com",
+        "presented_as": "recommendation"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [
+      "Amazon",
+      "Walmart",
+      "Target",
+      "Amazon",
+      "Walmart.com",
+      "Target.com"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {
+      "Amazon": "recommendation",
+      "Walmart": "recommendation",
+      "Target": "recommendation",
+      "Walmart.com": null,
+      "Target.com": null
+    },
+    "codes": []
+  },
+  "review_note": {
+    "retailers": {
+      "Amazon": "recommendation",
+      "Walmart": "recommendation",
+      "Target": "recommendation"
+    },
+    "brands": {
+      "Amazon": "not_a_brand",
+      "Walmart": "not_a_brand",
+      "Target": "not_a_brand",
+      "Walmart.com": "not_a_brand",
+      "Target.com": "not_a_brand"
+    }
+  }
+}

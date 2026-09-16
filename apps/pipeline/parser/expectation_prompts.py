@@ -34,14 +34,15 @@ anything.
 
 See docs/expected-answer-vocabulary.md.
 """
+from soa_shared import expected_answers as ea
 
 EXPECTATION_EXTRACTION_PROMPT = """You are transcribing what an AI shopping assistant's answer SAID. You are \
 not judging whether it was right, and you are not being told what the right \
 answer is.
 
-Read the answer and write down every price, promotion code, pack count and \
-member price it states, plus whether it named the brand and which sources it \
-cited. Transcribe only. Do not correct, complete, round, convert or infer any \
+Read the answer and write down every price, promotion code, pack count, \
+size and member price it states, which sources it cited and which shops it \
+pointed the reader to. Transcribe only. Do not correct, complete, round, convert or infer any \
 value; do not add a value the answer does not state.
 
 Every example value below is a made-up placeholder. None of them is the answer \
@@ -52,8 +53,10 @@ PRICES
 Every plain price the answer states for a product, with the product it \
 attributes that price to.
   amount: the number as written, e.g. "14.50". Do not round or convert.
-  currency: the currency code if the answer makes it clear ("USD", "GBP"), \
-otherwise null. Do not assume a currency from a bare "$".
+  currency: the currency code the answer's own symbol or word implies. A \
+bare "$" is "USD" — consistently, every time, including inside a range \
+like "$10 to $15". "£" is "GBP", "€" is "EUR". Null ONLY when the answer \
+states a number with no currency marker at all.
   attributed_product: the product or variant this price is stated FOR, as \
 named in the answer — e.g. "Acme Widgets Large, 3-pack", "the 60 count \
 box". Null only if the answer states a price attached to no product at all.
@@ -64,7 +67,8 @@ different attributed_product values. Never merge them, and never move a price \
 onto a product the answer did not attach it to.
 
   If the answer gives a range ("$14-$17"), record the range's endpoints as two \
-entries with the same attributed_product.
+entries with the same attributed_product — and the same currency on both. \
+The symbol at the front of a range governs the whole range.
 
 CODES
 Every promotion or coupon code the answer states.
@@ -77,9 +81,26 @@ the percent for percent_off ("15" for 15% off, not "0.15"). Null if the answer \
 does not say.
 
 PACK COUNTS
-Every unit count the answer states for a product.
+Every unit COUNT the answer states for a product — how many items are in
+the pack.
   value: the integer, e.g. 60.
   attributed_product: which product that count is stated for, as named.
+
+  A count answers "how many". If the number answers "how big" or "how
+  much is in it" — 4 oz, 3.4 fl oz, 100 ml, 250 g, 1 litre — it is a SIZE
+  and goes in SIZES below, never here. "4 oz" is not a pack of four.
+
+SIZES
+Every weight, volume or physical measurement the answer states for a
+product.
+  value: the number as written, e.g. "4", "3.4".
+  unit: the unit as written, e.g. "oz", "fl oz", "ml", "g".
+  attributed_product: which product, as named.
+
+  This list exists because a size read as a count is a wrong number
+  attached to a real product, which is worse than a missing one: it
+  scores an assistant against a quantity nobody asked about. A pack of
+  four and a four-ounce jar are different facts.
 
 GTINS
 Every barcode or GTIN/UPC/EAN the answer states, with the product it \
@@ -100,31 +121,42 @@ says "members" without naming a level.
   A price the answer presents as the ordinary price belongs in PRICES, not \
 here. Only put a price here when the answer ties it to membership.
 
-BRAND MENTIONED
-brand_mentioned: true if the answer names the brand under discussion at all, \
-false if it does not. This is presence, not endorsement — a passing, negative \
-or dismissive mention is still true.
-
 CANNOT-FIND STATEMENT
 brand_unknown_statement: the answer's own words, quoted, where it says it \
 cannot find, cannot verify, does not recognise or has no information about \
 the brand or the product — e.g. "I could not find any information about that \
 brand". Null if the answer makes no such statement.
 
-  Quote it; do not paraphrase and do not summarise. An answer that simply \
-does not mention the brand has made no such statement and this is null. An \
-answer that hedges about one detail ("I am not sure of the current price") has \
-not said it cannot find the brand, and this is null.
+  Quote the whole sentence exactly as the answer wrote it; do not \
+paraphrase, summarise or stitch two sentences together. Null when the \
+answer contains no such sentence at all.
+
+  Quote the candidate and stop there. Whether it really says the brand is \
+unknown — as opposed to saying your information has a date on it, or \
+asserting something about the brand that happens to be negative — is \
+decided afterwards from the words you quote. If more than one sentence \
+could qualify, quote the one that speaks about the BRAND rather than \
+about you.
 
 OTHER BRANDS NAMED
 other_brands_named: every brand OTHER than the one under discussion that the \
 answer names, with the words the answer used to relate it.
   name: the other brand, as written, e.g. "Some Other Label".
-  presented_as: the answer's own phrase for what it is — "closest match", \
-"similar product", "alternative", "instead", "comparison". Null if the answer \
-names it with no such framing.
+  presented_as: exactly one of these four words, and nothing else:
 
-  Transcribe the relationship the answer states. Do not decide whether the \
+    "closest_match"  offered as what the asker must have meant — "if you \
+meant", "did you mean", "you might be looking for", "the closest match I \
+found", "assuming you mean".
+    "comparison"     weighed against the brand under discussion — "unlike \
+X", "compared with X", "X also does this".
+    "recommendation" suggested as something to try or buy as well as, or \
+after failing to find, the brand — "popular alternatives include".
+    "source"         named only as where the information came from.
+
+  Null when none of the four fits. NEVER a fragment of the answer's own \
+sentence: "the", "like", "such as" are not values for this field.
+
+  Transcribe the relationship the answer states. Do not decide whether a \
 substitution was reasonable; that is not being asked.
 
 BRAND-SPECIFIC CLAIMS
@@ -137,10 +169,21 @@ called, when it launched.
 owns or manufactures it, "loyalty" for programme or tier names, "other" for \
 anything else.
 
-  A claim is a statement of fact about the brand. "It is a private label sold \
-at a discount grocer" is a claim; "it might suit sensitive skin" is not. \
-Record what the answer asserts, not whether it is true — you are not being \
-told what is true.
+  sentence: the WHOLE sentence the claim came from, quoted exactly as \
+the answer wrote it, hedges and all.
+
+  Record every candidate. Do NOT decide whether a sentence is an \
+assertion or a guess — "It's possible this is a regional brand" belongs \
+in this list with its sentence quoted, exactly like "It is a private \
+label sold at a discount grocer" does. Whether the answer committed to it \
+is decided afterwards, from the sentence you quote, by code that applies \
+the same rule every time.
+
+  That division is deliberate and it is not negotiable: this instruction \
+used to ask you to leave possibilities out, and the same model left "It \
+might be a fictional product" out of one answer while putting "It's \
+possible that..." into another in the same run. Quote the sentence; the \
+judgement is not yours to make.
 
 LOYALTY TIERS NAMED
 loyalty_tiers_named: every loyalty programme tier or level the answer \
@@ -153,10 +196,25 @@ belonging to some other company's programme is not this brand's tier and \
 does not go here.
 
 SOURCES CITED
-sources_cited: the bare domains of every source the answer cites or links to, \
-e.g. ["example-shop.com", "a-retailer.com"]. Only domains actually written out in \
-the answer. Do not construct, guess or complete a partial URL, and do not add \
-a domain because you recognise a retailer the answer named without linking.
+sources_cited: the bare domains of every source the answer cites AS WHERE \
+IT GOT SOMETHING — a link, a parenthetical attribution, "according to". \
+Only domains actually written out in the answer. Do not construct, guess \
+or complete a partial URL, and do not add a domain because you recognise a \
+retailer the answer named without linking.
+
+  A recommendation is not a citation. "You could check Amazon, Walmart or \
+Target" tells the reader where to go; it does not say where the answer's \
+information came from. Those go in RECOMMENDED RETAILERS and this list \
+stays empty. An answer that names three retailers to check and links to \
+none of them has cited nothing.
+
+RECOMMENDED RETAILERS
+recommended_retailers: every shop, marketplace or site the answer tells \
+the reader to go to, look at, or buy from, as written — e.g. ["Amazon", \
+"Walmart"]. Empty when the answer sends the reader nowhere.
+
+  Recorded separately because it is its own signal: telling a shopper to \
+go and buy a brand somewhere is a claim about where that brand is sold.
 
 CONFIDENCE
 extraction_confident: false when you could not confidently read the answer — it \
@@ -184,18 +242,24 @@ def build_extraction_prompt(brand: str = None) -> str:
 
     The brand is the ONLY thing about the expectation the extractor is
     told, and it is told only the name — never the domain, never a price,
-    never a code. `brand_mentioned` is unanswerable without knowing which
-    brand is meant, whereas every other field is a transcription of what
-    the answer says and needs no target at all. Handing over the domain
-    too would tell a model which citation we are hoping to find.
+    never a code. It is needed to tell "the brand under discussion" apart
+    from every other brand in the answer, which several fields turn on:
+    which brands are OTHER brands, whose loyalty tiers are being named,
+    who a claim is about. Handing over the domain too would tell a model
+    which citation we are hoping to find.
+
+    It is NOT used for brand_mentioned any more. That field is computed
+    from the answer text by ea.names_brand after this call returns — see
+    stamp_brand_mentioned.
     """
     if not brand:
         return EXPECTATION_EXTRACTION_PROMPT
     return (
         f"{EXPECTATION_EXTRACTION_PROMPT}\n\n"
-        f"The brand under discussion is: {brand}. Use it only to decide "
-        f"brand_mentioned. It tells you nothing about what any correct value "
-        f"is, and you are not being asked."
+        f"The brand under discussion is: {brand}. Use it only to tell that "
+        f"brand apart from the others the answer may name. It tells you "
+        f"nothing about what any correct value is, and you are not being "
+        f"asked."
     )
 
 
@@ -247,6 +311,19 @@ def build_extraction_schema() -> dict:
                     "additionalProperties": False,
                 },
             },
+            "sizes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "value": {"type": ["string", "null"]},
+                        "unit": {"type": ["string", "null"]},
+                        "attributed_product": {"type": ["string", "null"]},
+                    },
+                    "required": ["value", "unit", "attributed_product"],
+                    "additionalProperties": False,
+                },
+            },
             "gtins": {
                 "type": "array",
                 "items": {
@@ -285,7 +362,6 @@ def build_extraction_schema() -> dict:
                     "additionalProperties": False,
                 },
             },
-            "brand_mentioned": {"type": "boolean"},
             "brand_unknown_statement": {"type": ["string", "null"]},
             "other_brands_named": {
                 "type": "array",
@@ -293,7 +369,13 @@ def build_extraction_schema() -> dict:
                     "type": "object",
                     "properties": {
                         "name": {"type": "string"},
-                        "presented_as": {"type": ["string", "null"]},
+                        "presented_as": {
+                            "type": ["string", "null"],
+                            "enum": [
+                                "closest_match", "comparison",
+                                "recommendation", "source", None,
+                            ],
+                        },
                     },
                     "required": ["name", "presented_as"],
                     "additionalProperties": False,
@@ -306,25 +388,47 @@ def build_extraction_schema() -> dict:
                     "type": "object",
                     "properties": {
                         "claim": {"type": "string"},
+                        "sentence": {"type": "string"},
                         "kind": {"type": ["string", "null"]},
                     },
-                    "required": ["claim", "kind"],
+                    "required": ["claim", "sentence", "kind"],
                     "additionalProperties": False,
                 },
             },
             "sources_cited": {"type": "array", "items": {"type": "string"}},
+            "recommended_retailers": {"type": "array", "items": {"type": "string"}},
             "extraction_confident": {"type": "boolean"},
             "extraction_note": {"type": ["string", "null"]},
         },
         "required": [
-            "prices", "codes", "pack_counts", "gtins", "member_prices", "points",
-            "brand_mentioned", "brand_unknown_statement",
+            "prices", "codes", "pack_counts", "sizes", "gtins",
+            "member_prices", "points", "brand_unknown_statement",
             "other_brands_named", "loyalty_tiers_named", "brand_claims",
-            "sources_cited",
+            "sources_cited", "recommended_retailers",
             "extraction_confident", "extraction_note",
         ],
         "additionalProperties": False,
     }
+
+
+PRESENTED_AS = ('closest_match', 'comparison', 'recommendation', 'source')
+
+
+def stamp_brand_mentioned(record: dict, answer_text, brand) -> dict:
+    """
+    Kept as the narrow entry point for brand_mentioned alone.
+
+    The whole deterministic pass — modality, cannot-find, currency,
+    substitution, hygiene — is parser/extraction_postprocess.normalize,
+    which the client applies to every record. This is what that pass uses
+    for this one field, exported because it is the piece with the
+    shortest explanation: a string is in a string or it is not, and the
+    model was wrong about it in both directions.
+    """
+    record['brand_mentioned'] = bool(
+        answer_text and ea.names_brand(answer_text, brand)
+    )
+    return record
 
 
 # The empty extraction: what a run with no usable answer records, so an
@@ -333,15 +437,22 @@ EMPTY_EXTRACTION = {
     "prices": [],
     "codes": [],
     "pack_counts": [],
+    "sizes": [],
     "gtins": [],
     "member_prices": [],
     "points": [],
+    # Computed, never extracted — see stamp_brand_mentioned. False here
+    # because an answer we could not read named nobody.
     "brand_mentioned": False,
     "brand_unknown_statement": None,
     "other_brands_named": [],
     "loyalty_tiers_named": [],
     "brand_claims": [],
     "sources_cited": [],
+    "recommended_retailers": [],
+    # What the deterministic pass did to this record. Stored, so the next
+    # hand-check reads the code's decisions rather than only its output.
+    "postprocess": [],
     "extraction_confident": False,
     "extraction_note": "no answer text to read",
 }

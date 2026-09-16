@@ -1,0 +1,78 @@
+{
+  "row": 36,
+  "seed": 2,
+  "query_code": "WIG_154",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I found the closest matching listing — **Wonder/The Wiggles Day & Night Nappies Diapers, Crawler/Size 3, pack of 25** — priced at **$29.99 AUD**. ([bigw.com.au](https://www.bigw.com.au/product/wonder-pk25-the-wiggles-day-night-nappies-diapers-crawler-6-11-kg-size-3/p/9900050474))",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "29.99",
+        "currency": "AUD",
+        "attributed_product": "Wonder/The Wiggles Day & Night Nappies Diapers, Crawler/Size 3, pack of 25"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 25,
+        "attributed_product": "Wonder/The Wiggles Day & Night Nappies Diapers, Crawler/Size 3"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "The Wiggles",
+        "presented_as": "closest_match"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "bigw.com.au"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": false,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "29.99",
+        "currency": "AUD",
+        "attributed_product": "Wonder/The Wiggles Day & Night Nappies Diapers, Crawler/Size 3, pack of 25"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 25,
+        "attributed_product": "Wonder/The Wiggles Day & Night Nappies Diapers, Crawler/Size 3"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "bigw.com.au"
+    ],
+    "other_brands": {
+      "The Wiggles": "spelling_guess"
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": {
+    "bm": false,
+    "brands": {
+      "The Wiggles": "spelling_guess"
+    }
+  }
+}

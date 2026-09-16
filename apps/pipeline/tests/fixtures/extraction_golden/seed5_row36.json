@@ -1,0 +1,183 @@
+{
+  "row": 36,
+  "seed": 5,
+  "query_code": "WIG_142",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Yes—**it appears suitable for sensitive baby skin**, assuming you mean the **Cloud Moist Baby Wipes / Cloud Wipes 3-Pack** listing. The product is described as **hypoallergenic**, **unscented/fragrance-free**, **alcohol-free**, **dermatologist-tested**, and recommended for **sensitive skin**; it’s also listed as **99% purified water** with plant-based fibers. ([target.com](https://www.target.com/p/-/A-1006780196))\n\nThe listed ingredients are relatively simple: **water, sodium citrate, gluconolactone, glycerin, sodium benzoate, citric acid, and disodium EDTA**. The brand also says the wipes are made without **fragrance, alcohol, parabens, formaldehyde, latex, allergens, or chlorine processing**. ([bcbabycare.com](https://www.bcbabycare.com/products/cloud-moist-baby-wipe?variant=46984901460214))\n\n**Caveat:** “Hypoallergenic” doesn’t guarantee that every baby won’t react. If your baby has eczema, an active rash, broken skin, or known sensitivities, test on a small area first and stop use if redness or irritation appears. The National Eczema Association similarly notes that people with eczema/sensitive skin should check ingredients for possible triggers and ask a healthcare provider when unsure. ([nationaleczema.org](https://nationaleczema.org/eczema-products/cloud-skin-soft-wipe/))",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 3,
+        "attributed_product": "Cloud Moist Baby Wipes / Cloud Wipes 3-Pack"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "Yes—**it appears suitable for sensitive baby skin**, assuming you mean the **Cloud Moist Baby Wipes / Cloud Wipes 3-Pack** listing.",
+        "sentence": "Yes—**it appears suitable for sensitive baby skin**, assuming you mean the **Cloud Moist Baby Wipes / Cloud Wipes 3-Pack** listing.",
+        "span_id": 1,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      },
+      {
+        "claim": "The product is described as **hypoallergenic**, **unscented/fragrance-free**, **alcohol-free**, **dermatologist-tested**, and recommended for **sensitive skin**;",
+        "sentence": "The product is described as **hypoallergenic**, **unscented/fragrance-free**, **alcohol-free**, **dermatologist-tested**, and recommended for **sensitive skin**;",
+        "span_id": 2,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "it’s also listed as **99% purified water** with plant-based fibers. ([target.com](https://www.target.com/p/-/A-1006780196))",
+        "sentence": "it’s also listed as **99% purified water** with plant-based fibers. ([target.com](https://www.target.com/p/-/A-1006780196))",
+        "span_id": 3,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "The brand also says the wipes are made without **fragrance, alcohol, parabens, formaldehyde, latex, allergens, or chlorine processing**. ([bcbabycare.com](https://www.bcbabycare.com/products/cloud-moist-baby-wipe?variant=46984901460214))",
+        "sentence": "The brand also says the wipes are made without **fragrance, alcohol, parabens, formaldehyde, latex, allergens, or chlorine processing**. ([bcbabycare.com](https://www.bcbabycare.com/products/cloud-moist-baby-wipe?variant=46984901460214))",
+        "span_id": 5,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      }
+    ],
+    "sources_cited": [
+      "target.com",
+      "bcbabycare.com",
+      "nationaleczema.org"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": false,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "transcribed_unknown_statement": null,
+    "spans": [
+      {
+        "id": 1,
+        "text": "Yes—**it appears suitable for sensitive baby skin**, assuming you mean the **Cloud Moist Baby Wipes / Cloud Wipes 3-Pack** listing."
+      },
+      {
+        "id": 2,
+        "text": "The product is described as **hypoallergenic**, **unscented/fragrance-free**, **alcohol-free**, **dermatologist-tested**, and recommended for **sensitive skin**;"
+      },
+      {
+        "id": 3,
+        "text": "it’s also listed as **99% purified water** with plant-based fibers. ([target.com](https://www.target.com/p/-/A-1006780196))"
+      },
+      {
+        "id": 4,
+        "text": "The listed ingredients are relatively simple: **water, sodium citrate, gluconolactone, glycerin, sodium benzoate, citric acid, and disodium EDTA**."
+      },
+      {
+        "id": 5,
+        "text": "The brand also says the wipes are made without **fragrance, alcohol, parabens, formaldehyde, latex, allergens, or chlorine processing**. ([bcbabycare.com](https://www.bcbabycare.com/products/cloud-moist-baby-wipe?variant=46984901460214))"
+      },
+      {
+        "id": 6,
+        "text": "**Caveat:** “Hypoallergenic” doesn’t guarantee that every baby won’t react."
+      },
+      {
+        "id": 7,
+        "text": "If your baby has eczema, an active rash, broken skin, or known sensitivities, test on a small area first and stop use if redness or irritation appears."
+      },
+      {
+        "id": 8,
+        "text": "The National Eczema Association similarly notes that people with eczema/sensitive skin should check ingredients for possible triggers and ask a healthcare provider when unsure. ([nationaleczema.org](https://nationaleczema.org/eczema-products/cloud-skin-soft-wipe/))"
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "Yes—**it appears suitable for sensitive baby skin**, assuming you mean the **Cloud Moist Baby Wipes / Cloud Wipes 3-Pack** listing.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 2,
+        "text": "The product is described as **hypoallergenic**, **unscented/fragrance-free**, **alcohol-free**, **dermatologist-tested**, and recommended for **sensitive skin**;",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "it’s also listed as **99% purified water** with plant-based fibers. ([target.com](https://www.target.com/p/-/A-1006780196))",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 4,
+        "text": "The listed ingredients are relatively simple: **water, sodium citrate, gluconolactone, glycerin, sodium benzoate, citric acid, and disodium EDTA**.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 5,
+        "text": "The brand also says the wipes are made without **fragrance, alcohol, parabens, formaldehyde, latex, allergens, or chlorine processing**. ([bcbabycare.com](https://www.bcbabycare.com/products/cloud-moist-baby-wipe?variant=46984901460214))",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 6,
+        "text": "**Caveat:** “Hypoallergenic” doesn’t guarantee that every baby won’t react.",
+        "kind": "disclaimer",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 7,
+        "text": "If your baby has eczema, an active rash, broken skin, or known sensitivities, test on a small area first and stop use if redness or irritation appears.",
+        "kind": "instruction",
+        "modality": "conditional"
+      },
+      {
+        "span_id": 8,
+        "text": "The National Eczema Association similarly notes that people with eczema/sensitive skin should check ingredients for possible triggers and ask a healthcare provider when unsure. ([nationaleczema.org](https://nationaleczema.org/eczema-products/cloud-skin-soft-wipe/))",
+        "kind": "none",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": false,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [
+      {
+        "value": 3,
+        "attributed_product": "Cloud Moist Baby Wipes / Cloud Wipes 3-Pack"
+      }
+    ],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [
+      "target.com",
+      "bcbabycare.com",
+      "nationaleczema.org"
+    ],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

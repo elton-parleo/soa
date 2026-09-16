@@ -1,0 +1,86 @@
+{
+  "row": 36,
+  "seed": 4,
+  "query_code": "WIG_165",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "The \"Wiggle & Snug\" brand, including their Snug-Fit Overnight Diapers, is a **Kroger house brand**.\n\nTherefore, to find the most accurate and current price for Wiggle & Snug Snug-Fit Overnight Diapers Size 6, you will need to:\n\n1.  **Check your local Kroger store.**\n2.  **Visit the Kroger website or use their app.** You can search for \"Wiggle & Snug Snug-Fit Overnight Diapers Size 6\" on your specific store's page.\n\nPrices can vary slightly by location and depend on current sales or promotions. As an estimate, similar store-brand overnight diapers often range from **$15-$25 per pack**, depending on the number of diapers in the package and any ongoing sales.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "15",
+        "currency": "USD",
+        "attributed_product": "similar store-brand overnight diapers per pack"
+      },
+      {
+        "amount": "25",
+        "currency": "USD",
+        "attributed_product": "similar store-brand overnight diapers per pack"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "The \"Wiggle & Snug\" brand, including their Snug-Fit Overnight Diapers, is a Kroger house brand.",
+        "sentence": "The \"Wiggle & Snug\" brand, including their Snug-Fit Overnight Diapers, is a **Kroger house brand**.",
+        "kind": "assertion",
+        "lexicon_hedged": false,
+        "modality": "asserted",
+        "claim_kind": "ownership"
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [
+      "Kroger"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [
+      {
+        "name": "Kroger",
+        "role": "recommendation"
+      }
+    ],
+    "postprocess": [
+      "not product sizes: 6 Size, 6 Size",
+      "not a brand: Kroger"
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "15",
+        "currency": "USD",
+        "attributed_product": "similar store-brand overnight diapers per pack"
+      },
+      {
+        "amount": "25",
+        "currency": "USD",
+        "attributed_product": "similar store-brand overnight diapers per pack"
+      }
+    ],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {
+      "Kroger": "recommendation"
+    },
+    "codes": []
+  },
+  "review_note": null
+}

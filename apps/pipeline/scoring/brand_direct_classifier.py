@@ -34,6 +34,7 @@ does.
 import re
 from typing import Optional
 
+from parser import extraction_postprocess as pp
 from soa_shared import expected_answers as ea
 
 GROUNDED = 'grounded'
@@ -55,20 +56,49 @@ def _tokens(text) -> set:
     return {t for t in _norm(text).split() if t}
 
 
-# The answer's own framing when it offers something else in place of the
-# brand. Transcribed into `presented_as` by the extractor, matched here —
-# so the rule is a list of phrases anyone can read, rather than a model's
-# opinion about whether a substitution happened.
-SUBSTITUTION_PHRASES = (
+# `presented_as` is one of four words the extractor chooses from, and
+# only one of them is a substitution: closest_match means the answer
+# decided the asker must have meant somebody else. A `recommendation`
+# ("popular alternatives include...") sits beside an answer about this
+# brand rather than replacing it, and a `comparison` is the opposite of a
+# substitution. Neither is misattribution on its own — but if the answer
+# then hangs its numbers on that other brand's product, route one of
+# misattributed_to catches it regardless of the label.
+SUBSTITUTION = 'closest_match'
+
+# Free text this field used to hold, before it was an enum. Kept so the
+# classifier still reads extractions stored under the old prompt — a
+# re-score over old records must not silently stop finding substitutions
+# it used to find. New extractions cannot produce these: the schema
+# enumerates the four words.
+LEGACY_SUBSTITUTION_PHRASES = (
     'closest match', 'if you meant', 'did you mean', 'you might mean',
     'assuming you mean', 'looking for', 'similar', 'instead', 'alternative',
     'in place of', 'rather than', 'misremember',
 )
 
 
-def _is_substitution(presented_as) -> bool:
-    text = str(presented_as or '').lower()
-    return any(phrase in text for phrase in SUBSTITUTION_PHRASES)
+# What the labelling pass calls a substitution. One value of four, and
+# the only one that means "the answer decided the asker meant somebody
+# else AND described them". A spelling guess describes nothing — three
+# rows were scored misattributed for describing a brand they never
+# described — and a comparison or a citation is not a substitution at
+# all.
+DESCRIBED = 'closest_match_described'
+
+
+def _is_substitution(entry) -> bool:
+    """`entry` is an other_brands_named row. The label decides."""
+    if isinstance(entry, dict) and entry.get('relation') is not None:
+        return entry['relation'] == DESCRIBED
+    # No label: the labelling call failed or predates this. Fall back to
+    # the old free-text field rather than guessing — and never to "yes".
+    presented = str((entry or {}).get('presented_as') or '').strip().lower()
+    if not presented or presented in ('comparison', 'recommendation', 'source'):
+        return False
+    if presented == SUBSTITUTION:
+        return True
+    return any(phrase in presented for phrase in LEGACY_SUBSTITUTION_PHRASES)
 
 
 def _quantities(extraction) -> list:
@@ -111,8 +141,9 @@ def misattributed_to(extraction) -> Optional[str]:
         # Route one: a number of ours, attached to their product.
         if any(name_tokens <= product for product in attributed):
             return entry['name']
-        # Route two: offered as the thing the asker must have meant.
-        if _is_substitution(entry.get('presented_as')):
+        # Route two: offered as the thing the asker must have meant, and
+        # described.
+        if _is_substitution(entry):
             return entry['name']
     return None
 
@@ -144,6 +175,48 @@ def _tier_contradictions(extraction, facts):
         }
 
 
+def _recommended_without_source(extraction):
+    """
+    Sending a shopper somewhere to buy this brand, with nothing behind it.
+
+    Telling a reader to "check Amazon, Walmart or Target" is a claim about
+    where the brand is sold — which is why the extractor records it apart
+    from the sources it cites, and why it is a finding rather than
+    scenery.
+
+    Two ways out of it, both deliberate:
+
+      * the answer cited something. Then it is sourced, and the record
+        does not carry retail presence, so it cannot be contradicted;
+      * the answer also said it could not find the brand. "I could not
+        find this brand — you could try Amazon" is a suggestion to go
+        looking, not an assertion that it is there, and treating the two
+        the same would punish the most honest answer in the set for
+        trying to be useful.
+    """
+    # Only what the labeller called a recommendation. A retailer named
+    # as where a price was found is a source, and one named as showing
+    # the product unavailable is the opposite of a recommendation —
+    # "Amazon listings show it currently unavailable" drove a fabricated
+    # verdict reading "told the reader to buy it at Amazon".
+    mentions = extraction.get('retailer_mentions')
+    if mentions is not None:
+        retailers = [
+            m['name'] for m in mentions
+            if isinstance(m, dict) and m.get('role') == 'recommendation' and m.get('name')
+        ]
+    else:
+        retailers = [r for r in extraction.get('recommended_retailers') or [] if r]
+    if not retailers:
+        return None
+    if extraction.get('sources_cited') or extraction.get('brand_unknown_statement'):
+        return None
+    return {
+        'claim': f"told the reader to buy it at {', '.join(retailers)}",
+        'why': 'where to buy, stated with no source',
+    }
+
+
 def contradicted_claims(extraction, brand_facts=None) -> list:
     """
     Brand-specific claims the published record contradicts, plus claims
@@ -162,9 +235,12 @@ def contradicted_claims(extraction, brand_facts=None) -> list:
     unsourced assertion rather than as a proven invention.
     """
     facts = brand_facts or {}
+    # Hedged claims are recorded and are not claims. The modality
+    # decision is made once, deterministically, in
+    # parser/extraction_postprocess — not here and not by the model.
     claims = [
-        claim for claim in extraction.get('brand_claims') or []
-        if isinstance(claim, dict) and claim.get('claim')
+        claim for claim in pp.asserted_claims(extraction)
+        if claim.get('claim')
     ]
 
     sourced = bool(extraction.get('sources_cited'))
@@ -172,8 +248,15 @@ def contradicted_claims(extraction, brand_facts=None) -> list:
     domain = _norm(facts.get('domain'))
 
     found = list(_tier_contradictions(extraction, facts))
+    availability = _recommended_without_source(extraction)
+    if availability:
+        found.append(availability)
     for claim in claims:
-        kind = (claim.get('kind') or 'other').lower()
+        # claim_kind, not kind: the labelling pass owns `kind` (what sort
+        # of sentence this is) and the transcription owns `claim_kind`
+        # (what the claim is about). Reading the wrong one here would
+        # check every assertion against the loyalty rule.
+        kind = (claim.get('claim_kind') or claim.get('kind') or 'other').lower()
         text = claim['claim']
         words = _tokens(text)
 

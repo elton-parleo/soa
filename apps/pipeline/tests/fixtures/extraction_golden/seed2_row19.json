@@ -1,0 +1,119 @@
+{
+  "row": 19,
+  "seed": 2,
+  "query_code": "WIG_149",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "As of **September 15, 2026**, I **couldn’t verify a current product under the exact name “Wiggle & Snug Bum Balm 4 oz.”** I also didn’t find a clear discontinuation notice for that exact name.\n\nWhat I *did* find:\n\n- **Amallow Baby Bum Balm, 4 oz** appears to still be listed by Amallow, priced at **$38**, with an **“Add to cart”** option and “100+ Bought This Month” shown on the product listing. ([amallow.com](https://amallow.com/products/baby-bum-balm))  \n- **Instacart** also has a listing for **Amallow Baby Bum Balm 4 oz**, though local availability may depend on stores in your area. ([instacart.com](https://www.instacart.com/products/118315679-amallow-baby-bum-balm-4-oz?utm_source=openai))  \n- If you meant **Wild Carrot Herbals Baby Bum Balm - 4 oz Size**, that also appears available: the product page shows **$29.99**, “Add to cart,” and Shopify inventory data indicating it’s available. ([wildcarrotherbals.com](https://www.wildcarrotherbals.com/products/baby-bum-balm-new-4-oz-size))  \n\n**Bottom line:** I don’t see evidence that a 4 oz “Bum Balm” has been discontinued, but I also can’t confirm “Wiggle & Snug” as the current brand/name. It may have been a marketplace listing title, a seller name, or a misremembered/rebranded product. If you have a photo, UPC, Amazon link, or ingredient list, I can help identify the exact item.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "38",
+        "currency": "USD",
+        "attributed_product": "Amallow Baby Bum Balm, 4 oz"
+      },
+      {
+        "amount": "29.99",
+        "currency": "USD",
+        "attributed_product": "Wild Carrot Herbals Baby Bum Balm - 4 oz Size"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Amallow Baby Bum Balm"
+      },
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+      },
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Wild Carrot Herbals Baby Bum Balm - 4 oz Size"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t verify a current product under the exact name “Wiggle & Snug Bum Balm 4 oz.”",
+    "other_brands_named": [
+      {
+        "name": "Amallow",
+        "presented_as": "source"
+      },
+      {
+        "name": "Instacart",
+        "presented_as": "source"
+      },
+      {
+        "name": "Wild Carrot Herbals",
+        "presented_as": "closest_match"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "amallow.com",
+      "instacart.com",
+      "wildcarrotherbals.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Amallow Baby Bum Balm"
+      },
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+      },
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Wild Carrot Herbals Baby Bum Balm - 4 oz Size"
+      }
+    ],
+    "prices": [
+      {
+        "amount": "38",
+        "currency": "USD",
+        "attributed_product": "Amallow Baby Bum Balm, 4 oz"
+      },
+      {
+        "amount": "29.99",
+        "currency": "USD",
+        "attributed_product": "Wild Carrot Herbals Baby Bum Balm - 4 oz Size"
+      }
+    ],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "amallow.com",
+      "instacart.com",
+      "wildcarrotherbals.com"
+    ],
+    "other_brands": {
+      "Amallow": null,
+      "Instacart": null,
+      "Wild Carrot Herbals": null
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

@@ -1,0 +1,180 @@
+{
+  "row": 34,
+  "seed": 4,
+  "query_code": "WIG_149",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I **couldn’t verify a current product called “Wiggle & Snug Bum Balm 4 oz”** in the sources I checked, and I also didn’t find an official discontinuation notice for that exact name.\n\nWhat I did find:\n\n- If you mean **Dabble & Dollop Hug & Heal™ Bum Balm**, it appears to be an active/current product, but it’s **3.4 fl oz / 100 ml**, not 4 oz. The Dabble & Dollop product page currently shows it as **sold out**, while Target’s listing shows it **in stock** at **$15.99**. ([dabbleanddollop.com](https://dabbleanddollop.com/products/hug-heal-bum-balm))\n- Dabble & Dollop also lists Hug & Heal™ Bum Balm as part of its current Baby Collection, so it does **not** look discontinued—just possibly out of stock on the brand’s own site. ([dabbleanddollop.com](https://dabbleanddollop.com/products/cuddle-cloud-all-over-lotion))\n- If you specifically need a **4 oz Baby Bum Balm**, Wild Carrot Herbals currently lists **Baby Bum Balm – 4 oz Size** as available, with inventory shown as available on its product data. ([wildcarrotherbals.com](https://www.wildcarrotherbals.com/products/baby-bum-balm-new-4-oz-size))\n\n**Bottom line:** I don’t see evidence that the likely matching product has been discontinued. But the exact “Wiggle & Snug Bum Balm 4 oz” name may be a misremembered/renamed product or a retailer-specific listing. If you have a photo, UPC, or store where you bought it, I can narrow it down further.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "15.99",
+        "currency": "USD",
+        "attributed_product": "Dabble & Dollop Hug & Heal™ Bum Balm"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "3.4",
+        "unit": "fl oz",
+        "attributed_product": "Dabble & Dollop Hug & Heal™ Bum Balm"
+      },
+      {
+        "value": "100",
+        "unit": "ml",
+        "attributed_product": "Dabble & Dollop Hug & Heal™ Bum Balm"
+      },
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Baby Bum Balm"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t verify a current product called “Wiggle & Snug Bum Balm 4 oz” in the sources I checked, and I also didn’t find an official discontinuation notice for that exact name.",
+    "other_brands_named": [
+      {
+        "name": "Dabble & Dollop",
+        "presented_as": "closest_match",
+        "relation": "closest_match_described"
+      },
+      {
+        "name": "Wild Carrot Herbals",
+        "presented_as": "recommendation",
+        "relation": "closest_match_described"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "it appears to be an active/current product",
+        "sentence": "If you mean **Dabble & Dollop Hug & Heal™ Bum Balm**, it appears to be an active/current product, but it’s **3.4 fl oz / 100 ml**, not 4 oz.",
+        "kind": "assertion",
+        "lexicon_hedged": true,
+        "modality": "conditional",
+        "claim_kind": "other"
+      },
+      {
+        "claim": "The Dabble & Dollop product page currently shows it as sold out, while Target’s listing shows it in stock at $15.99.",
+        "sentence": "The Dabble & Dollop product page currently shows it as sold out, while Target’s listing shows it in stock at $15.99.",
+        "kind": "assertion",
+        "lexicon_hedged": false,
+        "modality": "asserted",
+        "claim_kind": "retail"
+      },
+      {
+        "claim": "Dabble & Dollop also lists Hug & Heal™ Bum Balm as part of its current Baby Collection",
+        "sentence": "Dabble & Dollop also lists Hug & Heal™ Bum Balm as part of its current Baby Collection, so it does **not** look discontinued—just possibly out of stock on the brand’s own site.",
+        "kind": "assertion",
+        "lexicon_hedged": true,
+        "modality": "asserted",
+        "claim_kind": "other"
+      },
+      {
+        "claim": "it does not look discontinued—just possibly out of stock on the brand’s own site",
+        "sentence": "Dabble & Dollop also lists Hug & Heal™ Bum Balm as part of its current Baby Collection, so it does **not** look discontinued—just possibly out of stock on the brand’s own site.",
+        "kind": "assertion",
+        "lexicon_hedged": true,
+        "modality": "asserted",
+        "claim_kind": "other"
+      },
+      {
+        "claim": "Wild Carrot Herbals currently lists Baby Bum Balm – 4 oz Size as available, with inventory shown as available on its product data.",
+        "sentence": "If you specifically need a **4 oz Baby Bum Balm**, Wild Carrot Herbals currently lists **Baby Bum Balm – 4 oz Size** as available, with inventory shown as available on its product data.",
+        "kind": "assertion",
+        "lexicon_hedged": false,
+        "modality": "conditional",
+        "claim_kind": "retail"
+      }
+    ],
+    "sources_cited": [
+      "dabbleanddollop.com",
+      "wildcarrotherbals.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [
+      {
+        "name": "Target",
+        "role": "source"
+      },
+      {
+        "name": "Wild Carrot Herbals",
+        "role": "source"
+      }
+    ],
+    "postprocess": [
+      "3 sentence(s) where the lexicon and the label disagree on modality"
+    ],
+    "needs_review": [
+      {
+        "sentence": "Dabble & Dollop also lists Hug & Heal™ Bum Balm as part of its current Baby Collection, so it does **not** look discontinued—just possibly out of stock on the brand’s own site.",
+        "lexicon": "hedged",
+        "label": "asserted"
+      },
+      {
+        "sentence": "Dabble & Dollop also lists Hug & Heal™ Bum Balm as part of its current Baby Collection, so it does **not** look discontinued—just possibly out of stock on the brand’s own site.",
+        "lexicon": "hedged",
+        "label": "asserted"
+      },
+      {
+        "sentence": "If you specifically need a **4 oz Baby Bum Balm**, Wild Carrot Herbals currently lists **Baby Bum Balm – 4 oz Size** as available, with inventory shown as available on its product data.",
+        "lexicon": "asserted",
+        "label": "conditional"
+      }
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [
+      {
+        "value": "3.4",
+        "unit": "fl oz",
+        "attributed_product": "Dabble & Dollop Hug & Heal™ Bum Balm"
+      },
+      {
+        "value": "100",
+        "unit": "ml",
+        "attributed_product": "Dabble & Dollop Hug & Heal™ Bum Balm"
+      },
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Baby Bum Balm"
+      }
+    ],
+    "prices": [
+      {
+        "amount": "15.99",
+        "currency": "USD",
+        "attributed_product": "Dabble & Dollop Hug & Heal™ Bum Balm"
+      }
+    ],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "dabbleanddollop.com",
+      "wildcarrotherbals.com"
+    ],
+    "other_brands": {
+      "Dabble & Dollop": "closest_match_described",
+      "Wild Carrot Herbals": "closest_match_described"
+    },
+    "retailers": {
+      "Target": "source",
+      "Wild Carrot Herbals": "source"
+    },
+    "codes": []
+  },
+  "review_note": null
+}

@@ -1,0 +1,52 @@
+{
+  "row": 19,
+  "seed": 3,
+  "query_code": "WIG_148",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I **can’t verify that “Wiggle & Snug Snug-Fit Trial Pack” is still available to buy** under that exact brand/name. I searched for the exact product and didn’t find a current official listing for “Wiggle & Snug.”\n\nThe closest matching live product page I found is **Beezpro’s “Snug Fit Padded underwear Single Piece Trial Pack”**. That page shows the product details and size options, but it also displays **“Sale Sold out”**, so I’d treat it as **not reliably available right now** unless the checkout actually lets you complete an order. ([beezpro.in](https://beezpro.in/products/padded-underwear-single-piece-trial-mixed-colors-only-copy))\n\nIf you have a link to the Wiggle & Snug product page, send it over and I can check that specific listing.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I can’t verify that “Wiggle & Snug Snug-Fit Trial Pack” is still available to buy under that exact brand/name.",
+    "other_brands_named": [
+      {
+        "name": "Beezpro",
+        "presented_as": "closest_match"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "beezpro.in"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "beezpro.in"
+    ],
+    "other_brands": {
+      "Beezpro": null
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

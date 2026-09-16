@@ -1,0 +1,249 @@
+{
+  "row": 34,
+  "seed": 5,
+  "query_code": "WIG_140",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn’t verify a diaper brand/product specifically called **“Wiggle & Snug Snug-Fit Diapers”** from reliable sources, so I’d double-check the exact name on the package. If you meant **Huggies Little Snugglers** or **Huggies Snug & Dry**, then **yes, they can be suitable for newborns** as long as you choose the newborn size and the fit is right.\n\n**What to look for for a newborn:**\n\n- **Correct weight range:** Newborn diapers are typically for babies up to about **10 lb**; Huggies Little Snugglers newborn is listed as **up to 10 lb**. ([target.com](https://www.target.com/p/-/A-15145170))  \n- **Gentle materials:** For sensitive newborn skin, it’s a plus if the diaper is **fragrance-free, hypoallergenic, and free of lotions/parabens**; Huggies Little Snugglers is described this way, and Huggies Snug & Dry is also listed as fragrance-free and hypoallergenic. ([target.com](https://www.target.com/p/-/A-15145170))  \n- **Umbilical cord area:** A newborn diaper with an **umbilical cord opening/cutout** is helpful in the first couple of weeks; Huggies Little Snugglers newborn lists this feature. ([target.com](https://www.target.com/p/-/A-15145170))  \n- **Not too tight:** A “snug fit” is good only if it doesn’t leave red marks or trap moisture. The AAP notes that diapers fastened too tightly can contribute to rubbing, irritation, and diaper rash. ([healthychildren.org](https://www.healthychildren.org/English/tips-tools/ask-the-pediatrician/Pages/Why-is-my-baby-always-getting-diaper-rashes.aspx))  \n\n**Bottom line:** They’re likely fine for a newborn **if they’re fragrance-free, absorbent, newborn-sized, and not too tight**. If your baby gets redness, leaks, blowouts, or marks around the legs/waist, try fastening looser or size up/down. For persistent rash or worsening irritation, ask your pediatrician.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t verify a diaper brand/product specifically called **“Wiggle & Snug Snug-Fit Diapers”** from reliable sources, so I’d double-check the exact name on the package.",
+    "other_brands_named": [
+      {
+        "name": "Huggies Little Snugglers",
+        "presented_as": "closest_match",
+        "relation": "closest_match_described"
+      },
+      {
+        "name": "Huggies Snug & Dry",
+        "presented_as": "closest_match",
+        "relation": "closest_match_described"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "Huggies Little Snugglers newborn is listed as **up to 10 lb**. ([target.com](https://www.target.com/p/-/A-15145170))",
+        "sentence": "Huggies Little Snugglers newborn is listed as **up to 10 lb**. ([target.com](https://www.target.com/p/-/A-15145170))",
+        "span_id": 5,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "Huggies Little Snugglers is described this way, and Huggies Snug & Dry is also listed as fragrance-free and hypoallergenic. ([target.com](https://www.target.com/p/-/A-15145170))",
+        "sentence": "Huggies Little Snugglers is described this way, and Huggies Snug & Dry is also listed as fragrance-free and hypoallergenic. ([target.com](https://www.target.com/p/-/A-15145170))",
+        "span_id": 7,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "Huggies Little Snugglers newborn lists this feature. ([target.com](https://www.target.com/p/-/A-15145170))",
+        "sentence": "Huggies Little Snugglers newborn lists this feature. ([target.com](https://www.target.com/p/-/A-15145170))",
+        "span_id": 9,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "The AAP notes that diapers fastened too tightly can contribute to rubbing, irritation, and diaper rash. ([healthychildren.org](https://www.healthychildren.org/English/tips-tools/ask-the-pediatrician/Pages/Why-is-my-baby-always-getting-diaper-rashes.aspx))",
+        "sentence": "The AAP notes that diapers fastened too tightly can contribute to rubbing, irritation, and diaper rash. ([healthychildren.org](https://www.healthychildren.org/English/tips-tools/ask-the-pediatrician/Pages/Why-is-my-baby-always-getting-diaper-rashes.aspx))",
+        "span_id": 11,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      }
+    ],
+    "sources_cited": [
+      "target.com",
+      "healthychildren.org"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [],
+    "postprocess": [
+      "not product sizes: 10 lb, 10 lb"
+    ],
+    "transcribed_unknown_statement": "I couldn’t verify a diaper brand/product specifically called **“Wiggle & Snug Snug-Fit Diapers”** from reliable sources, so I’d double-check the exact name on the package.",
+    "spans": [
+      {
+        "id": 1,
+        "text": "I couldn’t verify a diaper brand/product specifically called **“Wiggle & Snug Snug-Fit Diapers”** from reliable sources, so I’d double-check the exact name on the package."
+      },
+      {
+        "id": 2,
+        "text": "If you meant **Huggies Little Snugglers** or **Huggies Snug & Dry**, then **yes, they can be suitable for newborns** as long as you choose the newborn size and the fit is right."
+      },
+      {
+        "id": 3,
+        "text": "**What to look for for a newborn:**"
+      },
+      {
+        "id": 4,
+        "text": "- **Correct weight range:** Newborn diapers are typically for babies up to about **10 lb**;"
+      },
+      {
+        "id": 5,
+        "text": "Huggies Little Snugglers newborn is listed as **up to 10 lb**. ([target.com](https://www.target.com/p/-/A-15145170))"
+      },
+      {
+        "id": 6,
+        "text": "- **Gentle materials:** For sensitive newborn skin, it’s a plus if the diaper is **fragrance-free, hypoallergenic, and free of lotions/parabens**;"
+      },
+      {
+        "id": 7,
+        "text": "Huggies Little Snugglers is described this way, and Huggies Snug & Dry is also listed as fragrance-free and hypoallergenic. ([target.com](https://www.target.com/p/-/A-15145170))"
+      },
+      {
+        "id": 8,
+        "text": "- **Umbilical cord area:** A newborn diaper with an **umbilical cord opening/cutout** is helpful in the first couple of weeks;"
+      },
+      {
+        "id": 9,
+        "text": "Huggies Little Snugglers newborn lists this feature. ([target.com](https://www.target.com/p/-/A-15145170))"
+      },
+      {
+        "id": 10,
+        "text": "- **Not too tight:** A “snug fit” is good only if it doesn’t leave red marks or trap moisture."
+      },
+      {
+        "id": 11,
+        "text": "The AAP notes that diapers fastened too tightly can contribute to rubbing, irritation, and diaper rash. ([healthychildren.org](https://www.healthychildren.org/English/tips-tools/ask-the-pediatrician/Pages/Why-is-my-baby-always-getting-diaper-rashes.aspx))"
+      },
+      {
+        "id": 12,
+        "text": "**Bottom line:** They’re likely fine for a newborn **if they’re fragrance-free, absorbent, newborn-sized, and not too tight**."
+      },
+      {
+        "id": 13,
+        "text": "If your baby gets redness, leaks, blowouts, or marks around the legs/waist, try fastening looser or size up/down."
+      },
+      {
+        "id": 14,
+        "text": "For persistent rash or worsening irritation, ask your pediatrician."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "I couldn’t verify a diaper brand/product specifically called **“Wiggle & Snug Snug-Fit Diapers”** from reliable sources, so I’d double-check the exact name on the package.",
+        "kind": "unknown_statement",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "If you meant **Huggies Little Snugglers** or **Huggies Snug & Dry**, then **yes, they can be suitable for newborns** as long as you choose the newborn size and the fit is right.",
+        "kind": "instruction",
+        "modality": "conditional"
+      },
+      {
+        "span_id": 3,
+        "text": "**What to look for for a newborn:**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 4,
+        "text": "- **Correct weight range:** Newborn diapers are typically for babies up to about **10 lb**;",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 5,
+        "text": "Huggies Little Snugglers newborn is listed as **up to 10 lb**. ([target.com](https://www.target.com/p/-/A-15145170))",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 6,
+        "text": "- **Gentle materials:** For sensitive newborn skin, it’s a plus if the diaper is **fragrance-free, hypoallergenic, and free of lotions/parabens**;",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 7,
+        "text": "Huggies Little Snugglers is described this way, and Huggies Snug & Dry is also listed as fragrance-free and hypoallergenic. ([target.com](https://www.target.com/p/-/A-15145170))",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 8,
+        "text": "- **Umbilical cord area:** A newborn diaper with an **umbilical cord opening/cutout** is helpful in the first couple of weeks;",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 9,
+        "text": "Huggies Little Snugglers newborn lists this feature. ([target.com](https://www.target.com/p/-/A-15145170))",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 10,
+        "text": "- **Not too tight:** A “snug fit” is good only if it doesn’t leave red marks or trap moisture.",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 11,
+        "text": "The AAP notes that diapers fastened too tightly can contribute to rubbing, irritation, and diaper rash. ([healthychildren.org](https://www.healthychildren.org/English/tips-tools/ask-the-pediatrician/Pages/Why-is-my-baby-always-getting-diaper-rashes.aspx))",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 12,
+        "text": "**Bottom line:** They’re likely fine for a newborn **if they’re fragrance-free, absorbent, newborn-sized, and not too tight**.",
+        "kind": "instruction",
+        "modality": "conditional"
+      },
+      {
+        "span_id": 13,
+        "text": "If your baby gets redness, leaks, blowouts, or marks around the legs/waist, try fastening looser or size up/down.",
+        "kind": "instruction",
+        "modality": "conditional"
+      },
+      {
+        "span_id": 14,
+        "text": "For persistent rash or worsening irritation, ask your pediatrician.",
+        "kind": "instruction",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [
+      "target.com",
+      "healthychildren.org"
+    ],
+    "other_brands": {
+      "Huggies Little Snugglers": "closest_match_described",
+      "Huggies Snug & Dry": "closest_match_described"
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

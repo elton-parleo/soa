@@ -1,0 +1,61 @@
+{
+  "row": 27,
+  "seed": 1,
+  "query_code": "WIG_148",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "As of **September 15, 2026**, I **couldn’t verify an active listing for an exact product named “Wiggle & Snug Snug-Fit Trial Pack.”** Searches for that exact brand/product didn’t turn up a clear official product page.\n\nThe closest match I found is **Beezpro’s “Snug Fit Padded underwear Single Piece Trial Pack (Mixed colors only)”**. That page shows a price of **Rs. 255.00**, size options, and an **“Add to cart”** button, so that similar product appears to be buyable from Beezpro. It’s described as a sample/trial piece for testing the fit and is marked non-returnable/non-exchangeable. ([beezpro.in](https://beezpro.in/products/padded-underwear-single-piece-trial-mixed-colors-only-copy))\n\nIf you meant a different “Wiggle & Snug” product, send me the link or a screenshot and I can check that exact listing.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "255.00",
+        "currency": "INR",
+        "attributed_product": "Beezpro’s “Snug Fit Padded underwear Single Piece Trial Pack (Mixed colors only)”"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "brand_unknown_statement": "“couldn’t verify an active listing for an exact product named “Wiggle & Snug Snug-Fit Trial Pack.””",
+    "other_brands_named": [
+      {
+        "name": "Beezpro",
+        "presented_as": "closest match"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "beezpro.in"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "255.00",
+        "currency": "INR",
+        "attributed_product": "Beezpro’s “Snug Fit Padded underwear Single Piece Trial Pack (Mixed colors only)”"
+      }
+    ],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "beezpro.in"
+    ],
+    "other_brands": {
+      "Beezpro": null
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

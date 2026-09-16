@@ -1,0 +1,84 @@
+{
+  "row": 22,
+  "seed": 4,
+  "query_code": "WIG_165",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I cannot provide the exact real-time cost of Wiggle & Snug Snug-Fit Overnight Diapers Size 6, as prices for products like these vary significantly based on several factors:\n\n*   **Retailer:** Prices will differ between stores like Amazon, Walmart, Target, local grocery stores, drugstores, etc.\n*   **Current Sales & Promotions:** Diapers are frequently on sale, or part of bulk-buy discounts.\n*   **Package Size:** The cost per pack depends on how many diapers are included.\n*   **Location:** Regional pricing differences can occur.\n*   **Online vs. In-Store:** Online prices and promotions might differ from those in physical stores.\n\n**To get the most accurate and current price, I recommend checking the following:**\n\n1.  **Major Online Retailers:**\n    *   Amazon.com\n    *   Walmart.com\n    *   Target.com\n    *   Other baby supply websites\n\n2.  **Local Store Websites or Apps:** Check the specific websites or apps for grocery stores or pharmacies in your area.\n\nWhen comparing, it's often helpful to look at the **\"cost per diaper\"** (which some online retailers display) as pack sizes can vary greatly.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [
+      "Amazon.com",
+      "Walmart.com",
+      "Target.com",
+      "Other baby supply websites",
+      "Local Store Websites or Apps"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": false,
+    "lexicon_disclaimer": true,
+    "retailer_mentions": [
+      {
+        "name": "Amazon.com",
+        "role": "recommendation"
+      },
+      {
+        "name": "Walmart.com",
+        "role": "recommendation"
+      },
+      {
+        "name": "Target.com",
+        "role": "recommendation"
+      },
+      {
+        "name": "Other baby supply websites",
+        "role": "recommendation"
+      },
+      {
+        "name": "Local Store Websites or Apps",
+        "role": "recommendation"
+      }
+    ],
+    "postprocess": [
+      "not product sizes: 6",
+      "unknown-statement span labelled a disclaimer",
+      "not a brand: Amazon",
+      "not a brand: Walmart",
+      "not a brand: Target"
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {
+      "Amazon.com": "recommendation",
+      "Walmart.com": "recommendation",
+      "Target.com": "recommendation",
+      "Other baby supply websites": "recommendation",
+      "Local Store Websites or Apps": "recommendation"
+    },
+    "codes": []
+  },
+  "review_note": null
+}

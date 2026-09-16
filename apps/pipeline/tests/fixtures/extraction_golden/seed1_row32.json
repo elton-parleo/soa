@@ -1,0 +1,64 @@
+{
+  "row": 32,
+  "seed": 1,
+  "query_code": "WIG_146",
+  "platform": "gemini",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "When a baby leaks at night, it's often a sign that you need to adjust either the **size** of the diaper or how it's **fitted**, even when using an overnight-specific diaper like the Wiggle & Snug Snug-Fit Overnight Diapers.\n\nHere's how to approach sizing for a leaking baby:\n\n1.  **Start with the Weight Chart:**\n    *   First, confirm your baby's current weight. Wiggle & Snug, like all diaper brands, will have a weight range for each size (e.g., Size 3: 16-28 lbs, Size 4: 22-37 lbs). **Always consult the specific Wiggle & Snug weight chart on their packaging or website.**\n\n2.  **Consider \"Sizing Up\" for Leaks:**\n    *   **If your baby is at the *top end* of their current size's weight range:** It's almost always time to go up to the next size. Even if they're still *within* the range, if they're leaking, a larger size offers more absorbent material and more coverage.\n    *   **If your baby is in the *middle* of their current size's weight range, but still leaking:** Many parents find that sizing up by one size specifically for overnight can solve the problem. A larger diaper provides:\n        *   **More Absorbency:** More material to hold more pee.\n        *   **More Coverage:** A higher waistband and wider fit can prevent leaks from the top or sides, especially for active sleepers.\n\n3.  **Check the Fit (Crucial, regardless of size):**\n    *   **Around the Legs:** Make sure the leg cuffs are snug against the thighs with no gaps. The ruffles should be pulled *out*, not tucked in. Gaps here are a common cause of leaks.\n    *   **Around the Waist:** The diaper should fit snugly, but you should be able to comfortably slide two fingers under the waistband. If it's too loose, it can sag and create gaps; if it's too tight, it can be uncomfortable and cause blowouts.\n    *   **Overall Coverage:** Does the diaper cover enough of your baby's bottom and tummy? A diaper that's too small might not go high enough, leading to leaks over the top or back.\n    *   **For Boys:** Make sure your baby boy's penis is pointed downwards within the diaper. This directs urine towards the most absorbent part of the diaper and away from the top edge.\n\n**Recommendation Strategy for Leaks:**\n\n*   **Scenario 1: You're currently using Wiggle & Snug Snug-Fit Overnight Diapers in the correct weight range, and your baby is leaking.**\n    *   **Try going up one size for overnight.** For example, if your baby is 25 lbs and in Size 3 (let's say 16-28 lbs) and leaking, try Size 4 for overnight (e.g., 22-37 lbs). Even if it seems a little big at first, the extra absorbency and coverage often make the difference. Ensure the leg gathers are still snug.\n\n*   **Scenario 2: You're currently using *regular* Wiggle & Snug diapers (not overnight) and your baby is leaking.**\n    *   **First, switch to the Wiggle & Snug Snug-Fit Overnight Diapers in their current regular size.** These are specifically designed with extra absorbency for longer wear. If that doesn't solve it, then proceed to the \"sizing up\" strategy above.\n\n**Additional Tips for Night Leaks:**\n\n*   **Booster Pads/Diaper Doublers:** If sizing up isn't enough, consider adding a diaper booster pad (like Sposie or Jooldia) inside the overnight diaper. These are thin absorbent pads that lie within the diaper to add extra absorbency without making the diaper too bulky or causing fit issues.\n*   **Limit Evening Fluids (with caution):** Avoid excessive fluids right before bed, but ensure your baby stays well-hydrated throughout the day.\n*   **Pre-Bed Diaper Change:** A fresh, dry diaper right before bed (after any last feeding) can make a big difference.\n*   **\"Dream Feed\" Change:** For very heavy wetters, a quick diaper change during a \"dream feed\" (when baby is still mostly asleep) can help.\n\nUltimately, preventing night leaks often involves a bit of trial and error with sizing and fit. Starting with moving up one size for the Wiggle & Snug Snug-Fit Overnight Diapers is usually the most effective first step.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Sposie",
+        "presented_as": "like"
+      },
+      {
+        "name": "Jooldia",
+        "presented_as": "like"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "Wiggle & Snug, like all diaper brands, will have a weight range for each size",
+        "kind": "other"
+      },
+      {
+        "claim": "These are specifically designed with extra absorbency for longer wear.",
+        "kind": "other"
+      }
+    ],
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {
+      "Sposie": "recommendation",
+      "Jooldia": "recommendation"
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": {
+    "brands": {
+      "Sposie": "recommendation",
+      "Jooldia": "recommendation"
+    }
+  }
+}

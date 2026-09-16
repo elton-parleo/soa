@@ -1,0 +1,56 @@
+{
+  "row": 16,
+  "seed": 1,
+  "query_code": "WIG_146",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "For a baby who **leaks at night**, the usual move is to buy **one size larger than their daytime diaper** in the Wiggle & Snug Snug-Fit Overnight Diapers—**as long as the larger size still seals well around the legs and waist**.\n\n**Rule of thumb:**\n- Daytime **Size 2** → try Overnight **Size 3**\n- Daytime **Size 3** → try Overnight **Size 4**\n- Daytime **Size 4** → try Overnight **Size 5**\n\nNight leaks often mean the diaper is either too small/low-capacity or not fitting well. A slightly larger diaper can add absorbency for longer stretches, but if it leaves leg gaps or sags, it can leak more. A good fit should be snug at the waist, have no leg gaps, and not leave red marks. ([pampers.com](https://www.pampers.com/en-us/baby/diapering/article/when-to-size-up-diapers))\n\nIf you tell me your baby’s **weight** and **current daytime diaper size**, I can suggest the exact size to start with.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "pampers",
+        "presented_as": "source"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "Wiggle & Snug Snug-Fit Overnight Diapers",
+        "kind": "other"
+      }
+    ],
+    "sources_cited": [
+      "pampers.com"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "pampers.com"
+    ],
+    "other_brands": {
+      "pampers": null
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": {
+    "claims": []
+  }
+}

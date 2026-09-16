@@ -120,7 +120,21 @@ def test_a_successful_call_returns_the_fixture_record(client):
     _stub(client, FIXTURE_EXTRACTION)
     result = asyncio.run(client.extract("...", brand="Wiggle & Snug"))
 
-    assert result.record == FIXTURE_EXTRACTION
+    # Everything the model returned reaches the record unchanged.
+    COMPUTED = {"brand_mentioned", "postprocess"}
+    for field, value in FIXTURE_EXTRACTION.items():
+        if field in COMPUTED:
+            continue
+        assert result.record[field] == value, field
+
+    # Plus what the deterministic pass adds: the two computed fields, and
+    # an empty list for every field this older-shaped fixture predates —
+    # so a stored record always has the same shape whatever produced it.
+    assert result.record["brand_mentioned"] is False  # the stub answer is "..."
+    assert result.record["postprocess"] == []
+    for field in ("brand_claims", "other_brands_named",
+                  "recommended_retailers", "loyalty_tiers_named"):
+        assert result.record[field] == []
     assert result.error is None
     assert result.latency_ms is not None
     assert result.usage["input_tokens"] == 900
@@ -178,10 +192,24 @@ def test_an_empty_answer_never_reaches_the_model(client):
 
 def test_the_empty_extraction_has_every_schema_field():
     """It is stored as a real extraction record, so a reader of the row
-    cannot tell it apart by shape — only by extraction_confident."""
+    cannot tell it apart by shape — only by extraction_confident.
+
+    Plus brand_mentioned, which is stamped on afterwards and so is in
+    every stored record without ever being in the schema."""
     assert sorted(prompts.EMPTY_EXTRACTION) == sorted(
-        prompts.build_extraction_schema()["properties"]
+        list(prompts.build_extraction_schema()["properties"])
+        + ["brand_mentioned", "postprocess"]
     )
+
+
+def test_the_model_is_never_asked_whether_the_brand_was_named():
+    """It answered wrong in both directions on one cycle — false on "on
+    eligible Wiggle & Snug products", true on an answer that only said
+    "Wonder" and "The Wiggles". A string is in a string or it is not."""
+    schema = prompts.build_extraction_schema()
+    assert "brand_mentioned" not in schema["properties"]
+    assert "brand_mentioned" not in schema["required"]
+    assert "brand_mentioned" not in prompts.EXPECTATION_EXTRACTION_PROMPT
 
 
 # ── the fixture record scores as expected end to end ──────────────────────

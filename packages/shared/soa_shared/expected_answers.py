@@ -26,6 +26,7 @@ them.
 
 Sync copies to apps/api/soa_shared/ and apps/pipeline/soa_shared/.
 """
+import re
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
@@ -180,13 +181,56 @@ def normalize_money(value: Any) -> Optional[str]:
     return f"{amount.quantize(Decimal('0.01'))}"
 
 
+# What a shopping answer writes a currency as, and the ISO-4217 code it
+# means. A table rather than a guess: an extractor asked to "use the code"
+# returned "Rs." on one run and "INR" on another for the same answer, and
+# a scorer comparing "Rs." against "INR" finds a mismatch that is not one.
+#
+# Deliberately short. Every entry here is a symbol seen in a real answer;
+# a symbol nobody has seen is better refused than guessed at, because a
+# wrong guess is a price comparison that silently means nothing.
+CURRENCY_SYMBOLS = {
+    '$': 'USD', 'US$': 'USD', 'USD': 'USD', 'DOLLARS': 'USD',
+    '£': 'GBP', 'GBP': 'GBP', 'POUNDS': 'GBP',
+    '€': 'EUR', 'EUR': 'EUR', 'EUROS': 'EUR',
+    '₹': 'INR', 'RS': 'INR', 'INR': 'INR', 'RUPEES': 'INR',
+}
+
+
 def normalize_currency(value: Any) -> Optional[str]:
-    """ISO-4217, uppercase. '$22.99' and 'CA$22.99' are not the same
-    answer, so currency is compared rather than assumed."""
+    """
+    ISO-4217, uppercase, via the symbol table.
+
+    '$22.99' and 'CA$22.99' are still not the same answer — 'CA$' is not
+    in the table and comes back as itself, which is_currency_code then
+    refuses. Currency is compared, never assumed.
+    """
     if not value:
         return None
-    text = str(value).strip().upper()
-    return text or None
+    raw = str(value).strip()
+    mapped = (
+        CURRENCY_SYMBOLS.get(raw)
+        or CURRENCY_SYMBOLS.get(raw.upper().rstrip('.'))
+    )
+    if mapped:
+        return mapped
+    return raw.upper() or None
+
+
+def is_currency_code(value: Any) -> bool:
+    """
+    Whether a normalized currency is something a comparison can use.
+
+    Three letters, because that is what ISO-4217 is — so 'CAD' and 'AUD'
+    pass without being in the table above, and 'RS.' and 'CA$' do not.
+    The caller decides what to do about a false; the scorer records the
+    run as unscoreable rather than comparing a price whose currency it
+    cannot read, which is the only honest option: treating it as a match
+    and treating it as a mismatch are both claims about the assistant
+    made on the strength of our own confusion.
+    """
+    text = str(value or '').strip()
+    return len(text) == 3 and text.isalpha()
 
 
 def normalize_gtin(value: Any) -> Optional[str]:
@@ -354,6 +398,56 @@ def with_secondary(primary: dict, secondary: list) -> dict:
     if not validated:
         return dict(primary)
     return {**primary, 'secondary': validated}
+
+
+# ─── Naming a brand ────────────────────────────────────────────────────────
+
+_BRAND_NOISE = re.compile(r'[^a-z0-9]+')
+_AMPERSAND = re.compile(r'\s*&\s*')
+
+
+def normalize_brand_text(text) -> str:
+    """Lowercased, &-expanded, punctuation-flattened, single-spaced.
+
+    Applied to BOTH sides of every comparison, so the tolerance it grants
+    is symmetric — never a rule that reads one way for the brand and
+    another for the text being checked.
+    """
+    lowered = _AMPERSAND.sub(' and ', str(text or '').lower())
+    return _BRAND_NOISE.sub(' ', lowered).strip()
+
+
+def names_brand(text, brand) -> bool:
+    """
+    Whether a piece of text names this brand.
+
+    ONE definition, used in two places that must not disagree: the
+    generator's guard, which rejects a brand-direct question that does
+    not name the brand, and the extraction, which records whether the
+    ANSWER did. If those two drifted apart, a question could pass the
+    guard and then be scored against a different idea of what naming is.
+
+    Substring on the normalized forms, so 'Wiggle & Snug', 'wiggle and
+    snug' and 'Wiggle  &  Snug' all pass and 'Wiggle' does not — the
+    tolerance is for typography, never for identity. Word boundaries come
+    from padding both sides with spaces: without that, a brand called
+    'Bum' would count itself named by the word 'album'.
+
+    Deterministic on purpose. This used to be a field the extraction
+    model filled in, and on one cycle it got it wrong in both directions:
+    false on an answer reading "on eligible Wiggle & Snug products", true
+    on one that only ever said "Wonder" and "The Wiggles". A string is in
+    a string or it is not, and that is not a judgement anyone needs a
+    model for.
+    """
+    brand_text = normalize_brand_text(brand)
+    if not brand_text:
+        # No brand to look for. Callers that require one refuse to run
+        # without it; reaching here means a caller asked a question this
+        # function cannot answer, and answering 'no' would mark every
+        # answer as not naming a brand nobody named.
+        return True
+    return f' {brand_text} ' in f' {normalize_brand_text(text)} '
 
 
 # ─── Validation ────────────────────────────────────────────────────────────

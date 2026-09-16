@@ -1,0 +1,46 @@
+{
+  "row": 5,
+  "seed": 2,
+  "query_code": "WIG_174",
+  "platform": "gemini",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "You earn **1 Member Rewards point for every $1 spent** on Wiggle & Snug products.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [
+      {
+        "value": "1",
+        "per_dollar": true,
+        "program": "Member Rewards"
+      }
+    ],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

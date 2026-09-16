@@ -1,0 +1,58 @@
+{
+  "row": 34,
+  "seed": 2,
+  "query_code": "WIG_148",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I can't find any information about a brand called \"Wiggle & Snug\" or a product specifically named \"Snug-Fit Trial Pack\" being currently available for purchase through major retailers or online searches.\n\nThis suggests a few possibilities:\n*   **It might be a fictional product or brand.**\n*   **It could be a very niche, local, or small brand** without a strong online presence.\n*   **The name might be slightly different** (e.g., \"Wiggles & Giggles,\" \"Snuggle & Snug,\" etc.).\n*   **It might have been a limited-time promotional item** that is no longer offered.\n\nDo you remember where you might have seen or heard about \"Wiggle & Snug Snug-Fit Trial Pack\"? Knowing more details (like what kind of product it is – e.g., baby clothing, diapers, bedding, etc. – or where you saw it) might help to identify it.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I can't find any information about a brand called \"Wiggle & Snug\" or a product specifically named \"Snug-Fit Trial Pack\" being currently available for purchase through major retailers or online searches.",
+    "other_brands_named": [
+      {
+        "name": "Wiggles & Giggles",
+        "presented_as": "closest_match"
+      },
+      {
+        "name": "Snuggle & Snug",
+        "presented_as": "closest_match"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {
+      "Wiggles & Giggles": "spelling_guess",
+      "Snuggle & Snug": "spelling_guess"
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": {
+    "unknown": "keep",
+    "brands": {
+      "Wiggles & Giggles": "spelling_guess",
+      "Snuggle & Snug": "spelling_guess"
+    }
+  }
+}

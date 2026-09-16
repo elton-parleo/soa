@@ -1,0 +1,197 @@
+{
+  "row": 11,
+  "seed": 4,
+  "query_code": "WIG_159",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn’t find a “Wiggle & Snug” diaper brand; I think you may mean **Huggies Snug & Dry Size 5**.\n\nCurrent prices I found:\n\n- **Walmart — Huggies Snug & Dry Size 5, 60 ct:** **$19.97** (33.3¢/diaper). ([walmart.com](https://www.walmart.com/ip/15036922577))  \n- **H-E-B — Huggies Snug & Dry Disney Mickey Mouse Big Pack Size 5, 62 ct:** **$20.47** (33¢/diaper). ([heb.com](https://www.heb.com/product-detail/huggies-snug-amp-dry-disney-mickey-mouse-big-pack-diapers-size-5-over-27-lbs-/790866))  \n- **Fleet Farm — Huggies Snug & Dry Big Pack Size 5:** **$15.39 clearance**; regular **$21.99**. ([fleetfarm.com](https://www.fleetfarm.com/detail/huggies-snug-dry-big-pack-diapers-size-5/0000000378146))  \n\nSo, the **big pack is roughly $20–$22 normally**, depending on the store; there may be clearance or local pricing.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "19.97",
+        "currency": "USD",
+        "attributed_product": "Walmart — Huggies Snug & Dry Size 5, 60 ct"
+      },
+      {
+        "amount": "20.47",
+        "currency": "USD",
+        "attributed_product": "H-E-B — Huggies Snug & Dry Disney Mickey Mouse Big Pack Size 5, 62 ct"
+      },
+      {
+        "amount": "15.39",
+        "currency": "USD",
+        "attributed_product": "Fleet Farm — Huggies Snug & Dry Big Pack Size 5"
+      },
+      {
+        "amount": "21.99",
+        "currency": "USD",
+        "attributed_product": "Fleet Farm — Huggies Snug & Dry Big Pack Size 5"
+      },
+      {
+        "amount": "20",
+        "currency": "USD",
+        "attributed_product": "the big pack"
+      },
+      {
+        "amount": "22",
+        "currency": "USD",
+        "attributed_product": "the big pack"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 60,
+        "attributed_product": "Huggies Snug & Dry Size 5"
+      },
+      {
+        "value": 62,
+        "attributed_product": "Huggies Snug & Dry Disney Mickey Mouse Big Pack Size 5"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t find a “Wiggle & Snug” diaper brand; I think you may mean **Huggies Snug & Dry Size 5**.",
+    "other_brands_named": [
+      {
+        "name": "Huggies Snug & Dry Size 5",
+        "presented_as": "closest_match",
+        "relation": "closest_match_described"
+      },
+      {
+        "name": "Huggies Snug & Dry Disney Mickey Mouse Big Pack Size 5",
+        "presented_as": "closest_match",
+        "relation": "closest_match_described"
+      },
+      {
+        "name": "Huggies Snug & Dry Big Pack Size 5",
+        "presented_as": "closest_match",
+        "relation": "closest_match_described"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "Walmart",
+        "sentence": "- **Walmart — Huggies Snug & Dry Size 5, 60 ct:** **$19.97** (33.3¢/diaper). ([walmart.com](https://www.walmart.com/ip/15036922577))",
+        "kind": "assertion",
+        "lexicon_hedged": false,
+        "modality": "asserted",
+        "claim_kind": "retail"
+      },
+      {
+        "claim": "H-E-B",
+        "sentence": "- **H-E-B — Huggies Snug & Dry Disney Mickey Mouse Big Pack Size 5, 62 ct:** **$20.47** (33¢/diaper). ([heb.com](https://www.heb.com/product-detail/huggies-snug-amp-dry-disney-mickey-mouse-big-pack-diapers-size-5-over-27-lbs-/790866))",
+        "kind": "assertion",
+        "lexicon_hedged": false,
+        "modality": "asserted",
+        "claim_kind": "retail"
+      },
+      {
+        "claim": "Fleet Farm",
+        "sentence": "- **Fleet Farm — Huggies Snug & Dry Big Pack Size 5:** **$15.39 clearance**; regular **$21.99**. ([fleetfarm.com](https://www.fleetfarm.com/detail/huggies-snug-dry-big-pack-diapers-size-5/0000000378146))",
+        "kind": "assertion",
+        "lexicon_hedged": false,
+        "modality": "asserted",
+        "claim_kind": "retail"
+      }
+    ],
+    "sources_cited": [
+      "walmart.com",
+      "heb.com",
+      "fleetfarm.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [
+      {
+        "name": "Walmart",
+        "role": "source"
+      },
+      {
+        "name": "H-E-B",
+        "role": "source"
+      },
+      {
+        "name": "Fleet Farm",
+        "role": "source"
+      }
+    ],
+    "postprocess": [
+      "retailers that were sources: Walmart"
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "19.97",
+        "currency": "USD",
+        "attributed_product": "Walmart — Huggies Snug & Dry Size 5, 60 ct"
+      },
+      {
+        "amount": "20.47",
+        "currency": "USD",
+        "attributed_product": "H-E-B — Huggies Snug & Dry Disney Mickey Mouse Big Pack Size 5, 62 ct"
+      },
+      {
+        "amount": "15.39",
+        "currency": "USD",
+        "attributed_product": "Fleet Farm — Huggies Snug & Dry Big Pack Size 5"
+      },
+      {
+        "amount": "21.99",
+        "currency": "USD",
+        "attributed_product": "Fleet Farm — Huggies Snug & Dry Big Pack Size 5"
+      },
+      {
+        "amount": "20",
+        "currency": "USD",
+        "attributed_product": "the big pack"
+      },
+      {
+        "amount": "22",
+        "currency": "USD",
+        "attributed_product": "the big pack"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 60,
+        "attributed_product": "Huggies Snug & Dry Size 5"
+      },
+      {
+        "value": 62,
+        "attributed_product": "Huggies Snug & Dry Disney Mickey Mouse Big Pack Size 5"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "walmart.com",
+      "heb.com",
+      "fleetfarm.com"
+    ],
+    "other_brands": {
+      "Huggies Snug & Dry Size 5": "closest_match_described",
+      "Huggies Snug & Dry Disney Mickey Mouse Big Pack Size 5": "closest_match_described",
+      "Huggies Snug & Dry Big Pack Size 5": "closest_match_described"
+    },
+    "retailers": {
+      "Walmart": "source",
+      "H-E-B": "source",
+      "Fleet Farm": "source"
+    },
+    "codes": []
+  },
+  "review_note": null
+}

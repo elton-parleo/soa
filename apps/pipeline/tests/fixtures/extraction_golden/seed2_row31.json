@@ -1,0 +1,46 @@
+{
+  "row": 31,
+  "seed": 2,
+  "query_code": "WIG_146",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "For a baby who **leaks at night**, start with **one size larger than their daytime diaper** in the Wiggle & Snug Snug-Fit Overnight Diapers—**but only if the bigger size still seals at the legs and waist**.\n\n**Quick guide:**\n- Day diaper **Size 2** → try overnight **Size 3**\n- Day diaper **Size 3** → try overnight **Size 4**\n- Day diaper **Size 4** → try overnight **Size 5**\n- Day diaper **Size 5** → try overnight **Size 6**\n\nThis “size up for overnight” approach is commonly recommended because the larger diaper can provide more absorbent capacity for long stretches; however, if sizing up creates **leg gaps**, it can make leaks worse. Fit checks matter: the diaper should be snug at the waist/thighs, the leg cuffs should be pulled out, and there shouldn’t be visible gaps. ([babylist.com](https://www.babylist.com/hello-baby/how-to-stop-overnight-diaper-leaks?utm_source=openai))\n\nIf the baby is already in a well-fitting overnight diaper and still leaks, try:\n1. Put on a **fresh diaper right before bed**.\n2. Make sure **leg ruffles/cuffs are fully out**.\n3. For boys, point the penis **down** before fastening.\n4. If the next size is too loose, use the **current size + diaper booster pad** instead. ([albeebaby.com](https://www.albeebaby.com/blogs/from-the-cradle/overnight-diaper-leaks?utm_source=openai))\n\nIf you tell me the baby’s **current diaper size and weight**, I can recommend the best exact size.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "babylist.com",
+      "albeebaby.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "babylist.com",
+      "albeebaby.com"
+    ],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

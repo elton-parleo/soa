@@ -1,0 +1,68 @@
+{
+  "row": 32,
+  "seed": 4,
+  "query_code": "WIG_139",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Yes, Wiggle & Snug sells **wipes and diaper cream** in addition to their diapers. They aim to be a comprehensive baby care brand.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "sells wipes and diaper cream in addition to their diapers",
+        "sentence": "Yes, Wiggle & Snug sells **wipes and diaper cream** in addition to their diapers.",
+        "kind": "assertion",
+        "lexicon_hedged": false,
+        "modality": "asserted",
+        "claim_kind": "retail"
+      },
+      {
+        "claim": "aim to be a comprehensive baby care brand",
+        "sentence": "They aim to be a comprehensive baby care brand.",
+        "kind": "assertion",
+        "lexicon_hedged": false,
+        "modality": "hedged",
+        "claim_kind": "other"
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [],
+    "postprocess": [
+      "1 sentence(s) where the lexicon and the label disagree on modality"
+    ],
+    "needs_review": [
+      {
+        "sentence": "They aim to be a comprehensive baby care brand.",
+        "lexicon": "asserted",
+        "label": "hedged"
+      }
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

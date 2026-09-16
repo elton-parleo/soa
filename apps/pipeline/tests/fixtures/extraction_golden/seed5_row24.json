@@ -1,0 +1,557 @@
+{
+  "row": 24,
+  "seed": 5,
+  "query_code": "WIG_141",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "It's difficult to give a definitive \"yes, they are better\" without knowing more about \"Wiggle & Snug Snug-Fit Overnight Diapers,\" as it's not a widely recognized major brand of diapers that I have specific performance data for.\n\nHowever, the name itself – **\"Snug-Fit Overnight Diapers\"** – suggests some promising characteristics for combating nighttime leaks:\n\n1.  **\"Overnight\":** This typically means the diaper is designed with enhanced absorbency compared to a regular daytime diaper. Overnight diapers usually have more super-absorbent polymers (SAP) and extra layers to handle a longer period without changes and a larger volume of urine.\n2.  **\"Snug-Fit\":** This implies the design focuses on a secure fit around the waist and legs to prevent gaps where leaks can occur. A good fit is crucial for containing both urine and potential blowouts.\n\n**What generally makes an overnight diaper \"better\" for nighttime leaks?**\n\nIf \"Wiggle & Snug Snug-Fit Overnight Diapers\" incorporates these features, they would be a strong contender:\n\n*   **Superior Absorbency:** This is the #1 factor. It needs to hold significantly more liquid than a daytime diaper without leaking or feeling excessively bulky.\n*   **Excellent Fit and Leak Guards:**\n    *   **Snug Leg Cuffs:** Double leg cuffs or strong, soft elastic around the thighs prevent leaks from escaping the sides.\n    *   **Flexible Waistband:** A stretchy and comfortable waistband ensures a secure fit around the tummy, even as baby moves.\n    *   **High Back:** A higher back can help prevent leaks, especially for back sleepers or babies prone to blowouts.\n*   **Comfort and Breathability:** While absorbency is key, the diaper still needs to be soft and breathable to prevent rashes and allow the baby to sleep comfortably.\n*   **Wetness Indicator (Optional but helpful):** While less critical for overnight changes, it can be useful for initial trials or if you're unsure.\n*   **Sizing Up:** Many parents find that sizing up one size in an overnight diaper helps with both absorbency and preventing leaks, as it offers more coverage.\n\n**How to determine if Wiggle & Snug Snug-Fit Overnight Diapers are a good choice for *your* baby:**\n\n1.  **Read Reviews:** Look for reviews specifically mentioning these diapers and their performance against leaks.\n2.  **Check Product Details:** Does the description highlight multiple absorbency layers, advanced leak protection, or a specific moisture-wicking core?\n3.  **Trial and Error:** The best way to know if they are better for your child is to try them. Every baby's body shape, sleeping position, and urine output are different. What works wonders for one baby might not for another. Start with a small pack if available.\n4.  **Compare to Established Overnights:** Brands like **Huggies Overnites**, **Pampers Swaddlers Overnights**, and **Luvs** (for some) are well-known for their overnight performance. If Wiggle & Snug can compete with or surpass these in your experience, then they would be a better choice.\n\nIn summary, the name \"Wiggle & Snug Snug-Fit Overnight Diapers\" is promising, suggesting they are designed with the right features for nighttime leak protection. However, without specific product information or user reviews, it's impossible to guarantee they will be \"better\" than other options for your individual needs. You'll need to evaluate them based on their specific features and, ideally, through personal trial.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "It's difficult to give a definitive \"yes, they are better\" without knowing more about \"Wiggle & Snug Snug-Fit Overnight Diapers,\" as it's not a widely recognized major brand of diapers that I have specific performance data for.",
+    "other_brands_named": [
+      {
+        "name": "Huggies Overnites",
+        "presented_as": "comparison",
+        "relation": "comparison"
+      },
+      {
+        "name": "Pampers Swaddlers Overnights",
+        "presented_as": "comparison",
+        "relation": "comparison"
+      },
+      {
+        "name": "Luvs",
+        "presented_as": "comparison",
+        "relation": "comparison"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "However, the name itself – **\"Snug-Fit Overnight Diapers\"** – suggests some promising characteristics for combating nighttime leaks:",
+        "sentence": "However, the name itself – **\"Snug-Fit Overnight Diapers\"** – suggests some promising characteristics for combating nighttime leaks:",
+        "span_id": 2,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      },
+      {
+        "claim": "**\"Overnight\":** This typically means the diaper is designed with enhanced absorbency compared to a regular daytime diaper.",
+        "sentence": "**\"Overnight\":** This typically means the diaper is designed with enhanced absorbency compared to a regular daytime diaper.",
+        "span_id": 3,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      },
+      {
+        "claim": "Overnight diapers usually have more super-absorbent polymers (SAP) and extra layers to handle a longer period without changes and a larger volume of urine.",
+        "sentence": "Overnight diapers usually have more super-absorbent polymers (SAP) and extra layers to handle a longer period without changes and a larger volume of urine.",
+        "span_id": 4,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      },
+      {
+        "claim": "**\"Snug-Fit\":** This implies the design focuses on a secure fit around the waist and legs to prevent gaps where leaks can occur.",
+        "sentence": "**\"Snug-Fit\":** This implies the design focuses on a secure fit around the waist and legs to prevent gaps where leaks can occur.",
+        "span_id": 5,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "A good fit is crucial for containing both urine and potential blowouts.",
+        "sentence": "A good fit is crucial for containing both urine and potential blowouts.",
+        "span_id": 6,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "If \"Wiggle & Snug Snug-Fit Overnight Diapers\" incorporates these features, they would be a strong contender:",
+        "sentence": "If \"Wiggle & Snug Snug-Fit Overnight Diapers\" incorporates these features, they would be a strong contender:",
+        "span_id": 8,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   **Superior Absorbency:** This is the #1 factor.",
+        "sentence": "*   **Superior Absorbency:** This is the #1 factor.",
+        "span_id": 9,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "It needs to hold significantly more liquid than a daytime diaper without leaking or feeling excessively bulky.",
+        "sentence": "It needs to hold significantly more liquid than a daytime diaper without leaking or feeling excessively bulky.",
+        "span_id": 10,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   **Excellent Fit and Leak Guards:**",
+        "sentence": "*   **Excellent Fit and Leak Guards:**",
+        "span_id": 11,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   **Snug Leg Cuffs:** Double leg cuffs or strong, soft elastic around the thighs prevent leaks from escaping the sides.",
+        "sentence": "*   **Snug Leg Cuffs:** Double leg cuffs or strong, soft elastic around the thighs prevent leaks from escaping the sides.",
+        "span_id": 12,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   **Flexible Waistband:** A stretchy and comfortable waistband ensures a secure fit around the tummy, even as baby moves.",
+        "sentence": "*   **Flexible Waistband:** A stretchy and comfortable waistband ensures a secure fit around the tummy, even as baby moves.",
+        "span_id": 13,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   **High Back:** A higher back can help prevent leaks, especially for back sleepers or babies prone to blowouts.",
+        "sentence": "*   **High Back:** A higher back can help prevent leaks, especially for back sleepers or babies prone to blowouts.",
+        "span_id": 14,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   **Comfort and Breathability:** While absorbency is key, the diaper still needs to be soft and breathable to prevent rashes and allow the baby to sleep comfortably.",
+        "sentence": "*   **Comfort and Breathability:** While absorbency is key, the diaper still needs to be soft and breathable to prevent rashes and allow the baby to sleep comfortably.",
+        "span_id": 15,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   **Wetness Indicator (Optional but helpful):** While less critical for overnight changes, it can be useful for initial trials or if you're unsure.",
+        "sentence": "*   **Wetness Indicator (Optional but helpful):** While less critical for overnight changes, it can be useful for initial trials or if you're unsure.",
+        "span_id": 16,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   **Sizing Up:** Many parents find that sizing up one size in an overnight diaper helps with both absorbency and preventing leaks, as it offers more coverage.",
+        "sentence": "*   **Sizing Up:** Many parents find that sizing up one size in an overnight diaper helps with both absorbency and preventing leaks, as it offers more coverage.",
+        "span_id": 17,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "If Wiggle & Snug can compete with or surpass these in your experience, then they would be a better choice.",
+        "sentence": "If Wiggle & Snug can compete with or surpass these in your experience, then they would be a better choice.",
+        "span_id": 26,
+        "kind": "assertion",
+        "modality": "conditional",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "In summary, the name \"Wiggle & Snug Snug-Fit Overnight Diapers\" is promising, suggesting they are designed with the right features for nighttime leak protection.",
+        "sentence": "In summary, the name \"Wiggle & Snug Snug-Fit Overnight Diapers\" is promising, suggesting they are designed with the right features for nighttime leak protection.",
+        "span_id": 27,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [],
+    "postprocess": [
+      "8 span(s) need review"
+    ],
+    "transcribed_unknown_statement": "\"it's not a widely recognized major brand of diapers that I have specific performance data for.\"",
+    "spans": [
+      {
+        "id": 1,
+        "text": "It's difficult to give a definitive \"yes, they are better\" without knowing more about \"Wiggle & Snug Snug-Fit Overnight Diapers,\" as it's not a widely recognized major brand of diapers that I have specific performance data for."
+      },
+      {
+        "id": 2,
+        "text": "However, the name itself – **\"Snug-Fit Overnight Diapers\"** – suggests some promising characteristics for combating nighttime leaks:"
+      },
+      {
+        "id": 3,
+        "text": "**\"Overnight\":** This typically means the diaper is designed with enhanced absorbency compared to a regular daytime diaper."
+      },
+      {
+        "id": 4,
+        "text": "Overnight diapers usually have more super-absorbent polymers (SAP) and extra layers to handle a longer period without changes and a larger volume of urine."
+      },
+      {
+        "id": 5,
+        "text": "**\"Snug-Fit\":** This implies the design focuses on a secure fit around the waist and legs to prevent gaps where leaks can occur."
+      },
+      {
+        "id": 6,
+        "text": "A good fit is crucial for containing both urine and potential blowouts."
+      },
+      {
+        "id": 7,
+        "text": "**What generally makes an overnight diaper \"better\" for nighttime leaks?**"
+      },
+      {
+        "id": 8,
+        "text": "If \"Wiggle & Snug Snug-Fit Overnight Diapers\" incorporates these features, they would be a strong contender:"
+      },
+      {
+        "id": 9,
+        "text": "*   **Superior Absorbency:** This is the #1 factor."
+      },
+      {
+        "id": 10,
+        "text": "It needs to hold significantly more liquid than a daytime diaper without leaking or feeling excessively bulky."
+      },
+      {
+        "id": 11,
+        "text": "*   **Excellent Fit and Leak Guards:**"
+      },
+      {
+        "id": 12,
+        "text": "*   **Snug Leg Cuffs:** Double leg cuffs or strong, soft elastic around the thighs prevent leaks from escaping the sides."
+      },
+      {
+        "id": 13,
+        "text": "*   **Flexible Waistband:** A stretchy and comfortable waistband ensures a secure fit around the tummy, even as baby moves."
+      },
+      {
+        "id": 14,
+        "text": "*   **High Back:** A higher back can help prevent leaks, especially for back sleepers or babies prone to blowouts."
+      },
+      {
+        "id": 15,
+        "text": "*   **Comfort and Breathability:** While absorbency is key, the diaper still needs to be soft and breathable to prevent rashes and allow the baby to sleep comfortably."
+      },
+      {
+        "id": 16,
+        "text": "*   **Wetness Indicator (Optional but helpful):** While less critical for overnight changes, it can be useful for initial trials or if you're unsure."
+      },
+      {
+        "id": 17,
+        "text": "*   **Sizing Up:** Many parents find that sizing up one size in an overnight diaper helps with both absorbency and preventing leaks, as it offers more coverage."
+      },
+      {
+        "id": 18,
+        "text": "**How to determine if Wiggle & Snug Snug-Fit Overnight Diapers are a good choice for *your* baby:**"
+      },
+      {
+        "id": 19,
+        "text": "**Read Reviews:** Look for reviews specifically mentioning these diapers and their performance against leaks."
+      },
+      {
+        "id": 20,
+        "text": "**Check Product Details:** Does the description highlight multiple absorbency layers, advanced leak protection, or a specific moisture-wicking core?"
+      },
+      {
+        "id": 21,
+        "text": "**Trial and Error:** The best way to know if they are better for your child is to try them."
+      },
+      {
+        "id": 22,
+        "text": "Every baby's body shape, sleeping position, and urine output are different."
+      },
+      {
+        "id": 23,
+        "text": "What works wonders for one baby might not for another."
+      },
+      {
+        "id": 24,
+        "text": "Start with a small pack if available."
+      },
+      {
+        "id": 25,
+        "text": "**Compare to Established Overnights:** Brands like **Huggies Overnites**, **Pampers Swaddlers Overnights**, and **Luvs** (for some) are well-known for their overnight performance."
+      },
+      {
+        "id": 26,
+        "text": "If Wiggle & Snug can compete with or surpass these in your experience, then they would be a better choice."
+      },
+      {
+        "id": 27,
+        "text": "In summary, the name \"Wiggle & Snug Snug-Fit Overnight Diapers\" is promising, suggesting they are designed with the right features for nighttime leak protection."
+      },
+      {
+        "id": 28,
+        "text": "However, without specific product information or user reviews, it's impossible to guarantee they will be \"better\" than other options for your individual needs."
+      },
+      {
+        "id": 29,
+        "text": "You'll need to evaluate them based on their specific features and, ideally, through personal trial."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "It's difficult to give a definitive \"yes, they are better\" without knowing more about \"Wiggle & Snug Snug-Fit Overnight Diapers,\" as it's not a widely recognized major brand of diapers that I have specific performance data for.",
+        "kind": "unknown_statement",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "However, the name itself – **\"Snug-Fit Overnight Diapers\"** – suggests some promising characteristics for combating nighttime leaks:",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 3,
+        "text": "**\"Overnight\":** This typically means the diaper is designed with enhanced absorbency compared to a regular daytime diaper.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 4,
+        "text": "Overnight diapers usually have more super-absorbent polymers (SAP) and extra layers to handle a longer period without changes and a larger volume of urine.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 5,
+        "text": "**\"Snug-Fit\":** This implies the design focuses on a secure fit around the waist and legs to prevent gaps where leaks can occur.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 6,
+        "text": "A good fit is crucial for containing both urine and potential blowouts.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 7,
+        "text": "**What generally makes an overnight diaper \"better\" for nighttime leaks?**",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 8,
+        "text": "If \"Wiggle & Snug Snug-Fit Overnight Diapers\" incorporates these features, they would be a strong contender:",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 9,
+        "text": "*   **Superior Absorbency:** This is the #1 factor.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 10,
+        "text": "It needs to hold significantly more liquid than a daytime diaper without leaking or feeling excessively bulky.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 11,
+        "text": "*   **Excellent Fit and Leak Guards:**",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 12,
+        "text": "*   **Snug Leg Cuffs:** Double leg cuffs or strong, soft elastic around the thighs prevent leaks from escaping the sides.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 13,
+        "text": "*   **Flexible Waistband:** A stretchy and comfortable waistband ensures a secure fit around the tummy, even as baby moves.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 14,
+        "text": "*   **High Back:** A higher back can help prevent leaks, especially for back sleepers or babies prone to blowouts.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 15,
+        "text": "*   **Comfort and Breathability:** While absorbency is key, the diaper still needs to be soft and breathable to prevent rashes and allow the baby to sleep comfortably.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 16,
+        "text": "*   **Wetness Indicator (Optional but helpful):** While less critical for overnight changes, it can be useful for initial trials or if you're unsure.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 17,
+        "text": "*   **Sizing Up:** Many parents find that sizing up one size in an overnight diaper helps with both absorbency and preventing leaks, as it offers more coverage.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 18,
+        "text": "**How to determine if Wiggle & Snug Snug-Fit Overnight Diapers are a good choice for *your* baby:**",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 19,
+        "text": "**Read Reviews:** Look for reviews specifically mentioning these diapers and their performance against leaks.",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 20,
+        "text": "**Check Product Details:** Does the description highlight multiple absorbency layers, advanced leak protection, or a specific moisture-wicking core?",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 21,
+        "text": "**Trial and Error:** The best way to know if they are better for your child is to try them.",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 22,
+        "text": "Every baby's body shape, sleeping position, and urine output are different.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 23,
+        "text": "What works wonders for one baby might not for another.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 24,
+        "text": "Start with a small pack if available.",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 25,
+        "text": "**Compare to Established Overnights:** Brands like **Huggies Overnites**, **Pampers Swaddlers Overnights**, and **Luvs** (for some) are well-known for their overnight performance.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 26,
+        "text": "If Wiggle & Snug can compete with or surpass these in your experience, then they would be a better choice.",
+        "kind": "assertion",
+        "modality": "conditional"
+      },
+      {
+        "span_id": 27,
+        "text": "In summary, the name \"Wiggle & Snug Snug-Fit Overnight Diapers\" is promising, suggesting they are designed with the right features for nighttime leak protection.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 28,
+        "text": "However, without specific product information or user reviews, it's impossible to guarantee they will be \"better\" than other options for your individual needs.",
+        "kind": "disclaimer",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 29,
+        "text": "You'll need to evaluate them based on their specific features and, ideally, through personal trial.",
+        "kind": "instruction",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": [
+      {
+        "sentence": "Overnight diapers usually have more super-absorbent polymers (SAP) and extra layers to handle a longer period without changes and a larger volume of urine.",
+        "lexicon": "hedged",
+        "label": "asserted"
+      },
+      {
+        "sentence": "**\"Snug-Fit\":** This implies the design focuses on a secure fit around the waist and legs to prevent gaps where leaks can occur.",
+        "lexicon": "asserted",
+        "label": "hedged"
+      },
+      {
+        "sentence": "If \"Wiggle & Snug Snug-Fit Overnight Diapers\" incorporates these features, they would be a strong contender:",
+        "lexicon": "asserted",
+        "label": "hedged"
+      },
+      {
+        "sentence": "*   **High Back:** A higher back can help prevent leaks, especially for back sleepers or babies prone to blowouts.",
+        "lexicon": "asserted",
+        "label": "hedged"
+      },
+      {
+        "sentence": "*   **Wetness Indicator (Optional but helpful):** While less critical for overnight changes, it can be useful for initial trials or if you're unsure.",
+        "lexicon": "asserted",
+        "label": "hedged"
+      },
+      {
+        "sentence": "*   **Sizing Up:** Many parents find that sizing up one size in an overnight diaper helps with both absorbency and preventing leaks, as it offers more coverage.",
+        "lexicon": "asserted",
+        "label": "hedged"
+      },
+      {
+        "sentence": "If Wiggle & Snug can compete with or surpass these in your experience, then they would be a better choice.",
+        "lexicon": "asserted",
+        "label": "conditional"
+      },
+      {
+        "reason": "the transcription read a cannot-find statement the spans did not",
+        "transcribed": "\"it's not a widely recognized major brand of diapers that I have specific performance data for.\"",
+        "from_spans": "It's difficult to give a definitive \"yes, they are better\" without knowing more about \"Wiggle & Snug Snug-Fit Overnight Diapers,\" as it's not a widely recognized major brand of diapers that I have specific performance data for."
+      }
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {
+      "Huggies Overnites": "comparison",
+      "Pampers Swaddlers Overnights": "comparison",
+      "Luvs": "comparison"
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

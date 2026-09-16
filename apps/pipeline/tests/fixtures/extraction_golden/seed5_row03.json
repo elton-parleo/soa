@@ -1,0 +1,122 @@
+{
+  "row": 3,
+  "seed": 5,
+  "query_code": "WIG_167",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Based on a quick search, the Wiggle & Snug Bum Balm 4 oz typically costs around **$14.99 to $15.99**.\n\nKeep in mind that prices can vary slightly by retailer and may change due to sales or promotions. It's always best to check the current price at your preferred store.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "14.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+      },
+      {
+        "amount": "15.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Wiggle & Snug Bum Balm"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "Based on a quick search, the Wiggle & Snug Bum Balm 4 oz typically costs around **$14.99 to $15.99**.",
+        "sentence": "Based on a quick search, the Wiggle & Snug Bum Balm 4 oz typically costs around **$14.99 to $15.99**.",
+        "span_id": 1,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "transcribed_unknown_statement": null,
+    "spans": [
+      {
+        "id": 1,
+        "text": "Based on a quick search, the Wiggle & Snug Bum Balm 4 oz typically costs around **$14.99 to $15.99**."
+      },
+      {
+        "id": 2,
+        "text": "Keep in mind that prices can vary slightly by retailer and may change due to sales or promotions."
+      },
+      {
+        "id": 3,
+        "text": "It's always best to check the current price at your preferred store."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "Based on a quick search, the Wiggle & Snug Bum Balm 4 oz typically costs around **$14.99 to $15.99**.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 2,
+        "text": "Keep in mind that prices can vary slightly by retailer and may change due to sales or promotions.",
+        "kind": "disclaimer",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "It's always best to check the current price at your preferred store.",
+        "kind": "instruction",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Wiggle & Snug Bum Balm"
+      }
+    ],
+    "prices": [
+      {
+        "amount": "14.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+      },
+      {
+        "amount": "15.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+      }
+    ],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

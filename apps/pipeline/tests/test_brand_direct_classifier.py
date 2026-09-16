@@ -197,14 +197,30 @@ def test_a_brand_named_without_being_offered_in_place_of_ours_is_not_misattribut
 # ── fabricated ────────────────────────────────────────────────────────────
 
 def test_run_10628_a_private_label_at_aldi():
+    """Labelled now, because round three made a claim count only when the
+    labelling pass says the answer asserted it."""
     assessment, reason = classify(
         brand_claims=[{
-            "claim": "They are a private label brand (often associated with supermarkets like Aldi)",
-            "kind": "retail",
+            "claim": "They are a private label brand sold at Aldi",
+            "sentence": "They are a private label brand sold at Aldi.",
+            "kind": "assertion", "modality": "asserted", "claim_kind": "retail",
         }],
     )
     assert assessment == c.FABRICATED
     assert "no source" in reason
+
+
+def test_the_same_sentence_hedged_is_not_a_fabrication():
+    """The verbatim hedge from the answer this row came from."""
+    assessment, _ = classify(
+        brand_claims=[{
+            "claim": "a private label brand",
+            "sentence": "They are possibly a private label brand, often associated "
+                        "with supermarkets like Aldi.",
+            "kind": "assertion", "modality": "hedged", "claim_kind": "retail",
+        }],
+    )
+    assert assessment == c.ECHOED
 
 
 def test_run_10651_exclusive_to_kohls():
@@ -284,7 +300,8 @@ def test_a_lookalike_domain_is_not_the_brands_domain():
     assessment, reason = classify(
         brand_claims=[{
             "claim": "their official website (wiggleandsnug.com)",
-            "kind": "ownership",
+            "sentence": "Their official website is wiggleandsnug.com.",
+            "kind": "assertion", "modality": "asserted", "claim_kind": "ownership",
         }],
         sources_cited=["wiggleandsnug.com"],
     )

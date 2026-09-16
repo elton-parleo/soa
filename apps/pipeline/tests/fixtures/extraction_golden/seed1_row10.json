@@ -1,0 +1,65 @@
+{
+  "row": 10,
+  "seed": 1,
+  "query_code": "WIG_144",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Yes — **Wiggle & Snug Member Rewards is still available**. The current Member Rewards page says it’s **free to join**, members earn points on every order, and it lists two tiers. ([trueshopstore.com](https://trueshopstore.com/loyalty))\n\nThe tiers are:\n\n1. **Member** — free to join; earns **1 point per $1 spent** and gets members-only offers.  \n2. **Member+** — requires **$150+ spend per year**; earns **1 point per $1 spent**, plus **5% off select categories** and member pricing on selected products. ([trueshopstore.com](https://trueshopstore.com/loyalty))",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [
+      {
+        "value": "1",
+        "per_dollar": true,
+        "program": "Wiggle & Snug Member Rewards"
+      },
+      {
+        "value": "1",
+        "per_dollar": true,
+        "program": "Wiggle & Snug Member Rewards"
+      }
+    ],
+    "brand_mentioned": true,
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [
+      "Member",
+      "Member+"
+    ],
+    "brand_claims": [
+      {
+        "claim": "Wiggle & Snug Member Rewards is still available.",
+        "kind": "loyalty"
+      },
+      {
+        "claim": "The current Member Rewards page says it’s free to join, members earn points on every order, and it lists two tiers.",
+        "kind": "loyalty"
+      }
+    ],
+    "sources_cited": [
+      "trueshopstore.com"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "trueshopstore.com"
+    ],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

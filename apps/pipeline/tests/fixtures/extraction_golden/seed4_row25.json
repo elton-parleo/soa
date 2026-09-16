@@ -1,0 +1,59 @@
+{
+  "row": 25,
+  "seed": 4,
+  "query_code": "WIG_144",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "It seems there might be a slight misunderstanding. **Wiggle & Snug is a private label brand sold exclusively at Kohl's.**\n\nTherefore, there isn't a separate \"Wiggle & Snug Member Rewards\" program. Instead, when you purchase Wiggle & Snug items at Kohl's, you earn rewards through the **Kohl's Rewards program**.\n\nHere's the information about the Kohl's Rewards program:\n\n1.  **Is it still available? Yes, the Kohl's Rewards program is currently active.**\n\n2.  **What are the tiers called?**\n    Kohl's Rewards doesn't operate with formally named \"tiers\" in the way some loyalty programs do (like Silver, Gold, Platinum). Instead, it has a base membership and enhanced benefits for Kohl's credit cardholders:\n\n    *   **Kohl's Rewards Member:**\n        *   You earn 5% back in Kohl's Cash on every purchase, every day.\n        *   You also receive personalized deals and exclusive savings.\n\n    *   **Kohl's Rewards Credit Cardholder:**\n        *   While not a separate \"tier\" name, Kohl's credit cardholders automatically become Kohl's Rewards members and receive enhanced benefits.\n        *   They earn **7.5% back in Kohl's Cash** on purchases when using their Kohl's Card.\n        *   They also get additional exclusive savings, discounts, and offers available only to cardholders.\n\nSo, if you're looking to earn rewards on Wiggle & Snug products, sign up for or use your existing Kohl's Rewards account!",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [
+      "Kohl's Rewards Member",
+      "Kohl's Rewards Credit Cardholder"
+    ],
+    "brand_claims": [
+      {
+        "claim": "Wiggle & Snug is a private label brand sold exclusively at Kohl's.",
+        "sentence": "It seems there might be a slight misunderstanding. **Wiggle & Snug is a private label brand sold exclusively at Kohl's.**",
+        "kind": "assertion",
+        "lexicon_hedged": true,
+        "modality": "hedged",
+        "claim_kind": "retail"
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [],
+    "postprocess": [
+      "not a brand: Kohl's"
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": {
+    "note": "two sentences merged, so the first one’s hedge suppressed the second one’s claim — \"Wiggle & Snug is a private label brand sold exclusively at Kohl’s\" is not hedged"
+  }
+}

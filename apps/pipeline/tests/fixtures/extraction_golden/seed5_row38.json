@@ -1,0 +1,109 @@
+{
+  "row": 38,
+  "seed": 5,
+  "query_code": "WIG_145",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "For a 15 lb baby, you would typically buy **Wiggle & Snug Snug-Fit Diapers in Size 2**.\n\nSize 2 generally fits babies from around 12 to 18 lbs, making it a good fit for a 15 lb baby, allowing for a \"snug fit\" without being too tight and providing a little room for growth.\n\nWhile a Size 1 (usually 8-14 lbs) might still fit, it would be at the very top of the range and could be too snug or quickly outgrown, potentially leading to leaks.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "Size 2 generally fits babies from around 12 to 18 lbs, making it a good fit for a 15 lb baby, allowing for a \"snug fit\" without being too tight and providing a little room for growth.",
+        "sentence": "Size 2 generally fits babies from around 12 to 18 lbs, making it a good fit for a 15 lb baby, allowing for a \"snug fit\" without being too tight and providing a little room for growth.",
+        "span_id": 2,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [],
+    "postprocess": [
+      "not product sizes: 2, 1, 12 to 18 lbs, 8 to 14 lbs",
+      "1 span(s) need review"
+    ],
+    "transcribed_unknown_statement": null,
+    "spans": [
+      {
+        "id": 1,
+        "text": "For a 15 lb baby, you would typically buy **Wiggle & Snug Snug-Fit Diapers in Size 2**."
+      },
+      {
+        "id": 2,
+        "text": "Size 2 generally fits babies from around 12 to 18 lbs, making it a good fit for a 15 lb baby, allowing for a \"snug fit\" without being too tight and providing a little room for growth."
+      },
+      {
+        "id": 3,
+        "text": "While a Size 1 (usually 8-14 lbs) might still fit,"
+      },
+      {
+        "id": 4,
+        "text": "it would be at the very top of the range and could be too snug or quickly outgrown, potentially leading to leaks."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "For a 15 lb baby, you would typically buy **Wiggle & Snug Snug-Fit Diapers in Size 2**.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "Size 2 generally fits babies from around 12 to 18 lbs, making it a good fit for a 15 lb baby, allowing for a \"snug fit\" without being too tight and providing a little room for growth.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "While a Size 1 (usually 8-14 lbs) might still fit,",
+        "kind": "none",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 4,
+        "text": "it would be at the very top of the range and could be too snug or quickly outgrown, potentially leading to leaks.",
+        "kind": "none",
+        "modality": "hedged"
+      }
+    ],
+    "needs_review": [
+      {
+        "sentence": "Size 2 generally fits babies from around 12 to 18 lbs, making it a good fit for a 15 lb baby, allowing for a \"snug fit\" without being too tight and providing a little room for growth.",
+        "lexicon": "hedged",
+        "label": "asserted"
+      }
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": {
+    "note": "lexicon read \"generally\" as a hedge, the labeller read a flat assertion; the disagreement produced a fabricated verdict"
+  }
+}

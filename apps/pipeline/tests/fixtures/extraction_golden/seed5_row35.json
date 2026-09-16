@@ -1,0 +1,131 @@
+{
+  "row": 35,
+  "seed": 5,
+  "query_code": "WIG_166",
+  "platform": "gemini",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Based on current listings, the Wiggle & Snug Cloud Wipes 3-Pack typically costs around **$14.99 to $15.99**.\n\nPrices can vary slightly depending on the retailer and any ongoing sales or promotions. For the most accurate current price, it's best to check a specific retailer like Amazon.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "14.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+      },
+      {
+        "amount": "15.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 3,
+        "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "Based on current listings, the Wiggle & Snug Cloud Wipes 3-Pack typically costs around **$14.99 to $15.99**.",
+        "sentence": "Based on current listings, the Wiggle & Snug Cloud Wipes 3-Pack typically costs around **$14.99 to $15.99**.",
+        "span_id": 1,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [
+      "Amazon"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [
+      {
+        "name": "Amazon",
+        "role": "recommendation"
+      }
+    ],
+    "postprocess": [
+      "not a brand: Amazon"
+    ],
+    "transcribed_unknown_statement": null,
+    "spans": [
+      {
+        "id": 1,
+        "text": "Based on current listings, the Wiggle & Snug Cloud Wipes 3-Pack typically costs around **$14.99 to $15.99**."
+      },
+      {
+        "id": 2,
+        "text": "Prices can vary slightly depending on the retailer and any ongoing sales or promotions."
+      },
+      {
+        "id": 3,
+        "text": "For the most accurate current price, it's best to check a specific retailer like Amazon."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "Based on current listings, the Wiggle & Snug Cloud Wipes 3-Pack typically costs around **$14.99 to $15.99**.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 2,
+        "text": "Prices can vary slightly depending on the retailer and any ongoing sales or promotions.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "For the most accurate current price, it's best to check a specific retailer like Amazon.",
+        "kind": "instruction",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "14.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+      },
+      {
+        "amount": "15.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 3,
+        "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+      }
+    ],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {
+      "Amazon": "recommendation"
+    }
+  },
+  "review_note": null
+}

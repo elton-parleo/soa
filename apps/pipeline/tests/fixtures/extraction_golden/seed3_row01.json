@@ -1,0 +1,73 @@
+{
+  "row": 1,
+  "seed": 3,
+  "query_code": "WIG_162",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I couldn’t verify a product with the exact name **“Wiggle & Snug Snug-Fit Overnight Diapers Size 3.”**  \n\nIf you mean the closest matching Target/up&up listing I found — **Disposable Overnight Diapers Giant Pack, Size 3, 66ct** — it costs **$15.79**, or about **$0.24 per diaper**. ([registry.thebump.com](https://registry.thebump.com/krystal-diaz-ernesto-jimenez-january-2025-ca/68167788))",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "15.79",
+        "currency": "USD",
+        "attributed_product": "Disposable Overnight Diapers Giant Pack, Size 3, 66ct"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 66,
+        "attributed_product": "Disposable Overnight Diapers Giant Pack, Size 3, 66ct"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t verify a product with the exact name **“Wiggle & Snug Snug-Fit Overnight Diapers Size 3.”**",
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "registry.thebump.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": [
+      "dropped other brands: Target/up&up (offered as a spelling, describes nothing)"
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "15.79",
+        "currency": "USD",
+        "attributed_product": "Disposable Overnight Diapers Giant Pack, Size 3, 66ct"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 66,
+        "attributed_product": "Disposable Overnight Diapers Giant Pack, Size 3, 66ct"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "registry.thebump.com"
+    ],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": {
+    "brands": {
+      "Target/up&up": "closest_match_described"
+    }
+  }
+}

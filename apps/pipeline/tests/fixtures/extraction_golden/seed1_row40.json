@@ -1,0 +1,38 @@
+{
+  "row": 40,
+  "seed": 1,
+  "query_code": "WIG_147",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn’t find any official evidence that **Wiggle & Snug** offers a subscription for **Snug-Fit Diapers**. Searches for the exact brand/product name didn’t turn up an official Wiggle & Snug diaper product page or subscription listing; the results were mostly unrelated diaper brands/products.  \n\nIf you have a link to the Wiggle & Snug product page, send it over and I can check that specific page for subscription options.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "brand_unknown_statement": "\"I couldn’t find any official evidence that **Wiggle & Snug** offers a subscription for **Snug-Fit Diapers**.\"",
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

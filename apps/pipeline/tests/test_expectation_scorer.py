@@ -113,11 +113,26 @@ class FakeClient:
         ))
 
 
-def make_scorer(record=None, history=None):
+class FakeFacts:
+    """No network. The real BrandFactsCache reads TrueSync, and a unit
+    test that reaches a third-party service is a test of that service."""
+    def __init__(self, facts=None):
+        self.facts = facts if facts is not None else {
+            'brand': 'Wiggle & Snug', 'domain': 'trueshopstore.com',
+            'tier_names': ['Member', 'Member+'], 'product_titles': [],
+        }
+
+    def for_merchant(self, _slug):
+        return self.facts
+
+
+def make_scorer(record=None, history=None, facts=None, labeler=False):
     class FakeHistory:
         def for_variant(self, _slug, _vid):
             return history
-    return scorer_module.ExpectationScorer(FakeClient(record), FakeHistory())
+    return scorer_module.ExpectationScorer(
+        FakeClient(record), FakeHistory(), FakeFacts(facts), labeler=labeler,
+    )
 
 
 def score(db, scorer=None, run_id=7):
@@ -158,7 +173,20 @@ def test_the_row_stores_the_extraction_it_compared(db):
     seed(db)
     score(db)
     (row,) = outcomes(db)
-    assert json.loads(row['extraction']) == EXTRACTION
+    stored = json.loads(row['extraction'])
+    for field, value in EXTRACTION.items():
+        assert stored[field] == value, field
+
+
+def test_the_brand_is_taken_from_the_study_when_the_expectation_has_none(db):
+    """A price expectation carries no brand. Without the merchant as a
+    fallback, brand_mentioned was computed with nothing to look for on
+    every catalog and value row — which ea.names_brand answers True
+    to."""
+    seed(db)
+    scorer = make_scorer()
+    asyncio.run(scorer.score_run(7))
+    assert scorer.client.extract.call_args.kwargs['brand'] == 'Wiggle & Snug'
 
 
 def test_the_row_stores_the_publish_timestamp_it_compared_against(db):
@@ -358,10 +386,76 @@ def test_a_question_with_no_secondary_leaves_the_column_null(db):
 
 # ── the extractor is told the brand and nothing else ──────────────────────
 
-def test_the_extractor_is_handed_the_brand_only(db):
+def test_the_extractor_is_handed_the_brand_and_its_domain_and_no_more(db):
+    """The domain is for the deterministic pass after the call — telling
+    the brand's own site apart from another brand when the answer writes
+    one as the other. It never reaches the prompt: build_extraction_prompt
+    takes the name alone, and handing a model the domain would tell it
+    which citation we are hoping to find."""
     seed(db, expectation=ea.brand_mention('Wiggle & Snug', 'trueshopstore.com'))
     scorer = make_scorer()
     asyncio.run(scorer.score_run(7))
 
     kwargs = scorer.client.extract.call_args.kwargs
-    assert kwargs == {'brand': 'Wiggle & Snug'}
+    assert kwargs == {
+        'brand': 'Wiggle & Snug', 'brand_domain': 'trueshopstore.com',
+    }
+
+
+def test_the_labelling_pass_runs_on_what_the_extractor_returned(db):
+    seed(db, expectation=ea.brand_mention('Wiggle & Snug', 'trueshopstore.com'))
+
+    class FakeLabeler:
+        def __init__(self):
+            self.seen = None
+        async def label(self, record, *, answer_text):
+            self.seen = (record, answer_text)
+            from parser.labeling_client import LabelingResult
+            return LabelingResult(labels={'brand_sentences': [], 'other_brands': [],
+                                          'retailers': []})
+
+    labeler = FakeLabeler()
+    scorer = make_scorer(labeler=labeler)
+    asyncio.run(scorer.score_run(7))
+
+    record, answer = labeler.seen
+    # The labeller sees the transcription and the answer it came from,
+    # and nothing else — no expectation, no published record, no verdict.
+    assert answer == 'The Size 3 Small Pack is $22.99.'
+    assert record is scorer.client.record
+
+
+def test_a_failed_labelling_call_leaves_the_spans_unlabelled_not_asserted(db):
+    """The rule the last two rounds were missing. A span nobody
+    classified is not a claim, and the row says the call failed."""
+    seed(db, expectation=ea.brand_mention('Wiggle & Snug', 'trueshopstore.com'))
+
+    class BrokenLabeler:
+        async def label(self, record, *, answer_text):
+            from parser.labeling_client import LabelingResult
+            return LabelingResult(
+                labels={'spans': [], 'other_brands': [], 'retailers': []},
+                error='boom',
+            )
+
+    record = dict(EXTRACTION)
+    record['brand_claims'] = [{
+        'claim': 'sold at Aldi', 'sentence': 'It is sold at Aldi.', 'kind': 'retail',
+    }]
+    scorer = make_scorer(record=record, labeler=BrokenLabeler())
+    asyncio.run(scorer.score_run(7))
+
+    from parser.extraction_postprocess import asserted_claims
+    (row,) = outcomes(db)
+    stored = json.loads(row['extraction'])
+    # No labels means no claims — never "claims nobody classified".
+    assert asserted_claims(stored) == []
+    # And the answer's spans are on the row, so the gap is visible.
+    assert stored['spans']
+
+
+def test_the_domain_never_reaches_the_prompt():
+    from parser.expectation_prompts import build_extraction_prompt
+    prompt = build_extraction_prompt('Wiggle & Snug')
+    assert 'Wiggle & Snug' in prompt
+    assert 'trueshopstore' not in prompt

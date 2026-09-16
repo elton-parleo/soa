@@ -1,0 +1,85 @@
+{
+  "row": 14,
+  "seed": 4,
+  "query_code": "WIG_169",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn’t find a current retailer called **“Wiggle & Snug”** in the results I checked. If you meant **Wild & Snug**: **yes** — their site says you can join their mailing list to get **10% off your first order**. ([wildandsnug.com](https://wildandsnug.com/))\n\nOne note: a Shop.app listing for a Wild & Snug product shows **“20% off first order,”** but the official Wild & Snug site itself states **10% off** for the first-order email-list offer. ([shop.app](https://shop.app/products/7458724511962/terrazzo-green-dog-crate-cover?utm_source=openai))",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t find a current retailer called **“Wiggle & Snug”** in the results I checked.",
+    "other_brands_named": [
+      {
+        "name": "Wild & Snug",
+        "presented_as": "closest_match",
+        "relation": "closest_match_described"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "their site says you can join their mailing list to get 10% off your first order",
+        "sentence": "If you meant **Wild & Snug**: **yes** — their site says you can join their mailing list to get **10% off your first order**.",
+        "kind": "assertion",
+        "lexicon_hedged": false,
+        "modality": "conditional",
+        "claim_kind": "retail"
+      },
+      {
+        "claim": "a Shop.app listing for a Wild & Snug product shows “20% off first order,” but the official Wild & Snug site itself states 10% off for the first-order email-list offer",
+        "sentence": "One note: a Shop.app listing for a Wild & Snug product shows **“20% off first order,”** but the official Wild & Snug site itself states **10% off** for the first-order email-list offer.",
+        "kind": "assertion",
+        "lexicon_hedged": false,
+        "modality": "asserted",
+        "claim_kind": "retail"
+      }
+    ],
+    "sources_cited": [
+      "wildandsnug.com",
+      "shop.app"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [],
+    "postprocess": [
+      "not a brand: Shop.app",
+      "1 sentence(s) where the lexicon and the label disagree on modality"
+    ],
+    "needs_review": [
+      {
+        "sentence": "If you meant **Wild & Snug**: **yes** — their site says you can join their mailing list to get **10% off your first order**.",
+        "lexicon": "asserted",
+        "label": "conditional"
+      }
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "wildandsnug.com",
+      "shop.app"
+    ],
+    "other_brands": {
+      "Wild & Snug": "closest_match_described"
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

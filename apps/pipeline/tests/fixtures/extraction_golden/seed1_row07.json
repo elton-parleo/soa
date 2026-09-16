@@ -1,0 +1,50 @@
+{
+  "row": 7,
+  "seed": 1,
+  "query_code": "WIG_148",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I'm having trouble finding any information about a brand called **\"Wiggle & Snug\"** that offers a **\"Snug-Fit Trial Pack.\"**\n\nIt's possible that:\n\n1.  **The brand name might be slightly different.** Could it be \"Wiggle and Snuggle\" or something similar?\n2.  **It's a very niche or new product/brand** that isn't widely listed online yet.\n3.  **It might be a discontinued item** that no longer appears in active listings.\n4.  **It could be a fictional product or a local/private label item** not sold widely.\n\nThere *is* a well-known sports and outdoor retailer called **Wiggle**, but they don't sell products that fit the description of a \"Snug-Fit Trial Pack\" from a brand called \"Wiggle & Snug.\"\n\nCould you provide any more details about where you heard about this product or what kind of product it is (e.g., babywear, intimate apparel, pet accessories)? That might help in locating it!",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "brand_unknown_statement": "\"I'm having trouble finding any information about a brand called **\"Wiggle & Snug\"** that offers a **\"Snug-Fit Trial Pack.\"**\"",
+    "other_brands_named": [
+      {
+        "name": "Wiggle",
+        "presented_as": "a well-known sports and outdoor retailer"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "There is a well-known sports and outdoor retailer called Wiggle, but they don't sell products that fit the description of a \"Snug-Fit Trial Pack\" from a brand called \"Wiggle & Snug.\"",
+        "kind": "retail"
+      }
+    ],
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {
+      "Wiggle": null
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

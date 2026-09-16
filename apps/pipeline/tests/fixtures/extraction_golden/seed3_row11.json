@@ -1,0 +1,69 @@
+{
+  "row": 11,
+  "seed": 3,
+  "query_code": "WIG_151",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I found the **Size 1 big pack (162-count)** listing at **$17.48** — about **10.8¢ per diaper**. Prices can vary by store/online availability. ([business.walmart.com](https://business.walmart.com/ip/Parent-s-Choice-Dry-Gentle-Diapers-Size-1-162-Count-Select-for-More-Options/509288697))",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "17.48",
+        "currency": "USD",
+        "attributed_product": "Size 1 big pack (162-count)"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 162,
+        "attributed_product": "Size 1 big pack"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "business.walmart.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": []
+  },
+  "golden": {
+    "brand_mentioned": false,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "17.48",
+        "currency": "USD",
+        "attributed_product": "Size 1 big pack (162-count)"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 162,
+        "attributed_product": "Size 1 big pack"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "business.walmart.com"
+    ],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": {
+    "bm": false
+  }
+}

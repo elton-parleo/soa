@@ -1,0 +1,73 @@
+{
+  "row": 4,
+  "seed": 4,
+  "query_code": "WIG_158",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "It seems there might be a misunderstanding or a typo in the brand name.\n\n\"**Wiggle & Snug Snug-Fit Diapers**\" does not appear to be a widely recognized or available brand of diapers from major retailers in the US or other common markets.\n\nTherefore, I cannot provide a cost for a \"Size 5 small pack\" of this specific brand, as the product itself doesn't seem to exist under that name.\n\nPerhaps you were thinking of a different brand? If you can provide the correct brand name, I might be able to help you find pricing information for Size 5 small packs from actual brands like Pampers, Huggies, Luvs, Honest Co., etc.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "\"Wiggle & Snug Snug-Fit Diapers\" does not appear to be a widely recognized or available brand of diapers from major retailers in the US or other common markets.",
+    "other_brands_named": [
+      {
+        "name": "Pampers",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      },
+      {
+        "name": "Huggies",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      },
+      {
+        "name": "Luvs",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      },
+      {
+        "name": "Honest Co.",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": false,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [],
+    "postprocess": [
+      "a claim span was labelled a disclaimer"
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {
+      "Pampers": "comparison",
+      "Huggies": "comparison",
+      "Luvs": "comparison",
+      "Honest Co.": "comparison"
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

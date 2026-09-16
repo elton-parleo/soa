@@ -1,0 +1,65 @@
+{
+  "row": 33,
+  "seed": 1,
+  "query_code": "WIG_147",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn't find any information about a brand called \"Wiggle & Snug\" that offers Snug-Fit Diapers or a subscription service for them. It's possible this is a fictional brand, a very new brand without an online presence, or a private label.\n\nMost major diaper brands and several newer companies do offer subscription services, such as:\n\n*   **Pampers**\n*   **Huggies**\n*   **The Honest Company**\n*   **Hello Bello**\n*   **Dyper**\n\nIf you have more details about \"Wiggle & Snug,\" I might be able to help further. Otherwise, you might want to explore the subscription options from the brands listed above.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "brand_unknown_statement": "I couldn't find any information about a brand called \"Wiggle & Snug\" that offers Snug-Fit Diapers or a subscription service for them.",
+    "other_brands_named": [
+      {
+        "name": "Pampers",
+        "presented_as": "brands listed above"
+      },
+      {
+        "name": "Huggies",
+        "presented_as": "brands listed above"
+      },
+      {
+        "name": "The Honest Company",
+        "presented_as": "brands listed above"
+      },
+      {
+        "name": "Hello Bello",
+        "presented_as": "brands listed above"
+      },
+      {
+        "name": "Dyper",
+        "presented_as": "brands listed above"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {
+      "Pampers": null,
+      "Huggies": null,
+      "The Honest Company": null,
+      "Hello Bello": null,
+      "Dyper": null
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

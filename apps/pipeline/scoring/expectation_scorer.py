@@ -22,6 +22,7 @@ from sqlalchemy import text
 
 from clients.truesync_catalog import TrueSyncCatalogClient
 from parser.expectation_client import ExpectationClient
+from parser.extraction_postprocess import apply_labels
 from scoring import expectation_comparator as cmp
 from soa_shared import expected_answers as ea
 from soa_shared.database import engine
@@ -108,6 +109,7 @@ class BrandFactsCache:
                 self._by_merchant[merchant_slug] = {}
             else:
                 self._by_merchant[merchant_slug] = {
+                    'brand': snapshot.brand,
                     'domain': snapshot.domain,
                     'tier_names': [
                         t.get('name') for t in (snapshot.tiers or []) if t.get('name')
@@ -121,12 +123,20 @@ class ExpectationScorer:
 
     def __init__(self, client: ExpectationClient = None,
                  history: HistoryCache = None,
-                 brand_facts: BrandFactsCache = None) -> None:
+                 brand_facts: BrandFactsCache = None,
+                 labeler=None) -> None:
         self.client = client or ExpectationClient()
         self.history = history if history is not None else HistoryCache()
         self.brand_facts = (
             brand_facts if brand_facts is not None else BrandFactsCache()
         )
+        # Step 1b. Constructed lazily so a test that does not pass one
+        # gets no labelling call rather than a missing-API-key error at
+        # import time; pass labeler=False to switch it off outright.
+        if labeler is None:
+            from parser.labeling_client import LabelingClient
+            labeler = LabelingClient()
+        self.labeler = labeler or None
 
     # ─── Reading ──────────────────────────────────────────────────────
 
@@ -234,18 +244,46 @@ class ExpectationScorer:
             return ScoreRunResult(run_id, 'skipped_no_answer', outcome=verdict.outcome)
 
         source_ref = _as_dict(run.source_ref) or {}
-        brand = (expectation.get('brand')
-                 or source_ref.get('brand'))
+        facts = self.brand_facts.for_merchant(
+            source_ref.get('merchant_slug'),
+        ) if self.brand_facts else {}
 
-        result = await self.client.extract(run.raw_response, brand=brand)
+        # The study's merchant, for every tier. A price expectation
+        # carries no brand, and without this fallback brand_mentioned was
+        # computed with nothing to look for on every catalog and value
+        # row in the study — which ea.names_brand answers True to.
+        brand = (expectation.get('brand')
+                 or source_ref.get('brand')
+                 or facts.get('brand'))
+
+        result = await self.client.extract(
+            run.raw_response, brand=brand,
+            # So the post-processor can tell the brand's own site from
+            # another brand when the answer writes one as the other.
+            brand_domain=(expectation.get('domain') or source_ref.get('domain')
+                          or facts.get('domain')),
+        )
+
+        # Step 1b: what each transcribed span IS. A failed call leaves
+        # every span unlabelled, which asserted_claims reads as no claims
+        # — never as claims nobody classified.
+        if self.labeler is not None:
+            labels = await self.labeler.label(
+                result.record, answer_text=run.raw_response,
+            )
+            result.record = apply_labels(
+                result.record, labels.labels,
+                answer_text=run.raw_response, brand=brand,
+            )
+            if labels.error:
+                logger.warning(
+                    "[expectation] run %s: labelling failed (%s) — spans are "
+                    "recorded and unlabelled", run_id, labels.error,
+                )
 
         history = self.history.for_variant(
             source_ref.get('merchant_slug'), source_ref.get('variant_id'),
         ) if self.history else None
-
-        facts = self.brand_facts.for_merchant(
-            source_ref.get('merchant_slug'),
-        ) if self.brand_facts else {}
 
         verdict = cmp.compare_with_secondary(
             expectation, result.record,

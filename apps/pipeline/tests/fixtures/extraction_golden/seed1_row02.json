@@ -1,0 +1,34 @@
+{
+  "row": 2,
+  "seed": 1,
+  "query_code": "WIG_171",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "(no answer text)",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": false,
+    "sources_cited": [],
+    "extraction_confident": false,
+    "extraction_note": "run status 'timeout', no answer text"
+  },
+  "golden": {
+    "brand_mentioned": false,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

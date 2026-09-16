@@ -19,6 +19,7 @@ from typing import Optional
 from openai import AsyncOpenAI
 
 import soa_shared.config as config
+from parser.extraction_postprocess import normalize
 from parser.expectation_prompts import (
     EMPTY_EXTRACTION,
     build_extraction_prompt,
@@ -59,19 +60,31 @@ class ExpectationClient:
         self.model = model
         self._client = AsyncOpenAI(api_key=config.OPEN_AI_API_KEY)
 
-    async def extract(self, answer_text: str, *, brand: str = None) -> ExtractionResult:
+    async def extract(self, answer_text: str, *, brand: str = None,
+                      brand_domain: str = None) -> ExtractionResult:
         """
         One answer -> one extraction record. Never raises.
 
         `brand` is the ONLY thing about the expectation this call is told,
-        and only the name: brand_mentioned is unanswerable without knowing
-        which brand is meant, while every other field is a transcription
-        that needs no target. Passing the price would be handing the
-        extractor the answer and asking it to find it.
+        and only the name: it is what separates "the brand under
+        discussion" from every other brand the answer names. Passing the
+        price would be handing the extractor the answer and asking it to
+        find it.
+
+        Everything the model returns then goes through
+        extraction_postprocess.normalize, which decides the things the
+        model kept getting wrong — whether a claim was hedged, whether a
+        cannot-find sentence really says the brand is unknown, what
+        currency a symbol means, whether a named brand was actually
+        described — and records what it decided. Applied on every return
+        path, including the failures, so no record leaves here
+        half-processed.
         """
         if not answer_text or not answer_text.strip():
             return ExtractionResult(
-                record=_unreadable('no answer text to read'), model=self.model,
+                record=self._finish(_unreadable('no answer text to read'),
+                                    answer_text, brand, brand_domain),
+                model=self.model,
             )
 
         instructions = build_extraction_prompt(brand)
@@ -97,7 +110,10 @@ class ExpectationClient:
                         }
                     },
                 )
-                record = json.loads(response.output_text)
+                record = self._finish(
+                    json.loads(response.output_text),
+                    answer_text, brand, brand_domain,
+                )
                 usage = getattr(response, "usage", None)
                 return ExtractionResult(
                     record=record,
@@ -116,8 +132,20 @@ class ExpectationClient:
                 )
 
         return ExtractionResult(
-            record=_unreadable(f"extraction call failed: {last_error}"),
+            record=self._finish(
+                _unreadable(f"extraction call failed: {last_error}"),
+                answer_text, brand, brand_domain,
+            ),
             model=self.model,
             latency_ms=int((time.monotonic() - t0) * 1000),
             error=last_error,
+        )
+
+    @staticmethod
+    def _finish(record, answer_text, brand, brand_domain):
+        """The deterministic pass, applied on every return path so no
+        record ever leaves here half-processed."""
+        return normalize(
+            record, answer_text=answer_text, brand=brand,
+            brand_domain=brand_domain,
         )

@@ -1,0 +1,111 @@
+{
+  "row": 28,
+  "seed": 2,
+  "query_code": "WIG_156",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I couldn’t verify an exact product called **“Wiggle & Snug Snug-Fit Diapers Size 4”** online.\n\nIf you meant a **similar Size 4 small pack**:\n- **Huggies Snug & Dry Size 4, 27 ct** is listed at **$14.99** at Walmart. ([walmart.com](https://www.walmart.com/ip/678616264?utm_source=openai))\n- **Huggies Snug & Dry Size 4, 30 ct** is **$9.99 on sale** at ShopRite, down from $10.99, with the sale valid **September 13–19, 2026**. ([shoprite.com](https://www.shoprite.com/product/huggies-snug-%26-dry-diapers-size-4-2237-lb-30-count-id-00036000564273?utm_source=openai))\n\nIf you have a store name, link, or photo of the Wiggle & Snug item, I can pin down that exact price.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "14.99",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Size 4, 27 ct"
+      },
+      {
+        "amount": "9.99",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Size 4, 30 ct"
+      },
+      {
+        "amount": "10.99",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Size 4, 30 ct"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 27,
+        "attributed_product": "Huggies Snug & Dry Size 4"
+      },
+      {
+        "value": 30,
+        "attributed_product": "Huggies Snug & Dry Size 4"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t verify an exact product called **“Wiggle & Snug Snug-Fit Diapers Size 4”** online.",
+    "other_brands_named": [
+      {
+        "name": "Huggies",
+        "presented_as": "closest_match"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "walmart.com",
+      "shoprite.com"
+    ],
+    "recommended_retailers": [
+      "Walmart",
+      "ShopRite"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "14.99",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Size 4, 27 ct"
+      },
+      {
+        "amount": "9.99",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Size 4, 30 ct"
+      },
+      {
+        "amount": "10.99",
+        "currency": "USD",
+        "attributed_product": "Huggies Snug & Dry Size 4, 30 ct"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 27,
+        "attributed_product": "Huggies Snug & Dry Size 4"
+      },
+      {
+        "value": 30,
+        "attributed_product": "Huggies Snug & Dry Size 4"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "walmart.com",
+      "shoprite.com"
+    ],
+    "other_brands": {
+      "Huggies": null
+    },
+    "retailers": {
+      "Walmart": "source",
+      "ShopRite": "source"
+    },
+    "codes": []
+  },
+  "review_note": {
+    "retailers": "all_source"
+  }
+}

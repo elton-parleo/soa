@@ -1,0 +1,173 @@
+{
+  "row": 19,
+  "seed": 5,
+  "query_code": "WIG_149",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "As of **September 15, 2026**, I don’t see evidence that **Baby Bum Balm 4 oz** has been discontinued. The product appears to still be available under the **Amallow** brand: Amallow’s official product page lists **Baby Bum Balm** with a **4 oz** jar, a price, “Add to cart,” and “100+ bought this month.” ([amallow.com](https://amallow.com/products/baby-bum-balm?utm_source=openai)) It also appears on Amallow’s “All Products” page with an **Add to cart** option. ([amallow.com](https://amallow.com/collections/all-products?utm_source=openai))\n\nI **did not find a reliable current product page specifically for “Wiggle & Snug Bum Balm 4 oz.”** The closest/current matching product listings I found are for **“Amallow Baby Bum Balm … 4 oz”**—including Instacart and baby-registry pages pointing to Amazon listings. ([instacart.com](https://www.instacart.com/products/118315679-amallow-baby-bum-balm-4-oz?utm_source=openai))\n\n**Bottom line:** It looks **still available, not discontinued**—but likely as **Amallow Baby Bum Balm 4 oz**, not “Wiggle & Snug.” If you’re seeing “Wiggle & Snug” on an old receipt/listing, it may be a retailer/store label, a mistaken listing title, or an older third-party listing.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Baby Bum Balm"
+      },
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Amallow Baby Bum Balm"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I **did not find a reliable current product page specifically for “Wiggle & Snug Bum Balm 4 oz.",
+    "other_brands_named": [
+      {
+        "name": "Amallow",
+        "presented_as": "closest_match",
+        "relation": "closest_match_described"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "The product appears to still be available under the **Amallow** brand: Amallow’s official product page lists **Baby Bum Balm** with a **4 oz** jar, a price, “Add to cart,” and “100+ bought this month.” ([amallow.com](https://amallow.com/products/baby-bum-balm?utm_source=openai)) It also appears on Amallow’s “All Products” page with an **Add to cart** option. ([amallow.com](https://amallow.com/collections/all-products?utm_source=openai))",
+        "sentence": "The product appears to still be available under the **Amallow** brand: Amallow’s official product page lists **Baby Bum Balm** with a **4 oz** jar, a price, “Add to cart,” and “100+ bought this month.” ([amallow.com](https://amallow.com/products/baby-bum-balm?utm_source=openai)) It also appears on Amallow’s “All Products” page with an **Add to cart** option. ([amallow.com](https://amallow.com/collections/all-products?utm_source=openai))",
+        "span_id": 2,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "retail",
+        "lexicon_hedged": true
+      },
+      {
+        "claim": "**Bottom line:** It looks **still available, not discontinued**—but likely as **Amallow Baby Bum Balm 4 oz**, not “Wiggle & Snug.",
+        "sentence": "**Bottom line:** It looks **still available, not discontinued**—but likely as **Amallow Baby Bum Balm 4 oz**, not “Wiggle & Snug.",
+        "span_id": 5,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "retail",
+        "lexicon_hedged": true
+      }
+    ],
+    "sources_cited": [
+      "amallow.com",
+      "instacart.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": false,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [],
+    "postprocess": [
+      "1 span(s) need review"
+    ],
+    "transcribed_unknown_statement": "I did not find a reliable current product page specifically for “Wiggle & Snug Bum Balm 4 oz.”",
+    "spans": [
+      {
+        "id": 1,
+        "text": "As of **September 15, 2026**, I don’t see evidence that **Baby Bum Balm 4 oz** has been discontinued."
+      },
+      {
+        "id": 2,
+        "text": "The product appears to still be available under the **Amallow** brand: Amallow’s official product page lists **Baby Bum Balm** with a **4 oz** jar, a price, “Add to cart,” and “100+ bought this month.” ([amallow.com](https://amallow.com/products/baby-bum-balm?utm_source=openai)) It also appears on Amallow’s “All Products” page with an **Add to cart** option. ([amallow.com](https://amallow.com/collections/all-products?utm_source=openai))"
+      },
+      {
+        "id": 3,
+        "text": "I **did not find a reliable current product page specifically for “Wiggle & Snug Bum Balm 4 oz."
+      },
+      {
+        "id": 4,
+        "text": "The closest/current matching product listings I found are for **“Amallow Baby Bum Balm … 4 oz”**—including Instacart and baby-registry pages pointing to Amazon listings. ([instacart.com](https://www.instacart.com/products/118315679-amallow-baby-bum-balm-4-oz?utm_source=openai))"
+      },
+      {
+        "id": 5,
+        "text": "**Bottom line:** It looks **still available, not discontinued**—but likely as **Amallow Baby Bum Balm 4 oz**, not “Wiggle & Snug."
+      },
+      {
+        "id": 6,
+        "text": "If you’re seeing “Wiggle & Snug” on an old receipt/listing, it may be a retailer/store label, a mistaken listing title, or an older third-party listing."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "As of **September 15, 2026**, I don’t see evidence that **Baby Bum Balm 4 oz** has been discontinued.",
+        "kind": "disclaimer",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "The product appears to still be available under the **Amallow** brand: Amallow’s official product page lists **Baby Bum Balm** with a **4 oz** jar, a price, “Add to cart,” and “100+ bought this month.” ([amallow.com](https://amallow.com/products/baby-bum-balm?utm_source=openai)) It also appears on Amallow’s “All Products” page with an **Add to cart** option. ([amallow.com](https://amallow.com/collections/all-products?utm_source=openai))",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "I **did not find a reliable current product page specifically for “Wiggle & Snug Bum Balm 4 oz.",
+        "kind": "unknown_statement",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 4,
+        "text": "The closest/current matching product listings I found are for **“Amallow Baby Bum Balm … 4 oz”**—including Instacart and baby-registry pages pointing to Amazon listings. ([instacart.com](https://www.instacart.com/products/118315679-amallow-baby-bum-balm-4-oz?utm_source=openai))",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 5,
+        "text": "**Bottom line:** It looks **still available, not discontinued**—but likely as **Amallow Baby Bum Balm 4 oz**, not “Wiggle & Snug.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 6,
+        "text": "If you’re seeing “Wiggle & Snug” on an old receipt/listing, it may be a retailer/store label, a mistaken listing title, or an older third-party listing.",
+        "kind": "none",
+        "modality": "conditional"
+      }
+    ],
+    "needs_review": [
+      {
+        "sentence": "The product appears to still be available under the **Amallow** brand: Amallow’s official product page lists **Baby Bum Balm** with a **4 oz** jar, a price, “Add to cart,” and “100+ bought this month.” ([amallow.com](https://amallow.com/products/baby-bum-balm?utm_source=openai)) It also appears on Amallow’s “All Products” page with an **Add to cart** option. ([amallow.com](https://amallow.com/collections/all-products?utm_source=openai))",
+        "lexicon": "hedged",
+        "label": "asserted"
+      }
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Baby Bum Balm"
+      },
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Amallow Baby Bum Balm"
+      }
+    ],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [
+      "amallow.com",
+      "instacart.com"
+    ],
+    "other_brands": {
+      "Amallow": "closest_match_described"
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

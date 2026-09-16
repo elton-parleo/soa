@@ -1,0 +1,34 @@
+{
+  "row": 4,
+  "seed": 1,
+  "query_code": "WIG_150",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn't find any information for a diaper brand specifically named \"Wiggle & Snug Snug-Fit Diapers.\" It's possible this is a less common brand, a store-specific brand, or perhaps a slight misspelling.\n\nDiaper prices can vary significantly based on the retailer, promotions, and the exact count in the \"small pack.\"\n\nIf you could confirm the exact brand name or the store where you've seen them, I might be able to help you find the price for a similar product!",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

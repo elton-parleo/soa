@@ -1,0 +1,60 @@
+{
+  "row": 11,
+  "seed": 1,
+  "query_code": "WIG_165",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn’t find an exact product indexed as **“Wiggle & Snug Snug-Fit Overnight Diapers Size 6.”** If you mean **Parent’s Choice Gentle Dreams Overnight Diapers, Size 6, 58 count**, the current Walmart listing shows **$15.73** — about **27.1¢ per diaper**. Prices can vary by location and availability. ([walmart.com](https://www.walmart.com/browse/5427_486190_2844649?affinityOverride=default&utm_source=openai))",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "15.73",
+        "currency": "USD",
+        "attributed_product": "Parent’s Choice Gentle Dreams Overnight Diapers, Size 6, 58 count"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 58,
+        "attributed_product": "Parent’s Choice Gentle Dreams Overnight Diapers, Size 6"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [
+      "walmart.com"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "15.73",
+        "currency": "USD",
+        "attributed_product": "Parent’s Choice Gentle Dreams Overnight Diapers, Size 6, 58 count"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 58,
+        "attributed_product": "Parent’s Choice Gentle Dreams Overnight Diapers, Size 6"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "walmart.com"
+    ],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

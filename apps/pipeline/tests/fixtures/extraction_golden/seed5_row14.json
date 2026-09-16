@@ -1,0 +1,179 @@
+{
+  "row": 14,
+  "seed": 5,
+  "query_code": "WIG_151",
+  "platform": "gemini",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I'm sorry, but I couldn't find any information on a widely available diaper brand called \"Wiggle & Snug Snug-Fit Diapers.\" It's possible this is a fictional brand, a very new or niche brand, a private label for a specific store, or perhaps there's a slight misspelling.\n\nIf you know it's a real product, please double-check the brand name or let me know which retailer sells it, and I might be able to help you find pricing information.\n\nGenerally, diaper prices vary significantly based on:\n*   **Retailer:** Prices differ between stores like Amazon, Walmart, Target, Costco, etc.\n*   **Pack Size:** \"Big packs\" (or \"economy boxes\") usually offer a lower per-diaper cost.\n*   **Sales and Coupons:** Diapers are frequently on sale.\n*   **Subscription Services:** Some retailers offer discounts for recurring subscriptions.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "but I couldn't find any information on a widely available diaper brand called \"Wiggle & Snug Snug-Fit Diapers.",
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [
+      "Amazon",
+      "Walmart",
+      "Target",
+      "Costco"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [
+      {
+        "name": "Amazon",
+        "role": "recommendation"
+      },
+      {
+        "name": "Walmart",
+        "role": "recommendation"
+      },
+      {
+        "name": "Target",
+        "role": "recommendation"
+      },
+      {
+        "name": "Costco",
+        "role": "recommendation"
+      }
+    ],
+    "postprocess": [
+      "not a brand: Amazon",
+      "not a brand: Walmart",
+      "not a brand: Target",
+      "not a brand: Costco",
+      "1 span(s) need review"
+    ],
+    "transcribed_unknown_statement": "I'm sorry, but I couldn't find any information on a widely available diaper brand called \"Wiggle & Snug Snug-Fit Diapers.\"",
+    "spans": [
+      {
+        "id": 1,
+        "text": "I'm sorry,"
+      },
+      {
+        "id": 2,
+        "text": "but I couldn't find any information on a widely available diaper brand called \"Wiggle & Snug Snug-Fit Diapers."
+      },
+      {
+        "id": 3,
+        "text": "It's possible this is a fictional brand, a very new or niche brand, a private label for a specific store, or perhaps there's a slight misspelling."
+      },
+      {
+        "id": 4,
+        "text": "If you know it's a real product, please double-check the brand name or let me know which retailer sells it, and I might be able to help you find pricing information."
+      },
+      {
+        "id": 5,
+        "text": "Generally, diaper prices vary significantly based on:"
+      },
+      {
+        "id": 6,
+        "text": "*   **Retailer:** Prices differ between stores like Amazon, Walmart, Target, Costco, etc."
+      },
+      {
+        "id": 7,
+        "text": "*   **Pack Size:** \"Big packs\" (or \"economy boxes\") usually offer a lower per-diaper cost."
+      },
+      {
+        "id": 8,
+        "text": "*   **Sales and Coupons:** Diapers are frequently on sale."
+      },
+      {
+        "id": 9,
+        "text": "*   **Subscription Services:** Some retailers offer discounts for recurring subscriptions."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "I'm sorry,",
+        "kind": "disclaimer",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "but I couldn't find any information on a widely available diaper brand called \"Wiggle & Snug Snug-Fit Diapers.",
+        "kind": "unknown_statement",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "It's possible this is a fictional brand, a very new or niche brand, a private label for a specific store, or perhaps there's a slight misspelling.",
+        "kind": "unknown_statement",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 4,
+        "text": "If you know it's a real product, please double-check the brand name or let me know which retailer sells it, and I might be able to help you find pricing information.",
+        "kind": "instruction",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 5,
+        "text": "Generally, diaper prices vary significantly based on:",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 6,
+        "text": "*   **Retailer:** Prices differ between stores like Amazon, Walmart, Target, Costco, etc.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 7,
+        "text": "*   **Pack Size:** \"Big packs\" (or \"economy boxes\") usually offer a lower per-diaper cost.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 8,
+        "text": "*   **Sales and Coupons:** Diapers are frequently on sale.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 9,
+        "text": "*   **Subscription Services:** Some retailers offer discounts for recurring subscriptions.",
+        "kind": "none",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": [
+      {
+        "reason": "the transcription read a cannot-find statement the spans did not",
+        "transcribed": "I'm sorry, but I couldn't find any information on a widely available diaper brand called \"Wiggle & Snug Snug-Fit Diapers.\"",
+        "from_spans": "but I couldn't find any information on a widely available diaper brand called \"Wiggle & Snug Snug-Fit Diapers."
+      }
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {
+      "Amazon": "recommendation",
+      "Walmart": "recommendation",
+      "Target": "recommendation",
+      "Costco": "recommendation"
+    }
+  },
+  "review_note": null
+}

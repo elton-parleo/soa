@@ -1,0 +1,80 @@
+{
+  "row": 34,
+  "seed": 1,
+  "query_code": "WIG_149",
+  "platform": "gemini",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "It seems you might be looking for **Wiggle & Giggle Organic Baby Bum Balm 4 oz**!\n\nWhile I don't find a product specifically named \"Wiggle & **Snug** Bum Balm,\" the **Wiggle & Giggle Organic Baby Bum Balm 4 oz** is a very popular and similarly named product.\n\nThis product **is still available** and can typically be found on Amazon. It has not been discontinued.\n\nIt's possible \"Snug\" was a slight misremembering, or perhaps an older name for what is now known as \"Wiggle & Giggle.\"",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 4,
+        "attributed_product": "Wiggle & Giggle Organic Baby Bum Balm 4 oz"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "brand_unknown_statement": "\"I don't find a product specifically named \"Wiggle & Snug Bum Balm,\"",
+    "other_brands_named": [
+      {
+        "name": "Wiggle & Giggle",
+        "presented_as": "similarly named product"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "it can typically be found on Amazon",
+        "kind": "retail"
+      },
+      {
+        "claim": "It has not been discontinued.",
+        "kind": "other"
+      }
+    ],
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Wiggle & Giggle Organic Baby Bum Balm 4 oz"
+      }
+    ],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {
+      "Wiggle & Giggle": "closest_match_described"
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": {
+    "drop_counts": [
+      4
+    ],
+    "sizes_add": [
+      [
+        "4",
+        "oz",
+        "Wiggle & Giggle Organic Baby Bum Balm 4 oz"
+      ]
+    ],
+    "brands": {
+      "Wiggle & Giggle": "closest_match_described"
+    },
+    "unknown": "keep"
+  }
+}

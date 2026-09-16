@@ -1,0 +1,175 @@
+{
+  "row": 28,
+  "seed": 5,
+  "query_code": "WIG_169",
+  "platform": "gemini",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "Yes, Wiggle & Snug typically offers a first-order promo code, usually obtained by signing up for their email newsletter.\n\n**What it takes off:**\nIt generally offers **10% off** your first order.\n\n**How to get it:**\n1.  Go to the official Wiggle & Snug website.\n2.  Look for a pop-up window or a banner at the top/bottom of the page inviting you to sign up for their newsletter.\n3.  If you don't see one, scroll to the footer of the website – there's usually a \"Sign up for our newsletter\" section there.\n4.  Enter your email address, and they will usually email you a unique 10% off code for your first purchase.\n\nAlways check their website directly for the most current and active offer, as promotions can change.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [
+      {
+        "code": "10% off",
+        "value_kind": "percent_off",
+        "value": "10"
+      }
+    ],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "Yes, Wiggle & Snug typically offers a first-order promo code, usually obtained by signing up for their email newsletter.",
+        "sentence": "Yes, Wiggle & Snug typically offers a first-order promo code, usually obtained by signing up for their email newsletter.",
+        "span_id": 1,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      },
+      {
+        "claim": "It generally offers **10% off** your first order.",
+        "sentence": "It generally offers **10% off** your first order.",
+        "span_id": 3,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [
+      "the official Wiggle & Snug website"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [
+      {
+        "name": "the official Wiggle & Snug website",
+        "role": "recommendation"
+      }
+    ],
+    "postprocess": [],
+    "transcribed_unknown_statement": null,
+    "spans": [
+      {
+        "id": 1,
+        "text": "Yes, Wiggle & Snug typically offers a first-order promo code, usually obtained by signing up for their email newsletter."
+      },
+      {
+        "id": 2,
+        "text": "**What it takes off:**"
+      },
+      {
+        "id": 3,
+        "text": "It generally offers **10% off** your first order."
+      },
+      {
+        "id": 4,
+        "text": "**How to get it:**"
+      },
+      {
+        "id": 5,
+        "text": "Go to the official Wiggle & Snug website."
+      },
+      {
+        "id": 6,
+        "text": "Look for a pop-up window or a banner at the top/bottom of the page inviting you to sign up for their newsletter."
+      },
+      {
+        "id": 7,
+        "text": "If you don't see one, scroll to the footer of the website – there's usually a \"Sign up for our newsletter\" section there."
+      },
+      {
+        "id": 8,
+        "text": "Enter your email address, and they will usually email you a unique 10% off code for your first purchase."
+      },
+      {
+        "id": 9,
+        "text": "Always check their website directly for the most current and active offer, as promotions can change."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "Yes, Wiggle & Snug typically offers a first-order promo code, usually obtained by signing up for their email newsletter.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 2,
+        "text": "**What it takes off:**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "It generally offers **10% off** your first order.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 4,
+        "text": "**How to get it:**",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 5,
+        "text": "Go to the official Wiggle & Snug website.",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 6,
+        "text": "Look for a pop-up window or a banner at the top/bottom of the page inviting you to sign up for their newsletter.",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 7,
+        "text": "If you don't see one, scroll to the footer of the website – there's usually a \"Sign up for our newsletter\" section there.",
+        "kind": "instruction",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 8,
+        "text": "Enter your email address, and they will usually email you a unique 10% off code for your first purchase.",
+        "kind": "instruction",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 9,
+        "text": "Always check their website directly for the most current and active offer, as promotions can change.",
+        "kind": "instruction",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {
+      "the official Wiggle & Snug website": "recommendation"
+    }
+  },
+  "review_note": {
+    "codes": [],
+    "note": "\"10% off\" is a description of a discount, not a code. It was compared against a published code it could never match."
+  }
+}

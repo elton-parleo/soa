@@ -1,0 +1,82 @@
+{
+  "row": 18,
+  "seed": 3,
+  "query_code": "WIG_141",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "**Maybe—but I’d be cautious about calling Wiggle & Snug Snug-Fit Overnight Diapers “better” unless you can verify their absorbency and fit for your child.** I couldn’t find strong independent testing for that exact product, so I’d treat them as a **trial option**, not a proven upgrade.\n\nFor nighttime leaks, the most important things are:\n\n- **More absorbency than daytime diapers.** Overnight diapers are typically designed for longer wear and often have substantially more capacity than regular diapers. Babylist notes many overnight diapers offer about **25–50% more capacity**, and are intended for around **12 hours** of protection. ([babylist.com](https://www.babylist.com/hello-baby/best-overnight-diapers))  \n- **Snug but not tight fit.** A snug waist/thigh fit helps prevent gaps, but if the diaper is too tight—or compressed by tight pajamas—it can actually make leaks worse. Pampers recommends no gaps at the waist/thighs and checking that leg cuffs aren’t tucked in; Albee Baby also notes that too-tight diapering can reduce absorbency. ([support.pampers.com](https://support.pampers.com/hc/en-us/articles/21678052813597-How-can-I-prevent-diaper-leakage-and-protect-my-baby-s-skin)) ([albeebaby.com](https://www.albeebaby.com/blogs/from-the-cradle/overnight-diaper-leaks))  \n- **The leak pattern.** Front leaks may need a forward booster pad or penis pointed down; leg leaks often mean fit/ruffles/tabs; back leaks may need a higher-rise diaper or center/back booster. ([albeebaby.com](https://www.albeebaby.com/blogs/from-the-cradle/overnight-diaper-leaks))  \n\n**My practical take:** If Wiggle & Snug is marketed as an overnight diaper and fits your child well, it’s worth trying a small pack—especially if your current diaper is soaked by morning. But if leaks continue, I’d compare it against well-tested overnight options like **Pampers Swaddlers Overnights**, **Huggies OverNites**, or an **overnight diaper + booster pad** setup. BabyGearLab’s testing, for example, rated Pampers Swaddlers Overnights highly for overnight absorbency, while noting Huggies OverNites had strong leak scores but more mixed lab results. ([babygearlab.com](https://www.babygearlab.com/topics/diapering-potty/best-overnight-diaper))\n\n**Best first experiment:** use one size up in an overnight diaper, make sure the leg ruffles are fully out, avoid tight pajamas, and add a booster pad if the diaper is totally saturated by morning.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "25",
+        "unit": "%",
+        "attributed_product": "overnight diapers"
+      },
+      {
+        "value": "50",
+        "unit": "%",
+        "attributed_product": "overnight diapers"
+      },
+      {
+        "value": "12",
+        "unit": "hours",
+        "attributed_product": "overnight diapers"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t find strong independent testing for that exact product, so I’d treat them as a trial option, not a proven upgrade.",
+    "other_brands_named": [
+      {
+        "name": "Pampers Swaddlers Overnights",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Huggies OverNites",
+        "presented_as": "recommendation"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "babylist.com",
+      "support.pampers.com",
+      "albeebaby.com",
+      "babygearlab.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "babylist.com",
+      "support.pampers.com",
+      "albeebaby.com",
+      "babygearlab.com"
+    ],
+    "other_brands": {
+      "Pampers Swaddlers Overnights": null,
+      "Huggies OverNites": null
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": {
+    "ruling": 11,
+    "note": "\"25%\", \"50%\" and \"12 hours\" recorded as sizes. A percentage and a duration are not product measurements."
+  }
+}

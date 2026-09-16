@@ -1,0 +1,94 @@
+{
+  "row": 1,
+  "seed": 1,
+  "query_code": "WIG_167",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I couldn’t find an exact listing for **“Wiggle & Snug Bum Balm 4 oz.”** The closest match I found is **Amallow Baby Bum Balm, 4 oz**:\n\n- **Official Amallow price:** **$38** — marked down from **$45**. ([amallow.com](https://amallow.com/products/baby-bum-balm))  \n- **Instacart:** starts at **$24.99**, but price varies by retailer/location. ([instacart.com](https://www.instacart.com/products/118315679-amallow-baby-bum-balm-4-oz))\n\nIf you meant a different “Wiggle & Snug” listing, send me the link and I’ll check that exact price.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "38",
+        "currency": "USD",
+        "attributed_product": "Amallow Baby Bum Balm, 4 oz"
+      },
+      {
+        "amount": "45",
+        "currency": "USD",
+        "attributed_product": "Amallow Baby Bum Balm, 4 oz"
+      },
+      {
+        "amount": "24.99",
+        "currency": "USD",
+        "attributed_product": "Amallow Baby Bum Balm, 4 oz"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 4,
+        "attributed_product": "Amallow Baby Bum Balm, 4 oz"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [
+      "amallow.com",
+      "instacart.com"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Amallow Baby Bum Balm, 4 oz"
+      }
+    ],
+    "prices": [
+      {
+        "amount": "38",
+        "currency": "USD",
+        "attributed_product": "Amallow Baby Bum Balm, 4 oz"
+      },
+      {
+        "amount": "45",
+        "currency": "USD",
+        "attributed_product": "Amallow Baby Bum Balm, 4 oz"
+      },
+      {
+        "amount": "24.99",
+        "currency": "USD",
+        "attributed_product": "Amallow Baby Bum Balm, 4 oz"
+      }
+    ],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "amallow.com",
+      "instacart.com"
+    ],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": {
+    "drop_counts": [
+      4
+    ],
+    "sizes_add": [
+      [
+        "4",
+        "oz",
+        "Amallow Baby Bum Balm, 4 oz"
+      ]
+    ]
+  }
+}

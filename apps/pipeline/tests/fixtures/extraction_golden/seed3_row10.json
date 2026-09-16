@@ -1,0 +1,67 @@
+{
+  "row": 10,
+  "seed": 3,
+  "query_code": "WIG_144",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Yes — **Wiggle & Snug Member Rewards is still available**. It’s described as **free to join**, with members earning **1 point per $1 spent** and access to member pricing/offers. ([trueshopstore.com](https://trueshopstore.com/loyalty))\n\nThe tiers are:\n\n1. **Member** — free to join  \n2. **Member+** — for **$150+ spend per year** ([trueshopstore.com](https://trueshopstore.com/loyalty))",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [
+      {
+        "value": "1",
+        "per_dollar": true,
+        "program": "Wiggle & Snug Member Rewards"
+      }
+    ],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [
+      "Member",
+      "Member+"
+    ],
+    "brand_claims": [
+      {
+        "claim": "Wiggle & Snug Member Rewards is still available",
+        "sentence": "Yes — **Wiggle & Snug Member Rewards is still available**.",
+        "kind": "loyalty",
+        "hedged": false
+      },
+      {
+        "claim": "free to join",
+        "sentence": "It’s described as **free to join**, with members earning **1 point per $1 spent** and access to member pricing/offers.",
+        "kind": "loyalty",
+        "hedged": false
+      }
+    ],
+    "sources_cited": [
+      "trueshopstore.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "trueshopstore.com"
+    ],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}

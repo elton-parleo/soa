@@ -1,0 +1,252 @@
+{
+  "row": 29,
+  "seed": 5,
+  "query_code": "WIG_146",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "For a baby who **leaks at night**, the best starting move is usually:\n\n**Buy the Snug-Fit Overnight Diaper one size larger than your baby’s daytime diaper** — *as long as it still fits snugly at the legs and waist with no gaps.* Sizing up often helps because the larger diaper has more absorbent capacity; Pampers also notes that consistent leaking can mean baby needs a different size or more absorbency. ([support.pampers.com](https://support.pampers.com/hc/en-us/articles/21678052813597-How-can-I-prevent-diaper-leakage-and-protect-my-baby-s-skin))\n\n**Quick guide:**\n- Daytime **Size 2** → try overnight **Size 3**\n- Daytime **Size 3** → try overnight **Size 4**\n- Daytime **Size 4** → try overnight **Size 5**\n- Daytime **Size 5** → try overnight **Size 6**\n\nIf the bigger size leaves **leg gaps**, don’t use it—gaps cause leaks. In that case, stay in the current size and try a **diaper booster pad** or a different overnight brand/cut. Overnight leak guides commonly recommend sizing up, but specifically warn not to size up if it creates gaps. ([albeebaby.com](https://www.albeebaby.com/blogs/from-the-cradle/overnight-diaper-leaks))\n\nAlso check fit before bed:\n- Leg ruffles/cuffs pulled fully out\n- Tabs snug, not loose\n- Waistband not gapping\n- For boys, point penis downward before fastening\n\nIf you tell me your baby’s **weight** and current diaper size, I can give you the exact size to buy.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Pampers",
+        "presented_as": "source",
+        "relation": "citation_only"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "support.pampers.com",
+      "albeebaby.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": false,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "transcribed_unknown_statement": null,
+    "spans": [
+      {
+        "id": 1,
+        "text": "For a baby who **leaks at night**, the best starting move is usually:"
+      },
+      {
+        "id": 2,
+        "text": "**Buy the Snug-Fit Overnight Diaper one size larger than your baby’s daytime diaper** — *as long as it still fits snugly at the legs and waist with no gaps."
+      },
+      {
+        "id": 3,
+        "text": "Sizing up often helps because the larger diaper has more absorbent capacity;"
+      },
+      {
+        "id": 4,
+        "text": "Pampers also notes that consistent leaking can mean baby needs a different size or more absorbency. ([support.pampers.com](https://support.pampers.com/hc/en-us/articles/21678052813597-How-can-I-prevent-diaper-leakage-and-protect-my-baby-s-skin))"
+      },
+      {
+        "id": 5,
+        "text": "**Quick guide:**"
+      },
+      {
+        "id": 6,
+        "text": "- Daytime **Size 2** → try overnight **Size 3**"
+      },
+      {
+        "id": 7,
+        "text": "- Daytime **Size 3** → try overnight **Size 4**"
+      },
+      {
+        "id": 8,
+        "text": "- Daytime **Size 4** → try overnight **Size 5**"
+      },
+      {
+        "id": 9,
+        "text": "- Daytime **Size 5** → try overnight **Size 6**"
+      },
+      {
+        "id": 10,
+        "text": "If the bigger size leaves **leg gaps**, don’t use it—gaps cause leaks."
+      },
+      {
+        "id": 11,
+        "text": "In that case, stay in the current size and try a **diaper booster pad** or a different overnight brand/cut."
+      },
+      {
+        "id": 12,
+        "text": "Overnight leak guides commonly recommend sizing up,"
+      },
+      {
+        "id": 13,
+        "text": "but specifically warn not to size up if it creates gaps. ([albeebaby.com](https://www.albeebaby.com/blogs/from-the-cradle/overnight-diaper-leaks))"
+      },
+      {
+        "id": 14,
+        "text": "Also check fit before bed:"
+      },
+      {
+        "id": 15,
+        "text": "- Leg ruffles/cuffs pulled fully out"
+      },
+      {
+        "id": 16,
+        "text": "- Tabs snug, not loose"
+      },
+      {
+        "id": 17,
+        "text": "- Waistband not gapping"
+      },
+      {
+        "id": 18,
+        "text": "- For boys, point penis downward before fastening"
+      },
+      {
+        "id": 19,
+        "text": "If you tell me your baby’s **weight** and current diaper size, I can give you the exact size to buy."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "For a baby who **leaks at night**, the best starting move is usually:",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "**Buy the Snug-Fit Overnight Diaper one size larger than your baby’s daytime diaper** — *as long as it still fits snugly at the legs and waist with no gaps.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "Sizing up often helps because the larger diaper has more absorbent capacity;",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 4,
+        "text": "Pampers also notes that consistent leaking can mean baby needs a different size or more absorbency. ([support.pampers.com](https://support.pampers.com/hc/en-us/articles/21678052813597-How-can-I-prevent-diaper-leakage-and-protect-my-baby-s-skin))",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 5,
+        "text": "**Quick guide:**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 6,
+        "text": "- Daytime **Size 2** → try overnight **Size 3**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 7,
+        "text": "- Daytime **Size 3** → try overnight **Size 4**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 8,
+        "text": "- Daytime **Size 4** → try overnight **Size 5**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 9,
+        "text": "- Daytime **Size 5** → try overnight **Size 6**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 10,
+        "text": "If the bigger size leaves **leg gaps**, don’t use it—gaps cause leaks.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 11,
+        "text": "In that case, stay in the current size and try a **diaper booster pad** or a different overnight brand/cut.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 12,
+        "text": "Overnight leak guides commonly recommend sizing up,",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 13,
+        "text": "but specifically warn not to size up if it creates gaps. ([albeebaby.com](https://www.albeebaby.com/blogs/from-the-cradle/overnight-diaper-leaks))",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 14,
+        "text": "Also check fit before bed:",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 15,
+        "text": "- Leg ruffles/cuffs pulled fully out",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 16,
+        "text": "- Tabs snug, not loose",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 17,
+        "text": "- Waistband not gapping",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 18,
+        "text": "- For boys, point penis downward before fastening",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 19,
+        "text": "If you tell me your baby’s **weight** and current diaper size, I can give you the exact size to buy.",
+        "kind": "disclaimer",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": false,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [
+      "support.pampers.com",
+      "albeebaby.com"
+    ],
+    "other_brands": {
+      "Pampers": "citation_only"
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

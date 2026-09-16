@@ -1,0 +1,50 @@
+{
+  "row": 26,
+  "seed": 1,
+  "query_code": "WIG_142",
+  "platform": "gemini",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "While I don't have real-time access to the absolute latest ingredient list and specific certifications for \"Wiggle & Snug Cloud Wipes 3-Pack\" at this very moment, I can give you general guidance based on what brands typically mean when they use terms like \"Cloud Wipes\" and target sensitive baby skin.\n\n**Generally, products marketed with \"Cloud Wipes,\" \"Snug,\" or designed for babies are formulated with sensitivity in mind.** They typically aim to be:\n\n*   **Fragrance-Free:** Fragrances are a common irritant for sensitive skin.\n*   **Alcohol-Free:** Alcohol can be drying and irritating.\n*   **Hypoallergenic:** This means they are formulated to minimize the risk of allergic reactions.\n*   **Dermatologically Tested / Paediatrician Approved:** Indicates they've been tested for skin tolerance under expert supervision.\n*   **Free from harsh chemicals:** Often without parabens, phthalates, dyes, chlorine, etc.\n*   **pH Balanced:** To match the natural pH of a baby's skin.\n\n**To be absolutely sure for *your* baby's sensitive skin, I recommend you always:**\n\n1.  **Check the Product Packaging:** Look for the full ingredient list and any specific claims like \"for sensitive skin,\" \"hypoallergenic,\" \"dermatologically tested,\" or \"National Eczema Association approved.\"\n2.  **Look for Specific Certifications:** Some brands proudly display certifications from organizations related to skin health.\n3.  **Perform a Patch Test:** Before using them widely, try wiping a small, non-sensitive area of your baby's skin (like a forearm or leg) and wait 24 hours to see if there's any reaction.\n\n**In summary:** Given the name and target audience, Wiggle & Snug Cloud Wipes are **highly likely** to be suitable for sensitive baby skin. However, always verify the details on the packaging and perform a patch test if you have specific concerns about your baby's sensitivity.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 3,
+        "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "brand_unknown_statement": "\"While I don't have real-time access to the absolute latest ingredient list and specific certifications for \"Wiggle & Snug Cloud Wipes 3-Pack\" at this very moment\"",
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [
+      {
+        "value": 3,
+        "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": {
+    "unknown": null
+  }
+}

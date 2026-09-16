@@ -1,0 +1,95 @@
+{
+  "row": 6,
+  "seed": 5,
+  "query_code": "WIG_139",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Yes, Wiggle & Snug sells **wipes and diaper cream** in addition to their diapers. They aim to be a comprehensive baby care brand.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "Yes, Wiggle & Snug sells **wipes and diaper cream** in addition to their diapers.",
+        "sentence": "Yes, Wiggle & Snug sells **wipes and diaper cream** in addition to their diapers.",
+        "span_id": 1,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "retail",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "They aim to be a comprehensive baby care brand.",
+        "sentence": "They aim to be a comprehensive baby care brand.",
+        "span_id": 2,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [],
+    "postprocess": [
+      "1 span(s) need review"
+    ],
+    "transcribed_unknown_statement": null,
+    "spans": [
+      {
+        "id": 1,
+        "text": "Yes, Wiggle & Snug sells **wipes and diaper cream** in addition to their diapers."
+      },
+      {
+        "id": 2,
+        "text": "They aim to be a comprehensive baby care brand."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "Yes, Wiggle & Snug sells **wipes and diaper cream** in addition to their diapers.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "They aim to be a comprehensive baby care brand.",
+        "kind": "assertion",
+        "modality": "hedged"
+      }
+    ],
+    "needs_review": [
+      {
+        "sentence": "They aim to be a comprehensive baby care brand.",
+        "lexicon": "asserted",
+        "label": "hedged"
+      }
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

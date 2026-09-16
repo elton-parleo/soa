@@ -1,0 +1,77 @@
+{
+  "row": 18,
+  "seed": 1,
+  "query_code": "WIG_140",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "**Short answer:** *Maybe, but I wouldn’t call Wiggle & Snug Snug-Fit Diapers a “yes” for newborns unless you can verify the size, materials, and fit.* I couldn’t find a reliable official product page or independent newborn-specific testing/reviews for the exact “Wiggle & Snug Snug-Fit Diapers” name; searches mostly turned up unrelated products or Huggies “Snug” diapers. ([target.com](https://www.target.com/p/-/A-1013551250?utm_source=openai))\n\nFor a **newborn**, I’d only use them if they meet these checks:\n\n- **Newborn size/weight range** — usually labeled NB or “up to ~10 lb.”\n- **Soft, fragrance-free, alcohol-free/low-irritant materials** — newborn skin is sensitive; AAP recommends alcohol- and fragrance-free wipes, and frequent changes to limit irritation. ([healthychildren.org](https://www.healthychildren.org/English/ages-stages/baby/diapers-clothing/Pages/Diaper-Rash.aspx?utm_source=openai))\n- **Good umbilical cord clearance** — ideally an umbilical cutout or a front that can fold down.\n- **Snug but not tight fit** — no gaps at the legs, but no deep red marks on belly/thighs.\n- **Absorbent enough** — leaks, blowouts, or damp-feeling skin mean they’re not a good match.\n- **No rash after a trial pack** — diaper rash can be triggered by moisture, chafing, or sensitivity; change wet/dirty diapers promptly and stop using them if irritation appears. ([mayoclinic.org](https://www.mayoclinic.org/diseases-conditions/diaper-rash/symptoms-causes/syc-20371636?utm_source=openai))\n\n**My practical recommendation:** buy only a **small pack first**. If your baby stays dry, has no rash, and the diaper sits below/away from the umbilical stump, they’re fine to keep using. If you see redness, leaks, chemical/fragrance smell, or poor fit, switch to a well-established newborn diaper like **Huggies Little Snugglers**, **Pampers Swaddlers**, or another fragrance-free newborn option.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": null,
+        "attributed_product": "a small pack first"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "brand_unknown_statement": "\"I couldn’t find a reliable official product page or independent newborn-specific testing/reviews for the exact “Wiggle & Snug Snug-Fit Diapers” name;\"",
+    "other_brands_named": [
+      {
+        "name": "Huggies",
+        "presented_as": "unrelated products or"
+      },
+      {
+        "name": "Huggies Little Snugglers",
+        "presented_as": "a well-established newborn diaper like"
+      },
+      {
+        "name": "Pampers Swaddlers",
+        "presented_as": "another fragrance-free newborn option"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "target.com",
+      "healthychildren.org",
+      "mayoclinic.org"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "target.com",
+      "healthychildren.org",
+      "mayoclinic.org"
+    ],
+    "other_brands": {
+      "Huggies": "comparison",
+      "Huggies Little Snugglers": "recommendation",
+      "Pampers Swaddlers": "recommendation"
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": {
+    "drop_counts": [
+      null
+    ],
+    "brands": {
+      "Huggies": "comparison",
+      "Huggies Little Snugglers": "recommendation",
+      "Pampers Swaddlers": "recommendation"
+    }
+  }
+}

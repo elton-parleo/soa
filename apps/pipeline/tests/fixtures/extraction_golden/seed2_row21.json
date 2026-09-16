@@ -1,0 +1,107 @@
+{
+  "row": 21,
+  "seed": 2,
+  "query_code": "WIG_162",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn’t verify a current price for an exact product named **“Wiggle & Snug Snug-Fit Overnight Diapers Size 3.”** My searches turned up similar Size 3 overnight diaper listings instead—for example, Target lists **Millie Moon Disposable Overnight Diapers Size 3, 66ct at $26.99**, and **Pampers Swaddlers Overnight Diapers Size 3, 66ct at $27.99**. ([target.com](https://www.target.com/c/diapers-diapering-baby/buy-online-pick-up/-/N-62fox?utm_source=openai))\n\nIf you send me the retailer or product link, I can check the exact cost.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "26.99",
+        "currency": "USD",
+        "attributed_product": "Millie Moon Disposable Overnight Diapers Size 3, 66ct"
+      },
+      {
+        "amount": "27.99",
+        "currency": "USD",
+        "attributed_product": "Pampers Swaddlers Overnight Diapers Size 3, 66ct"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 66,
+        "attributed_product": "Millie Moon Disposable Overnight Diapers Size 3"
+      },
+      {
+        "value": 66,
+        "attributed_product": "Pampers Swaddlers Overnight Diapers Size 3"
+      }
+    ],
+    "sizes": [
+      {
+        "value": "3",
+        "unit": null,
+        "attributed_product": "Millie Moon Disposable Overnight Diapers Size 3, 66ct"
+      },
+      {
+        "value": "3",
+        "unit": null,
+        "attributed_product": "Pampers Swaddlers Overnight Diapers Size 3, 66ct"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t verify a current price for an exact product named “Wiggle & Snug Snug-Fit Overnight Diapers Size 3.”",
+    "other_brands_named": [
+      {
+        "name": "Millie Moon",
+        "presented_as": "closest_match"
+      },
+      {
+        "name": "Pampers",
+        "presented_as": "closest_match"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "target.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "26.99",
+        "currency": "USD",
+        "attributed_product": "Millie Moon Disposable Overnight Diapers Size 3, 66ct"
+      },
+      {
+        "amount": "27.99",
+        "currency": "USD",
+        "attributed_product": "Pampers Swaddlers Overnight Diapers Size 3, 66ct"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 66,
+        "attributed_product": "Millie Moon Disposable Overnight Diapers Size 3"
+      },
+      {
+        "value": 66,
+        "attributed_product": "Pampers Swaddlers Overnight Diapers Size 3"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "target.com"
+    ],
+    "other_brands": {
+      "Millie Moon": null,
+      "Pampers": null
+    },
+    "retailers": {},
+    "codes": []
+  },
+  "review_note": null
+}
