@@ -151,11 +151,11 @@ describe('RequestFormModal — success and failure states', () => {
     expect(screen.getByLabelText(/^Company/)).toHaveValue('Acme Corp')
   })
 
-  it('renders per-field errors from a 422 response and preserves entered values', async () => {
+  it('surfaces Formspree\'s own error message ({errors: [{message}]}) and preserves entered values', async () => {
     const onSubmit = vi.fn().mockResolvedValue({
       ok: false,
       status: 422,
-      body: { detail: [{ loc: ['body', 'email'], msg: 'email must be a valid email address' }] },
+      body: { errors: [{ field: 'email', message: 'The email field is invalid.', code: 'TYPE_EMAIL' }] },
     })
     renderModal({ onSubmit })
     passTimingGuard()
@@ -163,8 +163,19 @@ describe('RequestFormModal — success and failure states', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
 
-    expect(await screen.findByText('email must be a valid email address')).toBeInTheDocument()
+    expect(await screen.findByText('The email field is invalid.')).toBeInTheDocument()
     expect(screen.getByLabelText(/^Company/)).toHaveValue('Acme Corp')
+  })
+
+  it('surfaces Formspree\'s {error: "message"} shape too', async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ ok: false, status: 500, body: { error: 'Form not found' } })
+    renderModal({ onSubmit })
+    passTimingGuard()
+    fillValidForm()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+
+    expect(await screen.findByText('Form not found')).toBeInTheDocument()
   })
 
   it('disables the button and shows "Sending…" while submitting', async () => {
@@ -183,20 +194,23 @@ describe('RequestFormModal — success and failure states', () => {
 })
 
 describe('RequestFormModal — anti-spam', () => {
-  it('honeypot filled: shows success without calling onSubmit', async () => {
+  it('honeypot filled: shows success without calling onSubmit, and logs a dev warning naming the reason', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { onSubmit, container } = renderModal()
     passTimingGuard()
     fillValidForm()
-    const honeypot = container.querySelector('input[name="website"]')
+    const honeypot = container.querySelector('input[name="hp_field"]')
     fireEvent.change(honeypot, { target: { value: 'http://spam.example' } })
 
     fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
 
     expect(await screen.findByText('Message sent')).toBeInTheDocument()
     expect(onSubmit).not.toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('reason: honeypot'))
   })
 
-  it('submitted faster than MIN_ELAPSED_MS: shows success without calling onSubmit, even with a fully valid form', async () => {
+  it('submitted faster than MIN_ELAPSED_MS: shows success without calling onSubmit, logs a dev warning, even with a fully valid form', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { onSubmit } = renderModal()
     fillValidForm()
 
@@ -207,6 +221,44 @@ describe('RequestFormModal — anti-spam', () => {
 
     expect(await screen.findByText('Message sent')).toBeInTheDocument()
     expect(onSubmit).not.toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('reason: too_fast'))
+  })
+
+  it('timer origin: the clock restarts on each open, not just once — closing and reopening then submitting immediately still trips', async () => {
+    const onSubmit = vi.fn().mockResolvedValue({ ok: true, status: 200, body: { ok: true } })
+    const { rerender } = renderModal({ onSubmit })
+    passTimingGuard() // now well past MIN_ELAPSED_MS since the first open
+
+    // Close, then reopen — a real close/reopen cycle, matching how
+    // every CTA call site unmounts-or-toggles the modal (Part 2b: the
+    // clock must start on OPEN, not once at module/first-mount time).
+    rerender(<RequestFormModal open={false} onClose={() => {}} eyebrow={CTA.eyebrow} title={CTA.title} messagePlaceholder={CTA.messagePlaceholder} onSubmit={onSubmit} />)
+    rerender(<RequestFormModal open onClose={() => {}} eyebrow={CTA.eyebrow} title={CTA.title} messagePlaceholder={CTA.messagePlaceholder} onSubmit={onSubmit} />)
+
+    fillValidForm()
+    // No further time advance since the reopen — instant submit relative
+    // to THIS open, even though it's long past the FIRST open's clock.
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+
+    expect(await screen.findByText('Message sent')).toBeInTheDocument()
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
+
+  it('honeypot input cannot be mistaken for a real field by name/label/autofill heuristics', () => {
+    const { container } = renderModal()
+    const honeypot = container.querySelector('input[name="hp_field"]')
+    expect(honeypot).toHaveAttribute('autocomplete', 'off')
+    expect(honeypot).toHaveAttribute('tabindex', '-1')
+    expect(honeypot).toHaveAttribute('aria-hidden', 'true')
+    expect(honeypot.name).not.toMatch(/website|url|company|phone|address/i)
+
+    const wrapper = honeypot.closest('div[aria-hidden="true"]')
+    expect(wrapper).toHaveAttribute('aria-hidden', 'true')
+    expect(wrapper.style.position).toBe('absolute')
+    expect(wrapper.style.display).not.toBe('none') // off-screen, not display:none — some bots skip that
+
+    const label = container.querySelector(`label[for="${honeypot.id}"]`)
+    expect(label.textContent).not.toMatch(/website|url|company|phone|address/i)
   })
 })
 

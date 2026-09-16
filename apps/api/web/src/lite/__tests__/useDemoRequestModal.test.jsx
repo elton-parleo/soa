@@ -1,9 +1,10 @@
 /**
  * useDemoRequestModal — Part 2c context ride-along: report_token/
  * brand_name only present when the caller passed them (report
- * surfaces), page_url always read fresh from window.location.href at
- * submit time. submitDemoRequest itself is mocked; this test only
- * verifies the payload the hook builds, not the fetch.
+ * surfaces). No page_url — see demoRequestApi.js's docstring for why
+ * that field was dropped from the payload. submitDemoRequest itself
+ * is mocked; this test only verifies the payload the hook builds, not
+ * the fetch.
  */
 import React from 'react'
 import { renderHook, act } from '@testing-library/react'
@@ -30,7 +31,6 @@ vi.mock('../openaiPixel.js', () => ({
 
 beforeEach(() => {
   vi.spyOn(demoRequestApi, 'submitDemoRequest').mockResolvedValue({ ok: true, status: 200, body: { ok: true } })
-  window.history.pushState(null, '', '/r/tok123')
   track.mockClear()
   trackAppointmentScheduled.mockClear()
   newRequestId.mockClear()
@@ -59,7 +59,7 @@ describe('useDemoRequestModal', () => {
     expect(result.current.cta).toBeNull()
   })
 
-  it('landing (no brandName/reportToken): submits with page_url only, brand_name/report_token undefined', async () => {
+  it('landing (no brandName/reportToken): submits with brand_name/report_token undefined, no page_url', async () => {
     const { result } = renderHook(() => useDemoRequestModal())
     act(() => result.current.open('landing_truesync'))
 
@@ -70,10 +70,11 @@ describe('useDemoRequestModal', () => {
     expect(demoRequestApi.submitDemoRequest).toHaveBeenCalledWith(expect.objectContaining({
       name: 'Jane', email: 'jane@company.com', company: 'Acme', message: '',
       source: 'landing_truesync',
-      page_url: expect.stringContaining('/r/tok123'),
       brand_name: undefined,
       report_token: undefined,
     }))
+    const payload = demoRequestApi.submitDemoRequest.mock.calls[0][0]
+    expect(payload).not.toHaveProperty('page_url')
   })
 
   it('report context: submits with brand_name and report_token from the caller', async () => {
@@ -88,6 +89,19 @@ describe('useDemoRequestModal', () => {
       source: 'truesync',
       brand_name: 'Allbirds',
       report_token: 'tok123',
+    }))
+  })
+
+  it('threads the CTA\'s subject line through to submitDemoRequest (Formspree _subject)', async () => {
+    const { result } = renderHook(() => useDemoRequestModal())
+    act(() => result.current.open('full_analysis_walkthrough'))
+
+    await act(async () => {
+      await result.current.onSubmit({ name: 'Jane', email: 'jane@company.com', company: 'Acme', message: '' })
+    })
+
+    expect(demoRequestApi.submitDemoRequest).toHaveBeenCalledWith(expect.objectContaining({
+      subject: 'Demo request — walkthrough',
     }))
   })
 

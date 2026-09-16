@@ -2,10 +2,9 @@
  * Wires RequestFormModal (ds/, presentational-only) to the demo-request
  * API and to a CTA's copy from demoRequestCtas.js. Context ride-along
  * (Part 2c): report_token/brand_name are passed in by the caller (only
- * report surfaces have them); page_url is always read fresh from
- * window.location.href at submit time, not captured at open time, so
- * a visitor who navigates within a long-lived SPA session before
- * submitting still reports the page they were actually on.
+ * report surfaces have them) — no visited-page-URL field; see
+ * demoRequestApi.js's own docstring for why that was dropped from the
+ * payload.
  */
 import { useCallback, useState } from 'react'
 import { DEMO_REQUEST_CTAS } from './demoRequestCtas.js'
@@ -31,7 +30,7 @@ export function useDemoRequestModal({ brandName, reportToken } = {}) {
       const result = await submitDemoRequest({
         ...values,
         source: cta ? cta.source : undefined,
-        page_url: typeof window !== 'undefined' ? window.location.href : '',
+        subject: cta ? cta.subject : undefined,
         brand_name: brandName || undefined,
         report_token: reportToken || undefined,
       })

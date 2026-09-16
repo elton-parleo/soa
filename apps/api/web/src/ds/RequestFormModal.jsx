@@ -7,20 +7,21 @@
  * Deliberately decoupled from the demo-request API: this component
  * only knows how to render a form, validate it client-side, and call
  * the `onSubmit` prop it's given — it has no idea what source/
- * brand_name/report_token/page_url are, or that the endpoint is
- * /api/public/demo-request. That context-gathering lives in lite/
- * (which is allowed to depend on ds/, never the other way around) —
- * see lite/useDemoRequestModal.js.
+ * brand_name/report_token are, or which endpoint onSubmit
+ * actually calls. That context-gathering lives in lite/ (which is
+ * allowed to depend on ds/, never the other way around) — see
+ * lite/useDemoRequestModal.js, lite/demoRequestApi.js.
  *
  * onSubmit(values) must resolve to { ok, status, body } (never throw —
- * demoRequestApi.js's submitDemoRequest already has this shape). A 422
- * with a FastAPI-style {detail: [{loc, msg}]} body renders per-field
- * errors; any other non-ok result shows the generic failure line with
- * the entered values preserved; ok shows the success state.
+ * demoRequestApi.js's submitDemoRequest already has this shape). Any
+ * non-ok result shows a failure line — Formspree's own JSON error
+ * message when the body has one, else a generic line — with the
+ * entered values preserved; ok shows the success state.
  */
 import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from './Button.jsx'
 import { Glyph } from './Glyph.jsx'
+import { logAntiSpamGateTripped } from './devWarn.js'
 
 const EMAIL_SHAPE = /[^\s@]+@[^\s@]+\.[^\s@]+/
 const MAX_SHORT_FIELD = 200
@@ -34,20 +35,20 @@ const MAX_MESSAGE = 2000
 // guessing a magic number that has to be kept in sync by hand.
 export const MIN_ELAPSED_MS = 1500
 
-const FIELD_LABELS = { name: 'Name', email: 'Email', company: 'Company' }
+const GENERIC_FAILURE_MESSAGE = 'Something went wrong — email us at elton@parleo.io'
 
-function fieldErrorsFromDetail(detail) {
-  const errors = {}
-  if (!Array.isArray(detail)) return errors
-  for (const item of detail) {
-    const loc = item && item.loc
-    if (!Array.isArray(loc) || loc.length === 0) continue
-    const field = loc[loc.length - 1]
-    if (typeof field === 'string' && !errors[field]) {
-      errors[field] = item.msg || 'Invalid value'
-    }
+// Formspree's error body is either {error: "message"} or
+// {errors: [{field, message, code}, ...]} — never the FastAPI-style
+// {detail: [{loc, msg}]} shape this used to read. One line, not
+// per-field: Formspree doesn't hand back a stable field-name-to-error
+// mapping the way our own API did.
+function firstFormspreeErrorMessage(body) {
+  if (!body) return null
+  if (Array.isArray(body.errors) && body.errors.length > 0 && body.errors[0].message) {
+    return body.errors[0].message
   }
-  return errors
+  if (typeof body.error === 'string' && body.error) return body.error
+  return null
 }
 
 function validate(values) {
@@ -175,9 +176,25 @@ export function RequestFormModal({ open, onClose, eyebrow, title, messagePlaceho
     e.preventDefault()
     if (status === 'submitting') return
 
+    // Anti-spam gate (Part 1c/2): show success without calling onSubmit —
+    // checked as two separate conditions, not a combined ||, so the dev
+    // warning below can name the actual reason. Root cause of the
+    // "success but no request" bug this hardens against: the honeypot
+    // input used to be named/labeled "website", a classic browser-
+    // autofill target — Chrome ignores autocomplete="off" for fields it
+    // recognizes by name/label text, and would silently fill it from a
+    // saved profile on a form shaped like this one, tripping this gate
+    // for real humans who never touched the field. See the honeypot
+    // input below for the fix; MIN_ELAPSED_MS's clock already started
+    // on modal open (the effect above), not module load.
+    if (honeypot.trim() !== '') {
+      logAntiSpamGateTripped('honeypot')
+      setStatus('success')
+      return
+    }
     const elapsed = Date.now() - openedAtRef.current
-    if (honeypot.trim() !== '' || elapsed < MIN_ELAPSED_MS) {
-      // Anti-spam trip (Part 1c): show success without calling the API.
+    if (elapsed < MIN_ELAPSED_MS) {
+      logAntiSpamGateTripped('too_fast')
       setStatus('success')
       return
     }
@@ -202,14 +219,8 @@ export function RequestFormModal({ open, onClose, eyebrow, title, messagePlaceho
       return
     }
 
-    if (result && result.status === 422 && result.body) {
-      setErrors(fieldErrorsFromDetail(result.body.detail))
-      setStatus('form')
-      return
-    }
-
     setStatus('form')
-    setSubmitError('Something went wrong — email us at elton@parleo.io')
+    setSubmitError(firstFormspreeErrorMessage(result && result.body) || GENERIC_FAILURE_MESSAGE)
   }
 
   const submitting = status === 'submitting'
@@ -299,18 +310,28 @@ export function RequestFormModal({ open, onClose, eyebrow, title, messagePlaceho
               {title}
             </h2>
 
-            {/* Honeypot (Part 1c) — real users never see or fill this;
+            {/* Honeypot (Part 1c/2a) — real users never see or fill this;
                 any client that does trips the same anti-spam path as a
-                too-fast submit, above. Kept off-canvas rather than
-                display:none, which some crawlers skip filling. */}
+                too-fast submit, above. Kept off-canvas via absolute
+                positioning rather than display:none, which some
+                crawlers skip filling. Deliberately NOT named/labeled
+                like a real field (was "website"/"Website" — a classic
+                browser-autofill target on a form shaped like this one;
+                Chrome ignores autocomplete="off" for fields it
+                recognizes that way) — this name/label reads as nothing
+                any autofill heuristic or a scraper's naive field-list
+                would match. Separate from Formspree's own _gotcha
+                honeypot (demoRequestApi.js), which is never a rendered
+                DOM input so it isn't an autofill target at all. */}
             <div aria-hidden="true" style={{ position: 'absolute', left: -9999, top: 'auto', width: 1, height: 1, overflow: 'hidden' }}>
-              <label htmlFor={`${uid}-website`}>Website</label>
+              <label htmlFor={`${uid}-hp`}>Leave this field blank</label>
               <input
-                id={`${uid}-website`}
-                name="website"
+                id={`${uid}-hp`}
+                name="hp_field"
                 type="text"
                 tabIndex={-1}
                 autoComplete="off"
+                aria-hidden="true"
                 value={honeypot}
                 onChange={(e) => setHoneypot(e.target.value)}
               />
