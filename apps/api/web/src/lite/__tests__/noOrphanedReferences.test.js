@@ -1,17 +1,18 @@
 /**
- * Grep guards from two sessions, merged back together after their
+ * Grep guards from several sessions, merged back together after their
  * PRs split apart and re-converged:
  * - Part 1c (lemlist): the landing-only guarantee holds at the raw
  *   HTML source level too, not just in the real Vite build output
  *   (staticHead.build.test.js) — a fast, no-build check.
- * - Part 2d (Formspree retarget): no `oaiq` (the OpenAI-pixel global)
- *   anywhere — it gates on a pixel that was never installed, and this
- *   session deliberately omits it rather than transplanting the
- *   vanilla-DOM snippet's call to it. The old backend is also gone
- *   from the frontend's own references: no /api/public/demo-request
- *   fetch call or docstring mention survives the retarget to
- *   Formspree (demoRequestApi.js, publicUrls.js's
- *   FORMSPREE_DEMO_ENDPOINT).
+ * - Formspree retarget: the old backend is gone from the frontend's
+ *   own references — no /api/public/demo-request fetch call or
+ *   docstring mention survives the retarget to Formspree
+ *   (demoRequestApi.js, publicUrls.js's FORMSPREE_DEMO_ENDPOINT). This
+ *   file used to also assert zero `oaiq` references anywhere — that
+ *   guard predates the OpenAI (ChatGPT Ads) pixel, which a separate,
+ *   later, independently-reviewed piece of work deliberately installed
+ *   (openaiPixel.js, wired into this very useDemoRequestModal.js) —
+ *   removed rather than kept stale once that landed on main.
  * - the anti-spam gate fix: RequestFormModal.jsx's own submit path
  *   must never be gateable by environment (no import.meta.env/VITE_
  *   reference), so a submission can never be silently disabled in any
@@ -21,7 +22,7 @@
  *   payload field (a spam-classifier signal, confirmed via dashboard
  *   access) doesn't survive in the functional modal/payload modules.
  *
- * The oaiq/demo-request walk() helper walks the whole src/ tree like
+ * The demo-request walk() helper walks the whole src/ tree like
  * analytics.test.js's posthog-import-boundary test, excluding test
  * files/__tests__ dirs so this file's own assertions (which
  * necessarily contain the banned strings) don't trip themselves.
@@ -80,13 +81,6 @@ describe('the anti-spam gate / submit path has no environment reference', () => 
 })
 
 describe('no orphaned references left behind by the Formspree retarget', () => {
-  it('no file references oaiq (the un-installed OpenAI pixel)', () => {
-    const srcRoot = path.join(__dirname, '../..')
-    const offenders = []
-    walk(srcRoot, offenders, /oaiq/i)
-    expect(offenders).toEqual([])
-  })
-
   it('no file still references /api/public/demo-request (superseded by Formspree)', () => {
     const srcRoot = path.join(__dirname, '../..')
     const offenders = []
