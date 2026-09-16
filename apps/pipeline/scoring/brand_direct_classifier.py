@@ -78,15 +78,27 @@ LEGACY_SUBSTITUTION_PHRASES = (
 )
 
 
-def _is_substitution(presented_as) -> bool:
-    text = str(presented_as or '').strip().lower()
-    if not text:
+# What the labelling pass calls a substitution. One value of four, and
+# the only one that means "the answer decided the asker meant somebody
+# else AND described them". A spelling guess describes nothing — three
+# rows were scored misattributed for describing a brand they never
+# described — and a comparison or a citation is not a substitution at
+# all.
+DESCRIBED = 'closest_match_described'
+
+
+def _is_substitution(entry) -> bool:
+    """`entry` is an other_brands_named row. The label decides."""
+    if isinstance(entry, dict) and entry.get('relation') is not None:
+        return entry['relation'] == DESCRIBED
+    # No label: the labelling call failed or predates this. Fall back to
+    # the old free-text field rather than guessing — and never to "yes".
+    presented = str((entry or {}).get('presented_as') or '').strip().lower()
+    if not presented or presented in ('comparison', 'recommendation', 'source'):
         return False
-    if text in ('comparison', 'recommendation', 'source'):
-        return False
-    if text == SUBSTITUTION:
+    if presented == SUBSTITUTION:
         return True
-    return any(phrase in text for phrase in LEGACY_SUBSTITUTION_PHRASES)
+    return any(phrase in presented for phrase in LEGACY_SUBSTITUTION_PHRASES)
 
 
 def _quantities(extraction) -> list:
@@ -129,8 +141,9 @@ def misattributed_to(extraction) -> Optional[str]:
         # Route one: a number of ours, attached to their product.
         if any(name_tokens <= product for product in attributed):
             return entry['name']
-        # Route two: offered as the thing the asker must have meant.
-        if _is_substitution(entry.get('presented_as')):
+        # Route two: offered as the thing the asker must have meant, and
+        # described.
+        if _is_substitution(entry):
             return entry['name']
     return None
 
@@ -181,7 +194,19 @@ def _recommended_without_source(extraction):
         the same would punish the most honest answer in the set for
         trying to be useful.
     """
-    retailers = [r for r in extraction.get('recommended_retailers') or [] if r]
+    # Only what the labeller called a recommendation. A retailer named
+    # as where a price was found is a source, and one named as showing
+    # the product unavailable is the opposite of a recommendation —
+    # "Amazon listings show it currently unavailable" drove a fabricated
+    # verdict reading "told the reader to buy it at Amazon".
+    mentions = extraction.get('retailer_mentions')
+    if mentions is not None:
+        retailers = [
+            m['name'] for m in mentions
+            if isinstance(m, dict) and m.get('role') == 'recommendation' and m.get('name')
+        ]
+    else:
+        retailers = [r for r in extraction.get('recommended_retailers') or [] if r]
     if not retailers:
         return None
     if extraction.get('sources_cited') or extraction.get('brand_unknown_statement'):
@@ -227,7 +252,11 @@ def contradicted_claims(extraction, brand_facts=None) -> list:
     if availability:
         found.append(availability)
     for claim in claims:
-        kind = (claim.get('kind') or 'other').lower()
+        # claim_kind, not kind: the labelling pass owns `kind` (what sort
+        # of sentence this is) and the transcription owns `claim_kind`
+        # (what the claim is about). Reading the wrong one here would
+        # check every assertion against the loyalty rule.
+        kind = (claim.get('claim_kind') or claim.get('kind') or 'other').lower()
         text = claim['claim']
         words = _tokens(text)
 

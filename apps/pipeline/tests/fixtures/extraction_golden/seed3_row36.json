@@ -1,0 +1,53 @@
+{
+  "row": 36,
+  "query_code": "WIG_174",
+  "platform": "gemini",
+  "run_number": 2,
+  "seed": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Wiggle & Snug is a brand exclusive to **Target**.\n\nTarget's primary rewards program is the **Target RedCard** (which comes as a debit card or credit card). With a RedCard, you don't earn \"points\" in the traditional sense that accumulate. Instead, you receive an **immediate 5% discount** on most purchases, including Wiggle & Snug products, when you use your RedCard.\n\nSo, effectively, you save **5 cents per dollar** spent on Wiggle & Snug products when using a Target RedCard.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "Wiggle & Snug is a brand exclusive to Target.",
+        "sentence": "Wiggle & Snug is a brand exclusive to **Target**.",
+        "kind": "retail",
+        "hedged": false
+      },
+      {
+        "claim": "Target's primary rewards program is the Target RedCard (which comes as a debit card or credit card).",
+        "sentence": "Target's primary rewards program is the **Target RedCard** (which comes as a debit card or credit card).",
+        "kind": "loyalty",
+        "hedged": false
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

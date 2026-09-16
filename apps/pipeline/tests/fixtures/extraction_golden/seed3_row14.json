@@ -1,0 +1,87 @@
+{
+  "row": 14,
+  "query_code": "WIG_142",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "seed": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Yes—**it appears suitable for sensitive baby skin**, assuming you mean the **Bc Babycare “Cloud” baby wipes 3-pack**. The 3-pack “Cloud Moist” wipes are made with **99% purified water** plus a short list of gentle ingredients such as glycerin, sodium citrate, gluconolactone, sodium benzoate, citric acid, and disodium EDTA; the product page also highlights **no fragrance, alcohol, parabens, formaldehyde, latex, allergens, or chlorine processing**. ([bcbabycare.com](https://www.bcbabycare.com/products/cloud-moist-baby-wipe?variant=46984901460214))\n\nIf your baby has **very sensitive or eczema-prone skin**, the related **CLOUD SKIN™ Soft Wipe** looks like the more skin-focused option: it is described as **hypoallergenic, 0% fragrance, dermatologist-tested**, and has the **National Eczema Association Seal of Acceptance**; NEA lists its ingredients as aqua, citric acid, disodium EDTA, gluconolactone, glycerin, panthenol, sodium benzoate, and sodium citrate. ([bcbabycare.com](https://www.bcbabycare.com/products/cloud-skin-soft-wipe))\n\n**Bottom line:** Likely yes for everyday sensitive baby skin. For eczema, rashes, or known allergies, check the ingredient list and try a small patch first; stop using if redness or irritation appears.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 3,
+        "attributed_product": "Bc Babycare “Cloud” baby wipes 3-pack"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Bc Babycare",
+        "presented_as": "closest_match"
+      },
+      {
+        "name": "CLOUD SKIN™ Soft Wipe",
+        "presented_as": null
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "it appears suitable for sensitive baby skin",
+        "sentence": "Yes—**it appears suitable for sensitive baby skin**, assuming you mean the **Bc Babycare “Cloud” baby wipes 3-pack**.",
+        "kind": "other",
+        "hedged": true
+      },
+      {
+        "claim": "the product page also highlights **no fragrance, alcohol, parabens, formaldehyde, latex, allergens, or chlorine processing**",
+        "sentence": "The 3-pack “Cloud Moist” wipes are made with **99% purified water** plus a short list of gentle ingredients such as glycerin, sodium citrate, gluconolactone, sodium benzoate, citric acid, and disodium EDTA; the product page also highlights **no fragrance, alcohol, parabens, formaldehyde, latex, allergens, or chlorine processing**.",
+        "kind": "other",
+        "hedged": false
+      },
+      {
+        "claim": "it is described as **hypoallergenic, 0% fragrance, dermatologist-tested**, and has the **National Eczema Association Seal of Acceptance**",
+        "sentence": "If your baby has **very sensitive or eczema-prone skin**, the related **CLOUD SKIN™ Soft Wipe** looks like the more skin-focused option: it is described as **hypoallergenic, 0% fragrance, dermatologist-tested**, and has the **National Eczema Association Seal of Acceptance**; NEA lists its ingredients as aqua, citric acid, disodium EDTA, gluconolactone, glycerin, panthenol, sodium benzoate, and sodium citrate.",
+        "kind": "other",
+        "hedged": false
+      }
+    ],
+    "sources_cited": [
+      "bcbabycare.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": false,
+    "postprocess": [
+      "1 claim(s) hedged, not counted as asserted"
+    ]
+  },
+  "golden": {
+    "brand_mentioned": false,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [
+      {
+        "value": 3,
+        "attributed_product": "Bc Babycare “Cloud” baby wipes 3-pack"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "bcbabycare.com"
+    ],
+    "other_brands": {
+      "Bc Babycare": null,
+      "CLOUD SKIN™ Soft Wipe": null
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

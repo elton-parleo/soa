@@ -1,0 +1,65 @@
+{
+  "row": 29,
+  "query_code": "WIG_170",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "seed": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "As of **September 15, 2026**, I **couldn’t verify any active public promo codes specifically for “Wiggle & Snug Snug-Fit Diapers.”** The searches I found were for other diaper brands/products—mainly Huggies, Honest, Gerber clothing, etc.—not a Wiggle & Snug diaper promo-code listing. ([walmart.com](https://www.walmart.com/ip/49151709?utm_source=openai))\n\nA few **related diaper deals** I did find, but **not for Wiggle & Snug**, include:\n\n- **H-E-B digital coupon:** **$2 off** one qualifying Huggies diapers package, valid on 32-count or larger; listed as expiring **October 3, 2026**. ([heb.com](https://www.heb.com/digital-coupon/coupon-detail/84064205?filter=SAVINGS%3APRICE_CUT&type=NORMAL&utm_source=openai))  \n- **Walgreens / Huggies:** listings show **$3 off 2** coupon offers on select Huggies diapers. ([walgreens.com](https://www.walgreens.com/store/c/productlist/size-3-%2816-28-lbs%29-baby-%26-kids/N%3D359449-100089783-4294814904?utm_source=openai))  \n\nIf you have a product page or store listing for the exact **Wiggle & Snug Snug-Fit Diapers**, send it over and I can check that specific checkout/coupon area.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "As of **September 15, 2026**, I **couldn’t verify any active public promo codes specifically for “Wiggle & Snug Snug-Fit Diapers.”**",
+    "other_brands_named": [
+      {
+        "name": "Huggies",
+        "presented_as": "comparison"
+      },
+      {
+        "name": "Honest",
+        "presented_as": "comparison"
+      },
+      {
+        "name": "Gerber",
+        "presented_as": "comparison"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "walmart.com",
+      "heb.com",
+      "walgreens.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "walmart.com",
+      "heb.com",
+      "walgreens.com"
+    ],
+    "other_brands": {
+      "Huggies": null,
+      "Honest": null,
+      "Gerber": null
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

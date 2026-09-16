@@ -1,0 +1,51 @@
+{
+  "row": 31,
+  "query_code": "WIG_138",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "seed": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "**Wiggle & Snug Snug-Fit Diapers** appear to be positioned as an everyday diaper with a stronger focus on **fit during movement**—not just basic absorbency. The main difference is the **“Snug-Fit” design**: a stretchy, secure fit around the waist and legs that helps the diaper stay in place as a baby wiggles, crawls, rolls, or walks. That matters because active-baby diapers are typically designed to reduce gaps that can lead to leaks. ([huggies.com](https://www.huggies.com/en-ca/resources/parenting/everyday-diaper-tips/different-types-of-diapers-you-will-need-for-your-baby?utm_source=openai))\n\nCompared with ordinary everyday diapers, they likely emphasize:\n\n- **Flexible, close fit** that moves with baby rather than sagging or shifting.\n- **Leak protection around legs and waist**, especially during active play.\n- **Soft, breathable comfort** for all-day use.\n- **Absorbent core** to pull moisture away and keep skin drier.\n- **Everyday convenience**, possibly including features like secure tabs or a wetness indicator, depending on the exact product version.\n\nIn short: **they’re different because they combine everyday diaper comfort with a more movement-friendly, leak-resistant fit**—aimed at babies who don’t stay still.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Huggies",
+        "presented_as": "source"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "huggies.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "huggies.com"
+    ],
+    "other_brands": {
+      "Huggies": null
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

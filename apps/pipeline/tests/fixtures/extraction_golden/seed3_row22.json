@@ -1,0 +1,117 @@
+{
+  "row": 22,
+  "query_code": "WIG_155",
+  "platform": "gemini",
+  "run_number": 1,
+  "seed": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I cannot provide the exact, current price for Wiggle & Snug Snug-Fit Diapers Size 3 big pack because prices can vary significantly based on:\n\n*   **Retailer:** (e.g., Amazon, Walmart, Target, local grocery stores, specialty baby stores)\n*   **Location:** Prices can differ by region or country.\n*   **Sales and Promotions:** Diapers are frequently on sale.\n*   **Exact Pack Count:** Even within \"big pack\" there can be variations like jumbo, super jumbo, mega, etc., which affect the price.\n*   **Brand Availability:** \"Wiggle & Snug\" doesn't sound like a widely recognized national brand, so it might be a store brand or a regional product, making it harder to find a universal price.\n\nTo get the most accurate price, I recommend checking:\n\n1.  **Online retailers:** Search for \"Wiggle & Snug Snug-Fit Diapers Size 3 big pack\" on websites like Amazon, Walmart.com, Target.com, or the website of your preferred grocery store.\n2.  **The specific store where you plan to purchase them:** Check their website or app, or visit the store directly.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "3",
+        "unit": "Size",
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers big pack"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Amazon",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Walmart",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Target",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "local grocery stores",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "specialty baby stores",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Amazon.com",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Walmart.com",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Target.com",
+        "presented_as": "recommendation"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "\"Wiggle & Snug\" doesn't sound like a widely recognized national brand, so it might be a store brand or a regional product, making it harder to find a universal price.",
+        "sentence": "\"Wiggle & Snug\" doesn't sound like a widely recognized national brand, so it might be a store brand or a regional product, making it harder to find a universal price.",
+        "kind": "retail",
+        "hedged": true
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [
+      "Amazon",
+      "Walmart",
+      "Target",
+      "local grocery stores",
+      "specialty baby stores",
+      "Amazon.com",
+      "Walmart.com",
+      "Target.com"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": [
+      "unknown statement was an assertion, moved to claims"
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {
+      "Amazon": null,
+      "Walmart": null,
+      "Target": null,
+      "local grocery stores": null,
+      "specialty baby stores": null,
+      "Amazon.com": null,
+      "Walmart.com": null,
+      "Target.com": null
+    },
+    "retailers": {
+      "Amazon": null,
+      "Walmart": null,
+      "Target": null,
+      "local grocery stores": null,
+      "specialty baby stores": null,
+      "Amazon.com": null,
+      "Walmart.com": null,
+      "Target.com": null
+    }
+  },
+  "review_note": {
+    "unknown_is": "unknown_statement"
+  }
+}

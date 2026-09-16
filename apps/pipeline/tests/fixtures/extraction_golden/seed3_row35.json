@@ -1,0 +1,122 @@
+{
+  "row": 35,
+  "query_code": "WIG_164",
+  "platform": "chatgpt",
+  "run_number": 1,
+  "seed": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn’t find an exact product listing for **“Wiggle & Snug Snug-Fit Overnight Diapers Size 5.”** If you meant **Huggies Overnites Size 5 nighttime diapers**, the current Walmart listing shows:\n\n- **100-count Size 5:** **$50.65** — **50.7¢ per diaper** — currently marked **out of stock**\n- **44-count Size 5:** **$24.97** — **56.8¢ per diaper**\n- Another Walmart listing for **74-count Size 5** shows **$41.89** — **56.6¢ per diaper** ([walmart.com](https://www.walmart.com/ip/150748504?utm_source=openai))\n\nPrices can vary by retailer, location, and stock status.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "50.65",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Size 5 nighttime diapers, 100-count Size 5"
+      },
+      {
+        "amount": "24.97",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Size 5 nighttime diapers, 44-count Size 5"
+      },
+      {
+        "amount": "41.89",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Size 5 nighttime diapers, 74-count Size 5"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 100,
+        "attributed_product": "Huggies Overnites Size 5 nighttime diapers, 100-count Size 5"
+      },
+      {
+        "value": 44,
+        "attributed_product": "Huggies Overnites Size 5 nighttime diapers, 44-count Size 5"
+      },
+      {
+        "value": 74,
+        "attributed_product": "Huggies Overnites Size 5 nighttime diapers, 74-count Size 5"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t find an exact product listing for **“Wiggle & Snug Snug-Fit Overnight Diapers Size 5.”**",
+    "other_brands_named": [
+      {
+        "name": "Huggies",
+        "presented_as": "closest_match"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "the current Walmart listing shows",
+        "sentence": "If you meant **Huggies Overnites Size 5 nighttime diapers**, the current Walmart listing shows:",
+        "kind": "retail",
+        "hedged": false
+      },
+      {
+        "claim": "Another Walmart listing for **74-count Size 5** shows **$41.89** — **56.6¢ per diaper** ([walmart.com](https://www.walmart.com/ip/150748504?utm_source=openai))",
+        "sentence": "Another Walmart listing for **74-count Size 5** shows **$41.89** — **56.6¢ per diaper** ([walmart.com](https://www.walmart.com/ip/150748504?utm_source=openai))",
+        "kind": "retail",
+        "hedged": false
+      }
+    ],
+    "sources_cited": [
+      "walmart.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "50.65",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Size 5 nighttime diapers, 100-count Size 5"
+      },
+      {
+        "amount": "24.97",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Size 5 nighttime diapers, 44-count Size 5"
+      },
+      {
+        "amount": "41.89",
+        "currency": "USD",
+        "attributed_product": "Huggies Overnites Size 5 nighttime diapers, 74-count Size 5"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 100,
+        "attributed_product": "Huggies Overnites Size 5 nighttime diapers, 100-count Size 5"
+      },
+      {
+        "value": 44,
+        "attributed_product": "Huggies Overnites Size 5 nighttime diapers, 44-count Size 5"
+      },
+      {
+        "value": 74,
+        "attributed_product": "Huggies Overnites Size 5 nighttime diapers, 74-count Size 5"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [
+      "walmart.com"
+    ],
+    "other_brands": {
+      "Huggies": null
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

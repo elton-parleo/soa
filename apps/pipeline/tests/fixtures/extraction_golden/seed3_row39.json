@@ -1,0 +1,72 @@
+{
+  "row": 39,
+  "query_code": "WIG_145",
+  "platform": "gemini",
+  "run_number": 3,
+  "seed": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "For a 15 lb baby, you would typically buy **Size 2** Wiggle & Snug Snug-Fit Diapers.\n\nSize 2 usually covers babies in the range of **12-18 lbs**.\n\n*   **Size 1** (typically 8-14 lbs) would likely be too small or very snug.\n*   While **Size 3** (typically 16-28 lbs) might fit, it could be a bit loose at 15 lbs, though it would give you room to grow.\n\n**It's always best to double-check the specific weight ranges listed on the Wiggle & Snug packaging or their official website**, as sizing can sometimes vary slightly between brands.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "15",
+        "unit": "lb",
+        "attributed_product": "baby"
+      },
+      {
+        "value": "12-18",
+        "unit": "lbs",
+        "attributed_product": "Size 2 Wiggle & Snug Snug-Fit Diapers"
+      },
+      {
+        "value": "8-14",
+        "unit": "lbs",
+        "attributed_product": "Size 1"
+      },
+      {
+        "value": "16-28",
+        "unit": "lbs",
+        "attributed_product": "Size 3"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "it's always best to double-check the specific weight ranges listed on the Wiggle & Snug packaging or their official website",
+        "sentence": "It's always best to double-check the specific weight ranges listed on the Wiggle & Snug packaging or their official website, as sizing can sometimes vary slightly between brands.",
+        "kind": "retail",
+        "hedged": false
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": {
+    "kind": {
+      "double-check": "instruction"
+    }
+  }
+}

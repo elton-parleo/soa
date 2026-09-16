@@ -1,0 +1,86 @@
+{
+  "row": 4,
+  "query_code": "WIG_153",
+  "platform": "gemini",
+  "run_number": 3,
+  "seed": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I'm sorry, but \"Wiggle & Snug Snug-Fit Diapers\" does not appear to be a real diaper brand available on major retail sites.\n\nIt's possible you might be thinking of a different brand or a product with a similar name.\n\nCould you please double-check the brand name? Once we have the correct brand, I can try to find the cost of a Size 2 big pack for you.\n\nCommon brands known for \"snug fit\" type diapers include:\n*   **Huggies Little Snugglers**\n*   **Pampers Swaddlers**\n*   **Mama Bear Gentle Touch (Amazon brand)**\n*   **Cloud Island (Target brand)**\n\nIf it's one of these, or another brand you know, let me know!",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "2",
+        "unit": null,
+        "attributed_product": "Size 2 big pack"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Huggies Little Snugglers",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Pampers Swaddlers",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Mama Bear Gentle Touch",
+        "presented_as": "recommendation"
+      },
+      {
+        "name": "Cloud Island",
+        "presented_as": "recommendation"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "does not appear to be a real diaper brand available on major retail sites",
+        "sentence": "I'm sorry, but \"Wiggle & Snug Snug-Fit Diapers\" does not appear to be a real diaper brand available on major retail sites.",
+        "kind": "retail",
+        "hedged": true
+      },
+      {
+        "claim": "I'm sorry, but \"Wiggle & Snug Snug-Fit Diapers\" does not appear to be a real diaper brand available on major retail sites.",
+        "sentence": "I'm sorry, but \"Wiggle & Snug Snug-Fit Diapers\" does not appear to be a real diaper brand available on major retail sites.",
+        "kind": "retail",
+        "hedged": true
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": [
+      "1 claim(s) hedged, not counted as asserted",
+      "unknown statement was an assertion, moved to claims"
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {
+      "Huggies Little Snugglers": null,
+      "Pampers Swaddlers": null,
+      "Mama Bear Gentle Touch": null,
+      "Cloud Island": null
+    },
+    "retailers": {}
+  },
+  "review_note": {
+    "unknown_is": "unknown_statement"
+  }
+}

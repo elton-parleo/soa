@@ -1,0 +1,65 @@
+{
+  "row": 34,
+  "query_code": "WIG_140",
+  "platform": "chatgpt",
+  "run_number": 3,
+  "seed": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "I couldn’t verify a diaper brand/product specifically called **“Wiggle & Snug Snug-Fit Diapers”** from reliable sources, so I’d double-check the exact name on the package. If you meant **Huggies Little Snugglers** or **Huggies Snug & Dry**, then **yes, they can be suitable for newborns** as long as you choose the newborn size and the fit is right.\n\n**What to look for for a newborn:**\n\n- **Correct weight range:** Newborn diapers are typically for babies up to about **10 lb**; Huggies Little Snugglers newborn is listed as **up to 10 lb**. ([target.com](https://www.target.com/p/-/A-15145170))  \n- **Gentle materials:** For sensitive newborn skin, it’s a plus if the diaper is **fragrance-free, hypoallergenic, and free of lotions/parabens**; Huggies Little Snugglers is described this way, and Huggies Snug & Dry is also listed as fragrance-free and hypoallergenic. ([target.com](https://www.target.com/p/-/A-15145170))  \n- **Umbilical cord area:** A newborn diaper with an **umbilical cord opening/cutout** is helpful in the first couple of weeks; Huggies Little Snugglers newborn lists this feature. ([target.com](https://www.target.com/p/-/A-15145170))  \n- **Not too tight:** A “snug fit” is good only if it doesn’t leave red marks or trap moisture. The AAP notes that diapers fastened too tightly can contribute to rubbing, irritation, and diaper rash. ([healthychildren.org](https://www.healthychildren.org/English/tips-tools/ask-the-pediatrician/Pages/Why-is-my-baby-always-getting-diaper-rashes.aspx))  \n\n**Bottom line:** They’re likely fine for a newborn **if they’re fragrance-free, absorbent, newborn-sized, and not too tight**. If your baby gets redness, leaks, blowouts, or marks around the legs/waist, try fastening looser or size up/down. For persistent rash or worsening irritation, ask your pediatrician.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "10",
+        "unit": "lb",
+        "attributed_product": "Huggies Little Snugglers newborn"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn’t verify a diaper brand/product specifically called **“Wiggle & Snug Snug-Fit Diapers”** from reliable sources, so I’d double-check the exact name on the package.",
+    "other_brands_named": [
+      {
+        "name": "Huggies Little Snugglers",
+        "presented_as": "closest_match"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+      "target.com",
+      "healthychildren.org"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": [
+      "dropped other brands: Huggies Snug & Dry (offered as a spelling, describes nothing)"
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [
+      "target.com",
+      "healthychildren.org"
+    ],
+    "other_brands": {
+      "Huggies Little Snugglers": null
+    },
+    "retailers": {}
+  },
+  "review_note": {
+    "other_brands": {
+      "Huggies Snug & Dry": "closest_match_described"
+    }
+  }
+}

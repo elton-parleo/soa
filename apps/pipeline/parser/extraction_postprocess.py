@@ -152,6 +152,34 @@ def claim_kind(sentence) -> str:
     return 'other'
 
 
+# ─── Sizes ─────────────────────────────────────────────────────────────────
+#
+# A size is how much product is in the pack. The field was catching every
+# number with a unit next to it: a baby's weight ("15 lb", attributed to
+# "a baby"), a diaper's weight RANGE ("12–18 lb" for Size 2), a
+# percentage ("25%"), a duration ("12 hours"), a per-unit price ("30.3 ¢
+# per diaper"), and the digit out of "Size 6".
+#
+# An allowlist rather than a denylist, because the failure is the field
+# accepting things nobody enumerated. Weight in pounds is deliberately
+# NOT here: every lb value across three samples was a baby's weight or a
+# size chart's range, and a product sold by the pound would be better
+# missed than a size chart read as a product.
+SIZE_UNITS = {
+    'oz', 'ounce', 'ounces', 'fl oz', 'floz', 'fluid ounce', 'fluid ounces',
+    'ml', 'millilitre', 'millilitres', 'milliliter', 'milliliters',
+    'l', 'litre', 'litres', 'liter', 'liters',
+    'g', 'gram', 'grams', 'kg', 'kilogram', 'kilograms',
+}
+
+
+def is_product_size(entry) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    unit = _flat(entry.get('unit')).strip()
+    return bool(unit) and unit in SIZE_UNITS
+
+
 # ─── Hygiene ───────────────────────────────────────────────────────────────
 
 def _dedupe(items, key):
@@ -220,8 +248,16 @@ def normalize(record: dict, *, answer_text, brand, brand_domain=None) -> dict:
     notes = []
 
     # ── brand_mentioned, decided here and never asked ────────────────
+    #
+    # `brand` empty means FALSE, not true. ea.names_brand answers True
+    # with nothing to look for — right for the generator's guard, where a
+    # brand is always in hand, and catastrophic here: the value tiers
+    # carry a price expectation with no brand on it, so every catalog row
+    # in the study recorded brand_mentioned true whatever the answer
+    # said. One sample row made it visible; the rest were true by
+    # accident.
     record['brand_mentioned'] = bool(
-        answer_text and ea.names_brand(answer_text, brand)
+        answer_text and brand and ea.names_brand(answer_text, brand)
     )
 
     # ── currency ──────────────────────────────────────────────────────
@@ -258,51 +294,54 @@ def normalize(record: dict, *, answer_text, brand, brand_domain=None) -> dict:
             continue
         sentence = claim.get('sentence') or claim.get('claim')
         claim['sentence'] = sentence
-        claim['hedged'] = is_hedged(sentence)
+        # Recorded as what the lexicon thinks, under a name that says so.
+        # The labelling pass supplies `modality`, and the classifier
+        # reads that; this is the second opinion the two are compared
+        # against — see reconcile_modality.
+        claim['lexicon_hedged'] = is_hedged(sentence)
         claims.append(claim)
-    claims = _dedupe(claims, lambda c: _flat(c['claim']))
-    hedged = sum(1 for c in claims if c['hedged'])
-    if hedged:
-        notes.append(f'{hedged} claim(s) hedged, not counted as asserted')
+    claims = _dedupe(claims, lambda c: (_flat(c['claim']), _flat(c['sentence'])))
     record['brand_claims'] = claims
 
-    # ── cannot-find, or an assertion wearing its clothes ──────────────
+    # ── cannot-find: a cross-check, never a rewrite ───────────────────
+    #
+    # This used to move a statement that failed the lexicon into
+    # brand_claims. It fired on six rows of one sample and was right on
+    # one: it removed two textbook unknown statements ("I'm having
+    # trouble finding any information about a brand called Wiggle &
+    # Snug"), it turned a hedged sentence into an asserted claim, and it
+    # treated "does not appear to be a real brand" differently from "is
+    # not a real or widely recognized brand", which are the same
+    # sentence twice.
+    #
+    # A lexicon is a good signal and a bad adjudicator. It now records
+    # what it thinks and changes nothing; the labelling pass decides.
     statement = record.get('brand_unknown_statement')
-    if statement and not looks_unknown(statement):
-        record['brand_unknown_statement'] = None
-        if is_disclaimer(statement):
-            notes.append('unknown statement was a disclaimer about our reach')
-        else:
-            # An assertion about the brand, filed in the wrong place. It
-            # is still an assertion, and dropping it would lose the
-            # finding entirely — row 26 said the brand runs no rewards
-            # programme, which is false and is exactly the kind of thing
-            # this tier exists to catch.
-            record['brand_claims'].append({
-                'claim': statement,
-                'sentence': statement,
-                'kind': claim_kind(statement),
-                'hedged': is_hedged(statement),
-            })
-            notes.append('unknown statement was an assertion, moved to claims')
+    if statement:
+        record['lexicon_unknown'] = looks_unknown(statement)
+        record['lexicon_disclaimer'] = is_disclaimer(statement)
 
     # ── other brands ──────────────────────────────────────────────────
     others, dropped = [], []
-    brand_tokens = set(_flat(brand).split())
+    # ea.normalize_brand_text, not _flat: it expands '&' to 'and', so
+    # "Wiggle & Snug" and "wiggle and snug" are one name. _flat drops the
+    # ampersand entirely and the two stop matching.
+    brand_tokens = set(ea.normalize_brand_text(brand).split())
     own_root = _domain_root(brand_domain)
     for entry in record.get('other_brands_named') or []:
         if not isinstance(entry, dict) or not entry.get('name'):
             continue
         name = entry['name']
-        tokens = set(_flat(name).split())
-        if tokens and tokens <= brand_tokens:
+        tokens = set(ea.normalize_brand_text(name).split())
+        # The WHOLE brand, not a token of it. "Wiggle" is a UK sports
+        # retailer that one answer explicitly distinguishes from Wiggle &
+        # Snug, and dropping it as "is the brand" deleted the one thing
+        # that answer was doing.
+        if tokens and tokens == brand_tokens:
             dropped.append(f'{name} (is the brand)')
             continue
         if own_root and own_root in _flat(name):
             dropped.append(f'{name} (is the brand\'s own site)')
-            continue
-        if entry.get('presented_as') == 'closest_match' and not attributes_something_to(name, record):
-            dropped.append(f'{name} (offered as a spelling, describes nothing)')
             continue
         others.append(entry)
     record['other_brands_named'] = _dedupe(others, lambda e: _flat(e['name']))
@@ -327,6 +366,41 @@ def normalize(record: dict, *, answer_text, brand, brand_domain=None) -> dict:
     if demoted:
         notes.append('retailers that were sources: ' + ', '.join(demoted))
 
+    # ── sizes ─────────────────────────────────────────────────────────
+    sizes, not_sizes = [], []
+    for entry in record.get('sizes') or []:
+        (sizes if is_product_size(entry) else not_sizes).append(entry)
+    record['sizes'] = _dedupe(
+        sizes,
+        lambda e: (_flat(e.get('value')), _flat(e.get('unit')),
+                   _flat(e.get('attributed_product'))),
+    )
+    if not_sizes:
+        notes.append(
+            'not product sizes: '
+            + ', '.join(
+                f"{e.get('value')} {e.get('unit') or ''}".strip()
+                for e in not_sizes if isinstance(e, dict)
+            )
+        )
+
+    # ── the remaining lists ───────────────────────────────────────────
+    for key in ('prices', 'member_prices', 'pack_counts', 'gtins'):
+        record[key] = _dedupe(
+            [e for e in record.get(key) or [] if isinstance(e, dict)],
+            lambda e: tuple(sorted((k, _flat(v)) for k, v in e.items())),
+        )
+    # A member price with no amount is not a member price. "Member
+    # pricing on selected products" says a programme exists, not what
+    # anybody pays.
+    record['member_prices'] = [
+        e for e in record['member_prices']
+        if ea.normalize_money(e.get('amount')) is not None
+    ]
+    record['pack_counts'] = [
+        e for e in record['pack_counts'] if e.get('value') is not None
+    ]
+
     record['sources_cited'] = _dedupe(record.get('sources_cited') or [], _flat)
     # Cased and stripped, NOT punctuation-flattened: 'Member' and
     # 'Member+' are two tiers, and a key that drops the plus merges the
@@ -340,10 +414,163 @@ def normalize(record: dict, *, answer_text, brand, brand_domain=None) -> dict:
     return record
 
 
+def apply_labels(record: dict, labels: dict) -> dict:
+    """
+    The labeller's answer, merged onto the transcription.
+
+    Matched on the sentence text, normalised, because that is the only
+    key both sides share — the labeller is handed spans and returns them
+    with labels attached, and a span it renamed is a span nobody can
+    match. Anything it did not label keeps no label at all, which
+    asserted_claims reads as "not a claim".
+
+    A sentence labelled `unknown_statement` becomes the record's
+    brand_unknown_statement and leaves brand_claims. A sentence labelled
+    `disclaimer` or `instruction` leaves brand_claims too and becomes
+    neither: an instruction to check the packaging is not a claim about
+    the brand, and one sample scored `fabricated` on exactly that.
+    """
+    record = dict(record or {})
+    labels = labels or {}
+    notes = list(record.get('postprocess') or [])
+
+    by_sentence = {}
+    for item in labels.get('brand_sentences') or []:
+        if isinstance(item, dict) and item.get('sentence'):
+            by_sentence[_flat(item['sentence'])] = item
+
+    # ── the unknown-statement candidate ───────────────────────────────
+    statement = record.get('brand_unknown_statement')
+    promoted = []
+    if statement:
+        label = by_sentence.get(_flat(statement))
+        kind = (label or {}).get('kind')
+        if kind == 'unknown_statement':
+            pass                                   # stays exactly where it is
+        elif kind in ('assertion',):
+            record['brand_unknown_statement'] = None
+            promoted.append({
+                'claim': statement, 'sentence': statement,
+                'kind': 'assertion', 'modality': (label or {}).get('modality'),
+                'lexicon_hedged': is_hedged(statement),
+                'claim_kind': claim_kind(statement),
+            })
+            notes.append('unknown-statement span labelled an assertion')
+        elif kind in ('disclaimer', 'instruction'):
+            record['brand_unknown_statement'] = None
+            notes.append(f'unknown-statement span labelled a {kind}')
+        # No label at all: left alone. An unlabelled candidate is not
+        # evidence of anything, and moving it on a failed call is how the
+        # last two rounds went wrong.
+
+    # ── the claims ────────────────────────────────────────────────────
+    claims, unknown_from_claims = [], None
+    for claim in record.get('brand_claims') or []:
+        if not isinstance(claim, dict):
+            continue
+        label = by_sentence.get(_flat(claim.get('sentence') or claim.get('claim')))
+        if not label:
+            claims.append(claim)
+            continue
+        kind, modality = label.get('kind'), label.get('modality')
+        if kind == 'unknown_statement':
+            # The labeller found the cannot-find sentence in the claims
+            # list. Two samples had it there.
+            if not record.get('brand_unknown_statement'):
+                unknown_from_claims = claim.get('sentence') or claim.get('claim')
+            notes.append('a claim span was labelled an unknown statement')
+            continue
+        if kind in ('disclaimer', 'instruction'):
+            notes.append(f'a claim span was labelled a {kind}')
+            continue
+        claims.append({**claim, 'kind': kind, 'modality': modality,
+                       'claim_kind': claim.get('kind') or claim_kind(
+                           claim.get('sentence') or claim.get('claim'))})
+
+    if unknown_from_claims:
+        record['brand_unknown_statement'] = unknown_from_claims
+    record['brand_claims'] = claims + promoted
+
+    # ── other brands ──────────────────────────────────────────────────
+    relations = {
+        _flat(item['name']): item.get('relation')
+        for item in labels.get('other_brands') or []
+        if isinstance(item, dict) and item.get('name')
+    }
+    for entry in record.get('other_brands_named') or []:
+        if isinstance(entry, dict) and entry.get('name'):
+            entry['relation'] = relations.get(_flat(entry['name']))
+
+    # ── retailers ─────────────────────────────────────────────────────
+    roles = {
+        _flat(item['name']): item.get('role')
+        for item in labels.get('retailers') or []
+        if isinstance(item, dict) and item.get('name')
+    }
+    record['retailer_mentions'] = [
+        {'name': name, 'role': roles.get(_flat(name))}
+        for name in record.get('recommended_retailers') or []
+    ]
+    # The old flat list keeps only what the labeller called a
+    # recommendation. "Amazon listings show it currently unavailable" is
+    # the opposite of one, and it drove a fabricated verdict.
+    record['recommended_retailers'] = [
+        m['name'] for m in record['retailer_mentions']
+        if m['role'] == 'recommendation'
+    ]
+
+    disagreements = needs_review(record)
+    if disagreements:
+        notes.append(
+            f'{len(disagreements)} sentence(s) where the lexicon and the '
+            f'label disagree on modality'
+        )
+    record['needs_review'] = disagreements
+    record['postprocess'] = notes
+    return record
+
+
 def asserted_claims(record) -> list:
-    """The claims the answer actually made. Hedged ones are recorded and
-    are not claims."""
+    """
+    The claims the answer actually made, by the LABEL — never by the
+    lexicon.
+
+    A claim counts when its label says kind=assertion and
+    modality=asserted. An unlabelled record yields nothing rather than
+    everything: a claim nobody has classified is not a claim we can act
+    on, and falling back to "treat it as asserted" is how a hedge became
+    a fabrication three samples running.
+    """
     return [
         claim for claim in record.get('brand_claims') or []
-        if isinstance(claim, dict) and not claim.get('hedged')
+        if isinstance(claim, dict)
+        and claim.get('kind') == 'assertion'
+        and claim.get('modality') == 'asserted'
     ]
+
+
+def needs_review(record) -> list:
+    """
+    Where the lexicon and the label disagree about modality.
+
+    Surfaced, never silently resolved. The lexicon is a regular
+    expression and the labeller is a model, and when a sentence looks
+    hedged to one and asserted to the other, the honest output is a flag
+    for a human — not a pick made by whichever happens to be consulted
+    first.
+    """
+    out = []
+    for claim in record.get('brand_claims') or []:
+        if not isinstance(claim, dict) or 'modality' not in claim:
+            continue
+        lexicon = claim.get('lexicon_hedged')
+        if lexicon is None:
+            continue
+        label_hedged = claim.get('modality') in ('hedged', 'conditional')
+        if bool(lexicon) != label_hedged:
+            out.append({
+                'sentence': claim.get('sentence'),
+                'lexicon': 'hedged' if lexicon else 'asserted',
+                'label': claim.get('modality'),
+            })
+    return out

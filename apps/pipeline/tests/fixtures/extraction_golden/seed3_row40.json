@@ -1,0 +1,57 @@
+{
+  "row": 40,
+  "query_code": "WIG_141",
+  "platform": "gemini",
+  "run_number": 1,
+  "seed": 3,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "\"Wiggle & Snug\" is not a widely recognized or prominent diaper brand in most major markets. It's possible it's:\n\n1.  **A very new, small, or regional brand.**\n2.  **A private label or store brand** (e.g., from a specific grocery chain or discount store that rebrands products).\n3.  **A slightly misremembered name** for another brand.\n\nBecause of this, it's difficult to give a specific \"yes\" or \"no\" answer regarding whether they are a \"better choice for nighttime leaks\" compared to other, more established brands.\n\n**To determine if Wiggle & Snug Snug-Fit Overnight Diapers are a good choice for *your* child for nighttime leaks, consider these general factors for *any* overnight diaper:**\n\n1.  **Absorbency:** Overnight diapers are designed with more absorbent material to handle longer stretches without changes. Look for descriptions mentioning high capacity or extra layers.\n2.  **Fit:** A snug fit around the waist and legs is crucial to prevent leaks. If there are gaps, even the most absorbent diaper can leak. \"Snug-Fit\" in the name is a good sign, but actual performance matters.\n3.  **Leak Guards:** Double leg cuffs or tall leak guards provide an extra barrier against liquid escaping.\n4.  **Material:** A soft, comfortable material is good, but it also needs to be effective at wicking moisture away from the skin.\n5.  **Size:** Sometimes, sizing up one size for nighttime diapers can help with absorbency and coverage, especially if your child is on the cusp of a size.\n6.  **Child's Output:** Every child is different. Some are heavy wetters, others less so. What works for one might not work for another.\n\n**Recommendation:**\n\n*   **If you have access to them, the best way to know is to try them.** Buy a small pack if possible and test them out for a few nights.\n*   **Check for reviews** from other parents if you can find them (e.g., on the retailer's website where they are sold, or on parenting forums).\n*   **Compare them** to what you're currently using. Are they thicker? Do they feel more substantial?\n\nWithout more information on the brand itself, it's impossible to give a definitive assessment. Good luck with your search for the best nighttime solution!",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "\"Wiggle & Snug\" is not a widely recognized or prominent diaper brand in most major markets.",
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "It's possible it's: 1.  **A very new, small, or regional brand.**",
+        "sentence": "\"Wiggle & Snug\" is not a widely recognized or prominent diaper brand in most major markets. It's possible it's:\n\n1.  **A very new, small, or regional brand.**\n2.  **A private label or store brand** (e.g., from a specific grocery chain or discount store that rebrands products).\n3.  **A slightly misremembered name** for another brand.",
+        "kind": "other",
+        "hedged": true
+      },
+      {
+        "claim": "A private label or store brand",
+        "sentence": "\"Wiggle & Snug\" is not a widely recognized or prominent diaper brand in most major markets. It's possible it's:\n\n1.  **A very new, small, or regional brand.**\n2.  **A private label or store brand** (e.g., from a specific grocery chain or discount store that rebrands products).\n3.  **A slightly misremembered name** for another brand.",
+        "kind": "other",
+        "hedged": true
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": [
+      "2 claim(s) hedged, not counted as asserted"
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": {
+    "unknown_is": "unknown_statement"
+  }
+}

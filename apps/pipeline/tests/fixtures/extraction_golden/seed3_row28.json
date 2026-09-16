@@ -1,0 +1,88 @@
+{
+  "row": 28,
+  "query_code": "WIG_152",
+  "platform": "gemini",
+  "run_number": 3,
+  "seed": 3,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "The cost of a Wiggle & Snug Snug-Fit Diapers Size 2 small pack can vary depending on the retailer and any ongoing sales, but generally, you can expect it to be in the range of **$10 to $15** for a pack containing approximately 30-40 diapers.\n\nFor the most accurate current price, I recommend checking specific retailers like Amazon, Walmart, or Target.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "10",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers Size 2 small pack"
+      },
+      {
+        "amount": "15",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers Size 2 small pack"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 30,
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers Size 2 small pack"
+      },
+      {
+        "value": 40,
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers Size 2 small pack"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [
+      "Amazon",
+      "Walmart",
+      "Target"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "postprocess": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "10",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers Size 2 small pack"
+      },
+      {
+        "amount": "15",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers Size 2 small pack"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 30,
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers Size 2 small pack"
+      },
+      {
+        "value": 40,
+        "attributed_product": "Wiggle & Snug Snug-Fit Diapers Size 2 small pack"
+      }
+    ],
+    "member_prices": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {
+      "Amazon": null,
+      "Walmart": null,
+      "Target": null
+    }
+  },
+  "review_note": null
+}

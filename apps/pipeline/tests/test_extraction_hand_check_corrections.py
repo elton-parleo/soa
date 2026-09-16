@@ -207,13 +207,25 @@ def test_row_25_hedges_alone_no_longer_reach_the_classifier():
     assert assessment == c.ACKNOWLEDGED_UNKNOWN
 
 
-def test_row_25_is_what_it_used_to_be_if_the_hedges_come_back():
-    """The test that says the fix is the prompt's and not the
-    classifier's: hand it hedges as claims and it still calls them
-    fabricated, because a claim is a claim once it is in that list."""
+def test_row_25_an_unlabelled_claim_can_no_longer_reach_fabricated():
+    """Round three closed the last route. An unlabelled claim is not an
+    asserted claim, so a hedge that slips into brand_claims cannot
+    produce a fabrication on its own."""
     assessment, _ = classify(
         brand_claims=[{"claim": "It's possible it's a regional brand", "kind": "other"}],
         brand_unknown_statement='not a widely recognized brand',
+    )
+    assert assessment == c.ACKNOWLEDGED_UNKNOWN
+
+
+def test_a_claim_labelled_asserted_still_reaches_fabricated():
+    """The other half — the mechanism still works when the labeller says
+    the answer committed to something."""
+    assessment, _ = classify(
+        brand_claims=[{
+            "claim": "sold at Aldi", "sentence": "It is sold at Aldi.",
+            "kind": "assertion", "modality": "asserted",
+        }],
     )
     assert assessment == c.FABRICATED
 
@@ -288,10 +300,12 @@ def test_the_prompt_forbids_fragments_by_name():
     assert '"the", "like", "such as" are not values for this field' in PROMPT
 
 
-def test_only_closest_match_is_a_substitution():
-    assert c._is_substitution("closest_match")
-    for other in ("comparison", "recommendation", "source", None, ""):
-        assert not c._is_substitution(other)
+def test_only_a_described_closest_match_is_a_substitution():
+    """Round three: the labeller's relation decides, and only one of its
+    four values means the answer both substituted and described."""
+    assert c._is_substitution({"name": "X", "relation": "closest_match_described"})
+    for other in ("spelling_guess", "citation_only", "comparison"):
+        assert not c._is_substitution({"name": "X", "relation": other})
 
 
 def test_a_recommendation_that_takes_the_numbers_with_it_is_still_misattribution():
@@ -314,9 +328,12 @@ def test_a_comparison_is_never_a_substitution():
     assert assessment == c.GROUNDED
 
 
-def test_the_old_free_text_still_reads_as_a_substitution():
+def test_an_unlabelled_entry_falls_back_to_the_old_free_text():
     """Extractions stored under the old prompt are still in the database.
     A re-score over them must not quietly stop finding substitutions it
-    used to find."""
-    assert c._is_substitution("closest match")
-    assert c._is_substitution("if you meant")
+    used to find — but an entry with no label and no phrase is never a
+    substitution by default."""
+    assert c._is_substitution({"name": "X", "presented_as": "closest match"})
+    assert c._is_substitution({"name": "X", "presented_as": "if you meant"})
+    assert not c._is_substitution({"name": "X"})
+    assert not c._is_substitution({"name": "X", "presented_as": "comparison"})
