@@ -134,6 +134,56 @@ def _render_secondary(counts: dict) -> str:
     return '\n'.join(lines) or '    (no secondary expectations)'
 
 
+def row_outcomes(conn, cid: int) -> dict:
+    """
+    {run_id: (query_code, platform, run_number, tier, outcome)}.
+
+    The tier totals say how many moved; this says which. A correction to
+    the extractor is supposed to move particular rows for particular
+    reasons, and "twelve went from fabricated to acknowledged_unknown" is
+    a number somebody has to take on trust. The list of twelve is not.
+    """
+    rows = conn.execute(text("""
+        SELECT o.run_id, q.query_code, o.platform, r.run_number, o.tier, o.outcome
+        FROM soa_expectation_outcomes o
+        JOIN soa_runs r ON r.id = o.run_id
+        JOIN soa_queries q ON q.id = r.query_id
+        WHERE o.cycle_id = :cid
+    """), {"cid": cid}).fetchall()
+    return {
+        row[0]: (row[1], row[2], row[3], row[4], row[5]) for row in rows
+    }
+
+
+def row_diff(before: dict, after: dict) -> list:
+    """Every run whose outcome is not what it was, oldest run_id first."""
+    moved = []
+    for run_id in sorted(set(before) | set(after)):
+        was = before.get(run_id)
+        now = after.get(run_id)
+        if was and now and was[4] == now[4]:
+            continue
+        moved.append((run_id, was, now))
+    return moved
+
+
+def _render_rows(moved: list, limit: int = 200) -> str:
+    if not moved:
+        return '    (no row changed its outcome)'
+    lines = []
+    for run_id, was, now in moved[:limit]:
+        label = (now or was)
+        code, platform, number, tier = label[0], label[1], label[2], label[3]
+        lines.append(
+            f"    {code} · {platform} · run {number} · {tier}: "
+            f"{was[4] if was else '(none)'} -> {now[4] if now else '(gone)'}"
+            f"   [run {run_id}]"
+        )
+    if len(moved) > limit:
+        lines.append(f"    ... and {len(moved) - limit} more")
+    return '\n'.join(lines)
+
+
 def changed_tiers(before: dict, after: dict) -> list:
     """Every tier whose primary outcome counts are not identical."""
     return [
@@ -199,6 +249,7 @@ def main(argv=None) -> int:
         cid = cycle_id(conn, args.cycle)
         before = outcome_counts(conn, cid)
         before_secondary = secondary_counts(conn, cid)
+        before_rows = row_outcomes(conn, cid)
         run_ids = run_ids_for(conn, cid, tiers)
 
     print(f"cycle {args.cycle} (id {cid})")
@@ -228,6 +279,7 @@ def main(argv=None) -> int:
     with engine.connect() as conn:
         after = outcome_counts(conn, cid)
         after_secondary = secondary_counts(conn, cid)
+        after_rows = row_outcomes(conn, cid)
 
     print(f"\nscored {summary.succeeded}/{summary.total} "
           f"(skipped {summary.skipped}, failed {summary.failed}, "
@@ -240,6 +292,10 @@ def main(argv=None) -> int:
     moved_primary = changed_tiers(before, after)
     print(f"\nprimary outcomes changed in: "
           f"{', '.join(moved_primary) if moved_primary else 'nothing'}")
+
+    moved_rows = row_diff(before_rows, after_rows)
+    print(f"\nrows whose outcome moved: {len(moved_rows)} of {len(after_rows)}")
+    print(_render_rows(moved_rows))
 
     for failure in summary.failures[:10]:
         print(f"    FAILED run {failure.run_id}: {failure.status} "

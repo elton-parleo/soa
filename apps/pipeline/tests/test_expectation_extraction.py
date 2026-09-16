@@ -120,12 +120,21 @@ def test_a_successful_call_returns_the_fixture_record(client):
     _stub(client, FIXTURE_EXTRACTION)
     result = asyncio.run(client.extract("...", brand="Wiggle & Snug"))
 
-    # Everything the model returned, plus the one field the model is not
-    # asked for: brand_mentioned is computed from the answer text.
-    assert {k: v for k, v in result.record.items() if k != "brand_mentioned"} == {
-        k: v for k, v in FIXTURE_EXTRACTION.items() if k != "brand_mentioned"
-    }
+    # Everything the model returned reaches the record unchanged.
+    COMPUTED = {"brand_mentioned", "postprocess"}
+    for field, value in FIXTURE_EXTRACTION.items():
+        if field in COMPUTED:
+            continue
+        assert result.record[field] == value, field
+
+    # Plus what the deterministic pass adds: the two computed fields, and
+    # an empty list for every field this older-shaped fixture predates —
+    # so a stored record always has the same shape whatever produced it.
     assert result.record["brand_mentioned"] is False  # the stub answer is "..."
+    assert result.record["postprocess"] == []
+    for field in ("brand_claims", "other_brands_named",
+                  "recommended_retailers", "loyalty_tiers_named"):
+        assert result.record[field] == []
     assert result.error is None
     assert result.latency_ms is not None
     assert result.usage["input_tokens"] == 900
@@ -188,7 +197,8 @@ def test_the_empty_extraction_has_every_schema_field():
     Plus brand_mentioned, which is stamped on afterwards and so is in
     every stored record without ever being in the schema."""
     assert sorted(prompts.EMPTY_EXTRACTION) == sorted(
-        list(prompts.build_extraction_schema()["properties"]) + ["brand_mentioned"]
+        list(prompts.build_extraction_schema()["properties"])
+        + ["brand_mentioned", "postprocess"]
     )
 
 

@@ -34,6 +34,7 @@ does.
 import re
 from typing import Optional
 
+from parser import extraction_postprocess as pp
 from soa_shared import expected_answers as ea
 
 GROUNDED = 'grounded'
@@ -209,9 +210,12 @@ def contradicted_claims(extraction, brand_facts=None) -> list:
     unsourced assertion rather than as a proven invention.
     """
     facts = brand_facts or {}
+    # Hedged claims are recorded and are not claims. The modality
+    # decision is made once, deterministically, in
+    # parser/extraction_postprocess — not here and not by the model.
     claims = [
-        claim for claim in extraction.get('brand_claims') or []
-        if isinstance(claim, dict) and claim.get('claim')
+        claim for claim in pp.asserted_claims(extraction)
+        if claim.get('claim')
     ]
 
     sourced = bool(extraction.get('sources_cited'))

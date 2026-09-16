@@ -33,18 +33,21 @@ def db(monkeypatch):
         """)
         c.exec_driver_sql("""
             CREATE TABLE soa_queries (
-                id INTEGER PRIMARY KEY, tier TEXT, expected_answer TEXT
+                id INTEGER PRIMARY KEY, tier TEXT, expected_answer TEXT,
+                query_code TEXT
             )
         """)
         c.exec_driver_sql("""
             CREATE TABLE soa_runs (
-                id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER
+                id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER,
+                run_number INTEGER
             )
         """)
         c.exec_driver_sql("""
             CREATE TABLE soa_expectation_outcomes (
                 id INTEGER PRIMARY KEY, run_id INTEGER, cycle_id INTEGER,
-                tier TEXT, outcome TEXT, secondary_results TEXT
+                tier TEXT, outcome TEXT, secondary_results TEXT,
+                platform TEXT
             )
         """)
         c.execute(text(
@@ -257,3 +260,72 @@ def test_a_secondary_moving_is_not_a_primary_change():
     leaves the price outcome it rides on alone."""
     counts = {"catalog_accuracy": Counter({"exact": 19})}
     assert rc.changed_tiers(counts, dict(counts)) == []
+
+
+# ── the row-level diff ────────────────────────────────────────────────────
+#
+# The tier totals say how many moved. An extractor correction is meant to
+# move particular rows for particular reasons, and "twelve went from
+# fabricated to acknowledged_unknown" is a number somebody has to take on
+# trust until they can see the twelve.
+
+def seed_named(db, *, run_id, code, platform, number, tier, outcome):
+    with db.begin() as c:
+        qid = c.execute(text(
+            "INSERT INTO soa_queries (tier, expected_answer, query_code) "
+            "VALUES (:t, '{}', :c) RETURNING id"
+        ), {"t": tier, "c": code}).scalar()
+        c.execute(text(
+            "INSERT INTO soa_runs (id, cycle_id, query_id, run_number) "
+            "VALUES (:r, 1, :q, :n)"
+        ), {"r": run_id, "q": qid, "n": number})
+        c.execute(text(
+            "INSERT INTO soa_expectation_outcomes "
+            "(run_id, cycle_id, tier, outcome, platform) "
+            "VALUES (:r, 1, :t, :o, :p)"
+        ), {"r": run_id, "t": tier, "o": outcome, "p": platform})
+
+
+def test_a_row_that_kept_its_outcome_is_not_in_the_diff():
+    before = {1: ("WIG_144", "gemini", 1, "brand_direct", "fabricated")}
+    after = {1: ("WIG_144", "gemini", 1, "brand_direct", "fabricated")}
+    assert rc.row_diff(before, after) == []
+
+
+def test_a_row_that_changed_is_named_with_both_outcomes():
+    before = {1: ("WIG_144", "gemini", 1, "brand_direct", "fabricated")}
+    after = {1: ("WIG_144", "gemini", 1, "brand_direct", "acknowledged_unknown")}
+    (moved,) = rc.row_diff(before, after)
+    assert moved[0] == 1
+    assert moved[1][4] == "fabricated"
+    assert moved[2][4] == "acknowledged_unknown"
+
+
+def test_a_row_that_appeared_or_vanished_is_in_the_diff():
+    before = {1: ("A", "chatgpt", 1, "brand_direct", "exact")}
+    after = {2: ("B", "chatgpt", 1, "brand_direct", "echoed")}
+    assert [m[0] for m in rc.row_diff(before, after)] == [1, 2]
+
+
+def test_the_diff_reads_as_one_line_per_row():
+    moved = rc.row_diff(
+        {1: ("WIG_144", "gemini", 1, "brand_direct", "fabricated")},
+        {1: ("WIG_144", "gemini", 1, "brand_direct", "acknowledged_unknown")},
+    )
+    rendered = rc._render_rows(moved)
+    assert "WIG_144 · gemini · run 1 · brand_direct" in rendered
+    assert "fabricated -> acknowledged_unknown" in rendered
+    assert "[run 1]" in rendered
+
+
+def test_an_unchanged_cycle_says_so_rather_than_printing_nothing():
+    assert "no row changed its outcome" in rc._render_rows([])
+
+
+def test_the_rows_are_read_with_their_question_code_and_surface(db):
+    seed_named(db, run_id=10646, code="WIG_144", platform="gemini", number=1,
+               tier="brand_direct", outcome="fabricated")
+
+    with db.connect() as conn:
+        rows = rc.row_outcomes(conn, 1)
+    assert rows[10646] == ("WIG_144", "gemini", 1, "brand_direct", "fabricated")

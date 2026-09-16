@@ -237,7 +237,12 @@ class ExpectationScorer:
         brand = (expectation.get('brand')
                  or source_ref.get('brand'))
 
-        result = await self.client.extract(run.raw_response, brand=brand)
+        result = await self.client.extract(
+            run.raw_response, brand=brand,
+            # So the post-processor can tell the brand's own site from
+            # another brand when the answer writes one as the other.
+            brand_domain=expectation.get('domain') or source_ref.get('domain'),
+        )
 
         history = self.history.for_variant(
             source_ref.get('merchant_slug'), source_ref.get('variant_id'),

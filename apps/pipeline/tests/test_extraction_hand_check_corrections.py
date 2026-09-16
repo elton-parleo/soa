@@ -148,9 +148,9 @@ def test_a_recommendation_beside_a_citation_is_not_a_finding():
 
 # ── Row 21 — "$10 to $15" is USD twice ────────────────────────────────────
 
-def test_the_prompt_reads_a_bare_dollar_sign_as_usd():
-    assert 'A \\\nbare "$" is "USD"' in PROMPT or 'bare "$" is "USD"' in PROMPT
-    assert "consistently, every time" in PROMPT
+def test_a_bare_dollar_sign_is_usd_by_table_not_by_instruction():
+    assert ea.normalize_currency("$") == "USD"
+    assert ea.normalize_currency("US$") == "USD"
 
 
 def test_the_prompt_says_a_range_carries_one_currency():
@@ -178,16 +178,22 @@ def test_a_price_with_no_currency_is_still_compared():
     "It's possible this is a very new, small, or regional brand.",
     "They likely emphasise a closer fit.",
     "It might be a store brand.",
-    "It should be suitable for sensitive skin.",
 ])
-def test_the_prompt_lists_the_hedges_that_were_recorded_as_claims(hedge):
-    assert hedge in PROMPT
+def test_the_hedges_that_were_recorded_as_claims_are_caught_in_code(hedge):
+    """Round one put these in the prompt and the model applied the rule
+    inconsistently within a single run. Round two moved the decision
+    here — see tests/test_extraction_postprocess.py for the full set."""
+    from parser import extraction_postprocess as pp
+    assert pp.is_hedged(hedge)
 
 
-def test_the_prompt_enumerates_the_hedging_words():
-    for word in ("possible", "likely", "probably", "may", "might", "could",
-                 "perhaps", "seems", "appears to be"):
-        assert word in PROMPT
+def test_the_prompt_no_longer_asks_the_model_to_judge_modality():
+    """The instruction that did not work. If it comes back, the model is
+    being asked for a judgement again and the hedge filter has a second,
+    disagreeing opinion upstream of it."""
+    assert "NOT a claim" not in PROMPT
+    assert "Record every candidate" in PROMPT
+    assert "the judgement is not yours to make" in PROMPT
 
 
 def test_row_25_hedges_alone_no_longer_reach_the_classifier():
@@ -214,10 +220,18 @@ def test_row_25_is_what_it_used_to_be_if_the_hedges_come_back():
 
 # ── Row 26 — a freshness disclaimer is not a can't-find ───────────────────
 
-def test_the_prompt_rules_out_the_freshness_disclaimer():
-    assert "freshness disclaimer" in PROMPT
-    assert "real-time access" in PROMPT
-    assert "your knowledge has a date on it, not that the brand is unknown" in PROMPT
+def test_the_freshness_disclaimer_is_ruled_out_in_code():
+    from parser import extraction_postprocess as pp
+    assert not pp.looks_unknown(
+        "I don't have real-time access to the absolute latest ingredient list"
+    )
+    assert pp.is_disclaimer(
+        "I don't have real-time access to the absolute latest ingredient list"
+    )
+
+
+def test_the_prompt_asks_for_the_candidate_sentence_and_stops():
+    assert "Quote the candidate and stop there" in PROMPT
 
 
 def test_row_26_an_answer_that_treats_the_brand_as_real_is_not_an_admission():

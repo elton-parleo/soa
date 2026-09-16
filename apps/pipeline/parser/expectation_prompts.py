@@ -127,21 +127,16 @@ cannot find, cannot verify, does not recognise or has no information about \
 the brand or the product — e.g. "I could not find any information about that \
 brand". Null if the answer makes no such statement.
 
-  Quote it; do not paraphrase and do not summarise. It has to be a \
-statement that the BRAND OR THE PRODUCT is unfindable, unverifiable or \
-unknown to you — "I could not find", "I cannot verify", "I have never \
-heard of it", "it does not appear to exist", "not a real brand".
+  Quote the whole sentence exactly as the answer wrote it; do not \
+paraphrase, summarise or stitch two sentences together. Null when the \
+answer contains no such sentence at all.
 
-  These are NOT that statement, and this field is null for every one of \
-them:
-
-    * a freshness disclaimer — "I don't have real-time access to the \
-latest ingredient list", "my information may be out of date". That says \
-your knowledge has a date on it, not that the brand is unknown; an answer \
-that then describes the brand as real has plainly found it.
-    * hedging about one detail — "I am not sure of the current price".
-    * simply not mentioning the brand. Saying nothing is not saying you \
-could not find it.
+  Quote the candidate and stop there. Whether it really says the brand is \
+unknown — as opposed to saying your information has a date on it, or \
+asserting something about the brand that happens to be negative — is \
+decided afterwards from the words you quote. If more than one sentence \
+could qualify, quote the one that speaks about the BRAND rather than \
+about you.
 
 OTHER BRANDS NAMED
 other_brands_named: every brand OTHER than the one under discussion that the \
@@ -174,20 +169,21 @@ called, when it launched.
 owns or manufactures it, "loyalty" for programme or tier names, "other" for \
 anything else.
 
-  A claim is an ASSERTION of fact about the brand. A possibility is not.
+  sentence: the WHOLE sentence the claim came from, quoted exactly as \
+the answer wrote it, hedges and all.
 
-    a claim:     "It is a private label sold at a discount grocer."
-    a claim:     "The tiers are called Bronze and Silver."
-    NOT a claim: "It's possible this is a very new, small, or regional brand."
-    NOT a claim: "They likely emphasise a closer fit."
-    NOT a claim: "It might be a store brand."
-    NOT a claim: "It should be suitable for sensitive skin."
+  Record every candidate. Do NOT decide whether a sentence is an \
+assertion or a guess — "It's possible this is a regional brand" belongs \
+in this list with its sentence quoted, exactly like "It is a private \
+label sold at a discount grocer" does. Whether the answer committed to it \
+is decided afterwards, from the sentence you quote, by code that applies \
+the same rule every time.
 
-  If the sentence is hedged — possible, possibly, likely, probably, may, \
-might, could, perhaps, presumably, I would guess, I suspect, seems, \
-appears to be — it is speculation and it does not belong in this list, \
-however specific the thing being speculated about. Record what the answer \
-asserts, not what it wonders.
+  That division is deliberate and it is not negotiable: this instruction \
+used to ask you to leave possibilities out, and the same model left "It \
+might be a fictional product" out of one answer while putting "It's \
+possible that..." into another in the same run. Quote the sentence; the \
+judgement is not yours to make.
 
 LOYALTY TIERS NAMED
 loyalty_tiers_named: every loyalty programme tier or level the answer \
@@ -392,9 +388,10 @@ def build_extraction_schema() -> dict:
                     "type": "object",
                     "properties": {
                         "claim": {"type": "string"},
+                        "sentence": {"type": "string"},
                         "kind": {"type": ["string", "null"]},
                     },
-                    "required": ["claim", "kind"],
+                    "required": ["claim", "sentence", "kind"],
                     "additionalProperties": False,
                 },
             },
@@ -419,22 +416,14 @@ PRESENTED_AS = ('closest_match', 'comparison', 'recommendation', 'source')
 
 def stamp_brand_mentioned(record: dict, answer_text, brand) -> dict:
     """
-    Whether the answer named the brand, decided here rather than asked of
-    the model.
+    Kept as the narrow entry point for brand_mentioned alone.
 
-    It was a model field, and on one cycle it was wrong in both
-    directions: false on an answer reading "on eligible Wiggle & Snug
-    products", true on an answer that only ever said "Wonder" and "The
-    Wiggles". Both errors changed an outcome — the first to `absent`, the
-    second to a brand assessment of an answer about somebody else.
-
-    Nothing about this needs a model. It is a string in a string, and a
-    deterministic check is both right every time and re-checkable by hand
-    from the stored answer, which the rest of Layer 2 already promises.
-
-    Mutates and returns `record`, so the client can apply it to whatever
-    the call produced — including a failed call, whose record names
-    nobody.
+    The whole deterministic pass — modality, cannot-find, currency,
+    substitution, hygiene — is parser/extraction_postprocess.normalize,
+    which the client applies to every record. This is what that pass uses
+    for this one field, exported because it is the piece with the
+    shortest explanation: a string is in a string or it is not, and the
+    model was wrong about it in both directions.
     """
     record['brand_mentioned'] = bool(
         answer_text and ea.names_brand(answer_text, brand)
@@ -461,6 +450,9 @@ EMPTY_EXTRACTION = {
     "brand_claims": [],
     "sources_cited": [],
     "recommended_retailers": [],
+    # What the deterministic pass did to this record. Stored, so the next
+    # hand-check reads the code's decisions rather than only its output.
+    "postprocess": [],
     "extraction_confident": False,
     "extraction_note": "no answer text to read",
 }

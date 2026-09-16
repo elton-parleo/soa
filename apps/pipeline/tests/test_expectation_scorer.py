@@ -358,10 +358,24 @@ def test_a_question_with_no_secondary_leaves_the_column_null(db):
 
 # ── the extractor is told the brand and nothing else ──────────────────────
 
-def test_the_extractor_is_handed_the_brand_only(db):
+def test_the_extractor_is_handed_the_brand_and_its_domain_and_no_more(db):
+    """The domain is for the deterministic pass after the call — telling
+    the brand's own site apart from another brand when the answer writes
+    one as the other. It never reaches the prompt: build_extraction_prompt
+    takes the name alone, and handing a model the domain would tell it
+    which citation we are hoping to find."""
     seed(db, expectation=ea.brand_mention('Wiggle & Snug', 'trueshopstore.com'))
     scorer = make_scorer()
     asyncio.run(scorer.score_run(7))
 
     kwargs = scorer.client.extract.call_args.kwargs
-    assert kwargs == {'brand': 'Wiggle & Snug'}
+    assert kwargs == {
+        'brand': 'Wiggle & Snug', 'brand_domain': 'trueshopstore.com',
+    }
+
+
+def test_the_domain_never_reaches_the_prompt():
+    from parser.expectation_prompts import build_extraction_prompt
+    prompt = build_extraction_prompt('Wiggle & Snug')
+    assert 'Wiggle & Snug' in prompt
+    assert 'trueshopstore' not in prompt

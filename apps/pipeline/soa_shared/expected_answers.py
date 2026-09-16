@@ -181,13 +181,56 @@ def normalize_money(value: Any) -> Optional[str]:
     return f"{amount.quantize(Decimal('0.01'))}"
 
 
+# What a shopping answer writes a currency as, and the ISO-4217 code it
+# means. A table rather than a guess: an extractor asked to "use the code"
+# returned "Rs." on one run and "INR" on another for the same answer, and
+# a scorer comparing "Rs." against "INR" finds a mismatch that is not one.
+#
+# Deliberately short. Every entry here is a symbol seen in a real answer;
+# a symbol nobody has seen is better refused than guessed at, because a
+# wrong guess is a price comparison that silently means nothing.
+CURRENCY_SYMBOLS = {
+    '$': 'USD', 'US$': 'USD', 'USD': 'USD', 'DOLLARS': 'USD',
+    '£': 'GBP', 'GBP': 'GBP', 'POUNDS': 'GBP',
+    '€': 'EUR', 'EUR': 'EUR', 'EUROS': 'EUR',
+    '₹': 'INR', 'RS': 'INR', 'INR': 'INR', 'RUPEES': 'INR',
+}
+
+
 def normalize_currency(value: Any) -> Optional[str]:
-    """ISO-4217, uppercase. '$22.99' and 'CA$22.99' are not the same
-    answer, so currency is compared rather than assumed."""
+    """
+    ISO-4217, uppercase, via the symbol table.
+
+    '$22.99' and 'CA$22.99' are still not the same answer — 'CA$' is not
+    in the table and comes back as itself, which is_currency_code then
+    refuses. Currency is compared, never assumed.
+    """
     if not value:
         return None
-    text = str(value).strip().upper()
-    return text or None
+    raw = str(value).strip()
+    mapped = (
+        CURRENCY_SYMBOLS.get(raw)
+        or CURRENCY_SYMBOLS.get(raw.upper().rstrip('.'))
+    )
+    if mapped:
+        return mapped
+    return raw.upper() or None
+
+
+def is_currency_code(value: Any) -> bool:
+    """
+    Whether a normalized currency is something a comparison can use.
+
+    Three letters, because that is what ISO-4217 is — so 'CAD' and 'AUD'
+    pass without being in the table above, and 'RS.' and 'CA$' do not.
+    The caller decides what to do about a false; the scorer records the
+    run as unscoreable rather than comparing a price whose currency it
+    cannot read, which is the only honest option: treating it as a match
+    and treating it as a mismatch are both claims about the assistant
+    made on the strength of our own confusion.
+    """
+    text = str(value or '').strip()
+    return len(text) == 3 and text.isalpha()
 
 
 def normalize_gtin(value: Any) -> Optional[str]:

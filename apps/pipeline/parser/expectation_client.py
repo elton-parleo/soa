@@ -19,11 +19,11 @@ from typing import Optional
 from openai import AsyncOpenAI
 
 import soa_shared.config as config
+from parser.extraction_postprocess import normalize
 from parser.expectation_prompts import (
     EMPTY_EXTRACTION,
     build_extraction_prompt,
     build_extraction_schema,
-    stamp_brand_mentioned,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,7 +60,8 @@ class ExpectationClient:
         self.model = model
         self._client = AsyncOpenAI(api_key=config.OPEN_AI_API_KEY)
 
-    async def extract(self, answer_text: str, *, brand: str = None) -> ExtractionResult:
+    async def extract(self, answer_text: str, *, brand: str = None,
+                      brand_domain: str = None) -> ExtractionResult:
         """
         One answer -> one extraction record. Never raises.
 
@@ -70,15 +71,19 @@ class ExpectationClient:
         price would be handing the extractor the answer and asking it to
         find it.
 
-        brand_mentioned is stamped on afterwards, from the answer text,
-        and is never asked of the model — including on the failure paths,
-        so every record that leaves here carries the field whether the
-        call worked or not.
+        Everything the model returns then goes through
+        extraction_postprocess.normalize, which decides the things the
+        model kept getting wrong — whether a claim was hedged, whether a
+        cannot-find sentence really says the brand is unknown, what
+        currency a symbol means, whether a named brand was actually
+        described — and records what it decided. Applied on every return
+        path, including the failures, so no record leaves here
+        half-processed.
         """
         if not answer_text or not answer_text.strip():
             return ExtractionResult(
-                record=self._stamp(_unreadable('no answer text to read'),
-                                   answer_text, brand),
+                record=self._finish(_unreadable('no answer text to read'),
+                                    answer_text, brand, brand_domain),
                 model=self.model,
             )
 
@@ -105,8 +110,9 @@ class ExpectationClient:
                         }
                     },
                 )
-                record = self._stamp(
-                    json.loads(response.output_text), answer_text, brand,
+                record = self._finish(
+                    json.loads(response.output_text),
+                    answer_text, brand, brand_domain,
                 )
                 usage = getattr(response, "usage", None)
                 return ExtractionResult(
@@ -126,9 +132,9 @@ class ExpectationClient:
                 )
 
         return ExtractionResult(
-            record=self._stamp(
+            record=self._finish(
                 _unreadable(f"extraction call failed: {last_error}"),
-                answer_text, brand,
+                answer_text, brand, brand_domain,
             ),
             model=self.model,
             latency_ms=int((time.monotonic() - t0) * 1000),
@@ -136,8 +142,10 @@ class ExpectationClient:
         )
 
     @staticmethod
-    def _stamp(record, answer_text, brand):
-        """brand_mentioned, computed from the answer rather than asked of
-        the model. Applied on every return path, so no record ever leaves
-        here without it."""
-        return stamp_brand_mentioned(record, answer_text, brand)
+    def _finish(record, answer_text, brand, brand_domain):
+        """The deterministic pass, applied on every return path so no
+        record ever leaves here half-processed."""
+        return normalize(
+            record, answer_text=answer_text, brand=brand,
+            brand_domain=brand_domain,
+        )

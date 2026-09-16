@@ -293,6 +293,36 @@ both usually do. An answer that says "I cannot verify Wiggle & Snug, but
 here is Huggies Snug & Dry" leaves the reader holding Huggies. The
 admission is a mitigation, not the result.
 
+#### The model transcribes spans; the code classifies them
+
+Two hand-checks of forty stored answers each: ten disagreements, then
+eight. The second set is what settled the division of labour, because
+four of the eight were the model applying a rule the prompt had spelled
+out — and applying it differently to two answers of the same shape **in
+the same run**. "It's possible that…" went in as a claim on one; "It
+might be a fictional product" was correctly left out of another.
+
+So every judgement moved into `parser/extraction_postprocess.py`, which
+runs on every extraction before it is stored:
+
+| Decision | Rule |
+| --- | --- |
+| **Hedged?** | The quoted sentence carries a hedge marker (*possible, likely, might, could, perhaps, appears, seems, if it*, …). A hedged claim is recorded and is **not** a claim — the classifier ignores it for `fabricated`. |
+| **Cannot-find?** | The quoted sentence matches the can't-find lexicon and is **not** a disclaimer about our own reach (*real-time, in front of me, knowledge cutoff*). |
+| **An assertion filed as a cannot-find** | Moved into `brand_claims` with a kind inferred from its words. "Wiggle & Snug does not currently offer a member rewards program" is a false claim about the brand, not an admission of ignorance. |
+| **Currency** | A table: `$`→USD, `£`→GBP, `€`→EUR, `Rs.`/`₹`→INR. Anything it cannot read makes the run **unscoreable** — never a raw string. |
+| **`brand_mentioned`** | `ea.names_brand`, the same function the generation guard uses. |
+| **`closest_match`** | Kept only if the answer attributed something to that brand — a price, a claim or a citation. A bare alternate-spelling guess describes nothing and is dropped. |
+| **Hygiene** | Dedupe; a retailer a price came from is a source, not a suggestion; the brand and its own domain are never "other brands". |
+
+`may` is the one marker written as a rule rather than a word: it is also
+a month, so it hedges only when not followed by a number. "The line
+launched in May 2024" is the claim it is.
+
+Every decision is recorded in `postprocess` on the stored record, so the
+next hand-check reads what the code decided rather than only what it
+produced.
+
 #### What the extractor transcribes, and what it does not
 
 Forty stored answers from cycle 20260915 were read by hand against their
