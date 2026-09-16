@@ -121,9 +121,6 @@ export const PARLEO_HOME_URL = 'https://parleo.io'
 
 // The demo-request modal's submission backend (demoRequestApi.js) —
 // leads go straight to Formspree, no public demo-request API route
-// or soa_demo_requests table in this app. Our own account's form —
-// moved off the marketing site's shared form so audit leads land in
-// our own dashboard: visibility into Submissions/Spam, not the
-// marketing form's inbox. Restrict allowed submission domains in the
-// Formspree dashboard (ops step, not code).
-export const FORMSPREE_DEMO_ENDPOINT = 'https://formspree.io/f/mppzrrrq'
+// or soa_demo_requests table in this app. Restrict allowed submission
+// domains in the Formspree dashboard (ops step, not code).
+export const FORMSPREE_DEMO_ENDPOINT = 'https://formspree.io/f/xyklyajq'

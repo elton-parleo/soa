@@ -17,10 +17,12 @@
  *   must never be gateable by environment (no import.meta.env/VITE_
  *   reference), so a submission can never be silently disabled in any
  *   mode.
- * - own-account Formspree form + dropped visited-page-URL field: no
- *   reference to the old shared form id anywhere, and the removed
- *   payload field (a spam-classifier signal, confirmed via dashboard
- *   access) doesn't survive in the functional modal/payload modules.
+ * - dropped visited-page-URL field: a spam-classifier signal
+ *   (confirmed via dashboard access) that doesn't survive in the
+ *   functional modal/payload modules. (This file used to also assert
+ *   the old shared Formspree form id was gone, from a since-reverted
+ *   move to a different form — reverted back to the shared form, so
+ *   that guard no longer applies either.)
  *
  * The demo-request walk() helper walks the whole src/ tree like
  * analytics.test.js's posthog-import-boundary test, excluding test
@@ -85,17 +87,6 @@ describe('no orphaned references left behind by the Formspree retarget', () => {
     const srcRoot = path.join(__dirname, '../..')
     const offenders = []
     walk(srcRoot, offenders, /\/api\/public\/demo-request/)
-    expect(offenders).toEqual([])
-  })
-})
-
-// Moved off the marketing site's shared Formspree form onto our own
-// account's — the old form id must not survive anywhere.
-describe('no reference to the old shared Formspree form id', () => {
-  it('no file references the old form id', () => {
-    const srcRoot = path.join(__dirname, '../..')
-    const offenders = []
-    walk(srcRoot, offenders, /xyklyajq/)
     expect(offenders).toEqual([])
   })
 })
