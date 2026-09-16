@@ -23,6 +23,7 @@ from parser.expectation_prompts import (
     EMPTY_EXTRACTION,
     build_extraction_prompt,
     build_extraction_schema,
+    stamp_brand_mentioned,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,14 +65,21 @@ class ExpectationClient:
         One answer -> one extraction record. Never raises.
 
         `brand` is the ONLY thing about the expectation this call is told,
-        and only the name: brand_mentioned is unanswerable without knowing
-        which brand is meant, while every other field is a transcription
-        that needs no target. Passing the price would be handing the
-        extractor the answer and asking it to find it.
+        and only the name: it is what separates "the brand under
+        discussion" from every other brand the answer names. Passing the
+        price would be handing the extractor the answer and asking it to
+        find it.
+
+        brand_mentioned is stamped on afterwards, from the answer text,
+        and is never asked of the model — including on the failure paths,
+        so every record that leaves here carries the field whether the
+        call worked or not.
         """
         if not answer_text or not answer_text.strip():
             return ExtractionResult(
-                record=_unreadable('no answer text to read'), model=self.model,
+                record=self._stamp(_unreadable('no answer text to read'),
+                                   answer_text, brand),
+                model=self.model,
             )
 
         instructions = build_extraction_prompt(brand)
@@ -97,7 +105,9 @@ class ExpectationClient:
                         }
                     },
                 )
-                record = json.loads(response.output_text)
+                record = self._stamp(
+                    json.loads(response.output_text), answer_text, brand,
+                )
                 usage = getattr(response, "usage", None)
                 return ExtractionResult(
                     record=record,
@@ -116,8 +126,18 @@ class ExpectationClient:
                 )
 
         return ExtractionResult(
-            record=_unreadable(f"extraction call failed: {last_error}"),
+            record=self._stamp(
+                _unreadable(f"extraction call failed: {last_error}"),
+                answer_text, brand,
+            ),
             model=self.model,
             latency_ms=int((time.monotonic() - t0) * 1000),
             error=last_error,
         )
+
+    @staticmethod
+    def _stamp(record, answer_text, brand):
+        """brand_mentioned, computed from the answer rather than asked of
+        the model. Applied on every return path, so no record ever leaves
+        here without it."""
+        return stamp_brand_mentioned(record, answer_text, brand)

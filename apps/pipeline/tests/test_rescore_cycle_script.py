@@ -44,7 +44,7 @@ def db(monkeypatch):
         c.exec_driver_sql("""
             CREATE TABLE soa_expectation_outcomes (
                 id INTEGER PRIMARY KEY, run_id INTEGER, cycle_id INTEGER,
-                tier TEXT, outcome TEXT
+                tier TEXT, outcome TEXT, secondary_results TEXT
             )
         """)
         c.execute(text(
@@ -181,3 +181,79 @@ def test_a_dry_run_on_a_tier_with_nothing_to_score_says_so(db, capsys):
     ])
     assert code == 0
     assert "nothing to do." in capsys.readouterr().out
+
+
+# ── the secondary snapshot ────────────────────────────────────────────────
+#
+# The extractor corrections are meant to move pack-count secondaries — a
+# size read as a count was four of the ten hand-check errors — and to
+# leave the price outcome each one rides on exactly where it was. That is
+# only a checkable claim if the two are counted apart.
+
+def seed_secondary(db, *, tier, outcome, results, expectation='{"type": "price"}'):
+    import json
+    with db.begin() as c:
+        qid = c.execute(text(
+            "INSERT INTO soa_queries (tier, expected_answer) VALUES (:t, :e) "
+            "RETURNING id"
+        ), {"t": tier, "e": expectation}).scalar()
+        rid = c.execute(text(
+            "INSERT INTO soa_runs (cycle_id, query_id) VALUES (1, :q) RETURNING id"
+        ), {"q": qid}).scalar()
+        c.execute(text(
+            "INSERT INTO soa_expectation_outcomes "
+            "(run_id, cycle_id, tier, outcome, secondary_results) "
+            "VALUES (:r, 1, :t, :o, :s)"
+        ), {"r": rid, "t": tier, "o": outcome, "s": json.dumps(results)})
+
+
+def test_secondary_results_are_counted_per_tier_and_per_type(db):
+    seed_secondary(db, tier="catalog_accuracy", outcome="exact",
+                   results=[{"type": "pack_count", "outcome": "wrong"},
+                            {"type": "gtin", "outcome": "absent"}])
+    seed_secondary(db, tier="catalog_accuracy", outcome="exact",
+                   results=[{"type": "pack_count", "outcome": "absent"}])
+
+    with db.connect() as conn:
+        counts = rc.secondary_counts(conn, 1)
+    assert counts["catalog_accuracy"]["pack_count"] == {"wrong": 1, "absent": 1}
+    assert counts["catalog_accuracy"]["gtin"] == {"absent": 1}
+
+
+def test_a_row_with_no_secondaries_contributes_nothing(db):
+    seed(db, tier="catalog_accuracy", outcome="exact", n=3)
+    with db.connect() as conn:
+        assert rc.secondary_counts(conn, 1) == {}
+
+
+def test_unreadable_secondary_json_is_skipped_rather_than_crashing(db):
+    seed_secondary(db, tier="catalog_accuracy", outcome="exact",
+                   results=[{"type": "pack_count", "outcome": "exact"}])
+    with db.begin() as c:
+        c.execute(text(
+            "UPDATE soa_expectation_outcomes SET secondary_results = 'not json'"
+        ))
+    with db.connect() as conn:
+        assert rc.secondary_counts(conn, 1) == {}
+
+
+# ── the promise, asserted ─────────────────────────────────────────────────
+
+def test_a_tier_whose_primary_outcomes_moved_is_named():
+    before = {"catalog_accuracy": Counter({"exact": 19, "wrong": 2})}
+    after = {"catalog_accuracy": Counter({"exact": 21})}
+    assert rc.changed_tiers(before, after) == ["catalog_accuracy"]
+
+
+def test_identical_counts_are_not_a_change():
+    counts = {"catalog_accuracy": Counter({"exact": 19, "wrong": 2}),
+              "value_incentives": Counter({"exact": 4})}
+    assert rc.changed_tiers(counts, dict(counts)) == []
+
+
+def test_a_secondary_moving_is_not_a_primary_change():
+    """The whole reason the two are counted apart. A size that stops
+    being read as a pack count changes the pack_count secondary and
+    leaves the price outcome it rides on alone."""
+    counts = {"catalog_accuracy": Counter({"exact": 19})}
+    assert rc.changed_tiers(counts, dict(counts)) == []

@@ -29,6 +29,7 @@ current counts and makes no model call and no write.
 """
 import argparse
 import asyncio
+import json
 import os
 import sys
 from collections import Counter
@@ -87,6 +88,60 @@ def run_ids_for(conn, cid: int, tiers) -> list:
     return [row[0] for row in rows]
 
 
+def secondary_counts(conn, cid: int) -> dict:
+    """
+    {tier: {expectation type: {outcome: n}}} for the secondary results.
+
+    Read apart from the primary outcomes because they move for different
+    reasons and a re-score is expected to move only one of them. The
+    correction that prompted this — a size read as a pack count — lands
+    squarely on a pack_count secondary and must not touch the price
+    outcome the secondary rides on.
+
+    Counted in Python for the same reason tier_accuracy counts them in
+    Python: secondary_results is a JSON array and the two dialects this
+    runs on disagree about how to unnest one.
+    """
+    rows = conn.execute(text("""
+        SELECT tier, secondary_results
+        FROM soa_expectation_outcomes
+        WHERE cycle_id = :cid AND secondary_results IS NOT NULL
+    """), {"cid": cid}).fetchall()
+
+    out = {}
+    for tier, payload in rows:
+        if isinstance(payload, str):
+            try:
+                payload = json.loads(payload)
+            except json.JSONDecodeError:
+                continue
+        for item in payload or []:
+            kind, outcome = item.get('type'), item.get('outcome')
+            if not kind or not outcome:
+                continue
+            out.setdefault(tier or '(untiered)', {}).setdefault(kind, Counter())
+            out[tier][kind][outcome] += 1
+    return out
+
+
+def _render_secondary(counts: dict) -> str:
+    lines = []
+    for tier in sorted(counts):
+        for kind in sorted(counts[tier]):
+            inner = counts[tier][kind]
+            detail = ', '.join(f"{o} {n}" for o, n in sorted(inner.items()))
+            lines.append(f"    {tier} / {kind:<12} {sum(inner.values()):>4}  ({detail})")
+    return '\n'.join(lines) or '    (no secondary expectations)'
+
+
+def changed_tiers(before: dict, after: dict) -> list:
+    """Every tier whose primary outcome counts are not identical."""
+    return [
+        tier for tier in sorted(set(before) | set(after))
+        if dict(before.get(tier, {})) != dict(after.get(tier, {}))
+    ]
+
+
 def _render(counts: dict) -> str:
     lines = []
     for tier in sorted(counts):
@@ -125,6 +180,17 @@ def main(argv=None) -> int:
         "--dry-run", action="store_true",
         help="print the plan and the current counts; no model call, no write",
     )
+    parser.add_argument(
+        "--expect-unchanged", action="append", dest="expect_unchanged",
+        default=[], metavar="TIER",
+        help=(
+            "repeatable; fail if this tier's PRIMARY outcome counts move. "
+            "Secondary results are not covered — a correction can be meant "
+            "to move a pack-count secondary while leaving the price "
+            "outcome it rides on exactly where it was, and that is a "
+            "distinction worth being able to assert."
+        ),
+    )
     args = parser.parse_args(argv)
 
     tiers = args.tiers or [t for t in QUERY_TIERS if t != 'category_control']
@@ -132,6 +198,7 @@ def main(argv=None) -> int:
     with engine.connect() as conn:
         cid = cycle_id(conn, args.cycle)
         before = outcome_counts(conn, cid)
+        before_secondary = secondary_counts(conn, cid)
         run_ids = run_ids_for(conn, cid, tiers)
 
     print(f"cycle {args.cycle} (id {cid})")
@@ -139,6 +206,8 @@ def main(argv=None) -> int:
     print(f"runs to score:    {len(run_ids)}")
     print("before:")
     print(_render(before))
+    print("before (secondary):")
+    print(_render_secondary(before_secondary))
 
     if not run_ids:
         print("\nnothing to do.")
@@ -158,26 +227,53 @@ def main(argv=None) -> int:
 
     with engine.connect() as conn:
         after = outcome_counts(conn, cid)
+        after_secondary = secondary_counts(conn, cid)
 
     print(f"\nscored {summary.succeeded}/{summary.total} "
           f"(skipped {summary.skipped}, failed {summary.failed}, "
           f"retried {summary.retried})")
     print("after:")
     print(_render(after))
+    print("after (secondary):")
+    print(_render_secondary(after_secondary))
+
+    moved_primary = changed_tiers(before, after)
+    print(f"\nprimary outcomes changed in: "
+          f"{', '.join(moved_primary) if moved_primary else 'nothing'}")
 
     for failure in summary.failures[:10]:
         print(f"    FAILED run {failure.run_id}: {failure.status} "
               f"{failure.error_message or ''}")
 
+    problems = []
+
     moved = diff_untouched(before, after, set(tiers))
     if moved:
-        print(f"\nPROBLEM: {', '.join(moved)} changed and {'was' if len(moved) == 1 else 'were'} "
-              f"not re-scored. A re-score of one tier must leave the others alone.")
+        problems.append(
+            f"{', '.join(moved)} changed and {'was' if len(moved) == 1 else 'were'} "
+            f"not re-scored. A re-score of one tier must leave the others alone."
+        )
+
+    # Asserted rather than eyeballed. "The price outcomes did not move" is
+    # a claim somebody is going to put in a report, and it should be
+    # checked by the thing that did the re-scoring.
+    broke_promise = [t for t in args.expect_unchanged if t in moved_primary]
+    if broke_promise:
+        problems.append(
+            f"{', '.join(broke_promise)} was expected to be unchanged and "
+            f"its primary outcomes moved."
+        )
+
+    for problem in problems:
+        print(f"\nPROBLEM: {problem}")
+    if problems:
         return 1
 
+    if args.expect_unchanged:
+        print(f"unchanged, as promised: {', '.join(sorted(args.expect_unchanged))}")
     untouched = sorted(set(before) - set(tiers))
     if untouched:
-        print(f"\nunchanged, as expected: {', '.join(untouched)}")
+        print(f"unchanged, not re-scored: {', '.join(untouched)}")
     return 0 if not summary.failed else 1
 
 

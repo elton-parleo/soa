@@ -26,6 +26,7 @@ them.
 
 Sync copies to apps/api/soa_shared/ and apps/pipeline/soa_shared/.
 """
+import re
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
@@ -354,6 +355,56 @@ def with_secondary(primary: dict, secondary: list) -> dict:
     if not validated:
         return dict(primary)
     return {**primary, 'secondary': validated}
+
+
+# ─── Naming a brand ────────────────────────────────────────────────────────
+
+_BRAND_NOISE = re.compile(r'[^a-z0-9]+')
+_AMPERSAND = re.compile(r'\s*&\s*')
+
+
+def normalize_brand_text(text) -> str:
+    """Lowercased, &-expanded, punctuation-flattened, single-spaced.
+
+    Applied to BOTH sides of every comparison, so the tolerance it grants
+    is symmetric — never a rule that reads one way for the brand and
+    another for the text being checked.
+    """
+    lowered = _AMPERSAND.sub(' and ', str(text or '').lower())
+    return _BRAND_NOISE.sub(' ', lowered).strip()
+
+
+def names_brand(text, brand) -> bool:
+    """
+    Whether a piece of text names this brand.
+
+    ONE definition, used in two places that must not disagree: the
+    generator's guard, which rejects a brand-direct question that does
+    not name the brand, and the extraction, which records whether the
+    ANSWER did. If those two drifted apart, a question could pass the
+    guard and then be scored against a different idea of what naming is.
+
+    Substring on the normalized forms, so 'Wiggle & Snug', 'wiggle and
+    snug' and 'Wiggle  &  Snug' all pass and 'Wiggle' does not — the
+    tolerance is for typography, never for identity. Word boundaries come
+    from padding both sides with spaces: without that, a brand called
+    'Bum' would count itself named by the word 'album'.
+
+    Deterministic on purpose. This used to be a field the extraction
+    model filled in, and on one cycle it got it wrong in both directions:
+    false on an answer reading "on eligible Wiggle & Snug products", true
+    on one that only ever said "Wonder" and "The Wiggles". A string is in
+    a string or it is not, and that is not a judgement anyone needs a
+    model for.
+    """
+    brand_text = normalize_brand_text(brand)
+    if not brand_text:
+        # No brand to look for. Callers that require one refuse to run
+        # without it; reaching here means a caller asked a question this
+        # function cannot answer, and answering 'no' would mark every
+        # answer as not naming a brand nobody named.
+        return True
+    return f' {brand_text} ' in f' {normalize_brand_text(text)} '
 
 
 # ─── Validation ────────────────────────────────────────────────────────────

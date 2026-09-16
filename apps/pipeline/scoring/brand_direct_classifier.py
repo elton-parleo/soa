@@ -55,11 +55,22 @@ def _tokens(text) -> set:
     return {t for t in _norm(text).split() if t}
 
 
-# The answer's own framing when it offers something else in place of the
-# brand. Transcribed into `presented_as` by the extractor, matched here —
-# so the rule is a list of phrases anyone can read, rather than a model's
-# opinion about whether a substitution happened.
-SUBSTITUTION_PHRASES = (
+# `presented_as` is one of four words the extractor chooses from, and
+# only one of them is a substitution: closest_match means the answer
+# decided the asker must have meant somebody else. A `recommendation`
+# ("popular alternatives include...") sits beside an answer about this
+# brand rather than replacing it, and a `comparison` is the opposite of a
+# substitution. Neither is misattribution on its own — but if the answer
+# then hangs its numbers on that other brand's product, route one of
+# misattributed_to catches it regardless of the label.
+SUBSTITUTION = 'closest_match'
+
+# Free text this field used to hold, before it was an enum. Kept so the
+# classifier still reads extractions stored under the old prompt — a
+# re-score over old records must not silently stop finding substitutions
+# it used to find. New extractions cannot produce these: the schema
+# enumerates the four words.
+LEGACY_SUBSTITUTION_PHRASES = (
     'closest match', 'if you meant', 'did you mean', 'you might mean',
     'assuming you mean', 'looking for', 'similar', 'instead', 'alternative',
     'in place of', 'rather than', 'misremember',
@@ -67,8 +78,14 @@ SUBSTITUTION_PHRASES = (
 
 
 def _is_substitution(presented_as) -> bool:
-    text = str(presented_as or '').lower()
-    return any(phrase in text for phrase in SUBSTITUTION_PHRASES)
+    text = str(presented_as or '').strip().lower()
+    if not text:
+        return False
+    if text in ('comparison', 'recommendation', 'source'):
+        return False
+    if text == SUBSTITUTION:
+        return True
+    return any(phrase in text for phrase in LEGACY_SUBSTITUTION_PHRASES)
 
 
 def _quantities(extraction) -> list:
@@ -144,6 +161,36 @@ def _tier_contradictions(extraction, facts):
         }
 
 
+def _recommended_without_source(extraction):
+    """
+    Sending a shopper somewhere to buy this brand, with nothing behind it.
+
+    Telling a reader to "check Amazon, Walmart or Target" is a claim about
+    where the brand is sold — which is why the extractor records it apart
+    from the sources it cites, and why it is a finding rather than
+    scenery.
+
+    Two ways out of it, both deliberate:
+
+      * the answer cited something. Then it is sourced, and the record
+        does not carry retail presence, so it cannot be contradicted;
+      * the answer also said it could not find the brand. "I could not
+        find this brand — you could try Amazon" is a suggestion to go
+        looking, not an assertion that it is there, and treating the two
+        the same would punish the most honest answer in the set for
+        trying to be useful.
+    """
+    retailers = [r for r in extraction.get('recommended_retailers') or [] if r]
+    if not retailers:
+        return None
+    if extraction.get('sources_cited') or extraction.get('brand_unknown_statement'):
+        return None
+    return {
+        'claim': f"told the reader to buy it at {', '.join(retailers)}",
+        'why': 'where to buy, stated with no source',
+    }
+
+
 def contradicted_claims(extraction, brand_facts=None) -> list:
     """
     Brand-specific claims the published record contradicts, plus claims
@@ -172,6 +219,9 @@ def contradicted_claims(extraction, brand_facts=None) -> list:
     domain = _norm(facts.get('domain'))
 
     found = list(_tier_contradictions(extraction, facts))
+    availability = _recommended_without_source(extraction)
+    if availability:
+        found.append(availability)
     for claim in claims:
         kind = (claim.get('kind') or 'other').lower()
         text = claim['claim']

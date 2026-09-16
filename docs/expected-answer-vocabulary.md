@@ -293,6 +293,41 @@ both usually do. An answer that says "I cannot verify Wiggle & Snug, but
 here is Huggies Snug & Dry" leaves the reader holding Huggies. The
 admission is a mitigation, not the result.
 
+#### What the extractor transcribes, and what it does not
+
+Forty stored answers from cycle 20260915 were read by hand against their
+extractions. Ten disagreed, and the corrections are these:
+
+| Rule | Why |
+| --- | --- |
+| A **size** is not a pack count. `4 oz`, `3.4 fl oz`, `100 ml` go in `sizes` with their unit. | Four of the ten. A size read as a count is a wrong number attached to a real product — worse than a missing one, because it scores an assistant against a quantity nobody asked about. |
+| A **recommendation** is not a citation. "Check Amazon, Walmart or Target" goes in `recommended_retailers`; `sources_cited` stays empty. | A citation says where the answer got something. A recommendation says where to go. An answer that names three shops and links to none has cited nothing. |
+| A **hedge** is not a claim. "It's possible", "likely", "might be" never reach `brand_claims`. | A possibility is not an assertion, and one row was classified `fabricated` on three hedged sentences alone. |
+| `brand_unknown_statement` means **can't-find**, not a freshness disclaimer. | "I don't have real-time access to the latest ingredient list" says your knowledge has a date on it. The same answer went on to describe the brand as real. |
+| A bare **`$` is USD**, every time, including inside a range. | The extractor read it as USD in some rows and null in others. |
+| `presented_as` is one of **four words** — `closest_match`, `comparison`, `recommendation`, `source`. | It was free text and came back holding sentence fragments. |
+
+**`brand_mentioned` is no longer asked of the model.** It is
+`ea.names_brand(answer, brand)` — a case-insensitive substring on the
+normalized forms, computed after the call returns. The model got it wrong
+in both directions on one cycle: `false` on an answer reading "on
+eligible Wiggle & Snug products", `true` on one that only ever said
+"Wonder" and "The Wiggles". Both changed an outcome. A string is in a
+string or it is not.
+
+That function is the **same object** the generator's guard uses to reject
+a brand-direct question that does not name the brand. If the two drifted,
+a question could pass the guard and then be scored against a different
+idea of naming.
+
+`recommended_retailers` is not only a correction — it is a signal. An
+answer that tells a shopper to buy this brand at three retailers, cites
+nothing, and does **not** say it could not find the brand has made an
+unsourced claim about where the brand is sold, and is classified
+`fabricated`. The two exemptions are deliberate: a cited answer is
+sourced, and "I could not find this brand — you could try Amazon" is a
+suggestion to go looking, not an assertion that it is there.
+
 #### Guessable expectations
 
 `points` at **one per dollar** is the category default. An answer that

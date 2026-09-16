@@ -22,51 +22,23 @@ the one outcome worth less than admitting fewer questions.
 import re
 from typing import Iterable, List, Optional, Set, Tuple
 
+from soa_shared import expected_answers as ea
+
 BRAND_MISSING = 'does not name the brand'
 INTENT_DUPLICATE = 'restates a question the catalog tier already asks'
 
 _NOISE = re.compile(r'[^a-z0-9]+')
 
-# 'Wiggle & Snug' and 'Wiggle and Snug' are the same brand typed two
-# ways, and a shopper types both. Tolerating that is not the same as
-# tolerating a partial name: 'Wiggle' alone still fails, because a
-# question that names half a brand is a question about something else.
-_AMPERSAND = re.compile(r'\s*&\s*')
-
-
-def _normalize(text) -> str:
-    """Lowercased, &-expanded, punctuation-flattened, single-spaced.
-
-    Applied to BOTH sides of every comparison, so the tolerance it grants
-    is symmetric — never a rule that reads one way for the brand and
-    another for the question.
-    """
-    lowered = _AMPERSAND.sub(' and ', str(text or '').lower())
-    return _NOISE.sub(' ', lowered).strip()
+# Both from soa_shared, so the rule that decides whether a QUESTION names
+# the brand is the same object as the one that decides whether an ANSWER
+# did. Two copies of this would let a question pass the guard here and
+# then be scored against a different idea of naming.
+_normalize = ea.normalize_brand_text
+names_brand = ea.names_brand
 
 
 def _tokens(text) -> Set[str]:
     return {t for t in _normalize(text).split() if t}
-
-
-def names_brand(text, brand) -> bool:
-    """
-    Whether the question names the brand.
-
-    Substring on the normalized forms, so 'Wiggle & Snug', 'wiggle and
-    snug' and 'Wiggle  &  Snug' all pass and 'Wiggle' does not. Word
-    boundaries are enforced by padding both sides with spaces: without
-    that, a brand called 'Bum' would count itself named by the word
-    'album'.
-    """
-    brand_text = _normalize(brand)
-    if not brand_text:
-        # No brand to require. The caller (generate_brand_direct) refuses
-        # to run without one, so reaching here means a different caller
-        # asked a question this function cannot answer — and answering
-        # 'no' would reject every row it is handed.
-        return True
-    return f' {brand_text} ' in f' {_normalize(text)} '
 
 
 # ─── Intent ────────────────────────────────────────────────────────────────
