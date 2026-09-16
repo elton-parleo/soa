@@ -59,7 +59,8 @@
       "Honest": null,
       "Gerber": null
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": null
 }

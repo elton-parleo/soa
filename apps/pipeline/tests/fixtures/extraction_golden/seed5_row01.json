@@ -1,0 +1,128 @@
+{
+  "row": 1,
+  "seed": 5,
+  "query_code": "WIG_165",
+  "platform": "gemini",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Wiggle & Snug is a Target-exclusive brand.\n\nAs of my last update, **Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)** typically cost around **$16.99** at Target.\n\nPrices can vary slightly, so it's always a good idea to check Target's website or app for the most current pricing and any available promotions.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "16.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [
+      {
+        "value": 52,
+        "attributed_product": "Wiggle & Snug Snug-Fit Overnight Diapers Size 6"
+      }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "Wiggle & Snug is a Target-exclusive brand.",
+        "sentence": "Wiggle & Snug is a Target-exclusive brand.",
+        "span_id": 1,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "retail",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "As of my last update, **Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)** typically cost around **$16.99** at Target.",
+        "sentence": "As of my last update, **Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)** typically cost around **$16.99** at Target.",
+        "span_id": 2,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [
+      {
+        "name": "Target",
+        "role": "source"
+      }
+    ],
+    "postprocess": [
+      "not product sizes: 6 Size, 6 Size"
+    ],
+    "transcribed_unknown_statement": null,
+    "spans": [
+      {
+        "id": 1,
+        "text": "Wiggle & Snug is a Target-exclusive brand."
+      },
+      {
+        "id": 2,
+        "text": "As of my last update, **Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)** typically cost around **$16.99** at Target."
+      },
+      {
+        "id": 3,
+        "text": "Prices can vary slightly, so it's always a good idea to check Target's website or app for the most current pricing and any available promotions."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "Wiggle & Snug is a Target-exclusive brand.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "As of my last update, **Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)** typically cost around **$16.99** at Target.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 3,
+        "text": "Prices can vary slightly, so it's always a good idea to check Target's website or app for the most current pricing and any available promotions.",
+        "kind": "instruction",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "16.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)"
+      }
+    ],
+    "pack_counts": [
+      {
+        "value": 52,
+        "attributed_product": "Wiggle & Snug Snug-Fit Overnight Diapers Size 6"
+      }
+    ],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {
+      "Target": "source"
+    }
+  },
+  "review_note": null
+}

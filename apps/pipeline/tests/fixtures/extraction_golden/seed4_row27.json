@@ -92,7 +92,8 @@
     },
     "retailers": {
       "Amazon": "recommendation"
-    }
+    },
+    "codes": []
   },
   "review_note": {
     "note": "the cannot-find is the leading subordinate clause; the span ran past the comma closing it"

@@ -101,7 +101,8 @@
     "retailers": {
       "Walmart": null,
       "Amazon": null
-    }
+    },
+    "codes": []
   },
   "review_note": null
 }

@@ -31,11 +31,11 @@ from scripts import eval_extraction_golden as ev
 GOLDEN = sorted(ev.GOLDEN_DIR.glob('*.json'))
 
 
-def test_the_golden_set_is_four_whole_samples():
-    assert len(GOLDEN) == 160
+def test_the_golden_set_is_five_whole_samples():
+    assert len(GOLDEN) == 200
     rows = [json.loads(p.read_text()) for p in GOLDEN]
-    assert sorted({r['seed'] for r in rows}) == [1, 2, 3, 4]
-    for seed in (1, 2, 3, 4):
+    assert sorted({r['seed'] for r in rows}) == [1, 2, 3, 4, 5]
+    for seed in (1, 2, 3, 4, 5):
         assert len([r for r in rows if r['seed'] == seed]) == 40
 
 
@@ -54,7 +54,7 @@ def test_every_golden_row_carries_the_answer_it_was_judged_from(path):
 def test_the_rows_the_review_ruled_on_carry_its_note():
     rows = [json.loads(p.read_text()) for p in GOLDEN]
     flagged = [r for r in rows if r['flagged_by_review']]
-    assert len(flagged) == 55
+    assert len(flagged) == 59
     assert all(r['review_note'] is not None for r in flagged)
 
 
@@ -96,6 +96,17 @@ def test_the_pipeline_beats_the_stored_transcription_on_every_earlier_sample():
         assert _score(ev.as_extracted, subset) < _score(ev.run_pipeline, subset), seed
 
 
+def test_a_second_pass_changes_nothing_on_any_row():
+    """The property a growing golden set can check that a fresh sample
+    cannot: a re-score must not move an answer the first score settled.
+    It has already caught one real bug — rebuilding retailer_mentions
+    from recommended_retailers dropped every retailer an earlier pass had
+    marked source or unavailable."""
+    rows = [json.loads(p.read_text()) for p in GOLDEN]
+    unstable = [r['row'] for r in rows if not ev.idempotent(r)]
+    assert unstable == []
+
+
 def test_the_latest_sample_is_not_made_worse_by_running_it_again():
     """Seed 4 came out of the current pipeline, so re-running it should
     change nothing. It did: rebuilding retailer_mentions from
@@ -115,7 +126,7 @@ def test_the_later_samples_are_clean_and_the_first_is_not():
     fixed in the extractor, not here — which is exactly what the two
     later samples scoring 1.000 says."""
     rows = [json.loads(p.read_text()) for p in GOLDEN]
-    for seed in (2, 3, 4):
+    for seed in (2, 3, 4, 5):
         assert _score(ev.run_pipeline, [r for r in rows if r['seed'] == seed]) == 1.0
     assert _score(ev.run_pipeline, [r for r in rows if r['seed'] == 1]) < 1.0
 

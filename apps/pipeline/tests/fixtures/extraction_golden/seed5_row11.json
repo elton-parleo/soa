@@ -1,0 +1,163 @@
+{
+  "row": 11,
+  "seed": 5,
+  "query_code": "WIG_158",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn't find any information about a diaper brand specifically named \"**Wiggle & Snug Snug-Fit Diapers**.\"\n\nIt's possible this is:\n*   A fictional brand name.\n*   A very new brand that isn't widely listed yet.\n*   A private label or store brand specific to a particular retailer (e.g., \"Wiggle & Snug\" might be a name used by a smaller regional store or an online-only boutique).\n\nIf you saw these diapers somewhere, I recommend checking the website or physical store where you encountered them.\n\n**General Diaper Price Information (for a \"small pack\" of Size 5 from common brands):**\nFor a \"small pack\" of Size 5 diapers (which usually means 20-40 diapers, depending on the brand and specific product line), you could expect to pay anywhere from **$9 to $18 USD** in the United States, depending on the brand, retailer, and any current sales or promotions.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "9",
+        "currency": "USD",
+        "attributed_product": "a \"small pack\" of Size 5 diapers"
+      },
+      {
+        "amount": "18",
+        "currency": "USD",
+        "attributed_product": "a \"small pack\" of Size 5 diapers"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn't find any information about a diaper brand specifically named \"**Wiggle & Snug Snug-Fit Diapers**.\"",
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [
+      "the website or physical store where you encountered them"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [
+      {
+        "name": "the website or physical store where you encountered them",
+        "role": "recommendation"
+      }
+    ],
+    "postprocess": [
+      "not product sizes: 5 Size"
+    ],
+    "transcribed_unknown_statement": "I couldn't find any information about a diaper brand specifically named \"Wiggle & Snug Snug-Fit Diapers\".",
+    "spans": [
+      {
+        "id": 1,
+        "text": "I couldn't find any information about a diaper brand specifically named \"**Wiggle & Snug Snug-Fit Diapers**.\""
+      },
+      {
+        "id": 2,
+        "text": "It's possible this is:"
+      },
+      {
+        "id": 3,
+        "text": "*   A fictional brand name."
+      },
+      {
+        "id": 4,
+        "text": "*   A very new brand that isn't widely listed yet."
+      },
+      {
+        "id": 5,
+        "text": "*   A private label or store brand specific to a particular retailer (e.g., \"Wiggle & Snug\" might be a name used by a smaller regional store or an online-only boutique)."
+      },
+      {
+        "id": 6,
+        "text": "If you saw these diapers somewhere, I recommend checking the website or physical store where you encountered them."
+      },
+      {
+        "id": 7,
+        "text": "**General Diaper Price Information (for a \"small pack\" of Size 5 from common brands):**"
+      },
+      {
+        "id": 8,
+        "text": "For a \"small pack\" of Size 5 diapers (which usually means 20-40 diapers, depending on the brand and specific product line), you could expect to pay anywhere from **$9 to $18 USD** in the United States, depending on the brand, retailer, and any current sales or promotions."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "I couldn't find any information about a diaper brand specifically named \"**Wiggle & Snug Snug-Fit Diapers**.\"",
+        "kind": "unknown_statement",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "It's possible this is:",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "*   A fictional brand name.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 4,
+        "text": "*   A very new brand that isn't widely listed yet.",
+        "kind": "unknown_statement",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 5,
+        "text": "*   A private label or store brand specific to a particular retailer (e.g., \"Wiggle & Snug\" might be a name used by a smaller regional store or an online-only boutique).",
+        "kind": "unknown_statement",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 6,
+        "text": "If you saw these diapers somewhere, I recommend checking the website or physical store where you encountered them.",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 7,
+        "text": "**General Diaper Price Information (for a \"small pack\" of Size 5 from common brands):**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 8,
+        "text": "For a \"small pack\" of Size 5 diapers (which usually means 20-40 diapers, depending on the brand and specific product line), you could expect to pay anywhere from **$9 to $18 USD** in the United States, depending on the brand, retailer, and any current sales or promotions.",
+        "kind": "none",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [
+      {
+        "amount": "9",
+        "currency": "USD",
+        "attributed_product": "a \"small pack\" of Size 5 diapers"
+      },
+      {
+        "amount": "18",
+        "currency": "USD",
+        "attributed_product": "a \"small pack\" of Size 5 diapers"
+      }
+    ],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {
+      "the website or physical store where you encountered them": "recommendation"
+    }
+  },
+  "review_note": null
+}

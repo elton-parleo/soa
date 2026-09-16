@@ -70,7 +70,8 @@
     "other_brands": {
       "Huggies": "closest_match_described"
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": null
 }

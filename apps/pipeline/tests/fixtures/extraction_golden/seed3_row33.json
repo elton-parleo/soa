@@ -66,7 +66,8 @@
       "Coterie": null,
       "Hello Bello": null
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": {
     "unknown": "keep"

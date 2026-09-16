@@ -47,7 +47,8 @@
     "other_brands": {
       "pampers": null
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": {
     "claims": []

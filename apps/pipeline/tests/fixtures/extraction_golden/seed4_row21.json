@@ -90,7 +90,8 @@
       "Huggies": "closest_match_described",
       "Kroger/King Soopers": "citation_only"
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": null
 }

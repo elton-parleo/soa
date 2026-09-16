@@ -45,7 +45,8 @@
       "Wiggles & Giggles": "spelling_guess",
       "Snuggle & Snug": "spelling_guess"
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": {
     "unknown": "keep",

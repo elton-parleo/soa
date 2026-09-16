@@ -293,6 +293,41 @@ both usually do. An answer that says "I cannot verify Wiggle & Snug, but
 here is Huggies Snug & Dry" leaves the reader holding Huggies. The
 admission is a mitigation, not the result.
 
+#### The extractor is frozen
+
+Five hand-checks, five rounds of corrections, and a golden set of 200
+reviewed rows. **No further extractor change without a golden regression
+showing why** — the eval is the thing that says a change is needed, and
+the gate is the thing that says it worked.
+
+```
+cd apps/pipeline && python3 scripts/eval_extraction_golden.py --idempotency --gate
+```
+
+The settled division of labour:
+
+| | decides |
+| --- | --- |
+| `span_segmenter` | where a span starts and stops. Verbatim, numbered, covering the answer. |
+| the transcriber | what quantities the answer states — prices, sizes, counts, codes, names. |
+| the labeller | what each span **is**: `kind` × `modality`, `relation`, `role`, from closed enums, by span id. |
+| the post-processor | everything mechanical, and every fail-safe. |
+
+**Three fail-safes, one principle.** Where the evidence is missing,
+disputed, or malformed, the pipeline takes the reading that cannot
+manufacture a finding:
+
+- an **unlabelled** span is not a claim;
+- a **disputed** span — lexicon and labeller disagreeing on modality —
+  counts as hedged, and lands in `hedged_unsourced` rather than
+  `fabricated`;
+- a **malformed** code is not a code.
+
+All three are still surfaced in `needs_review`. Defaulting decides only
+what the classifier does while a human has not looked yet. The costs are
+not symmetric: scoring a hedge as an assertion puts a false accusation in
+a report; scoring an assertion as a hedge leaves a true one in a queue.
+
 #### The model transcribes spans; the code classifies them
 
 Two hand-checks of forty stored answers each: ten disagreements, then

@@ -100,7 +100,8 @@
     },
     "retailers": {
       "Amazon": "unavailable"
-    }
+    },
+    "codes": []
   },
   "review_note": {
     "note": "the headline assertion, \"has been discontinued\", reached nothing and nothing recorded that it had gone missing"

@@ -1,0 +1,242 @@
+{
+  "row": 31,
+  "seed": 5,
+  "query_code": "WIG_149",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "It appears that Wiggle & Snug Bum Balm 4 oz has been **discontinued**.\n\nMost retail listings (like on Amazon) show it as \"currently unavailable\" and have been for some time, with no indication of restocking or future availability. There doesn't seem to be an official \"Wiggle & Snug\" brand website to confirm directly, but the widespread unavailability across various platforms strongly suggests it's no longer being produced.\n\nIf you're looking for alternatives, popular and well-regarded bum balms include:\n*   Boudreaux's Butt Paste\n*   Desitin\n*   Aquaphor Baby Healing Ointment\n*   Weleda Calendula Diaper Cream\n*   GroVia Magic Stick Organic Diaper Balm",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Wiggle & Snug Bum Balm"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "Boudreaux's Butt Paste",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      },
+      {
+        "name": "Desitin",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      },
+      {
+        "name": "Aquaphor Baby Healing Ointment",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      },
+      {
+        "name": "Weleda Calendula Diaper Cream",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      },
+      {
+        "name": "GroVia Magic Stick Organic Diaper Balm",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "It appears that Wiggle & Snug Bum Balm 4 oz has been **discontinued**.",
+        "sentence": "It appears that Wiggle & Snug Bum Balm 4 oz has been **discontinued**.",
+        "span_id": 1,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      },
+      {
+        "claim": "Most retail listings (like on Amazon) show it as \"currently unavailable\" and have been for some time, with no indication of restocking or future availability.",
+        "sentence": "Most retail listings (like on Amazon) show it as \"currently unavailable\" and have been for some time, with no indication of restocking or future availability.",
+        "span_id": 2,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "but the widespread unavailability across various platforms strongly suggests it's no longer being produced.",
+        "sentence": "but the widespread unavailability across various platforms strongly suggests it's no longer being produced.",
+        "span_id": 4,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": false,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [],
+    "postprocess": [
+      "3 span(s) need review"
+    ],
+    "transcribed_unknown_statement": "There doesn't seem to be an official \"Wiggle & Snug\" brand website to confirm directly, but the widespread unavailability across various platforms strongly suggests it's no longer being produced.",
+    "spans": [
+      {
+        "id": 1,
+        "text": "It appears that Wiggle & Snug Bum Balm 4 oz has been **discontinued**."
+      },
+      {
+        "id": 2,
+        "text": "Most retail listings (like on Amazon) show it as \"currently unavailable\" and have been for some time, with no indication of restocking or future availability."
+      },
+      {
+        "id": 3,
+        "text": "There doesn't seem to be an official \"Wiggle & Snug\" brand website to confirm directly,"
+      },
+      {
+        "id": 4,
+        "text": "but the widespread unavailability across various platforms strongly suggests it's no longer being produced."
+      },
+      {
+        "id": 5,
+        "text": "If you're looking for alternatives, popular and well-regarded bum balms include:"
+      },
+      {
+        "id": 6,
+        "text": "*   Boudreaux's Butt Paste"
+      },
+      {
+        "id": 7,
+        "text": "*   Desitin"
+      },
+      {
+        "id": 8,
+        "text": "*   Aquaphor Baby Healing Ointment"
+      },
+      {
+        "id": 9,
+        "text": "*   Weleda Calendula Diaper Cream"
+      },
+      {
+        "id": 10,
+        "text": "*   GroVia Magic Stick Organic Diaper Balm"
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "It appears that Wiggle & Snug Bum Balm 4 oz has been **discontinued**.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "Most retail listings (like on Amazon) show it as \"currently unavailable\" and have been for some time, with no indication of restocking or future availability.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "There doesn't seem to be an official \"Wiggle & Snug\" brand website to confirm directly,",
+        "kind": "disclaimer",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 4,
+        "text": "but the widespread unavailability across various platforms strongly suggests it's no longer being produced.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 5,
+        "text": "If you're looking for alternatives, popular and well-regarded bum balms include:",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 6,
+        "text": "*   Boudreaux's Butt Paste",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 7,
+        "text": "*   Desitin",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 8,
+        "text": "*   Aquaphor Baby Healing Ointment",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 9,
+        "text": "*   Weleda Calendula Diaper Cream",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 10,
+        "text": "*   GroVia Magic Stick Organic Diaper Balm",
+        "kind": "none",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": [
+      {
+        "sentence": "It appears that Wiggle & Snug Bum Balm 4 oz has been **discontinued**.",
+        "lexicon": "hedged",
+        "label": "asserted"
+      },
+      {
+        "sentence": "but the widespread unavailability across various platforms strongly suggests it's no longer being produced.",
+        "lexicon": "hedged",
+        "label": "asserted"
+      },
+      {
+        "reason": "the transcription read a cannot-find statement the spans did not",
+        "transcribed": "There doesn't seem to be an official \"Wiggle & Snug\" brand website to confirm directly, but the widespread unavailability across various platforms strongly suggests it's no longer being produced.",
+        "from_spans": null
+      }
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Wiggle & Snug Bum Balm"
+      }
+    ],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {
+      "Boudreaux's Butt Paste": "comparison",
+      "Desitin": "comparison",
+      "Aquaphor Baby Healing Ointment": "comparison",
+      "Weleda Calendula Diaper Cream": "comparison",
+      "GroVia Magic Stick Organic Diaper Balm": "comparison"
+    },
+    "retailers": {}
+  },
+  "review_note": {
+    "note": "lexicon read \"appears\" as a hedge, the labeller read a flat assertion; the disagreement produced a fabricated verdict"
+  }
+}

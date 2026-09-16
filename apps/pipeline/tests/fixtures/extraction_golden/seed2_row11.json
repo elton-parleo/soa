@@ -135,7 +135,8 @@
     "retailers": {
       "Walmart": "source",
       "Target": "source"
-    }
+    },
+    "codes": []
   },
   "review_note": {
     "retailers": "all_source"

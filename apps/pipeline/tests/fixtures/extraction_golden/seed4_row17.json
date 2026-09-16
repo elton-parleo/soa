@@ -63,7 +63,8 @@
     "retailers": {
       "official Wiggle & Snug website": "recommendation",
       "the retailer's product page": "recommendation"
-    }
+    },
+    "codes": []
   },
   "review_note": null
 }

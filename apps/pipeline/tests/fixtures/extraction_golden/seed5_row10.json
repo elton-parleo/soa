@@ -1,0 +1,130 @@
+{
+  "row": 10,
+  "seed": 5,
+  "query_code": "WIG_144",
+  "platform": "chatgpt",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "Yes — **Wiggle & Snug Member Rewards is still available**. It’s described as **free to join**, with members earning **1 point per $1 spent** and access to member pricing/offers. ([trueshopstore.com](https://trueshopstore.com/loyalty))\n\nThe tiers are:\n\n1. **Member** — free to join  \n2. **Member+** — for **$150+ spend per year** ([trueshopstore.com](https://trueshopstore.com/loyalty))",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [
+      {
+        "value": "1",
+        "per_dollar": true,
+        "program": "Wiggle & Snug Member Rewards"
+      }
+    ],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [
+      "Member",
+      "Member+"
+    ],
+    "brand_claims": [
+      {
+        "claim": "Yes — **Wiggle & Snug Member Rewards is still available**.",
+        "sentence": "Yes — **Wiggle & Snug Member Rewards is still available**.",
+        "span_id": 1,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "loyalty",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "It’s described as **free to join**, with members earning **1 point per $1 spent** and access to member pricing/offers. ([trueshopstore.com](https://trueshopstore.com/loyalty))",
+        "sentence": "It’s described as **free to join**, with members earning **1 point per $1 spent** and access to member pricing/offers. ([trueshopstore.com](https://trueshopstore.com/loyalty))",
+        "span_id": 2,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "loyalty",
+        "lexicon_hedged": false
+      }
+    ],
+    "sources_cited": [
+      "trueshopstore.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "transcribed_unknown_statement": null,
+    "spans": [
+      {
+        "id": 1,
+        "text": "Yes — **Wiggle & Snug Member Rewards is still available**."
+      },
+      {
+        "id": 2,
+        "text": "It’s described as **free to join**, with members earning **1 point per $1 spent** and access to member pricing/offers. ([trueshopstore.com](https://trueshopstore.com/loyalty))"
+      },
+      {
+        "id": 3,
+        "text": "The tiers are:"
+      },
+      {
+        "id": 4,
+        "text": "**Member** — free to join"
+      },
+      {
+        "id": 5,
+        "text": "**Member+** — for **$150+ spend per year** ([trueshopstore.com](https://trueshopstore.com/loyalty))"
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "Yes — **Wiggle & Snug Member Rewards is still available**.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "It’s described as **free to join**, with members earning **1 point per $1 spent** and access to member pricing/offers. ([trueshopstore.com](https://trueshopstore.com/loyalty))",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "The tiers are:",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 4,
+        "text": "**Member** — free to join",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 5,
+        "text": "**Member+** — for **$150+ spend per year** ([trueshopstore.com](https://trueshopstore.com/loyalty))",
+        "kind": "none",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [
+      "trueshopstore.com"
+    ],
+    "other_brands": {},
+    "retailers": {}
+  },
+  "review_note": null
+}

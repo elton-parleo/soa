@@ -215,6 +215,24 @@ def is_product_size(entry) -> bool:
     return names_a_product(entry.get('attributed_product'))
 
 
+# ─── Codes ─────────────────────────────────────────────────────────────────
+#
+# A promotion code is a token you type into a box. "10% off" is a
+# description of what a code does, and one answer had it in the codes
+# list — where it was compared against a published code, could never
+# match one, and produced a wrong verdict about a code the answer never
+# actually named.
+#
+# The shape is the whole test: one alphanumeric run, no spaces, no
+# percent sign. Codes in the record look like SAVE5 and WELCOME10, and
+# nothing that describes a discount looks like that.
+_CODE_SHAPE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{1,31}$')
+
+
+def is_code_shaped(code) -> bool:
+    return bool(_CODE_SHAPE.match(str(code or '').strip()))
+
+
 # ─── Hygiene ───────────────────────────────────────────────────────────────
 
 def _dedupe(items, key):
@@ -465,6 +483,20 @@ def normalize(record: dict, *, answer_text, brand, brand_domain=None) -> dict:
         e for e in record['pack_counts'] if e.get('value') is not None
     ]
 
+    # ── codes ─────────────────────────────────────────────────────────
+    codes, not_codes = [], []
+    for entry in record.get('codes') or []:
+        if not isinstance(entry, dict):
+            continue
+        (codes if is_code_shaped(entry.get('code')) else not_codes).append(entry)
+    record['codes'] = _dedupe(
+        codes, lambda c: (_flat(c.get('code')), _flat(c.get('value_kind')),
+                          _flat(c.get('value'))))
+    if not_codes:
+        notes.append(
+            'not codes: '
+            + ', '.join(str(c.get('code')) for c in not_codes))
+
     record['sources_cited'] = _dedupe(record.get('sources_cited') or [], _flat)
     # Cased and stripped, NOT punctuation-flattened: 'Member' and
     # 'Member+' are two tiers, and a key that drops the plus merges the
@@ -525,11 +557,14 @@ def apply_labels(record: dict, labels: dict, *, answer_text=None,
             if kind == 'unknown_statement' and statement is None:
                 statement = span['text']
             elif kind == 'assertion':
+                lexicon = is_hedged(span['text']) or span.get('inherits_hedge', False)
                 claims.append({
                     'claim': span['text'], 'sentence': span['text'],
                     'span_id': span_id, 'kind': kind, 'modality': modality,
                     'claim_kind': claim_kind(span['text']),
-                    'lexicon_hedged': is_hedged(span['text']),
+                    'lexicon_hedged': lexicon,
+                    'inherits_hedge': span.get('inherits_hedge', False),
+                    'effective_modality': effective_modality(modality, lexicon),
                 })
         # The transcription's own reading, kept beside the spans so a
         # disagreement is visible instead of being resolved by whichever
@@ -581,6 +616,7 @@ def apply_labels(record: dict, labels: dict, *, answer_text=None,
         if m['role'] == 'recommendation'
     ]
 
+    record['hedged_unsourced'] = hedged_unsourced(record)
     review = needs_review(record)
     review.extend(coverage_gaps(record, brand=brand))
     if review:
@@ -623,7 +659,13 @@ def coverage_gaps(record, *, brand=None) -> list:
 
     transcribed = record.get('transcribed_unknown_statement')
     derived = record.get('brand_unknown_statement')
-    if transcribed and _flat(transcribed) != _flat(derived or ''):
+    # One containing the other is the same statement read to a different
+    # boundary, which is the segmenter's job and not a disagreement about
+    # what the answer said. Only a genuinely different statement — or
+    # none at all on one side — is a finding.
+    a, b = _flat(transcribed).strip(), _flat(derived or '').strip()
+    same = bool(a) and bool(b) and (a in b or b in a)
+    if transcribed and not same:
         gaps.append({
             'reason': ('the transcription read a cannot-find statement the '
                        'spans did not'),
@@ -632,22 +674,68 @@ def coverage_gaps(record, *, brand=None) -> list:
     return gaps
 
 
+def effective_modality(label_modality, lexicon_hedged) -> str:
+    """
+    What the span counts as for scoring when the two readings differ.
+
+    HEDGED. The same fail-safe as "an unlabelled span is not a claim":
+    where the evidence is disputed, the pipeline takes the reading that
+    cannot manufacture a finding. A hedge scored as an assertion invents
+    a fabrication out of a sentence the answer did not commit to; an
+    assertion scored as a hedge loses a finding that a human reading the
+    needs_review queue will still see.
+
+    Those are not symmetric costs. One of them puts a false accusation in
+    a report; the other leaves a true one for a person to confirm.
+
+    The disagreement is surfaced either way — this decides only what the
+    classifier does while it waits.
+    """
+    if label_modality in ('hedged', 'conditional'):
+        return label_modality
+    if lexicon_hedged:
+        return 'hedged'
+    return label_modality or 'hedged'
+
+
+def hedged_unsourced(record) -> list:
+    """
+    Claims this answer made, hedged, with nothing behind them.
+
+    A disputed span lands here rather than in `fabricated`: the answer
+    said something specific about the brand, did not commit to it, and
+    cited nothing. That is a real finding and a different one from
+    inventing a fact, and it is worth being able to count separately
+    rather than folding into "named the brand and said nothing
+    checkable".
+    """
+    if record.get('sources_cited'):
+        return []
+    return [
+        claim for claim in record.get('brand_claims') or []
+        if isinstance(claim, dict)
+        and claim.get('kind') == 'assertion'
+        and claim.get('effective_modality') in ('hedged', 'conditional')
+    ]
+
+
 def asserted_claims(record) -> list:
     """
     The claims the answer actually made, by the LABEL — never by the
     lexicon.
 
-    A claim counts when its label says kind=assertion and
-    modality=asserted. An unlabelled record yields nothing rather than
-    everything: a claim nobody has classified is not a claim we can act
-    on, and falling back to "treat it as asserted" is how a hedge became
-    a fabrication three samples running.
+    A claim counts when its label says kind=assertion and its EFFECTIVE
+    modality is asserted — which means the label said asserted and the
+    lexicon did not disagree. An unlabelled record yields nothing rather
+    than everything: a claim nobody has classified is not a claim we can
+    act on, and falling back to "treat it as asserted" is how a hedge
+    became a fabrication three samples running.
     """
     return [
         claim for claim in record.get('brand_claims') or []
         if isinstance(claim, dict)
         and claim.get('kind') == 'assertion'
-        and claim.get('modality') == 'asserted'
+        and claim.get('effective_modality', claim.get('modality')) == 'asserted'
     ]
 
 

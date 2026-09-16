@@ -77,7 +77,8 @@
     "other_brands": {},
     "retailers": {
       "Amazon": "recommendation"
-    }
+    },
+    "codes": []
   },
   "review_note": null
 }

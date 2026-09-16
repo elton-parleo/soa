@@ -52,7 +52,8 @@
       "Sposie": "recommendation",
       "Jooldia": "recommendation"
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": {
     "brands": {

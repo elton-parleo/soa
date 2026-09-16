@@ -81,7 +81,8 @@
     "other_brands": {
       "Bc Babycare": "closest_match_described"
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": {
     "note": "the cannot-find statement ran past the \", but\" and swallowed a product claim; the claim span was labelled an unknown statement and that only reached a note"

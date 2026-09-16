@@ -60,7 +60,8 @@
       "business.walmart.com"
     ],
     "other_brands": {},
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": {
     "bm": false

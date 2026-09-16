@@ -66,7 +66,8 @@
     "other_brands": {
       "The Wiggles": "spelling_guess"
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": {
     "bm": false,

@@ -103,6 +103,15 @@ def _split_clauses(sentence: str):
     return [p for p in parts if p.strip()]
 
 
+# A line that introduces a list and hedges while doing it — "It's
+# possible that:" — governs the items under it. The items are fragments
+# ("It was a limited-time offer that has since ended.") and read as flat
+# assertions on their own, which is how a list of possibilities became a
+# list of claims.
+_LEAD_IN = re.compile(r':\s*$')
+_LIST_ITEM = re.compile(r'^\s*(?:[*\-\u2022]|\d+[.)])\s+')
+
+
 def segment(answer_text) -> list:
     """
     [{'id': 1, 'text': '...'}, ...] — every span a verbatim substring of
@@ -112,18 +121,28 @@ def segment(answer_text) -> list:
     newline ends a span whatever punctuation is or is not there, and a
     list item is its own claim.
     """
+    from parser import extraction_postprocess as _pp   # late: mutual import
+
     text = str(answer_text or '')
-    spans = []
+    spans, lead_in_hedged = [], False
     for line in text.split('\n'):
         if not line.strip():
             continue
+        is_item = bool(_LIST_ITEM.match(line))
+        if not is_item:
+            # A new non-list line ends whatever list came before it, and
+            # may itself be the next lead-in.
+            lead_in_hedged = bool(_LEAD_IN.search(line)) and _pp.is_hedged(line)
         for sentence in _split_sentences(line):
             for clause in _split_clauses(sentence):
                 stripped = clause.strip()
                 if len(stripped) >= MIN_SPAN_CHARS:
-                    spans.append(stripped)
+                    spans.append((stripped, is_item and lead_in_hedged))
 
-    return [{'id': i, 'text': span} for i, span in enumerate(spans, start=1)]
+    return [
+        {'id': i, 'text': span, 'inherits_hedge': inherited}
+        for i, (span, inherited) in enumerate(spans, start=1)
+    ]
 
 
 def covers(answer_text, spans) -> bool:

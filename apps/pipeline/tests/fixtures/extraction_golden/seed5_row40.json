@@ -1,0 +1,190 @@
+{
+  "row": 40,
+  "seed": 5,
+  "query_code": "WIG_148",
+  "platform": "gemini",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": true,
+  "answer": "Based on my most recent check, I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**\n\nWiggle & Snug primarily sells individual swaddles and sleepwear products, often available in different sizes and materials (e.g., organic cotton, bamboo).\n\nIt's possible that:\n*   It was a limited-time offer that has since ended.\n*   It was a product offered by a specific retailer or through a different platform in the past.\n*   The name might have changed.\n\nIf you are looking to try different sizes or materials, you would likely need to purchase individual swaddles separately.\n\nI recommend checking their official website (wiggleandsnug.com) directly or contacting their customer service if you have a specific memory of this pack and want to inquire further.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "Based on my most recent check, I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**",
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "Wiggle & Snug primarily sells individual swaddles and sleepwear products, often available in different sizes and materials (e.g., organic cotton, bamboo).",
+        "sentence": "Wiggle & Snug primarily sells individual swaddles and sleepwear products, often available in different sizes and materials (e.g., organic cotton, bamboo).",
+        "span_id": 2,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "retail",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   It was a limited-time offer that has since ended.",
+        "sentence": "*   It was a limited-time offer that has since ended.",
+        "span_id": 4,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   It was a product offered by a specific retailer or through a different platform in the past.",
+        "sentence": "*   It was a product offered by a specific retailer or through a different platform in the past.",
+        "span_id": 5,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "retail",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   The name might have changed.",
+        "sentence": "*   The name might have changed.",
+        "span_id": 6,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      }
+    ],
+    "sources_cited": [
+      "wiggleandsnug.com"
+    ],
+    "recommended_retailers": [
+      "their official website (wiggleandsnug.com)"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [
+      {
+        "name": "their official website (wiggleandsnug.com)",
+        "role": "recommendation"
+      }
+    ],
+    "postprocess": [
+      "1 span(s) need review"
+    ],
+    "transcribed_unknown_statement": "I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**",
+    "spans": [
+      {
+        "id": 1,
+        "text": "Based on my most recent check, I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**"
+      },
+      {
+        "id": 2,
+        "text": "Wiggle & Snug primarily sells individual swaddles and sleepwear products, often available in different sizes and materials (e.g., organic cotton, bamboo)."
+      },
+      {
+        "id": 3,
+        "text": "It's possible that:"
+      },
+      {
+        "id": 4,
+        "text": "*   It was a limited-time offer that has since ended."
+      },
+      {
+        "id": 5,
+        "text": "*   It was a product offered by a specific retailer or through a different platform in the past."
+      },
+      {
+        "id": 6,
+        "text": "*   The name might have changed."
+      },
+      {
+        "id": 7,
+        "text": "If you are looking to try different sizes or materials, you would likely need to purchase individual swaddles separately."
+      },
+      {
+        "id": 8,
+        "text": "I recommend checking their official website (wiggleandsnug.com) directly or contacting their customer service if you have a specific memory of this pack and want to inquire further."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "Based on my most recent check, I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**",
+        "kind": "unknown_statement",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "Wiggle & Snug primarily sells individual swaddles and sleepwear products, often available in different sizes and materials (e.g., organic cotton, bamboo).",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "It's possible that:",
+        "kind": "disclaimer",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 4,
+        "text": "*   It was a limited-time offer that has since ended.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 5,
+        "text": "*   It was a product offered by a specific retailer or through a different platform in the past.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 6,
+        "text": "*   The name might have changed.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 7,
+        "text": "If you are looking to try different sizes or materials, you would likely need to purchase individual swaddles separately.",
+        "kind": "instruction",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 8,
+        "text": "I recommend checking their official website (wiggleandsnug.com) directly or contacting their customer service if you have a specific memory of this pack and want to inquire further.",
+        "kind": "instruction",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": [
+      {
+        "reason": "the transcription read a cannot-find statement the spans did not",
+        "transcribed": "I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**",
+        "from_spans": "Based on my most recent check, I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**"
+      }
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [
+      "wiggleandsnug.com"
+    ],
+    "other_brands": {},
+    "retailers": {
+      "their official website (wiggleandsnug.com)": "recommendation"
+    }
+  },
+  "review_note": {
+    "note": "list items under \"It’s possible that:\" read as flat assertions on their own; and one sentence was flagged as a disagreement with itself, read to two boundaries"
+  }
+}

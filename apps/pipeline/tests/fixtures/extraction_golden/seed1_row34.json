@@ -58,7 +58,8 @@
     "other_brands": {
       "Wiggle & Giggle": "closest_match_described"
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": {
     "drop_counts": [

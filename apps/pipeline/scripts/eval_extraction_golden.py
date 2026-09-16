@@ -63,13 +63,14 @@ DOMAIN = 'trueshopstore.com'
 # measured by drawing a sample and reading it.
 BASELINE = {
     'brand_mentioned': 1.0,
-    'sizes': 0.974,
-    'prices': 0.993,
-    'pack_counts': 0.974,
+    'sizes': 0.979,
+    'prices': 0.994,
+    'pack_counts': 0.979,
     'member_prices': 1.0,
-    'sources_cited': 0.993,
+    'sources_cited': 0.994,
     'other_brands': 1.0,
-    'retailers': 0.993,
+    'retailers': 0.994,
+    'codes': 1.0,
 }
 
 FIELDS = tuple(BASELINE)
@@ -156,6 +157,53 @@ def compare(row, produced):
     return out
 
 
+def idempotent(row) -> bool:
+    """
+    Whether running the pipeline over its own output changes anything.
+
+    The one property a growing golden set can check that a fresh sample
+    cannot. It has already caught one real bug: rebuilding
+    retailer_mentions from recommended_retailers dropped every retailer
+    a previous pass had marked source or unavailable, so a re-score lost
+    data the first score had established.
+    """
+    once = run_pipeline(row)
+    twice = pp.apply_labels(
+        pp.normalize(json.loads(json.dumps(once)),
+                     answer_text=row['answer'], brand=BRAND, brand_domain=DOMAIN),
+        {
+            'spans': [
+                {'span_id': label['span_id'], 'kind': label['kind'],
+                 'modality': label['modality']}
+                for label in once.get('span_labels') or []
+            ],
+            'other_brands': [
+                {'name': name, 'relation': relation}
+                for name, relation in (row['golden'].get('other_brands') or {}).items()
+                if relation
+            ],
+            'retailers': [
+                {'name': name, 'role': role}
+                for name, role in (row['golden'].get('retailers') or {}).items()
+                if role
+            ],
+        },
+        answer_text=row['answer'], brand=BRAND,
+    )
+    # Against the FIRST pass, not against the golden. A row the pipeline
+    # cannot get right is still allowed to be got wrong the same way
+    # twice; what is not allowed is the answer changing underneath a
+    # re-score.
+    for field in FIELDS:
+        if field in ('other_brands', 'retailers'):
+            key = 'other_brands_named' if field == 'other_brands' else 'retailer_mentions'
+            if [_key(e) for e in once.get(key) or []] != [_key(e) for e in twice.get(key) or []]:
+                return False
+        elif not _same(once.get(field), twice.get(field)):
+            return False
+    return True
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="Per-field agreement against the frozen golden set.",
@@ -168,6 +216,8 @@ def main(argv=None) -> int:
         '--before', action='store_true',
         help='score the stored transcription instead of the new pipeline',
     )
+    parser.add_argument('--idempotency', action='store_true',
+                        help='check that a second pass changes nothing')
     parser.add_argument('--seed', type=int, action='append', dest='seeds',
                         help='restrict to one sample; repeatable')
     parser.add_argument(
@@ -223,6 +273,14 @@ def main(argv=None) -> int:
           f"(floor {args.min_overall:.2f})")
     if overall < args.min_overall - 1e-9:
         failures.append(f"overall {overall:.3f} < {args.min_overall:.2f}")
+
+    if args.idempotency:
+        unstable = [row['row'] for row in rows if not idempotent(row)]
+        print(f"\nidempotency: {len(rows) - len(unstable)}/{len(rows)} rows "
+              f"unchanged by a second pass")
+        if unstable:
+            print(f"    unstable rows: {unstable}")
+            failures.append(f"{len(unstable)} row(s) change on a second pass")
 
     if args.show_misses and misses:
         print("\nrows that disagree:")

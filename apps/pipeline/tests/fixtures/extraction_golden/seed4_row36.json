@@ -79,7 +79,8 @@
     "other_brands": {},
     "retailers": {
       "Kroger": "recommendation"
-    }
+    },
+    "codes": []
   },
   "review_note": null
 }

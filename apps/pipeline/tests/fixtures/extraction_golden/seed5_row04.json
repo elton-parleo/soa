@@ -1,0 +1,106 @@
+{
+  "row": 4,
+  "seed": 5,
+  "query_code": "WIG_164",
+  "platform": "gemini",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I cannot provide you with the exact real-time cost of Wiggle & Snug Snug-Fit Overnight Diapers Size 5, as prices for consumer goods like diapers fluctuate frequently and vary depending on the retailer (e.g., Amazon, Walmart, Target, local grocery stores), current sales, promotions, and pack size.\n\nTo get the most accurate and up-to-date pricing, I recommend checking the websites of major online retailers or your preferred local stores directly.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [
+      "Amazon",
+      "Walmart",
+      "Target",
+      "major online retailers",
+      "your preferred local stores"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [
+      {
+        "name": "Amazon",
+        "role": "recommendation"
+      },
+      {
+        "name": "Walmart",
+        "role": "recommendation"
+      },
+      {
+        "name": "Target",
+        "role": "recommendation"
+      },
+      {
+        "name": "major online retailers",
+        "role": "recommendation"
+      },
+      {
+        "name": "your preferred local stores",
+        "role": "recommendation"
+      }
+    ],
+    "postprocess": [
+      "not product sizes: 5 Size",
+      "not a brand: Amazon",
+      "not a brand: Walmart",
+      "not a brand: Target"
+    ],
+    "transcribed_unknown_statement": null,
+    "spans": [
+      {
+        "id": 1,
+        "text": "I cannot provide you with the exact real-time cost of Wiggle & Snug Snug-Fit Overnight Diapers Size 5, as prices for consumer goods like diapers fluctuate frequently and vary depending on the retailer (e.g., Amazon, Walmart, Target, local grocery stores), current sales, promotions, and pack size."
+      },
+      {
+        "id": 2,
+        "text": "To get the most accurate and up-to-date pricing, I recommend checking the websites of major online retailers or your preferred local stores directly."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "I cannot provide you with the exact real-time cost of Wiggle & Snug Snug-Fit Overnight Diapers Size 5, as prices for consumer goods like diapers fluctuate frequently and vary depending on the retailer (e.g., Amazon, Walmart, Target, local grocery stores), current sales, promotions, and pack size.",
+        "kind": "disclaimer",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "To get the most accurate and up-to-date pricing, I recommend checking the websites of major online retailers or your preferred local stores directly.",
+        "kind": "instruction",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {
+      "Amazon": "recommendation",
+      "Walmart": "recommendation",
+      "Target": "recommendation",
+      "major online retailers": "recommendation",
+      "your preferred local stores": "recommendation"
+    }
+  },
+  "review_note": null
+}

@@ -35,7 +35,8 @@
       "amazon.com": "recommendation",
       "walmart.com": "recommendation",
       "target.com": "recommendation"
-    }
+    },
+    "codes": []
   },
   "review_note": {
     "sources": [],

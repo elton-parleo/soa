@@ -67,7 +67,8 @@
     "other_brands": {
       "Beezpro": "closest_match_described"
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": {
     "brands": {

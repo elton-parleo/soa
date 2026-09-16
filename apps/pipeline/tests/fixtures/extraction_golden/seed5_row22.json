@@ -1,0 +1,458 @@
+{
+  "row": 22,
+  "seed": 5,
+  "query_code": "WIG_170",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "As an AI, I don't have real-time access to live, constantly changing promo codes for every specific brand. Promo codes are highly dynamic and can change daily, weekly, or seasonally.\n\nHowever, I can give you the **best strategies to find current Wiggle & Snug promo codes** and what types of discounts are common:\n\n**1. Check the Official Wiggle & Snug Website:**\n*   **Homepage Banners:** Often, current promotions are displayed right on the homepage.\n*   **Pop-ups:** Many sites have a pop-up offering a discount (e.g., 10-15% off your first order) if you sign up for their email list.\n*   **\"Promotions\" or \"Deals\" Section:** Some sites have a dedicated page.\n*   **Footer:** Sometimes, a link to current offers is in the website's footer.\n\n**2. Sign Up for Their Email Newsletter:**\n*   This is one of the most reliable ways to get exclusive offers, future sales notifications, and often an immediate **first-time customer discount** (typically 10-15% off your initial purchase).\n\n**3. Follow Their Social Media:**\n*   Brands often announce flash sales or special promo codes on platforms like Facebook, Instagram, or Twitter.\n\n**4. Check Coupon Aggregator Websites:**\n*   Sites like RetailMeNot, Coupons.com, Honey, or Rakuten often list current codes. Be aware that some codes on these sites might be expired or not always work. It's always best to verify on the official site.\n\n**Common Types of Discounts You Might Find:**\n\n*   **Percentage Off:** 10%, 15%, 20% off your order.\n*   **Dollar Amount Off:** $5, $10, $15 off a minimum purchase.\n*   **Free Shipping:** Often available over a certain order threshold.\n*   **First-Time Customer Discount:** Usually 10-15% off for signing up for emails.\n*   **Bundle Deals:** Discount when buying multiple packs or a subscription.\n*   **Seasonal Sales:** Black Friday, Cyber Monday, holiday sales, back-to-school, etc.\n\n**My best advice for \"right now\" is to visit the official Wiggle & Snug website and look for any banners or pop-ups regarding discounts, and consider signing up for their email list.** That's typically where the most current and reliable offers are found.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [
+      {
+        "name": "RetailMeNot",
+        "presented_as": "source",
+        "relation": "comparison"
+      },
+      {
+        "name": "Coupons.com",
+        "presented_as": "source",
+        "relation": "comparison"
+      },
+      {
+        "name": "Honey",
+        "presented_as": "source",
+        "relation": "comparison"
+      },
+      {
+        "name": "Rakuten",
+        "presented_as": "source",
+        "relation": "comparison"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "*   This is one of the most reliable ways to get exclusive offers, future sales notifications, and often an immediate **first-time customer discount** (typically 10-15% off your initial purchase).",
+        "sentence": "*   This is one of the most reliable ways to get exclusive offers, future sales notifications, and often an immediate **first-time customer discount** (typically 10-15% off your initial purchase).",
+        "span_id": 12,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "retail",
+        "lexicon_hedged": true
+      },
+      {
+        "claim": "*   Brands often announce flash sales or special promo codes on platforms like Facebook, Instagram, or Twitter.",
+        "sentence": "*   Brands often announce flash sales or special promo codes on platforms like Facebook, Instagram, or Twitter.",
+        "span_id": 15,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   Sites like RetailMeNot, Coupons.com, Honey, or Rakuten often list current codes.",
+        "sentence": "*   Sites like RetailMeNot, Coupons.com, Honey, or Rakuten often list current codes.",
+        "span_id": 18,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   **Percentage Off:** 10%, 15%, 20% off your order.",
+        "sentence": "*   **Percentage Off:** 10%, 15%, 20% off your order.",
+        "span_id": 22,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   **Dollar Amount Off:** $5, $10, $15 off a minimum purchase.",
+        "sentence": "*   **Dollar Amount Off:** $5, $10, $15 off a minimum purchase.",
+        "span_id": 23,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   **Free Shipping:** Often available over a certain order threshold.",
+        "sentence": "*   **Free Shipping:** Often available over a certain order threshold.",
+        "span_id": 24,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "retail",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   **First-Time Customer Discount:** Usually 10-15% off for signing up for emails.",
+        "sentence": "*   **First-Time Customer Discount:** Usually 10-15% off for signing up for emails.",
+        "span_id": 25,
+        "kind": "assertion",
+        "modality": "hedged",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      },
+      {
+        "claim": "*   **Bundle Deals:** Discount when buying multiple packs or a subscription.",
+        "sentence": "*   **Bundle Deals:** Discount when buying multiple packs or a subscription.",
+        "span_id": 26,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "*   **Seasonal Sales:** Black Friday, Cyber Monday, holiday sales, back-to-school, etc.",
+        "sentence": "*   **Seasonal Sales:** Black Friday, Cyber Monday, holiday sales, back-to-school, etc.",
+        "span_id": 27,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": false
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [
+      "the official Wiggle & Snug website"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [
+      {
+        "name": "the official Wiggle & Snug website",
+        "role": "recommendation"
+      }
+    ],
+    "postprocess": [
+      "2 span(s) need review"
+    ],
+    "transcribed_unknown_statement": null,
+    "spans": [
+      {
+        "id": 1,
+        "text": "As an AI, I don't have real-time access to live, constantly changing promo codes for every specific brand."
+      },
+      {
+        "id": 2,
+        "text": "Promo codes are highly dynamic and can change daily, weekly, or seasonally."
+      },
+      {
+        "id": 3,
+        "text": "However, I can give you the **best strategies to find current Wiggle & Snug promo codes** and what types of discounts are common:"
+      },
+      {
+        "id": 4,
+        "text": "**1."
+      },
+      {
+        "id": 5,
+        "text": "Check the Official Wiggle & Snug Website:**"
+      },
+      {
+        "id": 6,
+        "text": "*   **Homepage Banners:** Often, current promotions are displayed right on the homepage."
+      },
+      {
+        "id": 7,
+        "text": "*   **Pop-ups:** Many sites have a pop-up offering a discount (e.g., 10-15% off your first order) if you sign up for their email list."
+      },
+      {
+        "id": 8,
+        "text": "*   **\"Promotions\" or \"Deals\" Section:** Some sites have a dedicated page."
+      },
+      {
+        "id": 9,
+        "text": "*   **Footer:** Sometimes, a link to current offers is in the website's footer."
+      },
+      {
+        "id": 10,
+        "text": "**2."
+      },
+      {
+        "id": 11,
+        "text": "Sign Up for Their Email Newsletter:**"
+      },
+      {
+        "id": 12,
+        "text": "*   This is one of the most reliable ways to get exclusive offers, future sales notifications, and often an immediate **first-time customer discount** (typically 10-15% off your initial purchase)."
+      },
+      {
+        "id": 13,
+        "text": "**3."
+      },
+      {
+        "id": 14,
+        "text": "Follow Their Social Media:**"
+      },
+      {
+        "id": 15,
+        "text": "*   Brands often announce flash sales or special promo codes on platforms like Facebook, Instagram, or Twitter."
+      },
+      {
+        "id": 16,
+        "text": "**4."
+      },
+      {
+        "id": 17,
+        "text": "Check Coupon Aggregator Websites:**"
+      },
+      {
+        "id": 18,
+        "text": "*   Sites like RetailMeNot, Coupons.com, Honey, or Rakuten often list current codes."
+      },
+      {
+        "id": 19,
+        "text": "Be aware that some codes on these sites might be expired or not always work."
+      },
+      {
+        "id": 20,
+        "text": "It's always best to verify on the official site."
+      },
+      {
+        "id": 21,
+        "text": "**Common Types of Discounts You Might Find:**"
+      },
+      {
+        "id": 22,
+        "text": "*   **Percentage Off:** 10%, 15%, 20% off your order."
+      },
+      {
+        "id": 23,
+        "text": "*   **Dollar Amount Off:** $5, $10, $15 off a minimum purchase."
+      },
+      {
+        "id": 24,
+        "text": "*   **Free Shipping:** Often available over a certain order threshold."
+      },
+      {
+        "id": 25,
+        "text": "*   **First-Time Customer Discount:** Usually 10-15% off for signing up for emails."
+      },
+      {
+        "id": 26,
+        "text": "*   **Bundle Deals:** Discount when buying multiple packs or a subscription."
+      },
+      {
+        "id": 27,
+        "text": "*   **Seasonal Sales:** Black Friday, Cyber Monday, holiday sales, back-to-school, etc."
+      },
+      {
+        "id": 28,
+        "text": "**My best advice for \"right now\" is to visit the official Wiggle & Snug website and look for any banners or pop-ups regarding discounts, and consider signing up for their email list.** That's typically where the most current and reliable offers are found."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "As an AI, I don't have real-time access to live, constantly changing promo codes for every specific brand.",
+        "kind": "disclaimer",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "Promo codes are highly dynamic and can change daily, weekly, or seasonally.",
+        "kind": "disclaimer",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "However, I can give you the **best strategies to find current Wiggle & Snug promo codes** and what types of discounts are common:",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 4,
+        "text": "**1.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 5,
+        "text": "Check the Official Wiggle & Snug Website:**",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 6,
+        "text": "*   **Homepage Banners:** Often, current promotions are displayed right on the homepage.",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 7,
+        "text": "*   **Pop-ups:** Many sites have a pop-up offering a discount (e.g., 10-15% off your first order) if you sign up for their email list.",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 8,
+        "text": "*   **\"Promotions\" or \"Deals\" Section:** Some sites have a dedicated page.",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 9,
+        "text": "*   **Footer:** Sometimes, a link to current offers is in the website's footer.",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 10,
+        "text": "**2.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 11,
+        "text": "Sign Up for Their Email Newsletter:**",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 12,
+        "text": "*   This is one of the most reliable ways to get exclusive offers, future sales notifications, and often an immediate **first-time customer discount** (typically 10-15% off your initial purchase).",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 13,
+        "text": "**3.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 14,
+        "text": "Follow Their Social Media:**",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 15,
+        "text": "*   Brands often announce flash sales or special promo codes on platforms like Facebook, Instagram, or Twitter.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 16,
+        "text": "**4.",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 17,
+        "text": "Check Coupon Aggregator Websites:**",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 18,
+        "text": "*   Sites like RetailMeNot, Coupons.com, Honey, or Rakuten often list current codes.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 19,
+        "text": "Be aware that some codes on these sites might be expired or not always work.",
+        "kind": "disclaimer",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 20,
+        "text": "It's always best to verify on the official site.",
+        "kind": "instruction",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 21,
+        "text": "**Common Types of Discounts You Might Find:**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 22,
+        "text": "*   **Percentage Off:** 10%, 15%, 20% off your order.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 23,
+        "text": "*   **Dollar Amount Off:** $5, $10, $15 off a minimum purchase.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 24,
+        "text": "*   **Free Shipping:** Often available over a certain order threshold.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 25,
+        "text": "*   **First-Time Customer Discount:** Usually 10-15% off for signing up for emails.",
+        "kind": "assertion",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 26,
+        "text": "*   **Bundle Deals:** Discount when buying multiple packs or a subscription.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 27,
+        "text": "*   **Seasonal Sales:** Black Friday, Cyber Monday, holiday sales, back-to-school, etc.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 28,
+        "text": "**My best advice for \"right now\" is to visit the official Wiggle & Snug website and look for any banners or pop-ups regarding discounts, and consider signing up for their email list.** That's typically where the most current and reliable offers are found.",
+        "kind": "instruction",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": [
+      {
+        "sentence": "*   This is one of the most reliable ways to get exclusive offers, future sales notifications, and often an immediate **first-time customer discount** (typically 10-15% off your initial purchase).",
+        "lexicon": "hedged",
+        "label": "asserted"
+      },
+      {
+        "sentence": "*   **Free Shipping:** Often available over a certain order threshold.",
+        "lexicon": "asserted",
+        "label": "hedged"
+      }
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {
+      "RetailMeNot": "comparison",
+      "Coupons.com": "comparison",
+      "Honey": "comparison",
+      "Rakuten": "comparison"
+    },
+    "retailers": {
+      "the official Wiggle & Snug website": "recommendation"
+    }
+  },
+  "review_note": null
+}

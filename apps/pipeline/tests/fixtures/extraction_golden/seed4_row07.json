@@ -61,7 +61,8 @@
     "other_brands": {
       "Parleo": "citation_only"
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": null
 }

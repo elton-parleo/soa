@@ -1,0 +1,181 @@
+{
+  "row": 5,
+  "seed": 5,
+  "query_code": "WIG_167",
+  "platform": "gemini",
+  "run_number": 1,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I found the Wiggle & Snug Bum Balm 4 oz available for purchase at several retailers.\n\nAs of late May 2024, the price is generally around **$11.99 - $12.99**.\n\nFor example:\n*   **Walmart:** $11.99\n*   **Amazon:** $12.99\n\nPrices can vary slightly between retailers and are subject to change.",
+  "as_extracted": {
+    "prices": [
+      {
+        "amount": "11.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+      },
+      {
+        "amount": "12.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Wiggle & Snug Bum Balm"
+      }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+      {
+        "claim": "I found the Wiggle & Snug Bum Balm 4 oz available for purchase at several retailers.",
+        "sentence": "I found the Wiggle & Snug Bum Balm 4 oz available for purchase at several retailers.",
+        "span_id": 1,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "retail",
+        "lexicon_hedged": false
+      },
+      {
+        "claim": "As of late May 2024, the price is generally around **$11.99 - $12.99**.",
+        "sentence": "As of late May 2024, the price is generally around **$11.99 - $12.99**.",
+        "span_id": 2,
+        "kind": "assertion",
+        "modality": "asserted",
+        "claim_kind": "other",
+        "lexicon_hedged": true
+      }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [
+      {
+        "name": "Walmart",
+        "role": "source"
+      },
+      {
+        "name": "Amazon",
+        "role": "source"
+      }
+    ],
+    "postprocess": [
+      "1 span(s) need review"
+    ],
+    "transcribed_unknown_statement": null,
+    "spans": [
+      {
+        "id": 1,
+        "text": "I found the Wiggle & Snug Bum Balm 4 oz available for purchase at several retailers."
+      },
+      {
+        "id": 2,
+        "text": "As of late May 2024, the price is generally around **$11.99 - $12.99**."
+      },
+      {
+        "id": 3,
+        "text": "For example:"
+      },
+      {
+        "id": 4,
+        "text": "*   **Walmart:** $11.99"
+      },
+      {
+        "id": 5,
+        "text": "*   **Amazon:** $12.99"
+      },
+      {
+        "id": 6,
+        "text": "Prices can vary slightly between retailers and are subject to change."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "I found the Wiggle & Snug Bum Balm 4 oz available for purchase at several retailers.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "As of late May 2024, the price is generally around **$11.99 - $12.99**.",
+        "kind": "assertion",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 3,
+        "text": "For example:",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 4,
+        "text": "*   **Walmart:** $11.99",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 5,
+        "text": "*   **Amazon:** $12.99",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 6,
+        "text": "Prices can vary slightly between retailers and are subject to change.",
+        "kind": "disclaimer",
+        "modality": "asserted"
+      }
+    ],
+    "needs_review": [
+      {
+        "sentence": "As of late May 2024, the price is generally around **$11.99 - $12.99**.",
+        "lexicon": "hedged",
+        "label": "asserted"
+      }
+    ]
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [
+      {
+        "value": "4",
+        "unit": "oz",
+        "attributed_product": "Wiggle & Snug Bum Balm"
+      }
+    ],
+    "prices": [
+      {
+        "amount": "11.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+      },
+      {
+        "amount": "12.99",
+        "currency": "USD",
+        "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+      }
+    ],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {},
+    "retailers": {
+      "Walmart": "source",
+      "Amazon": "source"
+    }
+  },
+  "review_note": null
+}

@@ -94,7 +94,8 @@
     "retailers": {
       "Walmart": "recommendation",
       "Amazon": "recommendation"
-    }
+    },
+    "codes": []
   },
   "review_note": null
 }

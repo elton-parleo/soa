@@ -109,7 +109,8 @@
       "Amazon.com": null,
       "Walmart.com": null,
       "Target.com": null
-    }
+    },
+    "codes": []
   },
   "review_note": {
     "unknown": "keep"

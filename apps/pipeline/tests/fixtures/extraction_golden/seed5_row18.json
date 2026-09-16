@@ -1,0 +1,182 @@
+{
+  "row": 18,
+  "seed": 5,
+  "query_code": "WIG_147",
+  "platform": "gemini",
+  "run_number": 2,
+  "reviewed": true,
+  "flagged_by_review": false,
+  "answer": "I couldn't find any information about a brand called \"Wiggle & Snug\" that offers Snug-Fit Diapers or a subscription service for them. It's possible this is a fictional brand, a very new brand without an online presence, or a private label.\n\nMost major diaper brands and several newer companies do offer subscription services, such as:\n\n*   **Pampers**\n*   **Huggies**\n*   **The Honest Company**\n*   **Hello Bello**\n*   **Dyper**\n\nIf you have more details about \"Wiggle & Snug,\" I might be able to help further. Otherwise, you might want to explore the subscription options from the brands listed above.",
+  "as_extracted": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "I couldn't find any information about a brand called \"Wiggle & Snug\" that offers Snug-Fit Diapers or a subscription service for them.",
+    "other_brands_named": [
+      {
+        "name": "Pampers",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      },
+      {
+        "name": "Huggies",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      },
+      {
+        "name": "The Honest Company",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      },
+      {
+        "name": "Hello Bello",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      },
+      {
+        "name": "Dyper",
+        "presented_as": "recommendation",
+        "relation": "comparison"
+      }
+    ],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "transcribed_unknown_statement": "I couldn't find any information about a brand called \"Wiggle & Snug\" that offers Snug-Fit Diapers or a subscription service for them.",
+    "spans": [
+      {
+        "id": 1,
+        "text": "I couldn't find any information about a brand called \"Wiggle & Snug\" that offers Snug-Fit Diapers or a subscription service for them."
+      },
+      {
+        "id": 2,
+        "text": "It's possible this is a fictional brand, a very new brand without an online presence, or a private label."
+      },
+      {
+        "id": 3,
+        "text": "Most major diaper brands and several newer companies do offer subscription services, such as:"
+      },
+      {
+        "id": 4,
+        "text": "*   **Pampers**"
+      },
+      {
+        "id": 5,
+        "text": "*   **Huggies**"
+      },
+      {
+        "id": 6,
+        "text": "*   **The Honest Company**"
+      },
+      {
+        "id": 7,
+        "text": "*   **Hello Bello**"
+      },
+      {
+        "id": 8,
+        "text": "*   **Dyper**"
+      },
+      {
+        "id": 9,
+        "text": "If you have more details about \"Wiggle & Snug,\" I might be able to help further."
+      },
+      {
+        "id": 10,
+        "text": "Otherwise, you might want to explore the subscription options from the brands listed above."
+      }
+    ],
+    "span_labels": [
+      {
+        "span_id": 1,
+        "text": "I couldn't find any information about a brand called \"Wiggle & Snug\" that offers Snug-Fit Diapers or a subscription service for them.",
+        "kind": "unknown_statement",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 2,
+        "text": "It's possible this is a fictional brand, a very new brand without an online presence, or a private label.",
+        "kind": "unknown_statement",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 3,
+        "text": "Most major diaper brands and several newer companies do offer subscription services, such as:",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 4,
+        "text": "*   **Pampers**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 5,
+        "text": "*   **Huggies**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 6,
+        "text": "*   **The Honest Company**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 7,
+        "text": "*   **Hello Bello**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 8,
+        "text": "*   **Dyper**",
+        "kind": "none",
+        "modality": "asserted"
+      },
+      {
+        "span_id": 9,
+        "text": "If you have more details about \"Wiggle & Snug,\" I might be able to help further.",
+        "kind": "instruction",
+        "modality": "hedged"
+      },
+      {
+        "span_id": 10,
+        "text": "Otherwise, you might want to explore the subscription options from the brands listed above.",
+        "kind": "instruction",
+        "modality": "hedged"
+      }
+    ],
+    "needs_review": []
+  },
+  "golden": {
+    "brand_mentioned": true,
+    "sizes": [],
+    "prices": [],
+    "pack_counts": [],
+    "member_prices": [],
+    "codes": [],
+    "sources_cited": [],
+    "other_brands": {
+      "Pampers": "comparison",
+      "Huggies": "comparison",
+      "The Honest Company": "comparison",
+      "Hello Bello": "comparison",
+      "Dyper": "comparison"
+    },
+    "retailers": {}
+  },
+  "review_note": null
+}

@@ -120,7 +120,8 @@
     "other_brands": {
       "Amallow": null
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": {
     "unknown": "keep"

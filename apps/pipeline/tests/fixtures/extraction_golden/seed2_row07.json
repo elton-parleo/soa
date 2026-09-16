@@ -57,7 +57,8 @@
     "other_brands": {
       "Wiggle": "comparison"
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": {
     "unknown": "keep",

@@ -61,7 +61,8 @@
       "Huggies Little Snugglers": "recommendation",
       "Pampers Swaddlers": "recommendation"
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": {
     "drop_counts": [

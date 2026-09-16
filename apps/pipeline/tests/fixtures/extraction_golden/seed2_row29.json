@@ -73,7 +73,8 @@
       "Target": "recommendation",
       "Walmart.com": null,
       "Target.com": null
-    }
+    },
+    "codes": []
   },
   "review_note": {
     "retailers": {

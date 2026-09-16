@@ -91,7 +91,8 @@
     "other_brands": {
       "Amallow": "closest_match_described"
     },
-    "retailers": {}
+    "retailers": {},
+    "codes": []
   },
   "review_note": {
     "note": "the sentence saying no product page could be found reached neither the claims nor the unknown statement — an unlabelled brand span, silently dropped"
