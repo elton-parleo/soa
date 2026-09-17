@@ -342,7 +342,11 @@ function StatusEmailCard({ token }) {
     try {
       await liteApi.setEmail(token, email.trim())
       setSubmittedEmail(email.trim())
-      track(EVENTS.EMAIL_CAPTURED, {})
+      // report_token only — the fact that an address was captured for
+      // THIS run, never the address itself. The token already joins to
+      // soa_lite_requests.email server-side if the address is ever
+      // actually needed.
+      track(EVENTS.EMAIL_CAPTURED, { report_token: token })
       // OpenAI ad conversion: the first moment this run has a person
       // behind it rather than a store URL. Inside the try on purpose —
       // a failed setEmail must not report a lead. The address itself
@@ -404,7 +408,12 @@ export function LiteProgress({ phaseData, storeUrl, error, token }) {
   const showDegradedBanner = latestState === 'degraded-blocked' || latestState === 'no-product-pages'
 
   useEffect(() => {
-    track(EVENTS.STATUS_VIEWED, {})
+    // Passed explicitly as well as registered (LiteWidget mounts and
+    // calls identifyReport for the same token): on a cold-loaded /s/
+    // page the register and this event happen in the same mount, and
+    // the explicit prop is what makes the join independent of which
+    // effect runs first.
+    track(EVENTS.STATUS_VIEWED, { report_token: token })
     // Fires once per mount only — the page polls phaseData repeatedly,
     // that's not a new "view".
     // eslint-disable-next-line react-hooks/exhaustive-deps

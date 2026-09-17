@@ -3,16 +3,23 @@
 PostHog, explicit events only. Client events measure behavior; the
 database is already ground truth for submissions, emails, and demo
 requests. The two join later by the run token (`report_token`, a
-PostHog super-property set once per report load via
-`identifyReport(token)` in [`analytics.js`](../apps/api/web/src/lite/analytics.js)).
+PostHog super-property set via `identifyReport(token)` in
+[`analytics.js`](../apps/api/web/src/lite/analytics.js) — registered
+the moment a submit is accepted, and again on any cold-loaded status
+or report page — and also passed explicitly on the funnel's spine
+events). One id name, `report_token`, the same value
+`soa_lite_requests.token` holds; a second name for it would fork every
+join.
 
 Owned by one module, [`apps/api/web/src/lite/analytics.js`](../apps/api/web/src/lite/analytics.js),
 which is the only file in the frontend allowed to import `posthog-js`
 directly. The registry of every trackable event and its allowed props
 lives in [`apps/api/web/src/lite/analyticsEvents.js`](../apps/api/web/src/lite/analyticsEvents.js) —
 `track()` drops anything not in it. No event carries email, name,
-company, message, or any other form value; those actions are tracked
-as bare facts (`audit_submitted`, `email_captured`) with no payload.
+company, message, or any other form value; an event about a form
+action (`audit_submitted`, `email_captured`) carries the fact that it
+happened, the run it happened on, and the attribution the session
+arrived with — never what was typed.
 
 ## The four questions
 
@@ -30,12 +37,12 @@ as bare facts (`audit_submitted`, `email_captured`) with no payload.
 | Event | Props | Fired when |
 |---|---|---|
 | `landing_viewed` | `src` | Landing page mounts. `src` from `captureSrcParam()`, defaults to `direct`. |
-| `audit_submitted` | — | Intake accepted (200 from submit) — the funnel's spine. |
+| `audit_submitted` | `report_token`, `target_domain`, `oppref`, `utm_source`, `src` | Intake accepted (200 from submit) — the funnel's spine. `target_domain` is the bare hostname of the store URL, `null` for a brand-only submission; the brand name itself is a form value and is never sent. `identifyReport` is called with the token immediately before this fires. |
 | `sample_report_clicked` | `placement` | A "see a sample report" link is clicked (`nav`, `hero`, `sample_section`, `final_cta`). |
 | `estimator_interacted` | — | First interaction with the landing revenue/AI-share sliders, once per session. |
 | `demo_request_submitted` | `source`, `brand_name`, `report_token` | The demo request modal gets a 200. `brand_name`/`report_token` only present when fired from a report page; never fires on a honeypot trip. |
-| `status_viewed` | — | Status page mounts. |
-| `email_captured` | — | Email successfully saved on the status page (fact only, no address). |
+| `status_viewed` | `report_token` | Status page mounts. |
+| `email_captured` | `report_token` | Email successfully saved on the status page (fact only, no address — `report_token` already joins to `soa_lite_requests.email` server-side). |
 | `report_viewed` | `state`, `viewer`, `src`, `report_type` | Report page mounts. `state` is `scored`\|`partial`\|`blocked`\|`expired`. `viewer` is `owner`\|`visitor` (lite: does this browser hold the token from its own submission? Full Analysis: is this the authenticated owner's own view, via real auth state). `src` from `captureSrcParam()`. `report_type` is absent for lite, `full_analysis` for [`FullAnalysisReport.jsx`](../apps/api/web/src/components/FullAnalysisReport.jsx) — same event/props, shared across both products rather than a second event. |
 | `section_viewed` | `section` | A report section is ≥50% visible for a continuous 1s, once per section per load. |
 | `section_expanded` | `section`, `control` | A collapsible panel or top-level section opens (closed→open only). Instrumented once inside the shared `useCollapsible` hook and `SectionCollapseButton`, not per call site. |
@@ -78,7 +85,46 @@ as bare facts (`audit_submitted`, `email_captured`) with no payload.
   from the address bar via `history.replaceState` so a copied-from-
   the-bar link stays canonical (no lingering `?src=email` from a
   re-share). The share button builds its URL independently and never
-  carries `src`.
+  carries `src`. **Only `src` is stripped** — `oppref` and the `utm_*`
+  parameters stay in the address bar, which the pixel depends on.
+
+## Paid attribution
+
+ChatGPT Ads lands visitors on
+`?oppref=<code>&utm_source=chatgpt`. Before this was wired up, neither
+parameter reached a single PostHog event: `captureSrcParam()` read
+`?src=` and nothing else, so **every ad click was recorded as
+`src=direct`**, and `oppref` survived only in the URL and the ad SDK's
+own cookie — so any client-side navigation lost it.
+
+- **`captureAttribution()`** (`analytics.js`) runs **once at module
+  init**, before any component mounts. It reads `oppref`,
+  `utm_source`, `utm_medium` and `utm_campaign` off the URL, writes
+  whatever is present to **one `sessionStorage` key,
+  `soaLiteAttribution`** (a JSON object plus a `captured_at` stamp),
+  and calls `posthog.register()` with them and the derived `src`. That
+  registration is why every event carries the attribution with **no
+  call site passing it** — and why a direct visit registers `src`
+  alone rather than four null props.
+- **A URL carrying none of them loads what the session already
+  stored**, which is what makes attribution survive the landing → `/r/`
+  `pushState` and a cold load of `audit-report.html` in the same tab.
+- **`sessionStorage`, not `localStorage`** — matching `soaLiteSrc` and
+  the pixel's guard keys. It dies with the tab, so a later
+  unattributed visit never inherits a campaign it didn't come from.
+- **It never rewrites the address bar.** Stripping the parameters
+  would be the obvious tidy-up and would break the pixel, which reads
+  `oppref` off `window.location` first.
+- **`src` precedence**, in `captureSrcParam()`: explicit `?src=` (this
+  URL, or stored this session) → `utm_source` lowercased → `'chatgpt'`
+  when there is an `oppref` but no `utm_source` (an `oppref` is a
+  ChatGPT Ads click code; nothing else mints one) → `'direct'`. No
+  referrer branch — guessing organic search and social is a separate
+  decision from fixing paid.
+- **`getAttribution()`** returns the four values (null when absent) for
+  the two callers that need them as data rather than as
+  super-properties: `audit_submitted`'s props, and `withOppref()`'s
+  fallback.
 
 ## The OpenAI ad-conversion pixel
 
@@ -138,9 +184,15 @@ kept alongside them.
 - **`?oppref=`** is captured by the SDK on init and persisted in a
   first-party `__oppref` cookie on the audit host, so it already
   survives client-side navigation. `withOppref()` additionally carries
-  it through our `pushState` paths (landing submit, report re-run) so
-  the address bar keeps it. Only `oppref`, and only on those two
-  navigations — share links, the Copy-link button, the report-ready
-  email, and `reportUrl()` all keep producing the bare canonical URL.
+  it through our `pushState` paths (landing submit, report re-run, and
+  the not-found card's "Start a new audit") so the address bar keeps
+  it. It reads the current URL first and falls back to
+  `getAttribution().oppref` — by the time a visitor re-runs from a
+  report, the address bar is a bare `/r/` path an earlier `pushState`
+  built, so there is nothing left on it to carry forward. Only
+  `oppref`, and only on those three navigations — share links, the
+  Copy-link button, the report-ready email, and `reportUrl()` all keep
+  producing the bare canonical URL. A visitor arriving from the
+  report-ready email is a different session and must not inherit one.
 - **Verbose SDK logging** is on (`OPENAI_PIXEL_DEBUG = true`). Flip
   that one constant to `false` once the conversions are confirmed live.

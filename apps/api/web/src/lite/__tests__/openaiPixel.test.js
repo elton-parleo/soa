@@ -320,6 +320,7 @@ describe('newRequestId', () => {
 describe('withOppref', () => {
   afterEach(() => {
     window.history.replaceState(null, '', '/')
+    sessionStorage.removeItem('soaLiteAttribution')
   })
 
   it('appends oppref from the current URL', () => {
@@ -350,5 +351,60 @@ describe('withOppref', () => {
   it('joins with & when the path already has a query string', () => {
     window.history.replaceState(null, '', '/audit.html?oppref=xyz')
     expect(withOppref('/r/abc?foo=1')).toBe('/r/abc?foo=1&oppref=xyz')
+  })
+})
+
+// The gap this fallback closes: by the time a visitor re-runs from a
+// report, the address bar is a bare /r/ path an earlier pushState
+// built, so reading oppref off window.location alone finds nothing —
+// which is the same pushState this function exists to fix in the first
+// place. analytics.js's stored attribution still has it.
+//
+// Each case imports the module fresh, after setting the URL and the
+// storage it wants: analytics.js captures attribution at ITS module
+// init, so a static import would pin whatever the first test in this
+// file happened to load with. This is the real page-load path, end to
+// end — stored attribution, captured at init, read back here.
+describe('withOppref — falls back to stored attribution', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    sessionStorage.clear()
+  })
+  afterEach(() => {
+    window.history.replaceState(null, '', '/')
+    sessionStorage.clear()
+  })
+
+  function storeAttribution(attr) {
+    sessionStorage.setItem('soaLiteAttribution', JSON.stringify({
+      oppref: null, utm_source: null, utm_medium: null, utm_campaign: null, ...attr,
+    }))
+  }
+
+  async function freshWithOppref() {
+    return (await import('../openaiPixel.js')).withOppref
+  }
+
+  it('appends oppref from stored attribution when the URL has none', async () => {
+    storeAttribution({ oppref: 'STORED9', utm_source: 'chatgpt' })
+    window.history.replaceState(null, '', '/r/tok123')
+    expect((await freshWithOppref())('/r/abc')).toBe('/r/abc?oppref=STORED9')
+  })
+
+  it('the URL still wins when both carry one', async () => {
+    storeAttribution({ oppref: 'STORED9' })
+    window.history.replaceState(null, '', '/audit.html?oppref=FROMURL')
+    expect((await freshWithOppref())('/r/abc')).toBe('/r/abc?oppref=FROMURL')
+  })
+
+  it('carries nothing when neither has one — behavior unchanged', async () => {
+    window.history.replaceState(null, '', '/r/tok123')
+    expect((await freshWithOppref())('/r/abc')).toBe('/r/abc')
+  })
+
+  it('carries only oppref, never a stored utm param', async () => {
+    storeAttribution({ oppref: 'STORED9', utm_source: 'chatgpt', utm_medium: 'cpc', utm_campaign: 'q4' })
+    window.history.replaceState(null, '', '/r/tok123')
+    expect((await freshWithOppref())('/r/abc')).toBe('/r/abc?oppref=STORED9')
   })
 })

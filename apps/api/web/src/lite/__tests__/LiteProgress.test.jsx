@@ -9,9 +9,15 @@ import { fileURLToPath } from 'node:url'
 import { LiteProgress, LiteFailed, projectEvents, estimateRemainingMinutes } from '../LiteProgress.jsx'
 import { liteApi } from '../liteApi.js'
 import { trackLeadCreated } from '../openaiPixel.js'
+import { track } from '../analytics.js'
+import { EVENTS } from '../analyticsEvents.js'
 
 vi.mock('../liteApi.js', () => ({
   liteApi: { setEmail: vi.fn() },
+}))
+
+vi.mock('../analytics.js', () => ({
+  track: vi.fn(),
 }))
 
 vi.mock('../openaiPixel.js', () => ({
@@ -464,6 +470,58 @@ describe('LiteProgress — the email card fires lead_created on success only', (
 
     expect(liteApi.setEmail).not.toHaveBeenCalled()
     expect(trackLeadCreated).not.toHaveBeenCalled()
+  })
+})
+
+// ─── report_token on the status page's two events ──────────────────────
+//
+// Both were registry-empty before this session, so neither could be
+// joined back to the run it belonged to — status_viewed in particular
+// is the step between submission and report, which is exactly where
+// the funnel needed to be readable. The token is passed explicitly as
+// well as registered (LiteWidget calls identifyReport on mount),
+// because on a cold-loaded /s/ page both happen in the same mount and
+// the explicit prop doesn't depend on which effect runs first.
+describe('LiteProgress — status_viewed and email_captured carry report_token', () => {
+  beforeEach(() => {
+    track.mockClear()
+    liteApi.setEmail.mockReset()
+  })
+
+  it('status_viewed carries the token the page was mounted with', () => {
+    render(<LiteProgress phaseData={{ status: 'running', events: [ev(1, 'state', 'run', 'running')] }} token="tok-status" />)
+    expect(track).toHaveBeenCalledWith(EVENTS.STATUS_VIEWED, { report_token: 'tok-status' })
+  })
+
+  it('email_captured carries the same token on a successful save', async () => {
+    liteApi.setEmail.mockResolvedValue({})
+    render(<LiteProgress phaseData={{ status: 'running', events: [ev(1, 'state', 'run', 'running')] }} token="tok-email" />)
+    fireEvent.change(screen.getByPlaceholderText('you@company.com'), { target: { value: 'visitor@example.com' } })
+    await act(async () => { fireEvent.click(screen.getByText('Email me the report')) })
+
+    expect(track).toHaveBeenCalledWith(EVENTS.EMAIL_CAPTURED, { report_token: 'tok-email' })
+  })
+
+  // The address is the one thing this event is about and the one thing
+  // it may never carry — report_token already joins to
+  // soa_lite_requests.email server-side.
+  it('email_captured carries the token and nothing else — never the address', async () => {
+    liteApi.setEmail.mockResolvedValue({})
+    render(<LiteProgress phaseData={{ status: 'running', events: [ev(1, 'state', 'run', 'running')] }} token="tok-pii" />)
+    fireEvent.change(screen.getByPlaceholderText('you@company.com'), { target: { value: 'visitor@example.com' } })
+    await act(async () => { fireEvent.click(screen.getByText('Email me the report')) })
+
+    const call = track.mock.calls.find(([name]) => name === EVENTS.EMAIL_CAPTURED)
+    expect(Object.keys(call[1])).toEqual(['report_token'])
+  })
+
+  it('a rejected setEmail fires no email_captured at all', async () => {
+    liteApi.setEmail.mockRejectedValue(new Error('nope'))
+    render(<LiteProgress phaseData={{ status: 'running', events: [ev(1, 'state', 'run', 'running')] }} token="tok-fail" />)
+    fireEvent.change(screen.getByPlaceholderText('you@company.com'), { target: { value: 'visitor@example.com' } })
+    await act(async () => { fireEvent.click(screen.getByText('Email me the report')) })
+
+    expect(track.mock.calls.filter(([name]) => name === EVENTS.EMAIL_CAPTURED)).toHaveLength(0)
   })
 })
 

@@ -23,6 +23,9 @@ vi.mock('../analytics.js', () => ({
   track: vi.fn(),
   identifyReport: vi.fn(),
   captureSrcParam: vi.fn(() => 'direct'),
+  getAttribution: vi.fn(() => ({
+    oppref: null, utm_source: null, utm_medium: null, utm_campaign: null,
+  })),
   isTokenOwned: vi.fn(() => false),
   recordOwnedToken: vi.fn(),
 }))

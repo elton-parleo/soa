@@ -31,6 +31,24 @@
  * (report_token) is the one allowed pseudonymous id, since it's
  * already the report's own public handle (anyone with the link has
  * it); brand_name is allowed since it's already on the page.
+ *
+ * The run token now sits on the funnel's SPINE events directly —
+ * audit_submitted, status_viewed, email_captured — not only on
+ * report-page events. identifyReport() registers it as a
+ * super-property from the moment a submit is accepted, so in practice
+ * it arrives both ways; passing it explicitly as well is what makes a
+ * cold-loaded status page, whose register() call and whose event fire
+ * in the same mount, join reliably. One id name, report_token, the
+ * same one soa_lite_requests.token carries — a second name for the
+ * same value would fork every join in PostHog.
+ *
+ * audit_submitted also allows oppref and utm_source. Neither is a
+ * person: oppref is an ad-click code minted by the ad platform and
+ * utm_source is a campaign source, both of which arrive in the
+ * landing URL and describe where a click came from. They are here so
+ * the paid funnel can be read at its narrowest step — submission —
+ * rather than only at the landing view, which is the one place they
+ * were visible before.
  */
 
 export const EVENTS = {
@@ -107,11 +125,11 @@ export const EVENTS = {
 // dropped by track(); an event name not listed here is dropped whole.
 export const EVENT_REGISTRY = {
   [EVENTS.LANDING_VIEWED]: ['src'],
-  [EVENTS.AUDIT_SUBMITTED]: [],
+  [EVENTS.AUDIT_SUBMITTED]: ['report_token', 'target_domain', 'oppref', 'utm_source', 'src'],
   [EVENTS.SAMPLE_REPORT_CLICKED]: ['placement'],
   [EVENTS.ESTIMATOR_INTERACTED]: [],
-  [EVENTS.STATUS_VIEWED]: [],
-  [EVENTS.EMAIL_CAPTURED]: [],
+  [EVENTS.STATUS_VIEWED]: ['report_token'],
+  [EVENTS.EMAIL_CAPTURED]: ['report_token'],
   [EVENTS.REPORT_VIEWED]: ['state', 'viewer', 'src', 'report_type'],
   [EVENTS.SECTION_VIEWED]: ['section'],
   [EVENTS.SECTION_EXPANDED]: ['section', 'control'],

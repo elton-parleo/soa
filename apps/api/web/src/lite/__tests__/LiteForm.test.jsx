@@ -5,7 +5,7 @@ import '@testing-library/jest-dom'
 
 import { LiteForm } from '../LiteForm.jsx'
 import { liteApi } from '../liteApi.js'
-import { track } from '../analytics.js'
+import { track, identifyReport, getAttribution } from '../analytics.js'
 import { EVENTS } from '../analyticsEvents.js'
 
 vi.mock('../liteApi.js', () => ({
@@ -14,7 +14,12 @@ vi.mock('../liteApi.js', () => ({
 
 vi.mock('../analytics.js', () => ({
   track: vi.fn(),
+  identifyReport: vi.fn(),
   recordOwnedToken: vi.fn(),
+  captureSrcParam: vi.fn(() => 'direct'),
+  getAttribution: vi.fn(() => ({
+    oppref: null, utm_source: null, utm_medium: null, utm_campaign: null,
+  })),
 }))
 
 beforeEach(() => {
@@ -60,7 +65,16 @@ describe('LiteForm — brand-only mode', () => {
       competitor_names: ['Rival Co'],
       captcha_token: expect.any(String),
     })
-    expect(track).toHaveBeenCalledWith(EVENTS.AUDIT_SUBMITTED, {})
+    // A brand-only submission has no store URL, so target_domain is an
+    // explicit null rather than an absent key — "we asked and there
+    // isn't one" reads differently in PostHog from "never sent".
+    expect(track).toHaveBeenCalledWith(EVENTS.AUDIT_SUBMITTED, {
+      report_token: 'tok-123',
+      target_domain: null,
+      oppref: null,
+      utm_source: null,
+      src: 'direct',
+    })
   })
 
   it('shows a rate-limit message on 429', async () => {
@@ -176,5 +190,89 @@ describe('LiteForm — compact mode (Stage 6 hero/final-CTA)', () => {
       competitor_names: [],
       captcha_token: expect.any(String),
     }))
+  })
+})
+
+// ─── audit_submitted's payload (paid-attribution session) ──────────────
+//
+// The event used to carry nothing at all — its registry entry was an
+// empty array, so track() dropped every prop — which is why PostHog
+// could see oppref on 88 of 130 landing views and on 4 of 14
+// submissions. It now carries the run token (the id every other
+// system already uses for this audit) and the attribution the session
+// arrived with.
+describe('LiteForm — audit_submitted carries the run token and attribution', () => {
+  beforeEach(() => {
+    getAttribution.mockReturnValue({
+      oppref: 'ABC123', utm_source: 'chatgpt', utm_medium: 'cpc', utm_campaign: 'q4',
+    })
+  })
+
+  async function submitBrandOnly(token = 'tok-attr') {
+    liteApi.submit.mockResolvedValue({ token, status: 'pending' })
+    render(<LiteForm onSubmitted={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'Acme Co' } })
+    fireEvent.click(screen.getByText('Run my free diagnostic'))
+    await waitFor(() => expect(track).toHaveBeenCalled())
+  }
+
+  it('sends report_token, target_domain, oppref, utm_source and src', async () => {
+    liteApi.submit.mockResolvedValue({ token: 'tok-attr', status: 'pending' })
+    render(<LiteForm onSubmitted={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'acme.com' } })
+    fireEvent.click(screen.getByText('Run my free diagnostic'))
+
+    await waitFor(() => expect(track).toHaveBeenCalledWith(EVENTS.AUDIT_SUBMITTED, {
+      report_token: 'tok-attr',
+      target_domain: 'acme.com',
+      oppref: 'ABC123',
+      utm_source: 'chatgpt',
+      src: 'direct',
+    }))
+  })
+
+  it('target_domain is the bare hostname, not the raw URL the visitor typed', async () => {
+    liteApi.submit.mockResolvedValue({ token: 'tok-domain', status: 'pending' })
+    render(<LiteForm onSubmitted={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'https://www.acme.com/collections/all' } })
+    fireEvent.click(screen.getByText('Run my free diagnostic'))
+
+    await waitFor(() => expect(track).toHaveBeenCalledWith(
+      EVENTS.AUDIT_SUBMITTED,
+      expect.objectContaining({ target_domain: 'acme.com' }),
+    ))
+  })
+
+  // Order matters: identifyReport registers report_token as a
+  // super-property, and everything after it in this session — including
+  // this very event — should be able to rely on it being set.
+  it('calls identifyReport with the token BEFORE firing the event', async () => {
+    await submitBrandOnly('tok-order')
+
+    expect(identifyReport).toHaveBeenCalledWith('tok-order')
+    expect(identifyReport.mock.invocationCallOrder[0])
+      .toBeLessThan(track.mock.invocationCallOrder[0])
+  })
+
+  it('fires neither when the API rejects', async () => {
+    liteApi.submit.mockRejectedValue(new Error('nope'))
+    render(<LiteForm onSubmitted={() => {}} />)
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value: 'Acme Co' } })
+    fireEvent.click(screen.getByText('Run my free diagnostic'))
+
+    await waitFor(() => expect(screen.getByText('nope')).toBeInTheDocument())
+    expect(identifyReport).not.toHaveBeenCalled()
+    expect(track).not.toHaveBeenCalled()
+  })
+
+  // The registry forbids form values, and the banned-prop test enforces
+  // it — this pins the same rule at the call site, where a well-meaning
+  // "just add the brand name" would actually be written.
+  it('never sends an email or the brand name the visitor typed', async () => {
+    await submitBrandOnly()
+    const props = track.mock.calls[0][1]
+    expect(Object.keys(props).sort()).toEqual(
+      ['oppref', 'report_token', 'src', 'target_domain', 'utm_source'],
+    )
   })
 })
