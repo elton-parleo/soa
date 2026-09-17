@@ -25,11 +25,11 @@
 import { useEffect, useId, useState } from 'react'
 import { liteApi } from './liteApi.js'
 import { validateSubmission } from './validation.js'
-import { looksLikeUrl, deriveBrandFromUrl } from './liteDerive.js'
+import { looksLikeUrl, deriveBrandFromUrl, domainFromStoreUrl } from './liteDerive.js'
 import { LogoHeader, ErrorBanner, LightCard } from './liteTheme.jsx'
 import { LITE_QUERY_COUNT } from './landing/scanDimensionsRegistry.js'
 import { Button } from '../ds/index.js'
-import { track, recordOwnedToken } from './analytics.js'
+import { track, identifyReport, recordOwnedToken, captureSrcParam, getAttribution } from './analytics.js'
 import { EVENTS } from './analyticsEvents.js'
 
 export function LiteForm({
@@ -106,7 +106,29 @@ export function LiteForm({
       // owner, not a visitor who opened a shared link — see
       // analytics.js's own doc comment for why sessionStorage's
       // soaLiteToken can't answer that question by itself.
-      track(EVENTS.AUDIT_SUBMITTED, {})
+      //
+      // identifyReport FIRST, then the event: the run token is the
+      // audit's id everywhere (soa_lite_requests.token), and
+      // registering it here is what puts report_token on every
+      // subsequent event of this session — status_viewed,
+      // email_captured, report_viewed — not just this one. The event
+      // carries it explicitly as well, so the submission itself joins
+      // even if this is the last thing that happens in this tab.
+      //
+      // The props below are the attribution this session arrived with
+      // (analytics.js captured it at init) plus the one fact about the
+      // submission that isn't a form value: the store's domain. Never
+      // the brand name the visitor typed — that's a form value, and
+      // the registry forbids it.
+      identifyReport(result.token)
+      const attribution = getAttribution()
+      track(EVENTS.AUDIT_SUBMITTED, {
+        report_token: result.token,
+        target_domain: storeUrl ? domainFromStoreUrl(storeUrl) : null,
+        oppref: attribution.oppref,
+        utm_source: attribution.utm_source,
+        src: captureSrcParam(),
+      })
       recordOwnedToken(result.token)
       onSubmitted(result.token, { storeUrl })
     } catch (err) {

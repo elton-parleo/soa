@@ -2,7 +2,9 @@
  * analytics.js — the one module allowed to import posthog-js. Covers
  * the dark-ships-without-a-key contract, registry enforcement (unknown
  * event/prop dropped, dev-only console.error), captureSrcParam's
- * read-store-strip behavior, and the owner/visitor token helpers.
+ * read-store-strip behavior and its new ad-attribution fallback chain,
+ * captureAttribution's capture/store/register contract, and the
+ * owner/visitor token helpers.
  * posthog.capture/register are spied on the real posthog-js module
  * (not mocked at import level) so these tests exercise the actual
  * init() gate, not a stand-in.
@@ -40,6 +42,152 @@ describe('analytics.js — dark-ships without VITE_POSTHOG_KEY', () => {
     const { identifyReport } = await import('../analytics.js')
     expect(() => identifyReport('tok123')).not.toThrow()
     expect(registerSpy).not.toHaveBeenCalled()
+  })
+
+  it('captureAttribution() registers nothing without a key', async () => {
+    sessionStorage.clear()
+    window.history.replaceState(null, '', '/?oppref=DARK&utm_source=chatgpt')
+    const registerSpy = vi.spyOn(posthog, 'register')
+    const { captureAttribution } = await import('../analytics.js')
+    expect(() => captureAttribution()).not.toThrow()
+    expect(registerSpy).not.toHaveBeenCalled()
+    window.history.replaceState(null, '', '/')
+    sessionStorage.clear()
+  })
+})
+
+// The fix for paid traffic reading as 'direct': ChatGPT Ads lands on
+// ?oppref=<code>&utm_source=chatgpt, and nothing in our own code used
+// to keep either one past the first pushState. Capture happens at
+// module init, which is why every test here imports the module AFTER
+// setting the URL it wants captured.
+describe('captureAttribution()', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    sessionStorage.clear()
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+    window.history.replaceState(null, '', '/')
+    sessionStorage.clear()
+  })
+
+  it('reads the four params off the URL and stores them under one key', async () => {
+    window.history.replaceState(null, '', '/?oppref=ABC123&utm_source=chatgpt&utm_medium=cpc&utm_campaign=q4')
+    const { getAttribution } = await import('../analytics.js')
+
+    expect(getAttribution()).toEqual({
+      oppref: 'ABC123',
+      utm_source: 'chatgpt',
+      utm_medium: 'cpc',
+      utm_campaign: 'q4',
+    })
+    const stored = JSON.parse(sessionStorage.getItem('soaLiteAttribution'))
+    expect(stored.oppref).toBe('ABC123')
+    expect(stored.utm_source).toBe('chatgpt')
+    expect(stored.utm_medium).toBe('cpc')
+    expect(stored.utm_campaign).toBe('q4')
+    expect(typeof stored.captured_at).toBe('string')
+  })
+
+  it('a partially-attributed URL stores what is there and nulls the rest', async () => {
+    window.history.replaceState(null, '', '/?oppref=ONLY')
+    const { getAttribution } = await import('../analytics.js')
+    expect(getAttribution()).toEqual({
+      oppref: 'ONLY', utm_source: null, utm_medium: null, utm_campaign: null,
+    })
+  })
+
+  // The case the whole mechanism exists for: a client-side navigation
+  // (or a cold load of the report document) leaves a bare path with no
+  // parameters at all, and the attribution still has to be there.
+  it('loads from sessionStorage when the URL carries none of them', async () => {
+    sessionStorage.setItem('soaLiteAttribution', JSON.stringify({
+      oppref: 'STORED1', utm_source: 'chatgpt', utm_medium: null, utm_campaign: null,
+      captured_at: '2026-09-16T00:00:00.000Z',
+    }))
+    window.history.replaceState(null, '', '/r/tok123')
+    const { getAttribution } = await import('../analytics.js')
+    expect(getAttribution().oppref).toBe('STORED1')
+    expect(getAttribution().utm_source).toBe('chatgpt')
+  })
+
+  it('returns nulls for every field when nothing was ever captured', async () => {
+    window.history.replaceState(null, '', '/')
+    const { getAttribution } = await import('../analytics.js')
+    expect(getAttribution()).toEqual({
+      oppref: null, utm_source: null, utm_medium: null, utm_campaign: null,
+    })
+  })
+
+  // openaiPixel.js reads oppref off window.location first, and
+  // captureSrcParam's strip-only-src behavior is pinned below — so the
+  // one thing this function must never do is tidy the address bar.
+  it('leaves oppref and the utm params in the address bar', async () => {
+    window.history.replaceState(null, '', '/?oppref=ABC123&utm_source=chatgpt&utm_campaign=q4')
+    await import('../analytics.js')
+    const params = new URLSearchParams(window.location.search)
+    expect(params.get('oppref')).toBe('ABC123')
+    expect(params.get('utm_source')).toBe('chatgpt')
+    expect(params.get('utm_campaign')).toBe('q4')
+  })
+
+  it('never throws when sessionStorage is blocked', async () => {
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('storage blocked')
+    })
+    window.history.replaceState(null, '', '/?oppref=ABC123')
+    const mod = await import('../analytics.js')
+    expect(() => mod.captureAttribution()).not.toThrow()
+    expect(mod.getAttribution().oppref).toBe('ABC123')
+    setItemSpy.mockRestore()
+  })
+
+  it('survives corrupt stored JSON without throwing', async () => {
+    sessionStorage.setItem('soaLiteAttribution', 'not json')
+    window.history.replaceState(null, '', '/r/tok123')
+    const mod = await import('../analytics.js')
+    expect(() => mod.captureAttribution()).not.toThrow()
+    expect(mod.getAttribution().oppref).toBeNull()
+  })
+})
+
+// The point of registering rather than threading props: no call site
+// changes, and every event in the session carries the attribution.
+describe('captureAttribution() — super-properties', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    sessionStorage.clear()
+    vi.stubEnv('VITE_POSTHOG_KEY', 'test-key-123')
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
+    window.history.replaceState(null, '', '/')
+    sessionStorage.clear()
+  })
+
+  it('registers oppref, utm_* and the derived src when a key is set', async () => {
+    const registerSpy = vi.spyOn(posthog, 'register').mockImplementation(() => {})
+    window.history.replaceState(null, '', '/?oppref=ABC123&utm_source=chatgpt&utm_medium=cpc&utm_campaign=q4')
+    await import('../analytics.js')
+
+    expect(registerSpy).toHaveBeenCalledWith({
+      src: 'chatgpt',
+      oppref: 'ABC123',
+      utm_source: 'chatgpt',
+      utm_medium: 'cpc',
+      utm_campaign: 'q4',
+    })
+  })
+
+  // A direct visit must not stamp four null props onto every event.
+  it('registers src alone on an unattributed visit', async () => {
+    const registerSpy = vi.spyOn(posthog, 'register').mockImplementation(() => {})
+    window.history.replaceState(null, '', '/')
+    await import('../analytics.js')
+    expect(registerSpy).toHaveBeenCalledWith({ src: 'direct' })
   })
 })
 
@@ -149,6 +297,55 @@ describe('captureSrcParam()', () => {
     window.history.replaceState(null, '', '/')
     const { captureSrcParam } = await import('../analytics.js')
     expect(captureSrcParam()).toBe('direct')
+  })
+})
+
+// The derivation added this session. Before it, src was read from
+// ?src= alone — which we only ever set on the report-ready email — so
+// every ad click was indistinguishable from a direct visit.
+describe('captureSrcParam() — derives src from ad attribution', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    sessionStorage.clear()
+  })
+  afterEach(() => {
+    window.history.replaceState(null, '', '/')
+    sessionStorage.clear()
+  })
+
+  it('falls back to utm_source, lowercased', async () => {
+    window.history.replaceState(null, '', '/?utm_source=ChatGPT')
+    const { captureSrcParam } = await import('../analytics.js')
+    expect(captureSrcParam()).toBe('chatgpt')
+  })
+
+  it('reads "chatgpt" from an oppref with no utm_source — nothing else mints one', async () => {
+    window.history.replaceState(null, '', '/?oppref=ABC123')
+    const { captureSrcParam } = await import('../analytics.js')
+    expect(captureSrcParam()).toBe('chatgpt')
+  })
+
+  it('an explicit ?src= still wins over utm_source and oppref', async () => {
+    window.history.replaceState(null, '', '/r/tok123?src=email&oppref=ABC123&utm_source=chatgpt')
+    const { captureSrcParam } = await import('../analytics.js')
+    expect(captureSrcParam()).toBe('email')
+  })
+
+  // The same navigation the report route performs: parameters gone
+  // from the URL, attribution still in sessionStorage.
+  it('derives from STORED attribution once the URL has lost the params', async () => {
+    sessionStorage.setItem('soaLiteAttribution', JSON.stringify({
+      oppref: 'ABC123', utm_source: null, utm_medium: null, utm_campaign: null,
+    }))
+    window.history.replaceState(null, '', '/r/tok123')
+    const { captureSrcParam } = await import('../analytics.js')
+    expect(captureSrcParam()).toBe('chatgpt')
+  })
+
+  it('utm_source outranks oppref when both are present', async () => {
+    window.history.replaceState(null, '', '/?oppref=ABC123&utm_source=newsletter')
+    const { captureSrcParam } = await import('../analytics.js')
+    expect(captureSrcParam()).toBe('newsletter')
   })
 })
 

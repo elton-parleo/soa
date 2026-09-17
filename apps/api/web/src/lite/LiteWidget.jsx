@@ -177,11 +177,16 @@ function ReportNotFound({ navigate }) {
         // marketing host (H2: /scan no longer exists there) has
         // nowhere local to send the visitor, so it does a full
         // navigation out to the audit tool's landing page.
+        //
+        // withOppref, like the submit and re-run navigations: an
+        // ad-attributed visitor who lands on a dead token is still an
+        // ad-attributed visitor when they start over from here, and
+        // this is the third and last navigation our own code builds.
         if (isAuditHost()) {
-          if (navigate) navigate(auditPath('/'))
-          else window.location.href = auditPath('/')
+          if (navigate) navigate(withOppref(auditPath('/')))
+          else window.location.href = withOppref(auditPath('/'))
         } else {
-          window.location.href = PUBLIC_AUDIT_BASE_URL
+          window.location.href = withOppref(PUBLIC_AUDIT_BASE_URL)
         }
       }}
     />
@@ -301,6 +306,17 @@ export default function LiteWidget({ urlToken, navigate } = {}) {
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // The run token is the audit's id in PostHog (report_token), and on
+  // a cold-loaded /s/ or /r/ page nothing has registered it yet — the
+  // submit that would have (LiteForm.jsx) happened in another tab, or
+  // last week. Registering it here is what lets status_viewed and
+  // email_captured on this page join back to the run. Idempotent and
+  // no-op on a falsy token, so LiteFullReportV4/ReportExpired keeping
+  // their own identifyReport calls costs nothing.
+  useEffect(() => {
+    if (token) identifyReport(token)
+  }, [token])
 
   // Stage 9 (U4), audit.parleo.io migration (S2/S3): noindex whenever a
   // real report/progress view could be showing — /report/* always, or

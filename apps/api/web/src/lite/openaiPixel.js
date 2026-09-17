@@ -55,6 +55,11 @@
  * subject is that one was captured.
  */
 import { OPENAI_PIXEL_ID } from './openaiPixel.constants.js'
+// getAttribution only — a plain read of the attribution analytics.js
+// captured at init. Nothing in this file touches posthog, and the
+// import boundary in the other direction still holds: analytics.js
+// never imports this module.
+import { getAttribution } from './analytics.js'
 
 /** Re-exported so the pixel's identity has one import path for app code. */
 export { OPENAI_PIXEL_ID }
@@ -91,6 +96,14 @@ export function isOpenAIPixelAvailable() {
  * share links, the Copy-link button, the report-ready email, and
  * publicUrls.js's reportUrl() all build their own URLs and never come
  * through here.
+ *
+ * The current URL is read FIRST and still wins. The fallback behind it
+ * is analytics.js's stored attribution, which covers the case this
+ * function was written for but could not actually reach: by the time a
+ * visitor re-runs from a report, the address bar may be a bare /r/
+ * path that an earlier pushState built, so there is no oppref left on
+ * it to carry forward. With neither source the behavior is unchanged —
+ * the path comes back untouched.
  */
 export function withOppref(path) {
   if (typeof window === 'undefined') return path
@@ -102,6 +115,14 @@ export function withOppref(path) {
     // A URL jsdom/an exotic embed can't parse — attribution is not
     // worth breaking a navigation over.
     return path
+  }
+
+  if (!oppref) {
+    try {
+      oppref = getAttribution().oppref
+    } catch (_) {
+      return path
+    }
   }
 
   if (!oppref) return path
