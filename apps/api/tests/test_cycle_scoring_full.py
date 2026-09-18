@@ -677,6 +677,37 @@ def test_degraded_crawl_never_recommends_fixes_for_unread_dimensions(db):
     assert not (fixed_codes & {"catalog_context", "protocol_feed", "price_truth", "member_value", "deal_citability"})
 
 
+_SHORT_CIRCUIT_VP_EVIDENCE = (
+    "could not verify a protocol profile — not attempted; "
+    "robots.txt and the store root both refused our reader"
+)
+
+
+def test_value_protocols_checks_stay_na_when_the_manifest_was_never_requested(db):
+    """Regression (fetcher hardening), second caller: _value_protocols_
+    checks is shared with lite_pillars, and a short-circuited crawl never
+    requests the MCP manifest — so score_value_protocols says that
+    instead of claiming it looked and found nothing. The N/A gate used to
+    exact-match the old sentence, which made the new one fall through to
+    the substring parser and render five red 'invisible' chips for checks
+    that never ran. Full Analysis reads the same function, so it needs
+    its own end-to-end coverage."""
+    dims = dict(_BLOCKED_DIMENSIONS)
+    dims["value_protocols_seen"] = {
+        "score": 0, "max": 14, "coverage": "full", "evidence": [_SHORT_CIRCUIT_VP_EVIDENCE],
+    }
+    with db.begin() as conn:
+        _seed_cycle(conn, 95, scan_status="blocked", dimensions=dims)
+    with db.connect() as conn:
+        pillars = build_full_cycle_report(conn, 95)["pillars"]
+
+    tv = {d["code"]: d for d in pillars["true_value"]["dimensions"]}
+    vp_checks = tv["value_protocols"]["checks"]
+    assert vp_checks
+    assert all(c["state"] == "na" for c in vp_checks)
+    assert all(c["evidence"] == _SHORT_CIRCUIT_VP_EVIDENCE for c in vp_checks)
+
+
 def test_composite_withheld_when_only_accessibility_is_blocked(db):
     """The middle state: True Value is clean, so tv_pct stays real while
     composite/verdict are withheld."""
