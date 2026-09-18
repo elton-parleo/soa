@@ -90,10 +90,19 @@ POLITENESS_JITTER_FRACTION = 0.40
 # SECONDS are separate, zeroable module constants (not folded into
 # SCAN_FETCH_DELAY_MS) so tests can silence retry sleeps without also
 # silencing the ordinary per-page politeness delay, and vice versa.
+#
+# 403 is the exception to the ladder's premise, and is capped separately
+# below: a WAF/bot-management 403 is deterministic, not a burst limit
+# that eases off.
 RETRY_AFTER_CAP_SECONDS = 30.0
 RETRY_BACKOFF_BASE_SECONDS = 4.0
 FIRST_REQUEST_429_COOLOFF_SECONDS = 20.0
 RETRYABLE_STATUS_CODES = {429, 403, 500, 502, 503, 504}
+
+# A hard 403 from a WAF / bot-management layer is deterministic — the
+# export of blocked runs showed 3–4 identical 403s per URL. One retry
+# catches a transient edge; more only spends budget and looks aggressive.
+SCAN_FETCH_403_MAX_ATTEMPTS = _env_int("SCAN_FETCH_403_MAX_ATTEMPTS", 2)
 
 MAX_PAGE_FETCHES = 12
 MIN_BODY_LENGTH = 100
@@ -596,6 +605,17 @@ def _fetch_with_retries(current_url: str, hostname: str):
     ladder starts — an immediate sitewide-hostility signal, distinct
     from an ordinary rate limit hit mid-run.
 
+    403 stops early, at SCAN_FETCH_403_MAX_ATTEMPTS (2 by default), and
+    without sleeping on the way out. The ladder exists because a
+    terminal-looking first response may be a burst limit that eases off;
+    a WAF/bot-management 403 is not that. The export of blocked runs
+    showed 3-4 byte-identical 403s per URL and 9-16 per run — one retry
+    still rescues a genuinely transient edge, and the rest only spent
+    the fetch budget and made this reader look aggressive to exactly the
+    systems it is asking to trust it. The general SCAN_FETCH_RETRIES cap
+    still applies on top; the effective 403 limit is the smaller of the
+    two.
+
     Returns (response, attempts, retry_after_seen): response is the
     LAST httpx.Response received (whatever its final status — the
     caller decides what that means), attempts is how many requests were
@@ -614,6 +634,12 @@ def _fetch_with_retries(current_url: str, hostname: str):
             resp = client.get(current_url, headers=_request_headers(current_url))
 
         if resp.status_code not in RETRYABLE_STATUS_CODES or attempt >= SCAN_FETCH_RETRIES:
+            return resp, attempt, retry_after_seen
+
+        # The 403 cap, applied on top of the general one — whichever is
+        # smaller wins. No sleep on the way out: there is nothing to wait
+        # for when the answer is deterministic.
+        if resp.status_code == 403 and attempt >= SCAN_FETCH_403_MAX_ATTEMPTS:
             return resp, attempt, retry_after_seen
 
         if resp.status_code == 429 and is_first_request_to_host and attempt == 1:

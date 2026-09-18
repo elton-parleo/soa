@@ -292,3 +292,112 @@ def test_fetch_records_retry_after_seen_on_the_result(monkeypatch):
     result = fetcher.fetch("https://example.com/")
     assert result.status == fetcher.BLOCKED
     assert result.retry_after_seen == 12.0
+
+
+# ─── the 403 cap: a hard refusal is deterministic ───────────────────────
+
+def test_a_hard_403_gets_exactly_one_retry_not_the_full_ladder(monkeypatch):
+    """The export of blocked runs showed 3-4 byte-identical 403s per URL.
+    One retry still catches a transient edge; the rest only spent the
+    fetch budget."""
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_RETRIES", 3)
+    monkeypatch.setattr(fetcher, "RETRY_BACKOFF_BASE_SECONDS", 4.0)
+    sleeps = []
+    monkeypatch.setattr(time, "sleep", lambda s: sleeps.append(s))
+    calls = {"n": 0}
+
+    def fake_get(self, url, headers=None, **kw):
+        calls["n"] += 1
+        return httpx.Response(403, text="Access Denied", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+
+    resp, attempts, retry_after = fetcher._fetch_with_retries("https://example.com/", "example.com")
+    assert attempts == 2
+    assert calls["n"] == 2
+    assert resp.status_code == 403
+    assert sleeps == [4.0]  # the one retry's backoff, and no sleep on the way out
+
+
+def test_the_one_403_retry_still_rescues_a_transient_edge(monkeypatch):
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_RETRIES", 3)
+    codes = iter([403, 200])
+
+    def fake_get(self, url, headers=None, **kw):
+        return httpx.Response(next(codes), text="ok", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+
+    resp, attempts, retry_after = fetcher._fetch_with_retries("https://example.com/", "example.com")
+    assert attempts == 2
+    assert resp.status_code == 200
+
+
+def test_the_403_cap_leaves_the_429_ladder_alone(monkeypatch):
+    """429 IS the burst-limit case the ladder was built for — unchanged."""
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_RETRIES", 3)
+    fetcher._domain_seen.add("example.com")
+
+    def fake_get(self, url, headers=None, **kw):
+        return httpx.Response(429, text="", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+
+    resp, attempts, retry_after = fetcher._fetch_with_retries("https://example.com/", "example.com")
+    assert attempts == 3
+
+
+def test_the_403_cap_leaves_the_5xx_ladder_alone(monkeypatch):
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_RETRIES", 3)
+
+    def fake_get(self, url, headers=None, **kw):
+        return httpx.Response(503, text="", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+
+    resp, attempts, retry_after = fetcher._fetch_with_retries("https://example.com/", "example.com")
+    assert attempts == 3
+
+
+def test_scan_fetch_403_max_attempts_is_read_live_not_captured_at_import(monkeypatch):
+    """Same contract as SCAN_FETCH_RETRIES: a retarget takes effect on
+    the very next call, so a hostile-edge rerun can be retuned without a
+    deploy."""
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_RETRIES", 3)
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_403_MAX_ATTEMPTS", 1)
+    sleeps = []
+    monkeypatch.setattr(time, "sleep", lambda s: sleeps.append(s))
+    calls = {"n": 0}
+
+    def fake_get(self, url, headers=None, **kw):
+        calls["n"] += 1
+        return httpx.Response(403, text="", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+
+    resp, attempts, retry_after = fetcher._fetch_with_retries("https://example.com/", "example.com")
+    assert attempts == 1
+    assert calls["n"] == 1
+    assert sleeps == []
+
+
+def test_a_403_behind_a_redirect_hop_reports_the_summed_attempts(monkeypatch):
+    """FetchResult.attempts sums across redirect hops (total_attempts in
+    fetch()) — a bare-domain -> www hop followed by a capped 403 ladder
+    is 1 + 2. That's the field's existing meaning, not a miscount."""
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_RETRIES", 3)
+
+    def fake_get(self, url, headers=None, **kw):
+        if url == "https://example.com/":
+            return httpx.Response(
+                301, text="", headers={"Location": "https://www.example.com/"},
+                request=httpx.Request("GET", url),
+            )
+        return httpx.Response(403, text="Access Denied", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+
+    result = fetcher.fetch("https://example.com/")
+    assert result.status == fetcher.BLOCKED
+    assert result.http_status == 403
+    assert result.attempts == 3  # 1 redirect hop + 2 capped 403 attempts
