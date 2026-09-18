@@ -1019,8 +1019,32 @@ def process_lite_requests():
         # — so a crash partway through the rest of this function still
         # leaves the generated set on the row rather than losing it to a
         # future re-generation.
+
+        # Competitor grounding: read the store's own homepage FIRST, so
+        # the model is told what this brand sells instead of inferring it
+        # from the name. An ambiguous or little-known name ("Orbit",
+        # "Kindred") otherwise produces a confident, wrong rival list —
+        # and a wrong rival list makes the whole audit moot. Same
+        # never-throw contract as generate_competitors itself:
+        # read_site_context returns None for a missing URL, a block, a
+        # challenge page, a timeout or unparseable HTML, and the prompt
+        # falls back to today's name-only behavior with the reason
+        # logged. Costs one extra homepage GET; the later _run_lite_scan
+        # step is deliberately left where it is (it must not delay the
+        # LLM path — see its own comment below).
+        site_context = None
+        if store_url:
+            lite_events.emit_log(
+                request_id, lite_events.TASK_COMPETITORS, "reading your store to see what you sell…",
+            )
+            from scan.site_context import read_site_context
+            site_context = read_site_context(store_url)
+
         lite_events.emit_log(request_id, lite_events.TASK_COMPETITORS, "identifying your closest rivals…")
-        candidates = generate_competitors(brand_name, api_key, store_url=store_url)
+        candidates = generate_competitors(
+            brand_name, api_key, store_url=store_url,
+            site_context=site_context.as_prompt_block() if site_context else None,
+        )
         competitor_candidates, competitor_source = select_competitors(
             manual_competitor_names, candidates, brand_name,
         )
@@ -1046,8 +1070,13 @@ def process_lite_requests():
                 "id":     request_id,
             })
 
+        # site_context_used/site_title ride along so a wrong competitor
+        # list is diagnosable from this one line alone: it says whether
+        # the model was grounded at all, and if so, on what page.
+        site_title = site_context.title if site_context else None
         log.info(
-            f"[lite] request {request_id}: competitors={competitor_names} source={competitor_source}"
+            f"[lite] request {request_id}: competitors={competitor_names} source={competitor_source} "
+            f"site_context_used={site_context is not None} site_title={site_title!r}"
         )
         if competitor_names:
             lite_events.emit_done(

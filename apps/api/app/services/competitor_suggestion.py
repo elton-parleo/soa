@@ -13,6 +13,17 @@ Deliberately not promoted into soa_shared: unlike a DB model, an LLM
 prompt isn't schema, and the two call sites (worker-side lite
 processing vs. this synchronous authed endpoint) have different
 failure/latency tolerances.
+
+LOCKSTEP: the prompt builder and generate_competitors' signature must
+change in BOTH files together, or not at all; a parity test asserts the
+two prompts are byte-identical for identical inputs
+(tests/test_competitor_prompt_parity.py). Only the differences already
+there are allowed to differ: the module docstrings and the log prefix.
+
+site_context (competitor grounding): accepted here for parity, but
+nothing on this side populates it yet — the homepage fetcher that
+renders the block lives in apps/pipeline and this app cannot import it.
+See app/routers/full_analysis.py::suggest_competitors.
 """
 import json
 import logging
@@ -35,7 +46,20 @@ class CompetitorCandidate:
     domain: Optional[str] = None
 
 
-def _build_competitor_prompt(brand_name: str, store_url: Optional[str], category_hint: Optional[str]) -> str:
+def _build_competitor_prompt(
+    brand_name: str,
+    store_url: Optional[str],
+    category_hint: Optional[str],
+    site_context: Optional[str] = None,
+) -> str:
+    """site_context is an already-rendered prompt block (a plain string,
+    never a dataclass — see this module's docstring on why the two copies
+    of this file share a contract but no imports): a few short labelled
+    lines of what the brand's own homepage says about itself, produced
+    worker-side by apps/pipeline/scan/site_context.py::SiteContext::
+    as_prompt_block. It is the authoritative category signal when
+    present, because a brand NAME alone is often ambiguous and the model
+    would otherwise guess the category from it."""
     context_lines = []
     if store_url:
         context_lines.append(f"Its store is at {store_url}.")
@@ -43,7 +67,17 @@ def _build_competitor_prompt(brand_name: str, store_url: Optional[str], category
         context_lines.append(f"Its product category is: {category_hint}.")
     context = " ".join(context_lines)
 
-    return f"""You are identifying direct consumer-brand competitors for "{brand_name}" for a brand comparison study. {context}
+    grounding = ""
+    if site_context:
+        grounding = (
+            f"\n\nWhat the brand's own website says about itself (fetched from its homepage):\n"
+            f"{site_context}\n"
+            f'Treat this as the authoritative description of what "{brand_name}" sells. '
+            f"If the brand name alone could belong to several categories, use the website, "
+            f"not the name, to decide."
+        )
+
+    return f"""You are identifying direct consumer-brand competitors for "{brand_name}" for a brand comparison study. {context}{grounding}
 
 Selection rules — follow exactly:
 - List brands a shopper would genuinely consider INSTEAD of "{brand_name}" — same product category, roughly the same price tier.
@@ -93,9 +127,10 @@ def _call_once(
     store_url: Optional[str],
     category_hint: Optional[str],
     api_key: str,
+    site_context: Optional[str] = None,
 ) -> list:
     client = OpenAI(api_key=api_key)
-    prompt = _build_competitor_prompt(brand_name, store_url, category_hint)
+    prompt = _build_competitor_prompt(brand_name, store_url, category_hint, site_context)
     response = client.chat.completions.create(
         model=COMPETITOR_MODEL,
         messages=[{"role": "user", "content": prompt}],
@@ -111,6 +146,7 @@ def generate_competitors(
     *,
     store_url: Optional[str] = None,
     category_hint: Optional[str] = None,
+    site_context: Optional[str] = None,
 ) -> list:
     """Returns up to 5 CompetitorCandidate rows, or [] if both the
     initial attempt and its one retry fail (bad JSON, API error, timeout,
@@ -118,7 +154,7 @@ def generate_competitors(
     competitor_generator.py::generate_competitors."""
     for attempt in (1, 2):
         try:
-            return _call_once(brand_name, store_url, category_hint, api_key)
+            return _call_once(brand_name, store_url, category_hint, api_key, site_context)
         except Exception:
             log.warning(
                 f"[full-analysis] competitor generation attempt {attempt} failed for '{brand_name}'", exc_info=True
