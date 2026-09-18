@@ -11,6 +11,7 @@ import pytest
 
 from app.services.lite_crosswalk import RunSignal
 from app.services.lite_pillars import (
+    _value_protocols_checks,
     build_pillars_payload,
     member_value_applicable,
     score_deal_citability_said,
@@ -1237,6 +1238,59 @@ def test_value_protocols_checks_all_na_when_no_manifest_found():
     )
     vp = next(d for d in result["true_value"]["dimensions"] if d["code"] == "value_protocols")
     assert all(c["state"] == "na" for c in vp["checks"])
+
+
+_SHORT_CIRCUIT_VP_EVIDENCE = (
+    "could not verify a protocol profile — not attempted; "
+    "robots.txt and the store root both refused our reader"
+)
+
+
+def test_value_protocols_checks_all_na_when_manifest_never_requested_on_short_circuit():
+    """Regression (fetcher hardening): when robots.txt and the store root
+    both refuse us, the crawler short-circuits and never requests the MCP
+    manifest, so score_value_protocols says so instead of claiming it
+    looked and found nothing. This gate used to exact-match the old
+    sentence, so the new one fell through to the substring parser and
+    came back fail x5 — five red 'invisible' chips for checks that never
+    ran, which is precisely what checkState.js's H1 forbids."""
+    crawl = dict(_REALISTIC_CRAWL_DIMS)
+    crawl["value_protocols_seen"] = {
+        "score": 0, "max": 7, "coverage": "full", "evidence": [_SHORT_CIRCUIT_VP_EVIDENCE],
+    }
+    result = build_pillars_payload(
+        som_pct=35.0, rsi_score=0.2, total_mentions=8,
+        crawl_dimensions=crawl, run_signals=_no_purchase_intent_signals(),
+        membership_probe_result="no",
+    )
+    vp = next(d for d in result["true_value"]["dimensions"] if d["code"] == "value_protocols")
+    assert all(c["state"] == "na" for c in vp["checks"])
+    # The chips carry the honest reason, not the old hard-coded literal.
+    assert all(c["evidence"] == _SHORT_CIRCUIT_VP_EVIDENCE for c in vp["checks"])
+
+
+def test_the_no_manifest_gate_does_not_over_match_a_real_manifest():
+    """The prefix gate must not swallow a run that actually parsed a
+    manifest — _REALISTIC_CRAWL_DIMS declares one that resolves but
+    declares no capabilities, and those are real fail findings."""
+    result = _realistic_result()
+    vp = next(d for d in result["true_value"]["dimensions"] if d["code"] == "value_protocols")
+    assert not all(c["state"] == "na" for c in vp["checks"])
+    assert any(c["state"] == "fail" for c in vp["checks"])
+
+
+def test_the_no_manifest_gate_requires_exactly_one_evidence_line():
+    """Two lines means the scorer parsed a manifest and has per-check
+    findings — the parser below the gate must get them, even if the
+    first line happens to start with a recognised prefix."""
+    checks = _value_protocols_checks([
+        "no protocol profile found",
+        "the manifest declares a UCP shopping-discount capability",
+    ])
+    states = [c["state"] for c in checks]
+    assert not all(s == "na" for s in states)
+    by_code = {c["code"]: c["state"] for c in checks}
+    assert by_code["ucp_discount"] == "pass"
 
 
 def test_price_truth_checks_combine_seen_said_and_advisory():

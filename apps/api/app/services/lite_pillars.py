@@ -267,6 +267,20 @@ def _blocked_checks(code: str, evidence: List[str]) -> List[Dict]:
     ]
 
 
+# The two ways scorer.py's score_value_protocols says "there was no
+# manifest to evaluate": the plain absence, and the fetcher-hardening
+# short-circuit where the manifest was never requested because
+# robots.txt and the store root both refused us. Either one means every
+# check below is N/A — none of them ran. Prefix-matched, not exact,
+# so the scorer can extend the sentence without silently flipping five
+# chips to 'fail' (which is exactly what happened when it did).
+# apps/api never imports apps/pipeline, so these are mirrored, not shared.
+VALUE_PROTOCOLS_NO_MANIFEST_PREFIXES = (
+    "no protocol profile found",
+    "could not verify a protocol profile",
+)
+
+
 def _value_protocols_checks(evidence: List[str]) -> List[Dict]:
     # Re-weighting session (Part 1): five checks, not four — schema
     # resolution and version currency are independently scored (see
@@ -274,9 +288,14 @@ def _value_protocols_checks(evidence: List[str]) -> List[Dict]:
     # DIMENSIONS_BY_CODE["value_protocols"].how_measured exactly.
     dim = DIMENSIONS_BY_CODE["value_protocols"]
     check_ids = ("schema_resolution", "version_currency", "ucp_discount", "loyalty", "acp_promotions")
-    if evidence == ["no protocol profile found"]:
+    # Exactly one line, because a multi-line evidence list means the
+    # scorer actually parsed a manifest and has per-check findings for
+    # the parser below to read.
+    if len(evidence) == 1 and any(
+        evidence[0].startswith(prefix) for prefix in VALUE_PROTOCOLS_NO_MANIFEST_PREFIXES
+    ):
         return [
-            _check(check_id, label, CHECK_NA, evidence="no protocol profile found")
+            _check(check_id, label, CHECK_NA, evidence=evidence[0])
             for check_id, label in zip(check_ids, dim.how_measured)
         ]
 

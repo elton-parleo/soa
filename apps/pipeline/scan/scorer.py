@@ -217,6 +217,16 @@ def _parse_date(value) -> Optional[datetime]:
         return None
 
 
+# Fetcher hardening: the one place the hard-refused clause is written.
+# Discovery stops before it starts when robots.txt AND the store root
+# both refuse us (discovery.py's hard_refused), so the llms.txt/MCP
+# probes never run — and "not attempted" on its own reads as an
+# oversight rather than the deliberate stop it is. First-person and
+# factual, like every other line here: what OUR reader observed, never a
+# claim about how other agents fare against this site.
+SHORT_CIRCUIT_EVIDENCE_CLAUSE = "robots.txt and the store root both refused our reader"
+
+
 def score_f1_agent_access(discovery, pages, divergence_evidence=()) -> DimensionScore:
     weight = WEIGHTS["F1"]
     evidence = []
@@ -293,12 +303,20 @@ def score_f1_agent_access(discovery, pages, divergence_evidence=()) -> Dimension
     if homepage_page and homepage_page.fetch_result.status != "fetched":
         fr = homepage_page.fetch_result
         attempts_note = f"; {fr.attempts} attempt{'s' if fr.attempts != 1 else ''}" if fr.attempts else ""
-        if fr.http_status == 429:
-            evidence.append(f"store root rate-limited our reader (HTTP 429{attempts_note}) — product pages read successfully")
-        elif fr.http_status:
-            evidence.append(f"store root returned HTTP {fr.http_status} to our reader{attempts_note} — product pages read successfully")
+        # The suffix has to match what actually happened. Every blocked
+        # row in the export carried "product pages read successfully"
+        # with zero product pages sampled — false on its face, and
+        # printed right next to the fact that nothing was read.
+        if any(p.fetch_result.status == "fetched" for p in _product_pages(pages)):
+            read_note = " — product pages read successfully"
         else:
-            evidence.append("store root could not be reached by our reader (network error) — product pages read successfully")
+            read_note = " — no product pages were read this run"
+        if fr.http_status == 429:
+            evidence.append(f"store root rate-limited our reader (HTTP 429{attempts_note}){read_note}")
+        elif fr.http_status:
+            evidence.append(f"store root returned HTTP {fr.http_status} to our reader{attempts_note}{read_note}")
+        else:
+            evidence.append(f"store root could not be reached by our reader (network error){read_note}")
 
     if discovery.sitemap_urls:
         points += weight * 0.1
@@ -420,7 +438,7 @@ def score_f2_catalog_context(pages, site_type_result) -> DimensionScore:
     return DimensionScore(score=round(points, 1), max=weight, evidence=evidence, fix=fix, fix_human=fix_human)
 
 
-def score_f3_protocol_feed_presence(pages, site_type_result) -> DimensionScore:
+def score_f3_protocol_feed_presence(pages, site_type_result, short_circuited: bool = False) -> DimensionScore:
     """
     Stage 10 (D2): rescoped from "Transaction Rails" to Protocol & Feed
     Presence. Scored, crawl-observable checks only: /llms.txt, an MCP
@@ -443,6 +461,14 @@ def score_f3_protocol_feed_presence(pages, site_type_result) -> DimensionScore:
     scoring as absent. UCP and the agentic-commerce hint are markup-
     derived from already-fetched pages with no fetch status of their
     own, so they stay simple present/absent checks.
+
+    Fetcher hardening: short_circuited says discovery stopped before it
+    started because robots.txt and the store root both refused us
+    (discovery.py's hard_refused), which is why the llms.txt/MCP probes
+    have no page here at all. Evidence wording only — those sub-checks
+    were already unverifiable-and-excluded on this path, so coverage and
+    score are identical either way; the string just stops reading as an
+    unexplained omission.
     """
     weight = WEIGHTS["F3"]
 
@@ -467,7 +493,10 @@ def score_f3_protocol_feed_presence(pages, site_type_result) -> DimensionScore:
     checks = []
 
     if llms_txt_page is None:
-        checks.append((False, False, "could not verify /llms.txt — not attempted"))
+        llms_not_attempted = "could not verify /llms.txt — not attempted"
+        if short_circuited:
+            llms_not_attempted = f"{llms_not_attempted}; {SHORT_CIRCUIT_EVIDENCE_CLAUSE}"
+        checks.append((False, False, llms_not_attempted))
     else:
         status = llms_txt_page.fetch_result.status
         if status == "fetched":
@@ -481,7 +510,12 @@ def score_f3_protocol_feed_presence(pages, site_type_result) -> DimensionScore:
     if mcp_link_hint:
         checks.append((True, True, "MCP endpoint declaration discoverable (link/meta markup)"))
     elif mcp_page is None:
-        checks.append((False, False, "could not verify MCP endpoint — not attempted; no link markup found"))
+        mcp_not_attempted = (
+            f"could not verify MCP endpoint — not attempted; {SHORT_CIRCUIT_EVIDENCE_CLAUSE}"
+            if short_circuited
+            else "could not verify MCP endpoint — not attempted; no link markup found"
+        )
+        checks.append((False, False, mcp_not_attempted))
     else:
         status = mcp_page.fetch_result.status
         mcp_body_present = bool(mcp_page.fetch_result.html and mcp_page.fetch_result.html.strip())
@@ -892,11 +926,12 @@ def score_catalog_context(pages, site_type_result) -> DimensionScore:
     return result
 
 
-def score_protocol_feed(pages, site_type_result) -> DimensionScore:
+def score_protocol_feed(pages, site_type_result, short_circuited: bool = False) -> DimensionScore:
     """Stage 16: v2's score_f3_protocol_feed_presence, rescaled onto the
-    v3 protocol_feed dimension's weight."""
+    v3 protocol_feed dimension's weight. short_circuited: see F3 —
+    threaded through unchanged, evidence wording only."""
     return _rescale_dimension_score(
-        score_f3_protocol_feed_presence(pages, site_type_result),
+        score_f3_protocol_feed_presence(pages, site_type_result, short_circuited=short_circuited),
         DIMENSIONS_BY_CODE["protocol_feed"].weight,
     )
 
@@ -1220,7 +1255,7 @@ def _parse_protocol_manifest(mcp_page) -> Optional[dict]:
     return manifest if isinstance(manifest, dict) else None
 
 
-def score_value_protocols(pages) -> DimensionScore:
+def score_value_protocols(pages, short_circuited: bool = False) -> DimensionScore:
     """
     Stage 25 (Part 3, V1-V4): value_protocols.seen — whether a store
     DECLARES agent-checkout protocol capabilities. Encode-only: there is
@@ -1238,6 +1273,15 @@ def score_value_protocols(pages) -> DimensionScore:
     empty-but-well-typed capabilities list and a current specVersion now
     correctly earns both — that's a real, distinct fact about the
     manifest, not previously creditable on its own.
+
+    Fetcher hardening: short_circuited says discovery stopped before it
+    started because robots.txt and the store root both refused us
+    (discovery.py's hard_refused), so the MCP manifest was never
+    requested at all. "No protocol profile found" would then be an
+    absence asserted from a check that never ran — the same falsehood the
+    F1 store-root line carried. Evidence wording only: the score, the
+    coverage and the fix are untouched, because a manifest we couldn't
+    look for is still a manifest we can't show an agent.
     """
     weight = DIMENSIONS_BY_CODE["value_protocols"].weight
     mcp_page = next((p for p in pages if p.candidate.kind == "mcp_well_known"), None)
@@ -1259,7 +1303,11 @@ def score_value_protocols(pages) -> DimensionScore:
         return DimensionScore(
             score=0.0,
             max=weight,
-            evidence=["no protocol profile found"],
+            evidence=[
+                f"could not verify a protocol profile — not attempted; {SHORT_CIRCUIT_EVIDENCE_CLAUSE}"
+                if short_circuited
+                else "no protocol profile found"
+            ],
             fix=(
                 "Publish an MCP well-known manifest declaring your agent-checkout capabilities, e.g. "
                 f'"capabilities": ["{UCP_DISCOUNT_CAPABILITY}", "{UCP_LOYALTY_CAPABILITY}", "{ACP_PROMOTIONS_CAPABILITY}"], '

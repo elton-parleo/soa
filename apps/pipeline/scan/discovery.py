@@ -56,6 +56,15 @@ discipline as the sitemap sampler above. discovery_coverage_note()
 is the one place the "how we found your product pages" report copy
 is written for these non-sitemap paths — offer_feed.py and scorer.py
 both read it rather than composing their own.
+
+Fetcher hardening: discover_pages short-circuits before it starts when
+robots.txt AND the store root both refused us (403/429). On 5 of the 13
+blocked runs in the export, every follow-up probe returned the same 403
+with the same body — nothing was learned, and the budget and the
+politeness were both spent for it. BOTH signals are required: robots 200
+with a refused homepage is a shape where llms.txt and the MCP manifest
+are still served and still worth reading. See hard_refused, and
+sitemap_sampling["short_circuit"] for the record it leaves.
 """
 import gzip
 import json
@@ -195,10 +204,16 @@ class DiscoveryResult:
     # platform_endpoints_probed cover the Part 2 platform-endpoint tier,
     # and llm_discovery covers the Part 3 LLM-assisted tier (counts
     # only — the raw model response text is never recorded here).
+    # Fetcher hardening: short_circuit is None on every ordinary run, and
+    # the record of why discovery stopped before it started on a run
+    # where robots.txt AND the store root both refused us (see
+    # discover_pages' hard_refused). Always present, so a reader never
+    # has to tell "not short-circuited" apart from "written before this
+    # key existed."
     sitemap_sampling: dict = field(default_factory=lambda: {
         "children_probed": [], "child_chosen": None, "candidates_found": 0, "robots_excluded": 0,
         "tiers_attempted": [], "platform_detected": None, "platform_endpoints_probed": [],
-        "platform_endpoint_used": None, "llm_discovery": None,
+        "platform_endpoint_used": None, "llm_discovery": None, "short_circuit": None,
     })
 
 
@@ -718,6 +733,32 @@ def _probe_llm_discovery(
     return verified, reused_fetches, trace
 
 
+def _build_discovery_result(
+    *, robots_fetch, robot_parser, sitemap_urls, candidates, homepage_fetch,
+    llms_txt_fetch, mcp_well_known_fetch, products_found, discovery_path,
+    all_fetches, sitemap_index_entries, sitemap_sampling, reused_product_fetches,
+) -> DiscoveryResult:
+    """Every field, named — the one place discover_pages builds its
+    result. Both the ordinary return and the hard-refused short-circuit
+    go through here precisely so a new DiscoveryResult field can never be
+    silently left at its default on one path and set on the other."""
+    return DiscoveryResult(
+        robots_fetch=robots_fetch,
+        robot_parser=robot_parser,
+        sitemap_urls=sitemap_urls,
+        candidates=candidates,
+        homepage_fetch=homepage_fetch,
+        llms_txt_fetch=llms_txt_fetch,
+        mcp_well_known_fetch=mcp_well_known_fetch,
+        products_found=products_found,
+        discovery_path=discovery_path,
+        all_fetches=all_fetches,
+        sitemap_index_entries=sitemap_index_entries,
+        sitemap_sampling=sitemap_sampling,
+        reused_product_fetches=reused_product_fetches,
+    )
+
+
 def discover_pages(
     base_url: str,
     budget: FetchBudget,
@@ -770,6 +811,68 @@ def discover_pages(
                 except Exception:
                     log.exception(f"[scan.discovery] failed to parse robots.txt for {base_url}")
 
+        sitemap_index_entries: list = []
+        sampling_log = {
+            "children_probed": [], "child_chosen": None, "candidates_found": 0, "robots_excluded": 0,
+            "tiers_attempted": [], "platform_detected": None, "platform_endpoints_probed": [],
+            "platform_endpoint_used": None, "llm_discovery": None, "short_circuit": None,
+        }
+
+        # Fetcher hardening: when robots.txt AND the store root both
+        # refuse us, stop here and issue no further requests. On 5 of the
+        # 13 blocked runs in the export, every one of the 6-7 follow-up
+        # probes (sitemap.xml, sitemap_products_1.xml, products.json
+        # twice, llms.txt, .well-known/mcp.json) came back 403 with the
+        # same body as robots.txt did. Nothing was learned from any of
+        # them, and a reader that keeps knocking after being told no
+        # twice is the kind of reader these systems are built to refuse.
+        #
+        # BOTH signals are required, deliberately. robots 200 + homepage
+        # 403 is the Warby Parker shape from the export — robots.txt,
+        # llms.txt and the MCP manifest were all served while HTML was
+        # refused, and those probes are exactly the ones worth keeping.
+        # robots 403 + homepage 200 is not a wall either. And a caller
+        # using discover_pages standalone passes no homepage_fetch at
+        # all, which is one signal, not two, so it never short-circuits.
+        hard_refused = (
+            robots_fetch.http_status in (403, 429)
+            and homepage_fetch is not None
+            and homepage_fetch.status != "fetched"
+            and homepage_fetch.http_status in (403, 429)
+        )
+        if hard_refused:
+            sampling_log["short_circuit"] = {
+                "reason": "robots_and_homepage_refused",
+                "robots_http_status": robots_fetch.http_status,
+                "homepage_http_status": homepage_fetch.http_status,
+                "skipped": [
+                    "sitemap", "platform_endpoint", "llm_assisted",
+                    "llms_txt", "mcp_well_known", "product_pages",
+                ],
+            }
+            sampling_log["tiers_attempted"].append({"tier": "short_circuit", "candidates_found": 0})
+            log.info(
+                f"[scan.discovery] short-circuiting discovery for "
+                f"{urlparse(base_url).hostname}: robots.txt returned "
+                f"{robots_fetch.http_status} and the store root returned "
+                f"{homepage_fetch.http_status} — issuing no further requests"
+            )
+            return _build_discovery_result(
+                robots_fetch=robots_fetch,
+                robot_parser=robot_parser,
+                sitemap_urls=[],
+                candidates=[PageCandidate(url=base_url, kind="homepage")],
+                homepage_fetch=homepage_fetch,
+                llms_txt_fetch=None,
+                mcp_well_known_fetch=None,
+                products_found=0,
+                discovery_path="none",
+                all_fetches=[robots_fetch],
+                sitemap_index_entries=[],
+                sitemap_sampling=sampling_log,
+                reused_product_fetches={},
+            )
+
         declared_sitemaps = []
         if robot_parser is not None:
             try:
@@ -779,12 +882,6 @@ def discover_pages(
         if not declared_sitemaps:
             declared_sitemaps = [urljoin(base_url, "/sitemap.xml")]
 
-        sitemap_index_entries: list = []
-        sampling_log = {
-            "children_probed": [], "child_chosen": None, "candidates_found": 0, "robots_excluded": 0,
-            "tiers_attempted": [], "platform_detected": None, "platform_endpoints_probed": [],
-            "platform_endpoint_used": None, "llm_discovery": None,
-        }
         sitemap_urls = _resolve_sitemaps(
             declared_sitemaps, robot_parser, discovery_budget, all_fetches, sitemap_index_entries, sampling_log,
         )
@@ -904,7 +1001,7 @@ def discover_pages(
         candidates.append(PageCandidate(url=urljoin(base_url, LLMS_TXT_PATH), kind="llms_txt"))
         candidates.append(PageCandidate(url=urljoin(base_url, MCP_WELL_KNOWN_PATH), kind="mcp_well_known"))
 
-        return DiscoveryResult(
+        return _build_discovery_result(
             robots_fetch=robots_fetch,
             robot_parser=robot_parser,
             sitemap_urls=sitemap_urls,

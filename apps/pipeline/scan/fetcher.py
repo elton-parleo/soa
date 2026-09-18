@@ -18,6 +18,15 @@ domain" here is a naive last-two-labels heuristic (no public suffix
 list dependency, per rule 8) — same pragmatic-heuristic style as
 liteDerive.js::deriveBrandFromUrl; multi-part TLDs (co.uk, com.au) are
 a known, accepted limitation.
+
+Block evidence (fetcher hardening): every response we record as
+anything other than 'fetched' also carries the facts that answer "who
+refused us?" — an allowlisted slice of the response headers, the NAMES
+(never the values) of any cookies it set, its <title>, a short
+tag-stripped body excerpt, and a heuristic edge-vendor hint. All of it
+is diagnostic: it is written to pages_fetched for debugging, never read
+by the scorer, and filtered out before the report payload reaches a
+browser (apps/api/app/services/cycle_scoring.py::build_scan_payload).
 """
 import ipaddress
 import logging
@@ -81,10 +90,19 @@ POLITENESS_JITTER_FRACTION = 0.40
 # SECONDS are separate, zeroable module constants (not folded into
 # SCAN_FETCH_DELAY_MS) so tests can silence retry sleeps without also
 # silencing the ordinary per-page politeness delay, and vice versa.
+#
+# 403 is the exception to the ladder's premise, and is capped separately
+# below: a WAF/bot-management 403 is deterministic, not a burst limit
+# that eases off.
 RETRY_AFTER_CAP_SECONDS = 30.0
 RETRY_BACKOFF_BASE_SECONDS = 4.0
 FIRST_REQUEST_429_COOLOFF_SECONDS = 20.0
 RETRYABLE_STATUS_CODES = {429, 403, 500, 502, 503, 504}
+
+# A hard 403 from a WAF / bot-management layer is deterministic — the
+# export of blocked runs showed 3–4 identical 403s per URL. One retry
+# catches a transient edge; more only spends budget and looks aggressive.
+SCAN_FETCH_403_MAX_ATTEMPTS = _env_int("SCAN_FETCH_403_MAX_ATTEMPTS", 2)
 
 MAX_PAGE_FETCHES = 12
 MIN_BODY_LENGTH = 100
@@ -119,6 +137,238 @@ CHALLENGE_PAGE_SIGNATURES = (
 )
 
 
+# Block evidence (fetcher hardening): the facts that answer "who
+# refused us?" after the fact. Every one of these is DIAGNOSTIC — read
+# by engine.py's pages_fetched rows and the block_evidence rollup, never
+# by the scorer, never surfaced to the browser (cycle_scoring.py filters
+# pages_fetched down to its long-standing public keys before the report
+# payload is built).
+#
+# Allowlisted on purpose rather than "copy every header": a response
+# header set is attacker-influenced and can be arbitrarily large, and
+# most of it says nothing about who blocked us. Values are truncated
+# (RESPONSE_HEADER_VALUE_MAX_CHARS) for the same reason. httpx merges
+# repeated headers into one comma-joined value — fine here, the point
+# is presence and vendor shape, not byte-exact reconstruction.
+RESPONSE_HEADER_ALLOWLIST = (
+    "server", "via", "x-served-by", "x-cache", "content-type", "retry-after",
+    # Cloudflare
+    "cf-ray", "cf-mitigated", "cf-cache-status",
+    # Akamai
+    "x-akamai-transformed", "akamai-grn", "x-reference-error",
+    # DataDome
+    "x-datadome", "x-datadome-cid",
+    # HUMAN / PerimeterX
+    "x-px", "x-px-block",
+    # Imperva / Incapsula
+    "x-iinfo", "x-cdn",
+    # Shopify — not a bot-management vendor, but _edge_vendor_hint's
+    # shopify marker tests these two headers, so they have to survive
+    # the allowlist or that branch could never fire.
+    "x-shopify-stage", "x-sorting-hat-shopid",
+)
+RESPONSE_HEADER_VALUE_MAX_CHARS = 200
+TITLE_MAX_CHARS = 120
+# Only the leading slice of the body is ever looked at — a real page can
+# be hundreds of KB and none of it belongs in a diagnostic record.
+BODY_EXCERPT_SCAN_CHARS = 4000
+BODY_EXCERPT_MAX_CHARS = 300
+
+# Title extraction is shared with _looks_like_challenge_page below —
+# one regex, not two copies that could drift apart.
+TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+_SCRIPT_STYLE_RE = re.compile(r"<(script|style)\b[^>]*>.*?</\1>", re.IGNORECASE | re.DOTALL)
+_TAG_RE = re.compile(r"<[^>]+>")
+_WHITESPACE_RE = re.compile(r"\s+")
+
+# The vendors _edge_vendor_hint can name, in precedence order (first
+# match wins). Kept as an ordered (vendor, marker description) registry
+# so extending it is one tuple entry plus one predicate below, not a
+# rewrite of a long if/elif chain.
+#
+# This is a HINT, for diagnostics only — it is never a scored fact, never
+# reaches the report, and never becomes a claim about the merchant. Edge
+# vendors change their header and cookie names without notice, so these
+# markers should be re-checked against each vendor's current
+# documentation rather than trusted indefinitely; a stale marker
+# degrades to None, which is exactly what it meant before this existed.
+EDGE_VENDOR_MARKERS = (
+    ("cloudflare", "Server: cloudflare, a cf-ray/cf-mitigated header, a __cf_bm/cf_clearance cookie, or a Cloudflare interstitial <title>"),
+    ("akamai", "Server: AkamaiGHost, an akamai-grn/x-akamai-transformed/x-reference-error header, an _abck/ak_bmsc/bm_sz cookie, or an 'Access Denied' title carrying a reference number"),
+    ("datadome", "an x-datadome header, a datadome cookie, or 'datadome' in the body"),
+    ("human_px", "any x-px* header, any _px* cookie, 'px-captcha' in the body, or a 'robot or human' title"),
+    ("imperva", "an x-iinfo header, an incap_ses_*/visid_incap_* cookie, or 'incapsula' in the body"),
+    ("shopify", "an x-shopify-stage/x-sorting-hat-shopid header, or a _shopify_y/_shopify_s cookie"),
+)
+
+
+def _marks_cloudflare(headers: dict, cookies: list, title: str, body: str) -> bool:
+    return (
+        headers.get("server") == "cloudflare"
+        or "cf-ray" in headers
+        or "cf-mitigated" in headers
+        or any(c in ("__cf_bm", "cf_clearance") for c in cookies)
+        or any(s in title for s in ("cloudflare", "just a moment", "attention required"))
+    )
+
+
+def _marks_akamai(headers: dict, cookies: list, title: str, body: str) -> bool:
+    return (
+        headers.get("server") == "akamaighost"
+        or any(k in headers for k in ("akamai-grn", "x-akamai-transformed", "x-reference-error"))
+        or any(c in ("_abck", "ak_bmsc", "bm_sz") for c in cookies)
+        or ("access denied" in title and "reference #" in body)
+    )
+
+
+def _marks_datadome(headers: dict, cookies: list, title: str, body: str) -> bool:
+    return "x-datadome" in headers or "datadome" in cookies or "datadome" in body
+
+
+def _marks_human_px(headers: dict, cookies: list, title: str, body: str) -> bool:
+    return (
+        any(k.startswith("x-px") for k in headers)
+        or any(c.startswith("_px") for c in cookies)
+        or "px-captcha" in body
+        or "robot or human" in title
+    )
+
+
+def _marks_imperva(headers: dict, cookies: list, title: str, body: str) -> bool:
+    return (
+        "x-iinfo" in headers
+        or any(c.startswith("incap_ses_") or c.startswith("visid_incap_") for c in cookies)
+        or "incapsula" in body
+    )
+
+
+def _marks_shopify(headers: dict, cookies: list, title: str, body: str) -> bool:
+    return (
+        "x-shopify-stage" in headers
+        or "x-sorting-hat-shopid" in headers
+        or any(c in ("_shopify_y", "_shopify_s") for c in cookies)
+    )
+
+
+_EDGE_VENDOR_PREDICATES = {
+    "cloudflare": _marks_cloudflare,
+    "akamai": _marks_akamai,
+    "datadome": _marks_datadome,
+    "human_px": _marks_human_px,
+    "imperva": _marks_imperva,
+    "shopify": _marks_shopify,
+}
+
+
+def _edge_vendor_hint(headers: dict, cookie_names: list, title, body_excerpt) -> Optional[str]:
+    """Names the edge/bot-management vendor whose fingerprint this
+    response carries, or None when nothing matches — see
+    EDGE_VENDOR_MARKERS for what each vendor is recognized by, and for
+    why this is only ever a diagnostic hint. Never raises: any bad input
+    (None headers, a malformed cookie string, a non-string title)
+    degrades to None."""
+    try:
+        norm_headers = {str(k).lower(): str(v).lower() for k, v in (headers or {}).items()}
+        cookies = [str(c).lower() for c in (cookie_names or [])]
+        norm_title = str(title).lower() if title is not None else ""
+        norm_body = str(body_excerpt).lower() if body_excerpt is not None else ""
+        for vendor, _description in EDGE_VENDOR_MARKERS:
+            predicate = _EDGE_VENDOR_PREDICATES.get(vendor)
+            if predicate is not None and predicate(norm_headers, cookies, norm_title, norm_body):
+                return vendor
+    except Exception:
+        return None
+    return None
+
+
+def _extract_title(html: Optional[str]) -> Optional[str]:
+    """<title> text, whitespace-collapsed and capped. Never raises."""
+    if not html:
+        return None
+    match = TITLE_RE.search(html)
+    if not match:
+        return None
+    text = _WHITESPACE_RE.sub(" ", match.group(1)).strip()
+    return text[:TITLE_MAX_CHARS] or None
+
+
+def _body_excerpt(html: Optional[str]) -> Optional[str]:
+    """A short, tag-stripped, whitespace-collapsed excerpt of the
+    leading BODY_EXCERPT_SCAN_CHARS of the body — enough to recognize
+    an "Access Denied" page and its reference number after the fact.
+    Regex-based on purpose: the fetcher has no HTML-parser dependency
+    today (BeautifulSoup lives in discovery/structured_data) and this
+    doesn't earn one. Never raises."""
+    if not html:
+        return None
+    text = _SCRIPT_STYLE_RE.sub(" ", html[:BODY_EXCERPT_SCAN_CHARS])
+    text = _TAG_RE.sub(" ", text)
+    text = _WHITESPACE_RE.sub(" ", text).strip()
+    return text[:BODY_EXCERPT_MAX_CHARS] or None
+
+
+def _response_facts(resp, *, include_excerpt: bool) -> dict:
+    """The block-evidence kwargs for a FetchResult, read off an
+    httpx.Response. Never raises — any failure inside returns whatever
+    was gathered up to that point, so a malformed response degrades the
+    diagnostics, never the fetch.
+
+    include_excerpt is passed True only on the non-'fetched' return
+    paths: a real product page's own content is never stored here, only
+    the body of a response we are recording as a refusal.
+
+    Cookie NAMES only, never values — a Set-Cookie value is a bearer
+    token by construction and has no place in a scan row.
+    """
+    facts = {
+        "response_headers": {},
+        "set_cookie_names": [],
+        "title": None,
+        "body_excerpt": None,
+        "edge_vendor_hint": None,
+    }
+    try:
+        headers = {}
+        for name in RESPONSE_HEADER_ALLOWLIST:
+            value = resp.headers.get(name)
+            if value is not None:
+                headers[name] = str(value)[:RESPONSE_HEADER_VALUE_MAX_CHARS]
+        facts["response_headers"] = headers
+    except Exception:
+        pass
+
+    try:
+        names = []
+        for raw in resp.headers.get_list("set-cookie"):
+            name = str(raw).split("=", 1)[0].strip()
+            if name and name not in names:
+                names.append(name)
+        facts["set_cookie_names"] = names
+    except Exception:
+        pass
+
+    try:
+        body = resp.text
+    except Exception:
+        body = None
+
+    try:
+        facts["title"] = _extract_title(body)
+    except Exception:
+        pass
+
+    if include_excerpt:
+        try:
+            facts["body_excerpt"] = _body_excerpt(body)
+        except Exception:
+            pass
+
+    facts["edge_vendor_hint"] = _edge_vendor_hint(
+        facts["response_headers"], facts["set_cookie_names"], facts["title"], facts["body_excerpt"],
+    )
+    return facts
+
+
 @dataclass
 class FetchResult:
     url: str
@@ -140,6 +390,18 @@ class FetchResult:
     # or persisted anywhere — runtime-only, garbage-collected with the
     # rest of the scan's in-memory state.
     content: Optional[bytes] = None
+    # Block evidence (fetcher hardening): who refused us, recorded at
+    # the moment of refusal instead of being lost. All defaulted, so
+    # every existing constructor call (and every test that builds a
+    # FetchResult by hand) keeps working unchanged. See
+    # _response_facts/RESPONSE_HEADER_ALLOWLIST for what goes in here —
+    # and, just as importantly, what never does: no cookie values, no
+    # full bodies, and no body at all from a page we actually read.
+    response_headers: dict = field(default_factory=dict)   # allowlisted, lowercase keys, values truncated
+    set_cookie_names: list = field(default_factory=list)   # cookie NAMES only, never values
+    title: Optional[str] = None                            # <title> of any received body, capped
+    body_excerpt: Optional[str] = None                     # non-'fetched' responses only
+    edge_vendor_hint: Optional[str] = None                 # diagnostic heuristic, never a scored fact
 
 
 class SsrfRejected(Exception):
@@ -256,7 +518,7 @@ def _looks_like_challenge_page(html: Optional[str]) -> Optional[str]:
     ):
         return None
 
-    title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+    title_match = TITLE_RE.search(html)
     title_text = title_match.group(1).lower() if title_match else ""
     if _challenge_signature_in(title_text):
         return f"challenge-page: title signature + {body_bytes // 1000}KB body"
@@ -343,6 +605,17 @@ def _fetch_with_retries(current_url: str, hostname: str):
     ladder starts — an immediate sitewide-hostility signal, distinct
     from an ordinary rate limit hit mid-run.
 
+    403 stops early, at SCAN_FETCH_403_MAX_ATTEMPTS (2 by default), and
+    without sleeping on the way out. The ladder exists because a
+    terminal-looking first response may be a burst limit that eases off;
+    a WAF/bot-management 403 is not that. The export of blocked runs
+    showed 3-4 byte-identical 403s per URL and 9-16 per run — one retry
+    still rescues a genuinely transient edge, and the rest only spent
+    the fetch budget and made this reader look aggressive to exactly the
+    systems it is asking to trust it. The general SCAN_FETCH_RETRIES cap
+    still applies on top; the effective 403 limit is the smaller of the
+    two.
+
     Returns (response, attempts, retry_after_seen): response is the
     LAST httpx.Response received (whatever its final status — the
     caller decides what that means), attempts is how many requests were
@@ -361,6 +634,12 @@ def _fetch_with_retries(current_url: str, hostname: str):
             resp = client.get(current_url, headers=_request_headers(current_url))
 
         if resp.status_code not in RETRYABLE_STATUS_CODES or attempt >= SCAN_FETCH_RETRIES:
+            return resp, attempt, retry_after_seen
+
+        # The 403 cap, applied on top of the general one — whichever is
+        # smaller wins. No sleep on the way out: there is nothing to wait
+        # for when the answer is deterministic.
+        if resp.status_code == 403 and attempt >= SCAN_FETCH_403_MAX_ATTEMPTS:
             return resp, attempt, retry_after_seen
 
         if resp.status_code == 429 and is_first_request_to_host and attempt == 1:
@@ -447,6 +726,7 @@ def fetch(
                         http_status=resp.status_code, redirect_chain=redirect_chain,
                         attempts=total_attempts, retry_after_seen=retry_after_seen,
                         bytes=len(resp.content), error="redirect with no Location header",
+                        **_response_facts(resp, include_excerpt=True),
                     )
                 current_url = next_url
                 continue
@@ -457,6 +737,7 @@ def fetch(
                     http_status=resp.status_code, redirect_chain=redirect_chain,
                     attempts=total_attempts, retry_after_seen=retry_after_seen,
                     bytes=len(resp.content), error=f"HTTP {resp.status_code}",
+                    **_response_facts(resp, include_excerpt=True),
                 )
 
             if resp.status_code in (403, 429):
@@ -465,6 +746,7 @@ def fetch(
                     http_status=resp.status_code, redirect_chain=redirect_chain,
                     attempts=total_attempts, retry_after_seen=retry_after_seen,
                     bytes=len(resp.content), error=f"HTTP {resp.status_code}",
+                    **_response_facts(resp, include_excerpt=True),
                 )
 
             if resp.status_code >= 400:
@@ -473,6 +755,7 @@ def fetch(
                     http_status=resp.status_code, redirect_chain=redirect_chain,
                     attempts=total_attempts, retry_after_seen=retry_after_seen,
                     bytes=len(resp.content), error=f"HTTP {resp.status_code}",
+                    **_response_facts(resp, include_excerpt=True),
                 )
 
             body = resp.text
@@ -484,6 +767,7 @@ def fetch(
                     attempts=total_attempts, retry_after_seen=retry_after_seen,
                     bytes=len(resp.content),
                     error=challenge_reason,
+                    **_response_facts(resp, include_excerpt=True),
                 )
             if check_short_body and len(body.strip()) < MIN_BODY_LENGTH:
                 return FetchResult(
@@ -492,6 +776,7 @@ def fetch(
                     attempts=total_attempts, retry_after_seen=retry_after_seen,
                     bytes=len(resp.content),
                     error=f"suspiciously short body ({len(body.strip())} chars) after following redirects",
+                    **_response_facts(resp, include_excerpt=True),
                 )
 
             return FetchResult(
@@ -499,6 +784,7 @@ def fetch(
                 http_status=resp.status_code, redirect_chain=redirect_chain,
                 attempts=total_attempts, retry_after_seen=retry_after_seen,
                 bytes=len(resp.content), content=resp.content,
+                **_response_facts(resp, include_excerpt=False),
             )
 
         return FetchResult(

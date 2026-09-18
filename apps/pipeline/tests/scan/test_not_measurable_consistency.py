@@ -137,11 +137,18 @@ def test_vp_still_scores_real_even_when_its_own_mcp_fetch_also_fails(monkeypatch
     manifest absent" — an agent-checkout protocol declaration either
     exists or it doesn't, on every site type (V1's own design, Stage
     25) — so there is no reachable state where VP is genuinely
-    NOT MEASURABLE; it always produces the same honest 0/7 "no protocol
-    profile found" finding. This locks in that this is the real,
-    correct behavior of the current scorer (not something this stage
-    changes) — never blocked, never a bare zero mistaken for an
-    unevaluated dimension."""
+    NOT MEASURABLE; it always produces the same honest 0/7 finding. This
+    locks in that this is the real, correct behavior of the current
+    scorer (not something this stage changes) — never blocked, never a
+    bare zero mistaken for an unevaluated dimension.
+
+    Fetcher hardening: a uniform-403 origin is now exactly the
+    hard-refused shape, so discovery short-circuits and the MCP manifest
+    is never requested at all. Coverage and score are unchanged — the
+    point this test exists for — but the evidence no longer claims to
+    have found nothing at a URL it never asked for. (The
+    robots-200/homepage-429 fixture above does NOT short-circuit and
+    keeps the plain "no protocol profile found" wording.)"""
     def fake_get(self, url, headers=None):
         return httpx.Response(403, text="Forbidden", request=httpx.Request("GET", url))
     monkeypatch.setattr(httpx.Client, "get", fake_get)
@@ -152,7 +159,10 @@ def test_vp_still_scores_real_even_when_its_own_mcp_fetch_also_fails(monkeypatch
     vp = result.dimensions["value_protocols_seen"]
     assert vp["coverage"] == "full"
     assert vp["score"] == 0.0
-    assert vp["evidence"] == ["no protocol profile found"]
+    assert vp["evidence"] == [
+        "could not verify a protocol profile — not attempted; "
+        "robots.txt and the store root both refused our reader"
+    ]
 
     for code in _PDP_DEPENDENT_CODES:
         assert result.dimensions[code]["coverage"] == "blocked", code
