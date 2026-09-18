@@ -138,6 +138,20 @@ def suggest_competitors(
     success response the client can't tell apart from "brand genuinely
     has no competitors" — see SuggestCompetitorsResponse. reason is a
     fixed enum string, never the env var name or any backend internals.
+
+    Not grounded in the store's homepage (yet): the worker-side lite
+    flow now fetches the store and hands generate_competitors a
+    site_context block, so the model reads the category off the site
+    instead of guessing it from an ambiguous brand name. That fetcher
+    (apps/pipeline/scan/site_context.py, on top of apps/pipeline/scan/
+    fetcher.py's SSRF guard, politeness delay and declared bot identity)
+    lives in apps/pipeline, which this app never imports — and the fix
+    is emphatically NOT to add an unguarded HTTP fetch here. This flow
+    is also the authed one, where the user edits the suggested chips
+    directly in NewCycleFlow before launching, so a wrong first guess is
+    visible and correctable rather than silently baked into a report.
+    Grounding here is a deliberate follow-up: it needs either a shared
+    fetch service or a worker round-trip, not a second HTTP client.
     """
     api_key = os.environ.get("OPEN_AI_API_KEY")
     candidates = []

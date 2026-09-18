@@ -166,6 +166,21 @@ def _no_generated_competitors(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_site_context_read(monkeypatch):
+    """
+    Competitor grounding: process_lite_requests now reads the store's
+    homepage before generating competitors, whenever store_url is set.
+    Defaulting it to None (as if the fetch found nothing usable) keeps
+    every pre-grounding test's assertions exactly as they were — the
+    prompt falls back to name-only — and, more importantly, makes sure
+    no test ever reaches the real fetcher and the network. Tests that
+    care about grounding override this per-test (see the grounding
+    section below).
+    """
+    monkeypatch.setattr("scan.site_context.read_site_context", lambda *a, **k: None)
+
+
+@pytest.fixture(autouse=True)
 def _no_membership_probe_call(monkeypatch):
     """
     Stage 16 (Part 4): process_lite_requests now always calls
@@ -1715,3 +1730,125 @@ def test_sweep_emits_degraded_blocked_when_scan_timed_out(db):
     events = _events_by_token(db.connect(), "stuck001")
     state_texts = [e["text"] for e in _events_of_kind(events, "state")]
     assert state_texts == ["degraded-blocked"]
+
+
+# ── competitor grounding: the store's homepage feeds the prompt ──────────
+
+def _site_context(**overrides):
+    from scan.site_context import SiteContext
+
+    defaults = dict(
+        title="Acme Coffee — Small-batch roasted beans",
+        meta_description="Single-origin coffee beans, roasted weekly in Portland.",
+        final_url="https://acme.example.com",
+    )
+    defaults.update(overrides)
+    return SiteContext(**defaults)
+
+
+def test_site_context_block_reaches_generate_competitors(db, monkeypatch):
+    ctx = _site_context()
+    monkeypatch.setattr("scan.site_context.read_site_context", lambda *a, **k: ctx)
+
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=[], store_url="https://acme.example.com")
+
+    with patch("generation.competitor_generator.generate_competitors", return_value=[]) as mock_gen, \
+         patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
+        worker.process_lite_requests()
+
+    assert mock_gen.call_args.kwargs["site_context"] == ctx.as_prompt_block()
+    assert "Acme Coffee — Small-batch roasted beans" in mock_gen.call_args.kwargs["site_context"]
+
+
+def test_site_context_is_read_from_the_requests_store_url(db, monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        "scan.site_context.read_site_context",
+        lambda url, *a, **k: seen.append(url) or _site_context(),
+    )
+
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=[], store_url="https://acme.example.com")
+
+    with patch("generation.competitor_generator.generate_competitors", return_value=[]), \
+         patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
+        worker.process_lite_requests()
+
+    assert seen == ["https://acme.example.com"]
+
+
+def test_failed_site_context_read_still_proceeds_with_none(db, monkeypatch):
+    """The whole point of the never-throw contract: a blocked store, a
+    challenge page or a timeout degrades to today's name-only prompt and
+    the run completes exactly as before — it never fails the request."""
+    monkeypatch.setattr("scan.site_context.read_site_context", lambda *a, **k: None)
+
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    with patch("generation.competitor_generator.generate_competitors",
+               return_value=[CompetitorCandidate(name="Gen One")]) as mock_gen, \
+         patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
+        worker.process_lite_requests()
+
+    assert mock_gen.call_args.kwargs["site_context"] is None
+
+    names, source, status = _competitor_fields_by_token(db.connect(), "a1b2c3d4e5f6")
+    assert names == ["Rival", "Gen One"]
+    assert source == "mixed"
+    assert status == "running"
+
+
+def test_without_a_store_url_the_homepage_is_never_read(db, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "scan.site_context.read_site_context", lambda *a, **k: calls.append(a) or None,
+    )
+
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url=None)
+
+    with patch("generation.competitor_generator.generate_competitors", return_value=[]) as mock_gen, \
+         patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
+        worker.process_lite_requests()
+
+    assert calls == []
+    assert mock_gen.call_args.kwargs["site_context"] is None
+
+
+def test_grounding_emits_its_own_progress_log_before_the_rivals_one(db, monkeypatch):
+    monkeypatch.setattr("scan.site_context.read_site_context", lambda *a, **k: _site_context())
+
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=[], store_url="https://acme.example.com")
+
+    with patch("generation.competitor_generator.generate_competitors", return_value=[]), \
+         patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        events = json.loads(conn.exec_driver_sql(
+            "SELECT events FROM soa_lite_requests WHERE token = 'a1b2c3d4e5f6'"
+        ).fetchone()[0])
+
+    texts = [e.get("text") for e in events]
+    assert "reading your store to see what you sell…" in texts
+    assert texts.index("reading your store to see what you sell…") < \
+        texts.index("identifying your closest rivals…")
+
+
+def test_no_grounding_log_is_emitted_without_a_store_url(db):
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url=None)
+
+    with patch("generation.competitor_generator.generate_competitors", return_value=[]), \
+         patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()):
+        worker.process_lite_requests()
+
+    with db.connect() as conn:
+        events = json.loads(conn.exec_driver_sql(
+            "SELECT events FROM soa_lite_requests WHERE token = 'a1b2c3d4e5f6'"
+        ).fetchone()[0])
+
+    assert "reading your store to see what you sell…" not in [e.get("text") for e in events]
