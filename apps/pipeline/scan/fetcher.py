@@ -19,6 +19,14 @@ list dependency, per rule 8) — same pragmatic-heuristic style as
 liteDerive.js::deriveBrandFromUrl; multi-part TLDs (co.uk, com.au) are
 a known, accepted limitation.
 
+robots.txt compliance: every robots lookup uses ROBOTS_USER_AGENT (the
+bot's own name), never USER_AGENT — urllib.robotparser would read the
+latter's leading "Mozilla/5.0" as the agent token and never match a
+named group. Crawl-delay is honored as a floor on the per-host politeness
+gap, and a delay above SCAN_CRAWL_DELAY_CAP_SECONDS ends the fetch
+instead of being capped. Both claims are made to site operators on
+bots.parleo.io, so both have to be true here.
+
 Block evidence (fetcher hardening): every response we record as
 anything other than 'fetched' also carries the facts that answer "who
 refused us?" — an allowlisted slice of the response headers, the NAMES
@@ -45,7 +53,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 
 from . import signing
-from .identity import BOT_UA
+from .identity import BOT_NAME, BOT_UA
 
 log = logging.getLogger(__name__)
 
@@ -66,6 +74,15 @@ def _env_int(name: str, default: int) -> int:
 # agent_access_matrix.py) imports THIS name, not identity.BOT_UA
 # directly, so there is still exactly one name used repo-wide.
 USER_AGENT = BOT_UA
+# The token robots.txt groups are matched on — NOT the full UA string.
+# urllib.robotparser takes the text before the first "/" as the agent
+# token, and BOT_UA starts "Mozilla/5.0 ...", so passing USER_AGENT to
+# can_fetch() matches on "Mozilla" and a named ParleoAuditBot group is
+# never found (the bots page tells operators that group blocks us, so
+# this has to be the bot's own name). Re-exported here, like
+# USER_AGENT, so discovery.py and scorer.py import one name from one
+# place rather than each reaching into identity.py.
+ROBOTS_USER_AGENT = BOT_NAME
 ACCEPT_HEADER = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 ACCEPT_LANGUAGE_HEADER = "en-US,en;q=0.9"
 TIMEOUT_SECONDS = 10.0
@@ -103,6 +120,12 @@ RETRYABLE_STATUS_CODES = {429, 403, 500, 502, 503, 504}
 # export of blocked runs showed 3–4 identical 403s per URL. One retry
 # catches a transient edge; more only spends budget and looks aggressive.
 SCAN_FETCH_403_MAX_ATTEMPTS = _env_int("SCAN_FETCH_403_MAX_ATTEMPTS", 2)
+
+# Crawl-delay is honored up to this ceiling. Above it we don't wait,
+# we don't fetch: a site asking for a minute between requests has
+# said it does not want a 12-page audit, and pretending otherwise by
+# silently capping the wait would make the bots page's claim false.
+SCAN_CRAWL_DELAY_CAP_SECONDS = _env_int("SCAN_CRAWL_DELAY_CAP_SECONDS", 30)
 
 MAX_PAGE_FETCHES = 12
 MIN_BODY_LENGTH = 100
@@ -402,6 +425,11 @@ class FetchResult:
     title: Optional[str] = None                            # <title> of any received body, capped
     body_excerpt: Optional[str] = None                     # non-'fetched' responses only
     edge_vendor_hint: Optional[str] = None                 # diagnostic heuristic, never a scored fact
+    # The per-host gap robots.txt asked us to keep, when it asked for one
+    # — recorded on every result produced with a parser in hand, success
+    # or refusal, so a row shows the gap that was actually honored rather
+    # than leaving it to be re-derived from robots.txt later.
+    crawl_delay_seconds: Optional[float] = None
 
 
 class SsrfRejected(Exception):
@@ -548,11 +576,39 @@ def _jittered_delay(base_seconds: float) -> float:
     return max(0.0, base_seconds + random.uniform(-spread, spread))
 
 
-def _politeness_wait(hostname: str) -> None:
+def _robots_crawl_delay(robot_parser) -> Optional[float]:
+    """The Crawl-delay robots.txt declares for us, in seconds, or None.
+    RobotFileParser.crawl_delay() already does the right lookup — the
+    named ParleoAuditBot group's value if there is one, else the '*'
+    group's, else None — so this only has to ask it with the right token
+    and coerce the answer. Never raises: an absent directive, an
+    unparseable value, or no parser at all all read as None, which is
+    'no floor' and leaves the ordinary politeness delay in charge."""
+    if robot_parser is None:
+        return None
+    try:
+        raw = robot_parser.crawl_delay(ROBOTS_USER_AGENT)
+    except Exception:
+        return None
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def _politeness_wait(hostname: str, min_gap_seconds: Optional[float] = None) -> None:
+    """min_gap_seconds (Crawl-delay) is a FLOOR on the gap, never a
+    replacement: whichever of the two is larger wins, so a Crawl-delay
+    below our own politeness delay never speeds us up. No jitter is
+    applied on top of a Crawl-delay — the site named a number, and that
+    number is what it gets."""
     last = _last_fetch_at.get(hostname)
     if last is not None:
         elapsed = time.monotonic() - last
-        delay = _jittered_delay(POLITENESS_DELAY_SECONDS)
+        delay = max(_jittered_delay(POLITENESS_DELAY_SECONDS), min_gap_seconds or 0.0)
         if elapsed < delay:
             time.sleep(delay - elapsed)
     _last_fetch_at[hostname] = time.monotonic()
@@ -674,6 +730,12 @@ def fetch(
     or the fetch ends 'failed' (too many hops, SSRF-abort, cross-domain
     stop) — it never comes back as a bare "redirect" status.
 
+    robots.txt's Crawl-delay, when it declares one for us, becomes a
+    floor on the per-host gap (see _politeness_wait). A Crawl-delay above
+    SCAN_CRAWL_DELAY_CAP_SECONDS ends the fetch as 'robots_disallowed'
+    without a request rather than being silently capped — see the comment
+    at that check for why refusing is the honest reading.
+
     check_short_body (F2) flags a final 2xx body under MIN_BODY_LENGTH
     chars as 'blocked' — but only when the caller opts in. A real
     robots.txt, sitemap, or /llms.txt is routinely well under 100 chars
@@ -688,10 +750,42 @@ def fetch(
     starting_domain = _registrable_domain(urlparse(url).hostname)
     total_attempts = 0
     retry_after_seen: Optional[float] = None
+    crawl_delay: Optional[float] = None
 
     try:
-        if robot_parser is not None and not robot_parser.can_fetch(USER_AGENT, current_url):
-            return FetchResult(url=url, status=ROBOTS_DISALLOWED, error="disallowed by robots.txt")
+        # ROBOTS_USER_AGENT, never USER_AGENT: robotparser splits the
+        # agent on "/" and would match BOT_UA's leading "Mozilla".
+        # Read before the allow check so a disallowed URL's record still
+        # shows what gap this robots.txt asked for.
+        crawl_delay = _robots_crawl_delay(robot_parser)
+
+        if robot_parser is not None and not robot_parser.can_fetch(ROBOTS_USER_AGENT, current_url):
+            return FetchResult(
+                url=url, status=ROBOTS_DISALLOWED, error="disallowed by robots.txt",
+                crawl_delay_seconds=crawl_delay,
+            )
+
+        # Crawl-delay, honored as a floor on the per-host gap below. Past
+        # SCAN_CRAWL_DELAY_CAP_SECONDS we refuse the fetch rather than
+        # quietly capping the wait: a site asking for a minute between
+        # requests has said it doesn't want an audit that reads a dozen
+        # pages, and honoring the letter while ignoring the intent is
+        # exactly the behavior the bots page promises we don't have.
+        #
+        # This can only apply from the SECOND request to a host onward,
+        # and that is not a gap in the implementation — the first request
+        # has no preceding one to be spaced from, and robots.txt itself
+        # must be fetched before anything it says can be known. Crawl-
+        # delay means the interval between requests, so a first request
+        # and the robots.txt fetch are outside its scope by definition.
+        if crawl_delay is not None and crawl_delay > SCAN_CRAWL_DELAY_CAP_SECONDS:
+            return FetchResult(
+                url=url, status=ROBOTS_DISALLOWED, crawl_delay_seconds=crawl_delay,
+                error=(
+                    f"robots.txt Crawl-delay of {crawl_delay:g} s exceeds our maximum "
+                    f"wait of {SCAN_CRAWL_DELAY_CAP_SECONDS:g} s — not fetched"
+                ),
+            )
 
         for _ in range(MAX_REDIRECTS + 1):
             _validate_url(current_url)
@@ -701,7 +795,7 @@ def fetch(
                 return FetchResult(
                     url=url, final_url=current_url, status=FAILED,
                     redirect_chain=redirect_chain, attempts=total_attempts or 1,
-                    retry_after_seen=retry_after_seen,
+                    retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay,
                     error=(
                         f"cross-domain redirect stopped at {current_url!r} "
                         f"(registrable domain {hop_domain!r} != {starting_domain!r})"
@@ -709,7 +803,7 @@ def fetch(
                 )
 
             hostname = urlparse(current_url).hostname
-            _politeness_wait(hostname)
+            _politeness_wait(hostname, min_gap_seconds=crawl_delay)
 
             resp, hop_attempts, hop_retry_after = _fetch_with_retries(current_url, hostname)
             total_attempts += hop_attempts
@@ -724,7 +818,7 @@ def fetch(
                     return FetchResult(
                         url=url, final_url=current_url, status=FAILED,
                         http_status=resp.status_code, redirect_chain=redirect_chain,
-                        attempts=total_attempts, retry_after_seen=retry_after_seen,
+                        attempts=total_attempts, retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay,
                         bytes=len(resp.content), error="redirect with no Location header",
                         **_response_facts(resp, include_excerpt=True),
                     )
@@ -735,7 +829,7 @@ def fetch(
                 return FetchResult(
                     url=url, final_url=current_url, status=NOT_FOUND,
                     http_status=resp.status_code, redirect_chain=redirect_chain,
-                    attempts=total_attempts, retry_after_seen=retry_after_seen,
+                    attempts=total_attempts, retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay,
                     bytes=len(resp.content), error=f"HTTP {resp.status_code}",
                     **_response_facts(resp, include_excerpt=True),
                 )
@@ -744,7 +838,7 @@ def fetch(
                 return FetchResult(
                     url=url, final_url=current_url, status=BLOCKED,
                     http_status=resp.status_code, redirect_chain=redirect_chain,
-                    attempts=total_attempts, retry_after_seen=retry_after_seen,
+                    attempts=total_attempts, retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay,
                     bytes=len(resp.content), error=f"HTTP {resp.status_code}",
                     **_response_facts(resp, include_excerpt=True),
                 )
@@ -753,7 +847,7 @@ def fetch(
                 return FetchResult(
                     url=url, final_url=current_url, status=FAILED,
                     http_status=resp.status_code, redirect_chain=redirect_chain,
-                    attempts=total_attempts, retry_after_seen=retry_after_seen,
+                    attempts=total_attempts, retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay,
                     bytes=len(resp.content), error=f"HTTP {resp.status_code}",
                     **_response_facts(resp, include_excerpt=True),
                 )
@@ -764,7 +858,7 @@ def fetch(
                 return FetchResult(
                     url=url, final_url=current_url, status=BLOCKED, html=body,
                     http_status=resp.status_code, redirect_chain=redirect_chain,
-                    attempts=total_attempts, retry_after_seen=retry_after_seen,
+                    attempts=total_attempts, retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay,
                     bytes=len(resp.content),
                     error=challenge_reason,
                     **_response_facts(resp, include_excerpt=True),
@@ -773,7 +867,7 @@ def fetch(
                 return FetchResult(
                     url=url, final_url=current_url, status=BLOCKED, html=body,
                     http_status=resp.status_code, redirect_chain=redirect_chain,
-                    attempts=total_attempts, retry_after_seen=retry_after_seen,
+                    attempts=total_attempts, retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay,
                     bytes=len(resp.content),
                     error=f"suspiciously short body ({len(body.strip())} chars) after following redirects",
                     **_response_facts(resp, include_excerpt=True),
@@ -782,7 +876,7 @@ def fetch(
             return FetchResult(
                 url=url, final_url=current_url, status=FETCHED, html=body,
                 http_status=resp.status_code, redirect_chain=redirect_chain,
-                attempts=total_attempts, retry_after_seen=retry_after_seen,
+                attempts=total_attempts, retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay,
                 bytes=len(resp.content), content=resp.content,
                 **_response_facts(resp, include_excerpt=False),
             )
@@ -790,31 +884,31 @@ def fetch(
         return FetchResult(
             url=url, final_url=current_url, status=FAILED,
             redirect_chain=redirect_chain, attempts=total_attempts or 1,
-            retry_after_seen=retry_after_seen, error="too many redirects",
+            retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay, error="too many redirects",
         )
 
     except SsrfRejected as e:
         return FetchResult(
             url=url, final_url=current_url, status=FAILED,
             redirect_chain=redirect_chain, attempts=total_attempts or 1,
-            retry_after_seen=retry_after_seen, error=f"blocked by SSRF guard: {e}",
+            retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay, error=f"blocked by SSRF guard: {e}",
         )
     except httpx.TimeoutException as e:
         return FetchResult(
             url=url, final_url=current_url, status=FAILED,
             redirect_chain=redirect_chain, attempts=total_attempts or 1,
-            retry_after_seen=retry_after_seen, error=f"timeout: {e}",
+            retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay, error=f"timeout: {e}",
         )
     except httpx.HTTPError as e:
         return FetchResult(
             url=url, final_url=current_url, status=FAILED,
             redirect_chain=redirect_chain, attempts=total_attempts or 1,
-            retry_after_seen=retry_after_seen, error=f"HTTP error: {e}",
+            retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay, error=f"HTTP error: {e}",
         )
     except Exception as e:
         log.exception(f"[scan.fetcher] unexpected error fetching {url}")
         return FetchResult(
             url=url, final_url=current_url, status=FAILED,
             redirect_chain=redirect_chain, attempts=total_attempts or 1,
-            retry_after_seen=retry_after_seen, error=f"unexpected error: {e}",
+            retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay, error=f"unexpected error: {e}",
         )

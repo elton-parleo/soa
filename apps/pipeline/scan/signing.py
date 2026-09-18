@@ -84,6 +84,16 @@ WEB_BOT_AUTH = os.environ.get("WEB_BOT_AUTH", "on" if _PRIVATE_KEY is not None e
 
 if _PRIVATE_KEY is None:
     log.info("[scan.signing] BOT_SIGNING_KEY not set — page fetches will be unsigned (Web Bot Auth off)")
+else:
+    # The mirror of the line above: whichever state the worker booted
+    # in, one INFO line says so and names the key. Without this, "which
+    # key is production actually signing with right now?" was only
+    # answerable by reading the environment of a running container —
+    # precisely the question a rotation makes urgent.
+    log.info(
+        f"[scan.signing] Web Bot Auth on — keyid={_key_id(_PRIVATE_KEY)}, "
+        f"directory={KEY_DIRECTORY_URL}"
+    )
 
 
 def is_signing_enabled() -> bool:
@@ -106,6 +116,21 @@ def _key_id(private_key: Ed25519PrivateKey) -> str:
     jwk = {"crv": "Ed25519", "kty": "OKP", "x": _b64url_no_pad(raw_public)}
     canonical = json.dumps(jwk, separators=(",", ":"), sort_keys=True).encode("utf-8")
     return _b64url_no_pad(hashlib.sha256(canonical).digest())
+
+
+def key_id() -> Optional[str]:
+    """The keyid this process signs with, or None when signing is off.
+    Public material only — a thumbprint over the PUBLIC key, the same
+    value published in the key directory and sent in every
+    Signature-Input, never anything derived from the seed.
+
+    Exists so a scan row can record WHICH key signed its fetches
+    (engine.py writes it to dimensions["signing_kid"]): after a rotation,
+    "was this run signed with the old key or the new one?" should be a
+    database question, not an archaeology exercise."""
+    if not is_signing_enabled():
+        return None
+    return _key_id(_PRIVATE_KEY)
 
 
 def public_key_jwk(private_key: Optional[Ed25519PrivateKey] = None) -> Optional[dict]:

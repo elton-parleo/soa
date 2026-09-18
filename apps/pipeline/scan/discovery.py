@@ -79,7 +79,7 @@ from xml.etree import ElementTree
 
 from bs4 import BeautifulSoup
 
-from .fetcher import USER_AGENT, FetchBudget, FetchResult, fetch
+from .fetcher import ROBOTS_USER_AGENT, FetchBudget, FetchResult, fetch
 from .structured_data import extract as extract_structured_data
 
 log = logging.getLogger(__name__)
@@ -580,7 +580,7 @@ def _probe_platform_endpoints(
     for path, name in PLATFORM_ENDPOINT_PROBES:
         endpoint_url = urljoin(base_url, path)
 
-        if robot_parser is not None and not robot_parser.can_fetch(USER_AGENT, endpoint_url):
+        if robot_parser is not None and not robot_parser.can_fetch(ROBOTS_USER_AGENT, endpoint_url):
             sampling_log["platform_endpoints_probed"].append(
                 {"endpoint": name, "url": endpoint_url, "skipped": "robots disallowed"}
             )
@@ -700,7 +700,7 @@ def _probe_llm_discovery(
             rejections.append({"url": candidate_url, "reason": "off-domain"})
             continue
 
-        if robot_parser is not None and not robot_parser.can_fetch(USER_AGENT, candidate_url):
+        if robot_parser is not None and not robot_parser.can_fetch(ROBOTS_USER_AGENT, candidate_url):
             rejections.append({"url": candidate_url, "reason": "robots disallowed"})
             continue
 
@@ -969,7 +969,7 @@ def discover_pages(
         # "rate-limited" (that's a fetch-time signal, this is a crawl-
         # policy one).
         if robot_parser is not None and deduped_product_urls:
-            allowed_product_urls = [u for u in deduped_product_urls if robot_parser.can_fetch(USER_AGENT, u)]
+            allowed_product_urls = [u for u in deduped_product_urls if robot_parser.can_fetch(ROBOTS_USER_AGENT, u)]
             sampling_log["robots_excluded"] = len(deduped_product_urls) - len(allowed_product_urls)
             deduped_product_urls = allowed_product_urls
 

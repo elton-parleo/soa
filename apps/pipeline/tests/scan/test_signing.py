@@ -198,3 +198,64 @@ def test_public_key_jwk_never_includes_private_material(enabled_signing):
 def test_public_key_jwk_is_none_with_no_key(monkeypatch):
     monkeypatch.setattr(signing, "_PRIVATE_KEY", None)
     assert signing.public_key_jwk(None) is None
+
+
+# ─── key_id(): which key signed this run ───────────────────────────────────
+
+def test_key_id_matches_the_published_directory_entry(enabled_signing):
+    """The kid recorded on a scan row has to be the same string a
+    verifier sees in the key directory, or it answers nothing."""
+    assert signing.key_id() == signing.public_key_jwk(enabled_signing)["kid"]
+
+
+def test_key_id_matches_the_keyid_sent_in_signature_input(enabled_signing):
+    headers = signing.sign_request("GET", "https://example.com/products/foo")
+    keyid_in_header = re.search(r'keyid="([^"]+)"', headers["Signature-Input"]).group(1)
+    assert signing.key_id() == keyid_in_header
+
+
+def test_key_id_is_none_when_the_flag_is_off(monkeypatch, test_key):
+    monkeypatch.setattr(signing, "_PRIVATE_KEY", test_key)
+    monkeypatch.setattr(signing, "WEB_BOT_AUTH", "off")
+    assert signing.key_id() is None
+
+
+def test_key_id_is_none_when_no_key_is_set(monkeypatch):
+    monkeypatch.setattr(signing, "_PRIVATE_KEY", None)
+    monkeypatch.setattr(signing, "WEB_BOT_AUTH", "on")
+    assert signing.key_id() is None
+
+
+def test_key_id_never_exposes_private_material(enabled_signing):
+    seed_b64 = _b64(enabled_signing.private_bytes_raw())
+    kid = signing.key_id()
+    assert seed_b64 not in kid
+    assert signing._b64url_no_pad(enabled_signing.private_bytes_raw()) not in kid
+
+
+def test_key_present_announces_the_keyid_and_directory_in_one_startup_line(monkeypatch, caplog, test_key):
+    """The mirror of test_key_absent_degrades_to_unsigned_with_a_single_
+    startup_log_line: whichever state the worker boots in, exactly one
+    INFO line says so — and the enabled one names the key, so "which key
+    is production signing with?" is answerable from the Railway log."""
+    _seed_env(monkeypatch, test_key)
+    monkeypatch.delenv("WEB_BOT_AUTH", raising=False)
+    with caplog.at_level(logging.INFO, logger="scan.signing"):
+        reloaded = importlib.reload(signing)
+    try:
+        assert reloaded._PRIVATE_KEY is not None
+        startup_lines = [r for r in caplog.records if "Web Bot Auth on" in r.getMessage()]
+        assert len(startup_lines) == 1
+        message = startup_lines[0].getMessage()
+        assert reloaded.key_id() in message
+        assert reloaded.KEY_DIRECTORY_URL in message
+        # Never the seed, not even partially.
+        assert _b64(test_key.private_bytes_raw()) not in message
+    finally:
+        # The env var must go BEFORE the restoring reload: monkeypatch
+        # only undoes it after this function returns, so reloading first
+        # would leave signing globally ENABLED for every later test in
+        # the session — which silently flips _reader_phrase()'s
+        # signed/unsigned evidence wording elsewhere in the suite.
+        monkeypatch.delenv("BOT_SIGNING_KEY", raising=False)
+        importlib.reload(signing)  # restore whatever state later tests expect
