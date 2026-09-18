@@ -45,7 +45,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 
 from . import signing
-from .identity import BOT_UA
+from .identity import BOT_NAME, BOT_UA
 
 log = logging.getLogger(__name__)
 
@@ -66,6 +66,15 @@ def _env_int(name: str, default: int) -> int:
 # agent_access_matrix.py) imports THIS name, not identity.BOT_UA
 # directly, so there is still exactly one name used repo-wide.
 USER_AGENT = BOT_UA
+# The token robots.txt groups are matched on — NOT the full UA string.
+# urllib.robotparser takes the text before the first "/" as the agent
+# token, and BOT_UA starts "Mozilla/5.0 ...", so passing USER_AGENT to
+# can_fetch() matches on "Mozilla" and a named ParleoAuditBot group is
+# never found (the bots page tells operators that group blocks us, so
+# this has to be the bot's own name). Re-exported here, like
+# USER_AGENT, so discovery.py and scorer.py import one name from one
+# place rather than each reaching into identity.py.
+ROBOTS_USER_AGENT = BOT_NAME
 ACCEPT_HEADER = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 ACCEPT_LANGUAGE_HEADER = "en-US,en;q=0.9"
 TIMEOUT_SECONDS = 10.0
@@ -690,7 +699,9 @@ def fetch(
     retry_after_seen: Optional[float] = None
 
     try:
-        if robot_parser is not None and not robot_parser.can_fetch(USER_AGENT, current_url):
+        # ROBOTS_USER_AGENT, never USER_AGENT: robotparser splits the
+        # agent on "/" and would match BOT_UA's leading "Mozilla".
+        if robot_parser is not None and not robot_parser.can_fetch(ROBOTS_USER_AGENT, current_url):
             return FetchResult(url=url, status=ROBOTS_DISALLOWED, error="disallowed by robots.txt")
 
         for _ in range(MAX_REDIRECTS + 1):

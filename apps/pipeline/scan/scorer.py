@@ -43,7 +43,7 @@ from soa_shared.scan_dimensions import DIMENSIONS_BY_CODE
 
 from . import site_typing
 from .discovery import discovery_coverage_note
-from .fetcher import USER_AGENT
+from .fetcher import ROBOTS_USER_AGENT
 from .signing import is_signing_enabled
 
 WEIGHTS = {
@@ -241,7 +241,7 @@ def score_f1_agent_access(discovery, pages, divergence_evidence=()) -> Dimension
         if discovery.robot_parser is not None:
             disallowed = [
                 u for u in product_urls
-                if not discovery.robot_parser.can_fetch(USER_AGENT, u)
+                if not discovery.robot_parser.can_fetch(ROBOTS_USER_AGENT, u)
             ]
         if not disallowed:
             points += weight * 0.4
