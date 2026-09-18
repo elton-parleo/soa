@@ -228,7 +228,17 @@ def _fetch_entry(fr) -> dict:
     performed, including robots.txt/sitemap/well-known probes that were
     previously invisible. A4 (fetch resilience): attempts/retry_after_seen/
     bytes give the scorer (and the report) the structured facts behind
-    a status, instead of re-deriving them from evidence strings."""
+    a status, instead of re-deriving them from evidence strings.
+
+    Block evidence (fetcher hardening): additive diagnostic keys —
+    error is the fetcher's own reason string (it was always computed,
+    it just never got serialized, so a Cloudflare block, an Akamai
+    "Access Denied" page and a client-rendered app shell were
+    indistinguishable after the fact), and the rest are the response
+    facts fetcher.py now records at the moment of refusal. These are
+    for us: cycle_scoring.build_scan_payload filters pages_fetched back
+    down to its long-standing public keys before the report payload
+    reaches a browser."""
     return {
         "url": fr.url,
         "final_url": fr.final_url,
@@ -237,6 +247,53 @@ def _fetch_entry(fr) -> dict:
         "attempts": fr.attempts,
         "retry_after_seen": fr.retry_after_seen,
         "bytes": fr.bytes,
+        "error": fr.error,
+        "redirect_chain": list(fr.redirect_chain or []),
+        "response_headers": fr.response_headers or {},
+        "set_cookie_names": list(fr.set_cookie_names or []),
+        "title": fr.title,
+        "body_excerpt": fr.body_excerpt,
+        "edge_vendor_hint": fr.edge_vendor_hint,
+    }
+
+
+BLOCK_EVIDENCE_MAX_TITLES = 5
+BLOCK_EVIDENCE_MAX_BODY_SIZES = 8
+
+
+def _block_evidence_summary(entries) -> dict:
+    """Block evidence (fetcher hardening): the run-level rollup of what
+    the per-fetch evidence above adds up to — which edge vendor's
+    fingerprint showed up and how often, and the distinct refusal-page
+    titles and body sizes. Identical titles and byte counts across every
+    URL on a run are the signature of one WAF answering everything, which
+    is the question this whole record exists to answer.
+
+    vendor_hints counts EVERY entry, not just blocked ones — knowing a
+    run's successful fetches also came through Cloudflare is part of
+    reading the blocked ones. Pure and never raises."""
+    vendor_hints: dict = {}
+    blocked_titles: list = []
+    blocked_body_sizes: list = []
+    try:
+        for entry in entries or []:
+            vendor = entry.get("edge_vendor_hint")
+            if vendor:
+                vendor_hints[vendor] = vendor_hints.get(vendor, 0) + 1
+            if entry.get("status") != "blocked":
+                continue
+            title = entry.get("title")
+            if title and title not in blocked_titles and len(blocked_titles) < BLOCK_EVIDENCE_MAX_TITLES:
+                blocked_titles.append(title)
+            size = entry.get("bytes")
+            if size is not None and size not in blocked_body_sizes and len(blocked_body_sizes) < BLOCK_EVIDENCE_MAX_BODY_SIZES:
+                blocked_body_sizes.append(size)
+    except Exception:
+        log.exception("[scan.engine] block evidence summary failed")
+    return {
+        "vendor_hints": vendor_hints,
+        "blocked_titles": blocked_titles,
+        "blocked_body_sizes": blocked_body_sizes,
     }
 
 
@@ -522,6 +579,12 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
             # (public_lite.py) both key off, so they can never disagree
             # about whether this run's fetches were actually signed.
             dimensions["signing_enabled"] = signing.is_signing_enabled()
+            # Block evidence (fetcher hardening): recorded unconditionally,
+            # same "debuggability was the point" rationale as
+            # sitemap_sampling/signing_enabled above — a degraded run is
+            # exactly when "who refused us, and did the same thing refuse
+            # every URL?" is the question being asked.
+            dimensions["block_evidence"] = _block_evidence_summary(pages_fetched)
             return ScanResult(
                 status=status,
                 dimensions=dimensions,
@@ -613,6 +676,11 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
         # W6: see the degraded branch's identical line for why this is
         # recorded unconditionally.
         dimensions["signing_enabled"] = signing.is_signing_enabled()
+        # Block evidence (fetcher hardening): see the degraded branch's
+        # identical line — recorded unconditionally, same rationale. A
+        # complete run can still have individually refused fetches worth
+        # attributing.
+        dimensions["block_evidence"] = _block_evidence_summary(pages_fetched)
         dimensions["price_honesty_advisory"] = {
             "scored": False,
             "would_have_capped": v5_would_have_capped,

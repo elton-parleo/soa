@@ -224,6 +224,36 @@ def _fetch_probe_banner_note(fetch_probe: dict) -> dict | None:
     }
 
 
+# Block evidence (fetcher hardening): the pipeline now records a lot
+# more per fetch — the fetcher's own reason string, an allowlisted slice
+# of the response headers, the names of any cookies the response set,
+# its title, a body excerpt and an edge-vendor hint. All of that is OUR
+# diagnostic record for reading a blocked run after the fact; none of it
+# is report content, and a body excerpt off a refusal page has no
+# business being served to a browser. pages_fetched is filtered back
+# down to exactly the keys it has always carried publicly, so the shape
+# the report and its three readers see is unchanged — today they only
+# use the array's length and discovery_trace, and this keeps it that way
+# even if one of them starts reading rows.
+PUBLIC_PAGES_FETCHED_KEYS = (
+    'url', 'final_url', 'status', 'http_status', 'attempts', 'retry_after_seen', 'bytes',
+)
+
+
+def _public_pages_fetched(rows) -> list:
+    """Never raises — an unexpected row shape degrades to dropping that
+    row's extras, never to breaking the report (rule 7)."""
+    if not isinstance(rows, list):
+        return []
+    public = []
+    for row in rows:
+        if not isinstance(row, dict):
+            public.append(row)
+            continue
+        public.append({k: row[k] for k in PUBLIC_PAGES_FETCHED_KEYS if k in row})
+    return public
+
+
 def build_scan_payload(scan_row, linked: dict) -> dict | None:
     """
     Shapes one soa_lite_scan_results row into the public 'scan' object.
@@ -251,7 +281,7 @@ def build_scan_payload(scan_row, linked: dict) -> dict | None:
 
     (status, total_score, integrity_capped, dimensions, pages_fetched,
      _membership_probe, _revenue_probe, fetch_probe_raw, _input_url) = scan_row
-    pages_fetched = decode_json_field(pages_fetched, [])
+    pages_fetched = _public_pages_fetched(decode_json_field(pages_fetched, []))
     fetch_probe = decode_json_field(fetch_probe_raw, {})
 
     if status != 'complete':
