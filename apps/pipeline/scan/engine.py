@@ -601,6 +601,14 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
             # (public_lite.py) both key off, so they can never disagree
             # about whether this run's fetches were actually signed.
             dimensions["signing_enabled"] = signing.is_signing_enabled()
+            # W2/W3: recorded unconditionally for the same reason as the
+            # line above — debuggability was the point. signing_enabled
+            # says THAT this run was signed; signing_kid says which key
+            # did it, so a rotation is checkable from the database
+            # instead of from a running container's environment. Public
+            # material (it is in the served key directory); it is not put
+            # on the report payload because the report has no use for it.
+            dimensions["signing_kid"] = signing.key_id()
             # Block evidence (fetcher hardening): recorded unconditionally,
             # same "debuggability was the point" rationale as
             # sitemap_sampling/signing_enabled above — a degraded run is
@@ -700,6 +708,9 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
         # W6: see the degraded branch's identical line for why this is
         # recorded unconditionally.
         dimensions["signing_enabled"] = signing.is_signing_enabled()
+        # W2/W3: see the degraded branch's identical line — recorded
+        # unconditionally, same rationale.
+        dimensions["signing_kid"] = signing.key_id()
         # Block evidence (fetcher hardening): see the degraded branch's
         # identical line — recorded unconditionally, same rationale. A
         # complete run can still have individually refused fetches worth
