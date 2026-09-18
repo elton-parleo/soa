@@ -288,14 +288,22 @@ def test_bot_blocked_store_returns_blocked_status(monkeypatch):
     # an agent reach this site" / "does it declare a protocol" are
     # exactly what a uniform-403 run just answered, not something it
     # left unmeasured. value_protocols never even looks at PDPs, so a
-    # 403-walled run still gets an honest 0/7 "no protocol profile
-    # found" instead of the page-sampling blanket.
+    # 403-walled run still gets an honest 0/7 instead of the page-
+    # sampling blanket.
+    #
+    # Fetcher hardening: this uniform-403 origin is the hard-refused
+    # shape, so discovery short-circuits and the MCP manifest is never
+    # requested. Coverage and score are unchanged; the evidence now says
+    # it didn't look, rather than claiming it looked and found nothing.
     assert result.dimensions["agent_access"]["coverage"] == "full"
     assert result.dimensions["agent_access"]["score"] == 0.0
     assert any("robots.txt itself refused our identified reader (HTTP 403)" in e for e in result.dimensions["agent_access"]["evidence"])
     assert result.dimensions["value_protocols_seen"]["coverage"] == "full"
     assert result.dimensions["value_protocols_seen"]["score"] == 0.0
-    assert result.dimensions["value_protocols_seen"]["evidence"] == ["no protocol profile found"]
+    assert result.dimensions["value_protocols_seen"]["evidence"] == [
+        "could not verify a protocol profile — not attempted; "
+        "robots.txt and the store root both refused our reader"
+    ]
 
 
 def test_fake_was_price_with_no_validity_anywhere_is_advisory_only_never_caps(monkeypatch):

@@ -148,6 +148,18 @@ def _choose_fetch_probe_url(canonical_origin: str, pages: list) -> tuple:
     return canonical_origin, FETCH_PROBE_KIND_STORE_ROOT
 
 
+def _short_circuited(discovery: DiscoveryResult) -> bool:
+    """Fetcher hardening: did discovery stop before it started because
+    robots.txt and the store root both refused us (see discovery.py's
+    hard_refused)? Threaded into the scorers whose evidence would
+    otherwise report an absence they never actually checked for — never
+    a scoring input, only a wording one."""
+    try:
+        return bool(discovery.sitemap_sampling.get("short_circuit"))
+    except Exception:
+        return False
+
+
 def _compute_agent_access(discovery: DiscoveryResult, pages: list) -> tuple:
     """
     Part 1 (M1-M5): builds the Agent Access Matrix exactly once and
@@ -210,7 +222,9 @@ def _compute_discovery_surface_scores(discovery: DiscoveryResult, pages: list) -
     agent_access_score, agent_access_matrix = _compute_agent_access(discovery, pages)
     scores = {
         "agent_access": agent_access_score,
-        "value_protocols_seen": scorer.score_value_protocols(pages),
+        "value_protocols_seen": scorer.score_value_protocols(
+            pages, short_circuited=_short_circuited(discovery),
+        ),
     }
     return scores, agent_access_matrix
 
@@ -474,6 +488,11 @@ def _discovery_trace_facts(discovery: DiscoveryResult, pages: list) -> dict:
         "robots_ok": robots_ok,
         "homepage_fetched": homepage_fetched,
         "product_pages_fetched": product_pages_fetched,
+        # Fetcher hardening: additive key, nothing in the frontend reads
+        # it yet. It exists so the trace is honest about WHY
+        # tiers_attempted is short on a hard-refused run — discovery
+        # stopped on purpose, it didn't fail to find anything.
+        "short_circuited": bool(discovery.sitemap_sampling.get("short_circuit")),
     }
 
 
@@ -619,7 +638,9 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
         dim_scores = {
             **discovery_surface_scores,
             "catalog_context": scorer.score_catalog_context(pages, site_type_result),
-            "protocol_feed": scorer.score_protocol_feed(pages, site_type_result),
+            "protocol_feed": scorer.score_protocol_feed(
+                pages, site_type_result, short_circuited=_short_circuited(discovery),
+            ),
             "price_truth_seen": scorer.score_price_truth_seen(pages, site_type_result),
             "member_value_seen": scorer.score_member_value_seen(pages, site_type_result),
             "deal_citability_seen": scorer.score_deal_citability_seen(pages, site_type_result),
