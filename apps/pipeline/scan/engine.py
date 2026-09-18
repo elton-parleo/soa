@@ -268,6 +268,9 @@ def _fetch_entry(fr) -> dict:
         "title": fr.title,
         "body_excerpt": fr.body_excerpt,
         "edge_vendor_hint": fr.edge_vendor_hint,
+        # The per-host gap robots.txt asked us to keep, when it asked for
+        # one — additive, None on the overwhelming majority of rows.
+        "crawl_delay_seconds": fr.crawl_delay_seconds,
     }
 
 
