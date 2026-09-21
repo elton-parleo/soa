@@ -22,6 +22,7 @@ import httpx
 import pytest
 
 from scan import engine, fetcher
+from scan.scorer import NOT_MEASURABLE_NO_PRODUCT_PAGES_REASON
 from scan.site_typing import BRAND_ONLY_REASON, DISCOVERY_FAILURE_REASON
 
 ROBOTS_TXT = "User-agent: *\nSitemap: https://rich.example.com/sitemap.xml\n"
@@ -598,8 +599,10 @@ def test_brand_only_site_marks_protocol_feed_na_and_rescales_total(monkeypatch):
 def test_commerce_signals_without_pdps_is_a_discovery_failure_never_brand_only(monkeypatch):
     """Commerce signals present (a cart link) but no product pages
     discoverable from sitemap or navigation — must degrade to
-    coverage='partial' with the honest reason, never a brand-only or
-    'not applicable' claim anywhere in the full serialized report."""
+    coverage='blocked' (Nike discovery fix: NOT MEASURABLE, not a
+    scored zero — was 'partial' before) with the honest reason, never a
+    brand-only or 'not applicable' claim anywhere in the full serialized
+    report."""
     cart_homepage = """
     <html><body>
       <nav>
@@ -623,16 +626,21 @@ def test_commerce_signals_without_pdps_is_a_discovery_failure_never_brand_only(m
 
     assert result.status == "complete"
     for code in ("catalog_context", "price_truth_seen", "deal_citability_seen"):
-        assert result.dimensions[code]["coverage"] == "partial"
-        assert result.dimensions[code]["evidence"] == [DISCOVERY_FAILURE_REASON]
+        assert result.dimensions[code]["coverage"] == "blocked"
+        assert result.dimensions[code]["evidence"] == [NOT_MEASURABLE_NO_PRODUCT_PAGES_REASON]
     # member_value_seen combines loyalty (always applicable, found here)
-    # with member-price encoding (partial — discovery failure, same
-    # reason as the single-check dimensions above). 'partial' wins per
-    # _combine_coverage, and the discovery-failure reason is still
-    # surfaced honestly alongside the loyalty evidence.
+    # with member-price encoding (now 'blocked' — Nike discovery fix).
+    # score_member_value_seen's own combine step already treats
+    # 'blocked' like 'na' (see that function's docstring): member_price
+    # drops out of the raw_max/raw_score entirely and the COMBINED
+    # result's top-level coverage comes back 'full' (loyalty alone was
+    # genuinely measured), not 'blocked' — the whole-dimension coverage
+    # would otherwise falsely claim loyalty-surface discoverability was
+    # never checked either. The unmeasured reason is still surfaced
+    # honestly alongside the loyalty evidence either way.
     member_value_seen = result.dimensions["member_value_seen"]
-    assert member_value_seen["coverage"] == "partial"
-    assert DISCOVERY_FAILURE_REASON in member_value_seen["evidence"]
+    assert member_value_seen["coverage"] == "full"
+    assert NOT_MEASURABLE_NO_PRODUCT_PAGES_REASON in member_value_seen["evidence"]
     # protocol_feed is decoupled from PDP discovery (T3) — still scored
     # normally, never na, regardless of the failed product-page sample.
     assert result.dimensions["protocol_feed"]["coverage"] == "partial"

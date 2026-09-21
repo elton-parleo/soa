@@ -629,6 +629,10 @@ _DISCOVERY_PATH_COVERAGE_NOTE = {
     "collection_hop": "found via your site's category pages, not your sitemap",
     "platform_endpoint": "found via your store platform's catalog endpoint",
     "llm_assisted": "found via AI-assisted discovery, not your sitemap",
+    # Nike discovery fix: mirrors scan/discovery.py's DISCOVERY_PATH_
+    # COVERAGE_NOTE entry for "sitemap_sampled" by hand — see that
+    # registry's own comment for why this file keeps its own copy.
+    "sitemap_sampled": "found by reading a sample of your sitemap's own pages, not by URL pattern",
 }
 
 # Top FREE_FIX_RANK dimensions by opportunity size (max - earned) across

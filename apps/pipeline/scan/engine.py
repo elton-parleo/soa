@@ -17,6 +17,22 @@ rather than an exception.
 Stage 11 (H1/H2): the canonical origin is resolved ONCE, before
 discovery ever runs — every subsequent URL discover_pages() builds uses
 that one resolved origin, never a mix of apex and www.
+
+Nike discovery fix: STATUS_COMPLETE no longer implies every crawl-
+dependent dimension was actually measured. _derive_status only ever
+degrades the run to blocked/failed when the store root ALSO failed to
+fetch (see that function's own docstring) — a run whose homepage reads
+fine but whose sampler never found a single product page (a starved,
+Nike-shaped discovery run, or any commerce site discovery genuinely
+couldn't crawl this time) still lands on STATUS_COMPLETE, same as
+before. What changed is what that "complete" run's dimensions dict
+looks like: scorer.py's commerce_discovery_failure branch (see
+scorer.py's module docstring) now marks catalog_context/price_truth_
+seen/deal_citability_seen coverage="blocked" instead of a scored zero,
+so build_pillars_payload (apps/api/app/services/lite_pillars.py)
+excludes them from the applicable-max sum and withholds the composite/
+verdict (state="composite_withheld" or "unverified", never a fabricated
+score) rather than computing one against data that was never sampled.
 """
 import logging
 from dataclasses import dataclass, field
@@ -347,6 +363,18 @@ def _derive_status(discovery: DiscoveryResult, pages: list) -> tuple:
     us." FetchResult.http_status is only ever set when a real HTTP
     response was received, so its presence anywhere is exactly this
     signal.
+
+    Nike discovery fix: this function's own "no_product_pages_found"
+    branch above only ever fires when the HOMEPAGE ALSO never fetched —
+    it does NOT cover the STATUS_COMPLETE, zero-product-pages shape
+    (homepage read fine, sampler still found nothing), which is by far
+    the more common starved-discovery run in practice. That shape never
+    reaches this function's degraded branch at all — it returns
+    STATUS_COMPLETE at the very top (any_product_page_fetched or
+    homepage_fetched), same as it always has. What used to be silently
+    wrong about that COMPLETE-but-unmeasured shape lived downstream, in
+    scorer.py's per-dimension coverage (see that module's own docstring)
+    — not here.
     """
     product_pages = [p for p in pages if p.candidate.kind == "product"]
     homepage_page = next((p for p in pages if p.candidate.kind == "homepage"), None)
