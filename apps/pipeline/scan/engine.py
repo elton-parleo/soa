@@ -52,6 +52,7 @@ from soa_shared.scan_dimensions import SCORER_VERSION
 from . import scorer, signing, site_typing
 from .agent_access_matrix import build_agent_access_matrix
 from .discovery import DiscoveryResult, discover_pages, resolve_canonical_origin
+from .discovery_outcome import build_discovery_outcome
 from .fetcher import FetchBudget, fetch
 from .brand_icon import extract_brand_icon
 from .offer_feed import build_offer_feed, extract_product_image, extract_product_name
@@ -574,6 +575,11 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
             # Partial-read report state (Part 3): additive sibling key,
             # same no-migration pattern as sitemap_sampling above.
             dimensions["discovery_trace"] = _discovery_trace_facts(discovery, pages)
+            # Discovery follow-up (Part 2): recorded on every run, same
+            # "debuggability was the point" discipline — a WHY,
+            # classified from the same trace, plain-language and
+            # first-person. See discovery_outcome.py's own docstring.
+            dimensions["discovery_outcome"] = build_discovery_outcome(discovery, pages, canonical_origin)
             # Rescue session (Part 4a): recorded regardless of outcome,
             # same rationale as sitemap_sampling above — a run that
             # still ended degraded (e.g. candidates were found but every
@@ -656,6 +662,29 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
             "deal_citability_seen": scorer.score_deal_citability_seen(pages, site_type_result),
         }
 
+        # Discovery follow-up (Part 2): the ONE classification of WHY
+        # this run's PDP-dependent dimensions have nothing to show, computed
+        # once and threaded into every dimension scorer._no_product_pages_
+        # score left at its generic NOT_MEASURABLE_NO_PRODUCT_PAGES_REASON
+        # line — replacing it with the SAME first-person sentence the
+        # report renders (discovery_outcome["summary"]), never a second,
+        # independently-worded copy. Replaces the line WHEREVER it
+        # appears in a dimension's evidence list — member_value_seen
+        # combines it with loyalty-surface evidence rather than carrying
+        # it alone (see score_member_value_seen's docstring). A no-op
+        # for every dimension that actually scored for real (its
+        # evidence never contains that exact generic line to begin
+        # with).
+        discovery_outcome = build_discovery_outcome(discovery, pages, canonical_origin)
+        _generic_reason = scorer.NOT_MEASURABLE_NO_PRODUCT_PAGES_REASON
+        _outcome_summary = discovery_outcome.get("summary")
+        if _outcome_summary:
+            for score in dim_scores.values():
+                if _generic_reason in score.evidence:
+                    score.evidence = [
+                        _outcome_summary if line == _generic_reason else line for line in score.evidence
+                    ]
+
         # Stage 16 (Part 6): price-honesty checks are UNSCORED under v3
         # — no cap, no contribution to total_score or the dimensions
         # sum below. Still run (same crawl logic, byte-identical) and
@@ -701,6 +730,11 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
         # a complete-status run (homepage fetched, zero product pages)
         # can still have individually blocked True Value dimensions.
         dimensions["discovery_trace"] = _discovery_trace_facts(discovery, pages)
+        # Discovery follow-up (Part 2): see the degraded branch's
+        # identical line — recorded unconditionally, same rationale.
+        # Already computed above (needed before scoring, to thread its
+        # summary into the NOT MEASURABLE evidence lines).
+        dimensions["discovery_outcome"] = discovery_outcome
         # Part 1 (M4): recorded on every run, same rationale as
         # sitemap_sampling above — additive sibling key, no migration.
         dimensions["agent_access_matrix"] = agent_access_matrix

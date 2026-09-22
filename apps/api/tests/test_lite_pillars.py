@@ -1445,6 +1445,31 @@ def test_catalog_context_blocked_excludes_from_accessibility_denominator():
     assert all(c["evidence"] == _BLOCKED_EVIDENCE[0] for c in row["checks"])
 
 
+def test_blocked_checks_surface_the_discovery_outcome_summary_verbatim():
+    """Discovery follow-up (Part 2/3): engine.py threads dimensions[
+    "discovery_outcome"]["summary"] into a PDP-dependent dimension's
+    evidence in place of the old generic NOT_MEASURABLE line — this is
+    that summary reaching the report's checks[].evidence unchanged
+    (_blocked_checks already reads evidence[0] verbatim; no code change
+    was needed there, only that the summary actually arrives this way)."""
+    michael_kors_summary = (
+        "we read 5 of your sitemaps, including sitemap_0-product.xml (1,110 URLs), "
+        "but its product URLs use a shape our reader doesn't recognise, and our page "
+        "sample of it found no product markup"
+    )
+    crawl = dict(_FULL_CRAWL_DIMS)
+    crawl["catalog_context"] = {
+        "score": 0, "max": 8, "coverage": "blocked", "evidence": [michael_kors_summary],
+    }
+    result = build_pillars_payload(
+        som_pct=0.0, rsi_score=None, total_mentions=0,
+        crawl_dimensions=crawl, run_signals=[], membership_probe_result="unknown",
+    )
+    row = next(d for d in result["accessibility"]["dimensions"] if d["code"] == "catalog_context")
+    assert all(c["state"] == "blocked" for c in row["checks"])
+    assert all(c["evidence"] == michael_kors_summary for c in row["checks"])
+
+
 def test_price_truth_blocked_excludes_whole_dimension_from_true_value():
     crawl = dict(_FULL_CRAWL_DIMS)
     crawl["price_truth_seen"] = {"score": 0, "max": 5, "coverage": "blocked", "evidence": _BLOCKED_EVIDENCE}

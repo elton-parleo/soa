@@ -62,14 +62,38 @@ export function isPartialRead(pillars, degradedReason) {
   return buildMeasurableContext(pillars).measurable_max > 0
 }
 
-// Part 3c: which failure-point registry entry explains this run.
-// 'partial' covers everything that isn't a named run-level reason —
-// e.g. a complete-status run whose sampled product pages still came
-// back too thin to score a dimension (per-dimension coverage='blocked'
-// with no run-level degraded_reason at all).
-export function partialReadFailurePoint(degradedReason) {
+// Discovery follow-up (Part 4): the codes apps/pipeline/scan/
+// discovery_outcome.py can hand back, grouped by which of the three
+// failure-point buckets they read as. A genuine refusal (the site or
+// its robots.txt turned us away, or we stopped rather than keep
+// probing a site that already said no) reads as 'blocked' — never our
+// own limitation. Everything else that still boils down to "we didn't
+// find your product pages" reads as 'no_product_pages_found'.
+const _OUTCOME_CODES_BLOCKED = new Set([
+  'product_pages_refused', 'sitemaps_refused', 'sitemaps_robots_disallowed', 'short_circuited',
+])
+const _OUTCOME_CODES_NOT_FOUND = new Set([
+  'no_sitemap', 'product_sitemap_unrecognized', 'sitemap_children_unprobed',
+  'sitemaps_non_catalog', 'homepage_no_links', 'rescue_tiers_skipped',
+  'product_pages_unreadable', 'unknown',
+])
+
+// Part 3c/Discovery follow-up (Part 4): which failure-point registry
+// entry explains this run. degradedReason (a run-level status) still
+// takes priority when set — it's the more specific, pre-existing
+// signal. Otherwise discoveryOutcome.code (recorded on every run, see
+// discovery_outcome.py) picks the bucket. 'partial' is the catch-all:
+// no named degradedReason and no discoveryOutcome (or a code — e.g.
+// product_pages_read — that doesn't describe a discovery failure at
+// all), the original case this covered before discoveryOutcome existed
+// — e.g. a complete-status run whose sampled product pages still came
+// back too thin to score a dimension.
+export function partialReadFailurePoint(degradedReason, discoveryOutcome) {
   if (degradedReason === 'no_product_pages_found') return 'no_product_pages_found'
   if (degradedReason === 'blocked') return 'blocked'
+  const code = discoveryOutcome?.code
+  if (_OUTCOME_CODES_BLOCKED.has(code)) return 'blocked'
+  if (_OUTCOME_CODES_NOT_FOUND.has(code)) return 'no_product_pages_found'
   return 'partial'
 }
 
@@ -84,9 +108,9 @@ export function isV3Report(report) {
 // 'no_product_pages_found' folds into 'partial' here, matching that
 // function's own doc comment ("'partial' covers everything that isn't
 // a named run-level reason").
-export function deriveReportViewedState(pillars, degradedReason) {
+export function deriveReportViewedState(pillars, degradedReason, discoveryOutcome) {
   if (!isPartialRead(pillars, degradedReason)) return 'scored'
-  return partialReadFailurePoint(degradedReason) === 'blocked' ? 'blocked' : 'partial'
+  return partialReadFailurePoint(degradedReason, discoveryOutcome) === 'blocked' ? 'blocked' : 'partial'
 }
 
 // earned = sum over every dimension row (na/blocked dims are already

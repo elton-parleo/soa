@@ -86,7 +86,7 @@ export function LiteFullReportV4({ report, token }) {
   useEffect(() => {
     identifyReport(token)
     track(EVENTS.REPORT_VIEWED, {
-      state: deriveReportViewedState(report.pillars, report.scan?.degraded_reason),
+      state: deriveReportViewedState(report.pillars, report.scan?.degraded_reason, report.scan?.discovery_outcome),
       viewer: isTokenOwned(token) ? 'owner' : 'visitor',
       src: captureSrcParam(),
     })

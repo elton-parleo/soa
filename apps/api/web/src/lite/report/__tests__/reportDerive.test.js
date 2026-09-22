@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import {
-  buildNavItems, deriveReportViewedState,
+  buildNavItems, deriveReportViewedState, partialReadFailurePoint,
   deriveScoreBandHeadline, resolvePillarHeadline,
   PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE,
   NOT_MEASURABLE_HEADLINE,
@@ -132,6 +132,42 @@ describe('deriveReportViewedState — analytics report_viewed.state vocabulary',
 
   it('degraded_reason="unreachable" never reads as partial/blocked (matches isPartialRead)', () => {
     expect(deriveReportViewedState(withBlockedDim(), 'unreachable')).toBe('scored')
+  })
+
+  it('with no named degraded_reason, a blocking discoveryOutcome code derives "blocked" too', () => {
+    expect(deriveReportViewedState(withBlockedDim(), null, { code: 'sitemaps_robots_disallowed' })).toBe('blocked')
+  })
+})
+
+describe('partialReadFailurePoint — Discovery follow-up (Part 4)', () => {
+  it('degradedReason still wins outright when set, regardless of discoveryOutcome', () => {
+    expect(partialReadFailurePoint('no_product_pages_found', { code: 'sitemaps_refused' })).toBe('no_product_pages_found')
+    expect(partialReadFailurePoint('blocked', { code: 'no_sitemap' })).toBe('blocked')
+  })
+
+  it('a genuine refusal/short-circuit code reads as "blocked", never our own limitation', () => {
+    for (const code of ['product_pages_refused', 'sitemaps_refused', 'sitemaps_robots_disallowed', 'short_circuited']) {
+      expect(partialReadFailurePoint(null, { code })).toBe('blocked')
+    }
+  })
+
+  it('a not-found-shaped code reads as "no_product_pages_found"', () => {
+    for (const code of [
+      'no_sitemap', 'product_sitemap_unrecognized', 'sitemap_children_unprobed',
+      'sitemaps_non_catalog', 'homepage_no_links', 'rescue_tiers_skipped',
+      'product_pages_unreadable', 'unknown',
+    ]) {
+      expect(partialReadFailurePoint(null, { code })).toBe('no_product_pages_found')
+    }
+  })
+
+  it('no discoveryOutcome and no degradedReason falls back to "partial", the original case', () => {
+    expect(partialReadFailurePoint(null, null)).toBe('partial')
+    expect(partialReadFailurePoint(undefined, undefined)).toBe('partial')
+  })
+
+  it('a code that is not a discovery failure at all (product_pages_read) also falls back to "partial"', () => {
+    expect(partialReadFailurePoint(null, { code: 'product_pages_read' })).toBe('partial')
   })
 })
 

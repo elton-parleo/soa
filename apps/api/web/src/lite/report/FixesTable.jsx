@@ -51,7 +51,7 @@ export function FixesTable({ report, open, onToggle, brandName, reportToken, que
   const fixes = report.pillars.fixes
   if (!fixes) return null
   const partialRead = isPartialRead(report.pillars, report.scan?.degraded_reason)
-  const failurePoint = partialRead ? partialReadFailurePoint(report.scan?.degraded_reason) : null
+  const failurePoint = partialRead ? partialReadFailurePoint(report.scan?.degraded_reason, report.scan?.discovery_outcome) : null
   const rawVisible = fixes.visible || []
   const { ordered, discoveryCode } = partialRead ? _withDiscoveryFirst(rawVisible) : { ordered: rawVisible, discoveryCode: null }
   const visible = ordered

@@ -102,7 +102,7 @@ export default function FullAnalysisReport({ cycleCode, report, onNavigate, read
   useEffect(() => {
     if (readOnly && shareToken) identifyReport(shareToken)
     track(EVENTS.REPORT_VIEWED, {
-      state: deriveReportViewedState(report.pillars, report.scan?.degraded_reason),
+      state: deriveReportViewedState(report.pillars, report.scan?.degraded_reason, report.scan?.discovery_outcome),
       viewer: readOnly ? 'visitor' : 'owner',
       report_type: 'full_analysis',
       src: captureSrcParam(),

@@ -14,7 +14,7 @@ import '@testing-library/jest-dom'
 
 import { LiteFullReportV4 } from '../LiteFullReportV4.jsx'
 import { buildMeasurableContext, isPartialRead } from '../reportDerive.js'
-import { FAILURE_POINT_COPY } from '../reportContent.js'
+import { FAILURE_POINT_COPY, DISCOVERY_OUTCOME_COPY } from '../reportContent.js'
 
 const BASE = {
   status: 'complete',
@@ -156,6 +156,44 @@ const NOTHING_MEASURABLE_REPORT = {
   },
 }
 
+// Michael Kors shape (Discovery follow-up, Part 4): a complete-status
+// run with NO named degraded_reason at all — only discovery_outcome
+// distinguishes it from an ordinary "partial" fallback. code
+// product_sitemap_unrecognized is a "not found" bucket (our own
+// reader's limitation, never a refusal), so DiscoveryFinding should
+// read DISCOVERY_OUTCOME_COPY, not the generic FAILURE_POINT_COPY.partial
+// entry — and the summary/tiers/example_urls it renders come straight
+// off discovery_outcome, not a static string.
+const MICHAEL_KORS_REPORT = {
+  ...BASE,
+  overall: [{ name: 'Michael Kors', role: 'primary', metrics: { som: 30, mention_rate: 38 } }],
+  scan_status: 'complete',
+  scan: {
+    status: 'complete',
+    degraded_reason: null,
+    degraded_banner_facts: null,
+    discovery_trace: {
+      sitemaps_read: 5, product_urls_found: 0, tiers_attempted: ['sitemap'],
+      robots_ok: true, homepage_fetched: true, product_pages_fetched: 0,
+    },
+    discovery_outcome: {
+      code: 'product_sitemap_unrecognized',
+      summary: 'we read 5 of your sitemaps, including sitemap_0-product.xml (1,110 URLs), but its product URLs use a shape our reader doesn\'t recognise, and our page sample of it found no product markup',
+      found_candidates: 0, product_pages_attempted: 0, product_pages_fetched: 0,
+      sitemaps: [
+        { name: 'sitemap_0-product.xml', outcome: 'read', urls: 1110, product_urls: 0, http_status: 200, note: null },
+        { name: 'sitemap_1-pages.xml', outcome: 'read', urls: 40, product_urls: 0, http_status: 200, note: null },
+      ],
+      child_chosen: 'https://michaelkors.com/sitemap_0-product.xml',
+      example_urls: ['https://michaelkors.com/some-bag-12345.html', 'https://michaelkors.com/some-shoe-67890.html'],
+      tiers: [{ tier: 'sitemap', outcome: 'found 0' }],
+      robots_excluded: 0, llm: null, short_circuited: false,
+    },
+  },
+  composite: null,
+  pillars: MARC_JACOBS_REPORT.pillars,
+}
+
 function renderIt(report) {
   return render(<LiteFullReportV4 report={report} token="tok-partial" />)
 }
@@ -227,6 +265,47 @@ describe('partial-read report state — Marc Jacobs (no_product_pages_found)', (
     renderIt(MARC_JACOBS_REPORT)
     // impact 1 + impact 7 = 8 real points recovered; the unlocked figure (7) must never be folded in.
     expect(screen.getByText(/moves recover up to 8 points/)).toBeInTheDocument()
+  })
+})
+
+describe('partial-read report state — Michael Kors (discovery_outcome, no named degraded_reason)', () => {
+  it('reads the code-specific DISCOVERY_OUTCOME_COPY heading, not the generic partial/blocked one', () => {
+    renderIt(MICHAEL_KORS_REPORT)
+    expect(screen.getByText(DISCOVERY_OUTCOME_COPY.product_sitemap_unrecognized.heading)).toBeInTheDocument()
+    expect(screen.queryByText(FAILURE_POINT_COPY.partial.heading)).not.toBeInTheDocument()
+  })
+
+  it("renders discovery_outcome.summary verbatim as the section body, never a static duplicate", () => {
+    renderIt(MICHAEL_KORS_REPORT)
+    expect(screen.getByText(MICHAEL_KORS_REPORT.scan.discovery_outcome.summary, { exact: false })).toBeInTheDocument()
+  })
+
+  it('lists real sitemap names and the child chosen under the sitemaps step, not a generic count', () => {
+    renderIt(MICHAEL_KORS_REPORT)
+    // The chosen child's filename shows up both in the backend summary
+    // and in the sitemaps step's own fact — at least the step's copy.
+    expect(screen.getAllByText(/sitemap_0-product\.xml/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText(/picked sitemap_0-product\.xml/)).toBeInTheDocument()
+  })
+
+  it('renders a WHAT WE TRIED tiers list from discovery_outcome.tiers', () => {
+    renderIt(MICHAEL_KORS_REPORT)
+    expect(screen.getByText('WHAT WE TRIED')).toBeInTheDocument()
+    expect(screen.getByText('Sitemap walk')).toBeInTheDocument()
+    expect(screen.getByText('found 0')).toBeInTheDocument()
+  })
+
+  it('renders discovery_outcome.example_urls in a mono block', () => {
+    renderIt(MICHAEL_KORS_REPORT)
+    expect(screen.getByText('EXAMPLE URLS WE FOUND')).toBeInTheDocument()
+    for (const url of MICHAEL_KORS_REPORT.scan.discovery_outcome.example_urls) {
+      expect(screen.getByText(url)).toBeInTheDocument()
+    }
+  })
+
+  it('the fix box shows the code-specific explanation, not "blocked" framing, since this is our own limitation', () => {
+    renderIt(MICHAEL_KORS_REPORT)
+    expect(screen.getByText(DISCOVERY_OUTCOME_COPY.product_sitemap_unrecognized.explanation, { exact: false })).toBeInTheDocument()
   })
 })
 

@@ -625,9 +625,17 @@ def test_commerce_signals_without_pdps_is_a_discovery_failure_never_brand_only(m
     result = engine.run_scan("https://rich.example.com")
 
     assert result.status == "complete"
+    # Discovery follow-up (Part 2): the generic NOT_MEASURABLE_NO_
+    # PRODUCT_PAGES_REASON line is now replaced with this run's own
+    # discovery_outcome summary — here, sitemaps_non_catalog (an empty-
+    # but-real sitemap, no homepage product links, rescue tiers ran and
+    # found nothing).
+    assert result.dimensions["discovery_outcome"]["code"] == "sitemaps_non_catalog"
+    discovery_summary = result.dimensions["discovery_outcome"]["summary"]
+    assert discovery_summary != NOT_MEASURABLE_NO_PRODUCT_PAGES_REASON
     for code in ("catalog_context", "price_truth_seen", "deal_citability_seen"):
         assert result.dimensions[code]["coverage"] == "blocked"
-        assert result.dimensions[code]["evidence"] == [NOT_MEASURABLE_NO_PRODUCT_PAGES_REASON]
+        assert result.dimensions[code]["evidence"] == [discovery_summary]
     # member_value_seen combines loyalty (always applicable, found here)
     # with member-price encoding (now 'blocked' — Nike discovery fix).
     # score_member_value_seen's own combine step already treats
@@ -636,11 +644,12 @@ def test_commerce_signals_without_pdps_is_a_discovery_failure_never_brand_only(m
     # result's top-level coverage comes back 'full' (loyalty alone was
     # genuinely measured), not 'blocked' — the whole-dimension coverage
     # would otherwise falsely claim loyalty-surface discoverability was
-    # never checked either. The unmeasured reason is still surfaced
-    # honestly alongside the loyalty evidence either way.
+    # never checked either. The unmeasured reason (now this run's own
+    # discovery_outcome summary) is still surfaced honestly alongside
+    # the loyalty evidence either way.
     member_value_seen = result.dimensions["member_value_seen"]
     assert member_value_seen["coverage"] == "full"
-    assert NOT_MEASURABLE_NO_PRODUCT_PAGES_REASON in member_value_seen["evidence"]
+    assert discovery_summary in member_value_seen["evidence"]
     # protocol_feed is decoupled from PDP discovery (T3) — still scored
     # normally, never na, regardless of the failed product-page sample.
     assert result.dimensions["protocol_feed"]["coverage"] == "partial"

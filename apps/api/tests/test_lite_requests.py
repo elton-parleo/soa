@@ -710,6 +710,37 @@ def test_detail_carries_the_degraded_reason_too(db):
     assert detail.degraded_reason == _DEGRADED_DIMENSIONS["degraded_reason"]
 
 
+def test_detail_carries_the_discovery_outcome_for_triage(db):
+    """Discovery follow-up (Part 3): code + summary reach the admin
+    drawer straight off dimensions["discovery_outcome"], independent of
+    whether a pillars payload was ever built (this row has no cycle_id
+    at all) — so a zero-PDP run can be triaged without opening the raw
+    dimensions JSON."""
+    discovery_outcome = {
+        "code": "product_sitemap_unrecognized",
+        "summary": "we read 5 of your sitemaps, including sitemap_0-product.xml (1,110 URLs)...",
+        "found_candidates": 0, "product_pages_attempted": 0, "product_pages_fetched": 0,
+        "sitemaps": [], "child_chosen": None, "example_urls": [], "tiers": [],
+        "robots_excluded": 0, "llm": None, "short_circuited": False,
+    }
+    with db.begin() as conn:
+        _insert(conn, token="t1", status="complete", cycle_id=None)
+        _insert_scan(conn, 1, status="complete", dimensions={
+            **_DEGRADED_DIMENSIONS, "discovery_outcome": discovery_outcome,
+        })
+
+    detail = lite_requests.get_lite_request(1)
+    assert detail.discovery_outcome == discovery_outcome
+
+
+def test_detail_discovery_outcome_is_none_with_no_scan_row(db):
+    with db.begin() as conn:
+        _insert(conn, token="t1", status="pending", cycle_id=None)
+
+    detail = lite_requests.get_lite_request(1)
+    assert detail.discovery_outcome is None
+
+
 def test_degraded_reason_for_guards_the_empty_join_tuple():
     assert degraded_reason_for(None) is None
     assert degraded_reason_for((None,) * 9) is None

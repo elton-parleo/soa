@@ -211,6 +211,14 @@ class LiteRequestDetail(LiteRequestListItem):
     # True Value encode wing was blocked). Tells apart the two reasons a
     # complete row can still report score_state 'unavailable'.
     pillars_state: Optional[str] = None
+    # Discovery follow-up (Part 3): dimensions["discovery_outcome"]
+    # (apps/pipeline/scan/discovery_outcome.py) verbatim — code + first-
+    # person summary + the sitemaps/tiers/example URLs this run actually
+    # saw, so a zero-PDP row can be triaged from this page without
+    # opening the raw dimensions JSON. Recorded on every scan going
+    # forward, complete or degraded; null for a row scanned before this
+    # stage, or with no scan row at all.
+    discovery_outcome: Optional[dict] = None
 
 
 # ─── Derivations from the events log ─────────────────────────────────────
@@ -731,6 +739,13 @@ def get_lite_request(lite_request_id: int):
             "ip_hash_truncated": truncate_ip_hash(row[30]),
             "study_series_id": row[31],
         })
+        # Discovery follow-up (Part 3): read straight off the scan row's
+        # own dimensions column (index 19 — _SCAN_COLUMNS' 4th entry,
+        # sr.dimensions, offset by _SCAN_SLICE's start of 16) —
+        # independent of the pillars-building branch below, so it's
+        # populated for a degraded (blocked/failed) row too, not only a
+        # complete one.
+        item["discovery_outcome"] = (decode_json_field(row[19], {}) or {}).get("discovery_outcome")
 
         # Detail is one row, so the plain per-cycle path is used here —
         # the same build_cycle_report the public report calls, with no

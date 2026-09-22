@@ -115,6 +115,20 @@ PRODUCT_URL_PATTERNS = (
     # Nike's URLs also short-circuit straight to a pattern match when one
     # already exists, same as any other known shape.
     re.compile(r"/t/"),
+    # Discovery follow-up: /ip/<slug>/<id> (Walmart) — another stopgap,
+    # same reasoning as /t/ above.
+    re.compile(r"/ip/"),
+    # Discovery follow-up: <slug>/<sku-or-id>.html at the END of the
+    # path (Michael Kors: /pour-homme-eau-de-parfum--1.7-oz/450308.html;
+    # Marc Jacobs: /us-en/the-bubble-top/2F3RTP007W02.html) — a
+    # deliberately conservative stopgap, not the real fix either (see
+    # _sample_child_for_product_content). The trailing path segment
+    # (from the last "/" to ".html") must be at least 5 characters,
+    # PURELY alphanumeric (no hyphens/underscores — a descriptive slug
+    # like "faq-XX00-international-order-return.html" is excluded by
+    # this alone), and contain at least one digit — a bare word ending
+    # in ".html" (an About page, a FAQ) never matches.
+    re.compile(r"/(?=[a-z0-9]*\d)[a-z0-9]{5,}\.html?$", re.IGNORECASE),
 )
 # /shop/ is deliberately in BOTH pattern sets — real stores use it for
 # either a catalog root or a single PDP depending on the retailer. See
@@ -166,16 +180,20 @@ def discovery_coverage_note(discovery_path: Optional[str]) -> Optional[str]:
 MAX_PRODUCT_PAGES = 2
 LLMS_TXT_PATH = "/llms.txt"
 MCP_WELL_KNOWN_PATH = "/.well-known/mcp.json"
-# Nike discovery fix: raised from 6 (6 + RESCUE_FETCH_RESERVE below) —
-# sitemap traversal keeps its old 6-fetch ceiling (see
-# _SITEMAP_SUB_BUDGET), and the 3 extra fetches are permanently
-# ring-fenced for collection_hop/platform_endpoint/llm_assisted so a
-# sitemap walk that legitimately needs its whole old budget (a large
-# <sitemapindex>, several locale children) can never again starve every
-# rescue tier the way the Nike run did — robots.txt + 3 top-level
-# sitemaps + 2 children left nothing for the tiers built to rescue
-# exactly that shape.
-DISCOVERY_FETCH_BUDGET = 9
+# Nike discovery fix, raised again by discovery follow-up: was 6, then
+# 9 (6 + RESCUE_FETCH_RESERVE), now 11 (+ CONTENT_SAMPLE_LIMIT below) —
+# each raise preserves the PREVIOUS ceiling for the traversal it already
+# covered and ring-fences the new fetches for whatever starved next.
+# Sitemap traversal (top-level declared walk + child probing) keeps its
+# old 6-fetch ceiling; RESCUE_FETCH_RESERVE keeps collection_hop/
+# platform_endpoint/llm_assisted's own 3; the 2 fetches added by THIS
+# stage are ring-fenced for _sample_child_for_product_content
+# specifically — see _child_probe_budget_has_capacity's docstring for
+# why child-PROBING alone (Michael Kors: 4-6 children, none pattern-
+# matching) could otherwise still burn the whole sitemap share before
+# content-sampling — the tier built to rescue exactly that shape — ever
+# got a turn.
+DISCOVERY_FETCH_BUDGET = 11
 # Nike discovery fix: fetches sitemap traversal (_resolve_sitemaps,
 # _select_best_sitemap_child, and this stage's own content-sampling
 # fallback) can never dip into, no matter how many candidates it still
@@ -319,7 +337,20 @@ _PRODUCT_FILENAME_HINTS = ("pdp", "product", "products", "catalog", "item")
 # NOT a product catalog — content-sampling skips these unless nothing
 # else was probed, so a starved run doesn't burn its sample budget
 # reading a help center or blog before trying anything else.
-_NON_CATALOG_FILENAME_HINTS = ("help", "article", "blog", "locator", "store", "landingpage", "gridwall")
+_NON_CATALOG_FILENAME_HINTS = (
+    "help", "article", "blog", "locator", "store", "landingpage", "gridwall",
+    # Discovery follow-up: "question(s)"/"review(s)" catch the hotfix-5
+    # decoy shape by name (sitemap-product-questions.xml, sitemap-
+    # product-reviews.xml both contain "product" too) — a filename
+    # carrying one of THESE is never trusted as "the" catalog child on
+    # filename alone, whatever other hint it also matches. See
+    # _select_best_sitemap_child's early-exit: it deliberately requires
+    # a product hint AND the absence of one of these before stopping
+    # the walk early. Both singular and plural, same convention as
+    # _PRODUCT_FILENAME_HINTS' "product"/"products" — _matches_filename_
+    # hint's word-boundary match doesn't fold one into the other.
+    "question", "questions", "review", "reviews",
+)
 
 
 def _matches_filename_hint(path: str, hints) -> bool:
@@ -525,22 +556,32 @@ def _fetch_and_parse_sitemap(url: str, robot_parser, discovery_budget: FetchBudg
     all_fetches.append(result)
 
     if result.status != "fetched":
-        sampling_log["children_probed"].append({"url": url, "skipped": f"fetch failed (status={result.status})"})
+        sampling_log["children_probed"].append({
+            "url": url, "skipped": f"fetch failed (status={result.status})", "http_status": result.http_status,
+        })
         return None
 
     xml_text, skip_reason = _sitemap_xml_text(url, result)
     if xml_text is None:
-        sampling_log["children_probed"].append({"url": url, "skipped": skip_reason})
+        sampling_log["children_probed"].append({"url": url, "skipped": skip_reason, "http_status": result.http_status})
         return None
 
     is_index, urls = _parse_sitemap(xml_text)
     if not is_index and not urls:
-        sampling_log["children_probed"].append({"url": url, "skipped": "no URLs found (empty or unparseable)"})
+        sampling_log["children_probed"].append({
+            "url": url, "skipped": "no URLs found (empty or unparseable)", "http_status": result.http_status,
+        })
         return None
 
     sampling_log["children_probed"].append({
         "url": url, "is_index": is_index, "url_count": len(urls),
         "product_count": (sum(1 for u in urls if _looks_like_product_url(u)) if not is_index else None),
+        "http_status": result.http_status,
+        # Discovery follow-up: a handful of this child's own declared
+        # URLs, so a report can show a store owner exactly what we saw
+        # ("your product sitemap's URLs look like this") instead of
+        # just a count — never more than a few, never the whole list.
+        "example_urls": None if is_index else urls[:3],
     })
     return is_index, urls
 
@@ -595,6 +636,39 @@ def _sample_child_for_product_content(
     return confirmed, reused
 
 
+def _content_sample_rank(child_url: str, preferred_locale: Optional[str]) -> int:
+    """Discovery follow-up (Part 1, requirement 2): the order content-
+    sampling tries zero-density children in, once pattern matching has
+    already failed on all of them — a product-hint filename first (the
+    single strongest signal that THIS is the real catalog under an
+    unrecognized URL shape), then the resolved-locale child, then
+    everything else. ORDER ONLY, same discipline as every other
+    filename/locale hint in this module."""
+    path = urlparse(child_url).path.lower()
+    if _matches_filename_hint(path, _PRODUCT_FILENAME_HINTS):
+        return 0
+    if preferred_locale and _sitemap_locale_hint(child_url) == preferred_locale:
+        return 1
+    return 2
+
+
+def _child_probe_budget_has_capacity(discovery_budget: FetchBudget) -> bool:
+    """
+    Discovery follow-up (Part 1, requirement 2): probing sitemap-index
+    CHILDREN gets its own tighter allowance, CONTENT_SAMPLE_LIMIT
+    fetches short of the plain sitemap sub-budget — the same ring-fence
+    idea as RESCUE_FETCH_RESERVE, one level down. Michael Kors' shape
+    (a 4-6-child index, none pattern-matching) used to spend the ENTIRE
+    sitemap sub-budget just probing children, leaving
+    _sample_child_for_product_content — the tier built to rescue exactly
+    this shape — nothing to work with. Only the child-probing LOOP below
+    checks this (not _fetch_and_parse_sitemap's own, shared, plainer
+    check) — top-level declared-sitemap walking is untouched.
+    """
+    cap = max(0, discovery_budget.max_fetches - RESCUE_FETCH_RESERVE - CONTENT_SAMPLE_LIMIT)
+    return discovery_budget.used < cap
+
+
 def _select_best_sitemap_child(
     child_urls: list, robot_parser, discovery_budget: FetchBudget, all_fetches: list, sampling_log: dict,
     sample_reused_fetches: dict, preferred_locale: Optional[str] = None,
@@ -615,12 +689,34 @@ def _select_best_sitemap_child(
     (see _sample_child_for_product_content) before giving up. Returns
     that child's page URLs, or [] if nothing usable was found among the
     probed children by either method.
+
+    Discovery follow-up (Part 1, requirement 3): the moment a child
+    whose FILENAME carries a product hint (_PRODUCT_FILENAME_HINTS) —
+    and no NON-catalog hint too (_looks_non_catalog_filename) — parses
+    with product_count == 0, the walk stops right there instead of
+    spending the remaining share probing siblings (sitemap_1-image.xml,
+    sitemap_2-category.xml) — that child is almost certainly the real
+    catalog in an unrecognized URL shape, and content-sampling it
+    (below) is a far better use of the fetches a sibling walk would
+    otherwise burn. Harmless when an earlier child already matched by
+    pattern (any(c[1] > 0) already short-circuits content-sampling in
+    that case) — this only ever saves budget there.
+
+    The non-catalog exclusion matters: the hotfix-5 incident this
+    module's whole sampler rewrite exists to prevent is a DECOY child
+    whose name merely contains "product" (sitemap-product-questions.xml,
+    sitemap-product-reviews.xml) starving the real catalog child's turn.
+    Requiring the filename NOT also look like a question/review/help
+    page before trusting a lone zero-density match keeps that invariant
+    — a decoy still gets seen through, just one hop later, once its
+    sibling (the genuine catalog child, named without a product hint at
+    all) is reached in the same probe pass.
     """
     ordered = _reorder_children_by_locale(child_urls, preferred_locale)
     candidates = []  # (density, product_count, url, urls)
     probed = 0
     for child_url in ordered:
-        if probed >= SITEMAP_CHILD_PROBE_LIMIT or not discovery_budget.has_capacity() or not _sitemap_budget_has_capacity(discovery_budget):
+        if probed >= SITEMAP_CHILD_PROBE_LIMIT or not discovery_budget.has_capacity() or not _child_probe_budget_has_capacity(discovery_budget):
             break
         probed += 1
         parsed = _fetch_and_parse_sitemap(child_url, robot_parser, discovery_budget, all_fetches, sampling_log)
@@ -632,6 +728,12 @@ def _select_best_sitemap_child(
         product_count = sum(1 for u in urls if _looks_like_product_url(u))
         density = product_count / len(urls)
         candidates.append((density, product_count, child_url, urls))
+        if (
+            product_count == 0
+            and _matches_filename_hint(urlparse(child_url).path.lower(), _PRODUCT_FILENAME_HINTS)
+            and not _looks_non_catalog_filename(child_url)
+        ):
+            break
 
     if not candidates:
         return []
@@ -646,9 +748,14 @@ def _select_best_sitemap_child(
     # Requirement 3: zero pattern density on every probed child — try
     # content-sampling before giving up. Catalog-shaped filenames first
     # (skip the obvious non-catalog ones), but fall back to sampling
-    # whatever was probed if nothing else is available, in probe order.
+    # whatever was probed if nothing else is available. Within that set,
+    # sample a product-hint-named child first, then the resolved-locale
+    # child, then everything else, in probe order (Discovery follow-up,
+    # Part 1 requirement 2) — a stable sort, so ties keep probe order.
     catalog_like = [c for c in candidates if not _looks_non_catalog_filename(c[2])]
-    for _density, _product_count, child_url, urls in (catalog_like or candidates):
+    sample_pool = catalog_like or list(candidates)
+    sample_pool.sort(key=lambda c: _content_sample_rank(c[2], preferred_locale))
+    for _density, _product_count, child_url, urls in sample_pool:
         if not discovery_budget.has_capacity() or not _sitemap_budget_has_capacity(discovery_budget):
             break
         confirmed, reused = _sample_child_for_product_content(urls, robot_parser, discovery_budget, all_fetches)
@@ -841,7 +948,17 @@ def _probe_platform_endpoints(
     """Returns (urls, endpoint_name) — endpoint_name is "none" when
     nothing was probed or nothing yielded candidates. Never raises;
     every outcome (skipped, fetch failure, empty parse) is recorded on
-    sampling_log["platform_endpoints_probed"] (Part 4a)."""
+    sampling_log["platform_endpoints_probed"] (Part 4a).
+
+    Discovery follow-up: this tier used to also probe when NO platform
+    was fingerprinted at all ("the two Shopify JSON paths are cheap and
+    by far the most common shape even when undetected") — but on every
+    non-Shopify trace in the zero-product export (Michael Kors, Walmart,
+    Marc Jacobs), that "cheap" probe was exactly what spent the entire
+    RESCUE_FETCH_RESERVE, starving the LLM tier that never got to run.
+    Probing now requires an ACTUAL Shopify/nextjs fingerprint — an
+    undetected platform records a skip reason per endpoint (never a
+    silent, unlogged return) and spends nothing."""
     platform = _detect_platform(homepage_html)
     sampling_log["platform_detected"] = platform
     # nextjs is a rendering-layer signal, not a commerce-backend one —
@@ -850,7 +967,12 @@ def _probe_platform_endpoints(
     # genuinely different backend (bigcommerce/magento/woocommerce)
     # does. Those three DO rule it out — probing Shopify's endpoints
     # against a confirmed-Magento store would just waste a fetch.
-    if platform not in (None, PLATFORM_SHOPIFY, "nextjs"):
+    if platform not in (PLATFORM_SHOPIFY, "nextjs"):
+        skip_reason = "no platform fingerprint" if platform is None else f"platform is {platform}, not shopify/nextjs"
+        for path, name in PLATFORM_ENDPOINT_PROBES:
+            sampling_log["platform_endpoints_probed"].append(
+                {"endpoint": name, "url": urljoin(base_url, path), "skipped": skip_reason}
+            )
         return [], "none"
 
     for path, name in PLATFORM_ENDPOINT_PROBES:
