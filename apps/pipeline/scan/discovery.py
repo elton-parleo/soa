@@ -575,7 +575,7 @@ def _sample_child_for_product_content(
     confirmed: list = []
     reused: dict = {}
     for candidate_url in urls[:CONTENT_SAMPLE_LIMIT]:
-        if robot_parser is not None and not robot_parser.can_fetch(USER_AGENT, candidate_url):
+        if robot_parser is not None and not robot_parser.can_fetch(ROBOTS_USER_AGENT, candidate_url):
             continue
         if not discovery_budget.has_capacity() or not _sitemap_budget_has_capacity(discovery_budget):
             break
