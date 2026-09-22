@@ -109,10 +109,40 @@ def test_keyid_is_a_jwk_thumbprint_matching_public_key_jwk(enabled_signing):
 
 # ─── Signature-Agent present ──────────────────────────────────────────────
 
-def test_signature_agent_header_present_and_points_at_the_key_directory(enabled_signing):
-    from scan.identity import KEY_DIRECTORY_URL
+def test_signature_agent_header_present_and_carries_the_key_directory_origin(enabled_signing):
     headers = signing.sign_request("GET", "https://example.com/")
-    assert headers["Signature-Agent"] == f'"{KEY_DIRECTORY_URL}"'
+    assert headers["Signature-Agent"] == '"https://bots.parleo.io"'
+
+
+def test_signature_agent_sf_value_is_the_quoted_origin_of_the_key_directory():
+    """WBA directory draft section 4.1: the member value is an origin —
+    verifiers append the well-known path themselves, so any path here
+    would make them look up the directory at the wrong URL."""
+    from urllib.parse import urlparse
+    from scan.identity import KEY_DIRECTORY_URL
+    parsed = urlparse(KEY_DIRECTORY_URL)
+    assert signing.SIGNATURE_AGENT_SF_VALUE == '"' + f"{parsed.scheme}://{parsed.netloc}" + '"'
+    unquoted = signing.SIGNATURE_AGENT_SF_VALUE[1:-1]
+    assert urlparse(unquoted).path == ""
+    assert not unquoted.endswith("/")
+    assert "/.well-known/" not in signing.SIGNATURE_AGENT_SF_VALUE
+
+
+def test_signature_base_signature_agent_line_uses_the_origin(monkeypatch):
+    """Fixed key, hand-written expected signature base (not built via
+    _signature_base) — the signed bytes must cover the origin value."""
+    fixed_key = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    monkeypatch.setattr(signing, "_PRIVATE_KEY", fixed_key)
+    monkeypatch.setattr(signing, "WEB_BOT_AUTH", "on")
+    headers = signing.sign_request("GET", "https://example.com/products/foo")
+    params_value = headers["Signature-Input"][len("sig1="):]
+    expected_base = (
+        '"@authority": example.com\n'
+        '"signature-agent": "https://bots.parleo.io"\n'
+        f'"@signature-params": {params_value}'
+    )
+    sig_bytes = base64.b64decode(re.match(r"^sig1=:(.*):$", headers["Signature"]).group(1))
+    fixed_key.public_key().verify(sig_bytes, expected_base.encode("utf-8"))
 
 
 def test_authority_component_is_host_only_lowercased(enabled_signing):
@@ -322,6 +352,7 @@ def test_key_present_announces_the_keyid_and_directory_in_one_startup_line(monke
         message = startup_lines[0].getMessage()
         assert reloaded.key_id() in message
         assert reloaded.KEY_DIRECTORY_URL in message
+        assert f"signature_agent={reloaded.SIGNATURE_AGENT_SF_VALUE}" in message
         # Never the seed, not even partially.
         assert _b64(test_key.private_bytes_raw()) not in message
     finally:

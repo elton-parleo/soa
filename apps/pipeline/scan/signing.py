@@ -48,10 +48,15 @@ SIGNATURE_ALG = "ed25519"
 # a verifier is pointed at without invalidating the signature.
 COVERED_COMPONENTS = ("@authority", "signature-agent")
 
-# The Signature-Agent header's value is a Structured-Field String (WBA
-# draft) — the literal bytes sent on the wire, quotes included. Built
-# once since it never varies per request.
-SIGNATURE_AGENT_SF_VALUE = f'"{KEY_DIRECTORY_URL}"'
+# The Signature-Agent header's value is a Structured-Field String — the
+# literal bytes sent on the wire, quotes included — carrying the ORIGIN
+# of the key directory (scheme://host, no path, no trailing slash), per
+# the WBA directory draft (draft-meunier-webbotauth-httpsig-directory)
+# section 4.1: verifiers append /.well-known/http-message-signatures-
+# directory themselves. Derived from KEY_DIRECTORY_URL, never hardcoded,
+# so the two can't disagree. Built once since it never varies per request.
+_KEY_DIRECTORY = urlparse(KEY_DIRECTORY_URL)
+SIGNATURE_AGENT_SF_VALUE = f'"{_KEY_DIRECTORY.scheme}://{_KEY_DIRECTORY.netloc}"'
 
 
 def _b64url_no_pad(data: bytes) -> str:
@@ -117,7 +122,7 @@ else:
     # precisely the question a rotation makes urgent.
     log.info(
         f"[scan.signing] Web Bot Auth on — keyid={_key_id(_PRIVATE_KEY)}, "
-        f"directory={KEY_DIRECTORY_URL}"
+        f"directory={KEY_DIRECTORY_URL}, signature_agent={SIGNATURE_AGENT_SF_VALUE}"
     )
 
 
