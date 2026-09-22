@@ -1022,19 +1022,36 @@ def test_sweep_recovers_scan_stuck_running_past_ten_minutes(db):
     status, *_ = _lite_row_by_token(db.connect(), "stuck0001")
     assert status == "complete"
 
-    scan_status, _, _, _, _, scan_error, _ = _scan_row_by_token(db.connect(), "stuck0001")
+    scan_status, _, _, dimensions, pages_fetched, scan_error, _ = _scan_row_by_token(db.connect(), "stuck0001")
     assert scan_status == "failed"
     assert scan_error == "scan timed out"
+    # Production outage (2026-09-22): the watchdog now writes the same
+    # honest, fully-v4-shaped degraded dims a normal blocked/failed scan
+    # gets, so this row renders through the pillars machinery instead of
+    # an empty {} — and closes out the crawl task's own event, which
+    # would otherwise still be sitting on "reading…" forever.
+    dims = json.loads(dimensions) if isinstance(dimensions, str) else dimensions
+    assert dims["degraded_reason"] == "timed_out"
+    assert dims["catalog_context"]["coverage"] == "blocked"
+    assert dims["scorer_version"]
+    fetched = json.loads(pages_fetched) if isinstance(pages_fetched, str) else pages_fetched
+    assert fetched == []
+
+    crawl_events = [e for e in _events_by_token(db.connect(), "stuck0001") if e["task"] == "crawl"]
+    assert any(e["kind"] == "done" for e in crawl_events), "the crawl task must never be left hanging"
 
 
-def test_worker_crash_mid_scan_does_not_reprocess_and_sweep_recovers(db):
+def test_scan_orchestration_raising_marks_the_scan_row_failed_immediately(db):
     """
-    Simulates the worker dying mid-scan: the cycle is queued and the scan
-    row created (both atomic, per process_lite_requests), but run_scan
-    itself never returns — mirrored here by raising instead of returning,
-    since a real worker crash means no result is ever written. The next
-    poll must not reprocess this row (it already left 'pending'), and the
-    sweep's 10-minute rule is what eventually recovers it.
+    Production outage (2026-09-22): run_scan() itself (or, in
+    production, the very first `from scan.engine import run_scan` in
+    this process — the signing-import NameError) can raise before ever
+    returning a result. The scan row must never be left 'running' for
+    the 10-minute watchdog to eventually mislabel as a timeout — it's
+    marked 'failed' the moment orchestration raises, with an honest
+    degraded-dims record, and the lite request itself (cycle already
+    queued) is completely unaffected — rule 7, the scan never blocks
+    the report.
     """
     with db.begin() as conn:
         _insert_pending(conn, token="crash001", store_url="https://acme.example.com")
@@ -1046,25 +1063,39 @@ def test_worker_crash_mid_scan_does_not_reprocess_and_sweep_recovers(db):
     status, *_ = _lite_row_by_token(db.connect(), "crash001")
     assert status == "running"  # cycle queued; the scan crash must not affect it
 
-    scan_status, *_ = _scan_row_by_token(db.connect(), "crash001")
-    assert scan_status == "running"  # stuck, as if the worker died before writing a result
+    scan_status, _, _, dimensions, pages_fetched, scan_error, _ = _scan_row_by_token(db.connect(), "crash001")
+    assert scan_status == "failed"
+    assert "RuntimeError" in scan_error
+    assert "worker died mid-scan" in scan_error
+    dims = json.loads(dimensions) if isinstance(dimensions, str) else dimensions
+    assert dims["degraded_reason"] == "orchestration_failed"
+    assert dims["catalog_context"]["coverage"] == "blocked"
+    assert dims["scorer_version"]
+    fetched = json.loads(pages_fetched) if isinstance(pages_fetched, str) else pages_fetched
+    assert fetched == []
 
+    crawl_events = [e for e in _events_by_token(db.connect(), "crash001") if e["task"] == "crawl"]
+    assert any(e["kind"] == "log" for e in crawl_events), "reading… must be emitted before the risky import"
+    assert any(e["kind"] == "done" for e in crawl_events), "the crawl task must never be left hanging"
+
+    # No longer 'pending' — the next poll must not reprocess this row.
     with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()) as mock_gen:
         worker.process_lite_requests()
-    mock_gen.assert_not_called()  # no longer 'pending' — must not be reprocessed
+    mock_gen.assert_not_called()
 
+    # Once the cycle finishes, the sweep completes the lite request off
+    # the scan row's ALREADY-terminal status — the watchdog's 10-minute
+    # rule never has to fire for this row at all.
     with db.begin() as conn:
         conn.exec_driver_sql("UPDATE soa_cycles SET status = 'complete' WHERE cycle_code = 'lite-crash001'")
-        _age_scan_row(conn, "crash001", minutes_ago=15)
 
     worker._sweep_lite_completions()
 
     status, *_ = _lite_row_by_token(db.connect(), "crash001")
     assert status == "complete"
 
-    scan_status, _, _, _, _, scan_error, _ = _scan_row_by_token(db.connect(), "crash001")
-    assert scan_status == "failed"
-    assert scan_error == "scan timed out"
+    scan_status, *_ = _scan_row_by_token(db.connect(), "crash001")
+    assert scan_status == "failed"  # untouched by the sweep — already terminal
 
 
 # ── Stage 12 (E3): report-ready email delivery ──────────────────────────

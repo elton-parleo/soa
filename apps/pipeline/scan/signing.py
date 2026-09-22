@@ -58,6 +58,31 @@ def _b64url_no_pad(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
 
+def _key_id(private_key: Ed25519PrivateKey) -> str:
+    """WBA-convention keyid: an RFC 7638-style thumbprint over the
+    key's OKP/Ed25519 JWK form (RFC 8037) — canonical JSON, lexically
+    sorted keys, no whitespace, exactly the three required members.
+    Derived fresh from whatever key is passed in (never cached against
+    a DIFFERENT key than the one actually signing) so tests can swap
+    _PRIVATE_KEY without a second variable going stale.
+
+    Defined ABOVE _load_private_key/the module-level boot-log block
+    below on purpose (production outage, 2026-09-22): this used to sit
+    near the bottom of the file while the boot-log block called it at
+    module-import time — a NameError on every import whenever
+    BOT_SIGNING_KEY was set, which took down the whole scan pipeline in
+    production (scan.fetcher imports scan.signing; scan.engine imports
+    scan.fetcher). See test_signing_import_with_key_set in
+    test_signing.py, which imports this module with a real key set and
+    would have caught it."""
+    raw_public = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw,
+    )
+    jwk = {"crv": "Ed25519", "kty": "OKP", "x": _b64url_no_pad(raw_public)}
+    canonical = json.dumps(jwk, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return _b64url_no_pad(hashlib.sha256(canonical).digest())
+
+
 def _load_private_key() -> Optional[Ed25519PrivateKey]:
     """BOT_SIGNING_KEY: a standard (padded or unpadded) base64 encoding
     of the raw 32-byte Ed25519 private seed. Never in the repo — env/
@@ -101,21 +126,6 @@ def is_signing_enabled() -> bool:
     request) and scorer.py/W6 (which evidence wording to use) read —
     a single flag, never two independent checks that could disagree."""
     return WEB_BOT_AUTH == "on" and _PRIVATE_KEY is not None
-
-
-def _key_id(private_key: Ed25519PrivateKey) -> str:
-    """WBA-convention keyid: an RFC 7638-style thumbprint over the
-    key's OKP/Ed25519 JWK form (RFC 8037) — canonical JSON, lexically
-    sorted keys, no whitespace, exactly the three required members.
-    Derived fresh from whatever key is passed in (never cached against
-    a DIFFERENT key than the one actually signing) so tests can swap
-    _PRIVATE_KEY without a second variable going stale."""
-    raw_public = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw,
-    )
-    jwk = {"crv": "Ed25519", "kty": "OKP", "x": _b64url_no_pad(raw_public)}
-    canonical = json.dumps(jwk, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    return _b64url_no_pad(hashlib.sha256(canonical).digest())
 
 
 def key_id() -> Optional[str]:

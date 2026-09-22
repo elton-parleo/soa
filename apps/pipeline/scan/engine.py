@@ -40,7 +40,14 @@ from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
-from soa_shared.scan_dimensions import DIMENSIONS_BY_CODE, SCORER_VERSION
+from soa_shared.degraded_dimensions import (
+    DEGRADED_REASON_BLOCKED,
+    DEGRADED_REASON_FAILED,
+    DEGRADED_REASON_NO_PRODUCT_PAGES_TEMPLATE,
+    DIMENSION_INPUT_MAP,
+    build_degraded_dimensions,
+)
+from soa_shared.scan_dimensions import SCORER_VERSION
 
 from . import scorer, signing, site_typing
 from .agent_access_matrix import build_agent_access_matrix
@@ -215,25 +222,23 @@ def _compute_agent_access(discovery: DiscoveryResult, pages: list) -> tuple:
 # scope: "no methodology change"). Stays on the synthetic NOT MEASURABLE
 # path here; only value_protocols (which never consults site typing at
 # all) gets the fix.
-_DIMENSION_INPUT_MAP = (
-    # (dim_key, registry_code, is_split, requires_pdp)
-    ("agent_access", "agent_access", False, False),
-    ("catalog_context", "catalog_context", False, True),
-    ("protocol_feed", "protocol_feed", False, True),
-    ("price_truth_seen", "price_truth", True, True),
-    ("member_value_seen", "member_value", True, True),
-    ("deal_citability_seen", "deal_citability", True, True),
-    ("value_protocols_seen", "value_protocols", False, False),
-)
+#
+# Production outage (2026-09-22): DIMENSION_INPUT_MAP itself now lives
+# in soa_shared.degraded_dimensions (imported above), not here — it has
+# to be reachable from apps/api/app/services/cycle_scoring.py too, for
+# a legacy row that reached a terminal status with no dimensions ever
+# written. See that module's own docstring for why it stays dependency-
+# free rather than living in this file.
 
 
 def _compute_discovery_surface_scores(discovery: DiscoveryResult, pages: list) -> tuple:
     """
     N1: the two dimensions whose required inputs are discovery-surface
     fetches only, with no site-typing dependency either (see
-    _DIMENSION_INPUT_MAP and its comment on why protocol_feed is
-    excluded) — real-scored unconditionally, complete run or degraded.
-    Returns ({dim_key: DimensionScore, ...}, agent_access_matrix).
+    soa_shared.degraded_dimensions.DIMENSION_INPUT_MAP and its comment
+    on why protocol_feed is excluded) — real-scored unconditionally,
+    complete run or degraded. Returns ({dim_key: DimensionScore, ...},
+    agent_access_matrix).
     """
     agent_access_score, agent_access_matrix = _compute_agent_access(discovery, pages)
     scores = {
@@ -409,58 +414,23 @@ def _derive_status(discovery: DiscoveryResult, pages: list) -> tuple:
     return STATUS_FAILED, "unreachable"
 
 
-# R2 (fetch resilience, hotfix 3), narrowed by N1: every crawl-derived
-# dimension that actually REQUIRES sampled product pages, paired with
-# the soa_shared registry entry (and whether it's a seen/said-split True
-# Value dimension, whose crawl-side weight is seen_max rather than the
-# full weight) — used to synthesize an honest, fully-v4-shaped
-# dimensions dict for a run that never reached PDP-dependent scoring
-# (BLOCKED or FAILED) so the report renders through the exact same
-# pillars/NOT-MEASURABLE machinery as a normal scan, rather than an
-# empty {} that public_lite.py/lite_pillars.py have no honest way to
-# distinguish from "never scored under this version at all." Derived
-# from _DIMENSION_INPUT_MAP rather than listed twice — agent_access/
-# protocol_feed/value_protocols_seen (requires_pdp=False) are excluded
-# here; _compute_discovery_surface_scores real-scores them instead (N1).
-_DEGRADED_DIM_SPECS = tuple(
-    (dim_key, registry_code, is_split)
-    for dim_key, registry_code, is_split, requires_pdp in _DIMENSION_INPUT_MAP
-    if requires_pdp
-)
-
-
+# R2 (fetch resilience, hotfix 3), narrowed by N1: used to synthesize an
+# honest, fully-v4-shaped dimensions dict for a run that never reached
+# PDP-dependent scoring (BLOCKED or FAILED) so the report renders
+# through the exact same pillars/NOT-MEASURABLE machinery as a normal
+# scan, rather than an empty {} that public_lite.py/lite_pillars.py
+# have no honest way to distinguish from "never scored under this
+# version at all."
+#
+# Production outage (2026-09-22): the actual dimension table and
+# builder now live in soa_shared.degraded_dimensions (imported above,
+# alongside the DEGRADED_REASON_* constants) — this is just a thin,
+# engine.py-local convenience that pins scan_engine_rev to the real
+# crawl revision this process is actually running, which only engine.py
+# (not a caller synthesizing this after the fact for a run that never
+# started) has any business knowing.
 def _degraded_dimensions(reason: str) -> dict:
-    dims = {}
-    for dim_key, registry_code, is_split in _DEGRADED_DIM_SPECS:
-        registry_dim = DIMENSIONS_BY_CODE[registry_code]
-        weight = registry_dim.seen_max if is_split else registry_dim.weight
-        dims[dim_key] = {
-            "score": 0.0, "max": weight, "evidence": [reason],
-            "fix": None, "fix_human": None, "coverage": "blocked",
-            "deferred_items": [], "cap_basis": [],
-        }
-    dims["scorer_version"] = SCORER_VERSION
-    dims["scan_engine_rev"] = EXTRACTION_REV
-    return dims
-
-
-DEGRADED_REASON_BLOCKED = (
-    "the store root and every sampled product page were rate-limited or "
-    "blocked this run — nothing could be measured on-site"
-)
-DEGRADED_REASON_FAILED = (
-    "the store root and every sampled product page could not be reached "
-    "this run (network error) — nothing could be measured on-site"
-)
-# S2 (sitemap sampler, hotfix 5): a distinct, honest reason for the case
-# where the sampler simply never found a product page to attempt at
-# all — never worded as a site-blame ("blocked"/"refused"), since this
-# can just as easily be our reader's own limitation.
-DEGRADED_REASON_NO_PRODUCT_PAGES_TEMPLATE = (
-    "we read {n} of your sitemaps but couldn't locate product pages to "
-    "sample this run — this can be our reader's limitation; on-site "
-    "checks weren't evaluated"
-)
+    return build_degraded_dimensions(reason, scan_engine_rev=EXTRACTION_REV)
 
 
 def _sitemaps_read_count(discovery: DiscoveryResult) -> int:
@@ -611,7 +581,8 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
             # tier produced those candidates matters most for debugging.
             dimensions["discovery_path"] = discovery.discovery_path
             # N1: agent_access/value_protocols never depend on sampled
-            # PDPs (see _DIMENSION_INPUT_MAP) — real-scored here exactly
+            # PDPs (see soa_shared.degraded_dimensions.DIMENSION_INPUT_MAP)
+            # — real-scored here exactly
             # like a complete run, instead of synthesized as blocked.
             # This is what makes the robots-403-itself fact (Sephora),
             # the robots-disallow-exclusion count (S1.c), and an honest
