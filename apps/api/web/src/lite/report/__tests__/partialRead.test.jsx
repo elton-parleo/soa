@@ -14,7 +14,7 @@ import '@testing-library/jest-dom'
 
 import { LiteFullReportV4 } from '../LiteFullReportV4.jsx'
 import { buildMeasurableContext, isPartialRead } from '../reportDerive.js'
-import { FAILURE_POINT_COPY, DISCOVERY_OUTCOME_COPY } from '../reportContent.js'
+import { FAILURE_POINT_COPY, DISCOVERY_OUTCOME_COPY, EDGE_VENDOR_COPY, FETCH_PROBE_EVIDENCE_COPY } from '../reportContent.js'
 
 const BASE = {
   status: 'complete',
@@ -310,11 +310,17 @@ describe('partial-read report state — Michael Kors (discovery_outcome, no name
 })
 
 describe('partial-read report state — Sephora (blocked)', () => {
-  it('renders the blocked registry entry and the fetch-probe sentence exactly once', () => {
+  it('renders the blocked registry entry and the fetch-probe claim exactly once', () => {
     const { container } = renderIt(SEPHORA_REPORT)
     expect(screen.getByText(FAILURE_POINT_COPY.blocked.heading)).toBeInTheDocument()
-    const occurrences = container.textContent.split('ChatGPT opened').length - 1
-    expect(occurrences).toBe(1)
+    // Blocked-run evidence: on a blocked run the probe speaks once, in
+    // its own WHAT CHATGPT SAW block in the finding section. The
+    // banner's old trailing sentence was the SAME claim and is gone
+    // from this state — two surfaces asserting one fact is one too
+    // many, and the block says more.
+    expect(container.textContent.split(FETCH_PROBE_EVIDENCE_COPY.label).length - 1).toBe(1)
+    expect(container.textContent.split('We asked ChatGPT to open').length - 1).toBe(1)
+    expect(container.textContent).not.toContain('ChatGPT opened it fine')
   })
 })
 
@@ -330,8 +336,16 @@ describe('blocked-run copy pass — plain language, banned terms', () => {
   ]
 
   it('the registry heading and body contain none of the banned engineer-jargon terms', () => {
-    const bodyText = FAILURE_POINT_COPY.blocked.body({ refusal: '403', attempts: 6, robots_included: true, signed: true })
-    for (const s of [FAILURE_POINT_COPY.blocked.heading, bodyText]) {
+    const facts = { refusal: '403', attempts: 6, robots_included: true, signed: true }
+    // Vendor attribution: every vendor's wording inherits the register,
+    // including the setting names — a named wall is still written for a
+    // marketing lead, not for whoever configured it.
+    const strings = [FAILURE_POINT_COPY.blocked.heading]
+    for (const vendor of [null, ...Object.keys(EDGE_VENDOR_COPY)]) {
+      strings.push(FAILURE_POINT_COPY.blocked.body(facts, vendor))
+      strings.push(FAILURE_POINT_COPY.blocked.fixFraming(facts, vendor))
+    }
+    for (const s of strings) {
       for (const pattern of BANNED_TERMS) {
         expect(s).not.toMatch(pattern)
       }
@@ -341,7 +355,9 @@ describe('blocked-run copy pass — plain language, banned terms', () => {
   it('"cryptographically" survives only in the fixFraming action line, explained in the same sentence', () => {
     expect(FAILURE_POINT_COPY.blocked.heading).not.toMatch(/cryptographically/i)
     expect(FAILURE_POINT_COPY.blocked.body({})).not.toMatch(/cryptographically/i)
-    expect(FAILURE_POINT_COPY.blocked.fixFraming).toMatch(/cryptographically/i)
+    for (const vendor of [null, ...Object.keys(EDGE_VENDOR_COPY)]) {
+      expect(FAILURE_POINT_COPY.blocked.fixFraming({}, vendor)).toMatch(/cryptographically/i)
+    }
   })
 
   it('writes a status code in words with the code in parentheses, never as a bare-number adjective', () => {
@@ -359,7 +375,9 @@ describe('blocked-run copy pass — plain language, banned terms', () => {
     expect(FAILURE_POINT_COPY.blocked.heading).not.toMatch(/\bour bot\b|\bthe bot\b/i)
     expect(FAILURE_POINT_COPY.blocked.body({})).not.toMatch(/\bour bot\b|\bthe bot\b|\bour crawler\b/i)
     expect(FAILURE_POINT_COPY.blocked.body({})).not.toMatch(/\bcrawler\b/i)
-    expect(FAILURE_POINT_COPY.blocked.fixFraming).toMatch(/published crawlers/)
+    for (const vendor of [null, ...Object.keys(EDGE_VENDOR_COPY)]) {
+      expect(FAILURE_POINT_COPY.blocked.fixFraming({}, vendor)).toMatch(/published crawlers/)
+    }
   })
 
   it('the rendered Sephora report shows the new heading and no banned terms anywhere on the page', () => {
@@ -372,7 +390,8 @@ describe('blocked-run copy pass — plain language, banned terms', () => {
 
   it('the discovery fix\'s ranked-fix description also carries the fixFraming action line', () => {
     renderIt(SEPHORA_REPORT)
-    expect(screen.getAllByText(FAILURE_POINT_COPY.blocked.fixFraming).length).toBe(2) // discovery section box + ranked fix row
+    const line = FAILURE_POINT_COPY.blocked.fixFraming(SEPHORA_REPORT.scan.degraded_banner_facts, null)
+    expect(screen.getAllByText(line).length).toBe(2) // discovery section box + ranked fix row
   })
 
   it('grep: the causal body/explanation text still renders exactly once per report (fixFraming is expected twice, per Part 1c)', () => {

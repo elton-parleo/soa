@@ -22,8 +22,10 @@ import hashlib
 import json
 import logging
 import os
+import socket
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -145,6 +147,129 @@ def _enforce_rate_limits(conn, ip_hash: str, now: datetime) -> None:
     """), {"cutoff": now - timedelta(hours=1)}).scalar()
     if global_count >= GLOBAL_RATE_LIMIT_PER_HOUR:
         raise _rate_limited(3600, "SoA Lite is at capacity right now — please try again shortly.")
+
+
+# ─── Store-URL admissibility (intake validation) ─────────────────────────
+#
+# Two audits in the 30-day review — a bit.ly link and a synthetic
+# .example domain — were accepted, queued, ran 24 LLM queries each, and
+# then failed at the crawl with nothing to show. Every one of those
+# queries cost real money and produced a report about a store that does
+# not exist.
+#
+# schemas.py::_validate_store_url is deliberately SHAPE-only (documented
+# there as UX-level, and explicitly not the SSRF defense). These checks
+# are about ADMISSIBILITY — can this host possibly be a storefront at
+# all — and they run here, after captcha and rate limits and before the
+# INSERT, so a rejected request costs a DNS lookup and nothing else.
+#
+# What this deliberately does NOT do is fetch the homepage. That would
+# be a server-side request to a caller-supplied URL from an
+# unauthenticated endpoint (an SSRF surface this router has no business
+# opening) and would put a live site's response time inside a POST that
+# must stay fast. apps/pipeline/scan is where a URL gets fetched, behind
+# its own SSRF guard.
+
+# Every one of these serves shortened links and nothing else: the host a
+# visitor pastes is never the store, and following it is a redirect we
+# would be resolving on their behalf. Small and explicit on purpose — a
+# heuristic ("short domain", "no dots in the path") would reject real
+# stores.
+URL_SHORTENER_HOSTS = frozenset({
+    "bit.ly", "t.co", "tinyurl.com", "goo.gl", "ow.ly",
+    "buff.ly", "rebrand.ly", "lnkd.in",
+})
+
+# RFC 2606 / RFC 6761 reserved names. These can never resolve to a real
+# store, by specification — a .example domain in the export came from
+# our own tracking test, which is why the env flag exists.
+RESERVED_TLDS = frozenset({"example", "invalid", "test", "localhost"})
+ALLOW_TEST_DOMAINS_ENV = "ALLOW_TEST_DOMAINS"
+
+# One lookup, bounded. On TIMEOUT we ALLOW: a slow resolver on our side
+# is our problem, and turning it into a rejection would block real
+# stores during exactly the moments we are least able to tell. Only a
+# definitive "this name does not exist" rejects.
+DNS_RESOLVE_TIMEOUT_SECONDS = 2.0
+
+REJECT_CODE_SHORTENER = "shortener"
+REJECT_CODE_UNRESOLVABLE = "unresolvable"
+REJECT_CODE_RESERVED_TLD = "reserved_tld"
+
+_REJECT_MESSAGES = {
+    REJECT_CODE_SHORTENER: (
+        "That looks like a shortened link. Paste your store's own web address "
+        "(for example, yourstore.com) so we know which site to read."
+    ),
+    REJECT_CODE_UNRESOLVABLE: (
+        "We couldn't find that domain. Check the spelling and paste your "
+        "store's web address again."
+    ),
+    REJECT_CODE_RESERVED_TLD: (
+        "That domain is reserved for testing and can't be a real store. "
+        "Paste your store's own web address."
+    ),
+}
+
+
+def _allow_test_domains() -> bool:
+    return os.environ.get(ALLOW_TEST_DOMAINS_ENV, "").strip().lower() in ("1", "true", "on", "yes")
+
+
+def _host_resolves(hostname: str) -> bool:
+    """One DNS lookup, bounded by DNS_RESOLVE_TIMEOUT_SECONDS. True
+    means "resolved, or we couldn't tell" — see this section's note on
+    why a timeout allows. Never raises."""
+    previous = socket.getdefaulttimeout()
+    try:
+        socket.setdefaulttimeout(DNS_RESOLVE_TIMEOUT_SECONDS)
+        socket.getaddrinfo(hostname, None)
+        return True
+    except socket.gaierror:
+        # A definitive "no such name" from the resolver. The one case
+        # that genuinely means this host cannot be a store.
+        return False
+    except Exception:
+        # A timeout, a resolver outage, anything else — our problem, not
+        # the visitor's. Allow, and let the crawl report honestly.
+        log.warning("[lite] DNS check for %r was inconclusive — allowing", hostname, exc_info=True)
+        return True
+    finally:
+        try:
+            socket.setdefaulttimeout(previous)
+        except Exception:
+            pass
+
+
+def _reject_store_url(code: str) -> HTTPException:
+    """422 with a machine-readable `code` the widget maps to inline copy
+    under the URL field, plus a message that stands on its own for any
+    other caller."""
+    return HTTPException(
+        status_code=422,
+        detail={"code": code, "message": _REJECT_MESSAGES[code]},
+    )
+
+
+def _enforce_store_url_admissible(store_url: str | None) -> None:
+    """Raises a 422 when the submitted store URL cannot be a real
+    storefront. A None/absent store_url is untouched — the audit runs
+    without a crawl, which is an existing, supported shape."""
+    if not store_url:
+        return
+    hostname = (urlparse(store_url).hostname or "").strip().lower().rstrip(".")
+    if not hostname:
+        return
+
+    if hostname in URL_SHORTENER_HOSTS:
+        raise _reject_store_url(REJECT_CODE_SHORTENER)
+
+    tld = hostname.rsplit(".", 1)[-1]
+    if tld in RESERVED_TLDS and not _allow_test_domains():
+        raise _reject_store_url(REJECT_CODE_RESERVED_TLD)
+
+    if not _host_resolves(hostname):
+        raise _reject_store_url(REJECT_CODE_UNRESOLVABLE)
 
 
 # ─── Phase derivation ────────────────────────────────────────────────────
@@ -309,6 +434,11 @@ def submit_lite_request(data: PublicLiteSubmitRequest, request: Request):
 
     with engine.connect() as conn:
         _enforce_rate_limits(conn, ip_hash, now)
+
+    # Intake validation: after captcha and rate limits (a caller who
+    # trips either of those never reaches a DNS lookup), before the
+    # INSERT (a rejected request never costs an LLM query).
+    _enforce_store_url_admissible(data.store_url)
 
     with session_factory() as session:
         org_id = get_or_create_leadgen_org(session)

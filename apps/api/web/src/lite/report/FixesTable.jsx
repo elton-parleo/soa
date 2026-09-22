@@ -19,7 +19,7 @@
 import { Fragment, useState } from 'react'
 import { Button, Glyph, ProvenanceLine, RequestFormModal, StatusChip } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
-import { FAILURE_POINT_COPY, FIXES_REMAINING_STRIP } from './reportContent.js'
+import { FAILURE_POINT_COPY, FIXES_REMAINING_STRIP, resolveFailurePointBody } from './reportContent.js'
 import { isPartialRead, buildMeasurableContext, partialReadFailurePoint } from './reportDerive.js'
 import { DEMO_REQUEST_CTAS } from '../demoRequestCtas.js'
 import { useDemoRequestModal } from '../useDemoRequestModal.js'
@@ -89,7 +89,17 @@ export function FixesTable({ report, open, onToggle, brandName, reportToken, que
           // of the backend's generic ENG fix text, for the blocked
           // failure point only — registry-sourced, never inlined here.
           const isDiscoveryRow = f.code === discoveryCode
-          const fixHuman = (isDiscoveryRow && failurePoint === 'blocked') ? FAILURE_POINT_COPY.blocked.fixFraming : f.fix_human
+          // Vendor attribution: fixFraming names the vendor's own
+          // setting when the run recognized one — resolved through the
+          // same helper the finding section uses, so the ranked fix and
+          // the finding can never name two different walls.
+          const fixHuman = (isDiscoveryRow && failurePoint === 'blocked')
+            ? resolveFailurePointBody(
+                FAILURE_POINT_COPY.blocked.fixFraming,
+                report.scan?.degraded_banner_facts,
+                report.scan?.edge_vendor,
+              )
+            : f.fix_human
           const subFixes = f.sub_fixes || []
           const isExpanded = !!expandedCodes[f.code]
           return (

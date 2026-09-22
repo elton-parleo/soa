@@ -401,3 +401,99 @@ def test_a_403_behind_a_redirect_hop_reports_the_summed_attempts(monkeypatch):
     assert result.status == fetcher.BLOCKED
     assert result.http_status == 403
     assert result.attempts == 3  # 1 redirect hop + 2 capped 403 attempts
+
+
+# ─── the per-call 403 cap: discovery surfaces get exactly one shot ───────
+#
+# Walled-site runtime (this session): a sitemap, platform endpoint,
+# llms.txt or MCP manifest that 403s is being answered by the same edge
+# that just refused the store root — the one retry that might rescue a
+# transient edge has nothing left to rescue. Content pages keep the
+# ladder. The local re-scans that motivated this spent 185 s (Warby
+# Parker) and 133 s (Best Buy) almost entirely in these ladders.
+
+def _count_403s(monkeypatch):
+    calls = {"n": 0}
+
+    def fake_get(self, url, headers=None, **kw):
+        calls["n"] += 1
+        return httpx.Response(403, text="Access Denied", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    return calls
+
+
+def test_max_403_attempts_of_one_makes_exactly_one_request(monkeypatch):
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_RETRIES", 3)
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_403_MAX_ATTEMPTS", 2)
+    sleeps = []
+    monkeypatch.setattr(time, "sleep", lambda s: sleeps.append(s))
+    calls = _count_403s(monkeypatch)
+
+    result = fetcher.fetch("https://example.com/sitemap.xml", max_403_attempts=1)
+
+    assert calls["n"] == 1
+    assert result.attempts == 1
+    assert result.status == fetcher.BLOCKED
+    assert sleeps == []  # nothing to wait for when the answer is deterministic
+
+
+def test_omitting_max_403_attempts_keeps_the_module_default(monkeypatch):
+    """The parameter is additive — an unchanged call site behaves
+    exactly as it did before it existed."""
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_RETRIES", 3)
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_403_MAX_ATTEMPTS", 2)
+    calls = _count_403s(monkeypatch)
+
+    result = fetcher.fetch("https://example.com/product/widget")
+
+    assert calls["n"] == 2
+    assert result.attempts == 2
+
+
+def test_the_per_call_403_cap_never_loosens_the_module_default(monkeypatch):
+    """A caller asking for MORE attempts than the module allows doesn't
+    get them — the two caps compose as a minimum, same as the general
+    SCAN_FETCH_RETRIES cap already does."""
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_RETRIES", 5)
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_403_MAX_ATTEMPTS", 2)
+    calls = _count_403s(monkeypatch)
+
+    fetcher.fetch("https://example.com/sitemap.xml", max_403_attempts=1)
+
+    assert calls["n"] == 1
+
+
+def test_the_per_call_403_cap_does_not_touch_429_or_5xx(monkeypatch):
+    """Only 403 is deterministic. A rate limit and an outage can both
+    genuinely ease off, on a discovery surface as much as anywhere."""
+    monkeypatch.setattr(fetcher, "SCAN_FETCH_RETRIES", 3)
+    for status in (429, 503):
+        fetcher._domain_seen.add("example.com")
+        calls = {"n": 0}
+
+        def fake_get(self, url, headers=None, _status=status, **kw):
+            calls["n"] += 1
+            return httpx.Response(_status, text="", request=httpx.Request("GET", url))
+
+        monkeypatch.setattr(httpx.Client, "get", fake_get)
+        fetcher.fetch("https://example.com/sitemap.xml", max_403_attempts=1)
+        assert calls["n"] == 3, status
+
+
+def test_every_discovery_surface_call_site_caps_403_at_one():
+    """Grep-level guard on the rule itself: the four discovery-surface
+    fetch() calls in discovery.py all pass the cap, and the CONTENT
+    fetches (homepage, collection hop, sampled child page, an
+    LLM-suggested PDP) all deliberately do not."""
+    import re
+    from pathlib import Path
+
+    source = Path(fetcher.__file__).with_name("discovery.py").read_text()
+    calls = re.findall(r"= fetch\((.*?)\)\n", source, re.DOTALL)
+    capped = [c for c in calls if "DISCOVERY_SURFACE_403_ATTEMPTS" in c]
+    uncapped = [c for c in calls if "DISCOVERY_SURFACE_403_ATTEMPTS" not in c]
+
+    assert len(capped) == 5, capped  # robots, sitemap, platform endpoint, llms.txt, mcp
+    for call in uncapped:
+        assert any(k in call for k in ("input_url", "base_url", "candidate_url", "collection_links")), call

@@ -1302,6 +1302,24 @@ class PublicLiteScan(BaseModel):
     unconditionally on every scan going forward, same rationale as
     discovery_trace above. Null only for a row scanned before this
     stage.
+
+    Blocked-run vendor attribution (this session): edge_vendor is the
+    bot-management vendor whose fingerprint showed up on the most
+    fetches this run ("cloudflare" | "akamai" | "datadome" | "human_px"
+    | "imperva"), from engine.py's block_evidence rollup — never
+    "shopify", which fingerprints a store platform rather than a wall.
+    Null when nothing was recognized, which is a normal outcome and the
+    report has neutral wording for it. Evidence only: it changes what
+    the blocked report CALLS the wall, never a single point.
+
+    Non-commerce report (this session): site_type is engine.py's
+    dimensions["site_type"] — "commerce_normal" | "commerce_discovery_
+    failure" | "brand_only" (apps/pipeline/scan/site_typing.py). It
+    has always been computed and used to gate scorers; recording it
+    here is what lets the report stop presenting a correctly-typed
+    brand-only site as a failing store. Null on a degraded run (which
+    never types the site at all) and on any row scanned before this
+    stage.
     """
     status: str
     total_score: Optional[int] = None
@@ -1316,6 +1334,8 @@ class PublicLiteScan(BaseModel):
     agent_access_matrix: Optional[List[dict]] = None
     discovery_trace: Optional[dict] = None
     discovery_outcome: Optional[dict] = None
+    edge_vendor: Optional[str] = None
+    site_type: Optional[str] = None
 
 
 class PublicLiteVisibilityMentionRate(BaseModel):

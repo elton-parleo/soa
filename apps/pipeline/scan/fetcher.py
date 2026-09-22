@@ -650,7 +650,7 @@ def _parse_retry_after(header_value: Optional[str]) -> Optional[float]:
         return None
 
 
-def _fetch_with_retries(current_url: str, hostname: str):
+def _fetch_with_retries(current_url: str, hostname: str, *, max_403_attempts: Optional[int] = None):
     """
     A3: issues the GET request, retrying on 429/403/5xx up to
     SCAN_FETCH_RETRIES total attempts — Retry-After (capped) when the
@@ -661,8 +661,9 @@ def _fetch_with_retries(current_url: str, hostname: str):
     ladder starts — an immediate sitewide-hostility signal, distinct
     from an ordinary rate limit hit mid-run.
 
-    403 stops early, at SCAN_FETCH_403_MAX_ATTEMPTS (2 by default), and
-    without sleeping on the way out. The ladder exists because a
+    403 stops early, at max_403_attempts (SCAN_FETCH_403_MAX_ATTEMPTS,
+    2, when the caller names no lower number), and without sleeping on
+    the way out. The ladder exists because a
     terminal-looking first response may be a burst limit that eases off;
     a WAF/bot-management 403 is not that. The export of blocked runs
     showed 3-4 byte-identical 403s per URL and 9-16 per run — one retry
@@ -672,6 +673,16 @@ def _fetch_with_retries(current_url: str, hostname: str):
     still applies on top; the effective 403 limit is the smaller of the
     two.
 
+    Walled-site runtime (this session): discovery-surface callers pass
+    max_403_attempts=1 — a sitemap or platform endpoint that 403s is
+    answering for the same WAF that just refused the store root, and the
+    one retry that might rescue a genuinely transient edge has nothing
+    left to rescue by then. The local re-scans that motivated this spent
+    185 s (Warby Parker) and 133 s (Best Buy) almost entirely in retry
+    ladders on 403 discovery surfaces. Content pages keep the full
+    ladder — a product page is the thing the run exists to read, and one
+    more try for it is worth the wait.
+
     Returns (response, attempts, retry_after_seen): response is the
     LAST httpx.Response received (whatever its final status — the
     caller decides what that means), attempts is how many requests were
@@ -679,6 +690,8 @@ def _fetch_with_retries(current_url: str, hostname: str):
     honored in seconds, or None if the ladder ran on backoff alone (or
     never retried at all).
     """
+    limit_403 = SCAN_FETCH_403_MAX_ATTEMPTS if max_403_attempts is None else max(1, max_403_attempts)
+
     is_first_request_to_host = hostname not in _domain_seen
     _domain_seen.add(hostname)
 
@@ -695,7 +708,7 @@ def _fetch_with_retries(current_url: str, hostname: str):
         # The 403 cap, applied on top of the general one — whichever is
         # smaller wins. No sleep on the way out: there is nothing to wait
         # for when the answer is deterministic.
-        if resp.status_code == 403 and attempt >= SCAN_FETCH_403_MAX_ATTEMPTS:
+        if resp.status_code == 403 and attempt >= limit_403:
             return resp, attempt, retry_after_seen
 
         if resp.status_code == 429 and is_first_request_to_host and attempt == 1:
@@ -716,6 +729,7 @@ def fetch(
     url: str,
     robot_parser: Optional[urllib.robotparser.RobotFileParser] = None,
     check_short_body: bool = False,
+    max_403_attempts: Optional[int] = None,
 ) -> FetchResult:
     """
     Fetches a single URL, enforcing the SSRF guard on the original URL
@@ -744,6 +758,13 @@ def fetch(
     a real page is never this short. Challenge-page marker detection is
     unconditional regardless of this flag — a bot-challenge response is
     never legitimate, on any URL.
+
+    max_403_attempts (walled-site runtime) caps the 403 rung of the
+    retry ladder below SCAN_FETCH_403_MAX_ATTEMPTS for this one call —
+    every discovery-surface call site (sitemaps, platform endpoints,
+    llms.txt, the MCP manifest) passes 1. See _fetch_with_retries for
+    why content pages deliberately keep the full ladder. None (the
+    default) is exactly the pre-existing behavior.
     """
     current_url = url
     redirect_chain: list = []
@@ -805,7 +826,9 @@ def fetch(
             hostname = urlparse(current_url).hostname
             _politeness_wait(hostname, min_gap_seconds=crawl_delay)
 
-            resp, hop_attempts, hop_retry_after = _fetch_with_retries(current_url, hostname)
+            resp, hop_attempts, hop_retry_after = _fetch_with_retries(
+                current_url, hostname, max_403_attempts=max_403_attempts,
+            )
             total_attempts += hop_attempts
             if hop_retry_after is not None:
                 retry_after_seen = max(retry_after_seen or 0.0, hop_retry_after)

@@ -11,7 +11,10 @@
 import { Glyph } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
 import { _fetchProbeSentence } from '../DegradedRunBanner.jsx'
-import { FAILURE_POINT_COPY, BLOCKED_STEP_COPY, DISCOVERY_OUTCOME_COPY, resolveFailurePointBody } from './reportContent.js'
+import {
+  FAILURE_POINT_COPY, BLOCKED_STEP_COPY, DISCOVERY_OUTCOME_COPY,
+  FETCH_PROBE_EVIDENCE_COPY, resolveFailurePointBody,
+} from './reportContent.js'
 import { partialReadFailurePoint, buildMeasurableContext } from './reportDerive.js'
 
 const STEP_META = {
@@ -119,6 +122,35 @@ function _buildSteps(trace, unmeasurablePoints, failurePoint, discoveryOutcome) 
   return steps
 }
 
+// Blocked-run evidence (this session): the probe's own fact block.
+// Renders only for the three decisive outcomes, and only on a blocked
+// run — on a sampler miss the probe says nothing about a wall (see
+// DegradedRunBanner's _fetchProbeSentence, which keeps that
+// distinction) and this would overclaim. Copy is registry-sourced;
+// this only decides whether there is a fact to show.
+function FetchProbeEvidence({ probe, failurePoint }) {
+  if (!probe || failurePoint !== 'blocked') return null
+  const line = FETCH_PROBE_EVIDENCE_COPY[probe.outcome]
+  if (!line) return null
+  const kindPhrase = probe.kind === 'store_root' ? 'your homepage' : 'your product page'
+  const note = probe.outcome === 'quoted_price'
+    ? FETCH_PROBE_EVIDENCE_COPY.quoted_price_note
+    : probe.outcome === 'could_not_access'
+      ? FETCH_PROBE_EVIDENCE_COPY.could_not_access_note
+      : null
+  return (
+    <div style={{ marginTop: 18, padding: '15px 17px', background: 'var(--surface-warm)', border: '1px solid var(--hairline)', borderRadius: 12 }}>
+      <div className="mono-label" style={{ fontSize: 9, color: 'var(--faint)', marginBottom: 8 }}>{FETCH_PROBE_EVIDENCE_COPY.label}</div>
+      <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.6 }}>
+        {line({ kindPhrase, price: probe.price })}
+      </div>
+      {note && (
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.6, marginTop: 7 }}>{note}</div>
+      )}
+    </div>
+  )
+}
+
 export function DiscoveryFinding({ report, open, onToggle }) {
   const degradedReason = report.scan?.degraded_reason
   const discoveryOutcome = report.scan?.discovery_outcome
@@ -132,13 +164,19 @@ export function DiscoveryFinding({ report, open, onToggle }) {
   const copy = outcomeCopy || FAILURE_POINT_COPY[failurePoint]
   const trace = report.scan?.discovery_trace
   const bannerFacts = report.scan?.degraded_banner_facts
+  const edgeVendor = report.scan?.edge_vendor
   const unmeasurablePoints = buildMeasurableContext(report.pillars).unmeasurable_points
   const steps = _buildSteps(trace, unmeasurablePoints, failurePoint, discoveryOutcome)
-  const probeSentence = _fetchProbeSentence(bannerFacts, degradedReason, report.scan_status)
+  // Blocked-run evidence: on a blocked run the probe gets its own fact
+  // block below, so the trailing sentence would be the same claim
+  // twice — it stays only where it is the ONLY place the probe speaks.
+  const probeSentence = failurePoint === 'blocked'
+    ? ''
+    : _fetchProbeSentence(bannerFacts, degradedReason, report.scan_status)
   // outcomeCopy has no `body` of its own — discoveryOutcome.summary IS
   // that body, already first-person fact-grounded prose from this run
   // (see reportContent.js's DISCOVERY_OUTCOME_COPY doc comment).
-  const bodyText = outcomeCopy ? (discoveryOutcome.summary || '') : resolveFailurePointBody(copy.body, bannerFacts)
+  const bodyText = outcomeCopy ? (discoveryOutcome.summary || '') : resolveFailurePointBody(copy.body, bannerFacts, edgeVendor)
   const tiers = discoveryOutcome?.tiers || []
   const exampleUrls = discoveryOutcome?.example_urls || []
 
@@ -182,6 +220,8 @@ export function DiscoveryFinding({ report, open, onToggle }) {
         </div>
       )}
 
+      <FetchProbeEvidence probe={bannerFacts?.fetch_probe} failurePoint={failurePoint} />
+
       {exampleUrls.length > 0 && (
         <div style={{ marginTop: 18 }}>
           <div className="mono-label" style={{ fontSize: 9, color: 'var(--faint)', marginBottom: 8 }}>EXAMPLE URLS WE FOUND</div>
@@ -197,7 +237,7 @@ export function DiscoveryFinding({ report, open, onToggle }) {
           // Blocked-run copy pass (1c): the registry's action line
           // stands on its own here — the causal "why" already lives in
           // bodyText above, so this box doesn't repeat it.
-          <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.6 }}>{copy.fixFraming}</div>
+          <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.6 }}>{resolveFailurePointBody(copy.fixFraming, bannerFacts, edgeVendor)}</div>
         ) : (
           <div style={{ fontSize: 13.5, color: 'var(--text)', lineHeight: 1.6 }}>
             <b style={{ color: 'var(--text-strong)' }}>What this usually means:</b> {copy.explanation} That's fix 01 below — it unlocks the {Math.round(unmeasurablePoints)} points this run couldn't read.

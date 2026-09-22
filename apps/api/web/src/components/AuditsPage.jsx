@@ -574,6 +574,20 @@ function Drawer({ detail, loading, error, onClose }) {
                   k="Scan"
                   v={row.scan_status ? `${row.scan_status}${row.scan_integrity_capped ? ' · integrity-capped' : ''}` : null}
                 />
+                {/* Non-commerce report: a brand_only row scoring 10-22
+                    is a correct reading of a non-store site, not a
+                    broken crawl. Triaging the two apart needed the raw
+                    dimensions JSON before this. */}
+                <KV k="Site type" v={row.site_type} mono muted={!row.site_type} />
+                {/* Scan reuse: present only when this row's crawl data
+                    was copied from a recent scan of the same host. */}
+                <KV
+                  k="Crawl"
+                  v={row.reused_from_scan_id
+                    ? `reused from soa_lite_scan_results #${row.reused_from_scan_id}${row.reused_at ? ` · ${formatAbsolute(row.reused_at)}` : ''}`
+                    : null}
+                  mono
+                />
                 <KV k="Scorer" v={row.scorer_version ? `v${row.scorer_version}` : null} mono />
                 <KV k="Rate-limit key" v={row.ip_hash_truncated ? `ip_hash ${row.ip_hash_truncated}` : null} mono muted />
               </div>

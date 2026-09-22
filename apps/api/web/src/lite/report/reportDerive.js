@@ -9,6 +9,7 @@ import {
   VERDICT_AGENT_READY,
 } from '../landing/scanDimensionsRegistry.js'
 import { NAV_IDS } from './useReportSections.js'
+import { BLOCKED_ACCESSIBILITY_HEADLINE } from './reportContent.js'
 import { formatCompactCurrency } from '../liteDerive.js'
 
 // Partial-read report state (Part 2a): the ONE shared measurable-
@@ -71,11 +72,19 @@ export function isPartialRead(pillars, degradedReason) {
 // find your product pages" reads as 'no_product_pages_found'.
 const _OUTCOME_CODES_BLOCKED = new Set([
   'product_pages_refused', 'sitemaps_refused', 'sitemaps_robots_disallowed', 'short_circuited',
+  // Walled-site runtime: discovery.py's second short-circuit. Its
+  // robots.txt was served, but the wall on HTML and the sitemap is
+  // still a wall — this belongs in the blocked bucket, never in the
+  // "our sampler couldn't find them" one.
+  'homepage_and_sitemap_refused',
 ])
 const _OUTCOME_CODES_NOT_FOUND = new Set([
   'no_sitemap', 'product_sitemap_unrecognized', 'sitemap_children_unprobed',
   'sitemaps_non_catalog', 'homepage_no_links', 'rescue_tiers_skipped',
   'product_pages_unreadable', 'unknown',
+  // Product-candidate verification: the pages opened fine and weren't
+  // product pages. Not a wall — never the blocked bucket.
+  'product_candidates_not_products',
 ])
 
 // Part 3c/Discovery follow-up (Part 4): which failure-point registry
@@ -95,6 +104,21 @@ export function partialReadFailurePoint(degradedReason, discoveryOutcome) {
   if (_OUTCOME_CODES_BLOCKED.has(code)) return 'blocked'
   if (_OUTCOME_CODES_NOT_FOUND.has(code)) return 'no_product_pages_found'
   return 'partial'
+}
+
+// Non-commerce report (this session): the ONE place the report asks
+// "is this a store at all?". Reads the site type the scan has always
+// computed and now records (apps/pipeline/scan/site_typing.py ->
+// dimensions["site_type"] -> PublicLiteScan.site_type). Deliberately
+// NOT inferred from a low score or from zero product pages — that
+// inference is exactly what site_typing.py exists to replace, and a
+// commerce site whose discovery failed must never be told it isn't a
+// store (it is typed commerce_discovery_failure, not brand_only).
+//
+// Null site_type (a degraded run, or a row scanned before this stage)
+// is not brand-only: nothing was established either way.
+export function isBrandOnlyReport(report) {
+  return report?.scan?.site_type === 'brand_only'
 }
 
 export function isV3Report(report) {
@@ -265,6 +289,25 @@ export function pillarHeadline(report, pillarKey) {
   return resolvePillarHeadline(report, pillarKey).headline
 }
 
+// Blocked-run evidence (this session): on a blocked run the
+// Accessibility tile read "Couldn't be measured this run" — true, and
+// the least useful true thing on the page, on a report whose whole
+// subject is that the site refused a reader. When the fetch probe has a
+// decisive answer about the SAME wall, the tile says that instead.
+//
+// Deliberately narrow. It fires only on a blocked run (a sampler miss
+// is not a wall), only for Accessibility (the pillar the wall actually
+// bears on), only when the pillar genuinely wasn't measured, and only
+// when the probe was decisive. The score beside it is untouched — this
+// is a headline, not a point.
+export function blockedAccessibilityHeadline(report) {
+  if (report?.scan_status !== 'blocked') return null
+  const probe = report?.scan?.degraded_banner_facts?.fetch_probe
+  if (!probe) return null
+  if (resolvePillarHeadline(report, PILLAR_ACCESSIBILITY).source !== 'not_measurable') return null
+  return BLOCKED_ACCESSIBILITY_HEADLINE[probe.outcome] || null
+}
+
 export { PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE, PILLAR_VISIBILITY }
 
 // Mobile rail replacement (RM1): the desktop rail (ReportRail.jsx) and
@@ -298,7 +341,11 @@ function kLabel(n) {
   return formatCompactCurrency(n)
 }
 
-export function buildNavItems({ pillars, composite, exposure, active, partial, transcript }) {
+// brandOnly (non-commerce report): the nav's Score row is the same
+// composite the hero and the rail withhold on a non-store site, so it
+// takes the same variant rather than being the one surface that still
+// asserts "16/100" about a storefront that isn't there.
+export function buildNavItems({ pillars, composite, exposure, active, partial, transcript, brandOnly }) {
   const vis = pillarEarnedMax(pillars.visibility)
   const acc = pillarEarnedMax(pillars.accessibility)
   const tv = pillarEarnedMax(pillars.true_value)
@@ -309,7 +356,7 @@ export function buildNavItems({ pillars, composite, exposure, active, partial, t
     const meta = NAV_META[id]
     let score = null
     if (id === 'why') score = '↓'
-    else if (id === 'score') score = `${Math.round(composite ?? 0)}/100`
+    else if (id === 'score') score = brandOnly ? `${Math.round(vis.earned)}/${Math.round(vis.max)}` : `${Math.round(composite ?? 0)}/100`
     else if (id === 'viz') score = `${Math.round(vis.earned)}/${Math.round(vis.max)}`
     else if (id === 'transcript') score = `${transcript.query_index}/${transcript.total_queries}`
     else if (id === 'acc') score = `${Math.round(acc.earned)}/${Math.round(acc.max)}`

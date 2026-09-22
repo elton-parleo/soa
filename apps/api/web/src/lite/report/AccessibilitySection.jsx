@@ -1,6 +1,7 @@
 import { StateChip } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
-import { dimByCode, pillarEarnedMax, pillarHeadline, isPartialRead, PILLAR_ACCESSIBILITY } from './reportDerive.js'
+import { dimByCode, pillarEarnedMax, pillarHeadline, isBrandOnlyReport, isPartialRead, PILLAR_ACCESSIBILITY } from './reportDerive.js'
+import { BRAND_ONLY_COPY } from './reportContent.js'
 import { DIMENSIONS_BY_CODE } from '../landing/scanDimensionsRegistry.js'
 import { toChipState } from './checkState.js'
 
@@ -44,6 +45,12 @@ export function AccessibilitySection({ report, open, onToggle }) {
   const catalog = dimByCode(dims, 'catalog_context')
   const protocol = dimByCode(dims, 'protocol_feed')
   const partialRead = isPartialRead(pillars, report.scan?.degraded_reason)
+  // Non-commerce report: Agent Access and Protocol & Feed are read off
+  // robots.txt, llms.txt and the MCP manifest — they apply to any site.
+  // Catalog Context reads product pages, and a site with no storefront
+  // has none to read, so showing it as a scored 0/8 states a failing
+  // result about a check that had nothing to check.
+  const brandOnly = isBrandOnlyReport(report)
 
   return (
     <ReportSection
@@ -52,11 +59,16 @@ export function AccessibilitySection({ report, open, onToggle }) {
       score={`${Math.round(acc.earned)}/${Math.round(acc.max)}`}
       open={open} onToggle={onToggle}
     >
-      <div className="lite-v4-acc-tiles-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginTop: 20 }}>
+      <div className="lite-v4-acc-tiles-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${brandOnly ? 2 : 3},1fr)`, gap: 14, marginTop: 20 }}>
         <ChecksTile dim={agentAccess} registryDim={DIMENSIONS_BY_CODE.agent_access} partialRead={partialRead} />
-        <ChecksTile dim={catalog} registryDim={DIMENSIONS_BY_CODE.catalog_context} partialRead={partialRead} />
+        {!brandOnly && <ChecksTile dim={catalog} registryDim={DIMENSIONS_BY_CODE.catalog_context} partialRead={partialRead} />}
         <ChecksTile dim={protocol} registryDim={DIMENSIONS_BY_CODE.protocol_feed} partialRead={partialRead} />
       </div>
+      {brandOnly && (
+        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.6, marginTop: 14 }}>
+          {BRAND_ONLY_COPY.accessibilityNote}
+        </div>
+      )}
     </ReportSection>
   )
 }

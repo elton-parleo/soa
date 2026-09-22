@@ -1,5 +1,6 @@
 import { Glyph, StatusChip, Button, BrandLogo } from '../../ds/index.js'
-import { pillarEarnedMax, pillarNominalWeight, isAgentReady, isPartialRead, buildMeasurableContext, buildNavItems, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from './reportDerive.js'
+import { pillarEarnedMax, pillarNominalWeight, isAgentReady, isBrandOnlyReport, isPartialRead, buildMeasurableContext, buildNavItems, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from './reportDerive.js'
+import { BRAND_ONLY_COPY } from './reportContent.js'
 import { LITE_QUERY_COUNT } from '../landing/scanDimensionsRegistry.js'
 import { ShareReportButton } from './ShareReportButton.jsx'
 import { WordmarkLink } from '../WordmarkLink.jsx'
@@ -16,7 +17,12 @@ export function ReportRail({ report, primaryEntityName, exposure, active, focus,
   const measurable = partial ? buildMeasurableContext(pillars) : null
   const readyPct = partial ? Math.min(100, (60 / measurable.measurable_max) * 100) : 60
 
-  const navItems = buildNavItems({ pillars, composite, exposure, active, partial, transcript: report.transcript })
+  // Non-commerce report: the rail's own score/verdict is the SAME claim
+  // the hero makes, so it takes the same variant — a composite out of
+  // 100 and an "agent-ready" verdict are both about a storefront this
+  // site does not have. See ScoreHero.jsx for the full rationale.
+  const brandOnly = isBrandOnlyReport(report)
+  const navItems = buildNavItems({ pillars, composite, exposure, active, partial, brandOnly, transcript: report.transcript })
 
   return (
     <div className="lite-report-rail" style={{ borderRight: '1px solid var(--border)', background: 'var(--canvas-dim)' }}>
@@ -36,23 +42,27 @@ export function ReportRail({ report, primaryEntityName, exposure, active, focus,
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
               <span className="num" style={{ fontSize: 44, fontWeight: 750, letterSpacing: '-0.042em', lineHeight: 0.9, color: 'var(--text-strong)' }}>
-                {composite != null ? Math.round(composite) : partial ? Math.round(measurable.earned) : '—'}
+                {brandOnly ? Math.round(vis.earned) : composite != null ? Math.round(composite) : partial ? Math.round(measurable.earned) : '—'}
               </span>
               <span className="num" style={{ fontSize: 16, fontWeight: 560, color: 'var(--faint)' }}>
-                {composite == null && partial ? `/${Math.round(measurable.measurable_max)} read` : '/100'}
+                {brandOnly
+                  ? `/${Math.round(vis.max || pillarNominalWeight(PILLAR_VISIBILITY))} ${BRAND_ONLY_COPY.scoreLabel}`
+                  : composite == null && partial ? `/${Math.round(measurable.measurable_max)} read` : '/100'}
               </span>
             </div>
             <div style={{ marginTop: 16 }}>
               <div style={{ position: 'relative', height: 11, borderRadius: 5.5, background: 'var(--canvas-dim)', boxShadow: 'inset 0 1px 2px rgba(70,69,85,.16),inset 0 0 0 1px rgba(213,209,203,.95)' }}>
-                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${partial ? Math.min(100, (measurable.earned / measurable.measurable_max) * 100 || 0) : Math.min(100, composite ?? 0)}%`, borderRadius: 5.5, background: 'var(--ink)' }} />
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${brandOnly ? Math.min(100, (vis.earned / (vis.max || 1)) * 100 || 0) : partial ? Math.min(100, (measurable.earned / measurable.measurable_max) * 100 || 0) : Math.min(100, composite ?? 0)}%`, borderRadius: 5.5, background: 'var(--ink)' }} />
                 <span aria-hidden="true" style={{ position: 'absolute', left: `${readyPct}%`, top: -2, bottom: -2, width: 3, transform: 'translateX(-3px)', borderRadius: 2, background: 'var(--blue)' }} />
               </div>
               <div style={{ position: 'relative', height: 14, marginTop: 7 }}>
                 <span className="mono-label" style={{ position: 'absolute', left: 0, top: 0, fontSize: 9, color: 'var(--text-strong)', fontWeight: 600 }}>
-                  {composite != null ? Math.round(composite) : partial ? Math.round(measurable.earned) : '—'} EARNED
+                  {brandOnly ? Math.round(vis.earned) : composite != null ? Math.round(composite) : partial ? Math.round(measurable.earned) : '—'} EARNED
                 </span>
-                <span className="mono-label" style={{ position: 'absolute', left: `${readyPct}%`, top: 0, transform: 'translateX(-50%)', fontSize: 9, color: 'var(--muted)', whiteSpace: 'nowrap' }}>READY 60</span>
-                <span className="mono-label" style={{ position: 'absolute', right: 0, top: 0, fontSize: 9, color: 'var(--faint)' }}>{partial ? Math.round(measurable.measurable_max) : 100}</span>
+                {!brandOnly && (
+                  <span className="mono-label" style={{ position: 'absolute', left: `${readyPct}%`, top: 0, transform: 'translateX(-50%)', fontSize: 9, color: 'var(--muted)', whiteSpace: 'nowrap' }}>READY 60</span>
+                )}
+                <span className="mono-label" style={{ position: 'absolute', right: 0, top: 0, fontSize: 9, color: 'var(--faint)' }}>{brandOnly ? Math.round(vis.max) : partial ? Math.round(measurable.measurable_max) : 100}</span>
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 14 }}>
@@ -66,7 +76,11 @@ export function ReportRail({ report, primaryEntityName, exposure, active, focus,
               </div>
             )}
           </div>
-          {pillars.state === 'scored' ? (
+          {brandOnly ? (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
+              <StatusChip tone="info" size="sm">{BRAND_ONLY_COPY.statusChip}</StatusChip>
+            </div>
+          ) : pillars.state === 'scored' ? (
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: 14 }}>
               <StatusChip tone={isAgentReady(pillars) ? 'success' : 'risk'} size="sm">{isAgentReady(pillars) ? 'Agent-ready' : 'Not agent-ready'}</StatusChip>
             </div>

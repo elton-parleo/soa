@@ -219,6 +219,20 @@ class LiteRequestDetail(LiteRequestListItem):
     # forward, complete or degraded; null for a row scanned before this
     # stage, or with no scan row at all.
     discovery_outcome: Optional[dict] = None
+    # Non-commerce report (this session): dimensions["site_type"] —
+    # "commerce_normal" | "commerce_discovery_failure" | "brand_only"
+    # (apps/pipeline/scan/site_typing.py). Triage-critical on this page:
+    # a brand_only row scoring 10-22 is a correct reading of a
+    # non-store site, not a broken crawl, and the two were
+    # indistinguishable here before. Null for a degraded run (which
+    # never types the site) or a row scanned before this stage.
+    site_type: Optional[str] = None
+    # Scan reuse (this session): dimensions["reused_from_scan_id"] /
+    # ["reused_at"] when this row's crawl data was copied from a recent
+    # scan of the same host instead of re-crawling it (see
+    # apps/pipeline/worker.py). Both null on an ordinary run.
+    reused_from_scan_id: Optional[int] = None
+    reused_at: Optional[str] = None
 
 
 # ─── Derivations from the events log ─────────────────────────────────────
@@ -745,7 +759,13 @@ def get_lite_request(lite_request_id: int):
         # independent of the pillars-building branch below, so it's
         # populated for a degraded (blocked/failed) row too, not only a
         # complete one.
-        item["discovery_outcome"] = (decode_json_field(row[19], {}) or {}).get("discovery_outcome")
+        scan_dimensions = decode_json_field(row[19], {}) or {}
+        item["discovery_outcome"] = scan_dimensions.get("discovery_outcome")
+        # Same read, same column, same "triage without opening the raw
+        # JSON" rationale as discovery_outcome above.
+        item["site_type"] = scan_dimensions.get("site_type")
+        item["reused_from_scan_id"] = scan_dimensions.get("reused_from_scan_id")
+        item["reused_at"] = scan_dimensions.get("reused_at")
 
         # Detail is one row, so the plain per-cycle path is used here —
         # the same build_cycle_report the public report calls, with no

@@ -32,6 +32,24 @@ CODE_PRODUCT_PAGES_READ = "product_pages_read"
 CODE_PRODUCT_PAGES_REFUSED = "product_pages_refused"
 CODE_PRODUCT_PAGES_UNREADABLE = "product_pages_unreadable"
 CODE_SHORT_CIRCUITED = "short_circuited"
+# Walled-site runtime (this session): discovery.py now has a SECOND
+# short-circuit — robots.txt served, store root and first declared
+# sitemap both refused (the Warby Parker shape). It gets its own code
+# rather than folding into short_circuited above, because the sentence
+# a reader needs is genuinely different: "your robots.txt was fine, the
+# wall is on HTML and your sitemap", not "you refused us twice at the
+# door".
+CODE_HOMEPAGE_AND_SITEMAP_REFUSED = "homepage_and_sitemap_refused"
+# Product-candidate verification (this session): engine.py now re-kinds
+# a candidate that fetched fine but carries no product markup to
+# product_candidate_rejected and excludes it from _product_pages. That
+# is a genuinely different outcome from "we couldn't read them" — those
+# pages read fine; they just weren't product pages — and saying
+# otherwise would be exactly the kind of sentence this module exists to
+# stop the report making. Walmart's live run is the fixture: 50,000 real
+# /ip/ URLs behind the sitemap, four candidates fetched, three of them
+# served as something other than a product page.
+CODE_PRODUCT_CANDIDATES_NOT_PRODUCTS = "product_candidates_not_products"
 CODE_SITEMAPS_REFUSED = "sitemaps_refused"
 CODE_SITEMAPS_ROBOTS_DISALLOWED = "sitemaps_robots_disallowed"
 CODE_NO_SITEMAP = "no_sitemap"
@@ -66,7 +84,16 @@ _EMPTY_OUTCOME = {
     "robots_excluded": 0,
     "llm": None,
     "short_circuited": False,
+    "product_candidates_rejected": 0,
 }
+
+
+def _rejected_candidates(pages) -> list:
+    """Candidates engine.py re-kinded because they fetched fine and
+    turned out not to be product pages. Matched on the kind string
+    rather than imported from engine.py — discovery_outcome.py is
+    imported BY engine.py, and reaching back would be a cycle."""
+    return [p for p in pages if p.candidate.kind == "product_candidate_rejected"]
 
 
 def _sitemap_name(url) -> str:
@@ -216,6 +243,7 @@ def _classify(discovery, pages, base_url: str, sitemap_entries: list) -> tuple:
     product_pages = [p for p in pages if p.candidate.kind == "product"]
     product_pages_attempted = len(product_pages)
     product_pages_fetched = sum(1 for p in product_pages if p.fetch_result.status == "fetched")
+    rejected = _rejected_candidates(pages)
     found_candidates = ss.get("candidates_found") or 0
     tiers_attempted = ss.get("tiers_attempted") or []
 
@@ -241,12 +269,50 @@ def _classify(discovery, pages, base_url: str, sitemap_entries: list) -> tuple:
                 f"we found {product_pages_attempted} product page(s) and asked for each one; "
                 f"your site refused every request (HTTP {label})"
             )
+
+    # Product-candidate verification: checked after a READ (top of this
+    # function) and after a REFUSAL (just above) — both of those are
+    # stronger, more specific facts about the run. It is checked BEFORE
+    # "unreadable", because a run whose candidates mostly opened-but-
+    # weren't-products is not a run that couldn't read anything, and the
+    # unreadable sentence would be the wrong story about it. Walmart's
+    # live run is exactly this: four /ip/ candidates, three served
+    # without product markup and one a 404.
+    if rejected and product_pages_fetched == 0:
+        opened = len(rejected)
+        return CODE_PRODUCT_CANDIDATES_NOT_PRODUCTS, (
+            f"we found product-shaped URLs and opened {opened} of them, but every page we "
+            "opened came back without product markup — a category or landing page, or a "
+            "page served to our reader without its product details"
+        )
+
+    if product_pages_attempted >= 1:
+        # "network error or timeout" is only honest when no HTTP
+        # response ever came back. A 404/5xx is a real answer from a
+        # real server, and calling it a network error sends a store
+        # owner looking in the wrong place.
+        responded = [p for p in product_pages if p.fetch_result.http_status is not None]
+        if responded:
+            statuses = sorted({p.fetch_result.http_status for p in responded})
+            label = ", ".join(str(code) for code in statuses)
+            return CODE_PRODUCT_PAGES_UNREADABLE, (
+                f"we found {product_pages_attempted} product page(s) and asked for each one, "
+                f"but none of them served us a page we could read (HTTP {label})"
+            )
         return CODE_PRODUCT_PAGES_UNREADABLE, (
             f"we found {product_pages_attempted} product page(s) and asked for each one, "
             "but couldn't read any of them (network error or timeout, not a refusal)"
         )
 
-    if ss.get("short_circuit"):
+    short_circuit = ss.get("short_circuit")
+    if short_circuit:
+        # The two short-circuits describe two different walls — keyed
+        # off the reason discovery.py recorded, never inferred here.
+        if short_circuit.get("reason") == "homepage_and_sitemap_refused":
+            return CODE_HOMEPAGE_AND_SITEMAP_REFUSED, (
+                "your robots.txt was served, but your store root and your first declared "
+                "sitemap both refused our reader, so we stopped probing your catalog"
+            )
         return CODE_SHORT_CIRCUITED, (
             "robots.txt and your store root both refused our reader, so we stopped without probing further"
         )
@@ -400,6 +466,10 @@ def build_discovery_outcome(discovery, pages: list, base_url: str) -> dict:
             "robots_excluded": ss.get("robots_excluded") or 0,
             "llm": llm,
             "short_circuited": bool(ss.get("short_circuit")),
+            # Product-candidate verification: how many URLs this run
+            # opened that matched a product URL pattern and turned out
+            # not to be product pages. 0 on almost every run.
+            "product_candidates_rejected": len(_rejected_candidates(pages)),
         }
     except Exception:
         log.exception("[scan.discovery_outcome] classification failed")

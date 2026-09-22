@@ -51,7 +51,14 @@ from soa_shared.scan_dimensions import SCORER_VERSION
 
 from . import scorer, signing, site_typing
 from .agent_access_matrix import build_agent_access_matrix
-from .discovery import DiscoveryResult, discover_pages, resolve_canonical_origin
+from .discovery import (
+    MAX_PRODUCT_PAGES,
+    DiscoveryResult,
+    PageCandidate,
+    _looks_like_product_page,
+    discover_pages,
+    resolve_canonical_origin,
+)
 from .discovery_outcome import build_discovery_outcome
 from .fetcher import FetchBudget, fetch
 from .brand_icon import extract_brand_icon
@@ -71,6 +78,11 @@ class PageScanData:
     candidate: object        # discovery.PageCandidate
     fetch_result: object     # fetcher.FetchResult
     extracted: Optional[ExtractedData]
+    # Product-candidate verification (this session): why this candidate
+    # was re-kinded away from "product" — None on every page that wasn't.
+    # Serialized onto the page's own pages_fetched row (_fetch_entry),
+    # never read by the scorer.
+    rejected_reason: Optional[str] = None
 
 
 @dataclass
@@ -118,6 +130,97 @@ def _normalize_input(input_url_or_domain: str) -> Optional[str]:
     return f"{parsed.scheme}://{parsed.netloc}"
 
 
+# Product-candidate verification (this session): Walmart's stored audit
+# (#127) scored catalog 0 with exactly one "product page" fetched —
+# https://www.walmart.com/cp/pd/9881824, a CATEGORY page that matched
+# discovery's /pd/ URL pattern. Every PDP-dependent scorer then read
+# that page, found no Product markup, and reported "checked, nothing
+# found" about a page that was never a product page to begin with.
+#
+# A candidate that fetches fine but carries no Product/ProductGroup
+# structured data and no microdata-plus-visible-price is re-kinded to
+# this, excluded from _product_pages, and replaced from the ranked pool
+# discovery kept back (there were 50,000 real /ip/ URLs behind Walmart's
+# sitemap — stopping at the first false positive was never the honest
+# answer). _looks_like_product_page is discovery.py's own content-level
+# check, reused here rather than re-stated.
+#
+# A candidate whose fetch FAILED is deliberately NOT a rejection: it is
+# still a product page as far as anyone knows, and the refused/
+# unreadable classifications downstream (discovery_outcome.py) depend on
+# it staying kind="product".
+PRODUCT_CANDIDATE_REJECTED_KIND = "product_candidate_rejected"
+PRODUCT_CANDIDATE_REJECTED_REASON = (
+    "fetched, but carried no Product/ProductGroup structured data and no "
+    "microdata with a visible price — a category or landing page that "
+    "matched a product URL pattern, not a product page"
+)
+# How many replacement fetches one run may spend on this. Bounded for
+# the same reason the walled short-circuit exists: a run that keeps
+# knocking is a run that spends its budget learning nothing. Only ever
+# engaged after a real rejection.
+MAX_PRODUCT_REPLACEMENT_FETCHES = 2
+
+
+def _extract_page(result) -> Optional[ExtractedData]:
+    if result.status == "fetched" and result.html:
+        return extract(result.html)
+    return None
+
+
+def _verify_product_candidate(page: PageScanData) -> PageScanData:
+    """Returns `page` unchanged unless it is a product candidate that
+    fetched successfully and does not parse as a product page — in
+    which case a re-kinded copy is returned. Pure; never raises (the
+    extraction already happened, this only reads its result)."""
+    if page.candidate.kind != "product" or page.fetch_result.status != "fetched":
+        return page
+    if _looks_like_product_page(page.extracted):
+        return page
+    return PageScanData(
+        candidate=PageCandidate(url=page.candidate.url, kind=PRODUCT_CANDIDATE_REJECTED_KIND),
+        fetch_result=page.fetch_result,
+        extracted=page.extracted,
+        rejected_reason=PRODUCT_CANDIDATE_REJECTED_REASON,
+    )
+
+
+def _replace_rejected_product_pages(
+    discovery: DiscoveryResult, budget: FetchBudget, pages: list,
+) -> list:
+    """Fetches up to MAX_PRODUCT_REPLACEMENT_FETCHES further candidates
+    from discovery's ranked pool, to stand in for candidates that turned
+    out to be category pages. Runs only when at least one candidate WAS
+    rejected — a run that simply found one product page, or whose
+    candidates were refused, spends nothing here. Returns the extra
+    PageScanData rows (possibly empty); never raises."""
+    rejected = sum(1 for p in pages if p.candidate.kind == PRODUCT_CANDIDATE_REJECTED_KIND)
+    if not rejected:
+        return []
+
+    accepted = sum(1 for p in pages if p.candidate.kind == "product")
+    attempted = {p.candidate.url for p in pages}
+    extra: list = []
+    for url in discovery.product_url_pool or []:
+        if accepted >= MAX_PRODUCT_PAGES or len(extra) >= MAX_PRODUCT_REPLACEMENT_FETCHES:
+            break
+        if url in attempted:
+            continue
+        if not budget.has_capacity():
+            break
+        budget.consume()
+        result = fetch(url, robot_parser=discovery.robot_parser, check_short_body=True)
+        page = _verify_product_candidate(PageScanData(
+            candidate=PageCandidate(url=url, kind="product"),
+            fetch_result=result,
+            extracted=_extract_page(result),
+        ))
+        extra.append(page)
+        if page.candidate.kind == "product":
+            accepted += 1
+    return extra
+
+
 def _gather_pages(discovery: DiscoveryResult, budget: FetchBudget) -> list:
     pages = []
     for candidate in discovery.candidates:
@@ -144,11 +247,11 @@ def _gather_pages(discovery: DiscoveryResult, budget: FetchBudget) -> list:
             check_short_body = candidate.kind in ("homepage", "product", "loyalty", "shipping_returns")
             result = fetch(candidate.url, robot_parser=discovery.robot_parser, check_short_body=check_short_body)
 
-        extracted = None
-        if result.status == "fetched" and result.html:
-            extracted = extract(result.html)
+        pages.append(_verify_product_candidate(PageScanData(
+            candidate=candidate, fetch_result=result, extracted=_extract_page(result),
+        )))
 
-        pages.append(PageScanData(candidate=candidate, fetch_result=result, extracted=extracted))
+    pages.extend(_replace_rejected_product_pages(discovery, budget, pages))
     return pages
 
 
@@ -162,13 +265,24 @@ def _choose_fetch_probe_url(canonical_origin: str, pages: list) -> tuple:
     fetch outcome — `pages` only ever contains candidates actually
     fetched, per _gather_pages); else the store root. Always returns a
     real (url, kind) pair — canonical_origin is a plain string by the
-    time pages exist."""
+    time pages exist.
+
+    Product-candidate verification (this session): a REJECTED candidate
+    still counts as a product-page rung here. It is a real product URL
+    off the store's own catalog that our reader was served without
+    product details — asking ChatGPT to open that exact URL is the most
+    useful question this probe can ask about such a run, and dropping
+    to the homepage instead would throw away the comparison. It ranks
+    below a genuinely-read PDP and above the store root."""
     product_pages = [p for p in pages if p.candidate.kind == "product"]
     fetched = next((p for p in product_pages if p.fetch_result.status == "fetched"), None)
     if fetched:
         return fetched.candidate.url, FETCH_PROBE_KIND_PRODUCT_PAGE
     if product_pages:
         return product_pages[0].candidate.url, FETCH_PROBE_KIND_PRODUCT_PAGE
+    rejected = [p for p in pages if p.candidate.kind == PRODUCT_CANDIDATE_REJECTED_KIND]
+    if rejected:
+        return rejected[0].candidate.url, FETCH_PROBE_KIND_PRODUCT_PAGE
     return canonical_origin, FETCH_PROBE_KIND_STORE_ROOT
 
 
@@ -259,7 +373,7 @@ def _serialize_dim_score(score) -> dict:
     }
 
 
-def _fetch_entry(fr) -> dict:
+def _fetch_entry(fr, *, rejected_reason: Optional[str] = None) -> dict:
     """Stage 11 (F3): one pages_fetched row — every fetch the scan
     performed, including robots.txt/sitemap/well-known probes that were
     previously invisible. A4 (fetch resilience): attempts/retry_after_seen/
@@ -274,8 +388,15 @@ def _fetch_entry(fr) -> dict:
     facts fetcher.py now records at the moment of refusal. These are
     for us: cycle_scoring.build_scan_payload filters pages_fetched back
     down to its long-standing public keys before the report payload
-    reaches a browser."""
-    return {
+    reaches a browser.
+
+    Product-candidate verification (this session): product_candidate_
+    rejected is the same diagnostic kind of key — present and non-null
+    only on a row that matched a product URL pattern, fetched fine, and
+    turned out to be a category page (see _verify_product_candidate).
+    It is what makes "we sampled a page that wasn't a product page"
+    readable after the fact instead of invisible."""
+    entry = {
         "url": fr.url,
         "final_url": fr.final_url,
         "status": fr.status,
@@ -294,10 +415,24 @@ def _fetch_entry(fr) -> dict:
         # one — additive, None on the overwhelming majority of rows.
         "crawl_delay_seconds": fr.crawl_delay_seconds,
     }
+    if rejected_reason:
+        entry["product_candidate_rejected"] = rejected_reason
+    return entry
 
 
 BLOCK_EVIDENCE_MAX_TITLES = 5
 BLOCK_EVIDENCE_MAX_BODY_SIZES = 8
+
+# Vendor attribution (this session): the one vendor whose fingerprint
+# showed up on the most fetches this run, or None when nothing did.
+# "shopify" is deliberately excluded — it fingerprints a STORE PLATFORM,
+# not a bot-management layer, and naming it in a blocked-run report
+# ("your site runs Shopify's bot protection") would be wrong in a way
+# the reader would immediately catch. The report uses this to name the
+# wall instead of gesturing at "security tools like Cloudflare";
+# everything else about block_evidence stays the diagnostic record it
+# already was.
+BLOCK_EVIDENCE_NON_WAF_VENDORS = ("shopify",)
 
 
 def _block_evidence_summary(entries) -> dict:
@@ -333,7 +468,25 @@ def _block_evidence_summary(entries) -> dict:
         "vendor_hints": vendor_hints,
         "blocked_titles": blocked_titles,
         "blocked_body_sizes": blocked_body_sizes,
+        "dominant_vendor": _dominant_edge_vendor(vendor_hints),
     }
+
+
+def _dominant_edge_vendor(vendor_hints: dict) -> Optional[str]:
+    """The bot-management vendor this run saw most, or None. Ties break
+    on the vendor name so the same run always names the same wall.
+    Never raises."""
+    try:
+        candidates = [
+            (count, vendor) for vendor, count in (vendor_hints or {}).items()
+            if vendor not in BLOCK_EVIDENCE_NON_WAF_VENDORS and count
+        ]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda c: (c[0], [-ord(ch) for ch in c[1]]))[1]
+    except Exception:
+        log.exception("[scan.engine] dominant edge vendor selection failed")
+        return None
 
 
 def _derive_status(discovery: DiscoveryResult, pages: list) -> tuple:
@@ -539,7 +692,9 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
         pages = _gather_pages(discovery, budget)
 
         pages_fetched = [_fetch_entry(fr) for fr in discovery.all_fetches]
-        pages_fetched.extend(_fetch_entry(p.fetch_result) for p in pages)
+        pages_fetched.extend(
+            _fetch_entry(p.fetch_result, rejected_reason=p.rejected_reason) for p in pages
+        )
 
         # Part 2 (P1), kind-aware (N4): computed once, regardless of what
         # status this run lands on below — the fetch probe still has a
@@ -735,6 +890,18 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
         # Already computed above (needed before scoring, to thread its
         # summary into the NOT MEASURABLE evidence lines).
         dimensions["discovery_outcome"] = discovery_outcome
+        # Non-commerce report (this session): the site type has always
+        # been computed (it gates several scorers) but never recorded —
+        # it survived only as evidence wording, so a brand-only site
+        # like emcube/marketlytics/wealthsimple (correctly typed, scored
+        # 10-22) reached the report indistinguishable from a failing
+        # STORE. Additive sibling keys, same no-migration pattern as
+        # sitemap_sampling above. Only recorded on the complete path:
+        # a degraded run never calls classify_site at all, and inventing
+        # a type for one would be exactly the false brand-only claim
+        # site_typing's own never-throw fallback exists to avoid.
+        dimensions["site_type"] = site_type_result.site_type
+        dimensions["site_type_signals"] = list(site_type_result.signals or [])
         # Part 1 (M4): recorded on every run, same rationale as
         # sitemap_sampling above — additive sibling key, no migration.
         dimensions["agent_access_matrix"] = agent_access_matrix

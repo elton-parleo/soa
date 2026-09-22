@@ -20,12 +20,24 @@ async function request(method, path, body) {
 
   if (!res.ok) {
     let detail = `${method} ${path} → ${res.status}`
+    // Intake validation (this session): a rejected store URL comes back
+    // as a structured detail — {code, message} — so the form can put
+    // the message under the URL field it's about instead of in the
+    // generic submit-error slot. Every other endpoint still returns a
+    // plain string detail, and that path is untouched.
+    let code = null
     try {
       const err = await res.json()
-      if (err.detail) detail = err.detail
+      if (typeof err.detail === 'string') {
+        detail = err.detail
+      } else if (err.detail && typeof err.detail === 'object') {
+        code = err.detail.code || null
+        detail = err.detail.message || detail
+      }
     } catch (_) {}
     const error = new Error(detail)
     error.status = res.status
+    error.code = code
     error.retryAfter = res.headers.get('Retry-After')
     throw error
   }

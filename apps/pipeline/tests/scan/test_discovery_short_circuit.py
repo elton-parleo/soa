@@ -35,6 +35,12 @@ HOMEPAGE_HTML = (
 )
 # The shape the export actually showed: a small, identical Access Denied
 # body returned for every URL on the origin.
+SITEMAP_WITH_PRODUCTS = (
+    "<?xml version='1.0' encoding='UTF-8'?><urlset>"
+    "<url><loc>https://big-box.example.com/products/blue-widget</loc></url>"
+    "<url><loc>https://big-box.example.com/products/red-widget</loc></url>"
+    "</urlset>"
+)
 ACCESS_DENIED_BODY = (
     "<html><head><title>Access Denied</title></head><body>"
     "You don't have permission to access this resource on this server. "
@@ -171,11 +177,12 @@ def test_an_ordinary_run_records_short_circuit_as_none(monkeypatch):
 
 # ─── both signals are required ───────────────────────────────────────────
 
-def test_robots_200_with_a_refused_homepage_is_not_short_circuited(monkeypatch):
-    """The Warby Parker shape: robots.txt, llms.txt and the MCP manifest
-    were all served while HTML was refused. Those probes are worth
-    keeping — this is the case the two-signal rule exists to protect."""
-    requested = _counting_server(monkeypatch, (200, ROBOTS_TXT_PLAIN))
+def test_robots_200_with_a_refused_homepage_is_not_hard_refused(monkeypatch):
+    """hard_refused needs robots.txt ITSELF to refuse — a served
+    robots.txt is never that shape, whatever the store root did. The
+    Warby Parker shape is handled by the SECOND short-circuit below,
+    which needs a refused sitemap too."""
+    requested = _counting_server(monkeypatch, (200, ROBOTS_TXT_PLAIN), other=(200, "<urlset></urlset>"))
 
     result = discovery.discover_pages(ORIGIN, FetchBudget(), homepage_fetch=_homepage_fetch(403))
 
@@ -220,6 +227,155 @@ def test_a_503_homepage_is_not_the_hard_refused_shape(monkeypatch):
     assert len(requested) > 1
 
 
+# ─── the walled short-circuit: homepage + first sitemap both refused ─────
+#
+# Walled-site runtime (this session): the Warby Parker shape. robots.txt
+# is served; the store root and the first declared sitemap are both
+# refused. A local re-scan of warbyparker.com took 185 s, nearly all of
+# it probes downstream of this point that could never have succeeded.
+# llms.txt and .well-known/mcp.json stay — Warby Parker serves both.
+
+
+def _split_server(monkeypatch, *, robots=(200, ROBOTS_TXT_PLAIN), sitemap=(403, ACCESS_DENIED_BODY),
+                  other=(403, ACCESS_DENIED_BODY)):
+    """robots.txt, anything with 'sitemap' in the URL, and everything
+    else are each answered separately, and every request is recorded."""
+    requested = []
+
+    def fake_get(self, url, headers=None, **kw):
+        requested.append(url)
+        if url.endswith("/robots.txt"):
+            status, body = robots
+        elif "sitemap" in url:
+            status, body = sitemap
+        else:
+            status, body = other
+        return httpx.Response(status, text=body, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    return requested
+
+
+@pytest.mark.parametrize("refusal", [403, 429])
+def test_a_refused_store_root_and_first_sitemap_short_circuit(monkeypatch, refusal):
+    requested = _split_server(monkeypatch, sitemap=(refusal, ACCESS_DENIED_BODY))
+
+    result = discovery.discover_pages(
+        ORIGIN, FetchBudget(), homepage_fetch=_homepage_fetch(refusal),
+    )
+
+    short_circuit = result.sitemap_sampling["short_circuit"]
+    assert short_circuit["reason"] == "homepage_and_sitemap_refused"
+    assert short_circuit["robots_http_status"] == 200
+    assert short_circuit["homepage_http_status"] == refusal
+    assert short_circuit["sitemap_url"] == f"{ORIGIN}/sitemap.xml"
+    assert short_circuit["sitemap_http_status"] == refusal
+    assert result.sitemap_sampling["first_sitemap_refused"] == {
+        "url": f"{ORIGIN}/sitemap.xml", "http_status": refusal,
+    }
+    # Exactly one sitemap URL was ever asked for. (A 429 may still be
+    # knocked on twice — that rung of the ladder is a real rate limit
+    # that can ease off; only 403 is capped at one attempt.)
+    assert set(u for u in requested if "sitemap" in u) == {f"{ORIGIN}/sitemap.xml"}
+
+
+def test_the_walled_short_circuit_keeps_the_llms_txt_and_mcp_probes(monkeypatch):
+    """The whole point of stopping HERE rather than at the door: these
+    two are exactly what a site in this shape still serves."""
+    requested = _split_server(monkeypatch)
+
+    result = discovery.discover_pages(ORIGIN, FetchBudget(), homepage_fetch=_homepage_fetch(403))
+
+    joined = " ".join(requested)
+    assert "/llms.txt" in joined
+    assert "/.well-known/mcp.json" in joined
+    assert result.llms_txt_fetch is not None
+    assert result.mcp_well_known_fetch is not None
+    assert [c.kind for c in result.candidates] == ["homepage", "llms_txt", "mcp_well_known"]
+
+
+def test_the_walled_short_circuit_probes_nothing_else(monkeypatch):
+    requested = _split_server(monkeypatch)
+
+    discovery.discover_pages(ORIGIN, FetchBudget(), homepage_fetch=_homepage_fetch(403))
+
+    joined = " ".join(requested)
+    assert "products.json" not in joined
+    assert "/collections/" not in joined
+
+
+def test_the_walled_short_circuit_tier_is_recorded_and_sitemap_is_not(monkeypatch):
+    """"sitemap: found 0" would read as a discovery miss — this run
+    stopped on purpose, and the trace has to say so."""
+    _split_server(monkeypatch)
+
+    result = discovery.discover_pages(ORIGIN, FetchBudget(), homepage_fetch=_homepage_fetch(403))
+
+    tiers = result.sitemap_sampling["tiers_attempted"]
+    assert {"tier": "short_circuit", "candidates_found": 0} in tiers
+    assert not any(t.get("tier") == "sitemap" for t in tiers)
+    assert result.discovery_path == "none"
+    assert result.products_found == 0
+
+
+def test_a_served_sitemap_does_not_short_circuit_a_refused_homepage(monkeypatch):
+    """Both signals required, same rationale as hard_refused. A store
+    whose sitemap serves fine still has a catalog we can read."""
+    requested = _split_server(monkeypatch, sitemap=(200, SITEMAP_WITH_PRODUCTS), other=(404, ""))
+
+    result = discovery.discover_pages(ORIGIN, FetchBudget(), homepage_fetch=_homepage_fetch(403))
+
+    assert result.sitemap_sampling["short_circuit"] is None
+    assert result.sitemap_sampling["first_sitemap_refused"] is None
+    assert any(t.get("tier") == "sitemap" for t in result.sitemap_sampling["tiers_attempted"])
+    assert "products.json" in " ".join(requested) or result.products_found > 0
+
+
+def test_a_refused_sitemap_alone_does_not_short_circuit(monkeypatch):
+    """A refused sitemap with a SERVED store root is an ordinary
+    per-URL refusal — the homepage's own links are still worth
+    following, and the existing sitemaps_refused classification covers
+    the wording."""
+    requested = _split_server(
+        monkeypatch, other=(200, HOMEPAGE_HTML),
+    )
+
+    result = discovery.discover_pages(
+        ORIGIN, FetchBudget(),
+        homepage_fetch=FetchResult(url=ORIGIN, status="fetched", html=HOMEPAGE_HTML, http_status=200),
+    )
+
+    assert result.sitemap_sampling["short_circuit"] is None
+    assert result.sitemap_sampling["first_sitemap_refused"] is None
+    assert "/llms.txt" in " ".join(requested)
+
+
+def test_an_ordinary_run_records_first_sitemap_refused_as_none(monkeypatch):
+    """Same always-present discipline as short_circuit itself."""
+    _split_server(monkeypatch, sitemap=(200, SITEMAP_WITH_PRODUCTS), other=(404, ""))
+
+    result = discovery.discover_pages(
+        ORIGIN, FetchBudget(),
+        homepage_fetch=FetchResult(url=ORIGIN, status="fetched", html=HOMEPAGE_HTML, http_status=200),
+    )
+    assert result.sitemap_sampling["first_sitemap_refused"] is None
+    assert discovery.DiscoveryResult(
+        robots_fetch=None, robot_parser=None,
+    ).sitemap_sampling["first_sitemap_refused"] is None
+
+
+def test_the_walled_run_is_classified_as_its_own_outcome_code(monkeypatch):
+    """Not short_circuited: robots.txt was SERVED, and a report that
+    told this operator otherwise would be wrong in a way they'd catch."""
+    _split_server(monkeypatch)
+
+    result = engine.run_scan(ORIGIN)
+
+    outcome = result.dimensions["discovery_outcome"]
+    assert outcome["code"] == "homepage_and_sitemap_refused"
+    assert "robots.txt was served" in outcome["summary"]
+
+
 # ─── engine level: where a short-circuited run lands ─────────────────────
 
 def _uniform_403(monkeypatch):
@@ -246,8 +402,9 @@ def test_a_uniformly_403_origin_still_lands_exactly_where_it_used_to(monkeypatch
     # Homepage + robots.txt, and nothing else.
     assert len(result.pages_fetched) == 2
     assert result.dimensions["discovery_trace"]["short_circuited"] is True
-    # Two URLs, each capped at the 403 ladder's 2 attempts.
-    assert len(requested) == 4
+    # The homepage is a CONTENT page and keeps the full 403 ladder (2
+    # attempts); robots.txt is a discovery surface and gets exactly one.
+    assert len(requested) == 3
 
 
 def test_the_short_circuited_run_never_claims_it_read_product_pages(monkeypatch):

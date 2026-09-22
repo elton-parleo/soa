@@ -9,7 +9,8 @@
 import { DarkPanel, Glyph, StatusChip, MonoTag } from '../../ds/index.js'
 import { LITE_QUERY_COUNT, VERDICT_COMPOSITE_THRESHOLD, PILLAR_NAMES } from '../landing/scanDimensionsRegistry.js'
 import { formatCurrency } from '../liteDerive.js'
-import { pillarEarnedMax, pillarNominalWeight, pillarHeadline, isAgentReady, buildMeasurableContext, isPartialRead, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from './reportDerive.js'
+import { pillarEarnedMax, pillarNominalWeight, pillarHeadline, blockedAccessibilityHeadline, isAgentReady, isBrandOnlyReport, buildMeasurableContext, isPartialRead, PILLAR_VISIBILITY, PILLAR_ACCESSIBILITY, PILLAR_TRUE_VALUE } from './reportDerive.js'
+import { BRAND_ONLY_COPY } from './reportContent.js'
 
 // Part 2d: a lane whose measurable_max is short of its registry
 // full_max renders the shortfall as the DS hatch (ds-hatch, tokens.css)
@@ -66,10 +67,21 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
   const shortOfReady = composite != null ? Math.max(0, Math.round(VERDICT_COMPOSITE_THRESHOLD - composite)) : null
   const partial = isPartialRead(pillars, report.scan?.degraded_reason)
   const measurable = partial ? buildMeasurableContext(pillars) : null
+  // Non-commerce report: a composite out of 100 answers "how ready is
+  // this store", which is not a question this site has. The hero shows
+  // the one pillar that does apply and says why the others are blank.
+  // Scores are untouched — see BRAND_ONLY_COPY.
+  const brandOnly = isBrandOnlyReport(report)
+
+  // Blocked-run evidence: when the fetch probe has a decisive answer
+  // about the same wall, the Accessibility tile says what actually
+  // happened instead of "Couldn't be measured this run". Score
+  // untouched — see blockedAccessibilityHeadline.
+  const accHeadline = blockedAccessibilityHeadline(report) || pillarHeadline(report, PILLAR_ACCESSIBILITY)
 
   const pillarCards = [
     { key: PILLAR_VISIBILITY, icon: 'eye', ...vis, sub: pillarHeadline(report, PILLAR_VISIBILITY) },
-    { key: PILLAR_ACCESSIBILITY, icon: 'globe', ...acc, sub: pillarHeadline(report, PILLAR_ACCESSIBILITY) },
+    { key: PILLAR_ACCESSIBILITY, icon: 'globe', ...acc, sub: accHeadline },
     { key: PILLAR_TRUE_VALUE, icon: 'tag', ...tv, sub: pillarHeadline(report, PILLAR_TRUE_VALUE), accent: true },
   ]
 
@@ -89,7 +101,9 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
             <div className="lite-scorehero-headline" style={{ flex: 1, minWidth: 340, maxWidth: 560, fontSize: 38, fontWeight: 740, letterSpacing: '-0.034em', lineHeight: 1.1, color: 'var(--dark-text)' }}>
               {plain} <em style={{ fontFamily: "'Newsreader',Georgia,serif", fontWeight: 440, fontStyle: 'italic', color: 'var(--blue-lite)', letterSpacing: '-0.008em' }}>{emphasis}</em>
             </div>
-            {pillars.state === 'scored' ? (
+            {brandOnly ? (
+              <div style={{ flexShrink: 0 }}><StatusChip tone="info">{BRAND_ONLY_COPY.statusChip}</StatusChip></div>
+            ) : pillars.state === 'scored' ? (
               <div style={{ flexShrink: 0 }}><StatusChip tone={isAgentReady(pillars) ? 'success' : 'risk'}>{isAgentReady(pillars) ? 'Agent-ready' : 'Not agent-ready'}</StatusChip></div>
             ) : partial ? (
               <div style={{ flexShrink: 0 }}><StatusChip tone="warning">Partial read</StatusChip></div>
@@ -100,13 +114,15 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 22, flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
                 <span className="num lite-display-num" style={{ fontSize: 66, fontWeight: 750, letterSpacing: '-0.044em', lineHeight: 0.86, color: 'var(--dark-text)' }}>
-                  {composite != null ? Math.round(composite) : partial ? Math.round(measurable.earned) : '—'}
+                  {brandOnly ? Math.round(vis.earned) : composite != null ? Math.round(composite) : partial ? Math.round(measurable.earned) : '—'}
                 </span>
                 <span className="num" style={{ fontSize: 23, fontWeight: 560, color: 'var(--dark-faint)', letterSpacing: '-0.02em' }}>
-                  {composite == null && partial ? `/${Math.round(measurable.measurable_max)} measurable` : '/100'}
+                  {brandOnly
+                    ? `/${Math.round(vis.max || pillarNominalWeight(PILLAR_VISIBILITY))} ${BRAND_ONLY_COPY.scoreLabel}`
+                    : composite == null && partial ? `/${Math.round(measurable.measurable_max)} measurable` : '/100'}
                 </span>
               </div>
-              {shortOfReady != null ? (
+              {brandOnly ? null : shortOfReady != null ? (
                 <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
                   <div className="num" style={{ fontSize: 23, fontWeight: 720, letterSpacing: '-0.024em', color: 'var(--blue-lite)', lineHeight: 1 }}>{shortOfReady} points</div>
                   <div className="mono-label" style={{ fontSize: 8.5, color: 'var(--dark-faint)', marginTop: 5 }}>SHORT OF THE READINESS BAR</div>
@@ -118,6 +134,11 @@ export function ScoreHero({ report, exposure, shareOfMentionsRank, headline }) {
                 </div>
               ) : null}
             </div>
+            {brandOnly && (
+              <div style={{ fontSize: 13.5, color: 'var(--dark-muted)', lineHeight: 1.6, marginTop: 16 }}>
+                {BRAND_ONLY_COPY.heroNote}
+              </div>
+            )}
             <div style={{ marginTop: 24 }}>
               <div style={{ background: 'var(--canvas)', borderRadius: 14, padding: '22px 22px 18px', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.7),0 10px 26px -12px rgba(10,10,18,.6)' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14, marginBottom: 15, paddingBottom: 12, borderBottom: '1px solid var(--hairline)' }}>

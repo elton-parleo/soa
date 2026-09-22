@@ -213,7 +213,23 @@ GZIP_MAGIC = b"\x1f\x8b"
 # real product markup before giving up on that child — see
 # _sample_child_for_product_content.
 CONTENT_SAMPLE_LIMIT = 2
+# Walled-site/false-positive follow-up (this session): how many ranked,
+# robots-allowed product-URL candidates are carried on DiscoveryResult
+# for engine.py to fall back on. MAX_PRODUCT_PAGES of them become
+# PageCandidates; the remainder are replacements for a candidate that
+# fetches fine but turns out to be a category page.
+PRODUCT_URL_POOL_LIMIT = 8
 DEFAULT_SITE_LOCALE = "en-us"
+# Walled-site runtime (this session): every DISCOVERY-SURFACE fetch
+# (robots.txt, sitemaps, platform catalog endpoints, llms.txt, the MCP
+# manifest) gets exactly one shot at a 403 — no retry. These surfaces
+# are all answered by the same edge as the store root, so a second
+# knock on one of them learns nothing the first didn't already say.
+# CONTENT pages (the homepage, a collection hop, a sampled child page,
+# an LLM-suggested PDP) deliberately keep fetcher.py's full ladder —
+# those are what the run exists to read, and one retry is worth the
+# wait there. See fetcher.py's _fetch_with_retries.
+DISCOVERY_SURFACE_403_ATTEMPTS = 1
 
 
 @dataclass
@@ -236,6 +252,16 @@ class DiscoveryResult:
     discovery_path: str = "none"
     all_fetches: list = field(default_factory=list)        # every FetchResult discovery performed (F3 observability)
     sitemap_index_entries: list = field(default_factory=list)  # every child-sitemap URL seen (site_typing T1)
+    # Walled-site/false-positive follow-up (this session): every
+    # product-URL candidate that survived dedupe and the robots filter,
+    # in rank order — NOT just the MAX_PRODUCT_PAGES that became
+    # PageCandidates. engine.py's _gather_pages draws from here when a
+    # sampled "product page" turns out to be a category page in
+    # disguise (Walmart's /cp/pd/9881824 matched the /pd/ pattern and
+    # scored catalog 0 as "checked, nothing found"). Bounded — there
+    # were 50,000 real /ip/ URLs behind Walmart's sitemap, and none of
+    # this needs more than the next few.
+    product_url_pool: list = field(default_factory=list)
     # Rescue session (Part 3): product-page URLs the LLM-assisted tier
     # already fetched-and-verified during discovery itself (charged to
     # discovery_budget, not the content budget) — keyed by URL so
@@ -281,6 +307,7 @@ class DiscoveryResult:
         "tiers_attempted": [], "platform_detected": None, "platform_endpoints_probed": [],
         "platform_endpoint_used": None, "llm_discovery": None, "short_circuit": None,
         "declared_order": [], "locale_preferred": None, "content_sampled": None,
+        "first_sitemap_refused": None,
     })
 
 
@@ -548,7 +575,7 @@ def _fetch_and_parse_sitemap(url: str, robot_parser, discovery_budget: FetchBudg
         return None
     discovery_budget.consume()
     try:
-        result = fetch(url, robot_parser=robot_parser)
+        result = fetch(url, robot_parser=robot_parser, max_403_attempts=DISCOVERY_SURFACE_403_ATTEMPTS)
     except Exception:
         log.exception(f"[scan.discovery] unexpected error fetching sitemap {url}")
         sampling_log["children_probed"].append({"url": url, "skipped": "unexpected fetch error"})
@@ -773,6 +800,7 @@ def _resolve_sitemaps(
     initial_urls: list, robot_parser, discovery_budget: FetchBudget,
     all_fetches: list, index_entries: list, sampling_log: dict,
     sample_reused_fetches: dict, preferred_locale: Optional[str] = None,
+    stop_on_first_refusal: bool = False,
 ) -> list:
     """
     Sitemap-sampler rewrite (hotfix 5, S1.a): fetches each declared
@@ -788,6 +816,15 @@ def _resolve_sitemaps(
     sitemapindex naming "sitemap_products_1.xml" is itself commerce
     evidence, even if that exact child was never the one actually
     chosen.
+
+    stop_on_first_refusal (walled-site runtime) is passed only when the
+    STORE ROOT already came back 403/429: if the very first declared
+    sitemap is refused too, the traversal stops there and records
+    sampling_log["first_sitemap_refused"], which is the second of the
+    two signals discover_pages' walled short-circuit requires. It is
+    deliberately scoped to the FIRST declared sitemap — a later child
+    403 in an otherwise-served tree is an ordinary per-URL refusal, not
+    a wall, and the existing per-child skip record already covers it.
     """
     page_urls: list = []
     queue = list(initial_urls)
@@ -803,6 +840,13 @@ def _resolve_sitemaps(
 
         parsed = _fetch_and_parse_sitemap(sm_url, robot_parser, discovery_budget, all_fetches, sampling_log)
         if parsed is None:
+            if stop_on_first_refusal and followed == 1:
+                probed = sampling_log["children_probed"][-1] if sampling_log["children_probed"] else {}
+                if probed.get("url") == sm_url and probed.get("http_status") in (403, 429):
+                    sampling_log["first_sitemap_refused"] = {
+                        "url": sm_url, "http_status": probed.get("http_status"),
+                    }
+                    break
             continue
         is_index, urls = parsed
 
@@ -991,7 +1035,7 @@ def _probe_platform_endpoints(
 
         discovery_budget.consume()
         try:
-            result = fetch(endpoint_url, robot_parser=robot_parser)
+            result = fetch(endpoint_url, robot_parser=robot_parser, max_403_attempts=DISCOVERY_SURFACE_403_ATTEMPTS)
         except Exception:
             log.exception(f"[scan.discovery] unexpected error probing platform endpoint {endpoint_url}")
             sampling_log["platform_endpoints_probed"].append(
@@ -1135,6 +1179,7 @@ def _build_discovery_result(
     *, robots_fetch, robot_parser, sitemap_urls, candidates, homepage_fetch,
     llms_txt_fetch, mcp_well_known_fetch, products_found, discovery_path,
     all_fetches, sitemap_index_entries, sitemap_sampling, reused_product_fetches,
+    product_url_pool=(),
 ) -> DiscoveryResult:
     """Every field, named — the one place discover_pages builds its
     result. Both the ordinary return and the hard-refused short-circuit
@@ -1149,6 +1194,7 @@ def _build_discovery_result(
         llms_txt_fetch=llms_txt_fetch,
         mcp_well_known_fetch=mcp_well_known_fetch,
         products_found=products_found,
+        product_url_pool=list(product_url_pool),
         discovery_path=discovery_path,
         all_fetches=all_fetches,
         sitemap_index_entries=sitemap_index_entries,
@@ -1198,7 +1244,7 @@ def discover_pages(
         robots_fetch = FetchResult(url=robots_url, status="failed", error="discovery budget exhausted before robots.txt")
         if discovery_budget.has_capacity():
             discovery_budget.consume()
-            robots_fetch = fetch(robots_url, robot_parser=None)
+            robots_fetch = fetch(robots_url, robot_parser=None, max_403_attempts=DISCOVERY_SURFACE_403_ATTEMPTS)
             all_fetches.append(robots_fetch)
             if robots_fetch.status == "fetched" and robots_fetch.html:
                 try:
@@ -1215,6 +1261,7 @@ def discover_pages(
             "tiers_attempted": [], "platform_detected": None, "platform_endpoints_probed": [],
             "platform_endpoint_used": None, "llm_discovery": None, "short_circuit": None,
             "declared_order": [], "locale_preferred": None, "content_sampled": None,
+            "first_sitemap_refused": None,
         }
 
         # Fetcher hardening: when robots.txt AND the store root both
@@ -1296,11 +1343,64 @@ def discover_pages(
         )
         sampling_log["locale_preferred"] = preferred_locale
 
+        # Walled-site runtime (this session): the store root is already
+        # known to have been refused by the time discovery runs (engine.py
+        # resolves it first and hands the fetch down). When it was, the
+        # sitemap traversal below stops at the FIRST declared sitemap if
+        # that one is refused too — the second half of the walled
+        # short-circuit evaluated just after it.
+        homepage_refused = (
+            homepage_fetch is not None
+            and homepage_fetch.status != "fetched"
+            and homepage_fetch.http_status in (403, 429)
+        )
+
         content_sample_reused: dict = {}
         sitemap_urls = _resolve_sitemaps(
             declared_sitemaps, robot_parser, discovery_budget, all_fetches, sitemap_index_entries, sampling_log,
             content_sample_reused, preferred_locale=preferred_locale,
+            stop_on_first_refusal=homepage_refused,
         )
+
+        # Walled-site runtime (this session): the Warby Parker shape —
+        # robots.txt SERVED, store root and first declared sitemap both
+        # refused. hard_refused above can't cover it (robots.txt came
+        # back 200, so there is only one refusal at that point), but by
+        # here there are two, and they say the same thing: HTML and the
+        # catalog are behind a wall this reader isn't getting through.
+        # A local re-scan of warbyparker.com spent 185 s almost entirely
+        # on probes downstream of this point, every one of them refused.
+        #
+        # llms.txt and the MCP manifest are deliberately NOT skipped:
+        # Warby Parker serves both while refusing HTML, and they are
+        # exactly what a site in this shape still has to say to an agent.
+        # Everything between here and them is skipped — which, on this
+        # shape, is already almost nothing (homepage_html is None, so
+        # the homepage/collection_hop/platform_endpoint/llm tiers all
+        # self-skip); the flag makes that explicit and records it, so
+        # the record says "we stopped on purpose" rather than "we found
+        # nothing".
+        walled = homepage_refused and bool(sampling_log.get("first_sitemap_refused"))
+        if walled:
+            refused = sampling_log["first_sitemap_refused"]
+            sampling_log["short_circuit"] = {
+                "reason": "homepage_and_sitemap_refused",
+                "robots_http_status": robots_fetch.http_status,
+                "homepage_http_status": homepage_fetch.http_status,
+                "sitemap_url": refused.get("url"),
+                "sitemap_http_status": refused.get("http_status"),
+                "skipped": [
+                    "sitemap", "homepage_links", "collection_hop",
+                    "platform_endpoint", "llm_assisted", "product_pages",
+                ],
+            }
+            sampling_log["tiers_attempted"].append({"tier": "short_circuit", "candidates_found": 0})
+            log.info(
+                f"[scan.discovery] short-circuiting discovery for "
+                f"{urlparse(base_url).hostname}: the store root returned "
+                f"{homepage_fetch.http_status} and {refused.get('url')} returned "
+                f"{refused.get('http_status')} — keeping only the llms.txt and MCP probes"
+            )
 
         if homepage_fetch is None:
             if budget.has_capacity():
@@ -1313,7 +1413,7 @@ def discover_pages(
         candidates = [PageCandidate(url=base_url, kind="homepage")]
         reused_product_fetches: dict = {}
 
-        content_sampled = sampling_log.get("content_sampled")
+        content_sampled = None if walled else sampling_log.get("content_sampled")
         if content_sampled:
             # Requirement 3: these URLs were independently confirmed by
             # their own markup (_sample_child_for_product_content), not
@@ -1326,18 +1426,26 @@ def discover_pages(
             product_urls = list(content_sampled["confirmed_product_urls"])
             discovery_path = "sitemap_sampled"
             reused_product_fetches.update(content_sample_reused)
+        elif walled:
+            # Nothing was sampled and nothing will be — the tier record
+            # above already says why (short_circuit), so this one stays
+            # silent rather than logging a "sitemap: found 0" line that
+            # reads as a discovery miss instead of a deliberate stop.
+            product_urls = []
+            discovery_path = "none"
         else:
             product_urls = [u for u in sitemap_urls if _looks_like_product_url(u)]
             discovery_path = "sitemap" if product_urls else "none"
-        sampling_log["tiers_attempted"].append({"tier": "sitemap", "candidates_found": len(product_urls)})
+        if not walled:
+            sampling_log["tiers_attempted"].append({"tier": "sitemap", "candidates_found": len(product_urls)})
 
-        if not product_urls and homepage_html:
+        if not walled and not product_urls and homepage_html:
             product_urls = _find_links_matching(homepage_html, base_url, _looks_like_product_url)
             if product_urls:
                 discovery_path = "homepage"
             sampling_log["tiers_attempted"].append({"tier": "homepage", "candidates_found": len(product_urls)})
 
-        if not product_urls and homepage_html:
+        if not walled and not product_urls and homepage_html:
             # Requirement 2: this tier, and the two below, draw from the
             # FULL discovery_budget (not the reduced sitemap-only share)
             # — that's the whole point of RESCUE_FETCH_RESERVE. A skip
@@ -1364,7 +1472,7 @@ def discover_pages(
         # came up empty. Cheap platform fingerprinting first (2b) means
         # this never blindly probes an endpoint set the detected
         # platform can't have.
-        if not product_urls:
+        if not walled and not product_urls:
             if discovery_budget.has_capacity():
                 platform_urls, endpoint_used = _probe_platform_endpoints(
                     base_url, homepage_html, robot_parser, discovery_budget, all_fetches, sampling_log,
@@ -1386,7 +1494,7 @@ def discover_pages(
         # returns is independently verified (host match, robots, our
         # own fetch, product-page shape) before it counts as anything —
         # see _probe_llm_discovery.
-        if not product_urls and _homepage_reached(homepage_fetch) and _llm_discovery_enabled(api_key):
+        if not walled and not product_urls and _homepage_reached(homepage_fetch) and _llm_discovery_enabled(api_key):
             if discovery_budget.has_capacity():
                 llm_urls, llm_fetches, llm_trace = _probe_llm_discovery(
                     base_url, robot_parser, discovery_budget, all_fetches, api_key,
@@ -1425,6 +1533,12 @@ def discover_pages(
 
         for u in deduped_product_urls[:MAX_PRODUCT_PAGES]:
             candidates.append(PageCandidate(url=u, kind="product"))
+        # Walled-site/false-positive follow-up: the rest of the ranked,
+        # robots-allowed pool, for engine.py to fall back on when one of
+        # the sampled candidates turns out not to be a product page at
+        # all. Capped — nothing downstream needs more than a couple of
+        # replacements, and the whole list is written to the DB.
+        product_url_pool = deduped_product_urls[:PRODUCT_URL_POOL_LIMIT]
 
         if homepage_html:
             loyalty_links = _find_links_by_keyword(homepage_html, base_url, LOYALTY_LINK_KEYWORDS)
@@ -1443,10 +1557,16 @@ def discover_pages(
         mcp_well_known_fetch = None
         if discovery_budget.has_capacity():
             discovery_budget.consume()
-            llms_txt_fetch = fetch(urljoin(base_url, LLMS_TXT_PATH), robot_parser=robot_parser)
+            llms_txt_fetch = fetch(
+                urljoin(base_url, LLMS_TXT_PATH), robot_parser=robot_parser,
+                max_403_attempts=DISCOVERY_SURFACE_403_ATTEMPTS,
+            )
         if discovery_budget.has_capacity():
             discovery_budget.consume()
-            mcp_well_known_fetch = fetch(urljoin(base_url, MCP_WELL_KNOWN_PATH), robot_parser=robot_parser)
+            mcp_well_known_fetch = fetch(
+                urljoin(base_url, MCP_WELL_KNOWN_PATH), robot_parser=robot_parser,
+                max_403_attempts=DISCOVERY_SURFACE_403_ATTEMPTS,
+            )
 
         candidates.append(PageCandidate(url=urljoin(base_url, LLMS_TXT_PATH), kind="llms_txt"))
         candidates.append(PageCandidate(url=urljoin(base_url, MCP_WELL_KNOWN_PATH), kind="mcp_well_known"))
@@ -1465,6 +1585,7 @@ def discover_pages(
             sitemap_index_entries=sitemap_index_entries,
             sitemap_sampling=sampling_log,
             reused_product_fetches=reused_product_fetches,
+            product_url_pool=product_url_pool,
         )
     except Exception:
         log.exception(f"[scan.discovery] discovery failed for {base_url}")
