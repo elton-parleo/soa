@@ -167,21 +167,19 @@ def test_nike_shaped_pdp_index_probed_before_landingpage_locale_preferred_first(
 
     result = discover_pages(ORIGIN, FetchBudget())
 
-    # The other six declared sitemaps (help, the 64-child landing-page
-    # index, and the rest) must never actually be requested — the PDP
-    # index alone, probed first, already exhausts the sitemap walk's
-    # reserved share of the discovery budget (requirement 2) before the
-    # top-level queue ever reaches them.
-    joined = " ".join(requested)
-    for forbidden_name in (
-        "sitemap-us-help.xml", "sitemap-v2-landingpage-index.xml",
-        "sitemap-v2-snkrsweb-index.xml", "sitemap-v2-gridwall-index.xml",
-        "sitemap-v2-article-index.xml", "sitemap-locator-index.xml",
-    ):
-        assert forbidden_name not in joined, forbidden_name
-    assert not any("landingpage-" in u and u != f"{ORIGIN}/sitemap-v2-landingpage-index.xml" for u in requested), (
-        "no landing-page-index child should ever be fetched either"
-    )
+    # The PDP index's own child walk is now efficient enough (discovery
+    # follow-up: it stops the moment a product-hint child reads as
+    # zero-density, rather than exhausting the whole child-probe
+    # allowance on siblings) that the top-level queue may go on to
+    # 404-probe a few of the other declared sitemaps too — harmless, and
+    # no longer the point of this test. What must STILL never happen is
+    # ever walking INTO the 64-child landing-page index itself (each of
+    # those children is its own real fetch this fixture would notice) —
+    # that's the actual budget-starvation shape this test guards.
+    requested_landingpage_children = [
+        u for u in requested if "landingpage-" in u and u != f"{ORIGIN}/sitemap-v2-landingpage-index.xml"
+    ]
+    assert requested_landingpage_children == [], "no landing-page-index child should ever be fetched"
 
     sampling = result.sitemap_sampling
     declared_order = sampling["declared_order"]
@@ -259,6 +257,14 @@ MAGENTO_HOMEPAGE_HTML = (
     "</body></html>"
 )
 
+SHOPIFY_HOMEPAGE_HTML_NO_LINKS = (
+    "<html><head><script src='https://cdn.shopify.com/s/files/1/theme.js'></script></head>"
+    "<body><p>Welcome to the store — plenty of real homepage copy here so this "
+    "clears the short-body heuristic like any genuine homepage would, with "
+    "no product or collection links anywhere in this raw markup.</p>"
+    "</body></html>"
+)
+
 
 def test_exhausted_sitemap_walk_still_leaves_the_llm_tier_reachable(monkeypatch):
     """The decoy sitemapindex has 10 children — far more than the
@@ -291,13 +297,16 @@ def test_exhausted_sitemap_walk_still_leaves_the_llm_tier_reachable(monkeypatch)
 
 
 def test_a_rescue_tier_skipped_purely_for_budget_is_recorded_not_dropped(monkeypatch):
-    """Same starved sitemap tree, but this time nothing about the
-    homepage rules out Shopify's endpoints (no platform detected at
-    all), so platform_endpoint spends the rest of the reserve probing
-    all three of its own endpoints — leaving llm_assisted with nothing.
-    That tier must still show up in tiers_attempted with an honest
-    reason, never silently vanish."""
-    handlers = _reserve_base_handlers(HOMEPAGE_HTML_EN_US)
+    """Same starved sitemap tree, but this time the homepage carries a
+    genuine Shopify fingerprint (discovery follow-up: an UNDETECTED
+    platform no longer probes at all — see
+    test_platform_endpoints_never_probed_without_a_platform_fingerprint
+    — so this test needs a real one to still spend the reserve), so
+    platform_endpoint spends the rest of the reserve probing all three
+    of its own endpoints — leaving llm_assisted with nothing. That tier
+    must still show up in tiers_attempted with an honest reason, never
+    silently vanish."""
+    handlers = _reserve_base_handlers(SHOPIFY_HOMEPAGE_HTML_NO_LINKS)
     for path in (
         "/products.json?limit=24", "/collections/all/products.json?limit=24", "/sitemap_products_1.xml",
     ):
@@ -316,6 +325,53 @@ def test_a_rescue_tier_skipped_purely_for_budget_is_recorded_not_dropped(monkeyp
     tiers_attempted = result.sitemap_sampling["tiers_attempted"]
     llm_entry = next(t for t in tiers_attempted if t["tier"] == "llm_assisted")
     assert llm_entry.get("skipped") == "discovery budget exhausted"
+
+
+# ─── Discovery follow-up (Part 1, requirement 1): no blind Shopify probes ──
+
+def test_platform_endpoints_never_probed_without_a_platform_fingerprint(monkeypatch):
+    """An undetected platform used to still get all three Shopify probes
+    ("cheap and by far the most common shape even when undetected") —
+    on every non-Shopify trace in the zero-product export (Michael Kors,
+    Walmart, Marc Jacobs) that was exactly what spent the whole
+    RESCUE_FETCH_RESERVE before the LLM tier ever got a turn. No
+    fingerprint now means no fetch at all, with an honest skip reason
+    recorded for each of the three endpoints — never a silent, unlogged
+    return."""
+    handlers = _reserve_base_handlers(HOMEPAGE_HTML_EN_US)  # no platform markers at all
+    requested: list = []
+    monkeypatch.setattr(httpx.Client, "get", _dispatch(handlers, requested=requested))
+    monkeypatch.setattr(
+        "generation.discovery_probe.probe_discover_urls",
+        lambda homepage_url, api_key: {"urls": [f"{ORIGIN}/products/rescued-widget"]},
+    )
+    handlers[f"{ORIGIN}/products/rescued-widget"] = (200, PRODUCT_PAGE_HTML)
+
+    result = discover_pages(ORIGIN, FetchBudget(), api_key="fake-key")
+
+    assert not any("products.json" in u or "sitemap_products_1.xml" in u for u in requested), (
+        "an undetected platform must never spend a fetch probing Shopify endpoints"
+    )
+    sampling = result.sitemap_sampling
+    assert sampling["platform_detected"] is None
+    probed = sampling["platform_endpoints_probed"]
+    assert len(probed) == 3
+    assert all(e.get("skipped") == "no platform fingerprint" for e in probed)
+    # The reserve this freed up reaches the LLM tier instead.
+    assert result.discovery_path == "llm_assisted"
+
+
+def test_platform_endpoints_skipped_with_a_named_reason_for_a_confirmed_other_platform(monkeypatch):
+    handlers = _reserve_base_handlers(MAGENTO_HOMEPAGE_HTML)
+    requested: list = []
+    monkeypatch.setattr(httpx.Client, "get", _dispatch(handlers, requested=requested))
+
+    result = discover_pages(ORIGIN, FetchBudget())
+
+    assert not any("products.json" in u or "sitemap_products_1.xml" in u for u in requested)
+    probed = result.sitemap_sampling["platform_endpoints_probed"]
+    assert len(probed) == 3
+    assert all(e.get("skipped") == "platform is magento, not shopify/nextjs" for e in probed)
 
 
 # ─── Content-based sitemap-child sampling (requirement 3) ───────────────

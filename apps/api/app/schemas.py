@@ -1293,6 +1293,15 @@ class PublicLiteScan(BaseModel):
     _discovery_trace_facts(), recorded unconditionally (see engine.py —
     a complete-status run can still have individually blocked True
     Value dimensions worth explaining). Null only pre-this-stage.
+
+    Discovery follow-up (Part 2): discovery_outcome is engine.py's
+    dimensions["discovery_outcome"] (apps/pipeline/scan/discovery_
+    outcome.py) — a structured classification of WHY this run's product-
+    page discovery ended up where it did (code + first-person summary +
+    the sitemaps/tiers/example URLs it actually saw), recorded
+    unconditionally on every scan going forward, same rationale as
+    discovery_trace above. Null only for a row scanned before this
+    stage.
     """
     status: str
     total_score: Optional[int] = None
@@ -1306,6 +1315,7 @@ class PublicLiteScan(BaseModel):
     degraded_banner_facts: Optional[dict] = None
     agent_access_matrix: Optional[List[dict]] = None
     discovery_trace: Optional[dict] = None
+    discovery_outcome: Optional[dict] = None
 
 
 class PublicLiteVisibilityMentionRate(BaseModel):

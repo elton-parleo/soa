@@ -1029,6 +1029,55 @@ def test_blocked_scan_under_current_scorer_version_still_gets_a_pillars_payload(
     assert result["pillars"]["visibility"]["score"] == 100
 
 
+# ─── Discovery follow-up (Part 2/3): a complete run, zero PDPs found ────
+#
+# The Nike/Michael-Kors/Loreal shape: status stays 'complete' (the
+# homepage read fine — engine.py's _derive_status never degrades the
+# run over this), but PDP-dependent dimensions are coverage='blocked'
+# with this run's own discovery_outcome summary as their evidence, and
+# dimensions["discovery_outcome"] itself must reach the public report
+# unchanged.
+
+def test_complete_zero_pdp_scan_surfaces_discovery_outcome_on_the_scan_payload(db):
+    discovery_outcome = {
+        "code": "product_sitemap_unrecognized",
+        "summary": (
+            "we read 5 of your sitemaps, including sitemap_0-product.xml (1,110 URLs), "
+            "but its product URLs use a shape our reader doesn't recognise, and our page "
+            "sample of it found no product markup"
+        ),
+        "found_candidates": 0, "product_pages_attempted": 0, "product_pages_fetched": 0,
+        "sitemaps": [{
+            "name": "sitemap_0-product.xml", "outcome": "read", "urls": 1110, "product_urls": 0,
+            "http_status": 200, "note": None,
+        }],
+        "child_chosen": None, "example_urls": ["https://michaelkors.example.com/x/widget-one/AB1234"],
+        "tiers": [{"tier": "sitemap", "outcome": "found 0"}],
+        "robots_excluded": 0, "llm": None, "short_circuited": False,
+    }
+    dims = {
+        **_DEGRADED_CRAWL_DIMENSIONS,
+        "discovery_outcome": discovery_outcome,
+        "catalog_context": {
+            **_DEGRADED_CRAWL_DIMENSIONS["catalog_context"], "evidence": [discovery_outcome["summary"]],
+        },
+    }
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="zeropdp1", dimensions=dims)
+        conn.exec_driver_sql(
+            "UPDATE soa_lite_scan_results SET status = 'complete' "
+            "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = 'zeropdp1')"
+        )
+
+    result = public_lite.get_lite_report("zeropdp1")
+
+    assert result["scan_status"] == "complete"
+    assert result["scan"]["discovery_outcome"] == discovery_outcome
+    row = next(d for d in result["pillars"]["accessibility"]["dimensions"] if d["code"] == "catalog_context")
+    assert row["blocked"] is True
+    assert all(c["evidence"] == discovery_outcome["summary"] for c in row["checks"])
+
+
 # ─── Production outage (2026-09-22): a failed row with empty dims ───────
 #
 # The actual incident shape: soa_lite_scan_results.status='failed' with

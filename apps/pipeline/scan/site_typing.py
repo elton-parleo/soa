@@ -14,9 +14,23 @@ Decision table (T2):
   commerce signals + product pages sampled       -> commerce_normal
   commerce signals + NO product pages found      -> commerce_discovery_failure
   no commerce signals anywhere                   -> brand_only
+
+Discovery follow-up (Part 5): _has_commerce_path_in_robots_or_sitemap
+used to do a bare substring test for "/products"/"/collections"
+against every sitemap PAGE URL — which reads a real editorial/
+corporate site's own prose ("...for-our-products/", "...creating-
+breakthrough-products-through-collaborative-play/") as a commerce
+signal, purely because the English word "products" shows up in a URL
+slug. Now requires an actual PATH SEGMENT match for page URLs; the
+looser bare-word check stays only for child-SITEMAP FILENAMES (e.g.
+Shopify's "sitemap_products_1.xml"), which are never prose to begin
+with. loreal.com is the fixture this was caught against — see
+test_site_typing.py.
 """
 import logging
+import re
 from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
@@ -76,20 +90,33 @@ def _has_cart_checkout_link(homepage_html: str) -> bool:
     return False
 
 
+# Discovery follow-up (Part 5): /products or /collections as a genuine
+# PATH SEGMENT — bounded by slashes on both sides — never a bare
+# substring test. loreal.com (a corporate/editorial site, no catalog)
+# was misread as commerce_discovery_failure purely because its OWN
+# prose URL slugs happen to contain the word "products" —
+# ".../for-our-products/", ".../creating-breakthrough-products-
+# through-collaborative-play/" — English sentences, not a /products/
+# catalog path. Applied to real page URLs (discovery.sitemap_urls) and
+# to robots.txt's own directive text; sitemap_index_entries (child-
+# sitemap FILENAMES, e.g. Shopify's "sitemap_products_1.xml" — never a
+# page URL with unrelated path segments a bare word could collide
+# with) keeps the looser bare-word check it always had.
+_COMMERCE_PATH_SEGMENT_RE = re.compile(r"/(?:products?|collections?)(?:/|$)")
+
+
 def _has_commerce_path_in_robots_or_sitemap(discovery) -> bool:
     robots_html = (discovery.robots_fetch.html or "") if discovery.robots_fetch else ""
-    if any(hint in robots_html.lower() for hint in COMMERCE_PATH_HINTS):
+    if _COMMERCE_PATH_SEGMENT_RE.search(robots_html.lower()):
         return True
 
-    # Sitemap/child-sitemap entries: a Shopify sitemapindex names its
-    # children "sitemap_products_1.xml" — a filename, not a URL path
-    # segment — so this checks the bare "product"/"collection" words
-    # rather than requiring the leading slash COMMERCE_PATH_HINTS uses
-    # for robots.txt rules.
+    for u in discovery.sitemap_urls or []:
+        if _COMMERCE_PATH_SEGMENT_RE.search(urlparse(u).path.lower()):
+            return True
+
     bare_hints = tuple(hint.lstrip("/") for hint in COMMERCE_PATH_HINTS)
-    sitemap_entries = [u.lower() for u in (discovery.sitemap_urls or [])]
-    sitemap_entries.extend(u.lower() for u in (discovery.sitemap_index_entries or []))
-    return any(hint in u for u in sitemap_entries for hint in bare_hints)
+    index_entries = [u.lower() for u in (discovery.sitemap_index_entries or [])]
+    return any(hint in u for u in index_entries for hint in bare_hints)
 
 
 def _has_platform_marker(homepage_html: str) -> bool:

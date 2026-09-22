@@ -11,7 +11,7 @@
 import { Glyph } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
 import { _fetchProbeSentence } from '../DegradedRunBanner.jsx'
-import { FAILURE_POINT_COPY, BLOCKED_STEP_COPY, resolveFailurePointBody } from './reportContent.js'
+import { FAILURE_POINT_COPY, BLOCKED_STEP_COPY, DISCOVERY_OUTCOME_COPY, resolveFailurePointBody } from './reportContent.js'
 import { partialReadFailurePoint, buildMeasurableContext } from './reportDerive.js'
 
 const STEP_META = {
@@ -19,6 +19,28 @@ const STEP_META = {
   homepage: { n: '02', label: 'HOMEPAGE' },
   sitemaps: { n: '03', label: 'SITEMAPS' },
   productPages: { n: '04', label: 'PRODUCT PAGES' },
+}
+
+// Discovery follow-up (Part 4): apps/pipeline/scan/discovery_outcome.py's
+// tier keys, in the order they're attempted, read next to their
+// discovery_outcome.tiers[].outcome string ("found N" / "found 0" /
+// "skipped: <reason>") under WHAT WE TRIED.
+const TIER_LABELS = {
+  sitemap: 'Sitemap walk',
+  collection_hop: 'Category page hop',
+  platform_endpoint: 'Platform catalog endpoint',
+  llm_assisted: 'AI-assisted discovery',
+  homepage: 'Homepage links',
+}
+
+function _urlFilename(url) {
+  if (!url) return null
+  try {
+    const parts = new URL(url).pathname.split('/').filter(Boolean)
+    return parts[parts.length - 1] || url
+  } catch {
+    return url
+  }
 }
 
 // Blocked-run copy pass (2c): the blocked path reads its step facts in
@@ -31,7 +53,38 @@ function _stepFact(key, good, failurePoint, genericGood, genericBad) {
   return good ? genericGood : genericBad
 }
 
-function _buildSteps(trace, unmeasurablePoints, failurePoint) {
+// Discovery follow-up (Part 4): the sitemaps/product-pages steps read
+// real per-run facts straight off discovery_outcome (recorded on every
+// run — see discovery_outcome.py) instead of the older, coarser
+// discovery_trace counts, whenever it's present. Falls back to the
+// generic trace-only fact when discoveryOutcome is absent (an older
+// report) so nothing changes for those.
+function _sitemapsStepFact(discoveryOutcome, trace) {
+  if (!discoveryOutcome || !(discoveryOutcome.sitemaps || []).length) {
+    const n = trace.sitemaps_read
+    return `${n} resolved · ${trace.product_urls_found} product URL${trace.product_urls_found === 1 ? '' : 's'} found.`
+  }
+  const read = discoveryOutcome.sitemaps.filter((s) => s.outcome === 'read')
+  const totalProductUrls = read.reduce((sum, s) => sum + (s.product_urls || 0), 0)
+  const names = read.map((s) => s.name).slice(0, 2).join(', ')
+  const chosen = discoveryOutcome.child_chosen ? _urlFilename(discoveryOutcome.child_chosen) : null
+  return `${read.length} read${names ? ` (${names}${read.length > 2 ? ', …' : ''})` : ''}`
+    + (chosen ? ` · picked ${chosen}` : '')
+    + ` · ${totalProductUrls} product URL${totalProductUrls === 1 ? '' : 's'} found.`
+}
+
+function _productPagesStepFact(discoveryOutcome, failurePoint, fetched, unmeasurablePoints) {
+  const genericBad = `None reached, none parsed${unmeasurablePoints ? ` · ${Math.round(unmeasurablePoints)} points unread.` : '.'}`
+  if (discoveryOutcome && (discoveryOutcome.product_pages_attempted || 0) > 0) {
+    const attempted = discoveryOutcome.product_pages_attempted
+    if (fetched > 0) return `${fetched} of ${attempted} reached and parsed.`
+    if (discoveryOutcome.code === 'product_pages_refused') return `Found ${attempted}, refused every request.`
+    if (discoveryOutcome.code === 'product_pages_unreadable') return `Found ${attempted}, none could be read (network error or timeout).`
+  }
+  return _stepFact('productPages', fetched > 0, failurePoint, `${fetched} reached and parsed.`, genericBad)
+}
+
+function _buildSteps(trace, unmeasurablePoints, failurePoint, discoveryOutcome) {
   if (!trace) return []
   const steps = []
   if (trace.robots_ok != null) {
@@ -49,20 +102,18 @@ function _buildSteps(trace, unmeasurablePoints, failurePoint) {
     })
   }
   if (trace.sitemaps_read != null && trace.product_urls_found != null) {
-    const n = trace.sitemaps_read
     steps.push({
       key: 'sitemaps',
       good: trace.product_urls_found > 0,
-      fact: `${n} resolved · ${trace.product_urls_found} product URL${trace.product_urls_found === 1 ? '' : 's'} found.`,
+      fact: _sitemapsStepFact(discoveryOutcome, trace),
     })
   }
   if (trace.product_pages_fetched != null) {
     const fetched = trace.product_pages_fetched
-    const genericBad = `None reached, none parsed${unmeasurablePoints ? ` · ${Math.round(unmeasurablePoints)} points unread.` : '.'}`
     steps.push({
       key: 'productPages',
       good: fetched > 0,
-      fact: _stepFact('productPages', fetched > 0, failurePoint, `${fetched} reached and parsed.`, genericBad),
+      fact: _productPagesStepFact(discoveryOutcome, failurePoint, fetched, unmeasurablePoints),
     })
   }
   return steps
@@ -70,14 +121,26 @@ function _buildSteps(trace, unmeasurablePoints, failurePoint) {
 
 export function DiscoveryFinding({ report, open, onToggle }) {
   const degradedReason = report.scan?.degraded_reason
-  const failurePoint = partialReadFailurePoint(degradedReason)
-  const copy = FAILURE_POINT_COPY[failurePoint]
+  const discoveryOutcome = report.scan?.discovery_outcome
+  const failurePoint = partialReadFailurePoint(degradedReason, discoveryOutcome)
+  // Discovery follow-up (Part 4): a code-specific registry entry, when
+  // discovery_outcome is present and covers this exact run's code —
+  // falls back to the coarser 3-bucket FAILURE_POINT_COPY otherwise
+  // (an older report, or a code this table doesn't (yet) cover), same
+  // as before this session.
+  const outcomeCopy = discoveryOutcome && DISCOVERY_OUTCOME_COPY[discoveryOutcome.code]
+  const copy = outcomeCopy || FAILURE_POINT_COPY[failurePoint]
   const trace = report.scan?.discovery_trace
   const bannerFacts = report.scan?.degraded_banner_facts
   const unmeasurablePoints = buildMeasurableContext(report.pillars).unmeasurable_points
-  const steps = _buildSteps(trace, unmeasurablePoints, failurePoint)
+  const steps = _buildSteps(trace, unmeasurablePoints, failurePoint, discoveryOutcome)
   const probeSentence = _fetchProbeSentence(bannerFacts, degradedReason, report.scan_status)
-  const bodyText = resolveFailurePointBody(copy.body, bannerFacts)
+  // outcomeCopy has no `body` of its own — discoveryOutcome.summary IS
+  // that body, already first-person fact-grounded prose from this run
+  // (see reportContent.js's DISCOVERY_OUTCOME_COPY doc comment).
+  const bodyText = outcomeCopy ? (discoveryOutcome.summary || '') : resolveFailurePointBody(copy.body, bannerFacts)
+  const tiers = discoveryOutcome?.tiers || []
+  const exampleUrls = discoveryOutcome?.example_urls || []
 
   return (
     <ReportSection
@@ -102,6 +165,29 @@ export function DiscoveryFinding({ report, open, onToggle }) {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {tiers.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <div className="mono-label" style={{ fontSize: 9, color: 'var(--faint)', marginBottom: 8 }}>WHAT WE TRIED</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {tiers.map((t, i) => (
+              <div key={`${t.tier}-${i}`} style={{ fontSize: 12.5, color: 'var(--muted)', display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                <span>{TIER_LABELS[t.tier] || t.tier}</span>
+                <span style={{ color: 'var(--text)' }}>{t.outcome}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {exampleUrls.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <div className="mono-label" style={{ fontSize: 9, color: 'var(--faint)', marginBottom: 8 }}>EXAMPLE URLS WE FOUND</div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--muted)', background: 'var(--surface-warm)', border: '1px solid var(--hairline)', borderRadius: 8, padding: '10px 12px', lineHeight: 1.7, wordBreak: 'break-all' }}>
+            {exampleUrls.map((u) => <div key={u}>{u}</div>)}
+          </div>
         </div>
       )}
 

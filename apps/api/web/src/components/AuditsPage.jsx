@@ -453,6 +453,7 @@ function Dim({ label, value, max }) {
 function Drawer({ detail, loading, error, onClose }) {
   const row = detail
   const pillars = row?.pillars || {}
+  const discoveryOutcome = row?.discovery_outcome
 
   return (
     <aside style={{
@@ -531,6 +532,20 @@ function Drawer({ detail, loading, error, onClose }) {
                 </div>
               )}
             </Section>
+
+            {discoveryOutcome && (
+              <Section title="Discovery">
+                <div style={{
+                  background: T.amberLight, border: '1px solid #FDE68A',
+                  borderRadius: 8, padding: '8px 10px', fontSize: 12, color: '#92400E',
+                }}>
+                  {discoveryOutcome.summary || discoveryOutcome.code}
+                </div>
+                <div style={{ fontFamily: MONO, fontSize: 11, color: T.slate, marginTop: 6 }}>
+                  {discoveryOutcome.code}
+                </div>
+              </Section>
+            )}
 
             {row.error_message && (
               <Section title="Error">

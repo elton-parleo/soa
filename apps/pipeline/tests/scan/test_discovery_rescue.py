@@ -274,9 +274,18 @@ def test_part3_llm_discovery_verified_happy_path_through_the_full_ladder(monkeyp
     budget for sitemap traversal alone can still reach this tier — this
     test pins the budget back to the old 6 to keep exercising the
     budget-exhaustion-mid-tier edge case on a fixture that would
-    otherwise have room for both URLs now."""
+    otherwise have room for both URLs now.
+
+    Discovery follow-up: the platform-endpoint tier no longer probes at
+    all without an actual Shopify/nextjs fingerprint (PLAIN_HOMEPAGE_
+    HTML's short body never even reaches platform detection — a
+    'blocked' short-body fetch carries no homepage_html at all) — this
+    test needs its OWN, longer homepage with a real Shopify marker so
+    the platform tier still spends its 3 probes, keeping the "5 used,
+    1 left" arithmetic this test is actually about."""
     monkeypatch.setattr("scan.discovery.DISCOVERY_FETCH_BUDGET", 6)
     pages = _llm_base_pages()
+    pages[ORIGIN] = (200, SHOPIFY_HOMEPAGE_HTML)
     pages["/products/blue-widget"] = (200, PRODUCT_PAGE_HTML)
     pages["/products/red-widget"] = (200, PRODUCT_PAGE_HTML)
     monkeypatch.setattr(httpx.Client, "get", _serve(pages))

@@ -139,6 +139,91 @@ export const FAILURE_POINT_COPY = {
   },
 }
 
+// Discovery follow-up (Part 4): one entry per apps/pipeline/scan/
+// discovery_outcome.py code, read by DiscoveryFinding.jsx whenever
+// report.scan.discovery_outcome is present (older reports without it
+// fall back to FAILURE_POINT_COPY above, keyed by the coarser 3-bucket
+// failurePoint). `body` is deliberately NOT duplicated here — the
+// outcome's own `summary` field is already first-person, fact-grounded
+// prose generated from this exact run (see discovery_outcome.py), so
+// DiscoveryFinding renders it directly instead of a second, static
+// copy of the same claim that could drift from the real trace.
+//
+// Plain-verb register throughout, same reader as FAILURE_POINT_COPY:
+// never "blocked" for a code that's our own reader's limitation
+// (product_sitemap_unrecognized, sitemap_children_unprobed,
+// sitemaps_non_catalog, homepage_no_links, rescue_tiers_skipped,
+// no_sitemap, unknown) — "blocked" is reserved for the codes where the
+// site itself genuinely turned us away (product_pages_refused,
+// sitemaps_refused, sitemaps_robots_disallowed, short_circuited).
+export const DISCOVERY_OUTCOME_COPY = {
+  product_pages_read: {
+    heading: 'We read some of your product pages, but not enough to score everything',
+    explanation: 'A thin sample like this can come from rate limiting, timeouts, or pages that fetched but never parsed cleanly.',
+    fixFraming: 'get more product pages through cleanly',
+  },
+  product_pages_refused: {
+    heading: 'Your site refused our reader on every product page we found',
+    explanation: "This usually comes from a bot-blocking rule triggering on our reader specifically, not a deliberate choice by your team.",
+    fixFraming: 'allow verified AI reader traffic through to your product pages',
+  },
+  product_pages_unreadable: {
+    heading: 'We found your product pages, but none of them could be read',
+    explanation: 'A network error or timeout kept every page from loading — not a refusal.',
+    fixFraming: 'check that your product pages load reliably for readers outside your own network',
+  },
+  short_circuited: {
+    heading: 'Your site turned our reader away before we could look any further',
+    explanation: 'Both your robots.txt and your store root refused us, so we stopped rather than keep probing a site that had already said no.',
+    fixFraming: 'allow verified AI reader traffic in your robots.txt and at your store root',
+  },
+  sitemaps_refused: {
+    heading: 'Your site refused every sitemap request we made',
+    explanation: 'We found your sitemap(s), but every request for one came back refused rather than served.',
+    fixFraming: 'allow verified AI reader traffic through to your sitemaps',
+  },
+  sitemaps_robots_disallowed: {
+    heading: 'Your robots.txt disallows every sitemap you declare',
+    explanation: "Your homepage links didn't lead to a product page either, so we had nowhere else to look.",
+    fixFraming: 'allow readers like ours to fetch your declared sitemaps in robots.txt',
+  },
+  no_sitemap: {
+    heading: "We couldn't find a sitemap for your site",
+    explanation: 'Neither your robots.txt nor the default /sitemap.xml location pointed us to one.',
+    fixFraming: 'add a sitemap and declare it in robots.txt',
+  },
+  product_sitemap_unrecognized: {
+    heading: "We read a sitemap that looks like your catalog, but couldn't recognize its product pages",
+    explanation: "Its URLs use a shape our reader doesn't recognize, and a page sample of it found no product markup either.",
+    fixFraming: 'use a recognizable URL pattern for product pages, or add product markup we can detect',
+  },
+  sitemap_children_unprobed: {
+    heading: 'Your sitemap index lists more product-shaped sitemaps than we had budget to read this run',
+    explanation: 'We ran out of budget before reaching every catalog-shaped sitemap your index declares.',
+    fixFraming: 'put your product sitemap earlier in your sitemap index, or trim non-catalog sitemaps out of it',
+  },
+  sitemaps_non_catalog: {
+    heading: 'We read your sitemaps and checked your homepage, but found nothing that looked like a product catalog',
+    explanation: 'Every sitemap and link we checked turned up editorial or navigational pages, not products.',
+    fixFraming: 'add product pages to a sitemap so a reader can find your catalog',
+  },
+  homepage_no_links: {
+    heading: "Your site has no sitemap, and your homepage's own links didn't lead anywhere we could follow",
+    explanation: 'Without a sitemap or homepage links to products or categories, we had nothing left to follow.',
+    fixFraming: 'add a sitemap, or link to your product and category pages from your homepage',
+  },
+  rescue_tiers_skipped: {
+    heading: "We ran out of budget before trying every option we had left",
+    explanation: "One or more of our fallback discovery options never got to run this pass.",
+    fixFraming: 'make your product pages reachable earlier in a scan — for example, via a sitemap or homepage links',
+  },
+  unknown: {
+    heading: "We couldn't determine why your product pages weren't found this run",
+    explanation: "Nothing in this run's trace matched a pattern we recognize — worth a second look on our end.",
+    fixFraming: 'get in touch so we can dig into this run directly',
+  },
+}
+
 // Part 2c: the four-step discovery trace's blocked-path wording — the
 // same plain-verbs register as the rest of this entry (reading the
 // site's rules, asking for pages, being refused), never the generic
