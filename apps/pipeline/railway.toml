@@ -2,6 +2,12 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "python worker.py"
+# Deploy smoke (see smoke_imports.py): imports scan.engine,
+# scan.signing and worker in this container's own environment before
+# the worker starts. The 2026-09-22 outage was module-level code that
+# raised on first import — which, because the scan package is imported
+# lazily inside a request, first happened when a real visitor submitted
+# a real audit. `&&` means a failing import is a failed boot.
+startCommand = "python smoke_imports.py && python worker.py"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5

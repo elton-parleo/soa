@@ -32,13 +32,17 @@ from datetime import datetime, timedelta, timezone
 # Add pipeline root to path so local modules resolve correctly
 sys.path.insert(0, os.path.dirname(__file__))
 
+from urllib.parse import urlparse
+
 import lite_events
+import ops_alert
 from soa_shared.database import engine
 from soa_shared.degraded_dimensions import (
     DEGRADED_REASON_ORCHESTRATION_FAILED,
     DEGRADED_REASON_TIMED_OUT,
     build_degraded_dimensions,
 )
+from soa_shared.scan_dimensions import SCORER_VERSION
 from soa_shared.models.soa_models import (
     LITE_STATUS_COMPLETE,
     LITE_STATUS_FAILED,
@@ -55,6 +59,16 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 POLL_INTERVAL = 30  # seconds when idle
+
+
+def _env_int(name: str, default: int) -> int:
+    """Never raises — an unset or unparseable env var falls back to the
+    default, same discipline as scan/fetcher.py's own _env_int. A worker
+    must never fail to boot over a typo in a tuning knob."""
+    try:
+        return int(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return default
 
 
 def get_next_planned_cycle():
@@ -1167,8 +1181,17 @@ def process_lite_requests():
         fetch_probe_kind = None
         try:
             fetch_probe_url, fetch_probe_kind = _run_lite_scan(request_id, store_url, api_key)
-        except Exception:
+        except Exception as scan_error:
             log.exception(f"[lite] request {request_id}: scan orchestration failed unexpectedly")
+            # Crawl-failure alerting: this except is exactly the shape
+            # the signing-import crash took, and it stayed silent for a
+            # deploy cycle. ops_alert never raises, so the isolation
+            # this block exists to provide is unchanged.
+            ops_alert.send_crawl_failure_alert(
+                ops_alert.FAILURE_CLASS_ORCHESTRATION,
+                request_id=request_id, token=token, store_url=store_url,
+                error=f"{type(scan_error).__name__}: {scan_error}",
+            )
 
         # Stage 16 (Part 4): a single out-of-band OpenAI call, isolated
         # exactly like the scan above — a bug here must never flip this
@@ -1204,6 +1227,183 @@ def process_lite_requests():
     except Exception as e:
         log.exception(f"[lite] request {request_id} failed")
         _mark_lite_failed(request_id, str(e))
+
+
+# ─── Scan reuse: don't re-crawl a store we just read ─────────────────────
+#
+# Justfoodfordogs was audited six times in one week; Petco, Vans, Warby
+# Parker, NAPA and AutoAccessoriesGarage twice each. Every repeat
+# re-crawled the same store and got the same answer — a dozen fetches
+# and, on a walled site, minutes of wall clock, spent re-establishing a
+# fact we already had on file.
+#
+# Scoped deliberately narrowly:
+#   - Same canonical host, not the same URL string. www/apex, http/https
+#     and a trailing slash are the same store.
+#   - Same SCORER_VERSION only. A row scored under an older rubric is
+#     not this run's answer, and copying it would silently mix versions.
+#   - status in ('complete','blocked') only. A 'failed' row is exactly
+#     the case worth retrying — reusing one would make a transient
+#     outage permanent for the whole window.
+#   - Inside SCAN_REUSE_WINDOW_HOURS. Past that, the store may genuinely
+#     have changed.
+#
+# Only the CRAWL is reused. The membership and revenue probes are cheap
+# brand-level LLM calls that don't touch the store, and they still run.
+SCAN_REUSE_WINDOW_HOURS = _env_int("SCAN_REUSE_WINDOW_HOURS", 72)
+SCAN_REUSE_STATUSES = ("complete", "blocked")
+
+
+def _canonical_host(url: str | None) -> str | None:
+    """The host two URLs have to share to be the same store: scheme
+    stripped, leading 'www.' stripped, lowercased, no trailing dot or
+    port. None for anything that isn't recognizably a hostname — which
+    simply means no reuse, the safe direction. A subdomain is NOT
+    folded in: shop.example.com is a different storefront from
+    example.com and routinely has a different catalog."""
+    if not url:
+        return None
+    try:
+        value = url.strip()
+        if "://" not in value:
+            value = f"https://{value}"
+        host = (urlparse(value).hostname or "").strip().lower().rstrip(".")
+        # urlparse is happy to call free text a hostname. A host with no
+        # dot or with whitespace in it could never match a real store's,
+        # but returning it would put garbage in a log line and an event.
+        if not host or "." not in host or any(c.isspace() for c in host):
+            return None
+        if host.startswith("www."):
+            host = host[4:]
+        return host or None
+    except Exception:
+        return None
+
+
+def _find_reusable_scan(conn, store_url: str, request_id: int):
+    """The most recent reusable scan row for this store, or None. Reads
+    only — the caller does the copy. Never raises: any failure here
+    degrades to "no reuse", which is just an ordinary crawl."""
+    host = _canonical_host(store_url)
+    if not host:
+        return None
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=SCAN_REUSE_WINDOW_HOURS)
+        rows = conn.execute(text("""
+            SELECT id, input_url, status, total_score, integrity_capped,
+                   dimensions, pages_fetched, fetch_probe, updated_at
+            FROM soa_lite_scan_results
+            WHERE status IN :statuses
+              AND input_url IS NOT NULL
+              AND updated_at > :cutoff
+              AND lite_request_id IS DISTINCT FROM :rid
+            ORDER BY updated_at DESC
+            LIMIT 50
+        """).bindparams(bindparam("statuses", expanding=True)),
+            {"statuses": list(SCAN_REUSE_STATUSES), "cutoff": cutoff, "rid": request_id},
+        ).fetchall()
+    except Exception:
+        log.exception(f"[lite] request {request_id}: reuse lookup failed — falling back to a fresh crawl")
+        return None
+
+    # Host matching happens here, not in SQL: input_url is stored as
+    # given (scheme, www, sometimes a path), and normalizing it in SQL
+    # across Postgres and SQLite would be a per-dialect string mess for
+    # a 50-row scan.
+    for row in rows:
+        if _canonical_host(row[1]) != host:
+            continue
+        # The window is re-checked here, not left to the SQL predicate
+        # alone: the SQL one narrows the scan on Postgres, but
+        # updated_at comes back as text on SQLite and a text-vs-
+        # timestamp comparison there is not the check it looks like.
+        # This one reads the value the same way every other timestamp in
+        # this worker is read.
+        updated = _as_utc_datetime(row[8])
+        if updated is None or updated < cutoff:
+            continue
+        dimensions = _decode_json_field(row[5], {}) or {}
+        if dimensions.get("scorer_version") != SCORER_VERSION:
+            continue
+        # Never reuse a reuse: chaining would let one crawl's data
+        # outlive its own window indefinitely.
+        if dimensions.get("reused_from_scan_id"):
+            continue
+        return row
+    return None
+
+
+def _reuse_recent_scan(request_id: int, store_url: str) -> tuple | None:
+    """Copies a recent scan of the same store onto this request's row
+    and returns (fetch_probe_url, fetch_probe_kind) for the caller, or
+    None when there was nothing to reuse (the ordinary path).
+
+    The copied row is stamped with reused_from_scan_id/reused_at so the
+    reuse is legible in the admin drawer and after the fact — this
+    should never be something you have to infer from timing."""
+    with engine.connect() as conn:
+        source = _find_reusable_scan(conn, store_url, request_id)
+    if source is None:
+        return None
+
+    (source_id, _source_url, status, total_score, integrity_capped,
+     dimensions_raw, pages_fetched_raw, fetch_probe_raw, updated_at) = source
+
+    dimensions = _decode_json_field(dimensions_raw, {}) or {}
+    dimensions["reused_from_scan_id"] = source_id
+    dimensions["reused_at"] = datetime.now(timezone.utc).isoformat()
+    pages_fetched = _decode_json_field(pages_fetched_raw, []) or []
+    fetch_probe = _decode_json_field(fetch_probe_raw, None)
+
+    with engine.begin() as conn:
+        conn.execute(text("""
+            UPDATE soa_lite_scan_results
+            SET status = :status,
+                total_score = :total_score,
+                integrity_capped = :integrity_capped,
+                dimensions = :dimensions,
+                pages_fetched = :pages_fetched,
+                fetch_probe = :fetch_probe,
+                error = NULL,
+                updated_at = NOW()
+            WHERE lite_request_id = :rid
+        """), {
+            "rid": request_id,
+            "status": status,
+            "total_score": total_score,
+            "integrity_capped": bool(integrity_capped) if integrity_capped is not None else False,
+            "dimensions": json.dumps(dimensions),
+            "pages_fetched": json.dumps(pages_fetched),
+            "fetch_probe": json.dumps(fetch_probe) if fetch_probe is not None else None,
+        })
+
+    host = _canonical_host(store_url)
+    age_hours = _reuse_age_hours(updated_at)
+    log.info(
+        f"[lite] request {request_id}: reusing scan #{source_id} of {host} "
+        f"({age_hours}h old, status={status}) — skipping the crawl"
+    )
+    lite_events.emit_done(
+        request_id, lite_events.TASK_CRAWL,
+        f"Reusing our read of {host} from {age_hours} hour{'' if age_hours == 1 else 's'} ago",
+    )
+    # The fetch probe was copied with the rest, so re-running it would
+    # overwrite a good answer with a second OpenAI call for nothing.
+    return None, None
+
+
+def _reuse_age_hours(updated_at) -> int:
+    """Whole hours since the reused scan ran, floored at 1 — "0 hours
+    ago" reads as a bug, and the reuse window is measured in hours
+    anyway. Never raises."""
+    try:
+        when = _as_utc_datetime(updated_at)
+        if when is None:
+            return 1
+        delta = datetime.now(timezone.utc) - when
+        return max(1, int(delta.total_seconds() // 3600))
+    except Exception:
+        return 1
 
 
 def _run_lite_scan(request_id: int, store_url: str | None, api_key: str | None = None) -> tuple:
@@ -1257,6 +1457,18 @@ def _run_lite_scan(request_id: int, store_url: str | None, api_key: str | None =
     # resolving. Emitting first means the visitor always sees "reading
     # your store…" show up, whatever happens next.
     lite_events.emit_log(request_id, lite_events.TASK_CRAWL, f"reading {store_url}…")
+
+    # Scan reuse: checked after the crawl task's event exists (so the
+    # status page always shows the task, whichever way it resolves) and
+    # before any network work. Isolated — a bug in reuse must never cost
+    # this request its crawl, so anything unexpected falls through to
+    # the ordinary path below.
+    try:
+        reused = _reuse_recent_scan(request_id, store_url)
+        if reused is not None:
+            return reused
+    except Exception:
+        log.exception(f"[lite] request {request_id}: scan reuse failed — crawling instead")
 
     try:
         from scan.engine import run_scan
@@ -1778,6 +1990,17 @@ def _sweep_lite_completions():
                     """), {"status": LITE_STATUS_FAILED, "id": lite_id})
 
             if watchdog_fired:
+                # Crawl-failure alerting: a scan the watchdog had to
+                # force-fail means the worker died or hung mid-crawl —
+                # the other failure worth waking up for. Rate-limited to
+                # one per class per window, so a broken deploy timing
+                # out every request sends one email, not hundreds.
+                ops_alert.send_crawl_failure_alert(
+                    ops_alert.FAILURE_CLASS_WATCHDOG,
+                    request_id=lite_id, token=_lite_token(lite_id),
+                    store_url=_lite_store_url(lite_id),
+                    error=f"scan #{scan_id} sat in 'running' for >= {SCAN_TIMEOUT_MINUTES} minutes",
+                )
                 # The crawl task's own event may still be sitting on
                 # "reading…" if the worker died (or hung) mid-scan —
                 # close it out so the status page's progress UI never
@@ -1815,6 +2038,34 @@ def _sweep_lite_completions():
         _send_pending_report_emails()
     except Exception:
         log.exception("[lite] report-ready email sweep failed unexpectedly")
+
+
+def _lite_token(lite_request_id: int) -> str | None:
+    """The request's public token, for an ops alert's body — the one
+    handle that identifies a run across the logs, the admin page and
+    the visitor's own link. Its own connection and its own try/except:
+    this is called from a failure path, and a lookup that raises there
+    would turn a handled failure into an unhandled one."""
+    return _lite_column(lite_request_id, "token")
+
+
+def _lite_store_url(lite_request_id: int) -> str | None:
+    return _lite_column(lite_request_id, "store_url")
+
+
+def _lite_column(lite_request_id: int, column: str) -> str | None:
+    # column is never caller-supplied — both call sites above pass a
+    # literal — so the interpolation below has no untrusted input.
+    try:
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(f"SELECT {column} FROM soa_lite_requests WHERE id = :id"),
+                {"id": lite_request_id},
+            ).fetchone()
+        return row[0] if row else None
+    except Exception:
+        log.exception(f"[lite] request {lite_request_id}: could not read {column} for an ops alert")
+        return None
 
 
 def _fetch_visibility_metrics(conn, cycle_id: int) -> dict:

@@ -142,6 +142,7 @@ export function LiteFullReportV4({ report, token }) {
             status={report.scan_status}
             degradedReason={report.scan?.degraded_reason}
             bannerFacts={report.scan?.degraded_banner_facts}
+            edgeVendor={report.scan?.edge_vendor}
             partialRead={partial}
           />
 

@@ -21,6 +21,7 @@ lite-specific) — public_lite.py adds that field itself, after calling
 this.
 """
 import json
+import logging
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -46,6 +47,8 @@ from app.schemas import (
     PublicLiteScanDimension,
     PublicLiteScanFamily,
 )
+
+log = logging.getLogger(__name__)
 
 # Re-weighting session (Part 4): the first scorer_version that ever
 # computed a `pillars` payload via build_pillars_payload (Stage 25). A
@@ -217,15 +220,25 @@ def _fetch_probe_banner_note(fetch_probe: dict) -> dict | None:
     root) so the frontend can name it honestly instead of a generic
     "it". None when the probe hasn't run yet or came back inconclusive
     (nothing confident enough to append to the banner).
+
+    Blocked-run evidence (this session): `price` rides along too. On
+    Vans and Warby Parker the probe came back quoted_price on the SAME
+    audit whose crawl was 403'd at the door — ChatGPT read a price off a
+    page our reader was refused. That is the single most useful fact on
+    a blocked report, and it was being spent on one clause at the bottom
+    of a banner. Null unless the probe actually quoted one; the report
+    never asserts a price the probe didn't establish.
     """
     outcome = (fetch_probe or {}).get("outcome")
     if outcome not in ("quoted_price", "opened_no_price", "could_not_access"):
         return None
+    price = fetch_probe.get("price")
     return {
         "outcome": outcome,
         "agent_could_access": outcome in ("quoted_price", "opened_no_price"),
         "url": fetch_probe.get("url"),
         "kind": fetch_probe.get("kind"),
+        "price": price if outcome == "quoted_price" and isinstance(price, str) and price.strip() else None,
     }
 
 
@@ -257,6 +270,26 @@ def _public_pages_fetched(rows) -> list:
             continue
         public.append({k: row[k] for k in PUBLIC_PAGES_FETCHED_KEYS if k in row})
     return public
+
+
+def _edge_vendor(dimensions: dict) -> str | None:
+    """Blocked-run vendor attribution (this session): the one field the
+    report reads out of engine.py's block_evidence rollup — which
+    bot-management vendor refused this run, so the blocked report can
+    name the wall and the setting that opens it instead of gesturing at
+    "security tools like Cloudflare".
+
+    Everything ELSE in block_evidence (refusal-page titles, body sizes,
+    the full per-vendor counts) stays our own diagnostic record and is
+    deliberately not served to a browser — same discipline as
+    _public_pages_fetched above. Never raises: a row written before this
+    key existed, or a malformed one, simply has no vendor to name, which
+    the report already has neutral wording for."""
+    try:
+        return (dimensions.get('block_evidence') or {}).get('dominant_vendor') or None
+    except Exception:
+        log.exception('[cycle_scoring] edge vendor read failed')
+        return None
 
 
 def build_scan_payload(scan_row, linked: dict) -> dict | None:
@@ -320,6 +353,10 @@ def build_scan_payload(scan_row, linked: dict) -> dict | None:
             agent_access_matrix=degraded.get('agent_access_matrix'),
             discovery_trace=degraded.get('discovery_trace'),
             discovery_outcome=degraded.get('discovery_outcome'),
+            edge_vendor=_edge_vendor(degraded),
+            # site_type is deliberately absent on a degraded run —
+            # engine.py never classifies one (see PublicLiteScan's own
+            # docstring), so there is nothing honest to report.
         ).model_dump()
 
     dimensions = decode_json_field(dimensions, {})
@@ -408,6 +445,8 @@ def build_scan_payload(scan_row, linked: dict) -> dict | None:
         agent_access_matrix=dimensions.get('agent_access_matrix'),
         discovery_trace=dimensions.get('discovery_trace'),
         discovery_outcome=dimensions.get('discovery_outcome'),
+        edge_vendor=_edge_vendor(dimensions),
+        site_type=dimensions.get('site_type'),
     ).model_dump()
 
 

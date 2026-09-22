@@ -76,7 +76,7 @@ describe('DiscoveryFinding — discovery_outcome present, a "not found" code (ou
   it('shows the code-specific explanation in the fix box, never the "blocked" fixFraming framing', () => {
     renderIt(_report({ discovery_outcome: discoveryOutcome }))
     expect(screen.getByText(DISCOVERY_OUTCOME_COPY.sitemaps_non_catalog.explanation, { exact: false })).toBeInTheDocument()
-    expect(screen.queryByText(FAILURE_POINT_COPY.blocked.fixFraming)).not.toBeInTheDocument()
+    expect(screen.queryByText(FAILURE_POINT_COPY.blocked.fixFraming(null, null))).not.toBeInTheDocument()
   })
 
   it('renders WHAT WE TRIED with friendly tier labels next to their raw outcome strings', () => {

@@ -771,7 +771,212 @@ def test_fetch_probe_merges_could_not_access_into_degraded_banner_facts(db):
     assert result["scan"]["degraded_banner_facts"]["fetch_probe"] == {
         "outcome": "could_not_access", "agent_could_access": False,
         "url": "https://acme.example.com/products/tee", "kind": "product_page",
+        # Blocked-run evidence: price rides along, and is None for every
+        # outcome that didn't establish one.
+        "price": None,
     }
+
+
+# ─── site type on a complete run (this session) ─────────────────────────
+
+
+@pytest.mark.parametrize("site_type", ["commerce_normal", "commerce_discovery_failure", "brand_only"])
+def test_the_site_type_reaches_a_complete_report(db, site_type):
+    """emcube, marketlytics and wealthsimple were all correctly typed
+    brand_only and then rendered as failing STORES, because the type
+    never left the pipeline."""
+    dimensions = dict(_FULL_DIMENSIONS)
+    dimensions["site_type"] = site_type
+    dimensions["site_type_signals"] = ["cart/checkout link or form found in homepage nav/footer"]
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="complete", total_score=59, dimensions=dimensions)
+
+    assert public_lite.get_lite_report("t1")["scan"]["site_type"] == site_type
+
+
+def test_a_row_scanned_before_site_type_existed_reports_none(db):
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="complete", total_score=59, dimensions=_FULL_DIMENSIONS)
+
+    assert public_lite.get_lite_report("t1")["scan"]["site_type"] is None
+
+
+def test_the_site_type_changes_no_score(db):
+    """Presentation only — the brand-only variant is a report decision,
+    never a scoring one (which would be a methodology change). The
+    dimension scores a brand-only row reports are byte-for-byte the
+    ones the scorer wrote."""
+    dimensions = dict(_FULL_DIMENSIONS)
+    dimensions["site_type"] = "brand_only"
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="a@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="complete", total_score=59, dimensions=dimensions)
+
+    report = public_lite.get_lite_report("t1")
+
+    assert report["scan"]["total_score"] == 59
+    for row in report["scan"]["dimensions"]:
+        assert row["score"] == _FULL_DIMENSIONS[row["code"]]["score"], row["code"]
+        assert row["coverage"] == (_FULL_DIMENSIONS[row["code"]].get("coverage") or "full"), row["code"]
+
+
+# ─── blocked-run vendor attribution + site type (this session) ──────────
+#
+# Seven of the 22 stores in the 30-day review 403'd their homepage, and
+# the report told every one of them the same thing about "security tools
+# like Cloudflare" whether or not Cloudflare was the tool refusing us.
+# The scan has known the vendor all along (fetcher.py's edge-vendor
+# fingerprinting, rolled up per run by engine.py's block_evidence) — it
+# just never reached the payload. Same story for site_type: computed on
+# every complete run, used to gate scorers, never recorded.
+
+
+@pytest.mark.parametrize("vendor", ["cloudflare", "akamai", "datadome", "human_px", "imperva"])
+def test_the_dominant_edge_vendor_reaches_a_blocked_report(db, vendor):
+    dimensions = {
+        "degraded_reason": "blocked",
+        "degraded_banner_facts": {"refusal": "403", "attempts": 6},
+        "block_evidence": {"vendor_hints": {vendor: 7}, "dominant_vendor": vendor},
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="blocked", total_score=None, dimensions=dimensions)
+
+    result = public_lite.get_lite_report("t1")
+
+    assert result["scan"]["edge_vendor"] == vendor
+
+
+def test_a_run_with_no_recognized_vendor_reports_none(db):
+    """A normal outcome, and the report has neutral wording for it —
+    never an absent-vs-unknown ambiguity."""
+    dimensions = {
+        "degraded_reason": "blocked",
+        "degraded_banner_facts": {"refusal": "403", "attempts": 6},
+        "block_evidence": {"vendor_hints": {}, "dominant_vendor": None},
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="blocked", total_score=None, dimensions=dimensions)
+
+    assert public_lite.get_lite_report("t1")["scan"]["edge_vendor"] is None
+
+
+def test_a_row_written_before_vendor_attribution_reports_none(db):
+    """A pre-this-stage block_evidence has no dominant_vendor key at
+    all — that must read as "we don't know", not raise."""
+    dimensions = {
+        "degraded_reason": "blocked",
+        "degraded_banner_facts": {"refusal": "403", "attempts": 6},
+        "block_evidence": {"vendor_hints": {"cloudflare": 4}, "blocked_titles": ["Access Denied"]},
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="blocked", total_score=None, dimensions=dimensions)
+
+    assert public_lite.get_lite_report("t1")["scan"]["edge_vendor"] is None
+
+
+def test_the_rest_of_block_evidence_never_reaches_the_browser(db):
+    """Refusal-page titles and body sizes stay our diagnostic record —
+    only the vendor is report content."""
+    dimensions = {
+        "degraded_reason": "blocked",
+        "degraded_banner_facts": {"refusal": "403", "attempts": 6},
+        "block_evidence": {
+            "vendor_hints": {"cloudflare": 4}, "dominant_vendor": "cloudflare",
+            "blocked_titles": ["Attention Required! | Cloudflare"],
+            "blocked_body_sizes": [370],
+        },
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="blocked", total_score=None, dimensions=dimensions)
+
+    payload = json.dumps(public_lite.get_lite_report("t1"))
+    assert "Attention Required" not in payload
+    assert "blocked_body_sizes" not in payload
+
+
+def test_a_blocked_run_never_claims_a_site_type(db):
+    """engine.py doesn't classify a degraded run, so there is nothing
+    honest to report — and a null site_type must never read as
+    brand-only downstream."""
+    dimensions = {"degraded_reason": "blocked", "degraded_banner_facts": {"refusal": "403"}}
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(conn, rid, status="blocked", total_score=None, dimensions=dimensions)
+
+    assert public_lite.get_lite_report("t1")["scan"]["site_type"] is None
+
+
+@pytest.mark.parametrize("probe_outcome,price", [
+    ("quoted_price", "$29.99"),
+    ("opened_no_price", None),
+    ("could_not_access", None),
+])
+@pytest.mark.parametrize("vendor", ["cloudflare", None])
+def test_every_probe_outcome_and_vendor_combination_shapes_the_payload(db, probe_outcome, price, vendor):
+    """The Vans/Warby Parker case (quoted_price against a 403'd crawl)
+    and the Adidas/NAPA one (could_not_access, which corroborates the
+    block) both have to arrive intact, named vendor or not."""
+    dimensions = {
+        "degraded_reason": "blocked",
+        "degraded_banner_facts": {"refusal": "403", "attempts": 6},
+        "block_evidence": {"vendor_hints": {}, "dominant_vendor": vendor},
+    }
+    fetch_probe = {
+        "outcome": probe_outcome, "url": "https://acme.example.com/products/tee",
+        "kind": "product_page", "price": price, "quote": None, "note": None,
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(
+            conn, rid, status="blocked", total_score=None,
+            dimensions=dimensions, fetch_probe=fetch_probe,
+        )
+
+    scan = public_lite.get_lite_report("t1")["scan"]
+
+    assert scan["edge_vendor"] == vendor
+    probe = scan["degraded_banner_facts"]["fetch_probe"]
+    assert probe["outcome"] == probe_outcome
+    assert probe["agent_could_access"] is (probe_outcome != "could_not_access")
+    assert probe["price"] == price
+    # Evidence, never points: a blocked run's total_score is None
+    # whatever the probe saw.
+    assert scan["total_score"] is None
+
+
+def test_a_price_on_a_non_quoted_outcome_is_never_reported(db):
+    """The report must never assert a price the probe didn't establish,
+    even if the model volunteered one alongside "I couldn't open it"."""
+    fetch_probe = {
+        "outcome": "could_not_access", "url": "https://acme.example.com/products/tee",
+        "kind": "product_page", "price": "$29.99",
+    }
+    with db.begin() as conn:
+        _seed_complete_cycle(conn, token="t1", email="visitor@example.com")
+        rid = _lite_request_id(conn, "t1")
+        _seed_scan_row(
+            conn, rid, status="blocked", total_score=None,
+            dimensions={"degraded_reason": "blocked", "degraded_banner_facts": {}},
+            fetch_probe=fetch_probe,
+        )
+
+    probe = public_lite.get_lite_report("t1")["scan"]["degraded_banner_facts"]["fetch_probe"]
+    assert probe["price"] is None
 
 
 def test_fetch_probe_merges_agent_could_access_direction(db):

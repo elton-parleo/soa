@@ -119,6 +119,68 @@ function _blockedRefusalPhrase(bannerFacts) {
 // so the two surfaces can never drift on wording. `fixFraming` is the
 // action line, rendered both in this section's closing note and as the
 // matching ranked-fix's description (FixesTable.jsx).
+// Blocked-run vendor attribution (this session): seven of the 22 stores
+// in the 30-day review 403'd their homepage, and the report told every
+// one of them the same thing — "security tools like Cloudflare" — whether
+// or not that was the tool actually refusing us. The scan has known the
+// vendor all along (fetcher.py's _edge_vendor_hint, rolled up per run by
+// engine.py's block_evidence); it just never reached the page.
+//
+// `name` is what the reader's own team calls it. `setting` is the
+// specific control that opens the door, so the message they forward
+// lands on something actionable rather than "please allow AI crawlers".
+// Keys are apps/pipeline/scan/fetcher.py's EDGE_VENDOR_MARKERS vendor
+// ids, one-for-one; "shopify" is not here and never will be — it
+// fingerprints a store platform, not a wall.
+//
+// This changes what the report CALLS the wall. It never changes a score:
+// the vendor is evidence, and evidence is not points.
+export const EDGE_VENDOR_COPY = {
+  cloudflare: {
+    name: 'Cloudflare',
+    setting: 'In Cloudflare this is the Bot Fight Mode / Super Bot Fight Mode setting, plus the Verified Bots allowlist and any custom firewall rule that filters on how a reader identifies itself.',
+  },
+  akamai: {
+    name: 'Akamai',
+    setting: 'In Akamai this is Bot Manager — the bot category actions and the allowlist of known, declared bots.',
+  },
+  datadome: {
+    name: 'DataDome',
+    setting: 'In DataDome this is your bot-protection policy and its allowlist of verified crawlers.',
+  },
+  human_px: {
+    name: 'HUMAN (PerimeterX)',
+    setting: 'In HUMAN / PerimeterX this is the Bot Defender enforcement policy and its allowlist of known good bots.',
+  },
+  imperva: {
+    name: 'Imperva',
+    setting: 'In Imperva this is the Advanced Bot Protection policy and its list of permitted declared bots.',
+  },
+}
+
+// The neutral wording for a run where nothing was recognized — the
+// same shape as a named vendor, never a hedge bolted on at render time.
+export const EDGE_VENDOR_UNKNOWN_COPY = {
+  clause: "most bot-blocking is a default setting in a security or CDN product, switched on to stop scrapers, that also blocks the AI assistants your shoppers are using. Your marketing team almost never knows it's on",
+  setting: "Whoever manages your website security can allow verified AI shopping agents in minutes. Ask them to permit traffic from OpenAI, Google, Anthropic, and Perplexity's published crawlers — and to allow readers that verify themselves cryptographically, which is how we identify ourselves too.",
+}
+
+export function edgeVendorCopy(vendor) {
+  return EDGE_VENDOR_COPY[vendor] || null
+}
+
+// The middle clause of FAILURE_POINT_COPY.blocked.body — "whose fault
+// this isn't", named when we know the name.
+function _blockedVendorClause(edgeVendor) {
+  const v = edgeVendorCopy(edgeVendor)
+  if (!v) return EDGE_VENDOR_UNKNOWN_COPY.clause
+  return (
+    `this is ${v.name}'s bot protection turning away a reader that announced who it was, and it is almost `
+    + 'always a default setting switched on to stop scrapers — one that also blocks the AI assistants your '
+    + "shoppers are using. Your marketing team almost never knows it's on"
+  )
+}
+
 export const FAILURE_POINT_COPY = {
   no_product_pages_found: {
     heading: "Your catalog isn't discoverable to a reader that follows the rules",
@@ -126,10 +188,20 @@ export const FAILURE_POINT_COPY = {
     explanation: 'This usually means product links are rendered by JavaScript after the page loads, or your sitemaps index editorial and collection pages instead of individual SKUs.',
     fixFraming: 'make your product pages discoverable',
   },
+  // body/fixFraming take (bannerFacts, edgeVendor) — edgeVendor is
+  // report.scan.edge_vendor, null when this run's fetches carried no
+  // recognized fingerprint. Both surfaces that render this (the
+  // DiscoveryFinding section and DegradedRunBanner) pass it, so the two
+  // can never disagree about whose wall this is.
   blocked: {
     heading: 'Your site turned our reader away at the door.',
-    body: (bannerFacts) => `We visited your site the way an AI shopping agent does — announcing who we are, following the rules in your robots.txt, and asking politely for a few product pages. Your site ${_blockedRefusalPhrase(bannerFacts)}. This usually isn't a deliberate choice: most bot-blocking is a default setting in security tools like Cloudflare, switched on to stop scrapers, that also blocks the AI assistants your shoppers are using. Your marketing team almost never knows it's on.`,
-    fixFraming: "The fix is a settings change, not a project. Whoever manages your website security can allow verified AI shopping agents in minutes. Ask them to permit traffic from OpenAI, Google, Anthropic, and Perplexity's published crawlers — and to allow readers that verify themselves cryptographically, which is how we identify ourselves too.",
+    body: (bannerFacts, edgeVendor) => `We visited your site the way an AI shopping agent does — announcing who we are, following the rules in your robots.txt, and asking politely for a few product pages. Your site ${_blockedRefusalPhrase(bannerFacts)}. This usually isn't a deliberate choice: ${_blockedVendorClause(edgeVendor)}.`,
+    fixFraming: (_bannerFacts, edgeVendor) => {
+      const v = edgeVendorCopy(edgeVendor)
+      return 'The fix is a settings change, not a project. '
+        + (v ? `${v.setting} Ask whoever manages it to permit traffic from OpenAI, Google, Anthropic, and Perplexity's published crawlers — and to allow readers that verify themselves cryptographically, which is how we identify ourselves too.`
+             : EDGE_VENDOR_UNKNOWN_COPY.setting)
+    },
   },
   partial: {
     heading: 'Too few product pages came through to score your catalog',
@@ -167,6 +239,14 @@ export const DISCOVERY_OUTCOME_COPY = {
     explanation: "This usually comes from a bot-blocking rule triggering on our reader specifically, not a deliberate choice by your team.",
     fixFraming: 'allow verified AI reader traffic through to your product pages',
   },
+  // Product-candidate verification: Walmart's shape. The pages opened
+  // fine — they just weren't product pages — so this must never read
+  // as a refusal or as a network problem.
+  product_candidates_not_products: {
+    heading: "We opened the pages your catalog pointed us to, and none of them carried product details",
+    explanation: 'Each one loaded normally but had no product markup on it — a category or landing page, or a version of the page served without its product details.',
+    fixFraming: 'make sure the page an identified reader gets is the same product page a shopper gets, with its price and availability in the markup',
+  },
   product_pages_unreadable: {
     heading: 'We found your product pages, but none of them could be read',
     explanation: 'A network error or timeout kept every page from loading — not a refusal.',
@@ -176,6 +256,16 @@ export const DISCOVERY_OUTCOME_COPY = {
     heading: 'Your site turned our reader away before we could look any further',
     explanation: 'Both your robots.txt and your store root refused us, so we stopped rather than keep probing a site that had already said no.',
     fixFraming: 'allow verified AI reader traffic in your robots.txt and at your store root',
+  },
+  // Walled-site runtime: the Warby Parker shape — robots.txt served,
+  // HTML and the catalog behind a wall. Deliberately does NOT read as
+  // "you blocked us everywhere": the rules file came through fine, and
+  // saying otherwise would be wrong in a way the site's own operator
+  // would immediately catch.
+  homepage_and_sitemap_refused: {
+    heading: 'Your rules file came through, but your store pages and sitemap did not',
+    explanation: 'Your robots.txt was served normally, while your store root and your first declared sitemap both refused our reader — so we stopped rather than keep asking a wall the same question.',
+    fixFraming: 'allow verified AI reader traffic through to your store pages and your sitemaps, not just your robots.txt',
   },
   sitemaps_refused: {
     heading: 'Your site refused every sitemap request we made',
@@ -224,6 +314,73 @@ export const DISCOVERY_OUTCOME_COPY = {
   },
 }
 
+// Blocked-run evidence (this session): the fetch probe promoted out of
+// a trailing clause on the banner and into a fact of its own. On Vans
+// and Warby Parker the probe came back quoted_price on the SAME audit
+// whose crawl was refused at the door — ChatGPT read a price off a page
+// our reader could not open. On Adidas, NAPA, and Vans' second run it
+// came back could_not_access, which corroborates the block rather than
+// contradicting it. Both are worth a reader's attention; neither is
+// worth a single point, and this never touches one.
+//
+// Every line here is scoped to what the probe actually established.
+// "ChatGPT read a price" is a claim about one page at one moment, not
+// about every agent or every page, and nothing here says otherwise.
+export const FETCH_PROBE_EVIDENCE_COPY = {
+  label: 'WHAT CHATGPT SAW',
+  quoted_price: ({ kindPhrase, price }) => (
+    price
+      ? `We asked ChatGPT to open ${kindPhrase} itself. It opened, and it quoted ${price}.`
+      : `We asked ChatGPT to open ${kindPhrase} itself. It opened, and it quoted a price.`
+  ),
+  opened_no_price: ({ kindPhrase }) => (
+    `We asked ChatGPT to open ${kindPhrase} itself. It opened, though it didn't quote a price.`
+  ),
+  could_not_access: ({ kindPhrase }) => (
+    `We asked ChatGPT to open ${kindPhrase} itself. It couldn't access it either.`
+  ),
+  // The caveat under the fact, so "ChatGPT got in" is never read as
+  // "the wall is only a problem for you".
+  quoted_price_note: 'The wall is on readers like ours, not on every reader — but the setting that produced it is the same one an agent hits when it is not on the allowlist.',
+  could_not_access_note: 'Two independent readers, the same refusal.',
+}
+
+// The accessibility tile's headline on a blocked run, replacing the
+// generic "Couldn't be measured this run" whenever the probe has
+// something concrete to say about the same wall. Never a score change —
+// the tile's number is untouched.
+export const BLOCKED_ACCESSIBILITY_HEADLINE = {
+  quoted_price: 'Our reader was refused; ChatGPT read a price',
+  opened_no_price: 'Our reader was refused; ChatGPT got in',
+  could_not_access: "Our reader was refused; ChatGPT couldn't get in either",
+}
+
+// Non-commerce report (this session): emcube, marketlytics and
+// wealthsimple were all correctly typed brand_only by
+// apps/pipeline/scan/site_typing.py, scored 10-22, and were then
+// rendered as failing STORES — three pillars, a composite out of 100,
+// a "Not agent-ready" chip and a ranked list of store fixes for a site
+// with no storefront. The typing was right; the report just never saw
+// it, because site_type was not on the row at all.
+//
+// What this variant does NOT do is change a single score. The
+// True Value dimensions still carry the numbers the scorer computed
+// (price_truth_seen and friends score 0 at coverage='full' on a
+// brand-only site — re-coding them to 'na' would move applicable_max
+// and the composite, which is a methodology change and out of scope
+// here). This is presentation: the report stops asserting a verdict
+// about a storefront that does not exist, and says plainly why the
+// store-side pillars are blank.
+export const BRAND_ONLY_COPY = {
+  statusChip: 'Non-store site',
+  scoreLabel: 'visibility',
+  heroNote: "We didn't find a storefront on this site — no cart, no product pages, no commerce markup. Visibility is the pillar that still applies; the store-side pillars need a storefront URL to measure.",
+  accessibilityNote: 'Agent Access and Protocol & Feed apply to any site. Catalog Context reads product pages, which this site does not appear to have.',
+  trueValueHeading: 'Not applicable to a non-store site',
+  trueValueBody: "True Value measures whether your price, member value and deals survive into an agent's answer. There is no catalog here for that to apply to. If you do sell somewhere else, point the audit at that storefront's URL and this pillar fills in.",
+  railNote: 'NON-STORE SITE',
+}
+
 // Part 2c: the four-step discovery trace's blocked-path wording — the
 // same plain-verbs register as the rest of this entry (reading the
 // site's rules, asking for pages, being refused), never the generic
@@ -245,8 +402,8 @@ export const BLOCKED_STEP_COPY = {
   },
 }
 
-function _resolveBody(body, bannerFacts) {
-  return typeof body === 'function' ? body(bannerFacts) : body
+function _resolveBody(body, bannerFacts, edgeVendor) {
+  return typeof body === 'function' ? body(bannerFacts, edgeVendor) : body
 }
 export { _resolveBody as resolveFailurePointBody }
 

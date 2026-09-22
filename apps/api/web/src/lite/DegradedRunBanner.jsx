@@ -1,5 +1,13 @@
 /**
  * R2 (fetch resilience, hotfix 3): the honest banner for a degraded run.
+ *
+ * Blocked-run vendor attribution (this session): edgeVendor is
+ * report.scan.edge_vendor (null when this run's fetches carried no
+ * recognized bot-management fingerprint) — threaded straight into the
+ * SAME FAILURE_POINT_COPY.blocked.body the discovery finding renders,
+ * so the two surfaces can never name two different walls. The status
+ * page (LiteProgress) has no scan payload to read it from yet and
+ * passes nothing, which falls back to the neutral wording.
  * Extracted (Part 1, judgment call) from LiteFullReport.jsx so the
  * status page (LiteProgress.jsx, P4) and the full report render the
  * exact same wording from the exact same degradedReason/bannerFacts
@@ -52,7 +60,7 @@ export function _fetchProbeSentence(bannerFacts, degradedReason, status) {
   return ''
 }
 
-export function DegradedRunBanner({ status, degradedReason, bannerFacts, partialRead }) {
+export function DegradedRunBanner({ status, degradedReason, bannerFacts, partialRead, edgeVendor }) {
   // Part 3d: partial_read demotes this banner to a compact pointer down
   // to the discovery finding section — the causal explanation lives
   // ONLY there now (grep-tested: appears once per report), never
@@ -79,7 +87,7 @@ export function DegradedRunBanner({ status, degradedReason, bannerFacts, partial
     // Blocked-run copy pass: the same plain-language explanation the
     // discovery finding section renders, read from the same registry
     // entry (reportContent.js) so the two surfaces can never drift.
-    message = resolveFailurePointBody(FAILURE_POINT_COPY.blocked.body, bannerFacts)
+    message = resolveFailurePointBody(FAILURE_POINT_COPY.blocked.body, bannerFacts, edgeVendor)
   } else {
     message = "We couldn't finish reading your site this time — nothing could be measured on-site. We'll try again on your next diagnostic."
   }

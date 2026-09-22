@@ -11,7 +11,8 @@ import { ReportSection } from './ReportSection.jsx'
 import { HowItsScoredButton, HowItsScoredPanel, HowItsScoredChips } from './HowItsScored.jsx'
 import { SectionCollapseButton } from './SectionCollapseButton.jsx'
 import { useCollapsible } from './Collapsible.jsx'
-import { dimByCode, pillarEarnedMax, pillarHeadline, anyTrueValueEncodeBlocked, trueValueNotMeasurableCount, isAgentReady, isPartialRead, PILLAR_TRUE_VALUE } from './reportDerive.js'
+import { dimByCode, pillarEarnedMax, pillarHeadline, anyTrueValueEncodeBlocked, trueValueNotMeasurableCount, isAgentReady, isBrandOnlyReport, isPartialRead, PILLAR_TRUE_VALUE } from './reportDerive.js'
+import { BRAND_ONLY_COPY } from './reportContent.js'
 import { DIMENSIONS_BY_CODE, VERDICT_COMPOSITE_THRESHOLD, VERDICT_TRUE_VALUE_RATIO_THRESHOLD } from '../landing/scanDimensionsRegistry.js'
 
 const GROUP_META = {
@@ -183,6 +184,13 @@ export function TrueValueSection({ report, open, onToggle }) {
   const notMeasurable = trueValueNotMeasurableCount(pillars)
   const encodeBlocked = anyTrueValueEncodeBlocked(pillars)
   const partialRead = isPartialRead(pillars, report.scan?.degraded_reason)
+  // Non-commerce report: this whole pillar asks whether a catalog's
+  // value survives into an answer. A site with no catalog has no
+  // answer to that, and a dimension-by-dimension breakdown of zeros
+  // would read as a verdict on a storefront that isn't there. The
+  // stored scores are untouched (see BRAND_ONLY_COPY) — this section
+  // simply stops presenting them as findings.
+  const brandOnly = isBrandOnlyReport(report)
 
   const [ptOpen, togglePt] = useCollapsible(false, { section: 'tv', control: 'price_truth' })
   const [mvOpen, toggleMv] = useCollapsible(false, { section: 'tv', control: 'member_value' })
@@ -206,26 +214,44 @@ export function TrueValueSection({ report, open, onToggle }) {
               <span className="mono-label" style={{ fontSize: 10, color: 'var(--blue-lite)' }}>PILLAR 03 · TRUE VALUE</span>
               <MonoTag tone="blue">THE PILLAR ONLY PARLEO MEASURES</MonoTag>
             </div>
-            <h2 style={{ fontSize: 25, fontWeight: 720, letterSpacing: '-0.024em', color: 'var(--dark-text)', margin: '13px 0 0', lineHeight: 1.15 }}>{pillarHeadline(report, PILLAR_TRUE_VALUE)}</h2>
+            <h2 style={{ fontSize: 25, fontWeight: 720, letterSpacing: '-0.024em', color: 'var(--dark-text)', margin: '13px 0 0', lineHeight: 1.15 }}>
+              {brandOnly ? BRAND_ONLY_COPY.trueValueHeading : pillarHeadline(report, PILLAR_TRUE_VALUE)}
+            </h2>
             <div style={{ fontSize: 14, color: 'var(--dark-muted)', lineHeight: 1.6, marginTop: 10 }}>
-              One SKU, as parsed from the page your markup reached, next to what agents actually read.
-              {notMeasurable > 0 && ` ${notMeasurable} dimension${notMeasurable === 1 ? '' : 's'} not measurable this run.`}
+              {brandOnly ? BRAND_ONLY_COPY.trueValueBody : (
+                <>
+                  One SKU, as parsed from the page your markup reached, next to what agents actually read.
+                  {notMeasurable > 0 && ` ${notMeasurable} dimension${notMeasurable === 1 ? '' : 's'} not measurable this run.`}
+                </>
+              )}
             </div>
           </div>
           <div className="lite-tv-header-meta" style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
             <div className="lite-tv-header-score">
-              <div className="lite-tv-header-points-row" style={{ display: 'flex', alignItems: 'baseline', gap: 3, justifyContent: 'flex-end' }}>
-                <span className="num" style={{ fontSize: 38, fontWeight: 720, letterSpacing: '-0.03em', color: 'var(--dark-text)', lineHeight: 1 }}>{Math.round(tv.earned)}</span>
-                <span className="num" style={{ fontSize: 18, fontWeight: 500, color: 'var(--dark-faint)' }}>/{Math.round(tv.max)}</span>
-              </div>
-              <div className="mono-label" style={{ fontSize: 9, color: 'var(--blue-lite)', marginTop: 7 }}>POINTS EARNED</div>
+              {brandOnly ? (
+                <div className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 20, fontWeight: 700, color: 'var(--dark-faint)', lineHeight: 1 }}>N/A</div>
+              ) : (
+                <>
+                  <div className="lite-tv-header-points-row" style={{ display: 'flex', alignItems: 'baseline', gap: 3, justifyContent: 'flex-end' }}>
+                    <span className="num" style={{ fontSize: 38, fontWeight: 720, letterSpacing: '-0.03em', color: 'var(--dark-text)', lineHeight: 1 }}>{Math.round(tv.earned)}</span>
+                    <span className="num" style={{ fontSize: 18, fontWeight: 500, color: 'var(--dark-faint)' }}>/{Math.round(tv.max)}</span>
+                  </div>
+                  <div className="mono-label" style={{ fontSize: 9, color: 'var(--blue-lite)', marginTop: 7 }}>POINTS EARNED</div>
+                </>
+              )}
             </div>
             <div className="lite-tv-header-collapse" style={{ marginTop: 12 }}><SectionCollapseButton open={open} onClick={onToggle} dark section="tv" /></div>
           </div>
         </div>
       </DarkPanel>
 
-      {open && (
+      {open && brandOnly && (
+        <div className="sec-body" style={{ background: 'var(--surface)', padding: '24px 28px 26px', fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.6 }}>
+          {BRAND_ONLY_COPY.heroNote}
+        </div>
+      )}
+
+      {open && !brandOnly && (
         <div className="sec-body" style={{ background: 'var(--surface)', padding: '24px 28px 26px' }}>
           {offers ? <ParsedPageCard offers={offers} productImageUrl={report.product_image_url} productName={report.product_name} /> : <ParsedPageHonestBanner partialRead={partialRead} />}
 

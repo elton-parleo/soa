@@ -26,12 +26,17 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { BrandLogo, StatusChip, Glyph } from '../../ds/index.js'
-import { isAgentReady, isPartialRead, buildNavItems } from './reportDerive.js'
+import { isAgentReady, isBrandOnlyReport, isPartialRead, pillarEarnedMax, buildNavItems, PILLAR_VISIBILITY } from './reportDerive.js'
+import { BRAND_ONLY_COPY } from './reportContent.js'
 import { ShareReportButton } from './ShareReportButton.jsx'
 
 export function ReportSummaryBlock({ report, primaryEntityName, summaryRef, token }) {
   const pillars = report.pillars
   const composite = report.composite
+  // Non-commerce report: the phone header carries the same claim as the
+  // desktop rail and the hero, so it takes the same variant.
+  const brandOnly = isBrandOnlyReport(report)
+  const vis = pillarEarnedMax(pillars.visibility)
   return (
     <div className="lite-report-mobile-summary" ref={summaryRef}>
       <div className="lite-report-mobile-summary-brand">
@@ -40,9 +45,14 @@ export function ReportSummaryBlock({ report, primaryEntityName, summaryRef, toke
       </div>
       <div className="lite-report-mobile-summary-score-row">
         <span className="num lite-report-mobile-summary-score">
-          {composite != null ? Math.round(composite) : '—'}<span className="lite-report-mobile-summary-score-max">/100</span>
+          {brandOnly ? Math.round(vis.earned) : composite != null ? Math.round(composite) : '—'}
+          <span className="lite-report-mobile-summary-score-max">
+            {brandOnly ? `/${Math.round(vis.max)} ${BRAND_ONLY_COPY.scoreLabel}` : '/100'}
+          </span>
         </span>
-        {pillars.state === 'scored' && (
+        {brandOnly ? (
+          <StatusChip tone="info" size="sm">{BRAND_ONLY_COPY.statusChip}</StatusChip>
+        ) : pillars.state === 'scored' && (
           <StatusChip tone={isAgentReady(pillars) ? 'success' : 'risk'} size="sm">
             {isAgentReady(pillars) ? 'Agent-ready' : 'Not agent-ready'}
           </StatusChip>
@@ -76,12 +86,17 @@ export function useSummaryScrolledPast(summaryRef) {
 
 export function MobileStickyBar({ report, primaryEntityName, visible, sheetOpen, onToggleSheet, token }) {
   const composite = report.composite
+  const brandOnly = isBrandOnlyReport(report)
+  const vis = pillarEarnedMax(report.pillars?.visibility)
   return (
     <div className={`lite-report-mobile-stickybar${visible ? ' lite-report-mobile-stickybar--visible' : ''}`}>
       <BrandLogo name={primaryEntityName} src={report.brand_icon_url} domain={report.store_domain} size={20} />
       <span className="lite-report-mobile-stickybar-name">{primaryEntityName}</span>
       <span className="num lite-report-mobile-stickybar-score">
-        {composite != null ? Math.round(composite) : '—'}<span className="lite-report-mobile-stickybar-score-max">/100</span>
+        {brandOnly ? Math.round(vis.earned) : composite != null ? Math.round(composite) : '—'}
+        <span className="lite-report-mobile-stickybar-score-max">
+          {brandOnly ? `/${Math.round(vis.max)}` : '/100'}
+        </span>
       </span>
       {token && <ShareReportButton token={token} compact placement="mobile_sticky_bar" />}
       <button
@@ -102,7 +117,10 @@ export function SectionsSheet({ report, exposure, active, open, onClose }) {
   const pillars = report.pillars
   const composite = report.composite
   const partial = isPartialRead(pillars, report.scan?.degraded_reason)
-  const navItems = buildNavItems({ pillars, composite, exposure, active, partial, transcript: report.transcript })
+  const navItems = buildNavItems({
+    pillars, composite, exposure, active, partial,
+    brandOnly: isBrandOnlyReport(report), transcript: report.transcript,
+  })
 
   // Closing the sheet unmounts the very <a> the browser is mid-navigating
   // from — confirmed live: the native anchor jump loses the race against

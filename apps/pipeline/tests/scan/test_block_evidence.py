@@ -282,9 +282,12 @@ def test_block_evidence_summary_caps_its_lists():
 
 
 def test_block_evidence_summary_never_raises_on_garbage():
-    assert engine._block_evidence_summary(None) == {
+    empty = {
         "vendor_hints": {}, "blocked_titles": [], "blocked_body_sizes": [],
+        # Vendor attribution: always present, never absent — a reader
+        # must never have to tell "no vendor recognized" apart from
+        # "written before this key existed".
+        "dominant_vendor": None,
     }
-    assert engine._block_evidence_summary([]) == {
-        "vendor_hints": {}, "blocked_titles": [], "blocked_body_sizes": [],
-    }
+    assert engine._block_evidence_summary(None) == empty
+    assert engine._block_evidence_summary([]) == empty

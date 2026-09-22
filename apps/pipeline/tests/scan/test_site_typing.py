@@ -145,3 +145,87 @@ def test_malformed_extracted_data_never_raises():
     homepage = _page("homepage", html="<html>not much here</html>", extracted=ExtractedData())
     result = classify_site([homepage], _discovery())
     assert result.site_type in (SITE_TYPE_BRAND_ONLY, SITE_TYPE_DISCOVERY_FAILURE, SITE_TYPE_COMMERCE)
+
+
+# ─── the site type is recorded on the row (this session) ────────────────
+#
+# classify_site has always run and always gated the scorers, but its
+# answer never left the pipeline — it survived only as evidence wording.
+# emcube, marketlytics and wealthsimple were all correctly typed
+# brand_only, scored 10-22, and were then presented as failing STORES,
+# because the report had no way to know what they were.
+
+def _record_scan(monkeypatch, homepage_html, extra_pages=None):
+    import socket
+
+    import httpx
+
+    from scan import engine, fetcher
+
+    origin = "https://typed.example.com"
+    pages = {"/robots.txt": "User-agent: *\nAllow: /\n"}
+    pages.update(extra_pages or {})
+
+    def fake_get(self, url, headers=None, **kw):
+        if url == origin:
+            return httpx.Response(200, text=homepage_html, request=httpx.Request("GET", url))
+        key = url[len(origin):]
+        body = pages.get(key)
+        if body is None:
+            return httpx.Response(404, text="", request=httpx.Request("GET", url))
+        return httpx.Response(200, text=body, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    monkeypatch.setattr(fetcher, "POLITENESS_DELAY_SECONDS", 0)
+    monkeypatch.setattr(
+        socket, "getaddrinfo",
+        lambda *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))],
+    )
+    fetcher._last_fetch_at.clear()
+    fetcher._domain_seen.clear()
+    return engine.run_scan(origin)
+
+
+_BRAND_ONLY_HOMEPAGE = (
+    "<html><body><h1>Marketlytics</h1><p>We are a consultancy that helps teams "
+    "understand their analytics. Read our case studies and our blog for the "
+    "latest on measurement strategy and data engineering.</p>"
+    "<a href='/about'>About</a><a href='/blog'>Blog</a></body></html>"
+)
+
+_STORE_HOMEPAGE = (
+    "<html><body><h1>Big Box</h1><nav><a href='/cart'>Cart</a></nav>"
+    "<p>Plenty of real homepage copy here so this clears the short-body "
+    "heuristic like any genuine storefront would, with navigation and "
+    "footer text and everything else a store carries.</p></body></html>"
+)
+
+
+def test_a_brand_only_run_records_its_site_type(monkeypatch):
+    result = _record_scan(monkeypatch, _BRAND_ONLY_HOMEPAGE)
+
+    assert result.status == "complete"
+    assert result.dimensions["site_type"] == SITE_TYPE_BRAND_ONLY
+    assert result.dimensions["site_type_signals"] == []
+
+
+def test_a_commerce_run_records_its_site_type_and_the_signals_behind_it(monkeypatch):
+    result = _record_scan(monkeypatch, _STORE_HOMEPAGE)
+
+    assert result.dimensions["site_type"] in (SITE_TYPE_COMMERCE, SITE_TYPE_DISCOVERY_FAILURE)
+    signals = result.dimensions["site_type_signals"]
+    assert any("cart/checkout" in s for s in signals), signals
+
+
+def test_recording_the_site_type_changes_no_score(monkeypatch):
+    """Additive sibling keys only — the same reason sitemap_sampling and
+    agent_access_matrix are recorded the way they are."""
+    result = _record_scan(monkeypatch, _BRAND_ONLY_HOMEPAGE)
+
+    # The scorer's own numbers, untouched: brand_only still scores
+    # price_truth_seen/deal_citability_seen at coverage='full', which is
+    # what it did before this key existed. Re-coding those to 'na' would
+    # move applicable_max, and that is a methodology change.
+    assert result.dimensions["price_truth_seen"]["coverage"] == "full"
+    assert result.dimensions["deal_citability_seen"]["coverage"] == "full"
+    assert result.total_score is not None

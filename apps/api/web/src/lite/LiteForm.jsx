@@ -32,6 +32,14 @@ import { Button } from '../ds/index.js'
 import { track, identifyReport, recordOwnedToken, captureSrcParam, getAttribution } from './analytics.js'
 import { EVENTS } from './analyticsEvents.js'
 
+// Intake validation (this session): the `code` values
+// public_lite.py::_enforce_store_url_admissible returns on a 422. The
+// MESSAGE is the API's — one wording, one place — and this set decides
+// only that the message belongs under the URL field rather than in the
+// generic error slot. An unrecognized code falls through to the
+// generic path, so a new server-side code is never swallowed.
+const STORE_URL_ERROR_CODES = new Set(['shortener', 'unresolvable', 'reserved_tld'])
+
 export function LiteForm({
   onSubmitted,
   initialBrandName = '',
@@ -48,6 +56,11 @@ export function LiteForm({
   const [errors, setErrors] = useState({ brandName: null, competitors: {} })
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
+  // Intake validation (this session): a store URL the API refused —
+  // shown UNDER the URL field it's about, not in the generic
+  // submit-error slot at the bottom, because it's the URL the visitor
+  // needs to change. Cleared the moment they edit that field.
+  const [storeUrlError, setStoreUrlError] = useState(null)
 
   const isUrlMode = looksLikeUrl(primaryInput)
 
@@ -59,6 +72,7 @@ export function LiteForm({
 
   function handlePrimaryChange(value) {
     setPrimaryInput(value)
+    setStoreUrlError(null)
     if (!looksLikeUrl(value)) {
       // Leaving URL mode — reset the gate so re-entering it later re-derives fresh.
       setBrandManuallyEdited(false)
@@ -86,6 +100,7 @@ export function LiteForm({
 
     setSubmitting(true)
     setSubmitError(null)
+    setStoreUrlError(null)
     try {
       const storeUrl = isUrlMode ? primaryInput.trim() : null
       // No captcha provider is wired up yet — the API skips verification
@@ -134,6 +149,11 @@ export function LiteForm({
     } catch (err) {
       if (err.status === 429) {
         setSubmitError(err.message || 'Too many requests — please try again shortly.')
+      } else if (STORE_URL_ERROR_CODES.has(err.code)) {
+        // Copy comes from the API (one wording, one place) — the form
+        // decides only WHERE it goes, which is under the field the
+        // visitor has to fix.
+        setStoreUrlError(err.message)
       } else {
         setSubmitError(err.message || 'Something went wrong. Please try again.')
       }
@@ -188,6 +208,9 @@ export function LiteForm({
               {submitting ? 'Starting…' : submitLabel}
             </Button>
           </div>
+          {storeUrlError && (
+            <div style={{ fontSize: 12, color: errorColor, marginTop: 8 }}>{storeUrlError}</div>
+          )}
           {!isUrlMode && (
             <div style={{ fontSize: 12, color: errorColor, marginTop: 8, minHeight: 16 }}>{errors.brandName || ' '}</div>
           )}
@@ -243,6 +266,9 @@ export function LiteForm({
               onChange={(e) => handlePrimaryChange(e.target.value)}
               style={{ marginBottom: 4 }}
             />
+            {storeUrlError && (
+              <div style={{ ...fieldErrorStyle, minHeight: undefined }}>{storeUrlError}</div>
+            )}
             {isUrlMode ? (
               <div className="lite-muted" style={{ fontSize: 12, marginBottom: 10 }}>
                 Looks like a URL — we'll read it the way an AI shopping agent does.
