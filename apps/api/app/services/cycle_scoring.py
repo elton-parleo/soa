@@ -26,6 +26,11 @@ from urllib.parse import urlparse
 
 from sqlalchemy import text
 
+from soa_shared.degraded_dimensions import (
+    DEGRADED_REASON_BLOCKED,
+    DEGRADED_REASON_UNKNOWN,
+    build_degraded_dimensions,
+)
 from soa_shared.scan_dimensions import SCORER_VERSION
 from app.routers.metrics import build_entity_metrics
 from app.services.lite_crosswalk import GAP_THRESHOLD, RunSignal, link_dimensions, link_incentive_citation
@@ -521,6 +526,23 @@ def build_cycle_report(conn, cycle_id: int, scan_row) -> dict:
     scan_complete = bool(scan_row and scan_row[0] == 'complete')
     scan_scorable = bool(scan_row and scan_row[0] in ('complete', 'blocked', 'failed'))
     dimensions_raw = decode_json_field(scan_row[3], {}) if scan_scorable else {}
+    # Production outage (2026-09-22): worker.py now writes an honest,
+    # fully-v4-shaped degraded dimensions dict (soa_shared.
+    # degraded_dimensions) on every blocked/failed scan going forward —
+    # including the moment orchestration itself raises before run_scan()
+    # ever returns, and the watchdog's own timeout path. This is the
+    # backward-compatible half: a row that reached 'blocked'/'failed'
+    # with NO dimensions at all (an old row from before that fix
+    # existed, or anything else that still somehow slips through)
+    # renders honestly through the exact same v4 pillars/NOT-MEASURABLE
+    # machinery instead of falling through to the retired legacy
+    # foundation/value-family fallback below, which has nothing
+    # meaningful to compute from an empty {}. dimensions_raw's own keys
+    # (spread last) win over the synthesized scaffold — this never
+    # overwrites a row that legitimately has SOME dimensions content.
+    if scan_status in ('blocked', 'failed') and not dimensions_raw.get('scorer_version'):
+        reason = DEGRADED_REASON_BLOCKED if scan_status == 'blocked' else DEGRADED_REASON_UNKNOWN
+        dimensions_raw = {**build_degraded_dimensions(reason), **dimensions_raw}
     scorer_version = dimensions_raw.get('scorer_version') or '1'
 
     # Logo feature, Part 1c: unconditional on scan_scorable — the target

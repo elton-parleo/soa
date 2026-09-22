@@ -1029,6 +1029,100 @@ def test_blocked_scan_under_current_scorer_version_still_gets_a_pillars_payload(
     assert result["pillars"]["visibility"]["score"] == 100
 
 
+# ─── Production outage (2026-09-22): a failed row with empty dims ───────
+#
+# The actual incident shape: soa_lite_scan_results.status='failed' with
+# dimensions carrying NO scorer_version at all (an old row from before
+# worker.py started writing degraded dims on every failure path — see
+# scan/signing.py's outage — or dimensions=NULL/{} outright). Before this
+# fix, build_cycle_report's pillars gate (scorer_version == SCORER_VERSION)
+# was never satisfied for such a row, so it fell through to the retired
+# legacy foundation/value-family fallback: a bare status badge, no True
+# Value section, an "Audit failed" accessibility reading. This must
+# instead synthesize the same honest degraded dims a normal blocked/
+# failed scan already gets and render the real three-pillar report.
+
+def test_failed_scan_with_no_dimensions_at_all_still_gets_a_pillars_payload(db):
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="failedempty", dimensions={})
+        conn.exec_driver_sql(
+            "UPDATE soa_lite_scan_results SET status = 'failed', total_score = NULL "
+            "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = 'failedempty')"
+        )
+
+    result = public_lite.get_lite_report("failedempty")
+
+    assert result["scan_status"] == "failed"
+    assert result["pillars"] is not None
+    assert result["pillars"]["composite"] is None
+    # agent_access/value_protocols never require sampled product pages
+    # (soa_shared.degraded_dimensions.DIMENSION_INPUT_MAP's requires_pdp
+    # split) — build_degraded_dimensions doesn't synthesize them as
+    # blocked at all, only the PDP-dependent dimensions.
+    for code in ("catalog_context", "protocol_feed"):
+        row = next(d for d in result["pillars"]["accessibility"]["dimensions"] if d["code"] == code)
+        assert row["blocked"] is True
+        assert row["earned"] == 0.0
+    for code in ("price_truth", "deal_citability"):
+        row = next(d for d in result["pillars"]["true_value"]["dimensions"] if d["code"] == code)
+        assert row["blocked"] is True
+    # Visibility (answer-side, mention-derived) still computes for real —
+    # it never depended on the crawl at all, blocked or not.
+    assert result["pillars"]["visibility"]["score"] == 100
+
+
+def test_failed_scan_with_stray_dimensions_content_still_synthesizes_pillars(db):
+    """The real incident row carried {"generated_headlines": [...]} —
+    some content, but no scorer_version. Synthesis must still fire (the
+    gate is "no scorer_version", not "no content at all") and produce a
+    real pillars payload rather than skipping it because the dict
+    wasn't literally empty."""
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(
+            conn, token="failedheadlines", dimensions={"brand_icon_url": "https://example.com/icon.png"},
+        )
+        conn.exec_driver_sql(
+            "UPDATE soa_lite_scan_results SET status = 'failed', total_score = NULL "
+            "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = 'failedheadlines')"
+        )
+
+    result = public_lite.get_lite_report("failedheadlines")
+
+    assert result["pillars"] is not None
+    assert result["pillars"]["composite"] is None
+    row = next(d for d in result["pillars"]["accessibility"]["dimensions"] if d["code"] == "catalog_context")
+    assert row["blocked"] is True
+
+
+def test_failed_scan_with_a_real_scorer_version_is_left_untouched(db):
+    """A row worker.py's own fix already wrote degraded dims for (a real
+    scorer_version present) must never be re-synthesized over — the
+    synthesis only ever fires for a row with NO scorer_version at all.
+    Proven with evidence text that wouldn't match either canned
+    synthesis reason (BLOCKED/UNKNOWN), so a silent overwrite would be
+    caught here even if it happened to pick the same coverage shape."""
+    custom_dims = {
+        **_DEGRADED_CRAWL_DIMENSIONS,
+        "degraded_reason": "orchestration_failed",
+        "catalog_context": {
+            **_DEGRADED_CRAWL_DIMENSIONS["catalog_context"],
+            "evidence": ["the crawl could not start this run (internal error) — nothing was measured on-site"],
+        },
+    }
+    with db.begin() as conn:
+        _seed_v3_full_credit_scan(conn, token="failedwritten", dimensions=custom_dims)
+        conn.exec_driver_sql(
+            "UPDATE soa_lite_scan_results SET status = 'failed', total_score = NULL "
+            "WHERE lite_request_id = (SELECT id FROM soa_lite_requests WHERE token = 'failedwritten')"
+        )
+
+    result = public_lite.get_lite_report("failedwritten")
+
+    assert result["pillars"] is not None
+    row = next(d for d in result["pillars"]["accessibility"]["dimensions"] if d["code"] == "catalog_context")
+    assert row["evidence"] == ["the crawl could not start this run (internal error) — nothing was measured on-site"]
+
+
 # ─── Re-weighting session (Part 4): the expired-report version gate ─────
 #
 # A scan scored under scorer_version "4" (the direct predecessor of this

@@ -12,8 +12,13 @@ RFC 9421 mechanic).
 """
 import base64
 import importlib
+import json
 import logging
+import os
 import re
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 from cryptography.exceptions import InvalidSignature
@@ -179,6 +184,74 @@ def test_key_absent_degrades_to_unsigned_with_a_single_startup_log_line(monkeypa
         assert len(startup_lines) == 1
     finally:
         importlib.reload(signing)  # restore whatever state later tests expect
+
+
+# ─── Production outage (2026-09-22): fresh-process import ────────────────
+#
+# _key_id was defined BELOW the module-level boot-log block that called
+# it, so importing scan.signing with BOT_SIGNING_KEY set raised
+# NameError — which took down the whole scan pipeline in production
+# (scan.fetcher imports scan.signing; scan.engine imports scan.fetcher;
+# worker.py's `from scan.engine import run_scan` is the first thing a
+# lite scan does). Every other test above uses importlib.reload() or
+# monkeypatches module globals directly — both REUSE the module's
+# existing __dict__, which by the time any of those tests run already
+# has _key_id bound in it from some earlier, unrelated, no-key import
+# elsewhere in the suite. That's exactly why CI passed: reload doesn't
+# re-create the namespace, so the same ordering bug that crashed a real
+# (genuinely first-time) worker process was invisible to every test
+# that only ever reloads. A real subprocess is the only way to observe
+# what a fresh interpreter actually sees on its first import.
+PIPELINE_ROOT = Path(__file__).resolve().parents[2]
+
+_IMPORT_AND_REPORT_SCRIPT = """
+import json
+from scan.engine import run_scan  # noqa: F401 -- worker.py's own import chain
+from scan import signing
+print(json.dumps({
+    "signing_enabled": signing.is_signing_enabled(),
+    "key_id": signing.key_id(),
+}))
+"""
+
+
+def _run_fresh_import(bot_signing_key):
+    """Runs _IMPORT_AND_REPORT_SCRIPT in a brand-new interpreter — never
+    importlib.reload(), see module comment above. bot_signing_key=None
+    means BOT_SIGNING_KEY is unset for the subprocess regardless of
+    whatever this test process's own environment happens to carry."""
+    env = dict(os.environ)
+    if bot_signing_key is None:
+        env.pop("BOT_SIGNING_KEY", None)
+    else:
+        env["BOT_SIGNING_KEY"] = bot_signing_key
+    proc = subprocess.run(
+        [sys.executable, "-c", _IMPORT_AND_REPORT_SCRIPT],
+        cwd=str(PIPELINE_ROOT), env=env, capture_output=True, text=True, timeout=30,
+    )
+    assert proc.returncode == 0, (
+        f"fresh-process import failed (returncode={proc.returncode})\n"
+        f"STDOUT: {proc.stdout}\nSTDERR: {proc.stderr}"
+    )
+    return json.loads(proc.stdout.strip().splitlines()[-1])
+
+
+def test_fresh_process_import_succeeds_with_a_signing_key_set():
+    """The regression test for the outage: a genuinely fresh process
+    importing scan.engine with BOT_SIGNING_KEY set must succeed, with
+    signing actually enabled and a real keyid — not crash on
+    NameError('_key_id')."""
+    key = base64.b64encode(os.urandom(32)).decode()
+    result = _run_fresh_import(key)
+    assert result["signing_enabled"] is True
+    assert isinstance(result["key_id"], str) and result["key_id"]
+
+
+def test_fresh_process_import_succeeds_with_no_signing_key():
+    """The mirror negative case — signing off, import still clean."""
+    result = _run_fresh_import(None)
+    assert result["signing_enabled"] is False
+    assert result["key_id"] is None
 
 
 # ─── public_key_jwk ────────────────────────────────────────────────────────

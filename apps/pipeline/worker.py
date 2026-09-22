@@ -34,6 +34,11 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import lite_events
 from soa_shared.database import engine
+from soa_shared.degraded_dimensions import (
+    DEGRADED_REASON_ORCHESTRATION_FAILED,
+    DEGRADED_REASON_TIMED_OUT,
+    build_degraded_dimensions,
+)
 from soa_shared.models.soa_models import (
     LITE_STATUS_COMPLETE,
     LITE_STATUS_FAILED,
@@ -1215,8 +1220,15 @@ def _run_lite_scan(request_id: int, store_url: str | None, api_key: str | None =
     API/widget owns collecting a real URL from the visitor.
 
     run_scan itself never raises (scan/engine.py) — it always returns a
-    ScanResult with a terminal or 'skipped' status — so this function
-    only ever writes one final update to the scan row.
+    ScanResult with a terminal or 'skipped' status. What CAN still raise
+    is getting there at all: `from scan.engine import run_scan` runs the
+    whole scan/ package's import chain (fetcher -> signing -> ...) for
+    the first time in this process, and a bug in module-level code
+    anywhere in that chain (production outage, 2026-09-22 — see
+    scan/signing.py's module docstring) raises before run_scan is even
+    called. That path is now caught here too, so this function still
+    only ever writes one final update to the scan row — 'failed' with
+    an honest degraded-dims record, never leaving it 'running' forever.
 
     api_key (rescue session, Part 3c): threaded down to run_scan's
     last-resort LLM-assisted discovery tier ONLY — gates behind
@@ -1237,10 +1249,43 @@ def _run_lite_scan(request_id: int, store_url: str | None, api_key: str | None =
         )
         return None, None
 
-    from scan.engine import run_scan
-
+    # Emitted BEFORE the import below, not after (production outage,
+    # 2026-09-22): the incident this guards against was exactly an
+    # import-time raise, which — when this log line came after the
+    # import — meant a broken worker left NO crawl task event at all,
+    # and the status page's progress UI sat on nothing rather than ever
+    # resolving. Emitting first means the visitor always sees "reading
+    # your store…" show up, whatever happens next.
     lite_events.emit_log(request_id, lite_events.TASK_CRAWL, f"reading {store_url}…")
-    result = run_scan(store_url, api_key=api_key)
+
+    try:
+        from scan.engine import run_scan
+        result = run_scan(store_url, api_key=api_key)
+    except Exception as e:
+        log.exception(f"[lite] request {request_id}: scan orchestration raised before completing — marking failed")
+        degraded_dims = build_degraded_dimensions(DEGRADED_REASON_ORCHESTRATION_FAILED)
+        degraded_dims["degraded_reason"] = "orchestration_failed"
+        error_text = f"{type(e).__name__}: {e}"[:500]
+        with engine.begin() as conn:
+            conn.execute(text("""
+                UPDATE soa_lite_scan_results
+                SET status = 'failed',
+                    dimensions = :dimensions,
+                    pages_fetched = :pages_fetched,
+                    error = :error,
+                    updated_at = NOW()
+                WHERE lite_request_id = :rid
+            """), {
+                "rid": request_id,
+                "dimensions": json.dumps(degraded_dims),
+                "pages_fetched": json.dumps([]),
+                "error": error_text,
+            })
+        lite_events.emit_done(
+            request_id, lite_events.TASK_CRAWL,
+            "Couldn't read your store this run — see your report for details",
+        )
+        return None, None
 
     with engine.begin() as conn:
         conn.execute(text("""
@@ -1290,11 +1335,37 @@ def _run_cycle_scan(scan_id: int, store_url: str, api_key: str | None) -> None:
     Runs the Agent Scan for one standalone (non-lite) cycle crawl and
     writes the result back onto its own soa_lite_scan_results row by id.
     run_scan() never raises (scan/engine.py) — always returns a
-    ScanResult with a terminal or 'skipped' status.
+    ScanResult with a terminal or 'skipped' status. What CAN still raise
+    is getting there at all (see _run_lite_scan's docstring — same
+    scan/ import-chain risk, same fix here): process_cycle_crawls calls
+    this with NO surrounding try/except, so leaving that path unguarded
+    would crash the whole poll iteration instead of just failing one
+    scan row.
     """
-    from scan.engine import run_scan
-
-    result = run_scan(store_url, api_key=api_key)
+    try:
+        from scan.engine import run_scan
+        result = run_scan(store_url, api_key=api_key)
+    except Exception as e:
+        log.exception(f"[cycle-crawl] scan {scan_id}: orchestration raised before completing — marking failed")
+        degraded_dims = build_degraded_dimensions(DEGRADED_REASON_ORCHESTRATION_FAILED)
+        degraded_dims["degraded_reason"] = "orchestration_failed"
+        error_text = f"{type(e).__name__}: {e}"[:500]
+        with engine.begin() as conn:
+            conn.execute(text("""
+                UPDATE soa_lite_scan_results
+                SET status = 'failed',
+                    dimensions = :dimensions,
+                    pages_fetched = :pages_fetched,
+                    error = :error,
+                    updated_at = NOW()
+                WHERE id = :scan_id
+            """), {
+                "scan_id": scan_id,
+                "dimensions": json.dumps(degraded_dims),
+                "pages_fetched": json.dumps([]),
+                "error": error_text,
+            })
+        return
 
     with engine.begin() as conn:
         conn.execute(text("""
@@ -1661,6 +1732,7 @@ def _sweep_lite_completions():
     for lite_id, cycle_id, cycle_status, scan_id, scan_status, scan_updated_at, dimensions_raw in rows:
         try:
             final_scan_status = scan_status
+            watchdog_fired = False
             with engine.begin() as conn:
                 if scan_status not in SCAN_TERMINAL_STATUSES:
                     scan_age = _as_utc_datetime(scan_updated_at)
@@ -1668,12 +1740,27 @@ def _sweep_lite_completions():
                     if not stuck:
                         continue  # scan legitimately still running — check again next pass
 
+                    # error stays the existing 'scan timed out' text for
+                    # this path specifically — dimensions/pages_fetched
+                    # are the additive part (same honest, fully-v4-shaped
+                    # degraded dims an ordinary blocked/failed scan
+                    # already gets) so the report renders through the
+                    # normal pillars machinery instead of an empty {}.
+                    timed_out_dims = build_degraded_dimensions(DEGRADED_REASON_TIMED_OUT)
+                    timed_out_dims["degraded_reason"] = "timed_out"
                     conn.execute(text("""
                         UPDATE soa_lite_scan_results
-                        SET status = 'failed', error = 'scan timed out', updated_at = NOW()
+                        SET status = 'failed', error = 'scan timed out',
+                            dimensions = :dimensions, pages_fetched = :pages_fetched,
+                            updated_at = NOW()
                         WHERE id = :id
-                    """), {"id": scan_id})
+                    """), {
+                        "id": scan_id,
+                        "dimensions": json.dumps(timed_out_dims),
+                        "pages_fetched": json.dumps([]),
+                    })
                     final_scan_status = 'failed'
+                    watchdog_fired = True
 
                 if cycle_status == 'complete':
                     conn.execute(text("""
@@ -1689,6 +1776,16 @@ def _sweep_lite_completions():
                             updated_at = NOW()
                         WHERE id = :id
                     """), {"status": LITE_STATUS_FAILED, "id": lite_id})
+
+            if watchdog_fired:
+                # The crawl task's own event may still be sitting on
+                # "reading…" if the worker died (or hung) mid-scan —
+                # close it out so the status page's progress UI never
+                # waits on a task that will now never finish.
+                lite_events.emit_done(
+                    lite_id, lite_events.TASK_CRAWL,
+                    "Your store read took too long and was stopped — see your report for details",
+                )
 
             degraded_reason = _decode_json_field(dimensions_raw, {}).get('degraded_reason')
             state = _terminal_run_state(cycle_status, final_scan_status, degraded_reason)

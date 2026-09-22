@@ -117,6 +117,39 @@ def test_process_cycle_crawls_runs_pending_standalone_scan(db, monkeypatch):
     assert lite_request_id is None
 
 
+def test_process_cycle_crawls_marks_the_row_failed_when_orchestration_raises(db, monkeypatch):
+    """
+    Production outage (2026-09-22): process_cycle_crawls calls
+    _run_cycle_scan with NO surrounding try/except at all (unlike the
+    lite path's own outer isolation) — an unguarded raise here used to
+    crash the whole poll iteration. run_scan raising must instead mark
+    just this one scan row 'failed' with an honest degraded-dims
+    record, never propagate.
+    """
+    import json as _json
+
+    monkeypatch.delenv("OPEN_AI_API_KEY", raising=False)
+    with db.begin() as conn:
+        scan_id = _insert_pending(conn)
+
+    with patch("scan.engine.run_scan", side_effect=RuntimeError("worker died mid-scan")):
+        worker.process_cycle_crawls()  # must not raise
+
+    with db.connect() as conn:
+        row = conn.execute(text(
+            "SELECT status, dimensions, pages_fetched, error FROM soa_lite_scan_results WHERE id = :id"
+        ), {"id": scan_id}).fetchone()
+    status, dimensions, pages_fetched, error = row
+    assert status == "failed"
+    assert "RuntimeError" in error
+    assert "worker died mid-scan" in error
+    dims = _json.loads(dimensions) if isinstance(dimensions, str) else dimensions
+    assert dims["degraded_reason"] == "orchestration_failed"
+    assert dims["catalog_context"]["coverage"] == "blocked"
+    fetched = _json.loads(pages_fetched) if isinstance(pages_fetched, str) else pages_fetched
+    assert fetched == []
+
+
 def test_process_cycle_crawls_skips_when_no_store_url(db):
     with db.begin() as conn:
         scan_id = _insert_pending(conn, store_url=None)
