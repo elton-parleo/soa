@@ -265,10 +265,17 @@ def test_part3_llm_discovery_verifies_urls_in_isolation(monkeypatch):
 
 def test_part3_llm_discovery_verified_happy_path_through_the_full_ladder(monkeypatch):
     """Integration-level: by the time the LLM tier runs, the sitemap
-    tier + full platform-endpoint tier have already spent 5 of
-    DISCOVERY_FETCH_BUDGET's 6 fetches, leaving exactly one
-    verification fetch — the second, equally-valid URL is correctly
-    rejected for budget, not fabricated or silently dropped."""
+    tier + full platform-endpoint tier have already spent 5 fetches,
+    leaving exactly one verification fetch — the second, equally-valid
+    URL is correctly rejected for budget, not fabricated or silently
+    dropped. Nike discovery fix: DISCOVERY_FETCH_BUDGET was raised from
+    6 to 9 (with RESCUE_FETCH_RESERVE ring-fencing 3 of those 9 for
+    exactly this ladder) specifically so a run that needs its whole old
+    budget for sitemap traversal alone can still reach this tier — this
+    test pins the budget back to the old 6 to keep exercising the
+    budget-exhaustion-mid-tier edge case on a fixture that would
+    otherwise have room for both URLs now."""
+    monkeypatch.setattr("scan.discovery.DISCOVERY_FETCH_BUDGET", 6)
     pages = _llm_base_pages()
     pages["/products/blue-widget"] = (200, PRODUCT_PAGE_HTML)
     pages["/products/red-widget"] = (200, PRODUCT_PAGE_HTML)

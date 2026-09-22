@@ -107,6 +107,14 @@ PRODUCT_URL_PATTERNS = (
     re.compile(r"/detail/"),
     re.compile(r"-p\d+(?:\.html?)?/?$"),
     re.compile(r"/p\d+(?:\.html?)?/?$"),
+    # Nike discovery fix: /t/<slug> (Nike's own PDP shape) is a stopgap,
+    # not the real fix — the real fix is the content-based sitemap-child
+    # sampling below (_sample_child_for_product_content), which confirms
+    # a product page by its own markup rather than needing a dedicated
+    # regex for every retailer's URL convention. This pattern just lets
+    # Nike's URLs also short-circuit straight to a pattern match when one
+    # already exists, same as any other known shape.
+    re.compile(r"/t/"),
 )
 # /shop/ is deliberately in BOTH pattern sets — real stores use it for
 # either a catalog root or a single PDP depending on the retailer. See
@@ -144,6 +152,11 @@ DISCOVERY_PATH_COVERAGE_NOTE = {
     "collection_hop": "found via your site's category pages, not your sitemap",
     "platform_endpoint": "found via your store platform's catalog endpoint",
     "llm_assisted": "found via AI-assisted discovery, not your sitemap",
+    # Nike discovery fix: a sitemap child whose declared URLs matched no
+    # known pattern at all, confirmed instead by sampling and reading a
+    # few of its own pages (_sample_child_for_product_content) — still
+    # your sitemap, just not a URL shape this reader already recognized.
+    "sitemap_sampled": "found by reading a sample of your sitemap's own pages, not by URL pattern",
 }
 
 
@@ -153,13 +166,36 @@ def discovery_coverage_note(discovery_path: Optional[str]) -> Optional[str]:
 MAX_PRODUCT_PAGES = 2
 LLMS_TXT_PATH = "/llms.txt"
 MCP_WELL_KNOWN_PATH = "/.well-known/mcp.json"
-DISCOVERY_FETCH_BUDGET = 6
+# Nike discovery fix: raised from 6 (6 + RESCUE_FETCH_RESERVE below) —
+# sitemap traversal keeps its old 6-fetch ceiling (see
+# _SITEMAP_SUB_BUDGET), and the 3 extra fetches are permanently
+# ring-fenced for collection_hop/platform_endpoint/llm_assisted so a
+# sitemap walk that legitimately needs its whole old budget (a large
+# <sitemapindex>, several locale children) can never again starve every
+# rescue tier the way the Nike run did — robots.txt + 3 top-level
+# sitemaps + 2 children left nothing for the tiers built to rescue
+# exactly that shape.
+DISCOVERY_FETCH_BUDGET = 9
+# Nike discovery fix: fetches sitemap traversal (_resolve_sitemaps,
+# _select_best_sitemap_child, and this stage's own content-sampling
+# fallback) can never dip into, no matter how many candidates it still
+# has left to probe — collection_hop/platform_endpoint/llm_assisted
+# draw from this reserve instead by checking discovery_budget.
+# has_capacity() directly (the full DISCOVERY_FETCH_BUDGET), never the
+# reduced sitemap-only ceiling. See _sitemap_budget_has_capacity.
+RESCUE_FETCH_RESERVE = 3
 # S1.a: bounds both how many TOP-LEVEL declared sitemaps are followed
 # and how many children of one <sitemapindex> are actually probed —
 # same constant, same reasoning (a large or malicious sitemap tree can
 # never consume more than this many fetches trying to find products).
 SITEMAP_CHILD_PROBE_LIMIT = 6
 GZIP_MAGIC = b"\x1f\x8b"
+# Nike discovery fix (requirement 3): up to this many of a zero-
+# pattern-density sitemap child's own URLs are fetched and read for
+# real product markup before giving up on that child — see
+# _sample_child_for_product_content.
+CONTENT_SAMPLE_LIMIT = 2
+DEFAULT_SITE_LOCALE = "en-us"
 
 
 @dataclass
@@ -178,7 +214,7 @@ class DiscoveryResult:
     llms_txt_fetch: Optional[FetchResult] = None
     mcp_well_known_fetch: Optional[FetchResult] = None
     products_found: int = 0
-    # sitemap | homepage | collection_hop | platform_endpoint | llm_assisted | none
+    # sitemap | sitemap_sampled | homepage | collection_hop | platform_endpoint | llm_assisted | none
     discovery_path: str = "none"
     all_fetches: list = field(default_factory=list)        # every FetchResult discovery performed (F3 observability)
     sitemap_index_entries: list = field(default_factory=list)  # every child-sitemap URL seen (site_typing T1)
@@ -210,10 +246,23 @@ class DiscoveryResult:
     # discover_pages' hard_refused). Always present, so a reader never
     # has to tell "not short-circuited" apart from "written before this
     # key existed."
+    #
+    # Nike discovery fix: declared_order is robots.txt's declared
+    # sitemaps AFTER product-hint reordering (the order actually walked,
+    # not robots.txt's own declared order — see _reorder_declared_
+    # sitemaps); locale_preferred is the site locale discovery resolved
+    # before picking which <sitemapindex> children to probe first (see
+    # _derive_site_locale); content_sampled is None unless a child won
+    # by content-sampling rather than URL-pattern density (see
+    # _sample_child_for_product_content) — {"child_url", "confirmed_
+    # product_urls"} when it did. Every one of these is recorded
+    # regardless of outcome, same "debuggability was the point"
+    # discipline as the rest of this dict.
     sitemap_sampling: dict = field(default_factory=lambda: {
         "children_probed": [], "child_chosen": None, "candidates_found": 0, "robots_excluded": 0,
         "tiers_attempted": [], "platform_detected": None, "platform_endpoints_probed": [],
         "platform_endpoint_used": None, "llm_discovery": None, "short_circuit": None,
+        "declared_order": [], "locale_preferred": None, "content_sampled": None,
     })
 
 
@@ -258,11 +307,135 @@ def resolve_canonical_origin(input_url: str) -> CanonicalResolution:
     return CanonicalResolution(origin=origin, homepage_fetch=homepage_fetch, cross_domain_flag=cross_domain_flag)
 
 
+# Nike discovery fix (requirement 1): filename hints that a declared
+# sitemap or sitemapindex child is likely to be the real PDP catalog —
+# shared by _reorder_declared_sitemaps (top-level declared order) and
+# _sitemap_priority (child tiebreak) so the two never drift apart.
+# ORDER ONLY, in both places — see each function's own docstring for
+# why filename is never trusted as the selector by itself.
+_PRODUCT_FILENAME_HINTS = ("pdp", "product", "products", "catalog", "item")
+
+# Nike discovery fix (requirement 3): filenames that are recognizably
+# NOT a product catalog — content-sampling skips these unless nothing
+# else was probed, so a starved run doesn't burn its sample budget
+# reading a help center or blog before trying anything else.
+_NON_CATALOG_FILENAME_HINTS = ("help", "article", "blog", "locator", "store", "landingpage", "gridwall")
+
+
+def _matches_filename_hint(path: str, hints) -> bool:
+    """A hint match bounded on both sides by a non-letter/digit (or the
+    string's own start/end) — a bare substring test would false-match
+    "item" against every single sitemap URL, since "sitemap" itself
+    contains "item" (s-ITEM-ap). Case-insensitive; `path` is expected
+    already-lowercased by the caller."""
+    for h in hints:
+        if re.search(rf"(?<![a-z0-9]){re.escape(h)}(?![a-z0-9])", path):
+            return True
+    return False
+
+# Nike discovery fix (requirement 1): a language-region locale token
+# embedded in a sitemap filename or path segment — "-en-us", "-de-at",
+# "/en_us/" — matched case-insensitively. The LAST match in the path
+# wins (a locale segment is conventionally the trailing one, e.g.
+# "sitemap-v2-landingpage-de-at.xml"), never a bare two-letter language
+# code alone (too likely to false-match an unrelated word).
+_LOCALE_TOKEN_RE = re.compile(r"(?:^|[/_-])([a-z]{2})[-_]([a-z]{2})(?=[/_.-]|$)", re.IGNORECASE)
+_HTML_LANG_RE = re.compile(r'<html[^>]+lang=["\']([a-zA-Z]{2})(?:[-_]([a-zA-Z]{2}))?', re.IGNORECASE)
+# Only the leading slice of a homepage document is ever scanned for
+# <html lang> — it's always in the opening tag, and a multi-hundred-KB
+# document has no business being regex-scanned in full for one attribute.
+_LOCALE_SCAN_CHARS = 4000
+
+
+def _sitemap_locale_hint(url: str) -> Optional[str]:
+    """The locale token embedded in a sitemap child's own filename/path
+    (e.g. '-en-us' or '/en_us/'), lowercased and hyphenated ('en-us'),
+    or None when the filename carries no locale segment at all. Order-
+    only, exactly like every other filename hint in this module — never
+    a selector on its own."""
+    path = urlparse(url).path.lower()
+    match = None
+    for m in _LOCALE_TOKEN_RE.finditer(path):
+        match = m  # last match wins — the trailing segment is the locale
+    if not match:
+        return None
+    return f"{match.group(1)}-{match.group(2)}"
+
+
+def _derive_site_locale(base_url: str, homepage_html: Optional[str]) -> str:
+    """Nike discovery fix (requirement 1): the site's own locale,
+    preferred when ordering which <sitemapindex> children to probe
+    first — from the canonical origin's own URL (a locale segment in
+    its path, when the final redirect landed on one), else the
+    homepage's <html lang> attribute, else DEFAULT_SITE_LOCALE. Never
+    raises; any parse failure just falls through to the default."""
+    try:
+        url_hint = _sitemap_locale_hint(urlparse(base_url).path)
+        if url_hint:
+            return url_hint
+    except Exception:
+        pass
+    if homepage_html:
+        try:
+            m = _HTML_LANG_RE.search(homepage_html[:_LOCALE_SCAN_CHARS])
+            if m:
+                lang = m.group(1).lower()
+                region = (m.group(2) or lang).lower()
+                return f"{lang}-{region}"
+        except Exception:
+            pass
+    return DEFAULT_SITE_LOCALE
+
+
+def _reorder_declared_sitemaps(urls: list) -> list:
+    """Nike discovery fix (requirement 1): robots.txt's declared
+    sitemaps, walked product-hint-first — a stable sort, so two
+    sitemaps with the same hint status keep robots.txt's own declared
+    order. ORDER ONLY: a decoy whose filename merely contains a hint
+    (the hotfix-5 incident this whole module already guards against
+    one layer down, in _select_best_sitemap_child) is still probed and
+    still loses on content density once fetched — it's just probed
+    sooner, so a genuine PDP index declared later than several
+    unrelated indexes (Nike's shape: sitemap-v2-pdp-index.xml is third
+    of seven) doesn't lose its share of the budget to them first."""
+    return sorted(
+        urls,
+        key=lambda u: 0 if _matches_filename_hint(urlparse(u).path.lower(), _PRODUCT_FILENAME_HINTS) else 1,
+    )
+
+
+def _reorder_children_by_locale(child_urls: list, preferred_locale: Optional[str]) -> list:
+    """Nike discovery fix (requirement 1): when a <sitemapindex>'s
+    children carry locale segments (Nike's 64 sitemap-v2-landingpage-
+    <locale>.xml children), probe the ones matching the resolved site
+    locale first. A stable sort: children with NO locale segment keep
+    their original position (neither promoted nor demoted), and a
+    locale MISMATCH is pushed later, never dropped — every child is
+    still eligible to be probed if budget allows."""
+    if not preferred_locale:
+        return list(child_urls)
+
+    def _rank(url: str) -> int:
+        hint = _sitemap_locale_hint(url)
+        if hint is None:
+            return 1
+        return 0 if hint == preferred_locale else 2
+
+    return sorted(child_urls, key=_rank)
+
+
+def _looks_non_catalog_filename(url: str) -> bool:
+    name = urlparse(url).path.lower()
+    return _matches_filename_hint(name, _NON_CATALOG_FILENAME_HINTS)
+
+
 def _sitemap_priority(url: str) -> int:
     """Tiebreaker ONLY (S1.a) — never the selector. Used to break a tie
-    between two children with equal product-URL density."""
-    lu = url.lower()
-    if "product" in lu:
+    between two children with equal product-URL density. Nike discovery
+    fix: hint list widened to match _PRODUCT_FILENAME_HINTS (was just
+    "product")."""
+    lu = urlparse(url).path.lower()
+    if _matches_filename_hint(lu, _PRODUCT_FILENAME_HINTS):
         return 0
     if "collection" in lu:
         return 1
@@ -318,6 +491,18 @@ def _sitemap_xml_text(url: str, result: FetchResult):
         return None, f"gzip decoded but not valid text ({e})"
 
 
+def _sitemap_budget_has_capacity(discovery_budget: FetchBudget) -> bool:
+    """Nike discovery fix (requirement 2): sitemap traversal's own share
+    of discovery_budget — RESCUE_FETCH_RESERVE fetches are permanently
+    off-limits to it, so a large or deeply-indexed sitemap tree (Nike:
+    seven declared sitemaps, one a 64-child locale index) can never again
+    consume the ENTIRE discovery budget and leave collection_hop/
+    platform_endpoint/llm_assisted with nothing to work with. Those three
+    tiers call discovery_budget.has_capacity() directly instead — they're
+    exactly what the reserve exists for."""
+    return discovery_budget.used < max(0, discovery_budget.max_fetches - RESCUE_FETCH_RESERVE)
+
+
 def _fetch_and_parse_sitemap(url: str, robot_parser, discovery_budget: FetchBudget, all_fetches: list, sampling_log: dict):
     """Fetches and parses one sitemap URL (gzip-aware). Never raises.
     Returns (is_index, urls) on success, else None — every outcome
@@ -326,6 +511,9 @@ def _fetch_and_parse_sitemap(url: str, robot_parser, discovery_budget: FetchBudg
     reason, never silently dropped (S1.d)."""
     if not discovery_budget.has_capacity():
         sampling_log["children_probed"].append({"url": url, "skipped": "discovery budget exhausted"})
+        return None
+    if not _sitemap_budget_has_capacity(discovery_budget):
+        sampling_log["children_probed"].append({"url": url, "skipped": "reserved for rescue tiers"})
         return None
     discovery_budget.consume()
     try:
@@ -357,18 +545,82 @@ def _fetch_and_parse_sitemap(url: str, robot_parser, discovery_budget: FetchBudg
     return is_index, urls
 
 
-def _select_best_sitemap_child(child_urls: list, robot_parser, discovery_budget: FetchBudget, all_fetches: list, sampling_log: dict) -> list:
+def _sample_child_for_product_content(
+    urls: list, robot_parser, discovery_budget: FetchBudget, all_fetches: list,
+) -> tuple:
     """
-    S1.a: probes up to SITEMAP_CHILD_PROBE_LIMIT children (declaration
-    order — filename never decides WHICH to try, only breaks a tie
-    among results that parsed with equal product-URL density) and
-    selects the one with the highest density. Returns that child's page
-    URLs, or [] if nothing usable was found among the probed children.
+    Nike discovery fix (requirement 3): the real fix behind the /t/
+    pattern stopgap above — when a probed child's own declared URLs
+    matched no known PRODUCT_URL_PATTERNS shape at all (a URL
+    convention this reader has never seen before, not necessarily
+    "not a catalog"), fetch up to CONTENT_SAMPLE_LIMIT of its own URLs
+    and check each one's actual markup with the same content-level
+    verification the LLM-assisted tier already uses to confirm a
+    model's guess (_looks_like_product_page) — reused here, not
+    redefined, so "is this a product page" has exactly one definition
+    in this module.
+
+    Draws from the same reserved sitemap sub-budget as the rest of
+    sitemap traversal (_sitemap_budget_has_capacity) — this is still
+    sitemap-child verification, not a rescue tier of its own. Never
+    raises: any one URL's fetch/extract failure just isn't confirmed,
+    never aborts the rest of the sample.
+
+    Returns (confirmed_urls, reused_fetches) — reused_fetches is
+    {url: FetchResult} for every confirmed URL so the caller can reuse
+    that fetch (charged here, to discovery_budget) instead of fetching
+    it again against the content budget, same reuse idea as the
+    LLM-assisted tier's own reused_product_fetches.
     """
+    confirmed: list = []
+    reused: dict = {}
+    for candidate_url in urls[:CONTENT_SAMPLE_LIMIT]:
+        if robot_parser is not None and not robot_parser.can_fetch(USER_AGENT, candidate_url):
+            continue
+        if not discovery_budget.has_capacity() or not _sitemap_budget_has_capacity(discovery_budget):
+            break
+        discovery_budget.consume()
+        try:
+            result = fetch(candidate_url, robot_parser=robot_parser)
+        except Exception:
+            log.exception(f"[scan.discovery] unexpected error content-sampling {candidate_url}")
+            continue
+        all_fetches.append(result)
+        if result.status != "fetched" or not result.html:
+            continue
+        extracted = extract_structured_data(result.html)
+        if _looks_like_product_page(extracted):
+            confirmed.append(candidate_url)
+            reused[candidate_url] = result
+    return confirmed, reused
+
+
+def _select_best_sitemap_child(
+    child_urls: list, robot_parser, discovery_budget: FetchBudget, all_fetches: list, sampling_log: dict,
+    sample_reused_fetches: dict, preferred_locale: Optional[str] = None,
+) -> list:
+    """
+    S1.a: probes up to SITEMAP_CHILD_PROBE_LIMIT children and selects
+    the one with the highest URL-pattern product density. Nike
+    discovery fix (requirement 1): children are probed in LOCALE-
+    preferred order, not raw declaration order, when they carry locale
+    segments (see _reorder_children_by_locale) — filename/locale never
+    decide WHICH child wins, only the order they're tried in and, for
+    _sitemap_priority, a tiebreak among equally-dense results.
+
+    Nike discovery fix (requirement 3): when every probed child parses
+    but NONE show any URL-pattern density at all (S2's starved shape —
+    a URL convention this reader doesn't recognize, not necessarily an
+    empty catalog), falls back to content-sampling eligible children
+    (see _sample_child_for_product_content) before giving up. Returns
+    that child's page URLs, or [] if nothing usable was found among the
+    probed children by either method.
+    """
+    ordered = _reorder_children_by_locale(child_urls, preferred_locale)
     candidates = []  # (density, product_count, url, urls)
     probed = 0
-    for child_url in child_urls:
-        if probed >= SITEMAP_CHILD_PROBE_LIMIT or not discovery_budget.has_capacity():
+    for child_url in ordered:
+        if probed >= SITEMAP_CHILD_PROBE_LIMIT or not discovery_budget.has_capacity() or not _sitemap_budget_has_capacity(discovery_budget):
             break
         probed += 1
         parsed = _fetch_and_parse_sitemap(child_url, robot_parser, discovery_budget, all_fetches, sampling_log)
@@ -384,37 +636,58 @@ def _select_best_sitemap_child(child_urls: list, robot_parser, discovery_budget:
     if not candidates:
         return []
 
-    candidates.sort(key=lambda c: (-c[0], _sitemap_priority(c[2])))
-    best_density, best_product_count, best_url, best_urls = candidates[0]
-    sampling_log["child_chosen"] = best_url
-    sampling_log["candidates_found"] = best_product_count
-    return best_urls
+    if any(c[1] > 0 for c in candidates):
+        candidates.sort(key=lambda c: (-c[0], _sitemap_priority(c[2])))
+        best_density, best_product_count, best_url, best_urls = candidates[0]
+        sampling_log["child_chosen"] = best_url
+        sampling_log["candidates_found"] = best_product_count
+        return best_urls
+
+    # Requirement 3: zero pattern density on every probed child — try
+    # content-sampling before giving up. Catalog-shaped filenames first
+    # (skip the obvious non-catalog ones), but fall back to sampling
+    # whatever was probed if nothing else is available, in probe order.
+    catalog_like = [c for c in candidates if not _looks_non_catalog_filename(c[2])]
+    for _density, _product_count, child_url, urls in (catalog_like or candidates):
+        if not discovery_budget.has_capacity() or not _sitemap_budget_has_capacity(discovery_budget):
+            break
+        confirmed, reused = _sample_child_for_product_content(urls, robot_parser, discovery_budget, all_fetches)
+        if confirmed:
+            sampling_log["child_chosen"] = child_url
+            sampling_log["candidates_found"] = len(confirmed)
+            sampling_log["content_sampled"] = {"child_url": child_url, "confirmed_product_urls": list(confirmed)}
+            sample_reused_fetches.update(reused)
+            return list(confirmed)
+
+    return []
 
 
 def _resolve_sitemaps(
     initial_urls: list, robot_parser, discovery_budget: FetchBudget,
     all_fetches: list, index_entries: list, sampling_log: dict,
+    sample_reused_fetches: dict, preferred_locale: Optional[str] = None,
 ) -> list:
     """
     Sitemap-sampler rewrite (hotfix 5, S1.a): fetches each declared
     (top-level) sitemap, bounded by SITEMAP_CHILD_PROBE_LIMIT and
-    discovery_budget. A FLAT sitemap's URLs are used directly
-    (unchanged fast path for a simple, unindexed store). A
-    <sitemapindex>'s children are NEVER trusted by filename — see
-    _select_best_sitemap_child. Never raises. Returns the flat list of
-    real PAGE URLs sampled — child-sitemap URLs themselves are never
-    returned here, but every one declared by an index (probed or not)
-    is still appended to index_entries for site_typing.py's T1 signal
-    check — a Shopify sitemapindex naming "sitemap_products_1.xml" is
-    itself commerce evidence, even if that exact child was never the
-    one actually chosen.
+    discovery_budget's reserved sitemap share (_sitemap_budget_has_
+    capacity). A FLAT sitemap's URLs are used directly (unchanged fast
+    path for a simple, unindexed store). A <sitemapindex>'s children are
+    NEVER trusted by filename — see _select_best_sitemap_child. Never
+    raises. Returns the flat list of real PAGE URLs sampled — child-
+    sitemap URLs themselves are never returned here, but every one
+    declared by an index (probed or not) is still appended to
+    index_entries for site_typing.py's T1 signal check — a Shopify
+    sitemapindex naming "sitemap_products_1.xml" is itself commerce
+    evidence, even if that exact child was never the one actually
+    chosen.
     """
     page_urls: list = []
     queue = list(initial_urls)
     seen: set = set()
     followed = 0
 
-    while queue and followed < SITEMAP_CHILD_PROBE_LIMIT and discovery_budget.has_capacity():
+    while queue and followed < SITEMAP_CHILD_PROBE_LIMIT and discovery_budget.has_capacity() and _sitemap_budget_has_capacity(discovery_budget):
         sm_url = queue.pop(0)
         if sm_url in seen:
             continue
@@ -431,7 +704,10 @@ def _resolve_sitemaps(
             continue
 
         index_entries.extend(urls)
-        page_urls.extend(_select_best_sitemap_child(urls, robot_parser, discovery_budget, all_fetches, sampling_log))
+        page_urls.extend(_select_best_sitemap_child(
+            urls, robot_parser, discovery_budget, all_fetches, sampling_log,
+            sample_reused_fetches, preferred_locale=preferred_locale,
+        ))
 
     return page_urls
 
@@ -816,6 +1092,7 @@ def discover_pages(
             "children_probed": [], "child_chosen": None, "candidates_found": 0, "robots_excluded": 0,
             "tiers_attempted": [], "platform_detected": None, "platform_endpoints_probed": [],
             "platform_endpoint_used": None, "llm_discovery": None, "short_circuit": None,
+            "declared_order": [], "locale_preferred": None, "content_sampled": None,
         }
 
         # Fetcher hardening: when robots.txt AND the store root both
@@ -882,8 +1159,25 @@ def discover_pages(
         if not declared_sitemaps:
             declared_sitemaps = [urljoin(base_url, "/sitemap.xml")]
 
+        # Nike discovery fix (requirement 1): product-hint-first order,
+        # not robots.txt's own declared order — recorded either way so
+        # the decision is debuggable (S1.d's discipline). Locale is
+        # resolved from whatever homepage_fetch the caller already gave
+        # us (engine.py always does, by the time discover_pages runs) —
+        # a standalone caller with none yet just falls back to the
+        # URL-derived/default locale, since the homepage fetch below
+        # hasn't happened yet at this point in the function.
+        declared_sitemaps = _reorder_declared_sitemaps(declared_sitemaps)
+        sampling_log["declared_order"] = list(declared_sitemaps)
+        preferred_locale = _derive_site_locale(
+            base_url, homepage_fetch.html if homepage_fetch and homepage_fetch.status == "fetched" else None,
+        )
+        sampling_log["locale_preferred"] = preferred_locale
+
+        content_sample_reused: dict = {}
         sitemap_urls = _resolve_sitemaps(
             declared_sitemaps, robot_parser, discovery_budget, all_fetches, sitemap_index_entries, sampling_log,
+            content_sample_reused, preferred_locale=preferred_locale,
         )
 
         if homepage_fetch is None:
@@ -897,8 +1191,22 @@ def discover_pages(
         candidates = [PageCandidate(url=base_url, kind="homepage")]
         reused_product_fetches: dict = {}
 
-        product_urls = [u for u in sitemap_urls if _looks_like_product_url(u)]
-        discovery_path = "sitemap" if product_urls else "none"
+        content_sampled = sampling_log.get("content_sampled")
+        if content_sampled:
+            # Requirement 3: these URLs were independently confirmed by
+            # their own markup (_sample_child_for_product_content), not
+            # by URL shape — re-applying the pattern filter here would
+            # defeat the entire point (they matched no pattern, that's
+            # why sampling ran at all), so they're used exactly as
+            # confirmed. Their fetches were already charged to
+            # discovery_budget — reused by engine.py's _gather_pages
+            # rather than fetched again against the content budget.
+            product_urls = list(content_sampled["confirmed_product_urls"])
+            discovery_path = "sitemap_sampled"
+            reused_product_fetches.update(content_sample_reused)
+        else:
+            product_urls = [u for u in sitemap_urls if _looks_like_product_url(u)]
+            discovery_path = "sitemap" if product_urls else "none"
         sampling_log["tiers_attempted"].append({"tier": "sitemap", "candidates_found": len(product_urls)})
 
         if not product_urls and homepage_html:
@@ -907,32 +1215,47 @@ def discover_pages(
                 discovery_path = "homepage"
             sampling_log["tiers_attempted"].append({"tier": "homepage", "candidates_found": len(product_urls)})
 
-        if not product_urls and homepage_html and discovery_budget.has_capacity():
-            collection_links = _find_links_matching(homepage_html, base_url, _looks_like_collection_url)
-            if collection_links:
-                discovery_budget.consume()
-                coll_result = fetch(collection_links[0], robot_parser=robot_parser, check_short_body=True)
-                all_fetches.append(coll_result)
-                if coll_result.status == "fetched" and coll_result.html:
-                    product_urls = _find_links_matching(coll_result.html, collection_links[0], _looks_like_product_url)
-                    if product_urls:
-                        discovery_path = "collection_hop"
-            sampling_log["tiers_attempted"].append({"tier": "collection_hop", "candidates_found": len(product_urls)})
+        if not product_urls and homepage_html:
+            # Requirement 2: this tier, and the two below, draw from the
+            # FULL discovery_budget (not the reduced sitemap-only share)
+            # — that's the whole point of RESCUE_FETCH_RESERVE. A skip
+            # here is recorded with a reason rather than silently
+            # vanishing from tiers_attempted (requirement 2's other half).
+            if discovery_budget.has_capacity():
+                collection_links = _find_links_matching(homepage_html, base_url, _looks_like_collection_url)
+                if collection_links:
+                    discovery_budget.consume()
+                    coll_result = fetch(collection_links[0], robot_parser=robot_parser, check_short_body=True)
+                    all_fetches.append(coll_result)
+                    if coll_result.status == "fetched" and coll_result.html:
+                        product_urls = _find_links_matching(coll_result.html, collection_links[0], _looks_like_product_url)
+                        if product_urls:
+                            discovery_path = "collection_hop"
+                sampling_log["tiers_attempted"].append({"tier": "collection_hop", "candidates_found": len(product_urls)})
+            else:
+                sampling_log["tiers_attempted"].append(
+                    {"tier": "collection_hop", "candidates_found": 0, "skipped": "discovery budget exhausted"}
+                )
 
         # Part 2 (2a/2b/2c): deterministic platform-endpoint probes —
         # tried before any LLM call, only once the three tiers above
         # came up empty. Cheap platform fingerprinting first (2b) means
         # this never blindly probes an endpoint set the detected
         # platform can't have.
-        if not product_urls and discovery_budget.has_capacity():
-            platform_urls, endpoint_used = _probe_platform_endpoints(
-                base_url, homepage_html, robot_parser, discovery_budget, all_fetches, sampling_log,
-            )
-            if platform_urls:
-                product_urls = platform_urls
-                discovery_path = "platform_endpoint"
-                sampling_log["platform_endpoint_used"] = endpoint_used
-            sampling_log["tiers_attempted"].append({"tier": "platform_endpoint", "candidates_found": len(platform_urls)})
+        if not product_urls:
+            if discovery_budget.has_capacity():
+                platform_urls, endpoint_used = _probe_platform_endpoints(
+                    base_url, homepage_html, robot_parser, discovery_budget, all_fetches, sampling_log,
+                )
+                if platform_urls:
+                    product_urls = platform_urls
+                    discovery_path = "platform_endpoint"
+                    sampling_log["platform_endpoint_used"] = endpoint_used
+                sampling_log["tiers_attempted"].append({"tier": "platform_endpoint", "candidates_found": len(platform_urls)})
+            else:
+                sampling_log["tiers_attempted"].append(
+                    {"tier": "platform_endpoint", "candidates_found": 0, "skipped": "discovery budget exhausted"}
+                )
 
         # Part 3 (3a/3b/3c): last-resort LLM-assisted discovery — only
         # when every deterministic tier above found nothing AND the
@@ -941,16 +1264,21 @@ def discover_pages(
         # returns is independently verified (host match, robots, our
         # own fetch, product-page shape) before it counts as anything —
         # see _probe_llm_discovery.
-        if not product_urls and _homepage_reached(homepage_fetch) and discovery_budget.has_capacity() and _llm_discovery_enabled(api_key):
-            llm_urls, llm_fetches, llm_trace = _probe_llm_discovery(
-                base_url, robot_parser, discovery_budget, all_fetches, api_key,
-            )
-            sampling_log["llm_discovery"] = llm_trace
-            sampling_log["tiers_attempted"].append({"tier": "llm_assisted", "candidates_found": len(llm_urls)})
-            if llm_urls:
-                product_urls = llm_urls
-                discovery_path = "llm_assisted"
-                reused_product_fetches.update(llm_fetches)
+        if not product_urls and _homepage_reached(homepage_fetch) and _llm_discovery_enabled(api_key):
+            if discovery_budget.has_capacity():
+                llm_urls, llm_fetches, llm_trace = _probe_llm_discovery(
+                    base_url, robot_parser, discovery_budget, all_fetches, api_key,
+                )
+                sampling_log["llm_discovery"] = llm_trace
+                sampling_log["tiers_attempted"].append({"tier": "llm_assisted", "candidates_found": len(llm_urls)})
+                if llm_urls:
+                    product_urls = llm_urls
+                    discovery_path = "llm_assisted"
+                    reused_product_fetches.update(llm_fetches)
+            else:
+                sampling_log["tiers_attempted"].append(
+                    {"tier": "llm_assisted", "candidates_found": 0, "skipped": "discovery budget exhausted"}
+                )
 
         seen_products: set = set()
         deduped_product_urls = []

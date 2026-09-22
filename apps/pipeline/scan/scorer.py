@@ -33,6 +33,17 @@ is a different honest answer than either a genuine zero or "na".
 Excluded from every applicable-max sum exactly like "na" (lite_pillars.py).
 A page that fetched but simply had no matching markup is still a
 genuine, scored zero — "blocked" only ever means "never read."
+
+Nike discovery fix: _no_product_pages_score's commerce_discovery_
+failure branch (a commerce site where discovery never sampled a SINGLE
+product page this run — not the B1/B2 case above, where pages were
+sampled but failed to fetch) now ALSO returns coverage="blocked"
+instead of the old "partial". Before this, a fully-undiscovered PDP set
+on a run that still reached the homepage (STATUS_COMPLETE) scored
+catalog_context/price_truth_seen/deal_citability_seen as real, applicable
+zeros — see engine.py's module docstring and lite_pillars.py's
+build_pillars_payload for how "blocked" then correctly withholds the
+composite instead of computing one from data that was never measured.
 """
 import json
 from dataclasses import dataclass, field
@@ -103,6 +114,22 @@ def _product_pages(pages):
     return [p for p in pages if p.candidate.kind == "product"]
 
 
+# Nike discovery fix: the commerce_discovery_failure branch used to
+# score 0/weight at coverage='partial' — which is what let a fully
+# undiscovered PDP set (Nike: zero product pages, homepage still
+# reached, so the run still landed STATUS_COMPLETE) get folded into the
+# composite as a real, scored zero. coverage='blocked' is the same
+# NOT-MEASURABLE rendering _all_blocked_score already uses when every
+# sampled product page fails to fetch — this is the sibling case where
+# no product page was ever even sampled. First-person, never a site-
+# blame claim (the crawl's own limitation, not the store's), matching
+# the wording discipline the rest of this module already follows.
+NOT_MEASURABLE_NO_PRODUCT_PAGES_REASON = (
+    "our reader couldn't locate product pages to sample this run — "
+    "on-site product checks weren't evaluated"
+)
+
+
 def _no_product_pages_score(
     weight: float, site_type_result, fix: Optional[str], *,
     fix_human: Optional[str] = None, na_on_brand_only: bool = False,
@@ -119,19 +146,39 @@ def _no_product_pages_score(
                                      one that never was (F2/V1/V4) — a
                                      non-commerce site just has nothing
                                      for those to score, not "n/a".
-      commerce_discovery_failure  -> coverage='partial' with the honest
-                                     discovery-failure reason — the site
-                                     IS commerce, the crawl just couldn't
-                                     find its products this run.
+      commerce_discovery_failure  -> coverage='blocked' (Nike discovery
+                                     fix) — the site IS commerce, the
+                                     crawl just never sampled a single
+                                     product page this run, so this
+                                     check has nothing to evaluate; NOT
+                                     MEASURABLE, never a scored zero.
+                                     Excluded from every applicable-max
+                                     sum exactly like an all-unreadable
+                                     sample (_all_blocked_score) — see
+                                     that function's own docstring.
+                                     score_member_value_seen's combine
+                                     step already treats 'blocked' the
+                                     same as 'na' (excluded from its
+                                     raw_max/raw_score), so member_
+                                     value_seen keeps its loyalty-page
+                                     credit and only the member-price
+                                     component goes unmeasured — no
+                                     special-casing needed here beyond
+                                     this one coverage value.
     """
     if site_type_result.site_type == site_typing.SITE_TYPE_BRAND_ONLY:
         return DimensionScore(
             score=0.0, max=weight, coverage="na" if na_on_brand_only else "full",
             evidence=[f"no product pages sampled — {site_type_result.reason}"],
         )
+    # No fix/fix_human here (unlike the old coverage='partial' branch) —
+    # matches _all_blocked_score's own precedent: a check with nothing
+    # to evaluate has no honest "here's what to change" to attach, and
+    # lite_pillars._is_fixable already excludes every blocked row from
+    # ranking regardless.
     return DimensionScore(
-        score=0.0, max=weight, coverage="partial",
-        evidence=[site_type_result.reason], fix=fix, fix_human=fix_human,
+        score=0.0, max=weight, coverage="blocked",
+        evidence=[NOT_MEASURABLE_NO_PRODUCT_PAGES_REASON],
     )
 
 
@@ -1126,6 +1173,25 @@ def score_member_value_seen(pages, site_type_result) -> DimensionScore:
     member-value N/A path, per the stage spec. Loyalty-surface
     discoverability doesn't depend on product pages at all, so it's
     unaffected either way.
+
+    Nike discovery fix: _no_product_pages_score's commerce_discovery_
+    failure branch (ZERO product pages ever sampled, not merely
+    unreadable ones) now also returns coverage='blocked', which
+    score_v3_member_value passes straight through — so this function
+    needed no code change at all to "keep its loyalty-page points but
+    mark only the PDP-dependent portion as unmeasured": `excluded`
+    above already treats 'blocked' and 'na' identically, member_price
+    drops out of components/raw_max/raw_score, and loyalty alone gets
+    rescaled onto the full seen_max. The one thing worth naming
+    explicitly: _combine_coverage only ever checks for 'partial', never
+    'blocked', so the COMBINED result's own top-level coverage comes
+    back 'full' (not 'blocked') whenever member_price is the only
+    excluded component — deliberate, not an oversight. A whole-
+    dimension 'blocked' would tell build_pillars_payload this
+    dimension's own SEEN half measured nothing at all, which is false
+    here: loyalty-surface discoverability was measured, for real, and
+    member_price's own evidence (the NOT-MEASURABLE reason) is still
+    folded into the combined evidence list a few lines down either way.
     """
     new_max = DIMENSIONS_BY_CODE["member_value"].seen_max
 
