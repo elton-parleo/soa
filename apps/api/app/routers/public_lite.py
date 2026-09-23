@@ -67,9 +67,29 @@ router = APIRouter()
 CAPTCHA_SECRET = os.getenv("CAPTCHA_SECRET", "")
 CAPTCHA_VERIFY_URL = os.getenv("CAPTCHA_VERIFY_URL", "")
 
-RATE_LIMIT_PER_IP_HOUR = 3
-RATE_LIMIT_PER_IP_DAY = 10
-GLOBAL_RATE_LIMIT_PER_HOUR = 20
+
+def _positive_int_env(name: str, default: int) -> int:
+    """Read a positive int from env var `name`; unset/empty -> default,
+    anything else invalid -> warn and default (never raises at import)."""
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 0
+    if value <= 0:
+        log.warning(
+            "[public_lite] %s=%r is not a positive integer — using default %d",
+            name, raw, default,
+        )
+        return default
+    return value
+
+
+RATE_LIMIT_PER_IP_HOUR = _positive_int_env("RATE_LIMIT_PER_IP_HOUR", 3)
+RATE_LIMIT_PER_IP_DAY = _positive_int_env("RATE_LIMIT_PER_IP_DAY", 10)
+GLOBAL_RATE_LIMIT_PER_HOUR = _positive_int_env("GLOBAL_RATE_LIMIT_PER_HOUR", 20)
 
 
 # ─── Captcha ─────────────────────────────────────────────────────────────

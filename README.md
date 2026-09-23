@@ -124,9 +124,10 @@ same place.
 
 Note on volume: an audit-started email goes out for **every accepted
 POST /api/public/soa-lite**, not only for runs that become leads. The
-per-IP and global rate limits in `public_lite.py`
-(`RATE_LIMIT_PER_IP_HOUR`, `RATE_LIMIT_PER_IP_DAY`,
-`GLOBAL_RATE_LIMIT_PER_HOUR`) are the only cap on how many that can be.
+per-IP and global rate limits in `public_lite.py` are the only cap on
+how many that can be. They're configurable via env vars
+`RATE_LIMIT_PER_IP_HOUR` (default 3), `RATE_LIMIT_PER_IP_DAY` (default
+10) and `GLOBAL_RATE_LIMIT_PER_HOUR` (default 20).
 Rejected requests — failed captcha, tripped rate limit — send nothing,
 since they raise before the row is written.
 
