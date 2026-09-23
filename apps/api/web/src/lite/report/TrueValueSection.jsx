@@ -11,8 +11,8 @@ import { ReportSection } from './ReportSection.jsx'
 import { HowItsScoredButton, HowItsScoredPanel, HowItsScoredChips } from './HowItsScored.jsx'
 import { SectionCollapseButton } from './SectionCollapseButton.jsx'
 import { useCollapsible } from './Collapsible.jsx'
-import { dimByCode, pillarEarnedMax, pillarHeadline, anyTrueValueEncodeBlocked, trueValueNotMeasurableCount, isAgentReady, isBrandOnlyReport, isPartialRead, PILLAR_TRUE_VALUE } from './reportDerive.js'
-import { BRAND_ONLY_COPY } from './reportContent.js'
+import { dimByCode, pillarEarnedMax, pillarHeadline, anyTrueValueEncodeBlocked, trueValueNotMeasurableCount, isAgentReady, isBrandOnlyReport, isManufacturerReport, isPartialRead, PILLAR_TRUE_VALUE } from './reportDerive.js'
+import { BRAND_ONLY_COPY, MANUFACTURER_COPY } from './reportContent.js'
 import { DIMENSIONS_BY_CODE, VERDICT_COMPOSITE_THRESHOLD, VERDICT_TRUE_VALUE_RATIO_THRESHOLD } from '../landing/scanDimensionsRegistry.js'
 
 const GROUP_META = {
@@ -107,6 +107,22 @@ function ParsedPageHonestBanner({ partialRead }) {
   )
 }
 
+// Manufacturer sites: the offer-bearing rows in the same N/A shape
+// member_value's own na row uses. The dimension keeps its stored
+// score — this row simply doesn't present it as a finding about a
+// storefront the brand doesn't run.
+function ManufacturerNaDim({ code }) {
+  return (
+    <div data-manufacturer-na={code} style={{ borderTop: '1px solid var(--hairline)', padding: '18px 0 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 15, fontWeight: 660, color: 'var(--text-strong)', letterSpacing: '-0.012em' }}>{DIMENSIONS_BY_CODE[code].name}</span>
+        <span className="num" style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, fontWeight: 640, color: 'var(--faint)' }}>N/A</span>
+        <span style={{ fontSize: 13, color: 'var(--muted)' }}>{MANUFACTURER_COPY.dimensionNote}</span>
+      </div>
+    </div>
+  )
+}
+
 function DualLensDim({ code, iconGlyph, dim, oneLiner, open, onToggle, partialRead }) {
   const reg = DIMENSIONS_BY_CODE[code]
   const seen = dim?.seen
@@ -191,6 +207,10 @@ export function TrueValueSection({ report, open, onToggle }) {
   // stored scores are untouched (see BRAND_ONLY_COPY) — this section
   // simply stops presenting them as findings.
   const brandOnly = isBrandOnlyReport(report)
+  // Manufacturer sites: the offer-bearing rows render N/A with the
+  // reason, and the pillar says why once. The pillar score, and the
+  // composite it feeds, are exactly what was scored (MANUFACTURER_COPY).
+  const manufacturer = isManufacturerReport(report)
 
   const [ptOpen, togglePt] = useCollapsible(false, { section: 'tv', control: 'price_truth' })
   const [mvOpen, toggleMv] = useCollapsible(false, { section: 'tv', control: 'member_value' })
@@ -220,7 +240,7 @@ export function TrueValueSection({ report, open, onToggle }) {
             <div style={{ fontSize: 14, color: 'var(--dark-muted)', lineHeight: 1.6, marginTop: 10 }}>
               {brandOnly ? BRAND_ONLY_COPY.trueValueBody : (
                 <>
-                  One SKU, as parsed from the page your markup reached, next to what agents actually read.
+                  {manufacturer ? MANUFACTURER_COPY.trueValueNote : 'One SKU, as parsed from the page your markup reached, next to what agents actually read.'}
                   {notMeasurable > 0 && ` ${notMeasurable} dimension${notMeasurable === 1 ? '' : 's'} not measurable this run.`}
                 </>
               )}
@@ -266,7 +286,8 @@ export function TrueValueSection({ report, open, onToggle }) {
           )}
 
           <div style={{ marginTop: 26, borderTop: '1px solid var(--hairline)', paddingTop: 20 }}>
-            {priceTruth && (
+            {manufacturer && priceTruth && <ManufacturerNaDim code="price_truth" />}
+            {!manufacturer && priceTruth && (
               <DualLensDim
                 code="price_truth" iconGlyph="card" dim={priceTruth}
                 oneLiner={encodeBlocked && priceTruth.blocked ? 'not measurable this run' : (priceTruth.discovery_note || 'readable on your site, cited in answers')}
@@ -274,7 +295,7 @@ export function TrueValueSection({ report, open, onToggle }) {
               />
             )}
 
-            {memberValue?.na ? (
+            {manufacturer && memberValue ? <ManufacturerNaDim code="member_value" /> : memberValue?.na ? (
               <div style={{ borderTop: '1px solid var(--hairline)', padding: '18px 0 20px' }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 15, fontWeight: 660, color: 'var(--text-strong)', letterSpacing: '-0.012em' }}>Member Value</span>
@@ -300,7 +321,8 @@ export function TrueValueSection({ report, open, onToggle }) {
               />
             )}
 
-            {dealCitability && (
+            {manufacturer && dealCitability && <ManufacturerNaDim code="deal_citability" />}
+            {!manufacturer && dealCitability && (
               <DualLensDim
                 code="deal_citability" iconGlyph="spark" dim={dealCitability}
                 oneLiner="deals encoded, cited when shoppers are ready"

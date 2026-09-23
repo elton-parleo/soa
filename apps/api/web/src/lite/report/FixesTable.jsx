@@ -19,8 +19,10 @@
 import { Fragment, useState } from 'react'
 import { Button, Glyph, ProvenanceLine, RequestFormModal, StatusChip } from '../../ds/index.js'
 import { ReportSection } from './ReportSection.jsx'
-import { FAILURE_POINT_COPY, FIXES_REMAINING_STRIP, resolveFailurePointBody } from './reportContent.js'
-import { isPartialRead, buildMeasurableContext, partialReadFailurePoint } from './reportDerive.js'
+import {
+  FAILURE_POINT_COPY, FIXES_REMAINING_STRIP, MANUFACTURER_COPY, MANUFACTURER_NA_DIMENSION_CODES, resolveFailurePointBody,
+} from './reportContent.js'
+import { isPartialRead, buildMeasurableContext, partialReadFailurePoint, isManufacturerReport, isWallFailurePoint } from './reportDerive.js'
 import { DEMO_REQUEST_CTAS } from '../demoRequestCtas.js'
 import { useDemoRequestModal } from '../useDemoRequestModal.js'
 import { LITE_QUERY_COUNT, FIX_OWNER_TRUESYNC } from '../landing/scanDimensionsRegistry.js'
@@ -52,6 +54,7 @@ export function FixesTable({ report, open, onToggle, brandName, reportToken, que
   if (!fixes) return null
   const partialRead = isPartialRead(report.pillars, report.scan?.degraded_reason)
   const failurePoint = partialRead ? partialReadFailurePoint(report.scan?.degraded_reason, report.scan?.discovery_outcome) : null
+  const manufacturer = isManufacturerReport(report)
   const rawVisible = fixes.visible || []
   const { ordered, discoveryCode } = partialRead ? _withDiscoveryFirst(rawVisible) : { ordered: rawVisible, discoveryCode: null }
   const visible = ordered
@@ -93,13 +96,20 @@ export function FixesTable({ report, open, onToggle, brandName, reportToken, que
           // setting when the run recognized one — resolved through the
           // same helper the finding section uses, so the ranked fix and
           // the finding can never name two different walls.
-          const fixHuman = (isDiscoveryRow && failurePoint === 'blocked')
+          // Unreachable-host follow-up: a run that was never answered
+          // takes the same vendor-aware action line (its own registry
+          // entry). Manufacturer sites: the offer-bearing rows point at
+          // the retailer feeds that carry the offer, not at markup the
+          // brand's own pages have no price to put in.
+          const fixHuman = (isDiscoveryRow && isWallFailurePoint(failurePoint))
             ? resolveFailurePointBody(
-                FAILURE_POINT_COPY.blocked.fixFraming,
+                FAILURE_POINT_COPY[failurePoint].fixFraming,
                 report.scan?.degraded_banner_facts,
                 report.scan?.edge_vendor,
               )
-            : f.fix_human
+            : (manufacturer && MANUFACTURER_NA_DIMENSION_CODES.includes(f.code))
+              ? MANUFACTURER_COPY.fixHuman
+              : f.fix_human
           const subFixes = f.sub_fixes || []
           const isExpanded = !!expandedCodes[f.code]
           return (

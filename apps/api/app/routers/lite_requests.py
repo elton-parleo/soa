@@ -220,8 +220,8 @@ class LiteRequestDetail(LiteRequestListItem):
     # stage, or with no scan row at all.
     discovery_outcome: Optional[dict] = None
     # Non-commerce report (this session): dimensions["site_type"] —
-    # "commerce_normal" | "commerce_discovery_failure" | "brand_only"
-    # (apps/pipeline/scan/site_typing.py). Triage-critical on this page:
+    # "commerce_normal" | "commerce_discovery_failure" | "brand_only" |
+    # "manufacturer" (apps/pipeline/scan/site_typing.py). Triage-critical on this page:
     # a brand_only row scoring 10-22 is a correct reading of a
     # non-store site, not a broken crawl, and the two were
     # indistinguishable here before. Null for a degraded run (which

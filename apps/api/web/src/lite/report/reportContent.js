@@ -203,6 +203,18 @@ export const FAILURE_POINT_COPY = {
              : EDGE_VENDOR_UNKNOWN_COPY.setting)
     },
   },
+  // Unreachable-host follow-up (Lululemon, request 138): every request
+  // this run — robots.txt, the sitemap, the store root — timed out
+  // without an answer, while ChatGPT opened the same homepage fine. The
+  // old report said "your site doesn't declare a sitemap", which was
+  // never checked. This is the blocked family (a wall on readers like
+  // ours, just a silent one), so it reads like `blocked` and names the
+  // vendor the same way when DNS recognized one.
+  unreachable: {
+    heading: 'Your site never answered our reader.',
+    body: (_bannerFacts, edgeVendor) => `We visited your site the way an AI shopping agent does — announcing who we are and following the rules in your robots.txt. No response came back: every request, including the one for your robots.txt, was held open until we gave up. This usually isn't a deliberate choice: ${_blockedVendorClause(edgeVendor)}.`,
+    fixFraming: (bannerFacts, edgeVendor) => FAILURE_POINT_COPY.blocked.fixFraming(bannerFacts, edgeVendor),
+  },
   partial: {
     heading: 'Too few product pages came through to score your catalog',
     body: 'We reached some of your product pages this run, but not enough to score the dimensions that depend on them.',
@@ -401,6 +413,36 @@ export const BLOCKED_STEP_COPY = {
     bad: 'Asked for product pages and were refused every time.',
   },
 }
+
+// Unreachable-host follow-up: the trace steps an unreachable run can
+// state. robots.txt never answered either, so discovery_trace carries
+// robots_ok: null and that step doesn't render at all.
+export const UNREACHABLE_STEP_COPY = {
+  homepage: {
+    good: 'Asked for your homepage and got it.',
+    bad: 'Asked for your homepage. No answer came back before we gave up.',
+  },
+  productPages: {
+    good: 'Asked for product pages and got them.',
+    bad: 'Never got far enough to ask for a product page — nothing answered.',
+  },
+}
+
+// Manufacturer sites (Clorox, request 146): real product pages with
+// Product markup and GTINs, and no Offer anywhere, because the brand
+// sells through retailers. Price truth and deal citability are correct
+// zeros — but the report used to ask Clorox to publish prices it has no
+// way to publish. Same discipline as BRAND_ONLY_COPY: presentation only.
+// Every stored score, and the composite, stay exactly as scored; the
+// three offer-bearing True Value rows say why they don't apply, and
+// their ranked fixes point at the channel that does carry the offer.
+export const MANUFACTURER_COPY = {
+  dimensionNote: 'not applicable to a manufacturer site — offers live at your retailers',
+  trueValueNote: "Your product pages carry product details but no prices — shoppers are sent to your retailers to buy. Price, member value and deals are read where your offers actually live, so this run doesn't hold them against your own site.",
+  // The ranked-fix text for price_truth / member_value / deal_citability.
+  fixHuman: 'Get your product data — GTINs, names and current offers — into the retailer and marketplace feeds agents read, so the price an agent quotes for your product is the one your retailers actually charge.',
+}
+export const MANUFACTURER_NA_DIMENSION_CODES = ['price_truth', 'member_value', 'deal_citability']
 
 function _resolveBody(body, bannerFacts, edgeVendor) {
   return typeof body === 'function' ? body(bannerFacts, edgeVendor) : body

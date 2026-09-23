@@ -73,12 +73,14 @@ import os
 import re
 import urllib.robotparser
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Optional
 from urllib.parse import urljoin, urlparse
 from xml.etree import ElementTree
 
 from bs4 import BeautifulSoup
 
+from . import site_typing
 from .fetcher import ROBOTS_USER_AGENT, FetchBudget, FetchResult, fetch
 from .structured_data import extract as extract_structured_data
 
@@ -145,9 +147,17 @@ COLLECTION_URL_PATTERNS = (
     re.compile(r"/departments?/"),
     re.compile(r"/catalog/"),
 )
-LOYALTY_LINK_KEYWORDS = (
-    "reward", "loyalty", "member", "perk", "insider", "circle", "plus",
-)
+# Loyalty-candidate fix (Loreal, request 139): "member" matched the
+# href /en/groupe/governance-and-ethics/comex-members/ — a corporate
+# board page whose visible text is "Executive Committee" — and member
+# value then scored 5/5 on a site with no program at all. These three
+# words are too common in ordinary URLs and prose to trust anywhere but
+# the link's own visible text, and only as whole words there
+# ("Member Pricing", "Plus One", "Beauty Circle" — never "comex-members",
+# "plusone" in a path, or "encircle"). The unambiguous four still match
+# either the text or the href, as before.
+LOYALTY_LINK_KEYWORDS = ("reward", "loyalty", "perk", "insider")
+LOYALTY_TEXT_WORD_KEYWORDS = ("member", "plus", "circle")
 SHIPPING_LINK_KEYWORDS = (
     "shipping", "returns", "return policy", "delivery",
 )
@@ -360,6 +370,34 @@ def resolve_canonical_origin(input_url: str) -> CanonicalResolution:
 # why filename is never trusted as the selector by itself.
 _PRODUCT_FILENAME_HINTS = ("pdp", "product", "products", "catalog", "item")
 
+# Ulta follow-up (request 141): Ulta's sitemap index lists 23 children
+# and its catalog child is just "p.xml" — named after its own /p/ PDP
+# path, with nothing _PRODUCT_FILENAME_HINTS could match. The walk spent
+# its child-probe allowance on discover/company/shop/guestservices and
+# stopped four short of it. A child whose whole filename stem IS one of
+# the PDP path prefixes PRODUCT_URL_PATTERNS recognizes is named after
+# the catalog. Exact stem only: "p" must never match "promotion.xml" or
+# "sitemap-p1.xml". ORDER ONLY, like every other filename hint here.
+_PDP_PATH_STEMS = ("p", "t", "ip", "dp", "pd", "products", "product", "pdp")
+
+
+def _sitemap_stem(url: str) -> str:
+    name = urlparse(url).path.lower().rsplit("/", 1)[-1]
+    for suffix in (".gz", ".xml"):
+        if name.endswith(suffix):
+            name = name[: -len(suffix)]
+    return name
+
+
+def _product_hinted_for_ordering(url: str) -> bool:
+    """A product-hint filename (_PRODUCT_FILENAME_HINTS) or an exact PDP
+    path stem (_PDP_PATH_STEMS). Used only to decide what is probed
+    FIRST — never to select, and never for _select_best_sitemap_child's
+    early exit or discovery_outcome's classifications, which keep the
+    narrower _PRODUCT_FILENAME_HINTS test."""
+    path = urlparse(url).path.lower()
+    return _matches_filename_hint(path, _PRODUCT_FILENAME_HINTS) or _sitemap_stem(url) in _PDP_PATH_STEMS
+
 # Nike discovery fix (requirement 3): filenames that are recognizably
 # NOT a product catalog — content-sampling skips these unless nothing
 # else was probed, so a starved run doesn't burn its sample budget
@@ -456,10 +494,7 @@ def _reorder_declared_sitemaps(urls: list) -> list:
     sooner, so a genuine PDP index declared later than several
     unrelated indexes (Nike's shape: sitemap-v2-pdp-index.xml is third
     of seven) doesn't lose its share of the budget to them first."""
-    return sorted(
-        urls,
-        key=lambda u: 0 if _matches_filename_hint(urlparse(u).path.lower(), _PRODUCT_FILENAME_HINTS) else 1,
-    )
+    return sorted(urls, key=lambda u: 0 if _product_hinted_for_ordering(u) else 1)
 
 
 def _reorder_children_by_locale(child_urls: list, preferred_locale: Optional[str]) -> list:
@@ -485,6 +520,20 @@ def _reorder_children_by_locale(child_urls: list, preferred_locale: Optional[str
 def _looks_non_catalog_filename(url: str) -> bool:
     name = urlparse(url).path.lower()
     return _matches_filename_hint(name, _NON_CATALOG_FILENAME_HINTS)
+
+
+def _is_promoted_child(url: str) -> bool:
+    return _product_hinted_for_ordering(url) and not _looks_non_catalog_filename(url)
+
+
+def _reorder_children_by_product_hint(child_urls: list) -> list:
+    """Ulta follow-up: a <sitemapindex>'s product-hinted children
+    (_product_hinted_for_ordering) are probed before the rest. Stable,
+    so the locale order _reorder_children_by_locale already set holds
+    within each group. A hinted name that ALSO reads as non-catalog
+    (sitemap-product-questions.xml — the hotfix-5 decoy) is not
+    promoted: it still gets probed, just not ahead of anything."""
+    return sorted(child_urls, key=lambda u: 0 if _is_promoted_child(u) else 1)
 
 
 def _sitemap_priority(url: str) -> int:
@@ -671,8 +720,7 @@ def _content_sample_rank(child_url: str, preferred_locale: Optional[str]) -> int
     unrecognized URL shape), then the resolved-locale child, then
     everything else. ORDER ONLY, same discipline as every other
     filename/locale hint in this module."""
-    path = urlparse(child_url).path.lower()
-    if _matches_filename_hint(path, _PRODUCT_FILENAME_HINTS):
+    if _product_hinted_for_ordering(child_url):
         return 0
     if preferred_locale and _sitemap_locale_hint(child_url) == preferred_locale:
         return 1
@@ -705,7 +753,9 @@ def _select_best_sitemap_child(
     the one with the highest URL-pattern product density. Nike
     discovery fix (requirement 1): children are probed in LOCALE-
     preferred order, not raw declaration order, when they carry locale
-    segments (see _reorder_children_by_locale) — filename/locale never
+    segments (see _reorder_children_by_locale), and — Ulta follow-up —
+    product-hinted children ahead of that (see _reorder_children_by_
+    product_hint) — filename/locale never
     decide WHICH child wins, only the order they're tried in and, for
     _sitemap_priority, a tiebreak among equally-dense results.
 
@@ -739,10 +789,12 @@ def _select_best_sitemap_child(
     sibling (the genuine catalog child, named without a product hint at
     all) is reached in the same probe pass.
     """
-    ordered = _reorder_children_by_locale(child_urls, preferred_locale)
+    queue = _reorder_children_by_product_hint(_reorder_children_by_locale(child_urls, preferred_locale))
     candidates = []  # (density, product_count, url, urls)
     probed = 0
-    for child_url in ordered:
+    descended: set = set()
+    while queue:
+        child_url = queue.pop(0)
         if probed >= SITEMAP_CHILD_PROBE_LIMIT or not discovery_budget.has_capacity() or not _child_probe_budget_has_capacity(discovery_budget):
             break
         probed += 1
@@ -750,6 +802,17 @@ def _select_best_sitemap_child(
         if parsed is None:
             continue
         is_index, urls = parsed
+        if is_index and urls and child_url not in descended and _is_promoted_child(child_url):
+            # Ulta follow-up: Ulta's p.xml is itself a <sitemapindex>
+            # (p-0.xml … p-27.xml). A nested index used to be skipped
+            # outright, so promoting it bought nothing. A PRODUCT-HINTED
+            # nested index has its own children probed next, ahead of
+            # every remaining sibling — one level only (its children are
+            # never descended in turn), and inside the same probe limit
+            # and budget as everything else here.
+            descended.add(child_url)
+            queue = [u for u in urls if u not in descended] + queue
+            continue
         if is_index or not urls:
             continue
         product_count = sum(1 for u in urls if _looks_like_product_url(u))
@@ -878,19 +941,47 @@ def _looks_like_product_url(url: str) -> bool:
     return any(p.search(path) for p in PRODUCT_URL_PATTERNS)
 
 
-def _find_links_by_keyword(html: str, base_url: str, keywords) -> list:
+def _find_links_by_keyword(html: str, base_url: str, keywords, *, text_word_keywords=()) -> list:
+    """Links whose visible text or href contains one of `keywords`, or
+    whose visible text contains one of `text_word_keywords` as a whole
+    word (see LOYALTY_TEXT_WORD_KEYWORDS for why some words only count
+    there). Document order. Never raises."""
     try:
         soup = BeautifulSoup(html, "html.parser")
     except Exception:
         return []
 
+    word_patterns = [re.compile(rf"\b{re.escape(kw)}\b") for kw in text_word_keywords]
     matches = []
     for a in soup.find_all("a", href=True):
         text = (a.get_text() or "").strip().lower()
         href = a["href"]
-        if any(kw in text or kw in href.lower() for kw in keywords):
+        if any(kw in text or kw in href.lower() for kw in keywords) or any(
+            p.search(text) for p in word_patterns
+        ):
             matches.append(urljoin(base_url, href))
     return matches
+
+
+def _has_commerce_signal(homepage_html: str, robots_fetch, sitemap_urls: list, sitemap_index_entries: list) -> bool:
+    """site_typing's own commerce-signal test, asked at discovery time —
+    before any product page has been gathered, so the Offer-markup
+    signal reads the homepage's own structured data only. Loyalty-
+    candidate fix: a brand-only site has no loyalty program to score, so
+    no loyalty page is sampled for one. Never raises."""
+    try:
+        view = SimpleNamespace(
+            robots_fetch=robots_fetch, sitemap_urls=sitemap_urls, sitemap_index_entries=sitemap_index_entries,
+        )
+        if site_typing.commerce_signals(homepage_html, view):
+            return True
+        homepage_page = SimpleNamespace(extracted=extract_structured_data(homepage_html))
+        return bool(site_typing.commerce_signals(None, SimpleNamespace(
+            robots_fetch=None, sitemap_urls=[], sitemap_index_entries=[],
+        ), [homepage_page]))
+    except Exception:
+        log.exception("[scan.discovery] commerce signal check failed")
+        return False
 
 
 def _find_links_matching(html: str, base_url: str, matcher) -> list:
@@ -1541,8 +1632,10 @@ def discover_pages(
         product_url_pool = deduped_product_urls[:PRODUCT_URL_POOL_LIMIT]
 
         if homepage_html:
-            loyalty_links = _find_links_by_keyword(homepage_html, base_url, LOYALTY_LINK_KEYWORDS)
-            if loyalty_links:
+            loyalty_links = _find_links_by_keyword(
+                homepage_html, base_url, LOYALTY_LINK_KEYWORDS, text_word_keywords=LOYALTY_TEXT_WORD_KEYWORDS,
+            )
+            if loyalty_links and _has_commerce_signal(homepage_html, robots_fetch, sitemap_urls, sitemap_index_entries):
                 candidates.append(PageCandidate(url=loyalty_links[0], kind="loyalty"))
 
             shipping_links = _find_links_by_keyword(homepage_html, base_url, SHIPPING_LINK_KEYWORDS)

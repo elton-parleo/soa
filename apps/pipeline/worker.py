@@ -1705,6 +1705,10 @@ def _emit_crawl_retry_moments(request_id: int, result) -> None:
     from the finished scan result rather than streaming them mid-fetch.
     Bounded by MAX_PAGE_FETCHES (~12 pages/scan), so one line per
     retried page is never spammy.
+
+    The verb names what actually happened (Michaels, Dick's, RH and
+    Coach were all told "rate-limited us" for a 403) — see
+    _crawl_retry_verb.
     """
     for entry in result.pages_fetched or []:
         attempts = entry.get("attempts") or 1
@@ -1715,8 +1719,23 @@ def _emit_crawl_retry_moments(request_id: int, result) -> None:
         outcome = "retry succeeded" if entry.get("status") == "fetched" else "still no luck"
         lite_events.emit_log(
             request_id, lite_events.TASK_CRAWL,
-            f"{entry.get('url')} rate-limited us{cooloff} — {outcome}",
+            f"{entry.get('url')} {_crawl_retry_verb(entry)}{cooloff} — {outcome}",
         )
+
+
+def _crawl_retry_verb(entry: dict) -> str:
+    """The status that sent this URL round the retry ladder — recorded
+    as retry_http_status on rows scanned since it existed; http_status
+    (the FINAL answer) is the fallback for older rows and for a
+    still-failing URL, where the two are the same thing."""
+    status = entry.get("retry_http_status") or entry.get("http_status")
+    if status == 429:
+        return "rate-limited us"
+    if status == 403:
+        return "refused our reader (HTTP 403)"
+    if status is None:
+        return "didn't respond"
+    return f"answered HTTP {status}"
 
 
 def _emit_llm_discovery_moment(request_id: int, result) -> None:

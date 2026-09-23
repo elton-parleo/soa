@@ -1593,7 +1593,8 @@ def test_crawl_retry_moments_mirrored_into_console(db):
     scan_result = _make_scan_result(
         pages_fetched=[
             {"url": "https://acme.example.com", "status": "fetched", "attempts": 1, "retry_after_seen": None},
-            {"url": "https://acme.example.com/products", "status": "fetched", "attempts": 2, "retry_after_seen": 5.0},
+            {"url": "https://acme.example.com/products", "status": "fetched", "attempts": 2, "retry_after_seen": 5.0,
+             "http_status": 200, "retry_http_status": 429},
         ],
     )
     with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
@@ -1604,11 +1605,48 @@ def test_crawl_retry_moments_mirrored_into_console(db):
     log_texts = [e["text"] for e in _events_of_kind(_events_for_task(events, "crawl"), "log")]
     retry_lines = [t for t in log_texts if "products" in t]
     assert len(retry_lines) == 1
+    assert "rate-limited us" in retry_lines[0]
     assert "retry succeeded" in retry_lines[0]
     assert "5s" in retry_lines[0]
     # The un-retried page (attempts=1) never gets a retry line of its own
     # — only the "reading {url}…" line and the one retried page's line.
     assert len(log_texts) == 2
+
+
+def test_crawl_retry_moment_verb_names_what_happened(db):
+    """Michaels, Dick's, RH and Coach were told "rate-limited us" for a
+    403. The verb keys off the status that caused the retry: 429 is a
+    rate limit, 403 is a refusal, no status at all is no response."""
+    with db.begin() as conn:
+        _insert_pending(conn, competitors=["Rival"], store_url="https://acme.example.com")
+
+    scan_result = _make_scan_result(
+        pages_fetched=[
+            {"url": "https://acme.example.com/p/refused", "status": "blocked", "attempts": 2,
+             "http_status": 403, "retry_http_status": 403},
+            {"url": "https://acme.example.com/p/recovered", "status": "fetched", "attempts": 2,
+             "http_status": 200, "retry_http_status": 403},
+            {"url": "https://acme.example.com/p/silent", "status": "failed", "attempts": 2,
+             "http_status": None},
+            # A row written before retry_http_status existed: the final
+            # status is all there is, and for a still-failing URL it is
+            # the same status that caused the retry.
+            {"url": "https://acme.example.com/p/legacy", "status": "blocked", "attempts": 3,
+             "http_status": 429},
+        ],
+    )
+    with patch("generation.query_generator.generate_lite_queries", return_value=_lite_query_rows()), \
+         patch("scan.engine.run_scan", return_value=scan_result):
+        worker.process_lite_requests()
+
+    events = _events_by_token(db.connect(), "a1b2c3d4e5f6")
+    log_texts = [e["text"] for e in _events_of_kind(_events_for_task(events, "crawl"), "log")]
+    by_slug = {slug: next(t for t in log_texts if f"/p/{slug}" in t) for slug in ("refused", "recovered", "silent", "legacy")}
+    assert "refused our reader (HTTP 403) — still no luck" in by_slug["refused"]
+    assert "refused our reader (HTTP 403) — retry succeeded" in by_slug["recovered"]
+    assert "didn't respond — still no luck" in by_slug["silent"]
+    assert "rate-limited us — still no luck" in by_slug["legacy"]
+    assert not any("rate-limited" in by_slug[s] for s in ("refused", "recovered", "silent"))
 
 
 def test_probe_done_events_present_with_result_aware_text(db):

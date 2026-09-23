@@ -54,6 +54,10 @@ export function _fetchProbeSentence(bannerFacts, degradedReason, status) {
     const kindPhrase = probe.kind === 'store_root' ? 'your homepage' : 'your product page'
     return ` ChatGPT opened ${kindPhrase} fine — the pages exist; our sampler couldn't locate them this run.`
   }
+  if (degradedReason === 'unreachable') {
+    const kindPhrase = probe.kind === 'store_root' ? 'your homepage' : 'your product page'
+    return ` ChatGPT opened ${kindPhrase} fine — your site is up; it just never answered a reader like ours.`
+  }
   if (status === 'blocked') {
     return ' ChatGPT opened it fine — the wall appears specific to unidentified readers like ours.'
   }
@@ -83,6 +87,10 @@ export function DegradedRunBanner({ status, degradedReason, bannerFacts, partial
   if (degradedReason === 'no_product_pages_found') {
     const n = bannerFacts?.sitemaps_read ?? 0
     message = `We read ${n} of your sitemap${n === 1 ? '' : 's'} but couldn't locate product pages to sample — this can be our reader's limitation; on-site checks weren't evaluated.`
+  } else if (degradedReason === 'unreachable') {
+    // Unreachable-host follow-up: the same registry entry the finding
+    // section renders — the status page (no partialRead) reads it here.
+    message = resolveFailurePointBody(FAILURE_POINT_COPY.unreachable.body, bannerFacts, edgeVendor)
   } else if (status === 'blocked') {
     // Blocked-run copy pass: the same plain-language explanation the
     // discovery finding section renders, read from the same registry

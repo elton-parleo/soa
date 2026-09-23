@@ -1273,8 +1273,9 @@ class PublicLiteScan(BaseModel):
     ever populated for a non-'complete' status — "blocked" (the site
     rate-limited/refused our reader), "no_product_pages_found" (our
     sampler couldn't locate product pages this run, never the site's
-    fault), or "unreachable" (total network/DNS failure, nothing
-    responded at all). degraded_banner_facts carries the dynamic facts
+    fault), or "unreachable" (nothing responded at all — every request,
+    robots.txt and the store root included, timed out or failed before
+    any HTTP answer came back). degraded_banner_facts carries the dynamic facts
     the report's first-person banner fills in (refusal type, attempt
     count, whether robots.txt was included, or sitemaps read, plus an
     optional `fetch_probe` sub-dict — Part 2, P4.b — merged in at
@@ -1308,13 +1309,17 @@ class PublicLiteScan(BaseModel):
     fetches this run ("cloudflare" | "akamai" | "datadome" | "human_px"
     | "imperva"), from engine.py's block_evidence rollup — never
     "shopify", which fingerprints a store platform rather than a wall.
+    When no response carried a fingerprint (an unreachable run, where
+    nothing answered at all), it falls back to the DNS-derived hint
+    (block_evidence.dns_vendor_hint), which can also be "cloudfront".
     Null when nothing was recognized, which is a normal outcome and the
     report has neutral wording for it. Evidence only: it changes what
     the blocked report CALLS the wall, never a single point.
 
     Non-commerce report (this session): site_type is engine.py's
     dimensions["site_type"] — "commerce_normal" | "commerce_discovery_
-    failure" | "brand_only" (apps/pipeline/scan/site_typing.py). It
+    failure" | "brand_only" | "manufacturer" (apps/pipeline/scan/
+    site_typing.py). It
     has always been computed and used to gate scorers; recording it
     here is what lets the report stop presenting a correctly-typed
     brand-only site as a failing store. Null on a degraded run (which

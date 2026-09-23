@@ -29,6 +29,14 @@ from .discovery import (
 log = logging.getLogger(__name__)
 
 CODE_PRODUCT_PAGES_READ = "product_pages_read"
+# Unreachable-host follow-up: not one request this run — robots.txt,
+# /sitemap.xml, the store root, llms.txt, the MCP manifest — came back
+# with any HTTP answer at all. Lululemon (request 138) is the fixture:
+# its Akamai edge held every connection open until our timeout while
+# answering a browser instantly. That is neither "no sitemap" (we never
+# learned whether there is one) nor a refusal (nothing refused us), so
+# it gets its own code, checked before both.
+CODE_UNREACHABLE = "unreachable"
 CODE_PRODUCT_PAGES_REFUSED = "product_pages_refused"
 CODE_PRODUCT_PAGES_UNREADABLE = "product_pages_unreadable"
 CODE_SHORT_CIRCUITED = "short_circuited"
@@ -86,6 +94,33 @@ _EMPTY_OUTCOME = {
     "short_circuited": False,
     "product_candidates_rejected": 0,
 }
+
+
+def nothing_responded(discovery, pages) -> bool:
+    """True when no fetch this run carries an HTTP status — robots.txt,
+    every sitemap/endpoint probe in discovery.all_fetches, the store
+    root, and every gathered page. FetchResult.http_status is only set
+    when a real response came back, so its absence everywhere is
+    exactly "nothing answered". Shared with engine._derive_status so the
+    run status and this classification can never disagree. Never
+    raises; an unreadable record answers False (the ordinary path)."""
+    try:
+        fetches = [discovery.robots_fetch, discovery.homepage_fetch, *(discovery.all_fetches or [])]
+        fetches.extend(p.fetch_result for p in pages)
+        return not any(fr is not None and fr.http_status is not None for fr in fetches)
+    except Exception:
+        log.exception("[scan.discovery_outcome] responded check failed")
+        return False
+
+
+def _robots_answered_for_sitemaps(discovery) -> bool:
+    """robots.txt was served, or genuinely isn't there (404/410). Only
+    then does "you don't declare a sitemap" follow from reading it — a
+    robots.txt that timed out or was refused says nothing either way."""
+    robots = discovery.robots_fetch
+    if robots is None:
+        return False
+    return robots.status == "fetched" or robots.http_status in (404, 410)
 
 
 def _rejected_candidates(pages) -> list:
@@ -260,6 +295,12 @@ def _classify(discovery, pages, base_url: str, sitemap_entries: list) -> tuple:
             f"we found {product_pages_attempted} product page(s) and read {product_pages_fetched} of them"
         )
 
+    if nothing_responded(discovery, pages):
+        return CODE_UNREACHABLE, (
+            "your site did not respond to our reader at all — every request "
+            "timed out before any answer came back"
+        )
+
     if product_pages_attempted >= 1:
         hostile = [p for p in product_pages if p.fetch_result.status == "blocked"]
         if hostile:
@@ -334,7 +375,7 @@ def _classify(discovery, pages, base_url: str, sitemap_entries: list) -> tuple:
 
     declared = ss.get("declared_order") or []
     default_fallback = urljoin(base_url, "/sitemap.xml")
-    if declared == [default_fallback]:
+    if declared == [default_fallback] and _robots_answered_for_sitemaps(discovery):
         matching = next((e for e in sitemap_entries if _sitemap_name(default_fallback) == e["name"]), None)
         if matching and matching["outcome"] in ("not_found", "failed"):
             return CODE_NO_SITEMAP, (

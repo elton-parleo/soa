@@ -59,8 +59,8 @@ from .discovery import (
     discover_pages,
     resolve_canonical_origin,
 )
-from .discovery_outcome import build_discovery_outcome
-from .fetcher import FetchBudget, fetch
+from .discovery_outcome import build_discovery_outcome, nothing_responded
+from .fetcher import FetchBudget, dns_vendor_hint, fetch, forget_host_timeouts
 from .brand_icon import extract_brand_icon
 from .offer_feed import build_offer_feed, extract_product_image, extract_product_name
 from .structured_data import EXTRACTION_REV, ExtractedData, extract
@@ -414,6 +414,10 @@ def _fetch_entry(fr, *, rejected_reason: Optional[str] = None) -> dict:
         # The per-host gap robots.txt asked us to keep, when it asked for
         # one — additive, None on the overwhelming majority of rows.
         "crawl_delay_seconds": fr.crawl_delay_seconds,
+        # The status that first sent this URL round the retry ladder
+        # (http_status above is the final one). Additive; None unless
+        # the URL was actually retried.
+        "retry_http_status": fr.retry_http_status,
     }
     if rejected_reason:
         entry["product_candidate_rejected"] = rejected_reason
@@ -435,7 +439,7 @@ BLOCK_EVIDENCE_MAX_BODY_SIZES = 8
 BLOCK_EVIDENCE_NON_WAF_VENDORS = ("shopify",)
 
 
-def _block_evidence_summary(entries) -> dict:
+def _block_evidence_summary(entries, *, dns_hostname: Optional[str] = None) -> dict:
     """Block evidence (fetcher hardening): the run-level rollup of what
     the per-fetch evidence above adds up to — which edge vendor's
     fingerprint showed up and how often, and the distinct refusal-page
@@ -445,7 +449,15 @@ def _block_evidence_summary(entries) -> dict:
 
     vendor_hints counts EVERY entry, not just blocked ones — knowing a
     run's successful fetches also came through Cloudflare is part of
-    reading the blocked ones. Pure and never raises."""
+    reading the blocked ones. Never raises.
+
+    dns_hostname (unreachable-host follow-up): passed only on a blocked
+    or unreachable run. When no response carried a recognizable
+    fingerprint — always the case when nothing answered at all — the
+    host's DNS is asked instead (fetcher.dns_vendor_hint, bounded at 2 s)
+    and recorded as dns_vendor_hint / dns_vendor_record. dominant_vendor
+    itself stays response-derived only; the report falls back to the DNS
+    hint in cycle_scoring._edge_vendor."""
     vendor_hints: dict = {}
     blocked_titles: list = []
     blocked_body_sizes: list = []
@@ -464,11 +476,17 @@ def _block_evidence_summary(entries) -> dict:
                 blocked_body_sizes.append(size)
     except Exception:
         log.exception("[scan.engine] block evidence summary failed")
+    dominant_vendor = _dominant_edge_vendor(vendor_hints)
+    dns_vendor, dns_record = (None, None)
+    if dns_hostname and dominant_vendor is None:
+        dns_vendor, dns_record = dns_vendor_hint(dns_hostname)
     return {
         "vendor_hints": vendor_hints,
         "blocked_titles": blocked_titles,
         "blocked_body_sizes": blocked_body_sizes,
-        "dominant_vendor": _dominant_edge_vendor(vendor_hints),
+        "dominant_vendor": dominant_vendor,
+        "dns_vendor_hint": dns_vendor,
+        "dns_vendor_record": dns_record,
     }
 
 
@@ -526,6 +544,18 @@ def _derive_status(discovery: DiscoveryResult, pages: list) -> tuple:
     response was received, so its presence anywhere is exactly this
     signal.
 
+    Unreachable-host follow-up: the "unreachable" answer used to be
+    reachable only AFTER at least one product page was attempted. A run
+    where nothing answered at all — robots.txt, /sitemap.xml, the store
+    root, llms.txt, the MCP manifest all timed out, so discovery never
+    had a product URL to try — fell through to "no_product_pages_found"
+    instead, and the report told Lululemon (request 138) its site
+    "doesn't declare a sitemap". Zero candidates with no HTTP status
+    anywhere is now "unreachable" too, checked before the hostile and
+    no_product_pages_found branches; discovery_outcome.nothing_responded
+    is the one definition of "no HTTP status anywhere", shared with the
+    outcome classification.
+
     Nike discovery fix: this function's own "no_product_pages_found"
     branch above only ever fires when the HOMEPAGE ALSO never fetched —
     it does NOT cover the STATUS_COMPLETE, zero-product-pages shape
@@ -547,6 +577,8 @@ def _derive_status(discovery: DiscoveryResult, pages: list) -> tuple:
         return STATUS_COMPLETE, None
 
     if not product_pages:
+        if nothing_responded(discovery, pages):
+            return STATUS_FAILED, "unreachable"
         # S2/S4: zero candidates isn't automatically "our limitation" —
         # if robots.txt or the sitemap itself came back hostile (403/429,
         # the Sephora shape), that's still honestly "the site blocked
@@ -680,6 +712,10 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
             )
 
         budget = FetchBudget()
+        # Unreachable-host follow-up: fetcher.py shortens the timeout for a
+        # host that has already timed out twice. That count is per-process,
+        # so a new scan of the same host starts back on the full timeout.
+        forget_host_timeouts(urlparse(input_origin).hostname)
 
         # Stage 11 (H1): resolve the canonical origin ONCE, following
         # redirects — this one homepage fetch is charged against the
@@ -774,7 +810,13 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
             # sitemap_sampling/signing_enabled above — a degraded run is
             # exactly when "who refused us, and did the same thing refuse
             # every URL?" is the question being asked.
-            dimensions["block_evidence"] = _block_evidence_summary(pages_fetched)
+            dimensions["block_evidence"] = _block_evidence_summary(
+                pages_fetched,
+                dns_hostname=(
+                    urlparse(canonical_origin).hostname
+                    if degraded_reason in ("blocked", "unreachable") else None
+                ),
+            )
             return ScanResult(
                 status=status,
                 dimensions=dimensions,
@@ -787,6 +829,7 @@ def run_scan(input_url_or_domain: str, api_key: Optional[str] = None) -> ScanRes
                 error=(
                     "site blocked automated access" if status == STATUS_BLOCKED
                     else "no product pages found to sample" if degraded_reason == "no_product_pages_found"
+                    else "the site did not respond to any request" if degraded_reason == "unreachable"
                     else "no pages could be fetched"
                 ),
             )

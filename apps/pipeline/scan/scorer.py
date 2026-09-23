@@ -274,6 +274,57 @@ def _parse_date(value) -> Optional[datetime]:
 SHORT_CIRCUIT_EVIDENCE_CLAUSE = "robots.txt and the store root both refused our reader"
 
 
+# Soft-200 follow-up (Church & Dwight, request 149): the site answered
+# /llms.txt and /.well-known/mcp.json with HTTP 200 and its own 14 KB
+# HTML "404 Something Went Wrong" page. It was harmless there only
+# because protocol_feed is N/A on a brand-only site; on a commerce site
+# the same response scored "/llms.txt present and non-empty" and "MCP
+# endpoint declaration discoverable". A 200 is not the file. These two
+# tests decide whether what came back IS the file; a response that
+# isn't lands in the same unverifiable bucket as a network failure —
+# neither present nor absent, since a soft-404 and a real file behind a
+# broken route look the same from here.
+LLMS_TXT_CONTENT_TYPES = ("text/plain", "text/markdown", "text/x-markdown")
+
+
+def _content_type(fetch_result) -> str:
+    raw = (getattr(fetch_result, "response_headers", None) or {}).get("content-type") or ""
+    return raw.split(";", 1)[0].strip().lower()
+
+
+def _looks_like_html_document(body: Optional[str]) -> bool:
+    head = (body or "").lstrip()[:15].lower()
+    return head.startswith("<!doctype") or head.startswith("<html")
+
+
+def _llms_txt_is_a_text_file(fetch_result) -> bool:
+    """/llms.txt is a markdown text file: not an HTML document, and
+    served as text, markdown, or with no content-type at all."""
+    if _looks_like_html_document(fetch_result.html):
+        return False
+    content_type = _content_type(fetch_result)
+    return not content_type or content_type in LLMS_TXT_CONTENT_TYPES
+
+
+def _json_object(body: Optional[str]) -> Optional[dict]:
+    """The body parsed as a JSON object, or None. Never raises."""
+    if not body or not body.strip():
+        return None
+    try:
+        parsed = json.loads(body)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _served_not_the_file(fetch_result) -> str:
+    """How to name what came back instead of the file we asked for."""
+    if _looks_like_html_document(fetch_result.html) or _content_type(fetch_result) == "text/html":
+        return "an HTML page"
+    content_type = _content_type(fetch_result)
+    return f"a {content_type} response" if content_type else "a response in the wrong format"
+
+
 def score_f1_agent_access(discovery, pages, divergence_evidence=()) -> DimensionScore:
     weight = WEIGHTS["F1"]
     evidence = []
@@ -516,6 +567,12 @@ def score_f3_protocol_feed_presence(pages, site_type_result, short_circuited: bo
     were already unverifiable-and-excluded on this path, so coverage and
     score are identical either way; the string just stops reading as an
     unexplained omission.
+
+    Soft-200 follow-up: a fetched /llms.txt counts as present only when
+    it is actually a text file (_llms_txt_is_a_text_file), and a fetched
+    MCP manifest only when it parses as a JSON object. Anything else
+    that came back 200 is unverifiable — excluded like a network error,
+    with its own evidence line.
     """
     weight = WEIGHTS["F3"]
 
@@ -538,6 +595,9 @@ def score_f3_protocol_feed_presence(pages, site_type_result, short_circuited: bo
 
     # Each check tuple: (verifiable, present, evidence string).
     checks = []
+    # How many of the unverifiable checks are a soft-200 rather than a
+    # network failure — only so the exclusion note can say which.
+    served_wrong_file = 0
 
     if llms_txt_page is None:
         llms_not_attempted = "could not verify /llms.txt — not attempted"
@@ -547,8 +607,16 @@ def score_f3_protocol_feed_presence(pages, site_type_result, short_circuited: bo
     else:
         status = llms_txt_page.fetch_result.status
         if status == "fetched":
-            present = bool(llms_txt_page.fetch_result.html and llms_txt_page.fetch_result.html.strip())
-            checks.append((True, present, "/llms.txt present and non-empty" if present else "/llms.txt fetched but empty"))
+            fr = llms_txt_page.fetch_result
+            non_empty = bool(fr.html and fr.html.strip())
+            if non_empty and not _llms_txt_is_a_text_file(fr):
+                served_wrong_file += 1
+                checks.append((False, False, (
+                    f"could not verify /llms.txt — the path answered with {_served_not_the_file(fr)}, "
+                    "not a text file; not counted as present or absent"
+                )))
+            else:
+                checks.append((True, non_empty, "/llms.txt present and non-empty" if non_empty else "/llms.txt fetched but empty"))
         elif status == "not_found":
             checks.append((True, False, "/llms.txt not found (404)"))
         else:
@@ -566,7 +634,14 @@ def score_f3_protocol_feed_presence(pages, site_type_result, short_circuited: bo
     else:
         status = mcp_page.fetch_result.status
         mcp_body_present = bool(mcp_page.fetch_result.html and mcp_page.fetch_result.html.strip())
-        if status == "fetched" and mcp_body_present:
+        if status == "fetched" and mcp_body_present and _json_object(mcp_page.fetch_result.html) is None:
+            served_wrong_file += 1
+            checks.append((False, False, (
+                f"could not verify MCP endpoint — the well-known path answered with "
+                f"{_served_not_the_file(mcp_page.fetch_result)}, not a JSON manifest; "
+                "not counted as present or absent"
+            )))
+        elif status == "fetched" and mcp_body_present:
             checks.append((True, True, "MCP endpoint declaration discoverable (well-known path)"))
         elif status in ("fetched", "not_found"):
             checks.append((True, False, "no MCP endpoint declaration found (well-known path checked, absent; no link markup)"))
@@ -583,8 +658,13 @@ def score_f3_protocol_feed_presence(pages, site_type_result, short_circuited: bo
     points = sum(per_check for c in verifiable_checks if c[1])
     evidence = [c[2] for c in checks]
     if unverifiable_count:
+        cause = (
+            "network error" if not served_wrong_file
+            else "the path didn't serve the file" if served_wrong_file == unverifiable_count
+            else "network error, or the path didn't serve the file"
+        )
         evidence.append(
-            f"{unverifiable_count} sub-check(s) excluded from scoring — network error, not counted as absent"
+            f"{unverifiable_count} sub-check(s) excluded from scoring — {cause}, not counted as absent"
         )
 
     fix = None
@@ -1308,17 +1388,22 @@ VALUE_PROTOCOLS_POINTS = {
 def _parse_protocol_manifest(mcp_page) -> Optional[dict]:
     """Never raises: a missing page, an unfetched status, an empty body,
     or unparseable/non-object JSON all return None — the caller treats
-    every one of these identically to "no protocol profile found"."""
+    every one of these identically to "no protocol profile found" for
+    scoring. Same JSON-object rule as F3's MCP check (_json_object), so
+    the two dimensions can never disagree about whether a manifest was
+    served."""
     if mcp_page is None or mcp_page.fetch_result.status != "fetched":
         return None
-    html = mcp_page.fetch_result.html
-    if not html or not html.strip():
-        return None
-    try:
-        manifest = json.loads(html)
-    except (json.JSONDecodeError, TypeError, ValueError):
-        return None
-    return manifest if isinstance(manifest, dict) else None
+    return _json_object(mcp_page.fetch_result.html)
+
+
+def _mcp_served_not_a_manifest(mcp_page) -> bool:
+    """The well-known path answered 200 with a body that isn't a JSON
+    object — Church & Dwight's HTML soft-404 (request 149)."""
+    if mcp_page is None or mcp_page.fetch_result.status != "fetched":
+        return False
+    body = mcp_page.fetch_result.html
+    return bool(body and body.strip()) and _json_object(body) is None
 
 
 def score_value_protocols(pages, short_circuited: bool = False) -> DimensionScore:
@@ -1339,6 +1424,14 @@ def score_value_protocols(pages, short_circuited: bool = False) -> DimensionScor
     empty-but-well-typed capabilities list and a current specVersion now
     correctly earns both — that's a real, distinct fact about the
     manifest, not previously creditable on its own.
+
+    Soft-200 follow-up: a well-known path that answered 200 with
+    something that isn't a JSON object (an HTML soft-404) gets its own
+    evidence line instead of "no protocol profile found". The score is
+    the same 0 a network failure gets here — this dimension has no
+    per-check exclusion, and a manifest we couldn't read is still one an
+    agent can't read either — but the line no longer asserts an absence
+    nobody checked.
 
     Fetcher hardening: short_circuited says discovery stopped before it
     started because robots.txt and the store root both refused us
@@ -1372,6 +1465,11 @@ def score_value_protocols(pages, short_circuited: bool = False) -> DimensionScor
             evidence=[
                 f"could not verify a protocol profile — not attempted; {SHORT_CIRCUIT_EVIDENCE_CLAUSE}"
                 if short_circuited
+                else (
+                    "could not verify a protocol profile — the MCP well-known path answered with "
+                    f"{_served_not_the_file(mcp_page.fetch_result)}, not a manifest"
+                )
+                if _mcp_served_not_a_manifest(mcp_page)
                 else "no protocol profile found"
             ],
             fix=(

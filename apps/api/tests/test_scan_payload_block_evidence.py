@@ -123,3 +123,55 @@ def test_the_filter_itself_never_raises_on_an_unexpected_shape():
     assert _public_pages_fetched([]) == []
     assert _public_pages_fetched(["legacy", None]) == ["legacy", None]
     assert _public_pages_fetched([{}]) == [{}]
+
+
+# ─── unreachable-host follow-up: the DNS vendor fallback ────────────────
+
+_UNREACHABLE_ROW = {
+    "url": "https://lululemon.example.com/robots.txt", "final_url": "https://lululemon.example.com/robots.txt",
+    "status": "failed", "http_status": None, "attempts": 1, "retry_after_seen": None, "bytes": None,
+    "error": "timeout: timed out", "retry_http_status": None,
+}
+
+_UNREACHABLE_DIMENSIONS = {
+    "degraded_reason": "unreachable",
+    "discovery_outcome": {
+        "code": "unreachable",
+        "summary": "your site did not respond to our reader at all — every request timed out before any answer came back",
+    },
+    "block_evidence": {
+        "vendor_hints": {}, "blocked_titles": [], "blocked_body_sizes": [],
+        "dominant_vendor": None,
+        "dns_vendor_hint": "akamai",
+        "dns_vendor_record": "a23-67-33-24.deploy.static.akamaitechnologies.com",
+    },
+}
+
+
+def test_unreachable_row_names_the_dns_vendor_and_its_outcome():
+    """Lululemon (request 138): nothing answered, so no response carried
+    a fingerprint — edge_vendor falls back to the DNS hint."""
+    payload = build_scan_payload(
+        _scan_row("failed", dimensions=_UNREACHABLE_DIMENSIONS, pages_fetched=[_UNREACHABLE_ROW]), {},
+    )
+    assert payload["degraded_reason"] == "unreachable"
+    assert payload["discovery_outcome"]["code"] == "unreachable"
+    assert payload["edge_vendor"] == "akamai"
+    # The matched DNS record, like the rest of block_evidence, is ours.
+    assert "dns_vendor_record" not in json.dumps(payload)
+    assert "retry_http_status" not in payload["pages_fetched"][0]
+
+
+def test_a_response_fingerprint_outranks_the_dns_hint():
+    dimensions = dict(_UNREACHABLE_DIMENSIONS)
+    dimensions["degraded_reason"] = "blocked"
+    dimensions["block_evidence"] = {**_UNREACHABLE_DIMENSIONS["block_evidence"], "dominant_vendor": "imperva"}
+    payload = build_scan_payload(_scan_row("blocked", dimensions=dimensions), {})
+    assert payload["edge_vendor"] == "imperva"
+
+
+def test_a_row_without_the_dns_keys_still_names_nothing():
+    """Written before the DNS fallback existed."""
+    dimensions = {"degraded_reason": "blocked", "block_evidence": {"dominant_vendor": None}}
+    payload = build_scan_payload(_scan_row("blocked", dimensions=dimensions), {})
+    assert payload["edge_vendor"] is None

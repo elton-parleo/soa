@@ -42,6 +42,7 @@ import os
 import random
 import re
 import socket
+import threading
 import time
 import urllib.robotparser
 from dataclasses import dataclass, field
@@ -86,6 +87,14 @@ ROBOTS_USER_AGENT = BOT_NAME
 ACCEPT_HEADER = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
 ACCEPT_LANGUAGE_HEADER = "en-US,en;q=0.9"
 TIMEOUT_SECONDS = 10.0
+# Unreachable-host follow-up: an edge that holds an identified reader's
+# connection open until we give up (Lululemon's Akamai edge, request
+# 138 — every probe ran the full 10 s) has already answered the
+# question by its second timeout. Every later request to that host this
+# scan waits REPEAT_TIMEOUT_SECONDS instead. A cooperative host never
+# times out at all, so it never sees the shorter value.
+REPEAT_TIMEOUT_SECONDS = 3.0
+TIMEOUTS_BEFORE_SHORTENING = 2
 MAX_REDIRECTS = 5
 ALLOWED_SCHEMES = {"http", "https"}
 ALLOWED_PORTS = {80, 443}
@@ -283,6 +292,82 @@ _EDGE_VENDOR_PREDICATES = {
 }
 
 
+# Unreachable-host follow-up: a connection that never answered carries no
+# headers, cookies or body for _edge_vendor_hint to read, so a run where
+# every fetch timed out (Lululemon, request 138) could never name its
+# wall. DNS still can — the edge a host is served from is published in
+# its CNAME target, or in the reverse-DNS name of the address it
+# resolves to. Same "diagnostic hint, never a scored fact" status as
+# EDGE_VENDOR_MARKERS, consulted only when the response-level hint found
+# nothing (engine.py). First match wins; "cloudfront" is a CDN rather
+# than a bot-management product, so the report has no named copy for it
+# and renders its unknown-wall wording.
+DNS_VENDOR_MARKERS = (
+    ("akamai", ("akamaiedge.net", "edgekey.net", "akamaized.net", "akamaitechnologies.com")),
+    ("cloudflare", ("cloudflare",)),
+    ("imperva", ("incapdns.net", "imperva")),
+    ("human_px", ("perimeterx", "px-cloud")),
+    ("cloudfront", ("cloudfront.net",)),
+)
+DNS_VENDOR_HINT_TIMEOUT_SECONDS = 2.0
+
+
+def _dns_names_for(hostname: str) -> list:
+    """Every DNS name that says something about where `hostname` is
+    served from, in the order dns_vendor_hint trusts them: the host's
+    own canonical (CNAME-target) name, the reverse-DNS name of its first
+    address, and — only for a bare apex with no CNAME of its own, since
+    an apex can't carry one — the www sibling's canonical name. Blocking;
+    call it through dns_vendor_hint, which bounds it. Raises freely."""
+    names: list = []
+    infos = socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM, flags=socket.AI_CANONNAME)
+    canonical = next((info[3] for info in infos if info[3]), "")
+    if canonical and canonical.lower() != hostname.lower():
+        names.append(canonical)
+    first_ip = next((info[4][0] for info in infos), None)
+    if first_ip:
+        try:
+            names.append(socket.gethostbyaddr(first_ip)[0])
+        except (socket.herror, socket.gaierror, OSError):
+            pass
+    if not canonical or canonical.lower() == hostname.lower():
+        if hostname.count(".") == 1:
+            www_infos = socket.getaddrinfo(f"www.{hostname}", 443, type=socket.SOCK_STREAM, flags=socket.AI_CANONNAME)
+            www_canonical = next((info[3] for info in www_infos if info[3]), "")
+            if www_canonical:
+                names.append(www_canonical)
+    return names
+
+
+def dns_vendor_hint(hostname: Optional[str], timeout: float = DNS_VENDOR_HINT_TIMEOUT_SECONDS) -> tuple:
+    """(vendor, matched_name) for the edge `hostname`'s DNS points at, or
+    (None, None). The lookups run on a daemon thread bounded by `timeout`
+    — the stdlib resolver takes no timeout of its own, and a slow
+    resolver must never hold a scan up. Never raises."""
+    if not hostname:
+        return None, None
+    box: dict = {}
+
+    def _resolve():
+        try:
+            box["names"] = _dns_names_for(hostname)
+        except Exception:
+            box["names"] = []
+
+    try:
+        worker = threading.Thread(target=_resolve, name="dns-vendor-hint", daemon=True)
+        worker.start()
+        worker.join(timeout)
+        for name in box.get("names") or []:
+            lowered = str(name).lower().rstrip(".")
+            for vendor, markers in DNS_VENDOR_MARKERS:
+                if any(marker in lowered for marker in markers):
+                    return vendor, lowered
+    except Exception:
+        log.exception(f"[scan.fetcher] DNS vendor hint failed for {hostname}")
+    return None, None
+
+
 def _edge_vendor_hint(headers: dict, cookie_names: list, title, body_excerpt) -> Optional[str]:
     """Names the edge/bot-management vendor whose fingerprint this
     response carries, or None when nothing matches — see
@@ -430,6 +515,12 @@ class FetchResult:
     # or refusal, so a row shows the gap that was actually honored rather
     # than leaving it to be re-derived from robots.txt later.
     crawl_delay_seconds: Optional[float] = None
+    # The status of the response that FIRST sent this URL round the
+    # retry ladder, when it went round at all. http_status above is the
+    # FINAL answer — a 200 on a retry that succeeded — so without this a
+    # "retry succeeded" row can't say whether it was a 429, a 403 or a
+    # 503 it recovered from. worker.py's crawl console reads it.
+    retry_http_status: Optional[int] = None
 
 
 class SsrfRejected(Exception):
@@ -564,6 +655,28 @@ _last_fetch_at: dict = {}
 # very first request to a domain this run reads as sitewide hostility
 # from the start, not an ordinary mid-run rate limit.
 _domain_seen: set = set()
+# Unreachable-host follow-up: timeouts per hostname, for _timeout_for.
+# Process-global like the two above; engine.py clears a host's count
+# when a scan of it starts, so one scan's slow edge never shortens the
+# next scan's first requests.
+_host_timeouts: dict = {}
+
+
+def _timeout_for(hostname: Optional[str]) -> float:
+    if hostname and _host_timeouts.get(hostname, 0) >= TIMEOUTS_BEFORE_SHORTENING:
+        return min(TIMEOUT_SECONDS, REPEAT_TIMEOUT_SECONDS)
+    return TIMEOUT_SECONDS
+
+
+def _note_timeout(hostname: Optional[str]) -> None:
+    if hostname:
+        _host_timeouts[hostname] = _host_timeouts.get(hostname, 0) + 1
+
+
+def forget_host_timeouts(hostname: Optional[str]) -> None:
+    """Start a scan of `hostname` on the full timeout. Never raises."""
+    if hostname:
+        _host_timeouts.pop(hostname, None)
 
 
 def _jittered_delay(base_seconds: float) -> float:
@@ -650,7 +763,10 @@ def _parse_retry_after(header_value: Optional[str]) -> Optional[float]:
         return None
 
 
-def _fetch_with_retries(current_url: str, hostname: str, *, max_403_attempts: Optional[int] = None):
+def _fetch_with_retries(
+    current_url: str, hostname: str, *, max_403_attempts: Optional[int] = None,
+    statuses_seen: Optional[list] = None,
+):
     """
     A3: issues the GET request, retrying on 429/403/5xx up to
     SCAN_FETCH_RETRIES total attempts — Retry-After (capped) when the
@@ -689,6 +805,10 @@ def _fetch_with_retries(current_url: str, hostname: str, *, max_403_attempts: Op
     actually made, retry_after_seen is the largest Retry-After value
     honored in seconds, or None if the ladder ran on backoff alone (or
     never retried at all).
+
+    statuses_seen, when given, gets every attempt's status code appended
+    in order — how fetch() learns which status sent a URL round the
+    ladder, without changing this function's return shape.
     """
     limit_403 = SCAN_FETCH_403_MAX_ATTEMPTS if max_403_attempts is None else max(1, max_403_attempts)
 
@@ -699,8 +819,10 @@ def _fetch_with_retries(current_url: str, hostname: str, *, max_403_attempts: Op
     retry_after_seen: Optional[float] = None
 
     for attempt in range(1, SCAN_FETCH_RETRIES + 1):
-        with httpx.Client(follow_redirects=False, timeout=TIMEOUT_SECONDS) as client:
+        with httpx.Client(follow_redirects=False, timeout=_timeout_for(hostname)) as client:
             resp = client.get(current_url, headers=_request_headers(current_url))
+        if statuses_seen is not None:
+            statuses_seen.append(resp.status_code)
 
         if resp.status_code not in RETRYABLE_STATUS_CODES or attempt >= SCAN_FETCH_RETRIES:
             return resp, attempt, retry_after_seen
@@ -730,6 +852,22 @@ def fetch(
     robot_parser: Optional[urllib.robotparser.RobotFileParser] = None,
     check_short_body: bool = False,
     max_403_attempts: Optional[int] = None,
+) -> FetchResult:
+    """See _fetch for the whole contract. This wrapper only stamps
+    retry_http_status onto whichever FetchResult _fetch returns — one
+    place, instead of on each of its return paths."""
+    retry_state: dict = {}
+    result = _fetch(url, robot_parser, check_short_body, max_403_attempts, retry_state)
+    result.retry_http_status = retry_state.get("status")
+    return result
+
+
+def _fetch(
+    url: str,
+    robot_parser: Optional[urllib.robotparser.RobotFileParser],
+    check_short_body: bool,
+    max_403_attempts: Optional[int],
+    retry_state: dict,
 ) -> FetchResult:
     """
     Fetches a single URL, enforcing the SSRF guard on the original URL
@@ -826,9 +964,12 @@ def fetch(
             hostname = urlparse(current_url).hostname
             _politeness_wait(hostname, min_gap_seconds=crawl_delay)
 
+            hop_statuses: list = []
             resp, hop_attempts, hop_retry_after = _fetch_with_retries(
-                current_url, hostname, max_403_attempts=max_403_attempts,
+                current_url, hostname, max_403_attempts=max_403_attempts, statuses_seen=hop_statuses,
             )
+            if len(hop_statuses) > 1 and "status" not in retry_state:
+                retry_state["status"] = hop_statuses[0]
             total_attempts += hop_attempts
             if hop_retry_after is not None:
                 retry_after_seen = max(retry_after_seen or 0.0, hop_retry_after)
@@ -917,6 +1058,7 @@ def fetch(
             retry_after_seen=retry_after_seen, crawl_delay_seconds=crawl_delay, error=f"blocked by SSRF guard: {e}",
         )
     except httpx.TimeoutException as e:
+        _note_timeout(urlparse(current_url).hostname)
         return FetchResult(
             url=url, final_url=current_url, status=FAILED,
             redirect_chain=redirect_chain, attempts=total_attempts or 1,

@@ -284,9 +284,17 @@ def _edge_vendor(dimensions: dict) -> str | None:
     deliberately not served to a browser — same discipline as
     _public_pages_fetched above. Never raises: a row written before this
     key existed, or a malformed one, simply has no vendor to name, which
-    the report already has neutral wording for."""
+    the report already has neutral wording for.
+
+    Unreachable-host follow-up: a run where no fetch got an answer has
+    no response to fingerprint, so engine.py asks DNS instead and records
+    dns_vendor_hint. It is only consulted when the responses themselves
+    named nothing — a response-level fingerprint is the stronger fact.
+    It can be "cloudfront", which the report has no named copy for and
+    renders with its unknown-wall wording."""
     try:
-        return (dimensions.get('block_evidence') or {}).get('dominant_vendor') or None
+        evidence = dimensions.get('block_evidence') or {}
+        return evidence.get('dominant_vendor') or evidence.get('dns_vendor_hint') or None
     except Exception:
         log.exception('[cycle_scoring] edge vendor read failed')
         return None
