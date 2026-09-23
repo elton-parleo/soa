@@ -288,6 +288,9 @@ def test_block_evidence_summary_never_raises_on_garbage():
         # must never have to tell "no vendor recognized" apart from
         # "written before this key existed".
         "dominant_vendor": None,
+        # Unreachable-host follow-up: same always-present rule for the
+        # DNS fallback, which only ever runs on a blocked/unreachable run.
+        "dns_vendor_hint": None, "dns_vendor_record": None,
     }
     assert engine._block_evidence_summary(None) == empty
     assert engine._block_evidence_summary([]) == empty

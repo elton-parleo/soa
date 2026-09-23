@@ -130,7 +130,12 @@ def test_unparseable_json_body_scores_zero_never_raises():
     that resolves to garbage, not valid JSON."""
     result = scorer.score_value_protocols([_mcp_page(status="fetched", body="not json at all {{{")])
     assert result.score == 0.0
-    assert result.evidence == ["no protocol profile found"]
+    # Soft-200 follow-up: something WAS served, it just isn't a
+    # manifest — the line says so rather than asserting an absence.
+    assert result.evidence == [
+        "could not verify a protocol profile — the MCP well-known path answered with "
+        "a response in the wrong format, not a manifest"
+    ]
 
 
 def test_non_object_json_body_scores_zero():

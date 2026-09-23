@@ -52,12 +52,16 @@ function _hasBlockedDim(pillar) {
 // just on measurable_max falling short of full_max, since `na`
 // (inapplicable, e.g. member_value_na) shrinks that same denominator
 // for reasons that have nothing to do with our reach and must never
-// trigger this state (Part 4a: unread is not na). 'unreachable' (total
-// network/DNS failure, nothing responded — not even robots.txt) stays
-// on today's failure treatment (1b): it isn't "honestly narrower," a
-// run that didn't happen.
+// trigger this state (Part 4a: unread is not na).
+//
+// Unreachable-host follow-up: 'unreachable' used to be excluded here
+// ("a run that didn't happen"), which left it with a generic banner and
+// no finding at all. Lululemon (request 138) showed what that run
+// actually is: a wall that answers nothing, with Visibility still fully
+// measured and a fetch probe that opened the homepage. It now reads
+// like `blocked` — the finding section, its own FAILURE_POINT_COPY entry
+// and the WHAT CHATGPT SAW block.
 export function isPartialRead(pillars, degradedReason) {
-  if (degradedReason === 'unreachable') return false
   const hasBlocked = _hasBlockedDim(pillars.visibility) || _hasBlockedDim(pillars.accessibility) || _hasBlockedDim(pillars.true_value)
   if (!hasBlocked) return false
   return buildMeasurableContext(pillars).measurable_max > 0
@@ -100,7 +104,9 @@ const _OUTCOME_CODES_NOT_FOUND = new Set([
 export function partialReadFailurePoint(degradedReason, discoveryOutcome) {
   if (degradedReason === 'no_product_pages_found') return 'no_product_pages_found'
   if (degradedReason === 'blocked') return 'blocked'
+  if (degradedReason === 'unreachable') return 'unreachable'
   const code = discoveryOutcome?.code
+  if (code === 'unreachable') return 'unreachable'
   if (_OUTCOME_CODES_BLOCKED.has(code)) return 'blocked'
   if (_OUTCOME_CODES_NOT_FOUND.has(code)) return 'no_product_pages_found'
   return 'partial'
@@ -121,6 +127,21 @@ export function isBrandOnlyReport(report) {
   return report?.scan?.site_type === 'brand_only'
 }
 
+// Manufacturer sites: same "read the recorded type, never infer it"
+// rule as isBrandOnlyReport. Unlike brand-only, nothing about the
+// composite, the hero or the rail changes — only the offer-bearing True
+// Value rows and their fix text (MANUFACTURER_COPY).
+export function isManufacturerReport(report) {
+  return report?.scan?.site_type === 'manufacturer'
+}
+
+// The two failure points that are a wall on readers like ours — one
+// that refused, one that never answered. They share the finding
+// section's fact blocks and the vendor-aware action line.
+export function isWallFailurePoint(failurePoint) {
+  return failurePoint === 'blocked' || failurePoint === 'unreachable'
+}
+
 export function isV3Report(report) {
   return Boolean(report.pillars)
 }
@@ -134,7 +155,7 @@ export function isV3Report(report) {
 // a named run-level reason").
 export function deriveReportViewedState(pillars, degradedReason, discoveryOutcome) {
   if (!isPartialRead(pillars, degradedReason)) return 'scored'
-  return partialReadFailurePoint(degradedReason, discoveryOutcome) === 'blocked' ? 'blocked' : 'partial'
+  return isWallFailurePoint(partialReadFailurePoint(degradedReason, discoveryOutcome)) ? 'blocked' : 'partial'
 }
 
 // earned = sum over every dimension row (na/blocked dims are already

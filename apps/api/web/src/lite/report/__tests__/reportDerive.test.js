@@ -130,8 +130,12 @@ describe('deriveReportViewedState — analytics report_viewed.state vocabulary',
     expect(deriveReportViewedState(withBlockedDim(), null)).toBe('partial')
   })
 
-  it('degraded_reason="unreachable" never reads as partial/blocked (matches isPartialRead)', () => {
-    expect(deriveReportViewedState(withBlockedDim(), 'unreachable')).toBe('scored')
+  it('degraded_reason="unreachable" derives "blocked" — a wall that never answered (Lululemon)', () => {
+    expect(deriveReportViewedState(withBlockedDim(), 'unreachable')).toBe('blocked')
+  })
+
+  it('an unreachable discoveryOutcome code derives "blocked" too', () => {
+    expect(deriveReportViewedState(withBlockedDim(), null, { code: 'unreachable' })).toBe('blocked')
   })
 
   it('with no named degraded_reason, a blocking discoveryOutcome code derives "blocked" too', () => {

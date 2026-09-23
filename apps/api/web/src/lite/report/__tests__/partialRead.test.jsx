@@ -14,7 +14,11 @@ import '@testing-library/jest-dom'
 
 import { LiteFullReportV4 } from '../LiteFullReportV4.jsx'
 import { buildMeasurableContext, isPartialRead } from '../reportDerive.js'
-import { FAILURE_POINT_COPY, DISCOVERY_OUTCOME_COPY, EDGE_VENDOR_COPY, FETCH_PROBE_EVIDENCE_COPY } from '../reportContent.js'
+import {
+  FAILURE_POINT_COPY, DISCOVERY_OUTCOME_COPY, EDGE_VENDOR_COPY, EDGE_VENDOR_UNKNOWN_COPY, FETCH_PROBE_EVIDENCE_COPY,
+} from '../reportContent.js'
+
+const EDGE_VENDOR_COPY_UNKNOWN_CLAUSE_START = EDGE_VENDOR_UNKNOWN_COPY.clause.slice(0, 60)
 
 const BASE = {
   status: 'complete',
@@ -141,13 +145,36 @@ const SEPHORA_REPORT = {
   },
 }
 
-// Nothing-measurable shape: 'unreachable' — 1b says this keeps today's
-// failure treatment, no partial chip, no new surfaces, regardless of
-// which dimensions carry a blocked flag.
+// Lululemon shape (request 138): 'unreachable' — every request timed
+// out without an answer, while ChatGPT opened the homepage. This used to
+// keep the old failure treatment (no finding at all); it now reads in
+// the blocked family, with its own FAILURE_POINT_COPY entry, the vendor
+// named when DNS recognized it, and the WHAT CHATGPT SAW block.
 const NOTHING_MEASURABLE_REPORT = {
   ...BASE,
+  overall: [{ name: 'Lululemon', role: 'primary', metrics: { som: 40, mention_rate: 50 } }],
   scan_status: 'failed',
-  scan: { status: 'failed', degraded_reason: 'unreachable', degraded_banner_facts: {} },
+  scan: {
+    status: 'failed',
+    degraded_reason: 'unreachable',
+    degraded_banner_facts: {
+      signed: true,
+      fetch_probe: { outcome: 'opened_no_price', agent_could_access: true, url: 'https://lululemon.com', kind: 'store_root' },
+    },
+    discovery_trace: {
+      sitemaps_read: 0, product_urls_found: 0, tiers_attempted: ['sitemap'],
+      robots_ok: null, homepage_fetched: false, product_pages_fetched: 0,
+    },
+    discovery_outcome: {
+      code: 'unreachable',
+      summary: 'your site did not respond to our reader at all — every request timed out before any answer came back',
+      found_candidates: 0, product_pages_attempted: 0, product_pages_fetched: 0,
+      sitemaps: [{ name: 'sitemap.xml', outcome: 'failed', urls: null, product_urls: null, http_status: null, note: 'fetch failed (status=failed)' }],
+      child_chosen: null, example_urls: [], tiers: [{ tier: 'sitemap', outcome: 'found 0' }],
+      robots_excluded: 0, llm: null, short_circuited: false, product_candidates_rejected: 0,
+    },
+    edge_vendor: 'akamai',
+  },
   composite: null,
   pillars: {
     ...MARC_JACOBS_REPORT.pillars,
@@ -421,12 +448,41 @@ describe('partial-read report state — G3 placeholder containment', () => {
   })
 })
 
-describe('partial-read report state — nothing measurable (unreachable)', () => {
-  it('keeps today\'s failure treatment: no partial chip, no discovery section, no complete-read band', () => {
-    renderIt(NOTHING_MEASURABLE_REPORT)
-    expect(screen.queryByText('Partial read')).not.toBeInTheDocument()
-    expect(screen.queryByText('FINDING 00 · DISCOVERY · MEASURED')).not.toBeInTheDocument()
-    expect(screen.queryByText('What a complete read adds')).not.toBeInTheDocument()
+describe('partial-read report state — unreachable (Lululemon)', () => {
+  it('renders the finding in the blocked family, with its own heading and no-response body', () => {
+    const { container } = renderIt(NOTHING_MEASURABLE_REPORT)
+    expect(screen.getByText('FINDING 00 · DISCOVERY · MEASURED')).toBeInTheDocument()
+    expect(screen.getByText(FAILURE_POINT_COPY.unreachable.heading)).toBeInTheDocument()
+    expect(container.textContent).toContain('No response came back')
+    // The vendor DNS recognized is named, same as a blocked run.
+    expect(container.textContent).toContain("this is Akamai's bot protection")
+    expect(container.textContent).toContain(EDGE_VENDOR_COPY.akamai.setting)
+  })
+
+  it('never claims a sitemap was missing or that anything refused us', () => {
+    const { container } = renderIt(NOTHING_MEASURABLE_REPORT)
+    expect(container.textContent).not.toMatch(/doesn't declare a sitemap/)
+    expect(container.textContent).not.toMatch(/refused every request/)
+    expect(container.textContent).not.toMatch(/rate-limit/)
+  })
+
+  it('shows WHAT CHATGPT SAW, since the probe opened the homepage', () => {
+    const { container } = renderIt(NOTHING_MEASURABLE_REPORT)
+    expect(screen.getByText(FETCH_PROBE_EVIDENCE_COPY.label)).toBeInTheDocument()
+    expect(container.textContent).toContain(FETCH_PROBE_EVIDENCE_COPY.opened_no_price({ kindPhrase: 'your homepage' }))
+  })
+
+  it('uses the unreachable trace wording — no robots step, homepage "no answer"', () => {
+    const { container } = renderIt(NOTHING_MEASURABLE_REPORT)
+    expect(screen.queryByText('01 · ROBOTS.TXT')).not.toBeInTheDocument()
+    expect(container.textContent).toContain('No answer came back before we gave up.')
+  })
+
+  it('falls back to the neutral wall wording when no vendor was recognized', () => {
+    const report = { ...NOTHING_MEASURABLE_REPORT, scan: { ...NOTHING_MEASURABLE_REPORT.scan, edge_vendor: null } }
+    const { container } = renderIt(report)
+    expect(container.textContent).toContain(EDGE_VENDOR_COPY_UNKNOWN_CLAUSE_START)
+    expect(container.textContent).not.toContain("Akamai's bot protection")
   })
 })
 

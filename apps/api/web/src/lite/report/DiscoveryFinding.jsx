@@ -13,9 +13,9 @@ import { ReportSection } from './ReportSection.jsx'
 import { _fetchProbeSentence } from '../DegradedRunBanner.jsx'
 import {
   FAILURE_POINT_COPY, BLOCKED_STEP_COPY, DISCOVERY_OUTCOME_COPY,
-  FETCH_PROBE_EVIDENCE_COPY, resolveFailurePointBody,
+  FETCH_PROBE_EVIDENCE_COPY, UNREACHABLE_STEP_COPY, resolveFailurePointBody,
 } from './reportContent.js'
-import { partialReadFailurePoint, buildMeasurableContext } from './reportDerive.js'
+import { partialReadFailurePoint, buildMeasurableContext, isWallFailurePoint } from './reportDerive.js'
 
 const STEP_META = {
   robots: { n: '01', label: 'ROBOTS.TXT' },
@@ -48,11 +48,14 @@ function _urlFilename(url) {
 
 // Blocked-run copy pass (2c): the blocked path reads its step facts in
 // plain verbs from BLOCKED_STEP_COPY (registry-sourced, reportContent.js)
-// instead of the generic wording below — the other failure points are
-// untouched this session.
+// instead of the generic wording below. Unreachable-host follow-up: the
+// unreachable path does the same from UNREACHABLE_STEP_COPY, since
+// "turned away" would be the wrong verb for a request nobody answered.
+const STEP_COPY_BY_FAILURE_POINT = { blocked: BLOCKED_STEP_COPY, unreachable: UNREACHABLE_STEP_COPY }
+
 function _stepFact(key, good, failurePoint, genericGood, genericBad) {
-  const blocked = failurePoint === 'blocked' ? BLOCKED_STEP_COPY[key] : null
-  if (blocked) return good ? blocked.good : blocked.bad
+  const specific = STEP_COPY_BY_FAILURE_POINT[failurePoint]?.[key]
+  if (specific) return good ? specific.good : specific.bad
   return good ? genericGood : genericBad
 }
 
@@ -123,13 +126,14 @@ function _buildSteps(trace, unmeasurablePoints, failurePoint, discoveryOutcome) 
 }
 
 // Blocked-run evidence (this session): the probe's own fact block.
-// Renders only for the three decisive outcomes, and only on a blocked
-// run — on a sampler miss the probe says nothing about a wall (see
+// Renders only for the three decisive outcomes, and only on a wall run
+// — blocked, or (unreachable-host follow-up) one that never answered.
+// On a sampler miss the probe says nothing about a wall (see
 // DegradedRunBanner's _fetchProbeSentence, which keeps that
 // distinction) and this would overclaim. Copy is registry-sourced;
 // this only decides whether there is a fact to show.
 function FetchProbeEvidence({ probe, failurePoint }) {
-  if (!probe || failurePoint !== 'blocked') return null
+  if (!probe || !isWallFailurePoint(failurePoint)) return null
   const line = FETCH_PROBE_EVIDENCE_COPY[probe.outcome]
   if (!line) return null
   const kindPhrase = probe.kind === 'store_root' ? 'your homepage' : 'your product page'
@@ -167,10 +171,11 @@ export function DiscoveryFinding({ report, open, onToggle }) {
   const edgeVendor = report.scan?.edge_vendor
   const unmeasurablePoints = buildMeasurableContext(report.pillars).unmeasurable_points
   const steps = _buildSteps(trace, unmeasurablePoints, failurePoint, discoveryOutcome)
-  // Blocked-run evidence: on a blocked run the probe gets its own fact
+  // Blocked-run evidence: on a wall run the probe gets its own fact
   // block below, so the trailing sentence would be the same claim
   // twice — it stays only where it is the ONLY place the probe speaks.
-  const probeSentence = failurePoint === 'blocked'
+  const wall = isWallFailurePoint(failurePoint)
+  const probeSentence = wall
     ? ''
     : _fetchProbeSentence(bannerFacts, degradedReason, report.scan_status)
   // outcomeCopy has no `body` of its own — discoveryOutcome.summary IS
@@ -233,7 +238,7 @@ export function DiscoveryFinding({ report, open, onToggle }) {
 
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, marginTop: 22, padding: '15px 17px', background: 'var(--amber-tint)', border: '1px solid rgba(245,158,11,.3)', borderRadius: 12 }}>
         <Glyph name="filter" size={15} color="var(--amber-deep)" />
-        {failurePoint === 'blocked' ? (
+        {wall ? (
           // Blocked-run copy pass (1c): the registry's action line
           // stands on its own here — the causal "why" already lives in
           // bodyText above, so this box doesn't repeat it.

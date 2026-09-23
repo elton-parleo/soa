@@ -275,10 +275,14 @@ def test_sitemaps_refused(monkeypatch):
 
 def test_sitemap_children_unprobed(monkeypatch):
     # 6 non-catalog-named children (probed, budget-exhausting) + 2
-    # product-hinted children left entirely unprobed — SITEMAP_CHILD_
+    # plainly-named children left entirely unprobed — SITEMAP_CHILD_
     # PROBE_LIMIT (6) means the walk stops before reaching either.
+    # Ulta follow-up: the unprobed pair used to be product-HINTED names;
+    # hinted children are now probed first (_reorder_children_by_
+    # product_hint), so they are exactly the ones that never end up
+    # here. The outcome still fires on an all-non-catalog probe set.
     probed_names = [f"sitemap-help-{i}.xml" for i in range(1, 7)]
-    unprobed_names = ["sitemap-products-7.xml", "sitemap-products-8.xml"]
+    unprobed_names = ["sitemap-7.xml", "sitemap-8.xml"]
     index_xml = (
         '<?xml version="1.0"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
         + "".join(f"<sitemap><loc>{ORIGIN}/{name}</loc></sitemap>" for name in probed_names + unprobed_names)
