@@ -8,7 +8,7 @@
  * env-driven keeps a local/preview deployment's own origin from ever
  * silently ending up in a link someone forwards.
  */
-const DEFAULT_PUBLIC_APP_BASE_URL = 'https://app.parleo.io'
+const DEFAULT_PUBLIC_APP_BASE_URL = 'https://soa-app.parleo.io'
 
 export const PUBLIC_APP_BASE_URL = (
   import.meta.env.VITE_PUBLIC_APP_BASE_URL || DEFAULT_PUBLIC_APP_BASE_URL
