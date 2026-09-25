@@ -123,10 +123,21 @@ def submit_demo_request(data: PublicDemoRequestRequest, request: Request):
     })
 
     if sent:
-        with engine.begin() as conn:
-            conn.execute(
-                text("UPDATE soa_demo_requests SET notified_at = :now WHERE id = :id"),
-                {"now": datetime.now(timezone.utc), "id": demo_request_id},
+        # Same guard as public_lite.py::_notify_new_lead: the row is
+        # written and the notification delivered by now, so a failure
+        # here must not turn a fully successful submission into a 500.
+        # notified_at is a record of what happened, not part of it.
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text("UPDATE soa_demo_requests SET notified_at = :now WHERE id = :id"),
+                    {"now": datetime.now(timezone.utc), "id": demo_request_id},
+                )
+        except Exception:
+            log.exception(
+                "[public_demo] notification sent for request id=%s but "
+                "stamping notified_at failed",
+                demo_request_id,
             )
 
     return PublicDemoRequestResponse()

@@ -11,6 +11,7 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 from sqlalchemy import create_engine, event
+from sqlalchemy.exc import OperationalError
 
 import app.routers.public_demo as public_demo
 from app.schemas import PublicDemoRequestRequest
@@ -208,3 +209,48 @@ def test_rate_limit_ignores_requests_older_than_a_minute(db):
         result = public_demo.submit_demo_request(_data(), FakeRequest(ip="203.0.113.7"))
 
     assert result.ok is True
+
+
+# ─── the stamp must never be able to 500 a succeeded request ─────────────
+
+class _EngineFailingOnStamp:
+    """Delegates to the real engine, but raises on the SECOND begin() —
+    the notified_at stamp's own transaction. The first begin() is the
+    INSERT, which must still work."""
+
+    def __init__(self, real):
+        self._real = real
+        self.begins = 0
+
+    def begin(self):
+        self.begins += 1
+        if self.begins > 1:
+            raise OperationalError(
+                "UPDATE soa_demo_requests SET notified_at = ...",
+                {}, Exception("server closed the connection unexpectedly"),
+            )
+        return self._real.begin()
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+def test_a_failing_notified_at_stamp_does_not_break_the_response(db, monkeypatch, caplog):
+    """The row is written and the notification delivered by the time the
+    stamp runs — a failure there must not turn a fully successful
+    submission into a 500."""
+    failing = _EngineFailingOnStamp(db)
+    monkeypatch.setattr(public_demo, "engine", failing)
+
+    with patch.object(public_demo, "send_demo_request_notification", return_value=True):
+        with caplog.at_level("ERROR"):
+            result = public_demo.submit_demo_request(_data(), FakeRequest())
+
+    assert result.ok is True
+    assert failing.begins == 2  # the stamp was genuinely attempted
+    assert "notified_at" in caplog.text
+
+    with db.connect() as conn:
+        row = _row(conn)
+    assert row is not None       # the row is the backstop — still there
+    assert row[9] is None        # unstamped, since the UPDATE failed
