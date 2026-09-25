@@ -15,12 +15,15 @@
  * no-op when it isn't there (ad blocker, SDK request failed, SSR/test
  * environment with no such global).
  *
- * THREE STANDARD events, matching the conversions already defined on
- * this pixel in Ads Manager. Standard names carry meaning for
- * conversion reporting and campaign optimization in a way a custom
- * name cannot, which is why the earlier one-off custom event was
- * retired rather than kept alongside them:
+ * FOUR STANDARD events, matching the conversions defined on this
+ * pixel in Ads Manager. Standard names carry meaning for conversion
+ * reporting and campaign optimization in a way a custom name cannot,
+ * which is why the earlier one-off custom event was retired rather
+ * than kept alongside them:
  *
+ *   registration_completed — an audit submit was accepted; the run
+ *                            exists. The high-volume signal, earlier
+ *                            in the funnel than lead_created.
  *   lead_created          — the status page's email capture succeeded.
  *                           The first moment we have a person rather
  *                           than a store URL.
@@ -34,14 +37,14 @@
  *
  * Payload shapes come from OpenAI's supported-events reference and
  * are not ours to improvise:
- *   - lead_created / appointment_scheduled use the customer_action
- *     shape — exactly { type: 'customer_action' }, no amount, no
- *     currency. Neither is a transaction; inventing a value would be
- *     inventing data.
+ *   - registration_completed / lead_created / appointment_scheduled
+ *     use the customer_action shape — exactly
+ *     { type: 'customer_action' }, no amount, no currency. None is a
+ *     transaction; inventing a value would be inventing data.
  *   - contents_viewed uses the contents shape, with only id, name and
  *     content_type per item. No amount, no currency.
  *   - custom_event_name is valid ONLY for custom events, so none of
- *     these three carry it.
+ *     these four carry it.
  *   - Every call passes an options object holding event_id and
  *     nothing else, for server-side dedup.
  *
@@ -176,6 +179,30 @@ function sendOnce(guardKey, sendFn) {
   } catch (_) {}
 
   return true
+}
+
+/**
+ * registration_completed — an audit submit was accepted and the run
+ * exists. Fired from LiteForm.jsx's accept path (after liteApi.submit
+ * resolves), never from its catch, so a 429, a store-URL rejection or
+ * a 5xx never reports a registration.
+ *
+ * Keyed on the run token. Every accepted submit mints a new token, so
+ * a re-run started from a report is its own registration, while a
+ * reload or remount of the same run is not. No form value (brand
+ * name, store URL, competitors) ever travels; the token is the only
+ * identifier, on the same grounds as lead_created below.
+ */
+export function trackRegistrationCompleted(token) {
+  if (!token) return false
+  return sendOnce(`oaiq:registration_completed:${token}`, () => {
+    window.oaiq(
+      'measure',
+      'registration_completed',
+      { type: 'customer_action' },
+      { event_id: `registration_completed:${token}` },
+    )
+  })
 }
 
 /**

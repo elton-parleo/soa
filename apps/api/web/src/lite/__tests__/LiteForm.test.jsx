@@ -7,6 +7,7 @@ import { LiteForm } from '../LiteForm.jsx'
 import { liteApi } from '../liteApi.js'
 import { track, identifyReport, getAttribution } from '../analytics.js'
 import { EVENTS } from '../analyticsEvents.js'
+import { trackRegistrationCompleted } from '../openaiPixel.js'
 
 vi.mock('../liteApi.js', () => ({
   liteApi: { submit: vi.fn() },
@@ -20,6 +21,16 @@ vi.mock('../analytics.js', () => ({
   getAttribution: vi.fn(() => ({
     oppref: null, utm_source: null, utm_medium: null, utm_campaign: null,
   })),
+}))
+
+vi.mock('../openaiPixel.js', () => ({
+  trackRegistrationCompleted: vi.fn(() => true),
+  trackLeadCreated: vi.fn(() => true),
+  trackAppointmentScheduled: vi.fn(() => true),
+  trackReportContentsViewed: vi.fn(() => true),
+  newRequestId: vi.fn(() => 'req-test'),
+  withOppref: vi.fn((path) => path),
+  isOpenAIPixelAvailable: vi.fn(() => true),
 }))
 
 beforeEach(() => {
@@ -274,5 +285,67 @@ describe('LiteForm — audit_submitted carries the run token and attribution', (
     expect(Object.keys(props).sort()).toEqual(
       ['oppref', 'report_token', 'src', 'target_domain', 'utm_source'],
     )
+  })
+})
+
+// The OpenAI pixel's volume signal: an accepted submit means the run
+// exists. The same accept-only discipline as audit_submitted above and
+// as lead_created in LiteProgress.jsx — a rejected or never-sent
+// submit must not report a registration.
+describe('LiteForm — fires registration_completed on accept only', () => {
+  function fillAndSubmit(value = 'Acme Co') {
+    fireEvent.change(screen.getByLabelText('Your brand or store URL'), { target: { value } })
+    fireEvent.click(screen.getByText('Run my free diagnostic'))
+  }
+
+  it('an accepted submit fires it once with the run token, after audit_submitted', async () => {
+    const onSubmitted = vi.fn()
+    liteApi.submit.mockResolvedValue({ token: 'tok-reg', status: 'pending' })
+    render(<LiteForm onSubmitted={onSubmitted} />)
+    fillAndSubmit()
+
+    await waitFor(() => expect(onSubmitted).toHaveBeenCalled())
+    expect(trackRegistrationCompleted).toHaveBeenCalledTimes(1)
+    expect(trackRegistrationCompleted).toHaveBeenCalledWith('tok-reg')
+    expect(track).toHaveBeenCalledWith(EVENTS.AUDIT_SUBMITTED, expect.any(Object))
+    expect(track.mock.invocationCallOrder[0])
+      .toBeLessThan(trackRegistrationCompleted.mock.invocationCallOrder[0])
+  })
+
+  it('a rejected submit fires nothing', async () => {
+    liteApi.submit.mockRejectedValue(new Error('nope'))
+    render(<LiteForm onSubmitted={() => {}} />)
+    fillAndSubmit()
+
+    await waitFor(() => expect(screen.getByText('nope')).toBeInTheDocument())
+    expect(trackRegistrationCompleted).not.toHaveBeenCalled()
+  })
+
+  it('a client-side validation failure fires nothing and never reaches the API', async () => {
+    render(<LiteForm onSubmitted={() => {}} />)
+    fillAndSubmit('A')
+
+    await waitFor(() => expect(screen.getByText(/2-80 characters/)).toBeInTheDocument())
+    expect(liteApi.submit).not.toHaveBeenCalled()
+    expect(trackRegistrationCompleted).not.toHaveBeenCalled()
+  })
+
+  // A rejected submit leaves the form mounted and retryable; the retry
+  // is the real registration and must still report.
+  it('a retry after a rejection fires it once', async () => {
+    const onSubmitted = vi.fn()
+    liteApi.submit
+      .mockRejectedValueOnce(new Error('nope'))
+      .mockResolvedValue({ token: 'tok-reg-retry', status: 'pending' })
+    render(<LiteForm onSubmitted={onSubmitted} />)
+
+    fillAndSubmit()
+    await waitFor(() => expect(screen.getByText('nope')).toBeInTheDocument())
+    expect(trackRegistrationCompleted).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByText('Run my free diagnostic'))
+    await waitFor(() => expect(onSubmitted).toHaveBeenCalled())
+    expect(trackRegistrationCompleted).toHaveBeenCalledTimes(1)
+    expect(trackRegistrationCompleted).toHaveBeenCalledWith('tok-reg-retry')
   })
 })

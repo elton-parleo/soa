@@ -136,7 +136,7 @@ documented in a comment block in
 that file stays the complete list of what this app emits and where it
 goes.
 
-Three **standard** OpenAI events, matching the conversions defined on
+Four **standard** OpenAI events, matching the conversions defined on
 this pixel in Ads Manager. Standard names carry meaning for conversion
 reporting and campaign optimization in a way a custom name cannot,
 which is why the earlier one-off custom event was retired rather than
@@ -144,6 +144,7 @@ kept alongside them.
 
 | Event | Shape | Fired when | Dedup key |
 |---|---|---|---|
+| `registration_completed` | `{ type: 'customer_action' }` | An audit submit was accepted ([`LiteForm.jsx`](../apps/api/web/src/lite/LiteForm.jsx), accept path only, never on a 429, store-URL rejection or 5xx). The run exists. The high-volume signal, earlier in the funnel than `lead_created`. A re-run from a report is its own registration, since it mints a new token. | run token |
 | `lead_created` | `{ type: 'customer_action' }` | The status page's email capture succeeded ([`LiteProgress.jsx`](../apps/api/web/src/lite/LiteProgress.jsx), success path only). The first moment a run has a person behind it rather than a store URL. | run token |
 | `appointment_scheduled` | `{ type: 'customer_action' }` | A demo request succeeded ([`useDemoRequestModal.js`](../apps/api/web/src/lite/useDemoRequestModal.js), ok-only branch — never on a honeypot trip or a 422). | run token, or a random per-submission id when the modal opened from the landing page |
 | `contents_viewed` | `{ type: 'contents', contents: [{ id, name, content_type }] }` | The report rendered for its owner ([`LiteFullReportV4.jsx`](../apps/api/web/src/lite/report/LiteFullReportV4.jsx), gated on `isTokenOwned`). | run token |
@@ -173,14 +174,21 @@ kept alongside them.
   landing-only, and the build test still asserts it). `contents_viewed`
   can only be observed where the report renders.
 - **No transaction data, no PII.** No `amount`, `currency`, `plan_id`,
-  or `contents` on the two `customer_action` events; `contents_viewed`
+  or `contents` on the three `customer_action` events; `contents_viewed`
   carries only `id`, `name` and `content_type` per item. No `user`
   object on init. `custom_event_name` is valid only for custom events
   and none of these carry it. `lead_created` never sends the email
-  address it is about — the run token is the identifier, on the same
-  grounds `report_token` is allowed above.
-- **Audit submit is not a conversion** in this mapping.
-  `audit_submitted` stays a PostHog-only event.
+  address it is about, and `registration_completed` never sends a
+  form value — the run token is the identifier, on the same grounds
+  `report_token` is allowed above.
+- **Audit submit is a conversion, and still a PostHog event.** The
+  same accepted submit fires `audit_submitted` to PostHog (the
+  funnel's spine) and `registration_completed` to the pixel (the ad
+  platform's volume signal). Different destinations; neither replaces
+  the other. `lead_created` remains the pixel's quality signal.
+- **The marketing host's `/lite` embed** renders the same form but
+  carries no pixel loader, so `registration_completed` is a silent
+  no-op there. Ad traffic lands on the audit surface.
 - **`?oppref=`** is captured by the SDK on init and persisted in a
   first-party `__oppref` cookie on the audit host, so it already
   survives client-side navigation. `withOppref()` additionally carries

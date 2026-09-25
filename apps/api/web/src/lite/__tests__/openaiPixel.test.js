@@ -1,7 +1,7 @@
 /**
  * openaiPixel.js — the one module allowed to touch window.oaiq.
  *
- * Three STANDARD OpenAI conversions, each with the same contract: the
+ * Four STANDARD OpenAI conversions, each with the same contract: the
  * exact arguments the SDK receives, a once-per-key-per-session guard,
  * and two ways a browser can refuse to cooperate — no SDK at all, and
  * storage that throws. Those two degrade in OPPOSITE directions on
@@ -21,15 +21,29 @@ import {
   newRequestId,
   trackAppointmentScheduled,
   trackLeadCreated,
+  trackRegistrationCompleted,
   trackReportContentsViewed,
   withOppref,
 } from '../openaiPixel.js'
 
 // One row per event: how it is called, the exact four arguments it
 // must produce, and the guard key it must claim. Every shared
-// behavior below is driven off this table so a fourth event cannot be
+// behavior below is driven off this table so a fifth event cannot be
 // added later without also being held to all of it.
 const EVENTS = [
+  {
+    name: 'registration_completed',
+    call: (key) => trackRegistrationCompleted(key),
+    keyA: 'tok-a',
+    keyB: 'tok-b',
+    guard: (key) => `oaiq:registration_completed:${key}`,
+    args: (key) => [
+      'measure',
+      'registration_completed',
+      { type: 'customer_action' },
+      { event_id: `registration_completed:${key}` },
+    ],
+  },
   {
     name: 'lead_created',
     call: (key) => trackLeadCreated(key),
@@ -102,7 +116,7 @@ describe.each(EVENTS)('$name — payload and guard', (evt) => {
   })
 
   // custom_event_name is valid only for custom events; none of these
-  // three may carry it, and none may carry money fields.
+  // four may carry it, and none may carry money fields.
   it('carries no custom_event_name, amount, currency, plan_id or user', () => {
     evt.call(evt.keyA)
     const [, , data, options] = window.oaiq.mock.calls[0]
