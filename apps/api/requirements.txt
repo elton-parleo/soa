@@ -9,7 +9,9 @@ uvicorn[standard]>=0.29.0,<1.0.0
 python-multipart>=0.0.9
 
 # Database / models (also used by soa_shared)
-sqlalchemy>=2.0,<3.0.0
+# SQLAlchemy 2.1 switched the default postgres driver to psycopg 3; we ship
+# psycopg2-binary, so stay on 2.0.x until we deliberately migrate.
+sqlalchemy>=2.0,<2.1
 psycopg2-binary
 python-dotenv
 
