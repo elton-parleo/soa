@@ -75,6 +75,13 @@ arrived with — never what was typed.
   banner. The trade-off: a repeat visit in a new tab/session counts as
   a new visitor. Unique-visitor counts here are **per-session**, not
   per-person — don't read them as deduplicated humans.
+- **Do Not Track is ignored (`respect_dnt: false`).** With it honored,
+  posthog-js dropped every event and replay from a browser sending
+  DNT, so a slice of real visitors (and any internal test run from
+  such a browser) never appeared in the funnel at all. It is ignored
+  on purpose: persistence is cookieless, no event carries PII, and
+  replays mask inputs and text, so a DNT visitor gives up nothing by
+  being counted. If those guarantees ever weaken, revisit the flag.
 - **Session replay sampling is a PostHog project setting, not a code
   flag.** `analytics.js` enables recording (`disable_session_recording:
   false`, inputs and text masked) but the *sample rate* (start at 20%)
