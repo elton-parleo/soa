@@ -25,6 +25,24 @@ import soa_shared.models.merchant_ref  # noqa: F401 — register Merchant mirror
 import soa_shared.models.soa_models    # noqa: F401 — register all SoA tables
 
 
+# Pin the DBAPI explicitly. SQLAlchemy 2.1 changed the default driver for
+# bare ``postgresql://`` URLs from psycopg2 to psycopg 3, and we only ship
+# psycopg2-binary, so a dependency bump must not silently switch drivers.
+_PG_DRIVER = "postgresql+psycopg2"
+
+
+def _with_explicit_driver(url: str) -> str:
+    """Rewrite a bare postgres scheme to name psycopg2 explicitly.
+
+    URLs that already name a driver (``postgresql+xyz://``) and non-postgres
+    URLs (e.g. ``sqlite:///:memory:`` in tests) are returned unchanged.
+    """
+    for scheme in ("postgresql://", "postgres://"):
+        if url.startswith(scheme):
+            return _PG_DRIVER + "://" + url[len(scheme):]
+    return url
+
+
 def get_database_url(pooled: bool = False):
     """
     Returns the appropriate database URL.
@@ -45,7 +63,7 @@ def get_database_url(pooled: bool = False):
         password = os.getenv("SUPABASE_DB_PASSWORD")
         if host and password:
             return URL.create(
-                drivername="postgresql",
+                drivername=_PG_DRIVER,
                 username="postgres.epuofomhfngvkkamlfiz",
                 host=host,
                 database="postgres",
@@ -56,7 +74,7 @@ def get_database_url(pooled: bool = False):
             'DATABASE_URL environment variable is not set. '
             'Set DATABASE_URL or SUPABASE_DB_HOST_URL + SUPABASE_DB_PASSWORD.'
         )
-    return url
+    return _with_explicit_driver(url)
 
 
 _USE_POOLED = os.getenv('USE_POOLED_DB', 'false').lower() == 'true'
