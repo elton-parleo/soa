@@ -31,6 +31,7 @@ import { LITE_QUERY_COUNT } from './landing/scanDimensionsRegistry.js'
 import { Button } from '../ds/index.js'
 import { track, identifyReport, recordOwnedToken, captureSrcParam, getAttribution } from './analytics.js'
 import { EVENTS } from './analyticsEvents.js'
+import { trackRegistrationCompleted } from './openaiPixel.js'
 
 // Intake validation (this session): the `code` values
 // public_lite.py::_enforce_store_url_admissible returns on a 422. The
@@ -145,6 +146,15 @@ export function LiteForm({
         src: captureSrcParam(),
       })
       recordOwnedToken(result.token)
+      // OpenAI ad conversion: the run exists. The high-volume signal
+      // that sits ahead of lead_created. Inside the try on purpose — a
+      // rejected submit (429, store-URL error, 5xx) must not report a
+      // registration. The token only; openaiPixel.js never sends a
+      // form value. This form also renders on the marketing host's
+      // /lite embed, which carries no pixel loader, so there this is
+      // a silent no-op by design: ad traffic lands on the audit
+      // surface, and the module handles the absence itself.
+      trackRegistrationCompleted(result.token)
       onSubmitted(result.token, { storeUrl })
     } catch (err) {
       if (err.status === 429) {

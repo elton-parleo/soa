@@ -85,7 +85,7 @@ export const EVENTS = {
 
 // ─── Emitted, but NOT to PostHog ──────────────────────────────────────
 //
-// Three STANDARD OpenAI (ChatGPT Ads) Measurement Pixel conversions,
+// Four STANDARD OpenAI (ChatGPT Ads) Measurement Pixel conversions,
 // emitted by lite/openaiPixel.js — never posthog.capture(), and
 // therefore deliberately absent from EVENTS and EVENT_REGISTRY above
 // (track() would drop them, which is correct: they are not ours to
@@ -93,6 +93,12 @@ export const EVENTS = {
 // those carry meaning for conversion reporting and campaign
 // optimization in Ads Manager.
 //
+//   registration_completed An audit submit was accepted; the run
+//                          exists (LiteForm.jsx, accept path only).
+//                          The high-volume signal. Fires for every
+//                          accepted submit, re-runs included, since
+//                          each mints its own token. No form value
+//                          is sent.
 //   lead_created           The status page's email capture succeeded
 //                          (LiteProgress.jsx, success path only).
 //                          The first moment a run has a person behind
