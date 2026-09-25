@@ -32,9 +32,18 @@
  *     but maskAllInputs — no field ever shows up in a replay, on top
  *     of the registry already forbidding email/name/company/message
  *     as an EVENT prop.
- *   - respect_dnt — a real posthog-js init option; if the browser
- *     sends Do Not Track, PostHog itself no-ops, so this file doesn't
- *     need its own DNT branch.
+ *   - respect_dnt: false — deliberately. With it on, posthog-js treats
+ *     a browser Do Not Track header as an opt-out and drops EVERY
+ *     event and replay from that visitor, which silently removed a
+ *     slice of real traffic (and every internal test run from a
+ *     browser with DNT on) from the funnel. Nothing here is what DNT
+ *     was meant to prevent: persistence is memory-only (no cookie, no
+ *     cross-site identity), the registry forbids PII on every event,
+ *     and replays mask all inputs and text. Counting a DNT visitor
+ *     costs them nothing they weren't already given. If a stricter
+ *     posture is ever wanted, this is the one flag to flip back —
+ *     posthog-js 1.415 checks navigator.doNotTrack (and the legacy
+ *     msDoNotTrack), not Global Privacy Control.
  *   - Session-replay SAMPLING (target: 20%) is a PostHog **project**
  *     setting (Settings -> Replay -> ingestion controls), not a
  *     posthog-js init key — posthog-js has no client-side sample_rate
@@ -63,7 +72,7 @@ function init() {
       maskAllInputs: true,
       maskTextSelector: '*',
     },
-    respect_dnt: true,
+    respect_dnt: false,
   })
   initialized = true
 }
