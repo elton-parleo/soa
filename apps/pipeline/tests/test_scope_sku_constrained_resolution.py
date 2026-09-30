@@ -113,7 +113,7 @@ def _make_client_with_mocked_create(result_dict):
 def _base_result(scope_skus=None):
     result = {
         "merchants": {
-            "M001": {
+            "M001_sephora": {
                 "mentioned": True, "position": 1, "strength": "Positive",
                 "deal_cited": False, "deal_types": [], "member_value_cited": False, "evidence": "ev",
                 "confidence": 0.9, "stated_price": None, "claimed_net_price": None,

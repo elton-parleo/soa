@@ -2,6 +2,7 @@
 System prompt and JSON schema for the coding LLM call.
 Dynamic per-cycle via build_system_prompt() and build_coding_schema().
 """
+import re
 from typing import TYPE_CHECKING, List, Optional
 
 if TYPE_CHECKING:
@@ -25,9 +26,18 @@ and code each mention using the exact rubric below.
 ENTITY COMPARISON SET:
 {{ENTITY_LIST}}
 
-The primary entity is marked (primary).
+The primary entity is marked PRIMARY ENTITY.
 Track all entities listed above.
-Entities not listed should be captured as other_entities in your response.
+Entities not listed should be captured as other_merchants in your response.
+
+ENTITY KEYS:
+Each line above starts with the key for that entity (e.g. M001_acme). The
+merchants object in your response uses these keys. The name inside the key is
+the entity that key is for: code each key ONLY for that named entity. Never
+record one entity's mention, position, strength, deals, or evidence under a
+different entity's key. If the entity named in a key does not appear in the
+response, code that key as not mentioned, even when other entities do appear.
+Evidence must quote the response text about the entity named in the key.
 
 RECOMMENDATION STRENGTH RUBRIC:
 
@@ -320,6 +330,23 @@ invent details for a product that was not actually surfaced.\
 """
 
 
+def entity_display_name(ce: "SoaCycleEntity") -> str:
+    return ce.display_name or ce.entity.name
+
+
+def entity_key(ce: "SoaCycleEntity") -> str:
+    """
+    The key an entity is coded under in the response's merchants object,
+    e.g. "M001_petco". A bare comparison code ("M001") gives the model
+    nothing to anchor on, and it would file one retailer's mention under
+    another's code. Carrying the name in the key keeps each coding next
+    to the entity it is for. The comparison code stays as the prefix so
+    keys are unique and sort in comparison-code order.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "_", entity_display_name(ce).lower()).strip("_")
+    return f"{ce.comparison_code}_{slug}" if slug else ce.comparison_code
+
+
 def build_system_prompt(
     cycle_entities: "List[SoaCycleEntity]",
     study_pattern: str,
@@ -336,14 +363,14 @@ def build_system_prompt(
     """
     lines = []
     for ce in sorted(cycle_entities, key=lambda x: x.comparison_code):
-        name = ce.display_name or ce.entity.name
+        name = entity_display_name(ce)
         aliases = ce.entity.aliases or []
         alias_str = (
             f" (also known as: {', '.join(aliases)})"
             if aliases else ""
         )
         role_note = " — PRIMARY ENTITY" if ce.role == "primary" else ""
-        lines.append(f"{ce.comparison_code}: {name}{alias_str}{role_note}")
+        lines.append(f"{entity_key(ce)}: {name}{alias_str}{role_note}")
 
     entity_list = "\n".join(lines)
     rubric_note = _get_rubric_note(study_pattern)
@@ -393,12 +420,13 @@ def _get_rubric_note(study_pattern: str) -> str:
 
 
 def build_coding_schema(
-    comparison_codes: List[str],
+    entity_keys: List[str],
     scope_sku_codes: Optional[List[str]] = None,
 ) -> dict:
     """
     Builds the JSON schema for the coding response dynamically
-    based on the comparison codes for this cycle (e.g. ["M001","M002","M003"]).
+    based on the entity keys for this cycle (e.g. ["M001_petco","M002_chewy"];
+    see entity_key()).
 
     scope_sku_codes, when non-empty, adds a required top-level "scope_skus"
     property keyed by SKU code (e.g. ["SKU001","SKU002"]), each validated
@@ -411,8 +439,8 @@ def build_coding_schema(
     properties = {
         "merchants": {
             "type": "object",
-            "properties": {code: entity_ref for code in comparison_codes},
-            "required": comparison_codes,
+            "properties": {key: entity_ref for key in entity_keys},
+            "required": entity_keys,
             "additionalProperties": False,
         },
         "other_merchants": {
