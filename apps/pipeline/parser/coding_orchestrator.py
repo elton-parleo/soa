@@ -32,6 +32,9 @@ class CodingSummary:
     duration_seconds: float
     input_tokens_total: int = 0
     output_tokens_total: int = 0
+    recoded_count: int = 0
+    mentions_cleared: int = 0
+    model: str = _CODING_MODEL
 
     def print_summary(self) -> None:
         est_cost = (
@@ -45,7 +48,7 @@ class CodingSummary:
         print("\n" + "━" * 34)
         print(f"Coding Cycle {self.cycle_code} Complete")
         print("━" * 34)
-        print(f"Model:           {_CODING_MODEL}")
+        print(f"Model:           {self.model}")
         print(f"Runs found:      {self.total_runs_found:>10}")
         print(f"Coded:           {self.coded:>10}")
         print(f"Already coded:   {self.skipped_already_coded:>10}")
@@ -53,6 +56,8 @@ class CodingSummary:
         print(f"Validation errors: {self.validation_errors:>7}")
         print(f"API errors:      {self.api_errors:>10}")
         print(f"Needs review:    {self.needs_review_count:>10}")
+        print(f"Recoded (retry): {self.recoded_count:>10}")
+        print(f"Mentions cleared:{self.mentions_cleared:>10}")
         print(f"Est. cost:       ${est_cost:>9.2f}")
         print(f"Duration:        {duration_str:>10}")
         print("━" * 34 + "\n")
@@ -139,12 +144,17 @@ class CodingOrchestrator:
             "needs_review": 0,
             "input_tokens": 0,
             "output_tokens": 0,
+            "recoded": 0,
+            "mentions_cleared": 0,
         }
         sem = asyncio.Semaphore(self.max_concurrent)
 
         async def _code_one(run: SoaRun) -> None:
             async with sem:
                 result: CodeRunResult = await self._coder.code_run(run.id)
+
+            counters["recoded"] += int(result.recoded)
+            counters["mentions_cleared"] += result.mentions_cleared
 
             if result.status == "success":
                 counters["coded"] += 1
@@ -175,4 +185,7 @@ class CodingOrchestrator:
             duration_seconds=duration,
             input_tokens_total=counters["input_tokens"],
             output_tokens_total=counters["output_tokens"],
+            recoded_count=counters["recoded"],
+            mentions_cleared=counters["mentions_cleared"],
+            model=self._client.model,
         )

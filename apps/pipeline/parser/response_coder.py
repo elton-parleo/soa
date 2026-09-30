@@ -19,8 +19,17 @@ from soa_shared.models.soa_models import (
     SoaRun,
     SoaScopeSku,
 )
+from parser.attribution_check import (
+    EntityTerms,
+    check_attribution,
+    clear_absent_mentions,
+    entity_terms,
+    resolve_position_ties,
+    retry_worthy,
+)
 from parser.coding_client import CodingClient
-from parser.validator import CodingValidator
+from parser.coding_response import CodingResponse
+from parser.validator import CodingValidator, ValidationResult
 from scoring.incentive_scorer import IncentiveScorer
 
 logger = logging.getLogger(__name__)
@@ -36,6 +45,20 @@ class CodeRunResult:
     error_message: Optional[str]
     input_tokens: int = 0
     output_tokens: int = 0
+    # Attribution check (parser/attribution_check.py)
+    recoded: bool = False  # a second coding call was made
+    mentions_cleared: int = 0  # coded mentions removed as absent from the text
+
+
+@dataclass
+class _CodingAttempt:
+    coding: CodingResponse
+    validation: ValidationResult
+    issues: list
+
+    def rank(self) -> tuple:
+        """Lower is better: valid before invalid, then fewer misattributions."""
+        return (not self.validation.is_valid, len(retry_worthy(self.issues)))
 
 
 class ResponseCoder:
@@ -199,11 +222,26 @@ class ResponseCoder:
 
         # 5. Call CodingClient — pass query-level study_pattern so each run uses
         #    the rubric for its own query, not the cycle-level aggregate value.
-        try:
+        code_to_terms: Dict[str, EntityTerms] = {
+            ce.comparison_code: entity_terms(ce) for ce in cycle_entities
+        }
+
+        async def _attempt() -> _CodingAttempt:
             coding = await self.coding_client.code_response(
                 run, query_text, cycle_entities, query_study_pattern,
                 scope_skus=scope_skus_payload,
             )
+            if resolve_position_ties(coding.merchants, run.raw_response, code_to_terms):
+                logger.warning("[coder] run_id=%d tied positions reordered by text order", run_id)
+            validation = self.validator.validate(coding, run)
+            issues = (
+                check_attribution(coding.merchants, run.raw_response, code_to_terms)
+                if validation.is_valid else []
+            )
+            return _CodingAttempt(coding, validation, issues)
+
+        try:
+            attempt = await _attempt()
         except Exception as exc:
             logger.error("[coder] run_id=%d api_error: %s", run_id, exc)
             return CodeRunResult(
@@ -211,9 +249,28 @@ class ResponseCoder:
                 needs_review=False, merchants_coded=0, other_merchants_found=0,
                 error_message=str(exc),
             )
+        input_tokens = attempt.coding.input_tokens
+        output_tokens = attempt.coding.output_tokens
 
-        # 6. Validate
-        validation = self.validator.validate(coding, run)
+        # 5b. One more coding call when the first fails validation or files
+        #     a mention under the wrong entity. Keep whichever is better.
+        recoded = False
+        if not attempt.validation.is_valid or retry_worthy(attempt.issues):
+            reasons = attempt.validation.errors + [i.detail for i in retry_worthy(attempt.issues)]
+            logger.warning("[coder] run_id=%d recoding: %s", run_id, "; ".join(reasons))
+            recoded = True
+            try:
+                second = await _attempt()
+                input_tokens += second.coding.input_tokens
+                output_tokens += second.coding.output_tokens
+                if second.rank() < attempt.rank():
+                    attempt = second
+            except Exception as exc:
+                logger.error("[coder] run_id=%d recode api_error: %s", run_id, exc)
+
+        coding, validation = attempt.coding, attempt.validation
+
+        # 6. Report validation of the attempt kept
         for warning in validation.warnings:
             logger.warning("[coder] run_id=%d warning: %s", run_id, warning)
         if not validation.is_valid:
@@ -223,9 +280,18 @@ class ResponseCoder:
                 run_id=run_id, status="validation_error",
                 needs_review=False, merchants_coded=0, other_merchants_found=0,
                 error_message="; ".join(validation.errors),
+                input_tokens=input_tokens, output_tokens=output_tokens,
+                recoded=recoded,
             )
 
-        final_needs_review = validation.should_flag_review
+        # 6b. Whatever attribution issues survived: a mention of an entity
+        #     the response never names is cleared outright; anything else is
+        #     left as coded and flagged for review.
+        for issue in attempt.issues:
+            logger.warning("[coder] run_id=%d attribution: %s", run_id, issue.detail)
+        mentions_cleared = clear_absent_mentions(coding.merchants, attempt.issues)
+
+        final_needs_review = validation.should_flag_review or bool(attempt.issues)
 
         # 7. Build entity_id → merchant_id lookup for backward compat with calculator.py
         entity_id_to_merchant_id: Dict[int, Optional[int]] = {}
@@ -336,6 +402,8 @@ class ResponseCoder:
             merchants_coded=len(coding.merchants),
             other_merchants_found=len(coding.other_merchants),
             error_message=None,
-            input_tokens=coding.input_tokens,
-            output_tokens=coding.output_tokens,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            recoded=recoded,
+            mentions_cleared=mentions_cleared,
         )

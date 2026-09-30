@@ -18,7 +18,7 @@ from parser.coding_response import (
     OtherMerchantCoding,
     ScopeSkuCoding,
 )
-from parser.prompts import build_coding_schema, build_system_prompt
+from parser.prompts import build_coding_schema, build_system_prompt, entity_key
 
 if TYPE_CHECKING:
     from soa_shared.models.soa_models import SoaCycleEntity
@@ -57,9 +57,14 @@ class CodingClient:
             study_pattern=study_pattern,
             scope_skus=scope_skus,
         )
-        comparison_codes = sorted(ce.comparison_code for ce in cycle_entities)
+        # The model codes each entity under a name-bearing key (M001_petco);
+        # everything downstream of this client is keyed by comparison code.
+        key_to_code = {
+            entity_key(ce): ce.comparison_code
+            for ce in sorted(cycle_entities, key=lambda x: x.comparison_code)
+        }
         scope_sku_codes = sorted(sku["code"] for sku in scope_skus) if scope_skus else None
-        coding_schema = build_coding_schema(comparison_codes, scope_sku_codes)
+        coding_schema = build_coding_schema(list(key_to_code), scope_sku_codes)
 
         user_message = (
             f"Query submitted to agent: {query_text}\n"
@@ -92,7 +97,8 @@ class CodingClient:
                 usage = response.usage
 
                 merchants: dict[str, MerchantCoding] = {}
-                for mid, data in result["merchants"].items():
+                for key, data in result["merchants"].items():
+                    mid = key_to_code[key]
                     merchants[mid] = MerchantCoding(
                         merchant_id=mid,
                         mentioned=data["mentioned"],
