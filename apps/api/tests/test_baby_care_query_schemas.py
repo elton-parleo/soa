@@ -27,7 +27,7 @@ def test_existing_category_still_accepted():
 
 def test_bogus_category_rejected():
     with pytest.raises(ValidationError, match="category"):
-        QueryCreate(query_text="test", category="Pet Care")
+        QueryCreate(query_text="test", category="Aquarium Care")
 
 
 # ── stage ─────────────────────────────────────────────────────────────────────
