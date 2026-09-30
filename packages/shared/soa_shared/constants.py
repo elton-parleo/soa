@@ -27,6 +27,7 @@ QUERY_CATEGORIES = [
     # SoA Lite submissions can be arbitrary brands outside the curated
     # verticals above — 'General' is their catch-all category.
     'General',
+    'Pet Care',
 ]
 
 QUERY_STAGES = [
@@ -55,6 +56,12 @@ QUERY_PERSONAS = [
     'Sensitive-Skin Baby Parent',
     'Subscription / Replenishment Parent',
     'Eco-Conscious Parent',
+    # Pet Care
+    'New Pet Parent',
+    'Value-Conscious Pet Parent',
+    'Health-Focused Pet Parent',
+    'Subscription / Replenishment Pet Parent',
+    'Premium / Quality-First Pet Parent',
 ]
 
 QUERY_STATUSES = [
