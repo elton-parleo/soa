@@ -28,7 +28,8 @@ const T = {
 
 const PLATFORM_META = {
   chatgpt:    { icon: '🤖', color: '#10B981', label: 'ChatGPT' },
-  gemini:     { icon: '✦',  color: '#4F46E5', label: 'Gemini' },
+  gemini:     { icon: '✦',  color: '#4F46E5', label: 'Gemini (ungrounded)' },
+  gemini_grounded: { icon: '✦', color: '#4F46E5', label: 'Gemini' },
   claude:     { icon: '◈',  color: '#F59E0B', label: 'Claude' },
   perplexity: { icon: '🔍', color: '#0EA5E9', label: 'Perplexity' },
 }
@@ -322,7 +323,8 @@ export default function ResponseExplorer({ cycleCode, onNavigate, initialRunId }
             options={[
               { value: 'all',        label: 'All Platforms' },
               { value: 'chatgpt',    label: 'ChatGPT' },
-              { value: 'gemini',     label: 'Gemini' },
+              { value: 'gemini_grounded', label: 'Gemini' },
+              { value: 'gemini',     label: 'Gemini (ungrounded)' },
               { value: 'claude',     label: 'Claude' },
               { value: 'perplexity', label: 'Perplexity' },
             ]}

@@ -118,6 +118,15 @@ class CreateCycleRequest(BaseModel):
             raise ValueError("cycle_mode must be 'query' or 'truecost'")
         return v
 
+    @field_validator("platforms")
+    @classmethod
+    def ground_gemini(cls, v):
+        # Gemini always runs grounded: store "gemini_grounded" for any
+        # client still sending "gemini" (the pipeline maps it too).
+        if v is None:
+            return v
+        return list(dict.fromkeys("gemini_grounded" if p == "gemini" else p for p in v))
+
     @model_validator(mode="after")
     def check_mode_requirements(self):
         if self.cycle_mode == "query":

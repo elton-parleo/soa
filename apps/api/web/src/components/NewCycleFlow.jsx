@@ -42,7 +42,8 @@ const STEP_LABELS = ['Brand & Competitors', 'Study & Queries', 'Review & Launch'
 // disabling it in PLATFORMS).
 const PLATFORM_META = [
   { id: 'chatgpt',    name: 'ChatGPT',    available: true },
-  { id: 'gemini',     name: 'Gemini',     available: true },
+  // Gemini always runs grounded (Google Search on) — the ungrounded API answers from training data alone.
+  { id: 'gemini_grounded', name: 'Gemini', available: true },
   { id: 'claude',     name: 'Claude',     available: true },
   { id: 'perplexity', name: 'Perplexity', available: false },
 ]
@@ -50,11 +51,11 @@ const PLATFORM_META = [
 const DEPTH_PRESETS = [
   {
     id: 'standard', name: 'Standard', description: 'ChatGPT + Gemini, 3 runs per query.',
-    platforms: ['chatgpt', 'gemini'], runsPerQuery: 3,
+    platforms: ['chatgpt', 'gemini_grounded'], runsPerQuery: 3,
   },
   {
     id: 'deep', name: 'Deep', description: 'ChatGPT + Gemini + Claude, 5 runs per query.',
-    platforms: ['chatgpt', 'gemini', 'claude'], runsPerQuery: 5,
+    platforms: ['chatgpt', 'gemini_grounded', 'claude'], runsPerQuery: 5,
   },
 ]
 
@@ -1039,7 +1040,7 @@ function Step3({ state, setState, onBack, onLaunched }) {
           ['Brand', state.primaryEntity?.name || '—'],
           ['Competitors', state.competitors.length ? state.competitors.map(c => c.name).join(', ') : 'None'],
           ['Study', state.studyType?.name || '—'],
-          ['Depth', `${depthPreset.name} (${depthPreset.platforms.join(', ')} · ${depthPreset.runsPerQuery} runs/query)`],
+          ['Depth', `${depthPreset.name} (${depthPreset.platforms.map(id => PLATFORM_META.find(p => p.id === id)?.name ?? id).join(', ')} · ${depthPreset.runsPerQuery} runs/query)`],
           ['Recurrence', RECURRENCE_OPTIONS.find(r => r.id === state.recurrence)?.label || 'One-time'],
           ['Continuing from audit', state.continuation ? 'Yes' : 'No'],
         ].map(([label, value]) => (

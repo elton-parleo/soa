@@ -198,6 +198,7 @@ function CycleCard({ cycle, children, onClick }) {
 const PLATFORM_META = {
   chatgpt:    { icon: '🤖', color: '#10B981' },
   gemini:     { icon: '✦',  color: '#4F46E5' },
+  gemini_grounded: { icon: '✦', color: '#4F46E5' },
   claude:     { icon: '◈',  color: '#F59E0B' },
   perplexity: { icon: '🔍', color: '#0EA5E9' },
 }
@@ -208,8 +209,8 @@ function RunningBody({ cycle, progressBaseline }) {
     : 0
   const estRemaining = formatEstRemaining(cycle.total_runs_planned, cycle.completed_runs, progressBaseline)
 
-  // Derive likely platforms from study_type as rough heuristic; fall back to placeholders
-  const derivedPlatforms = ['chatgpt', 'gemini']
+  // The cycle's own platforms; placeholders if it has none
+  const derivedPlatforms = cycle.platforms?.length ? cycle.platforms : ['chatgpt', 'gemini_grounded']
 
   return (
     <>

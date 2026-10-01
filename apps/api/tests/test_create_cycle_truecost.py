@@ -87,6 +87,15 @@ def test_schema_defaults_cycle_mode_to_query():
     assert req.cycle_mode == "query"
 
 
+def test_schema_stores_gemini_as_grounded():
+    req = CreateCycleRequest(
+        cycle_code="q1", study_type="retailer_sephora",
+        platforms=["chatgpt", "gemini", "gemini_grounded"],
+        runs_per_query=3, comparison_set=_comparison_set(1, 2),
+    )
+    assert req.platforms == ["chatgpt", "gemini_grounded"]
+
+
 def test_schema_rejects_invalid_cycle_mode():
     with pytest.raises(ValidationError):
         CreateCycleRequest(

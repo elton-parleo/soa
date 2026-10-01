@@ -614,7 +614,7 @@ class PipelineOrchestrator:
         per_platform = (total_calls // n_platforms) if n_platforms > 1 else total_calls
         openai_runs      = per_platform if "chatgpt"    in self.platforms else 0
         perplexity_runs  = per_platform if "perplexity" in self.platforms else 0
-        gemini_runs      = per_platform if "gemini"     in self.platforms else 0
+        gemini_runs      = per_platform if {"gemini", "gemini_grounded"} & set(self.platforms) else 0
         claude_runs      = per_platform if "claude"     in self.platforms else 0
 
         runner_cost = (
@@ -691,13 +691,14 @@ class PipelineOrchestrator:
 
         openai_runs     = platform_counts.get("chatgpt",    0)
         perplexity_runs = platform_counts.get("perplexity", 0)
-        gemini_runs     = platform_counts.get("gemini",     0)
+        gemini_runs     = platform_counts.get("gemini", 0) + platform_counts.get("gemini_grounded", 0)
         claude_runs     = platform_counts.get("claude",     0)
 
         # Per-run cost estimates (input_tokens * rate + output_tokens * rate)
         # OpenAI gpt-5.5:          $5/M input,  $30/M output
         # Perplexity sonar-large:  $1/M input,  $1/M output
         # Gemini 2.5 flash:        $0.15/M input, $0.60/M output
+        #                          (excludes Google Search grounding fees)
         # Claude Sonnet 4.6:       $3/M input,  $15/M output
         runner_cost = (
             openai_runs     * 1500 * 0.000005  + openai_runs     * 800 * 0.000030

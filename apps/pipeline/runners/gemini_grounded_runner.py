@@ -1,19 +1,17 @@
 """
 Grounded Gemini runner for SoA measurement — platform "gemini_grounded".
 
-Separate from gemini_runner.py / platform "gemini" by design. The base
-Gemini API (gemini_runner.py) does not replicate Google AI Mode/AI
-Overviews — it's the weakest incentive surface in the study because it has
-no live retrieval. This runner enables the google_search grounding tool so
-the model can ground its answer in live search results, which is a much
-closer proxy for a feed/search-discoverable shopping surface (the model
-can surface time-bound incentives it finds via search, the way AI
-Overviews / AI Mode do).
+This is the only Gemini surface cycles run: a cycle that lists "gemini" is
+run as "gemini_grounded" (see PLATFORM_ALIASES in run_orchestrator.py).
+The base Gemini API (gemini_runner.py) has no live retrieval, so it answers
+from training data alone — stale program names, stale prices, no sources.
+This runner enables the google_search grounding tool so the model can
+ground its answer in live search results, the way AI Overviews / AI Mode
+do.
 
-Uses the same google-genai SDK as gemini_runner.py. Intentionally does NOT
-share gemini_runner's 503 retry/fallback override — that complexity is
-specific to the existing "gemini" platform's operational history. This
-runner uses the BasePlatformRunner's generic retry/timeout behavior.
+Subclasses GeminiRunner for its 503 UNAVAILABLE retry/backoff and fallback
+model; only the API call differs (the grounding tool, and the sources it
+returns).
 
 Grounding metadata: response.candidates[0].grounding_metadata.grounding_chunks
 contains the search-result sources the model actually grounded on. Each
@@ -21,36 +19,23 @@ chunk's web.uri is extracted into PlatformResponse.retrieved_sources.
 """
 import logging
 
-from google import genai
 from google.genai import types
 
-import soa_shared.config as config
-from soa_shared.config import SOA_GEMINI_TIMEOUT_SECONDS
-from runners.base_runner import BasePlatformRunner
+from runners.gemini_runner import GeminiRunner
 from runners.platform_response import PlatformResponse
 
 logger = logging.getLogger(__name__)
 
 
-class GeminiGroundedRunner(BasePlatformRunner):
+class GeminiGroundedRunner(GeminiRunner):
 
     platform = "gemini_grounded"
 
-    def __init__(
-        self,
-        model: str = "gemini-2.5-flash",
-        timeout_seconds: int = SOA_GEMINI_TIMEOUT_SECONDS,
-    ):
-        if not config.GEMINI_API_KEY:
-            raise RuntimeError(
-                "GEMINI_API_KEY is not set. Add it to /soa/.env."
-            )
-        super().__init__(model=model, timeout_seconds=timeout_seconds)
-        self._client = genai.Client(api_key=config.GEMINI_API_KEY)
-
-    async def _call_api(self, query_text: str) -> PlatformResponse:
+    async def _call_api_for_model(
+        self, query_text: str, model: str
+    ) -> PlatformResponse:
         response = await self._client.aio.models.generate_content(
-            model=self.model,
+            model=model,
             contents=query_text,
             config=types.GenerateContentConfig(
                 tools=[types.Tool(google_search=types.GoogleSearch())],
@@ -66,9 +51,9 @@ class GeminiGroundedRunner(BasePlatformRunner):
             response_text=response.text or "",
             prompt_tokens=meta.prompt_token_count if meta else 0,
             completion_tokens=meta.candidates_token_count if meta else 0,
-            latency_ms=0,  # set by base run()
+            latency_ms=0,  # set by caller
             platform=self.platform,
-            model=self.model,
+            model=model,   # actual model, may differ from self.model on fallback
             status="success",
             search_triggered=search_triggered,
             retrieved_sources=retrieved_sources or None,
