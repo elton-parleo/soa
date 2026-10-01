@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 
 import app.routers.full_analysis as full_analysis_router
 from app.schemas import LaunchCrawlRequest, SuggestCompetitorsRequest
-from app.services.competitor_suggestion import CompetitorCandidate
+from app.services.competitor_suggestion import CompetitorCandidate, _build_competitor_prompt
 
 CURRENT_USER = {"organization_id": 1, "user_id": "u1"}
 
@@ -201,3 +201,51 @@ def test_launch_crawl_404_for_unknown_or_foreign_cycle(patched_engine):
     with pytest.raises(HTTPException) as exc_info:
         full_analysis_router.launch_crawl(req, current_user=CURRENT_USER)
     assert exc_info.value.status_code == 404
+
+
+# ─── competitor grounding: the site_context prompt block ─────────────────
+
+SITE_BLOCK = (
+    "Homepage: https://acme.example.com\n"
+    "Page title: Acme Coffee — Small-batch roasted beans\n"
+    "Site description: Single-origin coffee beans, roasted weekly in Portland."
+)
+
+
+def test_prompt_includes_the_site_block_when_one_is_given():
+    """This side accepts site_context purely for lockstep parity with
+    apps/pipeline/generation/competitor_generator.py — nothing here
+    populates it yet (see suggest_competitors' docstring) — but the
+    prompt has to render it identically the day something does."""
+    prompt = _build_competitor_prompt("Acme", "https://acme.example.com", None, SITE_BLOCK)
+
+    assert SITE_BLOCK in prompt
+    assert "What the brand's own website says about itself" in prompt
+    assert 'Treat this as the authoritative description of what "Acme" sells.' in prompt
+    assert prompt.index(SITE_BLOCK) < prompt.index("Selection rules")
+
+
+def test_prompt_omits_the_site_block_entirely_when_none():
+    prompt = _build_competitor_prompt("Acme", "https://acme.example.com", None, None)
+
+    assert "What the brand's own website says about itself" not in prompt
+    assert "authoritative description" not in prompt
+
+
+def test_suggest_competitors_passes_no_site_context(monkeypatch):
+    """The authed flow deliberately stays name-only for now: the
+    homepage fetcher lives in apps/pipeline and must NOT be re-created
+    here as a second, unguarded HTTP client."""
+    monkeypatch.setenv("OPEN_AI_API_KEY", "test-key")
+    seen = {}
+
+    def _capture(brand_name, api_key, **kw):
+        seen.update(kw)
+        return []
+
+    monkeypatch.setattr(full_analysis_router, "generate_competitors", _capture)
+
+    req = SuggestCompetitorsRequest(brand_name="Acme", store_url="https://acme.example.com")
+    full_analysis_router.suggest_competitors(req, current_user=CURRENT_USER)
+
+    assert "site_context" not in seen
