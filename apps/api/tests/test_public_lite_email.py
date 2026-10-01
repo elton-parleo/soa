@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from unittest.mock import patch
 from fastapi import HTTPException
 from sqlalchemy import create_engine, event
+from sqlalchemy.exc import OperationalError
 
 import app.routers.public_lite as public_lite
 from app.schemas import PublicLiteEmailRequest
@@ -463,3 +464,64 @@ def test_lead_notification_carries_a_null_store_url_through_unchanged(db):
         public_lite.set_lite_email("t1", _email())
 
     assert mock_send.call_args[0][0]["store_url"] is None
+
+
+# ─── the stamp must never be able to 500 a succeeded request ─────────────
+
+class _EngineFailingOnStamp:
+    """Delegates to the real engine, but raises on the SECOND begin() —
+    the stamp's own short transaction. The first begin() is the one that
+    stores the email, which must still work."""
+
+    def __init__(self, real):
+        self._real = real
+        self.begins = 0
+
+    def begin(self):
+        self.begins += 1
+        if self.begins > 1:
+            raise OperationalError(
+                "UPDATE soa_lite_requests SET lead_notified_at = ...",
+                {}, Exception("server closed the connection unexpectedly"),
+            )
+        return self._real.begin()
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+def test_a_failing_lead_notified_at_stamp_does_not_break_the_response(db, monkeypatch, caplog):
+    """By the time the stamp runs the email is stored and the
+    notification is sent — the request has already succeeded. A failure
+    here must not turn that into a 500 for the visitor."""
+    with db.begin() as conn:
+        conn.exec_driver_sql(
+            "INSERT INTO soa_lite_requests (token, status, brand_name) VALUES ('t1', 'pending', 'Allbirds')"
+        )
+
+    failing = _EngineFailingOnStamp(db)
+    monkeypatch.setattr(public_lite, "engine", failing)
+
+    with patch.object(public_lite, "send_lead_notification", return_value=True):
+        with caplog.at_level("ERROR"):
+            result = public_lite.set_lite_email("t1", _email("visitor@example.com"))
+
+    # Normal payload, exactly as if the stamp had worked.
+    assert result["status"] == "pending"
+    assert result["phase"] == "queued"
+
+    # The stamp was genuinely attempted and genuinely failed...
+    assert failing.begins == 2
+    assert "lead_notified_at" in caplog.text
+    # ...and the failure was logged with the token, never the address.
+    assert "t1" in caplog.text
+    assert "visitor@example.com" not in caplog.text
+
+    # The email is still stored: the stamp runs after that transaction
+    # committed, so it cannot roll it back.
+    with db.connect() as conn:
+        stored = conn.exec_driver_sql(
+            "SELECT email, lead_notified_at FROM soa_lite_requests WHERE token = 't1'"
+        ).fetchone()
+    assert stored[0] == "visitor@example.com"
+    assert stored[1] is None  # unstamped, so a later PATCH may notify again
