@@ -780,7 +780,7 @@ describe('NewCycleFlow — honest platform rendering', () => {
 
     const payload = api.createCycle.mock.calls[0][0]
     expect(payload.platforms).not.toContain('perplexity')
-    expect(payload.platforms).toEqual(['chatgpt', 'gemini'])
+    expect(payload.platforms).toEqual(['chatgpt', 'gemini_grounded'])
   })
 })
 
@@ -805,7 +805,7 @@ describe('NewCycleFlow — depth presets', () => {
     expect(screen.getByText('ChatGPT + Gemini, 3 runs per query.')).toBeInTheDocument()
 
     await advanceToStep3FromStep2()
-    expect(screen.getByText(/Standard \(chatgpt, gemini · 3 runs\/query\)/)).toBeInTheDocument()
+    expect(screen.getByText(/Standard \(ChatGPT, Gemini · 3 runs\/query\)/)).toBeInTheDocument()
 
     await waitFor(() => expect(screen.getByText('AVAILABLE ✓')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Launch Full Analysis'))
@@ -822,7 +822,7 @@ describe('NewCycleFlow — depth presets', () => {
     fireEvent.click(screen.getByText('Deep'))
 
     await advanceToStep3FromStep2()
-    expect(screen.getByText(/Deep \(chatgpt, gemini, claude · 5 runs\/query\)/)).toBeInTheDocument()
+    expect(screen.getByText(/Deep \(ChatGPT, Gemini, Claude · 5 runs\/query\)/)).toBeInTheDocument()
 
     await waitFor(() => expect(screen.getByText('AVAILABLE ✓')).toBeInTheDocument())
     fireEvent.click(screen.getByText('Launch Full Analysis'))

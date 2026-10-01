@@ -31,7 +31,8 @@ const T = {
 // ─── Platform metadata ────────────────────────────────────────────────────────
 const PLATFORMS = [
   { id: 'chatgpt',    name: 'ChatGPT',    model: 'GPT-5.5',                costMin: 0.04, costMax: 0.06, icon: '🤖', color: '#10B981' },
-  { id: 'gemini',     name: 'Gemini',     model: 'Gemini 2.5 Flash',       costMin: 0.02, costMax: 0.03, icon: '✦',  color: '#4F46E5' },
+  // Gemini always runs grounded (Google Search on) — the ungrounded API answers from training data alone.
+  { id: 'gemini_grounded', name: 'Gemini', model: 'Gemini 2.5 Flash + Google Search', costMin: 0.02, costMax: 0.03, icon: '✦',  color: '#4F46E5' },
   { id: 'perplexity', name: 'Perplexity', model: 'Llama 3.1 Sonar Large',  costMin: 0.05, costMax: 0.08, icon: '🔍', color: '#0EA5E9', disabled: true },
   { id: 'claude',     name: 'Claude',     model: 'Claude Sonnet 4.6',      costMin: 0.03, costMax: 0.05, icon: '◈',  color: '#F59E0B' },
 ]

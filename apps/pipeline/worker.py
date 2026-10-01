@@ -2334,9 +2334,9 @@ def main():
                 # Fallback for pre-migration cycles with NULL columns
                 if cycle_mode != "truecost" and not platforms:
                     log.warning(
-                        f"{cycle_code}: platforms is NULL — using default [chatgpt, gemini]"
+                        f"{cycle_code}: platforms is NULL — using default [chatgpt, gemini_grounded]"
                     )
-                    platforms = ['chatgpt', 'gemini']
+                    platforms = ['chatgpt', 'gemini_grounded']
 
                 if cycle_mode != "truecost" and not runs_per_query:
                     log.warning(

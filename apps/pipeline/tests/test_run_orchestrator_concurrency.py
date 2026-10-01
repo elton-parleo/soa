@@ -35,13 +35,13 @@ def test_lite_cycle_non_chatgpt_platform_is_unaffected():
     through to that platform's own normal limit."""
     assert resolve_platform_concurrency("lite-a1b2c3d4", "claude", 3) == config.SOA_CLAUDE_MAX_CONCURRENT
     assert resolve_platform_concurrency("lite-a1b2c3d4", "perplexity", 3) == config.SOA_PERPLEXITY_MAX_CONCURRENT
-    assert resolve_platform_concurrency("lite-a1b2c3d4", "gemini", 3) == config.SOA_GEMINI_MAX_CONCURRENT
+    assert resolve_platform_concurrency("lite-a1b2c3d4", "gemini_grounded", 3) == config.SOA_GEMINI_MAX_CONCURRENT
 
 
 def test_non_lite_cycle_every_platform_is_completely_unaffected():
     assert resolve_platform_concurrency("standard-abc123", "claude", 3) == config.SOA_CLAUDE_MAX_CONCURRENT
     assert resolve_platform_concurrency("standard-abc123", "perplexity", 3) == config.SOA_PERPLEXITY_MAX_CONCURRENT
-    assert resolve_platform_concurrency("standard-abc123", "gemini", 3) == config.SOA_GEMINI_MAX_CONCURRENT
+    assert resolve_platform_concurrency("standard-abc123", "gemini_grounded", 3) == config.SOA_GEMINI_MAX_CONCURRENT
 
 
 def test_unknown_platform_falls_back_to_the_caller_supplied_max_concurrent():

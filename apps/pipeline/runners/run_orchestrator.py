@@ -27,7 +27,6 @@ from soa_shared.scope_resolution import materialize_and_freeze
 from runners.base_runner import BasePlatformRunner
 from runners.claude_runner import ClaudeRunner
 from runners.cycle_summary import CycleSummary
-from runners.gemini_runner import GeminiRunner
 from runners.gemini_grounded_runner import GeminiGroundedRunner
 from runners.openai_runner import OpenAIRunner
 from runners.perplexity_runner import PerplexityRunner
@@ -45,24 +44,31 @@ class RunResult:
 _RUNNER_CLASSES: Dict[str, type] = {
     "chatgpt": OpenAIRunner,
     "perplexity": PerplexityRunner,
-    "gemini": GeminiRunner,
+    "gemini_grounded": GeminiGroundedRunner,
     "claude": ClaudeRunner,
+}
+
+# Gemini always runs grounded. The ungrounded API has no live retrieval and
+# answers from training data, so it is never run: a cycle that lists
+# "gemini" (any cycle created before grounding became the default) runs it
+# as "gemini_grounded", and its runs are stored under that name.
+PLATFORM_ALIASES: Dict[str, str] = {
+    "gemini": "gemini_grounded",
 }
 
 # Per-platform max concurrent connections (claude=1 to avoid 429 rate-limit)
 _PLATFORM_MAX_CONCURRENT: Dict[str, int] = {
-    "chatgpt":    config.SOA_OPENAI_MAX_CONCURRENT,
-    "perplexity": config.SOA_PERPLEXITY_MAX_CONCURRENT,
-    "gemini":     config.SOA_GEMINI_MAX_CONCURRENT,
-    "claude":     config.SOA_CLAUDE_MAX_CONCURRENT,
+    "chatgpt":         config.SOA_OPENAI_MAX_CONCURRENT,
+    "perplexity":      config.SOA_PERPLEXITY_MAX_CONCURRENT,
+    "gemini_grounded": config.SOA_GEMINI_MAX_CONCURRENT,
+    "claude":          config.SOA_CLAUDE_MAX_CONCURRENT,
 }
 
-# Additive, flagged: "gemini_grounded" only becomes a valid/runnable platform
-# when ENABLE_GEMINI_GROUNDED is set. With the flag off, requesting it raises
-# the same "Unknown platforms" error as before this runner existed.
-if config.ENABLE_GEMINI_GROUNDED:
-    _RUNNER_CLASSES["gemini_grounded"] = GeminiGroundedRunner
-    _PLATFORM_MAX_CONCURRENT["gemini_grounded"] = config.SOA_GEMINI_MAX_CONCURRENT
+
+def normalize_platforms(platforms: List[str]) -> List[str]:
+    """Applies PLATFORM_ALIASES, dropping any duplicate it creates."""
+    return list(dict.fromkeys(PLATFORM_ALIASES.get(p, p) for p in platforms))
+
 
 # Per-platform inter-run delays (claude needs a wider gap to avoid burst limits)
 _PLATFORM_INTER_RUN_DELAY: Dict[str, float] = {
@@ -101,7 +107,9 @@ class RunOrchestrator:
         max_concurrent: int = None,
     ):
         self.cycle_code = cycle_code
-        self.platforms = platforms or ["chatgpt", "perplexity", "gemini", "claude"]
+        self.platforms = normalize_platforms(
+            platforms or ["chatgpt", "perplexity", "gemini_grounded", "claude"]
+        )
         self.runs_per_query = runs_per_query or config.SOA_DEFAULT_RUNS_PER_QUERY
         self.max_concurrent = max_concurrent or config.SOA_MAX_CONCURRENT
 
@@ -321,7 +329,7 @@ class RunOrchestrator:
         duration = time.monotonic() - t_start
 
         # Collect Gemini 503 recovery stats from the runner (if present)
-        gemini_runner = self.runners.get("gemini")
+        gemini_runner = self.runners.get("gemini_grounded")
         gemini_503_count = getattr(gemini_runner, "gemini_503_count", 0)
         gemini_503_fallback_successes = getattr(
             gemini_runner, "gemini_503_fallback_successes", 0
