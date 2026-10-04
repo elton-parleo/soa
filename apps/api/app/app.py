@@ -88,9 +88,9 @@ app.include_router(
     dependencies=[Depends(verify_token)],
 )
 
-# Merchant Command Center's mutation proxy. Authed like the routers
-# above; see app/routers/truesync.py for why only writes come through
-# this app at all (the page's reads go straight to TRUESYNC_API_BASE).
+# Merchant Command Center's TrueSync proxy: every scoped read and every
+# write, with the tenant token attached server-side. Authed like the
+# routers above; see app/routers/truesync.py for the public/scoped split.
 app.include_router(
     truesync.router,
     prefix="/api",

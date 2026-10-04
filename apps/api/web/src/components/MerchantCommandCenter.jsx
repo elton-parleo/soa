@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Sidebar from './Sidebar.jsx'
 import { api } from '../api.js'
-import { truesyncApi, fetchAllVerifications, withMutationTimeout } from '../truesyncApi.js'
+import { truesyncApi, fetchAllVerifications, withMutationTimeout, NOT_AUTHORIZED } from '../truesyncApi.js'
 import SyncMatrix from './merchant-command-center/SyncMatrix.jsx'
 import ListingDrawer from './merchant-command-center/ListingDrawer.jsx'
 import SyncRulesTab from './merchant-command-center/SyncRulesTab.jsx'
@@ -41,10 +41,11 @@ const VERIFIERS = {
  * merchant-command-center/commandCenter.css).
  *
  * Data flow, and the reason it is split:
- *   reads   browser -> TRUESYNC_API_BASE directly (that API allows any
- *           origin on GET)
- *   writes  browser -> this app's authed proxy -> TrueSync, so
- *           TRUESYNC_ADMIN_KEY never reaches the client
+ *   public reads  browser -> TRUESYNC_API_BASE directly (the published
+ *                 surface: active brand, schema-org feed, listing record)
+ *   scoped reads  browser -> this app's authed proxy -> TrueSync
+ *   writes        the same proxy. The proxy attaches the tenant token
+ *                 (TRUESYNC_TENANT_TOKEN), which never reaches the client.
  *
  * Everything on screen is live API output. Nothing falls back to the
  * mock's illustrative values, and no state is inferred: no publication
@@ -72,6 +73,9 @@ export default function MerchantCommandCenter({ onNavigate }) {
   const [publications, setPublications] = useState([])
   const [loading,      setLoading]      = useState(true)
   const [loadError,    setLoadError]    = useState(null)
+  // A refused tenant token is not "could not be reached": the service
+  // answered, and said no. Kept apart so the banner can say which.
+  const [notAuthorized, setNotAuthorized] = useState(false)
   const [tab,          setTab]          = useState('catalog')
   const [selectedId,   setSelectedId]   = useState(null)
   const [toasts,       setToasts]       = useState([])
@@ -106,6 +110,7 @@ export default function MerchantCommandCenter({ onNavigate }) {
   const load = useCallback((signal) => {
     setLoading(true)
     setLoadError(null)
+    setNotAuthorized(false)
 
     // The brand, channel and publication reads are independent; the
     // catalog needs the brand's merchant_slug, and each listing's
@@ -171,6 +176,7 @@ export default function MerchantCommandCenter({ onNavigate }) {
       })
       .catch((err) => {
         if (signal?.aborted) return
+        setNotAuthorized(Boolean(err?.notAuthorized))
         setLoadError(err.message || 'TrueSync is unreachable')
       })
       .finally(() => { if (!signal?.aborted) setLoading(false) })
@@ -583,7 +589,17 @@ export default function MerchantCommandCenter({ onNavigate }) {
             )}
           </div>
 
-          {loadError && (
+          {loadError && notAuthorized && (
+            <div className="mcc-banner error" role="alert">
+              <span>
+                <strong>{NOT_AUTHORIZED}.</strong> TrueSync refused this app&apos;s
+                tenant token, so nothing for this customer can be shown or
+                changed until it is set or reissued.
+              </span>
+              <button className="mcc-btn" onClick={() => load()}>Retry</button>
+            </div>
+          )}
+          {loadError && !notAuthorized && (
             <div className="mcc-banner error" role="alert">
               <span>
                 <strong>TrueSync could not be reached.</strong> {loadError}

@@ -5,8 +5,9 @@
  * client bundle (truesyncApi.js, via import.meta.env) and anything
  * build-side that later needs it.
  *
- * Override with VITE_TRUESYNC_API_BASE. This is a READ base only — the
- * page's mutations are same-origin against this app's own proxy
- * (apps/api/app/routers/truesync.py), which holds the admin key.
+ * Override with VITE_TRUESYNC_API_BASE. This is the base for PUBLIC reads
+ * only — scoped reads and every mutation are same-origin against this
+ * app's own proxy (apps/api/app/routers/truesync.py), which holds the
+ * tenant token.
  */
 export const DEFAULT_TRUESYNC_API_BASE = 'https://api.parleo.io'

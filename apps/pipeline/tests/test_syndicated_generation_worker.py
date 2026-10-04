@@ -301,3 +301,39 @@ def test_the_catalog_is_read_without_history(db):
         worker.process_generation_jobs()
 
     assert client.return_value.snapshot.call_args.kwargs["with_history"] is False
+
+
+# ── a refused token fails the job, never an ungrounded study ──────────────
+
+def test_a_refused_token_fails_generation_instead_of_degrading(db):
+    """
+    An outage generates the ungrounded study (tested elsewhere). A refused
+    token must not: it would make every study ungrounded while reporting
+    success, so the job fails with the reason and writes nothing.
+    """
+    from clients.truesync_catalog import TrueSyncNotAuthorized
+
+    with db.begin() as conn:
+        _insert_job(conn, merchant="wiggle-and-snug", tier_config={
+            "catalog_accuracy": {"enabled": True},
+        })
+
+    class RefusingClient:
+        def snapshot(self, _slug, **_kwargs):
+            raise TrueSyncNotAuthorized(
+                "Not authorized for this customer: TrueSync refused this "
+                "service's TRUESYNC_TENANT_TOKEN"
+            )
+
+    with patch("clients.truesync_catalog.TrueSyncCatalogClient", RefusingClient), \
+         patch("generation.syndicated_study.build_syndicated_study") as build:
+        worker.process_generation_jobs()
+
+    build.assert_not_called()
+    assert _stored(db) == []
+    with db.connect() as conn:
+        status, error = conn.execute(text(
+            "SELECT status, error_message FROM soa_query_generation_jobs WHERE study_type = :st"
+        ), {"st": STUDY_TYPE}).fetchone()
+    assert status == "failed"
+    assert "Not authorized for this customer" in error

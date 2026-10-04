@@ -9,6 +9,10 @@ ambiguously re-parsed from a plain connection string.
 
 The merchants table is referenced via ForeignKey string in the
 migration only — this env.py never creates or alters it.
+
+Remote-migration guard: a remote target (which the Supabase default
+always is) is refused unless SOA_ALLOW_REMOTE_MIGRATION=1 is set for that
+run. See migration_target.py.
 """
 import os
 from logging.config import fileConfig
@@ -19,6 +23,8 @@ from sqlalchemy.engine import URL
 from sqlalchemy.pool import NullPool
 
 from alembic import context
+
+from migration_target import assert_migration_target_permitted
 
 load_dotenv()
 
@@ -80,7 +86,9 @@ def _make_url() -> URL:
     #
     # Unset in every deployed environment, so the default path below is
     # unchanged: absent this variable, alembic still cannot be aimed at
-    # anything except Supabase by accident.
+    # anything except Supabase by accident — and since Supabase is remote,
+    # the guard in migration_target.py refuses it without
+    # SOA_ALLOW_REMOTE_MIGRATION=1.
     override = os.getenv("ALEMBIC_DATABASE_URL")
     if override:
         return override
@@ -103,8 +111,10 @@ def _make_url() -> URL:
 
 
 def run_migrations_offline() -> None:
+    url = _make_url()
+    assert_migration_target_permitted(url)
     context.configure(
-        url=_make_url(),
+        url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -115,7 +125,9 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = create_engine(_make_url(), poolclass=NullPool)
+    url = _make_url()
+    assert_migration_target_permitted(url)
+    connectable = create_engine(url, poolclass=NullPool)
     with connectable.connect() as connection:
         context.configure(
             connection=connection,

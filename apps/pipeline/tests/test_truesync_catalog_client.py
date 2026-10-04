@@ -6,6 +6,9 @@ each of the four endpoints can fail on its own, and each failure must
 cost exactly one thing rather than the snapshot. A TrueSync outage has to
 degrade a study to its ungrounded form, never fail the generation job —
 fifty good AI-written questions are worth more than a failed job.
+
+The one exception is a refused token (401/403), which raises: see the
+module docstring of clients/truesync_catalog.py.
 """
 import json
 import os
@@ -172,25 +175,102 @@ def test_a_404_says_the_merchant_is_not_there_rather_than_returning_empty(monkey
     assert "no TrueSync merchant" in error
 
 
-def test_the_read_carries_no_admin_key(monkeypatch):
-    """These are unauthenticated reads on purpose: a generator holding the
-    key that gates publishing could also publish."""
-    seen = {}
+class _Response:
+    def __init__(self, status_code=200, body=None):
+        self.status_code = status_code
+        self._body = [] if body is None else body
+        self.text = json.dumps(self._body)
 
-    class Response:
-        status_code = 200
-        text = "[]"
+    def json(self):
+        return self._body
 
-        @staticmethod
-        def json():
-            return []
 
-    def capture(url, params=None, timeout=None, **kwargs):
-        seen["kwargs"] = kwargs
-        return Response()
+def test_every_read_carries_the_tenant_token(monkeypatch):
+    """
+    Since supply's tenancy step these routes are scoped to one customer and
+    refuse a request without its token. Every read sends it.
+    """
+    seen = []
+
+    def capture(url, params=None, timeout=None, headers=None, **kwargs):
+        seen.append((url, headers or {}))
+        return _Response(200, [] if url.endswith("/merchants") else {"listings": []})
 
     monkeypatch.setattr(tc.httpx, "get", capture)
-    tc.TrueSyncCatalogClient(base_url="https://example.invalid")._get(
-        "/api/truesync/merchants"
-    )
-    assert "headers" not in seen["kwargs"]
+    client = tc.TrueSyncCatalogClient(base_url="https://example.invalid", token="tst_abc_secret")
+    client.snapshot("wiggle-and-snug", with_history=True)
+
+    assert {url.rsplit("/", 1)[-1] for url, _ in seen} == {
+        "catalog", "merchants", "incentives", "price-history",
+    }
+    for url, headers in seen:
+        assert headers.get("X-TrueSync-Key") == "tst_abc_secret", url
+
+
+def test_the_token_comes_from_config_by_default(monkeypatch):
+    monkeypatch.setattr(tc.config, "TRUESYNC_TENANT_TOKEN", "tst_from_env")
+    assert tc.TrueSyncCatalogClient(base_url="https://x.invalid").token == "tst_from_env"
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_a_refused_token_raises_rather_than_degrading(monkeypatch, status):
+    """
+    An outage degrades a study to ungrounded; a refusal must not. It is
+    true on every retry, and degrading around it would make every study
+    ungrounded while reporting success.
+    """
+    monkeypatch.setattr(tc.httpx, "get", lambda *a, **k: _Response(status, {"detail": "no"}))
+    client = tc.TrueSyncCatalogClient(base_url="https://example.invalid", token="tst_abc_secret")
+
+    with pytest.raises(tc.TrueSyncNotAuthorized) as exc:
+        client.snapshot("wiggle-and-snug", with_history=False)
+
+    message = str(exc.value)
+    assert "Not authorized for this customer" in message
+    assert "refused this service's TRUESYNC_TENANT_TOKEN" in message
+    assert "tst_abc_secret" not in message
+
+
+def test_a_missing_token_is_named_as_the_cause(monkeypatch):
+    seen = {}
+
+    def capture(url, params=None, timeout=None, headers=None, **kwargs):
+        seen["headers"] = headers
+        return _Response(403, {"detail": "missing or invalid X-TrueSync-Key"})
+
+    monkeypatch.setattr(tc.httpx, "get", capture)
+    client = tc.TrueSyncCatalogClient(base_url="https://example.invalid", token="")
+
+    with pytest.raises(tc.TrueSyncNotAuthorized, match="TRUESYNC_TENANT_TOKEN is not set"):
+        client.list_merchants()
+    assert seen["headers"] == {}
+
+
+def test_an_outage_still_degrades_rather_than_raising(monkeypatch):
+    monkeypatch.setattr(tc.httpx, "get", lambda *a, **k: _Response(503, {"detail": "down"}))
+    client = tc.TrueSyncCatalogClient(base_url="https://example.invalid", token="tst_abc_secret")
+
+    snapshot = client.snapshot("wiggle-and-snug", with_history=False)
+
+    assert snapshot.available is False
+
+
+def test_the_scorer_degrades_on_a_refusal_but_says_so_loudly(caplog):
+    """
+    Scoring keeps degrade-on-failure (one dimension's nuance, not the run),
+    but a refusal is logged at ERROR: unlike an outage it recurs every batch.
+    """
+    import logging
+
+    from scoring.expectation_scorer import _snapshot_or_unavailable
+
+    class Refusing:
+        def snapshot(self, *_a, **_k):
+            raise tc.TrueSyncNotAuthorized("Not authorized for this customer: refused")
+
+    caplog.set_level(logging.ERROR)
+    snapshot = _snapshot_or_unavailable(Refusing(), "wiggle-and-snug", with_history=True)
+
+    assert snapshot.available is False
+    assert "Not authorized" in snapshot.error
+    assert any(r.levelno == logging.ERROR for r in caplog.records)

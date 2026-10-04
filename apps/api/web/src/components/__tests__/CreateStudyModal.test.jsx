@@ -12,6 +12,9 @@ import CreateStudyModal, {
 import { api } from '../../api.js'
 
 vi.mock('../../api.js', () => ({
+  // truesyncApi.js's proxied reads take these two from api.js.
+  apiAuthHeaders: () => ({}),
+  expireSession: vi.fn(),
   api: {
     getQueryConstraints: vi.fn(),
     getEntities: vi.fn(),

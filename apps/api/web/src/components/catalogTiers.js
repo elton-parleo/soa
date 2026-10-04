@@ -10,8 +10,8 @@
  *
  * Why mirror rather than ask the server. The examples have to be live —
  * "true for the selected brand", before anything is generated — and the
- * catalog reads already go straight from the browser to TrueSync (see
- * truesyncApi.js on why reads do not take a proxy hop). Adding a
+ * browser already holds the catalog (read through this app's TrueSync
+ * proxy; see truesyncApi.js). Adding a further
  * server round-trip so the server could compute what the browser already
  * has the data for would buy a shared implementation at the cost of a
  * request per keystroke on the brand select.

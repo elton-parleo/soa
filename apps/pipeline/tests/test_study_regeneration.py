@@ -286,6 +286,31 @@ def test_an_unreadable_catalog_leaves_every_question_in_place(db):
     assert "unchanged" in error
 
 
+def test_a_refused_token_fails_the_job_and_leaves_the_study_alone(db):
+    """
+    A refused token is not an outage: the job fails saying so, rather than
+    rebuilding nothing and reporting success. This path runs outside the
+    worker's own try, so a refusal that escaped would strand the job in
+    'running'.
+    """
+    from clients.truesync_catalog import TrueSyncNotAuthorized
+
+    seed(db, tiers=["catalog_accuracy", "value_incentives"])
+
+    class RefusingClient:
+        def snapshot(self, _slug, **_kwargs):
+            raise TrueSyncNotAuthorized("Not authorized for this customer: TrueSync refused it")
+
+    with patch("clients.truesync_catalog.TrueSyncCatalogClient", RefusingClient):
+        worker.process_generation_jobs()
+
+    assert len(questions(db)) == 5
+    status, _config, error = job(db)
+    assert status == "failed"
+    assert "Not authorized for this customer" in error
+    assert "unchanged" in error
+
+
 # ── brand-direct knows what the rest of the study is asking ───────────────
 #
 # A brand-direct-only regeneration is the common case and the one that

@@ -5,29 +5,32 @@ DEAL_ENGINE_BASE_URL points at).
 
 Unlike deal_engine_client.py, this one is NOT mirrored to
 apps/pipeline/clients/: only the Merchant Command Center's proxy router
-(app/routers/truesync.py) uses it, and the pipeline has no TrueSync
-call site. Edit here.
+(app/routers/truesync.py) uses it. The pipeline's catalog reads have
+their own synchronous client (apps/pipeline/clients/truesync_catalog.py).
 
 Two things shape it:
 
-  1. It only ever carries MUTATIONS. The Command Center's reads go
-     straight from the browser to TRUESYNC_API_BASE — that API answers
-     GETs with Access-Control-Allow-Origin: *, so a proxy hop would add
-     latency and buy nothing.
+  1. It carries every SCOPED call the Command Center makes, reads as well
+     as writes. Since supply's tenancy step, a scoped TrueSync route
+     refuses a request without its tenant's token, and a token cannot go
+     to a browser — so the page's reads come through here too. Only the
+     public serving routes (active brand, schema-org feeds, a listing's
+     record) are still read straight from the browser.
 
-  2. TRUESYNC_ADMIN_KEY must never leave the server. It is attached
+  2. TRUESYNC_TENANT_TOKEN must never leave the server. It is attached
      here as X-TrueSync-Key and scrubbed out of every error string this
      module returns (_scrub) before a caller — and therefore a browser,
      a log line, or a toast — can ever see it. httpx puts the request
      URL in its exception strings but not headers; _scrub is the
-     belt-and-braces for the case where a future upstream echoes the
-     header back inside an error body.
+     belt-and-braces for the case where an upstream echoes the header
+     back inside an error body.
 
 Never raises on network/HTTP failure — callers get (status, data,
 error) so an upstream outage renders as a toast, not a 500.
 """
 import logging
 from typing import Any, Optional, Tuple
+from urllib.parse import quote
 
 import httpx
 
@@ -41,44 +44,53 @@ logger = logging.getLogger(__name__)
 ForwardResult = Tuple[Optional[int], Optional[Any], Optional[str]]
 
 
+def _slug(value: str) -> str:
+    """A path segment, encoded — a slug is caller input on its way upstream."""
+    return quote(str(value), safe="")
+
+
 class TrueSyncClient:
 
     def __init__(
         self,
         base_url: Optional[str] = None,
-        admin_key: Optional[str] = None,
+        token: Optional[str] = None,
         timeout_seconds: Optional[float] = None,
+        read_timeout_seconds: Optional[float] = None,
     ) -> None:
         self.base_url = (
             config.TRUESYNC_API_BASE if base_url is None else base_url
         ).rstrip("/")
-        self.admin_key = (
-            config.TRUESYNC_ADMIN_KEY if admin_key is None else admin_key
-        )
+        self.token = config.TRUESYNC_TENANT_TOKEN if token is None else token
         self.timeout_seconds = (
             timeout_seconds
             if timeout_seconds is not None
             else config.SOA_TRUESYNC_TIMEOUT_SECONDS
         )
+        self.read_timeout_seconds = (
+            read_timeout_seconds
+            if read_timeout_seconds is not None
+            else config.SOA_TRUESYNC_READ_TIMEOUT_SECONDS
+        )
 
     def _scrub(self, text: Optional[str]) -> Optional[str]:
         """
-        Remove the admin key from anything on its way back out of this
-        module. A short or empty key is not scrubbed — replacing a
-        1-character secret would mangle unrelated text, and a key that
+        Remove the token from anything on its way back out of this
+        module. A short or empty token is not scrubbed — replacing a
+        1-character secret would mangle unrelated text, and a token that
         short is not a secret worth protecting anyway.
         """
-        if not text or not self.admin_key or len(self.admin_key) < 8:
+        if not text or not self.token or len(self.token) < 8:
             return text
-        return text.replace(self.admin_key, "[redacted]")
+        return text.replace(self.token, "[redacted]")
 
     def _headers(self) -> dict:
-        # Empty key -> no header at all, rather than an empty one: an
-        # upstream that starts enforcing the key should reject us with a
-        # clean 401, not treat "" as a presented-but-wrong credential.
-        if not self.admin_key:
+        # Empty token -> no header at all, rather than an empty one: the
+        # upstream should reject us as "no credential presented", not as
+        # a presented-but-wrong one.
+        if not self.token:
             return {}
-        return {"X-TrueSync-Key": self.admin_key}
+        return {"X-TrueSync-Key": self.token}
 
     async def forward(
         self,
@@ -88,19 +100,19 @@ class TrueSyncClient:
         json: Optional[dict] = None,
     ) -> ForwardResult:
         """
-        One request to TRUESYNC_API_BASE + path, with the admin key
-        attached. No retries: every caller is a mutation (publish,
-        diagnostics refresh, sync-rule write), and a blind retry of a
-        write whose response was merely lost is worse than surfacing the
-        failure to the operator who clicked the button.
+        One request to TRUESYNC_API_BASE + path, with the token attached.
+        No retries: a blind retry of a write whose response was merely
+        lost is worse than surfacing the failure to the operator who
+        clicked the button, and a read the page retries on its own.
         """
         if not self.base_url:
             return None, None, "TRUESYNC_API_BASE is not configured"
 
         url = f"{self.base_url}{path}"
+        timeout = self.read_timeout_seconds if method == "GET" else self.timeout_seconds
 
         try:
-            async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
+            async with httpx.AsyncClient(timeout=timeout) as client:
                 response = await client.request(
                     method, url, params=params, json=json, headers=self._headers()
                 )
@@ -124,7 +136,59 @@ class TrueSyncClient:
             # hand back the text so the caller can decide.
             return response.status_code, self._scrub(response.text), None
 
-    # ─── The three mutations the Command Center actually issues ──────────
+    # ─── Reads — the Command Center's scoped GETs ────────────────────────
+
+    async def get(self, path: str, params: Optional[dict] = None) -> ForwardResult:
+        return await self.forward("GET", path, params=params)
+
+    async def get_channels(self) -> ForwardResult:
+        return await self.get("/api/truesync/channels")
+
+    async def get_publications(self, limit: Optional[int] = None) -> ForwardResult:
+        return await self.get(
+            "/api/truesync/publications",
+            params={"limit": limit} if limit is not None else None,
+        )
+
+    async def get_merchants(self) -> ForwardResult:
+        return await self.get("/api/truesync/merchants")
+
+    async def get_merchant_catalog(self, merchant_slug: str) -> ForwardResult:
+        return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/catalog")
+
+    async def get_merchant_incentives(self, merchant_slug: str) -> ForwardResult:
+        return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/incentives")
+
+    async def get_merchant_price_history(
+        self, merchant_slug: str, limit: Optional[int] = None
+    ) -> ForwardResult:
+        return await self.get(
+            f"/api/truesync/merchants/{_slug(merchant_slug)}/price-history",
+            params={"limit": limit} if limit is not None else None,
+        )
+
+    async def get_prospects(self) -> ForwardResult:
+        return await self.get("/api/truesync/prospects")
+
+    async def get_prospect_drift(self, slug: str) -> ForwardResult:
+        return await self.get(f"/api/truesync/prospects/{_slug(slug)}/drift")
+
+    async def get_verifications(
+        self,
+        listing_id: int,
+        channel: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> ForwardResult:
+        params = {}
+        if channel:
+            params["channel"] = channel
+        if limit is not None:
+            params["limit"] = limit
+        return await self.get(
+            f"/api/truesync/listings/{listing_id}/verifications", params=params or None
+        )
+
+    # ─── Writes ──────────────────────────────────────────────────────────
 
     async def publish_listing(
         self, listing_id: int, channels: Optional[str] = None
