@@ -7,6 +7,9 @@ import StudyLibrary from '../StudyLibrary.jsx'
 import { api } from '../../api.js'
 
 vi.mock('../../api.js', () => ({
+  // truesyncApi.js's proxied reads take these two from api.js.
+  apiAuthHeaders: () => ({}),
+  expireSession: vi.fn(),
   api: {
     getStudies: vi.fn(),
     uploadStudyCsv: vi.fn(),

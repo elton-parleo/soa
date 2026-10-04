@@ -449,10 +449,12 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
       .then(res => setEntities(Array.isArray(res) ? res : []))
       .catch(() => setEntities([]))
 
-    // The brand list, from TrueSync. A failure here is not an error the
-    // form has to recover from — it means there is no brand to ground
-    // in, so the block says so and the study is generated ungrounded,
-    // which is a valid study and the only one that existed until now.
+    // The brand list, from TrueSync (through this app's proxy, which holds
+    // the tenant token). A failure here is not an error the form has to
+    // recover from — it means there is no brand to ground in, so the
+    // block says so and the study is generated ungrounded, which is a
+    // valid study and the only one that existed until now. A refused
+    // token shows as "Not authorized for this customer" in that block.
     setMerchantsError(null)
     truesyncApi.getMerchants()
       .then(rows => setMerchants(Array.isArray(rows) ? rows : []))
@@ -495,9 +497,10 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
       truesyncApi.getMerchantCatalog(merchantSlug, { signal: controller.signal }),
       // The incentives read is allowed to fail on its own: without it the
       // value tier has nothing to build, which is a smaller loss than the
-      // whole block going dark.
+      // whole block going dark. A refused token is not that: it would
+      // refuse the catalog too, and saying so beats a quietly smaller study.
       truesyncApi.getMerchantIncentives(merchantSlug, { signal: controller.signal })
-        .catch(() => null),
+        .catch((err) => { if (err?.notAuthorized) throw err; return null }),
     ])
       .then(([catalogPayload, incentivesPayload]) => {
         if (controller.signal.aborted) return

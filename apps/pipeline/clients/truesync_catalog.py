@@ -2,7 +2,7 @@
 TrueSyncCatalogClient — the published catalog a study grounds its
 questions in.
 
-Reads four public GETs on TRUESYNC_API_BASE, all of which serve stored
+Reads four GETs on TRUESYNC_API_BASE, all of which serve stored
 artifacts and none of which assembles, compiles or reaches the Deal
 Engine:
 
@@ -17,21 +17,29 @@ system against itself and would agree with it by construction; what it
 reads instead is what was actually published, with the published_at that
 says when.
 
-No admin key. These are unauthenticated reads, deliberately — a
-generator holding the key that gates publishing could also publish.
+The tenant token goes on every read. Since supply's tenancy step these
+routes are scoped to one customer and refuse a request without that
+customer's token (TRUESYNC_TENANT_TOKEN, sent as X-TrueSync-Key). Until
+Step 1C maps soa orgs to tenants there is one token, Wiggle & Snug's.
 
-Never raises on network or HTTP failure. A caller gets a snapshot with
-available=False and an error string, because a TrueSync outage must
-degrade a study to its ungrounded form rather than fail the generation
-job outright: fifty good AI-written questions are worth more than a
-failed job.
+Two kinds of failure, handled in opposite ways on purpose:
+
+  * An OUTAGE — network error, 5xx, a merchant that is not there — never
+    raises. The caller gets a snapshot with available=False and an error
+    string, and the study degrades to its ungrounded form: fifty good
+    AI-written questions are worth more than a failed job because a
+    third-party endpoint was down for thirty seconds.
+
+  * A REFUSAL — 401 or 403, the upstream saying this app's token is not
+    authorized for this customer — raises TrueSyncNotAuthorized. That is
+    a configuration fault, not weather: it will be true on every retry,
+    and degrading silently would turn every study into an ungrounded one
+    while reporting success. The generation job fails, saying why.
 
 Canonical copy lives here (apps/pipeline/clients/), same as
 deal_engine_client.py. The API app does NOT mirror this one: the Create
-Study modal reads the same endpoints straight from the browser (they
-answer with Access-Control-Allow-Origin: *), so a proxy hop through this
-app's backend would add latency and buy nothing — the same split
-truesyncApi.js already documents.
+Study modal reads the same endpoints through the API app's TrueSync proxy
+(apps/api/app/routers/truesync.py), which holds the token server-side.
 """
 import logging
 from dataclasses import dataclass, field
@@ -43,6 +51,16 @@ import httpx
 import soa_shared.config as config
 
 logger = logging.getLogger(__name__)
+
+
+class TrueSyncNotAuthorized(RuntimeError):
+    """
+    The upstream refused this app's tenant token (401/403).
+
+    Raised, never folded into a snapshot: see the module docstring. The
+    message is what the failed generation job records, so it says what
+    to fix, and it never contains the token.
+    """
 
 # Generous, and matched to the fact that this runs inside a generation
 # job that has already decided to spend a minute on model calls. The
@@ -167,17 +185,25 @@ class TrueSyncCatalogClient:
         self,
         base_url: Optional[str] = None,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+        token: Optional[str] = None,
     ) -> None:
         self.base_url = (
             config.TRUESYNC_API_BASE if base_url is None else base_url
         ).rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.token = config.TRUESYNC_TENANT_TOKEN if token is None else token
+
+    def _headers(self) -> dict:
+        # No token -> no header, so the upstream reports "no credential",
+        # which TrueSyncNotAuthorized then names as an unset variable.
+        return {"X-TrueSync-Key": self.token} if self.token else {}
 
     # ─── Transport ────────────────────────────────────────────────────
 
     def _get(self, path: str, params: Optional[dict] = None):
         """
-        One read. Returns (payload, error) — never raises.
+        One read. Returns (payload, error) — never raises on an outage;
+        raises TrueSyncNotAuthorized on a refused token.
 
         Synchronous on purpose. Every caller is inside the generation
         worker, which is a synchronous loop processing one job at a time;
@@ -186,10 +212,26 @@ class TrueSyncCatalogClient:
         """
         url = f"{self.base_url}{path}"
         try:
-            response = httpx.get(url, params=params, timeout=self.timeout_seconds)
+            response = httpx.get(
+                url, params=params, timeout=self.timeout_seconds, headers=self._headers(),
+            )
         except Exception as exc:
             logger.warning("[truesync-catalog] GET %s failed: %s", url, exc)
             return None, str(exc)
+
+        if response.status_code in (401, 403):
+            if not self.token:
+                reason = "TRUESYNC_TENANT_TOKEN is not set on this service"
+            else:
+                reason = "TrueSync refused this service's TRUESYNC_TENANT_TOKEN"
+            logger.error(
+                "[truesync-catalog] GET %s -> %d: %s", url, response.status_code, reason,
+            )
+            raise TrueSyncNotAuthorized(
+                f"Not authorized for this customer: {reason} (GET {path} -> "
+                f"{response.status_code}). The study was not generated, rather "
+                f"than generated without its catalog."
+            )
 
         if response.status_code == 404:
             return None, f"no TrueSync merchant at {path}"

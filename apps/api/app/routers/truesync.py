@@ -1,37 +1,38 @@
 """
-Merchant Command Center — the mutation proxy.
+Merchant Command Center — the TrueSync proxy, for reads and writes.
 
-The Command Center page (web/src/components/MerchantCommandCenter.jsx)
-reads TrueSync directly from the browser: TRUESYNC_API_BASE answers
-GETs with Access-Control-Allow-Origin: *, so its catalog, channel,
-publication and verification reads need nothing from this app.
+Since supply's tenancy step (parleo-supply-app, docs/truesync/tenancy.md)
+every TrueSync route is one of two kinds:
 
-Writes cannot work that way, for two independent reasons:
+  * PUBLIC — the published serving surface: the active brand, a merchant's
+    schema-org feed, one listing's record. The page still reads these
+    straight from TRUESYNC_API_BASE; there is nothing to authenticate.
 
-  1. TRUESYNC_ADMIN_KEY is a server-side secret. It must never be in a
-     client bundle, a network tab, or a toast. clients/truesync_client.py
-     attaches it here and scrubs it from every error it returns.
+  * SCOPED — everything else, reads included. Refused without the
+    tenant's token in X-TrueSync-Key. A token is a server-side secret, so
+    every scoped call the page makes comes through here, where
+    clients/truesync_client.py attaches TRUESYNC_TENANT_TOKEN and scrubs
+    it from every error it returns. It must never be in a client bundle,
+    a network tab, or a toast.
 
-  2. The upstream CORS policy allows GET/POST/HEAD/OPTIONS only, so a
-     browser PUT to /api/truesync/sync-rules fails preflight before it
-     is ever sent. Verified 2026-08-22: OPTIONS returns 400 with
-     access-control-allow-methods: GET, POST, HEAD, OPTIONS.
+The upstream CORS policy also allows GET/POST/HEAD/OPTIONS only, so a
+browser PUT to /api/truesync/sync-rules would fail preflight regardless.
 
 Paths deliberately mirror the upstream ones, so the only difference
-between a read and a write in truesyncApi.js is which base they hang
-off: TRUESYNC_API_BASE for reads, same-origin for these.
+between a public read and a scoped one in truesyncApi.js is which base it
+hangs off: TRUESYNC_API_BASE for public, same-origin for these.
 
 Authenticated — mounted with verify_token in app.py, same as cycles.py.
-That gates who can trigger a mutation from this app.
+That gates who can reach the tenant's data from this app.
 
-The upstream now enforces the key too: re-probed 2026-08-24, a POST to
-/api/truesync/listings/90/compile with no X-TrueSync-Key returns 403,
-where on 2026-08-22 the same call returned 200. The header was always
-sent, so nothing here had to change when that landed.
+A 403 from the upstream means it refused this app's tenant token: the
+token is missing, revoked, or belongs to a different customer. It comes
+back as 403 with NOT_AUTHORIZED leading the detail, so the page can say
+"not authorized for this customer" rather than look empty or broken.
 
-Only the mutations the page can actually issue are exposed. This is a
-deliberate allow-list, not a generic pass-through: an open proxy to an
-admin API is exactly the thing an admin key is meant to prevent.
+Only the calls the page actually issues are exposed. This is a
+deliberate allow-list, not a generic pass-through: an open proxy holding
+a tenant token would hand that tenant's data to anyone signed in here.
 """
 import logging
 
@@ -52,20 +53,86 @@ class SyncRuleProxyRequest(BaseModel):
     cadence: Optional[str] = None
 
 
+#: What a refused tenant token reads as, everywhere. The page keys on the
+#: 403 status; the words are for whoever reads the toast or the job error.
+NOT_AUTHORIZED = "Not authorized for this customer"
+
+
 def _unwrap(status, data, error):
     """
     (status, data, error) -> data, or an HTTPException carrying the
-    upstream's own message verbatim (already key-scrubbed by the
-    client). The page renders `detail` unchanged in its toast — the
-    prompt's "API errors verbatim" — so nothing is rewritten here.
+    upstream's own message (already token-scrubbed by the client). The
+    page renders `detail` unchanged in its toast, so nothing is
+    paraphrased — except a 403, which is led by NOT_AUTHORIZED so it can
+    never be mistaken for an empty catalog or a broken page. The
+    upstream's words follow it.
 
     A transport failure (status is None) becomes 502, not 500: the
     fault is upstream, and the distinction is what lets the page tell
     "TrueSync is down" from "this app is broken".
     """
     if error is not None:
+        if status == 403:
+            raise HTTPException(
+                status_code=403,
+                detail=f"{NOT_AUTHORIZED} — TrueSync refused this app's tenant token ({error})",
+            )
         raise HTTPException(status_code=status or 502, detail=error)
     return data
+
+
+# ─── Reads — every scoped GET the page makes ────────────────────────────
+
+@router.get("/truesync/channels")
+async def get_channels():
+    return _unwrap(*await TrueSyncClient().get_channels())
+
+
+@router.get("/truesync/publications")
+async def get_publications(limit: Optional[int] = None):
+    return _unwrap(*await TrueSyncClient().get_publications(limit))
+
+
+@router.get("/truesync/merchants")
+async def get_merchants():
+    return _unwrap(*await TrueSyncClient().get_merchants())
+
+
+@router.get("/truesync/merchants/{merchant_slug}/catalog")
+async def get_merchant_catalog(merchant_slug: str):
+    return _unwrap(*await TrueSyncClient().get_merchant_catalog(merchant_slug))
+
+
+@router.get("/truesync/merchants/{merchant_slug}/incentives")
+async def get_merchant_incentives(merchant_slug: str):
+    return _unwrap(*await TrueSyncClient().get_merchant_incentives(merchant_slug))
+
+
+@router.get("/truesync/merchants/{merchant_slug}/price-history")
+async def get_merchant_price_history(merchant_slug: str, limit: Optional[int] = None):
+    return _unwrap(
+        *await TrueSyncClient().get_merchant_price_history(merchant_slug, limit)
+    )
+
+
+@router.get("/truesync/prospects")
+async def get_prospects():
+    return _unwrap(*await TrueSyncClient().get_prospects())
+
+
+@router.get("/truesync/prospects/{slug}/drift")
+async def get_prospect_drift(slug: str):
+    return _unwrap(*await TrueSyncClient().get_prospect_drift(slug))
+
+
+@router.get("/truesync/listings/{listing_id}/verifications")
+async def get_verifications(
+    listing_id: int, channel: Optional[str] = None, limit: Optional[int] = None
+):
+    return _unwrap(*await TrueSyncClient().get_verifications(listing_id, channel, limit))
+
+
+# ─── Writes ─────────────────────────────────────────────────────────────
 
 
 @router.post("/truesync/listings/{listing_id}/publish")
@@ -87,10 +154,8 @@ async def verify_listing(listing_id: int):
     upstream's own summary ({outcome, integrity, findings, ...}) so the
     page can report the result rather than assume one.
 
-    Both verify routes are newer than the rest of this proxy — they
-    shipped upstream on 2026-08-24 — and unlike the others they are
-    genuinely key-gated: without X-TrueSync-Key the upstream answers
-    403. That is what the proxy is for.
+    Token-gated upstream like every scoped route: without X-TrueSync-Key
+    it answers 403. That is what the proxy is for.
     """
     return _unwrap(*await TrueSyncClient().verify_listing(listing_id))
 
@@ -103,8 +168,8 @@ async def verify_listing_acp(listing_id: int):
     — but against the `acp` channel, so the ACP cell gets its own badge
     rather than borrowing schema.org's.
 
-    Key-gated upstream like the other verify routes; that is what the proxy
-    is for.
+    Token-gated upstream like the other verify routes; that is what the
+    proxy is for.
     """
     return _unwrap(*await TrueSyncClient().verify_listing_acp(listing_id))
 

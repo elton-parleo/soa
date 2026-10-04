@@ -1,27 +1,35 @@
 /**
  * API client for the Merchant Command Center's TrueSync data.
  *
- * Split by direction, and the split is the whole design:
+ * Split by what the upstream allows, since supply's tenancy step:
  *
- *   READS  go straight to TRUESYNC_API_BASE (the supply app). That API
- *          answers GETs with Access-Control-Allow-Origin: *, so there is
- *          nothing for this app's backend to add — see
- *          apps/api/app/routers/truesync.py's module docstring.
+ *   PUBLIC READS — the published serving surface (active brand, a
+ *          merchant's schema-org feed, one listing's record). Straight to
+ *          TRUESYNC_API_BASE; nothing to authenticate.
  *
- *   WRITES go to this app's own origin, through the authed proxy, which
- *          attaches X-TrueSync-Key server-side. The key is never in this
- *          bundle. (The upstream also rejects a browser PUT at preflight,
- *          so sync-rule writes could not work any other way.)
+ *   SCOPED READS — merchants, catalog, incentives, publications,
+ *          verifications, prospects, drift, channels. The upstream
+ *          refuses these without the tenant's token, and the token is a
+ *          server-side secret, so they go to this app's own origin
+ *          (/api/truesync/*), where the authed proxy attaches it.
  *
- * Reads deliberately do NOT reuse ./api.js: that client attaches the
- * Supabase bearer token and signs the user out on any 401 — neither is
- * appropriate for a cross-origin call to a service that has never heard
- * of this app's sessions. Writes DO reuse it, because they hit this
- * app's authed API like every other mutation in the product.
+ *   WRITES — the same proxy, via ./api.js.
+ *
+ * The token is never in this bundle (truesyncTokenBundle.build.test.js).
+ *
+ * Public reads deliberately do NOT carry this app's bearer token: it is a
+ * cross-origin call to a service that has never heard of this app's
+ * sessions. Scoped reads DO — they hit this app's authed API, and a 401
+ * there means the session ended, exactly as it does in ./api.js.
+ *
+ * A 403 on a scoped read means TrueSync refused this app's tenant token.
+ * It throws a TrueSyncError with notAuthorized set and NOT_AUTHORIZED as
+ * its message, so the page says so instead of looking empty or broken.
  *
  * Every read carries a timeout. A TrueSync outage has to render as a
  * banner, and a fetch with no AbortSignal never resolves into one.
  */
+import { apiAuthHeaders, expireSession } from './api.js'
 import { DEFAULT_TRUESYNC_API_BASE } from './components/merchant-command-center/truesync-host.constants.js'
 
 export const TRUESYNC_API_BASE = (
@@ -34,17 +42,32 @@ export const TRUESYNC_API_BASE = (
 // still looking at the page.
 export const READ_TIMEOUT_MS = 15000
 
+// What a refused tenant token reads as, on every surface that shows it.
+export const NOT_AUTHORIZED = 'Not authorized for this customer'
+
 export class TrueSyncError extends Error {
   constructor(message, { status = null, timedOut = false } = {}) {
     super(message)
     this.name = 'TrueSyncError'
     this.status = status
     this.timedOut = timedOut
+    // A 403 is never an outage and never "nothing here": callers that
+    // would otherwise degrade a failed read to an empty one rethrow these.
+    this.notAuthorized = status === 403
   }
 }
 
-async function readJson(path, { timeoutMs = READ_TIMEOUT_MS, signal } = {}) {
-  const url = `${TRUESYNC_API_BASE}${path}`
+/** A public read, straight to the supply app. */
+function readJson(path, opts) {
+  return fetchJson(`${TRUESYNC_API_BASE}${path}`, path, opts, {})
+}
+
+/** A scoped read, through this app's proxy, which holds the tenant token. */
+function proxyReadJson(path, opts) {
+  return fetchJson(path, path, opts, apiAuthHeaders(), { sameOrigin: true })
+}
+
+async function fetchJson(url, path, { timeoutMs = READ_TIMEOUT_MS, signal } = {}, headers, { sameOrigin = false } = {}) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -55,8 +78,14 @@ async function readJson(path, { timeoutMs = READ_TIMEOUT_MS, signal } = {}) {
   if (signal) signal.addEventListener('abort', onOuterAbort)
 
   try {
-    const res = await fetch(url, { signal: controller.signal })
+    const res = await fetch(url, { signal: controller.signal, headers })
     if (!res.ok) {
+      // This app's own session ended — not TrueSync's business, and not
+      // a TrueSync error. Same handling as every other authed call.
+      if (sameOrigin && res.status === 401) await expireSession()
+      if (res.status === 403) {
+        throw new TrueSyncError(NOT_AUTHORIZED, { status: 403 })
+      }
       let detail = `GET ${path} → ${res.status}`
       try {
         const err = await res.json()
@@ -66,7 +95,7 @@ async function readJson(path, { timeoutMs = READ_TIMEOUT_MS, signal } = {}) {
     }
     return await res.json()
   } catch (err) {
-    if (err instanceof TrueSyncError) throw err
+    if (err instanceof TrueSyncError || err?.authExpired) throw err
     // An abort from the outer signal is an unmount, not a failure the
     // user should see — but it is still an abort here, so let the caller
     // distinguish via timedOut only when our own timer fired.
@@ -84,12 +113,9 @@ async function readJson(path, { timeoutMs = READ_TIMEOUT_MS, signal } = {}) {
 }
 
 export const truesyncApi = {
-  // ─── Reads — cross-origin, direct ─────────────────────────────────
+  // ─── Public reads — cross-origin, direct ──────────────────────────
   getActiveBrand: (opts) =>
     readJson('/api/truesync/demo/active-brand', opts),
-
-  getChannels: (opts) =>
-    readJson('/api/truesync/channels', opts),
 
   // The catalog spine. Returns one entry per listing this merchant has
   // published to schema.org: { listing_id, product_url, published_at,
@@ -104,19 +130,24 @@ export const truesyncApi = {
   getListing: (listingId, opts) =>
     readJson(`/api/truesync/listings/${listingId}`, opts),
 
+  // ─── Scoped reads — same-origin, through the proxy ───────────────
+
+  getChannels: (opts) =>
+    proxyReadJson('/api/truesync/channels', opts),
+
   // Every recorded publication, newest first — one call backs the whole
   // matrix. Verified 2026-08-22: rows come back strictly descending by
   // id and compiled_at, which is what lets the derive layer take the
   // first row it sees per (listing, channel) as the current state.
   getPublications: ({ limit = 500, ...opts } = {}) =>
-    readJson(`/api/truesync/publications?limit=${limit}`, opts),
+    proxyReadJson(`/api/truesync/publications?limit=${limit}`, opts),
 
   // ─── The study generator's catalog reads ────────────────────────
   //
-  // Four public GETs that serve stored artifacts and never assemble,
-  // compile or reach the Deal Engine. That serve-on-read property is
-  // what makes them groundable: a generator reading a freshly
-  // recomputed price would be checking the system against itself.
+  // GETs that serve stored artifacts and never assemble, compile or
+  // reach the Deal Engine. That serve-on-read property is what makes
+  // them groundable: a generator reading a freshly recomputed price
+  // would be checking the system against itself.
   //
   // These are the same endpoints apps/pipeline/clients/truesync_catalog.py
   // reads server-side at generation time. The modal reads them here so
@@ -130,31 +161,31 @@ export const truesyncApi = {
   // published, and a study must keep reading its brand's catalog after
   // the demo moves on.
   getMerchants: (opts) =>
-    readJson('/api/truesync/merchants', opts),
+    proxyReadJson('/api/truesync/merchants', opts),
 
   getMerchantCatalog: (merchantSlug, opts) =>
-    readJson(`/api/truesync/merchants/${encodeURIComponent(merchantSlug)}/catalog`, opts),
+    proxyReadJson(`/api/truesync/merchants/${encodeURIComponent(merchantSlug)}/catalog`, opts),
 
   getMerchantIncentives: (merchantSlug, opts) =>
-    readJson(`/api/truesync/merchants/${encodeURIComponent(merchantSlug)}/incentives`, opts),
+    proxyReadJson(`/api/truesync/merchants/${encodeURIComponent(merchantSlug)}/incentives`, opts),
 
   // Prospects — brands we observe but have no authorization to publish
   // for. Slug-keyed, and config rather than DB rows on the supply side,
   // so the list is small and cheap.
   getProspects: (opts) =>
-    readJson('/api/truesync/prospects', opts),
+    proxyReadJson('/api/truesync/prospects', opts),
 
   // The surface-vs-surface drift report for one prospect. Read-only
   // observation of public surfaces; nothing here publishes.
   getProspectDrift: (slug, opts) =>
-    readJson(`/api/truesync/prospects/${encodeURIComponent(slug)}/drift`, opts),
+    proxyReadJson(`/api/truesync/prospects/${encodeURIComponent(slug)}/drift`, opts),
 
   // Verification history for one listing on one channel, newest first.
   // There is no bulk form and no all-channels form: the endpoint takes
   // exactly one channel (default merchant_center), so a full matrix is
   // listings x channels calls — see fetchAllVerifications below.
   getVerifications: (listingId, channelSlug, { limit = 100, ...opts } = {}) =>
-    readJson(
+    proxyReadJson(
       `/api/truesync/listings/${listingId}/verifications` +
       `?channel=${encodeURIComponent(channelSlug)}&limit=${limit}`,
       opts,
@@ -203,6 +234,11 @@ export function unwrapVerifications(payload) {
  * A cell whose request fails resolves to [] — an empty history renders
  * as ○ ("not yet verified"), which is the honest reading of "we could
  * not find out", and is never mistaken for a clean ✓.
+ *
+ * Except a refusal. A 403 is not "could not find out", it is "not
+ * allowed to look", and a matrix of ○ would hide it — so the first one
+ * stops the sweep and rethrows, for the page to say so. A 401 (session
+ * ended) rethrows for the same reason.
  */
 export async function fetchAllVerifications(listingIds, channelSlugs, { signal, concurrency = 8 } = {}) {
   const jobs = []
@@ -222,7 +258,8 @@ export async function fetchAllVerifications(listingIds, channelSlugs, { signal, 
         // guard only covers a client that hands back something odd.
         const rows = await truesyncApi.getVerifications(listingId, channelSlug, { signal })
         out[`${listingId}:${channelSlug}`] = Array.isArray(rows) ? rows : []
-      } catch (_) {
+      } catch (err) {
+        if (err?.notAuthorized || err?.authExpired) throw err
         out[`${listingId}:${channelSlug}`] = []
       }
     }))

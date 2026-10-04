@@ -383,7 +383,7 @@ def _run_regeneration(
     between them would otherwise leave a study with its catalog questions
     gone and nothing in their place.
     """
-    from clients.truesync_catalog import TrueSyncCatalogClient
+    from clients.truesync_catalog import TrueSyncCatalogClient, TrueSyncNotAuthorized
     from generation import catalog_tiers as ct
     from generation.query_generator import generate_brand_direct
     from generation.syndicated_study import normalize_tier_config, _primary_category, _primary_persona
@@ -398,9 +398,16 @@ def _run_regeneration(
     # one study into two populations in every report that segments by it.
     persona = _primary_persona(kwargs.get("personas"), existing)
 
-    snapshot = TrueSyncCatalogClient().snapshot(
-        syndicated_merchant, with_history=False,
-    )
+    # This path runs outside process_generation_jobs' try, so a refused
+    # token is caught here: left to propagate, it would strand the job in
+    # 'running' instead of failing it.
+    try:
+        snapshot = TrueSyncCatalogClient().snapshot(
+            syndicated_merchant, with_history=False,
+        )
+    except TrueSyncNotAuthorized as exc:
+        _mark_generation_failed(job_id, f"{exc} The study is unchanged.")
+        return
     if not snapshot.available:
         _mark_generation_failed(
             job_id,
@@ -498,12 +505,17 @@ def _run_syndicated_generation(
     The grounded path: read the brand's published catalog, then build the
     four tiers over it.
 
-    The catalog read is not allowed to fail the job. TrueSync is a
+    A catalog OUTAGE is not allowed to fail the job. TrueSync is a
     separate service on a separate deploy, and a study whose stage
     questions generated perfectly well should not be thrown away because
     a third-party endpoint was down for the thirty seconds this ran —
     build_syndicated_study records the unavailability on tier_config and
     generates the study's ungrounded form.
+
+    A REFUSED TOKEN is: the snapshot raises TrueSyncNotAuthorized, the
+    caller's except marks the job failed with its message. That is a
+    configuration fault that would make every study ungrounded while
+    reporting success, so it is never degraded around.
 
     with_history=False: expectations are written against the CURRENT
     record. Prior values are the scorer's business, read at scoring time,

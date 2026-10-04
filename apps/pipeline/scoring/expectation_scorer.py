@@ -20,7 +20,7 @@ from typing import Optional
 
 from sqlalchemy import text
 
-from clients.truesync_catalog import TrueSyncCatalogClient
+from clients.truesync_catalog import TrueSyncCatalogClient, TrueSyncNotAuthorized
 from parser.expectation_client import ExpectationClient
 from parser.extraction_postprocess import apply_labels
 from scoring import expectation_comparator as cmp
@@ -28,6 +28,28 @@ from soa_shared import expected_answers as ea
 from soa_shared.database import engine
 
 logger = logging.getLogger(__name__)
+
+
+def _snapshot_or_unavailable(client, merchant_slug, *, with_history):
+    """
+    The snapshot, with a refused token folded into an unavailable one.
+
+    Scoring keeps the degrade-on-failure behaviour generation used to have,
+    deliberately: a cycle's scoring is many dimensions, and one missing
+    catalog costs this one its staleness/sourcing nuance, not the run. The
+    refusal is still logged at ERROR, because unlike an outage it will be
+    true on every batch until someone fixes the token. Generation, where a
+    missing catalog changes what the study IS, fails instead (worker.py).
+    """
+    try:
+        return client.snapshot(merchant_slug, with_history=with_history)
+    except TrueSyncNotAuthorized as exc:
+        logger.error("[expectation] %s", exc)
+        from clients.truesync_catalog import CatalogSnapshot, _now
+
+        return CatalogSnapshot(
+            available=False, merchant_slug=merchant_slug, read_at=_now(), error=str(exc),
+        )
 
 
 @dataclass
@@ -57,7 +79,9 @@ class HistoryCache:
         if not merchant_slug or not variant_id:
             return None
         if merchant_slug not in self._by_merchant:
-            snapshot = self._client.snapshot(merchant_slug, with_history=True)
+            snapshot = _snapshot_or_unavailable(
+                self._client, merchant_slug, with_history=True,
+            )
             if not snapshot.available:
                 logger.warning(
                     "[expectation] no price history for %s (%s) — a mismatch "
@@ -99,7 +123,9 @@ class BrandFactsCache:
         if not merchant_slug:
             return {}
         if merchant_slug not in self._by_merchant:
-            snapshot = self._client.snapshot(merchant_slug, with_history=False)
+            snapshot = _snapshot_or_unavailable(
+                self._client, merchant_slug, with_history=False,
+            )
             if not snapshot.available:
                 logger.warning(
                     "[expectation] no catalog for %s (%s) — brand claims can "

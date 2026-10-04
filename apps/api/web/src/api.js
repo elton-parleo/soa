@@ -21,6 +21,15 @@ export function setApiToken(token) {
 }
 
 /**
+ * The Authorization header this app's own API expects, or {} when signed
+ * out. Exported for truesyncApi.js, whose proxied reads need the session
+ * but not request()'s lack of a timeout or abort signal.
+ */
+export function apiAuthHeaders() {
+  return _accessToken ? { 'Authorization': `Bearer ${_accessToken}` } : {}
+}
+
+/**
  * A 401 that has already triggered sign-out and reload. Callers should
  * not treat it as a failure of the thing they asked for — nothing is
  * wrong with the request; the session ended.
@@ -33,15 +42,25 @@ export class AuthExpiredError extends Error {
   }
 }
 
+/**
+ * The 401 path, shared: sign out, reload to the login page, and throw.
+ * See the comment inside request() for why it throws rather than returns.
+ */
+export async function expireSession() {
+  // Token is invalid or expired.
+  // Sign out and reload to return to login page.
+  // The auth provider clears the token via onAuthStateChange.
+  await supabase.auth.signOut()
+  window.location.reload()
+  throw new AuthExpiredError()
+}
+
 async function request(method, path, body) {
   const opts = {
     method,
     headers: {
       'Content-Type': 'application/json',
-      ...(_accessToken
-        ? { 'Authorization': `Bearer ${_accessToken}` }
-        : {}
-      ),
+      ...apiAuthHeaders(),
     },
   }
   if (body !== undefined) {
@@ -52,13 +71,8 @@ async function request(method, path, body) {
 
   if (!res.ok) {
     if (res.status === 401) {
-      // Token is invalid or expired.
-      // Sign out and reload to return to login page.
-      // The auth provider clears the token via onAuthStateChange.
-      await supabase.auth.signOut()
-      window.location.reload()
-      // THROW, never `return`. This used to resolve the promise with
-      // undefined, which made every caller that reads a field off the
+      // expireSession() signs out, reloads, and THROWS — never `return`.
+      // This used to resolve the promise with undefined, which made every caller that reads a field off the
       // body — `data.outcomes`, `data.rows` — throw a TypeError inside
       // its own .then, while the reload wiped the console entry and the
       // half-rendered UI on its way out. The visible result was a
@@ -69,7 +83,7 @@ async function request(method, path, body) {
       // caller now has something to render in the moment before it
       // lands, and something to log if the reload is blocked (a test
       // environment, a stubbed location, an open beforeunload dialog).
-      throw new AuthExpiredError()
+      await expireSession()
     }
     let detail = `${method} ${path} → ${res.status}`
     try {
@@ -327,17 +341,17 @@ export const api = {
   updateRecommendation: (recommendationId, status) =>
     request('PATCH', `/api/recommendations/${recommendationId}`, { status }),
 
-  // Merchant Command Center — the TrueSync MUTATIONS only, through this
-  // app's proxy (app/routers/truesync.py) so TRUESYNC_ADMIN_KEY stays
-  // server-side. The page's reads bypass this client entirely and go
-  // straight to TRUESYNC_API_BASE; see truesyncApi.js for why.
+  // Merchant Command Center — the TrueSync MUTATIONS, through this app's
+  // proxy (app/routers/truesync.py) so the tenant token stays server-side.
+  // The page's reads live in truesyncApi.js: scoped ones through the same
+  // proxy, public ones straight to TRUESYNC_API_BASE.
   publishListing: (listingId, channels) =>
     post(`/api/truesync/listings/${listingId}/publish` +
       (channels ? `?channels=${encodeURIComponent(channels)}` : ''), {}),
 
   // Verify fetches the listing's live PDP and records what it served.
-  // Genuinely key-gated upstream (403 without X-TrueSync-Key), so it
-  // could not be called from the browser even if we wanted to.
+  // Token-gated upstream (403 without X-TrueSync-Key), so it could not be
+  // called from the browser even if we wanted to.
   verifyListing: (listingId) =>
     post(`/api/truesync/listings/${listingId}/verify`, {}),
 

@@ -24,7 +24,7 @@ import spine from '../__fixtures__/merchant-schema-org.json'
 import listings from '../__fixtures__/listings.json'
 
 import MerchantCommandCenter from '../../MerchantCommandCenter.jsx'
-import { truesyncApi, fetchAllVerifications, TrueSyncError } from '../../../truesyncApi.js'
+import { truesyncApi, fetchAllVerifications, TrueSyncError, NOT_AUTHORIZED } from '../../../truesyncApi.js'
 import { api } from '../../../api.js'
 
 // fetchAllVerifications is mocked alongside the client it wraps: it
@@ -215,6 +215,34 @@ describe('no fabricated verification state', () => {
     const whens = [...container.querySelectorAll('.mcc-cell-when')].map((e) => e.textContent)
     // 3 unbuilt channels x 5 listings.
     expect(whens.filter((w) => w.startsWith('failed'))).toHaveLength(15)
+  })
+})
+
+describe('tenant token refused', () => {
+  it('says "not authorized for this customer", not "could not be reached"', async () => {
+    mockHappyPath()
+    // The public reads succeed; the scoped ones come back 403 from the proxy.
+    truesyncApi.getChannels.mockRejectedValue(new TrueSyncError(NOT_AUTHORIZED, { status: 403 }))
+    truesyncApi.getPublications.mockRejectedValue(new TrueSyncError(NOT_AUTHORIZED, { status: 403 }))
+
+    render(<MerchantCommandCenter onNavigate={() => {}} />)
+
+    const banner = await screen.findByRole('alert')
+    expect(banner).toHaveTextContent(/not authorized for this customer/i)
+    expect(banner).not.toHaveTextContent('could not be reached')
+    expect(within(banner).getByRole('button', { name: /retry/i })).toBeInTheDocument()
+    // Not an empty matrix that looks like a merchant with no catalog.
+    expect(screen.queryByText('Snug-Fit Diapers')).not.toBeInTheDocument()
+  })
+
+  it('a refusal during the verification sweep reaches the banner, not a matrix of ○', async () => {
+    mockHappyPath()
+    fetchAllVerifications.mockRejectedValue(new TrueSyncError(NOT_AUTHORIZED, { status: 403 }))
+
+    render(<MerchantCommandCenter onNavigate={() => {}} />)
+
+    const banner = await screen.findByRole('alert')
+    expect(banner).toHaveTextContent(/not authorized for this customer/i)
   })
 })
 
