@@ -740,9 +740,25 @@ def _notify_new_lead(*, token, brand_name, email, previous_email, lead_notified_
         "submitted_at": str(datetime.now(timezone.utc)),
     })
 
-    if sent:
+    if not sent:
+        return
+
+    # The email is already stored and the notification already sent, so
+    # by this point the request has fully succeeded — the stamp is
+    # bookkeeping that only decides whether a LATER duplicate is
+    # suppressed. Letting it raise would turn a delivered notification
+    # into a 500 for the visitor, which is strictly worse than the
+    # duplicate it would prevent. Logged with the token only: the
+    # address is never safe to put in a log line.
+    try:
         with engine.begin() as conn:
             conn.execute(
                 text("UPDATE soa_lite_requests SET lead_notified_at = :now WHERE token = :token"),
                 {"now": datetime.now(timezone.utc), "token": token},
             )
+    except Exception:
+        log.exception(
+            "[public_lite] notification sent for token=%s but stamping "
+            "lead_notified_at failed — a repeat PATCH may notify again",
+            token,
+        )
