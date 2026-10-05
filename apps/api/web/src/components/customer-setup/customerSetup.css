@@ -1,0 +1,104 @@
+/*
+ * The customer setup wizard (Step 1C), built to
+ * design-refs/customer-setup-mock.html. Scoped under .csw so nothing here
+ * reaches the rest of the app; the tokens are the mock's, which are the
+ * Create Study modal's slate palette with the mock's blue for selection.
+ */
+.csw-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(15, 23, 42, .45);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 40px 20px; overflow-y: auto;
+}
+.csw {
+  --ink: #0f172a; --body: #334155; --muted: #64748b;
+  --line: #e2e8f0; --wash: #f8fafc; --blue: #0166ff; --blue-wash: #eff6ff;
+  --good-bg: #dcfce7; --good-ink: #14532d;
+  --warn-bg: #fef3c7; --warn-ink: #78350f;
+  --bad-bg: #fee2e2; --bad-ink: #7f1d1d;
+  width: 100%; max-width: 720px;
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.csw *, .csw *::before, .csw *::after { box-sizing: border-box; }
+.csw .modal { background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(15,23,42,.12); overflow: hidden; }
+.csw .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 22px 28px 14px; }
+.csw .modal-head h1 { font-size: 20px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+.csw .x { border: 0; background: none; color: var(--muted); font-size: 19px; cursor: pointer; line-height: 1; padding: 4px; }
+.csw .modal-body { padding: 0 28px 8px; max-height: 72vh; overflow-y: auto; }
+.csw .modal-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 16px 28px; border-top: 1px solid var(--line); background: var(--wash); }
+.csw .modal-foot .right { display: flex; gap: 10px; }
+
+.csw .steps { display: flex; gap: 6px; padding: 0 28px 14px; }
+.csw .step { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.csw .step b { display: inline-flex; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); align-items: center; justify-content: center; font-size: 11px; color: var(--muted); flex: none; }
+.csw .step.on { border-color: #bfdbfe; background: var(--blue-wash); color: var(--blue); font-weight: 600; }
+.csw .step.on b { background: var(--blue); border-color: var(--blue); color: #fff; }
+.csw .step.done b { background: var(--good-bg); border-color: #bbf7d0; color: var(--good-ink); }
+
+.csw .field { padding: 16px 0; border-top: 1px solid var(--line); }
+.csw .field:first-child { border-top: 0; padding-top: 4px; }
+.csw .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.csw .help { font-size: 12px; color: var(--muted); margin-top: 7px; line-height: 1.5; }
+.csw .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.csw input[type=text], .csw select { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; color: var(--ink); font-family: inherit; background: #fff; }
+.csw input:disabled, .csw select:disabled { background: var(--wash); color: var(--muted); }
+.csw input:focus, .csw select:focus, .csw button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; border-color: transparent; }
+.csw .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.csw .seg button { flex: 1; padding: 9px 8px; border: 0; border-left: 1px solid var(--line); background: #fff; font-size: 13px; color: var(--body); cursor: pointer; font-family: inherit; }
+.csw .seg button:first-child { border-left: 0; }
+.csw .seg button[aria-pressed=true] { background: var(--blue-wash); color: var(--blue); font-weight: 600; }
+.csw .seg button:disabled { cursor: not-allowed; }
+.csw .ent { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+.csw .ent input { flex: 1; }
+.csw .del { border: 1px solid var(--line); background: #fff; color: var(--muted); border-radius: 6px; width: 30px; height: 38px; cursor: pointer; font-size: 15px; line-height: 1; flex-shrink: 0; }
+.csw .addrow { margin-top: 2px; border: 1px dashed var(--line); background: #fff; color: var(--body); border-radius: 8px; padding: 8px 12px; font-size: 13px; cursor: pointer; width: 100%; font-family: inherit; }
+.csw .note { border: 1px solid #bfdbfe; background: var(--blue-wash); border-radius: 8px; padding: 12px 14px; font-size: 12px; color: var(--body); line-height: 1.55; margin-top: 10px; }
+.csw .note b { color: var(--blue); }
+
+.csw .drop { border: 2px dashed var(--line); border-radius: 10px; padding: 26px; text-align: center; background: var(--wash); }
+.csw .drop.over { border-color: var(--blue); background: var(--blue-wash); }
+.csw .drop .t { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.csw .drop .d { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+.csw .summary { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0 10px; }
+.csw .pill { font-size: 12px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); background: #fff; color: var(--body); }
+.csw .pill.ok { background: var(--good-bg); color: var(--good-ink); border-color: #bbf7d0; }
+.csw .pill.warn { background: var(--warn-bg); color: var(--warn-ink); border-color: #fde68a; }
+.csw .pill.bad { background: var(--bad-bg); color: var(--bad-ink); border-color: #fecaca; }
+.csw table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.csw th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; padding: 8px 8px; border-bottom: 1px solid var(--line); background: var(--wash); white-space: nowrap; }
+.csw td { padding: 8px 8px; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--body); }
+.csw td.mono { font-family: ui-monospace, Menlo, monospace; font-size: 11px; white-space: nowrap; }
+.csw th.url { white-space: normal; }
+.csw td.mono.url { white-space: normal; overflow-wrap: anywhere; min-width: 130px; }
+.csw tr.bad td { background: #fff7f7; }
+.csw tr.warn td { background: #fffdf5; }
+.csw .st { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; border-radius: 4px; padding: 2px 6px; }
+.csw .st.ok { background: var(--good-bg); color: var(--good-ink); }
+.csw .st.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.csw .st.bad { background: var(--bad-bg); color: var(--bad-ink); }
+.csw .msg { display: block; font-size: 11px; color: var(--muted); margin-top: 3px; white-space: normal;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+.csw .tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.csw .filters { display: flex; gap: 6px; margin: 10px 0; }
+.csw .chip { padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font-size: 12px; color: var(--body); cursor: pointer; font-family: inherit; }
+.csw .chip[aria-pressed=true] { background: var(--blue-wash); border-color: #bfdbfe; color: var(--blue); font-weight: 600; }
+.csw .gate { margin-top: 10px; font-size: 12px; padding: 8px 11px; border-radius: 6px; }
+.csw .gate.ok { background: var(--good-bg); color: var(--good-ink); }
+.csw .gate.off { background: var(--warn-bg); color: var(--warn-ink); }
+.csw .gate.bad { background: var(--bad-bg); color: var(--bad-ink); }
+.csw .file-errors { margin: 8px 0 0; padding-left: 18px; font-size: 12px; color: var(--bad-ink); }
+
+.csw .offer { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1fr 30px; gap: 8px; align-items: center; margin-bottom: 7px; }
+.csw .offer-error { grid-column: 1 / -1; font-size: 11px; color: var(--bad-ink); margin: -3px 0 4px; }
+.csw .rev { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; background: var(--wash); }
+.csw .rev .k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 4px; }
+.csw .rev .v { font-size: 13px; color: var(--ink); line-height: 1.5; }
+.csw .btn { padding: 10px 18px; border-radius: 8px; font-size: 14px; cursor: pointer; font-family: inherit; font-weight: 600; }
+.csw .btn-ghost { background: #fff; border: 1px solid var(--line); color: var(--body); }
+.csw .btn-primary { background: #334155; border: 1px solid #334155; color: #fff; }
+.csw .btn[disabled] { opacity: .45; cursor: not-allowed; }
+.csw .linkbtn { border: 0; background: none; padding: 0; font-family: inherit; font-size: 12px; color: var(--blue); cursor: pointer; text-decoration: underline; }
+.csw .error { margin: 12px 0 4px; font-size: 12px; padding: 8px 11px; border-radius: 6px; background: var(--bad-bg); color: var(--bad-ink); line-height: 1.5; }
+.csw .busy { font-size: 12px; color: var(--muted); margin: 10px 0; }

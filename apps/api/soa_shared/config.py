@@ -172,14 +172,30 @@ TRUESYNC_API_BASE: str = os.environ.get("TRUESYNC_API_BASE", "https://api.parleo
 # The tenant token, sent as X-TrueSync-Key. Server-side only: never logged,
 # never echoed to a caller, never in a client bundle.
 #
-# One tenant (Wiggle & Snug) until Step 1C maps soa orgs to tenants; then
-# this becomes a per-org lookup. Read from TRUESYNC_TENANT_TOKEN, falling
-# back to the older TRUESYNC_ADMIN_KEY name so a deployment that already
-# holds the token under that name keeps working until 1C retires it.
+# Since Step 1C the token is per customer org, stored sealed on the org row
+# (soa_shared/customers.py). This env value is only the FALLBACK for a linked
+# org that has no stored token yet — Wiggle & Snug's, until
+# scripts/backfill_customer_accounts.py stores it — and is retired (unset on
+# Vercel and the pipeline worker) once every linked org has its own.
+# TRUESYNC_ADMIN_KEY is still read as the older name of the same fallback.
 TRUESYNC_TENANT_TOKEN: str = (
     os.environ.get("TRUESYNC_TENANT_TOKEN")
     or os.environ.get("TRUESYNC_ADMIN_KEY", "")
 )
+
+# The Fernet key every stored tenant token is sealed with
+# (soa_shared/secret_box.py). Generate one with
+#   python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# and set the SAME value on Vercel and on the pipeline worker: the API seals
+# tokens the worker has to open. Unset, nothing can be sealed or opened, and
+# every org falls back to TRUESYNC_TENANT_TOKEN or is refused.
+SOA_SECRET_KEY: str = os.environ.get("SOA_SECRET_KEY", "")
+
+# supply's TRUESYNC_PROVISIONING_KEY, held here so the setup wizard can create
+# a new customer's tenant (POST /api/truesync/tenants). It can create a tenant
+# that does not exist and nothing else. API (Vercel) only; the worker never
+# provisions.
+TRUESYNC_PROVISIONING_KEY: str = os.environ.get("TRUESYNC_PROVISIONING_KEY", "")
 
 # Generous by design: a publish compiles the record to every enabled
 # channel before answering, which was measured at ~37s against the

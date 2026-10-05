@@ -148,6 +148,35 @@ export function buildCatalogRows(spine, detailsById) {
   })
 }
 
+/**
+ * Rows for a customer-hosted merchant (Step 1C), from its catalog read —
+ * which supply serves from the merchant's current SKU-feed version (1B).
+ *
+ * Same row shape as buildCatalogRows, so the matrix and the stat strip
+ * render it unchanged. What differs is honest absence: there is no
+ * catalog_product_id (no sync rule to toggle), no image, and no listing
+ * record to open (detailAvailable false). A product's GTIN is shown only
+ * when it has exactly one variant, for the same reason as above.
+ */
+export function buildFeedRows(catalogPayload) {
+  return (catalogPayload?.listings || []).map((listing) => {
+    const variants = listing.variants || []
+    return {
+      listingId: listing.listing_id,
+      catalogProductId: null,
+      name: listing.title || `Product ${listing.listing_id}`,
+      productUrl: listing.product_url || null,
+      image: null,
+      category: null,
+      variantCount: variants.length,
+      gtinCount: variants.filter((v) => v.gtin).length,
+      gtin: variants.length === 1 ? variants[0].gtin || null : null,
+      detailAvailable: false,
+      publishedAt: listing.published_at || null,
+    }
+  })
+}
+
 // ─── Formatting ──────────────────────────────────────────────────────
 
 // Relative freshness for a cell. Returns null (not "—", not "unknown")

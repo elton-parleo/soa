@@ -19,8 +19,12 @@ says when.
 
 The tenant token goes on every read. Since supply's tenancy step these
 routes are scoped to one customer and refuse a request without that
-customer's token (TRUESYNC_TENANT_TOKEN, sent as X-TrueSync-Key). Until
-Step 1C maps soa orgs to tenants there is one token, Wiggle & Snug's.
+customer's token, sent as X-TrueSync-Key. Since Step 1C the token is the
+STUDY'S CUSTOMER'S: TrueSyncCatalogClient.for_study() reads the study's
+generation job for its customer org and opens that org's stored token
+(soa_shared/customers.py), falling back to TRUESYNC_TENANT_TOKEN only for
+a linked org with none stored, or a pre-1C study the backfill did not
+stamp. A refusal names which of those it was.
 
 Two kinds of failure, handled in opposite ways on purpose:
 
@@ -186,12 +190,35 @@ class TrueSyncCatalogClient:
         base_url: Optional[str] = None,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
         token: Optional[str] = None,
+        token_source: Optional[str] = None,
     ) -> None:
         self.base_url = (
             config.TRUESYNC_API_BASE if base_url is None else base_url
         ).rstrip("/")
         self.timeout_seconds = timeout_seconds
         self.token = config.TRUESYNC_TENANT_TOKEN if token is None else token
+        # Where the token came from, for the refusal message: the variable,
+        # or which customer org's stored token. Never the token itself.
+        self.token_source = token_source or "TRUESYNC_TENANT_TOKEN"
+
+    @classmethod
+    def for_study(cls, study_type: str, **kwargs) -> "TrueSyncCatalogClient":
+        """
+        A client holding the token of the customer this study was generated
+        for. A study whose customer has no usable token raises
+        TrueSyncNotAuthorized here, before any read: the same configuration
+        fault as a refused token, named the same way.
+        """
+        from soa_shared import customers
+
+        try:
+            token, source = customers.token_and_source_for_study(study_type)
+        except customers.CustomerError as exc:
+            raise TrueSyncNotAuthorized(
+                f"Not authorized for this customer: {exc}. Nothing was read, "
+                f"rather than read without the customer's catalog."
+            ) from exc
+        return cls(token=token, token_source=source, **kwargs)
 
     def _headers(self) -> dict:
         # No token -> no header, so the upstream reports "no credential",
@@ -221,9 +248,9 @@ class TrueSyncCatalogClient:
 
         if response.status_code in (401, 403):
             if not self.token:
-                reason = "TRUESYNC_TENANT_TOKEN is not set on this service"
+                reason = f"{self.token_source} is not set on this service"
             else:
-                reason = "TrueSync refused this service's TRUESYNC_TENANT_TOKEN"
+                reason = f"TrueSync refused {self.token_source}"
             logger.error(
                 "[truesync-catalog] GET %s -> %d: %s", url, response.status_code, reason,
             )

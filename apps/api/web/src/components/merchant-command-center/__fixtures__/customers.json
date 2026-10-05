@@ -1,0 +1,21 @@
+{
+  "is_operator": false,
+  "customers": [
+    {
+      "org_id": 7,
+      "name": "Wiggle & Snug",
+      "tenant_slug": "wiggle-and-snug",
+      "error": null,
+      "merchants": [
+        {
+          "slug": "wiggle-and-snug",
+          "name": "Wiggle & Snug",
+          "domain": "trueshopstore.com",
+          "kind": "seller",
+          "hosting": "parleo",
+          "has_record": true
+        }
+      ]
+    }
+  ]
+}

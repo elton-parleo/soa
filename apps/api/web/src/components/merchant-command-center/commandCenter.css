@@ -448,6 +448,73 @@ a.mcc-gmc-offer { color: var(--cobalt); }
 .mcc-source-counts { font-size: .72rem; color: var(--ink-faint); font-weight: 400; }
 .mcc-source-switch button.active .mcc-source-counts { color: rgba(242,243,239,.65); }
 
+/* ── customer switcher (Step 1C) ─────────────────────────────────── */
+/* The source switch, generalized: one pill that opens customers ->
+   merchants -> read-only prospects. Same pill, tags and ink as above. */
+.mcc-customer { position: relative; }
+.mcc-customer-trigger {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  padding: 7px 14px; font-size: .86rem; font-weight: 500; color: var(--ink);
+  font-family: inherit; cursor: pointer;
+}
+.mcc-customer-trigger:hover { border-color: var(--line-strong); }
+.mcc-customer-trigger:focus-visible { outline: 2px solid var(--cobalt); outline-offset: 2px; }
+.mcc-customer-org { font-weight: 600; }
+.mcc-customer-sep, .mcc-customer-caret { color: var(--ink-faint); }
+.mcc-customer .tag {
+  font-size: .66rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 999px;
+}
+.mcc-customer .tag.live { background: var(--sync-soft); color: var(--sync); }
+.mcc-customer .tag.prospect { background: var(--drift-soft); color: var(--drift); }
+.mcc-customer-menu {
+  position: absolute; z-index: 30; top: calc(100% + 6px); left: 0;
+  min-width: 340px; max-width: 440px; max-height: 70vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(23,26,33,.14); padding: 6px;
+}
+.mcc-customer-group + .mcc-customer-group { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; }
+.mcc-customer-group-head {
+  display: flex; justify-content: space-between; gap: 10px; align-items: baseline;
+  padding: 8px 10px 4px; font-size: .72rem; font-weight: 700; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ink-faint);
+}
+.mcc-customer-group-head .mono { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.mcc-customer-item {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; width: 100%;
+  border: 0; background: transparent; text-align: left; border-radius: 8px;
+  padding: 8px 10px; font-family: inherit; font-size: .88rem; color: var(--ink); cursor: pointer;
+}
+.mcc-customer-item:hover { background: var(--mono-bg); }
+.mcc-customer-item.active { background: var(--cobalt-soft); }
+.mcc-customer-item:focus-visible { outline: 2px solid var(--cobalt); outline-offset: -2px; }
+.mcc-customer-item .name { font-weight: 600; }
+.mcc-customer-item .domain { font-size: .75rem; color: var(--ink-faint); }
+.mcc-customer-item .axes { display: flex; gap: 6px; flex-basis: 100%; }
+.mcc-customer-item .axis {
+  font-size: .68rem; padding: 1px 7px; border-radius: 999px;
+  background: var(--mono-bg); color: var(--ink-soft);
+}
+.mcc-customer-item .axis.hosting-parleo { background: var(--sync-soft); color: var(--sync); }
+.mcc-customer-item .axis.norecord { background: var(--drift-soft); color: var(--drift); }
+.mcc-customer-item.prospect .name { font-weight: 500; }
+.mcc-customer-subhead {
+  padding: 6px 10px 2px 22px; font-size: .68rem; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--drift);
+}
+.mcc-customer-prospects .mcc-customer-item { padding-left: 22px; }
+.mcc-customer-empty, .mcc-customer-error { padding: 6px 10px 8px; font-size: .8rem; color: var(--ink-faint); }
+.mcc-customer-error { color: var(--fail); }
+.mcc-customer-foot { border-top: 1px solid var(--line); margin-top: 6px; padding: 8px 4px 2px; }
+.mcc-customer-foot .mcc-btn { width: 100%; justify-content: center; }
+
+/* "not connected": a customer-hosted merchant's syndication columns. Not
+   "never published" — nothing CAN publish there until they integrate. */
+.mcc-cell.not-connected, .mcc-matrix th.surface.not-connected { color: var(--ink-faint); }
+.mcc-cell.not-connected .mcc-cell-when { font-style: italic; }
+.mcc-matrix th.surface .nc { display: block; font-size: .66rem; font-weight: 500; color: var(--ink-faint); }
+
 /* ── prospect mode ───────────────────────────────────────────────── */
 .mcc-banner.prospect {
   border: 1px solid #C9CCC2; background: var(--mono-bg); color: var(--ink-soft);

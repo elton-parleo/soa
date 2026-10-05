@@ -1,10 +1,17 @@
-# Create Study modal — screenshot harness
+# Screenshot harness
 
-Renders `CreateStudyModal` on its own, with `api.js` and `truesyncApi.js`
-replaced by stubs, so the modal can be seen and screenshotted without a
-login, a backend, or a live TrueSync.
+Renders one screen on its own, with `api.js`, `truesyncApi.js`,
+`customersApi.js` and `AuthContext.jsx` replaced by stubs, so it can be
+seen and screenshotted without a login, a backend, or a live TrueSync.
 
-    npm run shot        # http://localhost:5199
+    npm run shot        # http://localhost:5199              Create Study modal
+                        # http://localhost:5199/?view=commandcenter   the customer switcher (Step 1C)
+                        # http://localhost:5199/?view=wizard          the setup wizard (Step 1C)
+
+The Command Center and wizard views serve two customers — an invented
+customer-hosted store (Acme Pets) whose feed is
+`src/components/customer-setup/__fixtures__/feed-preview-acme-pets.json`,
+the 1B validator's real output for an invented feed, and Wiggle & Snug.
 
 The TrueSync stub serves `apps/pipeline/tests/fixtures/wiggle_and_snug_catalog.json`
 — the same real Wiggle & Snug catalog the Python and JS tier tests assert

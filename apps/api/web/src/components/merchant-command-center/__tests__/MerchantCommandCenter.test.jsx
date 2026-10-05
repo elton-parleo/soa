@@ -16,7 +16,6 @@ import { render, screen, waitFor, within, fireEvent } from '@testing-library/rea
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
 
-import activeBrand from '../__fixtures__/active-brand.json'
 import gmcEnvelope from '../__fixtures__/verifications-gmc.json'
 import channels from '../__fixtures__/channels.json'
 import publications from '../__fixtures__/publications.json'
@@ -51,6 +50,15 @@ vi.mock('../../../truesyncApi.js', async (importOriginal) => {
 })
 
 // Sidebar reads the auth context; the page under test never uses it.
+// The customer switcher's list (Step 1C): W&S, Parleo-hosted, the one
+// customer these fixtures describe. Imported inside the factory because
+// vi.mock is hoisted above this file's imports.
+vi.mock('../../../customersApi.js', async (importOriginal) => {
+  const actual = await importOriginal()
+  const customers = (await import('../__fixtures__/customers.json')).default
+  return { ...actual, listCustomers: vi.fn(() => Promise.resolve(customers)) }
+})
+
 vi.mock('../../../AuthContext.jsx', () => ({
   useAuth: () => ({ signOut: vi.fn() }),
 }))
@@ -62,7 +70,6 @@ vi.mock('../../../api.js', () => ({
 }))
 
 function mockHappyPath() {
-  truesyncApi.getActiveBrand.mockResolvedValue(activeBrand)
   truesyncApi.getChannels.mockResolvedValue(channels)
   truesyncApi.getPublications.mockResolvedValue(publications)
   truesyncApi.getMerchantSchemaOrg.mockResolvedValue(spine)
@@ -73,7 +80,7 @@ function mockHappyPath() {
   truesyncApi.getProspects.mockResolvedValue({ prospects: [] })
 }
 
-beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => { vi.clearAllMocks(); window.sessionStorage.clear() })
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('matrix renders from fixture API payloads', () => {
@@ -103,14 +110,15 @@ describe('matrix renders from fixture API payloads', () => {
     expect(headers).toHaveLength(2 + channels.length)
   })
 
-  it('takes the brand name and accent colour from the active-brand API', async () => {
-    const { container } = render(<MerchantCommandCenter onNavigate={() => {}} />)
-    await waitFor(() => expect(screen.getByText(activeBrand.site.display_name)).toBeInTheDocument())
+  it('takes the merchant from the selected customer, never from active-brand', async () => {
+    render(<MerchantCommandCenter onNavigate={() => {}} />)
+    await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
 
-    // The accent drives the page's --brand-accent, not a hardcoded value.
-    const root = container.querySelector('.mcc')
-    expect(root.style.getPropertyValue('--brand-accent'))
-      .toBe(activeBrand.site.primary_color)
+    // The switcher names the customer and its merchant; the spine is that
+    // merchant's, and /demo/active-brand is not read at all (Step 1C).
+    expect(screen.getByRole('button', { name: 'Customer' })).toHaveTextContent('Wiggle & Snug')
+    expect(truesyncApi.getMerchantSchemaOrg).toHaveBeenCalledWith('wiggle-and-snug', expect.anything())
+    expect(truesyncApi.getActiveBrand).not.toHaveBeenCalled()
   })
 
   it('shows real variant and GTIN counts, including a zero', async () => {
@@ -248,8 +256,7 @@ describe('tenant token refused', () => {
 
 describe('API down', () => {
   it('renders a banner, not a blank page', async () => {
-    truesyncApi.getActiveBrand.mockRejectedValue(new TrueSyncError('TrueSync did not respond within 15s', { timedOut: true }))
-    truesyncApi.getChannels.mockRejectedValue(new TrueSyncError('TrueSync is unreachable'))
+    truesyncApi.getChannels.mockRejectedValue(new TrueSyncError('TrueSync did not respond within 15s', { timedOut: true }))
     truesyncApi.getPublications.mockRejectedValue(new TrueSyncError('TrueSync is unreachable'))
     truesyncApi.getMerchantSchemaOrg.mockRejectedValue(new TrueSyncError('TrueSync is unreachable'))
 

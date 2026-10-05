@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from './supabase.js'
 import { setApiToken } from './api.js'
+import { clearSelection } from './customerSelection.js'
 
 const AuthContext = createContext(null)
 
@@ -30,6 +31,10 @@ export function AuthProvider({ children }) {
         // calls triggered by the session change — including the first
         // render after OAuth redirect.
         setApiToken(session?.access_token ?? null)
+        // A selected customer belongs to the login that chose it; the next
+        // one starts from its own first customer (the server would refuse
+        // another login's anyway).
+        if (event === 'SIGNED_OUT') clearSelection()
         setSession(session)
       }
     )

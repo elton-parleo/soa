@@ -1,0 +1,11 @@
+gtin,product_name,brand_name,variant_label,pack_count,size_value,size_unit,price,currency,product_url_acme-pets.test
+009900011000,"Trailmix Adult Dog Food, Chicken & Rice",Trailmix,Dry · 35 lb,,35,lb,74.98,USD,https://www.acme-pets.test/p/011000
+009900011017,"Trailmix Adult Dog Food, Chicken & Rice",Trailmix,Dry · 18 lb,,18,lb,46.98,USD,https://www.acme-pets.test/p/011017
+009900011025,"Meadowbrook Lamb & Rice Recipe",Meadowbrook,Dry · 30 lb,,30,lb,69.98,USD,https://www.acme-pets.test/p/011025
+009900011031,"Meadowbrook Lamb & Rice Recipe",Meadowbrook,Dry · 15 lb,,15,lb,39.98,USD,https://www.acme-pets.test/p/011031
+009900011048,"Northfield Grain Free Chicken, Adult Dog",Northfield,Dry · 40 lb,,40,lb,64.99,USD,https://www.acme-pets.test/p/011048
+009900011055,"Northfield Grain Free Chicken, Adult Dog",Northfield,Dry · 25 lb,,25,lb,44.99,USD,https://www.acme-pets.test/p/011055
+009900011062,"Clumpwell Litter, 24/7 Performance",Clumpwell,Pail · 35 lb,,35,lb,24.49,USD,https://www.acme-pets.test/p/011062
+009900011079,"Purrfect Adult Cat, Chicken",Purrfect,Dry · 16 lb,,16,lb,58.99,USD,https://www.acme-pets.test/p/011079
+009900011086,"Snugwalk Dog Harness, Grey",Snugwalk,Medium,1,,,24.99,USD,https://www.acme-pets.test/p/011086
+009900011093,"Chewbright Dental Sticks",Chewbright,Pouch · 30 ct,,30,ct,12.49,USD,https://www.acme-pets.test/p/011093

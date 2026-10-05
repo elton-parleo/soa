@@ -159,6 +159,16 @@ TRUESYNC_API_BASE: str = os.environ.get("TRUESYNC_API_BASE", "https://api.parleo
 # not enforce it; see the router's module docstring).
 TRUESYNC_ADMIN_KEY: str = os.environ.get("TRUESYNC_ADMIN_KEY", "")
 
+# Step 1C (see the apps' copies of this file, which are ahead of this one):
+# the per-org token fallback, the Fernet key tokens are sealed with, and the
+# supply provisioning key.
+TRUESYNC_TENANT_TOKEN: str = (
+    os.environ.get("TRUESYNC_TENANT_TOKEN")
+    or os.environ.get("TRUESYNC_ADMIN_KEY", "")
+)
+SOA_SECRET_KEY: str = os.environ.get("SOA_SECRET_KEY", "")
+TRUESYNC_PROVISIONING_KEY: str = os.environ.get("TRUESYNC_PROVISIONING_KEY", "")
+
 # Generous by design: a publish compiles the record to every enabled
 # channel before answering, which was measured at ~37s against the
 # production API. The read side never uses this.

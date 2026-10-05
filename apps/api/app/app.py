@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.routers import (
     studies, entities, cycles, metrics, scope, actions, full_analysis,
-    truesync, lite_requests, public_lite, public_demo, public_full_analysis,
+    truesync, customers, lite_requests, public_lite, public_demo, public_full_analysis,
 )
 from app.auth import verify_token
 
@@ -93,6 +93,15 @@ app.include_router(
 # routers above; see app/routers/truesync.py for the public/scoped split.
 app.include_router(
     truesync.router,
+    prefix="/api",
+    dependencies=[Depends(verify_token)],
+)
+
+# Customer accounts (Step 1C): the switcher's list of selectable customers,
+# and the setup wizard's account/merchant creation (operators only; see
+# app/customer_context.py). Authed like the routers above.
+app.include_router(
+    customers.router,
     prefix="/api",
     dependencies=[Depends(verify_token)],
 )

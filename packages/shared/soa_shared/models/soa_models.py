@@ -1352,6 +1352,16 @@ class SoaQueryGenerationJob(Base):
         ),
     )
 
+    # The customer org whose TrueSync tenant holds syndicated_merchant —
+    # whose token the generator and the scorer read the catalog with. NULL
+    # for an ungrounded study, and for jobs from before Step 1C until
+    # scripts/backfill_customer_accounts.py stamps them.
+    customer_organization_id = Column(
+        Integer,
+        ForeignKey('organizations.id'),
+        nullable=True,
+    )
+
     tier_config = Column(
         JSON,
         nullable=True,
@@ -1385,6 +1395,21 @@ class Organization(Base):
     name = Column(String, nullable=False, unique=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    # ─── The customer this org is (Step 1C) ───────────────────────────
+    #
+    # One concept: a soa org IS a supply tenant. The supply side carries
+    # soa_org_id; this side carries the tenant's slug and the service token
+    # soa uses to reach it. All three NULL for an org with no TrueSync
+    # account (the Parleo staff org, Lead Gen).
+    #
+    # The token is never stored in the clear and never sent to a browser:
+    # truesync_token_sealed is Fernet ciphertext under SOA_SECRET_KEY
+    # (soa_shared/secret_box.py). truesync_token_id is the token's public
+    # half, kept so an operator can match it to supply's `tenants.py list`.
+    truesync_tenant_slug = Column(String, nullable=True, unique=True)
+    truesync_token_sealed = Column(Text, nullable=True)
+    truesync_token_id = Column(String, nullable=True)
+
 
 # ---------------------------------------------------------------------------
 # 11. organization_members — membership mapping (user_id → organization)
@@ -1402,6 +1427,12 @@ class OrganizationMember(Base):
     user_id = Column(String, nullable=False)
     email = Column(String, nullable=False)
     role = Column(String, nullable=False, default='member')
+    # A Parleo operator: may select any customer org in the switcher and use
+    # the setup wizard. A flag on the membership, not a role value, because
+    # it is orthogonal to owner/member and only ever granted explicitly (by
+    # scripts/backfill_customer_accounts.py or by hand) — auto-provisioning
+    # never sets it. A non-operator is pinned to their own org.
+    is_operator = Column(Boolean, nullable=False, default=False, server_default='false')
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (

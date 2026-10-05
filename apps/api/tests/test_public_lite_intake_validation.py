@@ -50,7 +50,8 @@ def db(monkeypatch):
     with engine.begin() as conn:
         conn.exec_driver_sql("""
             CREATE TABLE organizations (
-                id INTEGER PRIMARY KEY, name TEXT UNIQUE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                id INTEGER PRIMARY KEY, name TEXT UNIQUE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                truesync_tenant_slug TEXT UNIQUE, truesync_token_sealed TEXT, truesync_token_id TEXT
             )
         """)
         conn.exec_driver_sql("""

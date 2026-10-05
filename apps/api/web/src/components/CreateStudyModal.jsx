@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { api } from '../api.js'
 import { truesyncApi } from '../truesyncApi.js'
+import { listCustomers, KIND_LABEL, HOSTING_LABEL } from '../customersApi.js'
+import { getSelection } from '../customerSelection.js'
 import {
   DEFAULT_BRAND_DIRECT_COUNT,
   buildSnapshot,
@@ -366,9 +368,15 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
   // modal and never touches the block sends exactly the payload they
   // sent before it existed.
   const [brandOn, setBrandOn] = useState(false)
-  const [merchants, setMerchants] = useState([])
+  // The brands, grouped by customer exactly as the Command Center's
+  // switcher lists them (Step 1C): [{ org_id, name, merchants: [...] }].
+  const [customerGroups, setCustomerGroups] = useState([])
   const [merchantsError, setMerchantsError] = useState(null)
   const [merchantSlug, setMerchantSlug] = useState('')
+  // Which customer the chosen brand belongs to: its catalog is read under
+  // that org, and the study records it so the generator and scorer read
+  // with that customer's token.
+  const [customerOrgId, setCustomerOrgId] = useState(null)
   const [tierState, setTierState] = useState(DEFAULT_TIER_STATE)
   const [catalog, setCatalog] = useState(null)
   const [catalogError, setCatalogError] = useState(null)
@@ -426,6 +434,7 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
     setError(null)
     setBrandOn(false)
     setMerchantSlug('')
+    setCustomerOrgId(null)
     setTierState(DEFAULT_TIER_STATE)
     setCatalog(null)
     setCatalogError(null)
@@ -449,17 +458,23 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
       .then(res => setEntities(Array.isArray(res) ? res : []))
       .catch(() => setEntities([]))
 
-    // The brand list, from TrueSync (through this app's proxy, which holds
-    // the tenant token). A failure here is not an error the form has to
-    // recover from — it means there is no brand to ground in, so the
+    // The brand list: every customer this login may select, each with its
+    // merchants (this app's /api/customers, which reads each tenant with
+    // its own token server-side). A failure here is not an error the form
+    // has to recover from — it means there is no brand to ground in, so the
     // block says so and the study is generated ungrounded, which is a
-    // valid study and the only one that existed until now. A refused
-    // token shows as "Not authorized for this customer" in that block.
+    // valid study. A refused customer is listed with its reason.
     setMerchantsError(null)
-    truesyncApi.getMerchants()
-      .then(rows => setMerchants(Array.isArray(rows) ? rows : []))
+    listCustomers()
+      .then(data => {
+        const groups = Array.isArray(data?.customers) ? data.customers : []
+        setCustomerGroups(groups)
+        if (!groups.some(g => g.merchants.some(m => m.has_record))) {
+          setMerchantsError('no customer has a published catalog yet')
+        }
+      })
       .catch(err => {
-        setMerchants([])
+        setCustomerGroups([])
         setMerchantsError(err?.message || 'TrueSync is unreachable')
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -477,6 +492,25 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
     setCategories(prev => (sameMembers(prev, inferred) ? prev : inferred))
   }, [inferred, inferenceLocked])
 
+  // The merchant list buildSnapshot reads the display name and domain from.
+  const merchants = useMemo(() => customerGroups.flatMap(g => g.merchants.map(m => ({
+    slug: m.slug, display_name: m.name, domain: m.domain,
+  }))), [customerGroups])
+
+  // Turning the block on starts from the page's selected customer, when
+  // that customer has a catalog to ground in — the same "active" merchant
+  // the Command Center shows.
+  useEffect(() => {
+    if (!open || !brandOn || merchantSlug) return
+    const sel = getSelection()
+    const group = customerGroups.find(g => g.org_id === sel?.orgId)
+    const m = group?.merchants.find(x => x.slug === sel?.merchantSlug && x.has_record)
+    if (m) {
+      setCustomerOrgId(group.org_id)
+      setMerchantSlug(m.slug)
+    }
+  }, [open, brandOn, customerGroups]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── The catalog read for the selected brand ───────────────────────
   //
   // Two reads, on the brand select rather than on every keystroke. They
@@ -493,13 +527,14 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
     setCatalogLoading(true)
     setCatalogError(null)
 
+    const under = { signal: controller.signal, customer: customerOrgId ?? undefined }
     Promise.all([
-      truesyncApi.getMerchantCatalog(merchantSlug, { signal: controller.signal }),
+      truesyncApi.getMerchantCatalog(merchantSlug, under),
       // The incentives read is allowed to fail on its own: without it the
       // value tier has nothing to build, which is a smaller loss than the
       // whole block going dark. A refused token is not that: it would
       // refuse the catalog too, and saying so beats a quietly smaller study.
-      truesyncApi.getMerchantIncentives(merchantSlug, { signal: controller.signal })
+      truesyncApi.getMerchantIncentives(merchantSlug, under)
         .catch((err) => { if (err?.notAuthorized) throw err; return null }),
     ])
       .then(([catalogPayload, incentivesPayload]) => {
@@ -518,7 +553,7 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
       })
 
     return () => controller.abort()
-  }, [open, brandOn, merchantSlug, merchants])
+  }, [open, brandOn, merchantSlug, customerOrgId, merchants])
 
   const stageTotal = Object.values(stageCounts).reduce((a, b) => a + (Number(b) || 0), 0)
 
@@ -620,6 +655,7 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
     if (!brandOn || !merchantSlug) return {}
     return {
       syndicated_merchant: merchantSlug,
+      customer_org_id: customerOrgId,
       tier_config: Object.fromEntries(TIER_ROWS.map(row => [
         row.key,
         row.key === 'brand_direct'
@@ -839,24 +875,40 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
 
             {merchantsError && (
               <div style={helperStyle}>
-                No syndicated brands available — TrueSync could not be reached
-                ({merchantsError}). The study will be generated exactly as it is today.
+                No syndicated brands available ({merchantsError}). The study will be
+                generated exactly as it is today.
               </div>
             )}
 
             {brandOn && (
               <div style={{ marginTop: 10 }}>
+                {/* Customers -> their merchants, as the Command Center's
+                    switcher lists them. A merchant with no record yet is
+                    shown but cannot be chosen: there is nothing to ground in. */}
                 <select
                   aria-label="Syndicated brand"
-                  value={merchantSlug}
-                  onChange={e => setMerchantSlug(e.target.value)}
+                  value={merchantSlug ? `${customerOrgId}|${merchantSlug}` : ''}
+                  onChange={e => {
+                    const [orgPart, slug] = e.target.value.split('|')
+                    setCustomerOrgId(slug ? Number(orgPart) : null)
+                    setMerchantSlug(slug || '')
+                  }}
                   style={inputStyle}
                 >
                   <option value="">Choose a syndicated brand…</option>
-                  {merchants.map(m => (
-                    <option key={m.slug} value={m.slug}>
-                      {m.domain ? `${m.display_name} (${m.domain})` : m.display_name}
-                    </option>
+                  {customerGroups.map(g => (
+                    <optgroup key={g.org_id} label={g.error ? `${g.name} — ${g.error}` : g.name}>
+                      {g.merchants.map(m => (
+                        <option key={m.slug} value={`${g.org_id}|${m.slug}`} disabled={!m.has_record}>
+                          {[
+                            m.domain ? `${m.name} (${m.domain})` : m.name,
+                            KIND_LABEL[m.kind] || m.kind,
+                            HOSTING_LABEL[m.hosting] || m.hosting,
+                            m.has_record ? null : 'no catalog yet',
+                          ].filter(Boolean).join(' · ')}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
 

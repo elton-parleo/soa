@@ -22,6 +22,8 @@ import '@testing-library/jest-dom'
 import CreateStudyModal, { TIER_ROWS } from '../CreateStudyModal.jsx'
 import { api } from '../../api.js'
 import { truesyncApi } from '../../truesyncApi.js'
+import { listCustomers } from '../../customersApi.js'
+import { setSelection, clearSelection } from '../../customerSelection.js'
 import fixture from '../../../../../pipeline/tests/fixtures/wiggle_and_snug_catalog.json'
 
 vi.mock('../../api.js', () => ({
@@ -40,6 +42,14 @@ vi.mock('../../truesyncApi.js', () => ({
   },
 }))
 
+// The brand list is the customer switcher's (Step 1C): customers, each
+// with its merchants. The labels are the real module's.
+vi.mock('../../customersApi.js', () => ({
+  listCustomers: vi.fn(),
+  KIND_LABEL: { seller: 'Seller', brand: 'Brand' },
+  HOSTING_LABEL: { parleo: 'Parleo-hosted', external: 'Customer-hosted' },
+}))
+
 const CONSTRAINTS = {
   category:      ['Skincare', 'Baby Care'],
   stage:         ['Awareness', 'Research', 'Comparison', 'Ready to Buy'],
@@ -49,8 +59,31 @@ const CONSTRAINTS = {
   study_pattern: ['retailer', 'brand_at_retail'],
 }
 
+// W&S's own org, plus a second customer whose brand has no record yet —
+// the switcher lists both, and only one can be grounded in.
+const WS_ORG = 7
+const CUSTOMERS = {
+  is_operator: true,
+  customers: [
+    {
+      org_id: WS_ORG, name: 'Wiggle & Snug', tenant_slug: 'wiggle-and-snug', error: null,
+      merchants: fixture.merchants.map(m => ({
+        slug: m.slug, name: m.display_name, domain: m.domain,
+        kind: 'seller', hosting: 'parleo', has_record: true,
+      })),
+    },
+    {
+      org_id: 20, name: 'Brandco', tenant_slug: 'brandco', error: null,
+      merchants: [{ slug: 'brandco', name: 'Brandco', domain: 'brandco.test',
+                    kind: 'brand', hosting: 'external', has_record: false }],
+    },
+  ],
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
+  clearSelection()
+  listCustomers.mockResolvedValue(CUSTOMERS)
   api.getQueryConstraints.mockResolvedValue(CONSTRAINTS)
   api.getEntities.mockResolvedValue([])
   api.generateStudy.mockResolvedValue({ study_type: 'wiggle_1a2b3c' })
@@ -76,7 +109,7 @@ const brandToggle = () =>
 async function enableBrand() {
   fireEvent.click(brandToggle())
   const select = await screen.findByLabelText('Syndicated brand')
-  fireEvent.change(select, { target: { value: 'wiggle-and-snug' } })
+  fireEvent.change(select, { target: { value: `${WS_ORG}|wiggle-and-snug` } })
   await screen.findByTestId('catalog-readback')
 }
 
@@ -162,11 +195,37 @@ describe('toggled on with no brand chosen', () => {
 // ── brand mode ───────────────────────────────────────────────────────────
 
 describe('in brand mode', () => {
-  it('offers the merchants TrueSync says have a published catalog', async () => {
+  it('lists customers -> merchants, as the switcher does, and only ones with a record can be chosen', async () => {
     await renderModal()
     fireEvent.click(brandToggle())
     const select = await screen.findByLabelText('Syndicated brand')
-    expect(within(select).getByText('Wiggle & Snug (trueshopstore.com)')).toBeInTheDocument()
+
+    const groups = [...select.querySelectorAll('optgroup')].map(g => g.label)
+    expect(groups).toEqual(['Wiggle & Snug', 'Brandco'])
+    const ws = within(select).getByText(/^Wiggle & Snug \(trueshopstore\.com\)/)
+    expect(ws).toHaveTextContent('Seller · Parleo-hosted')
+    expect(ws).not.toBeDisabled()
+    const brandco = within(select).getByText(/^Brandco/)
+    expect(brandco).toHaveTextContent('Brand · Customer-hosted · no catalog yet')
+    expect(brandco).toBeDisabled()
+  })
+
+  it('starts from the customer selected in the Command Center', async () => {
+    setSelection({ orgId: WS_ORG, merchantSlug: 'wiggle-and-snug', prospectSlug: null })
+    await renderModal()
+    fireEvent.click(brandToggle())
+
+    await screen.findByTestId('catalog-readback')
+    expect(screen.getByLabelText('Syndicated brand')).toHaveValue(`${WS_ORG}|wiggle-and-snug`)
+  })
+
+  it('reads the catalog under the org the brand belongs to', async () => {
+    await renderModal()
+    await enableBrand()
+    expect(truesyncApi.getMerchantCatalog)
+      .toHaveBeenCalledWith('wiggle-and-snug', expect.objectContaining({ customer: WS_ORG }))
+    expect(truesyncApi.getMerchantIncentives)
+      .toHaveBeenCalledWith('wiggle-and-snug', expect.objectContaining({ customer: WS_ORG }))
   })
 
   it('reads the catalog back with counts computed from the record', async () => {
@@ -367,6 +426,8 @@ describe('the brand-mode request', () => {
     const payload = api.generateStudy.mock.calls[0][0]
 
     expect(payload.syndicated_merchant).toBe('wiggle-and-snug')
+    // Which customer: the worker and scorer read with this org's token.
+    expect(payload.customer_org_id).toBe(WS_ORG)
     expect(payload.tier_config).toEqual({
       brand_direct: { enabled: true, count: 12 },
       catalog_accuracy: { enabled: true },
@@ -396,7 +457,7 @@ describe('the brand-mode request', () => {
 
 describe('when TrueSync cannot be reached', () => {
   it('says so and leaves the study generatable', async () => {
-    truesyncApi.getMerchants.mockRejectedValue(new Error('TrueSync is unreachable'))
+    listCustomers.mockRejectedValue(new Error('TrueSync is unreachable'))
     await renderModal()
 
     await screen.findByText(/No syndicated brands available/)
@@ -427,7 +488,7 @@ describe('when TrueSync cannot be reached', () => {
     await renderModal()
     fireEvent.click(brandToggle())
     fireEvent.change(await screen.findByLabelText('Syndicated brand'), {
-      target: { value: 'wiggle-and-snug' },
+      target: { value: `${WS_ORG}|wiggle-and-snug` },
     })
 
     await screen.findByText(/Could not read that catalog/)
