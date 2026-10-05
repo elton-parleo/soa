@@ -402,7 +402,7 @@ def _run_regeneration(
     # token is caught here: left to propagate, it would strand the job in
     # 'running' instead of failing it.
     try:
-        snapshot = TrueSyncCatalogClient().snapshot(
+        snapshot = TrueSyncCatalogClient.for_study(study_type).snapshot(
             syndicated_merchant, with_history=False,
         )
     except TrueSyncNotAuthorized as exc:
@@ -499,7 +499,7 @@ def _run_regeneration(
 
 
 def _run_syndicated_generation(
-    *, job_id, syndicated_merchant, tier_config, stage_targets, **kwargs,
+    *, job_id, syndicated_merchant, tier_config, stage_targets, study_type=None, **kwargs,
 ):
     """
     The grounded path: read the brand's published catalog, then build the
@@ -515,7 +515,9 @@ def _run_syndicated_generation(
     A REFUSED TOKEN is: the snapshot raises TrueSyncNotAuthorized, the
     caller's except marks the job failed with its message. That is a
     configuration fault that would make every study ungrounded while
-    reporting success, so it is never degraded around.
+    reporting success, so it is never degraded around. Since Step 1C the
+    token is the study's customer's (TrueSyncCatalogClient.for_study), and
+    a customer with no usable token is the same refusal.
 
     with_history=False: expectations are written against the CURRENT
     record. Prior values are the scorer's business, read at scoring time,
@@ -525,7 +527,7 @@ def _run_syndicated_generation(
     from clients.truesync_catalog import TrueSyncCatalogClient
     from generation.syndicated_study import build_syndicated_study
 
-    snapshot = TrueSyncCatalogClient().snapshot(
+    snapshot = TrueSyncCatalogClient.for_study(study_type).snapshot(
         syndicated_merchant, with_history=False,
     )
     if not snapshot.available:
@@ -597,6 +599,7 @@ def _run_briefed_generation(
         if syndicated_merchant:
             rows, provenance, resolved_tier_config = _run_syndicated_generation(
                 job_id=job_id,
+                study_type=study_type,
                 syndicated_merchant=syndicated_merchant,
                 tier_config=tier_config,
                 study_name=study_name,

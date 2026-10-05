@@ -156,6 +156,10 @@ def run(snapshot, brand_rows=None, capture=None):
     about the rest of the study, since the stub is what replaces the
     model call."""
     class FakeClient:
+        @classmethod
+        def for_study(cls, _study_type, **_kw):
+            return cls()
+
         def snapshot(self, _slug, **_kwargs):
             return snapshot
 
@@ -298,6 +302,13 @@ def test_a_refused_token_fails_the_job_and_leaves_the_study_alone(db):
     seed(db, tiers=["catalog_accuracy", "value_incentives"])
 
     class RefusingClient:
+
+        @classmethod
+
+        def for_study(cls, _study_type, **_kw):
+
+            return cls()
+
         def snapshot(self, _slug, **_kwargs):
             raise TrueSyncNotAuthorized("Not authorized for this customer: TrueSync refused it")
 
@@ -389,6 +400,13 @@ def test_a_brand_direct_shortfall_is_recorded_on_the_tier(db, snapshot):
     seed(db, tiers=["brand_direct"])
 
     class FakeClient:
+
+        @classmethod
+
+        def for_study(cls, _study_type, **_kw):
+
+            return cls()
+
         def snapshot(self, _slug, **_kwargs):
             return snapshot
 

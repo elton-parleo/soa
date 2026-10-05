@@ -17,6 +17,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import List
 
+from clients.truesync_catalog import TrueSyncNotAuthorized
 from parser.expectation_client import ExpectationClient
 from scoring.expectation_scorer import (
     ExpectationScorer,
@@ -69,7 +70,19 @@ async def score_runs(run_ids: List[int], *, concurrency: int = 5,
                     )
             return result
 
-    results = await asyncio.gather(*[_one(rid) for rid in run_ids])
+    # A refused catalog token (TrueSyncNotAuthorized) is not one run's
+    # failure: it is true of every run of the study, and scoring on without
+    # the catalog would turn `stale` into `wrong`. So it stops the batch —
+    # the runs still in flight are cancelled rather than left to spend
+    # extraction calls on a cycle that is about to fail — and propagates.
+    tasks = [asyncio.ensure_future(_one(rid)) for rid in run_ids]
+    try:
+        results = await asyncio.gather(*tasks)
+    except TrueSyncNotAuthorized:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
 
     by_outcome = {}
     for result in results:

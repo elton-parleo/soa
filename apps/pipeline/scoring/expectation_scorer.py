@@ -20,7 +20,7 @@ from typing import Optional
 
 from sqlalchemy import text
 
-from clients.truesync_catalog import TrueSyncCatalogClient, TrueSyncNotAuthorized
+from clients.truesync_catalog import TrueSyncCatalogClient
 from parser.expectation_client import ExpectationClient
 from parser.extraction_postprocess import apply_labels
 from scoring import expectation_comparator as cmp
@@ -30,26 +30,22 @@ from soa_shared.database import engine
 logger = logging.getLogger(__name__)
 
 
-def _snapshot_or_unavailable(client, merchant_slug, *, with_history):
+def _snapshot(client, study_type, merchant_slug, *, with_history):
     """
-    The snapshot, with a refused token folded into an unavailable one.
+    The merchant's snapshot, read with the token of the customer the study
+    belongs to (TrueSyncCatalogClient.for_study) unless a client was given.
 
-    Scoring keeps the degrade-on-failure behaviour generation used to have,
-    deliberately: a cycle's scoring is many dimensions, and one missing
-    catalog costs this one its staleness/sourcing nuance, not the run. The
-    refusal is still logged at ERROR, because unlike an outage it will be
-    true on every batch until someone fixes the token. Generation, where a
-    missing catalog changes what the study IS, fails instead (worker.py).
+    A REFUSAL is not degraded around (Step 1C, reversing the earlier
+    choice). Without the catalog, the staleness lookup has no history, and
+    a mismatch that is really `stale` — a value we once published — scores
+    `wrong`. That silently changes outcomes rather than costing nuance, so
+    TrueSyncNotAuthorized propagates and fails the cycle with the org or
+    variable named (orchestrator/pipeline.py, Stage 2c). An OUTAGE still
+    degrades: it is weather, and the snapshot says so.
     """
-    try:
-        return client.snapshot(merchant_slug, with_history=with_history)
-    except TrueSyncNotAuthorized as exc:
-        logger.error("[expectation] %s", exc)
-        from clients.truesync_catalog import CatalogSnapshot, _now
-
-        return CatalogSnapshot(
-            available=False, merchant_slug=merchant_slug, read_at=_now(), error=str(exc),
-        )
+    if client is None:
+        client = TrueSyncCatalogClient.for_study(study_type)
+    return client.snapshot(merchant_slug, with_history=with_history)
 
 
 @dataclass
@@ -72,15 +68,16 @@ class HistoryCache:
     """
 
     def __init__(self, client: TrueSyncCatalogClient = None) -> None:
-        self._client = client or TrueSyncCatalogClient()
+        # None: each merchant is read with its study's customer's token.
+        self._client = client
         self._by_merchant = {}
 
-    def for_variant(self, merchant_slug, variant_id):
+    def for_variant(self, merchant_slug, variant_id, study_type=None):
         if not merchant_slug or not variant_id:
             return None
         if merchant_slug not in self._by_merchant:
-            snapshot = _snapshot_or_unavailable(
-                self._client, merchant_slug, with_history=True,
+            snapshot = _snapshot(
+                self._client, study_type, merchant_slug, with_history=True,
             )
             if not snapshot.available:
                 logger.warning(
@@ -116,15 +113,15 @@ class BrandFactsCache:
     """
 
     def __init__(self, client: TrueSyncCatalogClient = None) -> None:
-        self._client = client or TrueSyncCatalogClient()
+        self._client = client
         self._by_merchant = {}
 
-    def for_merchant(self, merchant_slug):
+    def for_merchant(self, merchant_slug, study_type=None):
         if not merchant_slug:
             return {}
         if merchant_slug not in self._by_merchant:
-            snapshot = _snapshot_or_unavailable(
-                self._client, merchant_slug, with_history=False,
+            snapshot = _snapshot(
+                self._client, study_type, merchant_slug, with_history=False,
             )
             if not snapshot.available:
                 logger.warning(
@@ -171,7 +168,7 @@ class ExpectationScorer:
             return conn.execute(text("""
                 SELECT r.id, r.cycle_id, r.query_id, r.platform, r.raw_response,
                        r.status,
-                       q.tier, q.expected_answer, q.source_ref
+                       q.tier, q.expected_answer, q.source_ref, q.study_type
                 FROM soa_runs r
                 JOIN soa_queries q ON q.id = r.query_id
                 WHERE r.id = :run_id
@@ -271,7 +268,7 @@ class ExpectationScorer:
 
         source_ref = _as_dict(run.source_ref) or {}
         facts = self.brand_facts.for_merchant(
-            source_ref.get('merchant_slug'),
+            source_ref.get('merchant_slug'), study_type=run.study_type,
         ) if self.brand_facts else {}
 
         # The study's merchant, for every tier. A price expectation
@@ -309,6 +306,7 @@ class ExpectationScorer:
 
         history = self.history.for_variant(
             source_ref.get('merchant_slug'), source_ref.get('variant_id'),
+            study_type=run.study_type,
         ) if self.history else None
 
         verdict = cmp.compare_with_secondary(

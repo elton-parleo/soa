@@ -10,6 +10,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const STUBS = {
   [resolve(__dirname, 'src/api.js')]: resolve(__dirname, 'screenshot-harness/stub-api.js'),
   [resolve(__dirname, 'src/truesyncApi.js')]: resolve(__dirname, 'screenshot-harness/stub-truesync.js'),
+  [resolve(__dirname, 'src/customersApi.js')]: resolve(__dirname, 'screenshot-harness/stub-customers.js'),
+  [resolve(__dirname, 'src/AuthContext.jsx')]: resolve(__dirname, 'screenshot-harness/stub-auth.jsx'),
 }
 
 function stubPlugin() {

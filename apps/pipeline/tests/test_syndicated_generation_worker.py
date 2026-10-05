@@ -297,10 +297,10 @@ def test_the_catalog_is_read_without_history(db):
         "generation.syndicated_study.build_syndicated_study",
         return_value=([_plain_row(0)], {}, {}),
     ), patch("clients.truesync_catalog.TrueSyncCatalogClient") as client:
-        client.return_value.snapshot.return_value = _AvailableSnapshot()
+        client.for_study.return_value.snapshot.return_value = _AvailableSnapshot()
         worker.process_generation_jobs()
 
-    assert client.return_value.snapshot.call_args.kwargs["with_history"] is False
+    assert client.for_study.return_value.snapshot.call_args.kwargs["with_history"] is False
 
 
 # ── a refused token fails the job, never an ungrounded study ──────────────
@@ -319,6 +319,13 @@ def test_a_refused_token_fails_generation_instead_of_degrading(db):
         })
 
     class RefusingClient:
+
+        @classmethod
+
+        def for_study(cls, _study_type, **_kw):
+
+            return cls()
+
         def snapshot(self, _slug, **_kwargs):
             raise TrueSyncNotAuthorized(
                 "Not authorized for this customer: TrueSync refused this "

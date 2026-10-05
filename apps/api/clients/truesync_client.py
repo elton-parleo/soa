@@ -17,8 +17,10 @@ Two things shape it:
      public serving routes (active brand, schema-org feeds, a listing's
      record) are still read straight from the browser.
 
-  2. TRUESYNC_TENANT_TOKEN must never leave the server. It is attached
-     here as X-TrueSync-Key and scrubbed out of every error string this
+  2. The token must never leave the server. Since Step 1C it is the
+     selected customer org's (app/customer_context.py hands it in; the
+     TRUESYNC_TENANT_TOKEN default is only the per-org fallback's). It is
+     attached here as X-TrueSync-Key and scrubbed out of every error string this
      module returns (_scrub) before a caller — and therefore a browser,
      a log line, or a toast — can ever see it. httpx puts the request
      URL in its exception strings but not headers; _scrub is the
@@ -57,11 +59,15 @@ class TrueSyncClient:
         token: Optional[str] = None,
         timeout_seconds: Optional[float] = None,
         read_timeout_seconds: Optional[float] = None,
+        header_name: str = "X-TrueSync-Key",
     ) -> None:
         self.base_url = (
             config.TRUESYNC_API_BASE if base_url is None else base_url
         ).rstrip("/")
         self.token = config.TRUESYNC_TENANT_TOKEN if token is None else token
+        # The provisioning client sends a different credential under a
+        # different name; scrubbing covers whichever this instance holds.
+        self.header_name = header_name
         self.timeout_seconds = (
             timeout_seconds
             if timeout_seconds is not None
@@ -90,7 +96,7 @@ class TrueSyncClient:
         # a presented-but-wrong one.
         if not self.token:
             return {}
-        return {"X-TrueSync-Key": self.token}
+        return {self.header_name: self.token}
 
     async def forward(
         self,
@@ -98,9 +104,15 @@ class TrueSyncClient:
         path: str,
         params: Optional[dict] = None,
         json: Optional[dict] = None,
+        files: Optional[list] = None,
+        raw: bool = False,
     ) -> ForwardResult:
         """
         One request to TRUESYNC_API_BASE + path, with the token attached.
+
+        `files` is httpx's multipart list, passed through as-is (the feed
+        upload). `raw=True` hands back the response itself rather than its
+        JSON, for the template download, which is a file.
         No retries: a blind retry of a write whose response was merely
         lost is worse than surfacing the failure to the operator who
         clicked the button, and a read the page retries on its own.
@@ -113,9 +125,12 @@ class TrueSyncClient:
 
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.request(
-                    method, url, params=params, json=json, headers=self._headers()
-                )
+                kwargs = {"params": params, "headers": self._headers()}
+                if json is not None:
+                    kwargs["json"] = json
+                if files is not None:
+                    kwargs["files"] = files
+                response = await client.request(method, url, **kwargs)
         except Exception as exc:
             # str(exc) carries the URL, never the headers — but scrub anyway.
             error = self._scrub(str(exc))
@@ -129,6 +144,8 @@ class TrueSyncClient:
             )
             return response.status_code, None, detail or f"upstream returned {response.status_code}"
 
+        if raw:
+            return response.status_code, response, None
         try:
             return response.status_code, response.json(), None
         except ValueError:
@@ -187,6 +204,76 @@ class TrueSyncClient:
         return await self.get(
             f"/api/truesync/listings/{listing_id}/verifications", params=params or None
         )
+
+    # ─── Step 1C: the tenant, bulk verifications, the SKU feed ───────────
+
+    async def get_tenant(self) -> ForwardResult:
+        """The selected org's tenant and every merchant it owns (the switcher)."""
+        return await self.get("/api/truesync/tenant")
+
+    async def get_merchant_verifications(
+        self, merchant_slug: str, *, channel: Optional[str] = None,
+        method: Optional[str] = None, since: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> ForwardResult:
+        params = {
+            k: v for k, v in
+            {"channel": channel, "method": method, "since": since, "limit": limit}.items()
+            if v is not None
+        }
+        return await self.get(
+            f"/api/truesync/merchants/{_slug(merchant_slug)}/verifications",
+            params=params or None,
+        )
+
+    async def get_retailers(self, merchant_slug: str) -> ForwardResult:
+        return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/retailers")
+
+    async def put_retailers(self, merchant_slug: str, domains: list) -> ForwardResult:
+        return await self.forward(
+            "PUT", f"/api/truesync/merchants/{_slug(merchant_slug)}/retailers",
+            json={"domains": domains},
+        )
+
+    async def validate_feed(
+        self, merchant_slug: str, files: list, skip_reachability: bool = False,
+    ) -> ForwardResult:
+        return await self.forward(
+            "POST", f"/api/truesync/merchants/{_slug(merchant_slug)}/feed/validate",
+            params={"skip_reachability": "true" if skip_reachability else "false"},
+            files=files,
+        )
+
+    async def commit_feed(self, merchant_slug: str, upload_id: str, mode: str) -> ForwardResult:
+        return await self.forward(
+            "POST", f"/api/truesync/merchants/{_slug(merchant_slug)}/feed/commit",
+            json={"upload_id": upload_id, "mode": mode},
+        )
+
+    async def get_feed(self, merchant_slug: str) -> ForwardResult:
+        return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/feed")
+
+    async def get_feed_history(self, merchant_slug: str) -> ForwardResult:
+        return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/feed/history")
+
+    async def get_owned_incentives(self, merchant_slug: str) -> ForwardResult:
+        return await self.get(
+            f"/api/truesync/merchants/{_slug(merchant_slug)}/incentives/owned"
+        )
+
+    async def put_owned_incentives(self, merchant_slug: str, incentives: list) -> ForwardResult:
+        return await self.forward(
+            "PUT", f"/api/truesync/merchants/{_slug(merchant_slug)}/incentives/owned",
+            json={"incentives": incentives},
+        )
+
+    async def create_merchant(self, merchant: dict) -> ForwardResult:
+        """A merchant in this token's tenant: {slug, name, domain, kind, hosting}."""
+        return await self.forward("POST", "/api/truesync/tenant/merchants", json=merchant)
+
+    async def get_template(self, ext: str) -> ForwardResult:
+        """The SKU-feed template file. Public upstream; carried raw."""
+        return await self.forward("GET", f"/api/truesync/feed/template.{ext}", raw=True)
 
     # ─── Writes ──────────────────────────────────────────────────────────
 
@@ -257,4 +344,31 @@ class TrueSyncClient:
                 "enabled": enabled,
                 "cadence": cadence,
             },
+        )
+
+
+PROVISIONING_HEADER = "X-TrueSync-Provisioning-Key"
+
+
+class TrueSyncProvisioningClient(TrueSyncClient):
+    """
+    The one call made with supply's provisioning key instead of a tenant
+    token: create a tenant and receive its first token, once. The key is
+    scrubbed exactly as a token is; the returned token is the caller's to
+    seal and store, and it never goes further than that.
+    """
+
+    def __init__(self, key: Optional[str] = None, **kwargs) -> None:
+        super().__init__(
+            token=config.TRUESYNC_PROVISIONING_KEY if key is None else key,
+            header_name=PROVISIONING_HEADER,
+            **kwargs,
+        )
+
+    async def create_tenant(self, slug: str, display_name: str, soa_org_id: str) -> ForwardResult:
+        if not self.token:
+            return None, None, "TRUESYNC_PROVISIONING_KEY is not set on this service"
+        return await self.forward(
+            "POST", "/api/truesync/tenants",
+            json={"slug": slug, "display_name": display_name, "soa_org_id": soa_org_id},
         )

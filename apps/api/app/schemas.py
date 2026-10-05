@@ -575,6 +575,11 @@ class StudyGenerateRequest(BaseModel):
     # pinning a model to the request shape would make every field the
     # worker adds a schema change here too.
     tier_config:           Optional[Dict[str, Any]] = None
+    # The customer org whose tenant holds syndicated_merchant (Step 1C) —
+    # the switcher's selection. Checked against the user's rights in the
+    # route; the worker reads the catalog with this org's token. Omitted,
+    # a grounded study uses the user's first selectable customer.
+    customer_org_id:       Optional[int] = None
 
     @field_validator('target_count')
     @classmethod

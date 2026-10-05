@@ -41,10 +41,38 @@ def patched_engine(monkeypatch):
                 study_pattern TEXT, retailer_names TEXT, allowed_categories TEXT,
                 stage_targets TEXT, rotate_named_retailer BOOLEAN,
                 naming_rule_enabled BOOLEAN, personas TEXT, specificity_mode TEXT,
-                provenance TEXT
+                provenance TEXT, customer_organization_id INTEGER
             )
         """)
+        # Step 1C: the customer a grounded study is generated for. u1 is an
+        # operator in the staff org (7); org 9 is the linked customer.
+        conn.exec_driver_sql("""
+            CREATE TABLE organizations (
+                id INTEGER PRIMARY KEY, name TEXT UNIQUE, created_at TIMESTAMP,
+                truesync_tenant_slug TEXT UNIQUE, truesync_token_sealed TEXT,
+                truesync_token_id TEXT
+            )
+        """)
+        conn.exec_driver_sql("""
+            CREATE TABLE organization_members (
+                id INTEGER PRIMARY KEY, organization_id INTEGER, user_id TEXT,
+                email TEXT, role TEXT, is_operator BOOLEAN DEFAULT 0, created_at TIMESTAMP
+            )
+        """)
+        conn.exec_driver_sql("INSERT INTO organizations (id, name) VALUES (7, 'Parleo')")
+        conn.exec_driver_sql(
+            "INSERT INTO organizations (id, name, truesync_tenant_slug) "
+            "VALUES (9, 'Wiggle & Snug', 'wiggle-and-snug')"
+        )
+        conn.exec_driver_sql(
+            "INSERT INTO organization_members (organization_id, user_id, email, role, is_operator) "
+            "VALUES (7, 'u1', 'op@parleo.io', 'member', 1), "
+            "(7, 'u2', 'staff@parleo.io', 'member', 0)"
+        )
+    import soa_shared.customers as customers_module
+
     monkeypatch.setattr(studies_router, "engine", engine)
+    monkeypatch.setattr(customers_module, "engine", engine)
     return engine
 
 
@@ -313,6 +341,46 @@ def test_the_syndicated_brand_and_tier_config_are_persisted(patched_engine):
 
     assert merchant == "wiggle-and-snug"
     assert json.loads(tier_config) == TIER_CONFIG
+
+
+def _customer_of(engine, study_type):
+    with engine.connect() as conn:
+        return conn.execute(text(
+            "SELECT customer_organization_id FROM soa_query_generation_jobs WHERE study_type = :st"
+        ), {"st": study_type}).scalar()
+
+
+def test_a_grounded_study_records_its_customer_org(patched_engine):
+    """The worker reads the catalog with this org's token (Step 1C)."""
+    implicit = _generate({**FULL_BRIEF, "syndicated_merchant": "wiggle-and-snug",
+                          "tier_config": TIER_CONFIG})
+    explicit = _generate({**FULL_BRIEF, "study_name": "Prestige Beauty 2",
+                          "syndicated_merchant": "wiggle-and-snug",
+                          "tier_config": TIER_CONFIG, "customer_org_id": 9})
+
+    assert _customer_of(patched_engine, implicit.study_type) == 9
+    assert _customer_of(patched_engine, explicit.study_type) == 9
+
+
+def test_an_ungrounded_study_has_no_customer_org(patched_engine):
+    result = _generate({**FULL_BRIEF, "customer_org_id": 9})
+    assert _customer_of(patched_engine, result.study_type) is None
+
+
+def test_a_customer_the_user_cannot_select_is_refused(patched_engine):
+    from fastapi import HTTPException
+
+    with pytest.raises(HTTPException) as exc:
+        studies_router.generate_study(
+            StudyGenerateRequest(**FULL_BRIEF, syndicated_merchant="wiggle-and-snug",
+                                 tier_config=TIER_CONFIG, customer_org_id=9),
+            current_user={"organization_id": 7, "user_id": "u2"},
+        )
+    assert exc.value.status_code == 403
+    with pytest.raises(HTTPException) as exc:
+        _generate({**FULL_BRIEF, "syndicated_merchant": "wiggle-and-snug",
+                   "tier_config": TIER_CONFIG, "customer_org_id": 7})
+    assert exc.value.status_code == 403, "an unlinked org is not a customer"
 
 
 def test_an_untoggled_study_writes_both_columns_null(patched_engine):

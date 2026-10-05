@@ -12,14 +12,12 @@ import '@testing-library/jest-dom'
 
 import DRIFT from '../__fixtures__/prospect-drift-pampers.json'
 import PROSPECTS from '../__fixtures__/prospects.json'
-import activeBrand from '../__fixtures__/active-brand.json'
 import channels from '../__fixtures__/channels.json'
 import publications from '../__fixtures__/publications.json'
 import spine from '../__fixtures__/merchant-schema-org.json'
 import listings from '../__fixtures__/listings.json'
 
 import ProspectView from '../ProspectView.jsx'
-import CatalogSourceSwitcher from '../CatalogSourceSwitcher.jsx'
 import MerchantCommandCenter from '../../MerchantCommandCenter.jsx'
 import { truesyncApi, fetchAllVerifications } from '../../../truesyncApi.js'
 import {
@@ -38,6 +36,15 @@ vi.mock('../../../truesyncApi.js', async (importOriginal) => {
     fetchAllVerifications: vi.fn(),
   }
 })
+// The customer switcher's list (Step 1C): W&S, Parleo-hosted, the one
+// customer these fixtures describe. Imported inside the factory because
+// vi.mock is hoisted above this file's imports.
+vi.mock('../../../customersApi.js', async (importOriginal) => {
+  const actual = await importOriginal()
+  const customers = (await import('../__fixtures__/customers.json')).default
+  return { ...actual, listCustomers: vi.fn(() => Promise.resolve(customers)) }
+})
+
 vi.mock('../../../AuthContext.jsx', () => ({ useAuth: () => ({ signOut: vi.fn() }) }))
 vi.mock('../../../api.js', () => ({
   api: {
@@ -51,7 +58,6 @@ const renderView = (list = products()) =>
   render(<ProspectView prospect={DRIFT} products={list} totals={summarizeProspect(list)} />)
 
 function mockLive() {
-  truesyncApi.getActiveBrand.mockResolvedValue(activeBrand)
   truesyncApi.getChannels.mockResolvedValue(channels)
   truesyncApi.getPublications.mockResolvedValue(publications)
   truesyncApi.getMerchantSchemaOrg.mockResolvedValue(spine)
@@ -61,7 +67,7 @@ function mockLive() {
   truesyncApi.getProspectDrift.mockResolvedValue(DRIFT)
 }
 
-beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => { vi.clearAllMocks(); window.sessionStorage.clear() })
 
 // ─── Banner and framing ──────────────────────────────────────────────
 
@@ -239,37 +245,14 @@ describe('agent access policy', () => {
   })
 })
 
-// ─── Switcher ────────────────────────────────────────────────────────
-
-describe('catalog source switcher', () => {
-  it('offers the live merchant and each prospect with its counts', () => {
-    render(
-      <CatalogSourceSwitcher
-        brandName="Wiggle & Snug" prospects={PROSPECTS.prospects}
-        activeSlug={null} onSelect={() => {}}
-      />)
-    expect(screen.getByRole('tab', { name: /Wiggle & Snug/ })).toHaveAttribute('aria-selected', 'true')
-    const prospectTab = screen.getByRole('tab', { name: /Pampers/ })
-    expect(prospectTab).toHaveAttribute('aria-selected', 'false')
-    expect(prospectTab).toHaveTextContent('3/3 products')
-    expect(prospectTab).toHaveTextContent('Read-only')
-  })
-
-  it('reports the chosen slug, and null for the live merchant', () => {
-    const onSelect = vi.fn()
-    render(
-      <CatalogSourceSwitcher
-        brandName="Wiggle & Snug" prospects={PROSPECTS.prospects}
-        activeSlug="pampers" onSelect={onSelect}
-      />)
-    fireEvent.click(screen.getByRole('tab', { name: /Wiggle & Snug/ }))
-    expect(onSelect).toHaveBeenCalledWith(null)
-    fireEvent.click(screen.getByRole('tab', { name: /Pampers/ }))
-    expect(onSelect).toHaveBeenCalledWith('pampers')
-  })
-})
-
 // ─── Integration through the page ────────────────────────────────────
+
+// The customer switcher holds both: the merchant, and the selected
+// customer's read-only prospects as a mode within it.
+async function chooseFromSwitcher(name) {
+  fireEvent.click(await screen.findByRole('button', { name: 'Customer' }))
+  fireEvent.click(await screen.findByRole('menuitemradio', { name }))
+}
 
 describe('switching modes in the page', () => {
   beforeEach(mockLive)
@@ -278,13 +261,13 @@ describe('switching modes in the page', () => {
     render(<MerchantCommandCenter onNavigate={() => {}} />)
     await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
 
-    fireEvent.click(await screen.findByRole('tab', { name: /Pampers/ }))
+    await chooseFromSwitcher(/Pampers/)
 
     await waitFor(() => expect(screen.getByText(/Prospect mode/)).toBeInTheDocument())
     expect(screen.queryByText(/Syndication matrix/)).not.toBeInTheDocument()
     expect(screen.getByText('Pampers Swaddlers Diapers Size 1, 198 Count')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('tab', { name: /Wiggle & Snug/ }))
+    await chooseFromSwitcher(/Wiggle & Snug/)
     await waitFor(() => expect(screen.getByText(/Syndication matrix/)).toBeInTheDocument())
     expect(screen.queryByText(/Prospect mode/)).not.toBeInTheDocument()
   })
@@ -295,9 +278,9 @@ describe('switching modes in the page', () => {
     await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
     const before = container.querySelector('.mcc-context-meta').textContent
 
-    fireEvent.click(await screen.findByRole('tab', { name: /Pampers/ }))
+    await chooseFromSwitcher(/Pampers/)
     await waitFor(() => expect(screen.getByText(/Prospect mode/)).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('tab', { name: /Wiggle & Snug/ }))
+    await chooseFromSwitcher(/Wiggle & Snug/)
     await waitFor(() => expect(screen.getByText(/Syndication matrix/)).toBeInTheDocument())
 
     expect(container.querySelector('.mcc-context-meta').textContent).toBe(before)
@@ -308,7 +291,7 @@ describe('switching modes in the page', () => {
     await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
     expect(screen.getByRole('button', { name: /verify all/i })).toBeInTheDocument()
 
-    fireEvent.click(await screen.findByRole('tab', { name: /Pampers/ }))
+    await chooseFromSwitcher(/Pampers/)
     await waitFor(() => expect(screen.getByText(/Prospect mode/)).toBeInTheDocument())
 
     expect(screen.queryByRole('button', { name: /verify all/i })).not.toBeInTheDocument()
@@ -320,7 +303,7 @@ describe('switching modes in the page', () => {
 
     render(<MerchantCommandCenter onNavigate={() => {}} />)
     await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
-    fireEvent.click(await screen.findByRole('tab', { name: /Pampers/ }))
+    await chooseFromSwitcher(/Pampers/)
 
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('Prospect observations could not be loaded')
@@ -334,6 +317,7 @@ describe('switching modes in the page', () => {
     render(<MerchantCommandCenter onNavigate={() => {}} />)
     await waitFor(() => expect(screen.getByText('Snug-Fit Diapers')).toBeInTheDocument())
     expect(screen.getByText(/Syndication matrix/)).toBeInTheDocument()
-    expect(screen.queryByRole('tab', { name: /Pampers/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Customer' }))
+    expect(screen.queryByRole('menuitemradio', { name: /Pampers/ })).not.toBeInTheDocument()
   })
 })

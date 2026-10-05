@@ -48,6 +48,8 @@ const HARNESS_FINGERPRINTS = [
   'screenshot-harness',
   'stub-truesync',
   'stub-api',
+  'stub-customers',
+  'stub-auth',
 ]
 
 let outDir

@@ -74,7 +74,7 @@ def test_is_the_single_head():
         if down:
             down_revisions.add(down.group(1))
 
-    assert revisions - down_revisions == {"d439b7309af4"}
+    assert revisions - down_revisions == {"a7c3e9f1b2d4"}
 
 
 # ── upgrade: soa_queries ──────────────────────────────────────────────────

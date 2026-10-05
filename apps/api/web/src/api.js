@@ -9,6 +9,7 @@
  * the async session-lookup race condition that caused 401s after OAuth.
  */
 import { supabase } from './supabase.js'
+import { customerHeaders } from './customerSelection.js'
 
 // Module-level token store.
 // Updated by setApiToken() which is called from the auth provider whenever
@@ -61,6 +62,9 @@ async function request(method, path, body) {
     headers: {
       'Content-Type': 'application/json',
       ...apiAuthHeaders(),
+      // Which customer this is for (Step 1C). Only the TrueSync proxy reads
+      // it; every other route ignores it.
+      ...customerHeaders(),
     },
   }
   if (body !== undefined) {
@@ -88,7 +92,12 @@ async function request(method, path, body) {
     let detail = `${method} ${path} → ${res.status}`
     try {
       const err = await res.json()
-      if (err.detail) detail = err.detail
+      if (err.detail) {
+        // A structured detail ({message, ...}) says its words in `message`.
+        detail = typeof err.detail === 'object' && err.detail.message
+          ? err.detail.message
+          : err.detail
+      }
     } catch (_) {}
     throw new Error(detail)
   }

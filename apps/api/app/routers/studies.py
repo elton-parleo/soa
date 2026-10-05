@@ -9,6 +9,7 @@ from typing import Optional
 from sqlalchemy import text
 from collections import defaultdict
 from soa_shared.database import engine
+from soa_shared import customers
 from soa_shared.constants import QUERY_CONSTRAINTS
 from app.auth import get_current_user
 from app.schemas import (
@@ -180,6 +181,17 @@ def generate_study(
     user_id = current_user['user_id']
     study_type = _slugify_study_name(data.study_name)
 
+    # A grounded study is read with its customer's token, so which customer
+    # it is gets decided — and checked — here, by the same rule the TrueSync
+    # proxy applies: an operator may name any customer, anyone else only
+    # their own. Ungrounded studies have no customer.
+    customer_org_id = None
+    if data.syndicated_merchant:
+        try:
+            customer_org_id = customers.resolve_selection(user_id, data.customer_org_id).id
+        except customers.CustomerError as exc:
+            raise HTTPException(status_code=exc.status, detail=str(exc))
+
     with engine.connect() as conn:
         result = conn.execute(
             text("""
@@ -191,6 +203,7 @@ def generate_study(
                     stage_targets, rotate_named_retailer,
                     naming_rule_enabled, personas, specificity_mode,
                     syndicated_merchant, tier_config,
+                    customer_organization_id,
                     created_at
                 ) VALUES (
                     :study_type, :study_name, :description,
@@ -200,6 +213,7 @@ def generate_study(
                     :stage_targets, :rotate_named_retailer,
                     :naming_rule_enabled, :personas, :specificity_mode,
                     :syndicated_merchant, :tier_config,
+                    :customer_org_id,
                     NOW()
                 )
                 RETURNING id, status
@@ -235,6 +249,7 @@ def generate_study(
                 # notes — because a request is not evidence of what a
                 # study contains.
                 "tier_config":           _as_json(data.tier_config),
+                "customer_org_id":       customer_org_id,
             },
         )
         # Read the RETURNING row BEFORE committing, not after. Both

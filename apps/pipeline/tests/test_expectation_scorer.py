@@ -54,7 +54,7 @@ def db(monkeypatch):
         conn.exec_driver_sql("""
             CREATE TABLE soa_queries (
                 id INTEGER PRIMARY KEY, query_text TEXT, tier TEXT,
-                expected_answer TEXT, provenance TEXT, source_ref TEXT
+                expected_answer TEXT, provenance TEXT, source_ref TEXT, study_type TEXT
             )
         """)
         conn.exec_driver_sql("""
@@ -122,13 +122,13 @@ class FakeFacts:
             'tier_names': ['Member', 'Member+'], 'product_titles': [],
         }
 
-    def for_merchant(self, _slug):
+    def for_merchant(self, _slug, study_type=None):
         return self.facts
 
 
 def make_scorer(record=None, history=None, facts=None, labeler=False):
     class FakeHistory:
-        def for_variant(self, _slug, _vid):
+        def for_variant(self, _slug, _vid, study_type=None):
             return history
     return scorer_module.ExpectationScorer(
         FakeClient(record), FakeHistory(), FakeFacts(facts), labeler=labeler,

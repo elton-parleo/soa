@@ -1,0 +1,254 @@
+{
+  "upload_id": "upl_fixture_acme_1",
+  "merchant": "acme-pets",
+  "summary": {
+    "rows": 10,
+    "ready": 8,
+    "warning": 1,
+    "error": 1,
+    "file_errors": 0,
+    "forms": [
+      "wide"
+    ],
+    "reachability_checked": true,
+    "incentives": null
+  },
+  "file_errors": [],
+  "rows": [
+    {
+      "row_number": 2,
+      "sheet": "acme-pets-10-skus.csv",
+      "gtin_as_given": "009900011000",
+      "gtin": "00009900011000",
+      "product_name": "Trailmix Adult Dog Food, Chicken & Rice",
+      "brand_name": "Trailmix",
+      "variant_label": "Dry \u00b7 35 lb",
+      "pack_count": null,
+      "size_value": "35",
+      "size_unit": "lb",
+      "price": "74.98",
+      "currency": "USD",
+      "retailers": [
+        {
+          "domain": "acme-pets.test",
+          "url": "https://www.acme-pets.test/p/011000"
+        }
+      ],
+      "messages": [],
+      "status": "ready"
+    },
+    {
+      "row_number": 3,
+      "sheet": "acme-pets-10-skus.csv",
+      "gtin_as_given": "009900011017",
+      "gtin": "00009900011017",
+      "product_name": "Trailmix Adult Dog Food, Chicken & Rice",
+      "brand_name": "Trailmix",
+      "variant_label": "Dry \u00b7 18 lb",
+      "pack_count": null,
+      "size_value": "18",
+      "size_unit": "lb",
+      "price": "46.98",
+      "currency": "USD",
+      "retailers": [
+        {
+          "domain": "acme-pets.test",
+          "url": "https://www.acme-pets.test/p/011017"
+        }
+      ],
+      "messages": [],
+      "status": "ready"
+    },
+    {
+      "row_number": 4,
+      "sheet": "acme-pets-10-skus.csv",
+      "gtin_as_given": "009900011025",
+      "gtin": null,
+      "product_name": "Meadowbrook Lamb & Rice Recipe",
+      "brand_name": "Meadowbrook",
+      "variant_label": "Dry \u00b7 30 lb",
+      "pack_count": null,
+      "size_value": "30",
+      "size_unit": "lb",
+      "price": "69.98",
+      "currency": "USD",
+      "retailers": [
+        {
+          "domain": "acme-pets.test",
+          "url": "https://www.acme-pets.test/p/011025"
+        }
+      ],
+      "messages": [
+        {
+          "code": "gtin_check_digit",
+          "severity": "error",
+          "field": "gtin",
+          "message": "gtin '009900011025' fails its check digit (expected 4, got 5)"
+        }
+      ],
+      "status": "error"
+    },
+    {
+      "row_number": 5,
+      "sheet": "acme-pets-10-skus.csv",
+      "gtin_as_given": "009900011031",
+      "gtin": "00009900011031",
+      "product_name": "Meadowbrook Lamb & Rice Recipe",
+      "brand_name": "Meadowbrook",
+      "variant_label": "Dry \u00b7 15 lb",
+      "pack_count": null,
+      "size_value": "15",
+      "size_unit": "lb",
+      "price": "39.98",
+      "currency": "USD",
+      "retailers": [
+        {
+          "domain": "acme-pets.test",
+          "url": "https://www.acme-pets.test/p/011031"
+        }
+      ],
+      "messages": [],
+      "status": "ready"
+    },
+    {
+      "row_number": 6,
+      "sheet": "acme-pets-10-skus.csv",
+      "gtin_as_given": "009900011048",
+      "gtin": "00009900011048",
+      "product_name": "Northfield Grain Free Chicken, Adult Dog",
+      "brand_name": "Northfield",
+      "variant_label": "Dry \u00b7 40 lb",
+      "pack_count": null,
+      "size_value": "40",
+      "size_unit": "lb",
+      "price": "64.99",
+      "currency": "USD",
+      "retailers": [
+        {
+          "domain": "acme-pets.test",
+          "url": "https://www.acme-pets.test/p/011048"
+        }
+      ],
+      "messages": [],
+      "status": "ready"
+    },
+    {
+      "row_number": 7,
+      "sheet": "acme-pets-10-skus.csv",
+      "gtin_as_given": "009900011055",
+      "gtin": "00009900011055",
+      "product_name": "Northfield Grain Free Chicken, Adult Dog",
+      "brand_name": "Northfield",
+      "variant_label": "Dry \u00b7 25 lb",
+      "pack_count": null,
+      "size_value": "25",
+      "size_unit": "lb",
+      "price": "44.99",
+      "currency": "USD",
+      "retailers": [
+        {
+          "domain": "acme-pets.test",
+          "url": "https://www.acme-pets.test/p/011055"
+        }
+      ],
+      "messages": [
+        {
+          "code": "url_unreachable",
+          "severity": "warning",
+          "field": "product_url_acme-pets.test",
+          "message": "https://www.acme-pets.test/p/011055 answered 404"
+        }
+      ],
+      "status": "warning"
+    },
+    {
+      "row_number": 8,
+      "sheet": "acme-pets-10-skus.csv",
+      "gtin_as_given": "009900011062",
+      "gtin": "00009900011062",
+      "product_name": "Clumpwell Litter, 24/7 Performance",
+      "brand_name": "Clumpwell",
+      "variant_label": "Pail \u00b7 35 lb",
+      "pack_count": null,
+      "size_value": "35",
+      "size_unit": "lb",
+      "price": "24.49",
+      "currency": "USD",
+      "retailers": [
+        {
+          "domain": "acme-pets.test",
+          "url": "https://www.acme-pets.test/p/011062"
+        }
+      ],
+      "messages": [],
+      "status": "ready"
+    },
+    {
+      "row_number": 9,
+      "sheet": "acme-pets-10-skus.csv",
+      "gtin_as_given": "009900011079",
+      "gtin": "00009900011079",
+      "product_name": "Purrfect Adult Cat, Chicken",
+      "brand_name": "Purrfect",
+      "variant_label": "Dry \u00b7 16 lb",
+      "pack_count": null,
+      "size_value": "16",
+      "size_unit": "lb",
+      "price": "58.99",
+      "currency": "USD",
+      "retailers": [
+        {
+          "domain": "acme-pets.test",
+          "url": "https://www.acme-pets.test/p/011079"
+        }
+      ],
+      "messages": [],
+      "status": "ready"
+    },
+    {
+      "row_number": 10,
+      "sheet": "acme-pets-10-skus.csv",
+      "gtin_as_given": "009900011086",
+      "gtin": "00009900011086",
+      "product_name": "Snugwalk Dog Harness, Grey",
+      "brand_name": "Snugwalk",
+      "variant_label": "Medium",
+      "pack_count": 1,
+      "size_value": null,
+      "size_unit": null,
+      "price": "24.99",
+      "currency": "USD",
+      "retailers": [
+        {
+          "domain": "acme-pets.test",
+          "url": "https://www.acme-pets.test/p/011086"
+        }
+      ],
+      "messages": [],
+      "status": "ready"
+    },
+    {
+      "row_number": 11,
+      "sheet": "acme-pets-10-skus.csv",
+      "gtin_as_given": "009900011093",
+      "gtin": "00009900011093",
+      "product_name": "Chewbright Dental Sticks",
+      "brand_name": "Chewbright",
+      "variant_label": "Pouch \u00b7 30 ct",
+      "pack_count": null,
+      "size_value": "30",
+      "size_unit": "ct",
+      "price": "12.49",
+      "currency": "USD",
+      "retailers": [
+        {
+          "domain": "acme-pets.test",
+          "url": "https://www.acme-pets.test/p/011093"
+        }
+      ],
+      "messages": [],
+      "status": "ready"
+    }
+  ],
+  "incentives": null
+}

@@ -14,7 +14,6 @@ import { render, screen, waitFor, within, fireEvent } from '@testing-library/rea
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import '@testing-library/jest-dom'
 
-import activeBrand from '../__fixtures__/active-brand.json'
 import channels from '../__fixtures__/channels.json'
 import publications from '../__fixtures__/publications.json'
 import spine from '../__fixtures__/merchant-schema-org.json'
@@ -43,6 +42,15 @@ vi.mock('../../../truesyncApi.js', async (importOriginal) => {
     fetchAllVerifications: vi.fn(),
   }
 })
+// The customer switcher's list (Step 1C): W&S, Parleo-hosted, the one
+// customer these fixtures describe. Imported inside the factory because
+// vi.mock is hoisted above this file's imports.
+vi.mock('../../../customersApi.js', async (importOriginal) => {
+  const actual = await importOriginal()
+  const customers = (await import('../__fixtures__/customers.json')).default
+  return { ...actual, listCustomers: vi.fn(() => Promise.resolve(customers)) }
+})
+
 vi.mock('../../../AuthContext.jsx', () => ({ useAuth: () => ({ signOut: vi.fn() }) }))
 vi.mock('../../../api.js', () => ({
   api: {
@@ -52,7 +60,6 @@ vi.mock('../../../api.js', () => ({
 }))
 
 function mockHappyPath(verifications = {}) {
-  truesyncApi.getActiveBrand.mockResolvedValue(activeBrand)
   truesyncApi.getChannels.mockResolvedValue(channels)
   truesyncApi.getPublications.mockResolvedValue(publications)
   truesyncApi.getMerchantSchemaOrg.mockResolvedValue(spine)
@@ -61,7 +68,7 @@ function mockHappyPath(verifications = {}) {
   truesyncApi.getProspects.mockResolvedValue({ prospects: [] })
 }
 
-beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => { vi.clearAllMocks(); window.sessionStorage.clear() })
 afterEach(() => { vi.restoreAllMocks() })
 
 // Props for rendering ListingDrawer on its own, so a single bad record

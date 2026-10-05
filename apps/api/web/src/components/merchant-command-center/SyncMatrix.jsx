@@ -38,7 +38,22 @@ const ACCEPTANCE_GLYPH = {
   [ACCEPTANCE.UNAVAILABLE]: '⌀',
 }
 
+function NotConnectedCell({ channel }) {
+  return (
+    <td
+      className="cell mcc-cell muted not-connected"
+      title={`${channel.name}: not connected. The customer hosts its own pages, so nothing `
+        + 'publishes here until it integrates or grants access.'}
+    >
+      <span className="mcc-cell-stack">
+        <span className="mcc-cell-when">not connected</span>
+      </span>
+    </td>
+  )
+}
+
 function Cell({ cell, channel }) {
+  if (cell.notConnected) return <NotConnectedCell channel={channel} />
   const when = relativeTime(cell.publishedAt || cell.compiledAt)
   const acceptanceGlyph = ACCEPTANCE_GLYPH[cell.acceptance]
 
@@ -113,6 +128,7 @@ function Cell({ cell, channel }) {
 
 export default function SyncMatrix({
   rows, channels, channelState, cellFor, selectedListingId, onSelectRow,
+  selectable = true,
 }) {
   return (
     <div className="mcc-panel">
@@ -146,10 +162,11 @@ export default function SyncMatrix({
               <th>Variants</th>
               {channels.map((channel) => {
                 const muted = channelState[channel.slug]?.muted
+                const notConnected = channelState[channel.slug]?.notConnected
                 return (
                   <th
                     key={channel.slug}
-                    className={`surface${muted ? ' muted' : ''}`}
+                    className={`surface${muted ? ' muted' : ''}${notConnected ? ' not-connected' : ''}`}
                     title={`${channel.depth_label}${
                       channel.spec_version ? `\nspec: ${channel.spec_version}` : ''
                     }`}
@@ -158,6 +175,7 @@ export default function SyncMatrix({
                     {channel.spec_version && (
                       <span className="spec mono">{channel.spec_version}</span>
                     )}
+                    {notConnected && <span className="nc">not connected</span>}
                   </th>
                 )
               })}
@@ -168,16 +186,20 @@ export default function SyncMatrix({
               <tr
                 key={row.listingId}
                 className={row.listingId === selectedListingId ? 'selected' : undefined}
-                onClick={() => onSelectRow(row.listingId)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    onSelectRow(row.listingId)
-                  }
-                }}
-                tabIndex={0}
-                role="button"
-                aria-expanded={row.listingId === selectedListingId}
+                // A customer-hosted merchant's rows have no publication
+                // lineage to inspect, so they are not buttons at all.
+                {...(selectable ? {
+                  onClick: () => onSelectRow(row.listingId),
+                  onKeyDown: (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onSelectRow(row.listingId)
+                    }
+                  },
+                  tabIndex: 0,
+                  role: 'button',
+                  'aria-expanded': row.listingId === selectedListingId,
+                } : {})}
               >
                 <td>
                   <div className="mcc-prod">
@@ -204,7 +226,11 @@ export default function SyncMatrix({
                   return (
                     <Cell
                       key={channel.slug}
-                      cell={{ ...cell, muted: channelState[channel.slug]?.muted }}
+                      cell={{
+                        ...cell,
+                        muted: channelState[channel.slug]?.muted,
+                        notConnected: channelState[channel.slug]?.notConnected,
+                      }}
                       channel={channel}
                     />
                   )

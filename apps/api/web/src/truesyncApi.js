@@ -17,6 +17,12 @@
  *
  * The token is never in this bundle (truesyncTokenBundle.build.test.js).
  *
+ * WHOSE token (Step 1C): every proxied call carries X-Parleo-Customer — the
+ * page's selected customer (customerSelection.js), or `opts.customer` when a
+ * caller reads under a different org, as the Create Study modal does for
+ * the brand it is grounding in. The proxy resolves the org to its token
+ * server-side and refuses an org the user may not select.
+ *
  * Public reads deliberately do NOT carry this app's bearer token: it is a
  * cross-origin call to a service that has never heard of this app's
  * sessions. Scoped reads DO — they hit this app's authed API, and a 401
@@ -30,6 +36,7 @@
  * banner, and a fetch with no AbortSignal never resolves into one.
  */
 import { apiAuthHeaders, expireSession } from './api.js'
+import { customerHeaders } from './customerSelection.js'
 import { DEFAULT_TRUESYNC_API_BASE } from './components/merchant-command-center/truesync-host.constants.js'
 
 export const TRUESYNC_API_BASE = (
@@ -64,8 +71,67 @@ function readJson(path, opts) {
 
 /** A scoped read, through this app's proxy, which holds the tenant token. */
 function proxyReadJson(path, opts) {
-  return fetchJson(path, path, opts, apiAuthHeaders(), { sameOrigin: true })
+  return fetchJson(
+    path, path, opts,
+    { ...apiAuthHeaders(), ...customerHeaders(opts?.customer) },
+    { sameOrigin: true },
+  )
 }
+
+/**
+ * A proxied write for the setup wizard (Step 1C): JSON or a multipart body,
+ * the session and the customer attached. Errors read like the reads' — a
+ * 403 is NOT_AUTHORIZED, a 401 ends the session — and carry the upstream's
+ * detail verbatim otherwise, because the wizard shows it to the operator.
+ */
+export async function proxyWrite(method, path, { json, formData, customer, timeoutMs = MUTATION_TIMEOUT_MS } = {}) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const headers = { ...apiAuthHeaders(), ...customerHeaders(customer) }
+  let body
+  if (formData) body = formData
+  else if (json !== undefined) {
+    headers['Content-Type'] = 'application/json'
+    body = JSON.stringify(json)
+  }
+  try {
+    const res = await fetch(path, { method, headers, body, signal: controller.signal })
+    if (!res.ok) {
+      if (res.status === 401) await expireSession()
+      let detail = `${method} ${path} → ${res.status}`
+      let structured = null
+      try {
+        const err = await res.json()
+        if (err.detail && typeof err.detail === 'object' && !Array.isArray(err.detail)) {
+          structured = err.detail
+        }
+        if (typeof err.detail === 'string') detail = err.detail
+        else if (err.detail?.message) detail = err.detail.message
+        else if (Array.isArray(err.detail)) {
+          // FastAPI validation, or supply's per-incentive refusals.
+          detail = err.detail.map((d) => d.msg || (d.errors || []).join('; ') || JSON.stringify(d)).join(' · ')
+        }
+      } catch (_) {}
+      const error = new TrueSyncError(res.status === 403 && !detail.startsWith(NOT_AUTHORIZED)
+        ? `${NOT_AUTHORIZED} — ${detail}` : detail, { status: res.status })
+      // The rest of a structured detail (e.g. the org a half-finished
+      // customer creation left behind), for the caller to act on.
+      error.details = structured
+      throw error
+    }
+    return await res.json()
+  } catch (err) {
+    if (err instanceof TrueSyncError || err?.authExpired) throw err
+    if (err?.name === 'AbortError') {
+      throw new TrueSyncError(`${method} ${path} did not complete within ${Math.round(timeoutMs / 1000)}s`, { timedOut: true })
+    }
+    throw new TrueSyncError(err?.message || 'This app could not be reached')
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+const slugPath = (slug) => `/api/truesync/merchants/${encodeURIComponent(slug)}`
 
 async function fetchJson(url, path, { timeoutMs = READ_TIMEOUT_MS, signal } = {}, headers, { sameOrigin = false } = {}) {
   const controller = new AbortController()
@@ -181,15 +247,74 @@ export const truesyncApi = {
     proxyReadJson(`/api/truesync/prospects/${encodeURIComponent(slug)}/drift`, opts),
 
   // Verification history for one listing on one channel, newest first.
-  // There is no bulk form and no all-channels form: the endpoint takes
-  // exactly one channel (default merchant_center), so a full matrix is
-  // listings x channels calls — see fetchAllVerifications below.
+  // The drawer's single-cell read; the matrix uses the bulk form below.
   getVerifications: (listingId, channelSlug, { limit = 100, ...opts } = {}) =>
     proxyReadJson(
       `/api/truesync/listings/${listingId}/verifications` +
       `?channel=${encodeURIComponent(channelSlug)}&limit=${limit}`,
       opts,
     ).then(unwrapVerifications),
+
+  // Every listing's history on one channel, in one call (supply 1B's bulk
+  // route): {merchant, listings: [{listing_id, lineage, verifications}]}.
+  getMerchantVerifications: (merchantSlug, channelSlug, { limit = 100, ...opts } = {}) =>
+    proxyReadJson(
+      `${slugPath(merchantSlug)}/verifications` +
+      `?channel=${encodeURIComponent(channelSlug)}&limit=${limit}`,
+      opts,
+    ),
+
+  // ─── Step 1C: the customer's tenant and its SKU feed ─────────────
+
+  // The selected customer's tenant and every merchant it owns.
+  getTenant: (opts) =>
+    proxyReadJson('/api/truesync/tenant', opts),
+
+  getRetailers: (merchantSlug, opts) =>
+    proxyReadJson(`${slugPath(merchantSlug)}/retailers`, opts),
+
+  getFeed: (merchantSlug, opts) =>
+    proxyReadJson(`${slugPath(merchantSlug)}/feed`, opts),
+
+  getFeedHistory: (merchantSlug, opts) =>
+    proxyReadJson(`${slugPath(merchantSlug)}/feed/history`, opts),
+
+  getOwnedIncentives: (merchantSlug, opts) =>
+    proxyReadJson(`${slugPath(merchantSlug)}/incentives/owned`, opts),
+
+  // Writes (the wizard), through the same proxy.
+  putRetailers: (merchantSlug, domains, opts = {}) =>
+    proxyWrite('PUT', `${slugPath(merchantSlug)}/retailers`, { ...opts, json: { domains } }),
+
+  validateFeed: (merchantSlug, files, { skipReachability = false, ...opts } = {}) => {
+    const form = new FormData()
+    for (const file of files) form.append('files', file, file.name)
+    return proxyWrite(
+      'POST',
+      `${slugPath(merchantSlug)}/feed/validate?skip_reachability=${skipReachability ? 'true' : 'false'}`,
+      { ...opts, formData: form },
+    )
+  },
+
+  commitFeed: (merchantSlug, uploadId, mode, opts = {}) =>
+    proxyWrite('POST', `${slugPath(merchantSlug)}/feed/commit`,
+      { ...opts, json: { upload_id: uploadId, mode } }),
+
+  putOwnedIncentives: (merchantSlug, incentives, opts = {}) =>
+    proxyWrite('PUT', `${slugPath(merchantSlug)}/incentives/owned`,
+      { ...opts, json: { incentives } }),
+
+  // 1B's SKU-feed template, proxied. A Blob: the page saves it as a file.
+  // Fetched rather than linked, because a plain link would not carry the
+  // session this app's API requires.
+  downloadTemplate: async (ext) => {
+    const res = await fetch(`/api/truesync/feed/template.${ext}`, { headers: apiAuthHeaders() })
+    if (!res.ok) {
+      if (res.status === 401) await expireSession()
+      throw new TrueSyncError(`The template could not be downloaded (${res.status})`, { status: res.status })
+    }
+    return res.blob()
+  },
 }
 
 /**
@@ -226,44 +351,43 @@ export function unwrapVerifications(payload) {
 /**
  * Every cell's verification history, as "listingId:channelSlug" -> rows.
  *
- * One request per cell, because that is the only shape the endpoint
- * offers. Run at bounded concurrency rather than all at once: a 5x7
- * matrix is 35 requests, and firing them in a single burst is how you
- * get rate-limited by an API that was fine with the work itself.
+ * One request per CHANNEL, against supply's bulk route, which answers for
+ * every listing of the merchant at once. That retires the old sweep of one
+ * request per listing x channel (~35, each a Vercel invocation). Per
+ * channel rather than one all-channels call because the per-listing route
+ * capped each (listing, channel) at `limit` rows and the bulk route caps
+ * each listing; asking per channel keeps the cap exactly where it was, so
+ * the cells hold the same rows they always did.
  *
- * A cell whose request fails resolves to [] — an empty history renders
- * as ○ ("not yet verified"), which is the honest reading of "we could
- * not find out", and is never mistaken for a clean ✓.
+ * Every listing asked for gets an entry for every channel — [] when the
+ * bulk answer has nothing for it. A channel whose request fails resolves to
+ * [] for every listing: an empty history renders as ○ ("not yet
+ * verified"), the honest reading of "we could not find out".
  *
- * Except a refusal. A 403 is not "could not find out", it is "not
- * allowed to look", and a matrix of ○ would hide it — so the first one
- * stops the sweep and rethrows, for the page to say so. A 401 (session
- * ended) rethrows for the same reason.
+ * Except a refusal. A 403 is "not allowed to look", and a matrix of ○
+ * would hide it — so it stops the load and rethrows, for the page to say
+ * so. A 401 (session ended) rethrows for the same reason.
  */
-export async function fetchAllVerifications(listingIds, channelSlugs, { signal, concurrency = 8 } = {}) {
-  const jobs = []
-  for (const listingId of listingIds) {
-    for (const channelSlug of channelSlugs) {
-      jobs.push([listingId, channelSlug])
-    }
-  }
-
+export async function fetchAllVerifications(merchantSlug, listingIds, channelSlugs, { signal, limit = 100 } = {}) {
   const out = {}
-  for (let i = 0; i < jobs.length; i += concurrency) {
-    if (signal?.aborted) break
-    const batch = jobs.slice(i, i + concurrency)
-    await Promise.all(batch.map(async ([listingId, channelSlug]) => {
-      try {
-        // getVerifications has already normalised the envelope; this
-        // guard only covers a client that hands back something odd.
-        const rows = await truesyncApi.getVerifications(listingId, channelSlug, { signal })
-        out[`${listingId}:${channelSlug}`] = Array.isArray(rows) ? rows : []
-      } catch (err) {
-        if (err?.notAuthorized || err?.authExpired) throw err
-        out[`${listingId}:${channelSlug}`] = []
-      }
-    }))
+  for (const listingId of listingIds) {
+    for (const channelSlug of channelSlugs) out[`${listingId}:${channelSlug}`] = []
   }
+  if (!merchantSlug || listingIds.length === 0) return out
+
+  const wanted = new Set(listingIds.map(String))
+  await Promise.all(channelSlugs.map(async (channelSlug) => {
+    if (signal?.aborted) return
+    try {
+      const payload = await truesyncApi.getMerchantVerifications(merchantSlug, channelSlug, { signal, limit })
+      for (const entry of payload?.listings || []) {
+        if (!wanted.has(String(entry.listing_id))) continue
+        out[`${entry.listing_id}:${channelSlug}`] = unwrapVerifications(entry)
+      }
+    } catch (err) {
+      if (err?.notAuthorized || err?.authExpired) throw err
+    }
+  }))
   return out
 }
 

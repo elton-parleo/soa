@@ -490,10 +490,18 @@ class PipelineOrchestrator:
         catalog-question count times platforms times runs-per-query extra
         calls, which is worth stating out loud because it is not small.
 
-        Never raises. A bug here must not fail Stage 2 or the pipeline:
-        Layer 2 is a second measurement over answers that already exist,
-        and losing it costs an accuracy rate, not the report.
+        Never raises — with one exception. A bug here must not fail Stage 2
+        or the pipeline: Layer 2 is a second measurement over answers that
+        already exist, and losing it costs an accuracy rate, not the report.
+
+        The exception is a REFUSED catalog token (TrueSyncNotAuthorized).
+        Scoring without the catalog does not lose an accuracy rate, it
+        falsifies one: the staleness lookup finds no history and every
+        `stale` scores `wrong`. So the cycle fails, with the refusal — which
+        names the customer org or the variable — on the cycle's notes.
         """
+        from clients.truesync_catalog import TrueSyncNotAuthorized
+
         try:
             from scoring.expectation_batch import score_cycle
 
@@ -510,6 +518,11 @@ class PipelineOrchestrator:
                 self.cycle_code, summary.succeeded, summary.total,
                 summary.by_outcome,
             )
+        except TrueSyncNotAuthorized as exc:
+            reason = f"Expectation scoring stopped: {exc}"
+            logger.error("Stage 2c (expectation scoring) for cycle %s: %s", self.cycle_code, reason)
+            self._append_cycle_note(reason)
+            raise PipelineStageError(stage="expectation_scoring", reason=reason) from exc
         except Exception:
             logger.exception(
                 "Stage 2c (expectation scoring) failed unexpectedly for cycle %s",
@@ -902,6 +915,22 @@ class PipelineOrchestrator:
                 .first()
             )
             return row[0] if row else None
+
+    def _append_cycle_note(self, note: str) -> None:
+        """
+        Say why on the cycle itself, in the same form worker.mark_failed
+        uses, so the reason is on the row an operator looks at — the
+        stage-error path otherwise records only the status.
+        """
+        try:
+            with session_factory() as session:
+                cycle = session.get(SoaCycle, self.cycle.id)
+                if cycle:
+                    stamp = datetime.datetime.now(tz=datetime.timezone.utc).isoformat()
+                    cycle.notes = f"{cycle.notes or ''}\n[pipeline error {stamp}] {note}"
+                    session.commit()
+        except Exception as exc:
+            logger.error("Failed to record a note on cycle %s: %s", self.cycle_code, exc)
 
     def _update_cycle_status(self, status: str) -> None:
         try:

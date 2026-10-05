@@ -26,9 +26,25 @@ from fastapi import HTTPException
 import clients.truesync_client as truesync_client_module
 from clients.truesync_client import TrueSyncClient
 import app.routers.truesync as truesync_router
+from app.customer_context import CustomerScope, customer_scope
 from app.routers.truesync import SyncRuleProxyRequest
+from soa_shared.customers import CustomerOrg
 
 TOKEN = "tst_0123456789abcdef_supersecretsupersecretsupersecretsupersec"
+
+#: The selected customer, as customer_scope hands it to every route. Which
+#: org's token is picked, and who may pick which org, is
+#: tests/test_customer_scope.py's subject; here it is given.
+SCOPE = CustomerScope(
+    org=CustomerOrg(id=7, name="Wiggle & Snug", tenant_slug="wiggle-and-snug",
+                    token_id="0123456789abcdef", has_stored_token=True),
+    token=TOKEN,
+)
+
+
+def upstream_at(base="https://api.example"):
+    """TrueSyncClient, pointed at the fake upstream, holding whatever token the router hands it."""
+    return lambda token=None: TrueSyncClient(base_url=base, token=token)
 
 
 class FakeResponse:
@@ -58,11 +74,11 @@ class FakeAsyncClient:
     async def __aexit__(self, *args):
         return False
 
-    async def request(self, method, url, params=None, json=None, headers=None):
+    async def request(self, method, url, params=None, json=None, headers=None, files=None):
         if self._recorder is not None:
             self._recorder.append(
                 {"method": method, "url": url, "params": params, "json": json,
-                 "headers": headers or {}}
+                 "headers": headers or {}, "files": files}
             )
         if self._raises is not None:
             raise self._raises
@@ -220,11 +236,10 @@ def test_verify_surfaces_the_upstream_403_verbatim(monkeypatch, calls):
     """
     patch_httpx(monkeypatch, calls, response=FakeResponse(
         403, None, text='{"detail":"missing or invalid X-TrueSync-Key"}'))
-    monkeypatch.setattr(truesync_router, "TrueSyncClient",
-                        lambda: TrueSyncClient(base_url="https://api.example", token=TOKEN))
+    monkeypatch.setattr(truesync_router, "TrueSyncClient", upstream_at())
 
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(truesync_router.verify_listing(90))
+        asyncio.run(truesync_router.verify_listing(90, scope=SCOPE))
 
     assert exc.value.status_code == 403
     assert exc.value.detail.startswith(truesync_router.NOT_AUTHORIZED)
@@ -235,10 +250,9 @@ def test_verify_surfaces_the_upstream_403_verbatim(monkeypatch, calls):
 def test_router_returns_the_verify_summary_unchanged(monkeypatch, calls):
     summary = {"outcome": "ok", "integrity": True, "findings": [], "verification_id": 41}
     patch_httpx(monkeypatch, calls, response=FakeResponse(200, summary))
-    monkeypatch.setattr(truesync_router, "TrueSyncClient",
-                        lambda: TrueSyncClient(base_url="https://api.example"))
+    monkeypatch.setattr(truesync_router, "TrueSyncClient", upstream_at())
 
-    assert asyncio.run(truesync_router.verify_listing(90)) == summary
+    assert asyncio.run(truesync_router.verify_listing(90, scope=SCOPE)) == summary
 
 
 def test_an_unconfigured_base_url_fails_cleanly(monkeypatch, calls):
@@ -255,20 +269,18 @@ def test_an_unconfigured_base_url_fails_cleanly(monkeypatch, calls):
 def test_router_returns_the_upstream_rows_unchanged(monkeypatch, calls):
     rows = [{"channel_slug": "schema_org", "status": "published", "listing_id": 90}]
     patch_httpx(monkeypatch, calls, response=FakeResponse(200, rows))
-    monkeypatch.setattr(truesync_router, "TrueSyncClient",
-                        lambda: TrueSyncClient(base_url="https://api.example", token=TOKEN))
+    monkeypatch.setattr(truesync_router, "TrueSyncClient", upstream_at())
 
-    assert asyncio.run(truesync_router.publish_listing(90)) == rows
+    assert asyncio.run(truesync_router.publish_listing(90, scope=SCOPE)) == rows
 
 
 def test_router_surfaces_the_upstream_message_verbatim(monkeypatch, calls):
     patch_httpx(monkeypatch, calls,
                 response=FakeResponse(422, None, text="listing 999 does not exist"))
-    monkeypatch.setattr(truesync_router, "TrueSyncClient",
-                        lambda: TrueSyncClient(base_url="https://api.example"))
+    monkeypatch.setattr(truesync_router, "TrueSyncClient", upstream_at())
 
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(truesync_router.publish_listing(999))
+        asyncio.run(truesync_router.publish_listing(999, scope=SCOPE))
 
     assert exc.value.status_code == 422
     assert exc.value.detail == "listing 999 does not exist"
@@ -277,11 +289,10 @@ def test_router_surfaces_the_upstream_message_verbatim(monkeypatch, calls):
 def test_router_reports_a_transport_failure_as_502_not_500(monkeypatch, calls):
     """The fault is upstream; the page needs to tell that from "this app is broken"."""
     patch_httpx(monkeypatch, calls, raises=RuntimeError("connection refused"))
-    monkeypatch.setattr(truesync_router, "TrueSyncClient",
-                        lambda: TrueSyncClient(base_url="https://api.example"))
+    monkeypatch.setattr(truesync_router, "TrueSyncClient", upstream_at())
 
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(truesync_router.refresh_gmc_diagnostics())
+        asyncio.run(truesync_router.refresh_gmc_diagnostics(scope=SCOPE))
 
     assert exc.value.status_code == 502
     assert "connection refused" in exc.value.detail
@@ -290,12 +301,12 @@ def test_router_reports_a_transport_failure_as_502_not_500(monkeypatch, calls):
 def test_router_never_leaks_the_key_in_an_error_detail(monkeypatch, calls):
     patch_httpx(monkeypatch, calls,
                 response=FakeResponse(401, None, text=f"bad key {TOKEN}"))
-    monkeypatch.setattr(truesync_router, "TrueSyncClient",
-                        lambda: TrueSyncClient(base_url="https://api.example", token=TOKEN))
+    monkeypatch.setattr(truesync_router, "TrueSyncClient", upstream_at())
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(truesync_router.put_sync_rule(
-            SyncRuleProxyRequest(catalog_product_id=27, channel_slug="acp", enabled=False)
+            SyncRuleProxyRequest(catalog_product_id=27, channel_slug="acp", enabled=False),
+            scope=SCOPE,
         ))
 
     assert TOKEN not in exc.value.detail
@@ -312,14 +323,18 @@ def test_proxy_routes_are_mounted_and_authenticated():
     """
     from app.app import app
 
-    proxy_paths = {
-        r.path: sorted(r.methods - {"HEAD", "OPTIONS"})
-        for r in app.routes
-        if getattr(r, "path", "").startswith("/api/truesync")
-    }
+    # Merged per path: a GET and a PUT on one path are two route objects.
+    proxy_paths = {}
+    for r in app.routes:
+        if getattr(r, "path", "").startswith("/api/truesync"):
+            proxy_paths[r.path] = sorted(
+                set(proxy_paths.get(r.path, [])) | (r.methods - {"HEAD", "OPTIONS"})
+            )
 
     assert proxy_paths == {
         **{path: ["GET"] for path in READ_ROUTES},
+        **{path: ["GET"] for path in TOKENLESS_READS},
+        **{path: [method] for (method, path) in WRITE_ROUTES},
         "/api/truesync/listings/{listing_id}/publish": ["POST"],
         "/api/truesync/listings/{listing_id}/verify": ["POST"],
         # The ACP feed's own probe. Separate from /verify because they fetch
@@ -330,6 +345,9 @@ def test_proxy_routes_are_mounted_and_authenticated():
         "/api/truesync/verify-all": ["POST"],
         "/api/truesync/gmc/diagnostics/refresh": ["POST"],
         "/api/truesync/sync-rules": ["PUT"],
+        # Step 1C: GET and PUT on one path.
+        "/api/truesync/merchants/{merchant_slug}/retailers": ["GET", "PUT"],
+        "/api/truesync/merchants/{merchant_slug}/incentives/owned": ["GET", "PUT"],
     }
 
     # Same verify_token dependency the other authed routers carry.
@@ -338,6 +356,10 @@ def test_proxy_routes_are_mounted_and_authenticated():
         if getattr(route, "path", "").startswith("/api/truesync"):
             deps = [d.call for d in route.dependant.dependencies]
             assert verify_token in deps, f"{route.path} is not behind verify_token"
+            # And every one that reaches a tenant is scoped to the SELECTED
+            # customer: no route builds its client from a global token.
+            if route.path not in TOKENLESS_READS:
+                assert customer_scope in deps, f"{route.path} is not scoped to a customer"
 
 
 # ─── Reads: every scoped GET carries the token ───────────────────────
@@ -368,6 +390,44 @@ READ_ROUTES = {
     "/api/truesync/listings/{listing_id}/verifications": (
         "/api/truesync/listings/90/verifications?channel=acp&limit=100",
         "/api/truesync/listings/90/verifications"),
+    # ── Step 1C ──
+    "/api/truesync/tenant": (
+        "/api/truesync/tenant", "/api/truesync/tenant"),
+    "/api/truesync/merchants/{merchant_slug}/verifications": (
+        "/api/truesync/merchants/wiggle-and-snug/verifications?channel=acp&limit=100",
+        "/api/truesync/merchants/wiggle-and-snug/verifications"),
+    "/api/truesync/merchants/{merchant_slug}/retailers": (
+        "/api/truesync/merchants/petco/retailers", "/api/truesync/merchants/petco/retailers"),
+    "/api/truesync/merchants/{merchant_slug}/feed": (
+        "/api/truesync/merchants/petco/feed", "/api/truesync/merchants/petco/feed"),
+    "/api/truesync/merchants/{merchant_slug}/feed/history": (
+        "/api/truesync/merchants/petco/feed/history",
+        "/api/truesync/merchants/petco/feed/history"),
+    "/api/truesync/merchants/{merchant_slug}/incentives/owned": (
+        "/api/truesync/merchants/petco/incentives/owned",
+        "/api/truesync/merchants/petco/incentives/owned"),
+}
+
+#: GETs that carry NO tenant token: public upstream, no customer's data.
+TOKENLESS_READS = {"/api/truesync/feed/template.{ext}"}
+
+#: Step 1C's writes -> (method, concrete path, request kwargs, upstream path).
+#: Table-driven like READ_ROUTES: each must carry the selected customer's token.
+WRITE_ROUTES = {
+    ("PUT", "/api/truesync/merchants/{merchant_slug}/retailers"): (
+        "/api/truesync/merchants/petco/retailers", {"json": {"domains": ["petco.com"]}},
+        "/api/truesync/merchants/petco/retailers"),
+    ("POST", "/api/truesync/merchants/{merchant_slug}/feed/validate"): (
+        "/api/truesync/merchants/petco/feed/validate?skip_reachability=true",
+        {"files": [("files", ("f.csv", b"gtin,product_name\n", "text/csv"))]},
+        "/api/truesync/merchants/petco/feed/validate"),
+    ("POST", "/api/truesync/merchants/{merchant_slug}/feed/commit"): (
+        "/api/truesync/merchants/petco/feed/commit",
+        {"json": {"upload_id": "u1", "mode": "all_valid_rows"}},
+        "/api/truesync/merchants/petco/feed/commit"),
+    ("PUT", "/api/truesync/merchants/{merchant_slug}/incentives/owned"): (
+        "/api/truesync/merchants/petco/incentives/owned", {"json": {"incentives": []}},
+        "/api/truesync/merchants/petco/incentives/owned"),
 }
 
 
@@ -388,19 +448,89 @@ def authed_http(monkeypatch):
     from app.app import app
     from app.auth import verify_token
 
-    monkeypatch.setattr(
-        truesync_router, "TrueSyncClient",
-        lambda: TrueSyncClient(base_url="https://api.example", token=TOKEN),
-    )
+    monkeypatch.setattr(truesync_router, "TrueSyncClient", upstream_at())
     app.dependency_overrides[verify_token] = lambda: {"sub": "test-user"}
+    app.dependency_overrides[customer_scope] = lambda: SCOPE
     try:
         yield TestClient(app)
     finally:
         app.dependency_overrides.pop(verify_token, None)
+        app.dependency_overrides.pop(customer_scope, None)
 
 
 def test_every_read_route_is_in_the_table():
-    assert _mounted_read_routes() == set(READ_ROUTES)
+    assert _mounted_read_routes() == set(READ_ROUTES) | TOKENLESS_READS
+
+
+@pytest.mark.parametrize("key", sorted(WRITE_ROUTES), ids=lambda k: f"{k[0]} {k[1]}")
+def test_every_1c_write_attaches_the_tenant_token(authed_http, monkeypatch, calls, key):
+    method, _template = key
+    call_path, kwargs, upstream_path = WRITE_ROUTES[key]
+    patch_httpx(monkeypatch, calls, response=FakeResponse(200, {"ok": True}))
+
+    response = getattr(authed_http, method.lower())(call_path, **kwargs)
+
+    assert response.status_code == 200, response.text
+    assert len(calls) == 1
+    assert calls[0]["method"] == method
+    assert calls[0]["url"] == f"https://api.example{upstream_path}"
+    assert calls[0]["headers"]["X-TrueSync-Key"] == TOKEN
+    assert TOKEN not in response.text
+
+
+@pytest.mark.parametrize("key", sorted(WRITE_ROUTES), ids=lambda k: f"{k[0]} {k[1]}")
+def test_every_1c_write_reports_a_refusal_as_not_authorized(authed_http, monkeypatch, calls, key):
+    method, _template = key
+    call_path, kwargs, _ = WRITE_ROUTES[key]
+    patch_httpx(monkeypatch, calls, response=FakeResponse(403, None, text=f"no {TOKEN}"))
+
+    response = getattr(authed_http, method.lower())(call_path, **kwargs)
+
+    assert response.status_code == 403
+    assert response.json()["detail"].startswith(truesync_router.NOT_AUTHORIZED)
+    assert TOKEN not in response.text
+
+
+def test_the_feed_upload_is_forwarded_as_multipart(authed_http, monkeypatch, calls):
+    patch_httpx(monkeypatch, calls, response=FakeResponse(200, {"upload_id": "u1"}))
+    body = b"gtin,product_name\n036000291452,Thing\n"
+
+    authed_http.post(
+        "/api/truesync/merchants/petco/feed/validate?skip_reachability=true",
+        files=[("files", ("petco.csv", body, "text/csv"))],
+    )
+
+    assert calls[0]["files"] == [("files", ("petco.csv", body, "text/csv"))]
+    assert calls[0]["params"] == {"skip_reachability": "true"}
+
+
+def test_an_oversized_feed_is_refused_before_it_goes_upstream(authed_http, monkeypatch, calls):
+    patch_httpx(monkeypatch, calls, response=FakeResponse(200, {}))
+    monkeypatch.setattr(truesync_router, "MAX_FEED_UPLOAD_BYTES", 10)
+
+    response = authed_http.post(
+        "/api/truesync/merchants/petco/feed/validate",
+        files=[("files", ("big.csv", b"x" * 11, "text/csv"))],
+    )
+
+    assert response.status_code == 413
+    assert calls == []
+
+
+def test_the_template_is_proxied_without_any_token(authed_http, monkeypatch, calls):
+    class FileResponse(FakeResponse):
+        content = b"gtin,product_name\n"
+
+    patch_httpx(monkeypatch, calls, response=FileResponse(200, None, text="gtin"))
+
+    response = authed_http.get("/api/truesync/feed/template.csv")
+
+    assert response.status_code == 200
+    assert response.content == b"gtin,product_name\n"
+    assert "sku-feed-template.csv" in response.headers["content-disposition"]
+    assert calls[0]["url"] == "https://api.example/api/truesync/feed/template.csv"
+    assert "X-TrueSync-Key" not in calls[0]["headers"]
+    assert authed_http.get("/api/truesync/feed/template.exe").status_code == 404
 
 
 @pytest.mark.parametrize("route", sorted(READ_ROUTES))

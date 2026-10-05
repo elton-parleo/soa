@@ -227,7 +227,7 @@ def test_a_refused_token_raises_rather_than_degrading(monkeypatch, status):
 
     message = str(exc.value)
     assert "Not authorized for this customer" in message
-    assert "refused this service's TRUESYNC_TENANT_TOKEN" in message
+    assert "TrueSync refused TRUESYNC_TENANT_TOKEN" in message
     assert "tst_abc_secret" not in message
 
 
@@ -255,22 +255,29 @@ def test_an_outage_still_degrades_rather_than_raising(monkeypatch):
     assert snapshot.available is False
 
 
-def test_the_scorer_degrades_on_a_refusal_but_says_so_loudly(caplog):
+def test_the_scorer_no_longer_degrades_on_a_refusal():
     """
-    Scoring keeps degrade-on-failure (one dimension's nuance, not the run),
-    but a refusal is logged at ERROR: unlike an outage it recurs every batch.
+    Step 1C reverses the earlier choice. Scoring without the catalog does
+    not cost nuance, it changes outcomes: no history means a `stale` answer
+    scores `wrong`. So the refusal propagates (and fails the cycle; see
+    test_customer_tokens_pipeline.py).
     """
-    import logging
-
-    from scoring.expectation_scorer import _snapshot_or_unavailable
+    from scoring.expectation_scorer import BrandFactsCache, HistoryCache
 
     class Refusing:
         def snapshot(self, *_a, **_k):
             raise tc.TrueSyncNotAuthorized("Not authorized for this customer: refused")
 
-    caplog.set_level(logging.ERROR)
-    snapshot = _snapshot_or_unavailable(Refusing(), "wiggle-and-snug", with_history=True)
+    with pytest.raises(tc.TrueSyncNotAuthorized):
+        HistoryCache(Refusing()).for_variant("wiggle-and-snug", "v1", study_type="s")
+    with pytest.raises(tc.TrueSyncNotAuthorized):
+        BrandFactsCache(Refusing()).for_merchant("wiggle-and-snug", study_type="s")
 
-    assert snapshot.available is False
-    assert "Not authorized" in snapshot.error
-    assert any(r.levelno == logging.ERROR for r in caplog.records)
+
+def test_an_outage_still_degrades_in_the_scorer(monkeypatch):
+    from scoring.expectation_scorer import HistoryCache
+
+    monkeypatch.setattr(tc.httpx, "get", lambda *a, **k: _Response(503, {"detail": "down"}))
+    client = tc.TrueSyncCatalogClient(base_url="https://example.invalid", token="tst_abc_secret")
+
+    assert HistoryCache(client).for_variant("wiggle-and-snug", "v1") is None
