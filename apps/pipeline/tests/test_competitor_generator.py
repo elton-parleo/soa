@@ -19,6 +19,7 @@ from unittest.mock import patch
 from generation.competitor_generator import (
     CompetitorCandidate,
     MAX_CANDIDATES,
+    _build_competitor_prompt,
     generate_competitors,
     select_competitors,
 )
@@ -175,3 +176,75 @@ def test_manual_and_generated_domains_stay_independent_per_entry():
         {"name": "Manual Co", "domain": None},
         {"name": "Gen Co", "domain": "genco.com"},
     ]
+
+
+# ── competitor grounding: the site_context block ────────────────────────
+
+SITE_BLOCK = (
+    "Homepage: https://acme.example.com\n"
+    "Page title: Acme Coffee — Small-batch roasted beans\n"
+    "Site description: Single-origin coffee beans, roasted weekly in Portland."
+)
+
+
+def test_prompt_includes_the_site_block_when_one_is_given():
+    prompt = _build_competitor_prompt("Acme", "https://acme.example.com", None, SITE_BLOCK)
+
+    assert SITE_BLOCK in prompt
+    assert "What the brand's own website says about itself" in prompt
+    # The grounding is only useful if it outranks the name: the prompt
+    # must say so explicitly, not merely include the lines.
+    assert 'Treat this as the authoritative description of what "Acme" sells.' in prompt
+    assert "use the website, not the name, to decide" in prompt
+    # ...and it must land BEFORE the selection rules, so the rules are
+    # read in light of the category rather than the other way round.
+    assert prompt.index(SITE_BLOCK) < prompt.index("Selection rules")
+
+
+def test_prompt_omits_the_site_block_entirely_when_none():
+    prompt = _build_competitor_prompt("Acme", "https://acme.example.com", None, None)
+
+    assert "What the brand's own website says about itself" not in prompt
+    assert "authoritative description" not in prompt
+
+
+def test_prompt_without_site_context_is_byte_identical_to_the_default_call():
+    """The grounding must be purely additive — a run with no store URL
+    (or a failed fetch) has to produce exactly the pre-grounding prompt,
+    not a subtly different one."""
+    assert (
+        _build_competitor_prompt("Acme", "https://acme.example.com", "Coffee", None)
+        == _build_competitor_prompt("Acme", "https://acme.example.com", "Coffee")
+    )
+
+
+def test_empty_site_block_is_treated_as_absent():
+    assert (
+        _build_competitor_prompt("Acme", None, None, "")
+        == _build_competitor_prompt("Acme", None, None, None)
+    )
+
+
+def test_generate_competitors_forwards_site_context_to_call_once():
+    with patch("generation.competitor_generator._call_once") as mock_call:
+        mock_call.return_value = _cands("Rival A")
+        generate_competitors("Acme", "key", store_url="https://acme.example.com", site_context=SITE_BLOCK)
+
+    mock_call.assert_called_once_with("Acme", "https://acme.example.com", None, "key", SITE_BLOCK)
+
+
+def test_generate_competitors_forwards_none_site_context_by_default():
+    with patch("generation.competitor_generator._call_once") as mock_call:
+        mock_call.return_value = _cands("Rival A")
+        generate_competitors("Acme", "key")
+
+    mock_call.assert_called_once_with("Acme", None, None, "key", None)
+
+
+def test_site_context_is_forwarded_on_the_retry_too():
+    with patch("generation.competitor_generator._call_once") as mock_call:
+        mock_call.side_effect = [RuntimeError("boom"), _cands("Rival A")]
+        generate_competitors("Acme", "key", site_context=SITE_BLOCK)
+
+    assert mock_call.call_count == 2
+    assert all(call.args[4] == SITE_BLOCK for call in mock_call.call_args_list)
