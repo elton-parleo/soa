@@ -268,6 +268,12 @@ class RetailerListRequest(BaseModel):
     domains: List[str]
 
 
+@router.get("/truesync/merchants/{merchant_slug}/provenance")
+async def get_provenance(merchant_slug: str, scope: CustomerScope = Depends(customer_scope)):
+    """How much of the merchant's data was scraped and how much published (2A-0)."""
+    return _unwrap(*await _client(scope).get_provenance(merchant_slug))
+
+
 @router.get("/truesync/merchants/{merchant_slug}/retailers")
 async def get_retailers(merchant_slug: str, scope: CustomerScope = Depends(customer_scope)):
     return _unwrap(*await _client(scope).get_retailers(merchant_slug))

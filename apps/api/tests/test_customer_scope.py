@@ -298,116 +298,213 @@ def test_a_refused_customer_stays_listed_and_says_why(http, upstream):
     assert brandco["error"].startswith("Not authorized for this customer")
 
 
-# ─── POST /api/customers — the wizard's step 1 ─────────────────────────
+# ─── Step 1: lookup, claim or create (Step 2A-0) ───────────────────────
 
 NEW_MERCHANT = {"name": "Petco", "domain": "petco.com", "kind": "seller", "hosting": "external"}
+PETCO_VIEW = {**NEW_MERCHANT, "slug": "petco", "has_record": False}
+UNCLAIMED = {"status": "unclaimed", "domain": "petco.com", "merchant": {
+    "slug": "petco", "display_name": "Petco", "domain": "petco.com",
+    "scraped_deals": 3, "scraped_listings": 1, "last_seen_at": "2026-10-04T12:00:00Z"}}
+LOOKUP = "/api/truesync/merchants/lookup"
 
 
-def _provisioned(upstream):
+def _lookup_answers(upstream, **by_token):
+    upstream.answer("GET", LOOKUP, by_token={t: (200, body) for t, body in by_token.items()})
+
+
+def _provisioning(upstream, action="created", reused=False):
     upstream.answer("POST", "/api/truesync/tenants", status=201, body={
-        "tenant": {"slug": "petco", "display_name": "Petco", "soa_org_id": "?"},
+        "tenant": {"slug": "petco", "display_name": "Petco", "soa_org_id": None},
+        "reused": reused,
+        "merchant": {"action": action, **PETCO_VIEW},
         "token_id": "cccccccccccccccc", "scope": "write", "token": TOKEN_NEW,
     })
-    upstream.answer("POST", "/api/truesync/tenant/merchants", by_token={
-        TOKEN_NEW: (201, {**NEW_MERCHANT, "slug": "petco", "has_record": False}),
-        TOKEN_A: (201, {**NEW_MERCHANT, "slug": "petco", "has_record": False}),
-    })
+    upstream.answer("PUT", "/api/truesync/tenant/link", by_token={TOKEN_NEW: (200, {"slug": "petco"})})
     upstream.answer("PUT", "/api/truesync/merchants/petco/retailers", by_token={
-        TOKEN_NEW: (200, {"merchant": "petco", "own_domain": "petco.com", "domains": ["petco.com"]}),
-        TOKEN_A: (200, {"merchant": "petco", "own_domain": "petco.com", "domains": ["petco.com"]}),
-    })
+        t: (200, {"merchant": "petco", "domains": ["petco.com"]}) for t in (TOKEN_NEW, TOKEN_A)})
+    upstream.answer("GET", "/api/truesync/merchants/petco/provenance", by_token={
+        t: (200, {"merchant_source": "scrape", "deals": {"scrape": 3, "published": 0},
+                  "listings": {"scrape": 1, "published": 0}}) for t in (TOKEN_NEW, TOKEN_A)})
+
+
+def _create(http, account, claim=False, merchant=NEW_MERCHANT):
+    return http.post("/api/customers", json={
+        "account": account, "merchant": merchant, "retailers": ["petco.com"], "claim": claim})
+
+
+@pytest.mark.parametrize("status", ["unknown", "unclaimed", "mine", "unavailable"])
+def test_lookup_relays_each_status_for_an_existing_account(http, upstream, status):
+    _as("op")
+    body = UNCLAIMED if status == "unclaimed" else {"status": status, "domain": "petco.com"}
+    _lookup_answers(upstream, **{TOKEN_A: body})
+
+    r = http.get("/api/customers/lookup", params={"domain": "petco.com", "org_id": 10})
+
+    assert r.status_code == 200
+    assert r.json() == body
+    assert upstream.tokens_sent() == [TOKEN_A], "asked as that account"
+
+
+def test_lookup_for_a_new_account_never_says_mine(http, upstream):
+    """A new account owns nothing: another account's "mine" is "unavailable" to it."""
+    _as("op")
+    _lookup_answers(upstream, **{TOKEN_A: {"status": "mine", "domain": "petco.com", "slug": "acme-store"}})
+    r = http.get("/api/customers/lookup", params={"domain": "petco.com"})
+    assert r.json() == {"status": "unavailable", "domain": "petco.com"}
+
+
+def test_lookup_is_operator_only(http, upstream):
+    _as("alice")
+    assert http.get("/api/customers/lookup", params={"domain": "petco.com"}).status_code == 403
+    assert upstream.calls == []
 
 
 def test_only_an_operator_can_create_a_customer(http, upstream):
     _as("alice")
-    response = http.post("/api/customers", json={
-        "account": {"name": "Petco"}, "merchant": NEW_MERCHANT, "retailers": []})
-    assert response.status_code == 403
+    assert _create(http, {"name": "Petco"}).status_code == 403
     assert upstream.calls == []
 
 
-def test_a_new_account_is_provisioned_linked_and_sealed_in_one_go(http, upstream, db):
+def test_a_new_account_is_provisioned_atomically_then_linked_after_commit(http, upstream, db):
     _as("op")
-    _provisioned(upstream)
+    _lookup_answers(upstream, **{TOKEN_A: {"status": "unknown", "domain": "petco.com"}})
+    _provisioning(upstream, action="created")
 
-    response = http.post("/api/customers", json={
-        "account": {"name": "Petco"}, "merchant": NEW_MERCHANT, "retailers": ["petco.com"]})
+    r = _create(http, {"name": "Petco"})
 
-    assert response.status_code == 201, response.text
-    body = response.json()
-    assert body["created_account"] is True and body["tenant_slug"] == "petco"
-    assert body["merchant"]["slug"] == "petco"
-    assert TOKEN_NEW not in response.text and PROVISIONING_KEY not in response.text
-
-    # The calls, in order, each with the right credential.
-    provision, merchant, retailers = upstream.calls
-    assert provision["path"] == "/api/truesync/tenants"
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["created_account"] is True and body["merchant_action"] == "created"
+    assert TOKEN_NEW not in r.text and PROVISIONING_KEY not in r.text
+    paths = [(c["method"], c["path"]) for c in upstream.calls]
+    assert paths == [
+        ("GET", LOOKUP),
+        ("POST", "/api/truesync/tenants"),
+        ("PUT", "/api/truesync/tenant/link"),
+        ("PUT", "/api/truesync/merchants/petco/retailers"),
+    ]
+    provision, link = upstream.calls[1], upstream.calls[2]
     assert provision["headers"] == {"X-TrueSync-Provisioning-Key": PROVISIONING_KEY}
-    assert provision["json"] == {"slug": "petco", "display_name": "Petco",
-                                 "soa_org_id": str(body["org_id"])}
-    assert merchant["headers"]["X-TrueSync-Key"] == TOKEN_NEW
-    assert merchant["json"] == {"slug": "petco", **{k: NEW_MERCHANT[k] for k in NEW_MERCHANT}}
-    assert retailers["json"] == {"domains": ["petco.com"]}
-
-    # Stored sealed, and the operator can now select it.
-    with db.connect() as conn:
-        row = conn.execute(text(
-            "SELECT truesync_tenant_slug, truesync_token_sealed, truesync_token_id "
-            "FROM organizations WHERE id = :id"), {"id": body["org_id"]}).fetchone()
-    assert row[0] == "petco" and row[2] == "cccccccccccccccc"
-    assert TOKEN_NEW not in row[1]
+    # The merchant rides in the same supply transaction; no org id yet.
+    assert provision["json"] == {"slug": "petco", "display_name": "Petco", "merchant": {
+        "domain": "petco.com", "name": "Petco", "slug": "petco", "kind": "seller", "hosting": "external"}}
+    assert link["json"] == {"soa_org_id": str(body["org_id"])}
+    assert link["headers"]["X-TrueSync-Key"] == TOKEN_NEW
     assert customers.token_for_org(body["org_id"]) == TOKEN_NEW
-    assert body["org_id"] in [o.id for o in customers.selectable_orgs("op")]
+
+
+def test_an_unclaimed_domain_is_refused_until_the_operator_confirms_the_claim(http, upstream, db):
+    _as("op")
+    _lookup_answers(upstream, **{TOKEN_A: UNCLAIMED})
+    _provisioning(upstream, action="claimed")
+
+    refused = _create(http, {"name": "Petco"})
+    assert refused.status_code == 409
+    assert refused.json()["detail"]["code"] == "claimable"
+    assert [c["path"] for c in upstream.calls] == [LOOKUP], "nothing written"
+    with db.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM organizations WHERE name='Petco'")).scalar() == 0
+
+    claimed = _create(http, {"name": "Petco"}, claim=True)
+    assert claimed.status_code == 201, claimed.text
+    assert claimed.json()["merchant_action"] == "claimed"
+    assert claimed.json()["provenance"]["deals"] == {"scrape": 3, "published": 0}
+
+
+def test_an_unavailable_domain_is_refused_without_a_hint(http, upstream):
+    _as("op")
+    _lookup_answers(upstream, **{TOKEN_A: {"status": "unavailable", "domain": "petco.com"}})
+    r = _create(http, {"org_id": 10}, claim=True)
+    assert r.status_code == 409
+    assert r.json()["detail"]["message"] == "petco.com is not available"
+    assert [c["path"] for c in upstream.calls] == [LOOKUP]
+
+
+def test_claiming_into_an_existing_account_uses_its_token(http, upstream):
+    _as("op")
+    _lookup_answers(upstream, **{TOKEN_A: UNCLAIMED})
+    _provisioning(upstream)
+    upstream.answer("POST", "/api/truesync/merchants/petco/claim", by_token={
+        TOKEN_A: (200, {"claimed": True, "merchant": PETCO_VIEW, "provenance": {}})})
+
+    r = _create(http, {"org_id": 10}, claim=True)
+
+    assert r.status_code == 201, r.text
+    assert r.json()["merchant_action"] == "claimed" and r.json()["created_account"] is False
+    claim = next(c for c in upstream.calls if c["path"].endswith("/claim"))
+    assert claim["json"] == {"kind": "seller", "hosting": "external", "display_name": "Petco"}
+    assert "/api/truesync/tenants" not in [c["path"] for c in upstream.calls]
+    assert set(upstream.tokens_sent()) == {TOKEN_A}
+
+
+def test_already_the_accounts_merchant_continues(http, upstream):
+    _as("op")
+    _lookup_answers(upstream, **{TOKEN_A: {"status": "mine", "domain": "petco.com", "slug": "petco"}})
+    _provisioning(upstream)
+    upstream.answer("GET", "/api/truesync/tenant", by_token={
+        TOKEN_A: (200, {"slug": "acme-pets", "merchants": [PETCO_VIEW]})})
+
+    r = _create(http, {"org_id": 10})
+
+    assert r.status_code == 201, r.text
+    assert r.json()["merchant_action"] == "kept"
+    assert not any(c["method"] == "POST" for c in upstream.calls), "nothing created or claimed"
+
+
+def test_a_retry_after_a_failed_soa_commit_reuses_supplys_tenant(http, upstream, db, monkeypatch):
+    """
+    Supply committed the tenant; soa's own commit failed (here: sealing the
+    token raises). Nothing is left on this side, supply was never told the
+    org, and the retry's provisioning call — the same slug — gets the
+    leftover back (`reused`) instead of "already exists".
+    """
+    _as("op")
+    _lookup_answers(upstream, **{TOKEN_A: {"status": "unknown", "domain": "petco.com"}})
+    _provisioning(upstream)
+    real_link = customers.link_tenant
+    calls = {"n": 0}
+
+    def flaky_link(*args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("database went away")
+        return real_link(*args, **kwargs)
+
+    monkeypatch.setattr(customers, "link_tenant", flaky_link)
+
+    with pytest.raises(RuntimeError):
+        _create(http, {"name": "Petco"})
+    with db.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM organizations WHERE name='Petco'")).scalar() == 0
+    assert "/api/truesync/tenant/link" not in [c["path"] for c in upstream.calls], \
+        "supply never learned an org that does not exist"
+
+    _provisioning(upstream, reused=True)
+    retry = _create(http, {"name": "Petco"})
+
+    assert retry.status_code == 201, retry.text
+    provisions = [c for c in upstream.calls if c["path"] == "/api/truesync/tenants"]
+    assert len(provisions) == 2 and provisions[0]["json"] == provisions[1]["json"]
+    link = next(c for c in upstream.calls if c["path"] == "/api/truesync/tenant/link")
+    assert link["json"] == {"soa_org_id": str(retry.json()["org_id"])}
+    with db.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM organizations WHERE name='Petco'")).scalar() == 1
 
 
 def test_a_refused_provisioning_writes_no_org(http, upstream, db):
     _as("op")
+    _lookup_answers(upstream, **{TOKEN_A: {"status": "unknown", "domain": "petco.com"}})
     upstream.answer("POST", "/api/truesync/tenants", status=409,
                     body={"detail": "tenant 'petco' already exists"})
 
-    response = http.post("/api/customers", json={
-        "account": {"name": "Petco"}, "merchant": NEW_MERCHANT, "retailers": []})
-
-    assert response.status_code == 409
+    assert _create(http, {"name": "Petco"}).status_code == 409
     with db.connect() as conn:
         assert conn.execute(text("SELECT COUNT(*) FROM organizations WHERE name='Petco'")).scalar() == 0
 
 
-def test_adding_to_an_existing_account_uses_its_token_and_provisions_nothing(http, upstream):
-    _as("op")
-    _provisioned(upstream)
-
-    response = http.post("/api/customers", json={
-        "account": {"org_id": 10}, "merchant": NEW_MERCHANT, "retailers": ["petco.com"]})
-
-    assert response.status_code == 201, response.text
-    assert response.json()["created_account"] is False
-    assert [c["path"] for c in upstream.calls] == [
-        "/api/truesync/tenant/merchants", "/api/truesync/merchants/petco/retailers"]
-    assert upstream.tokens_sent() == [TOKEN_A, TOKEN_A]
-
-
-def test_a_merchant_refused_after_a_new_account_says_which_account_exists(http, upstream):
-    _as("op")
-    upstream.answer("POST", "/api/truesync/tenants", status=201, body={
-        "tenant": {"slug": "petco", "display_name": "Petco", "soa_org_id": "?"},
-        "token_id": "cccccccccccccccc", "scope": "write", "token": TOKEN_NEW,
-    })
-    upstream.answer("POST", "/api/truesync/tenant/merchants", status=409,
-                    body={"detail": "merchant slug 'petco' is not available"})
-
-    response = http.post("/api/customers", json={
-        "account": {"name": "Petco"}, "merchant": NEW_MERCHANT, "retailers": []})
-
-    assert response.status_code == 409
-    detail = response.json()["detail"]
-    assert "not available" in detail["message"]
-    assert isinstance(detail["org_id"], int), "the wizard retries under this account"
-
-
 def test_account_must_be_existing_or_new_not_both(http, upstream):
     _as("op")
-    response = http.post("/api/customers", json={
+    r = http.post("/api/customers", json={
         "account": {"org_id": 10, "name": "Petco"}, "merchant": NEW_MERCHANT})
-    assert response.status_code == 422
+    assert r.status_code == 422
     assert upstream.calls == []

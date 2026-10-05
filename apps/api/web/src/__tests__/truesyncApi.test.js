@@ -69,6 +69,8 @@ const SCOPED = {
   getFeedHistory: [() => truesyncApi.getFeedHistory('petco'), '/api/truesync/merchants/petco/feed/history'],
   getOwnedIncentives: [
     () => truesyncApi.getOwnedIncentives('petco'), '/api/truesync/merchants/petco/incentives/owned'],
+  // Step 2A-0
+  getProvenance: [() => truesyncApi.getProvenance('petco'), '/api/truesync/merchants/petco/provenance'],
 }
 
 //: The wizard's writes (Step 1C) — the same proxy, the same rules.

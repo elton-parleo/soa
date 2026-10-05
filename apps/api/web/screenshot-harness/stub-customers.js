@@ -22,11 +22,26 @@ export const CUSTOMERS = {
 export async function listCustomers() { return CUSTOMERS }
 
 export async function createCustomer(body) {
+  const claimed = body.claim
   return {
+    merchant_action: claimed ? 'claimed' : 'created',
+    provenance: claimed ? { deals: { scrape: 14, published: 0 }, listings: { scrape: 3, published: 0 } } : null,
     org_id: 31, org_name: body.account.name || 'Acme Pets', tenant_slug: 'acme-pets',
     created_account: !body.account.org_id,
     merchant: { slug: 'acme-pets', name: body.merchant.name, domain: body.merchant.domain,
                 kind: body.merchant.kind, hosting: body.merchant.hosting, has_record: false },
     retailers: { domains: body.retailers },
   }
+}
+
+// Step 2A-0: petco.com is a known, unclaimed merchant (scraped by the deal
+// engine); bee.test belongs to another account; anything else is unknown.
+export async function lookupDomain(domain) {
+  if (domain === 'petco.com') {
+    return { status: 'unclaimed', domain, merchant: {
+      slug: 'petco', display_name: 'Petco', domain,
+      scraped_deals: 14, scraped_listings: 3, last_seen_at: '2026-10-04T12:00:00Z' } }
+  }
+  if (domain === 'bee.test') return { status: 'unavailable', domain }
+  return { status: 'unknown', domain }
 }

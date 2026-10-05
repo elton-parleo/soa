@@ -406,6 +406,10 @@ READ_ROUTES = {
     "/api/truesync/merchants/{merchant_slug}/incentives/owned": (
         "/api/truesync/merchants/petco/incentives/owned",
         "/api/truesync/merchants/petco/incentives/owned"),
+    # ── Step 2A-0
+    "/api/truesync/merchants/{merchant_slug}/provenance": (
+        "/api/truesync/merchants/petco/provenance",
+        "/api/truesync/merchants/petco/provenance"),
 }
 
 #: GETs that carry NO tenant token: public upstream, no customer's data.

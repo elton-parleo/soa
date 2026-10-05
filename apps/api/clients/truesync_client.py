@@ -271,6 +271,29 @@ class TrueSyncClient:
         """A merchant in this token's tenant: {slug, name, domain, kind, hosting}."""
         return await self.forward("POST", "/api/truesync/tenant/merchants", json=merchant)
 
+    # ─── Step 2A-0: identity, claims, provenance ─────────────────────────
+
+    async def lookup_merchant(self, domain: str) -> ForwardResult:
+        """unknown | unclaimed (+ public summary) | mine | unavailable."""
+        return await self.get("/api/truesync/merchants/lookup", params={"domain": domain})
+
+    async def claim_merchant(
+        self, merchant_slug: str, kind: str, hosting: str, display_name: Optional[str] = None,
+    ) -> ForwardResult:
+        body = {"kind": kind, "hosting": hosting}
+        if display_name:
+            body["display_name"] = display_name
+        return await self.forward(
+            "POST", f"/api/truesync/merchants/{_slug(merchant_slug)}/claim", json=body,
+        )
+
+    async def get_provenance(self, merchant_slug: str) -> ForwardResult:
+        return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/provenance")
+
+    async def link_tenant(self, soa_org_id: str) -> ForwardResult:
+        """Tell supply which soa org this tenant is — after soa has committed it."""
+        return await self.forward("PUT", "/api/truesync/tenant/link", json={"soa_org_id": soa_org_id})
+
     async def get_template(self, ext: str) -> ForwardResult:
         """The SKU-feed template file. Public upstream; carried raw."""
         return await self.forward("GET", f"/api/truesync/feed/template.{ext}", raw=True)
@@ -365,10 +388,18 @@ class TrueSyncProvisioningClient(TrueSyncClient):
             **kwargs,
         )
 
-    async def create_tenant(self, slug: str, display_name: str, soa_org_id: str) -> ForwardResult:
+    async def create_tenant(
+        self, slug: str, display_name: str, merchant: Optional[dict] = None,
+    ) -> ForwardResult:
+        """
+        The tenant and — atomically, in supply's one transaction — its first
+        merchant, claimed if its domain is known (Step 2A-0). No soa org id:
+        the caller links it with link_tenant once its own commit has landed,
+        so a commit that fails leaves an unlinked tenant a retry reuses.
+        """
         if not self.token:
             return None, None, "TRUESYNC_PROVISIONING_KEY is not set on this service"
-        return await self.forward(
-            "POST", "/api/truesync/tenants",
-            json={"slug": slug, "display_name": display_name, "soa_org_id": soa_org_id},
-        )
+        body = {"slug": slug, "display_name": display_name}
+        if merchant is not None:
+            body["merchant"] = merchant
+        return await self.forward("POST", "/api/truesync/tenants", json=body)

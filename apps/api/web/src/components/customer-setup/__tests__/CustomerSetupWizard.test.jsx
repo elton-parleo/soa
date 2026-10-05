@@ -10,15 +10,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '@testing-library/jest-dom'
 
 import CustomerSetupWizard, { stepsFor } from '../CustomerSetupWizard.jsx'
-import { createCustomer } from '../../../customersApi.js'
+import { createCustomer, lookupDomain } from '../../../customersApi.js'
 import { truesyncApi } from '../../../truesyncApi.js'
 import PREVIEW from '../__fixtures__/feed-preview-acme-pets.json'
 
-vi.mock('../../../customersApi.js', () => ({ createCustomer: vi.fn() }))
+vi.mock('../../../customersApi.js', () => ({ createCustomer: vi.fn(), lookupDomain: vi.fn() }))
 vi.mock('../../../truesyncApi.js', () => ({
   truesyncApi: {
     validateFeed: vi.fn(), commitFeed: vi.fn(), putOwnedIncentives: vi.fn(),
-    getOwnedIncentives: vi.fn(), downloadTemplate: vi.fn(),
+    getOwnedIncentives: vi.fn(), downloadTemplate: vi.fn(), getProvenance: vi.fn(),
   },
 }))
 
@@ -40,6 +40,8 @@ const CLEAN = {
 beforeEach(() => {
   vi.clearAllMocks()
   createCustomer.mockResolvedValue(CREATED)
+  lookupDomain.mockResolvedValue({ status: 'unknown', domain: 'acme-pets.test' })
+  truesyncApi.getProvenance.mockResolvedValue(null)
   truesyncApi.validateFeed.mockResolvedValue(PREVIEW)
   truesyncApi.commitFeed.mockResolvedValue({ version_number: 1 })
   truesyncApi.putOwnedIncentives.mockResolvedValue({ incentives: [] })
@@ -87,6 +89,7 @@ describe('step 1 — account & customer', () => {
       account: { name: 'Acme Pets' },
       merchant: { name: 'Acme Pets', domain: 'acme-pets.test', kind: 'seller', hosting: 'external' },
       retailers: ['acme-pets.test'],
+      claim: false,
     })
   })
 
@@ -279,5 +282,113 @@ describe('re-entry from the Command Center', () => {
     expect(truesyncApi.putOwnedIncentives).toHaveBeenCalledWith('acme-pets', [
       { mechanic: 'coupon_code', name: 'WELCOME10', code: 'WELCOME10', applies_to: 'all', discount_percent: '10' },
     ], { customer: 31 })
+  })
+})
+
+// ─── Step 2A-0: the domain is looked up, and a known one is claimed ──────
+
+describe('step 1 looks the domain up — claim, not create', () => {
+  const UNCLAIMED = {
+    status: 'unclaimed', domain: 'petco.com',
+    merchant: { slug: 'petco', display_name: 'Petco', domain: 'petco.com',
+                scraped_deals: 3, scraped_listings: 1, last_seen_at: '2026-10-04T12:00:00Z' },
+  }
+
+  async function enterPetco() {
+    type('Account name', 'Petco')
+    type('Customer name', 'Petco')
+    type('Domain', 'https://www.petco.com/')
+  }
+
+  it('unclaimed: says what is on file, and Continue becomes Claim and continue', async () => {
+    lookupDomain.mockResolvedValue(UNCLAIMED)
+    createCustomer.mockResolvedValue({
+      ...CREATED, org_name: 'Petco', merchant_action: 'claimed',
+      merchant: { ...CREATED.merchant, slug: 'petco', name: 'Petco', domain: 'petco.com' },
+      provenance: { deals: { scrape: 3, published: 0 }, listings: { scrape: 1, published: 0 } },
+    })
+    renderWizard()
+    await enterPetco()
+
+    const card = await screen.findByTestId('claim-card')
+    expect(card).toHaveTextContent('petco.com is already known')
+    expect(card).toHaveTextContent('3 scraped deals on file, 1 listing, last seen Oct 4, 2026')
+    expect(lookupDomain).toHaveBeenLastCalledWith('petco.com', expect.objectContaining({ orgId: null }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Claim and continue' }))
+
+    await screen.findByTestId('feed-drop')
+    expect(createCustomer.mock.calls[0][0].claim).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByText(/It brought 3 scraped deals and 1 scraped listing with it/)).toBeInTheDocument()
+  })
+
+  it('mine: says so and continues', async () => {
+    lookupDomain.mockResolvedValue({ status: 'mine', domain: 'petco.com', slug: 'petco' })
+    renderWizard()
+    fireEvent.change(screen.getByLabelText('Account choice'), { target: { value: '7' } })
+    type('Customer name', 'Petco')
+    type('Domain', 'petco.com')
+
+    expect(await screen.findByTestId('claim-card')).toHaveTextContent("petco.com is already this account's")
+    await waitFor(() => expect(lookupDomain).toHaveBeenLastCalledWith('petco.com', expect.objectContaining({ orgId: 7 })))
+    expect(screen.getByRole('button', { name: 'Continue' })).not.toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Claim and continue' })).not.toBeInTheDocument()
+  })
+
+  it('unavailable: says only that, and Continue is off', async () => {
+    lookupDomain.mockResolvedValue({ status: 'unavailable', domain: 'petco.com' })
+    renderWizard()
+    await enterPetco()
+
+    const card = await screen.findByTestId('claim-card')
+    expect(card.textContent).toBe('petco.com is not available')
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
+  })
+
+  it('unknown: no card, and the customer is created', async () => {
+    lookupDomain.mockResolvedValue({ status: 'unknown', domain: 'petco.com' })
+    renderWizard()
+    await enterPetco()
+    await waitFor(() => expect(lookupDomain).toHaveBeenCalled())
+    expect(screen.queryByTestId('claim-card')).not.toBeInTheDocument()
+
+    next()
+    await waitFor(() => expect(createCustomer).toHaveBeenCalled())
+    expect(createCustomer.mock.calls[0][0].claim).toBe(false)
+  })
+
+  it('a retry after a failure goes again with the same request, and the server reuses the account', async () => {
+    lookupDomain.mockResolvedValue({ status: 'unknown', domain: 'petco.com' })
+    createCustomer.mockRejectedValueOnce(new Error('This app could not be reached'))
+    renderWizard()
+    await enterPetco()
+    await waitFor(() => expect(lookupDomain).toHaveBeenCalled())
+
+    next()
+    expect(await screen.findByRole('alert')).toHaveTextContent('This app could not be reached')
+    next()
+
+    await screen.findByTestId('feed-drop')
+    expect(createCustomer).toHaveBeenCalledTimes(2)
+    expect(createCustomer.mock.calls[1][0]).toEqual(createCustomer.mock.calls[0][0])
+    expect(createCustomer.mock.calls[1][0].account).toEqual({ name: 'Petco' })
+  })
+})
+
+describe('re-entry shows what the merchant holds, by provenance', () => {
+  it('lists scraped and published rows, and when it was claimed', async () => {
+    truesyncApi.getProvenance.mockResolvedValue({
+      merchant_source: 'scrape',
+      deals: { scrape: 3, published: 1 }, listings: { scrape: 1, published: 9 },
+      journal: [{ action: 'claim', at: '2026-10-05T09:00:00Z' }],
+    })
+    renderWizard({ mode: 'feed', existing: { orgId: 31, orgName: 'Petco', merchant: { ...CREATED.merchant, slug: 'petco' } } })
+
+    const note = await screen.findByTestId('provenance')
+    expect(truesyncApi.getProvenance).toHaveBeenCalledWith('petco', { customer: 31 })
+    expect(note).toHaveTextContent(
+      '3 scraped deals and 1 scraped listing (public), 1 published deal and 9 published listings')
+    expect(note).toHaveTextContent('Claimed Oct 5, 2026')
   })
 })
