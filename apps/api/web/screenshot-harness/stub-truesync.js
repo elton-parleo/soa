@@ -39,5 +39,7 @@ export const truesyncApi = {
   commitFeed: async () => ({ version_number: 1 }),
   putOwnedIncentives: async () => ({ incentives: [] }),
   getOwnedIncentives: async () => ({ incentives: [] }),
+  getProvenance: async () => ({ merchant_source: 'scrape', deals: { scrape: 14, published: 2 },
+    listings: { scrape: 3, published: 9 }, journal: [{ action: 'claim', at: '2026-10-05T09:00:00Z' }] }),
   downloadTemplate: async () => new Blob(['gtin,product_name\n']),
 }

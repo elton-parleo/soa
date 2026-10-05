@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { createCustomer } from '../../customersApi.js'
+import { createCustomer, lookupDomain } from '../../customersApi.js'
 import { truesyncApi } from '../../truesyncApi.js'
 import {
   MECHANICS, emptyRow, toIncentives, fromIncentive, describeOffers,
@@ -29,7 +29,18 @@ import './customerSetup.css'
  *
  * Re-entry from the Command Center uses the same screens on an existing
  * customer: mode "feed" (upload a new version, then review) and mode
- * "offers" (edit, then review). Nothing about the account changes there.
+ * "offers" (edit, then review). Nothing about the account changes there;
+ * the merchant's provenance mix (scraped vs published rows) is shown, so
+ * the operator can see what a claim brought in.
+ *
+ * CLAIM, NOT CREATE (Step 2A-0). A merchant's identity is its domain, and
+ * most customers are already known — scraped by the deal engine or seen by
+ * the audit tool. Step 1 looks the domain up as it is typed:
+ *   unclaimed    a card says what is on file; Continue becomes
+ *                "Claim and continue" and the write is a claim
+ *   mine         "already yours"; Continue carries on with it
+ *   unavailable  "not available" and nothing more; Continue is off
+ *   unknown      created, as before
  */
 
 const KIND_HELP = {
@@ -90,6 +101,64 @@ function plural(n, word, many = `${word}s`) {
   return `${n} ${n === 1 ? word : many}`
 }
 
+function shortDate(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime())
+    ? null
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+/** What the domain lookup found, as the operator needs to read it. */
+export function ClaimCard({ found, looking }) {
+  if (looking && !found) return <div className="help" role="status">Checking whether this domain is known…</div>
+  if (!found || found.status === 'unknown') return null
+  if (found.status === 'unclaimed') {
+    const m = found.merchant || {}
+    const seen = shortDate(m.last_seen_at)
+    return (
+      <div className="claim" data-testid="claim-card" role="status">
+        <div className="claim-head">{found.domain} is already known</div>
+        <div className="claim-body">
+          {plural(m.scraped_deals || 0, 'scraped deal')} on file
+          {m.scraped_listings ? `, ${plural(m.scraped_listings, 'listing')}` : ''}
+          {seen ? `, last seen ${seen}` : ''}. Claim it for this customer? What was scraped stays
+          public; what you load here is published on Parleo&apos;s rails only once the customer
+          publishes there.
+        </div>
+      </div>
+    )
+  }
+  if (found.status === 'mine') {
+    return (
+      <div className="claim mine" data-testid="claim-card" role="status">
+        <div className="claim-head">{found.domain} is already this account&apos;s</div>
+        <div className="claim-body">Continue to carry on with it.</div>
+      </div>
+    )
+  }
+  return (
+    <div className="claim unavailable" data-testid="claim-card" role="alert">
+      <div className="claim-head">{found.domain} is not available</div>
+    </div>
+  )
+}
+
+function ProvenanceNote({ provenance }) {
+  const deals = provenance.deals || {}
+  const listings = provenance.listings || {}
+  const claim = (provenance.journal || []).find((j) => j.action === 'claim')
+  return (
+    <div className="note provenance" data-testid="provenance">
+      <b>On file.</b>{' '}
+      {plural(deals.scrape || 0, 'scraped deal')} and {plural(listings.scrape || 0, 'scraped listing')}
+      {' '}(public), {plural(deals.published || 0, 'published deal')} and{' '}
+      {plural(listings.published || 0, 'published listing')} (on the rails once published there).
+      {claim && ` Claimed ${shortDate(claim.at) || ''}.`}
+    </div>
+  )
+}
+
 export default function CustomerSetupWizard({
   open, onClose, onDone, customers = [], mode = 'new', existing = null,
 }) {
@@ -105,9 +174,15 @@ export default function CustomerSetupWizard({
   const [kind, setKind] = useState('seller')
   const [hosting, setHosting] = useState('external')
   const [retailers, setRetailers] = useState([''])
-  // What step 1 created: { orgId, orgName, merchant }. Once set, step 1 is
-  // a record of what exists, not a form.
+  // What step 1 created: { orgId, orgName, merchant, action, provenance }.
+  // Once set, step 1 is a record of what exists, not a form.
   const [created, setCreated] = useState(null)
+  // The domain lookup: { domain, status, merchant?, slug? } | null, and
+  // whether one is in flight.
+  const [found, setFound] = useState(null)
+  const [looking, setLooking] = useState(false)
+  // Re-entry: the merchant's scraped/published mix.
+  const [provenance, setProvenance] = useState(null)
 
   // Step 2
   const [files, setFiles] = useState([])
@@ -129,7 +204,11 @@ export default function CustomerSetupWizard({
     setKind('seller'); setHosting('external'); setRetailers([''])
     setFiles([]); setPreview(null); setFilter('all'); setContinueWithValid(false)
     setOffers([emptyRow('loyalty_program')]); setOfferErrors({})
+    setFound(null); setLooking(false); setProvenance(null)
     if (existing) {
+      truesyncApi.getProvenance(existing.merchant.slug, { customer: existing.orgId })
+        .then(setProvenance)
+        .catch(() => setProvenance(null))
       setCreated({ orgId: existing.orgId, orgName: existing.orgName, merchant: existing.merchant })
       setKind(existing.merchant.kind)
       setHosting(existing.merchant.hosting)
@@ -145,6 +224,25 @@ export default function CustomerSetupWizard({
       setCreated(null)
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Look the domain up whenever it, or the account it is going into, settles.
+  useEffect(() => {
+    if (!open || mode !== 'new' || created) return undefined
+    const site = bareDomain(domain)
+    if (!site || !site.includes('.')) { setFound(null); return undefined }
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      setLooking(true)
+      lookupDomain(site, {
+        orgId: accountChoice === 'new' ? null : Number(accountChoice),
+        signal: controller.signal,
+      })
+        .then((result) => { if (!controller.signal.aborted) setFound({ ...result, domain: result.domain || site }) })
+        .catch(() => { if (!controller.signal.aborted) setFound(null) })
+        .finally(() => { if (!controller.signal.aborted) setLooking(false) })
+    }, 350)
+    return () => { clearTimeout(timer); controller.abort() }
+  }, [open, mode, created, domain, accountChoice])
 
   const steps = stepsFor(mode, created?.merchant?.hosting || hosting)
   const step = steps[Math.min(stepIndex, steps.length - 1)]
@@ -207,8 +305,12 @@ export default function CustomerSetupWizard({
           : { org_id: Number(accountChoice) },
         merchant: { name: merchantName.trim(), domain: bareDomain(domain), kind, hosting },
         retailers: retailers.map(bareDomain).filter(Boolean),
+        claim: found?.status === 'unclaimed',
       })
-      const made = { orgId: result.org_id, orgName: result.org_name, merchant: result.merchant }
+      const made = {
+        orgId: result.org_id, orgName: result.org_name, merchant: result.merchant,
+        action: result.merchant_action, provenance: result.provenance,
+      }
       setCreated(made)
       return made
     } catch (err) {
@@ -327,13 +429,15 @@ export default function CustomerSetupWizard({
   const isLast = step === 'review'
   const continueDisabled = !!busy
     || (step === 'feed' && !feedReady)
+    || (step === 'account' && !created && (looking || found?.status === 'unavailable'))
   const title = mode === 'feed'
     ? `New product feed — ${existing?.merchant?.name || ''}`
     : mode === 'offers'
       ? `Customer-owned offers — ${existing?.merchant?.name || ''}`
       : 'New customer'
-  const primaryLabel = !isLast ? 'Continue'
-    : mode === 'new' ? 'Create customer' : 'Save'
+  const primaryLabel = isLast
+    ? (mode === 'new' ? 'Create customer' : 'Save')
+    : (step === 'account' && !created && found?.status === 'unclaimed' ? 'Claim and continue' : 'Continue')
 
   const visibleRows = rows.filter((r) => filter === 'all'
     || (filter === 'bad' && r.status === 'error')
@@ -362,6 +466,8 @@ export default function CustomerSetupWizard({
           </div>
 
           <div className="modal-body">
+            {mode !== 'new' && provenance && <ProvenanceNote provenance={provenance} />}
+
             {/* ── 1: Account & customer ─────────────────────────── */}
             {step === 'account' && (
               <div>
@@ -412,6 +518,7 @@ export default function CustomerSetupWizard({
                         }
                       }} />
                   </div>
+                  {!step1Locked && <ClaimCard found={found} looking={looking} />}
                 </div>
 
                 <div className="field">
@@ -465,8 +572,22 @@ export default function CustomerSetupWizard({
                   <div className="help">{RETAILER_HELP[kind]}</div>
                   {step1Locked && (
                     <div className="note">
-                      <b>Created.</b> {created.orgName} · {merchant.name} now exists, with its
-                      retailer list. Continue to load its products.
+                      {created.action === 'claimed' ? (
+                        <>
+                          <b>Claimed.</b> {created.orgName} · {merchant.name} is this customer now.
+                          {created.provenance && (
+                            <> It brought {plural(created.provenance.deals?.scrape || 0, 'scraped deal')} and{' '}
+                            {plural(created.provenance.listings?.scrape || 0, 'scraped listing')} with it,
+                            which stay public.</>
+                          )}{' '}
+                          Continue to load its products.
+                        </>
+                      ) : created.action === 'kept' ? (
+                        <><b>Already yours.</b> {created.orgName} · {merchant.name}. Continue to load its products.</>
+                      ) : (
+                        <><b>Created.</b> {created.orgName} · {merchant.name} now exists, with its
+                        retailer list. Continue to load its products.</>
+                      )}
                     </div>
                   )}
                 </div>

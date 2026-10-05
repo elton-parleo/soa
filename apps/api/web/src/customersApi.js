@@ -51,5 +51,28 @@ export async function createCustomer(body) {
   }
 }
 
+/**
+ * What taking `domain` would mean for an account (Step 2A-0):
+ *   { status: 'unknown' }                         create it
+ *   { status: 'unclaimed', merchant: {...} }      it is known — claim it
+ *   { status: 'mine', slug }                      the account has it already
+ *   { status: 'unavailable' }                     someone else's; nothing more
+ * orgId omitted = a new account.
+ */
+export async function lookupDomain(domain, { orgId = null, signal } = {}) {
+  const params = new URLSearchParams({ domain })
+  if (orgId != null) params.set('org_id', String(orgId))
+  const res = await fetch(`/api/customers/lookup?${params}`, { headers: apiAuthHeaders(), signal })
+  if (!res.ok) {
+    let detail = `lookup → ${res.status}`
+    try {
+      const body = await res.json()
+      detail = typeof body.detail === 'string' ? body.detail : body.detail?.message || detail
+    } catch (_) {}
+    throw new TrueSyncError(detail, { status: res.status })
+  }
+  return res.json()
+}
+
 export const KIND_LABEL = { seller: 'Seller', brand: 'Brand' }
 export const HOSTING_LABEL = { parleo: 'Parleo-hosted', external: 'Customer-hosted' }

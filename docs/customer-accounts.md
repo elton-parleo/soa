@@ -57,4 +57,21 @@ The setup wizard (`web/src/components/customer-setup/`) is operator-only and has
 3. **Customer-owned offers.** Rows are read into structured owned incentives (`offerRows.js`).
 4. **Review.** "Create customer" commits the feed and `PUT`s the offers.
 
-From the Command Center, a customer-hosted merchant's feed can be re-uploaded as a new version, and its offers edited, through the same screens.
+From the Command Center, a customer-hosted merchant's feed can be re-uploaded as a new version, and its offers edited, through the same screens. Those screens show the merchant's provenance mix (scraped vs published rows) and when it was claimed.
+
+## Claiming a known domain (Step 2A-0)
+
+A merchant's identity is its domain. Most customers already exist on the supply side, scraped by the deal engine or seen by the audit tool. Step 1 looks the domain up as it is typed (`GET /api/customers/lookup`) and acts on the answer:
+
+| status | the wizard shows | step 1 writes |
+|---|---|---|
+| `unclaimed` | a card with the scraped deal/listing counts and when it was last seen; Continue becomes **Claim and continue** | a claim (`claim: true`) |
+| `mine` | "already this account's" | nothing new; carries on with it |
+| `unavailable` | "not available", with no reason given; Continue is off | nothing |
+| `unknown` | nothing | a new merchant |
+
+The server never claims without `claim: true`. A known domain without it is `409 claimable`.
+
+A new account goes through supply's atomic `POST /tenants`, which creates the tenant and its first merchant (claimed or created) in one transaction, with no soa org id. soa seals the token, commits, then calls `PUT /tenant/link`. If soa's commit fails, the retry's provisioning call reuses supply's unlinked, never-used tenant instead of failing with "already exists".
+
+For a brand-new account, the lookup is made with another linked account's token, because a tenant that doesn't exist yet has none. That account's `mine` is reported as `unavailable`.

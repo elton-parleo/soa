@@ -279,6 +279,11 @@ export const truesyncApi = {
   getFeedHistory: (merchantSlug, opts) =>
     proxyReadJson(`${slugPath(merchantSlug)}/feed/history`, opts),
 
+  // How much of the merchant's data was scraped and how much published,
+  // and its claim journal (Step 2A-0).
+  getProvenance: (merchantSlug, opts) =>
+    proxyReadJson(`${slugPath(merchantSlug)}/provenance`, opts),
+
   getOwnedIncentives: (merchantSlug, opts) =>
     proxyReadJson(`${slugPath(merchantSlug)}/incentives/owned`, opts),
 

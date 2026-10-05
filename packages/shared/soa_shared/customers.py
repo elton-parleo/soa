@@ -123,6 +123,17 @@ def selectable_orgs(user_id: str) -> List[CustomerOrg]:
     return [_row_to_org(r) for r in rows]
 
 
+def linked_orgs() -> List[CustomerOrg]:
+    """Every org linked to a TrueSync tenant, by name. Not a rights check."""
+    with engine.connect() as conn:
+        rows = conn.execute(text(f"""
+            SELECT {_ORG_COLUMNS} FROM organizations o
+            WHERE o.truesync_tenant_slug IS NOT NULL
+            ORDER BY o.name
+        """)).fetchall()
+    return [_row_to_org(r) for r in rows]
+
+
 def resolve_selection(user_id: str, requested_org_id: Optional[int]) -> CustomerOrg:
     """
     The org a request is scoped to.
