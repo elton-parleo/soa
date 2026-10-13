@@ -557,3 +557,40 @@ It is never estimated, never defaulted to a plausible number, and never
 inferred from the extractor's own confidence. A validated agreement rate
 that nobody validated is the single most damaging number this system
 could print.
+
+## 2B additions
+
+**Two value outcomes.** `partial` — a whole-dollar claim within 50 cents of the
+reference ("about $18" for 17.99, strictly under 50 cents), for prices and member
+prices alike; or the right price for an adjacent variant of the same item group (a
+`variant_swap`). Never folded into `exact`; inside the accuracy denominator beside
+`wrong`. `unverifiable` — the page a price is attributed to blocked both reference
+sources (supply's retailer-prices row is `verifiable: false`), or was never read. A
+finding about the page, never `wrong`, never in a denominator.
+
+**`attributed_to`** on `price` and `member_price`: the bare domain of the retailer page
+the question asks about. Written only for externally hosted merchants (a brand's
+retailer, or an external seller's own site). With it, the price is scored against that
+page's row in supply's `GET /merchants/{slug}/retailer-prices?as_of=<cycle start>`,
+read once per cycle and cached on `soa_cycles.reference_prices`; `stale` means the
+claim matches the PREVIOUS cycle's cached row for the same variant x page (supply
+serves no history). Without it — every hosted merchant, Wiggle & Snug included —
+nothing changes: the price is scored against the record and its publication history.
+
+**The clash rules** (ported from the console-demo engine's `checks.ts`, in
+`scoring/variant_rules.py` and `scoring/record_variants.py`): a claim whose pack
+number, model/size number or variant marker conflicts with the asked variant is scored
+against the variant it names when the record has exactly one such variant
+(`variant_swap`), else `wrong` with `reason_code: variant_clash`. A wrong count on an
+otherwise correctly named variant stays a secondary claim and does not move the price.
+A claim attached to no product (`attributed_product` null) can never be `wrong`: a
+mismatch is `unscoreable`, `reason_code: product_inferred`.
+
+**Answer flags** (`soa_expectation_outcomes.flags`), beside the outcome and never
+changing it: `fabricated_citation` (a cited domain that does not resolve, or whose root
+gives no HTTP response; checked once per domain per cycle, cached 24 hours),
+`fabricated_availability` (the answer places the product at a retailer not in the
+record's list, through a closed retailer enum; "online" counts), `variant_swap`.
+
+The verdict golden set (`apps/pipeline/tests/fixtures/verdict_golden/`) holds one row
+per rule, with the verdict before 2B and after it.

@@ -1,0 +1,1566 @@
+{
+ "_note": "Builds apps/api/tests/fixtures/console/ws_fixture_cycle.json \u2014 the W&S fixture\ncycle the console read-model tests and docs/console-read-models.md samples\nare built from. Built by scripts/build_console_fixture.py.",
+ "organizations": [
+  {
+   "id": 1,
+   "name": "Parleo"
+  },
+  {
+   "id": 10,
+   "name": "Wiggle & Snug",
+   "truesync_tenant_slug": "wiggle-and-snug"
+  },
+  {
+   "id": 20,
+   "name": "Brandco",
+   "truesync_tenant_slug": "brandco"
+  }
+ ],
+ "generation_jobs": [
+  {
+   "id": 1,
+   "study_type": "ws-2b-fixture",
+   "study_name": "Wiggle & Snug 2B fixture",
+   "target_count": 6,
+   "created_count": 6,
+   "status": "complete",
+   "organization_id": 1,
+   "customer_organization_id": 10,
+   "created_by": "op@parleo.io",
+   "created_at": "2026-10-08T12:00:00+00:00",
+   "study_pattern": "brand_at_retail",
+   "allowed_categories": [
+    "Baby Care"
+   ],
+   "syndicated_merchant": "wiggle-and-snug",
+   "tier_config": {
+    "merchant": {
+     "slug": "wiggle-and-snug",
+     "brand": "Wiggle & Snug",
+     "domain": "trueshopstore.com",
+     "study_brand": "Wiggle & Snug"
+    }
+   }
+  }
+ ],
+ "entities": [
+  {
+   "id": 1,
+   "name": "Wiggle & Snug",
+   "slug": "wiggle-and-snug",
+   "entity_type": "brand",
+   "category": "Baby Care",
+   "website_url": "https://trueshopstore.com/",
+   "aliases": [
+    "Wiggle and Snug"
+   ]
+  },
+  {
+   "id": 2,
+   "name": "Huggies",
+   "slug": "huggies",
+   "entity_type": "brand",
+   "category": "Baby Care",
+   "website_url": "https://www.huggies.com/",
+   "aliases": []
+  }
+ ],
+ "cycles": [
+  {
+   "id": 1,
+   "cycle_code": "WS-2B-FIXTURE",
+   "study_type": "ws-2b-fixture",
+   "study_pattern": "brand_at_retail",
+   "status": "complete",
+   "cycle_mode": "query",
+   "start_date": "2026-10-09",
+   "end_date": "2026-10-09",
+   "total_runs_planned": 8,
+   "completed_runs": 8,
+   "platforms": [
+    "chatgpt",
+    "gemini_grounded",
+    "aimode"
+   ],
+   "runs_per_query": 1,
+   "organization_id": 1,
+   "created_at": "2026-10-09T14:55:00+00:00",
+   "notes": null,
+   "full_loop_run_id": 33,
+   "reference_prices": null
+  }
+ ],
+ "cycle_entities": [
+  {
+   "cycle_id": 1,
+   "entity_id": 1,
+   "comparison_code": "M001",
+   "role": "primary"
+  },
+  {
+   "cycle_id": 1,
+   "entity_id": 2,
+   "comparison_code": "M002",
+   "role": "competitor"
+  }
+ ],
+ "queries": [
+  {
+   "id": 1,
+   "query_code": "WIG_167",
+   "query_text": "What does the Wiggle & Snug Bum Balm 4 oz cost?",
+   "category": "Baby Care",
+   "stage": "Ready to Buy",
+   "specificity": "Narrow",
+   "persona": "Value-Conscious Parent",
+   "status": "Active",
+   "study_type": "ws-2b-fixture",
+   "study_pattern": "brand_at_retail",
+   "organization_id": 1,
+   "tier": "catalog_accuracy",
+   "expected_answer": {
+    "type": "price",
+    "amount": "12.99",
+    "currency": "USD",
+    "secondary": [
+     {
+      "type": "gtin",
+      "value": "884400896186"
+     }
+    ]
+   },
+   "provenance": "catalog",
+   "source_ref": {
+    "merchant_slug": "wiggle-and-snug",
+    "listing_id": 93,
+    "product_id": "catalog_product:30",
+    "published_at": "2026-08-28T18:03:06.090934+00:00",
+    "variant_id": "bum-balm-4oz"
+   }
+  },
+  {
+   "id": 2,
+   "query_code": "WIG_166",
+   "query_text": "What does the Wiggle & Snug Cloud Wipes 3-Pack cost?",
+   "category": "Baby Care",
+   "stage": "Ready to Buy",
+   "specificity": "Narrow",
+   "persona": "Value-Conscious Parent",
+   "status": "Active",
+   "study_type": "ws-2b-fixture",
+   "study_pattern": "brand_at_retail",
+   "organization_id": 1,
+   "tier": "catalog_accuracy",
+   "expected_answer": {
+    "type": "price",
+    "amount": "11.99",
+    "currency": "USD",
+    "secondary": [
+     {
+      "type": "gtin",
+      "value": "884400676641"
+     },
+     {
+      "type": "pack_count",
+      "value": 216
+     }
+    ]
+   },
+   "provenance": "catalog",
+   "source_ref": {
+    "merchant_slug": "wiggle-and-snug",
+    "listing_id": 92,
+    "product_id": "catalog_product:29",
+    "published_at": "2026-08-28T18:58:45.042456+00:00",
+    "variant_id": "cloud-wipes-3pack"
+   }
+  },
+  {
+   "id": 3,
+   "query_code": "WIG_165",
+   "query_text": "What does the Wiggle & Snug Snug-Fit Overnight Diapers Size 6 cost?",
+   "category": "Baby Care",
+   "stage": "Ready to Buy",
+   "specificity": "Narrow",
+   "persona": "Value-Conscious Parent",
+   "status": "Active",
+   "study_type": "ws-2b-fixture",
+   "study_pattern": "brand_at_retail",
+   "organization_id": 1,
+   "tier": "catalog_accuracy",
+   "expected_answer": {
+    "type": "price",
+    "amount": "29.99",
+    "currency": "USD",
+    "secondary": [
+     {
+      "type": "pack_count",
+      "value": 42
+     }
+    ]
+   },
+   "provenance": "catalog",
+   "source_ref": {
+    "merchant_slug": "wiggle-and-snug",
+    "listing_id": 91,
+    "product_id": "catalog_product:28",
+    "published_at": "2026-08-28T18:01:14.698561+00:00",
+    "variant_id": "snug-fit-overnight-s6",
+    "attribution": [
+     "Size 6"
+    ],
+    "attribution_rivals": [
+     "Size 3",
+     "Size 4",
+     "Size 5"
+    ]
+   }
+  },
+  {
+   "id": 4,
+   "query_code": "WIG_154",
+   "query_text": "What does the Wiggle & Snug Snug-Fit Diapers Size 3 small pack cost?",
+   "category": "Baby Care",
+   "stage": "Ready to Buy",
+   "specificity": "Narrow",
+   "persona": "Value-Conscious Parent",
+   "status": "Active",
+   "study_type": "ws-2b-fixture",
+   "study_pattern": "brand_at_retail",
+   "organization_id": 1,
+   "tier": "catalog_accuracy",
+   "expected_answer": {
+    "type": "price",
+    "amount": "22.99",
+    "currency": "USD",
+    "secondary": [
+     {
+      "type": "gtin",
+      "value": "884400137609"
+     },
+     {
+      "type": "pack_count",
+      "value": 84
+     }
+    ]
+   },
+   "provenance": "catalog",
+   "source_ref": {
+    "merchant_slug": "wiggle-and-snug",
+    "listing_id": 90,
+    "product_id": "catalog_product:27",
+    "published_at": "2026-09-04T20:49:40.991623+00:00",
+    "variant_id": "snug-fit-diapers-s3-small",
+    "attribution": [
+     "Size 3",
+     "small pack"
+    ],
+    "attribution_rivals": [
+     "Size 1",
+     "big pack",
+     "Size 2",
+     "Size 4",
+     "Size 5",
+     "Size 6"
+    ]
+   }
+  },
+  {
+   "id": 5,
+   "query_code": "WIG_144",
+   "query_text": "Is Wiggle & Snug Member Rewards still available?",
+   "category": "Baby Care",
+   "stage": "Research",
+   "specificity": "Narrow",
+   "persona": "Value-Conscious Parent",
+   "status": "Active",
+   "study_type": "ws-2b-fixture",
+   "study_pattern": "brand_at_retail",
+   "organization_id": 1,
+   "tier": "brand_direct",
+   "expected_answer": {
+    "type": "brand_mention",
+    "brand": "Wiggle & Snug",
+    "domain": "trueshopstore.com"
+   },
+   "provenance": "ai_from_catalog",
+   "source_ref": {
+    "merchant_slug": "wiggle-and-snug",
+    "published_at": "2026-09-04T20:49:40.991623+00:00",
+    "listing_ids": [
+     90,
+     91,
+     92,
+     93,
+     94
+    ]
+   }
+  },
+  {
+   "id": 6,
+   "query_code": "WIG_148",
+   "query_text": "Does Wiggle & Snug sell a Snug-Fit Trial Pack?",
+   "category": "Baby Care",
+   "stage": "Research",
+   "specificity": "Narrow",
+   "persona": "Value-Conscious Parent",
+   "status": "Active",
+   "study_type": "ws-2b-fixture",
+   "study_pattern": "brand_at_retail",
+   "organization_id": 1,
+   "tier": "brand_direct",
+   "expected_answer": {
+    "type": "brand_mention",
+    "brand": "Wiggle & Snug",
+    "domain": "trueshopstore.com"
+   },
+   "provenance": "ai_from_catalog",
+   "source_ref": {
+    "merchant_slug": "wiggle-and-snug",
+    "published_at": "2026-09-04T20:49:40.991623+00:00",
+    "listing_ids": [
+     90,
+     91,
+     92,
+     93,
+     94
+    ]
+   }
+  }
+ ],
+ "runs": [
+  {
+   "id": 1001,
+   "cycle_id": 1,
+   "query_id": 1,
+   "platform": "gemini_grounded",
+   "run_number": 1,
+   "run_at": "2026-10-09T15:00:00+00:00",
+   "raw_response": "I found the Wiggle & Snug Bum Balm 4 oz available for purchase at several retailers.\n\nAs of late May 2024, the price is generally around **$11.99 - $12.99**.\n\nFor example:\n*   **Walmart:** $11.99\n*   **Amazon:** $12.99\n\nPrices can vary slightly between retailers and are subject to change.",
+   "status": "success",
+   "surface": "grounded_api",
+   "collector": "google_genai",
+   "answer_status": "answered",
+   "retrieved_sources": null,
+   "_golden": "seed5_row05.json"
+  },
+  {
+   "id": 1002,
+   "cycle_id": 1,
+   "query_id": 1,
+   "platform": "chatgpt",
+   "run_number": 1,
+   "run_at": "2026-10-09T15:00:00+00:00",
+   "raw_response": "The Wiggle & Snug Bum Balm 4 oz typically costs **around $14.99 to $15.99**.\n\nPrices can vary slightly depending on the retailer and any current sales or promotions.",
+   "status": "success",
+   "surface": "grounded_api",
+   "collector": "openai",
+   "answer_status": "answered",
+   "retrieved_sources": null,
+   "_golden": "seed5_row13.json"
+  },
+  {
+   "id": 1003,
+   "cycle_id": 1,
+   "query_id": 2,
+   "platform": "gemini_grounded",
+   "run_number": 1,
+   "run_at": "2026-10-09T15:00:00+00:00",
+   "raw_response": "Based on current listings, the Wiggle & Snug Cloud Wipes 3-Pack typically costs around **$14.99 to $15.99**.\n\nPrices can vary slightly depending on the retailer and any ongoing sales or promotions. For the most accurate current price, it's best to check a specific retailer like Amazon.",
+   "status": "success",
+   "surface": "grounded_api",
+   "collector": "google_genai",
+   "answer_status": "answered",
+   "retrieved_sources": null,
+   "_golden": "seed5_row35.json"
+  },
+  {
+   "id": 1004,
+   "cycle_id": 1,
+   "query_id": 3,
+   "platform": "gemini_grounded",
+   "run_number": 1,
+   "run_at": "2026-10-09T15:00:00+00:00",
+   "raw_response": "Wiggle & Snug is a Target-exclusive brand.\n\nAs of my last update, **Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)** typically cost around **$16.99** at Target.\n\nPrices can vary slightly, so it's always a good idea to check Target's website or app for the most current pricing and any available promotions.",
+   "status": "success",
+   "surface": "grounded_api",
+   "collector": "google_genai",
+   "answer_status": "answered",
+   "retrieved_sources": null,
+   "_golden": "seed5_row01.json"
+  },
+  {
+   "id": 1005,
+   "cycle_id": 1,
+   "query_id": 4,
+   "platform": "chatgpt",
+   "run_number": 1,
+   "run_at": "2026-10-09T15:00:00+00:00",
+   "raw_response": "The **Size 3 small pack** costs **$9.99** \u2014 that\u2019s **$0.40 per diaper** for the 25-count pack. ([target.com](https://www.target.com/p/-/A-94793999?utm_source=openai))",
+   "status": "success",
+   "surface": "grounded_api",
+   "collector": "openai",
+   "answer_status": "answered",
+   "retrieved_sources": null,
+   "_golden": "seed5_row21.json"
+  },
+  {
+   "id": 1006,
+   "cycle_id": 1,
+   "query_id": 5,
+   "platform": "chatgpt",
+   "run_number": 1,
+   "run_at": "2026-10-09T15:00:00+00:00",
+   "raw_response": "Yes \u2014 **Wiggle & Snug Member Rewards is still available**. It\u2019s described as **free to join**, with members earning **1 point per $1 spent** and access to member pricing/offers. ([trueshopstore.com](https://trueshopstore.com/loyalty))\n\nThe tiers are:\n\n1. **Member** \u2014 free to join  \n2. **Member+** \u2014 for **$150+ spend per year** ([trueshopstore.com](https://trueshopstore.com/loyalty))",
+   "status": "success",
+   "surface": "grounded_api",
+   "collector": "openai",
+   "answer_status": "answered",
+   "retrieved_sources": null,
+   "_golden": "seed5_row10.json"
+  },
+  {
+   "id": 1007,
+   "cycle_id": 1,
+   "query_id": 6,
+   "platform": "gemini_grounded",
+   "run_number": 1,
+   "run_at": "2026-10-09T15:00:00+00:00",
+   "raw_response": "Based on my most recent check, I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**\n\nWiggle & Snug primarily sells individual swaddles and sleepwear products, often available in different sizes and materials (e.g., organic cotton, bamboo).\n\nIt's possible that:\n*   It was a limited-time offer that has since ended.\n*   It was a product offered by a specific retailer or through a different platform in the past.\n*   The name might have changed.\n\nIf you are looking to try different sizes or materials, you would likely need to purchase individual swaddles separately.\n\nI recommend checking their official website (wiggleandsnug.com) directly or contacting their customer service if you have a specific memory of this pack and want to inquire further.",
+   "status": "success",
+   "surface": "grounded_api",
+   "collector": "google_genai",
+   "answer_status": "answered",
+   "retrieved_sources": null,
+   "_golden": "seed5_row40.json"
+  },
+  {
+   "id": 1008,
+   "cycle_id": 1,
+   "query_id": 1,
+   "platform": "aimode",
+   "run_number": 1,
+   "run_at": "2026-10-09T15:00:00+00:00",
+   "raw_response": "",
+   "status": "success",
+   "surface": "consumer_ui",
+   "collector": "serpapi",
+   "answer_status": "no_ai_answer",
+   "retrieved_sources": null,
+   "_golden": null
+  }
+ ],
+ "outcomes": [
+  {
+   "run_id": 1001,
+   "query_id": 1,
+   "cycle_id": 1,
+   "platform": "gemini_grounded",
+   "tier": "catalog_accuracy",
+   "expected_answer": {
+    "type": "price",
+    "amount": "12.99",
+    "currency": "USD",
+    "secondary": [
+     {
+      "type": "gtin",
+      "value": "884400896186"
+     }
+    ]
+   },
+   "extraction": {
+    "prices": [
+     {
+      "amount": "11.99",
+      "currency": "USD",
+      "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+     },
+     {
+      "amount": "12.99",
+      "currency": "USD",
+      "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+     }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+     {
+      "value": "4",
+      "unit": "oz",
+      "attributed_product": "Wiggle & Snug Bum Balm"
+     }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+     {
+      "claim": "I found the Wiggle & Snug Bum Balm 4 oz available for purchase at several retailers.",
+      "sentence": "I found the Wiggle & Snug Bum Balm 4 oz available for purchase at several retailers.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "retail",
+      "lexicon_hedged": false
+     },
+     {
+      "claim": "As of late May 2024, the price is generally around **$11.99 - $12.99**.",
+      "sentence": "As of late May 2024, the price is generally around **$11.99 - $12.99**.",
+      "span_id": 2,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": true
+     }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [
+     {
+      "name": "Walmart",
+      "role": "source"
+     },
+     {
+      "name": "Amazon",
+      "role": "source"
+     }
+    ],
+    "postprocess": [
+     "1 span(s) need review"
+    ],
+    "transcribed_unknown_statement": null,
+    "spans": [
+     {
+      "id": 1,
+      "text": "I found the Wiggle & Snug Bum Balm 4 oz available for purchase at several retailers."
+     },
+     {
+      "id": 2,
+      "text": "As of late May 2024, the price is generally around **$11.99 - $12.99**."
+     },
+     {
+      "id": 3,
+      "text": "For example:"
+     },
+     {
+      "id": 4,
+      "text": "*   **Walmart:** $11.99"
+     },
+     {
+      "id": 5,
+      "text": "*   **Amazon:** $12.99"
+     },
+     {
+      "id": 6,
+      "text": "Prices can vary slightly between retailers and are subject to change."
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "I found the Wiggle & Snug Bum Balm 4 oz available for purchase at several retailers.",
+      "kind": "assertion",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 2,
+      "text": "As of late May 2024, the price is generally around **$11.99 - $12.99**.",
+      "kind": "assertion",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 3,
+      "text": "For example:",
+      "kind": "none",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 4,
+      "text": "*   **Walmart:** $11.99",
+      "kind": "none",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 5,
+      "text": "*   **Amazon:** $12.99",
+      "kind": "none",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 6,
+      "text": "Prices can vary slightly between retailers and are subject to change.",
+      "kind": "disclaimer",
+      "modality": "asserted"
+     }
+    ],
+    "needs_review": [
+     {
+      "sentence": "As of late May 2024, the price is generally around **$11.99 - $12.99**.",
+      "lexicon": "hedged",
+      "label": "asserted"
+     }
+    ]
+   },
+   "outcome": "exact",
+   "outcome_reason": "stated 12.99",
+   "flags": null,
+   "claim_results": [
+    {
+     "stated": "11.99",
+     "amount": "11.99",
+     "product": "Wiggle & Snug Bum Balm 4 oz",
+     "tier": null,
+     "target": "asked",
+     "variant_id": "bum-balm-4oz",
+     "outcome": "wrong",
+     "matched_at": null,
+     "against": "12.99"
+    },
+    {
+     "stated": "12.99",
+     "amount": "12.99",
+     "product": "Wiggle & Snug Bum Balm 4 oz",
+     "tier": null,
+     "target": "asked",
+     "variant_id": "bum-balm-4oz",
+     "outcome": "exact",
+     "matched_at": null,
+     "against": "12.99"
+    }
+   ],
+   "source_split": null,
+   "reason_code": null,
+   "surface": "grounded_api",
+   "source_attribution": "none",
+   "domain_cited": false
+  },
+  {
+   "run_id": 1002,
+   "query_id": 1,
+   "cycle_id": 1,
+   "platform": "chatgpt",
+   "tier": "catalog_accuracy",
+   "expected_answer": {
+    "type": "price",
+    "amount": "12.99",
+    "currency": "USD",
+    "secondary": [
+     {
+      "type": "gtin",
+      "value": "884400896186"
+     }
+    ]
+   },
+   "extraction": {
+    "prices": [
+     {
+      "amount": "14.99",
+      "currency": "USD",
+      "attributed_product": "The Wiggle & Snug Bum Balm 4 oz"
+     },
+     {
+      "amount": "15.99",
+      "currency": "USD",
+      "attributed_product": "The Wiggle & Snug Bum Balm 4 oz"
+     }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [
+     {
+      "value": "4",
+      "unit": "oz",
+      "attributed_product": "The Wiggle & Snug Bum Balm"
+     }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+     {
+      "claim": "The Wiggle & Snug Bum Balm 4 oz typically costs **around $14.99 to $15.99**.",
+      "sentence": "The Wiggle & Snug Bum Balm 4 oz typically costs **around $14.99 to $15.99**.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "hedged",
+      "claim_kind": "other",
+      "lexicon_hedged": true
+     }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "transcribed_unknown_statement": null,
+    "spans": [
+     {
+      "id": 1,
+      "text": "The Wiggle & Snug Bum Balm 4 oz typically costs **around $14.99 to $15.99**."
+     },
+     {
+      "id": 2,
+      "text": "Prices can vary slightly depending on the retailer and any current sales or promotions."
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "The Wiggle & Snug Bum Balm 4 oz typically costs **around $14.99 to $15.99**.",
+      "kind": "assertion",
+      "modality": "hedged"
+     },
+     {
+      "span_id": 2,
+      "text": "Prices can vary slightly depending on the retailer and any current sales or promotions.",
+      "kind": "disclaimer",
+      "modality": "asserted"
+     }
+    ],
+    "needs_review": []
+   },
+   "outcome": "wrong",
+   "outcome_reason": "stated 14.99, 15.99; we have never published that (current: 12.99)",
+   "flags": null,
+   "claim_results": [
+    {
+     "stated": "14.99",
+     "amount": "14.99",
+     "product": "The Wiggle & Snug Bum Balm 4 oz",
+     "tier": null,
+     "target": "asked",
+     "variant_id": "bum-balm-4oz",
+     "outcome": "wrong",
+     "matched_at": null,
+     "against": "12.99"
+    },
+    {
+     "stated": "15.99",
+     "amount": "15.99",
+     "product": "The Wiggle & Snug Bum Balm 4 oz",
+     "tier": null,
+     "target": "asked",
+     "variant_id": "bum-balm-4oz",
+     "outcome": "wrong",
+     "matched_at": null,
+     "against": "12.99"
+    }
+   ],
+   "source_split": null,
+   "reason_code": null,
+   "surface": "grounded_api",
+   "source_attribution": "none",
+   "domain_cited": false
+  },
+  {
+   "run_id": 1003,
+   "query_id": 2,
+   "cycle_id": 1,
+   "platform": "gemini_grounded",
+   "tier": "catalog_accuracy",
+   "expected_answer": {
+    "type": "price",
+    "amount": "11.99",
+    "currency": "USD",
+    "secondary": [
+     {
+      "type": "gtin",
+      "value": "884400676641"
+     },
+     {
+      "type": "pack_count",
+      "value": 216
+     }
+    ]
+   },
+   "extraction": {
+    "prices": [
+     {
+      "amount": "14.99",
+      "currency": "USD",
+      "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+     },
+     {
+      "amount": "15.99",
+      "currency": "USD",
+      "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+     }
+    ],
+    "codes": [],
+    "pack_counts": [
+     {
+      "value": 3,
+      "attributed_product": "Wiggle & Snug Cloud Wipes 3-Pack"
+     }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+     {
+      "claim": "Based on current listings, the Wiggle & Snug Cloud Wipes 3-Pack typically costs around **$14.99 to $15.99**.",
+      "sentence": "Based on current listings, the Wiggle & Snug Cloud Wipes 3-Pack typically costs around **$14.99 to $15.99**.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "hedged",
+      "claim_kind": "other",
+      "lexicon_hedged": true
+     }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [
+     "Amazon"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [
+     {
+      "name": "Amazon",
+      "role": "recommendation"
+     }
+    ],
+    "postprocess": [
+     "not a brand: Amazon"
+    ],
+    "transcribed_unknown_statement": null,
+    "spans": [
+     {
+      "id": 1,
+      "text": "Based on current listings, the Wiggle & Snug Cloud Wipes 3-Pack typically costs around **$14.99 to $15.99**."
+     },
+     {
+      "id": 2,
+      "text": "Prices can vary slightly depending on the retailer and any ongoing sales or promotions."
+     },
+     {
+      "id": 3,
+      "text": "For the most accurate current price, it's best to check a specific retailer like Amazon."
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Based on current listings, the Wiggle & Snug Cloud Wipes 3-Pack typically costs around **$14.99 to $15.99**.",
+      "kind": "assertion",
+      "modality": "hedged"
+     },
+     {
+      "span_id": 2,
+      "text": "Prices can vary slightly depending on the retailer and any ongoing sales or promotions.",
+      "kind": "none",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 3,
+      "text": "For the most accurate current price, it's best to check a specific retailer like Amazon.",
+      "kind": "instruction",
+      "modality": "asserted"
+     }
+    ],
+    "needs_review": []
+   },
+   "outcome": "wrong",
+   "outcome_reason": "stated 14.99, 15.99; we have never published that (current: 11.99)",
+   "flags": null,
+   "claim_results": [
+    {
+     "stated": "14.99",
+     "amount": "14.99",
+     "product": "Wiggle & Snug Cloud Wipes 3-Pack",
+     "tier": null,
+     "target": "asked",
+     "variant_id": "cloud-wipes-3pack",
+     "outcome": "wrong",
+     "matched_at": null,
+     "against": "11.99"
+    },
+    {
+     "stated": "15.99",
+     "amount": "15.99",
+     "product": "Wiggle & Snug Cloud Wipes 3-Pack",
+     "tier": null,
+     "target": "asked",
+     "variant_id": "cloud-wipes-3pack",
+     "outcome": "wrong",
+     "matched_at": null,
+     "against": "11.99"
+    }
+   ],
+   "source_split": null,
+   "reason_code": null,
+   "surface": "grounded_api",
+   "source_attribution": "none",
+   "domain_cited": false
+  },
+  {
+   "run_id": 1004,
+   "query_id": 3,
+   "cycle_id": 1,
+   "platform": "gemini_grounded",
+   "tier": "catalog_accuracy",
+   "expected_answer": {
+    "type": "price",
+    "amount": "29.99",
+    "currency": "USD",
+    "secondary": [
+     {
+      "type": "pack_count",
+      "value": 42
+     }
+    ]
+   },
+   "extraction": {
+    "prices": [
+     {
+      "amount": "16.99",
+      "currency": "USD",
+      "attributed_product": "Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)"
+     }
+    ],
+    "codes": [],
+    "pack_counts": [
+     {
+      "value": 52,
+      "attributed_product": "Wiggle & Snug Snug-Fit Overnight Diapers Size 6"
+     }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+     {
+      "claim": "Wiggle & Snug is a Target-exclusive brand.",
+      "sentence": "Wiggle & Snug is a Target-exclusive brand.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "retail",
+      "lexicon_hedged": false
+     },
+     {
+      "claim": "As of my last update, **Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)** typically cost around **$16.99** at Target.",
+      "sentence": "As of my last update, **Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)** typically cost around **$16.99** at Target.",
+      "span_id": 2,
+      "kind": "assertion",
+      "modality": "hedged",
+      "claim_kind": "other",
+      "lexicon_hedged": true
+     }
+    ],
+    "sources_cited": [],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [
+     {
+      "name": "Target",
+      "role": "source"
+     }
+    ],
+    "postprocess": [
+     "not product sizes: 6 Size, 6 Size"
+    ],
+    "transcribed_unknown_statement": null,
+    "spans": [
+     {
+      "id": 1,
+      "text": "Wiggle & Snug is a Target-exclusive brand."
+     },
+     {
+      "id": 2,
+      "text": "As of my last update, **Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)** typically cost around **$16.99** at Target."
+     },
+     {
+      "id": 3,
+      "text": "Prices can vary slightly, so it's always a good idea to check Target's website or app for the most current pricing and any available promotions."
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Wiggle & Snug is a Target-exclusive brand.",
+      "kind": "assertion",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 2,
+      "text": "As of my last update, **Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)** typically cost around **$16.99** at Target.",
+      "kind": "assertion",
+      "modality": "hedged"
+     },
+     {
+      "span_id": 3,
+      "text": "Prices can vary slightly, so it's always a good idea to check Target's website or app for the most current pricing and any available promotions.",
+      "kind": "instruction",
+      "modality": "asserted"
+     }
+    ],
+    "needs_review": []
+   },
+   "outcome": "wrong",
+   "outcome_reason": "stated 16.99; we have never published that (current: 29.99)",
+   "flags": null,
+   "claim_results": [
+    {
+     "stated": "16.99",
+     "amount": "16.99",
+     "product": "Wiggle & Snug Snug-Fit Overnight Diapers Size 6 (52-count)",
+     "tier": null,
+     "target": "asked",
+     "variant_id": "snug-fit-overnight-s6",
+     "outcome": "wrong",
+     "matched_at": null,
+     "against": "29.99"
+    }
+   ],
+   "source_split": null,
+   "reason_code": null,
+   "surface": "grounded_api",
+   "source_attribution": "none",
+   "domain_cited": false
+  },
+  {
+   "run_id": 1005,
+   "query_id": 4,
+   "cycle_id": 1,
+   "platform": "chatgpt",
+   "tier": "catalog_accuracy",
+   "expected_answer": {
+    "type": "price",
+    "amount": "22.99",
+    "currency": "USD",
+    "secondary": [
+     {
+      "type": "gtin",
+      "value": "884400137609"
+     },
+     {
+      "type": "pack_count",
+      "value": 84
+     }
+    ]
+   },
+   "extraction": {
+    "prices": [
+     {
+      "amount": "9.99",
+      "currency": "USD",
+      "attributed_product": "Size 3 small pack"
+     },
+     {
+      "amount": "0.40",
+      "currency": "USD",
+      "attributed_product": "the 25-count pack"
+     }
+    ],
+    "codes": [],
+    "pack_counts": [
+     {
+      "value": 25,
+      "attributed_product": "the 25-count pack"
+     }
+    ],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [],
+    "sources_cited": [
+     "target.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": false,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "transcribed_unknown_statement": null,
+    "spans": [
+     {
+      "id": 1,
+      "text": "The **Size 3 small pack** costs **$9.99** \u2014 that\u2019s **$0.40 per diaper** for the 25-count pack. ([target.com](https://www.target.com/p/-/A-94793999?utm_source=openai))"
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "The **Size 3 small pack** costs **$9.99** \u2014 that\u2019s **$0.40 per diaper** for the 25-count pack. ([target.com](https://www.target.com/p/-/A-94793999?utm_source=openai))",
+      "kind": "none",
+      "modality": "asserted"
+     }
+    ],
+    "needs_review": []
+   },
+   "outcome": "wrong",
+   "outcome_reason": "stated 9.99; we have never published that (current: 22.99)",
+   "flags": null,
+   "claim_results": [
+    {
+     "stated": "9.99",
+     "amount": "9.99",
+     "product": "Size 3 small pack",
+     "tier": null,
+     "target": "asked",
+     "variant_id": "snug-fit-diapers-s3-small",
+     "outcome": "wrong",
+     "matched_at": null,
+     "against": "22.99"
+    },
+    {
+     "stated": "0.40",
+     "amount": "0.40",
+     "product": "the 25-count pack",
+     "tier": null,
+     "conflict": "names a sibling variant",
+     "target": "clash",
+     "outcome": "wrong",
+     "reason_code": "variant_clash",
+     "reason": "names a sibling variant, and the record has no such variant"
+    }
+   ],
+   "source_split": {
+    "own_domain": [],
+    "listed_retailer": [],
+    "other": [
+     "target.com"
+    ]
+   },
+   "reason_code": null,
+   "surface": "grounded_api",
+   "source_attribution": "retailer",
+   "domain_cited": false
+  },
+  {
+   "run_id": 1006,
+   "query_id": 5,
+   "cycle_id": 1,
+   "platform": "chatgpt",
+   "tier": "brand_direct",
+   "expected_answer": {
+    "type": "brand_mention",
+    "brand": "Wiggle & Snug",
+    "domain": "trueshopstore.com"
+   },
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [
+     {
+      "value": "1",
+      "per_dollar": true,
+      "program": "Wiggle & Snug Member Rewards"
+     }
+    ],
+    "brand_unknown_statement": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [
+     "Member",
+     "Member+"
+    ],
+    "brand_claims": [
+     {
+      "claim": "Yes \u2014 **Wiggle & Snug Member Rewards is still available**.",
+      "sentence": "Yes \u2014 **Wiggle & Snug Member Rewards is still available**.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "loyalty",
+      "lexicon_hedged": false
+     },
+     {
+      "claim": "It\u2019s described as **free to join**, with members earning **1 point per $1 spent** and access to member pricing/offers. ([trueshopstore.com](https://trueshopstore.com/loyalty))",
+      "sentence": "It\u2019s described as **free to join**, with members earning **1 point per $1 spent** and access to member pricing/offers. ([trueshopstore.com](https://trueshopstore.com/loyalty))",
+      "span_id": 2,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "loyalty",
+      "lexicon_hedged": false
+     }
+    ],
+    "sources_cited": [
+     "trueshopstore.com"
+    ],
+    "recommended_retailers": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "retailer_mentions": [],
+    "postprocess": [],
+    "transcribed_unknown_statement": null,
+    "spans": [
+     {
+      "id": 1,
+      "text": "Yes \u2014 **Wiggle & Snug Member Rewards is still available**."
+     },
+     {
+      "id": 2,
+      "text": "It\u2019s described as **free to join**, with members earning **1 point per $1 spent** and access to member pricing/offers. ([trueshopstore.com](https://trueshopstore.com/loyalty))"
+     },
+     {
+      "id": 3,
+      "text": "The tiers are:"
+     },
+     {
+      "id": 4,
+      "text": "**Member** \u2014 free to join"
+     },
+     {
+      "id": 5,
+      "text": "**Member+** \u2014 for **$150+ spend per year** ([trueshopstore.com](https://trueshopstore.com/loyalty))"
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Yes \u2014 **Wiggle & Snug Member Rewards is still available**.",
+      "kind": "assertion",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 2,
+      "text": "It\u2019s described as **free to join**, with members earning **1 point per $1 spent** and access to member pricing/offers. ([trueshopstore.com](https://trueshopstore.com/loyalty))",
+      "kind": "assertion",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 3,
+      "text": "The tiers are:",
+      "kind": "none",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 4,
+      "text": "**Member** \u2014 free to join",
+      "kind": "none",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 5,
+      "text": "**Member+** \u2014 for **$150+ spend per year** ([trueshopstore.com](https://trueshopstore.com/loyalty))",
+      "kind": "none",
+      "modality": "asserted"
+     }
+    ],
+    "needs_review": []
+   },
+   "outcome": "grounded",
+   "outcome_reason": "cited trueshopstore.com",
+   "flags": null,
+   "claim_results": null,
+   "source_split": {
+    "own_domain": [
+     "trueshopstore.com"
+    ],
+    "listed_retailer": [],
+    "other": []
+   },
+   "reason_code": null,
+   "surface": "grounded_api",
+   "source_attribution": "brand_domain",
+   "domain_cited": true
+  },
+  {
+   "run_id": 1007,
+   "query_id": 6,
+   "cycle_id": 1,
+   "platform": "gemini_grounded",
+   "tier": "brand_direct",
+   "expected_answer": {
+    "type": "brand_mention",
+    "brand": "Wiggle & Snug",
+    "domain": "trueshopstore.com"
+   },
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "sizes": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_unknown_statement": "Based on my most recent check, I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**",
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_claims": [
+     {
+      "claim": "Wiggle & Snug primarily sells individual swaddles and sleepwear products, often available in different sizes and materials (e.g., organic cotton, bamboo).",
+      "sentence": "Wiggle & Snug primarily sells individual swaddles and sleepwear products, often available in different sizes and materials (e.g., organic cotton, bamboo).",
+      "span_id": 2,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "retail",
+      "lexicon_hedged": false
+     },
+     {
+      "claim": "*   It was a limited-time offer that has since ended.",
+      "sentence": "*   It was a limited-time offer that has since ended.",
+      "span_id": 4,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false
+     },
+     {
+      "claim": "*   It was a product offered by a specific retailer or through a different platform in the past.",
+      "sentence": "*   It was a product offered by a specific retailer or through a different platform in the past.",
+      "span_id": 5,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "retail",
+      "lexicon_hedged": false
+     },
+     {
+      "claim": "*   The name might have changed.",
+      "sentence": "*   The name might have changed.",
+      "span_id": 6,
+      "kind": "assertion",
+      "modality": "hedged",
+      "claim_kind": "other",
+      "lexicon_hedged": true
+     }
+    ],
+    "sources_cited": [
+     "wiggleandsnug.com"
+    ],
+    "recommended_retailers": [
+     "their official website (wiggleandsnug.com)"
+    ],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "brand_mentioned": true,
+    "lexicon_unknown": true,
+    "lexicon_disclaimer": false,
+    "retailer_mentions": [
+     {
+      "name": "their official website (wiggleandsnug.com)",
+      "role": "recommendation"
+     }
+    ],
+    "postprocess": [
+     "1 span(s) need review"
+    ],
+    "transcribed_unknown_statement": "I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**",
+    "spans": [
+     {
+      "id": 1,
+      "text": "Based on my most recent check, I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**"
+     },
+     {
+      "id": 2,
+      "text": "Wiggle & Snug primarily sells individual swaddles and sleepwear products, often available in different sizes and materials (e.g., organic cotton, bamboo)."
+     },
+     {
+      "id": 3,
+      "text": "It's possible that:"
+     },
+     {
+      "id": 4,
+      "text": "*   It was a limited-time offer that has since ended."
+     },
+     {
+      "id": 5,
+      "text": "*   It was a product offered by a specific retailer or through a different platform in the past."
+     },
+     {
+      "id": 6,
+      "text": "*   The name might have changed."
+     },
+     {
+      "id": 7,
+      "text": "If you are looking to try different sizes or materials, you would likely need to purchase individual swaddles separately."
+     },
+     {
+      "id": 8,
+      "text": "I recommend checking their official website (wiggleandsnug.com) directly or contacting their customer service if you have a specific memory of this pack and want to inquire further."
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Based on my most recent check, I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**",
+      "kind": "unknown_statement",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 2,
+      "text": "Wiggle & Snug primarily sells individual swaddles and sleepwear products, often available in different sizes and materials (e.g., organic cotton, bamboo).",
+      "kind": "assertion",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 3,
+      "text": "It's possible that:",
+      "kind": "disclaimer",
+      "modality": "hedged"
+     },
+     {
+      "span_id": 4,
+      "text": "*   It was a limited-time offer that has since ended.",
+      "kind": "assertion",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 5,
+      "text": "*   It was a product offered by a specific retailer or through a different platform in the past.",
+      "kind": "assertion",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 6,
+      "text": "*   The name might have changed.",
+      "kind": "assertion",
+      "modality": "hedged"
+     },
+     {
+      "span_id": 7,
+      "text": "If you are looking to try different sizes or materials, you would likely need to purchase individual swaddles separately.",
+      "kind": "instruction",
+      "modality": "hedged"
+     },
+     {
+      "span_id": 8,
+      "text": "I recommend checking their official website (wiggleandsnug.com) directly or contacting their customer service if you have a specific memory of this pack and want to inquire further.",
+      "kind": "instruction",
+      "modality": "asserted"
+     }
+    ],
+    "needs_review": [
+     {
+      "reason": "the transcription read a cannot-find statement the spans did not",
+      "transcribed": "I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**",
+      "from_spans": "Based on my most recent check, I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**"
+     }
+    ]
+   },
+   "outcome": "acknowledged_unknown",
+   "outcome_reason": "said it could not find Wiggle & Snug: 'Based on my most recent check, I **cannot find a product specifically named the \"Wiggle & Snug Snug-Fit Trial Pack\" available for purchase on their official website (wiggleandsnug.com).**'",
+   "flags": [
+    {
+     "flag": "fabricated_citation",
+     "domains": [
+      {
+       "domain": "wiggleandsnug.com",
+       "resolves": false,
+       "responds": null,
+       "detail": "does not resolve ([Errno -2] Name or service not known)",
+       "checked_at": "2026-10-09T15:00:00+00:00",
+       "fabricated": true
+      }
+     ]
+    }
+   ],
+   "claim_results": null,
+   "source_split": {
+    "own_domain": [],
+    "listed_retailer": [],
+    "other": [
+     "wiggleandsnug.com"
+    ]
+   },
+   "reason_code": null,
+   "surface": "grounded_api",
+   "source_attribution": "retailer",
+   "domain_cited": false
+  },
+  {
+   "run_id": 1008,
+   "query_id": 1,
+   "cycle_id": 1,
+   "platform": "aimode",
+   "tier": "catalog_accuracy",
+   "expected_answer": {
+    "type": "price",
+    "amount": "12.99",
+    "currency": "USD",
+    "secondary": [
+     {
+      "type": "gtin",
+      "value": "884400896186"
+     }
+    ]
+   },
+   "extraction": {},
+   "outcome": "absent",
+   "outcome_reason": "the surface showed no answer (no_ai_answer); counted in coverage, outside accuracy",
+   "flags": null,
+   "claim_results": null,
+   "source_split": null,
+   "reason_code": null,
+   "surface": "consumer_ui",
+   "source_attribution": null,
+   "domain_cited": null
+  }
+ ],
+ "coded_mentions": [
+  {
+   "run_id": 1001,
+   "entity_id": 1,
+   "mentioned": true,
+   "position": 1
+  },
+  {
+   "run_id": 1002,
+   "entity_id": 1,
+   "mentioned": true,
+   "position": 1
+  },
+  {
+   "run_id": 1003,
+   "entity_id": 1,
+   "mentioned": true,
+   "position": 1
+  },
+  {
+   "run_id": 1004,
+   "entity_id": 1,
+   "mentioned": true,
+   "position": 1
+  },
+  {
+   "run_id": 1005,
+   "entity_id": 1,
+   "mentioned": false,
+   "position": null
+  },
+  {
+   "run_id": 1006,
+   "entity_id": 1,
+   "mentioned": true,
+   "position": 1
+  },
+  {
+   "run_id": 1007,
+   "entity_id": 1,
+   "mentioned": true,
+   "position": 1
+  }
+ ]
+}

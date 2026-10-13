@@ -2404,6 +2404,15 @@ def main():
             except Exception:
                 log.exception("[cycle] pillar headline sweep failed")
 
+            # 2B: "Run full loop" requests — poll supply to reference_done,
+            # create the cycle, and PATCH supply once it is scored. Same
+            # isolation; manual trigger only, nothing is scheduled here.
+            try:
+                from fullloop.coordinator import process_full_loops
+                process_full_loops()
+            except Exception:
+                log.exception("[full-loop] poll iteration failed")
+
             if not row:
                 time.sleep(POLL_INTERVAL)
 

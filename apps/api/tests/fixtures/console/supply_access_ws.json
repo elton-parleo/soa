@@ -1,0 +1,29 @@
+{
+  "_note": "Recorded in the shape supply's GET /api/truesync/merchants/{slug}/access returns (parleo-supply-app truesync/fullloop/views.py access()). Values are illustrative for Parleo's own test store; claude is unconfigured, as supply records it until TRUESYNC_PROBE_UA_CLAUDE is set.",
+  "merchant": "wiggle-and-snug",
+  "access_run": {"id": 12, "status": "done", "started_at": "2026-10-09T14:40:00+00:00", "finished_at": "2026-10-09T14:41:10+00:00", "counts": {"tokens_checked": 6, "tokens_allowed": 6, "probes_made": 5, "probes_ok": 5}},
+  "accessibility": {
+    "requests": [
+      {"identity": "OAI-SearchBot", "vendor": "chatgpt", "agent": "chatgpt", "result": "1 of 1 pages answered", "ok": true, "code": "ok"},
+      {"identity": "Googlebot", "vendor": "gemini", "agent": "gemini", "result": "1 of 1 pages answered", "ok": true, "code": "ok"},
+      {"identity": "PerplexityBot", "vendor": "perplexity", "agent": "perplexity", "result": "1 of 1 pages answered", "ok": true, "code": "ok"},
+      {"identity": "Claude-User", "vendor": "other", "agent": "claude", "result": "not measured: no verified UA configured", "ok": false, "code": "—"},
+      {"identity": "ParleoAuditBot (control)", "vendor": "other", "agent": null, "result": "1 of 1 pages answered", "ok": true, "code": "ok"}
+    ],
+    "summary": {"value": "11", "of": "11", "label": "answer-time robots tokens and agent probes passed"},
+    "checks": [
+      {"name": "ChatGPT", "value": "robots 2/2 · probes 1/1", "status": "ok"},
+      {"name": "Gemini", "value": "robots 2/2 · probes 1/1", "status": "ok"},
+      {"name": "Perplexity", "value": "robots 2/2 · probes 1/1", "status": "ok"}
+    ],
+    "grid": {"cols": [{"name": "ChatGPT"}, {"name": "Gemini"}, {"name": "Perplexity"}, {"name": "Claude"}],
+             "rows": [{"name": "Snug-Fit Diapers Size 3 — Small Pack (84 ct)", "source": "trueshopstore.com",
+                       "cells": [{"v": "readable", "tone": "ok"}, {"v": "readable", "tone": "ok"}, {"v": "readable", "tone": "ok"}, {"v": "not_measured", "tone": "neu"}],
+                       "detail": {"variant_ref": "catalog_variant:5", "url": "https://trueshopstore.com/products/snug-fit-diapers?variant=s3-small", "summary": "readable"}}]},
+    "note": "robots.txt per AI token on each page's path; one GET per agent identity with that agent's published UA, from Parleo's network, plus a Parleo-UA control. A bot UA sent from a non-vendor IP can be treated differently from the real crawler."
+  },
+  "divergences": [
+    "AccessRow.vendor is the console's AgentId, which has no 'claude'; claude rows carry vendor 'other' and agent 'claude'.",
+    "AccessRow is one probe in the console; here it is one agent identity aggregated over every page probed (result 'n of m pages answered', code = status counts)."
+  ]
+}

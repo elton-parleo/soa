@@ -444,7 +444,10 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
         row = reference.row(attributed_to, **keys)
         prior = reference.prior_row(attributed_to, **keys)
         outcome, why = rr.judge_claim(claim['raw'], row=row, prior=prior, member=member)
-        return outcome, why, (row.as_dict() if row else None)
+        reference_row = row.as_dict() if row else None
+        if reference_row is not None:
+            reference_row['against'] = row.value(member)
+        return outcome, why, reference_row
 
     for claim in claims:
         product = claim['product']
@@ -468,7 +471,7 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
             else:
                 outcome, matched_at = _judge_record(
                     claim, current=expectation['amount'], history=history, member=member)
-                entry.update(outcome=outcome, matched_at=matched_at)
+                entry.update(outcome=outcome, matched_at=matched_at, against=expectation['amount'])
             # Rule 3: a claim attached to no product can never be wrong.
             if entry['outcome'] == WRONG and not product:
                 entry.update(outcome=UNSCOREABLE, reason_code=REASON_PRODUCT_INFERRED,
@@ -493,7 +496,7 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
                     sibling_history = history_for(named.variant_id) if history_for else None
                     outcome, matched_at = _judge_record(
                         claim, current=current, history=sibling_history, member=member)
-                    entry.update(outcome=outcome, matched_at=matched_at)
+                    entry.update(outcome=outcome, matched_at=matched_at, against=current)
         out.append(entry)
 
     swapped = any(c['target'] == 'swap' for c in out)

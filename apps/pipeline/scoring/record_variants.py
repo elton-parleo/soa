@@ -31,6 +31,15 @@ class RecordVariant:
     member_price: Optional[str] = None
     gtin: Optional[str] = None
 
+    @property
+    def packs(self) -> set:
+        """Every pack number the record states for the variant: the
+        engine's packNumbers over its text ('4 oz', '3-Pack', '(84 ct)')
+        plus its count. The engine compares pack numbers on BOTH sides;
+        comparing a claim against the count alone read 'Bum Balm 4 oz' as
+        a different item from the 4 oz Bum Balm."""
+        return vr.pack_numbers(self.text) | ({self.count} if self.count else set())
+
 
 def _tokens(text) -> set:
     import re
@@ -94,7 +103,7 @@ def conflicts(claim: Optional[str], asked: RecordVariant, *, hints_attribute: bo
     stated = _tokens(claim)
     names_asked = any(phrase and phrase <= stated for phrase in asked.naming)
     claim_packs = vr.pack_numbers(claim)
-    if claim_packs and asked.count and asked.count not in claim_packs and not names_asked:
+    if claim_packs and asked.packs and not (claim_packs & asked.packs) and not names_asked:
         return f"pack count {', '.join(str(n) for n in sorted(claim_packs))}"
     return None
 
@@ -124,13 +133,13 @@ def named_variant(claim: Optional[str], asked: RecordVariant,
             continue
         if vr.model_number_clash(claim, variant.text):
             continue
-        if claim_packs and variant.count and variant.count not in claim_packs:
+        if claim_packs and variant.packs and not (claim_packs & variant.packs):
             continue
         # Evidence the claim names THIS variant: each of its naming phrases
         # present, its count stated, a marker they share ("Overnight Size 3"
         # names the overnight Size 3).
         score = sum(1 for phrase in variant.naming if phrase and phrase <= stated)
-        score += 1 if (claim_packs and variant.count in claim_packs) else 0
+        score += 1 if (claim_packs and variant.count and variant.count in claim_packs) else 0
         score += len(claim_markers & vr.variant_markers(variant.text))
         score += 1 if vr.model_number_match(claim, variant.text) else 0
         if score:
