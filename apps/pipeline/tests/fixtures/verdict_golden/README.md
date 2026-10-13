@@ -30,3 +30,10 @@ different rule is a moved verdict. r17 and r18 are WIG_171 runs 10758 and 10759
 is their list-price twin (`absent`, `not_our_product`: a retailer program is not our
 product); r20 is the true `variant_clash` guard (our product, a size the record lacks); r21 is
 r19 on the member-price path.
+
+`verdict_after` is computed with the record's brand facts (brand and product titles),
+as the live scorer has them. r30 is another brand's "Size 3" (absent / other_brand); r31
+is its guard: our price and another brand's, both stated, ours still scored.
+
+Precedence: the other-brand check runs before the not-our-product check, so a claim
+that matches both carries `other_brand`.

@@ -70,6 +70,7 @@ REASON_PRODUCT_INFERRED = 'product_inferred'
 REASON_VARIANT_CLASH = 'variant_clash'
 REASON_VARIANT_SWAP = 'variant_swap'
 REASON_NOT_OUR_PRODUCT = 'not_our_product'
+REASON_OTHER_BRAND = 'other_brand'
 
 
 @dataclass
@@ -100,7 +101,7 @@ class Verdict:
     #: 2B: cited domains split own_domain / listed_retailer / other.
     source_split: Optional[dict] = None
     #: 2B: a short reason code ('product_inferred', 'variant_clash',
-    #: 'variant_swap', 'not_our_product') when one of the §3 rules decided
+    #: 'variant_swap', 'not_our_product', 'other_brand') when a rule decided
     #: the outcome.
     reason_code: Optional[str] = None
 
@@ -601,6 +602,41 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
     return ABSENT, f'the answer stated no {label} for this product', None, out, swapped, None
 
 
+# ─── Other brands ──────────────────────────────────────────────────────────
+
+def _drop_other_brand_claims(extraction, brand_facts) -> tuple:
+    """
+    (extraction without other brands' prices, the attributed_products
+    dropped). A price or member price whose attributed_product names a
+    brand from the stored Layer 2 `other_brands_named` (the full name,
+    whatever its relation) is that brand's, never ours, whatever size or
+    count phrase it carries: "Huggies Size 3" is not our Size 3. A claim
+    that ALSO names our brand or one of our product names keeps its
+    ordinary path. Deterministic; reads only what Layer 2 stored.
+    """
+    facts = brand_facts or {}
+    ours = [_tokens(facts.get('brand'))] + [
+        {t for t in _tokens(title) if t.isalpha()} for title in facts.get('product_titles') or []]
+    ours = [name for name in ours if name]
+    others = [_tokens(e.get('name')) for e in extraction.get('other_brands_named') or []
+              if isinstance(e, dict) and e.get('relation') != 'not_a_brand']
+    others = [name for name in others if name and name not in ours]
+    if not others:
+        return extraction, []
+
+    def is_other(entry):
+        stated = _tokens(entry.get('attributed_product'))
+        return (any(name <= stated for name in others)
+                and not any(name <= stated for name in ours))
+
+    dropped, kept = [], dict(extraction)
+    for key in ('prices', 'member_prices'):
+        entries = extraction.get(key) or []
+        kept[key] = [e for e in entries if not (isinstance(e, dict) and is_other(e))]
+        dropped += [e.get('attributed_product') for e in entries if isinstance(e, dict) and is_other(e)]
+    return kept, dropped
+
+
 # ─── The classifier ────────────────────────────────────────────────────────
 
 def compare(expectation: dict, extraction: dict, *, history=None,
@@ -720,11 +756,17 @@ def _compare_core(expectation, extraction, *, history, source_ref, brand_domain,
     terms = variant_terms_from(source_ref, expectation)
 
     if kind in ('price', 'member_price'):
+        extraction, other_brand = _drop_other_brand_claims(extraction, brand_facts)
         outcome, reason, matched_at, claims, _swapped, code = _judge_price_like(
             expectation, extraction, member=(kind == 'member_price'), terms=terms,
             history=history, history_for=history_for, source_ref=source_ref,
             record_variants=record_variants, reference=reference, brand_facts=brand_facts,
         )
+        if other_brand and outcome == ABSENT and code is None:
+            label = 'member price' if kind == 'member_price' else 'price'
+            reason, code = (f"the answer stated no {label} for this product; "
+                            f"{', '.join(repr(c) for c in other_brand)} is another brand's"), \
+                REASON_OTHER_BRAND
         result = verdict(outcome, reason, matched_at)
         result.claims = claims
         result.reason_code = code
