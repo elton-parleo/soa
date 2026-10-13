@@ -1,0 +1,7 @@
+{
+  "_note": "Hand-written, NOT a captured response, and the shape of a sign-in wall in SerpApi output is NOT documented anywhere this repo has verified. It encodes the rule the runner applies: a short answer whose text asks the reader to sign in is recorded as sign_in_wall. Replace with a captured body when one exists.",
+  "search_metadata": {"id": "fixture-copilot-wall", "status": "Success", "bing_copilot_url": "https://www.bing.com/copilotsearch?q=acme+baby+swaddle+price"},
+  "search_parameters": {"engine": "bing_copilot", "q": "acme baby swaddle price"},
+  "text_blocks": [{"type": "paragraph", "snippet": "Sign in to continue using Copilot Search."}],
+  "references": []
+}

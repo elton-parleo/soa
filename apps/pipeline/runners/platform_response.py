@@ -19,7 +19,7 @@ class PlatformResponse:
     """Wall-clock time from request send to response received, in milliseconds."""
 
     platform: str
-    """One of: chatgpt, perplexity, gemini, claude, gemini_grounded. Must match soa_runs CHECK constraint."""
+    """A platform id from soa_shared/surfaces.py (chatgpt, chatgpt_api, gemini_api, gemini_grounded, perplexity, claude, aimode, copilot). Must match soa_runs CHECK constraint."""
 
     model: str
     """Exact model string used, e.g. gpt-5.5, llama-3.1-sonar-large-128k-online."""
@@ -40,3 +40,14 @@ class PlatformResponse:
     None when the platform does not expose sources or none were used.
     Seeds source attribution (M26).
     """
+
+    answer_status: Optional[str] = None
+    """
+    2B: answered | no_ai_answer | sign_in_wall | blocked. Set by the consumer
+    runners, whose walls and empty pages are results. None from an API
+    runner, where the orchestrator derives it (answered when the call
+    succeeded with text).
+    """
+
+    cost_units: Optional[float] = None
+    """2B: provider cost units this call consumed (SerpApi: searches)."""

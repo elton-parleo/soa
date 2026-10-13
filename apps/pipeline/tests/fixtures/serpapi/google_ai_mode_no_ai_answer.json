@@ -1,0 +1,6 @@
+{
+  "_note": "Hand-written, NOT a captured response. The error string is the one the console-demo engine's serpapi.test.ts uses for an AI Mode page with no AI answer (\"Google hasn't returned any results for this query.\"); the surrounding shape follows serpapi.com/google-ai-mode-api.",
+  "search_metadata": {"id": "fixture-aimode-empty", "status": "Success", "google_ai_mode_url": "https://www.google.com/search?udm=50&q=acme+baby+swaddle+price"},
+  "search_parameters": {"engine": "google_ai_mode", "q": "acme baby swaddle price"},
+  "error": "Google hasn't returned any results for this query."
+}
