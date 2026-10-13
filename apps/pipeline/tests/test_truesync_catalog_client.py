@@ -194,6 +194,11 @@ def test_every_read_carries_the_tenant_token(monkeypatch):
 
     def capture(url, params=None, timeout=None, headers=None, **kwargs):
         seen.append((url, headers or {}))
+        if url.endswith("/tenant"):
+            # 2B: an external merchant, so the record reads (/retailers,
+            # /feed) happen too and are held to the same rule.
+            return _Response(200, {"merchants": [
+                {"slug": "wiggle-and-snug", "kind": "brand", "hosting": "external"}]})
         return _Response(200, [] if url.endswith("/merchants") else {"listings": []})
 
     monkeypatch.setattr(tc.httpx, "get", capture)
@@ -202,6 +207,7 @@ def test_every_read_carries_the_tenant_token(monkeypatch):
 
     assert {url.rsplit("/", 1)[-1] for url, _ in seen} == {
         "catalog", "merchants", "incentives", "price-history",
+        "tenant", "retailers", "feed",
     }
     for url, headers in seen:
         assert headers.get("X-TrueSync-Key") == "tst_abc_secret", url

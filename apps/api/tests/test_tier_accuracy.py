@@ -34,6 +34,7 @@ def conn():
     with engine.begin() as c:
         c.exec_driver_sql("""
             CREATE TABLE soa_expectation_outcomes (
+                flags TEXT, claim_results TEXT, source_split TEXT, reason_code TEXT, surface TEXT,
                 id INTEGER PRIMARY KEY, run_id INTEGER UNIQUE, query_id INTEGER,
                 cycle_id INTEGER, platform TEXT, tier TEXT,
                 expected_answer TEXT, extraction TEXT, outcome TEXT,
@@ -51,6 +52,7 @@ def conn():
         """)
         c.exec_driver_sql("""
             CREATE TABLE soa_runs (
+                surface TEXT, collector TEXT, answer_status TEXT,
                 id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER,
                 platform TEXT, run_number INTEGER, raw_response TEXT
             )
@@ -63,6 +65,7 @@ def conn():
         """)
         c.exec_driver_sql("""
             CREATE TABLE soa_cycles (
+                full_loop_run_id INTEGER, reference_prices TEXT, reference_as_of TIMESTAMP,
                 id INTEGER PRIMARY KEY, study_type TEXT, extraction_validation TEXT
             )
         """)

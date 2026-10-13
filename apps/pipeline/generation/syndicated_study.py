@@ -237,6 +237,13 @@ def build_syndicated_study(
         'program_name': snapshot.program_name,
         'tiers': [t.get('name') for t in snapshot.tiers],
         'read_at': snapshot.read_at,
+        # 2B: which mode the study was generated in, and from what record.
+        'kind': getattr(snapshot, 'merchant_kind', None),
+        'hosting': getattr(snapshot, 'hosting', None),
+        'own_domain': getattr(snapshot, 'own_domain', None),
+        'retailer_list': list(getattr(snapshot, 'retailer_list', None) or []),
+        'study_brand': getattr(snapshot, 'study_brand', None) or snapshot.brand,
+        'record_error': getattr(snapshot, 'record_error', None),
     }
 
     # ── The catalog tiers, BUILT FIRST ───────────────────────────────
@@ -279,8 +286,22 @@ def build_syndicated_study(
             catalog_texts=[row['query_text'] for row in catalog_rows],
             **generate_kwargs,
         )
+        # 2B: a question may name a retailer only from the record's list.
+        # The generator is told so; this is the check that it listened.
+        retailer_drops = []
+        if ct.is_external(snapshot):
+            kept = []
+            for row in brand_rows:
+                outside = ct.retailers_outside_list(row.get('query_text'), snapshot)
+                if outside:
+                    retailer_drops.append({'query_text': row.get('query_text'),
+                                           'retailers': outside})
+                else:
+                    kept.append(row)
+            brand_rows = kept
         rows.extend(brand_rows)
         config['brand_direct'].update({
+            'retailer_not_in_list_drops': retailer_drops,
             'count': len(brand_rows),
             'requested': brand_report.get('requested'),
             'shortfall': brand_report.get('shortfall'),

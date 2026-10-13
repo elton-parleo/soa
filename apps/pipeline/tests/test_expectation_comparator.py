@@ -322,11 +322,28 @@ def test_a_confident_reading_of_an_answer_that_said_nothing_is_absent():
 
 def test_without_history_a_prior_value_scores_wrong_not_stale():
     """Without a record saying a value was once published we cannot claim
-    it was — the conservative direction and the honest one."""
+    it was — the conservative direction and the honest one.
+
+    2B: the claim names its product. Before 2B this row's claim was
+    unattributed; rule 3 (product_inferred can never be wrong) now makes
+    an unattributed mismatch unscoreable, which is tested on its own
+    below, so this test keeps testing what it was written for."""
+    result = verdict(PRICE, extraction(prices=[
+        {'amount': '21.49', 'currency': None, 'attributed_product': 'Snug-Fit Size 3, 84 ct'},
+    ]))
+    assert result.outcome == cmp.WRONG
+
+
+def test_2b_rule3_an_unattributed_mismatch_is_unscoreable_not_wrong():
+    """Rule 3, from the engine's canBeWrong: 'wrong' is the readout's
+    strongest claim, so it needs the agent to have named the item. This is
+    the claim test_without_history used before 2B, and the verdict it
+    moved: wrong -> unscoreable (product_inferred)."""
     result = verdict(PRICE, extraction(prices=[
         {'amount': '21.49', 'currency': None, 'attributed_product': None},
     ]))
-    assert result.outcome == cmp.WRONG
+    assert result.outcome == cmp.UNSCOREABLE
+    assert result.reason_code == cmp.REASON_PRODUCT_INFERRED
 
 
 def test_stale_records_which_publication_it_matched():

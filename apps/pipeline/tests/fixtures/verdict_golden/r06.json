@@ -1,0 +1,55 @@
+{
+  "id": "r06",
+  "rule": "\u00a73 rule 2 (variant marker)",
+  "source": "engine VARIANT_MARKERS + 2B \"overnight\"",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "price",
+    "amount": "22.99",
+    "currency": "USD"
+  },
+  "source_ref": {
+    "merchant_slug": "wiggle-and-snug",
+    "listing_id": 90,
+    "variant_id": "snug-fit-diapers-s3-small",
+    "attribution": [
+      "Size 3",
+      "small pack"
+    ],
+    "attribution_rivals": [
+      "big pack",
+      "Size 1",
+      "Size 2",
+      "Size 4",
+      "Size 5",
+      "Size 6"
+    ]
+  },
+  "extraction": {
+    "prices": [
+      {
+        "amount": "23.99",
+        "currency": null,
+        "attributed_product": "Snug-Fit Overnight Diapers Size 3"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "catalog": null,
+  "reference": null,
+  "verdict_before": "wrong",
+  "verdict_after": "wrong",
+  "reason_code_after": "variant_swap",
+  "flags_after": [
+    "variant_swap"
+  ],
+  "reason_after": "stated 23.99 for 'Snug-Fit Overnight Diapers Size 3', which is snug-fit-overnight-s3 (variant marker overnight); judged against it: exact"
+}

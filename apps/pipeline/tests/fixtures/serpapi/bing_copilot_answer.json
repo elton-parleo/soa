@@ -1,0 +1,25 @@
+{
+  "_note": "Hand-written test fixture in the shape documented at serpapi.com/bing-copilot-api. Not a captured response.",
+  "search_metadata": {
+    "id": "fixture-copilot-1",
+    "status": "Success",
+    "bing_copilot_url": "https://www.bing.com/copilotsearch?q=best+diapers+for+a+newborn"
+  },
+  "search_parameters": { "engine": "bing_copilot", "q": "best diapers for a newborn" },
+  "header": "Pampers Swaddlers are the best overall newborn diapers.",
+  "text_blocks": [
+    { "type": "heading", "snippet": "Top Overall Pick: Pampers Swaddlers", "level": 2 },
+    {
+      "type": "list",
+      "list": [
+        { "snippet": "Rated the best newborn diaper overall by Babylist.", "snippet_highlighted_words": ["best newborn diaper"], "reference_indexes": [0] },
+        { "snippet": "Widely available and offered in preemie sizes.", "reference_indexes": [1] }
+      ]
+    },
+    { "type": "paragraph", "snippet": "Huggies Little Snugglers are a close unscented alternative.", "snippet_links": [{ "text": "Huggies Little Snugglers", "link": "https://www.huggies.com/" }], "reference_indexes": [0] }
+  ],
+  "references": [
+    { "index": 0, "title": "babylist.com", "link": "https://www.babylist.com/hello-baby/best-diapers", "snippet": "Best diapers.", "source": "Babylist" },
+    { "index": 1, "title": "thebump.com", "link": "https://www.thebump.com/a/best-diapers", "source": "The Bump" }
+  ]
+}

@@ -143,7 +143,39 @@ def test_persists_brand_and_competitors_and_org(db):
     assert row[4] is not None  # ip_hash stored, never the raw IP
 
 
-def test_store_url_persisted_when_given(db):
+_DNS_SEEN = {}
+
+
+@pytest.fixture
+def require_dns():
+    """
+    Skip, naming the lookup, when this machine cannot resolve the host a
+    test submits. submit_lite_request resolves the store's domain for real
+    (public_lite._host_resolves), and offline that is a definitive "no such
+    name", which the route rightly rejects — a sandbox fact, not a bug. One
+    bounded getaddrinfo per host per session; in CI with network the test
+    runs unchanged.
+    """
+    import socket
+
+    def check(host):
+        if host not in _DNS_SEEN:
+            previous = socket.getdefaulttimeout()
+            try:
+                socket.setdefaulttimeout(2.0)
+                socket.getaddrinfo(host, None)
+                _DNS_SEEN[host] = None
+            except OSError as exc:
+                _DNS_SEEN[host] = f"{type(exc).__name__}: {exc}"
+            finally:
+                socket.setdefaulttimeout(previous)
+        if _DNS_SEEN[host] is not None:
+            pytest.skip(f"needs live DNS: getaddrinfo({host!r}) failed here ({_DNS_SEEN[host]})")
+    return check
+
+
+def test_store_url_persisted_when_given(db, require_dns):
+    require_dns("acme.com")
     result = public_lite.submit_lite_request(
         _submit_data(store_url="acme.com"), FakeRequest(ip="203.0.113.9"),
     )
@@ -266,7 +298,8 @@ def test_under_all_limits_succeeds(db):
 # The send happens after the INSERT has committed and its result is
 # discarded, so it can neither roll the row back nor change the 201.
 
-def test_successful_submit_notifies_once_with_the_audit_fields(db):
+def test_successful_submit_notifies_once_with_the_audit_fields(db, require_dns):
+    require_dns("allbirds.com")
     with patch.object(public_lite, "send_audit_started_notification", return_value=True) as mock_send:
         result = public_lite.submit_lite_request(
             _submit_data(brand_name="Allbirds", competitor_names=["Rothys", "Vessi"],

@@ -1,0 +1,39 @@
+{
+  "id": "r02",
+  "rule": "\u00a73 rule 1",
+  "source": "engine example, checks.ts compareQuote: \"$241\" for $240.99",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "price",
+    "amount": "240.99",
+    "currency": "USD"
+  },
+  "source_ref": {
+    "variant_id": "x"
+  },
+  "extraction": {
+    "prices": [
+      {
+        "amount": "241",
+        "currency": null,
+        "attributed_product": "the drill"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "catalog": null,
+  "reference": null,
+  "verdict_before": "wrong",
+  "verdict_after": "partial",
+  "reason_code_after": null,
+  "flags_after": [],
+  "reason_after": "stated 241, whole-dollar within 50 cents of 240.99"
+}

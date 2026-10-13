@@ -66,6 +66,7 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_cycles (
+                full_loop_run_id INTEGER, reference_prices TEXT, reference_as_of TIMESTAMP,
                 id INTEGER PRIMARY KEY, cycle_code TEXT, status TEXT,
                 source_lite_request_id INTEGER, study_series_id TEXT
             )
@@ -98,6 +99,7 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
+                surface TEXT, collector TEXT, answer_status TEXT,
                 id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT
             )
         """)

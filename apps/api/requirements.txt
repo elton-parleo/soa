@@ -4,7 +4,13 @@
 #   cp -r packages/shared/soa_shared apps/api/soa_shared
 
 # Web framework
-fastapi>=0.110.0,<1.0.0
+# Pinned to the versions the test suite runs on. A range let a build pick
+# up FastAPI 0.143, on which the TrueSync proxy route-table tests fail;
+# Vercel resolves at build time, so an untested version could ship.
+# Bump deliberately, with the suite green on the new versions.
+fastapi==0.115.12
+starlette==0.46.2
+pydantic==2.14.1
 uvicorn[standard]>=0.29.0,<1.0.0
 python-multipart>=0.0.9
 

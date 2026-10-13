@@ -1,0 +1,30 @@
+{
+  "_note": "Hand-written test fixture in the shape documented at serpapi.com/google-ai-mode-api. Not a captured response.",
+  "search_metadata": {
+    "id": "fixture-aimode-1",
+    "status": "Success",
+    "google_ai_mode_url": "https://www.google.com/search?udm=50&q=best+diapers+for+a+newborn"
+  },
+  "search_parameters": { "engine": "google_ai_mode", "q": "best diapers for a newborn", "location": "Berkeley, California, United States" },
+  "text_blocks": [
+    { "type": "paragraph", "snippet": "The top newborn diapers focus on absorbency and skin protection.", "reference_indexes": [0, 1] },
+    { "type": "heading", "snippet": "Top Diaper Recommendations" },
+    {
+      "type": "list",
+      "list": [
+        { "snippet": "Pampers Swaddlers: Best overall, with an umbilical cord notch.", "reference_indexes": [0] },
+        { "snippet": "Huggies Little Snugglers: Best for blowouts.", "list": [{ "snippet": "Pocketed back waistband." }] }
+      ]
+    },
+    { "type": "table", "table": [["Diaper", "Price"], ["Pampers Swaddlers 96 ct", "$27.97"]] }
+  ],
+  "shopping_results": [
+    { "title": "Pampers Swaddlers Baby Diapers", "price": "$27.97", "extracted_price": 27.97, "source": "Walmart", "product_link": "https://www.google.com/shopping/product/1", "index": 0 },
+    { "title": "Rascals Premium Diapers", "price": "$17.97", "old_price": "$20.00", "extracted_price": 17.97, "extracted_old_price": 20, "index": 1 }
+  ],
+  "references": [
+    { "index": 1, "title": "Best Diapers of 2026", "link": "https://www.babylist.com/hello-baby/best-diapers", "snippet": "Tested by parents.", "source": "Babylist" },
+    { "index": 0, "title": "Pampers Swaddlers", "link": "https://www.pampers.com/en-us/diapers-wipes/swaddlers", "snippet": "Our softest diaper.", "source": "Pampers" }
+  ],
+  "reconstructed_markdown": "The top newborn diapers focus on absorbency and skin protection."
+}

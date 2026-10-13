@@ -27,10 +27,14 @@ from soa_shared.scope_resolution import materialize_and_freeze
 from runners.base_runner import BasePlatformRunner
 from runners.claude_runner import ClaudeRunner
 from runners.cycle_summary import CycleSummary
+from runners.gemini_api_runner import GeminiApiRunner
 from runners.gemini_grounded_runner import GeminiGroundedRunner
+from runners.openai_api_runner import OpenAIApiRunner
 from runners.openai_runner import OpenAIRunner
 from runners.perplexity_runner import PerplexityRunner
 from runners.platform_response import PlatformResponse
+from runners.serpapi_runner import AiModeRunner, CopilotRunner
+from soa_shared import surfaces
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +50,12 @@ _RUNNER_CLASSES: Dict[str, type] = {
     "perplexity": PerplexityRunner,
     "gemini_grounded": GeminiGroundedRunner,
     "claude": ClaudeRunner,
+    # 2B: the ungrounded API surfaces beside the grounded ones, and the
+    # consumer surfaces through SerpApi (soa_shared/surfaces.py).
+    "chatgpt_api": OpenAIApiRunner,
+    "gemini_api": GeminiApiRunner,
+    "aimode": AiModeRunner,
+    "copilot": CopilotRunner,
 }
 
 # Gemini always runs grounded. The ungrounded API has no live retrieval and
@@ -62,6 +72,10 @@ _PLATFORM_MAX_CONCURRENT: Dict[str, int] = {
     "perplexity":      config.SOA_PERPLEXITY_MAX_CONCURRENT,
     "gemini_grounded": config.SOA_GEMINI_MAX_CONCURRENT,
     "claude":          config.SOA_CLAUDE_MAX_CONCURRENT,
+    "chatgpt_api":     config.SOA_OPENAI_MAX_CONCURRENT,
+    "gemini_api":      config.SOA_GEMINI_MAX_CONCURRENT,
+    "aimode":          config.SOA_SERPAPI_MAX_CONCURRENT,
+    "copilot":         config.SOA_SERPAPI_MAX_CONCURRENT,
 }
 
 
@@ -97,6 +111,19 @@ def resolve_platform_concurrency(cycle_code: str, platform: str, max_concurrent:
     return _PLATFORM_MAX_CONCURRENT.get(platform, max_concurrent)
 
 
+def answer_status_for(response: PlatformResponse) -> Optional[str]:
+    """
+    What the run produced, for soa_runs.answer_status. A consumer runner
+    says so itself (a wall is a result); an API runner's successful call
+    with text is answered; a failed call is not a result at all (None).
+    """
+    if response.answer_status:
+        return response.answer_status
+    if response.status == "success" and (response.response_text or "").strip():
+        return surfaces.ANSWERED
+    return None
+
+
 class RunOrchestrator:
 
     def __init__(
@@ -114,6 +141,13 @@ class RunOrchestrator:
         self.max_concurrent = max_concurrent or config.SOA_MAX_CONCURRENT
 
         # Validate platforms
+        for platform in self.platforms:
+            # 2B: a surface that cannot run here (a consumer surface that is
+            # switched off, or one with no verified provider) is refused
+            # with its reason, never silently skipped.
+            reason = surfaces.unavailable_reason(platform) if surfaces.get(platform) else None
+            if reason and platform not in ("gemini",):
+                raise ValueError(f"Surface {platform!r} cannot run: {reason}")
         unknown = set(self.platforms) - set(_RUNNER_CLASSES)
         if unknown:
             raise ValueError(f"Unknown platforms: {unknown}. Valid: {set(_RUNNER_CLASSES)}")
@@ -483,6 +517,10 @@ class RunOrchestrator:
             run.error_message = response.error
             run.search_triggered = response.search_triggered
             run.retrieved_sources = response.retrieved_sources
+            # 2B: surface fidelity on every run row.
+            run.surface = surfaces.surface_of(platform)
+            run.collector = surfaces.collector_of(platform)
+            run.answer_status = answer_status_for(response)
 
             session.commit()
 

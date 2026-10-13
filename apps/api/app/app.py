@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from app.routers import (
     studies, entities, cycles, metrics, scope, actions, full_analysis,
     truesync, customers, lite_requests, public_lite, public_demo, public_full_analysis,
+    console, full_loop,
 )
 from app.auth import verify_token
 
@@ -102,6 +103,21 @@ app.include_router(
 # app/customer_context.py). Authed like the routers above.
 app.include_router(
     customers.router,
+    prefix="/api",
+    dependencies=[Depends(verify_token)],
+)
+
+# 2B: "Run full loop" (POST/GET /api/full-loop) and the console's read
+# models (/api/console/*). Authed like the routers above; both are scoped
+# to one tenant by app/console_scope.py (members their own org, operators
+# any org via ?org=), and the tenant token stays server-side.
+app.include_router(
+    full_loop.router,
+    prefix="/api",
+    dependencies=[Depends(verify_token)],
+)
+app.include_router(
+    console.router,
     prefix="/api",
     dependencies=[Depends(verify_token)],
 )

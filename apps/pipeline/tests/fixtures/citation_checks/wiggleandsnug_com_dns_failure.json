@@ -1,0 +1,6 @@
+{
+  "_note": "Pinned recorded result, not a live lookup. The 2B brief records that wiggleandsnug.com did not resolve when a September Gemini answer cited it (golden row seed5_row40, query WIG_148, gemini run 1, cites 'their official website (wiggleandsnug.com)'). The domain resolves now, so a live lookup would no longer show it; this fixture replays the failure. The exact timestamp and resolver error text of the original lookup are not in this repository; the values below are the shape the check records, not a capture.",
+  "domain": "wiggleandsnug.com",
+  "resolver_error": "[Errno -2] Name or service not known",
+  "golden_row": "seed5_row40.json"
+}

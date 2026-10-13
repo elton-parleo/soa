@@ -1,0 +1,55 @@
+{
+  "id": "r05",
+  "rule": "\u00a73 rule 2 (model/size number)",
+  "source": "engine modelNumberClash: \"Size 1\" against \"Size 3\"",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "price",
+    "amount": "22.99",
+    "currency": "USD"
+  },
+  "source_ref": {
+    "merchant_slug": "wiggle-and-snug",
+    "listing_id": 90,
+    "variant_id": "snug-fit-diapers-s3-small",
+    "attribution": [
+      "Size 3",
+      "small pack"
+    ],
+    "attribution_rivals": [
+      "big pack",
+      "Size 1",
+      "Size 2",
+      "Size 4",
+      "Size 5",
+      "Size 6"
+    ]
+  },
+  "extraction": {
+    "prices": [
+      {
+        "amount": "17.99",
+        "currency": null,
+        "attributed_product": "Size 1 small pack"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "catalog": null,
+  "reference": null,
+  "verdict_before": "absent",
+  "verdict_after": "partial",
+  "reason_code_after": "variant_swap",
+  "flags_after": [
+    "variant_swap"
+  ],
+  "reason_after": "stated 17.99 for 'Size 1 small pack', which is snug-fit-diapers-s1-small (names a sibling variant); judged against it: exact"
+}

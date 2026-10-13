@@ -1,0 +1,13 @@
+{
+  "merchant": "acme-baby",
+  "kind": "brand",
+  "as_of": "2026-10-02T12:00:00+00:00",
+  "prices": [
+    {"variant_ref": "feed_sku:41", "gtin": "00012345678905", "sku": null, "variant_label": "Size 3, 84 ct",
+     "retailer_domain": "target.com", "url": "https://www.target.com/p/acme-swaddle-size-3-84ct/-/A-1",
+     "price": "22.99", "member_price": "20.69", "list_price": "24.99", "currency": "USD",
+     "availability": "in_stock", "observed_at": "2026-10-02T11:40:00+00:00",
+     "reference_source": "honest_fetch", "method": "json_ld", "read_status": "ok",
+     "verifiable": true, "unverifiable_reason": null, "reference_read_id": 701, "reference_run_id": 29}
+  ]
+}

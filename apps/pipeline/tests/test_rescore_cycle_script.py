@@ -39,12 +39,14 @@ def db(monkeypatch):
         """)
         c.exec_driver_sql("""
             CREATE TABLE soa_runs (
+                surface TEXT, collector TEXT, answer_status TEXT, retrieved_sources TEXT,
                 id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER,
                 run_number INTEGER
             )
         """)
         c.exec_driver_sql("""
             CREATE TABLE soa_expectation_outcomes (
+                flags TEXT, claim_results TEXT, source_split TEXT, reason_code TEXT, surface TEXT,
                 id INTEGER PRIMARY KEY, run_id INTEGER, cycle_id INTEGER,
                 tier TEXT, outcome TEXT, secondary_results TEXT,
                 platform TEXT

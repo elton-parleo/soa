@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Derived field by field from parleohq/truesync console-demo apps/console/src/data/types.ts (Answer, Check, Segment, TvCell, TvRow, TrueValue, AccessRow, Accessibility, StudyRow, StudyCell, AgentId) and studio.ts (Entity, Prompt, Study, Run). Typed fields are checked strictly; extra fields beside them are allowed (additionalProperties) because the read models carry documented extras. The 2B extensions the console does not have yet are marked x2b: AgentId + 'claude', Check.verdict + stale/unverifiable/unscoreable, TvCell.status + unverifiable, AccessRow.vendor + 'claude'.",
+  "$defs": {
+    "AgentId": {"enum": ["chatgpt", "gemini", "aimode", "perplexity", "copilot", "claude"], "x2b": "claude"},
+    "Tone": {"enum": ["ok", "warn", "bad", "blue", "neu"]},
+    "Segment": {"type": "object", "required": ["t"], "properties": {
+      "t": {"type": "string"}, "mark": {"enum": ["wrong", "miss", "ok"]}, "ann": {"type": "number"}}},
+    "Check": {"type": "object", "required": ["claim", "agent", "live", "verdict"], "properties": {
+      "claim": {"type": "string"}, "agent": {"type": "string"}, "live": {"type": "string"},
+      "verdict": {"enum": ["wrong", "missed", "right", "partial", "stale", "unverifiable", "unscoreable"]},
+      "note": {"type": "string"}}},
+    "Answer": {"type": "object",
+      "required": ["id", "agent", "query", "queryType", "runAt", "severity", "summary", "paragraphs", "named", "first", "checks"],
+      "properties": {
+        "id": {"type": "string"}, "agent": {"$ref": "#/$defs/AgentId"}, "query": {"type": "string"},
+        "queryType": {"type": "string"}, "runAt": {"type": "string"}, "runs": {"type": "string"},
+        "severity": {"enum": ["high", "medium", "low", "ok"]}, "summary": {"type": "string"},
+        "paragraphs": {"type": "array", "items": {"type": "array", "items": {"$ref": "#/$defs/Segment"}}},
+        "named": {"type": "array", "items": {"type": "string"}}, "first": {"type": "string"},
+        "checks": {"type": "array", "items": {"$ref": "#/$defs/Check"}},
+        "brand": {"type": "string"}, "gap": {"type": "string"}}},
+    "TvCell": {"type": "object", "required": ["quoted", "live", "status"], "properties": {
+      "quoted": {"type": "string"}, "live": {"type": "string"},
+      "status": {"enum": ["exact", "wrong", "none", "partial", "missed", "unverifiable"]}}},
+    "TvRow": {"type": "object", "required": ["product", "sku", "cells"], "properties": {
+      "product": {"type": "string"}, "sku": {"type": "string"},
+      "cells": {"type": "object", "additionalProperties": {"$ref": "#/$defs/TvCell"}}}},
+    "TrueValue": {"type": "object", "required": ["columns", "rows", "programs"], "properties": {
+      "columns": {"type": "array", "items": {"type": "object", "required": ["id", "name"], "properties": {
+        "id": {"type": "string"}, "name": {"type": "string"}, "logo": {"type": "string"}, "you": {"type": "boolean"}}}},
+      "rows": {"type": "array", "items": {"$ref": "#/$defs/TvRow"}},
+      "programs": {"type": "array"}}},
+    "AccessRow": {"type": "object", "required": ["identity", "vendor", "result", "ok", "code"], "properties": {
+      "identity": {"type": "string"}, "vendor": {"enum": ["chatgpt", "gemini", "aimode", "perplexity", "copilot", "claude", "other"]},
+      "result": {"type": "string"}, "ok": {"type": "boolean"}, "code": {"type": "string"}}},
+    "Accessibility": {"type": "object", "required": ["requests", "summary", "checks", "grid", "note"], "properties": {
+      "requests": {"type": "array", "items": {"$ref": "#/$defs/AccessRow"}},
+      "summary": {"type": "object", "required": ["value", "of", "label"], "properties": {
+        "value": {"type": "string"}, "of": {"type": "string"}, "label": {"type": "string"}}},
+      "checks": {"type": "array", "items": {"type": "object", "required": ["name", "value", "status"], "properties": {
+        "name": {"type": "string"}, "value": {"type": "string"}, "status": {"enum": ["ok", "partial", "bad"]}}}},
+      "grid": {"type": "object", "required": ["cols", "rows"], "properties": {
+        "cols": {"type": "array", "items": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string"}}}},
+        "rows": {"type": "array", "items": {"type": "object", "required": ["name", "source", "cells"], "properties": {
+          "name": {"type": "string"}, "source": {"type": "string"},
+          "cells": {"type": "array", "items": {"type": "object", "required": ["v", "tone"], "properties": {
+            "v": {"type": "string"}, "tone": {"$ref": "#/$defs/Tone"}}}}}}}}},
+      "note": {"type": "string"}}},
+    "StudyCell": {"type": "object", "required": ["s", "pick"], "properties": {
+      "s": {"enum": ["ok", "bad", "warn", "neu", "na"]}, "pick": {"type": ["string", "null"]},
+      "named": {"type": "boolean"}, "at": {"type": "string"}, "text": {"type": "string"},
+      "prices": {"type": "array", "items": {"type": "string"}}, "note": {"type": "string"}}},
+    "StudyRow": {"type": "object", "required": ["id", "q", "type", "cells"], "properties": {
+      "id": {"type": "string"}, "q": {"type": "string"}, "type": {"type": "string"},
+      "cells": {"type": "object", "propertyNames": {"$ref": "#/$defs/AgentId"},
+                "additionalProperties": {"$ref": "#/$defs/StudyCell"}}}},
+    "Entity": {"type": "object", "required": ["id", "name", "type", "aliases"], "properties": {
+      "id": {"type": "string"}, "name": {"type": "string"},
+      "type": {"enum": ["brand", "retailer", "cpg", "product", "group"]},
+      "domain": {"type": "string"}, "category": {"type": "string"},
+      "aliases": {"type": "array", "items": {"type": "string"}}}},
+    "Prompt": {"type": "object", "required": ["id", "text", "stage", "branded", "source"], "properties": {
+      "id": {"type": "string"}, "text": {"type": "string"},
+      "stage": {"enum": ["Awareness", "Research", "Comparison", "Ready to buy"]},
+      "branded": {"type": "boolean"}, "persona": {"type": "string"}, "source": {"enum": ["ai", "manual", "csv"]}}},
+    "Study": {"type": "object",
+      "required": ["id", "name", "entity", "pattern", "category", "rivals", "retailers", "agents", "runsPerPrompt", "cadence", "prompts", "shelfReads", "crawl", "status", "created", "owner"],
+      "properties": {
+        "id": {"type": "string"}, "name": {"type": "string"}, "entity": {"type": "string"},
+        "pattern": {"enum": ["retailer", "brand_at_retail", "brand_vs_brand"]}, "category": {"type": "string"},
+        "rivals": {"type": "array", "items": {"type": "string"}}, "retailers": {"type": "array", "items": {"type": "string"}},
+        "agents": {"type": "array", "items": {"$ref": "#/$defs/AgentId"}}, "runsPerPrompt": {"type": "number"},
+        "cadence": {"enum": ["weekly", "once", "paused", "draft"]},
+        "prompts": {"type": "array", "items": {"$ref": "#/$defs/Prompt"}},
+        "shelfReads": {"type": "array", "items": {"type": "string"}}, "crawl": {"type": "boolean"},
+        "status": {"enum": ["active", "draft", "paused", "done"]}, "created": {"type": "string"},
+        "lastRun": {"type": "string"}, "owner": {"type": "string"}, "note": {"type": "string"}}},
+    "Run": {"type": "object", "required": ["id", "study", "started", "status", "planned", "collected", "agents", "elapsed"],
+      "properties": {
+        "id": {"type": "string"}, "study": {"type": "string"}, "started": {"type": "string"}, "finished": {"type": "string"},
+        "status": {"enum": ["complete", "running", "failed", "queued"]},
+        "planned": {"type": "number"}, "collected": {"type": "number"}, "usable": {"type": "number"},
+        "agents": {"type": "array", "items": {"$ref": "#/$defs/AgentId"}}, "elapsed": {"type": "string"}, "note": {"type": "string"}}},
+    "FullLoopStatus": {"$comment": "soa's own shape (no console type yet): docs/console-read-models.md",
+      "type": "object", "required": ["id", "status", "merchant", "study_type", "platforms", "supply", "cycle", "strip"],
+      "properties": {
+        "id": {"type": "integer"},
+        "status": {"enum": ["reference_pending", "reference_done", "cycle_planned", "scoring", "scored", "failed"]},
+        "merchant": {"type": "string"}, "study_type": {"type": "string"},
+        "platforms": {"type": "array", "items": {"type": "string"}},
+        "supply": {"type": "object", "required": ["run_id", "status"]},
+        "cycle": {"type": ["object", "null"]},
+        "strip": {"type": "array", "items": {"type": "object", "required": ["step", "label", "state"]}}}}
+  }
+}

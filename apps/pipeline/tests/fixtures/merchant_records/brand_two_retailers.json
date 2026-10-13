@@ -1,0 +1,167 @@
+{
+  "_note": "Fictional merchant, recorded in the shapes supply serves (GET /tenant, /merchants/{slug}/retailers, /feed, /catalog). No customer data.",
+  "tenant_merchant": {
+    "slug": "acme-baby",
+    "name": "Acme Baby",
+    "domain": "acmebaby.example",
+    "kind": "brand",
+    "hosting": "external",
+    "has_record": true
+  },
+  "retailers": {
+    "merchant": "acme-baby",
+    "own_domain": "acmebaby.example",
+    "domains": [
+      "target.com",
+      "walmart.com"
+    ]
+  },
+  "feed": {
+    "merchant": "acme-baby",
+    "version": {
+      "id": 7,
+      "version_number": 1,
+      "committed_at": "2026-10-08T15:00:00+00:00"
+    },
+    "rows": [
+      {
+        "row_number": 2,
+        "gtin": "00012345678905",
+        "gtin14": "00012345678905",
+        "product_name": "Swaddle Diapers",
+        "brand_name": "Acme Baby",
+        "variant_label": "Size 3",
+        "pack_count": 84,
+        "multipack": null,
+        "size_value": null,
+        "size_unit": null,
+        "price": "24.99",
+        "currency": "USD",
+        "description": null,
+        "image_url": null,
+        "status": "ready",
+        "messages": [],
+        "provenance": "feed",
+        "retailers": [
+          {
+            "domain": "target.com",
+            "url": "https://www.target.com/p/acme-swaddle-3/-/A-1"
+          },
+          {
+            "domain": "walmart.com",
+            "url": "https://www.walmart.com/ip/acme-swaddle-3/2"
+          }
+        ]
+      },
+      {
+        "row_number": 3,
+        "gtin": "00012345678912",
+        "gtin14": "00012345678912",
+        "product_name": "Swaddle Diapers",
+        "brand_name": "Acme Baby",
+        "variant_label": "Size 3 value pack",
+        "pack_count": 120,
+        "multipack": null,
+        "size_value": null,
+        "size_unit": null,
+        "price": "29.99",
+        "currency": "USD",
+        "description": null,
+        "image_url": null,
+        "status": "ready",
+        "messages": [],
+        "provenance": "feed",
+        "retailers": [
+          {
+            "domain": "target.com",
+            "url": "https://www.target.com/p/acme-swaddle-3-value/-/A-3"
+          },
+          {
+            "domain": "walmart.com",
+            "url": "https://www.walmart.com/ip/acme-swaddle-3-value/4"
+          }
+        ]
+      },
+      {
+        "row_number": 4,
+        "gtin": "00012345678929",
+        "gtin14": "00012345678929",
+        "product_name": "Swaddle Diapers",
+        "brand_name": "Acme Baby",
+        "variant_label": "Size 4",
+        "pack_count": 72,
+        "multipack": null,
+        "size_value": null,
+        "size_unit": null,
+        "price": "24.99",
+        "currency": "USD",
+        "description": null,
+        "image_url": null,
+        "status": "ready",
+        "messages": [],
+        "provenance": "feed",
+        "retailers": [
+          {
+            "domain": "walmart.com",
+            "url": "https://www.walmart.com/ip/acme-swaddle-4/6"
+          }
+        ]
+      }
+    ]
+  },
+  "catalog": {
+    "merchant": "acme-baby",
+    "listings": [
+      {
+        "listing_id": 101,
+        "product_url": null,
+        "published_at": "2026-10-08T15:00:00+00:00",
+        "spec_version": "sku-feed",
+        "product_id": "feed:acme-baby:00012345678905",
+        "title": "Swaddle Diapers",
+        "brand": "Acme Baby",
+        "variants": [
+          {
+            "variant_id": "00012345678905",
+            "title": "Size 3",
+            "size": null,
+            "count": 84,
+            "attributes": {},
+            "list_price": "24.99",
+            "currency": "USD",
+            "gtin": "00012345678905"
+          },
+          {
+            "variant_id": "00012345678912",
+            "title": "Size 3 value pack",
+            "size": null,
+            "count": 120,
+            "attributes": {},
+            "list_price": "29.99",
+            "currency": "USD",
+            "gtin": "00012345678912"
+          },
+          {
+            "variant_id": "00012345678929",
+            "title": "Size 4",
+            "size": null,
+            "count": 72,
+            "attributes": {},
+            "list_price": "24.99",
+            "currency": "USD",
+            "gtin": "00012345678929"
+          }
+        ]
+      }
+    ]
+  },
+  "merchants": [
+    {
+      "slug": "acme-baby",
+      "display_name": "Acme Baby",
+      "domain": "acmebaby.example",
+      "last_published_at": "2026-10-08T15:00:00+00:00",
+      "published_listings": 1
+    }
+  ]
+}

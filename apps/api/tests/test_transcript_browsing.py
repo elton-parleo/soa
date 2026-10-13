@@ -34,6 +34,7 @@ def db():
         conn.exec_driver_sql("CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, stage TEXT, persona TEXT, query_text TEXT, tier TEXT, expected_answer TEXT, provenance TEXT, source_ref TEXT)")
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
+                surface TEXT, collector TEXT, answer_status TEXT,
                 id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, status TEXT,
                 platform TEXT, raw_response TEXT, run_at TEXT, run_number INTEGER
             )

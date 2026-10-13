@@ -17,9 +17,15 @@ from unittest.mock import patch
 
 import pytest
 
-from soa_shared.expected_answers import (
-    BRAND_ASSESSMENTS, EXPECTATION_OUTCOMES, VALUE_OUTCOMES,
-)
+from soa_shared.expected_answers import BRAND_ASSESSMENTS
+
+# The value vocabulary AS OF THIS MIGRATION. 2B (c4e2b7d9a1f3) widened it
+# with partial and unverifiable; this migration is a record of the day it
+# ran, so it is checked against the list it was written for. The "model
+# and migration mean the same thing" property moved to the newest
+# constraint migration with it: tests/test_external_mode_migration.py.
+VALUE_OUTCOMES = ['exact', 'stale', 'wrong', 'absent', 'unscoreable']
+EXPECTATION_OUTCOMES = VALUE_OUTCOMES + list(BRAND_ASSESSMENTS)
 
 _VERSIONS_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -56,10 +62,11 @@ def test_the_new_constraint_admits_both_vocabularies():
         assert f"'{value}'" in mod.NEW, value
 
 
-def test_the_new_constraint_admits_exactly_what_the_models_constraint_does():
+def test_the_new_constraint_admits_exactly_what_the_models_constraint_did():
     """Two places state this list — the migration and the model's
     CheckConstraint. They are allowed to be written differently; they are
-    not allowed to mean different things."""
+    not allowed to mean different things. As of this migration; the
+    current model is checked against c4e2b7d9a1f3."""
     mod = _load()
     for value in EXPECTATION_OUTCOMES:
         assert f"'{value}'" in mod.NEW

@@ -28,6 +28,7 @@ def db(monkeypatch):
     with engine.begin() as conn:
         conn.exec_driver_sql("""
             CREATE TABLE soa_cycles (
+                full_loop_run_id INTEGER, reference_prices TEXT, reference_as_of TIMESTAMP,
                 id INTEGER PRIMARY KEY, cycle_code TEXT UNIQUE,
                 extraction_validation TEXT, updated_at TIMESTAMP
             )
@@ -39,11 +40,13 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
+                surface TEXT, collector TEXT, answer_status TEXT, retrieved_sources TEXT,
                 id INTEGER PRIMARY KEY, run_number INTEGER, raw_response TEXT
             )
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_expectation_outcomes (
+                flags TEXT, claim_results TEXT, source_split TEXT, reason_code TEXT, surface TEXT,
                 id INTEGER PRIMARY KEY, run_id INTEGER, query_id INTEGER,
                 cycle_id INTEGER, platform TEXT, tier TEXT,
                 expected_answer TEXT, extraction TEXT, outcome TEXT,

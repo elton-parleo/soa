@@ -229,6 +229,30 @@ class TrueSyncClient:
     async def get_retailers(self, merchant_slug: str) -> ForwardResult:
         return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/retailers")
 
+    # ─── 2B: the full loop and what the console reads ────────────────────
+
+    async def post_full_loop(self, merchant_slug: str, allow_hosted_render: bool = True) -> ForwardResult:
+        """POST /merchants/{slug}/full-loop — 200 with the finished run up to
+        25 pages, 202 with the run in `running` above that. Write token."""
+        return await self.forward(
+            "POST", f"/api/truesync/merchants/{_slug(merchant_slug)}/full-loop",
+            json={"allow_hosted_render": bool(allow_hosted_render)},
+        )
+
+    async def get_full_loop_run(self, merchant_slug: str, run_id: int) -> ForwardResult:
+        return await self.get(
+            f"/api/truesync/merchants/{_slug(merchant_slug)}/full-loop/{int(run_id)}")
+
+    async def get_access(self, merchant_slug: str) -> ForwardResult:
+        """The Command Center's access payload: the console's Accessibility."""
+        return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/access")
+
+    async def get_retailer_prices(self, merchant_slug: str, as_of: Optional[str] = None) -> ForwardResult:
+        return await self.get(
+            f"/api/truesync/merchants/{_slug(merchant_slug)}/retailer-prices",
+            params={"as_of": as_of} if as_of else None,
+        )
+
     async def put_retailers(self, merchant_slug: str, domains: list) -> ForwardResult:
         return await self.forward(
             "PUT", f"/api/truesync/merchants/{_slug(merchant_slug)}/retailers",

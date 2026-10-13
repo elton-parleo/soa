@@ -1,0 +1,40 @@
+{
+  "id": "r16",
+  "rule": "\u00a73 rule 2 guard (size, not count)",
+  "source": "W&S catalog fixture: \"4 oz\" is the 4 oz Bum Balm, not a different pack",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "price",
+    "amount": "12.99",
+    "currency": "USD"
+  },
+  "source_ref": {
+    "merchant_slug": "wiggle-and-snug",
+    "variant_id": "bum-balm-4oz"
+  },
+  "extraction": {
+    "prices": [
+      {
+        "amount": "12.99",
+        "currency": null,
+        "attributed_product": "Wiggle & Snug Bum Balm 4 oz"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "catalog": null,
+  "reference": null,
+  "verdict_before": "exact",
+  "verdict_after": "exact",
+  "reason_code_after": null,
+  "flags_after": [],
+  "reason_after": "stated 12.99"
+}
