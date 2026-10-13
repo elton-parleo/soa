@@ -128,10 +128,13 @@ ROWS = [
  ('r18', 'any-tier attribution guard (member_price)',
   'WIG_171 run 10759: "$9.90" for "an $11.00 pack", tier Everyday Extra',
   ea.member_price('17.79', 'Member+'), OVERNIGHT_S3, RUN_10759, None, None),
- ('r19', 'attribution guard (price twin of r17)',
-  'r17\'s claim on the list-price path: never judged against the asked variant, so it is a '
-  '\u00a73 rule 2 clash, not a wrong Size 3 price',
+ ('r19', 'attribution guard (price twin of r17; \u00a73 rule 2 not_our_product)',
+  'r17\'s claim on the list-price path: a retailer program is not our product, so absent, as on main',
   ea.price('23.99'), OVERNIGHT_S3, ext([p('2', 'eligible purchases made at Costco')]), None, None),
+ ('r20', '\u00a73 rule 2 guard (variant_clash: our product, a size the record lacks)',
+  'W&S catalog fixture: the record has overnight Sizes 3-6, no Size 7',
+  ea.price('23.99'), OVERNIGHT_S3, ext([p('31.99', 'Wiggle & Snug Snug-Fit Overnight Diapers Size 7')]),
+  None, None),
 ]
 
 def jload(*parts):

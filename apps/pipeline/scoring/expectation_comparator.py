@@ -69,6 +69,7 @@ _RANK = {EXACT: 6, STALE: 5, PARTIAL: 4, WRONG: 3, UNVERIFIABLE: 2, UNSCOREABLE:
 REASON_PRODUCT_INFERRED = 'product_inferred'
 REASON_VARIANT_CLASH = 'variant_clash'
 REASON_VARIANT_SWAP = 'variant_swap'
+REASON_NOT_OUR_PRODUCT = 'not_our_product'
 
 
 @dataclass
@@ -99,7 +100,8 @@ class Verdict:
     #: 2B: cited domains split own_domain / listed_retailer / other.
     source_split: Optional[dict] = None
     #: 2B: a short reason code ('product_inferred', 'variant_clash',
-    #: 'variant_swap') when one of the §3 rules decided the outcome.
+    #: 'variant_swap', 'not_our_product') when one of the §3 rules decided
+    #: the outcome.
     reason_code: Optional[str] = None
 
     @property
@@ -417,7 +419,7 @@ def _judge_record(claim, *, current, history, member) -> tuple:
 
 
 def _judge_price_like(expectation, extraction, *, member, terms, history, history_for,
-                      source_ref, record_variants, reference):
+                      source_ref, record_variants, reference, brand_facts=None):
     """
     The price and member_price comparison, with the 2B rules.
 
@@ -428,7 +430,10 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
       asked     no conflict with the asked variant (the generator's hints
                 and, with the record supplied, rule 2's clash checks)
       swap      it conflicts, and names exactly one other record variant
-      clash     it conflicts, and names no variant in the record
+      clash     it conflicts, and names no variant in the record: OUR
+                product, with a variant descriptor the record lacks
+      not_ours  (list price) it conflicts, names no record variant, and
+                does not name our product at all: absent, as on main
       ignored   it conflicts and there is no record to say which variant
                 it names — the legacy filter, unchanged
 
@@ -486,7 +491,16 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
         else:
             named = rv.named_variant(product, asked, record_variants)
             entry['conflict'] = why
-            if named is None:
+            if named is None and not member and not rv.names_our_product(
+                    product, record_variants, brand_facts):
+                # Rule 2 narrowed: a retailer program, an unnamed "pack" or
+                # another brand is not a variant of ours to clash with.
+                entry.update(target='not_ours', outcome=ABSENT, reason_code=REASON_NOT_OUR_PRODUCT,
+                             reason=f"{product!r} is not our product")
+            elif named is None and not member and not rv.carries_descriptor(
+                    product, asked, terms[1]):
+                continue  # our product, no variant stated: dropped, as on main
+            elif named is None:
                 entry.update(target='clash', outcome=WRONG, reason_code=REASON_VARIANT_CLASH,
                              reason=f"{why}, and the record has no such variant")
             else:
@@ -574,6 +588,11 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
         return WRONG, (f"stated {', '.join(any_tier)}; the record says "
                        f"{expectation['amount']} for {expectation['tier_name']}"), \
             None, out, swapped, None
+    not_ours = [c for c in out if c['target'] == 'not_ours']
+    if not_ours:
+        return ABSENT, (f"the answer stated no price for this product; "
+                        f"{', '.join(repr(c['product']) for c in not_ours)} is not our product"), \
+            None, out, swapped, REASON_NOT_OUR_PRODUCT
     if attributed_to and claims and all(c['amount'] is None for c in claims):
         return UNSCOREABLE, 'the answer stated a price this could not read as one', \
             None, out, swapped, None
@@ -703,7 +722,7 @@ def _compare_core(expectation, extraction, *, history, source_ref, brand_domain,
         outcome, reason, matched_at, claims, _swapped, code = _judge_price_like(
             expectation, extraction, member=(kind == 'member_price'), terms=terms,
             history=history, history_for=history_for, source_ref=source_ref,
-            record_variants=record_variants, reference=reference,
+            record_variants=record_variants, reference=reference, brand_facts=brand_facts,
         )
         result = verdict(outcome, reason, matched_at)
         result.claims = claims

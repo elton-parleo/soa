@@ -236,3 +236,18 @@ def test_the_dry_run_warns_a_real_run_would_refuse(db, monkeypatch, capsys):
     _cli_with_fixture_scorer(monkeypatch)
     assert rc.main(['--cycle', 'WS-2B', '--classify-only', '--dry-run']) == 0
     assert 'a real run would REFUSE' in capsys.readouterr().out
+
+
+def test_a_not_our_product_move_is_attributed_and_writes(db):
+    """Rule 2 narrowed: wrong -> absent for a price about a retailer program
+    is a named rule, so it does not block the write."""
+    seed(db)
+    with db.begin() as c:
+        c.execute(text("UPDATE soa_expectation_outcomes SET extraction = :x WHERE run_id = 1"),
+                  {"x": json.dumps(extraction([{'amount': '2', 'currency': None,
+                                                 'attributed_product': 'eligible purchases made at Costco'}]))})
+        c.execute(text("UPDATE soa_expectation_outcomes SET outcome = 'wrong' WHERE run_id = 1"))
+    result = rc.classify_only('WS-2B', scorer=make_scorer())
+    assert [(m[1], m[4], m[5]) for m in result['moved'] if m[1] == 'Q1'] == [('Q1', 'wrong', 'absent')]
+    assert 'not our product' in [m[6] for m in result['moved'] if m[1] == 'Q1'][0]
+    assert result['unattributed'] == [] and result['written'] is True

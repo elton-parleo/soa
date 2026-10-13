@@ -1,7 +1,7 @@
 {
   "id": "r19",
-  "rule": "attribution guard (price twin of r17)",
-  "source": "r17's claim on the list-price path: never judged against the asked variant, so it is a \u00a73 rule 2 clash, not a wrong Size 3 price",
+  "rule": "attribution guard (price twin of r17; \u00a73 rule 2 not_our_product)",
+  "source": "r17's claim on the list-price path: a retailer program is not our product, so absent, as on main",
   "attribution": "claude-reviewed, elton-pending",
   "expectation": {
     "type": "price",
@@ -44,8 +44,8 @@
   "catalog": null,
   "reference": null,
   "verdict_before": "absent",
-  "verdict_after": "wrong",
-  "reason_code_after": "variant_clash",
+  "verdict_after": "absent",
+  "reason_code_after": "not_our_product",
   "flags_after": [],
-  "reason_after": "stated 2 for 'eligible purchases made at Costco': names a sibling variant, and the record has no such variant"
+  "reason_after": "the answer stated no price for this product; 'eligible purchases made at Costco' is not our product"
 }

@@ -581,7 +581,14 @@ nothing changes: the price is scored against the record and its publication hist
 `scoring/variant_rules.py` and `scoring/record_variants.py`): a claim whose pack
 number, model/size number or variant marker conflicts with the asked variant is scored
 against the variant it names when the record has exactly one such variant
-(`variant_swap`), else `wrong` with `reason_code: variant_clash`. A wrong count on an
+(`variant_swap`), else `wrong` with `reason_code: variant_clash`. On the list-price path
+`variant_clash` is narrowed: it needs the claim's `attributed_product` to name OUR product
+(the record's brand or a product name, present in full) and to carry a variant descriptor
+(marker, model/size number, pack count, or a sibling's naming phrase). A claim about
+something that is not our product (a retailer program, an unnamed "pack", another brand)
+is `absent` with `reason_code: not_our_product`, as main scored it; our product named
+with no descriptor is dropped, also as on main. Layer 1's mention coding is per answer,
+not per claim, so the test reads the record, not Layer 1. A wrong count on an
 otherwise correctly named variant stays a secondary claim and does not move the price.
 A claim attached to no product (`attributed_product` null) can never be `wrong`: a
 mismatch is `unscoreable`, `reason_code: product_inferred`.
