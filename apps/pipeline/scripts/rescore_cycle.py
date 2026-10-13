@@ -249,7 +249,7 @@ RULES = {
     'product_inferred': '§3 rule 3: product_inferred can never be wrong',
     'variant_swap': '§3 rule 2: a clash naming another record variant (variant_swap)',
     'variant_clash': '§3 rule 2: a clash naming no record variant (variant_clash)',
-    'not_our_product': '§3 rule 2 (narrowed): a list price for something that is not our product is absent',
+    'not_our_product': '§3 rule 2 (narrowed): a price for something that is not our product is absent',
 }
 
 

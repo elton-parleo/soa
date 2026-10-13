@@ -432,7 +432,7 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
       swap      it conflicts, and names exactly one other record variant
       clash     it conflicts, and names no variant in the record: OUR
                 product, with a variant descriptor the record lacks
-      not_ours  (list price) it conflicts, names no record variant, and
+      not_ours  it conflicts, names no record variant, and
                 does not name our product at all: absent, as on main
       ignored   it conflicts and there is no record to say which variant
                 it names — the legacy filter, unchanged
@@ -491,13 +491,13 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
         else:
             named = rv.named_variant(product, asked, record_variants)
             entry['conflict'] = why
-            if named is None and not member and not rv.names_our_product(
+            if named is None and not rv.names_our_product(
                     product, record_variants, brand_facts):
                 # Rule 2 narrowed: a retailer program, an unnamed "pack" or
                 # another brand is not a variant of ours to clash with.
                 entry.update(target='not_ours', outcome=ABSENT, reason_code=REASON_NOT_OUR_PRODUCT,
                              reason=f"{product!r} is not our product")
-            elif named is None and not member and not rv.carries_descriptor(
+            elif named is None and not rv.carries_descriptor(
                     product, asked, terms[1]):
                 continue  # our product, no variant stated: dropped, as on main
             elif named is None:
@@ -590,7 +590,8 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
             None, out, swapped, None
     not_ours = [c for c in out if c['target'] == 'not_ours']
     if not_ours:
-        return ABSENT, (f"the answer stated no price for this product; "
+        label = 'member price' if member else 'price'
+        return ABSENT, (f"the answer stated no {label} for this product; "
                         f"{', '.join(repr(c['product']) for c in not_ours)} is not our product"), \
             None, out, swapped, REASON_NOT_OUR_PRODUCT
     if attributed_to and claims and all(c['amount'] is None for c in claims):

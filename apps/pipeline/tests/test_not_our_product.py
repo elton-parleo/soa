@@ -1,5 +1,5 @@
 """
-§3 rule 2 narrowed (list price): variant_clash needs OUR product named and a
+§3 rule 2 narrowed (list and member price): variant_clash needs OUR product named and a
 variant descriptor the record lacks. Anything else that conflicts with the
 asked variant and names no record variant scores as main did: absent.
 """
@@ -58,8 +58,11 @@ def test_a_brand_alias_names_our_product():
     assert not rv.names_our_product('eligible purchases made at Costco', _variants())
 
 
-def test_the_member_path_keeps_rule_2_as_it_was():
+def test_the_member_path_uses_the_same_rule():
     extraction = {'prices': [], 'member_prices': [
         {'amount': '2', 'tier': 'Member+', 'attributed_product': 'eligible purchases made at Costco'}]}
+    v = _judge(ea.member_price('17.79', 'Member+'), extraction)
+    assert (v.outcome, v.reason_code) == ('absent', 'not_our_product')
+    extraction['member_prices'][0]['attributed_product'] = 'Snug-Fit Overnight Diapers 300 ct'
     v = _judge(ea.member_price('17.79', 'Member+'), extraction)
     assert (v.outcome, v.reason_code) == ('wrong', 'variant_clash')

@@ -581,8 +581,8 @@ nothing changes: the price is scored against the record and its publication hist
 `scoring/variant_rules.py` and `scoring/record_variants.py`): a claim whose pack
 number, model/size number or variant marker conflicts with the asked variant is scored
 against the variant it names when the record has exactly one such variant
-(`variant_swap`), else `wrong` with `reason_code: variant_clash`. On the list-price path
-`variant_clash` is narrowed: it needs the claim's `attributed_product` to name OUR product
+(`variant_swap`), else `wrong` with `reason_code: variant_clash`. On both price paths (list
+and member) `variant_clash` is narrowed: it needs the claim's `attributed_product` to name OUR product
 (the record's brand or a product name, present in full) and to carry a variant descriptor
 (marker, model/size number, pack count, or a sibling's naming phrase). A claim about
 something that is not our product (a retailer program, an unnamed "pack", another brand)

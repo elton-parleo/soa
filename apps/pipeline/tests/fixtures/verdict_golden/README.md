@@ -28,4 +28,5 @@ different rule is a moved verdict. r17 and r18 are WIG_171 runs 10758 and 10759
 (cycle 20260915-113207-wiggle-snug-full; W&S is Parleo's own test store), kept
 `absent` because their member prices name another tier and another product; r19
 is their list-price twin (`absent`, `not_our_product`: a retailer program is not our
-product); r20 is the true `variant_clash` guard (our product, a size the record lacks).
+product); r20 is the true `variant_clash` guard (our product, a size the record lacks); r21 is
+r19 on the member-price path.

@@ -135,6 +135,11 @@ ROWS = [
   'W&S catalog fixture: the record has overnight Sizes 3-6, no Size 7',
   ea.price('23.99'), OVERNIGHT_S3, ext([p('31.99', 'Wiggle & Snug Snug-Fit Overnight Diapers Size 7')]),
   None, None),
+ ('r21', '\u00a73 rule 2 not_our_product (member_price)',
+  'r19 on the member-price path: a Member+ price for a retailer program is not our product',
+  ea.member_price('17.79', 'Member+'), OVERNIGHT_S3,
+  ext(member=[{'amount': '2', 'tier': 'Member+', 'attributed_product': 'eligible purchases made at Costco'}]),
+  None, None),
 ]
 
 def jload(*parts):
