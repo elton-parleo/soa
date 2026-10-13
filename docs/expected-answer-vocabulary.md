@@ -594,3 +594,27 @@ record's list, through a closed retailer enum; "online" counts), `variant_swap`.
 
 The verdict golden set (`apps/pipeline/tests/fixtures/verdict_golden/`) holds one row
 per rule, with the verdict before 2B and after it.
+
+## Re-scoring
+
+Two ways to re-score a cycle's outcomes in place, both in
+`apps/pipeline/scripts/rescore_cycle.py`.
+
+**Re-extract** (`--cycle <code> [--tier ...]`): one extraction model call per run,
+then the classifier. Guarded by the unchanged-tiers check and `--expect-unchanged`.
+
+**Classify-only** (`--cycle <code> --classify-only [--dry-run]`): **no model call.**
+This is the intended meaning, confirmed for 2B:
+
+- **Layer 1** (mention coding, `soa_coded_mentions`) is read **as stored** and never
+  re-run: it is model output, and re-deriving it would be a model call.
+- **Layer 2's** spans, transcription and labels are the **stored extraction** on each
+  outcome row, also never re-run (the extractor is frozen at 85c2cfe).
+- Only the **deterministic classifier** re-runs, over each row's stored expectation and
+  extraction, through the same `classify()` the live scorer uses.
+
+The network calls it can make are the catalog read (rule 2's record variants), the
+cycle's one retailer-prices read if it was never cached, and the citation check (24-hour
+cache). Every row is classified twice and nothing is written unless both passes agree;
+every row whose outcome moved is printed with the rule that moved it. This is how every
+2B scoring change is applied to a cycle that already ran. Run it with `--dry-run` first.
