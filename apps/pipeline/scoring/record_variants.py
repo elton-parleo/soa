@@ -30,6 +30,11 @@ class RecordVariant:
     list_price: Optional[str] = None
     member_price: Optional[str] = None
     gtin: Optional[str] = None
+    #: The product's NAME as tokens: its title's words, without numbers or
+    #: units ('Bum Balm 4 oz' -> {bum, balm}). With `brand`, what
+    #: names_our_product() looks for.
+    product_name: set = field(default_factory=set)
+    brand: set = field(default_factory=set)
 
     @property
     def packs(self) -> set:
@@ -44,6 +49,14 @@ class RecordVariant:
 def _tokens(text) -> set:
     import re
     return {t for t in re.sub(r'[^a-z0-9]+', ' ', str(text or '').lower()).split() if t}
+
+
+#: Words a title carries for its size, not its name.
+_UNIT_WORDS = {'oz', 'fl', 'ml', 'l', 'g', 'kg', 'lb', 'ct', 'count', 'pack', 'pk', 'packs'}
+
+
+def name_tokens(title) -> set:
+    return {t for t in _tokens(title) if t.isalpha() and t not in _UNIT_WORDS}
 
 
 def from_snapshot(snapshot) -> List[RecordVariant]:
@@ -64,6 +77,8 @@ def from_snapshot(snapshot) -> List[RecordVariant]:
             list_price=ea.normalize_money(variant.list_price),
             member_price=ea.normalize_money(variant.member_price),
             gtin=variant.gtin,
+            product_name=name_tokens(product.title),
+            brand=_tokens(product.brand or snapshot.brand),
         ))
     return out
 
@@ -154,3 +169,39 @@ def named_variant(claim: Optional[str], asked: RecordVariant,
     # when that leaves exactly one.
     same_group = [v for v in top if v.group == asked.group]
     return same_group[0] if len(same_group) == 1 else None
+
+
+def names_our_product(claim: Optional[str], variants: List[RecordVariant],
+                      brand_facts: Optional[dict] = None) -> bool:
+    """
+    Whether a claim's attributed_product names OUR product at all: the
+    brand, or one of the record's product names, present in full. From the
+    record (and the brand facts the scorer already holds), so it is
+    deterministic and makes no model call. Layer 1's mention coding is per
+    answer, not per claim, so it cannot say which thing a price was for.
+
+    "eligible purchases made at Costco", "an $11.00 pack" and another
+    brand's diapers name none of ours.
+    """
+    stated = _tokens(claim)
+    if not stated:
+        return False
+    facts = brand_facts or {}
+    names = [v.brand for v in variants or []] + [v.product_name for v in variants or []]
+    names += [_tokens(facts.get('brand'))] + [name_tokens(t) for t in facts.get('product_titles') or []]
+    return any(name and name <= stated for name in names)
+
+
+def carries_descriptor(claim: Optional[str], asked: RecordVariant, rivals) -> bool:
+    """
+    Whether the claim states a variant descriptor of its own: a marker,
+    model/size number or pack count that conflicts with the asked variant
+    (rule 2's engine checks), or a sibling's naming phrase. A bare product
+    name ("Snug-Fit Overnight Diapers") carries none.
+    """
+    if not claim:
+        return False
+    if conflicts(claim, asked, hints_attribute=True):
+        return True
+    stated = _tokens(claim)
+    return any(rival and rival <= stated for rival in rivals or [])

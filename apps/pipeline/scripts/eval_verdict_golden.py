@@ -69,9 +69,13 @@ def main(argv=None) -> int:
         flags = f" flags={','.join(verdict.flag_names)}" if verdict.flag_names else ''
         print(f"{row['id']:<5} {row['verdict_before']:>12} -> {verdict.outcome:<13} "
               f"{'yes' if changed else '':<6} {row['rule']}{flags}")
-        if verdict.outcome != row['verdict_after'] or verdict.flag_names != row['flags_after']:
-            failures.append(f"{row['id']}: recorded {row['verdict_after']} {row['flags_after']}, "
-                            f"now {verdict.outcome} {verdict.flag_names}")
+        # The reason code too: the same outcome reached by another rule (r19's
+        # clash, against the asked variant's own price) is a moved verdict.
+        if (verdict.outcome, verdict.flag_names, verdict.reason_code) != \
+                (row['verdict_after'], row['flags_after'], row['reason_code_after']):
+            failures.append(f"{row['id']}: recorded {row['verdict_after']} {row['flags_after']} "
+                            f"{row['reason_code_after']}, now {verdict.outcome} {verdict.flag_names} "
+                            f"{verdict.reason_code}")
     print(f"\n{moved} of {len(rows)} verdicts differ from main's classifier; every row is "
           f"attributed {sorted({r['attribution'] for r in rows})}")
     if failures:

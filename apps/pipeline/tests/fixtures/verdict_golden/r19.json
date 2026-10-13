@@ -1,0 +1,51 @@
+{
+  "id": "r19",
+  "rule": "attribution guard (price twin of r17; \u00a73 rule 2 not_our_product)",
+  "source": "r17's claim on the list-price path: a retailer program is not our product, so absent, as on main",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "price",
+    "amount": "23.99",
+    "currency": "USD"
+  },
+  "source_ref": {
+    "merchant_slug": "wiggle-and-snug",
+    "listing_id": 91,
+    "product_id": "catalog_product:28",
+    "published_at": "2026-08-28T18:00:56.111443Z",
+    "variant_id": "snug-fit-overnight-s3",
+    "attribution": [
+      "Size 3"
+    ],
+    "attribution_rivals": [
+      "Size 4",
+      "Size 5",
+      "Size 6"
+    ]
+  },
+  "extraction": {
+    "prices": [
+      {
+        "amount": "2",
+        "currency": null,
+        "attributed_product": "eligible purchases made at Costco"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "catalog": null,
+  "reference": null,
+  "verdict_before": "absent",
+  "verdict_after": "absent",
+  "reason_code_after": "not_our_product",
+  "flags_after": [],
+  "reason_after": "the answer stated no price for this product; 'eligible purchases made at Costco' is not our product"
+}
