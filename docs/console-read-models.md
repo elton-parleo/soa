@@ -40,6 +40,8 @@ Lists (`runs`, `studio/*`) return only the scope's rows.
 | `GET /api/console/studio/entities` | entities the tenant's cycles compare | `Entity[]` (studio.ts) |
 | `GET /api/console/full-loop/{id}`, `GET /api/full-loop/{id}` | the full loop's combined status | — (soa) |
 | `POST /api/full-loop` | starts a full loop (202) | — (soa) |
+| `GET /api/console/me` | who is signed in and the orgs they may select (2C-0) | — (the console's workspace switcher) |
+| `GET /api/console/full-loop/latest` | the scope's most recent full loop, or `null` (2C-0) | — (soa) |
 
 Extra fields ride **beside** the typed ones; a typed field is never bent to hold
 something it does not mean. Optional typed fields (`field?: string`) are omitted,
@@ -128,6 +130,23 @@ as failures. **No cross-surface total exists**, by design.
 `supply.read_error`), the cycle once created, and a three-step `strip`
 (reference → study → scoring) for the console's status strip. The sequence is in
 `apps/pipeline/fullloop/coordinator.py`.
+
+### Me (2C-0)
+
+`GET /api/console/me` is the list the scope is chosen from, so it takes no `?org=`: the
+orgs come from `soa_shared/customers.selectable_orgs` (operators every linked org, members
+their own; the Parleo staff org is never listed). `kind`, `hosting` and `domain` are the
+org's first merchant in supply's record (`GET /api/truesync/tenant`, read with that org's
+own token, as `/api/customers` does). `slug` is that merchant's slug, the value
+`/accessibility?merchant=` takes. `tenant_slug`, `merchants` (every merchant) and `error`
+ride beside: an org whose record read fails is still listed, with `kind/hosting/domain`
+`null` and the error, rather than vanishing from the switcher.
+
+### Latest full loop (2C-0)
+
+`GET /api/console/full-loop/latest[?org=]`: the scope's newest `soa_full_loop_requests`
+row (by `created_at`, then id) in exactly the shape `/full-loop/{id}` returns, or `null`
+when the org has never run one. Scoped like every console read.
 
 ## Answer divergences
 
@@ -983,3 +1002,64 @@ store; no customer data. Arrays are cut to their first entries.
   ]
 }
 ```
+
+### GET /api/console/me (2C-0)
+
+From the test fixture, as the operator; the merchant records are the test's fake supply
+answers, not a real tenant's.
+
+```json
+{
+  "user": {
+    "id": "op",
+    "email": "op@test"
+  },
+  "is_operator": true,
+  "orgs": [
+    {
+      "id": 20,
+      "slug": "brandco",
+      "name": "Brandco",
+      "kind": "seller",
+      "hosting": "external",
+      "domain": "brandco.test",
+      "tenant_slug": "brandco",
+      "merchants": [
+        {
+          "slug": "brandco",
+          "name": "Brandco",
+          "domain": "brandco.test",
+          "kind": "seller",
+          "hosting": "external",
+          "has_record": false
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": 10,
+      "slug": "wiggle-and-snug",
+      "name": "Wiggle & Snug",
+      "kind": "brand",
+      "hosting": "parleo",
+      "domain": "trueshopstore.com",
+      "tenant_slug": "wiggle-and-snug",
+      "merchants": [
+        {
+          "slug": "wiggle-and-snug",
+          "name": "Wiggle & Snug",
+          "domain": "trueshopstore.com",
+          "kind": "brand",
+          "hosting": "parleo",
+          "has_record": true
+        }
+      ],
+      "error": null
+    }
+  ]
+}
+```
+
+### GET /api/console/full-loop/latest (2C-0)
+
+The `/full-loop/{id}` shape above, for the newest request; `null` before the first run.

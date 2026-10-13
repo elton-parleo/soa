@@ -30,6 +30,14 @@ _lite_origin = os.getenv("LITE_ALLOWED_ORIGIN")
 if _lite_origin:
     _cors_origins.append(_lite_origin)
 
+# 2C-0: the TrueSync console (parleohq/truesync apps/console) is its own
+# Vercel deployment and calls /api/console/* and /api/full-loop
+# cross-origin with the Supabase session's bearer token. Its origin is set
+# per environment; unset, nothing is added. Additive only, like the above.
+_console_origin = os.getenv("CONSOLE_ALLOWED_ORIGIN")
+if _console_origin:
+    _cors_origins.append(_console_origin.rstrip("/"))
+
 # audit.parleo.io migration (X1): the audit host is served by this same
 # Vercel deployment, so its own /api/* calls are same-origin — this
 # entry only matters if the API ever ends up served from a different
