@@ -593,6 +593,14 @@ otherwise correctly named variant stays a secondary claim and does not move the 
 A claim attached to no product (`attributed_product` null) can never be `wrong`: a
 mismatch is `unscoreable`, `reason_code: product_inferred`.
 
+**Other brands' prices.** A price or member price whose `attributed_product` contains the
+full name of a brand in the stored Layer 2 `other_brands_named` (any relation, including
+an unlabelled one; `not_a_brand` entries and our own brand excepted) is that brand's and
+is never attributed to our product, whatever size or count phrase it carries: "Huggies
+Size 3" is not our Size 3. If nothing else decides the question it is `absent`,
+`reason_code: other_brand`. A claim that also names our brand or one of our product names
+keeps its ordinary path. Deterministic; no Layer 2 change.
+
 **Answer flags** (`soa_expectation_outcomes.flags`), beside the outcome and never
 changing it: `fabricated_citation` (a cited domain that does not resolve, or whose root
 gives no HTTP response; checked once per domain per cycle, cached 24 hours),

@@ -38,11 +38,17 @@ def load_rows():
     return [json.loads(p.read_text()) for p in sorted(GOLDEN_DIR.glob('*.json'))]
 
 
+def brand_facts_of(snapshot) -> dict:
+    """The brand facts the live scorer reads for this record
+    (expectation_scorer.BrandFactsCache): its brand and product titles."""
+    return {'brand': snapshot.brand, 'product_titles': [p.title for p in snapshot.products or []]}
+
+
 def classify(row, *, ws_snapshot, reference):
     snapshot = build_snapshot(row['catalog']) if row.get('catalog') else ws_snapshot
     return cmp.compare(
         row['expectation'], row['extraction'], source_ref=row['source_ref'],
-        record_variants=rv.from_snapshot(snapshot),
+        record_variants=rv.from_snapshot(snapshot), brand_facts=brand_facts_of(snapshot),
         reference=reference if row.get('reference') else None,
     )
 

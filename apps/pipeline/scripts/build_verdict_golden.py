@@ -12,6 +12,7 @@ from clients.truesync_catalog import build_snapshot
 from scoring import expectation_comparator as new
 from scoring import record_variants as rv
 from scoring.retailer_reference import ReferenceSet
+from scripts.eval_verdict_golden import brand_facts_of
 from soa_shared import expected_answers as ea
 
 spec = importlib.util.spec_from_file_location('old_cmp', sys.argv[1])
@@ -22,10 +23,12 @@ OUT = os.path.join(FIX, 'verdict_golden')
 os.makedirs(OUT, exist_ok=True)
 ATTR = 'claude-reviewed, elton-pending'
 
-def ext(prices=(), member=(), mentions=None, sources=()):
+def ext(prices=(), member=(), mentions=None, sources=(), others=None):
     d = {'prices': list(prices), 'codes': [], 'pack_counts': [], 'gtins': [],
          'member_prices': list(member), 'points': [], 'brand_mentioned': True,
          'sources_cited': list(sources), 'extraction_confident': True, 'extraction_note': None}
+    if others is not None:
+        d['other_brands_named'] = [{'name': n, 'presented_as': pa, 'relation': rel} for n, pa, rel in others]
     if mentions is not None:
         d['retailer_mentions'] = mentions
     return d
@@ -84,6 +87,8 @@ RUN_10759 = {
     'points': [], 'brand_mentioned': True, 'sources_cited': [], 'recommended_retailers': ['Woolworths'],
     'retailer_mentions': [{'name': 'Woolworths', 'role': 'recommendation'}],
     'extraction_confident': True, 'extraction_note': None}
+OVERNIGHT_S3_OB = {'merchant_slug': 'wiggle-and-snug', 'listing_id': 91, 'variant_id': 'snug-fit-overnight-s3',
+                   'attribution': ['Size 3'], 'attribution_rivals': ['Size 4', 'Size 5', 'Size 6']}
 
 ROWS = [
  ('r01', '§3 rule 1', 'W&S catalog fixture; the brief\'s "about $18" for 17.99',
@@ -140,6 +145,14 @@ ROWS = [
   ea.member_price('17.79', 'Member+'), OVERNIGHT_S3,
   ext(member=[{'amount': '2', 'tier': 'Member+', 'attributed_product': 'eligible purchases made at Costco'}]),
   None, None),
+ ('r30', 'other_brand', 'Layer 2 stored Huggies as another brand; "Huggies Size 3" carries our size phrase',
+  ea.price('23.99'), OVERNIGHT_S3_OB,
+  ext([p('15.49', 'Huggies Overnites Size 3')], others=[('Huggies', 'comparison', 'comparison')]), None, None),
+ ('r31', 'other_brand guard (ours and another brand, distinct prices)',
+  'our Size 3 price is still scored; the Huggies price is dropped',
+  ea.price('23.99'), OVERNIGHT_S3_OB,
+  ext([p('19.49', 'Wiggle & Snug Snug-Fit Overnight Diapers Size 3'), p('23.99', 'Huggies Overnites Size 3')],
+      others=[('Huggies', 'comparison', 'comparison')]), None, None),
 ]
 
 def jload(*parts):
@@ -160,7 +173,7 @@ for rid, rule, source, expectation, ref, extraction, catalog, refname in ROWS:
     variants = rv.from_snapshot(snap)
     before = old.compare(expectation, extraction, source_ref=ref)
     after = new.compare(expectation, extraction, source_ref=ref, record_variants=variants,
-                        reference=reference if refname else None)
+                        brand_facts=brand_facts_of(snap), reference=reference if refname else None)
     row = {'id': rid, 'rule': rule, 'source': source, 'attribution': ATTR,
            'expectation': expectation, 'source_ref': ref, 'extraction': extraction,
            'catalog': catalog, 'reference': 'retailer_prices/acme_baby_as_of_cycle{2,1}.json' if refname else None,

@@ -250,6 +250,7 @@ RULES = {
     'variant_swap': '§3 rule 2: a clash naming another record variant (variant_swap)',
     'variant_clash': '§3 rule 2: a clash naming no record variant (variant_clash)',
     'not_our_product': '§3 rule 2 (narrowed): a price for something that is not our product is absent',
+    'other_brand': "another brand's price (Layer 2 other_brands_named) is never ours",
 }
 
 
