@@ -616,5 +616,9 @@ This is the intended meaning, confirmed for 2B:
 The network calls it can make are the catalog read (rule 2's record variants), the
 cycle's one retailer-prices read if it was never cached, and the citation check (24-hour
 cache). Every row is classified twice and nothing is written unless both passes agree;
-every row whose outcome moved is printed with the rule that moved it. This is how every
+every row whose outcome moved is printed with the rule that moved it. A move no named
+rule explains is printed as `unattributed` — "classifier output changed on identical
+inputs" when the row's stored expectation equals the question's current one field for
+field, otherwise the fields that differ — and while any unattributed move exists the real
+run refuses to write (exit 1). This is how every
 2B scoring change is applied to a cycle that already ran. Run it with `--dry-run` first.

@@ -48,7 +48,11 @@ re-extract runs (a fresh extraction legitimately moves rows in every
 tier). Here the extraction does not move, so the guard is replaced by two
 checks that can be stated exactly: every row is classified TWICE and the
 two passes must agree before anything is written, and every row whose
-outcome moved is printed with the rule that moved it.
+outcome moved is printed with the rule that moved it. A move no named rule
+explains is `unattributed`, and while any exists the real run refuses to
+write and prints them: "unattributed: classifier output changed on
+identical inputs" when the stored expectation matches the question's
+current one field for field, else the fields that differ.
 """
 import argparse
 import asyncio
@@ -248,8 +252,39 @@ RULES = {
 }
 
 
-def rule_for(verdict, expectation, answer_status=None) -> str:
-    """The 2B rule that produced this verdict, for the before/after list."""
+UNATTRIBUTED = 'unattributed'
+UNATTRIBUTED_IDENTICAL = 'unattributed: classifier output changed on identical inputs'
+
+
+def _canonical(value) -> str:
+    return json.dumps(value, sort_keys=True, default=str)
+
+
+def changed_inputs(stored_expectation, current_expectation) -> list:
+    """
+    The expectation fields that differ between the row as last scored
+    (soa_expectation_outcomes.expected_answer) and the question as built
+    now (soa_queries.expected_answer), compared as canonical JSON. Every
+    field, attributed_to included.
+    """
+    if not isinstance(current_expectation, dict) or not isinstance(stored_expectation, dict):
+        return [] if _canonical(stored_expectation) == _canonical(current_expectation) \
+            else ['expected_answer']
+    keys = sorted(set(stored_expectation) | set(current_expectation))
+    return [f'expected_answer.{k}' for k in keys
+            if _canonical(stored_expectation.get(k)) != _canonical(current_expectation.get(k))]
+
+
+def rule_for(verdict, expectation, answer_status=None, *, current_expectation) -> str:
+    """
+    The 2B rule that produced this verdict, for the before/after list.
+
+    When no named rule fired the move is `unattributed`, and says whether
+    the inputs differ. It never guesses: the fallback once read "an input
+    did" on rows whose inputs were byte-identical, which is how a
+    classifier regression (WIG_171, runs 10758/10759) nearly got written.
+    Any unattributed move makes the real run refuse to write.
+    """
     if verdict.reason_code in RULES:
         return RULES[verdict.reason_code]
     if answer_status in ('no_ai_answer', 'sign_in_wall', 'blocked'):
@@ -260,7 +295,10 @@ def rule_for(verdict, expectation, answer_status=None) -> str:
         return ('§3 rule 4: whole-dollar member price within 50 cents'
                 if expectation.get('type') == 'member_price'
                 else '§3 rule 1: whole-dollar within 50 cents')
-    return 'unattributed: the classifier did not change for this row; an input did'
+    changed = changed_inputs(expectation, current_expectation)
+    if not changed:
+        return UNATTRIBUTED_IDENTICAL
+    return f"{UNATTRIBUTED}: no named rule fired; inputs differ: {', '.join(changed)}"
 
 
 def stored_rows(conn, cid: int, tiers) -> list:
@@ -268,7 +306,8 @@ def stored_rows(conn, cid: int, tiers) -> list:
         SELECT o.run_id, o.query_id, o.cycle_id, o.platform, o.tier,
                o.expected_answer, o.extraction, o.extraction_model, o.outcome,
                r.retrieved_sources, r.surface, r.answer_status, r.run_number,
-               q.source_ref, q.study_type, q.query_code
+               q.source_ref, q.study_type, q.query_code,
+               q.expected_answer AS query_expected_answer
         FROM soa_expectation_outcomes o
         JOIN soa_runs r ON r.id = o.run_id
         JOIN soa_queries q ON q.id = r.query_id
@@ -303,7 +342,11 @@ def classify_only(cycle_code: str, tiers=None, *, scorer=None, write: bool = Tru
     """
     Re-classify a cycle's stored outcomes. Returns
     {'cid', 'rows', 'moved': [(run_id, query_code, platform, run_number,
-    before, after, rule)], 'deterministic': bool, 'skipped': [...]}.
+    before, after, rule)], 'unattributed': [the moved entries no named rule
+    explains], 'deterministic': bool, 'written': bool, 'skipped': [...]}.
+
+    Nothing is written unless both passes agree AND every move is
+    attributed to a named rule.
 
     `scorer` supplies the caches (history, brand facts, references,
     domain checker) and the writer; an ExpectationScorer with a client
@@ -346,15 +389,18 @@ def classify_only(cycle_code: str, tiers=None, *, scorer=None, write: bool = Tru
         if verdict.outcome != row['outcome']:
             moved.append((row['run_id'], row['query_code'], row['platform'], row['run_number'],
                           row['outcome'], verdict.outcome,
-                          rule_for(verdict, expectation, row['answer_status'])))
+                          rule_for(verdict, expectation, row['answer_status'],
+                                   current_expectation=_as_json(row['query_expected_answer']))))
+    unattributed = [m for m in moved if m[-1].startswith(UNATTRIBUTED)]
 
-    if write and deterministic:
+    written = bool(write and deterministic and not unattributed)
+    if written:
         for row, run, expectation, extraction, verdict, _again in plan:
             scorer._store(run=run, expectation=expectation, extraction=extraction,
                           verdict=verdict, model=row['extraction_model'])
 
-    return {'cid': cid, 'rows': len(plan), 'moved': moved,
-            'deterministic': deterministic, 'skipped': skipped}
+    return {'cid': cid, 'rows': len(plan), 'moved': moved, 'unattributed': unattributed,
+            'deterministic': deterministic, 'written': written, 'skipped': skipped}
 
 
 class _NoModel:
@@ -384,9 +430,19 @@ def _main_classify_only(args) -> int:
     print(f"\nrows whose outcome moved: {len(result['moved'])} of {result['rows']}")
     for run_id, code, platform, number, was, now, rule in result['moved']:
         print(f"    {code} · {platform} · run {number}: {was} -> {now}   [{rule}]   [run {run_id}]")
+    unattributed = result.get('unattributed') or []
+    print(f"\nunattributed moves: {len(unattributed)}")
+    for run_id, code, platform, number, was, now, rule in unattributed:
+        print(f"    {code} · {platform} · run {number}: {was} -> {now}   [{rule}]   [run {run_id}]")
     if args.dry_run:
+        if unattributed:
+            print("a real run would REFUSE to write while these remain.")
         print("\ndry run — nothing written.")
         return 0
+    if unattributed:
+        print("\nREFUSED: no named rule explains the moves above. Nothing was written. "
+              "Find the cause (a classifier change, or the input named) before re-running.")
+        return 1
     with engine.connect() as conn:
         after = outcome_counts(conn, cid)
     print("after:")

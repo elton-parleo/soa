@@ -1,0 +1,51 @@
+{
+  "id": "r19",
+  "rule": "attribution guard (price twin of r17)",
+  "source": "r17's claim on the list-price path: never judged against the asked variant, so it is a \u00a73 rule 2 clash, not a wrong Size 3 price",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "price",
+    "amount": "23.99",
+    "currency": "USD"
+  },
+  "source_ref": {
+    "merchant_slug": "wiggle-and-snug",
+    "listing_id": 91,
+    "product_id": "catalog_product:28",
+    "published_at": "2026-08-28T18:00:56.111443Z",
+    "variant_id": "snug-fit-overnight-s3",
+    "attribution": [
+      "Size 3"
+    ],
+    "attribution_rivals": [
+      "Size 4",
+      "Size 5",
+      "Size 6"
+    ]
+  },
+  "extraction": {
+    "prices": [
+      {
+        "amount": "2",
+        "currency": null,
+        "attributed_product": "eligible purchases made at Costco"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "catalog": null,
+  "reference": null,
+  "verdict_before": "absent",
+  "verdict_after": "wrong",
+  "reason_code_after": "variant_clash",
+  "flags_after": [],
+  "reason_after": "stated 2 for 'eligible purchases made at Costco': names a sibling variant, and the record has no such variant"
+}

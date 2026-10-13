@@ -53,6 +53,38 @@ ORALB_CATALOG = {'merchant': 'fictional-toothbrush-co', 'listings': [{
 IO6 = {'merchant_slug': 'fictional-toothbrush-co', 'listing_id': 1, 'variant_id': 'io-6',
        'attribution': ['Series 6'], 'attribution_rivals': ['Series 9']}
 
+# WIG_171 (cycle 20260915-113207-wiggle-snug-full): the soa_queries source_ref
+# and the stored extraction's classifier-read fields, verbatim. Spans and
+# brand_claims are left out; the comparator does not read them.
+OVERNIGHT_S3 = {'merchant_slug': 'wiggle-and-snug', 'listing_id': 91, 'product_id': 'catalog_product:28',
+                'published_at': '2026-08-28T18:00:56.111443Z', 'variant_id': 'snug-fit-overnight-s3',
+                'attribution': ['Size 3'], 'attribution_rivals': ['Size 4', 'Size 5', 'Size 6']}
+RUN_10758 = {
+    'prices': [{'amount': '25', 'currency': 'USD', 'attributed_product': 'a large box (e.g., 100-120 diapers)'},
+               {'amount': '35', 'currency': 'USD', 'attributed_product': 'a large box (e.g., 100-120 diapers)'}],
+    'codes': [], 'pack_counts': [{'value': 100, 'attributed_product': 'a large box (e.g., 100-120 diapers)'},
+                                 {'value': 120, 'attributed_product': 'a large box (e.g., 100-120 diapers)'}],
+    'gtins': [],
+    'member_prices': [{'amount': '2', 'tier': 'Costco Executive Members',
+                       'attributed_product': 'eligible purchases made at Costco'}],
+    'points': [{'value': '2', 'per_dollar': False, 'program': 'annual reward'}],
+    'brand_mentioned': True, 'sources_cited': ['Costco.com'], 'recommended_retailers': ['Costco warehouse'],
+    'retailer_mentions': [{'name': 'Costco.com', 'role': 'source'},
+                          {'name': 'Costco warehouse', 'role': 'recommendation'}],
+    'extraction_confident': True, 'extraction_note': None}
+RUN_10759 = {
+    'prices': [{'amount': '11.00', 'currency': 'USD',
+                'attributed_product': 'a pack of 28 Wiggle & Snug Snug-Fit Overnight Diapers Size 3'},
+               {'amount': '12.00', 'currency': 'USD',
+                'attributed_product': 'a pack of 28 Wiggle & Snug Snug-Fit Overnight Diapers Size 3'},
+               {'amount': '9.90', 'currency': 'USD', 'attributed_product': 'an $11.00 pack'}],
+    'codes': [], 'pack_counts': [{'value': 28, 'attributed_product': 'Wiggle & Snug Snug-Fit Overnight Diapers Size 3'}],
+    'gtins': [],
+    'member_prices': [{'amount': '9.90', 'tier': 'Everyday Extra', 'attributed_product': 'an $11.00 pack'}],
+    'points': [], 'brand_mentioned': True, 'sources_cited': [], 'recommended_retailers': ['Woolworths'],
+    'retailer_mentions': [{'name': 'Woolworths', 'role': 'recommendation'}],
+    'extraction_confident': True, 'extraction_note': None}
+
 ROWS = [
  ('r01', '§3 rule 1', 'W&S catalog fixture; the brief\'s "about $18" for 17.99',
   ea.price('17.99'), S1, ext([p('18', 'Size 1 small pack')]), None, None),
@@ -90,6 +122,16 @@ ROWS = [
  ('r16', '§3 rule 2 guard (size, not count)', 'W&S catalog fixture: "4 oz" is the 4 oz Bum Balm, not a different pack',
   ea.price('12.99'), {'merchant_slug': 'wiggle-and-snug', 'variant_id': 'bum-balm-4oz'},
   ext([p('12.99', 'Wiggle & Snug Bum Balm 4 oz')]), None, None),
+ ('r17', 'any-tier attribution guard (member_price)',
+  'WIG_171 run 10758: "2% annual reward on eligible purchases made at Costco", tier Costco Executive Members',
+  ea.member_price('17.79', 'Member+'), OVERNIGHT_S3, RUN_10758, None, None),
+ ('r18', 'any-tier attribution guard (member_price)',
+  'WIG_171 run 10759: "$9.90" for "an $11.00 pack", tier Everyday Extra',
+  ea.member_price('17.79', 'Member+'), OVERNIGHT_S3, RUN_10759, None, None),
+ ('r19', 'attribution guard (price twin of r17)',
+  'r17\'s claim on the list-price path: never judged against the asked variant, so it is a '
+  '\u00a73 rule 2 clash, not a wrong Size 3 price',
+  ea.price('23.99'), OVERNIGHT_S3, ext([p('2', 'eligible purchases made at Costco')]), None, None),
 ]
 
 def jload(*parts):

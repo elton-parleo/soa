@@ -367,20 +367,24 @@ def _prior_match(history, values, *, member: bool = False) -> Optional[str]:
 
 # ─── 2B: price claims ──────────────────────────────────────────────────────
 
-def _price_claims(extraction, expectation, *, member: bool) -> tuple:
+def _price_claims(extraction, expectation, *, member: bool, terms) -> tuple:
     """
     (claims, any_tier_amounts). A claim is one stated price this question
     could be about: {raw, amount, product, tier}. Currency is filtered
     exactly as it always was; a member price at a NAMED other tier is not a
     claim about this one, but its amount is kept so the legacy
     "right amount, wrong tier" verdict survives.
+
+    any_tier keeps main's _member_price_values filter exactly: only an
+    amount attributed to the asked variant. Without it, "2% reward on
+    eligible purchases made at Costco" scored a Member+ price wrong.
     """
     claims, any_tier = [], []
     if member:
         wanted_tier = ea.normalize_tier_name(expectation.get('tier_name'))
         for entry in extraction.get('member_prices') or []:
             amount = ea.normalize_money(entry.get('amount'))
-            if amount is not None:
+            if amount is not None and attributes_to(entry.get('attributed_product'), terms):
                 any_tier.append(amount)
             stated = ea.normalize_tier_name(entry.get('tier'))
             if stated is not None and stated != wanted_tier:
@@ -433,7 +437,7 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
     """
     ref = source_ref or {}
     attributed_to = expectation.get('attributed_to')
-    claims, any_tier = _price_claims(extraction, expectation, member=member)
+    claims, any_tier = _price_claims(extraction, expectation, member=member, terms=terms)
     asked = rv.find(record_variants, ref.get('variant_id')) if record_variants else None
     out = []
 

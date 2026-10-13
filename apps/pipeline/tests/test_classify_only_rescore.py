@@ -185,3 +185,54 @@ def test_the_cli_flag_reaches_classify_only(db, monkeypatch, capsys):
         'cid': 1, 'rows': 0, 'moved': [], 'deterministic': True, 'skipped': []})
     assert rc.main(['--cycle', 'WS-2B', '--classify-only', '--dry-run']) == 0
     assert 'no model call' in capsys.readouterr().out
+
+
+def _seed_unexplained_move(db, *, query_expectation):
+    """Q1's answer is exact; its stored outcome says absent. No named rule
+    explains absent -> exact, so the move is unattributed."""
+    seed(db)
+    with db.begin() as c:
+        c.execute(text("UPDATE soa_expectation_outcomes SET outcome = 'absent' WHERE run_id = 1"))
+        c.execute(text("UPDATE soa_queries SET expected_answer = :e WHERE id = 1"),
+                  {"e": json.dumps(query_expectation)})
+
+
+def test_an_unexplained_move_on_identical_inputs_says_so_and_blocks_the_write(db):
+    _seed_unexplained_move(db, query_expectation=ea.price('22.99'))
+    before = rows(db)
+    result = rc.classify_only('WS-2B', scorer=make_scorer())
+    assert [(m[1], m[4], m[5], m[6]) for m in result['unattributed']] == [
+        ('Q1', 'absent', 'exact', 'unattributed: classifier output changed on identical inputs')]
+    assert result['written'] is False
+    assert rows(db) == before
+
+
+def test_an_unexplained_move_names_the_input_that_differs(db):
+    _seed_unexplained_move(db, query_expectation=ea.price('22.99', attributed_to='target.com'))
+    result = rc.classify_only('WS-2B', scorer=make_scorer(), write=False)
+    (rule,) = [m[6] for m in result['unattributed']]
+    assert rule == 'unattributed: no named rule fired; inputs differ: expected_answer.attributed_to'
+
+
+def _cli_with_fixture_scorer(monkeypatch):
+    real = rc.classify_only
+    monkeypatch.setattr(rc, 'classify_only', lambda code, tiers, write: real(
+        code, tiers, scorer=make_scorer(), write=write))
+
+
+def test_the_real_run_refuses_and_prints_the_unattributed_moves(db, monkeypatch, capsys):
+    _seed_unexplained_move(db, query_expectation=ea.price('22.99'))
+    _cli_with_fixture_scorer(monkeypatch)
+    before = rows(db)
+    assert rc.main(['--cycle', 'WS-2B', '--classify-only']) == 1
+    out = capsys.readouterr().out
+    assert 'REFUSED' in out and 'unattributed moves: 1' in out
+    assert 'Q1 · chatgpt · run 1: absent -> exact' in out
+    assert rows(db) == before
+
+
+def test_the_dry_run_warns_a_real_run_would_refuse(db, monkeypatch, capsys):
+    _seed_unexplained_move(db, query_expectation=ea.price('22.99'))
+    _cli_with_fixture_scorer(monkeypatch)
+    assert rc.main(['--cycle', 'WS-2B', '--classify-only', '--dry-run']) == 0
+    assert 'a real run would REFUSE' in capsys.readouterr().out
