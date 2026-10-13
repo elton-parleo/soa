@@ -142,6 +142,37 @@ class CatalogSnapshot:
     read_at: Optional[str] = None
     error: Optional[str] = None
 
+    # ─── 2B: the merchant record ──────────────────────────────────────
+    #
+    # From GET /tenant (kind, hosting), /retailers (own_domain) and, for
+    # an externally hosted merchant, /feed (each SKU's retailer URLs).
+    # All None/empty for a snapshot built without them, which is exactly
+    # the pre-2B snapshot: a hosted seller is generated as it always was.
+    merchant_kind: Optional[str] = None      # seller | brand
+    hosting: Optional[str] = None            # parleo | external
+    own_domain: Optional[str] = None
+    #: The record's retailer list. A brand's: every retailer domain its
+    #: feed has a product_url for. A seller's: its own domain.
+    retailer_list: List[str] = field(default_factory=list)
+    #: variant_id (GTIN-14 for a feed merchant) -> the retailer domains
+    #: that SKU has a URL at, in the feed's order.
+    variant_retailers: Dict[str, List[str]] = field(default_factory=dict)
+    #: Why the record could not be read, when it could not.
+    record_error: Optional[str] = None
+
+    @property
+    def is_external(self) -> bool:
+        return self.hosting == 'external'
+
+    @property
+    def study_brand(self) -> Optional[str]:
+        """The name a question must carry. For an external SELLER it is the
+        store (Petco), not the brand of whatever product it sells; for
+        everyone else it is the brand on the records."""
+        if self.is_external and self.merchant_kind == 'seller':
+            return self.display_name or self.brand
+        return self.brand
+
     # ─── Read-back, for the modal's catalog line and tier_config ──────
 
     @property
@@ -386,13 +417,37 @@ class TrueSyncCatalogClient:
                     "mismatch will score wrong rather than stale", history_error,
                 )
 
-        return build_snapshot(
+        snapshot = build_snapshot(
             catalog,
             merchants=merchants,
             incentives=incentives,
             price_history=history,
             merchant_slug=merchant_slug,
         )
+        self._merge_merchant_record(snapshot, merchant_slug)
+        return snapshot
+
+    def _merge_merchant_record(self, snapshot: "CatalogSnapshot", merchant_slug: str) -> None:
+        """
+        2B: kind, hosting, own domain and retailer list, onto the snapshot.
+
+        An outage here costs the external mode, never the snapshot: the
+        study is generated as the hosted form, and tier_config says why
+        (record_error). A refusal still raises, as every read does.
+        """
+        merchant, error = self.merchant_record(merchant_slug)
+        if error is not None:
+            snapshot.record_error = error
+            logger.warning("[truesync-catalog] merchant record unavailable for %s (%s); "
+                           "generated as a hosted merchant", merchant_slug, error)
+            return
+        retailers = feed = None
+        retailers, retailers_error = self.retailers(merchant_slug)
+        if merchant.get("hosting") == "external":
+            feed, feed_error = self.feed(merchant_slug)
+            if feed_error is not None:
+                snapshot.record_error = feed_error
+        merge_merchant_record(snapshot, merchant=merchant, retailers=retailers, feed=feed)
 
 
 # ─── Merging ───────────────────────────────────────────────────────────────
@@ -474,6 +529,61 @@ def build_snapshot(
     if price_history:
         _merge_price_history(snapshot, price_history)
 
+    return snapshot
+
+
+def _domain(value) -> Optional[str]:
+    from soa_shared.expected_answers import normalize_domain
+    return normalize_domain(value)
+
+
+def merge_merchant_record(snapshot: CatalogSnapshot, *, merchant: Optional[dict],
+                          retailers: Optional[dict] = None, feed: Optional[dict] = None) -> CatalogSnapshot:
+    """
+    The merchant record onto a snapshot, from stored payloads (no HTTP),
+    the same way build_snapshot builds the catalog — so the external mode
+    is tested against recorded supply responses.
+
+      merchant   one entry of GET /tenant's `merchants`
+      retailers  GET /merchants/{slug}/retailers
+      feed       GET /merchants/{slug}/feed (external merchants)
+    """
+    merchant = merchant or {}
+    snapshot.merchant_kind = merchant.get("kind")
+    snapshot.hosting = merchant.get("hosting")
+    if merchant.get("name") and not snapshot.display_name:
+        snapshot.display_name = merchant.get("name")
+    own = _domain((retailers or {}).get("own_domain")) or _domain(merchant.get("domain")) \
+        or _domain(snapshot.domain)
+    snapshot.own_domain = own
+    if own and not snapshot.domain:
+        snapshot.domain = own
+
+    if snapshot.hosting != "external":
+        return snapshot
+
+    # A feed variant's shopper-facing name is its variant_label, which
+    # supply serves as the variant's title (truesync/feed/serve.py). The
+    # tier builders name variants by size and attributes, so the label is
+    # carried as one. Only here: a hosted record's naming is untouched.
+    for product, variant in snapshot.variants():
+        if variant.title and variant.title != product.title and 'label' not in variant.attributes:
+            variant.attributes = {**variant.attributes, 'label': variant.title}
+
+    union: List[str] = []
+    for row in (feed or {}).get("rows") or []:
+        key = row.get("gtin14") or row.get("gtin")
+        domains = [d for d in (_domain(r.get("domain")) for r in row.get("retailers") or []
+                               if r.get("url")) if d]
+        if key:
+            snapshot.variant_retailers[key] = domains
+        for domain in domains:
+            if domain not in union:
+                union.append(domain)
+    if snapshot.merchant_kind == "seller":
+        snapshot.retailer_list = [own] if own else []
+    else:
+        snapshot.retailer_list = sorted(union)
     return snapshot
 
 

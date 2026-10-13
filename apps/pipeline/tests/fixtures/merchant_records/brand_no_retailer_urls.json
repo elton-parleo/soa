@@ -1,0 +1,81 @@
+{
+  "_note": "Fictional merchant, recorded in the shapes supply serves (GET /tenant, /merchants/{slug}/retailers, /feed, /catalog). No customer data.",
+  "tenant_merchant": {
+    "slug": "plainbrand",
+    "name": "Plainbrand",
+    "domain": "plainbrand.example",
+    "kind": "brand",
+    "hosting": "external",
+    "has_record": true
+  },
+  "retailers": {
+    "merchant": "plainbrand",
+    "own_domain": "plainbrand.example",
+    "domains": []
+  },
+  "feed": {
+    "merchant": "plainbrand",
+    "version": {
+      "id": 7,
+      "version_number": 1,
+      "committed_at": "2026-10-08T15:00:00+00:00"
+    },
+    "rows": [
+      {
+        "row_number": 2,
+        "gtin": "00770002200011",
+        "gtin14": "00770002200011",
+        "product_name": "Everyday Wipes",
+        "brand_name": "Plainbrand",
+        "variant_label": "3-Pack",
+        "pack_count": 216,
+        "multipack": null,
+        "size_value": null,
+        "size_unit": null,
+        "price": "11.99",
+        "currency": "USD",
+        "description": null,
+        "image_url": null,
+        "status": "ready",
+        "messages": [],
+        "provenance": "feed",
+        "retailers": []
+      }
+    ]
+  },
+  "catalog": {
+    "merchant": "plainbrand",
+    "listings": [
+      {
+        "listing_id": 101,
+        "product_url": null,
+        "published_at": "2026-10-08T15:00:00+00:00",
+        "spec_version": "sku-feed",
+        "product_id": "feed:plainbrand:00770002200011",
+        "title": "Everyday Wipes",
+        "brand": "Plainbrand",
+        "variants": [
+          {
+            "variant_id": "00770002200011",
+            "title": "3-Pack",
+            "size": null,
+            "count": 216,
+            "attributes": {},
+            "list_price": "11.99",
+            "currency": "USD",
+            "gtin": "00770002200011"
+          }
+        ]
+      }
+    ]
+  },
+  "merchants": [
+    {
+      "slug": "plainbrand",
+      "display_name": "Plainbrand",
+      "domain": "plainbrand.example",
+      "last_published_at": "2026-10-08T15:00:00+00:00",
+      "published_listings": 1
+    }
+  ]
+}

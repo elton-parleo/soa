@@ -73,6 +73,11 @@ def _attribute_parts(product, variant) -> List[str]:
     variant titles are not prefixed with the product name.
     """
     parts = []
+    # 2B: an external feed variant's label ("Size 3"), set by
+    # merge_merchant_record. Absent on every hosted record.
+    label = (variant.attributes or {}).get('label')
+    if label:
+        parts.append(str(label).strip())
     if variant.size:
         parts.append(str(variant.size).strip())
 
@@ -367,7 +372,146 @@ def _source_ref(snapshot, product, *, variant=None, offer_id=None) -> dict:
         ref.update(_attribution_hints(product, variant))
     if offer_id is not None:
         ref['offer_id'] = offer_id
+    ref.update(external_ref(snapshot, variant=variant))
     return ref
+
+
+# ─── 2B: external / brand mode ─────────────────────────────────────────────
+#
+# A merchant hosted outside Parleo has no published PDP of ours: the price a
+# shopper sees is a retailer page's (a brand) or the seller's own page (an
+# external seller). Its price questions therefore name the page, carry
+# attributed_to, and are scored against supply's retailer-prices for that
+# page (scoring/retailer_reference.py). A hosted merchant has none of this
+# on its snapshot and is generated exactly as before.
+
+def is_external(snapshot) -> bool:
+    return bool(getattr(snapshot, 'is_external', False))
+
+
+def external_ref(snapshot, *, variant=None) -> dict:
+    """The record facts the scorer needs on every external row: the own
+    domain (the grounded-by-source split), the kind, the retailer list
+    (fabricated_availability), and the variant's GTIN (the reference row)."""
+    if not is_external(snapshot):
+        return {}
+    ref = {
+        'own_domain': snapshot.own_domain,
+        'merchant_kind': snapshot.merchant_kind,
+        'retailer_list': list(snapshot.retailer_list or []),
+    }
+    if variant is not None and variant.gtin:
+        ref['gtin'] = variant.gtin
+    return ref
+
+
+def retailers_outside_list(text, snapshot) -> List[str]:
+    """Retailers a question names that the record's list does not hold.
+    A question may name a retailer only from that list."""
+    from scoring import answer_flags as af
+    allowed = set(snapshot.retailer_list or [])
+    if snapshot.own_domain:
+        allowed.add(snapshot.own_domain)
+    return [d for d in af.retailers_named(text) if d not in allowed]
+
+
+def _price_retailers(snapshot, variant) -> List[str]:
+    """The pages a variant's price may be asked at. A seller: its own
+    domain. A brand: the retailers its feed has a URL for, own site last
+    — the brand-direct tier is where the brand's own claims are asked."""
+    if snapshot.merchant_kind == 'seller':
+        return [snapshot.own_domain] if snapshot.own_domain else []
+    domains = list(snapshot.variant_retailers.get(variant.variant_id) or [])
+    domains = [d for d in domains if d in (snapshot.retailer_list or [])]
+    others = [d for d in domains if d != snapshot.own_domain]
+    return others + [d for d in domains if d == snapshot.own_domain]
+
+
+def _external_subject(snapshot, product, variant) -> str:
+    """The product named by ITS brand: a seller sells many brands. A feed
+    product name that already starts with the brand ("Trailmix Adult Dog
+    Food") is not given it twice."""
+    brand = product.brand or snapshot.brand
+    if brand and ea.names_brand(product.title or '', brand):
+        brand = None
+    return _subject(brand, product, variant)
+
+
+def build_external_catalog_accuracy(snapshot, *, category, persona, study_pattern,
+                                    cap: int = DEFAULT_VARIANT_CAP) -> tuple:
+    """
+    One price question per sampled variant, asked AT a page from the
+    record's retailer list, with attributed_to on its expectation.
+
+    A brand's price is always asked at a retailer ("What does the Acme
+    Swaddle Size 3 cost at Target?"), rotating through each variant's own
+    retailer URLs so the study spans retailers rather than asking every
+    variant at the first one. A brand with no retailer URL at all gets no
+    price tier: there is no page a price could be read from, and the
+    report says so rather than showing an empty tier.
+    """
+    from scoring import answer_flags as af
+
+    if snapshot.merchant_kind != 'seller' and not snapshot.retailer_list:
+        return [], {
+            'count': 0, 'sampled_variants': [], 'variants_available': snapshot.variant_count,
+            'variant_cap': cap,
+            'unavailable': (
+                "no price tier: this brand's feed has no retailer URLs, and a brand's "
+                "price is only asked at a retailer page it can be read from"
+            ),
+        }
+
+    sampled = sample_variants(snapshot, cap)
+    rows, asked_at, skipped_no_price, skipped_no_retailer = [], {}, [], []
+    for index, (product, variant) in enumerate(sampled):
+        amount = ea.normalize_money(variant.list_price)
+        if amount is None:
+            skipped_no_price.append(variant.variant_id)
+            continue
+        pages = _price_retailers(snapshot, variant)
+        if not pages:
+            skipped_no_retailer.append(variant.variant_id)
+            continue
+        page = pages[index % len(pages)]
+        asked_at[variant.variant_id] = page
+        where = (snapshot.display_name or af.retailer_name(page)) \
+            if snapshot.merchant_kind == 'seller' else af.retailer_name(page)
+        subject = _external_subject(snapshot, product, variant)
+        expectation = ea.price(amount, variant.currency or 'USD', attributed_to=page)
+        secondary = []
+        if variant.gtin:
+            secondary.append(ea.gtin(variant.gtin))
+        if variant.count and variant.count > 1:
+            secondary.append(ea.pack_count(variant.count))
+        if secondary:
+            expectation = ea.with_secondary(expectation, secondary)
+        rows.append(_row(
+            query_text=f"What does the {subject} cost at {where}?",
+            tier='catalog_accuracy',
+            provenance='catalog',
+            expected_answer=expectation,
+            source_ref=_source_ref(snapshot, product, variant=variant),
+            category=category, persona=persona, study_pattern=study_pattern,
+            soa_focus='Catalog Accuracy, Price Accuracy',
+            rationale=(
+                f"Scored against {page}'s page price for {variant.variant_id} in "
+                f"TrueSync's retailer-prices as of the cycle start. The record's "
+                f"{amount} {variant.currency or 'USD'} is reference data, not the "
+                f"expected answer."
+            ),
+        ))
+    report = {
+        'sampled_variants': [v.variant_id for _p, v in sampled],
+        'variants_available': snapshot.variant_count,
+        'variant_cap': cap,
+        'sampled': len(sampled) < snapshot.variant_count,
+        'skipped_no_price': skipped_no_price,
+        'skipped_no_retailer': skipped_no_retailer,
+        'asked_at': asked_at,
+        'count': len(rows),
+    }
+    return rows, report
 
 
 # ─── Tier: catalog accuracy ────────────────────────────────────────────────
@@ -410,6 +554,12 @@ def build_catalog_accuracy(
     stating: a future checkbox, not built. See
     docs/expected-answer-vocabulary.md.
     """
+    if is_external(snapshot):
+        return build_external_catalog_accuracy(
+            snapshot, category=category, persona=persona,
+            study_pattern=study_pattern, cap=cap,
+        )
+
     sampled = sample_variants(snapshot, cap)
     rows: List[dict] = []
     skipped_no_price: List[str] = []
@@ -536,7 +686,7 @@ def _code_question_text(snapshot, incentive) -> str:
     already says what makes each code different — who it is for, and what
     it applies to — so the wording is read off that rather than invented.
     """
-    brand = snapshot.brand
+    brand = getattr(snapshot, 'study_brand', None) or snapshot.brand
     conditions = incentive.get('conditions') or {}
     if conditions.get('new_customer_only') or incentive.get('eligibility_kind') == 'new_customer':
         return (
@@ -644,6 +794,17 @@ def build_value_incentives(snapshot, *, category, persona, study_pattern) -> tup
             continue
 
         subject = _subject(snapshot.brand, product, variant)
+        attributed_to = None
+        if is_external(snapshot):
+            # A member price is the merchant's own program, read off its
+            # own page. Asked only where that page is in the record.
+            if not snapshot.own_domain or (
+                snapshot.merchant_kind != 'seller'
+                and snapshot.own_domain not in (snapshot.retailer_list or [])
+            ):
+                continue
+            attributed_to = snapshot.own_domain
+            subject = _external_subject(snapshot, product, variant)
         rows.append(_row(
             query_text=(
                 f"What do {variant.member_tier_name} members pay for the {subject}?"
@@ -652,6 +813,7 @@ def build_value_incentives(snapshot, *, category, persona, study_pattern) -> tup
             provenance='catalog',
             expected_answer=ea.member_price(
                 amount, variant.member_tier_name, variant.currency or 'USD',
+                attributed_to=attributed_to,
             ),
             source_ref=_source_ref(snapshot, product, variant=variant),
             category=category,
@@ -757,6 +919,13 @@ def expected_nulls(snapshot, tier: str) -> str:
             "a member price may be absent there while present elsewhere."
         )
     if tier == 'catalog_accuracy':
+        if is_external(snapshot):
+            if snapshot.merchant_kind != 'seller' and not snapshot.retailer_list:
+                return ("None asked: the brand's feed names no retailer page, so there is "
+                        "no page a price could be scored against.")
+            return ("Prices are scored against each retailer page as read at the cycle "
+                    "start. A page that blocked both reference sources scores "
+                    "unverifiable, never wrong.")
         return (
             "Surfaces without feed enrollment show crawl-derived data only. An "
             "absent price on those is a distribution gap, not an accuracy failure."
@@ -800,7 +969,7 @@ def build_catalog_context(snapshot) -> str:
     if not snapshot or not snapshot.available or not snapshot.products:
         return ''
 
-    lines = [f"The brand is {snapshot.brand}."]
+    lines = [f"The brand is {getattr(snapshot, 'study_brand', None) or snapshot.brand}."]
     if snapshot.domain:
         lines.append(f"Its own store is {snapshot.domain}.")
     lines.append("These are the products it actually sells, as published:")
@@ -815,6 +984,24 @@ def build_catalog_context(snapshot) -> str:
         remaining = len(product.variants) - len(shown)
         if remaining > 0:
             lines.append(f"    - (and {remaining} more variant(s) in the same range)")
+
+    if is_external(snapshot):
+        from scoring import answer_flags as af
+        listed = ', '.join(f"{af.retailer_name(d)} ({d})" for d in snapshot.retailer_list or [])
+        if snapshot.merchant_kind == 'brand':
+            lines.append(
+                "It is a brand, not a store. Ask about the brand's own claims — its "
+                "programs, its own site, and where to buy it."
+            )
+            lines.append(
+                f"Its products are sold at: {listed}. A question may name only these "
+                f"retailers." if listed else
+                "It lists no retailers, so a question must not name any retailer."
+            )
+        elif snapshot.merchant_kind == 'seller':
+            lines.append(
+                f"It is a store ({snapshot.own_domain}). A question may name only this store."
+            )
 
     if snapshot.program_name and snapshot.tiers:
         tier_names = ', '.join(t.get('name') for t in snapshot.tiers if t.get('name'))
@@ -878,7 +1065,9 @@ def stamp_brand_direct(rows: List[dict], snapshot) -> List[dict]:
     if not snapshot or not snapshot.brand:
         return rows
 
-    expectation = ea.brand_mention(snapshot.brand, snapshot.domain)
+    brand = getattr(snapshot, 'study_brand', None) or snapshot.brand
+    domain = (snapshot.own_domain if is_external(snapshot) else None) or snapshot.domain
+    expectation = ea.brand_mention(brand, domain)
     source_ref = {
         'merchant_slug': snapshot.merchant_slug,
         'published_at': max(
@@ -886,6 +1075,7 @@ def stamp_brand_direct(rows: List[dict], snapshot) -> List[dict]:
             default=None,
         ),
         'listing_ids': [p.listing_id for p in snapshot.products],
+        **external_ref(snapshot),
     }
 
     for row in rows:

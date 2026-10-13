@@ -1178,7 +1178,7 @@ def generate_brand_direct(
         personas=personas,
         specificity_mode=specificity_mode,
         catalog_context=context,
-        require_brand=snapshot.brand,
+        require_brand=getattr(snapshot, 'study_brand', None) or snapshot.brand,
         catalog_texts=list(catalog_texts or []),
     )
 

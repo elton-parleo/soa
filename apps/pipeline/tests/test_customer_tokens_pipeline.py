@@ -96,10 +96,14 @@ def sent(monkeypatch):
 def test_each_study_is_read_with_its_own_customers_token(db, sent):
     tc.TrueSyncCatalogClient.for_study("acme-study", base_url="https://x.invalid") \
         .snapshot("acme-store", with_history=False)
+    # Split where the first snapshot's reads end, not at a fixed count: 2B
+    # added the merchant-record read (/tenant) to every snapshot.
+    first = len(sent)
     tc.TrueSyncCatalogClient.for_study("brandco-study", base_url="https://x.invalid") \
         .snapshot("brandco", with_history=False)
 
-    assert set(sent[:3]) == {TOKEN_A} and set(sent[3:]) == {TOKEN_B}
+    assert first >= 3
+    assert set(sent[:first]) == {TOKEN_A} and set(sent[first:]) == {TOKEN_B}
 
 
 def test_a_pre_1c_study_uses_the_fallback_while_it_exists(db, sent, monkeypatch):

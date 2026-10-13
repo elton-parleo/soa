@@ -1,0 +1,121 @@
+{
+  "_note": "Fictional merchant, recorded in the shapes supply serves (GET /tenant, /merchants/{slug}/retailers, /feed, /catalog). No customer data.",
+  "tenant_merchant": {
+    "slug": "acme-pets",
+    "name": "Acme Pets",
+    "domain": "acme-pets.test",
+    "kind": "seller",
+    "hosting": "external",
+    "has_record": true
+  },
+  "retailers": {
+    "merchant": "acme-pets",
+    "own_domain": "acme-pets.test",
+    "domains": []
+  },
+  "feed": {
+    "merchant": "acme-pets",
+    "version": {
+      "id": 7,
+      "version_number": 1,
+      "committed_at": "2026-10-08T15:00:00+00:00"
+    },
+    "rows": [
+      {
+        "row_number": 2,
+        "gtin": "00990001100017",
+        "gtin14": "00990001100017",
+        "product_name": "Trailmix Adult Dog Food",
+        "brand_name": "Trailmix",
+        "variant_label": "Chicken & Rice 35 lb",
+        "pack_count": null,
+        "multipack": null,
+        "size_value": null,
+        "size_unit": null,
+        "price": "74.98",
+        "currency": "USD",
+        "description": null,
+        "image_url": null,
+        "status": "ready",
+        "messages": [],
+        "provenance": "feed",
+        "retailers": [
+          {
+            "domain": "acme-pets.test",
+            "url": "https://www.acme-pets.test/p/011000"
+          }
+        ]
+      },
+      {
+        "row_number": 3,
+        "gtin": "00990001100024",
+        "gtin14": "00990001100024",
+        "product_name": "Trailmix Adult Dog Food",
+        "brand_name": "Trailmix",
+        "variant_label": "Lamb & Rice 35 lb",
+        "pack_count": null,
+        "multipack": null,
+        "size_value": null,
+        "size_unit": null,
+        "price": "76.98",
+        "currency": "USD",
+        "description": null,
+        "image_url": null,
+        "status": "ready",
+        "messages": [],
+        "provenance": "feed",
+        "retailers": [
+          {
+            "domain": "acme-pets.test",
+            "url": "https://www.acme-pets.test/p/011001"
+          }
+        ]
+      }
+    ]
+  },
+  "catalog": {
+    "merchant": "acme-pets",
+    "listings": [
+      {
+        "listing_id": 101,
+        "product_url": null,
+        "published_at": "2026-10-08T15:00:00+00:00",
+        "spec_version": "sku-feed",
+        "product_id": "feed:acme-pets:00990001100017",
+        "title": "Trailmix Adult Dog Food",
+        "brand": "Trailmix",
+        "variants": [
+          {
+            "variant_id": "00990001100017",
+            "title": "Chicken & Rice 35 lb",
+            "size": null,
+            "count": null,
+            "attributes": {},
+            "list_price": "74.98",
+            "currency": "USD",
+            "gtin": "00990001100017"
+          },
+          {
+            "variant_id": "00990001100024",
+            "title": "Lamb & Rice 35 lb",
+            "size": null,
+            "count": null,
+            "attributes": {},
+            "list_price": "76.98",
+            "currency": "USD",
+            "gtin": "00990001100024"
+          }
+        ]
+      }
+    ]
+  },
+  "merchants": [
+    {
+      "slug": "acme-pets",
+      "display_name": "Acme Pets",
+      "domain": "acme-pets.test",
+      "last_published_at": "2026-10-08T15:00:00+00:00",
+      "published_listings": 1
+    }
+  ]
+}
