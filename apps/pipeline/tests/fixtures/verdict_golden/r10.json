@@ -1,0 +1,53 @@
+{
+  "id": "r10",
+  "rule": "\u00a73 rule 3",
+  "source": "engine canBeWrong: \"wrong\" needs the agent to have named the item",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "price",
+    "amount": "22.99",
+    "currency": "USD"
+  },
+  "source_ref": {
+    "merchant_slug": "wiggle-and-snug",
+    "listing_id": 90,
+    "variant_id": "snug-fit-diapers-s3-small",
+    "attribution": [
+      "Size 3",
+      "small pack"
+    ],
+    "attribution_rivals": [
+      "big pack",
+      "Size 1",
+      "Size 2",
+      "Size 4",
+      "Size 5",
+      "Size 6"
+    ]
+  },
+  "extraction": {
+    "prices": [
+      {
+        "amount": "19.49",
+        "currency": null,
+        "attributed_product": null
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "catalog": null,
+  "reference": null,
+  "verdict_before": "wrong",
+  "verdict_after": "unscoreable",
+  "reason_code_after": "product_inferred",
+  "flags_after": [],
+  "reason_after": "the answer attached this price to no product; a mismatch on an inferred product is not scored wrong"
+}

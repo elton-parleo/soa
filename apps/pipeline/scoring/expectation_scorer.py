@@ -14,7 +14,9 @@ history fetched when the question was written is a picture of the past as
 it looked before anything republished, and staleness is precisely the
 question of what has been published since.
 """
+import json
 import logging
+import os
 from dataclasses import dataclass
 from typing import Optional
 
@@ -24,8 +26,14 @@ from clients.truesync_catalog import TrueSyncCatalogClient
 from parser.expectation_client import ExpectationClient
 from parser.extraction_postprocess import apply_labels
 from scoring import expectation_comparator as cmp
+from scoring import record_variants as rv
+from scoring.retailer_reference import ReferenceSet
 from soa_shared import expected_answers as ea
 from soa_shared.database import engine
+
+#: 2B: what a consumer surface returned instead of an answer. A RESULT, not
+#: a failure: scored `absent`, counted in coverage, excluded from accuracy.
+NO_ANSWER_STATUSES = ('no_ai_answer', 'sign_in_wall', 'blocked')
 
 logger = logging.getLogger(__name__)
 
@@ -71,14 +79,33 @@ class HistoryCache:
         # None: each merchant is read with its study's customer's token.
         self._client = client
         self._by_merchant = {}
+        # 2B: the snapshot itself, so the record's variants (rule 2) are
+        # read off the same single catalog read as the history.
+        self._snapshots = {}
+
+    def record_variants(self, merchant_slug, study_type=None):
+        if not merchant_slug:
+            return []
+        if merchant_slug not in self._by_merchant:
+            self._load(merchant_slug, study_type)
+        return rv.from_snapshot(self._snapshots.get(merchant_slug))
+
+    def history_for(self, merchant_slug, study_type=None):
+        return lambda variant_id: self.for_variant(merchant_slug, variant_id, study_type)
 
     def for_variant(self, merchant_slug, variant_id, study_type=None):
         if not merchant_slug or not variant_id:
             return None
         if merchant_slug not in self._by_merchant:
+            self._load(merchant_slug, study_type)
+        return self._by_merchant[merchant_slug].get(variant_id)
+
+    def _load(self, merchant_slug, study_type):
+        if merchant_slug not in self._by_merchant:
             snapshot = _snapshot(
                 self._client, study_type, merchant_slug, with_history=True,
             )
+            self._snapshots[merchant_slug] = snapshot
             if not snapshot.available:
                 logger.warning(
                     "[expectation] no price history for %s (%s) — a mismatch "
@@ -97,7 +124,6 @@ class HistoryCache:
                 ]
                 for vid, points in (snapshot.price_history or {}).items()
             }
-        return self._by_merchant[merchant_slug].get(variant_id)
 
 
 class BrandFactsCache:
@@ -142,17 +168,173 @@ class BrandFactsCache:
         return self._by_merchant[merchant_slug]
 
 
+class ReferenceCache:
+    """
+    2B: one retailer-prices read per cycle, cached ON the cycle.
+
+    soa_cycles.reference_prices holds the payload, reference_as_of its
+    as_of. The first scoring of a cycle that has an attributed_to price
+    reads supply once (as of the cycle's start: created_at, the moment the
+    cycle existed — for a full-loop cycle that is after reference_done) and
+    stores it; every later scoring, re-score and classify-only re-score of
+    that cycle reads the stored copy, which is what makes a re-score
+    reproducible.
+
+    `stale` comes from the PREVIOUS cycle of the same study that has cached
+    rows: supply serves only the newest reference run at or before as_of.
+    """
+
+    def __init__(self, client: TrueSyncCatalogClient = None, *, fetch: bool = True) -> None:
+        self._client = client
+        self._fetch = fetch
+        self._by_cycle = {}
+
+    def for_cycle(self, cycle_id, *, study_type=None, merchant_slug=None):
+        if cycle_id in self._by_cycle:
+            return self._by_cycle[cycle_id]
+        with engine.connect() as conn:
+            row = conn.execute(text(
+                "SELECT id, cycle_code, study_type, reference_prices, created_at, start_date "
+                "FROM soa_cycles WHERE id = :id"
+            ), {"id": cycle_id}).fetchone()
+        if row is None:
+            self._by_cycle[cycle_id] = None
+            return None
+        payload = _as_dict(row.reference_prices)
+        if payload is None and self._fetch and merchant_slug:
+            payload = self._read(row, study_type or row.study_type, merchant_slug)
+        prior_code, prior_payload = self._prior(row)
+        reference = ReferenceSet(payload, prior_payload=prior_payload,
+                                 prior_cycle_code=prior_code) if payload else None
+        self._by_cycle[cycle_id] = reference
+        return reference
+
+    def _read(self, cycle, study_type, merchant_slug):
+        as_of = _cycle_start(cycle)
+        client = self._client or TrueSyncCatalogClient.for_study(study_type)
+        payload, error = client.retailer_prices(merchant_slug, as_of=as_of)
+        if error is not None:
+            logger.warning("[expectation] no retailer-prices for %s as of %s (%s) — "
+                           "attributed prices score unverifiable", merchant_slug, as_of, error)
+            return None
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE soa_cycles SET reference_prices = :p, reference_as_of = :a WHERE id = :id"
+            ), {"p": json.dumps(payload), "a": payload.get('as_of') or as_of, "id": cycle.id})
+        return payload
+
+    @staticmethod
+    def _prior(cycle):
+        with engine.connect() as conn:
+            row = conn.execute(text(
+                "SELECT cycle_code, reference_prices FROM soa_cycles "
+                "WHERE study_type = :st AND id <> :id AND reference_prices IS NOT NULL "
+                "  AND (start_date < :sd OR (start_date = :sd AND id < :id)) "
+                "ORDER BY start_date DESC, id DESC LIMIT 1"
+            ), {"st": cycle.study_type, "id": cycle.id, "sd": cycle.start_date}).fetchone()
+        if row is None:
+            return None, None
+        return row[0], _as_dict(row[1])
+
+
+def _cycle_start(cycle) -> str:
+    """ISO 8601 for the cycle's start: created_at when the row has it,
+    else the end of its start_date (a date alone is a day, and a reference
+    read made that day belongs to it)."""
+    created = getattr(cycle, 'created_at', None)
+    if created is not None:
+        if isinstance(created, str):
+            return created
+        if created.tzinfo is None:
+            from datetime import timezone
+            created = created.replace(tzinfo=timezone.utc)
+        return created.isoformat()
+    return f"{cycle.start_date}T23:59:59+00:00"
+
+
+def citation_checks_enabled() -> bool:
+    return os.getenv('SOA_CITATION_CHECK_ENABLED', '1') == '1'
+
+
+def classify(run, expectation, extraction, *, history=None, brand_facts=None,
+             references=None, domain_checker=None) -> cmp.Verdict:
+    """
+    The deterministic half, for one run whose extraction already exists.
+
+    Used by the live scorer after extraction, and by a classify-only
+    re-score over the STORED extraction — the same function, so the two
+    cannot disagree. No model call; the network calls it can make are the
+    catalog and retailer-prices reads (cached per batch / on the cycle)
+    and the citation check (cached 24 hours).
+    """
+    source_ref = _as_dict(run.source_ref) or {}
+    merchant = source_ref.get('merchant_slug')
+    facts = brand_facts.for_merchant(merchant, study_type=run.study_type) \
+        if brand_facts else {}
+
+    answer_status = getattr(run, 'answer_status', None)
+    if answer_status in NO_ANSWER_STATUSES:
+        return cmp.Verdict(
+            outcome=cmp.ABSENT,
+            reason=f"the surface showed no answer ({answer_status}); counted in "
+                   f"coverage, outside accuracy",
+        )
+
+    # Duck-typed: a history cache without the 2B methods (an older caller,
+    # a test double) simply gets no rule 2, never an error.
+    record_variants = (history.record_variants(merchant, run.study_type)
+                       if hasattr(history, 'record_variants') else None)
+    history_for = (history.history_for(merchant, run.study_type)
+                   if hasattr(history, 'history_for') else None)
+    reference = None
+    if expectation.get('attributed_to') and references is not None:
+        reference = references.for_cycle(run.cycle_id, study_type=run.study_type,
+                                         merchant_slug=merchant)
+    dead = {}
+    if domain_checker is not None:
+        from scoring import answer_flags as af
+        for domain in af.cited_domains(extraction.get('sources_cited')):
+            check = domain_checker.check(domain)
+            if check.fabricated:
+                dead[domain] = check.as_dict()
+
+    return cmp.compare_with_secondary(
+        expectation, extraction,
+        history=history.for_variant(merchant, source_ref.get('variant_id'),
+                                    study_type=run.study_type) if history else None,
+        source_ref=source_ref,
+        brand_domain=expectation.get('domain') or source_ref.get('domain'),
+        tier=run.tier,
+        brand_facts=facts,
+        record_variants=record_variants,
+        history_for=history_for,
+        reference=reference,
+        retrieved_sources=_as_dict(getattr(run, 'retrieved_sources', None)),
+        dead_domains=dead,
+    )
+
+
 class ExpectationScorer:
 
     def __init__(self, client: ExpectationClient = None,
                  history: HistoryCache = None,
                  brand_facts: BrandFactsCache = None,
-                 labeler=None) -> None:
+                 labeler=None, references: ReferenceCache = None,
+                 domain_checker=None) -> None:
         self.client = client or ExpectationClient()
         self.history = history if history is not None else HistoryCache()
         self.brand_facts = (
             brand_facts if brand_facts is not None else BrandFactsCache()
         )
+        # 2B. The retailer-prices reference shares the history cache's
+        # catalog client (and so its token); the citation check is on
+        # unless SOA_CITATION_CHECK_ENABLED=0.
+        self.references = references if references is not None else ReferenceCache(
+            getattr(self.history, '_client', None))
+        if domain_checker is None and citation_checks_enabled():
+            from scoring.citation_check import DbDomainCheckStore, DomainChecker
+            domain_checker = DomainChecker(store=DbDomainCheckStore())
+        self.domain_checker = domain_checker or None
         # Step 1b. Constructed lazily so a test that does not pass one
         # gets no labelling call rather than a missing-API-key error at
         # import time; pass labeler=False to switch it off outright.
@@ -167,7 +349,7 @@ class ExpectationScorer:
         with engine.connect() as conn:
             return conn.execute(text("""
                 SELECT r.id, r.cycle_id, r.query_id, r.platform, r.raw_response,
-                       r.status,
+                       r.status, r.retrieved_sources, r.surface, r.answer_status,
                        q.tier, q.expected_answer, q.source_ref, q.study_type
                 FROM soa_runs r
                 JOIN soa_queries q ON q.id = r.query_id
@@ -183,8 +365,6 @@ class ExpectationScorer:
         which is also why the table carries a unique constraint on run_id
         rather than relying on this.
         """
-        import json
-
         source_ref = _as_dict(run.source_ref) or {}
         payload = {
             "run_id": run.id,
@@ -209,6 +389,11 @@ class ExpectationScorer:
             "matched_published_at": verdict.matched_published_at,
             "near_miss": verdict.near_miss or None,
             "extraction_model": model,
+            "flags": json.dumps(verdict.flags) if verdict.flags else None,
+            "claim_results": json.dumps(verdict.claims) if verdict.claims else None,
+            "source_split": json.dumps(verdict.source_split) if verdict.source_split else None,
+            "reason_code": verdict.reason_code,
+            "surface": getattr(run, 'surface', None),
         }
 
         with engine.connect() as conn:
@@ -222,13 +407,15 @@ class ExpectationScorer:
                     expected_answer, extraction, outcome, outcome_reason,
                     domain_cited, source_attribution, secondary_results,
                     record_published_at, matched_published_at,
-                    near_miss, extraction_model, scored_at
+                    near_miss, extraction_model, flags, claim_results,
+                    source_split, reason_code, surface, scored_at
                 ) VALUES (
                     :run_id, :query_id, :cycle_id, :platform, :tier,
                     :expected_answer, :extraction, :outcome, :outcome_reason,
                     :domain_cited, :source_attribution, :secondary_results,
                     :record_published_at, :matched_published_at,
-                    :near_miss, :extraction_model, NOW()
+                    :near_miss, :extraction_model, :flags, :claim_results,
+                    :source_split, :reason_code, :surface, NOW()
                 )
             """), payload)
             conn.commit()
@@ -246,6 +433,21 @@ class ExpectationScorer:
             # expectation deliberately, and so does every query written
             # before the tiers existed. Layer 1 has already run on them.
             return ScoreRunResult(run_id, 'skipped_no_expectation')
+
+        if getattr(run, 'answer_status', None) in NO_ANSWER_STATUSES:
+            # A consumer surface's wall or empty answer: a result, scored
+            # absent, never sent to the extractor (there is nothing to read).
+            from parser.expectation_prompts import EMPTY_EXTRACTION
+            extraction = {**EMPTY_EXTRACTION, 'extraction_confident': True,
+                          'extraction_note': f"surface returned {run.answer_status}"}
+            verdict = classify(run, expectation, extraction)
+            try:
+                self._store(run=run, expectation=expectation,
+                            extraction=extraction, verdict=verdict, model=None)
+            except Exception as exc:
+                logger.exception("[expectation] run %s: could not store", run_id)
+                return ScoreRunResult(run_id, 'db_error', error_message=str(exc))
+            return ScoreRunResult(run_id, 'skipped_no_answer', outcome=verdict.outcome)
 
         if run.status != 'success' or not (run.raw_response or '').strip():
             # An answer that never arrived is not an assistant error. It
@@ -304,18 +506,10 @@ class ExpectationScorer:
                     "recorded and unlabelled", run_id, labels.error,
                 )
 
-        history = self.history.for_variant(
-            source_ref.get('merchant_slug'), source_ref.get('variant_id'),
-            study_type=run.study_type,
-        ) if self.history else None
-
-        verdict = cmp.compare_with_secondary(
-            expectation, result.record,
-            history=history,
-            source_ref=source_ref,
-            brand_domain=expectation.get('domain') or source_ref.get('domain'),
-            tier=run.tier,
-            brand_facts=facts,
+        verdict = classify(
+            run, expectation, result.record, history=self.history,
+            brand_facts=self.brand_facts, references=self.references,
+            domain_checker=self.domain_checker,
         )
 
         try:
@@ -333,8 +527,6 @@ def _as_dict(value):
     """JSON column -> Python. Postgres hands back a parsed object; sqlite
     (and any driver storing it as TEXT) hands back a string. Same
     defensive read worker.py's _job_json already uses."""
-    import json
-
     if isinstance(value, str):
         try:
             return json.loads(value)

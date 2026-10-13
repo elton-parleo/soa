@@ -92,6 +92,7 @@ def Session():
     with engine.begin() as conn:
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
+                surface TEXT, collector TEXT, answer_status TEXT,
                 id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER,
                 platform TEXT, run_number INTEGER, run_at TIMESTAMP,
                 raw_response TEXT, response_tokens INTEGER, latency_ms INTEGER,

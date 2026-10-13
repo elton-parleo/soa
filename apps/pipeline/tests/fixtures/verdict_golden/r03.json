@@ -1,0 +1,54 @@
+{
+  "id": "r03",
+  "rule": "\u00a73 rule 4",
+  "source": "W&S catalog fixture: whole-dollar member price",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "member_price",
+    "amount": "16.84",
+    "currency": "USD",
+    "tier_name": "Member+"
+  },
+  "source_ref": {
+    "merchant_slug": "wiggle-and-snug",
+    "listing_id": 90,
+    "variant_id": "snug-fit-diapers-s3-small",
+    "attribution": [
+      "Size 3",
+      "small pack"
+    ],
+    "attribution_rivals": [
+      "big pack",
+      "Size 1",
+      "Size 2",
+      "Size 4",
+      "Size 5",
+      "Size 6"
+    ]
+  },
+  "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [
+      {
+        "amount": "17",
+        "tier": "Member+",
+        "attributed_product": "Size 3 small pack"
+      }
+    ],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "catalog": null,
+  "reference": null,
+  "verdict_before": "wrong",
+  "verdict_after": "partial",
+  "reason_code_after": null,
+  "flags_after": [],
+  "reason_after": "stated 17, whole-dollar within 50 cents of 16.84 USD (Member+)"
+}

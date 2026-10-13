@@ -26,6 +26,29 @@ mentions, or anything Layer 1 produced.
 
 It costs one extraction call per run. --dry-run prints the plan and the
 current counts and makes no model call and no write.
+
+--classify-only (2B) makes NO model call at all. It re-runs the
+deterministic classifier (scoring/expectation_comparator.py, through the
+same classify() the live scorer uses) over each outcome row's STORED
+expectation and extraction, and replaces the row. This is how every 2B
+scoring change is applied to a cycle that already ran:
+
+    python3 scripts/rescore_cycle.py --cycle <code> --classify-only
+
+Layer 1 (soa_coded_mentions) is read as stored and never re-run: it is
+model output, and re-deriving it would be a model call. Layer 2's spans,
+transcription and labels are the stored extraction, also never re-run.
+The network calls it can make are the catalog read (for rule 2's record
+variants), the cycle's one retailer-prices read if it was never cached,
+and the citation check (24-hour cache).
+
+It replaces the unchanged-tiers guard for this kind of re-score. That
+guard compares tier totals before and after, which cried wolf on
+re-extract runs (a fresh extraction legitimately moves rows in every
+tier). Here the extraction does not move, so the guard is replaced by two
+checks that can be stated exactly: every row is classified TWICE and the
+two passes must agree before anything is written, and every row whose
+outcome moved is printed with the rule that moved it.
 """
 import argparse
 import asyncio
@@ -216,6 +239,161 @@ def diff_untouched(before: dict, after: dict, targeted) -> list:
     return moved
 
 
+# ─── 2B: classify-only ─────────────────────────────────────────────────────
+
+RULES = {
+    'product_inferred': '§3 rule 3: product_inferred can never be wrong',
+    'variant_swap': '§3 rule 2: a clash naming another record variant (variant_swap)',
+    'variant_clash': '§3 rule 2: a clash naming no record variant (variant_clash)',
+}
+
+
+def rule_for(verdict, expectation, answer_status=None) -> str:
+    """The 2B rule that produced this verdict, for the before/after list."""
+    if verdict.reason_code in RULES:
+        return RULES[verdict.reason_code]
+    if answer_status in ('no_ai_answer', 'sign_in_wall', 'blocked'):
+        return '§4: a wall or empty consumer answer is absent'
+    if expectation.get('attributed_to'):
+        return '§2: retailer_price scored against the attributed page'
+    if verdict.outcome == 'partial':
+        return ('§3 rule 4: whole-dollar member price within 50 cents'
+                if expectation.get('type') == 'member_price'
+                else '§3 rule 1: whole-dollar within 50 cents')
+    return 'unattributed: the classifier did not change for this row; an input did'
+
+
+def stored_rows(conn, cid: int, tiers) -> list:
+    statement = text("""
+        SELECT o.run_id, o.query_id, o.cycle_id, o.platform, o.tier,
+               o.expected_answer, o.extraction, o.extraction_model, o.outcome,
+               r.retrieved_sources, r.surface, r.answer_status, r.run_number,
+               q.source_ref, q.study_type, q.query_code
+        FROM soa_expectation_outcomes o
+        JOIN soa_runs r ON r.id = o.run_id
+        JOIN soa_queries q ON q.id = r.query_id
+        WHERE o.cycle_id = :cid AND (o.tier IN :tiers OR o.tier IS NULL)
+        ORDER BY o.run_id
+    """).bindparams(bindparam("tiers", expanding=True))
+    return conn.execute(statement, {"cid": cid, "tiers": list(tiers)}).mappings().all()
+
+
+def _as_json(value):
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            return None
+    return value
+
+
+def _signature(verdict) -> str:
+    """Everything a re-score writes, as one comparable string."""
+    return json.dumps({
+        'outcome': verdict.outcome, 'reason': verdict.reason,
+        'matched_published_at': verdict.matched_published_at,
+        'source_attribution': verdict.source_attribution,
+        'domain_cited': verdict.domain_cited, 'near_miss': verdict.near_miss,
+        'secondary': verdict.secondary, 'flags': verdict.flags, 'claims': verdict.claims,
+        'source_split': verdict.source_split, 'reason_code': verdict.reason_code,
+    }, sort_keys=True, default=str)
+
+
+def classify_only(cycle_code: str, tiers=None, *, scorer=None, write: bool = True) -> dict:
+    """
+    Re-classify a cycle's stored outcomes. Returns
+    {'cid', 'rows', 'moved': [(run_id, query_code, platform, run_number,
+    before, after, rule)], 'deterministic': bool, 'skipped': [...]}.
+
+    `scorer` supplies the caches (history, brand facts, references,
+    domain checker) and the writer; an ExpectationScorer with a client
+    that is never called. Its extraction client is NOT used: nothing here
+    reaches a model.
+    """
+    from types import SimpleNamespace
+
+    from scoring.expectation_scorer import ExpectationScorer, classify
+
+    tiers = tiers or [t for t in QUERY_TIERS]
+    scorer = scorer or ExpectationScorer(client=_NoModel(), labeler=False)
+
+    with engine.connect() as conn:
+        cid = cycle_id(conn, cycle_code)
+        rows = stored_rows(conn, cid, tiers)
+
+    plan, skipped = [], []
+    for row in rows:
+        expectation = _as_json(row['expected_answer'])
+        extraction = _as_json(row['extraction'])
+        if not isinstance(expectation, dict) or not isinstance(extraction, dict):
+            skipped.append(row['run_id'])
+            continue
+        run = SimpleNamespace(
+            id=row['run_id'], query_id=row['query_id'], cycle_id=row['cycle_id'],
+            platform=row['platform'], tier=row['tier'], source_ref=row['source_ref'],
+            study_type=row['study_type'], retrieved_sources=row['retrieved_sources'],
+            surface=row['surface'], answer_status=row['answer_status'],
+        )
+        kwargs = dict(history=scorer.history, brand_facts=scorer.brand_facts,
+                      references=scorer.references, domain_checker=scorer.domain_checker)
+        first = classify(run, expectation, extraction, **kwargs)
+        second = classify(run, expectation, extraction, **kwargs)
+        plan.append((row, run, expectation, extraction, first, second))
+
+    deterministic = all(_signature(a) == _signature(b) for *_rest, a, b in plan)
+    moved = []
+    for row, run, expectation, extraction, verdict, _again in plan:
+        if verdict.outcome != row['outcome']:
+            moved.append((row['run_id'], row['query_code'], row['platform'], row['run_number'],
+                          row['outcome'], verdict.outcome,
+                          rule_for(verdict, expectation, row['answer_status'])))
+
+    if write and deterministic:
+        for row, run, expectation, extraction, verdict, _again in plan:
+            scorer._store(run=run, expectation=expectation, extraction=extraction,
+                          verdict=verdict, model=row['extraction_model'])
+
+    return {'cid': cid, 'rows': len(plan), 'moved': moved,
+            'deterministic': deterministic, 'skipped': skipped}
+
+
+class _NoModel:
+    """The extraction client classify-only hands the scorer. Calling it is
+    a bug, and says so."""
+
+    async def extract(self, *_args, **_kwargs):
+        raise RuntimeError("classify-only must not call the extraction model")
+
+
+def _main_classify_only(args) -> int:
+    with engine.connect() as conn:
+        cid = cycle_id(conn, args.cycle)
+        before = outcome_counts(conn, cid)
+    print(f"cycle {args.cycle} (id {cid}) — classify-only: no model call; Layer 1 "
+          f"and the stored Layer 2 extraction are read as they are")
+    print("before:")
+    print(_render(before))
+    result = classify_only(args.cycle, args.tiers, write=not args.dry_run)
+    if not result['deterministic']:
+        print("\nPROBLEM: two classification passes over the same stored rows "
+              "disagreed. Nothing was written.")
+        return 1
+    print(f"\nclassified {result['rows']} stored row(s) twice; both passes agree")
+    if result['skipped']:
+        print(f"skipped (no stored expectation or extraction): {result['skipped']}")
+    print(f"\nrows whose outcome moved: {len(result['moved'])} of {result['rows']}")
+    for run_id, code, platform, number, was, now, rule in result['moved']:
+        print(f"    {code} · {platform} · run {number}: {was} -> {now}   [{rule}]   [run {run_id}]")
+    if args.dry_run:
+        print("\ndry run — nothing written.")
+        return 0
+    with engine.connect() as conn:
+        after = outcome_counts(conn, cid)
+    print("after:")
+    print(_render(after))
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="Re-score one or more tiers of a cycle, in place.",
@@ -241,7 +419,18 @@ def main(argv=None) -> int:
             "distinction worth being able to assert."
         ),
     )
+    parser.add_argument(
+        "--classify-only", action="store_true",
+        help=(
+            "re-run only the deterministic classifier over the STORED "
+            "extraction; no model call (2B). With --dry-run, prints what "
+            "would move and writes nothing."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.classify_only:
+        return _main_classify_only(args)
 
     tiers = args.tiers or [t for t in QUERY_TIERS if t != 'category_control']
 

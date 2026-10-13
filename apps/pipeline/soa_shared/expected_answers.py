@@ -56,7 +56,25 @@ POINTS_RULE_KINDS = ['per_dollar', 'fixed']
 # `unscoreable` is its own bucket and is never folded into `wrong`: they
 # are different facts, and merging them inflates the error rate with our
 # own extraction failures.
-VALUE_OUTCOMES = ['exact', 'stale', 'wrong', 'absent', 'unscoreable']
+VALUE_OUTCOMES = [
+    'exact', 'stale', 'wrong', 'absent', 'unscoreable',
+    # 2B. `partial`: a whole-dollar claim within 50 cents of the reference
+    # ("about $18" for 17.99), or the right price for an adjacent variant
+    # of the same item group. Reported apart from `exact`, never folded
+    # into it, and counted in the accuracy denominator like `wrong` — a
+    # partial is a claim we could check, not one we could not.
+    'partial',
+    # 2B. `unverifiable`: the page the price is attributed to blocked both
+    # reference sources (supply's retailer-prices row is verifiable=false).
+    # A finding about the page, never `wrong`, and never in an accuracy
+    # denominator: we could not see the price, so we cannot say the
+    # assistant got it wrong.
+    'unverifiable',
+]
+
+# The outcomes an accuracy denominator counts. `absent`, `unscoreable` and
+# `unverifiable` stay out of it and visible in the counts.
+SCORED_VALUE_OUTCOMES = ['exact', 'partial', 'stale', 'wrong']
 
 # Brand-direct answers are classified on a different axis, because there
 # is no published number for them to match. The old arrangement scored
@@ -115,6 +133,18 @@ def outcomes_for_tier(tier):
     behind it is the only thing the brand axis can describe.
     """
     return BRAND_OUTCOMES if tier == 'brand_direct' else VALUE_OUTCOMES
+
+# Flags recorded on an ANSWER beside its outcome (soa_expectation_outcomes.
+# flags). A flag never changes the outcome or a denominator; it says what
+# else was wrong with the answer.
+#
+#   fabricated_citation      a cited URL whose domain does not resolve, or
+#                            whose root returns no HTTP response in time
+#   fabricated_availability  the answer places the product at a retailer
+#                            that is not in the record's retailer list
+#   variant_swap             a price claim named a different variant of the
+#                            same item group, and was scored against it
+ANSWER_FLAGS = ['fabricated_citation', 'fabricated_availability', 'variant_swap']
 
 # The four question tiers. `null` on a query means it was generated
 # without a syndicated brand — which is every query that existed before
@@ -287,14 +317,51 @@ def normalize_count(value: Any) -> Optional[int]:
 # every comparison instead, and the day one comparison forgets is the day
 # a correct answer scores wrong.
 
-def price(amount: Any, currency: Any = 'USD') -> dict:
+def normalize_domain(value: Any) -> Optional[str]:
+    """A site as a bare lower-case host: 'https://www.Target.com/p/1' ->
+    'target.com'. None when there is no host in it."""
+    if value is None:
+        return None
+    text = str(value).strip().lower()
+    if not text:
+        return None
+    if '//' in text:
+        text = text.split('//', 1)[1]
+    text = text.split('/', 1)[0].split('?', 1)[0].split('#', 1)[0]
+    text = text.rsplit('@', 1)[-1].split(':', 1)[0].strip('.')
+    if text.startswith('www.'):
+        text = text[4:]
+    return text if '.' in text else None
+
+
+def _with_attribution(expectation: dict, attributed_to: Any) -> dict:
+    """
+    2B: which retailer PAGE a price expectation is about.
+
+    Set only for an externally hosted merchant, where the price a shopper
+    sees is a retailer page's, not a record we published: the scorer reads
+    that page's reference row (supply's retailer-prices) rather than the
+    record. Absent, the expectation scores against the record exactly as
+    it always has — which is what keeps the hosted seller unchanged.
+    """
+    if attributed_to in (None, ''):
+        return expectation
+    domain = normalize_domain(attributed_to)
+    if not domain:
+        raise ExpectedAnswerError(f"attributed_to {attributed_to!r} is not a site")
+    return {**expectation, 'attributed_to': domain}
+
+
+def price(amount: Any, currency: Any = 'USD', *, attributed_to: Any = None) -> dict:
     normalized = normalize_money(amount)
     if normalized is None:
         raise ExpectedAnswerError(f"price amount {amount!r} is not a money value")
     code = normalize_currency(currency)
     if not code:
         raise ExpectedAnswerError("price expectation needs a currency")
-    return {'type': 'price', 'amount': normalized, 'currency': code}
+    return _with_attribution(
+        {'type': 'price', 'amount': normalized, 'currency': code}, attributed_to,
+    )
 
 
 def gtin(value: Any) -> dict:
@@ -333,7 +400,8 @@ def code(value: Any, value_kind: str, amount: Any) -> dict:
     }
 
 
-def member_price(amount: Any, tier_name: Any, currency: Any = 'USD') -> dict:
+def member_price(amount: Any, tier_name: Any, currency: Any = 'USD', *,
+                 attributed_to: Any = None) -> dict:
     normalized = normalize_money(amount)
     if normalized is None:
         raise ExpectedAnswerError(f"member_price amount {amount!r} is not a money value")
@@ -345,12 +413,12 @@ def member_price(amount: Any, tier_name: Any, currency: Any = 'USD') -> dict:
     currency_code = normalize_currency(currency)
     if not currency_code:
         raise ExpectedAnswerError("member_price expectation needs a currency")
-    return {
+    return _with_attribution({
         'type': 'member_price',
         'amount': normalized,
         'currency': currency_code,
         'tier_name': str(tier_name).strip(),
-    }
+    }, attributed_to)
 
 
 def points(kind: str, *, rate: Any = None, total: Any = None,
@@ -507,6 +575,16 @@ def validate(expectation: Any) -> dict:
         if rule['kind'] == 'fixed' and rule.get('points') is None:
             raise ExpectedAnswerError("fixed points rule needs a points total")
 
+    if expectation.get('attributed_to') not in (None, ''):
+        if kind not in ('price', 'member_price'):
+            raise ExpectedAnswerError(
+                f"attributed_to applies to price and member_price, not {kind}"
+            )
+        if normalize_domain(expectation['attributed_to']) != expectation['attributed_to']:
+            raise ExpectedAnswerError(
+                f"attributed_to {expectation['attributed_to']!r} must be a bare domain"
+            )
+
     for item in expectation.get('secondary') or []:
         validate(item)
 
@@ -565,7 +643,8 @@ def describe(expectation: dict) -> str:
     """
     kind = expectation.get('type')
     if kind == 'price':
-        return f"{expectation['amount']} {expectation['currency']}"
+        where = f" at {expectation['attributed_to']}" if expectation.get('attributed_to') else ''
+        return f"{expectation['amount']} {expectation['currency']}{where}"
     if kind == 'gtin':
         return f"GTIN {expectation['value']}"
     if kind == 'pack_count':

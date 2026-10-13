@@ -1,0 +1,48 @@
+{
+  "id": "r14",
+  "rule": "\u00a72 retailer_price unverifiable",
+  "source": "Target blocked both reference sources (120 ct)",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "price",
+    "amount": "29.99",
+    "currency": "USD",
+    "attributed_to": "target.com"
+  },
+  "source_ref": {
+    "merchant_slug": "acme-baby",
+    "variant_id": "00012345678912",
+    "gtin": "00012345678912",
+    "own_domain": "acmebaby.example",
+    "merchant_kind": "brand",
+    "retailer_list": [
+      "target.com",
+      "walmart.com"
+    ]
+  },
+  "extraction": {
+    "prices": [
+      {
+        "amount": "27.97",
+        "currency": null,
+        "attributed_product": "Acme Swaddle Size 3 120 ct"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "catalog": null,
+  "reference": "retailer_prices/acme_baby_as_of_cycle{2,1}.json",
+  "verdict_before": "wrong",
+  "verdict_after": "unverifiable",
+  "reason_code_after": null,
+  "flags_after": [],
+  "reason_after": "page unreadable from every source (challenged)"
+}

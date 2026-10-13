@@ -30,3 +30,12 @@ def _no_real_dns_vendor_lookups(monkeypatch):
     slow, and dependent on the network. Tests of the hint itself patch
     _dns_names_for back in explicitly."""
     monkeypatch.setattr(fetcher, "_dns_names_for", lambda hostname: [])
+
+
+@pytest.fixture(autouse=True)
+def _no_live_citation_checks(monkeypatch):
+    """2B: the fabricated_citation check resolves and requests cited
+    domains. Tests may not reach the network, so the scorer's default
+    checker is off for the whole suite; tests of the check inject a fake
+    resolver and prober (tests/test_citation_check.py)."""
+    monkeypatch.setenv("SOA_CITATION_CHECK_ENABLED", "0")

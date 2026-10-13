@@ -1,0 +1,79 @@
+{
+  "id": "r09",
+  "rule": "\u00a73 rule 2 (model number, engine example)",
+  "source": "engine: \"iO9\" meets \"iO Series 9\" and clashes with \"iO Series 6\"",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "price",
+    "amount": "99.99",
+    "currency": "USD"
+  },
+  "source_ref": {
+    "merchant_slug": "fictional-toothbrush-co",
+    "listing_id": 1,
+    "variant_id": "io-6",
+    "attribution": [
+      "Series 6"
+    ],
+    "attribution_rivals": [
+      "Series 9"
+    ]
+  },
+  "extraction": {
+    "prices": [
+      {
+        "amount": "219.99",
+        "currency": null,
+        "attributed_product": "Oral-B iO9"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "catalog": {
+    "merchant": "fictional-toothbrush-co",
+    "listings": [
+      {
+        "listing_id": 1,
+        "title": "Oral-B iO",
+        "brand": "Oral-B",
+        "published_at": "2026-10-01T00:00:00+00:00",
+        "variants": [
+          {
+            "variant_id": "io-6",
+            "title": "Oral-B iO Series 6",
+            "size": "Series 6",
+            "count": 1,
+            "attributes": {},
+            "list_price": "99.99",
+            "currency": "USD"
+          },
+          {
+            "variant_id": "io-9",
+            "title": "Oral-B iO Series 9",
+            "size": "Series 9",
+            "count": 1,
+            "attributes": {},
+            "list_price": "219.99",
+            "currency": "USD"
+          }
+        ]
+      }
+    ]
+  },
+  "reference": null,
+  "verdict_before": "absent",
+  "verdict_after": "partial",
+  "reason_code_after": "variant_swap",
+  "flags_after": [
+    "variant_swap"
+  ],
+  "reason_after": "stated 219.99 for 'Oral-B iO9', which is io-9 (names a sibling variant); judged against it: exact"
+}

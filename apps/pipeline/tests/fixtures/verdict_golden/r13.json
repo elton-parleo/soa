@@ -1,0 +1,48 @@
+{
+  "id": "r13",
+  "rule": "\u00a72 retailer_price stale",
+  "source": "previous cycle's cached Target price",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "price",
+    "amount": "24.99",
+    "currency": "USD",
+    "attributed_to": "target.com"
+  },
+  "source_ref": {
+    "merchant_slug": "acme-baby",
+    "variant_id": "00012345678905",
+    "gtin": "00012345678905",
+    "own_domain": "acmebaby.example",
+    "merchant_kind": "brand",
+    "retailer_list": [
+      "target.com",
+      "walmart.com"
+    ]
+  },
+  "extraction": {
+    "prices": [
+      {
+        "amount": "22.99",
+        "currency": null,
+        "attributed_product": "Acme Swaddle Size 3"
+      }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "catalog": null,
+  "reference": "retailer_prices/acme_baby_as_of_cycle{2,1}.json",
+  "verdict_before": "wrong",
+  "verdict_after": "stale",
+  "reason_code_after": null,
+  "flags_after": [],
+  "reason_after": "stated 22.99; the page said 21.49 now and 22.99 at the previous reference read"
+}

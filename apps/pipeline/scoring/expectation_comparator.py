@@ -40,7 +40,11 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from soa_shared import expected_answers as ea
+from scoring import answer_flags as af
 from scoring import brand_direct_classifier as bdc
+from scoring import record_variants as rv
+from scoring import retailer_reference as rr
+from scoring import variant_rules as vr
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +53,22 @@ STALE = 'stale'
 WRONG = 'wrong'
 ABSENT = 'absent'
 UNSCOREABLE = 'unscoreable'
+#: 2B. See soa_shared/expected_answers.py VALUE_OUTCOMES.
+PARTIAL = 'partial'
+UNVERIFIABLE = 'unverifiable'
+
+#: Which claim decides a question when an answer makes several. A match
+#: to something we published beats an approximation, an approximation
+#: beats a miss, and a miss beats "we could not check" — the same order
+#: the engine's checkQuote keeps (exact > partial > wrong > none), with
+#: stale placed beside exact because it IS an exact match, to an earlier
+#: publication.
+_RANK = {EXACT: 6, STALE: 5, PARTIAL: 4, WRONG: 3, UNVERIFIABLE: 2, UNSCOREABLE: 1}
+
+#: Reason codes the 2B rules write, for the drill-down and the console.
+REASON_PRODUCT_INFERRED = 'product_inferred'
+REASON_VARIANT_CLASH = 'variant_clash'
+REASON_VARIANT_SWAP = 'variant_swap'
 
 
 @dataclass
@@ -69,6 +89,22 @@ class Verdict:
     #: from it — see the `code` branch of compare().
     near_miss: bool = False
     secondary: List[dict] = field(default_factory=list)
+    #: 2B: answer-level flags (ea.ANSWER_FLAGS) with their evidence, e.g.
+    #: {'flag': 'fabricated_citation', 'domains': [...]}. Never change the
+    #: outcome.
+    flags: List[dict] = field(default_factory=list)
+    #: 2B: every price claim and what it was judged against, for the
+    #: drill-down and the console's checks. Empty for non-price types.
+    claims: List[dict] = field(default_factory=list)
+    #: 2B: cited domains split own_domain / listed_retailer / other.
+    source_split: Optional[dict] = None
+    #: 2B: a short reason code ('product_inferred', 'variant_clash',
+    #: 'variant_swap') when one of the §3 rules decided the outcome.
+    reason_code: Optional[str] = None
+
+    @property
+    def flag_names(self) -> List[str]:
+        return [f['flag'] for f in self.flags]
 
 
 # ─── Attribution ───────────────────────────────────────────────────────────
@@ -329,18 +365,230 @@ def _prior_match(history, values, *, member: bool = False) -> Optional[str]:
 
 # ─── The classifier ────────────────────────────────────────────────────────
 
+# ─── 2B: price claims ──────────────────────────────────────────────────────
+
+def _price_claims(extraction, expectation, *, member: bool) -> tuple:
+    """
+    (claims, any_tier_amounts). A claim is one stated price this question
+    could be about: {raw, amount, product, tier}. Currency is filtered
+    exactly as it always was; a member price at a NAMED other tier is not a
+    claim about this one, but its amount is kept so the legacy
+    "right amount, wrong tier" verdict survives.
+    """
+    claims, any_tier = [], []
+    if member:
+        wanted_tier = ea.normalize_tier_name(expectation.get('tier_name'))
+        for entry in extraction.get('member_prices') or []:
+            amount = ea.normalize_money(entry.get('amount'))
+            if amount is not None:
+                any_tier.append(amount)
+            stated = ea.normalize_tier_name(entry.get('tier'))
+            if stated is not None and stated != wanted_tier:
+                continue
+            claims.append({'raw': entry.get('amount'), 'amount': amount,
+                           'product': entry.get('attributed_product'), 'tier': entry.get('tier')})
+        return claims, any_tier
+    for entry in extraction.get('prices') or []:
+        stated_currency = ea.normalize_currency(entry.get('currency'))
+        if stated_currency and stated_currency != expectation['currency']:
+            continue
+        claims.append({'raw': entry.get('amount'),
+                       'amount': ea.normalize_money(entry.get('amount')),
+                       'product': entry.get('attributed_product'), 'tier': None})
+    return claims, any_tier
+
+
+def _judge_record(claim, *, current, history, member) -> tuple:
+    """One claim against the RECORD. (outcome, matched_published_at)."""
+    amount = claim['amount']
+    if current is not None and amount == current:
+        return EXACT, None
+    matched_at = _prior_match(history, [amount], member=member)
+    if matched_at:
+        return STALE, matched_at
+    # Rules 1 and 4: whole-dollar, within fifty cents of the current value.
+    if current is not None and vr.rounds_to(claim['raw'], current):
+        return PARTIAL, None
+    return WRONG, None
+
+
+def _judge_price_like(expectation, extraction, *, member, terms, history, history_for,
+                      source_ref, record_variants, reference):
+    """
+    The price and member_price comparison, with the 2B rules.
+
+    Returns (outcome, reason, matched_at, claims, swapped, reason_code).
+
+    Each claim is first assigned to a variant:
+
+      asked     no conflict with the asked variant (the generator's hints
+                and, with the record supplied, rule 2's clash checks)
+      swap      it conflicts, and names exactly one other record variant
+      clash     it conflicts, and names no variant in the record
+      ignored   it conflicts and there is no record to say which variant
+                it names — the legacy filter, unchanged
+
+    then judged against that variant's reference: the record (hosted), or
+    the retailer page the expectation is attributed_to (2B external).
+    """
+    ref = source_ref or {}
+    attributed_to = expectation.get('attributed_to')
+    claims, any_tier = _price_claims(extraction, expectation, member=member)
+    asked = rv.find(record_variants, ref.get('variant_id')) if record_variants else None
+    out = []
+
+    def judge_retailer(claim, variant_id, gtin):
+        if reference is None:
+            return UNVERIFIABLE, 'no retailer-prices reference was read for this cycle', None
+        keys = {'gtin': gtin or variant_id, 'variant_ref': ref.get('variant_ref')}
+        row = reference.row(attributed_to, **keys)
+        prior = reference.prior_row(attributed_to, **keys)
+        outcome, why = rr.judge_claim(claim['raw'], row=row, prior=prior, member=member)
+        return outcome, why, (row.as_dict() if row else None)
+
+    for claim in claims:
+        product = claim['product']
+        if claim['amount'] is None and not attributed_to:
+            continue  # legacy: a non-price amount was never a claim
+        attributed = attributes_to(product, terms)
+        if asked is not None and product:
+            why = rv.conflicts(product, asked, hints_attribute=attributed)
+        else:
+            why = None if attributed else 'names a sibling variant'
+
+        entry = {'stated': claim['raw'], 'amount': claim['amount'], 'product': product,
+                 'tier': claim['tier']}
+        if why is None:
+            entry['target'] = 'asked'
+            entry['variant_id'] = ref.get('variant_id')
+            if attributed_to:
+                outcome, reason, row = judge_retailer(
+                    claim, ref.get('variant_id'), ref.get('gtin'))
+                entry.update(outcome=outcome, reason=reason, reference=row, matched_at=None)
+            else:
+                outcome, matched_at = _judge_record(
+                    claim, current=expectation['amount'], history=history, member=member)
+                entry.update(outcome=outcome, matched_at=matched_at)
+            # Rule 3: a claim attached to no product can never be wrong.
+            if entry['outcome'] == WRONG and not product:
+                entry.update(outcome=UNSCOREABLE, reason_code=REASON_PRODUCT_INFERRED,
+                             reason='the answer attached this price to no product; '
+                                    'a mismatch on an inferred product is not scored wrong')
+        elif asked is None:
+            continue  # legacy: no record to say which variant it names
+        else:
+            named = rv.named_variant(product, asked, record_variants)
+            entry['conflict'] = why
+            if named is None:
+                entry.update(target='clash', outcome=WRONG, reason_code=REASON_VARIANT_CLASH,
+                             reason=f"{why}, and the record has no such variant")
+            else:
+                entry.update(target='swap', variant_id=named.variant_id,
+                             same_group=named.group == asked.group)
+                if attributed_to:
+                    outcome, reason, row = judge_retailer(claim, named.variant_id, named.gtin)
+                    entry.update(outcome=outcome, reason=reason, reference=row)
+                else:
+                    current = named.member_price if member else named.list_price
+                    sibling_history = history_for(named.variant_id) if history_for else None
+                    outcome, matched_at = _judge_record(
+                        claim, current=current, history=sibling_history, member=member)
+                    entry.update(outcome=outcome, matched_at=matched_at)
+        out.append(entry)
+
+    swapped = any(c['target'] == 'swap' for c in out)
+    asked_claims = [c for c in out if c['target'] == 'asked']
+
+    if asked_claims:
+        best = max(asked_claims, key=lambda c: _RANK[c['outcome']])
+        outcome = best['outcome']
+        stated = [str(c['stated']) for c in asked_claims]
+        label = expectation['amount'] if not member else ea.describe(expectation)
+        if outcome == EXACT:
+            reason = best.get('reason') or (
+                f"stated {expectation['amount']}" if not member
+                else f"stated {ea.describe(expectation)}")
+            return EXACT, reason, None, out, swapped, None
+        if outcome == STALE:
+            matched = [c for c in asked_claims if c['outcome'] == STALE]
+            if attributed_to:
+                return STALE, best['reason'], None, out, swapped, None
+            matched_at = _prior_match(history, [c['amount'] for c in matched], member=member)
+            joined = ', '.join(str(c['amount']) for c in matched)
+            reason = (f"stated {joined}; we published that on {matched_at}" if not member else
+                      f"stated {joined} for {expectation['tier_name']}; we published that on {matched_at}")
+            return STALE, reason, matched_at, out, swapped, None
+        if outcome == PARTIAL:
+            return PARTIAL, best.get('reason') or (
+                f"stated {best['stated']}, whole-dollar within 50 cents of {label}"), \
+                None, out, swapped, None
+        if outcome == WRONG:
+            if attributed_to:
+                return WRONG, best['reason'], None, out, swapped, None
+            values = ', '.join(str(c['amount']) for c in asked_claims
+                               if c['outcome'] == WRONG and c['amount'] is not None)
+            if member:
+                return WRONG, (f"stated {values}; the record says "
+                               f"{expectation['amount']} for {expectation['tier_name']}"), \
+                    None, out, swapped, None
+            return WRONG, (f"stated {values}; we have never published that "
+                           f"(current: {expectation['amount']})"), None, out, swapped, None
+        # UNVERIFIABLE or UNSCOREABLE: say why, with the code when a rule decided it.
+        return outcome, best.get('reason') or f"stated {', '.join(stated)}", None, out, swapped, \
+            best.get('reason_code')
+
+    swaps = [c for c in out if c['target'] in ('swap', 'clash')]
+    if swaps:
+        def question_outcome(claim):
+            if claim['target'] == 'clash':
+                return WRONG
+            if claim['outcome'] in (EXACT, PARTIAL, STALE):
+                # Rule 1: the right price for an adjacent variant of the same
+                # item group is partial. A different product priced right
+                # has still not priced the product asked about.
+                return PARTIAL if claim['same_group'] else WRONG
+            return claim['outcome']
+        for claim in swaps:
+            claim['question_outcome'] = question_outcome(claim)
+        best = max(swaps, key=lambda c: _RANK[c['question_outcome']])
+        code = REASON_VARIANT_CLASH if best['target'] == 'clash' else REASON_VARIANT_SWAP
+        if best['target'] == 'clash':
+            reason = f"stated {best['stated']} for {best['product']!r}: {best['reason']}"
+        else:
+            reason = (f"stated {best['stated']} for {best['product']!r}, which is "
+                      f"{best['variant_id']} ({best['conflict']}); judged against it: "
+                      f"{best['outcome']}")
+        return best['question_outcome'], reason, None, out, swapped, code
+
+    if member and any_tier:
+        if expectation['amount'] in any_tier:
+            return WRONG, (f"stated {expectation['amount']} but attributed it to another "
+                           f"tier, not {expectation['tier_name']}"), None, out, swapped, None
+        return WRONG, (f"stated {', '.join(any_tier)}; the record says "
+                       f"{expectation['amount']} for {expectation['tier_name']}"), \
+            None, out, swapped, None
+    if attributed_to and claims and all(c['amount'] is None for c in claims):
+        return UNSCOREABLE, 'the answer stated a price this could not read as one', \
+            None, out, swapped, None
+    label = 'member price' if member else 'price'
+    return ABSENT, f'the answer stated no {label} for this product', None, out, swapped, None
+
+
+# ─── The classifier ────────────────────────────────────────────────────────
+
 def compare(expectation: dict, extraction: dict, *, history=None,
             source_ref=None, brand_domain=None, tier=None,
-            brand_facts=None) -> Verdict:
+            brand_facts=None, record_variants=None, history_for=None,
+            reference=None, retrieved_sources=None, dead_domains=None) -> Verdict:
     """
     One (question x surface x sample) -> one outcome.
 
     Which vocabulary the outcome comes from depends on the tier. A
     catalog or value question names a published number and lands in
-    exact/stale/wrong/absent/unscoreable. A brand-direct question names
-    no number at all, and landing it in the same five is what produced a
-    95% success rate on a brand two of 66 answers had actually read: see
-    scoring/brand_direct_classifier.py.
+    exact/stale/partial/wrong/absent/unscoreable/unverifiable. A
+    brand-direct question names no number at all, and landing it in the
+    same buckets is what produced a 95% success rate on a brand two of 66
+    answers had actually read: see scoring/brand_direct_classifier.py.
 
     `history` is [{published_at, list_price, member_price, ...}, ...] for
     the variant, oldest first, as
@@ -348,7 +596,65 @@ def compare(expectation: dict, extraction: dict, *, history=None,
     `wrong` rather than `stale` — the conservative direction and the
     honest one: without a record saying a value was once published we
     cannot claim it was.
+
+    2B additions, all keyword-only and all optional, so a caller that
+    passes none of them gets the pre-2B verdict except where rules 1 and
+    3 apply (they need nothing but the claim):
+
+      record_variants  [RecordVariant] from the snapshot — enables rule 2
+      history_for      variant_id -> history, for a swapped claim's variant
+      reference        retailer_reference.ReferenceSet, for an expectation
+                       carrying attributed_to
+      retrieved_sources the run's grounding URLs, for the source split
+      dead_domains     {domain: check} from citation_check, already run
     """
+    verdict = _compare_core(
+        expectation, extraction, history=history, source_ref=source_ref,
+        brand_domain=brand_domain, tier=tier, brand_facts=brand_facts,
+        record_variants=record_variants, history_for=history_for, reference=reference,
+    )
+    _decorate(verdict, expectation, extraction, source_ref=source_ref,
+              brand_domain=brand_domain, retrieved_sources=retrieved_sources,
+              dead_domains=dead_domains)
+    return verdict
+
+
+def _decorate(verdict, expectation, extraction, *, source_ref, brand_domain,
+              retrieved_sources, dead_domains) -> None:
+    """The answer-level 2B results: source split, and the flags."""
+    ref = source_ref or {}
+    own_domain = ref.get('own_domain') or expectation.get('domain') or brand_domain
+    retailer_list = ref.get('retailer_list') or []
+    domains = af.cited_domains(extraction.get('sources_cited'), retrieved_sources)
+    if domains:
+        verdict.source_split = af.source_split(
+            domains, own_domain=own_domain, retailer_list=retailer_list)
+
+    if 'retailer_list' in ref:
+        availability = af.fabricated_availability(
+            extraction.get('retailer_mentions') or [
+                {'name': n, 'role': None} for n in extraction.get('recommended_retailers') or []
+            ],
+            retailer_list=retailer_list, own_domain=ref.get('own_domain'),
+            merchant_kind=ref.get('merchant_kind'),
+        )
+        if availability['fabricated']:
+            verdict.flags.append({'flag': 'fabricated_availability',
+                                  'retailers': availability['fabricated'],
+                                  'unrecognised': availability['unrecognised']})
+
+    dead = [dead_domains[d] for d in af.cited_domains(extraction.get('sources_cited'))
+            if dead_domains and d in dead_domains]
+    if dead:
+        verdict.flags.append({'flag': 'fabricated_citation', 'domains': dead})
+
+    if any(c.get('target') == 'swap' for c in verdict.claims):
+        verdict.flags.append({'flag': 'variant_swap', 'variants': sorted({
+            c['variant_id'] for c in verdict.claims if c.get('target') == 'swap'})})
+
+
+def _compare_core(expectation, extraction, *, history, source_ref, brand_domain, tier,
+                  brand_facts, record_variants, history_for, reference) -> Verdict:
     source_attribution, domain_cited = classify_sources(
         extraction.get('sources_cited'), brand_domain,
     )
@@ -386,24 +692,16 @@ def compare(expectation: dict, extraction: dict, *, history=None,
     kind = expectation.get('type')
     terms = variant_terms_from(source_ref, expectation)
 
-    if kind == 'price':
-        values = _price_values(extraction, expectation, terms)
-        if not values:
-            return verdict(ABSENT, 'the answer stated no price for this product')
-        if expectation['amount'] in values:
-            return verdict(EXACT, f"stated {expectation['amount']}")
-        matched_at = _prior_match(history, values)
-        if matched_at:
-            return verdict(
-                STALE,
-                f"stated {', '.join(values)}; we published that on {matched_at}",
-                matched_at,
-            )
-        return verdict(
-            WRONG,
-            f"stated {', '.join(values)}; we have never published that "
-            f"(current: {expectation['amount']})",
+    if kind in ('price', 'member_price'):
+        outcome, reason, matched_at, claims, _swapped, code = _judge_price_like(
+            expectation, extraction, member=(kind == 'member_price'), terms=terms,
+            history=history, history_for=history_for, source_ref=source_ref,
+            record_variants=record_variants, reference=reference,
         )
+        result = verdict(outcome, reason, matched_at)
+        result.claims = claims
+        result.reason_code = code
+        return result
 
     if kind == 'pack_count':
         values = _pack_count_values(extraction, expectation, terms)
@@ -459,32 +757,6 @@ def compare(expectation: dict, extraction: dict, *, history=None,
                 f"named {others} rather than {expectation['code']}",
             )
         return verdict(ABSENT, 'the answer named no promotion code')
-
-    if kind == 'member_price':
-        right_tier, any_tier = _member_price_values(extraction, expectation, terms)
-        if not any_tier:
-            return verdict(ABSENT, 'the answer stated no member price for this product')
-        if expectation['amount'] in right_tier:
-            return verdict(EXACT, f"stated {ea.describe(expectation)}")
-        matched_at = _prior_match(history, right_tier, member=True)
-        if matched_at:
-            return verdict(
-                STALE,
-                f"stated {', '.join(right_tier)} for "
-                f"{expectation['tier_name']}; we published that on {matched_at}",
-                matched_at,
-            )
-        if expectation['amount'] in any_tier:
-            return verdict(
-                WRONG,
-                f"stated {expectation['amount']} but attributed it to another "
-                f"tier, not {expectation['tier_name']}",
-            )
-        return verdict(
-            WRONG,
-            f"stated {', '.join(any_tier)}; the record says "
-            f"{expectation['amount']} for {expectation['tier_name']}",
-        )
 
     if kind == 'points':
         seen, matched = _points_match(extraction, expectation)

@@ -228,10 +228,22 @@ def test_the_seven_types_are_the_seven_the_document_names():
 
 
 def test_the_five_value_outcomes_include_unscoreable_as_its_own_bucket():
+    # The five, then 2B's two: partial (rules 1 and 4) and unverifiable
+    # (a retailer page that blocked both reference sources).
     assert ea.VALUE_OUTCOMES == [
         "exact", "stale", "wrong", "absent", "unscoreable",
+        "partial", "unverifiable",
     ]
     assert "unscoreable" in ea.VALUE_OUTCOMES
+
+
+def test_2b_partial_is_scored_and_unverifiable_is_not():
+    """partial is a claim we could check, so it sits in the accuracy
+    denominator beside wrong; unverifiable is a page we could not read,
+    so it never does."""
+    assert "partial" in ea.SCORED_VALUE_OUTCOMES
+    assert "unverifiable" not in ea.SCORED_VALUE_OUTCOMES
+    assert "absent" not in ea.SCORED_VALUE_OUTCOMES
 
 
 def test_brand_direct_is_classified_on_its_own_axis():

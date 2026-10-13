@@ -49,9 +49,20 @@ TIER_LABELS = {
     'category_control': 'Category control',
 }
 
-SCORED_OUTCOMES = ('exact', 'stale', 'wrong')
+# 2B: `partial` is a claim we could check, so it sits in the denominator
+# beside wrong (and never in the numerator); `unverifiable` is a page we
+# could not read, so it is counted and stays out. Before this, a row with
+# either outcome was skipped by build_tier_accuracy's vocabulary check and
+# would have vanished from this report rather than been counted.
+SCORED_OUTCOMES = ('exact', 'stale', 'wrong', 'partial')
 
-EXPECTATION_OUTCOMES = ('exact', 'stale', 'wrong', 'absent', 'unscoreable')
+EXPECTATION_OUTCOMES = ('exact', 'stale', 'wrong', 'absent', 'unscoreable',
+                        'partial', 'unverifiable')
+
+# The keys every value tier's counts START with. The two 2B outcomes are
+# added only when a row carries one, so a cycle scored before 2B renders
+# exactly the payload it always did.
+BASE_VALUE_OUTCOMES = ('exact', 'stale', 'wrong', 'absent', 'unscoreable')
 
 # What a secondary expectation is called in the report. Both are bonus
 # signals: the question did not ask for either, so neither can move the
@@ -95,7 +106,8 @@ BRAND_HARMFUL = ('misattributed', 'fabricated')
 
 
 def _empty_counts(tier=None) -> dict:
-    return {outcome: 0 for outcome in _vocabulary(tier)}
+    return {outcome: 0 for outcome in
+            (BRAND_OUTCOMES if tier == 'brand_direct' else BASE_VALUE_OUTCOMES)}
 
 
 def _vocabulary(tier):
@@ -211,7 +223,7 @@ def _secondary_rows(conn, cycle_id: int):
             if not kind or outcome not in EXPECTATION_OUTCOMES:
                 continue
             counts.setdefault(tier, {}).setdefault(kind, _empty_counts())
-            counts[tier][kind][outcome] += 1
+            counts[tier][kind][outcome] = counts[tier][kind].get(outcome, 0) + 1
     return counts
 
 
@@ -375,8 +387,10 @@ def build_tier_accuracy(conn, cycle_id: int, *, primary_entity_id=None,
         # denominator that does not describe it.
         if outcome not in _vocabulary(tier):
             continue
-        tier_entry(tier)['counts'][outcome] += n
-        surface_entry(tier, platform)['counts'][outcome] += n
+        tier_counts = tier_entry(tier)['counts']
+        tier_counts[outcome] = tier_counts.get(outcome, 0) + n
+        surface_counts = surface_entry(tier, platform)['counts']
+        surface_counts[outcome] = surface_counts.get(outcome, 0) + n
 
     secondary_counts = _secondary_rows(conn, cycle_id)
     for tier, by_kind in secondary_counts.items():

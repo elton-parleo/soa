@@ -35,6 +35,7 @@ def Session():
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_cycles (
+                full_loop_run_id INTEGER, reference_prices TEXT, reference_as_of TIMESTAMP,
                 id INTEGER PRIMARY KEY, cycle_code TEXT, start_date DATE,
                 end_date DATE, total_runs_planned INTEGER, completed_runs INTEGER,
                 status TEXT, notes TEXT, platforms TEXT, runs_per_query INTEGER,
@@ -49,6 +50,7 @@ def Session():
         """)
         conn.exec_driver_sql("""
             CREATE TABLE IF NOT EXISTS soa_expectation_outcomes (
+                flags TEXT, claim_results TEXT, source_split TEXT, reason_code TEXT, surface TEXT,
                 id INTEGER PRIMARY KEY, run_id INTEGER UNIQUE, query_id INTEGER,
                 cycle_id INTEGER, platform TEXT, tier TEXT,
                 expected_answer TEXT, extraction TEXT, outcome TEXT,

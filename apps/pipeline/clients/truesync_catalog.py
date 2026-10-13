@@ -293,6 +293,39 @@ class TrueSyncCatalogClient:
             return [], "unexpected /merchants payload"
         return payload, None
 
+    # ─── 2B: the merchant record and the reference ────────────────────
+
+    def tenant(self) -> tuple:
+        """(payload, error) for GET /api/truesync/tenant: every merchant the
+        tenant owns, with its kind (seller | brand), hosting and domain."""
+        return self._get("/api/truesync/tenant")
+
+    def merchant_record(self, merchant_slug: str) -> tuple:
+        """(merchant view from /tenant, error): kind, hosting, domain."""
+        payload, error = self.tenant()
+        if error is not None:
+            return None, error
+        for merchant in (payload or {}).get("merchants") or []:
+            if merchant.get("slug") == merchant_slug:
+                return merchant, None
+        return None, f"merchant {merchant_slug!r} is not in this tenant"
+
+    def retailers(self, merchant_slug: str) -> tuple:
+        """(payload, error) for GET /merchants/{slug}/retailers:
+        {own_domain, domains} — the retailer sites the feed may name."""
+        return self._get(f"/api/truesync/merchants/{merchant_slug}/retailers")
+
+    def feed(self, merchant_slug: str) -> tuple:
+        """(payload, error) for GET /merchants/{slug}/feed: the current feed
+        version, row by row, each row with its retailers [{domain, url}]."""
+        return self._get(f"/api/truesync/merchants/{merchant_slug}/feed")
+
+    def retailer_prices(self, merchant_slug: str, *, as_of: Optional[str] = None) -> tuple:
+        """(payload, error) for GET /merchants/{slug}/retailer-prices?as_of=.
+        One row per variant x retailer page; see scoring/retailer_reference.py."""
+        params = {"as_of": as_of} if as_of else None
+        return self._get(f"/api/truesync/merchants/{merchant_slug}/retailer-prices", params=params)
+
     # ─── The snapshot ─────────────────────────────────────────────────
 
     def snapshot(self, merchant_slug: str, *, with_history: bool = True) -> CatalogSnapshot:

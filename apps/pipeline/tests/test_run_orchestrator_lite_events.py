@@ -86,6 +86,7 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_cycles (
+                full_loop_run_id INTEGER, reference_prices TEXT, reference_as_of TIMESTAMP,
                 id INTEGER PRIMARY KEY, cycle_code TEXT, start_date DATE,
                 end_date DATE, total_runs_planned INTEGER, completed_runs INTEGER,
                 status TEXT, notes TEXT, platforms TEXT, runs_per_query INTEGER,
@@ -100,6 +101,7 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE IF NOT EXISTS soa_expectation_outcomes (
+                flags TEXT, claim_results TEXT, source_split TEXT, reason_code TEXT, surface TEXT,
                 id INTEGER PRIMARY KEY, run_id INTEGER UNIQUE, query_id INTEGER,
                 cycle_id INTEGER, platform TEXT, tier TEXT,
                 expected_answer TEXT, extraction TEXT, outcome TEXT,
@@ -139,6 +141,7 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
+                surface TEXT, collector TEXT, answer_status TEXT,
                 id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, platform TEXT,
                 run_number INTEGER, run_at TIMESTAMP, raw_response TEXT, response_tokens INTEGER,
                 latency_ms INTEGER, status TEXT DEFAULT 'pending', error_message TEXT,

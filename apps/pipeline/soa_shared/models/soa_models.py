@@ -507,6 +507,12 @@ class SoaCycle(Base):
         ),
     )
 
+    # 2B: the supply full_loop_runs row this cycle scores, and the cycle's
+    # one cached read of supply's retailer-prices (as of the cycle start).
+    full_loop_run_id = Column(Integer, nullable=True, index=True)
+    reference_prices = Column(JSON, nullable=True)
+    reference_as_of = Column(DateTime(timezone=True), nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -808,8 +814,18 @@ class SoaRun(Base):
     __tablename__ = "soa_runs"
     __table_args__ = (
         CheckConstraint(
-            "platform IN ('chatgpt','perplexity','gemini','claude','gemini_grounded')",
+            "platform IN ('chatgpt','perplexity','gemini','claude','gemini_grounded',"
+            "'chatgpt_api','gemini_api','aimode','copilot')",
             name="ck_soa_runs_platform",
+        ),
+        CheckConstraint(
+            "surface IS NULL OR surface IN ('api','grounded_api','consumer_ui')",
+            name="ck_soa_runs_surface",
+        ),
+        CheckConstraint(
+            "answer_status IS NULL OR answer_status IN "
+            "('answered','no_ai_answer','sign_in_wall','blocked')",
+            name="ck_soa_runs_answer_status",
         ),
         CheckConstraint(
             "status IN ('pending','success','error','timeout')",
@@ -854,6 +870,25 @@ class SoaRun(Base):
             "Grounding/search source URLs where the platform exposes them — "
             "OpenAI web_search items, Gemini grounding metadata, Perplexity "
             "citations. NULL when not exposed or not used. Seeds M26."
+        ),
+    )
+    # 2B: surface fidelity. Every result says what kind of surface it came
+    # from and who collected it; per-surface accuracy is split by
+    # `surface` and never pooled. See apps/pipeline/runners/surfaces.py.
+    surface = Column(
+        Text, nullable=True,
+        comment="api | grounded_api | consumer_ui — the surface's configuration, not whether search fired (search_triggered says that).",
+    )
+    collector = Column(
+        Text, nullable=True,
+        comment="Who collected the answer: openai, google_genai, perplexity, anthropic, serpapi.",
+    )
+    answer_status = Column(
+        Text, nullable=True,
+        comment=(
+            "answered | no_ai_answer | sign_in_wall | blocked. A wall or an empty "
+            "consumer answer is a RESULT: scored absent, counted in coverage, "
+            "excluded from accuracy. NULL for a call that failed (status error/timeout)."
         ),
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -2201,7 +2236,69 @@ class SoaExpectationOutcome(Base):
     #: denominator. Null on every row scored before it existed.
     near_miss = Column(Boolean, nullable=True)
 
+    # 2B. Answer-level flags (fabricated_citation, fabricated_availability,
+    # variant_swap) with their evidence; every price claim and what it was
+    # judged against; cited domains split own_domain / listed_retailer /
+    # other; the §3 rule that decided the outcome, when one did; and the
+    # run's surface, copied so per-surface accuracy reads one table.
+    flags = Column(JSON, nullable=True)
+    claim_results = Column(JSON, nullable=True)
+    source_split = Column(JSON, nullable=True)
+    reason_code = Column(Text, nullable=True)
+    surface = Column(Text, nullable=True)
+
     extraction_model = Column(Text, nullable=True)
     scored_at = Column(DateTime(timezone=True), server_default=func.now())
 
     run = relationship("SoaRun")
+
+
+# ---------------------------------------------------------------------------
+# 2B. soa_domain_checks — the fabricated_citation check's 24-hour cache.
+# One row per domain; scoring/citation_check.py reads and replaces it.
+# ---------------------------------------------------------------------------
+
+class SoaDomainCheck(Base):
+    __tablename__ = "soa_domain_checks"
+
+    domain = Column(Text, primary_key=True)
+    resolves = Column(Boolean, nullable=True)
+    responds = Column(Boolean, nullable=True)
+    detail = Column(Text, nullable=True)
+    checked_at = Column(DateTime(timezone=True), nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# 2B. soa_full_loop_requests — one "Run full loop" press from soa: the
+# supply full-loop run it started, the cycle it created once the reference
+# reads were done, and where it stands. GET /api/full-loop/{id} reads it
+# with the supply run beside it. See apps/pipeline/fullloop/coordinator.py.
+# ---------------------------------------------------------------------------
+
+class SoaFullLoopRequest(Base):
+    __tablename__ = "soa_full_loop_requests"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('reference_pending','reference_done','cycle_planned',"
+            "'scoring','scored','failed')",
+            name="ck_soa_full_loop_requests_status",
+        ),
+        Index("ix_soa_full_loop_requests_org", "organization_id"),
+        Index("ix_soa_full_loop_requests_status", "status"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    merchant_slug = Column(Text, nullable=False)
+    study_type = Column(Text, nullable=False)
+    platforms = Column(JSON, nullable=False)
+    runs_per_query = Column(Integer, nullable=False, default=1, server_default="1")
+    supply_run_id = Column(Integer, nullable=True)
+    supply_status = Column(Text, nullable=True)
+    cycle_id = Column(Integer, ForeignKey("soa_cycles.id"), nullable=True)
+    status = Column(Text, nullable=False, default="reference_pending",
+                    server_default="reference_pending")
+    error = Column(Text, nullable=True)
+    created_by = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=True)

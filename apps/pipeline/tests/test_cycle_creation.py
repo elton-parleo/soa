@@ -17,6 +17,7 @@ def conn():
     with engine.begin() as c:
         c.exec_driver_sql("""
             CREATE TABLE soa_cycles (
+                full_loop_run_id INTEGER, reference_prices TEXT, reference_as_of TIMESTAMP,
                 id INTEGER PRIMARY KEY, cycle_code TEXT UNIQUE, study_type TEXT,
                 study_pattern TEXT, status TEXT, cycle_mode TEXT, truecost_tiers TEXT,
                 total_runs_planned INTEGER, completed_runs INTEGER, start_date DATE,

@@ -74,7 +74,7 @@ def test_is_the_single_head():
         if down:
             down_revisions.add(down.group(1))
 
-    assert revisions - down_revisions == {"a7c3e9f1b2d4"}
+    assert revisions - down_revisions == {"c4e2b7d9a1f3"}
 
 
 # ── upgrade: soa_queries ──────────────────────────────────────────────────
@@ -138,9 +138,11 @@ def test_constraint_text_matches_the_shared_vocabulary():
     is the tripwire that keeps the literal and the Python constant from
     diverging without anyone noticing.
     """
-    from soa_shared.expected_answers import (
-        VALUE_OUTCOMES, QUERY_PROVENANCES, QUERY_TIERS,
-    )
+    from soa_shared.expected_answers import QUERY_PROVENANCES, QUERY_TIERS
+
+    # As the vocabulary stood when this migration was written; 2B
+    # (c4e2b7d9a1f3) added partial and unverifiable later.
+    VALUE_OUTCOMES = ['exact', 'stale', 'wrong', 'absent', 'unscoreable']
 
     mock_op = _upgrade_calls()
     conditions = {
