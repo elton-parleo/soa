@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from app.routers import (
     studies, entities, cycles, metrics, scope, actions, full_analysis,
     truesync, customers, lite_requests, public_lite, public_demo, public_full_analysis,
-    console, full_loop,
+    console, console_ops, full_loop,
 )
 from app.auth import verify_token
 
@@ -126,6 +126,13 @@ app.include_router(
 )
 app.include_router(
     console.router,
+    prefix="/api",
+    dependencies=[Depends(verify_token)],
+)
+# 2C: the console's operator section (feed loader, study generator):
+# operator-only on top of the console scope (app/routers/console_ops.py).
+app.include_router(
+    console_ops.router,
     prefix="/api",
     dependencies=[Depends(verify_token)],
 )

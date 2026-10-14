@@ -556,6 +556,96 @@ def build_programs(incentives: List[dict], value_outcomes: List[dict]) -> List[d
     return out
 
 
+# ─── Setup > Catalog (2C) ──────────────────────────────────────────────────
+
+#: The 2A-1 warning soa adds to supply's feed preview (supply's validate has
+#: not read the pages; the full loop's record-vs-page findings have).
+MULTIPACK_SUGGESTED = 'multipack_suggested'
+
+
+def _gtin14_or(value) -> Optional[str]:
+    return _gtin14(value) or (str(value) if value else None)
+
+
+def annotate_feed_preview(preview: dict, reference: Optional[dict], *, reference_error: Optional[str] = None) -> dict:
+    """
+    supply's feed preview with one more warning per row: the latest
+    reference read of one of the row's pages showed a count-shaped number
+    (`pack_differs`) while the row gives pack_count and no multipack. When
+    a page number is a whole multiple of pack_count, the multiple is the
+    suggested multipack. A row that was `ready` becomes `warning`; the
+    summary's counts follow. Nothing here can make a row an error.
+    """
+    preview = dict(preview or {})
+    findings = {}
+    for row in (reference or {}).get('rows') or []:
+        key = _gtin14_or(row.get('gtin'))
+        for f in row.get('findings') or []:
+            if f.get('finding') == 'pack_differs':
+                findings.setdefault(key, []).append({**f, 'retailer_domain': row.get('retailer_domain'),
+                                                     'url': row.get('url')})
+    rows = []
+    for row in preview.get('rows') or []:
+        row = dict(row)
+        messages = list(row.get('messages') or [])
+        pack = row.get('pack_count')
+        hits = findings.get(_gtin14_or(row.get('gtin'))) or []
+        if hits and pack and not row.get('multipack'):
+            page_numbers = sorted({int(n) for f in hits for n in ((f.get('detail') or {}).get('page_numbers') or [])
+                                   if str(n).isdigit()})
+            multiples = [n // int(pack) for n in page_numbers if n > int(pack) and n % int(pack) == 0]
+            where = hits[0].get('retailer_domain') or 'a page'
+            shown = ', '.join(str(n) for n in page_numbers) or hits[0].get('observed') or 'a count'
+            text_ = (f"page shows a count but multipack is empty: {where} shows {shown}, the row says "
+                     f"pack_count {pack}")
+            if multiples:
+                text_ += f"; multipack {multiples[0]} would explain it"
+            messages.append({'code': MULTIPACK_SUGGESTED, 'severity': 'warning', 'field': 'multipack',
+                             'message': text_, 'source': 'soa', 'suggested': multiples[0] if multiples else None})
+            if row.get('status') == 'ready':
+                row['status'] = 'warning'
+        row['messages'] = messages
+        rows.append(row)
+    preview['rows'] = rows
+    summary = dict(preview.get('summary') or {})
+    if rows:
+        statuses = [r.get('status') for r in rows]
+        summary.update(ready=statuses.count('ready'), warning=statuses.count('warning'),
+                       error=statuses.count('error'))
+    preview['summary'] = summary
+    preview['reference_checked'] = reference is not None
+    if reference_error:
+        preview['reference_error'] = reference_error
+    return preview
+
+
+def build_catalog(merchant: str, *, feed: Optional[dict], history: List[dict], hosted_catalog: Optional[dict]) -> dict:
+    """GET /api/console/catalog: one shape for both kinds of merchant.
+    `source` is 'feed' (an external merchant's committed feed), 'hosted'
+    (a Parleo-hosted merchant: read-only, from the store config) or 'none'
+    (an external merchant with no feed committed yet)."""
+    if hosted_catalog is not None:
+        # supply's GET /merchants/{slug}/catalog: listings, each with its
+        # published variants (variant_id, title, size, count, list_price, gtin).
+        rows = []
+        for listing in hosted_catalog.get('listings') or []:
+            for v in listing.get('variants') or []:
+                rows.append({'gtin': v.get('gtin'), 'variant_id': v.get('variant_id'),
+                             'product_name': listing.get('title'), 'brand_name': listing.get('brand'),
+                             'variant_label': v.get('title'), 'size': v.get('size'), 'pack_count': v.get('count'),
+                             'multipack': None, 'price': v.get('list_price'), 'currency': v.get('currency'),
+                             'published_at': _iso(listing.get('published_at')), 'product_url': listing.get('product_url')})
+        return {'merchant': merchant, 'source': 'hosted', 'read_only': True,
+                'note': 'Hosted on Parleo: this catalog comes from the store config. Edit it there; no feed upload applies.',
+                'version': None, 'rows': rows, 'versions': []}
+    if feed is None:
+        return {'merchant': merchant, 'source': 'none', 'read_only': False,
+                'note': 'No feed committed yet. Download the template, fill it in and upload it here.',
+                'version': None, 'rows': [], 'versions': history or []}
+    return {'merchant': merchant, 'source': 'feed', 'read_only': False, 'note': None,
+            'version': feed.get('version'), 'rows': feed.get('rows') or [], 'versions': history or []}
+
+
 # ─── Accessibility ─────────────────────────────────────────────────────────
 
 def accessibility_from_supply(payload: Optional[dict]) -> dict:

@@ -1,0 +1,273 @@
+{
+ "validate": {
+  "_note": "supply POST /api/truesync/merchants/brandco/feed/validate, shaped by truesync/feed/validate.py (supply b3f261e); Brandco is soa's test fake.",
+  "upload_id": "up_7f3c2a",
+  "merchant": "brandco",
+  "summary": {
+   "rows": 3,
+   "ready": 2,
+   "warning": 0,
+   "error": 1,
+   "file_errors": 0,
+   "forms": [
+    "wide"
+   ],
+   "reachability_checked": false,
+   "incentives": null
+  },
+  "file_errors": [],
+  "rows": [
+   {
+    "row_number": 2,
+    "sheet": "skus",
+    "gtin_as_given": "012345678905",
+    "gtin": "00012345678905",
+    "product_name": "Brandco Wipes",
+    "brand_name": "Brandco",
+    "variant_label": "72 ct",
+    "pack_count": 72,
+    "multipack": null,
+    "size_value": null,
+    "size_unit": null,
+    "price": "4.99",
+    "currency": "USD",
+    "description": null,
+    "image_url": null,
+    "retailers": [
+     {
+      "domain": "target.com",
+      "url": "https://www.target.com/p/2"
+     }
+    ],
+    "messages": [],
+    "status": "ready"
+   },
+   {
+    "row_number": 3,
+    "sheet": "skus",
+    "gtin_as_given": "012345678912",
+    "gtin": "00012345678912",
+    "product_name": "Brandco Diapers Size 3",
+    "brand_name": "Brandco",
+    "variant_label": "84 ct",
+    "pack_count": 84,
+    "multipack": null,
+    "size_value": null,
+    "size_unit": null,
+    "price": "22.99",
+    "currency": "USD",
+    "description": null,
+    "image_url": null,
+    "retailers": [
+     {
+      "domain": "target.com",
+      "url": "https://www.target.com/p/3"
+     }
+    ],
+    "messages": [],
+    "status": "ready"
+   },
+   {
+    "row_number": 4,
+    "sheet": "skus",
+    "gtin_as_given": "01234567891",
+    "gtin": "00001234567891",
+    "product_name": "Brandco Balm",
+    "brand_name": "Brandco",
+    "variant_label": "4 oz",
+    "pack_count": null,
+    "multipack": null,
+    "size_value": null,
+    "size_unit": null,
+    "price": "9.99",
+    "currency": "USD",
+    "description": null,
+    "image_url": null,
+    "retailers": [
+     {
+      "domain": "target.com",
+      "url": "https://www.target.com/p/4"
+     }
+    ],
+    "messages": [
+     {
+      "code": "gtin_check_digit",
+      "severity": "error",
+      "field": "gtin",
+      "message": "the GTIN's check digit is wrong"
+     }
+    ],
+    "status": "error"
+   }
+  ],
+  "incentives": null
+ },
+ "reference": {
+  "_note": "supply GET /api/truesync/merchants/brandco/reference, shaped by truesync/fullloop/views.py reference() (supply b3f261e).",
+  "merchant": "brandco",
+  "reference_run": {
+   "id": 4,
+   "status": "done",
+   "started_at": "2026-10-09T14:40:00+00:00",
+   "finished_at": "2026-10-09T14:44:00+00:00",
+   "counts": {},
+   "allow_hosted_render": true
+  },
+  "rows": [
+   {
+    "variant_ref": "v-wipes",
+    "gtin": "00012345678905",
+    "sku": null,
+    "variant_label": "72 ct",
+    "retailer_domain": "target.com",
+    "url": "https://www.target.com/p/2",
+    "read_status": "ok",
+    "reference_source": "honest_fetch",
+    "method": "fetch",
+    "observed_at": "2026-10-09T14:41:00+00:00",
+    "price": "13.49",
+    "member_price": null,
+    "list_price": null,
+    "currency": "USD",
+    "verifiable": true,
+    "cell": {
+     "live": "$13.49",
+     "quoted": null,
+     "status": null
+    },
+    "findings": [
+     {
+      "finding": "pack_differs",
+      "expected": "72",
+      "observed": "216, 3",
+      "detail": {
+       "gap": true,
+       "record_numbers": [
+        72
+       ],
+       "page_numbers": [
+        216,
+        3
+       ]
+      }
+     }
+    ],
+    "gap_count": 1
+   },
+   {
+    "variant_ref": "v-diapers-s3",
+    "gtin": "00012345678912",
+    "sku": null,
+    "variant_label": "84 ct",
+    "retailer_domain": "target.com",
+    "url": "https://www.target.com/p/3",
+    "read_status": "ok",
+    "reference_source": "hosted_render",
+    "method": "hosted",
+    "observed_at": "2026-10-09T14:42:00+00:00",
+    "price": "22.99",
+    "member_price": null,
+    "list_price": null,
+    "currency": "USD",
+    "verifiable": true,
+    "cell": {
+     "live": "$22.99",
+     "quoted": null,
+     "status": null
+    },
+    "findings": [],
+    "gap_count": 0
+   }
+  ],
+  "findings_count": 1,
+  "findings_by_type": {
+   "pack_differs": 1
+  },
+  "last_full_loop": null,
+  "divergences": []
+ },
+ "history": {
+  "merchant": "brandco",
+  "versions": [
+   {
+    "id": 12,
+    "version_number": 2,
+    "upload_id": "up_61aa",
+    "mode": "all_valid_rows",
+    "row_count": 2,
+    "counts": {
+     "ready": 2,
+     "warning": 0,
+     "error": 0
+    },
+    "committed_at": "2026-10-08T10:00:00+00:00",
+    "superseded_at": null
+   },
+   {
+    "id": 9,
+    "version_number": 1,
+    "upload_id": "up_40b2",
+    "mode": "require_clean",
+    "row_count": 1,
+    "counts": {
+     "ready": 1,
+     "warning": 0,
+     "error": 0
+    },
+    "committed_at": "2026-10-01T10:00:00+00:00",
+    "superseded_at": "2026-10-08T10:00:00+00:00"
+   }
+  ]
+ },
+ "feed": {
+  "merchant": "brandco",
+  "version": {
+   "id": 12,
+   "version_number": 2,
+   "upload_id": "up_61aa",
+   "mode": "all_valid_rows",
+   "row_count": 2,
+   "counts": {
+    "ready": 2,
+    "warning": 0,
+    "error": 0
+   },
+   "committed_at": "2026-10-08T10:00:00+00:00",
+   "superseded_at": null
+  },
+  "rows": [
+   {
+    "row_number": 2,
+    "gtin": "012345678905",
+    "product_name": "Brandco Wipes",
+    "variant_label": "72 ct",
+    "pack_count": 72,
+    "multipack": null,
+    "price": "4.99",
+    "currency": "USD",
+    "retailers": [
+     {
+      "domain": "target.com",
+      "url": "https://www.target.com/p/2"
+     }
+    ]
+   },
+   {
+    "row_number": 3,
+    "gtin": "012345678912",
+    "product_name": "Brandco Diapers Size 3",
+    "variant_label": "84 ct",
+    "pack_count": 84,
+    "multipack": null,
+    "price": "22.99",
+    "currency": "USD",
+    "retailers": [
+     {
+      "domain": "target.com",
+      "url": "https://www.target.com/p/3"
+     }
+    ]
+   }
+  ]
+ }
+}
