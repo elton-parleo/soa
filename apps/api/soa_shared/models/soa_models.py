@@ -2293,6 +2293,9 @@ class SoaFullLoopRequest(Base):
     study_type = Column(Text, nullable=False)
     platforms = Column(JSON, nullable=False)
     runs_per_query = Column(Integer, nullable=False, default=1, server_default="1")
+    # Kept for the worker, which makes supply's POST (supply_run_id is NULL
+    # until it has).
+    allow_hosted_render = Column(Boolean, nullable=False, default=True, server_default="true")
     supply_run_id = Column(Integer, nullable=True)
     supply_status = Column(Text, nullable=True)
     cycle_id = Column(Integer, ForeignKey("soa_cycles.id"), nullable=True)

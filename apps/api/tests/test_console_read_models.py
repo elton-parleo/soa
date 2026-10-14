@@ -15,7 +15,8 @@ Users:
 """
 import json
 import os
-from datetime import datetime, timezone
+import time
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from cryptography.fernet import Fernet
@@ -99,7 +100,8 @@ def db(monkeypatch):
             entity_id INTEGER, mentioned BOOLEAN, position INTEGER)""")
         c.exec_driver_sql("""CREATE TABLE soa_full_loop_requests (id INTEGER PRIMARY KEY,
             organization_id INTEGER, merchant_slug TEXT, study_type TEXT, platforms TEXT,
-            runs_per_query INTEGER, supply_run_id INTEGER, supply_status TEXT, cycle_id INTEGER,
+            runs_per_query INTEGER, allow_hosted_render BOOLEAN NOT NULL DEFAULT 1,
+            supply_run_id INTEGER, supply_status TEXT, cycle_id INTEGER,
             status TEXT, error TEXT, created_by TEXT, created_at TIMESTAMP, updated_at TIMESTAMP)""")
 
         for table, rows in (('organizations', data['organizations']),
@@ -286,31 +288,105 @@ def start(http, **overrides):
     return http.post('/api/full-loop', json=body)
 
 
-def test_run_full_loop_starts_supply_and_reads_back_one_combined_object(http, upstream):
-    upstream.answer('POST', '/api/truesync/merchants/wiggle-and-snug/full-loop', status=202,
-                    body={'id': 33, 'status': 'running'}, token=TOKEN_A)
+def worker_started(db, request_id, run_id=33, supply_status='running'):
+    """What the worker's first step leaves behind: supply's run id on the row."""
+    with db.begin() as c:
+        c.execute(text("UPDATE soa_full_loop_requests SET supply_run_id = :r, supply_status = :s "
+                       "WHERE id = :id"), {'r': run_id, 's': supply_status, 'id': request_id})
+
+
+def test_run_full_loop_queues_and_answers_202_without_calling_supply(http, db, upstream):
+    as_('alice')
+    started = start(http, allow_hosted_render=False)
+    assert started.status_code == 202
+    body = started.json()
+    assert body['status'] == 'queued' and isinstance(body['full_loop_id'], int)
+    assert upstream.calls == []                          # supply is the worker's to call
+    with db.connect() as c:
+        row = c.execute(text("SELECT * FROM soa_full_loop_requests WHERE id = :id"),
+                        {'id': body['full_loop_id']}).mappings().one()
+    assert row['status'] == 'reference_pending' and row['supply_run_id'] is None
+    assert not row['allow_hosted_render'] and row['organization_id'] == 10
+
+    queued = http.get(f"/api/full-loop/{body['full_loop_id']}").json()
+    check(queued, 'FullLoopStatus')
+    assert queued['supply'] == {'run_id': None, 'status': None, 'run': None, 'read_error': None}
+    assert queued['strip'][0]['state'] == 'running'
+    assert upstream.calls == []                          # no run id yet: nothing to read upstream
+
+
+def test_run_full_loop_answers_within_budget_however_slow_supply_is(http, upstream, monkeypatch):
+    """The 504: supply's POST ran the whole loop inline. Here every call to
+    supply takes 5 seconds; the POST must neither make one nor wait."""
+    make = upstream.factory
+
+    def slow_factory(**kwargs):
+        client = make(**kwargs)
+        inner = client.request
+
+        async def request(*args, **kw):
+            time.sleep(5)
+            return await inner(*args, **kw)
+
+        client.request = request
+        return client
+
+    monkeypatch.setattr(truesync_client_module.httpx, "AsyncClient", slow_factory)
+    as_('alice')
+    began = time.monotonic()
+    response = start(http)
+    assert time.monotonic() - began < 1.0
+    assert response.status_code == 202 and response.json()['status'] == 'queued'
+    assert upstream.calls == []
+
+
+def test_the_worker_s_run_reads_back_one_combined_object(http, db, upstream):
     upstream.answer('GET', '/api/truesync/merchants/wiggle-and-snug/full-loop/33',
                     body={'id': 33, 'status': 'access_done'}, token=TOKEN_A)
     as_('alice')
-    started = start(http)
-    assert started.status_code == 202
-    check(started.json(), 'FullLoopStatus')
-    assert started.json()['status'] == 'reference_pending'
-    assert upstream.calls[0]['json'] == {'allow_hosted_render': True}
+    request_id = start(http).json()['full_loop_id']
+    worker_started(db, request_id)
 
-    got = http.get(f"/api/full-loop/{started.json()['id']}").json()
+    got = http.get(f"/api/full-loop/{request_id}").json()
     check(got, 'FullLoopStatus')
+    assert got['id'] == request_id and got['status'] == 'reference_pending'
     assert got['supply']['status'] == 'access_done'
     assert got['strip'][0] == {'step': 'reference', 'label': 'Access and reference reads', 'state': 'running'}
-    assert http.get(f"/api/console/full-loop/{started.json()['id']}").json() == got
+    assert http.get(f"/api/console/full-loop/{request_id}").json() == got
     assert {c['token'] for c in upstream.calls} == {TOKEN_A}
 
 
-def test_a_synchronous_full_loop_is_recorded_reference_done(http, upstream):
-    upstream.answer('POST', '/api/truesync/merchants/wiggle-and-snug/full-loop',
-                    body={'id': 34, 'status': 'reference_done'}, token=TOKEN_A)
+def age(db, request_id, minutes):
+    with db.begin() as c:
+        then = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
+        c.execute(text("UPDATE soa_full_loop_requests SET created_at = :t, updated_at = :t "
+                       "WHERE id = :id"), {'t': then, 'id': request_id})
+        c.execute(text("UPDATE soa_runs SET run_at = :t"), {'t': then})
+
+
+def test_a_stale_request_reads_back_failed_timed_out_and_latest_re_enables(http, db):
     as_('alice')
-    assert start(http).json()['status'] == 'reference_done'
+    request_id = start(http).json()['full_loop_id']
+    age(db, request_id, 59)
+    assert http.get('/api/console/full-loop/latest').json()['status'] == 'reference_pending'
+
+    age(db, request_id, 61)                              # the worker never picked it up
+    latest = http.get('/api/console/full-loop/latest').json()
+    check(latest, 'FullLoopStatus')
+    assert latest['id'] == request_id and latest['status'] == 'failed'
+    assert latest['error'].startswith('timed_out: no progress for 60 minutes')
+    assert latest['strip'][0]['state'] == 'failed'
+    assert latest == http.get(f'/api/console/full-loop/{request_id}').json()
+
+
+def test_a_request_marked_timed_out_by_the_worker_reads_back_as_written(http, db):
+    as_('alice')
+    request_id = start(http).json()['full_loop_id']
+    with db.begin() as c:
+        c.execute(text("UPDATE soa_full_loop_requests SET status = 'failed', error = :e WHERE id = :id"),
+                  {'e': 'timed_out: no progress for 60 minutes while cycle_planned', 'id': request_id})
+    latest = http.get('/api/console/full-loop/latest').json()
+    assert latest['status'] == 'failed' and latest['error'].startswith('timed_out:')
 
 
 def test_a_surface_that_cannot_run_is_refused_before_supply_is_called(http, upstream, monkeypatch):
@@ -359,10 +435,8 @@ def test_accessibility_uses_the_scoped_tenants_token(http, upstream):
 
 
 def test_full_loop_is_tenant_scoped(http, upstream):
-    upstream.answer('POST', '/api/truesync/merchants/wiggle-and-snug/full-loop', status=202,
-                    body={'id': 33, 'status': 'running'}, token=TOKEN_A)
     as_('alice')
-    request_id = start(http).json()['id']
+    request_id = start(http).json()['full_loop_id']
     as_('bob')
     assert start(http).status_code == 404                       # not bob's study
     assert http.get(f'/api/full-loop/{request_id}').status_code == 404
@@ -428,14 +502,13 @@ def test_latest_full_loop_is_null_before_the_first_run(http):
     assert response.status_code == 200 and response.json() is None
 
 
-def test_latest_full_loop_is_the_newest_in_the_by_id_shape(http, upstream):
-    upstream.answer('POST', '/api/truesync/merchants/wiggle-and-snug/full-loop', status=202,
-                    body={'id': 33, 'status': 'running'}, token=TOKEN_A)
+def test_latest_full_loop_is_the_newest_in_the_by_id_shape(http, db, upstream):
     upstream.answer('GET', '/api/truesync/merchants/wiggle-and-snug/full-loop/33',
                     body={'id': 33, 'status': 'access_done'}, token=TOKEN_A)
     as_('alice')
     start(http)
-    newest = start(http).json()['id']
+    newest = start(http).json()['full_loop_id']
+    worker_started(db, newest)
     latest = http.get('/api/console/full-loop/latest').json()
     check(latest, 'FullLoopStatus')
     assert latest['id'] == newest
@@ -443,8 +516,6 @@ def test_latest_full_loop_is_the_newest_in_the_by_id_shape(http, upstream):
 
 
 def test_latest_full_loop_is_tenant_scoped(http, upstream):
-    upstream.answer('POST', '/api/truesync/merchants/wiggle-and-snug/full-loop', status=202,
-                    body={'id': 33, 'status': 'running'}, token=TOKEN_A)
     as_('alice')
     start(http)
     as_('bob')
