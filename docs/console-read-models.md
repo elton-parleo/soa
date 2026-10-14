@@ -2822,7 +2822,7 @@ answer, so W&S is the only row.
       "consumer_ui": {}
     }
   },
-  "note": "First pick is the brand Layer 1 coded at position 1. Layer 1 ranks every brand the answer names, so when its lowest position is 2 or more another brand came first, and Layer 2 (other_brands_named, which has no order field) is read by span position: the brand found in the earliest stored span, else the first listed. When neither coding names it (unprompted answers have no Layer 2), the answer counts under `first_uncoded` and no brand gets the pick.",
+  "note": "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every brand named, so when the comparison set's first brand sits second or later, another brand came first, and the brands the answer named outside the set decide which, by where each first appears. When no coding names that brand (unprompted answers carry no list of other brands), nobody gets the pick.",
   "surfaces": [
     {
       "surface": "grounded_api",
@@ -3033,7 +3033,7 @@ store). Two of 516 rows (one first pick by span position, one uncoded) and 4 of 
       }
     }
   },
-  "note": "First pick is the brand Layer 1 coded at position 1. Layer 1 ranks every brand the answer names, so when its lowest position is 2 or more another brand came first, and Layer 2 (other_brands_named, which has no order field) is read by span position: the brand found in the earliest stored span, else the first listed. When neither coding names it (unprompted answers have no Layer 2), the answer counts under `first_uncoded` and no brand gets the pick.",
+  "note": "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every brand named, so when the comparison set's first brand sits second or later, another brand came first, and the brands the answer named outside the set decide which, by where each first appears. When no coding names that brand (unprompted answers carry no list of other brands), nobody gets the pick.",
   "surfaces": [
     {
       "surface": "grounded_api",
