@@ -75,5 +75,5 @@
   "flags_after": [
     "variant_swap"
   ],
-  "reason_after": "stated 219.99 for 'Oral-B iO9', which is io-9 (names a sibling variant); judged against it: exact"
+  "reason_after": "stated 219.99 for 'Oral-B iO9', which is io-9 (names a sibling variant): its price, a sibling variant of the same product"
 }

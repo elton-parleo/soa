@@ -51,5 +51,5 @@
   "flags_after": [
     "variant_swap"
   ],
-  "reason_after": "stated 23.99 for 'Snug-Fit Overnight Diapers Size 3', which is snug-fit-overnight-s3 (variant marker overnight); judged against it: exact"
+  "reason_after": "stated 23.99 for 'Snug-Fit Overnight Diapers Size 3', which is snug-fit-overnight-s3 (variant marker overnight): its price, a different product"
 }

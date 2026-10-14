@@ -18,9 +18,12 @@ with the verdicts they moved):
                $18" for 17.99), or the right price for an adjacent variant
                of the same item group. Never folded into exact.
   2. clash     a claim whose pack number, model/size token or variant marker
-               conflicts with the asked variant is scored against the variant
-               it names when that variant is in the record (flag
-               variant_swap), else it is wrong with reason variant_clash.
+               conflicts with the asked variant, and names another variant
+               in the record, is a variant_swap and never exact: the right
+               price for a sibling variant of the same product is partial,
+               for a different product (the Trial Pack's price on a Size 3
+               question) wrong. A conflict naming no record variant is wrong
+               with reason variant_clash.
   3. inferred  a claim attached to no product can never be wrong: a mismatch
                is unscoreable, reason product_inferred.
   4. member    the whole-dollar rounding in rule 1 applies to member prices.

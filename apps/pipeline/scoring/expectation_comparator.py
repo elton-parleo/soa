@@ -516,6 +516,15 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
                     outcome, matched_at = _judge_record(
                         claim, current=current, history=sibling_history, member=member)
                     entry.update(outcome=outcome, matched_at=matched_at, against=current)
+                # Rule 2: a swapped claim is never exact. Whether it is the
+                # named variant's price is kept beside the outcome; the
+                # outcome is what it says about the variant ASKED about.
+                # Right for a sibling variant of the same product: partial.
+                # Right for a different product: still wrong.
+                priced_as_named = entry['outcome'] in (EXACT, STALE, PARTIAL)
+                entry['priced_as_named'] = priced_as_named
+                if priced_as_named:
+                    entry['outcome'] = PARTIAL if entry['same_group'] else WRONG
         out.append(entry)
 
     swapped = any(c['target'] == 'swap' for c in out)
@@ -561,26 +570,20 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
 
     swaps = [c for c in out if c['target'] in ('swap', 'clash')]
     if swaps:
-        def question_outcome(claim):
-            if claim['target'] == 'clash':
-                return WRONG
-            if claim['outcome'] in (EXACT, PARTIAL, STALE):
-                # Rule 1: the right price for an adjacent variant of the same
-                # item group is partial. A different product priced right
-                # has still not priced the product asked about.
-                return PARTIAL if claim['same_group'] else WRONG
-            return claim['outcome']
-        for claim in swaps:
-            claim['question_outcome'] = question_outcome(claim)
-        best = max(swaps, key=lambda c: _RANK[c['question_outcome']])
+        best = max(swaps, key=lambda c: _RANK[c['outcome']])
         code = REASON_VARIANT_CLASH if best['target'] == 'clash' else REASON_VARIANT_SWAP
         if best['target'] == 'clash':
             reason = f"stated {best['stated']} for {best['product']!r}: {best['reason']}"
         else:
+            if not best['priced_as_named']:
+                verdict = 'not its price either'
+            elif best['same_group']:
+                verdict = "its price, a sibling variant of the same product"
+            else:
+                verdict = 'its price, a different product'
             reason = (f"stated {best['stated']} for {best['product']!r}, which is "
-                      f"{best['variant_id']} ({best['conflict']}); judged against it: "
-                      f"{best['outcome']}")
-        return best['question_outcome'], reason, None, out, swapped, code
+                      f"{best['variant_id']} ({best['conflict']}): {verdict}")
+        return best['outcome'], reason, None, out, swapped, code
 
     if member and any_tier:
         if expectation['amount'] in any_tier:
