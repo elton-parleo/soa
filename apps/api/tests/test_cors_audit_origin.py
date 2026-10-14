@@ -33,3 +33,9 @@ def test_cors_origins_additively_include_the_audit_host():
 def test_x2_no_cookie_domain_widening_documented():
     src = _source()
     assert "no cookie Domain is set anywhere in this app" in src
+
+
+def test_cors_origins_additively_include_the_console_when_set():
+    src = _source()
+    assert '_console_origin = os.getenv("CONSOLE_ALLOWED_ORIGIN")' in src
+    assert '_cors_origins.append(_console_origin.rstrip("/"))' in src

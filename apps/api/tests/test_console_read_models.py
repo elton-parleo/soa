@@ -372,6 +372,89 @@ def test_full_loop_is_tenant_scoped(http, upstream):
     assert http.get(f'/api/full-loop/{request_id}', params={'org': 10}).status_code == 200
 
 
+# ═══ 2C-0: who is signed in, and the latest full loop ══════════════════════
+
+WS_TENANT = {'slug': 'wiggle-and-snug', 'merchants': [
+    {'slug': 'wiggle-and-snug', 'name': 'Wiggle & Snug', 'domain': 'trueshopstore.com',
+     'kind': 'brand', 'hosting': 'parleo', 'has_record': True}]}
+BRANDCO_TENANT = {'slug': 'brandco', 'merchants': [
+    {'slug': 'brandco', 'name': 'Brandco', 'domain': 'brandco.test',
+     'kind': 'seller', 'hosting': 'external', 'has_record': False}]}
+
+
+def tenants(upstream):
+    upstream.answer('GET', '/api/truesync/tenant', body=WS_TENANT, token=TOKEN_A)
+    upstream.answer('GET', '/api/truesync/tenant', body=BRANDCO_TENANT, token=TOKEN_B)
+
+
+def test_me_lists_every_linked_org_for_an_operator(http, upstream):
+    tenants(upstream)
+    as_('op')
+    me = http.get('/api/console/me').json()
+    assert me['user'] == {'id': 'op', 'email': 'op@test'}
+    assert me['is_operator'] is True
+    by_id = {o['id']: o for o in me['orgs']}
+    assert set(by_id) == {10, 20}                    # the staff org is not a customer
+    assert {k: by_id[10][k] for k in ('slug', 'kind', 'hosting', 'domain')} == {
+        'slug': 'wiggle-and-snug', 'kind': 'brand', 'hosting': 'parleo', 'domain': 'trueshopstore.com'}
+    assert by_id[20]['kind'] == 'seller' and by_id[20]['hosting'] == 'external'
+    assert {c['token'] for c in upstream.calls} == {TOKEN_A, TOKEN_B}
+
+
+def test_me_pins_a_member_to_their_own_org(http, upstream):
+    tenants(upstream)
+    as_('alice')
+    me = http.get('/api/console/me').json()
+    assert me['is_operator'] is False
+    assert [o['id'] for o in me['orgs']] == [10]
+    assert [c['token'] for c in upstream.calls] == [TOKEN_A]
+
+
+def test_me_still_lists_an_org_whose_record_read_fails(http, upstream):
+    upstream.answer('GET', '/api/truesync/tenant', status=403, body={'detail': 'revoked'}, token=TOKEN_A)
+    as_('alice')
+    org = http.get('/api/console/me').json()['orgs'][0]
+    assert org['id'] == 10 and org['kind'] is None and org['slug'] == 'wiggle-and-snug'
+    assert 'refused its token' in org['error']
+
+
+def test_me_needs_a_session(http):
+    assert http.get('/api/console/me').status_code in (401, 403)
+
+
+def test_latest_full_loop_is_null_before_the_first_run(http):
+    as_('alice')
+    response = http.get('/api/console/full-loop/latest')
+    assert response.status_code == 200 and response.json() is None
+
+
+def test_latest_full_loop_is_the_newest_in_the_by_id_shape(http, upstream):
+    upstream.answer('POST', '/api/truesync/merchants/wiggle-and-snug/full-loop', status=202,
+                    body={'id': 33, 'status': 'running'}, token=TOKEN_A)
+    upstream.answer('GET', '/api/truesync/merchants/wiggle-and-snug/full-loop/33',
+                    body={'id': 33, 'status': 'access_done'}, token=TOKEN_A)
+    as_('alice')
+    start(http)
+    newest = start(http).json()['id']
+    latest = http.get('/api/console/full-loop/latest').json()
+    check(latest, 'FullLoopStatus')
+    assert latest['id'] == newest
+    assert latest == http.get(f'/api/console/full-loop/{newest}').json()
+
+
+def test_latest_full_loop_is_tenant_scoped(http, upstream):
+    upstream.answer('POST', '/api/truesync/merchants/wiggle-and-snug/full-loop', status=202,
+                    body={'id': 33, 'status': 'running'}, token=TOKEN_A)
+    as_('alice')
+    start(http)
+    as_('bob')
+    assert http.get('/api/console/full-loop/latest').json() is None        # bob's org has none
+    assert http.get('/api/console/full-loop/latest', params={'org': 10}).status_code == 403
+    as_('op')
+    assert http.get('/api/console/full-loop/latest', params={'org': 10}).json()['merchant'] == 'wiggle-and-snug'
+    assert http.get('/api/console/full-loop/latest', params={'org': 20}).json() is None
+
+
 # ═══ the verdict mapping ══════════════════════════════════════════════════
 
 def test_the_verdict_mapping_is_explicit_and_not_lossy():

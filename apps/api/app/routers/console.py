@@ -19,18 +19,23 @@ endpoints are untouched.
     GET /api/console/studio/studies                Study[] with Prompt[] (studio.ts)
     GET /api/console/studio/entities               Entity[] (studio.ts)
     GET /api/console/full-loop/{id}                the full loop's combined status
+    GET /api/console/me                            who is signed in and the orgs they may select (2C-0)
+    GET /api/console/full-loop/latest              the scope's most recent full loop, or null (2C-0)
 """
+import asyncio
 import json
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 
+from app.auth import verify_token
 from app.console_scope import console_scope, cycle_customer_org_sql, cycle_in_scope
 from app.customer_context import CustomerScope
 from app.routers import full_loop
+from app.routers.customers import _tenant_view
 from app.services import console_read_models as rm
-from soa_shared import surface_accuracy, surfaces
+from soa_shared import customers, surface_accuracy, surfaces
 from soa_shared.database import engine
 
 router = APIRouter(prefix="/console", tags=["console"])
@@ -226,6 +231,58 @@ def get_studio_entities(scope: CustomerScope = Depends(console_scope)):
             ORDER BY e.name
         """), {"org": scope.org.id}).mappings().all()
     return [rm.build_entity(dict(r)) for r in rows]
+
+
+@router.get("/me")
+async def get_me(user: dict = Depends(verify_token)):
+    """2C-0: the console's workspace switcher. The orgs this login may select
+    (soa_shared/customers.py decides: operators every linked org, members
+    their own), each with its first merchant's kind, hosting and domain from
+    the merchant record supply holds (read with that org's own token, as
+    /api/customers does). Not scoped to one org: it is the list the scope is
+    chosen from, and it names nothing the user may not select.
+
+    `slug` is the merchant's slug (what /accessibility?merchant= takes);
+    `tenant_slug`, `merchants` and `error` ride beside it. An org whose
+    record read fails is still listed, with kind/hosting/domain null and the
+    error, rather than vanishing from the switcher."""
+    user_id = user.get("sub")
+    views = await asyncio.gather(*(_tenant_view(org) for org in customers.selectable_orgs(user_id)))
+    orgs = []
+    for view in views:
+        first = (view.get("merchants") or [None])[0] or {}
+        orgs.append({
+            "id": view["org_id"],
+            "slug": first.get("slug") or view["tenant_slug"],
+            "name": view["name"],
+            "kind": first.get("kind"),
+            "hosting": first.get("hosting"),
+            "domain": first.get("domain"),
+            "tenant_slug": view["tenant_slug"],
+            "merchants": view.get("merchants") or [],
+            "error": view.get("error"),
+        })
+    return {
+        "user": {"id": user_id, "email": user.get("email")},
+        "is_operator": customers.is_operator(user_id),
+        "orgs": orgs,
+    }
+
+
+@router.get("/full-loop/latest")
+async def get_console_full_loop_latest(scope: CustomerScope = Depends(console_scope)):
+    """2C-0: the scope's most recent full loop in the shape /full-loop/{id}
+    returns, or null when the org has never run one (the console's status
+    strip shows "no run yet", which is not an error). Declared before
+    /full-loop/{request_id} so 'latest' is never read as an id."""
+    with engine.connect() as conn:
+        request_id = conn.execute(text("""
+            SELECT id FROM soa_full_loop_requests WHERE organization_id = :org
+            ORDER BY created_at DESC, id DESC LIMIT 1
+        """), {"org": scope.org.id}).scalar()
+    if request_id is None:
+        return None
+    return await full_loop.read_full_loop(request_id, scope)
 
 
 @router.get("/full-loop/{request_id}")
