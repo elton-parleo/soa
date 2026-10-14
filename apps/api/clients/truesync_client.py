@@ -239,6 +239,10 @@ class TrueSyncClient:
         """The Command Center's access payload: the console's Accessibility."""
         return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/access")
 
+    async def get_reference(self, merchant_slug: str) -> ForwardResult:
+        """2A: the latest reference reads and record-vs-page findings per SKU x retailer."""
+        return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/reference")
+
     async def get_retailer_prices(self, merchant_slug: str, as_of: Optional[str] = None) -> ForwardResult:
         return await self.get(
             f"/api/truesync/merchants/{_slug(merchant_slug)}/retailer-prices",

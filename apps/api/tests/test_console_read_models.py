@@ -185,7 +185,7 @@ def as_(user):
     app.dependency_overrides[verify_token] = lambda: {"sub": user, "email": f"{user}@test"}
 
 
-CYCLE_ENDPOINTS = ['answers', 'true-value', 'studies', 'accuracy']
+CYCLE_ENDPOINTS = ['answers', 'answers/summary', 'true-value', 'studies', 'accuracy']
 
 
 # ═══ shapes ═══════════════════════════════════════════════════════════════
@@ -209,6 +209,77 @@ def test_answers_are_console_answers(http):
     assert wall['surface'] == 'consumer_ui' and wall['agent'] == 'aimode'
 
 
+def test_the_rule_that_decided_a_check_is_its_reason_not_its_note(http):
+    """2C: the classifier's rule code is Check.reason; note is prose only."""
+    as_('alice')
+    by_id = {a['id']: a for a in http.get('/api/console/answers', params={'cycle': CYCLE}).json()}
+    clash = [c for c in by_id['run-1005']['checks'] if c.get('reason')]
+    assert [c['reason'] for c in clash] == ['variant_clash']
+    for answer in by_id.values():
+        for c in answer['checks']:
+            assert c.get('note') not in rm.REASON_CODES
+            assert c.get('reason') is None or c['reason'] in rm.REASON_CODES
+        assert answer['surface'] in ('api', 'grounded_api', 'consumer_ui') and answer['collector']
+
+
+def test_a_check_with_no_claim_carries_the_outcome_s_reason():
+    """The r30 golden: another brand's price, dropped, so the answer stated
+    no price for ours. The one check says so in reason, not in note."""
+    run = {'id': 1, 'platform': 'gemini_grounded', 'run_number': 1, 'run_at': '2026-10-09T15:00:00+00:00',
+           'raw_response': 'Huggies Overnites Size 3 are $15.49.', 'answer_status': 'answered'}
+    outcome = {'outcome': 'absent', 'reason_code': 'other_brand', 'claim_results': [],
+               'expected_answer': {'type': 'price', 'amount': '23.99', 'currency': 'USD'},
+               'outcome_reason': "the answer stated no price for this product; "
+                                 "'Huggies Overnites Size 3' is another brand's", 'flags': []}
+    answer = rm.build_answer(run, {'tier': 'catalog_accuracy', 'query_text': 'q'}, outcome, [],
+                             runs_per_query=1, cycle_code='C')
+    check(answer, 'Answer')
+    assert answer['checks'] == [{'claim': '—', 'agent': 'Gemini', 'live': '$23.99', 'verdict': 'missed',
+                                 'note': outcome['outcome_reason'], 'reason': 'other_brand', 'tone': 'warn'}]
+    assert answer['reason'] == 'other_brand'
+
+
+def test_answers_summary_is_per_tier_and_surface_never_pooled(http):
+    as_('alice')
+    body = http.get('/api/console/answers/summary', params={'cycle': CYCLE}).json()
+    assert body['cycle'] == CYCLE
+    assert [s['surface'] for s in body['surfaces']] == ['grounded_api', 'consumer_ui']
+    grounded = body['surfaces'][0]
+    assert grounded['counts'] == {'exact': 1, 'wrong': 4} and grounded['scored'] == 5
+    assert grounded['accuracy'] == 0.2 and grounded['unverifiable'] == 0
+    assert grounded['answered_with_other_brand'] == 0
+    consumer = body['surfaces'][1]
+    assert consumer['counts'] == {'absent': 1} and consumer['scored'] == 0 and consumer['accuracy'] is None
+    assert consumer['answered'] == 0
+    tiers = {t['tier']: t for t in body['tiers']}
+    assert list(tiers) == ['brand_direct', 'catalog_accuracy']
+    brand = tiers['brand_direct']['surfaces'][0]
+    assert brand['counts'] == {'grounded': 1, 'acknowledged_unknown': 1}
+    assert brand['flags']['fabricated_citation'] == 1 and brand['accuracy'] is None
+    for entry in [*body['surfaces'], *(s for t in body['tiers'] for s in t['surfaces'])]:
+        assert set(entry) >= {'surface', 'runs', 'counts', 'scored', 'accuracy', 'unverifiable',
+                              'answered_with_other_brand', 'flags'}
+    assert 'overall' not in body and 'total' not in body
+
+
+def test_answers_summary_counts_other_brand_and_keeps_unverifiable_out_of_accuracy():
+    rows = [
+        {'tier': 'catalog_accuracy', 'surface': 'grounded_api', 'outcome': 'absent', 'reason_code': 'other_brand'},
+        {'tier': 'catalog_accuracy', 'surface': 'grounded_api', 'outcome': 'absent', 'reason_code': None},
+        {'tier': 'catalog_accuracy', 'surface': 'grounded_api', 'outcome': 'unverifiable'},
+        {'tier': 'catalog_accuracy', 'surface': 'grounded_api', 'outcome': 'exact'},
+        {'tier': 'catalog_accuracy', 'surface': 'api', 'outcome': 'wrong'},
+        {'tier': 'catalog_accuracy', 'surface': 'api', 'outcome': None, 'answer_status': 'failed'},
+    ]
+    body = rm.build_answers_summary(rows, cycle_code='C')
+    by_surface = {s['surface']: s for s in body['surfaces']}
+    assert list(by_surface) == ['api', 'grounded_api']
+    g = by_surface['grounded_api']
+    assert g['answered_with_other_brand'] == 1 and g['unverifiable'] == 1
+    assert g['scored'] == 1 and g['accuracy'] == 1.0
+    assert by_surface['api']['counts'] == {'wrong': 1, 'not_scored': 1}
+
+
 def test_paragraphs_are_the_stored_spans_verbatim(http):
     as_('alice')
     answer = {a['id']: a for a in http.get('/api/console/answers', params={'cycle': CYCLE}).json()}['run-1004']
@@ -229,6 +300,39 @@ def test_true_value_is_console_true_value(http):
     # goes to the worse, and the runs behind the cell are counted.
     balm = cells['bum-balm-4oz']
     assert balm['status'] == 'wrong' and balm['runs'] == 3
+    # Scored against the record: the reference is the record, dated by its publication.
+    assert balm['reference_source'] == 'record' and balm['observed_at'].startswith('2026-08-28')
+
+
+OWNED = {'merchant': 'wiggle-and-snug', 'incentives': [
+    {'id': 1, 'mechanic': 'member_price', 'name': 'Member Rewards', 'tier_name': 'Member+', 'member_price': '16.84',
+     'currency': 'USD', 'code': None, 'discount_percent': None, 'discount_amount': None, 'points': None,
+     'points_multiplier': None, 'applies_to': 'all', 'applies_to_gtins': [], 'applies_to_category': None,
+     'valid_from': None, 'valid_until': None, 'set_at': '2026-09-01T00:00:00+00:00'},
+    {'id': 2, 'mechanic': 'code', 'name': 'SNUG3', 'tier_name': None, 'member_price': None, 'currency': 'USD',
+     'code': 'SNUG3', 'discount_percent': None, 'discount_amount': '3.00', 'points': None, 'points_multiplier': None,
+     'applies_to': 'all', 'applies_to_gtins': [], 'applies_to_category': 'Diapers', 'valid_from': None,
+     'valid_until': '2026-12-31', 'set_at': '2026-09-01T00:00:00+00:00'}]}
+
+
+def test_programs_are_the_owned_incentives_with_how_answers_did(http, upstream):
+    upstream.answer('GET', '/api/truesync/merchants/wiggle-and-snug/incentives/owned', body=OWNED, token=TOKEN_A)
+    as_('alice')
+    body = http.get('/api/console/programs', params={'merchant': 'wiggle-and-snug', 'cycle': CYCLE}).json()
+    assert [p['name'] for p in body['programs']] == ['Member Rewards', 'SNUG3']
+    assert body['programs'][0]['terms'] == '$16.84 member price, on all'
+    assert body['programs'][1]['terms'] == '$3.00 off, code SNUG3, on Diapers, until 2026-12-31'
+    # The fixture cycle asks no value & incentives question: said, not shown as 0.
+    assert {p['agentsRight'] for p in body['programs']} == {'not asked this cycle'}
+    assert [c['token'] for c in upstream.calls] == [TOKEN_A]
+
+
+def test_programs_count_right_among_scored_only():
+    outcomes = [{'outcome': 'exact', 'expected_answer': {'type': 'code', 'code': 'snug3'}},
+                {'outcome': 'wrong', 'expected_answer': {'type': 'code', 'code': 'SNUG3'}},
+                {'outcome': 'unverifiable', 'expected_answer': {'type': 'code', 'code': 'SNUG3'}}]
+    snug = rm.build_programs(OWNED['incentives'], outcomes)[1]
+    assert snug['agentsRight'] == '1 of 2 right' and snug['tone'] == 'warn' and snug['asked'] == 3
 
 
 def test_accessibility_is_proxied_with_claude_in_the_vocabulary(http, upstream):
@@ -543,7 +647,8 @@ def test_true_value_for_an_external_brand_reads_the_2a_reference():
     row; a page that blocked both sources is `unverifiable`, never wrong."""
     reference = {'as_of': '2026-10-09T12:00:00+00:00', 'prices': [
         {'gtin': '00012345678905', 'variant_label': 'Size 3', 'retailer_domain': 'target.com',
-         'price': '21.49', 'currency': 'USD', 'verifiable': True},
+         'price': '21.49', 'currency': 'USD', 'verifiable': True, 'reference_source': 'hosted_render',
+         'method': 'oxylabs', 'observed_at': '2026-10-09T11:58:00+00:00'},
         {'gtin': '00012345678905', 'variant_label': 'Size 3', 'retailer_domain': 'walmart.com',
          'price': None, 'currency': None, 'verifiable': False,
          'unverifiable_reason': 'page unreadable from every source (challenged)'},
@@ -557,6 +662,7 @@ def test_true_value_for_an_external_brand_reads_the_2a_reference():
     assert [c['id'] for c in tv['columns']] == ['target.com', 'walmart.com']
     cells = tv['rows'][0]['cells']
     assert cells['target.com'] == {'quoted': '$22.99', 'live': '$21.49', 'status': 'wrong',
-                                   'outcome': 'stale', 'runs': 1}
+                                   'outcome': 'stale', 'runs': 1, 'reference_source': 'hosted_render',
+                                   'method': 'oxylabs', 'observed_at': '2026-10-09T11:58:00+00:00'}
     assert cells['walmart.com']['status'] == 'unverifiable'
     assert cells['walmart.com']['live'] == 'unverifiable'

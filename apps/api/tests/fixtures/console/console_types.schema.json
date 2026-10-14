@@ -9,7 +9,7 @@
     "Check": {"type": "object", "required": ["claim", "agent", "live", "verdict"], "properties": {
       "claim": {"type": "string"}, "agent": {"type": "string"}, "live": {"type": "string"},
       "verdict": {"enum": ["wrong", "missed", "right", "partial", "stale", "unverifiable", "unscoreable"]},
-      "note": {"type": "string"}}},
+      "note": {"type": "string"}, "reason": {"type": "string"}}},
     "Answer": {"type": "object",
       "required": ["id", "agent", "query", "queryType", "runAt", "severity", "summary", "paragraphs", "named", "first", "checks"],
       "properties": {
@@ -19,7 +19,8 @@
         "paragraphs": {"type": "array", "items": {"type": "array", "items": {"$ref": "#/$defs/Segment"}}},
         "named": {"type": "array", "items": {"type": "string"}}, "first": {"type": "string"},
         "checks": {"type": "array", "items": {"$ref": "#/$defs/Check"}},
-        "brand": {"type": "string"}, "gap": {"type": "string"}}},
+        "brand": {"type": "string"}, "gap": {"type": "string"},
+        "surface": {"enum": ["api", "grounded_api", "consumer_ui"]}, "collector": {"type": "string"}}},
     "TvCell": {"type": "object", "required": ["quoted", "live", "status"], "properties": {
       "quoted": {"type": "string"}, "live": {"type": "string"},
       "status": {"enum": ["exact", "wrong", "none", "partial", "missed", "unverifiable"]}}},

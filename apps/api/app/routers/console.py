@@ -11,8 +11,11 @@ endpoints are untouched.
 
     GET /api/console/surfaces                      the modal's surface list
     GET /api/console/answers?cycle=<code>          Answer[]
+    GET /api/console/answers/summary?cycle=<code>  per tier x surface counts, never pooled (2C)
     GET /api/console/true-value?cycle=<code>       TrueValue
+    GET /api/console/programs?merchant=<slug>      TrueValue.programs, from owned incentives (2C)
     GET /api/console/accessibility?merchant=<slug> Accessibility (from supply)
+    GET /api/console/truesync?merchant=<slug>      the TrueSync matrix, assembled from supply (2C)
     GET /api/console/studies?cycle=<code>          StudyRow[]
     GET /api/console/accuracy?cycle=<code>         per-surface accuracy, never pooled
     GET /api/console/runs                          Run[]   (studio.ts)
@@ -24,7 +27,7 @@ endpoints are untouched.
 """
 import asyncio
 import json
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
@@ -57,6 +60,15 @@ def get_answers(cycle: str = Query(...), scope: CustomerScope = Depends(console_
     row = cycle_in_scope(cycle, scope)
     with engine.connect() as conn:
         return rm.load_answers(conn, dict(row))
+
+
+@router.get("/answers/summary")
+def get_answers_summary(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+    """2C: per tier and per surface, every outcome counted, unverifiable on
+    its own, and answered_with_other_brand. Never pooled across surfaces."""
+    row = cycle_in_scope(cycle, scope)
+    with engine.connect() as conn:
+        return rm.load_answers_summary(conn, dict(row))
 
 
 def _label_from_question(query_text: str) -> str:
@@ -97,7 +109,8 @@ def get_true_value(cycle: str = Query(...), scope: CustomerScope = Depends(conso
         if expected.get('type') == 'price':
             variants.append({'variant_id': ref.get('variant_id'), 'gtin': ref.get('gtin'),
                              'label': _label_from_question(q['query_text']),
-                             'list_price': expected.get('amount'), 'currency': expected.get('currency')})
+                             'list_price': expected.get('amount'), 'currency': expected.get('currency'),
+                             'published_at': ref.get('published_at')})
     if own_domain is None:
         with engine.connect() as conn:
             job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
@@ -131,6 +144,51 @@ async def get_accessibility(merchant: str = Query(...), scope: CustomerScope = D
         raise HTTPException(status_code=404 if status == 404 else 502,
                             detail=f"TrueSync access payload unavailable: {error}")
     return rm.accessibility_from_supply(payload)
+
+
+@router.get("/programs")
+async def get_programs(merchant: str = Query(...), cycle: Optional[str] = Query(None),
+                       scope: CustomerScope = Depends(console_scope)):
+    """2C: TrueValue.programs from the merchant's owned incentives (supply,
+    with the tenant token), each with how this cycle's value & incentives
+    answers did on it when `cycle` is given."""
+    status, payload, error = await full_loop._client(scope).get_owned_incentives(merchant)
+    if error is not None:
+        raise HTTPException(status_code=404 if status == 404 else 502,
+                            detail=f"TrueSync incentives unavailable: {error}")
+    outcomes = []
+    if cycle:
+        row = cycle_in_scope(cycle, scope)
+        with engine.connect() as conn:
+            outcomes = [dict(o) for o in conn.execute(text("""
+                SELECT outcome, expected_answer FROM soa_expectation_outcomes
+                WHERE cycle_id = :c AND tier = 'value_incentives'
+            """), {"c": row['id']}).mappings()]
+    return {'merchant': (payload or {}).get('merchant') or merchant,
+            'programs': rm.build_programs((payload or {}).get('incentives') or [], outcomes)}
+
+
+@router.get("/truesync")
+async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+    """2C: the TrueSync matrix (Command Center) for one of the scope's
+    merchants: publish state per product x channel, drift, acceptance
+    (Merchant Center, and Manufacturer Center with its gmc_sync origin and
+    "not connected" for a tenant with no MC account), last verified, and
+    the validator lines and artifact per cell. Assembled from supply with
+    the tenant token (rm.build_truesync)."""
+    client = full_loop._client(scope)
+    (c_status, channels, c_err), (p_status, pubs, p_err), (k_status, catalog, k_err), (_, prov, prov_err) = \
+        await asyncio.gather(client.get_channels(), client.get_publications(limit=500),
+                             client.get_merchant_catalog(merchant), client.get_provenance(merchant))
+    for status, error in ((k_status, k_err), (c_status, c_err), (p_status, p_err)):
+        if error is not None:
+            raise HTTPException(status_code=404 if status == 404 else 502,
+                                detail=f"TrueSync matrix unavailable: {error}")
+    slugs = [c['slug'] for c in channels or [] if c.get('is_active', True)]
+    reads = await asyncio.gather(*(client.get_merchant_verifications(merchant, channel=s, limit=100) for s in slugs))
+    verifications = {s: (body if err is None else {}) for s, (_, body, err) in zip(slugs, reads)}
+    return rm.build_truesync(merchant, channels=channels or [], publications=pubs or [], catalog=catalog or {},
+                             verifications=verifications, provenance=prov if prov_err is None else None)
 
 
 @router.get("/studies")
