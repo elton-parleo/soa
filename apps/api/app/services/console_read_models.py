@@ -70,7 +70,8 @@ ANSWER_DIVERGENCES = [
     "Answer.agent can be 'claude', which the console's AgentId does not have yet (2C-0 adds it).",
     "Segment.mark 'miss' marks a partial or stale claim; the console labels miss 'left out'.",
     "Extra fields beside the typed ones: platform, answer_status, tier, verdict, tone, "
-    "brand_verdict, flags, flag_details, cycle, reason (the outcome's rule code).",
+    "brand_verdict, flags, flag_details, cycle, reason (the outcome's rule code), variant_id, "
+    "gtin, retailer (the True Value cell the answer is judged in).",
     "Check.reason (2C) is the classifier's rule code (other_brand, not_our_product, "
     "variant_clash, product_inferred, variant_swap); Check.note is prose only.",
     "Answer.surface (api | grounded_api | consumer_ui) and Answer.collector are typed from 2C.",
@@ -244,6 +245,9 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
                                    'reason': _reason_code(outcome.get('reason_code')),
                                    'tone': VERDICT_TONE.get(verdict, 'neu')}, ('note', 'reason')))
 
+    # 2C: which True Value cell this answer is judged in (variant x retailer),
+    # so the console's drawer can show the reference price behind the verdict.
+    source_ref = _json(query.get('source_ref')) or {}
     named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99)]
     first = next((m['name'] for m in mentions if m.get('position') == 1), '')
     return compact({
@@ -274,7 +278,10 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'brand_verdict': brand_verdict,
         'flags': [f.get('flag') for f in flags],
         'flag_details': flags,
-    }, ('runs', 'reason'))
+        'variant_id': source_ref.get('variant_id'),
+        'gtin': source_ref.get('gtin'),
+        'retailer': expectation.get('attributed_to') or source_ref.get('own_domain') or source_ref.get('domain'),
+    }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer'))
 
 
 # ─── Answers summary (2C) ──────────────────────────────────────────────────
@@ -670,7 +677,7 @@ STUDIO_MIRROR = [
 
 def load_answers(conn, cycle: dict) -> List[dict]:
     runs = conn.execute(text("""
-        SELECT r.*, q.query_code, q.query_text, q.tier, q.stage
+        SELECT r.*, q.query_code, q.query_text, q.tier, q.stage, q.source_ref
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         WHERE r.cycle_id = :c ORDER BY q.query_code, r.platform, r.run_number
     """), {'c': cycle['id']}).mappings().all()

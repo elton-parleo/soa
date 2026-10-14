@@ -63,6 +63,7 @@ never `null`.
 | `paragraphs: Segment[][]` | the extraction's **stored spans**, verbatim, found in the answer in order; gaps are unmarked segments; a blank line starts a paragraph. A span carrying a price claim gets `mark` (exact → `ok`, wrong → `wrong`, partial/stale → `miss`) and `ann` = that claim's 1-based index in `checks`. No stored spans (an extraction from before the segmenter): the answer's own paragraphs, unmarked |
 | `named`, `first` | Layer 1 (`soa_coded_mentions`, mentioned, by position) |
 | `checks: Check[]` | one per price claim (`claim_results`): `claim` = stated price and product, `live` = what it was judged against (the page's price at its domain, or the record), `verdict` as below, `note` = the reason in prose, `reason` = the rule code that decided the claim (2C, below). No claim: one Check with `claim: "—"`, whose `reason` is the outcome's rule code |
+| `variant_id`, `gtin`, `retailer` (2C, beside) | the question's `source_ref` variant and GTIN, and the retailer the answer was judged at (`expected_answer.attributed_to`; absent when it was judged against the record), so the console can find the True Value cell and its reference price |
 | `surface`, `collector` (2C, typed) | the run's surface kind (`api`, `grounded_api`, `consumer_ui`) and the collector that fetched it (`openai`, `google_genai`, `serpapi`…), from `soa_runs`, else `soa_shared/surfaces.py` |
 
 **Verdict mapping** (`Answer.verdict`, `Check.verdict`) — explicit, not lossy:
@@ -83,7 +84,7 @@ acknowledged_unknown`, plus absent and unscoreable) travel in **`brand_verdict`*
 and `variant_swap` are in **`flags[]`** (evidence in `flag_details`).
 
 Extras: `cycle, platform, answer_status, tier, reason, verdict, tone,
-brand_verdict, flags, flag_details`. `reason` on the answer is the outcome's rule code
+brand_verdict, flags, flag_details, variant_id, gtin, retailer`. `reason` on the answer is the outcome's rule code
 (`soa_expectation_outcomes.reason_code`), omitted when no rule decided it.
 
 **Reason codes** (2C, `Check.reason`, `Answer.reason`): the classifier's
@@ -202,7 +203,7 @@ when the org has never run one. Scoped like every console read.
 - Check.verdict uses the same mapping, so it can hold stale / unverifiable / unscoreable, which the console's union does not have yet (2C-0).
 - Answer.agent can be 'claude', which the console's AgentId does not have yet (2C-0 adds it).
 - Segment.mark 'miss' marks a partial or stale claim; the console labels miss 'left out'.
-- Extra fields beside the typed ones: platform, answer_status, tier, verdict, tone, brand_verdict, flags, flag_details, cycle, reason (the outcome's rule code).
+- Extra fields beside the typed ones: platform, answer_status, tier, verdict, tone, brand_verdict, flags, flag_details, cycle, reason (the outcome's rule code), variant_id, gtin, retailer (the True Value cell the answer is judged in).
 - Check.reason (2C) is the classifier's rule code (other_brand, not_our_product, variant_clash, product_inferred, variant_swap); Check.note is prose only.
 - Answer.surface (api | grounded_api | consumer_ui) and Answer.collector are typed from 2C.
 
@@ -392,7 +393,8 @@ store; no customer data. Arrays are cut to their first entries.
     "tone": "bad",
     "brand_verdict": null,
     "flags": [],
-    "flag_details": []
+    "flag_details": [],
+    "variant_id": "snug-fit-overnight-s6"
   },
   {
     "id": "run-1005",
@@ -442,7 +444,8 @@ store; no customer data. Arrays are cut to their first entries.
     "tone": "bad",
     "brand_verdict": null,
     "flags": [],
-    "flag_details": []
+    "flag_details": [],
+    "variant_id": "snug-fit-diapers-s3-small"
   },
   {
     "id": "run-1007",
