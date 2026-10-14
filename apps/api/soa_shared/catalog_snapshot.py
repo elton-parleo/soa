@@ -87,6 +87,11 @@ class CatalogSnapshot:
     merchant_kind: Optional[str] = None      # seller | brand
     hosting: Optional[str] = None            # parleo | external
     own_domain: Optional[str] = None
+    #: Every site that is the merchant's own, own_domain first: a brand can
+    #: run a store and an informational site (W&S: trueshopstore.com and
+    #: wiggleandsnug.com). From the record's own_domains when it serves
+    #: one, else [own_domain]. A source at any of them is the merchant's.
+    own_domains: List[str] = field(default_factory=list)
     #: The record's retailer list. A brand's: every retailer domain its
     #: feed has a product_url for. A seller's: its own domain.
     retailer_list: List[str] = field(default_factory=list)
@@ -238,7 +243,8 @@ def merge_merchant_record(snapshot: CatalogSnapshot, *, merchant: Optional[dict]
     is tested against recorded supply responses.
 
       merchant   one entry of GET /tenant's `merchants`
-      retailers  GET /merchants/{slug}/retailers
+      retailers  GET /merchants/{slug}/retailers ({own_domain, own_domains?,
+                 domains})
       feed       GET /merchants/{slug}/feed (external merchants)
     """
     merchant = merchant or {}
@@ -249,6 +255,11 @@ def merge_merchant_record(snapshot: CatalogSnapshot, *, merchant: Optional[dict]
     own = _domain((retailers or {}).get("own_domain")) or _domain(merchant.get("domain")) \
         or _domain(snapshot.domain)
     snapshot.own_domain = own
+    listed = (retailers or {}).get("own_domains") or merchant.get("own_domains") or []
+    snapshot.own_domains = []
+    for domain in [own] + [_domain(d) for d in listed]:
+        if domain and domain not in snapshot.own_domains:
+            snapshot.own_domains.append(domain)
     if own and not snapshot.domain:
         snapshot.domain = own
 

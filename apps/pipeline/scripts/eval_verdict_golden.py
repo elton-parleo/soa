@@ -48,8 +48,10 @@ def classify(row, *, ws_snapshot, reference):
     snapshot = build_snapshot(row['catalog']) if row.get('catalog') else ws_snapshot
     return cmp.compare(
         row['expectation'], row['extraction'], source_ref=row['source_ref'],
-        record_variants=rv.from_snapshot(snapshot), brand_facts=brand_facts_of(snapshot),
+        record_variants=rv.from_snapshot(snapshot),
+        brand_facts={**brand_facts_of(snapshot), **(row.get('record_facts') or {})},
         reference=reference if row.get('reference') else None,
+        tier=row.get('tier'), grounding=row.get('grounding'),
     )
 
 

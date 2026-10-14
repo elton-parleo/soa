@@ -100,7 +100,7 @@ def Session():
                 platform TEXT, run_number INTEGER, run_at TIMESTAMP,
                 raw_response TEXT, response_tokens INTEGER, latency_ms INTEGER,
                 status TEXT, error_message TEXT, search_triggered BOOLEAN,
-                retrieved_sources TEXT, created_at TIMESTAMP
+                retrieved_sources TEXT, grounding TEXT, created_at TIMESTAMP
             )
         """)
         conn.exec_driver_sql("""

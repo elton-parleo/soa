@@ -1,0 +1,63 @@
+{
+  "id": "r45",
+  "rule": "brand-direct programme name guard (an invented tier)",
+  "source": "r44 naming tiers the record does not publish: still fabricated",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "brand_mention",
+    "brand": "Wiggle & Snug",
+    "domain": "trueshopstore.com"
+  },
+  "source_ref": {},
+  "extraction": {
+    "brand_mentioned": true,
+    "brand_claims": [
+      {
+        "claim": "Wiggle & Snug products are sold through retail partners such as TrueShop Store.",
+        "claim_kind": "retail",
+        "kind": "assertion",
+        "modality": "asserted",
+        "effective_modality": "asserted"
+      }
+    ],
+    "sources_cited": [
+      "trueshopstore.com"
+    ],
+    "loyalty_tiers_named": [
+      "Member Rewards",
+      "Snuggle Friend",
+      "Snuggle Bestie"
+    ],
+    "other_brands_named": [],
+    "retailer_mentions": [],
+    "brand_unknown_statement": null,
+    "prices": [],
+    "member_prices": [],
+    "pack_counts": [],
+    "gtins": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "tier": "brand_direct",
+  "record_facts": {
+    "own_domains": [
+      "trueshopstore.com",
+      "wiggleandsnug.com"
+    ],
+    "retailer_list": [
+      "trueshopstore.com"
+    ],
+    "program_name": "Member Rewards",
+    "tier_names": [
+      "Member",
+      "Member+"
+    ]
+  },
+  "catalog": null,
+  "reference": null,
+  "verdict_before": "fabricated",
+  "verdict_after": "fabricated",
+  "reason_code_after": null,
+  "flags_after": [],
+  "reason_after": "'Snuggle Friend, Snuggle Bestie' \u2014 names tiers the record does not publish"
+}

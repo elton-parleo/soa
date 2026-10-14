@@ -872,6 +872,18 @@ class SoaRun(Base):
             "citations. NULL when not exposed or not used. Seeds M26."
         ),
     )
+    grounding = Column(
+        JSON,
+        nullable=True,
+        comment=(
+            "The metadata behind retrieved_sources (runners/grounding.py): "
+            "{sources: [{uri, title, domain, resolved_at?}], supports: [{text, "
+            "start, end, sources}]}. A support names the answer span a source "
+            "backs, which is how a brand-direct claim is grounded by a source "
+            "the answer never names. NULL before it existed and where the "
+            "platform exposes none."
+        ),
+    )
     # 2B: surface fidelity. Every result says what kind of surface it came
     # from and who collected it; per-surface accuracy is split by
     # `surface` and never pooled. See apps/pipeline/runners/surfaces.py.

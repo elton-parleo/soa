@@ -40,7 +40,7 @@ def db(monkeypatch):
         """)
         conn.exec_driver_sql("""
             CREATE TABLE soa_runs (
-                surface TEXT, collector TEXT, answer_status TEXT, retrieved_sources TEXT,
+                surface TEXT, collector TEXT, answer_status TEXT, retrieved_sources TEXT, grounding TEXT,
                 id INTEGER PRIMARY KEY, run_number INTEGER, raw_response TEXT
             )
         """)

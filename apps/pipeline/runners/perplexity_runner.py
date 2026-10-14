@@ -19,6 +19,7 @@ from openai import AsyncOpenAI
 
 import soa_shared.config as config
 from soa_shared.config import SOA_PERPLEXITY_TIMEOUT_SECONDS
+from runners import grounding
 from runners.base_runner import BasePlatformRunner
 from runners.platform_response import PlatformResponse
 
@@ -68,4 +69,6 @@ class PerplexityRunner(BasePlatformRunner):
             model=self.model,
             status="success",
             retrieved_sources=retrieved_sources,
+            grounding=grounding.from_perplexity(
+                response, response.choices[0].message.content or ""),
         )

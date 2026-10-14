@@ -645,7 +645,8 @@ def _drop_other_brand_claims(extraction, brand_facts) -> tuple:
 def compare(expectation: dict, extraction: dict, *, history=None,
             source_ref=None, brand_domain=None, tier=None,
             brand_facts=None, record_variants=None, history_for=None,
-            reference=None, retrieved_sources=None, dead_domains=None) -> Verdict:
+            reference=None, retrieved_sources=None, dead_domains=None,
+            grounding=None) -> Verdict:
     """
     One (question x surface x sample) -> one outcome.
 
@@ -673,28 +674,44 @@ def compare(expectation: dict, extraction: dict, *, history=None,
                        carrying attributed_to
       retrieved_sources the run's grounding URLs, for the source split
       dead_domains     {domain: check} from citation_check, already run
+      grounding        the run's soa_runs.grounding (runners/grounding.py),
+                       for a brand-direct claim backed by a platform source
     """
     verdict = _compare_core(
         expectation, extraction, history=history, source_ref=source_ref,
         brand_domain=brand_domain, tier=tier, brand_facts=brand_facts,
         record_variants=record_variants, history_for=history_for, reference=reference,
+        grounding=grounding,
     )
     _decorate(verdict, expectation, extraction, source_ref=source_ref,
               brand_domain=brand_domain, retrieved_sources=retrieved_sources,
-              dead_domains=dead_domains)
+              dead_domains=dead_domains, brand_facts=brand_facts, grounding=grounding)
     return verdict
 
 
+def _retrieved(retrieved_sources, grounding) -> list:
+    """The run's sources for the split. Where grounding names a source's
+    site, that site; a redirect URL's own host names Google, not the page,
+    so an unresolved redirect is left out rather than counted as 'other'."""
+    sources = (grounding or {}).get('sources') if isinstance(grounding, dict) else None
+    if not sources:
+        return list(retrieved_sources or [])
+    return [s['domain'] for s in sources if isinstance(s, dict) and s.get('domain')]
+
+
 def _decorate(verdict, expectation, extraction, *, source_ref, brand_domain,
-              retrieved_sources, dead_domains) -> None:
+              retrieved_sources, dead_domains, brand_facts=None, grounding=None) -> None:
     """The answer-level 2B results: source split, and the flags."""
     ref = source_ref or {}
     own_domain = ref.get('own_domain') or expectation.get('domain') or brand_domain
+    owned = [own_domain] + [d for d in (brand_facts or {}).get('own_domains') or []
+                            if d != own_domain]
     retailer_list = ref.get('retailer_list') or []
-    domains = af.cited_domains(extraction.get('sources_cited'), retrieved_sources)
+    domains = af.cited_domains(extraction.get('sources_cited'),
+                               _retrieved(retrieved_sources, grounding))
     if domains:
         verdict.source_split = af.source_split(
-            domains, own_domain=own_domain, retailer_list=retailer_list)
+            domains, own_domain=owned, retailer_list=retailer_list)
 
     if 'retailer_list' in ref:
         availability = af.fabricated_availability(
@@ -720,7 +737,8 @@ def _decorate(verdict, expectation, extraction, *, source_ref, brand_domain,
 
 
 def _compare_core(expectation, extraction, *, history, source_ref, brand_domain, tier,
-                  brand_facts, record_variants, history_for, reference) -> Verdict:
+                  brand_facts, record_variants, history_for, reference,
+                  grounding=None) -> Verdict:
     source_attribution, domain_cited = classify_sources(
         extraction.get('sources_cited'), brand_domain,
     )
@@ -738,10 +756,12 @@ def _compare_core(expectation, extraction, *, history, source_ref, brand_domain,
     # same reason — our failure to read an answer is never a result about
     # the assistant.
     if bdc.is_brand_direct(tier, expectation):
-        outcome, reason = bdc.classify(
-            extraction, expectation, brand_facts=brand_facts,
+        outcome, reason, code = bdc.classify_with_code(
+            extraction, expectation, brand_facts=brand_facts, grounding=grounding,
         )
-        return verdict(outcome, reason)
+        result = verdict(outcome, reason)
+        result.reason_code = code
+        return result
 
     # An extraction that could not read the answer decides nothing else.
     # Checked FIRST, before any comparison: a garbled answer that happens

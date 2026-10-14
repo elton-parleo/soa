@@ -251,6 +251,9 @@ RULES = {
     'variant_clash': '§3 rule 2: a clash naming no record variant (variant_clash)',
     'not_our_product': '§3 rule 2 (narrowed): a price for something that is not our product is absent',
     'other_brand': "another brand's price (Layer 2 other_brands_named) is never ours",
+    'grounding_support': 'brand-direct: a claim grounded by a platform support at a merchant domain',
+    'own_domains': "brand-direct: the merchant's own domains are a list",
+    'program_name_not_tier': "brand-direct: the programme's name is not a tier claim",
 }
 
 
@@ -307,7 +310,7 @@ def stored_rows(conn, cid: int, tiers) -> list:
     statement = text("""
         SELECT o.run_id, o.query_id, o.cycle_id, o.platform, o.tier,
                o.expected_answer, o.extraction, o.extraction_model, o.outcome,
-               r.retrieved_sources, r.surface, r.answer_status, r.run_number,
+               r.retrieved_sources, r.grounding, r.surface, r.answer_status, r.run_number,
                q.source_ref, q.study_type, q.query_code,
                q.expected_answer AS query_expected_answer
         FROM soa_expectation_outcomes o
@@ -377,6 +380,7 @@ def classify_only(cycle_code: str, tiers=None, *, scorer=None, write: bool = Tru
             id=row['run_id'], query_id=row['query_id'], cycle_id=row['cycle_id'],
             platform=row['platform'], tier=row['tier'], source_ref=row['source_ref'],
             study_type=row['study_type'], retrieved_sources=row['retrieved_sources'],
+            grounding=row['grounding'],
             surface=row['surface'], answer_status=row['answer_status'],
         )
         kwargs = dict(history=scorer.history, brand_facts=scorer.brand_facts,
