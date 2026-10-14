@@ -1440,7 +1440,7 @@ def build_record(merchant: str, listing: dict, *, merchant_record: Optional[dict
     fields = [
         {'k': 'Name', 'v': listing.get('title') or NOT_CARRIED, 'prov': prov},
         {'k': 'Brand', 'v': listing.get('brand') or NOT_CARRIED, 'prov': prov},
-        {'k': 'Product page', 'v': listing.get('product_url') or NOT_CARRIED, 'prov': prov, 'mono': True},
+        {'k': 'Product page', 'v': listing.get('product_url') or NOT_CARRIED, 'prov': prov, 'mono': bool(listing.get('product_url'))},
         {'k': 'Price', 'v': price, 'prov': prov,
          **({'note': f"{len(variants)} variants"} if len(variants) > 1 and prices else {})},
     ]

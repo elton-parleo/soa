@@ -3404,7 +3404,7 @@ reference read is the 2C sample's (`supply_feed_brandco.json`), whose target.com
       "k": "Product page",
       "v": "not carried",
       "prov": "retail",
-      "mono": true
+      "mono": false
     },
     {
       "k": "Price",
