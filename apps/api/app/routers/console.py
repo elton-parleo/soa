@@ -15,6 +15,7 @@ endpoints are untouched.
     GET /api/console/true-value?cycle=<code>       TrueValue
     GET /api/console/programs?merchant=<slug>      TrueValue.programs, from owned incentives (2C)
     GET /api/console/accessibility?merchant=<slug> Accessibility (from supply)
+    GET /api/console/truesync?merchant=<slug>      the TrueSync matrix, assembled from supply (2C)
     GET /api/console/studies?cycle=<code>          StudyRow[]
     GET /api/console/accuracy?cycle=<code>         per-surface accuracy, never pooled
     GET /api/console/runs                          Run[]   (studio.ts)
@@ -165,6 +166,29 @@ async def get_programs(merchant: str = Query(...), cycle: Optional[str] = Query(
             """), {"c": row['id']}).mappings()]
     return {'merchant': (payload or {}).get('merchant') or merchant,
             'programs': rm.build_programs((payload or {}).get('incentives') or [], outcomes)}
+
+
+@router.get("/truesync")
+async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+    """2C: the TrueSync matrix (Command Center) for one of the scope's
+    merchants: publish state per product x channel, drift, acceptance
+    (Merchant Center, and Manufacturer Center with its gmc_sync origin and
+    "not connected" for a tenant with no MC account), last verified, and
+    the validator lines and artifact per cell. Assembled from supply with
+    the tenant token (rm.build_truesync)."""
+    client = full_loop._client(scope)
+    (c_status, channels, c_err), (p_status, pubs, p_err), (k_status, catalog, k_err), (_, prov, prov_err) = \
+        await asyncio.gather(client.get_channels(), client.get_publications(limit=500),
+                             client.get_merchant_catalog(merchant), client.get_provenance(merchant))
+    for status, error in ((k_status, k_err), (c_status, c_err), (p_status, p_err)):
+        if error is not None:
+            raise HTTPException(status_code=404 if status == 404 else 502,
+                                detail=f"TrueSync matrix unavailable: {error}")
+    slugs = [c['slug'] for c in channels or [] if c.get('is_active', True)]
+    reads = await asyncio.gather(*(client.get_merchant_verifications(merchant, channel=s, limit=100) for s in slugs))
+    verifications = {s: (body if err is None else {}) for s, (_, body, err) in zip(slugs, reads)}
+    return rm.build_truesync(merchant, channels=channels or [], publications=pubs or [], catalog=catalog or {},
+                             verifications=verifications, provenance=prov if prov_err is None else None)
 
 
 @router.get("/studies")

@@ -35,6 +35,8 @@ Lists (`runs`, `studio/*`) return only the scope's rows.
 | `GET /api/console/true-value?cycle=<code>` | variants x retailers | `TrueValue` |
 | `GET /api/console/programs?merchant=<slug>[&cycle=<code>]` | the merchant's owned incentives, with how the cycle's value answers did (2C) | `TrueValue.programs` |
 | `GET /api/console/accessibility?merchant=<slug>` | supply's access payload | `Accessibility` |
+| `GET /api/console/truesync?merchant=<slug>` | the TrueSync matrix, assembled from supply (2C) | `TrueSyncData` (products, channels, lastVerified) |
+| `GET /api/console/catalog?merchant=<slug>`, `/catalog/versions`, `/catalog/template.{csv,xlsx}`, `POST /catalog/validate`, `POST /catalog/commit` | Setup › Catalog over supply's 1B feed loader; **operator only** (2C) | — (soa) |
 | `GET /api/console/studies?cycle=<code>` | question x agent | `StudyRow[]` |
 | `GET /api/console/accuracy?cycle=<code>` | per-surface accuracy, never pooled | — (soa) |
 | `GET /api/console/runs` | the tenant's cycles | `Run[]` (studio.ts) |
@@ -156,6 +158,44 @@ token. Supply already returns the console's `Accessibility`; soa adds `claude` t
 agent vocabulary: a request row with `agent: "claude"` gets `vendor: "claude"`
 (supply sends `"other"` because `AgentId` has no claude; 2C-0 adds it). Supply's other
 divergences are passed through in `divergences`.
+
+### TrueSync matrix (2C)
+
+`GET /api/console/truesync?merchant=<slug>`, `build_truesync`. Supply has no single Command
+Center payload: the soa web app assembles the matrix in the browser
+(`MerchantCommandCenter.jsx`, `verificationModel.js`). soa now does the same server-side, with
+the tenant token, from `GET /channels`, `GET /publications?limit=500`,
+`GET /merchants/{slug}/catalog`, `GET /merchants/{slug}/provenance` and one
+`GET /merchants/{slug}/verifications?channel=` per active channel.
+
+| console field | from |
+|---|---|
+| `channels[]` | supply's channel list in its order (`id` = slug, `spec` = `spec_version`); `verification_surface`, `extension_status`, `connected`, `depth_label` beside. Never a hardcoded list: `manufacturer_center` appears when supply lists it |
+| `products[]` | one per published catalog listing (`sku` = product id, `name` = title, `variants`); `listing_id`, `variant_ids`, `gtins`, `product_url`, `provenance` (`published` or `scrape`) and `provenance_basis` beside |
+| `TsCell.s` | the newest publication per listing x channel: `published`; `compiled` (compiled, validated, withdrawn); `blocked` (failed, its error in `note`); `not_published` (none); `na` when the channel says `connected: false` (`note: "not connected"`) |
+| `TsCell.d`, `n`, `at` | the newest `fetch_probe` at or after the publish: `drift` with `n` findings, `none`, else `unverified`. `at` = the newest fresh verification. A record older than the publish counts for nothing |
+| `acceptance` (beside) | Merchant Center from `gmc_diagnostics` (404 → `not_found`, approved, else `disapproved` with issues or `pending`); Manufacturer Center from `mc_acceptance` `drift.acceptance` (`approved / pending / disapproved / not_found / unavailable`) |
+| `origin` (beside) | Manufacturer Center only: `drift.origin`, `parleo` or `gmc_sync` (the product came into MC through Merchant Center's sync) |
+| `validator[channel]` | validation errors as `conflict`; expressiveness flags `dropped` → `dropped`, `approximated` → `approx`, `checkout_scope`/`info` → `info`; one `ok` line for a valid record with no flags |
+| `payload[channel]` | the publication's artifact, pretty-printed JSON |
+| `lastVerified` | the newest fresh verification across the matrix |
+
+This is the soa follow-up supply's MC-1 doc asks for (`docs/truesync/manufacturer-center-lane.md`):
+`mc_acceptance` read as acceptance, `drift.acceptance` preferred, and "not connected" from
+`channel.connected === false`. There is no MC-2 or MC-3 in supply yet; the column is MC-1's.
+
+### Setup › Catalog (2C)
+
+`app/routers/console_ops.py`, **operator only** (a member is 403 `operator only: …`), scoped
+with `?org=` and the tenant token like every console read.
+
+| endpoint | does |
+|---|---|
+| `GET /catalog?merchant=` | `source: "hosted"` for a Parleo-hosted merchant (its published catalog, `read_only: true`, from the store config); `source: "feed"` (current version and rows) or `"none"` (no feed yet) for an external one, with every version |
+| `GET /catalog/versions?merchant=` | supply's feed history, newest first |
+| `GET /catalog/template.{csv,xlsx}` | supply's template |
+| `POST /catalog/validate?merchant=` | supply's validate, which is the preview (every row `ready / warning / error` with its messages, staged under `upload_id`), plus one soa warning per row: `multipack_suggested`, "page shows a count but multipack is empty", when the latest reference read's `pack_differs` finding shows a count that only a multipack explains and the row's multipack is empty. Advisory: commit writes supply's staged preview |
+| `POST /catalog/commit` | `{merchant, upload_id, mode}`, mode `all_valid_rows` or `require_clean` |
 
 ### StudyRow / StudyCell
 
@@ -978,6 +1018,636 @@ The owned incentives are the test's (`OWNED`); the fixture cycle asks no value q
     "AccessRow is one probe in the console; here it is one agent identity aggregated over every page probed (result 'n of m pages answered', code = status counts).",
     "AccessRow.vendor can be 'claude' (vendor 'claude', agent 'claude'); the console adds it to AgentId in 2C-0."
   ]
+}
+```
+
+### GET /api/console/truesync?merchant=wiggle-and-snug (2C, 1 of 5 products)
+
+Supply's answers are the web app's real W&S captures (Aug 2026) and the pipeline's W&S catalog,
+with `manufacturer_center` listed as supply's seed has it and `connected: false` (no MC
+account yet). Payloads cut.
+
+```json
+{
+  "merchant": "wiggle-and-snug",
+  "channels": [
+    {
+      "id": "schema_org",
+      "name": "Schema.org Product/Offer",
+      "short": "Schema.org Product/Offer",
+      "spec": "schemaorg-merchant-listing-2026-08-18",
+      "verification_surface": "fetch_probe",
+      "extension_status": null,
+      "connected": null,
+      "depth_label": "Fully live on demo store"
+    },
+    {
+      "id": "merchant_center",
+      "name": "Google Merchant Center feed",
+      "short": "Google Merchant Center feed",
+      "spec": "gmc-products-v1-2026-08-18",
+      "verification_surface": "acceptance",
+      "extension_status": null,
+      "connected": null,
+      "depth_label": "Live at API layer; accepted + passing diagnostics (not \"surfaced\")"
+    },
+    {
+      "id": "manufacturer_center",
+      "name": "Google Manufacturer Center",
+      "short": "Google Manufacturer Center",
+      "spec": "manufacturers-v1-2026-10-05",
+      "verification_surface": "acceptance",
+      "extension_status": null,
+      "connected": false,
+      "depth_label": "Acceptance read back"
+    },
+    {
+      "id": "acp",
+      "name": "Agentic Commerce Protocol",
+      "short": "Agentic Commerce Protocol",
+      "spec": "acp-feed-stable-2026-08-18",
+      "verification_surface": "fetch_probe",
+      "extension_status": "deferred",
+      "connected": null,
+      "depth_label": "Spec-conformant, self-hosted, validated (not enrolled)"
+    },
+    {
+      "id": "ucp_uip",
+      "name": "UCP / Universal Incentive Protocol",
+      "short": "UCP / Universal Incentive Protocol",
+      "spec": "ucp-2026-04-08",
+      "verification_surface": "none",
+      "extension_status": "not_applicable",
+      "connected": null,
+      "depth_label": "Spec-conformant, self-hosted (not enrolled)"
+    },
+    {
+      "id": "deals_api",
+      "name": "Parleo Deals API",
+      "short": "Parleo Deals API",
+      "spec": "parleo-internal",
+      "verification_surface": "none",
+      "extension_status": null,
+      "connected": null,
+      "depth_label": "Live today"
+    },
+    {
+      "id": "mcp",
+      "name": "Model Context Protocol server",
+      "short": "Model Context Protocol server",
+      "spec": "parleo-internal",
+      "verification_surface": "none",
+      "extension_status": null,
+      "connected": null,
+      "depth_label": "Live today"
+    },
+    {
+      "id": "deal_directory",
+      "name": "Deal directory / affiliate listing",
+      "short": "Deal directory / affiliate listing",
+      "spec": "parleo-internal",
+      "verification_surface": "none",
+      "extension_status": null,
+      "connected": null,
+      "depth_label": "Exists"
+    }
+  ],
+  "products": [
+    {
+      "sku": "catalog_product:27",
+      "name": "Snug-Fit Diapers",
+      "sub": "Wiggle & Snug · 12 variants",
+      "variants": "12 variants",
+      "gtin": "884400137609",
+      "cells": {
+        "schema_org": {
+          "s": "published",
+          "d": "none",
+          "at": "2026-08-24T22:35:04.189910Z",
+          "publication_id": 330,
+          "status": "published",
+          "published_at": "2026-08-21T20:16:03.128053Z",
+          "acceptance": null,
+          "origin": null,
+          "connected": null,
+          "external_ref": null
+        },
+        "merchant_center": {
+          "s": "blocked",
+          "d": "unverified",
+          "at": "2026-08-24T21:52:05.863831Z",
+          "note": "not implemented in Step 2",
+          "publication_id": 331,
+          "status": "failed",
+          "published_at": null,
+          "acceptance": "not_found",
+          "origin": null,
+          "connected": null,
+          "external_ref": null
+        },
+        "manufacturer_center": {
+          "s": "na",
+          "d": "unverified",
+          "note": "not connected",
+          "publication_id": null,
+          "status": null,
+          "published_at": null,
+          "acceptance": null,
+          "origin": null,
+          "connected": false,
+          "external_ref": null
+        },
+        "acp": {
+          "s": "blocked",
+          "d": "unverified",
+          "note": "not implemented in Step 2",
+          "publication_id": 332,
+          "status": "failed",
+          "published_at": null,
+          "acceptance": null,
+          "origin": null,
+          "connected": null,
+          "external_ref": null
+        },
+        "ucp_uip": {
+          "s": "blocked",
+          "d": "unverified",
+          "note": "not implemented in Step 2",
+          "publication_id": 333,
+          "status": "failed",
+          "published_at": null,
+          "acceptance": null,
+          "origin": null,
+          "connected": null,
+          "external_ref": null
+        },
+        "deals_api": {
+          "s": "published",
+          "d": "unverified",
+          "publication_id": 334,
+          "status": "published",
+          "published_at": "2026-08-21T20:16:03.549556Z",
+          "acceptance": null,
+          "origin": null,
+          "connected": null,
+          "external_ref": "deals_api:listing:90"
+        },
+        "mcp": {
+          "s": "published",
+          "d": "unverified",
+          "publication_id": 335,
+          "status": "published",
+          "published_at": "2026-08-21T20:16:03.718651Z",
+          "acceptance": null,
+          "origin": null,
+          "connected": null,
+          "external_ref": "mcp:listing:90"
+        },
+        "deal_directory": {
+          "s": "published",
+          "d": "unverified",
+          "publication_id": 336,
+          "status": "published",
+          "published_at": "2026-08-21T20:16:03.869094Z",
+          "acceptance": null,
+          "origin": null,
+          "connected": null,
+          "external_ref": "deal_directory:listing:90"
+        }
+      },
+      "validator": {
+        "schema_org": [
+          {
+            "field": "amount_off",
+            "verdict": "approx",
+            "note": "schema.org: the resulting price is expressible; the amount off itself is only a hint (specs §4)."
+          },
+          {
+            "field": "percent_off",
+            "verdict": "approx",
+            "note": "schema.org: price and priceSpecification carry the resulting price; the percentage itself is only a hint (specs §4)."
+          },
+          {
+            "field": "new_customer",
+            "verdict": "dropped",
+            "note": "schema.org: no new-customer eligibility structure (specs matrix)."
+          },
+          {
+            "field": "subscribe_and_save",
+            "verdict": "approx",
+            "note": "schema.org: disclosure only — no subscription pricing structure (specs matrix)."
+          },
+          {
+            "field": "subscription",
+            "verdict": "approx",
+            "note": "schema.org: subscription eligibility is disclosure text, not structured (specs matrix)."
+          },
+          {
+            "field": "mfr_coupon",
+            "verdict": "approx",
+            "note": "schema.org: coupon codes are a hint, not a structured field (specs matrix)."
+          },
+          {
+            "field": "gift_with_purchase",
+            "verdict": "approx",
+            "note": "schema.org: a gift with purchase is a disclosure hint, not a structured benefit (specs matrix)."
+          },
+          {
+            "field": "effective_net_price",
+            "verdict": "approx",
+            "note": "The calculator's net price includes a member-only offer, so the public Offer.price quotes list; the member price is carried in priceSpecification, gated by tier."
+          },
+          {
+            "field": "stacking",
+            "verdict": "info",
+            "note": "schema.org has no stacking vocabulary; combinability is stated in the description only (specs matrix)."
+          }
+        ],
+        "merchant_center": [
+          {
+            "field": "record",
+            "verdict": "conflict",
+            "note": "not implemented in Step 2"
+          },
+          {
+            "field": "amount_off",
+            "verdict": "approx",
+            "note": "GMC: no amount-off field; carried as sale_price, so the mechanic is lost (specs §3)."
+          },
+          {
+            "field": "percent_off",
+            "verdict": "approx",
+            "note": "GMC: no percentage field; carried as sale_price, so the mechanic is lost (specs §3)."
+          },
+          {
+            "field": "new_customer",
+            "verdict": "dropped",
+            "note": "GMC: no new-customer eligibility field (specs §3)."
+          },
+          {
+            "field": "subscribe_and_save",
+            "verdict": "dropped",
+            "note": "GMC: no subscribe-and-save representation in product data or loyalty_program (specs §3)."
+          },
+          {
+            "field": "subscription",
+            "verdict": "dropped",
+            "note": "GMC: loyalty_program expresses program and tier, not subscription (specs §3)."
+          },
+          {
+            "field": "mfr_coupon",
+            "verdict": "approx",
+            "note": "GMC: only via the separate promotions feed, whose current fields are unverified (specs §3)."
+          },
+          {
+            "field": "gift_with_purchase",
+            "verdict": "approx",
+            "note": "GMC: only via the separate promotions feed, whose current fields are unverified (specs §3, matrix)."
+          }
+        ],
+        "manufacturer_center": [],
+        "acp": [
+          {
+            "field": "record",
+            "verdict": "conflict",
+            "note": "not implemented in Step 2"
+          },
+          {
+            "field": "tier",
+            "verdict": "dropped",
+            "note": "ACP: promotions have no eligibility fields, so tier gating is not expressible (specs §2)."
+          },
+          {
+            "field": "points_earn",
+            "verdict": "dropped",
+            "note": "ACP: no loyalty points representation (specs §2)."
+          },
+          {
+            "field": "member",
+            "verdict": "dropped",
+            "note": "ACP: promotions have no eligibility fields, so membership gating is not expressible (specs §2)."
+          },
+          {
+            "field": "new_customer",
+            "verdict": "dropped",
+            "note": "ACP: no new-customer eligibility field (specs §2)."
+          },
+          {
+            "field": "subscribe_and_save",
+            "verdict": "dropped",
+            "note": "ACP: no subscribe-and-save fields; effective price plus disclosure is the best available (specs §1)."
+          },
+          {
+            "field": "subscription",
+            "verdict": "dropped",
+            "note": "ACP: no subscription eligibility field (specs §2)."
+          },
+          {
+            "field": "mfr_coupon",
+            "verdict": "dropped",
+            "note": "ACP: promotions carry no redemption code (specs §2)."
+          },
+          {
+            "field": "gift_with_purchase",
+            "verdict": "dropped",
+            "note": "ACP: promotions benefits are amount_off, percent_off and free_shipping only (specs §2)."
+          }
+        ],
+        "ucp_uip": [
+          {
+            "field": "record",
+            "verdict": "conflict",
+            "note": "not implemented in Step 2"
+          },
+          {
+            "field": "amount_off",
+            "verdict": "approx",
+            "note": "UCP: catalog carries list_price vs price only; the discount itself is a checkout-time UIP concern (specs §5, §6)."
+          },
+          {
+            "field": "percent_off",
+            "verdict": "approx",
+            "note": "UCP: catalog carries list_price vs price only; the discount itself is a checkout-time UIP concern (specs §5, §6)."
+          },
+          {
+            "field": "tier",
+            "verdict": "info",
+            "note": "UCP: tier status is a checkout-time UIP concern; the catalog payload has no tier scope (specs §5, §6)."
+          },
+          {
+            "field": "points_earn",
+            "verdict": "info",
+            "note": "UCP catalog has no points; UIP expresses them at checkout, not on the catalog payload (specs §5, §6)."
+          },
+          {
+            "field": "member",
+            "verdict": "info",
+            "note": "UCP: eligibility is a checkout-time UIP concern; the catalog payload has no member scope (specs §5, §6)."
+          },
+          {
+            "field": "new_customer",
+            "verdict": "dropped",
+            "note": "UCP/UIP: no new-customer eligibility field (specs §6)."
+          },
+          {
+            "field": "subscribe_and_save",
+            "verdict": "info",
+            "note": "UCP: UIP covers subscription promotions partially, and only at checkout (specs §6)."
+          },
+          {
+            "field": "subscription",
+            "verdict": "info",
+            "note": "UCP: subscription eligibility is checkout-scoped in UIP (specs §6)."
+          },
+          {
+            "field": "mfr_coupon",
+            "verdict": "info",
+            "note": "UCP: UIP carries the code at checkout; the catalog payload cannot (specs §6)."
+          },
+          {
+            "field": "gift_with_purchase",
+            "verdict": "info",
+            "note": "UCP: UIP carries a gift with purchase at checkout; the catalog payload cannot (specs matrix)."
+          }
+        ],
+        "deals_api": [
+          {
+            "field": "record",
+            "verdict": "ok",
+            "note": "valid against parleo-internal"
+          }
+        ],
+        "mcp": [
+          {
+            "field": "record",
+            "verdict": "ok",
+            "note": "valid against parleo-internal"
+          }
+        ],
+        "deal_directory": [
+          {
+            "field": "record",
+            "verdict": "ok",
+            "note": "valid against parleo-internal"
+          }
+        ]
+      },
+      "payload": {
+        "schema_org": "… 33630 chars of the published artifact (JSON), cut",
+        "merchant_center": "… 4 chars of the published artifact (JSON), cut",
+        "acp": "… 4 chars of the published artifact (JSON), cut",
+        "ucp_uip": "… 4 chars of the published artifact (JSON), cut",
+        "deals_api": "… 151 chars of the published artifact (JSON), cut",
+        "mcp": "… 151 chars of the published artifact (JSON), cut",
+        "deal_directory": "… 151 chars of the published artifact (JSON), cut"
+      },
+      "listing_id": 90,
+      "product_url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "published_at": "2026-09-04T20:49:40.991623+00:00",
+      "variant_ids": [
+        "snug-fit-diapers-s1-small",
+        "snug-fit-diapers-s1-big",
+        "snug-fit-diapers-s2-small",
+        "snug-fit-diapers-s2-big",
+        "snug-fit-diapers-s3-small",
+        "snug-fit-diapers-s3-big",
+        "snug-fit-diapers-s4-small",
+        "snug-fit-diapers-s4-big",
+        "snug-fit-diapers-s5-small",
+        "snug-fit-diapers-s5-big",
+        "snug-fit-diapers-s6-small",
+        "snug-fit-diapers-s6-big"
+      ],
+      "gtins": [
+        "884400137609",
+        "884400528827",
+        "884400046246",
+        "884400937353"
+      ],
+      "provenance": "published",
+      "provenance_basis": "merchant"
+    }
+  ],
+  "lastVerified": "2026-08-24T22:35:04.189910Z",
+  "provenance": {
+    "merchant_source": "published",
+    "listings": {
+      "scrape": 0,
+      "published": 5
+    }
+  },
+  "divergences": [
+    "Assembled by soa from supply's channels, publications, catalog, per-channel verifications and provenance; supply has no single Command Center payload.",
+    "Products are the published catalog's listings: a listing never published is not a row (the web app's schema-org spine has the same limit).",
+    "TsCell.s: published, compiled (compiled, validated, withdrawn), blocked (failed), not_published (no publication), na (a channel this tenant is not connected to, with connected: false beside).",
+    "TsCell.d comes from the newest fetch_probe at or after the publish only: drift when it has findings, none when it has none, unverified otherwise (and on every acceptance channel).",
+    "acceptance (merchant_center from gmc_diagnostics, manufacturer_center from mc_acceptance) and origin ('parleo' | 'gmc_sync', manufacturer_center only) ride beside the typed cell.",
+    "provenance per product is the merchant's mix when it is all one source; mixed, a listing with a publication is 'published' and the rest 'scrape' (provenance_basis says which).",
+    "ValidatorLine.verdict: validation errors are 'conflict'; expressiveness dropped -> dropped, approximated -> approx, checkout_scope and info -> info; a valid record with no flags is one 'ok'."
+  ]
+}
+```
+
+### GET /api/console/catalog?merchant=wiggle-and-snug (2C, hosted, 2 of 19 rows)
+
+```json
+{
+  "merchant": "wiggle-and-snug",
+  "source": "hosted",
+  "read_only": true,
+  "note": "Hosted on Parleo: this catalog comes from the store config. Edit it there; no feed upload applies.",
+  "version": null,
+  "rows": [
+    {
+      "gtin": null,
+      "variant_id": "snug-fit-diapers-s1-small",
+      "product_name": "Snug-Fit Diapers",
+      "brand_name": "Wiggle & Snug",
+      "variant_label": "Snug-Fit Diapers Size 1 — Small Pack (96 ct)",
+      "size": "Size 1",
+      "pack_count": 96,
+      "multipack": null,
+      "price": "17.99",
+      "currency": "USD",
+      "published_at": "2026-09-04T20:49:40.991623+00:00",
+      "product_url": "https://trueshopstore.com/products/snug-fit-diapers"
+    },
+    {
+      "gtin": null,
+      "variant_id": "snug-fit-diapers-s1-big",
+      "product_name": "Snug-Fit Diapers",
+      "brand_name": "Wiggle & Snug",
+      "variant_label": "Snug-Fit Diapers Size 1 — Big Pack (198 ct)",
+      "size": "Size 1",
+      "pack_count": 198,
+      "multipack": null,
+      "price": "31.99",
+      "currency": "USD",
+      "published_at": "2026-09-04T20:49:40.991623+00:00",
+      "product_url": "https://trueshopstore.com/products/snug-fit-diapers"
+    }
+  ],
+  "versions": []
+}
+```
+
+### POST /api/console/catalog/validate?merchant=brandco (2C)
+
+Brandco is soa's external test fake; supply's preview is shaped by its `feed/validate.py`.
+
+```json
+{
+  "_note": "supply POST /api/truesync/merchants/brandco/feed/validate, shaped by truesync/feed/validate.py (supply b3f261e); Brandco is soa's test fake.",
+  "upload_id": "up_7f3c2a",
+  "merchant": "brandco",
+  "summary": {
+    "rows": 3,
+    "ready": 1,
+    "warning": 1,
+    "error": 1,
+    "file_errors": 0,
+    "forms": [
+      "wide"
+    ],
+    "reachability_checked": false,
+    "incentives": null
+  },
+  "file_errors": [],
+  "rows": [
+    {
+      "row_number": 2,
+      "sheet": "skus",
+      "gtin_as_given": "012345678905",
+      "gtin": "00012345678905",
+      "product_name": "Brandco Wipes",
+      "brand_name": "Brandco",
+      "variant_label": "72 ct",
+      "pack_count": 72,
+      "multipack": null,
+      "size_value": null,
+      "size_unit": null,
+      "price": "4.99",
+      "currency": "USD",
+      "description": null,
+      "image_url": null,
+      "retailers": [
+        {
+          "domain": "target.com",
+          "url": "https://www.target.com/p/2"
+        }
+      ],
+      "messages": [
+        {
+          "code": "multipack_suggested",
+          "severity": "warning",
+          "field": "multipack",
+          "message": "page shows a count but multipack is empty: target.com shows 3, 216, the row says pack_count 72; multipack 3 would explain it",
+          "source": "soa",
+          "suggested": 3
+        }
+      ],
+      "status": "warning"
+    },
+    {
+      "row_number": 3,
+      "sheet": "skus",
+      "gtin_as_given": "012345678912",
+      "gtin": "00012345678912",
+      "product_name": "Brandco Diapers Size 3",
+      "brand_name": "Brandco",
+      "variant_label": "84 ct",
+      "pack_count": 84,
+      "multipack": null,
+      "size_value": null,
+      "size_unit": null,
+      "price": "22.99",
+      "currency": "USD",
+      "description": null,
+      "image_url": null,
+      "retailers": [
+        {
+          "domain": "target.com",
+          "url": "https://www.target.com/p/3"
+        }
+      ],
+      "messages": [],
+      "status": "ready"
+    },
+    {
+      "row_number": 4,
+      "sheet": "skus",
+      "gtin_as_given": "01234567891",
+      "gtin": "00001234567891",
+      "product_name": "Brandco Balm",
+      "brand_name": "Brandco",
+      "variant_label": "4 oz",
+      "pack_count": null,
+      "multipack": null,
+      "size_value": null,
+      "size_unit": null,
+      "price": "9.99",
+      "currency": "USD",
+      "description": null,
+      "image_url": null,
+      "retailers": [
+        {
+          "domain": "target.com",
+          "url": "https://www.target.com/p/4"
+        }
+      ],
+      "messages": [
+        {
+          "code": "gtin_check_digit",
+          "severity": "error",
+          "field": "gtin",
+          "message": "the GTIN's check digit is wrong"
+        }
+      ],
+      "status": "error"
+    }
+  ],
+  "incentives": null,
+  "reference_checked": true
 }
 ```
 

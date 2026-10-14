@@ -646,6 +646,184 @@ def build_catalog(merchant: str, *, feed: Optional[dict], history: List[dict], h
             'version': feed.get('version'), 'rows': feed.get('rows') or [], 'versions': history or []}
 
 
+# ─── TrueSync matrix (2C) ──────────────────────────────────────────────────
+#
+# The Command Center matrix, assembled server-side from what the soa web
+# app's MerchantCommandCenter.jsx reads in the browser (supply has no single
+# endpoint for it): channels, publications, the published catalog, one
+# verifications read per channel, and the merchant's provenance mix. The
+# cell rules are verificationModel.js's (docs/verification-semantics.md):
+# publish state, drift, acceptance and last verified are four separate
+# things, and a record older than the cell's latest publish counts for
+# nothing.
+
+#: publication.status -> the console's CellState.
+TS_CELL = {'published': 'published', 'compiled': 'compiled', 'validated': 'compiled',
+           'compiled_not_published': 'compiled', 'withdrawn': 'compiled', 'failed': 'blocked'}
+#: ExpressivenessFlag.severity -> ValidatorLine.verdict.
+TS_VALIDATOR = {'dropped': 'dropped', 'approximated': 'approx', 'checkout_scope': 'info', 'info': 'info'}
+#: Manufacturer Center acceptance (supply truesync/channels/manufacturer_center/diagnostics.py).
+MC_STATES = ('approved', 'pending', 'disapproved', 'not_found', 'unavailable')
+TS_DIVERGENCES = [
+    "Assembled by soa from supply's channels, publications, catalog, per-channel verifications and "
+    "provenance; supply has no single Command Center payload.",
+    "Products are the published catalog's listings: a listing never published is not a row (the web "
+    "app's schema-org spine has the same limit).",
+    "TsCell.s: published, compiled (compiled, validated, withdrawn), blocked (failed), not_published "
+    "(no publication), na (a channel this tenant is not connected to, with connected: false beside).",
+    "TsCell.d comes from the newest fetch_probe at or after the publish only: drift when it has "
+    "findings, none when it has none, unverified otherwise (and on every acceptance channel).",
+    "acceptance (merchant_center from gmc_diagnostics, manufacturer_center from mc_acceptance) and "
+    "origin ('parleo' | 'gmc_sync', manufacturer_center only) ride beside the typed cell.",
+    "provenance per product is the merchant's mix when it is all one source; mixed, a listing with a "
+    "publication is 'published' and the rest 'scrape' (provenance_basis says which).",
+    "ValidatorLine.verdict: validation errors are 'conflict'; expressiveness dropped -> dropped, "
+    "approximated -> approx, checkout_scope and info -> info; a valid record with no flags is one 'ok'.",
+]
+
+
+def _ts(value) -> str:
+    return _iso(value) or ''
+
+
+def _newest(rows, key='created_at'):
+    rows = [r for r in rows if r]
+    return max(rows, key=lambda r: (_ts(r.get(key)), r.get('id') or 0)) if rows else None
+
+
+def _validator(publication: Optional[dict]) -> List[dict]:
+    if not publication:
+        return []
+    lines = []
+    validation = publication.get('validation') or {}
+    for err in validation.get('errors') or []:
+        lines.append({'field': 'record', 'verdict': 'conflict', 'note': str(err)})
+    for flag in publication.get('expressiveness') or []:
+        lines.append({'field': flag.get('field') or '', 'verdict': TS_VALIDATOR.get(flag.get('severity'), 'info'),
+                      'note': flag.get('note') or ''})
+    if not lines and validation.get('ok', True):
+        lines.append({'field': 'record', 'verdict': 'ok', 'note': f"valid against {publication.get('spec_version') or 'the spec'}"})
+    return lines
+
+
+def _acceptance(channel: str, records: List[dict]) -> tuple:
+    """(acceptance, origin) from the newest acceptance record."""
+    if channel == 'manufacturer_center':
+        rec = _newest([r for r in records if r.get('method') == 'mc_acceptance'])
+        if rec is None:
+            return None, None
+        drift = rec.get('drift') or {}
+        state = drift.get('acceptance') if drift.get('acceptance') in MC_STATES else 'unavailable'
+        return state, drift.get('origin')
+    if channel == 'merchant_center':
+        rec = _newest([r for r in records if r.get('method') == 'gmc_diagnostics'])
+        if rec is None:
+            return None, None
+        drift = rec.get('drift') or {}
+        if drift.get('httpStatus') == 404:
+            return 'not_found', None
+        if drift.get('approved') is True:
+            return 'approved', None
+        return ('disapproved' if drift.get('issues') else 'pending'), None
+    return None, None
+
+
+def build_truesync(merchant: str, *, channels: List[dict], publications: List[dict], catalog: dict,
+                   verifications: Dict[str, dict], provenance: Optional[dict]) -> dict:
+    channel_list = [c for c in channels or [] if c.get('is_active', True)]
+    listings = catalog.get('listings') or []
+    listing_ids = {l.get('listing_id') for l in listings}
+    pubs: Dict[tuple, dict] = {}
+    for pub in publications or []:
+        if pub.get('listing_id') not in listing_ids:
+            continue
+        key = (pub['listing_id'], pub.get('channel_slug'))
+        best = pubs.get(key)
+        if best is None or (_ts(pub.get('compiled_at')), pub.get('id') or 0) > (_ts(best.get('compiled_at')), best.get('id') or 0):
+            pubs[key] = pub
+    records: Dict[tuple, List[dict]] = {}
+    for channel, envelope in (verifications or {}).items():
+        for entry in (envelope or {}).get('listings') or []:
+            for v in entry.get('verifications') or []:
+                records.setdefault((entry.get('listing_id'), v.get('channel_slug') or channel), []).append(v)
+
+    mix = (provenance or {}).get('listings') or {}
+    scraped, published_n = mix.get('scrape', 0) or 0, mix.get('published', 0) or 0
+
+    products, last_verified = [], ''
+    for listing in listings:
+        lid = listing.get('listing_id')
+        variants = listing.get('variants') or []
+        gtins = [v.get('gtin') for v in variants if v.get('gtin')]
+        cells, validator, payload = {}, {}, {}
+        any_pub = False
+        for ch in channel_list:
+            slug = ch['slug']
+            pub = pubs.get((lid, slug))
+            any_pub = any_pub or pub is not None
+            published_at = _ts((pub or {}).get('published_at') or (pub or {}).get('compiled_at'))
+            fresh = [r for r in records.get((lid, slug), []) if _ts(r.get('created_at')) >= published_at]
+            probe = _newest([r for r in fresh if r.get('method') in ('fetch_probe', 'live_fetch')])
+            findings = ((probe or {}).get('drift') or {}).get('findings')
+            probe_ok = probe is not None and ((probe.get('drift') or {}).get('outcome') in (None, 'ok', 'drift')) \
+                and isinstance(findings, list)
+            drift = ('drift' if findings else 'none') if probe_ok else 'unverified'
+            acceptance, origin = _acceptance(slug, fresh if pub else records.get((lid, slug), []))
+            newest = _newest(fresh)
+            if newest and _ts(newest.get('created_at')) > last_verified:
+                last_verified = _ts(newest.get('created_at'))
+            connected = ch.get('connected')
+            if connected is False:
+                state, note = 'na', 'not connected'
+            elif pub is None:
+                state, note = 'not_published', None
+            else:
+                state = TS_CELL.get(pub.get('status'), 'compiled')
+                note = 'withdrawn' if pub.get('status') == 'withdrawn' else pub.get('error') or \
+                    ('; '.join((pub.get('validation') or {}).get('errors') or []) or None)
+            cell = compact({'s': state, 'd': drift, 'n': len(findings) if probe_ok and findings else None,
+                            'at': _ts(newest.get('created_at')) if newest else None, 'note': note,
+                            # beside the typed fields
+                            'publication_id': (pub or {}).get('id'), 'status': (pub or {}).get('status'),
+                            'published_at': (pub or {}).get('published_at'), 'acceptance': acceptance,
+                            'origin': origin, 'connected': connected,
+                            'external_ref': (pub or {}).get('external_ref')},
+                           ('n', 'at', 'note'))
+            cells[slug] = cell
+            validator[slug] = _validator(pub)
+            if pub is not None:
+                payload[slug] = json.dumps(pub.get('payload'), indent=2, ensure_ascii=False)
+        if scraped and not published_n:
+            provenance_of, basis = 'scrape', 'merchant'
+        elif published_n and not scraped:
+            provenance_of, basis = 'published', 'merchant'
+        else:
+            provenance_of, basis = ('published' if any_pub else 'scrape'), ('publication' if (scraped or published_n) else 'unknown')
+        products.append({
+            'sku': str(listing.get('product_id') or lid), 'name': listing.get('title') or f"Listing {lid}",
+            'sub': ' · '.join(x for x in (listing.get('brand'), f"{len(variants)} variants") if x),
+            'variants': f"{len(variants)} variants", **({'gtin': gtins[0]} if gtins else {}),
+            'cells': cells, 'validator': validator, 'payload': payload,
+            # beside the typed fields
+            'listing_id': lid, 'product_url': listing.get('product_url'), 'published_at': _iso(listing.get('published_at')),
+            'variant_ids': [v.get('variant_id') for v in variants if v.get('variant_id')], 'gtins': gtins,
+            'provenance': provenance_of, 'provenance_basis': basis,
+        })
+    return {
+        'merchant': merchant,
+        'channels': [compact({'id': c['slug'], 'name': c.get('name') or c['slug'], 'short': c.get('name') or c['slug'],
+                              'spec': c.get('spec_version') or '',
+                              # beside the typed fields
+                              'verification_surface': c.get('verification_surface'),
+                              'extension_status': c.get('extension_status'), 'connected': c.get('connected'),
+                              'depth_label': c.get('depth_label')}, ()) for c in channel_list],
+        'products': products,
+        'lastVerified': last_verified or None,
+        'provenance': {'merchant_source': (provenance or {}).get('merchant_source'), 'listings': mix},
+        'divergences': TS_DIVERGENCES,
+    }
+
+
 # ─── Accessibility ─────────────────────────────────────────────────────────
 
 def accessibility_from_supply(payload: Optional[dict]) -> dict:
