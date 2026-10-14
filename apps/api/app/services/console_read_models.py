@@ -69,8 +69,11 @@ ANSWER_DIVERGENCES = [
     "which the console's union does not have yet (2C-0).",
     "Answer.agent can be 'claude', which the console's AgentId does not have yet (2C-0 adds it).",
     "Segment.mark 'miss' marks a partial or stale claim; the console labels miss 'left out'.",
-    "Extra fields beside the typed ones: platform, surface, collector, answer_status, tier, "
-    "verdict, tone, brand_verdict, flags, cycle.",
+    "Extra fields beside the typed ones: platform, answer_status, tier, verdict, tone, "
+    "brand_verdict, flags, flag_details, cycle, reason (the outcome's rule code).",
+    "Check.reason (2C) is the classifier's rule code (other_brand, not_our_product, "
+    "variant_clash, product_inferred, variant_swap); Check.note is prose only.",
+    "Answer.surface (api | grounded_api | consumer_ui) and Answer.collector are typed from 2C.",
 ]
 
 
@@ -120,6 +123,16 @@ def _severity(outcome, brand: bool, flags) -> str:
                 'acknowledged_unknown': 'medium', 'absent': 'low'}.get(outcome, 'low')
     return {'wrong': 'high', 'partial': 'medium', 'stale': 'medium', 'unverifiable': 'low',
             'absent': 'low', 'exact': 'ok', 'unscoreable': 'low'}.get(outcome, 'low')
+
+
+#: 2C: the classifier's reason codes (scoring/expectation_comparator.py
+#: REASON_*), carried in Check.reason and Answer.reason. A code soa adds
+#: later passes through verbatim; the console renders an unknown one neutral.
+REASON_CODES = ('other_brand', 'not_our_product', 'variant_clash', 'product_inferred', 'variant_swap')
+
+
+def _reason_code(value) -> Optional[str]:
+    return value if isinstance(value, str) and value else None
 
 
 def _claim_text(claim) -> str:
@@ -216,16 +229,20 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     if not brand and outcome is not None:
         for claim in claims:
             mapped = VALUE_VERDICT.get(claim.get('outcome'), claim.get('outcome'))
+            # 2C: the rule that decided the claim is `reason` (a code from
+            # REASON_CODES); `note` keeps the prose.
             checks.append(compact({'claim': _claim_text(claim), 'agent': AGENT_NAMES.get(agent, agent),
                                    'live': _live(claim, expectation), 'verdict': mapped,
                                    'note': claim.get('reason') or claim.get('conflict'),
-                                   'tone': VERDICT_TONE.get(mapped, 'neu')}, ('note',)))
+                                   'reason': _reason_code(claim.get('reason_code')),
+                                   'tone': VERDICT_TONE.get(mapped, 'neu')}, ('note', 'reason')))
         if not claims:
             checks.append(compact({'claim': '—', 'agent': AGENT_NAMES.get(agent, agent),
                                    'live': money(expectation.get('amount'), expectation.get('currency'))
                                    if expectation.get('amount') else '—',
                                    'verdict': verdict, 'note': outcome.get('outcome_reason'),
-                                   'tone': VERDICT_TONE.get(verdict, 'neu')}, ('note',)))
+                                   'reason': _reason_code(outcome.get('reason_code')),
+                                   'tone': VERDICT_TONE.get(verdict, 'neu')}, ('note', 'reason')))
 
     named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99)]
     first = next((m['name'] for m in mentions if m.get('position') == 1), '')
@@ -251,12 +268,106 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'collector': run.get('collector') or surfaces.collector_of(platform),
         'answer_status': run.get('answer_status'),
         'tier': tier,
+        'reason': _reason_code((outcome or {}).get('reason_code')),
         'verdict': verdict,
         'tone': BRAND_TONE.get(raw, 'neu') if brand else VERDICT_TONE.get(verdict, 'neu'),
         'brand_verdict': brand_verdict,
         'flags': [f.get('flag') for f in flags],
         'flag_details': flags,
-    }, ('runs',))
+    }, ('runs', 'reason'))
+
+
+# ─── Answers summary (2C) ──────────────────────────────────────────────────
+
+#: Outcomes an accuracy is taken over (soa_shared/surface_accuracy.py SCORED).
+#: absent, unscoreable and unverifiable are counted and stay outside it.
+SUMMARY_SCORED = ('exact', 'partial', 'stale', 'wrong')
+SUMMARY_FLAGS = ('fabricated_citation', 'fabricated_availability', 'variant_swap')
+
+
+def _summary_cell(rows: List[dict]) -> dict:
+    counts: Counter = Counter()
+    flags: Counter = Counter()
+    other_brand = 0
+    answered = 0
+    for r in rows:
+        if r.get('answer_status') in (None, 'answered'):
+            answered += 1
+        outcome = r.get('outcome')
+        counts[outcome or 'not_scored'] += 1
+        if outcome == 'absent' and r.get('reason_code') == 'other_brand':
+            other_brand += 1
+        for f in _json(r.get('flags')) or []:
+            name = f.get('flag') if isinstance(f, dict) else f
+            if name:
+                flags[name] += 1
+    scored = sum(counts.get(o, 0) for o in SUMMARY_SCORED)
+    return {
+        'runs': len(rows),
+        'answered': answered,
+        'counts': dict(counts),
+        'scored': scored,
+        'accuracy': round(counts.get('exact', 0) / scored, 4) if scored else None,
+        'unverifiable': counts.get('unverifiable', 0),
+        'answered_with_other_brand': other_brand,
+        'flags': {name: flags.get(name, 0) for name in SUMMARY_FLAGS},
+    }
+
+
+def _surface_key(row: dict) -> str:
+    return row.get('surface') or surfaces.surface_of(row.get('platform')) or 'unlabelled'
+
+
+def _ordered_surfaces(keys) -> List[str]:
+    keys = set(keys)
+    return [s for s in surfaces.SURFACE_KINDS if s in keys] + sorted(k for k in keys if k not in surfaces.SURFACE_KINDS)
+
+
+def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
+    """
+    /api/console/answers/summary: per tier and per surface, every outcome
+    counted, `unverifiable` on its own, and `answered_with_other_brand` (an
+    absent whose reason is other_brand: the answer priced another brand's
+    product in place of ours). One row per run; a run with no outcome
+    counts as `not_scored`.
+
+    Never pooled across surfaces: there is no all-surfaces total, by tier or
+    overall, by design (soa_shared/surface_accuracy.py). `surfaces` is per
+    surface across the value tiers; brand-direct, whose outcomes are not a
+    price verdict, is only in `tiers`.
+
+    rows: [{tier, surface, platform, answer_status, outcome, reason_code, flags}]
+    """
+    by_tier: Dict[str, List[dict]] = {}
+    for r in rows:
+        by_tier.setdefault(r.get('tier') or 'untiered', []).append(r)
+    tier_order = [t for t in TIER_LABELS if t in by_tier] + sorted(t for t in by_tier if t not in TIER_LABELS)
+
+    def per_surface(subset: List[dict]) -> List[dict]:
+        grouped: Dict[str, List[dict]] = {}
+        for r in subset:
+            grouped.setdefault(_surface_key(r), []).append(r)
+        return [{'surface': k, 'label': surfaces.SURFACE_LABELS.get(k, k), **_summary_cell(grouped[k])}
+                for k in _ordered_surfaces(grouped)]
+
+    value_rows = [r for r in rows if r.get('tier') != 'brand_direct']
+    return {
+        'cycle': cycle_code,
+        'surfaces': per_surface(value_rows),
+        'tiers': [{'tier': t, 'label': TIER_LABELS.get(t, t), 'surfaces': per_surface(by_tier[t])}
+                  for t in tier_order],
+    }
+
+
+def load_answers_summary(conn, cycle: dict) -> dict:
+    rows = [dict(r) for r in conn.execute(text("""
+        SELECT r.id AS run_id, r.platform, COALESCE(o.surface, r.surface) AS surface,
+               r.answer_status, q.tier, o.outcome, o.reason_code, o.flags
+        FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
+        LEFT JOIN soa_expectation_outcomes o ON o.run_id = r.id
+        WHERE r.cycle_id = :c
+    """), {'c': cycle['id']}).mappings()]
+    return build_answers_summary(rows, cycle_code=cycle['cycle_code'])
 
 
 # ─── TrueValue ─────────────────────────────────────────────────────────────

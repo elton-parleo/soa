@@ -11,6 +11,7 @@ endpoints are untouched.
 
     GET /api/console/surfaces                      the modal's surface list
     GET /api/console/answers?cycle=<code>          Answer[]
+    GET /api/console/answers/summary?cycle=<code>  per tier x surface counts, never pooled (2C)
     GET /api/console/true-value?cycle=<code>       TrueValue
     GET /api/console/accessibility?merchant=<slug> Accessibility (from supply)
     GET /api/console/studies?cycle=<code>          StudyRow[]
@@ -57,6 +58,15 @@ def get_answers(cycle: str = Query(...), scope: CustomerScope = Depends(console_
     row = cycle_in_scope(cycle, scope)
     with engine.connect() as conn:
         return rm.load_answers(conn, dict(row))
+
+
+@router.get("/answers/summary")
+def get_answers_summary(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+    """2C: per tier and per surface, every outcome counted, unverifiable on
+    its own, and answered_with_other_brand. Never pooled across surfaces."""
+    row = cycle_in_scope(cycle, scope)
+    with engine.connect() as conn:
+        return rm.load_answers_summary(conn, dict(row))
 
 
 def _label_from_question(query_text: str) -> str:

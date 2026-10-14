@@ -1,4 +1,4 @@
-# Console read models (2B)
+# Console read models (2B, 2C)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -31,6 +31,7 @@ Lists (`runs`, `studio/*`) return only the scope's rows.
 |---|---|---|
 | `GET /api/console/surfaces` | the surface list the modal shows | — (soa) |
 | `GET /api/console/answers?cycle=<code>` | one per run | `Answer[]` |
+| `GET /api/console/answers/summary?cycle=<code>` | per tier and per surface: every outcome, `unverifiable`, `answered_with_other_brand` (2C) | — (soa) |
 | `GET /api/console/true-value?cycle=<code>` | variants x retailers | `TrueValue` |
 | `GET /api/console/accessibility?merchant=<slug>` | supply's access payload | `Accessibility` |
 | `GET /api/console/studies?cycle=<code>` | question x agent | `StudyRow[]` |
@@ -61,7 +62,8 @@ never `null`.
 | `summary` | the outcome's reason |
 | `paragraphs: Segment[][]` | the extraction's **stored spans**, verbatim, found in the answer in order; gaps are unmarked segments; a blank line starts a paragraph. A span carrying a price claim gets `mark` (exact → `ok`, wrong → `wrong`, partial/stale → `miss`) and `ann` = that claim's 1-based index in `checks`. No stored spans (an extraction from before the segmenter): the answer's own paragraphs, unmarked |
 | `named`, `first` | Layer 1 (`soa_coded_mentions`, mentioned, by position) |
-| `checks: Check[]` | one per price claim (`claim_results`): `claim` = stated price and product, `live` = what it was judged against (the page's price at its domain, or the record), `verdict` as below, `note` = the reason. No claim: one Check with `claim: "—"` |
+| `checks: Check[]` | one per price claim (`claim_results`): `claim` = stated price and product, `live` = what it was judged against (the page's price at its domain, or the record), `verdict` as below, `note` = the reason in prose, `reason` = the rule code that decided the claim (2C, below). No claim: one Check with `claim: "—"`, whose `reason` is the outcome's rule code |
+| `surface`, `collector` (2C, typed) | the run's surface kind (`api`, `grounded_api`, `consumer_ui`) and the collector that fetched it (`openai`, `google_genai`, `serpapi`…), from `soa_runs`, else `soa_shared/surfaces.py` |
 
 **Verdict mapping** (`Answer.verdict`, `Check.verdict`) — explicit, not lossy:
 
@@ -80,8 +82,44 @@ acknowledged_unknown`, plus absent and unscoreable) travel in **`brand_verdict`*
 `verdict` is `null` on those rows. `fabricated_citation`, `fabricated_availability`
 and `variant_swap` are in **`flags[]`** (evidence in `flag_details`).
 
-Extras: `cycle, platform, surface, collector, answer_status, tier, verdict, tone,
-brand_verdict, flags, flag_details`.
+Extras: `cycle, platform, answer_status, tier, reason, verdict, tone,
+brand_verdict, flags, flag_details`. `reason` on the answer is the outcome's rule code
+(`soa_expectation_outcomes.reason_code`), omitted when no rule decided it.
+
+**Reason codes** (2C, `Check.reason`, `Answer.reason`): the classifier's
+(`scoring/expectation_comparator.py` `REASON_*`), verbatim. Before 2C they were
+not sent at all; `note` carried the prose only, which the 2C-0 console could not
+read a rule from.
+
+| code | rule |
+|---|---|
+| `other_brand` | the only price was another brand's product; dropped, so the answer stated none for ours (`absent`) |
+| `not_our_product` | the price was for a product that is not ours (`absent`) |
+| `variant_clash` | our product, a variant the record does not have (`wrong`) |
+| `variant_swap` | the price was for a sibling variant, judged against it |
+| `product_inferred` | a price attached to no product; never scored wrong (`unscoreable`) |
+
+A code soa adds later passes through verbatim; the console renders an unknown one neutral.
+
+### Answers summary (2C)
+
+`GET /api/console/answers/summary?cycle=<code>`, `build_answers_summary` in
+`console_read_models.py`. One row per run of the cycle; a run with no outcome counts
+as `not_scored`.
+
+| field | meaning |
+|---|---|
+| `surfaces[]` | one entry per surface kind (`api`, `grounded_api`, `consumer_ui`) across the value tiers. Brand-direct outcomes are not a price verdict and are only under `tiers` |
+| `tiers[].surfaces[]` | the same entry per tier (`brand_direct`, `catalog_accuracy`, `value_incentives`, `category_control`) and surface |
+| `runs`, `answered` | runs, and runs whose `answer_status` is `answered` |
+| `counts` | every outcome verbatim (`exact`, `wrong`, `partial`, `stale`, `absent`, `unverifiable`, `unscoreable`, the brand outcomes, `not_scored`) |
+| `scored`, `accuracy` | exact + partial + stale + wrong, and exact / scored (`null` when nothing was scored). `unverifiable`, `absent` and `unscoreable` are outside it |
+| `unverifiable` | its own count, never in a denominator |
+| `answered_with_other_brand` | `absent` with `reason_code: other_brand` |
+| `flags` | runs carrying `fabricated_citation`, `fabricated_availability`, `variant_swap` |
+
+There is no all-surfaces total, by tier or overall: an accuracy averaged across a
+model-only API, a grounded API and a consumer UI describes none of them.
 
 ### TrueValue
 
@@ -164,7 +202,9 @@ when the org has never run one. Scoped like every console read.
 - Check.verdict uses the same mapping, so it can hold stale / unverifiable / unscoreable, which the console's union does not have yet (2C-0).
 - Answer.agent can be 'claude', which the console's AgentId does not have yet (2C-0 adds it).
 - Segment.mark 'miss' marks a partial or stale claim; the console labels miss 'left out'.
-- Extra fields beside the typed ones: platform, surface, collector, answer_status, tier, verdict, tone, brand_verdict, flags, cycle.
+- Extra fields beside the typed ones: platform, answer_status, tier, verdict, tone, brand_verdict, flags, flag_details, cycle, reason (the outcome's rule code).
+- Check.reason (2C) is the classifier's rule code (other_brand, not_our_product, variant_clash, product_inferred, variant_swap); Check.note is prose only.
+- Answer.surface (api | grounded_api | consumer_ui) and Answer.collector are typed from 2C.
 
 ## The studio.ts mirror, field by field
 
@@ -297,7 +337,7 @@ store; no customer data. Arrays are cut to their first entries.
 }
 ```
 
-### GET /api/console/answers?cycle=WS-2B-FIXTURE (2 of 8)
+### GET /api/console/answers?cycle=WS-2B-FIXTURE (3 of 8)
 
 ```json
 [
@@ -346,6 +386,56 @@ store; no customer data. Arrays are cut to their first entries.
     "platform": "gemini_grounded",
     "surface": "grounded_api",
     "collector": "google_genai",
+    "answer_status": "answered",
+    "tier": "catalog_accuracy",
+    "verdict": "wrong",
+    "tone": "bad",
+    "brand_verdict": null,
+    "flags": [],
+    "flag_details": []
+  },
+  {
+    "id": "run-1005",
+    "agent": "chatgpt",
+    "query": "What does the Wiggle & Snug Snug-Fit Diapers Size 3 small pack cost?",
+    "queryType": "Catalog accuracy",
+    "runAt": "2026-10-09T15:00:00+00:00",
+    "runs": "run 1 of 1",
+    "severity": "high",
+    "summary": "stated 9.99; we have never published that (current: 22.99)",
+    "paragraphs": [
+      [
+        {
+          "t": "The **Size 3 small pack** costs **$9.99** — that’s **$0.40 per diaper** for the 25-count pack. ([target.com](https://www.target.com/p/-/A-94793999?utm_source=openai))",
+          "mark": "wrong",
+          "ann": 1
+        }
+      ]
+    ],
+    "named": [],
+    "first": "",
+    "checks": [
+      {
+        "claim": "$9.99 for Size 3 small pack",
+        "agent": "ChatGPT",
+        "live": "$22.99",
+        "verdict": "wrong",
+        "tone": "bad"
+      },
+      {
+        "claim": "$0.40 for the 25-count pack",
+        "agent": "ChatGPT",
+        "live": "—",
+        "verdict": "wrong",
+        "note": "names a sibling variant, and the record has no such variant",
+        "reason": "variant_clash",
+        "tone": "bad"
+      }
+    ],
+    "cycle": "WS-2B-FIXTURE",
+    "platform": "chatgpt",
+    "surface": "grounded_api",
+    "collector": "openai",
     "answer_status": "answered",
     "tier": "catalog_accuracy",
     "verdict": "wrong",
@@ -433,6 +523,126 @@ store; no customer data. Arrays are cut to their first entries.
     ]
   }
 ]
+```
+
+### GET /api/console/answers/summary?cycle=WS-2B-FIXTURE (2C)
+
+The fixture has no `other_brand` answer, so `answered_with_other_brand` is 0 here; the
+r30 verdict golden (`tests/test_console_read_models.py`) is the case that counts one.
+
+```json
+{
+  "cycle": "WS-2B-FIXTURE",
+  "surfaces": [
+    {
+      "surface": "grounded_api",
+      "label": "API with search grounding",
+      "runs": 5,
+      "answered": 5,
+      "counts": {
+        "exact": 1,
+        "wrong": 4
+      },
+      "scored": 5,
+      "accuracy": 0.2,
+      "unverifiable": 0,
+      "answered_with_other_brand": 0,
+      "flags": {
+        "fabricated_citation": 0,
+        "fabricated_availability": 0,
+        "variant_swap": 0
+      }
+    },
+    {
+      "surface": "consumer_ui",
+      "label": "Consumer UI, logged out",
+      "runs": 1,
+      "answered": 0,
+      "counts": {
+        "absent": 1
+      },
+      "scored": 0,
+      "accuracy": null,
+      "unverifiable": 0,
+      "answered_with_other_brand": 0,
+      "flags": {
+        "fabricated_citation": 0,
+        "fabricated_availability": 0,
+        "variant_swap": 0
+      }
+    }
+  ],
+  "tiers": [
+    {
+      "tier": "brand_direct",
+      "label": "Brand-direct",
+      "surfaces": [
+        {
+          "surface": "grounded_api",
+          "label": "API with search grounding",
+          "runs": 2,
+          "answered": 2,
+          "counts": {
+            "grounded": 1,
+            "acknowledged_unknown": 1
+          },
+          "scored": 0,
+          "accuracy": null,
+          "unverifiable": 0,
+          "answered_with_other_brand": 0,
+          "flags": {
+            "fabricated_citation": 1,
+            "fabricated_availability": 0,
+            "variant_swap": 0
+          }
+        }
+      ]
+    },
+    {
+      "tier": "catalog_accuracy",
+      "label": "Catalog accuracy",
+      "surfaces": [
+        {
+          "surface": "grounded_api",
+          "label": "API with search grounding",
+          "runs": 5,
+          "answered": 5,
+          "counts": {
+            "exact": 1,
+            "wrong": 4
+          },
+          "scored": 5,
+          "accuracy": 0.2,
+          "unverifiable": 0,
+          "answered_with_other_brand": 0,
+          "flags": {
+            "fabricated_citation": 0,
+            "fabricated_availability": 0,
+            "variant_swap": 0
+          }
+        },
+        {
+          "surface": "consumer_ui",
+          "label": "Consumer UI, logged out",
+          "runs": 1,
+          "answered": 0,
+          "counts": {
+            "absent": 1
+          },
+          "scored": 0,
+          "accuracy": null,
+          "unverifiable": 0,
+          "answered_with_other_brand": 0,
+          "flags": {
+            "fabricated_citation": 0,
+            "fabricated_availability": 0,
+            "variant_swap": 0
+          }
+        }
+      ]
+    }
+  ]
+}
 ```
 
 ### GET /api/console/true-value?cycle=WS-2B-FIXTURE

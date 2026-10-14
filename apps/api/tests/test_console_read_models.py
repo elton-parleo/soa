@@ -185,7 +185,7 @@ def as_(user):
     app.dependency_overrides[verify_token] = lambda: {"sub": user, "email": f"{user}@test"}
 
 
-CYCLE_ENDPOINTS = ['answers', 'true-value', 'studies', 'accuracy']
+CYCLE_ENDPOINTS = ['answers', 'answers/summary', 'true-value', 'studies', 'accuracy']
 
 
 # ═══ shapes ═══════════════════════════════════════════════════════════════
@@ -207,6 +207,77 @@ def test_answers_are_console_answers(http):
     wall = by_id['run-1008']
     assert wall['verdict'] == 'missed' and wall['answer_status'] == 'no_ai_answer'
     assert wall['surface'] == 'consumer_ui' and wall['agent'] == 'aimode'
+
+
+def test_the_rule_that_decided_a_check_is_its_reason_not_its_note(http):
+    """2C: the classifier's rule code is Check.reason; note is prose only."""
+    as_('alice')
+    by_id = {a['id']: a for a in http.get('/api/console/answers', params={'cycle': CYCLE}).json()}
+    clash = [c for c in by_id['run-1005']['checks'] if c.get('reason')]
+    assert [c['reason'] for c in clash] == ['variant_clash']
+    for answer in by_id.values():
+        for c in answer['checks']:
+            assert c.get('note') not in rm.REASON_CODES
+            assert c.get('reason') is None or c['reason'] in rm.REASON_CODES
+        assert answer['surface'] in ('api', 'grounded_api', 'consumer_ui') and answer['collector']
+
+
+def test_a_check_with_no_claim_carries_the_outcome_s_reason():
+    """The r30 golden: another brand's price, dropped, so the answer stated
+    no price for ours. The one check says so in reason, not in note."""
+    run = {'id': 1, 'platform': 'gemini_grounded', 'run_number': 1, 'run_at': '2026-10-09T15:00:00+00:00',
+           'raw_response': 'Huggies Overnites Size 3 are $15.49.', 'answer_status': 'answered'}
+    outcome = {'outcome': 'absent', 'reason_code': 'other_brand', 'claim_results': [],
+               'expected_answer': {'type': 'price', 'amount': '23.99', 'currency': 'USD'},
+               'outcome_reason': "the answer stated no price for this product; "
+                                 "'Huggies Overnites Size 3' is another brand's", 'flags': []}
+    answer = rm.build_answer(run, {'tier': 'catalog_accuracy', 'query_text': 'q'}, outcome, [],
+                             runs_per_query=1, cycle_code='C')
+    check(answer, 'Answer')
+    assert answer['checks'] == [{'claim': '—', 'agent': 'Gemini', 'live': '$23.99', 'verdict': 'missed',
+                                 'note': outcome['outcome_reason'], 'reason': 'other_brand', 'tone': 'warn'}]
+    assert answer['reason'] == 'other_brand'
+
+
+def test_answers_summary_is_per_tier_and_surface_never_pooled(http):
+    as_('alice')
+    body = http.get('/api/console/answers/summary', params={'cycle': CYCLE}).json()
+    assert body['cycle'] == CYCLE
+    assert [s['surface'] for s in body['surfaces']] == ['grounded_api', 'consumer_ui']
+    grounded = body['surfaces'][0]
+    assert grounded['counts'] == {'exact': 1, 'wrong': 4} and grounded['scored'] == 5
+    assert grounded['accuracy'] == 0.2 and grounded['unverifiable'] == 0
+    assert grounded['answered_with_other_brand'] == 0
+    consumer = body['surfaces'][1]
+    assert consumer['counts'] == {'absent': 1} and consumer['scored'] == 0 and consumer['accuracy'] is None
+    assert consumer['answered'] == 0
+    tiers = {t['tier']: t for t in body['tiers']}
+    assert list(tiers) == ['brand_direct', 'catalog_accuracy']
+    brand = tiers['brand_direct']['surfaces'][0]
+    assert brand['counts'] == {'grounded': 1, 'acknowledged_unknown': 1}
+    assert brand['flags']['fabricated_citation'] == 1 and brand['accuracy'] is None
+    for entry in [*body['surfaces'], *(s for t in body['tiers'] for s in t['surfaces'])]:
+        assert set(entry) >= {'surface', 'runs', 'counts', 'scored', 'accuracy', 'unverifiable',
+                              'answered_with_other_brand', 'flags'}
+    assert 'overall' not in body and 'total' not in body
+
+
+def test_answers_summary_counts_other_brand_and_keeps_unverifiable_out_of_accuracy():
+    rows = [
+        {'tier': 'catalog_accuracy', 'surface': 'grounded_api', 'outcome': 'absent', 'reason_code': 'other_brand'},
+        {'tier': 'catalog_accuracy', 'surface': 'grounded_api', 'outcome': 'absent', 'reason_code': None},
+        {'tier': 'catalog_accuracy', 'surface': 'grounded_api', 'outcome': 'unverifiable'},
+        {'tier': 'catalog_accuracy', 'surface': 'grounded_api', 'outcome': 'exact'},
+        {'tier': 'catalog_accuracy', 'surface': 'api', 'outcome': 'wrong'},
+        {'tier': 'catalog_accuracy', 'surface': 'api', 'outcome': None, 'answer_status': 'failed'},
+    ]
+    body = rm.build_answers_summary(rows, cycle_code='C')
+    by_surface = {s['surface']: s for s in body['surfaces']}
+    assert list(by_surface) == ['api', 'grounded_api']
+    g = by_surface['grounded_api']
+    assert g['answered_with_other_brand'] == 1 and g['unverifiable'] == 1
+    assert g['scored'] == 1 and g['accuracy'] == 1.0
+    assert by_surface['api']['counts'] == {'wrong': 1, 'not_scored': 1}
 
 
 def test_paragraphs_are_the_stored_spans_verbatim(http):
