@@ -1567,6 +1567,95 @@ account yet). Payloads cut.
 }
 ```
 
+### GET /api/console/catalog?merchant=brandco (2C, external)
+
+```json
+{
+  "merchant": "brandco",
+  "source": "feed",
+  "read_only": false,
+  "note": null,
+  "version": {
+    "id": 12,
+    "version_number": 2,
+    "upload_id": "up_61aa",
+    "mode": "all_valid_rows",
+    "row_count": 2,
+    "counts": {
+      "ready": 2,
+      "warning": 0,
+      "error": 0
+    },
+    "committed_at": "2026-10-08T10:00:00+00:00",
+    "superseded_at": null
+  },
+  "rows": [
+    {
+      "row_number": 2,
+      "gtin": "012345678905",
+      "product_name": "Brandco Wipes",
+      "variant_label": "72 ct",
+      "pack_count": 72,
+      "multipack": null,
+      "price": "4.99",
+      "currency": "USD",
+      "retailers": [
+        {
+          "domain": "target.com",
+          "url": "https://www.target.com/p/2"
+        }
+      ]
+    },
+    {
+      "row_number": 3,
+      "gtin": "012345678912",
+      "product_name": "Brandco Diapers Size 3",
+      "variant_label": "84 ct",
+      "pack_count": 84,
+      "multipack": null,
+      "price": "22.99",
+      "currency": "USD",
+      "retailers": [
+        {
+          "domain": "target.com",
+          "url": "https://www.target.com/p/3"
+        }
+      ]
+    }
+  ],
+  "versions": [
+    {
+      "id": 12,
+      "version_number": 2,
+      "upload_id": "up_61aa",
+      "mode": "all_valid_rows",
+      "row_count": 2,
+      "counts": {
+        "ready": 2,
+        "warning": 0,
+        "error": 0
+      },
+      "committed_at": "2026-10-08T10:00:00+00:00",
+      "superseded_at": null
+    },
+    {
+      "id": 9,
+      "version_number": 1,
+      "upload_id": "up_40b2",
+      "mode": "require_clean",
+      "row_count": 1,
+      "counts": {
+        "ready": 1,
+        "warning": 0,
+        "error": 0
+      },
+      "committed_at": "2026-10-01T10:00:00+00:00",
+      "superseded_at": "2026-10-08T10:00:00+00:00"
+    }
+  ]
+}
+```
+
 ### POST /api/console/catalog/validate?merchant=brandco (2C)
 
 Brandco is soa's external test fake; supply's preview is shaped by its `feed/validate.py`.
