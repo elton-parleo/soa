@@ -300,6 +300,39 @@ def test_true_value_is_console_true_value(http):
     # goes to the worse, and the runs behind the cell are counted.
     balm = cells['bum-balm-4oz']
     assert balm['status'] == 'wrong' and balm['runs'] == 3
+    # Scored against the record: the reference is the record, dated by its publication.
+    assert balm['reference_source'] == 'record' and balm['observed_at'].startswith('2026-08-28')
+
+
+OWNED = {'merchant': 'wiggle-and-snug', 'incentives': [
+    {'id': 1, 'mechanic': 'member_price', 'name': 'Member Rewards', 'tier_name': 'Member+', 'member_price': '16.84',
+     'currency': 'USD', 'code': None, 'discount_percent': None, 'discount_amount': None, 'points': None,
+     'points_multiplier': None, 'applies_to': 'all', 'applies_to_gtins': [], 'applies_to_category': None,
+     'valid_from': None, 'valid_until': None, 'set_at': '2026-09-01T00:00:00+00:00'},
+    {'id': 2, 'mechanic': 'code', 'name': 'SNUG3', 'tier_name': None, 'member_price': None, 'currency': 'USD',
+     'code': 'SNUG3', 'discount_percent': None, 'discount_amount': '3.00', 'points': None, 'points_multiplier': None,
+     'applies_to': 'all', 'applies_to_gtins': [], 'applies_to_category': 'Diapers', 'valid_from': None,
+     'valid_until': '2026-12-31', 'set_at': '2026-09-01T00:00:00+00:00'}]}
+
+
+def test_programs_are_the_owned_incentives_with_how_answers_did(http, upstream):
+    upstream.answer('GET', '/api/truesync/merchants/wiggle-and-snug/incentives/owned', body=OWNED, token=TOKEN_A)
+    as_('alice')
+    body = http.get('/api/console/programs', params={'merchant': 'wiggle-and-snug', 'cycle': CYCLE}).json()
+    assert [p['name'] for p in body['programs']] == ['Member Rewards', 'SNUG3']
+    assert body['programs'][0]['terms'] == '$16.84 member price, on all'
+    assert body['programs'][1]['terms'] == '$3.00 off, code SNUG3, on Diapers, until 2026-12-31'
+    # The fixture cycle asks no value & incentives question: said, not shown as 0.
+    assert {p['agentsRight'] for p in body['programs']} == {'not asked this cycle'}
+    assert [c['token'] for c in upstream.calls] == [TOKEN_A]
+
+
+def test_programs_count_right_among_scored_only():
+    outcomes = [{'outcome': 'exact', 'expected_answer': {'type': 'code', 'code': 'snug3'}},
+                {'outcome': 'wrong', 'expected_answer': {'type': 'code', 'code': 'SNUG3'}},
+                {'outcome': 'unverifiable', 'expected_answer': {'type': 'code', 'code': 'SNUG3'}}]
+    snug = rm.build_programs(OWNED['incentives'], outcomes)[1]
+    assert snug['agentsRight'] == '1 of 2 right' and snug['tone'] == 'warn' and snug['asked'] == 3
 
 
 def test_accessibility_is_proxied_with_claude_in_the_vocabulary(http, upstream):
@@ -614,7 +647,8 @@ def test_true_value_for_an_external_brand_reads_the_2a_reference():
     row; a page that blocked both sources is `unverifiable`, never wrong."""
     reference = {'as_of': '2026-10-09T12:00:00+00:00', 'prices': [
         {'gtin': '00012345678905', 'variant_label': 'Size 3', 'retailer_domain': 'target.com',
-         'price': '21.49', 'currency': 'USD', 'verifiable': True},
+         'price': '21.49', 'currency': 'USD', 'verifiable': True, 'reference_source': 'hosted_render',
+         'method': 'oxylabs', 'observed_at': '2026-10-09T11:58:00+00:00'},
         {'gtin': '00012345678905', 'variant_label': 'Size 3', 'retailer_domain': 'walmart.com',
          'price': None, 'currency': None, 'verifiable': False,
          'unverifiable_reason': 'page unreadable from every source (challenged)'},
@@ -628,6 +662,7 @@ def test_true_value_for_an_external_brand_reads_the_2a_reference():
     assert [c['id'] for c in tv['columns']] == ['target.com', 'walmart.com']
     cells = tv['rows'][0]['cells']
     assert cells['target.com'] == {'quoted': '$22.99', 'live': '$21.49', 'status': 'wrong',
-                                   'outcome': 'stale', 'runs': 1}
+                                   'outcome': 'stale', 'runs': 1, 'reference_source': 'hosted_render',
+                                   'method': 'oxylabs', 'observed_at': '2026-10-09T11:58:00+00:00'}
     assert cells['walmart.com']['status'] == 'unverifiable'
     assert cells['walmart.com']['live'] == 'unverifiable'

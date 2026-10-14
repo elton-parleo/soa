@@ -425,7 +425,8 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             key = v['variant_id']
             rows_by_key.setdefault(key, {'product': v.get('label') or key, 'sku': v.get('gtin') or key})
             live[(key, own_domain)] = {'price': v.get('list_price'), 'verifiable': True,
-                                       'currency': v.get('currency')}
+                                       'currency': v.get('currency'), 'reference_source': 'record',
+                                       'observed_at': v.get('published_at')}
 
     grouped: Dict[tuple, List[dict]] = {}
     for item in scored:
@@ -465,6 +466,12 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
                 # beside the typed fields
                 'outcome': outcome,
                 'runs': len(runs),
+                # 2C: where `live` came from, so "honest fetch" and "hosted render"
+                # are told apart; 'record' when no reference was cached.
+                'reference_source': (None if ref is None else
+                                     ref.get('reference_source') or ('record' if not reference else None)),
+                'method': None if ref is None else ref.get('method'),
+                'observed_at': None if ref is None else ref.get('observed_at'),
             }
         rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': cells})
 
@@ -477,8 +484,76 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             "TvCell.status is extended by 'unverifiable' (the page blocked both reference sources).",
             "A stale quote has status 'wrong' (it is wrong today); `outcome` carries 'stale'.",
             "`programs` is empty: soa scores no program terms per retailer here.",
+            "Each cell carries reference_source (honest_fetch | hosted_render | record), method and "
+            "observed_at beside the typed fields (2C).",
         ],
     }
+
+
+# ─── Programs (2C) ─────────────────────────────────────────────────────────
+
+def _program_terms(inc: dict) -> str:
+    parts = []
+    cur = inc.get('currency') or 'USD'
+    if inc.get('member_price'):
+        parts.append(f"{money(inc['member_price'], cur)} member price")
+    if inc.get('discount_percent'):
+        parts.append(f"{inc['discount_percent'].rstrip('0').rstrip('.')}% off")
+    if inc.get('discount_amount'):
+        parts.append(f"{money(inc['discount_amount'], cur)} off")
+    if inc.get('points'):
+        parts.append(f"{inc['points']} points")
+    if inc.get('points_multiplier'):
+        parts.append(f"{inc['points_multiplier'].rstrip('0').rstrip('.')}x points")
+    if inc.get('code'):
+        parts.append(f"code {inc['code']}")
+    scope = inc.get('applies_to_category') or (f"{len(inc['applies_to_gtins'])} GTINs" if inc.get('applies_to_gtins')
+                                                 else inc.get('applies_to'))
+    if scope:
+        parts.append(f"on {scope}")
+    if inc.get('valid_until'):
+        parts.append(f"until {str(inc['valid_until'])[:10]}")
+    return ', '.join(parts) or (inc.get('mechanic') or '').replace('_', ' ')
+
+
+def _program_matches(inc: dict, expected: dict) -> bool:
+    if inc.get('code') and expected.get('code'):
+        return str(expected['code']).upper() == str(inc['code']).upper()
+    if inc.get('tier_name') and expected.get('tier_name'):
+        return expected['tier_name'] == inc['tier_name']
+    return False
+
+
+def build_programs(incentives: List[dict], value_outcomes: List[dict]) -> List[dict]:
+    """
+    TrueValue.programs from the merchant's owned incentives (supply's
+    /incentives/owned, as entered). `agentsRight` counts this cycle's
+    value & incentives answers about that program: right / scored, where
+    scored excludes absent, unscoreable and unverifiable. A program no
+    question asked about says so rather than showing 0.
+
+    value_outcomes: [{outcome, expected_answer}] for tier value_incentives.
+    """
+    out = []
+    for inc in incentives or []:
+        about = [o for o in value_outcomes if _program_matches(inc, _json(o.get('expected_answer')) or {})]
+        scored = [o for o in about if o.get('outcome') in SUMMARY_SCORED]
+        right = sum(1 for o in scored if o.get('outcome') == 'exact')
+        if not about:
+            agents_right, tone = 'not asked this cycle', 'neu'
+        elif not scored:
+            agents_right, tone = f"{len(about)} asked, none scored", 'neu'
+        else:
+            agents_right = f"{right} of {len(scored)} right"
+            tone = 'ok' if right == len(scored) else 'bad' if right == 0 else 'warn'
+        out.append({
+            'name': inc.get('name') or inc.get('tier_name') or inc.get('code') or (inc.get('mechanic') or 'Program'),
+            'terms': _program_terms(inc), 'agentsRight': agents_right, 'tone': tone,
+            # beside the typed fields
+            'mechanic': inc.get('mechanic'), 'code': inc.get('code'), 'tier_name': inc.get('tier_name'),
+            'valid_until': inc.get('valid_until'), 'asked': len(about), 'scored': len(scored), 'right': right,
+        })
+    return out
 
 
 # ─── Accessibility ─────────────────────────────────────────────────────────

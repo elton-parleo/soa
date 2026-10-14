@@ -13,6 +13,7 @@ endpoints are untouched.
     GET /api/console/answers?cycle=<code>          Answer[]
     GET /api/console/answers/summary?cycle=<code>  per tier x surface counts, never pooled (2C)
     GET /api/console/true-value?cycle=<code>       TrueValue
+    GET /api/console/programs?merchant=<slug>      TrueValue.programs, from owned incentives (2C)
     GET /api/console/accessibility?merchant=<slug> Accessibility (from supply)
     GET /api/console/studies?cycle=<code>          StudyRow[]
     GET /api/console/accuracy?cycle=<code>         per-surface accuracy, never pooled
@@ -25,7 +26,7 @@ endpoints are untouched.
 """
 import asyncio
 import json
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
@@ -107,7 +108,8 @@ def get_true_value(cycle: str = Query(...), scope: CustomerScope = Depends(conso
         if expected.get('type') == 'price':
             variants.append({'variant_id': ref.get('variant_id'), 'gtin': ref.get('gtin'),
                              'label': _label_from_question(q['query_text']),
-                             'list_price': expected.get('amount'), 'currency': expected.get('currency')})
+                             'list_price': expected.get('amount'), 'currency': expected.get('currency'),
+                             'published_at': ref.get('published_at')})
     if own_domain is None:
         with engine.connect() as conn:
             job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
@@ -141,6 +143,28 @@ async def get_accessibility(merchant: str = Query(...), scope: CustomerScope = D
         raise HTTPException(status_code=404 if status == 404 else 502,
                             detail=f"TrueSync access payload unavailable: {error}")
     return rm.accessibility_from_supply(payload)
+
+
+@router.get("/programs")
+async def get_programs(merchant: str = Query(...), cycle: Optional[str] = Query(None),
+                       scope: CustomerScope = Depends(console_scope)):
+    """2C: TrueValue.programs from the merchant's owned incentives (supply,
+    with the tenant token), each with how this cycle's value & incentives
+    answers did on it when `cycle` is given."""
+    status, payload, error = await full_loop._client(scope).get_owned_incentives(merchant)
+    if error is not None:
+        raise HTTPException(status_code=404 if status == 404 else 502,
+                            detail=f"TrueSync incentives unavailable: {error}")
+    outcomes = []
+    if cycle:
+        row = cycle_in_scope(cycle, scope)
+        with engine.connect() as conn:
+            outcomes = [dict(o) for o in conn.execute(text("""
+                SELECT outcome, expected_answer FROM soa_expectation_outcomes
+                WHERE cycle_id = :c AND tier = 'value_incentives'
+            """), {"c": row['id']}).mappings()]
+    return {'merchant': (payload or {}).get('merchant') or merchant,
+            'programs': rm.build_programs((payload or {}).get('incentives') or [], outcomes)}
 
 
 @router.get("/studies")

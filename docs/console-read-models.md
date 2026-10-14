@@ -33,6 +33,7 @@ Lists (`runs`, `studio/*`) return only the scope's rows.
 | `GET /api/console/answers?cycle=<code>` | one per run | `Answer[]` |
 | `GET /api/console/answers/summary?cycle=<code>` | per tier and per surface: every outcome, `unverifiable`, `answered_with_other_brand` (2C) | — (soa) |
 | `GET /api/console/true-value?cycle=<code>` | variants x retailers | `TrueValue` |
+| `GET /api/console/programs?merchant=<slug>[&cycle=<code>]` | the merchant's owned incentives, with how the cycle's value answers did (2C) | `TrueValue.programs` |
 | `GET /api/console/accessibility?merchant=<slug>` | supply's access payload | `Accessibility` |
 | `GET /api/console/studies?cycle=<code>` | question x agent | `StudyRow[]` |
 | `GET /api/console/accuracy?cycle=<code>` | per-surface accuracy, never pooled | — (soa) |
@@ -131,9 +132,22 @@ model-only API, a grounded API and a consumer UI describes none of them.
 | `TvCell.live` | the 2A reference row's price, `unverifiable` when supply says `verifiable: false`; the record's price when no reference is cached |
 | `TvCell.quoted` | the stated price of the runs whose outcome the cell reports (most common) |
 | `TvCell.status` | the most common scored outcome across the cell's runs (an absent or a wall decides only when no run was scored; ties go to the worse): exact → `exact`, wrong → `wrong`, partial → `partial`, absent → `missed`, stale → `wrong` (`outcome` says `stale`), unverifiable → **`unverifiable`** (extension), no question → `none` |
-| `programs` | `[]` — no per-retailer program terms are scored here |
+| `programs` | `[]` here; the console reads them from `/api/console/programs` (2C, below) |
 
-Extras on each cell: `outcome` (the raw soa outcome), `runs`.
+Extras on each cell: `outcome` (the raw soa outcome), `runs`, and (2C) `reference_source`
+(`honest_fetch` or `hosted_render` from supply's reference row; `record` when the cycle was
+scored against the record), `method` and `observed_at` (the read's time; the record's
+publication time for `record`), so a reader can tell an honest fetch from a hosted render.
+
+### Programs (2C)
+
+`GET /api/console/programs?merchant=<slug>[&cycle=<code>]` proxies supply's
+`GET /api/truesync/merchants/{slug}/incentives/owned` with the tenant token and maps each
+incentive to `TrueValue.programs` (`name`, `terms`, `agentsRight`, `tone`). With `cycle`,
+`agentsRight` is right / scored over that cycle's value & incentives answers about the
+program (matched by code, else tier name; absent, unscoreable and unverifiable are outside
+it); a program no question asked about reads `not asked this cycle`, never 0. Extras:
+`mechanic, code, tier_name, valid_until, asked, scored, right`.
 
 ### Accessibility
 
@@ -669,7 +683,10 @@ r30 verdict golden (`tests/test_console_read_models.py`) is the case that counts
           "live": "$12.99",
           "status": "wrong",
           "outcome": "wrong",
-          "runs": 3
+          "runs": 3,
+          "reference_source": "record",
+          "method": null,
+          "observed_at": "2026-08-28T18:03:06.090934+00:00"
         }
       }
     },
@@ -682,7 +699,10 @@ r30 verdict golden (`tests/test_console_read_models.py`) is the case that counts
           "live": "$11.99",
           "status": "wrong",
           "outcome": "wrong",
-          "runs": 1
+          "runs": 1,
+          "reference_source": "record",
+          "method": null,
+          "observed_at": "2026-08-28T18:58:45.042456+00:00"
         }
       }
     },
@@ -695,7 +715,10 @@ r30 verdict golden (`tests/test_console_read_models.py`) is the case that counts
           "live": "$29.99",
           "status": "wrong",
           "outcome": "wrong",
-          "runs": 1
+          "runs": 1,
+          "reference_source": "record",
+          "method": null,
+          "observed_at": "2026-08-28T18:01:14.698561+00:00"
         }
       }
     },
@@ -708,7 +731,10 @@ r30 verdict golden (`tests/test_console_read_models.py`) is the case that counts
           "live": "$22.99",
           "status": "wrong",
           "outcome": "wrong",
-          "runs": 1
+          "runs": 1,
+          "reference_source": "record",
+          "method": null,
+          "observed_at": "2026-09-04T20:49:40.991623+00:00"
         }
       }
     }
@@ -718,7 +744,105 @@ r30 verdict golden (`tests/test_console_read_models.py`) is the case that counts
   "divergences": [
     "TvCell.status is extended by 'unverifiable' (the page blocked both reference sources).",
     "A stale quote has status 'wrong' (it is wrong today); `outcome` carries 'stale'.",
-    "`programs` is empty: soa scores no program terms per retailer here."
+    "`programs` is empty: soa scores no program terms per retailer here.",
+    "Each cell carries reference_source (honest_fetch | hosted_render | record), method and observed_at beside the typed fields (2C)."
+  ]
+}
+```
+
+### GET /api/console/true-value, an external brand (2C)
+
+The W&S fixture is scored against the record, so it has no `unverifiable` cell. This is
+`build_true_value` over a 2A reference with one blocked page (the case in
+`test_true_value_for_an_external_brand_reads_the_2a_reference`).
+
+```json
+{
+  "columns": [
+    {
+      "id": "target.com",
+      "name": "Target",
+      "you": false
+    },
+    {
+      "id": "walmart.com",
+      "name": "Walmart",
+      "you": false
+    }
+  ],
+  "rows": [
+    {
+      "product": "Size 3",
+      "sku": "00012345678905",
+      "cells": {
+        "target.com": {
+          "quoted": "$22.99",
+          "live": "$21.49",
+          "status": "wrong",
+          "outcome": "stale",
+          "runs": 1,
+          "reference_source": "honest_fetch",
+          "method": "fetch",
+          "observed_at": "2026-10-09T11:58:00+00:00"
+        },
+        "walmart.com": {
+          "quoted": "$17.00",
+          "live": "unverifiable",
+          "status": "unverifiable",
+          "outcome": "unverifiable",
+          "runs": 1,
+          "reference_source": "hosted_render",
+          "method": "hosted",
+          "observed_at": "2026-10-09T11:59:00+00:00"
+        }
+      }
+    }
+  ],
+  "programs": [],
+  "as_of": "2026-10-09T12:00:00+00:00",
+  "divergences": [
+    "TvCell.status is extended by 'unverifiable' (the page blocked both reference sources).",
+    "A stale quote has status 'wrong' (it is wrong today); `outcome` carries 'stale'.",
+    "`programs` is empty: soa scores no program terms per retailer here.",
+    "Each cell carries reference_source (honest_fetch | hosted_render | record), method and observed_at beside the typed fields (2C)."
+  ]
+}
+```
+
+### GET /api/console/programs?merchant=wiggle-and-snug&cycle=WS-2B-FIXTURE (2C)
+
+The owned incentives are the test's (`OWNED`); the fixture cycle asks no value question.
+
+```json
+{
+  "merchant": "wiggle-and-snug",
+  "programs": [
+    {
+      "name": "Member Rewards",
+      "terms": "$16.84 member price, on all",
+      "agentsRight": "not asked this cycle",
+      "tone": "neu",
+      "mechanic": "member_price",
+      "code": null,
+      "tier_name": "Member+",
+      "valid_until": null,
+      "asked": 0,
+      "scored": 0,
+      "right": 0
+    },
+    {
+      "name": "SNUG3",
+      "terms": "$3.00 off, code SNUG3, on Diapers, until 2026-12-31",
+      "agentsRight": "not asked this cycle",
+      "tone": "neu",
+      "mechanic": "code",
+      "code": "SNUG3",
+      "tier_name": null,
+      "valid_until": "2026-12-31",
+      "asked": 0,
+      "scored": 0,
+      "right": 0
+    }
   ]
 }
 ```
