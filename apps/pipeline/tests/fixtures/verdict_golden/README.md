@@ -37,3 +37,9 @@ is its guard: our price and another brand's, both stated, ours still scored.
 
 Precedence: the other-brand check runs before the not-our-product check, so a claim
 that matches both carries `other_brand`.
+
+Rule 2 never scores a swapped claim exact, neither the question nor the claim itself:
+the right price for a sibling variant of the same product is `partial` (r04, r05, r09),
+for a different product `wrong` (r06; r32, the Trial Pack's $6.99 answered for the Size 3
+small pack, as Gemini did on cycle 229 FL3-wiggle-and-snug-20261014). The claim keeps
+`priced_as_named` to say whether the price was that variant's.

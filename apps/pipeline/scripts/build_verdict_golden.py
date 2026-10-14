@@ -153,6 +153,9 @@ ROWS = [
   ea.price('23.99'), OVERNIGHT_S3_OB,
   ext([p('19.49', 'Wiggle & Snug Snug-Fit Overnight Diapers Size 3'), p('23.99', 'Huggies Overnites Size 3')],
       others=[('Huggies', 'comparison', 'comparison')]), None, None),
+ ('r32', '\u00a73 rule 2 (different product, never exact)',
+  'cycle 229 FL3-wiggle-and-snug-20261014: the Trial Pack\'s $6.99 answered for the Size 3 small pack',
+  ea.price('22.99'), S3, ext([p('6.99', 'Wiggle & Snug Snug-Fit Trial Pack')]), None, None),
 ]
 
 def jload(*parts):

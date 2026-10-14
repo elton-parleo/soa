@@ -150,7 +150,9 @@ def test_rule2_pack_clash_names_the_sibling_and_is_scored_against_it(ws_variants
     assert 'variant_swap' in result.flag_names
     (claim,) = result.claims
     assert claim['variant_id'] == 'snug-fit-diapers-s3-big'
-    assert claim['outcome'] == cmp.EXACT
+    # Never exact: the Big Pack's price, said for the Small Pack question.
+    assert claim['outcome'] == cmp.PARTIAL
+    assert claim['priced_as_named'] is True
 
 
 def test_rule2_model_number_clash_size_1_against_size_3(ws_variants):
@@ -169,6 +171,37 @@ def test_rule2_variant_marker_names_another_product_and_is_wrong(ws_variants):
     assert result.reason_code == cmp.REASON_VARIANT_SWAP
     assert result.claims[0]['variant_id'] == 'snug-fit-overnight-s3'
     assert result.claims[0]['same_group'] is False
+
+
+def test_rule2_trial_pack_price_on_a_size_question_is_wrong_never_exact(ws_variants):
+    """Cycle 229 (FL3-wiggle-and-snug-20261014), runs 12985 and others:
+    asked the Size 3 small pack, Gemini answered "Snug-Fit Trial Pack,
+    $6.99". The Trial Pack is a different product (its own listing), and
+    $6.99 is its price: wrong, variant_swap — and the claim itself is wrong
+    too, so no check marks it right."""
+    result = ws(PRICE, extraction(prices=[price('6.99', 'Wiggle & Snug Snug-Fit Trial Pack')]),
+                ws_variants)
+    assert result.outcome == cmp.WRONG
+    assert result.reason_code == cmp.REASON_VARIANT_SWAP
+    assert 'variant_swap' in result.flag_names
+    (claim,) = result.claims
+    assert claim['variant_id'] == 'snug-fit-trial-pack'
+    assert claim['same_group'] is False
+    assert claim['priced_as_named'] is True
+    assert claim['outcome'] == cmp.WRONG
+    assert 'a different product' in result.reason
+
+
+def test_rule2_a_swapped_claim_is_never_exact(ws_variants):
+    """Whatever variant a swapped claim names and however well it prices
+    it, neither the question nor the claim is exact."""
+    for stated, product in (('39.99', 'Snug-Fit Diapers 168 ct'), ('17.99', 'Size 1 small pack'),
+                            ('23.99', 'Snug-Fit Overnight Diapers Size 3'),
+                            ('6.99', 'Snug-Fit Trial Pack')):
+        result = ws(PRICE, extraction(prices=[price(stated, product)]), ws_variants)
+        assert result.reason_code == cmp.REASON_VARIANT_SWAP, product
+        assert result.outcome != cmp.EXACT, product
+        assert all(c['outcome'] != cmp.EXACT for c in result.claims), product
 
 
 def test_rule2_a_clash_naming_no_record_variant_is_variant_clash(ws_variants):

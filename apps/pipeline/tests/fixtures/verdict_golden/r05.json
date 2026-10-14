@@ -51,5 +51,5 @@
   "flags_after": [
     "variant_swap"
   ],
-  "reason_after": "stated 17.99 for 'Size 1 small pack', which is snug-fit-diapers-s1-small (names a sibling variant); judged against it: exact"
+  "reason_after": "stated 17.99 for 'Size 1 small pack', which is snug-fit-diapers-s1-small (names a sibling variant): its price, a sibling variant of the same product"
 }
