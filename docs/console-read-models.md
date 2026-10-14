@@ -1531,7 +1531,7 @@ account yet). Payloads cut.
   "merchant": "wiggle-and-snug",
   "source": "hosted",
   "read_only": true,
-  "note": "Hosted on Parleo: this catalog comes from the store config. Edit it there; no feed upload applies.",
+  "note": "Hosted on Parleo: this catalog comes from the store config. Edit it there. No feed upload applies.",
   "version": null,
   "rows": [
     {
@@ -1706,7 +1706,7 @@ Brandco is soa's external test fake; supply's preview is shaped by its `feed/val
           "code": "multipack_suggested",
           "severity": "warning",
           "field": "multipack",
-          "message": "page shows a count but multipack is empty: target.com shows 3, 216, the row says pack_count 72; multipack 3 would explain it",
+          "message": "page shows a count but multipack is empty: target.com shows 3, 216, the row says pack_count 72, and multipack 3 would explain it",
           "source": "soa",
           "suggested": 3
         }

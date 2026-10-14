@@ -85,7 +85,7 @@ def test_validate_previews_with_the_multipack_warning_from_the_page(http, upstre
     warning = wipes['messages'][-1]
     assert warning['code'] == 'multipack_suggested' and warning['severity'] == 'warning' and warning['suggested'] == 3
     assert warning['message'] == ('page shows a count but multipack is empty: target.com shows 3, 216, '
-                                  'the row says pack_count 72; multipack 3 would explain it')
+                                  'the row says pack_count 72, and multipack 3 would explain it')
     assert diapers['status'] == 'ready' and diapers['messages'] == []
     assert balm['status'] == 'error' and balm['messages'][0]['code'] == 'gtin_check_digit'
     assert body['summary'] == {**FEED['validate']['summary'], 'ready': 1, 'warning': 1, 'error': 1}

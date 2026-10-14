@@ -599,7 +599,7 @@ def annotate_feed_preview(preview: dict, reference: Optional[dict], *, reference
             text_ = (f"page shows a count but multipack is empty: {where} shows {shown}, the row says "
                      f"pack_count {pack}")
             if multiples:
-                text_ += f"; multipack {multiples[0]} would explain it"
+                text_ += f", and multipack {multiples[0]} would explain it"
             messages.append({'code': MULTIPACK_SUGGESTED, 'severity': 'warning', 'field': 'multipack',
                              'message': text_, 'source': 'soa', 'suggested': multiples[0] if multiples else None})
             if row.get('status') == 'ready':
@@ -636,7 +636,7 @@ def build_catalog(merchant: str, *, feed: Optional[dict], history: List[dict], h
                              'multipack': None, 'price': v.get('list_price'), 'currency': v.get('currency'),
                              'published_at': _iso(listing.get('published_at')), 'product_url': listing.get('product_url')})
         return {'merchant': merchant, 'source': 'hosted', 'read_only': True,
-                'note': 'Hosted on Parleo: this catalog comes from the store config. Edit it there; no feed upload applies.',
+                'note': 'Hosted on Parleo: this catalog comes from the store config. Edit it there. No feed upload applies.',
                 'version': None, 'rows': rows, 'versions': []}
     if feed is None:
         return {'merchant': merchant, 'source': 'none', 'read_only': False,
