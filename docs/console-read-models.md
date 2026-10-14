@@ -37,6 +37,7 @@ Lists (`runs`, `studio/*`) return only the scope's rows.
 | `GET /api/console/accessibility?merchant=<slug>` | supply's access payload | `Accessibility` |
 | `GET /api/console/truesync?merchant=<slug>` | the TrueSync matrix, assembled from supply (2C) | `TrueSyncData` (products, channels, lastVerified) |
 | `GET /api/console/catalog?merchant=<slug>`, `/catalog/versions`, `/catalog/template.{csv,xlsx}`, `POST /catalog/validate`, `POST /catalog/commit` | Setup › Catalog over supply's 1B feed loader; **operator only** (2C) | — (soa) |
+| `GET /api/console/studies/options`, `POST /studies/preview`, `POST /studies/generate`, `POST /studies/{study_type}/regenerate`, `GET /studies/{study_type}/status`, `POST /api/console/cycles` | the Create Study modal and "start a cycle"; **operator only** (2C) | — (soa) |
 | `GET /api/console/studies?cycle=<code>` | question x agent | `StudyRow[]` |
 | `GET /api/console/accuracy?cycle=<code>` | per-surface accuracy, never pooled | — (soa) |
 | `GET /api/console/runs` | the tenant's cycles | `Run[]` (studio.ts) |
@@ -196,6 +197,41 @@ with `?org=` and the tenant token like every console read.
 | `GET /catalog/template.{csv,xlsx}` | supply's template |
 | `POST /catalog/validate?merchant=` | supply's validate, which is the preview (every row `ready / warning / error` with its messages, staged under `upload_id`), plus one soa warning per row: `multipack_suggested`, "page shows a count but multipack is empty", when the latest reference read's `pack_differs` finding shows a count that only a multipack explains and the row's multipack is empty. Advisory: commit writes supply's staged preview |
 | `POST /catalog/commit` | `{merchant, upload_id, mode}`, mode `all_valid_rows` or `require_clean` |
+
+### Studies & Audits: Create Study and cycles (2C)
+
+`app/routers/console_ops.py`, `app/services/console_studies.py`; **operator only**. The
+studio reads (`/runs`, `/studio/studies`, `/studio/entities`) stay readable by members: they are
+the tenant's own rows, and Answers and the full-loop strip read `/runs` and `/studio/studies`.
+They already apply the studio.ts mapping below; 2C changes none of it.
+
+- **`GET /studies/options`**: the `soa_queries` constraints, the surface list (as
+  `/api/console/surfaces`, the two not available entries included), the scope's merchants
+  (supply's `/tenant`; one with `has_record: false` cannot be grounded in), `max_questions` 100,
+  `default_brand_direct_count` 12, `default_variant_cap` 20.
+- **`POST /studies/preview`** `{merchant, tiers, stage_total, brand_direct_count?, variant_cap?,
+  allowed_categories?, personas?, study_pattern?}`: the catalog-built tiers **as the generation
+  worker builds them**. The generator's catalog-tier code moved into
+  `soa_shared/catalog_tiers.py` (with the snapshot builder, `soa_shared/catalog_snapshot.py`, and
+  the retailer enum, `soa_shared/retailers.py`) so the API runs the same module the worker does;
+  the pipeline's `generation/catalog_tiers.py` is that module under its old name. Each question
+  carries its typed `expected_answer` and the mock's chips (`Expected: $22.99`, `GTIN …`,
+  `84 count`); `catalog_accuracy` reports `sampled`, `variants_available` and `variant_cap` (the
+  variant cap, 20 by default); brand-direct is a count and one example marked `illustrative`
+  (a model writes its wording at generation time); `tally` is the modal's
+  (`{stage} + brand-direct AI-written + {accuracy + value} from the catalog`) against 100. The
+  catalog line is `merchant.readback`.
+- **`POST /studies/generate`**: `POST /api/studies/generate`'s body plus the modal's `tiers`. With
+  a syndicated merchant the grand total is checked against 100 **server-side** (422 with the
+  tally's words), then the web app's own route queues the job, `customer_organization_id` = the
+  scope. The worker generates it as it always has, brand-catalog mode, the validator and the
+  review passes included.
+- **`POST /studies/{study_type}/regenerate`**, **`GET /studies/{study_type}/status`**: the web
+  app's routes, unchanged.
+- **`POST /api/console/cycles`** `{study_type, platforms, runs_per_query?, cycle_code?, notes?}`:
+  a surface that cannot run here (`soa_shared/surfaces.unavailable_reason`) is refused before
+  anything is written; the comparison set is the study's last cycle's, else its brand as primary;
+  then the web app's `create_cycle`. The code defaults to `YYYYMMDD-HHMMSS-<study_type>`.
 
 ### StudyRow / StudyCell
 
@@ -1648,6 +1684,292 @@ Brandco is soa's external test fake; supply's preview is shaped by its `feed/val
   ],
   "incentives": null,
   "reference_checked": true
+}
+```
+
+### GET /api/console/studies/options (2C, cut)
+
+```json
+{
+  "constraints": {
+    "category": [
+      "Skincare",
+      "Makeup",
+      "Fragrance",
+      "… 7 more"
+    ],
+    "stage": [
+      "Awareness",
+      "Research",
+      "Comparison",
+      "Ready to Buy"
+    ],
+    "specificity": [
+      "Broad",
+      "Mid",
+      "Narrow",
+      "… 0 more"
+    ],
+    "persona": [
+      "Casual / Gift Buyer",
+      "Value-Conscious",
+      "Beauty Enthusiast",
+      "… 13 more"
+    ],
+    "status": [
+      "Active",
+      "Paused",
+      "Retired",
+      "… 0 more"
+    ],
+    "study_pattern": [
+      "retailer",
+      "brand_at_retail",
+      "brand_vs_brand"
+    ],
+    "subscription_state": [
+      "subscribed",
+      "not_subscribed",
+      "… -1 more"
+    ]
+  },
+  "surfaces": [
+    {
+      "id": "chatgpt_api",
+      "label": "ChatGPT (OpenAI API)",
+      "surface": "api",
+      "collector": "openai",
+      "agent": "chatgpt",
+      "fidelity": "OpenAI Responses API, no tools: answers from the model alone",
+      "consumer": false,
+      "available": true,
+      "unavailable_reason": null,
+      "surface_label": "API, no tools"
+    },
+    "… 7 more, as /api/console/surfaces"
+  ],
+  "merchants": [
+    {
+      "slug": "wiggle-and-snug",
+      "name": "Wiggle & Snug",
+      "domain": "trueshopstore.com",
+      "kind": "brand",
+      "hosting": "parleo",
+      "has_record": true
+    }
+  ],
+  "merchants_error": null,
+  "max_questions": 100,
+  "default_brand_direct_count": 12,
+  "default_variant_cap": 20
+}
+```
+
+### POST /api/console/studies/preview (2C, W&S catalog, 2 questions per tier shown)
+
+`{"merchant": "wiggle-and-snug", "tiers": {"brand_direct": true, "catalog_accuracy": true, "value_incentives": true, "category_control": false}, "stage_total": 50}` against the pipeline's real W&S catalog fixture.
+
+```json
+{
+  "merchant": {
+    "slug": "wiggle-and-snug",
+    "brand": "Wiggle & Snug",
+    "domain": "trueshopstore.com",
+    "kind": "brand",
+    "hosting": "parleo",
+    "available": true,
+    "error": null,
+    "record_error": null,
+    "read_at": "2026-10-14T17:51:35.739513Z",
+    "products": 5,
+    "variants": 19,
+    "gtins": 6,
+    "codes": 2,
+    "readback": "5 products, 19 variants, 6 GTINs, 2 live codes, Member Rewards (2 tiers)"
+  },
+  "tiers": {
+    "brand_direct": {
+      "enabled": true,
+      "count": 12,
+      "source": "ai_from_catalog",
+      "questions": [
+        {
+          "query_text": "Where can I buy Wiggle & Snug Snug-Fit Diapers?",
+          "tier": "brand_direct",
+          "illustrative": true,
+          "expected": [
+            "Expected: brand named, trueshopstore.com cited"
+          ]
+        }
+      ],
+      "illustrative": true,
+      "expected_nulls": "Zero until Wiggle & Snug is retrievable at all on a surface; visibility gates everything below it."
+    },
+    "catalog_accuracy": {
+      "enabled": true,
+      "count": 19,
+      "source": "catalog",
+      "questions": [
+        {
+          "query_text": "What does the Wiggle & Snug Snug-Fit Diapers Size 1 small pack cost?",
+          "tier": "catalog_accuracy",
+          "stage": "Ready to Buy",
+          "provenance": "catalog",
+          "expected_answer": {
+            "type": "price",
+            "amount": "17.99",
+            "currency": "USD",
+            "secondary": [
+              {
+                "type": "pack_count",
+                "value": 96
+              }
+            ]
+          },
+          "expected": [
+            "Expected: $17.99",
+            "96 count"
+          ],
+          "variant_id": "snug-fit-diapers-s1-small"
+        },
+        {
+          "query_text": "What does the Wiggle & Snug Snug-Fit Diapers Size 1 big pack cost?",
+          "tier": "catalog_accuracy",
+          "stage": "Ready to Buy",
+          "provenance": "catalog",
+          "expected_answer": {
+            "type": "price",
+            "amount": "31.99",
+            "currency": "USD",
+            "secondary": [
+              {
+                "type": "pack_count",
+                "value": 198
+              }
+            ]
+          },
+          "expected": [
+            "Expected: $31.99",
+            "198 count"
+          ],
+          "variant_id": "snug-fit-diapers-s1-big"
+        },
+        "… 17 more questions"
+      ],
+      "sampled": false,
+      "variants_available": 19,
+      "variant_cap": 20,
+      "unavailable": null,
+      "skipped_no_price": [],
+      "expected_nulls": "Surfaces without feed enrollment show crawl-derived data only. An absent price on those is a distribution gap, not an accuracy failure."
+    },
+    "value_incentives": {
+      "enabled": true,
+      "count": 6,
+      "source": "catalog",
+      "questions": [
+        {
+          "query_text": "Is there a first-order promo code for Wiggle & Snug, and what does it take off?",
+          "tier": "value_incentives",
+          "stage": "Ready to Buy",
+          "provenance": "catalog",
+          "expected_answer": {
+            "type": "code",
+            "code": "WELCOME10",
+            "value_kind": "percent_off",
+            "value": "10.00"
+          },
+          "expected": [
+            "Expected: WELCOME10, 10.00% off"
+          ],
+          "variant_id": null
+        },
+        {
+          "query_text": "Are there any promo codes for Wiggle & Snug Snug-Fit Diapers right now, and what do they take off?",
+          "tier": "value_incentives",
+          "stage": "Ready to Buy",
+          "provenance": "catalog",
+          "expected_answer": {
+            "type": "code",
+            "code": "SNUG3",
+            "value_kind": "amount_off",
+            "value": "3.00"
+          },
+          "expected": [
+            "Expected: SNUG3, $3.00 off"
+          ],
+          "variant_id": null
+        },
+        "… 4 more questions"
+      ],
+      "mechanics": {
+        "code": 2,
+        "member_price": 3,
+        "points": 1
+      },
+      "mechanics_absent": [],
+      "expected_nulls": "Surfaces without feed enrollment show crawl-derived data only, so a member price may be absent there while present elsewhere."
+    },
+    "category_control": {
+      "enabled": false,
+      "count": 0,
+      "source": "ai",
+      "questions": []
+    }
+  },
+  "stage_total": 50,
+  "tally": {
+    "ai_written": 62,
+    "from_catalog": 25,
+    "total": 87,
+    "limit": 100,
+    "within": true,
+    "tone": "ok",
+    "text": "62 AI-written + 25 from the catalog = 87 questions — within the 100 limit"
+  }
+}
+```
+
+### POST /api/console/studies/generate (2C)
+
+```json
+{
+  "study_type": "wiggle_snug_visibility_after_syndication_<6 hex>",
+  "study_name": "Wiggle & Snug — visibility after syndication",
+  "job_id": 2,
+  "status": "pending",
+  "tally": {
+    "ai_written": 62,
+    "from_catalog": 25,
+    "total": 87,
+    "limit": 100,
+    "within": true,
+    "tone": "ok",
+    "text": "62 AI-written + 25 from the catalog = 87 questions — within the 100 limit"
+  }
+}
+```
+
+### POST /api/console/cycles (2C)
+
+```json
+{
+  "cycle_code": "WS-2C-TEST",
+  "status": "planned",
+  "cycle_mode": "query",
+  "study_type": "ws-2b-fixture",
+  "study_pattern": "brand_at_retail",
+  "total_runs_planned": 12,
+  "completed_runs": 0,
+  "created_at": null,
+  "updated_at": null,
+  "platforms": [
+    "chatgpt",
+    "gemini_grounded"
+  ],
+  "runs_per_query": 1,
+  "truecost_tiers": null,
+  "id": 2
 }
 ```
 
