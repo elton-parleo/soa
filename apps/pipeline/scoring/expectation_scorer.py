@@ -164,6 +164,12 @@ class BrandFactsCache:
                         t.get('name') for t in (snapshot.tiers or []) if t.get('name')
                     ],
                     'product_titles': [p.title for p in (snapshot.products or [])],
+                    # The merchant's own sites and listed retailers: a
+                    # brand claim is grounded by a source at any of them.
+                    'own_domains': list(snapshot.own_domains or []) or (
+                        [snapshot.domain] if snapshot.domain else []),
+                    'retailer_list': list(snapshot.retailer_list or []),
+                    'program_name': snapshot.program_name,
                 }
         return self._by_merchant[merchant_slug]
 
@@ -311,6 +317,7 @@ def classify(run, expectation, extraction, *, history=None, brand_facts=None,
         reference=reference,
         retrieved_sources=_as_dict(getattr(run, 'retrieved_sources', None)),
         dead_domains=dead,
+        grounding=_as_dict(getattr(run, 'grounding', None)),
     )
 
 
@@ -349,7 +356,7 @@ class ExpectationScorer:
         with engine.connect() as conn:
             return conn.execute(text("""
                 SELECT r.id, r.cycle_id, r.query_id, r.platform, r.raw_response,
-                       r.status, r.retrieved_sources, r.surface, r.answer_status,
+                       r.status, r.retrieved_sources, r.grounding, r.surface, r.answer_status,
                        q.tier, q.expected_answer, q.source_ref, q.study_type
                 FROM soa_runs r
                 JOIN soa_queries q ON q.id = r.query_id

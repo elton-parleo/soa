@@ -1,0 +1,76 @@
+{
+  "id": "r41",
+  "rule": "brand-direct grounding support guard (not a merchant site)",
+  "source": "r40 with the support resolving to huggies.com: not ours, so still stated with no source",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "brand_mention",
+    "brand": "Wiggle & Snug",
+    "domain": "trueshopstore.com"
+  },
+  "source_ref": {},
+  "extraction": {
+    "brand_mentioned": true,
+    "brand_claims": [
+      {
+        "claim": "It is listed as \"In stock\" for $6.99 on the Wiggle & Snug website.",
+        "claim_kind": "retail",
+        "kind": "assertion",
+        "modality": "asserted",
+        "effective_modality": "asserted"
+      }
+    ],
+    "sources_cited": [],
+    "loyalty_tiers_named": [],
+    "other_brands_named": [],
+    "retailer_mentions": [],
+    "brand_unknown_statement": null,
+    "prices": [],
+    "member_prices": [],
+    "pack_counts": [],
+    "gtins": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "tier": "brand_direct",
+  "grounding": {
+    "sources": [
+      {
+        "uri": "https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQ-r",
+        "title": "huggies.com",
+        "domain": "huggies.com"
+      }
+    ],
+    "supports": [
+      {
+        "text": "It is listed as \"In stock\" for $6.99 on the Wiggle & Snug website.",
+        "start": 60,
+        "end": 126,
+        "sources": [
+          0
+        ]
+      }
+    ]
+  },
+  "record_facts": {
+    "own_domains": [
+      "trueshopstore.com",
+      "wiggleandsnug.com"
+    ],
+    "retailer_list": [
+      "trueshopstore.com"
+    ],
+    "program_name": "Member Rewards",
+    "tier_names": [
+      "Member",
+      "Member+"
+    ]
+  },
+  "catalog": null,
+  "reference": null,
+  "verdict_before": "fabricated",
+  "verdict_after": "fabricated",
+  "reason_code_after": null,
+  "flags_after": [],
+  "reason_after": "'It is listed as \"In stock\" for $6.99 on the Wiggle & Snug website.' \u2014 stated with no source"
+}

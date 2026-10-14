@@ -43,3 +43,13 @@ the right price for a sibling variant of the same product is `partial` (r04, r05
 for a different product `wrong` (r06; r32, the Trial Pack's $6.99 answered for the Size 3
 small pack, as Gemini did on cycle 229 FL3-wiggle-and-snug-20261014). The claim keeps
 `priced_as_named` to say whether the price was that variant's.
+
+r40-r45 are brand-direct rows from cycle 229 (FL3-wiggle-and-snug-20261014), with `tier`,
+the run's `grounding` (runners/grounding.py) and `record_facts` (the record's own domains,
+retailer list, programme and tier names) on the row. Their `verdict_before` is main's
+brand-direct classifier before grounding supports. r40: a claim backed by a Gemini
+grounding support at wiggleandsnug.com is grounded (`grounding_support`); r41/r42 are its
+guards (a support at another site; a redirect that never resolved). r43: a text citation of
+wiggleandsnug.com is grounded once the record lists it among W&S's own domains
+(`own_domains`). r44: "Member Rewards" transcribed as a tier is the programme's name, not a
+tier claim (`program_name_not_tier`); r45, its guard, still invents tiers.

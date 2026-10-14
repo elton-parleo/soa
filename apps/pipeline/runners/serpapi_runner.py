@@ -37,6 +37,7 @@ from typing import List, Optional
 import httpx
 
 import soa_shared.config as config
+from runners import grounding
 from runners.base_runner import BasePlatformRunner
 from runners.platform_response import PlatformResponse
 
@@ -211,6 +212,7 @@ class SerpApiRunner(BasePlatformRunner):
                 parsed.get('error') or f'{status}: the page showed no AI answer'),
             search_triggered=None,
             retrieved_sources=parsed['sources'] or None,
+            grounding=grounding.from_serpapi(body) if status == 'answered' else None,
             answer_status=status,
             cost_units=COST_UNITS_PER_CALL,
         )

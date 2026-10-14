@@ -1,0 +1,61 @@
+{
+  "id": "r44",
+  "rule": "brand-direct programme name is not a tier",
+  "source": "cycle 229 run 12972: \"a 'Member Rewards' program\", transcribed as a tier",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "brand_mention",
+    "brand": "Wiggle & Snug",
+    "domain": "trueshopstore.com"
+  },
+  "source_ref": {},
+  "extraction": {
+    "brand_mentioned": true,
+    "brand_claims": [
+      {
+        "claim": "Wiggle & Snug products are sold through retail partners such as TrueShop Store.",
+        "claim_kind": "retail",
+        "kind": "assertion",
+        "modality": "asserted",
+        "effective_modality": "asserted"
+      }
+    ],
+    "sources_cited": [
+      "trueshopstore.com"
+    ],
+    "loyalty_tiers_named": [
+      "Member Rewards"
+    ],
+    "other_brands_named": [],
+    "retailer_mentions": [],
+    "brand_unknown_statement": null,
+    "prices": [],
+    "member_prices": [],
+    "pack_counts": [],
+    "gtins": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "tier": "brand_direct",
+  "record_facts": {
+    "own_domains": [
+      "trueshopstore.com",
+      "wiggleandsnug.com"
+    ],
+    "retailer_list": [
+      "trueshopstore.com"
+    ],
+    "program_name": "Member Rewards",
+    "tier_names": [
+      "Member",
+      "Member+"
+    ]
+  },
+  "catalog": null,
+  "reference": null,
+  "verdict_before": "fabricated",
+  "verdict_after": "grounded",
+  "reason_code_after": "program_name_not_tier",
+  "flags_after": [],
+  "reason_after": "cited trueshopstore.com"
+}

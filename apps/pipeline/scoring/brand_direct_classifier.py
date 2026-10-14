@@ -161,9 +161,16 @@ def _tier_contradictions(extraction, facts):
     search for the published tier "Member" finds it inside the programme's
     own name and concludes the answer got it right. The programme is not a
     tier. Only the list the answer actually gave is compared.
+
+    For the same reason a stated "tier" that IS the programme's name is
+    not a tier claim at all, and is left out before comparing: run 12972
+    (cycle 229) said the brand has "a 'Member Rewards' program", the
+    extractor listed Member Rewards as a tier, and the answer was scored
+    fabricated for naming a tier the record does not publish.
     """
     published = {_norm(t) for t in facts.get('tier_names') or [] if t}
-    stated = [t for t in extraction.get('loyalty_tiers_named') or [] if t]
+    stated = [t for t in extraction.get('loyalty_tiers_named') or []
+              if t and not is_program_name(t, facts)]
     if not published or not stated:
         return
 
@@ -173,6 +180,77 @@ def _tier_contradictions(extraction, facts):
             'claim': ', '.join(stated),
             'why': 'names tiers the record does not publish',
         }
+
+
+def is_program_name(name, facts) -> bool:
+    """A stated tier name equal to the record's programme name."""
+    program = _norm((facts or {}).get('program_name'))
+    return bool(program) and _norm(name) == program
+
+
+def own_domains(facts, expectation=None) -> list:
+    """The merchant's own sites: the record's own_domains, else its one
+    domain, else the expectation's."""
+    facts = facts or {}
+    listed = [d for d in facts.get('own_domains') or [] if d]
+    if not listed and facts.get('domain'):
+        listed = [facts['domain']]
+    domain = (expectation or {}).get('domain')
+    if domain and _norm(domain) not in {_norm(d) for d in listed}:
+        listed.append(domain)
+    return listed
+
+
+def grounding_domains(facts, expectation=None) -> set:
+    """Where a source grounds a brand claim: the merchant's own sites and
+    its listed retailers."""
+    return {_norm(d) for d in own_domains(facts, expectation)
+            + list((facts or {}).get('retailer_list') or []) if d}
+
+
+#: The shorter of a claim and a support segment must be at least this long
+#: for one containing the other to count: "Yes" inside every segment is
+#: not coverage.
+_MIN_COVERAGE_CHARS = 12
+
+
+def _covers(segment, claim) -> bool:
+    a, b = _norm(segment), _norm(claim)
+    if not a or not b or min(len(a), len(b)) < _MIN_COVERAGE_CHARS:
+        return False
+    return b in a or a in b
+
+
+def support_domains(claim_text, grounding) -> list:
+    """
+    The source domains behind a claim, from the platform's grounding
+    supports (runners/grounding.py): every support whose segment contains
+    the claim, or is contained by it, and the domain of each source it
+    names. Text, not offsets: Gemini counts offsets in UTF-8 bytes and the
+    extractor quotes characters, and the quote is what both agree on.
+    A source with no known domain (an unresolved redirect) grounds nothing.
+    """
+    grounding = grounding if isinstance(grounding, dict) else {}
+    sources = grounding.get('sources') or []
+    out = []
+    for support in grounding.get('supports') or []:
+        if not _covers(support.get('text'), claim_text):
+            continue
+        for index in support.get('sources') or []:
+            if isinstance(index, int) and 0 <= index < len(sources):
+                domain = (sources[index] or {}).get('domain')
+                if domain and domain not in out:
+                    out.append(domain)
+    return out
+
+
+def grounded_by(claim_text, grounding, allowed) -> Optional[str]:
+    """The first merchant domain (own or listed retailer) a grounding
+    support for this claim resolves to, or None."""
+    for domain in support_domains(claim_text, grounding):
+        if _norm(domain) in allowed:
+            return domain
+    return None
 
 
 def _recommended_without_source(extraction):
@@ -217,7 +295,8 @@ def _recommended_without_source(extraction):
     }
 
 
-def contradicted_claims(extraction, brand_facts=None) -> list:
+def contradicted_claims(extraction, brand_facts=None, *, grounding=None,
+                        expectation=None) -> list:
     """
     Brand-specific claims the published record contradicts, plus claims
     made with no source at all.
@@ -243,9 +322,13 @@ def contradicted_claims(extraction, brand_facts=None) -> list:
         if claim.get('claim')
     ]
 
+    # Sourced in the text (any citation, as before), or, claim by claim,
+    # grounded by a platform support resolving to one of the merchant's
+    # own sites or listed retailers.
     sourced = bool(extraction.get('sources_cited'))
+    allowed = grounding_domains(facts, expectation)
     titles = {_norm(t) for t in facts.get('product_titles') or [] if t}
-    domain = _norm(facts.get('domain'))
+    own = {_norm(d) for d in own_domains(facts)}
 
     found = list(_tier_contradictions(extraction, facts))
     availability = _recommended_without_source(extraction)
@@ -260,17 +343,17 @@ def contradicted_claims(extraction, brand_facts=None) -> list:
         text = claim['claim']
         words = _tokens(text)
 
-        if kind == 'ownership' and domain:
+        if kind == 'ownership' and own:
             # A claim that names a DIFFERENT domain as the brand's own.
             # Run 10663 called wiggleandsnug.com "their official website";
             # the record says trueshopstore.com. Matched on the domain in
             # the claim rather than on words like "official", because the
             # phrasing varies and the domain does not.
             claimed = _DOMAIN.findall(str(text))
-            if claimed and not any(_norm(d) == domain for d in claimed):
+            if claimed and not any(_norm(d) in own for d in claimed):
                 found.append({
                     'claim': text,
-                    'why': f"the record's own domain is {facts.get('domain')}",
+                    'why': f"the record's own domains are {', '.join(own_domains(facts))}",
                 })
                 continue
 
@@ -281,13 +364,26 @@ def contradicted_claims(extraction, brand_facts=None) -> list:
                     found.append({'claim': text, 'why': 'the record publishes this product now'})
                     continue
 
-        if not sourced:
+        if not sourced and not grounded_by(text, grounding, allowed):
             found.append({'claim': text, 'why': 'stated with no source'})
 
     return found
 
 
-def classify(extraction, expectation, *, brand_facts=None) -> tuple:
+#: Reason codes for the rules that decide a brand-direct outcome on what
+#: they newly read (the rescore names them; see scripts/rescore_cycle.py).
+CODE_GROUNDING_SUPPORT = 'grounding_support'
+CODE_OWN_DOMAINS = 'own_domains'
+CODE_PROGRAM_NAME = 'program_name_not_tier'
+
+
+def classify(extraction, expectation, *, brand_facts=None, grounding=None) -> tuple:
+    """(assessment, reason). See classify_with_code."""
+    return classify_with_code(extraction, expectation, brand_facts=brand_facts,
+                              grounding=grounding)[:2]
+
+
+def classify_with_code(extraction, expectation, *, brand_facts=None, grounding=None) -> tuple:
     """
     (assessment, reason). The order the checks run in IS the ruling, so
     it is written out rather than implied:
@@ -310,37 +406,59 @@ def classify(extraction, expectation, *, brand_facts=None) -> tuple:
                            and did not answer about somebody else instead.
                            The honest failure, and the one that most needs
                            telling apart from the other two.
-      grounded             it cited the brand's own domain.
+      grounded             it cited one of the brand's own domains, or a
+                           claim it asserted is backed by a grounding
+                           support whose source is one of them or a
+                           listed retailer.
       echoed               it named the brand. Nothing else is checkable —
                            which is exactly what the old `exact` meant.
     """
     extraction = extraction or {}
 
     if not extraction.get('extraction_confident', True):
-        return UNSCOREABLE, extraction.get('extraction_note') or 'the answer could not be read'
+        return UNSCOREABLE, extraction.get('extraction_note') or 'the answer could not be read', None
 
     brand = (expectation or {}).get('brand')
     if not extraction.get('brand_mentioned'):
-        return ABSENT, f"the answer did not name {brand}"
+        return ABSENT, f"the answer did not name {brand}", None
 
     other = misattributed_to(extraction)
     if other:
-        return MISATTRIBUTED, f"named {brand} but described {other}"
+        return MISATTRIBUTED, f"named {brand} but described {other}", None
 
-    contradicted = contradicted_claims(extraction, brand_facts)
+    facts = brand_facts or {}
+    contradicted = contradicted_claims(extraction, facts, grounding=grounding,
+                                       expectation=expectation)
     if contradicted:
         first = contradicted[0]
-        return FABRICATED, f"{first['claim']!r} — {first['why']}"
+        return FABRICATED, f"{first['claim']!r} — {first['why']}", None
+    # Rule 4 decided it when the programme-name "tier" was the only
+    # contradiction: with it counted, the answer would be fabricated.
+    program_rule = bool(list(_tier_contradictions(
+        extraction, {**facts, 'program_name': None}))) and \
+        not list(_tier_contradictions(extraction, facts))
+    program_code = CODE_PROGRAM_NAME if program_rule else None
 
     unknown = extraction.get('brand_unknown_statement')
     if unknown:
-        return ACKNOWLEDGED_UNKNOWN, f"said it could not find {brand}: {unknown!r}"
+        return ACKNOWLEDGED_UNKNOWN, f"said it could not find {brand}: {unknown!r}", program_code
 
-    domain = (expectation or {}).get('domain')
-    if domain and _norm(domain) in {_norm(s) for s in extraction.get('sources_cited') or []}:
-        return GROUNDED, f"cited {domain}"
+    own = own_domains(facts, expectation)
+    cited = {_norm(s) for s in extraction.get('sources_cited') or []}
+    for domain in own:
+        if _norm(domain) in cited:
+            legacy = _norm((expectation or {}).get('domain') or facts.get('domain'))
+            return GROUNDED, f"cited {domain}", \
+                program_code or (None if _norm(domain) == legacy else CODE_OWN_DOMAINS)
 
-    return ECHOED, f"named {brand}, with nothing checkable behind it"
+    allowed = grounding_domains(facts, expectation)
+    for claim in pp.asserted_claims(extraction):
+        domain = grounded_by(claim.get('claim'), grounding, allowed)
+        if domain:
+            return GROUNDED, (f"{claim['claim']!r} — grounded by a source at {domain} "
+                              f"(platform grounding support)"), CODE_GROUNDING_SUPPORT
+
+    return ECHOED, f"named {brand}, with nothing checkable behind it", program_code
 
 
 def is_brand_direct(tier, expectation) -> bool:

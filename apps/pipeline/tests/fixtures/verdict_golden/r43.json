@@ -1,0 +1,59 @@
+{
+  "id": "r43",
+  "rule": "brand-direct own_domains list",
+  "source": "cycle 229 run 12979: cited wiggleandsnug.com in its text; the record says W&S owns it too",
+  "attribution": "claude-reviewed, elton-pending",
+  "expectation": {
+    "type": "brand_mention",
+    "brand": "Wiggle & Snug",
+    "domain": "trueshopstore.com"
+  },
+  "source_ref": {},
+  "extraction": {
+    "brand_mentioned": true,
+    "brand_claims": [
+      {
+        "claim": "Yes, Wiggle & Snug Bum Balm 4 oz is still available.",
+        "claim_kind": "retail",
+        "kind": "assertion",
+        "modality": "asserted",
+        "effective_modality": "asserted"
+      }
+    ],
+    "sources_cited": [
+      "wiggleandsnug.com"
+    ],
+    "loyalty_tiers_named": [],
+    "other_brands_named": [],
+    "retailer_mentions": [],
+    "brand_unknown_statement": null,
+    "prices": [],
+    "member_prices": [],
+    "pack_counts": [],
+    "gtins": [],
+    "extraction_confident": true,
+    "extraction_note": null
+  },
+  "tier": "brand_direct",
+  "record_facts": {
+    "own_domains": [
+      "trueshopstore.com",
+      "wiggleandsnug.com"
+    ],
+    "retailer_list": [
+      "trueshopstore.com"
+    ],
+    "program_name": "Member Rewards",
+    "tier_names": [
+      "Member",
+      "Member+"
+    ]
+  },
+  "catalog": null,
+  "reference": null,
+  "verdict_before": "echoed",
+  "verdict_after": "grounded",
+  "reason_code_after": "own_domains",
+  "flags_after": [],
+  "reason_after": "cited wiggleandsnug.com"
+}

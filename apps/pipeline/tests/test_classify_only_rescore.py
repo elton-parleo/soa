@@ -63,7 +63,7 @@ def db(monkeypatch):
             expected_answer TEXT, source_ref TEXT, study_type TEXT, query_code TEXT)""")
         c.exec_driver_sql("""CREATE TABLE soa_runs (id INTEGER PRIMARY KEY, cycle_id INTEGER,
             query_id INTEGER, platform TEXT, run_number INTEGER, raw_response TEXT, status TEXT,
-            retrieved_sources TEXT, surface TEXT, collector TEXT, answer_status TEXT)""")
+            retrieved_sources TEXT, grounding TEXT, surface TEXT, collector TEXT, answer_status TEXT)""")
         c.exec_driver_sql("""CREATE TABLE soa_expectation_outcomes (
             id INTEGER PRIMARY KEY, run_id INTEGER UNIQUE, query_id INTEGER, cycle_id INTEGER,
             platform TEXT, tier TEXT, expected_answer TEXT, extraction TEXT, outcome TEXT,

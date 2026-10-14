@@ -41,6 +41,16 @@ class PlatformResponse:
     Seeds source attribution (M26).
     """
 
+    grounding: Optional[dict] = None
+    """
+    The source metadata behind retrieved_sources, where the platform
+    exposes it (runners/grounding.py): {"sources": [{uri, title, domain}],
+    "supports": [{text, start, end, sources: [index into sources]}]}.
+    A support says which sources back which span of the answer; that is
+    what lets a brand-direct claim be grounded by a source the answer
+    never names in its text. None when the platform exposes none.
+    """
+
     answer_status: Optional[str] = None
     """
     2B: answered | no_ai_answer | sign_in_wall | blocked. Set by the consumer

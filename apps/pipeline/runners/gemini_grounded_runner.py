@@ -15,12 +15,17 @@ returns).
 
 Grounding metadata: response.candidates[0].grounding_metadata.grounding_chunks
 contains the search-result sources the model actually grounded on. Each
-chunk's web.uri is extracted into PlatformResponse.retrieved_sources.
+chunk's web.uri is extracted into PlatformResponse.retrieved_sources; the
+chunks' titles and domains and the grounding_supports (which answer span
+each chunk backs) go to PlatformResponse.grounding (runners/grounding.py).
+The URIs are vertexaisearch redirects, so without the title the source's
+site is not recoverable from what is stored.
 """
 import logging
 
 from google.genai import types
 
+from runners import grounding
 from runners.gemini_runner import GeminiRunner
 from runners.platform_response import PlatformResponse
 
@@ -57,6 +62,7 @@ class GeminiGroundedRunner(GeminiRunner):
             status="success",
             search_triggered=search_triggered,
             retrieved_sources=retrieved_sources or None,
+            grounding=grounding.from_gemini(response),
         )
 
     @staticmethod

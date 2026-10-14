@@ -517,6 +517,7 @@ class RunOrchestrator:
             run.error_message = response.error
             run.search_triggered = response.search_triggered
             run.retrieved_sources = response.retrieved_sources
+            run.grounding = response.grounding
             # 2B: surface fidelity on every run row.
             run.surface = surfaces.surface_of(platform)
             run.collector = surfaces.collector_of(platform)

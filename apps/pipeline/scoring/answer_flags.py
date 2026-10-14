@@ -127,14 +127,16 @@ def cited_domains(sources_cited, retrieved_sources=None) -> List[str]:
     return out
 
 
-def source_split(domains: Iterable[str], *, own_domain: Optional[str],
+def source_split(domains: Iterable[str], *, own_domain,
                  retailer_list: List[str]) -> dict:
-    """{own_domain: [...], listed_retailer: [...], other: [...]}"""
-    own = ea.normalize_domain(own_domain)
+    """{own_domain: [...], listed_retailer: [...], other: [...]}.
+    `own_domain` is one site or the merchant's list of its own sites."""
+    owned = own_domain if isinstance(own_domain, (list, tuple, set)) else [own_domain]
+    own = [d for d in (ea.normalize_domain(o) for o in owned) if d]
     listed = [ea.normalize_domain(d) for d in retailer_list or [] if ea.normalize_domain(d)]
     out = {'own_domain': [], 'listed_retailer': [], 'other': []}
     for domain in domains:
-        if own and _domain_in(domain, [own]):
+        if own and _domain_in(domain, own):
             out['own_domain'].append(domain)
         elif _domain_in(domain, listed):
             out['listed_retailer'].append(domain)

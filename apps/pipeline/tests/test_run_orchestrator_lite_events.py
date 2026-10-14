@@ -145,7 +145,7 @@ def db(monkeypatch):
                 id INTEGER PRIMARY KEY, cycle_id INTEGER, query_id INTEGER, platform TEXT,
                 run_number INTEGER, run_at TIMESTAMP, raw_response TEXT, response_tokens INTEGER,
                 latency_ms INTEGER, status TEXT DEFAULT 'pending', error_message TEXT,
-                search_triggered BOOLEAN, retrieved_sources TEXT, created_at TIMESTAMP
+                search_triggered BOOLEAN, retrieved_sources TEXT, grounding TEXT, created_at TIMESTAMP
             )
         """)
         conn.exec_driver_sql("""

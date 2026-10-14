@@ -1,10 +1,12 @@
 """Builds apps/pipeline/tests/fixtures/verdict_golden/*.json.
 
-verdict_before: main's comparator (git show main:...), the classifier as it
-stood before 2B, over the same stored inputs. verdict_after: this branch's.
-Run from apps/pipeline:
-    git show main:apps/pipeline/scoring/expectation_comparator.py > /tmp/old_comparator.py
-    python3 scripts/build_verdict_golden.py /tmp/old_comparator.py
+verdict_before: the comparator as it stood before 2B (git show 9e22cf0^:...),
+over the same stored inputs; for a brand-direct row, the brand-direct
+classifier as it stood before grounding supports (the second argument).
+verdict_after: this branch's. Run from apps/pipeline:
+    git show 9e22cf0^:apps/pipeline/scoring/expectation_comparator.py > /tmp/old_comparator.py
+    git show d2d4412:apps/pipeline/scoring/brand_direct_classifier.py > /tmp/old_bdc.py
+    python3 scripts/build_verdict_golden.py /tmp/old_comparator.py /tmp/old_bdc.py
 """
 import importlib.util, json, os, sys
 sys.path.insert(0, os.getcwd())
@@ -17,6 +19,8 @@ from soa_shared import expected_answers as ea
 
 spec = importlib.util.spec_from_file_location('old_cmp', sys.argv[1])
 old = importlib.util.module_from_spec(spec); spec.loader.exec_module(old)
+spec = importlib.util.spec_from_file_location('old_bdc', sys.argv[2])
+old_bdc = importlib.util.module_from_spec(spec); spec.loader.exec_module(old_bdc)
 
 FIX = 'tests/fixtures'
 OUT = os.path.join(FIX, 'verdict_golden')
@@ -90,6 +94,41 @@ RUN_10759 = {
 OVERNIGHT_S3_OB = {'merchant_slug': 'wiggle-and-snug', 'listing_id': 91, 'variant_id': 'snug-fit-overnight-s3',
                    'attribution': ['Size 3'], 'attribution_rivals': ['Size 4', 'Size 5', 'Size 6']}
 
+# Brand-direct rows (r40-r45): cycle 229 FL3-wiggle-and-snug-20261014's
+# Gemini answers, as stored (W&S is Parleo's own test store), with the
+# grounding Gemini returned and soa now keeps (runners/grounding.py). The
+# record facts the record will carry (own_domains, its programme name) ride
+# on the row as `record_facts`, merged over the fixture's brand facts.
+WS_BRAND = ea.brand_mention('Wiggle & Snug', 'trueshopstore.com')
+WS_RECORD = {'own_domains': ['trueshopstore.com', 'wiggleandsnug.com'],
+             'retailer_list': ['trueshopstore.com'], 'program_name': 'Member Rewards',
+             'tier_names': ['Member', 'Member+']}
+
+def claim(text, claim_kind='retail'):
+    return {'claim': text, 'claim_kind': claim_kind, 'kind': 'assertion', 'modality': 'asserted',
+            'effective_modality': 'asserted'}
+
+def brand_ext(claims, sources=(), tiers=(), unknown=None):
+    return {'brand_mentioned': True, 'brand_claims': list(claims), 'sources_cited': list(sources),
+            'loyalty_tiers_named': list(tiers), 'other_brands_named': [], 'retailer_mentions': [],
+            'brand_unknown_statement': unknown, 'prices': [], 'member_prices': [], 'pack_counts': [],
+            'gtins': [], 'extraction_confident': True, 'extraction_note': None}
+
+TRIAL_IN_STOCK = 'It is listed as "In stock" for $6.99 on the Wiggle & Snug website.'
+TRIAL_EXT = brand_ext([claim(TRIAL_IN_STOCK)])
+
+def gemini_grounding(domain, segment=TRIAL_IN_STOCK):
+    return {'sources': [{'uri': 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQ-r',
+                         'title': domain, 'domain': domain}],
+            'supports': [{'text': segment, 'start': 60, 'end': 60 + len(segment.encode()),
+                          'sources': [0]}]}
+
+UNRESOLVED = {'sources': [{'uri': 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQ-x',
+                           'title': None, 'domain': None, 'resolve_error': 'ConnectError'}],
+              'supports': [{'text': TRIAL_IN_STOCK, 'start': 60, 'end': 126, 'sources': [0]}]}
+
+BRAND = {'tier': 'brand_direct', 'record_facts': WS_RECORD}
+
 ROWS = [
  ('r01', '§3 rule 1', 'W&S catalog fixture; the brief\'s "about $18" for 17.99',
   ea.price('17.99'), S1, ext([p('18', 'Size 1 small pack')]), None, None),
@@ -156,6 +195,29 @@ ROWS = [
  ('r32', '\u00a73 rule 2 (different product, never exact)',
   'cycle 229 FL3-wiggle-and-snug-20261014: the Trial Pack\'s $6.99 answered for the Size 3 small pack',
   ea.price('22.99'), S3, ext([p('6.99', 'Wiggle & Snug Snug-Fit Trial Pack')]), None, None),
+ ('r40', 'brand-direct grounding support',
+  'cycle 229 run 12975: the Trial Pack claim, backed by a Gemini support whose source is wiggleandsnug.com',
+  WS_BRAND, {}, TRIAL_EXT, None, None, {**BRAND, 'grounding': gemini_grounding('wiggleandsnug.com')}),
+ ('r41', 'brand-direct grounding support guard (not a merchant site)',
+  'r40 with the support resolving to huggies.com: not ours, so still stated with no source',
+  WS_BRAND, {}, TRIAL_EXT, None, None, {**BRAND, 'grounding': gemini_grounding('huggies.com')}),
+ ('r42', 'brand-direct grounding support guard (unresolved redirect)',
+  'r40 with a redirect that never resolved: a source with no known site grounds nothing',
+  WS_BRAND, {}, TRIAL_EXT, None, None, {**BRAND, 'grounding': UNRESOLVED}),
+ ('r43', 'brand-direct own_domains list',
+  'cycle 229 run 12979: cited wiggleandsnug.com in its text; the record says W&S owns it too',
+  WS_BRAND, {}, brand_ext([claim('Yes, Wiggle & Snug Bum Balm 4 oz is still available.')],
+                          sources=['wiggleandsnug.com']), None, None, BRAND),
+ ('r44', 'brand-direct programme name is not a tier',
+  'cycle 229 run 12972: "a \'Member Rewards\' program", transcribed as a tier',
+  WS_BRAND, {}, brand_ext([claim('Wiggle & Snug products are sold through retail partners such as '
+                                 'TrueShop Store.')], sources=['trueshopstore.com'],
+                          tiers=['Member Rewards']), None, None, BRAND),
+ ('r45', 'brand-direct programme name guard (an invented tier)',
+  'r44 naming tiers the record does not publish: still fabricated',
+  WS_BRAND, {}, brand_ext([claim('Wiggle & Snug products are sold through retail partners such as '
+                                 'TrueShop Store.')], sources=['trueshopstore.com'],
+                          tiers=['Member Rewards', 'Snuggle Friend', 'Snuggle Bestie']), None, None, BRAND),
 ]
 
 def jload(*parts):
@@ -171,14 +233,21 @@ reference = ReferenceSet(jload('retailer_prices', 'acme_baby_as_of_cycle2.json')
 for name in os.listdir(OUT):
     if name.endswith('.json'):
         os.remove(os.path.join(OUT, name))
-for rid, rule, source, expectation, ref, extraction, catalog, refname in ROWS:
+for rid, rule, source, expectation, ref, extraction, catalog, refname, *rest in ROWS:
+    extra = rest[0] if rest else {}
     snap = build_snapshot(catalog) if catalog else ws_snap
     variants = rv.from_snapshot(snap)
-    before = old.compare(expectation, extraction, source_ref=ref)
+    facts = {**brand_facts_of(snap), **extra.get('record_facts', {})}
+    if extra.get('tier'):
+        before = new.Verdict(*old_bdc.classify(extraction, expectation, brand_facts=facts))
+    else:
+        before = old.compare(expectation, extraction, source_ref=ref)
     after = new.compare(expectation, extraction, source_ref=ref, record_variants=variants,
-                        brand_facts=brand_facts_of(snap), reference=reference if refname else None)
+                        brand_facts=facts, reference=reference if refname else None,
+                        tier=extra.get('tier'), grounding=extra.get('grounding'))
     row = {'id': rid, 'rule': rule, 'source': source, 'attribution': ATTR,
            'expectation': expectation, 'source_ref': ref, 'extraction': extraction,
+           **{k: extra[k] for k in ('tier', 'grounding', 'record_facts') if k in extra},
            'catalog': catalog, 'reference': 'retailer_prices/acme_baby_as_of_cycle{2,1}.json' if refname else None,
            'verdict_before': before.outcome, 'verdict_after': after.outcome,
            'reason_code_after': after.reason_code, 'flags_after': after.flag_names,

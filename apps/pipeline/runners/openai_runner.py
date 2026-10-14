@@ -20,6 +20,7 @@ from openai import AsyncOpenAI
 
 import soa_shared.config as config
 from soa_shared.config import SOA_OPENAI_TIMEOUT_SECONDS
+from runners import grounding
 from runners.base_runner import BasePlatformRunner
 from runners.platform_response import PlatformResponse
 
@@ -68,6 +69,7 @@ class OpenAIRunner(BasePlatformRunner):
             status="success",
             search_triggered=search_triggered,
             retrieved_sources=retrieved_sources or None,
+            grounding=grounding.from_openai(response.output, response.output_text or ""),
         )
 
     @staticmethod
