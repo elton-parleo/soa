@@ -18,6 +18,9 @@ endpoints are untouched.
     GET /api/console/truesync?merchant=<slug>      the TrueSync matrix, assembled from supply (2C)
     GET /api/console/studies?cycle=<code>          StudyRow[]
     GET /api/console/accuracy?cycle=<code>         per-surface accuracy, never pooled
+    GET /api/console/visibility?cycle=<code>       who is named and who is named first, per surface (2C-1)
+    GET /api/console/record/list?merchant=<slug>   the merchant's products, for the record list (2C-1)
+    GET /api/console/record?merchant=<slug>&product=<sku>  one product's record (Record_), read-only (2C-1)
     GET /api/console/runs                          Run[]   (studio.ts)
     GET /api/console/studio/studies                Study[] with Prompt[] (studio.ts)
     GET /api/console/studio/entities               Entity[] (studio.ts)
@@ -84,6 +87,17 @@ def _label_from_question(query_text: str) -> str:
     if ' cost at ' in label:
         label = label.split(' cost at ', 1)[0]
     return label
+
+
+@router.get("/visibility")
+def get_visibility(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+    """2C-1: Measure > Visibility. Who each answer names and who it names
+    first, from the stored mention coding (Layer 1 position, Layer 2
+    other_brands_named), per surface with a per-agent split. Never pooled
+    across surfaces; no model call."""
+    row = cycle_in_scope(cycle, scope)
+    with engine.connect() as conn:
+        return rm.load_visibility(conn, dict(row))
 
 
 @router.get("/true-value")
@@ -189,6 +203,65 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
     verifications = {s: (body if err is None else {}) for s, (_, body, err) in zip(slugs, reads)}
     return rm.build_truesync(merchant, channels=channels or [], publications=pubs or [], catalog=catalog or {},
                              verifications=verifications, provenance=prov if prov_err is None else None)
+
+
+async def _record_inputs(merchant: str, scope: CustomerScope, *, incentives: bool) -> dict:
+    """2C-1: what the record reads from supply, with the org's tenant token.
+    The catalog is required (a 404 is "no record yet"); the rest degrade:
+    each failure is named in `read_errors` and its part is left out."""
+    client = full_loop._client(scope)
+    reads = [client.get_merchant_catalog(merchant), client.get_publications(limit=500), client.get_channels(),
+             client.get_provenance(merchant), client.get_reference(merchant)]
+    if incentives:
+        reads.append(client.get_merchant_incentives(merchant))
+    view, *results = await asyncio.gather(_tenant_view(scope.org), *reads)
+    (k_status, catalog, k_err), *rest = results
+    if k_err is not None and k_status != 404:
+        raise HTTPException(status_code=502, detail=f"TrueSync catalog unavailable: {k_err}")
+    names = ('publications', 'channels', 'provenance', 'reference', 'incentives')
+    errors = {n: err for n, (_, _, err) in zip(names, rest) if err is not None}
+    if view.get('error'):
+        errors['tenant'] = view['error']
+    body = {n: (b if err is None else None) for n, (_, b, err) in zip(names, rest)}
+    return {
+        'catalog': catalog if k_err is None else None,
+        'merchant_record': next((m for m in view.get('merchants') or [] if m.get('slug') == merchant), None),
+        'publications': body['publications'] or [], 'channels': body['channels'] or [],
+        'provenance': body['provenance'], 'reference': body['reference'],
+        'incentives': body.get('incentives'), 'read_errors': errors,
+    }
+
+
+@router.get("/record/list")
+async def get_record_list(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+    """2C-1: Fix > Offer record, the product list. Every product in the
+    merchant's record (supply's published catalog, or an external merchant's
+    current feed), each with its status. A merchant with no record yet is an
+    empty list, not an error."""
+    got = await _record_inputs(merchant, scope, incentives=False)
+    return rm.build_record_list(merchant, got['catalog'], merchant_record=got['merchant_record'],
+                                publications=got['publications'], channels=got['channels'],
+                                provenance=got['provenance'], reference=got['reference'],
+                                read_errors=got['read_errors'])
+
+
+@router.get("/record")
+async def get_record(merchant: str = Query(...), product: str = Query(...),
+                     scope: CustomerScope = Depends(console_scope)):
+    """2C-1: one product's record (Record_), read-only: its fields with
+    provenance, where the latest reference read disagrees (`was`, `diff`),
+    the validator's issues, the variants with member prices, and the
+    compiled schema.org artifact. `product` is the list's `sku` (or the
+    listing id)."""
+    got = await _record_inputs(merchant, scope, incentives=True)
+    listing = next((l for l in (got['catalog'] or {}).get('listings') or []
+                    if product in (rm._listing_sku(l), str(l.get('listing_id')))), None)
+    if listing is None:
+        raise HTTPException(status_code=404, detail=f"product {product!r} is not in {merchant!r}'s record")
+    return rm.build_record(merchant, listing, merchant_record=got['merchant_record'],
+                           publications=got['publications'], channels=got['channels'],
+                           provenance=got['provenance'], reference=got['reference'],
+                           incentives=got['incentives'], read_errors=got['read_errors'])
 
 
 @router.get("/studies")
