@@ -80,7 +80,7 @@ def readback(snapshot: CatalogSnapshot) -> str:
 def _money(amount, currency='USD') -> str:
     amount = ea.normalize_money(amount) if amount is not None else None
     if amount is None:
-        return '—'
+        return 'not given'
     return f"${amount}" if (currency or 'USD') == 'USD' else f"{amount} {currency}"
 
 
@@ -144,8 +144,8 @@ def tally(stage_total: int, tiers: dict) -> dict:
     within = total <= MAX_QUESTIONS
     return {'ai_written': ai, 'from_catalog': catalog, 'total': total, 'limit': MAX_QUESTIONS, 'within': within,
             'tone': 'ok' if within else 'off',
-            'text': f"{parts} — within the {MAX_QUESTIONS} limit" if within
-            else f"{parts} — over the {MAX_QUESTIONS} limit, reduce a stage or untick a tier"}
+            'text': f"{parts}, within the {MAX_QUESTIONS} limit" if within
+            else f"{parts}, over the {MAX_QUESTIONS} limit. Reduce a stage or untick a tier."}
 
 
 def build_preview(snapshot: CatalogSnapshot, *, tiers: Dict[str, bool], stage_total: int,

@@ -1869,7 +1869,7 @@ Brandco is soa's external test fake; supply's preview is shaped by its `feed/val
     "available": true,
     "error": null,
     "record_error": null,
-    "read_at": "2026-10-14T17:51:35.739513Z",
+    "read_at": "2026-10-14T18:26:08.147055Z",
     "products": 5,
     "variants": 19,
     "gtins": 6,
@@ -2014,7 +2014,7 @@ Brandco is soa's external test fake; supply's preview is shaped by its `feed/val
     "limit": 100,
     "within": true,
     "tone": "ok",
-    "text": "62 AI-written + 25 from the catalog = 87 questions — within the 100 limit"
+    "text": "62 AI-written + 25 from the catalog = 87 questions, within the 100 limit"
   }
 }
 ```
@@ -2034,7 +2034,7 @@ Brandco is soa's external test fake; supply's preview is shaped by its `feed/val
     "limit": 100,
     "within": true,
     "tone": "ok",
-    "text": "62 AI-written + 25 from the catalog = 87 questions — within the 100 limit"
+    "text": "62 AI-written + 25 from the catalog = 87 questions, within the 100 limit"
   }
 }
 ```
