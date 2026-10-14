@@ -39,7 +39,7 @@ Lists (`runs`, `studio/*`) return only the scope's rows.
 | `GET /api/console/studio/studies` | the tenant's studies with prompts | `Study[]` + `Prompt` (studio.ts) |
 | `GET /api/console/studio/entities` | entities the tenant's cycles compare | `Entity[]` (studio.ts) |
 | `GET /api/console/full-loop/{id}`, `GET /api/full-loop/{id}` | the full loop's combined status | — (soa) |
-| `POST /api/full-loop` | starts a full loop (202) | — (soa) |
+| `POST /api/full-loop` | queues a full loop for the worker (202 `{full_loop_id, status: 'queued'}`) | — (soa) |
 | `GET /api/console/me` | who is signed in and the orgs they may select (2C-0) | — (the console's workspace switcher) |
 | `GET /api/console/full-loop/latest` | the scope's most recent full loop, or `null` (2C-0) | — (soa) |
 
@@ -126,10 +126,20 @@ as failures. **No cross-surface total exists**, by design.
 ### Full loop
 
 `POST /api/full-loop` `{merchant_slug, study_type, platforms, runs_per_query?, allow_hosted_render?}`
-(202) and `GET /api/full-loop/{id}`: the request, supply's run read live (`supply.run`, or
+validates the study and surfaces, records the request and answers **202
+`{full_loop_id, status: 'queued'}`** (`id` is the same number) without calling supply.
+The worker picks the row up from the database, as it does a planned cycle, and makes
+supply's POST itself: supply runs the whole loop inline up to 25 pages, which outlasted a
+Vercel request (a 504).
+
+`GET /api/full-loop/{id}`: the request, supply's run read live (`supply.run`, or
 `supply.read_error`), the cycle once created, and a three-step `strip`
-(reference → study → scoring) for the console's status strip. The sequence is in
-`apps/pipeline/fullloop/coordinator.py`.
+(reference → study → scoring) for the console's status strip. A queued request reads as
+`reference_pending` with `supply.run_id` `null`. A request with no progress for 60 minutes
+(`FULL_LOOP_STALE_MINUTES`; the longest W&S cycle on record ran 56) reads as `failed` with
+an `error` starting `timed_out:`, whether or not the worker has marked it yet, so the
+button re-enables. The sequence is in `apps/pipeline/fullloop/coordinator.py`, the
+staleness rule in `soa_shared/full_loop_staleness.py`.
 
 ### Me (2C-0)
 

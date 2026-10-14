@@ -1,7 +1,7 @@
 """
 2B §5: "Run full loop" from soa.
 
-    POST /api/full-loop          start it: supply's run, then a request row
+    POST /api/full-loop          queue it: one request row, 202 {full_loop_id, status: 'queued'}
     GET  /api/full-loop/{id}     the combined status (supply run + soa cycle)
 
 Operator or org member, server-side: the org's tenant token is opened here
@@ -9,13 +9,19 @@ and attached upstream, never sent to the browser. Scoped like every console
 read (app/console_scope.py): a member acts for their own org, an operator
 may name one with ?org=.
 
-POST calls supply's POST /api/truesync/merchants/{slug}/full-loop, which
-answers 200 with the finished run up to 25 pages and 202 with the run in
-`running` above that. Either way the rest happens on the worker
-(apps/pipeline/fullloop/coordinator.py): poll to reference_done, create the
-cycle with full_loop_run_id, run and score it on the chosen surfaces, PATCH
-supply with soa_cycle_id and scored|failed. This route returns as soon as
-the request is recorded. Manual trigger only; nothing schedules it.
+POST validates the study and the surfaces, records the request with no
+supply_run_id, and returns. It does not call supply: supply's
+POST .../full-loop answers with the finished run up to 25 pages, which took
+longer than a Vercel request may (a 504). The worker
+(apps/pipeline/fullloop/coordinator.py) picks the row up the way it picks
+up a planned cycle, from the database: POST supply, poll to reference_done,
+create the cycle with full_loop_run_id, run and score it on the chosen
+surfaces, PATCH supply with soa_cycle_id and scored|failed. Manual trigger
+only; nothing schedules it.
+
+GET reports a request with no progress for full_loop_staleness.STALE_MINUTES
+as failed (timed_out) even before the worker has marked it so, so a stopped
+worker never leaves the console's button disabled.
 """
 import json
 from datetime import datetime, timezone
@@ -31,6 +37,7 @@ from app.customer_context import CustomerScope
 from clients.truesync_client import TrueSyncClient
 from soa_shared import surfaces
 from soa_shared.database import engine
+from soa_shared.full_loop_staleness import stale_error
 
 router = APIRouter(tags=["full-loop"])
 
@@ -76,7 +83,7 @@ def combined_status(row, *, supply_view: Optional[dict], supply_error: Optional[
         cycle = dict(c) if c else None
     supply_status = (supply_view or {}).get('status') or row.get('supply_status')
     status = row['status']
-    reference = ('failed' if supply_status == 'failed' else
+    reference = ('failed' if supply_status == 'failed' or (status == 'failed' and not row.get('supply_run_id')) else
                  'done' if supply_status in ('reference_done', 'scored') or status not in ('reference_pending',)
                  else 'running')
     study = ('waiting' if cycle is None else
@@ -123,33 +130,17 @@ async def start_full_loop(body: FullLoopStart, scope: CustomerScope = Depends(co
         if reason:
             raise HTTPException(status_code=422, detail=f"surface {platform!r} cannot run: {reason}")
 
-    status, payload, error = await _client(scope).post_full_loop(
-        body.merchant_slug, allow_hosted_render=body.allow_hosted_render)
-    if error is not None or not isinstance(payload, dict):
-        if status == 404:
-            raise HTTPException(status_code=404, detail=f"merchant {body.merchant_slug!r} not found")
-        raise HTTPException(status_code=502, detail=f"TrueSync full loop did not start: {error}")
-
-    supply_status = payload.get('status')
-    request_status = {'reference_done': 'reference_done', 'failed': 'failed'}.get(
-        supply_status, 'reference_pending')
-    now = datetime.now(timezone.utc)
     with engine.begin() as conn:
         request_id = conn.execute(text("""
             INSERT INTO soa_full_loop_requests (organization_id, merchant_slug, study_type, platforms,
-                runs_per_query, supply_run_id, supply_status, status, error, created_by,
-                created_at, updated_at)
-            VALUES (:org, :slug, :st, :p, :rpq, :run, :ss, :status, :err, :by, :now, :now)
+                runs_per_query, allow_hosted_render, status, created_by, created_at, updated_at)
+            VALUES (:org, :slug, :st, :p, :rpq, :ahr, 'reference_pending', :by, :now, :now)
             RETURNING id
         """), {"org": scope.org.id, "slug": body.merchant_slug, "st": body.study_type,
                "p": json.dumps(body.platforms), "rpq": body.runs_per_query,
-               "run": payload.get('id'), "ss": supply_status, "status": request_status,
-               "err": (f"supply full loop failed: {payload.get('error')}"
-                       if request_status == 'failed' else None),
-               "by": user.get('email') or user.get('sub'), "now": now}).scalar()
-        row = conn.execute(text("SELECT * FROM soa_full_loop_requests WHERE id = :id"),
-                           {"id": request_id}).mappings().one()
-    return combined_status(dict(row), supply_view=payload, supply_error=None)
+               "ahr": body.allow_hosted_render, "by": user.get('email') or user.get('sub'),
+               "now": datetime.now(timezone.utc)}).scalar()
+    return {'full_loop_id': request_id, 'id': request_id, 'status': 'queued'}
 
 
 async def read_full_loop(request_id: int, scope: CustomerScope) -> dict:
@@ -158,12 +149,17 @@ async def read_full_loop(request_id: int, scope: CustomerScope) -> dict:
                            {"id": request_id}).mappings().fetchone()
     if row is None or row['organization_id'] != scope.org.id:
         raise HTTPException(status_code=404, detail=f"full loop {request_id} not found")
+    row = dict(row)
+    with engine.connect() as conn:
+        timed_out = stale_error(conn, row, datetime.now(timezone.utc))
+    if timed_out:
+        row.update(status='failed', error=timed_out)
     supply_view, supply_error = None, None
     if row['supply_run_id']:
         _status, payload, error = await _client(scope).get_full_loop_run(
             row['merchant_slug'], row['supply_run_id'])
         supply_view, supply_error = (payload if isinstance(payload, dict) else None), error
-    return combined_status(dict(row), supply_view=supply_view, supply_error=supply_error)
+    return combined_status(row, supply_view=supply_view, supply_error=supply_error)
 
 
 @router.get("/full-loop/{request_id}")

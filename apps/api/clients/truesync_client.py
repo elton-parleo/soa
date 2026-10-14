@@ -231,14 +231,6 @@ class TrueSyncClient:
 
     # ─── 2B: the full loop and what the console reads ────────────────────
 
-    async def post_full_loop(self, merchant_slug: str, allow_hosted_render: bool = True) -> ForwardResult:
-        """POST /merchants/{slug}/full-loop — 200 with the finished run up to
-        25 pages, 202 with the run in `running` above that. Write token."""
-        return await self.forward(
-            "POST", f"/api/truesync/merchants/{_slug(merchant_slug)}/full-loop",
-            json={"allow_hosted_render": bool(allow_hosted_render)},
-        )
-
     async def get_full_loop_run(self, merchant_slug: str, run_id: int) -> ForwardResult:
         return await self.get(
             f"/api/truesync/merchants/{_slug(merchant_slug)}/full-loop/{int(run_id)}")
