@@ -33,6 +33,14 @@ def _fixture(name):
 
 with open(os.path.join(HERE, '..', '..', 'pipeline', 'tests', 'fixtures', 'wiggle_and_snug_catalog.json')) as fh:
     WS_INCENTIVES = json.load(fh)['incentives']
+# 2C-2b: production's W&S record states no per-variant member price (the
+# member price is only on the page reads, supply_reference_ws.json). The
+# pipeline's fixture carries member_prices / entitled_member_price on some
+# variants, which production never produces; the console tests read the
+# record as production holds it. The offers themselves are kept.
+for _listing in WS_INCENTIVES['listings']:
+    for _variant in _listing.get('variants') or []:
+        _variant.update(member_prices=[], entitled_member_price=None, entitled_tier_name=None)
 WS_REFERENCE = _fixture('supply_reference_ws.json')
 BRANDCO = _fixture('supply_feed_brandco.json')
 WS = '/api/truesync/merchants/wiggle-and-snug'
@@ -204,11 +212,12 @@ def test_a_field_the_page_disagrees_with_carries_was_and_diff(http, upstream):
     assert diff['v'] == 'Snug-Fit Overnight Diapers Size 6 (42 ct)'
     assert diff['was'] == 'Overnight Diapers Size 6, 42 Count'
     assert diff['prov'] == 'brand' and diff['finding'] == 'name_differs'
-    assert diff['note'] == ('trueshopstore.com, read 2026-10-09 by our own fetch. only in the record: snug fit')
+    assert diff['note'] == ('trueshopstore.com, read 2026-10-14 by our own fetch. only in the record: snug fit')
     assert body['kind'] == 'product'          # W&S is a brand
     v6 = next(v for v in body['variants'] if v['id'] == 'snug-fit-overnight-s6')
     assert v6['status'] == 'Page differs: name' and v6['tone'] == 'warn'
-    assert next(v for v in body['variants'] if v['id'] == 'snug-fit-overnight-s3')['status'] == 'Not read yet'
+    # 2C-2b: production reads every page, so a sibling with no finding matches it
+    assert next(v for v in body['variants'] if v['id'] == 'snug-fit-overnight-s3')['status'] == 'Matches the page'
     # Every field of a brand's published record is the brand's.
     assert {f['prov'] for f in body['fields']} == {'brand'}
 

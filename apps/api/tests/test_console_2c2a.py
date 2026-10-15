@@ -144,16 +144,17 @@ def test_codes_and_points_join_on_the_offer_id():
 
 def test_the_ladder_reads_the_variant_s_member_price_first():
     """Live: "Member+ 5% off, stated without a price, not drawn" although the
-    variant states $12.09 for Member+."""
+    page read of Size 1 small carries $12.09. 2C-2b: the corrected fixture
+    holds that price where production does, on the read, not the record."""
     listing = next(l for l in WS_CATALOG['listings'] if l['listing_id'] == 90)
     entry = copy.deepcopy(next(l for l in WS_INCENTIVES['listings'] if l['listing_id'] == 90))
-    v = next(x for x in entry['variants'] if x['variant_id'] == 'snug-fit-diapers-s1-small')
-    v.update(entitled_member_price='12.09', entitled_tier_name='Member+')
-    stated, unpriced = parity.ladder_steps(entry, listing['variants'][0], [])
-    assert (12.09, 'Member+', 'record', 'member_price') in stated
+    reads = WS_REFERENCE['rows']
+    stated, unpriced = parity.ladder_steps(entry, listing['variants'][0], [], reads=reads)
+    assert (12.09, 'Member+', 'reference_read', 'member_price') in [s_[:4] for s_ in stated]
     assert 'Member+ 5% off' not in unpriced
     ladder, receipt = parity.build_ladder({'listings': [listing]}, {'listings': [entry]}, [],
-                                          [{'variant_id': 'snug-fit-diapers-s1-small'}], own_domain='trueshopstore.com')
+                                          [{'variant_id': 'snug-fit-diapers-s1-small'}], own_domain='trueshopstore.com',
+                                          reads=reads)
     assert [(s['label'], s['value']) for s in ladder['steps']] == [('List', '$17.99'), ('First order, WELCOME10', '$16.19'), ('Member+', '$12.09')]
     assert receipt['rows'][-1] == {'k': 'The lowest stated price', 'v': '$12.09', 'kind': 'big'}
 
@@ -188,12 +189,18 @@ def test_a_sibling_variant_s_quote_is_shown_and_the_page_read_is_the_reference(h
     """Live: "Quoted a wrong price in 4 of 6 runs" beside one wrong quote and
     three "no price": the Trial Pack quotes were counted, not shown. And the
     reference said "the record, Sep 4" although an Oct 14 read existed."""
-    swap = [{'stated': '6.99', 'amount': '6.99', 'product': 'Snug-Fit Trial Pack', 'target': 'swap',
-             'variant_id': 'snug-fit-trial-pack', 'outcome': 'wrong', 'priced_as_named': True}]
+    # 2C-2b: exactly the entry scoring/expectation_comparator.py writes for a
+    # sibling-variant claim on the record path (rescore_cycle stores
+    # verdict.claims as claim_results unchanged), nothing more.
+    swap = [{'stated': '6.99', 'amount': '6.99', 'product': 'Snug-Fit Trial Pack', 'tier': None,
+             'conflict': 'names a sibling variant', 'target': 'swap', 'variant_id': 'snug-fit-trial-pack',
+             'same_group': False, 'outcome': 'wrong', 'matched_at': None, 'against': '6.99',
+             'priced_as_named': True}]
     for rid, platform in ((2101, 'chatgpt'), (2102, 'chatgpt'), (2103, 'gemini_grounded')):
         _run(db, rid, 1, platform, 'catalog_accuracy', 'wrong', swap, reason='variant_swap')
     reads = copy.deepcopy(WS_REFERENCE)
-    reads['rows'].append({**reads['rows'][2], 'price': '12.49', 'observed_at': '2026-10-14T17:01:00+00:00'})
+    balm_read = next(r for r in reads['rows'] if r['variant_label'] == 'bum-balm-4oz')
+    reads['rows'].append({**balm_read, 'price': '12.49', 'observed_at': '2026-10-15T08:00:00+00:00'})
     upstream.answer('GET', f'{WS}/access', body=_fixture('supply_access_ws.json'), token=TOKEN_A)
     upstream.answer('GET', f'{WS}/reference', body=reads, token=TOKEN_A)
     as_('alice')
@@ -202,7 +209,7 @@ def test_a_sibling_variant_s_quote_is_shown_and_the_page_read_is_the_reference(h
     assert balm['issue'] == 'Quoted a wrong price in 4 of 5 runs.'
     assert balm['quoted'] == ('$6.99 for Snug-Fit Trial Pack, 3 of 5 runs (ChatGPT 2, Gemini 1). '
                               '$12.99, 1 of 5 runs (Gemini 1). $14.99, 1 of 5 runs (ChatGPT 1)')
-    assert balm['live'] == '$12.49 at trueshopstore.com, our own fetch, Oct 14'
+    assert balm['live'] == '$12.49 at trueshopstore.com, our own fetch, Oct 15'
     tv = http.get('/api/console/true-value', params={'cycle': CYCLE}).json()
     whole = next(r for r in tv['rows'] if r['sku'] == 'bum-balm-4oz')['retailer_cells']['trueshopstore.com']
     assert {q['swap_product'] for q in whole['quotes'] if q.get('swap_product')} == {'Snug-Fit Trial Pack'}

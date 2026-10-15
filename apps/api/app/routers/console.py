@@ -201,8 +201,7 @@ def _true_value_inputs(conn, row) -> tuple:
         deciding = next((c for c in claims if c.get('outcome') == o['outcome']), claims[0] if claims else None)
         swap = None
         if deciding is None:
-            swap = next((c for c in all_claims if c.get('target') in ('swap', 'clash')
-                         and c.get('outcome') == o['outcome']), None)
+            swap = rm.deciding_swap(all_claims, o['outcome'])
             deciding = swap
         scored.append({'variant_id': ref.get('variant_id'), 'gtin': ref.get('gtin'),
                        'retailer': expected.get('attributed_to') or own_domain,
@@ -244,7 +243,8 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
     body['programs'] = programs
     body['ladder'], body['receipt'] = parity.build_ladder(
         catalog if k_err is None else None, incentives if i_err is None else None,
-        (owned or {}).get('incentives') if o_err is None else None, scored, own_domain=own_domain)
+        (owned or {}).get('incentives') if o_err is None else None, scored, own_domain=own_domain,
+        reads=(reference or {}).get('rows') if r_err is None else None)
     body['read_errors'] = errors
     return body
 

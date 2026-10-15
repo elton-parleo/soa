@@ -127,7 +127,7 @@ def test_supply_s_own_member_prices_are_read_when_listed():
     entry = {'listing_id': 93, 'incentives': [{'mechanic': 'member_price', 'variant_scope': ['b'], 'value': {'member_price': '10.99'}}],
              'variants': [{'variant_id': 'b', 'member_prices': [{'tier_name': 'Member+', 'price': '11.69', 'basis': 'effective_net_price'}]}]}
     stated, _ = parity.ladder_steps(entry, {'variant_id': 'b'}, [])
-    assert stated == [(11.69, 'Member+', 'record', 'effective_net_price')]
+    assert stated == [(11.69, 'Member+', 'record', 'effective_net_price', None)]
 
 
 def test_the_ladder_draws_only_stated_prices():
@@ -135,8 +135,9 @@ def test_the_ladder_draws_only_stated_prices():
     entry = next(l for l in WS_INCENTIVES['listings'] if l['listing_id'] == 90)
     variant = listing['variants'][0]
     stated, unpriced = parity.ladder_steps(entry, variant, [])
-    # WELCOME10 states its first-order price; Member+ states 5% and no price.
-    assert stated == [(16.19, 'First order, WELCOME10', 'record', 'effective_net_price')]
+    # WELCOME10 states its first-order price; Member+ states 5% and no price,
+    # and with no page read given there is no price to draw.
+    assert stated == [(16.19, 'First order, WELCOME10', 'record', 'effective_net_price', None)]
     assert unpriced == ['Member+ 5% off']
 
 
@@ -316,7 +317,7 @@ def test_accessibility_carries_the_checks_and_measured(http, upstream):
     check(body, 'Accessibility')
     assert [c['name'] for c in body['agent_checks']] == ['ChatGPT', 'Gemini', 'Perplexity']
     hosted = next(c for c in body['checks'] if c['key'] == 'hosted_render')
-    assert hosted['value'] == '0 of 3' and hosted['status'] == 'ok'
+    assert hosted['value'] == '0 of 19' and hosted['status'] == 'ok'
     assert [r['identity'] for r in body['requests'] if not r['measured']] == ['Claude-User']
 
 
@@ -377,8 +378,8 @@ def test_a_hosted_catalog_has_stages_and_the_retailers_read(http, upstream):
     assert 'verified' not in by['bum-balm-4oz']['stages']
     assert body['stage_cycle'] == CYCLE
     [shop] = body['retailers_read']
-    assert shop['domain'] == 'trueshopstore.com' and shop['pages'] == 3 and shop['read'] == 3
-    assert shop['note'] == '3 of 3 pages read.' and shop['hosted_render'] == 0
+    assert shop['domain'] == 'trueshopstore.com' and shop['pages'] == 19 and shop['read'] == 19
+    assert shop['note'] == '19 of 19 pages read.' and shop['hosted_render'] == 0
 
 
 def test_the_catalog_read_note_names_what_failed():
