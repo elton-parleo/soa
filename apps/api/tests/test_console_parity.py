@@ -341,6 +341,10 @@ def test_issues_with_most_impact_come_first():
     issues = [{'channel': 'acp', 'verdict': 'approx'}, {'channel': 'ucp', 'verdict': 'dropped'},
               {'channel': 'gmc', 'verdict': 'dropped'}, {'channel': 'acp', 'verdict': 'conflict'},
               {'channel': 'acp', 'verdict': 'info'}]
+    g = parity.group_issues(issues + [{'channel': 'acp,ucp', 'verdict': 'blocked'}], published_channels=['gmc'],
+                            channel_names={'acp': 'Agentic Commerce Protocol', 'ucp': 'UCP'})
+    assert g['expanded'] == [2, 5, 1]
+    assert next(x for x in g['groups'] if x['channel'] == 'acp,ucp')['label'] == 'Agentic Commerce Protocol, UCP'
     g = parity.group_issues(issues, published_channels=['gmc'])
     assert g['expanded'] == [2, 1, 3]
     assert [(x['channel'], x['count']) for x in g['groups']] == [('acp', 3), ('gmc', 1), ('ucp', 1)]

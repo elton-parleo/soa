@@ -873,7 +873,8 @@ def record_surfaces(product: Optional[dict], channels: List[dict]) -> List[dict]
 ISSUE_IMPACT = {'blocked': 0, 'dropped': 1, 'conflict': 2, 'approx': 3, 'info': 4}
 
 
-def group_issues(issues: List[dict], *, published_channels: Iterable[str]) -> dict:
+def group_issues(issues: List[dict], *, published_channels: Iterable[str],
+                 channel_names: Optional[Dict[str, str]] = None) -> dict:
     """Issues by channel with a count, every note kept. The three with the
     most impact (a dropped mechanic on a channel the merchant publishes to
     first, then a failed publish, a validation conflict, an approximation)
@@ -882,7 +883,9 @@ def group_issues(issues: List[dict], *, published_channels: Iterable[str]) -> di
     groups: Dict[str, dict] = {}
     for i, issue in enumerate(issues):
         ch = issue.get('channel') or 'record'
-        g = groups.setdefault(ch, {'channel': ch, 'count': 0, 'issues': []})
+        names = channel_names or {}
+        g = groups.setdefault(ch, {'channel': ch, 'count': 0, 'issues': [],
+                                   'label': ', '.join(names.get(c, c) for c in ch.split(','))})
         g['count'] += 1
         g['issues'].append({**issue, 'index': i})
     ranked = sorted(range(len(issues)), key=lambda i: (
@@ -909,7 +912,7 @@ def extend_record(record: dict, *, listing: dict, owned: Optional[List[dict]], r
                                        channel_names=names)
     record['surfaces'] = record_surfaces(truesync_product, truesync_channels)
     published = [s for s, c in (record.get('channels') or {}).items() if c.get('status') == 'published']
-    record['issue_groups'] = group_issues(record.get('issues') or [], published_channels=published)
+    record['issue_groups'] = group_issues(record.get('issues') or [], published_channels=published, channel_names=names)
     return record
 
 
