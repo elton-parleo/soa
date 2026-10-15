@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -625,7 +625,98 @@ keeps its own outcome and reference.
 - **Availability**: supply's reference payload does not project the read's availability, and
   the hosted catalog has none; the field shows only when one of them states it.
 - **A competitor grid**: needs a comparison-set domain list on supply (a separate prompt).
-- **Revenue, a Share of Algorithm score, the Fix and Prove workflow**: out of scope (Preview).
+- **Revenue, the Fix and Prove workflow**: out of scope (Preview). The Share of Algorithm score is 2C-3 (below).
+
+## 2C-3: the Share of Algorithm score
+
+`GET /api/console/score?cycle=<code>[&merchant=<slug>]`, `app/services/console_score.py`. The Audit's
+formula over loop data: the Audit's registry (`soa_shared/scan_dimensions.py`: weights, seen/said
+splits, `dimension_max`, the readiness bar), the Audit's per-dimension scoring functions
+(`lite_pillars.py`, `cycle_scoring_full.py`), called, never changed. The console only adapts loop
+counts into those functions' inputs. No model is called.
+
+### The weights, as the scorer has them
+
+Read from `soa_shared/scan_dimensions.py` at `SCORER_VERSION = "5"`; the weights are the ones
+the 2C-3 prompt lists as v4, unchanged by the v4 to v5 re-weight's own docstring (True Value 40 to 50):
+
+| pillar | dimension | weight | seen / said |
+|---|---|---|---|
+| Visibility 32 | Share of Mentions | 22 | |
+| | Recommendation Strength | 10 | |
+| Accessibility 18 | Agent Access | 5 | |
+| | Catalog & Context | 8 | |
+| | Protocol & Feed Presence | 5 | |
+| True Value 50 | Price Truth | 16 | 7 / 9 |
+| | Value Protocols | 14 | 14 / none (encode only) |
+| | Deal Citability | 12 | 7 / 5 |
+| | Member Value | 8 | 5 / 3 |
+
+Readiness bar: `VERDICT_COMPOSITE_THRESHOLD = 60`, with `VERDICT_TRUE_VALUE_RATIO_THRESHOLD = 0.25`
+beside it (`compute_verdict`: AGENT-READY needs both).
+
+**Which scorer version.** The file holds two constants. `SCORER_VERSION = "5"` is the lite Audit's
+(24 questions, one surface). `FULL_CYCLE_SCORER_VERSION = "6"` is the same registry and weights for a
+full cycle: the one difference is Deal Citability's said half, banded as a rate
+(`apply_deal_citability_rate_band`) because a citation count saturates at full-cycle volume. A loop is
+a full cycle, and its value-tier half is a rate by construction (right ÷ scored), so the console
+scores under **`FULL_CYCLE_SCORER_VERSION`** and stores that value as `scorer_version`. Reused, not
+forked: a re-weight of either bumps it and every stored console score reads stale.
+
+### Mapping, one row per Audit dimension
+
+Per surface unless the row says otherwise. "Pages read" is the latest 2A reference read of the
+merchant, `read_status` `ok` or `empty`, the same rows and predicates Accessibility's merchant
+checks count (`console_parity.build_access_checks`).
+
+| dimension | scorer input | loop source | denominator | state |
+|---|---|---|---|---|
+| Share of Mentions | `som_pct`, `total_mentions` (`score_share_of_mentions_full`) | Layer 1 (`soa_coded_mentions`) on answered **unprompted** runs: mentions of ours ÷ mentions of every cycle entity, as `MetricsCalculator` counts `soa_pct` | mentions of the cycle's entities in answered unprompted runs | `measured` when the surface has an answered unprompted run, else `not_measured` |
+| Recommendation Strength | `rsi_score` (`score_recommendation_strength_full`) | Layer 1 `strength` on our unprompted mentions, Primary +3 / Positive +1 / Neutral 0 / Negative −1, mean over our mentions, as `MetricsCalculator` counts `rsi_score` | our mentions in answered unprompted runs | as above |
+| Agent Access | `crawl_dimensions.agent_access` `{score, max}` | supply's access run: measured identities that got through; Claude-User (no verified UA) and the Parleo control are not agents measured | measured agent identities | `measured`, else `not_measured` when no identity was measured. One value for every surface |
+| Catalog & Context | `crawl_dimensions.catalog_context` | pages read with `method == json_ld` **and** a GTIN in markup (Accessibility's GTIN predicate) | pages read | `measured`, else `not_measured` with no page read. One value for every surface |
+| Protocol & Feed Presence | `crawl_dimensions.protocol_feed` | none: the supply probe does not exist | | **`not_measured`** |
+| Price Truth, seen | `crawl_dimensions.price_truth_seen` | pages read with a price | pages read | as Catalog & Context |
+| Price Truth, said | `run_signals` (`score_price_truth_said`) | catalog tier: one signal per scored run, cited = `exact` | scored (exact, partial, stale, wrong); `unverifiable`, `absent`, `unscoreable` outside it | `measured`; fewer than `MIN_OPPORTUNITY_SET_MENTIONS` (2) scored is the scorer's own `na`, and the dimension rescales onto its seen half |
+| Value Protocols | `crawl_dimensions.value_protocols_seen` | none: the manifest probe does not exist | | **`not_measured`** |
+| Deal Citability, seen | `crawl_dimensions.deal_citability_seen` | none: supply's `/reference` rows project no incentive or code (`reference_reads.offer_text` is stored, not served) | | **`not_measured`**, and with it the whole dimension (below) |
+| Deal Citability, said | `run_signals` (`score_deal_citability_said_full`) | value tier, `code` and `points` questions: cited = `exact` | scored | computed and shown, not counted while the seen half is unmeasured |
+| Member Value, seen | `crawl_dimensions.member_value_seen` | pages read with `member_price` | pages read | as Catalog & Context |
+| Member Value, said | `run_signals` (`score_member_value_said`) | value tier, `member_price` (Member+) questions: cited = `exact` | scored | `measured`; fewer than 2 scored is `na`, onto the seen half |
+
+Member Value's applicability is the scorer's (`member_value_applicable`): the record states a program
+(the study asked a `member_price` question, standing in for the Audit's membership probe) or the
+member-price half earned credit. Neither: `na`, and its 8 points leave the applicable max, as in the Audit.
+
+**Rows changed from the prompt's table, and why.**
+
+- **Share of Mentions**: the prompt had named ÷ answered. The scorer's input is a share of mentions
+  across tracked brands (`soa_pct`, capped at 50 for full marks), not a presence rate; named ÷ answered
+  fed into it would give full marks to any brand named in half the answers. The loop has the
+  honest input (Layer 1 counts every cycle entity), so the row uses it. Named ÷ answered stays as a metric row.
+- **Recommendation Strength**: the prompt had first pick ÷ answered. The scorer's input is `rsi_score`,
+  Layer 1's strength coding, which the loop stores (`soa_coded_mentions.strength`). First pick ÷ answered
+  stays as a metric row.
+- **Deal Citability, seen**: the prompt had reads carrying an incentive or code in markup. Supply's
+  reference read stores `offer_text` but `/reference` and `/retailer-prices` do not serve it, so the loop
+  has no source. `not_measured`.
+- **Deal Citability, said**: computed, but by the Audit's own rule an unmeasurable seen half takes the
+  whole dimension out of the applicable max (`build_pillars_payload` / `build_full_cycle_pillars`,
+  `seen_blocked`: "the WHOLE dimension leaves the applicable max"), said shown, uncounted.
+- **Price Truth, said**, **Member Value, said**: the scorer counts "cited a price" / "cited member
+  value" over mentions; the loop has a stronger fact, the price judged exact against the record, so
+  `exact` is the citation and `scored` the opportunity set. The value-tier signals are placed in a
+  purchase-intent stage so the scorer's own opportunity-set filter keeps them.
+
+### Not measured, and the applicable max
+
+A `not_measured` dimension leaves the applicable max by its full weight; a said half the scorer calls
+`na` rescales its dimension onto the seen half (`dimension_max`); Member Value `na` leaves by 8. The
+score is `round(earned ÷ applicable max × 100)`, as `compute_composite` does for the Audit's /92. One
+departure: `compute_composite` only shrinks its basis for Member Value, so the Audit scores an
+unmeasured Protocol & Feed (`na`) and Value Protocols as zeros in the composite. The console cannot
+call it for that reason, and sums the scorer's own dimension rows over the measured ones instead. A
+`not_measured` dimension is never 0.
 
 ## Answer divergences
 
