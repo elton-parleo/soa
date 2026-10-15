@@ -314,7 +314,7 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tie
             continue
         agent = surfaces.agent_of(r.get('platform')) or r.get('platform')
         o, t = r.get('outcome'), r.get('tier')
-        answered = r.get('answer_status') in (None, surfaces.ANSWERED)
+        answered = r.get('answer_status') == surfaces.ANSWERED
         for bucket in (total, per.setdefault(agent, _empty_agent())):
             if t == 'brand_direct':
                 if o in ('grounded', 'echoed', 'misattributed', 'fabricated', 'acknowledged_unknown'):
@@ -359,12 +359,17 @@ def _delta(now: int, prev: Optional[int]) -> tuple:
     return (f"+{d}" if d > 0 else str(d) if d < 0 else '0'), ('up' if d > 0 else 'down' if d < 0 else 'flat')
 
 
-def build_agents(metrics: dict, prev: Optional[dict]) -> List[dict]:
+def build_agents(metrics: dict, prev: Optional[dict], status: str = 'compared') -> List[dict]:
+    """AgentWeek per agent on the surface. 2C-2b: the per-agent change follows
+    the Changes block's rule: a delta only when the two cycles are compared
+    on this surface (changes_status), first picks over the same denominator
+    as the block (named_of); otherwise `delta` is empty and `delta_status`
+    says why ('first_cycle' | 'not_comparable')."""
     out = []
     for agent in sorted(metrics['agents'], key=lambda a: list(AGENT_NAMES).index(a) if a in AGENT_NAMES else 99):
         m = metrics['agents'][agent]
         rule, note = agent_note(m)
-        p = ((prev or {}).get('agents') or {}).get(agent)
+        p = ((prev or {}).get('agents') or {}).get(agent) if status == 'compared' else None
         delta, direction = _delta(m['first'], p['first'] if p else None)
         out.append(rm.compact({
             'agent': agent, 'answers': m['answers'], 'named': m['named'], 'first': m['first'],
@@ -374,12 +379,30 @@ def build_agents(metrics: dict, prev: Optional[dict]) -> List[dict]:
             'named_of': m['named_of'], 'exact': m['exact'], 'scored': m['scored'], 'stale': m['stale'],
             'unverifiable': m['unverifiable'], 'answered_with_other_brand': m['other_brand'],
             'did_not_know': m['unknown'], 'note_rule': rule,
-        }, ('dir',)))
+            'delta_status': status if p is None or status != 'compared' else 'compared',
+            'delta_detail': (TEMPLATES['changes.detail'].format(a=m['first'], of_now=m['named_of'], b=p['first'],
+                                                                of_prev=p['named_of'], code=(prev or {}).get('code'))
+                             if p else None),
+        }, ('dir', 'delta_detail')))
     return out
 
 
 def _money_text(value) -> Optional[str]:
     return rm.money(value) if value not in (None, '', '—') else None
+
+
+def quote_groups(quotes: List[dict]) -> List[dict]:
+    """2C-2b: the runs behind a product row, grouped by what they quoted (a
+    sibling variant's price named), the runs with no price last. Every run
+    is in exactly one group, so the groups sum to the row's runs."""
+    groups: Dict[tuple, Counter] = {}
+    for q in quotes:
+        key = (q.get('stated'), q.get('swap_product') if q.get('stated') else None)
+        groups.setdefault(key, Counter())[q.get('agent') or 'unknown'] += 1
+    out = [{'stated': stated, 'swap_product': swap, 'runs': sum(agents.values()), 'agents': dict(agents)}
+           for (stated, swap), agents in groups.items()]
+    out.sort(key=lambda g: (g['stated'] is None, -g['runs'], str(g['stated'])))
+    return out
 
 
 def _quoted_text(quotes: List[dict]) -> str:
@@ -481,6 +504,7 @@ def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, vari
                 'reference_source': cell.get('reference_source'), 'observed_at': cell.get('observed_at'),
                 'live_price': cell.get('live'),
                 'answer_ids': [q['run'] for q in quotes if q.get('run')],
+                'quote_groups': quote_groups(quotes),
             })
     severity = {'wrong': 0, 'partial': 1, 'none': 2, 'exact': 3}
     out.sort(key=lambda p: (severity.get(p['status'], 4), -p['wrong_runs'], -p['named'], p['name']))
@@ -643,12 +667,14 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
         prev_metrics = (surface_metrics(previous['rows'], previous['visibility'].get('byQuestion') or [], s, tier=metrics['tier'])
                         if previous else None)
         status, note = changes_status(metrics, prev_metrics, (previous or {}).get('code'))
+        if prev_metrics is not None:
+            prev_metrics['code'] = previous.get('code')
         head = visibility_headline(vis_rows, s, next((r['name'] for r in (visibility.get('ranking') or {}).get('rows') or [] if r.get('you')), None))
         products = build_products(true_value, vis_rows, s, variant_of_run=variant_of_run, reason_of_run=reason_of_run)
         signals = build_signals(metrics, products, surface=s, brand=brand, cycle_start=cycle.get('start_date'),
                                 access_problems=access_problems)
         by_surface[s] = {
-            'agents': build_agents(metrics, prev_metrics),
+            'agents': build_agents(metrics, prev_metrics, status),
             'products': products,
             'signals': signals,
             'summary': build_summary(metrics, head, signals),
@@ -659,6 +685,9 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
             'tier': metrics['tier'],
         }
     answered = [v for v in vis_rows if v.get('answered')]
+    # 2C-2b, one rule for every count on the Overview: runs are the rows the
+    # cycle executed (an errored run included), answers the runs with an
+    # answer; the tier and agent tables count answers.
     return {
         'cycle': cycle['cycle_code'],
         'started': rm._iso(cycle.get('start_date')),
@@ -670,7 +699,7 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
         'changes_note': None if previous else TEMPLATES['changes.first_cycle'],
         'ranking': visibility.get('ranking'),
         'coverage': {'questions': len({r.get('query_code') for r in rows}), 'agents': len({surfaces.agent_of(r.get('platform')) or r.get('platform') for r in rows}),
-                     'runs': len(rows), 'answers': len(answered),
+                     'runs': len(rows), 'answers': sum(1 for r in rows if r.get('answer_status') == surfaces.ANSWERED),
                      'unprompted': sum(1 for v in answered if v.get('tier') == UNPROMPTED)},
         'access_run': (access or {}).get('access_run'),
         'read_errors': read_errors or {},
@@ -757,7 +786,43 @@ def _price(v) -> Optional[float]:
         return None
 
 
-def ladder_steps(listing_entry: Optional[dict], variant: dict, owned: Optional[List[dict]]) -> tuple:
+def _read_member_price(reads: Optional[List[dict]], variant: dict) -> Optional[dict]:
+    """2C-2b: the newest readable page read of this variant that states a
+    member price (production's W&S record states none; 7 of 19 pages do)."""
+    hits = [r for r in reads or [] if r.get('read_status') in ('ok', 'empty') and _price(r.get('member_price')) is not None
+            and rm.reference_matches(r, {'variant_id': variant.get('variant_id'), 'gtin': variant.get('gtin')})]
+    return max(hits, key=lambda r: str(r.get('observed_at') or '')) if hits else None
+
+
+def member_price_source(listing_entry: Optional[dict], variant: dict, reads: Optional[List[dict]]) -> Optional[dict]:
+    """2C-2b, one source order wherever a member price is shown (the ladder,
+    the receipt, the record's variants): the record's variant (supply's
+    member_prices / entitled_member_price, or a catalog variant's
+    member_price), else the newest page read that states one, else None (the
+    incentive text then says "stated without a price"). The tier a page
+    price belongs to is the tier the record's offers name for the variant."""
+    vid = variant.get('variant_id')
+    entry = next((v for v in (listing_entry or {}).get('variants') or [] if v.get('variant_id') == vid), None)
+    record = [(mp.get('price'), mp.get('tier_name') or mp.get('program_name')) for mp in (entry or {}).get('member_prices') or []]
+    record += [((entry or {}).get('entitled_member_price'), (entry or {}).get('entitled_tier_name')),
+               (variant.get('member_price'), variant.get('member_tier_name') or variant.get('member_tier'))]
+    record = [(p_, t_) for p_, t_ in record if _price(p_) is not None]
+    if record:
+        price, tier = min(record, key=lambda x: _price(x[0]))
+        return {'price': _price(price), 'tier': tier or 'Member', 'source': 'record', 'observed_at': None,
+                'note': 'from the record'}
+    read = _read_member_price(reads, variant)
+    if read:
+        tier = next((inc.get('tier_name') for inc in (listing_entry or {}).get('incentives') or []
+                     if inc.get('tier_name') and inc.get('eligibility_kind') in ('tier', 'member')
+                     and ('*' in (inc.get('variant_scope') or ['*']) or vid in (inc.get('variant_scope') or []))), None)
+        return {'price': _price(read['member_price']), 'tier': tier or 'Member', 'source': 'reference_read',
+                'observed_at': read.get('observed_at'), 'note': f"from the page read {_short_day(read.get('observed_at'))}"}
+    return None
+
+
+def ladder_steps(listing_entry: Optional[dict], variant: dict, owned: Optional[List[dict]],
+                 reads: Optional[List[dict]] = None) -> tuple:
     """(steps, unpriced) for one variant: every price the record states for
     it below its list price (member prices with their tier, a first-order
     price the record states), then the owned incentives' member prices.
@@ -770,14 +835,19 @@ def ladder_steps(listing_entry: Optional[dict], variant: dict, owned: Optional[L
     # about: supply's per-variant member_prices and entitled_member_price, or
     # a member_price on the catalog variant). The offers' text is read only
     # when the variant states no member price.
-    listed = [(mp.get('price'), mp.get('tier_name') or mp.get('program_name'), mp.get('basis') or 'member_price')
+    listed = [(mp.get('price'), mp.get('tier_name') or mp.get('program_name'), mp.get('basis') or 'member_price', 'record', None)
               for mp in (entry or {}).get('member_prices') or []]
-    listed.append(((entry or {}).get('entitled_member_price'), (entry or {}).get('entitled_tier_name'), 'member_price'))
-    listed.append((variant.get('member_price'), variant.get('member_tier_name') or variant.get('member_tier'), 'member_price'))
-    listed = [(p_, t_ or 'Member', b_) for p_, t_, b_ in listed if _price(p_) is not None]
+    listed.append(((entry or {}).get('entitled_member_price'), (entry or {}).get('entitled_tier_name'), 'member_price', 'record', None))
+    listed.append((variant.get('member_price'), variant.get('member_tier_name') or variant.get('member_tier'), 'member_price', 'record', None))
+    listed = [(p_, t_ or 'Member', b_, s_, o_) for p_, t_, b_, s_, o_ in listed if _price(p_) is not None]
+    if not listed:
+        # 2C-2b: no member price in the record: the newest page read's, named
+        src = member_price_source(listing_entry, variant, reads)
+        if src:
+            listed.append((src['price'], src['tier'], 'member_price', src['source'], src['observed_at']))
     priced_tiers = set()
-    for price, tier, basis in listed:
-        stated.append((_price(price), tier, 'record', basis))
+    for price, tier, basis, source, observed in listed:
+        stated.append((_price(price), tier, source, basis, observed))
         priced_tiers.add(rm._norm_tier(tier))
     for inc in (listing_entry or {}).get('incentives') or []:
         scope = inc.get('variant_scope') or ['*']
@@ -792,30 +862,40 @@ def ladder_steps(listing_entry: Optional[dict], variant: dict, owned: Optional[L
             unpriced.append(f"{who} {str(value['discount_percent']).rstrip('0').rstrip('.')}% off")
         if kind == 'new_customer' and net is not None:
             code = inc.get('promo_code')
-            stated.append((net, f"First order{', ' + code if code else ''}", 'record', 'effective_net_price'))
+            stated.append((net, f"First order{', ' + code if code else ''}", 'record', 'effective_net_price', None))
         elif listed:
             continue
         elif inc.get('mechanic') == 'member_price' and _price(value.get('member_price')) is not None:
             stated.append((_price(value['member_price']), inc.get('tier_name') or inc.get('program_name') or 'Member',
-                           'record', 'member_price'))
+                           'record', 'member_price', None))
         elif kind == 'tier' and net is not None:
-            stated.append((net, inc.get('tier_name') or 'Member', 'record', 'effective_net_price'))
+            stated.append((net, inc.get('tier_name') or 'Member', 'record', 'effective_net_price', None))
     gt = rm._gtin14(variant.get('gtin'))
     for inc in owned or []:
         mp = _price(inc.get('member_price'))
         hits = inc.get('applies_to_gtins') or []
         if mp is not None and (not hits or (gt and gt in {rm._gtin14(g) for g in hits})):
-            stated.append((mp, inc.get('tier_name') or inc.get('name') or 'Member', 'owned_incentive', 'member_price'))
+            stated.append((mp, inc.get('tier_name') or inc.get('name') or 'Member', 'owned_incentive', 'member_price', None))
     return stated, sorted(set(unpriced))
 
 
+SOURCE_TAGS = {'record': 'Stated by the record', 'owned_incentive': 'Owned incentive', 'reference_read': 'On the page'}
+
+
+def _step_note(source: str, observed) -> str:
+    return {'record': 'from the record', 'owned_incentive': 'from an owned incentive'}.get(
+        source, f"from the page read {_short_day(observed)}")
+
+
 def build_ladder(catalog: Optional[dict], incentives: Optional[dict], owned: Optional[List[dict]],
-                 scored: List[dict], *, own_domain: Optional[str]) -> tuple:
+                 scored: List[dict], *, own_domain: Optional[str], reads: Optional[List[dict]] = None) -> tuple:
     """(ladder, receipt) for the merchant's primary product: the variant this
     cycle asked about most (ties to the catalog's order). Steps are the
-    record's list price, then each lower price the record or an owned
-    incentive states for it, lowest last. Only stated prices, never a
-    computed or modeled one. (None, None) when there is nothing to show."""
+    record's list price, then each lower price stated for it, lowest last:
+    the record's or an owned incentive's, and (2C-2b) when the record states
+    no member price, the newest page read's (member_price_source). Each step
+    says where it came from. Only stated prices, never a computed or modeled
+    one. (None, None) when there is nothing to show."""
     listings = (catalog or {}).get('listings') or []
     variants = [(l, v) for l in listings for v in l.get('variants') or []]
     if not variants:
@@ -828,22 +908,23 @@ def build_ladder(catalog: Optional[dict], incentives: Optional[dict], owned: Opt
         return None, None
     cur = variant.get('currency') or 'USD'
     entry = next((l for l in (incentives or {}).get('listings') or [] if l.get('listing_id') == listing.get('listing_id')), None)
-    stated, unpriced = ladder_steps(entry, variant, owned)
+    stated, unpriced = ladder_steps(entry, variant, owned, reads=reads)
     steps = [{'label': 'List', 'value': rm.money(f"{lp:.2f}", cur), 'pct': 100, 'kind': 'ink', 'source': 'record',
-              'amount': f"{lp:.2f}"}]
+              'amount': f"{lp:.2f}", 'note': 'from the record'}]
     seen = set()
-    for mp, label, src, basis in sorted(stated, key=lambda x: (-x[0], x[1])):
+    for mp, label, src, basis, observed in sorted(stated, key=lambda x: (-x[0], x[1])):
         if (mp, label) in seen or mp >= lp:
             continue
         seen.add((mp, label))
         steps.append({'label': label, 'value': rm.money(f"{mp:.2f}", cur), 'pct': round(mp / lp * 100), 'kind': 'b',
-                      'source': src, 'basis': basis, 'amount': f"{mp:.2f}"})
+                      'source': src, 'basis': basis, 'amount': f"{mp:.2f}", 'observed_at': observed,
+                      'note': _step_note(src, observed)})
     title = variant.get('title') or listing.get('title') or variant.get('variant_id')
     n = asked.get(variant.get('variant_id'), 0)
     sub = (f"The product this cycle asked about most, in {n} {_n(n, 'run', 'runs')}." if n
            else "The first product in the record.")
-    note = 'Only prices the record states. No discount is computed here.' if len(steps) > 1 else \
-        'The record states no price below the list price for this product.'
+    note = 'Only stated prices. No discount is computed here.' if len(steps) > 1 else \
+        'Nothing states a price below the list price for this product.'
     if unpriced:
         note += f" Stated without a price, so not drawn: {', '.join(unpriced)}."
     ladder = {'title': title, 'sub': sub, 'steps': steps, 'note': note,
@@ -852,10 +933,10 @@ def build_ladder(catalog: Optional[dict], incentives: Optional[dict], owned: Opt
     if len(steps) > 1:
         best = steps[-1]
         off = f"{lp - float(best['amount']):.2f}"
-        rows.append({'k': best['label'], 'v': f"-{rm.money(off, cur)}", 'kind': 'minus',
-                     'tag': 'Stated by the record' if best['source'] == 'record' else 'Owned incentive'})
+        rows.append({'k': f"{best['label']}, {best['note']}", 'v': f"-{rm.money(off, cur)}", 'kind': 'minus',
+                     'tag': SOURCE_TAGS.get(best['source'], best['source'])})
         rows.append({'k': 'The lowest stated price', 'v': best['value'], 'kind': 'big'})
-    receipt = {'title': 'What the record says a shopper pays', 'sub': title, 'rows': rows}
+    receipt = {'title': 'What a shopper pays', 'sub': title, 'rows': rows}
     return ladder, receipt
 
 

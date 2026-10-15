@@ -298,7 +298,9 @@ def _summary_cell(rows: List[dict]) -> dict:
     other_brand = 0
     answered = 0
     for r in rows:
-        if r.get('answer_status') in (None, 'answered'):
+        # 2C-2b: one rule for every Overview count: a run is answered only
+        # when it says so (an errored run has no answer_status).
+        if r.get('answer_status') == surfaces.ANSWERED:
             answered += 1
         outcome = r.get('outcome')
         counts[outcome or 'not_scored'] += 1
@@ -423,6 +425,18 @@ def aggregate_cell(runs: List[dict]) -> tuple:
 
 def _surface_order(keys) -> List[str]:
     return sorted(set(keys), key=lambda s: (-_SURFACE_RANK.get(s, 0), s))
+
+
+def deciding_swap(claims: List[dict], outcome: Optional[str]) -> Optional[dict]:
+    """2C-2b: the sibling-variant (or clash) claim that decided a run with no
+    claim about the variant asked. A row scored after b3c5a29 carries the
+    question's verdict in the claim's own `outcome`; a row scored before it
+    (cycle 229) keeps the sibling's verdict there (`exact` for the Trial
+    Pack's own price) and the question's in `question_outcome`. Either way
+    the quote is the claim's `stated`, so a swap run never reads "no price"."""
+    swaps = [c for c in claims or [] if c.get('target') in ('swap', 'clash') and c.get('stated') not in (None, '')]
+    return (next((c for c in swaps if (c.get('question_outcome') or c.get('outcome')) == outcome), None)
+            or (swaps[0] if swaps else None))
 
 
 def _newest_read(reads: Optional[List[dict]], variant: dict) -> Optional[dict]:
@@ -1544,6 +1558,21 @@ def _listing_source(mix: dict, has_publication: bool, *, from_feed: bool = False
     return ('published', 'publication') if has_publication else (None, 'unknown')
 
 
+def _short_day(value) -> str:
+    text_ = (_iso(value) or '')[:10]
+    try:
+        from datetime import date as _date
+        d = _date.fromisoformat(text_)
+        return f"{d.strftime('%b')} {d.day}"
+    except ValueError:
+        return 'an unrecorded date'
+
+
+def _newest_member_read(rows: List[dict]) -> Optional[dict]:
+    hits = [r for r in rows if r.get('read_status') in ('ok', 'empty') and _num(r.get('member_price')) is not None]
+    return max(hits, key=lambda r: str(r.get('observed_at') or '')) if hits else None
+
+
 def _price_text(value, currency) -> str:
     return money(value, currency) if value not in (None, '') else NOT_CARRIED
 
@@ -1730,21 +1759,43 @@ def build_record(merchant: str, listing: dict, *, merchant_record: Optional[dict
                            'prov': prov, 'note': listing.get('spec_version')}, ('note',)))
 
     variant_rows, diffs = [], 0
+    page_members: Dict[str, tuple] = {}
     for v in variants:
         rows = _reference_rows(reference, v, listing)
         extra = _diff_fields(v, rows, prov)
         diffs += len(extra)
         fields.extend(extra)
         status, tone = _variant_status(rows) if reference is not None else ('Not read yet', 'neu')
-        member = member_of.get(v.get('variant_id'))
+        # 2C-2b: the member price in one source order (the ladder's): the
+        # record's, else the newest page read that states one, named.
+        member, member_source, member_note = member_of.get(v.get('variant_id')), None, None
+        if member:
+            member_source, member_note = 'record', 'from the record'
+        else:
+            read = _newest_member_read(rows)
+            if read:
+                member, member_source = str(read['member_price']), 'reference_read'
+                member_note = f"from the page read {_short_day(read.get('observed_at'))}"
+                page_members[v.get('variant_id')] = (member, read.get('observed_at'))
         shown = _price_text(v.get('list_price'), v.get('currency') or currency)
         if member:
             shown += f" · member {money(member, v.get('currency') or currency)}"
+            if member_source == 'reference_read':
+                shown += f", {member_note}"
         variant_rows.append({'id': v.get('variant_id') or v.get('gtin') or '—', 'name': v.get('title') or v.get('variant_id') or '',
                              'price': shown, 'status': status, 'tone': tone,
                              # beside the typed fields
                              'gtin': v.get('gtin'), 'list_price': v.get('list_price'), 'member_price': member,
+                             'member_source': member_source, 'member_note': member_note,
                              'count': v.get('count'), 'pages': [r.get('url') for r in rows if r.get('url')]})
+    if page_members and not member_vals:
+        vals = sorted(_num(m) for m, _ in page_members.values())
+        newest = max(str(o or '') for _, o in page_members.values())
+        fields.append({'k': 'Member price', 'v': money(f"{vals[0]:.2f}", currency) if vals[0] == vals[-1]
+                       else f"{money(f'{vals[0]:.2f}', currency)} to {money(f'{vals[-1]:.2f}', currency)}",
+                       'prov': RECORD_PROVENANCE[('scrape', None)],
+                       'note': f"from the page read {_short_day(newest)}, on {len(vals)} of {len(variants)} variants. "
+                               "The record states none"})
 
     issues = []
     failed = {slug: pub for slug, pub in pubs.items() if pub.get('status') == 'failed'}

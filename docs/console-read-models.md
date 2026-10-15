@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -554,6 +554,29 @@ named, then the runs with no price, for example
 `changes_status` per surface: `first_cycle` (no earlier scored cycle), `not_comparable` (the
 agents differ, or this cycle reads unprompted answers and the previous asked none), `compared`.
 `changes_note` says which in one line; only `compared` carries deltas.
+
+### 2C-2b: four fixes from the second live walk, on a fixture shaped like production
+
+Two 2C-2a fixes passed on a fixture that held data where production does not. The W&S test
+fixture is now production's shape: `supply_reference_ws.json` is supply's `/reference` payload
+with one row per record variant (19; `variant_ref` `catalog_variant:<n>`, the variant key as
+`variant_label`, `method: json_ld`, no `price_observed` findings), 7 of them with a
+`member_price` from the page markup; the record's variants state no member price (the console
+tests strip the pipeline fixture's `member_prices` / `entitled_member_price`); swap rows are the
+entries `scoring/expectation_comparator.py` writes and `rescore_cycle` stores unchanged, in both
+shapes below.
+
+| # | what the live data showed | cause | fix |
+|---|---|---|---|
+| 1 | "Stated without a price, so not drawn: Member+ 5% off" beside an Oct 14 read of .09 | the ladder read member prices only from the record, which states none | one source order (`member_price_source`): the record's variant, else the newest readable page read with a `member_price` (its tier is the one the record's offers name), else "stated without a price". Each ladder step and the receipt say which ("from the record" / "from the page read Oct 14"); the record's `variants[]` (`member_source`, `member_note`) and its Member price field use the same order |
+| 2 | "wrong in 4 of 6 runs" beside "No price, 5 of 6" | cycle 229 was scored before `b3c5a29`: a swap claim then kept the sibling's own verdict in `outcome` (`exact`, the Trial Pack's own price) and the question's in `question_outcome`. The quote was in `claim_results[].stated` either way; the read model matched the swap claim on `outcome` only | `deciding_swap` matches on `question_outcome`, else `outcome`, else the first swap with a stated price. Products carry `quote_groups` (every run in exactly one group); tested: the groups sum to the row's runs and every wrong run shows a value |
+| 3 | "Not comparable" above an agent row "First, change: -2" | the agent table took a delta whatever the block said | `build_agents` follows `changes_status`: a delta only when `compared`, over the block's denominator (`named_of`), with `delta_detail`; else `delta_status` says why |
+| 4 | 514 answers, a tier table summing to 516, an agent table to 514 | an errored run has no `answer_status`, and `/answers/summary` counted a missing status as answered | one rule, below |
+
+**Run counts** (every count on the Overview): **runs** are the rows the cycle executed, an
+errored run included (`coverage.runs`); **answers** are the runs whose `answer_status` is
+`answered` (`coverage.answers`); the tier table (`/answers/summary` `answered`) and the agent
+table (`agents[].answers`) count answers. An errored or walled run is a run, never an answer.
 
 ### What the stored data cannot fill
 
@@ -3659,11 +3682,10 @@ reference read is the 2C sample's (`supply_feed_brandco.json`), whose target.com
 }
 ```
 
-### GET /api/console/overview?cycle=WS-2B-FIXTURE&merchant=wiggle-and-snug (2C-2a, cut)
+### GET /api/console/overview?cycle=WS-2B-FIXTURE&merchant=wiggle-and-snug (2C-2b, cut)
 
-The W&S fixture cycle with the W&S access and reference samples. One product of four, the
-consumer UI and the ranking rows cut (`rules` is `TEMPLATES`, also cut). The reference is
-`supply_reference_ws.json`'s Oct 9 read, the newest page read (2C-2a #7).
+The W&S fixture cycle with the W&S access sample and the production-shaped reference read. One
+product of four, the consumer UI and the ranking rows cut (`rules` is `TEMPLATES`, also cut).
 
 ```json
 {
@@ -3710,7 +3732,8 @@ consumer UI and the ranking rows cut (`rules` is `TEMPLATES`, also cut). The ref
           "unverifiable": 0,
           "answered_with_other_brand": 0,
           "did_not_know": 0,
-          "note_rule": "agent.wrong"
+          "note_rule": "agent.wrong",
+          "delta_status": "first_cycle"
         },
         {
           "agent": "gemini",
@@ -3728,7 +3751,8 @@ consumer UI and the ranking rows cut (`rules` is `TEMPLATES`, also cut). The ref
           "unverifiable": 0,
           "answered_with_other_brand": 0,
           "did_not_know": 1,
-          "note_rule": "agent.wrong"
+          "note_rule": "agent.wrong",
+          "delta_status": "first_cycle"
         }
       ],
       "signals": [],
@@ -3752,7 +3776,7 @@ consumer UI and the ranking rows cut (`rules` is `TEMPLATES`, also cut). The ref
           "named": 2,
           "first": 2,
           "quoted": "$12.99, 1 of 2 runs (Gemini 1). $14.99, 1 of 2 runs (ChatGPT 1)",
-          "live": "$12.99 at trueshopstore.com, our own fetch, Oct 9",
+          "live": "$12.99 at trueshopstore.com, our own fetch, Oct 14",
           "status": "wrong",
           "issue": "Quoted a wrong price in 1 of 2 runs.",
           "route": "true-value",
@@ -3764,11 +3788,29 @@ consumer UI and the ranking rows cut (`rules` is `TEMPLATES`, also cut). The ref
           "issue_rule": "product.wrong",
           "wrong_runs": 1,
           "reference_source": "honest_fetch",
-          "observed_at": "2026-10-09T14:42:50+00:00",
+          "observed_at": "2026-10-14T17:01:18+00:00",
           "live_price": "$12.99",
           "answer_ids": [
             "run-1001",
             "run-1002"
+          ],
+          "quote_groups": [
+            {
+              "stated": "12.99",
+              "swap_product": null,
+              "runs": 1,
+              "agents": {
+                "gemini": 1
+              }
+            },
+            {
+              "stated": "14.99",
+              "swap_product": null,
+              "runs": 1,
+              "agents": {
+                "chatgpt": 1
+              }
+            }
           ]
         }
       ],
@@ -3979,12 +4021,12 @@ consumer UI and the ranking rows cut (`rules` is `TEMPLATES`, also cut). The ref
 }
 ```
 
-### GET /api/console/true-value?cycle=WS-2B-FIXTURE&merchant=wiggle-and-snug (2C-2a, one row)
+### GET /api/console/true-value?cycle=WS-2B-FIXTURE&merchant=wiggle-and-snug (2C-2b, one row)
 
-One retailer in the record, so the columns are the agents (`column_kind: 'agent'`), per surface.
-Each row keeps its one-retailer cell in `retailer_cells`. The live price is the newest page read
-(`live_basis: 'reference_read'`). Programs are the record's (the fixture cycle asks no value &
-incentives question, so each is not asked), the ladder the record's member prices.
+One retailer in the record, so the columns are the agents, per surface; each row keeps its
+one-retailer cell in `retailer_cells`. The live price is the newest page read. The ladder is Bum
+Balm's (the variant this cycle asked about most): the record's offers state its prices, so no
+step comes from a page read here; Size 1 small's Member+ step does (test_console_2c2b).
 
 ```json
 {
@@ -4062,8 +4104,8 @@ incentives question, so each is not asked), the ladder the record's member price
           "outcome": "wrong",
           "runs": 1,
           "reference_source": "honest_fetch",
-          "method": "fetch",
-          "observed_at": "2026-10-09T14:42:50+00:00",
+          "method": "json_ld",
+          "observed_at": "2026-10-14T17:01:18+00:00",
           "live_basis": "reference_read",
           "surface": "grounded_api",
           "by_surface": {
@@ -4091,8 +4133,8 @@ incentives question, so each is not asked), the ladder the record's member price
           "outcome": "exact",
           "runs": 1,
           "reference_source": "honest_fetch",
-          "method": "fetch",
-          "observed_at": "2026-10-09T14:42:50+00:00",
+          "method": "json_ld",
+          "observed_at": "2026-10-14T17:01:18+00:00",
           "live_basis": "reference_read",
           "surface": "grounded_api",
           "by_surface": {
@@ -4120,8 +4162,8 @@ incentives question, so each is not asked), the ladder the record's member price
           "outcome": null,
           "runs": 0,
           "reference_source": "honest_fetch",
-          "method": "fetch",
-          "observed_at": "2026-10-09T14:42:50+00:00",
+          "method": "json_ld",
+          "observed_at": "2026-10-14T17:01:18+00:00",
           "live_basis": "reference_read",
           "surface": null,
           "by_surface": {
@@ -4151,8 +4193,8 @@ incentives question, so each is not asked), the ladder the record's member price
           "outcome": "wrong",
           "runs": 2,
           "reference_source": "honest_fetch",
-          "method": "fetch",
-          "observed_at": "2026-10-09T14:42:50+00:00",
+          "method": "json_ld",
+          "observed_at": "2026-10-14T17:01:18+00:00",
           "live_basis": "reference_read",
           "surface": "grounded_api",
           "by_surface": {
@@ -4235,7 +4277,7 @@ incentives question, so each is not asked), the ladder the record's member price
   "programs": [
     {
       "name": "Member Rewards Member+",
-      "terms": "Member+ price on 7 variants, $1.64 to $23.49",
+      "terms": "Member+ discount, stated without a price",
       "agentsRight": "not asked this cycle",
       "tone": "neu",
       "mechanic": "member_price",
@@ -4354,7 +4396,8 @@ incentives question, so each is not asked), the ladder the record's member price
         "pct": 100,
         "kind": "ink",
         "source": "record",
-        "amount": "12.99"
+        "amount": "12.99",
+        "note": "from the record"
       },
       {
         "label": "Member",
@@ -4363,7 +4406,9 @@ incentives question, so each is not asked), the ladder the record's member price
         "kind": "b",
         "source": "record",
         "basis": "member_price",
-        "amount": "10.99"
+        "amount": "10.99",
+        "observed_at": null,
+        "note": "from the record"
       },
       {
         "label": "Member+",
@@ -4372,10 +4417,12 @@ incentives question, so each is not asked), the ladder the record's member price
         "kind": "b",
         "source": "record",
         "basis": "effective_net_price",
-        "amount": "7.34"
+        "amount": "7.34",
+        "observed_at": null,
+        "note": "from the record"
       }
     ],
-    "note": "Only prices the record states. No discount is computed here. Stated without a price, so not drawn: WELCOME10 10% off.",
+    "note": "Only stated prices. No discount is computed here. Stated without a price, so not drawn: WELCOME10 10% off.",
     "variant_id": "bum-balm-4oz",
     "listing_id": 93,
     "unpriced": [
@@ -4383,7 +4430,7 @@ incentives question, so each is not asked), the ladder the record's member price
     ]
   },
   "receipt": {
-    "title": "What the record says a shopper pays",
+    "title": "What a shopper pays",
     "sub": "Bum Balm 4 oz",
     "rows": [
       {
@@ -4392,7 +4439,7 @@ incentives question, so each is not asked), the ladder the record's member price
         "tag": "trueshopstore.com"
       },
       {
-        "k": "Member+",
+        "k": "Member+, from the record",
         "v": "-$5.65",
         "kind": "minus",
         "tag": "Stated by the record"
@@ -4411,9 +4458,6 @@ incentives question, so each is not asked), the ladder the record's member price
 
 ### GET /api/console/accessibility?merchant=wiggle-and-snug, the 2C-2 additions (cut)
 
-The reference read is `supply_reference_ws.json` (illustrative: its `method` is `fetch`, which
-is not one of supply's `json_ld` / `regex` / `none`, so markup reads 0 of 3).
-
 ```json
 {
   "checks": [
@@ -4427,41 +4471,41 @@ is not one of supply's `json_ld` / `regex` / `none`, so markup reads 0 of 3).
     },
     {
       "name": "Product markup on product pages",
-      "value": "0 of 3",
-      "status": "bad",
+      "value": "19 of 19",
+      "status": "ok",
       "checked": true,
-      "got": 0,
-      "of": 3,
+      "got": 19,
+      "of": 19,
       "key": "markup",
       "basis": "reads with method json_ld"
     },
     {
       "name": "GTIN in markup",
-      "value": "2 of 3",
+      "value": "6 of 19",
       "status": "partial",
       "checked": true,
-      "got": 2,
-      "of": 3,
+      "got": 6,
+      "of": 19,
       "key": "gtin",
       "basis": "pages read whose record carries a GTIN, read with structured data, without a gtin_missing_on_page finding, over every page read"
     },
     {
       "name": "Program price in markup",
-      "value": "0 of 3",
-      "status": "bad",
+      "value": "7 of 19",
+      "status": "partial",
       "checked": true,
-      "got": 0,
-      "of": 3,
+      "got": 7,
+      "of": 19,
       "key": "member_price",
       "basis": "reads with member_price present"
     },
     {
       "name": "Needs a hosted render",
-      "value": "0 of 3",
+      "value": "0 of 19",
       "status": "ok",
       "checked": true,
       "got": 0,
-      "of": 3,
+      "of": 19,
       "key": "hosted_render",
       "basis": "reads that came from the hosted renderer. 0 is the good answer"
     },
@@ -4527,6 +4571,40 @@ is not one of supply's `json_ld` / `regex` / `none`, so markup reads 0 of 3).
 
 ```json
 {
+  "variants": [
+    {
+      "id": "snug-fit-overnight-s3",
+      "name": "Snug-Fit Overnight Diapers Size 3 (62 ct)",
+      "price": "$23.99",
+      "status": "Matches the page",
+      "tone": "ok",
+      "gtin": null,
+      "list_price": "23.99",
+      "member_price": null,
+      "member_source": null,
+      "member_note": null,
+      "count": 62,
+      "pages": [
+        "https://trueshopstore.com/products/snug-fit-overnight-diapers"
+      ]
+    },
+    {
+      "id": "snug-fit-overnight-s4",
+      "name": "Snug-Fit Overnight Diapers Size 4 (54 ct)",
+      "price": "$25.99",
+      "status": "Matches the page",
+      "tone": "ok",
+      "gtin": null,
+      "list_price": "25.99",
+      "member_price": null,
+      "member_source": null,
+      "member_note": null,
+      "count": 54,
+      "pages": [
+        "https://trueshopstore.com/products/snug-fit-overnight-diapers"
+      ]
+    }
+  ],
   "offer_fields": [
     {
       "k": "Incentive · Member Rewards",
@@ -4547,14 +4625,14 @@ is not one of supply's `json_ld` / `regex` / `none`, so markup reads 0 of 3).
     },
     {
       "k": "Last verified",
-      "v": "2026-10-09",
+      "v": "2026-10-14",
       "prov": "parleo",
       "note": "the newest reference read or channel check of this product"
     }
   ],
   "history": [
     {
-      "at": "2026-10-09T14:42:10+00:00",
+      "at": "2026-10-14T17:01:16+00:00",
       "event": "Page read for the study",
       "surface": "trueshopstore.com",
       "channel": null,
@@ -4563,22 +4641,22 @@ is not one of supply's `json_ld` / `regex` / `none`, so markup reads 0 of 3).
       "tone": "neu"
     },
     {
-      "at": "2026-08-21T20:16:23.989748Z",
-      "event": "Published",
-      "surface": "Deal directory / affiliate listing",
-      "channel": "deal_directory",
-      "kind": "publication",
-      "status": "published",
-      "tone": "ok"
+      "at": "2026-10-14T17:01:15+00:00",
+      "event": "Page read for the study",
+      "surface": "trueshopstore.com",
+      "channel": null,
+      "kind": "reference",
+      "detail": "our own fetch, ok",
+      "tone": "neu"
     },
     {
-      "at": "2026-08-21T20:16:23.843494Z",
-      "event": "Published",
-      "surface": "Model Context Protocol server",
-      "channel": "mcp",
-      "kind": "publication",
-      "status": "published",
-      "tone": "ok"
+      "at": "2026-10-14T17:01:14+00:00",
+      "event": "Page read for the study",
+      "surface": "trueshopstore.com",
+      "channel": null,
+      "kind": "reference",
+      "detail": "our own fetch, ok",
+      "tone": "neu"
     },
     "… newest first"
   ],
@@ -4673,12 +4751,12 @@ is not one of supply's `json_ld` / `regex` / `none`, so markup reads 0 of 3).
   "retailers_read": [
     {
       "domain": "trueshopstore.com",
-      "pages": 3,
-      "read": 3,
-      "method": "fetch 3",
+      "pages": 19,
+      "read": 19,
+      "method": "json ld 19",
       "hosted_render": 0,
-      "last_read": "2026-10-09T14:42:50+00:00",
-      "note": "3 of 3 pages read."
+      "last_read": "2026-10-14T17:01:19+00:00",
+      "note": "19 of 19 pages read."
     }
   ],
   "stage_cycle": "WS-2B-FIXTURE",

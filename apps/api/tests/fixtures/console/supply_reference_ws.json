@@ -1,26 +1,386 @@
 {
-  "_note": "supply GET /api/truesync/merchants/wiggle-and-snug/reference, in the shape truesync/fullloop/views.py reference() returns (the Brandco sample's shape, supply_feed_brandco.json). Values are illustrative for Parleo's own test store: the Cloud Wipes pack_differs is the 3-Pack case supply's sku-feed.md describes (the page says 3, the hosted record's count is 216 and hosted variants have no multipack); the Overnight Size 6 name_differs is written for the fixture.",
+  "_note": "supply GET /api/truesync/merchants/wiggle-and-snug/reference in the shape truesync/fullloop/views.py reference() returns, one row per record variant (19), as production reads Parleo's own test store: variant_ref is catalog_variant:<n>, variant_label is the variant key, gtin is the RECORD's, the URL is the listing's page, findings leave out price_observed (OBSERVATIONS). 2C-2b: the member price is on the page reads only (7 of 19 pages state one in markup); the record's variants carry none. Prices are the record's; the Overnight Size 6 name_differs and the Cloud Wipes pack_differs are written for the fixture.",
   "merchant": "wiggle-and-snug",
   "reference_run": {
     "id": 7,
     "status": "done",
-    "started_at": "2026-10-09T14:41:20+00:00",
-    "finished_at": "2026-10-09T14:43:00+00:00",
+    "started_at": "2026-10-14T17:00:00+00:00",
+    "finished_at": "2026-10-14T17:02:00+00:00",
     "counts": {},
     "allow_hosted_render": true
   },
   "rows": [
     {
-      "variant_ref": "snug-fit-overnight-s6",
+      "variant_ref": "catalog_variant:101",
       "gtin": null,
       "sku": null,
-      "variant_label": "Snug-Fit Overnight Diapers Size 6 (42 ct)",
+      "variant_label": "snug-fit-diapers-s1-small",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:01+00:00",
+      "price": "17.99",
+      "member_price": "12.09",
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$17.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:102",
+      "gtin": null,
+      "sku": null,
+      "variant_label": "snug-fit-diapers-s1-big",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:02+00:00",
+      "price": "31.99",
+      "member_price": "21.49",
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$31.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:103",
+      "gtin": null,
+      "sku": null,
+      "variant_label": "snug-fit-diapers-s2-small",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:03+00:00",
+      "price": "19.99",
+      "member_price": "13.49",
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$19.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:104",
+      "gtin": null,
+      "sku": null,
+      "variant_label": "snug-fit-diapers-s2-big",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:04+00:00",
+      "price": "35.99",
+      "member_price": "24.29",
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$35.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:105",
+      "gtin": "884400137609",
+      "sku": null,
+      "variant_label": "snug-fit-diapers-s3-small",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:05+00:00",
+      "price": "22.99",
+      "member_price": "15.49",
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$22.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:106",
+      "gtin": "884400528827",
+      "sku": null,
+      "variant_label": "snug-fit-diapers-s3-big",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:06+00:00",
+      "price": "39.99",
+      "member_price": "26.99",
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$39.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:107",
+      "gtin": "884400046246",
+      "sku": null,
+      "variant_label": "snug-fit-diapers-s4-small",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:07+00:00",
+      "price": "24.99",
+      "member_price": "16.79",
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$24.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:108",
+      "gtin": "884400937353",
+      "sku": null,
+      "variant_label": "snug-fit-diapers-s4-big",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:08+00:00",
+      "price": "43.99",
+      "member_price": null,
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$43.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:109",
+      "gtin": null,
+      "sku": null,
+      "variant_label": "snug-fit-diapers-s5-small",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:09+00:00",
+      "price": "26.99",
+      "member_price": null,
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$26.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:110",
+      "gtin": null,
+      "sku": null,
+      "variant_label": "snug-fit-diapers-s5-big",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:10+00:00",
+      "price": "47.99",
+      "member_price": null,
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$47.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:111",
+      "gtin": null,
+      "sku": null,
+      "variant_label": "snug-fit-diapers-s6-small",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:11+00:00",
+      "price": "28.99",
+      "member_price": null,
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$28.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:112",
+      "gtin": null,
+      "sku": null,
+      "variant_label": "snug-fit-diapers-s6-big",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:12+00:00",
+      "price": "51.99",
+      "member_price": null,
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$51.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:113",
+      "gtin": null,
+      "sku": null,
+      "variant_label": "snug-fit-overnight-s3",
       "retailer_domain": "trueshopstore.com",
       "url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
       "read_status": "ok",
       "reference_source": "honest_fetch",
-      "method": "fetch",
-      "observed_at": "2026-10-09T14:42:10+00:00",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:13+00:00",
+      "price": "23.99",
+      "member_price": null,
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$23.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:114",
+      "gtin": null,
+      "sku": null,
+      "variant_label": "snug-fit-overnight-s4",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:14+00:00",
+      "price": "25.99",
+      "member_price": null,
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$25.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:115",
+      "gtin": null,
+      "sku": null,
+      "variant_label": "snug-fit-overnight-s5",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:15+00:00",
+      "price": "27.99",
+      "member_price": null,
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$27.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:116",
+      "gtin": null,
+      "sku": null,
+      "variant_label": "snug-fit-overnight-s6",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:16+00:00",
       "price": "29.99",
       "member_price": null,
       "list_price": null,
@@ -48,30 +408,21 @@
               "only_on_page": []
             }
           }
-        },
-        {
-          "finding": "price_observed",
-          "expected": "29.99",
-          "observed": "29.99",
-          "detail": {
-            "gap": false,
-            "method": "fetch"
-          }
         }
       ],
       "gap_count": 1
     },
     {
-      "variant_ref": "cloud-wipes-3pack",
+      "variant_ref": "catalog_variant:117",
       "gtin": "884400676641",
       "sku": null,
-      "variant_label": "Cloud Wipes 3-Pack",
+      "variant_label": "cloud-wipes-3pack",
       "retailer_domain": "trueshopstore.com",
       "url": "https://trueshopstore.com/products/cloud-wipes-3-pack",
       "read_status": "ok",
       "reference_source": "honest_fetch",
-      "method": "fetch",
-      "observed_at": "2026-10-09T14:42:30+00:00",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:17+00:00",
       "price": "11.99",
       "member_price": null,
       "list_price": null,
@@ -96,30 +447,21 @@
               3
             ]
           }
-        },
-        {
-          "finding": "price_observed",
-          "expected": "11.99",
-          "observed": "11.99",
-          "detail": {
-            "gap": false,
-            "method": "fetch"
-          }
         }
       ],
       "gap_count": 1
     },
     {
-      "variant_ref": "bum-balm-4oz",
+      "variant_ref": "catalog_variant:118",
       "gtin": "884400896186",
       "sku": null,
-      "variant_label": "Bum Balm 4 oz",
+      "variant_label": "bum-balm-4oz",
       "retailer_domain": "trueshopstore.com",
       "url": "https://trueshopstore.com/products/bum-balm-4-oz",
       "read_status": "ok",
       "reference_source": "honest_fetch",
-      "method": "fetch",
-      "observed_at": "2026-10-09T14:42:50+00:00",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:18+00:00",
       "price": "12.99",
       "member_price": null,
       "list_price": null,
@@ -130,17 +472,31 @@
         "quoted": null,
         "status": null
       },
-      "findings": [
-        {
-          "finding": "price_observed",
-          "expected": "12.99",
-          "observed": "12.99",
-          "detail": {
-            "gap": false,
-            "method": "fetch"
-          }
-        }
-      ],
+      "findings": [],
+      "gap_count": 0
+    },
+    {
+      "variant_ref": "catalog_variant:119",
+      "gtin": null,
+      "sku": null,
+      "variant_label": "snug-fit-trial-pack",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-trial-pack",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "json_ld",
+      "observed_at": "2026-10-14T17:01:19+00:00",
+      "price": "6.99",
+      "member_price": null,
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$6.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [],
       "gap_count": 0
     }
   ],
@@ -148,5 +504,7 @@
   "findings_by_type": {
     "name_differs": 1,
     "pack_differs": 1
-  }
+  },
+  "last_full_loop": null,
+  "divergences": []
 }
