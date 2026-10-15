@@ -27,9 +27,11 @@ endpoints are untouched.
     GET /api/console/full-loop/{id}                the full loop's combined status
     GET /api/console/me                            who is signed in and the orgs they may select (2C-0)
     GET /api/console/full-loop/latest              the scope's most recent full loop, or null (2C-0)
+    GET /api/console/score?cycle=<code>            the Share of Algorithm, per surface and pooled (2C-3)
 """
 import asyncio
 import json
+from datetime import datetime, timezone
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -42,6 +44,7 @@ from app.routers import full_loop
 from app.routers.customers import _tenant_view
 from app.services import console_parity as parity
 from app.services import console_read_models as rm
+from app.services import console_score as score_svc
 from soa_shared import customers, surface_accuracy, surfaces
 from soa_shared.database import engine
 
@@ -153,6 +156,58 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     return parity.build_overview(row, rows=rows, visibility=vis, true_value=tv, brand=brand, access=access,
                                  previous=previous, scored_cycles=n_scored if n_scored else 1, read_errors=errors,
                                  study_questions=study_questions)
+
+
+@router.get("/score")
+async def get_score(cycle: str = Query(...), merchant: Optional[str] = Query(None), rescore: bool = Query(False),
+                    scope: CustomerScope = Depends(console_scope), user: dict = Depends(verify_token)):
+    """2C-3: the Share of Algorithm. The Audit's formula over loop data
+    (console_score.py), each surface scored on its own and pooled as the
+    equal-weight mean of the surface scores. Stored on the cycle row with
+    its scorer_version and served from there; recomputed when the version
+    differs, or on an operator's `rescore`. `previous` is the newest earlier
+    scored cycle's stored score, compared only under the same scorer version,
+    surfaces and agents. With no `merchant`, the cycle's own (its questions'
+    source_ref) is read for the access run and the reference read."""
+    if rescore and not customers.is_operator(user.get("sub")):
+        raise HTTPException(status_code=403, detail="operator only: re-scoring a cycle is for Parleo staff")
+    row = dict(cycle_in_scope(cycle, scope))
+    stored = score_svc.stored_score(engine, row['id'])
+    body = dict(stored or {}, stored=True)
+    if rescore or not score_svc.is_current(stored) or (merchant and (body.get('inputs') or {}).get('merchant') != merchant):
+        with engine.connect() as conn:
+            runs = score_svc.load_score_runs(conn, row)
+            mentions = score_svc.load_score_mentions(conn, row)
+            vis_rows = rm.load_visibility(conn, row).get('byQuestion') or []
+            slug = merchant or score_svc.cycle_merchant(conn, row)
+        access, reference_rows, errors = None, None, {}
+        reference_run, access_run = None, None
+        if slug:
+            client = full_loop._client(scope)
+            (_, payload, a_err), (_, reference, r_err) = await asyncio.gather(client.get_access(slug),
+                                                                              client.get_reference(slug))
+            if a_err is None:
+                access = rm.accessibility_from_supply(payload)
+                access_run = access.get('access_run')
+            else:
+                errors['access'] = a_err
+            if r_err is None:
+                reference_rows = (reference or {}).get('rows')
+                reference_run = (reference or {}).get('reference_run')
+            else:
+                errors['reference'] = r_err
+        else:
+            errors['merchant'] = 'no merchant record for this cycle'
+        body = score_svc.build_score(row['cycle_code'], runs=runs, mentions=mentions, vis_rows=vis_rows, access=access,
+                                     reference_rows=reference_rows, read_errors=errors,
+                                     inputs={'merchant': slug, 'reference_run': reference_run, 'access_run': access_run,
+                                             'scored_at': datetime.now(timezone.utc).isoformat()})
+        # a failed supply read is served, never stored: the next read tries again
+        body['stored'] = not errors and score_svc.store_score(engine, row['id'], body)
+    with engine.connect() as conn:
+        prev, _ = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
+    prev_stored = score_svc.stored_score(engine, prev['id']) if prev else None
+    return score_svc.with_previous(body, prev['cycle_code'] if prev else None, prev_stored)
 
 
 def _true_value_inputs(conn, row) -> tuple:

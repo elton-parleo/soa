@@ -98,7 +98,8 @@ def db(monkeypatch):
             claim_results TEXT, source_split TEXT, reason_code TEXT, surface TEXT,
             source_attribution TEXT, domain_cited BOOLEAN)""")
         c.exec_driver_sql("""CREATE TABLE soa_coded_mentions (id INTEGER PRIMARY KEY, run_id INTEGER,
-            entity_id INTEGER, mentioned BOOLEAN, position INTEGER)""")
+            entity_id INTEGER, mentioned BOOLEAN, position INTEGER, strength TEXT, deal_cited BOOLEAN,
+            member_value_cited BOOLEAN)""")
         c.exec_driver_sql("""CREATE TABLE soa_full_loop_requests (id INTEGER PRIMARY KEY,
             organization_id INTEGER, merchant_slug TEXT, study_type TEXT, platforms TEXT,
             runs_per_query INTEGER, allow_hosted_render BOOLEAN NOT NULL DEFAULT 1,
