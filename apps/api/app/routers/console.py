@@ -40,6 +40,7 @@ from app.console_scope import console_scope, cycle_customer_org_sql, cycle_in_sc
 from app.customer_context import CustomerScope
 from app.routers import full_loop
 from app.routers.customers import _tenant_view
+from app.services import console_parity as parity
 from app.services import console_read_models as rm
 from soa_shared import customers, surface_accuracy, surfaces
 from soa_shared.database import engine
@@ -97,22 +98,68 @@ def get_visibility(cycle: str = Query(...), scope: CustomerScope = Depends(conso
     across surfaces; no model call."""
     row = cycle_in_scope(cycle, scope)
     with engine.connect() as conn:
-        return rm.load_visibility(conn, dict(row))
+        return _visibility(conn, dict(row))
 
 
-@router.get("/true-value")
-def get_true_value(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
-    row = cycle_in_scope(cycle, scope)
+def _visibility(conn, row: dict) -> dict:
+    """2C-1's read with 2C-2's headline, matrix and by-stage, per surface."""
+    body = rm.load_visibility(conn, row)
+    ours = next((r['name'] for r in (body.get('ranking') or {}).get('rows') or [] if r.get('you')), None)
+    return parity.extend_visibility(body, ours)
+
+
+@router.get("/overview")
+async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(None),
+                       scope: CustomerScope = Depends(console_scope)):
+    """2C-2: This week for one cycle, per surface: the agent table, the
+    products, up to four signals, the week in short, the changes against the
+    previous scored cycle (none on a first cycle) and Visibility's ranking,
+    reused. Every sentence is a template filled from counts (console_parity.
+    TEMPLATES). With `merchant`, the last access run feeds the access signal;
+    a failed read leaves it out and is named in `read_errors`."""
+    row = dict(cycle_in_scope(cycle, scope))
     with engine.connect() as conn:
-        questions = conn.execute(text("""
-            SELECT q.id, q.query_text, q.expected_answer, q.source_ref
-            FROM soa_queries q
-            WHERE q.study_type = :st AND q.tier = 'catalog_accuracy'
-        """), {"st": row['study_type']}).mappings().all()
-        outcomes = conn.execute(text("""
-            SELECT o.query_id, o.outcome, o.claim_results, o.expected_answer
-            FROM soa_expectation_outcomes o WHERE o.cycle_id = :c AND o.tier = 'catalog_accuracy'
-        """), {"c": row['id']}).mappings().all()
+        rows = parity.load_overview_rows(conn, row)
+        vis = _visibility(conn, row)
+        own_domain, variants, scored = _true_value_inputs(conn, row)
+        tv = rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
+                                 record_variants=variants)
+        prev, n_scored = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
+        previous = None
+        if prev is not None:
+            prev = {**prev, 'customer_org_id': row['customer_org_id']}
+            previous = {'code': prev['cycle_code'], 'rows': parity.load_overview_rows(conn, prev),
+                        'visibility': _visibility(conn, prev)}
+        job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
+                           {"st": row['study_type']}).fetchone()
+    brand = next((r['name'] for r in (vis.get('ranking') or {}).get('rows') or [] if r.get('you')), None) or \
+        (((_json(job[0]) if job else None) or {}).get('merchant') or {}).get('study_brand') or 'the brand'
+    access, errors = None, {}
+    if merchant:
+        status, payload, error = await full_loop._client(scope).get_access(merchant)
+        if error is None:
+            access = rm.accessibility_from_supply(payload)
+        else:
+            errors['access'] = error
+    return parity.build_overview(row, rows=rows, visibility=vis, true_value=tv, brand=brand, access=access,
+                                 previous=previous, scored_cycles=n_scored if n_scored else 1, read_errors=errors)
+
+
+def _true_value_inputs(conn, row) -> tuple:
+    """(own_domain, record variants, scored items) for a cycle's catalog
+    tier: what build_true_value reads. 2C-2: each scored item carries its
+    run, agent and surface, so a cell is per surface."""
+    questions = conn.execute(text("""
+        SELECT q.id, q.query_text, q.expected_answer, q.source_ref
+        FROM soa_queries q
+        WHERE q.study_type = :st AND q.tier = 'catalog_accuracy'
+    """), {"st": row['study_type']}).mappings().all()
+    outcomes = conn.execute(text("""
+        SELECT o.run_id, o.query_id, o.outcome, o.reason_code, o.claim_results, o.expected_answer,
+               r.platform, COALESCE(o.surface, r.surface) AS surface
+        FROM soa_expectation_outcomes o JOIN soa_runs r ON r.id = o.run_id
+        WHERE o.cycle_id = :c AND o.tier = 'catalog_accuracy'
+    """), {"c": row['id']}).mappings().all()
 
     by_query = {q['id']: q for q in questions}
     own_domain, variants = None, []
@@ -124,11 +171,10 @@ def get_true_value(cycle: str = Query(...), scope: CustomerScope = Depends(conso
             variants.append({'variant_id': ref.get('variant_id'), 'gtin': ref.get('gtin'),
                              'label': _label_from_question(q['query_text']),
                              'list_price': expected.get('amount'), 'currency': expected.get('currency'),
-                             'published_at': ref.get('published_at')})
+                             'published_at': ref.get('published_at'), 'listing_id': ref.get('listing_id')})
     if own_domain is None:
-        with engine.connect() as conn:
-            job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
-                               {"st": row['study_type']}).fetchone()
+        job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
+                           {"st": row['study_type']}).fetchone()
         merchant = ((_json(job[0]) if job else None) or {}).get('merchant') or {}
         own_domain = merchant.get('own_domain') or merchant.get('domain')
 
@@ -145,19 +191,64 @@ def get_true_value(cycle: str = Query(...), scope: CustomerScope = Depends(conso
         deciding = next((c for c in claims if c.get('outcome') == o['outcome']), claims[0] if claims else None)
         scored.append({'variant_id': ref.get('variant_id'), 'gtin': ref.get('gtin'),
                        'retailer': expected.get('attributed_to') or own_domain,
-                       'outcome': o['outcome'],
-                       'stated': deciding.get('stated') if deciding else None})
-    return rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
+                       'outcome': o['outcome'], 'reason_code': o['reason_code'],
+                       'stated': deciding.get('stated') if deciding else None,
+                       'run': f"run-{o['run_id']}", 'platform': o['platform'],
+                       'agent': surfaces.agent_of(o['platform']) or o['platform'],
+                       'surface': o['surface'] or surfaces.surface_of(o['platform']) or 'unlabelled'})
+    return own_domain, variants, scored
+
+
+@router.get("/true-value")
+async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Query(None),
+                         scope: CustomerScope = Depends(console_scope)):
+    """TrueValue for one cycle, per surface (2C-2). With `merchant`, also the
+    merchant's programs (owned incentives, each with how many agents quoted
+    it right) and the ladder for its primary product (list price, then each
+    stated member price). A supply read that fails leaves its part out and is
+    named in `read_errors`."""
+    row = cycle_in_scope(cycle, scope)
+    with engine.connect() as conn:
+        own_domain, variants, scored = _true_value_inputs(conn, row)
+        value_outcomes = _value_outcomes(conn, row) if merchant else []
+    body = rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
                                record_variants=variants)
+    if not merchant:
+        return body
+    client = full_loop._client(scope)
+    (_, owned, o_err), (_, incentives, i_err), (_, catalog, k_err) = await asyncio.gather(
+        client.get_owned_incentives(merchant), client.get_merchant_incentives(merchant),
+        client.get_merchant_catalog(merchant))
+    errors = {n: e for n, e in (('owned_incentives', o_err), ('incentives', i_err), ('catalog', k_err)) if e is not None}
+    programs = rm.build_programs((owned or {}).get('incentives') or [] if o_err is None else [], value_outcomes)
+    body['programs'] = programs
+    body['ladder'], body['receipt'] = parity.build_ladder(
+        catalog if k_err is None else None, incentives if i_err is None else None,
+        (owned or {}).get('incentives') if o_err is None else None, scored, own_domain=own_domain)
+    body['read_errors'] = errors
+    return body
+
+
+def _value_outcomes(conn, row) -> list:
+    return [dict(o) for o in conn.execute(text("""
+        SELECT o.outcome, o.expected_answer, r.platform, COALESCE(o.surface, r.surface) AS surface
+        FROM soa_expectation_outcomes o JOIN soa_runs r ON r.id = o.run_id
+        WHERE o.cycle_id = :c AND o.tier = 'value_incentives'
+    """), {"c": row['id']}).mappings()]
 
 
 @router.get("/accessibility")
 async def get_accessibility(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
-    status, payload, error = await full_loop._client(scope).get_access(merchant)
+    client = full_loop._client(scope)
+    (status, payload, error), (_, reference, r_err) = await asyncio.gather(
+        client.get_access(merchant), client.get_reference(merchant))
     if error is not None:
         raise HTTPException(status_code=404 if status == 404 else 502,
                             detail=f"TrueSync access payload unavailable: {error}")
-    return rm.accessibility_from_supply(payload)
+    # 2C-2: the merchant-level checks from the latest reference read; a
+    # failed read leaves them 'not_checked' and is named in read_errors.
+    return parity.extend_accessibility(rm.accessibility_from_supply(payload), reference if r_err is None else None,
+                                       reference_error=r_err)
 
 
 @router.get("/programs")
@@ -174,10 +265,7 @@ async def get_programs(merchant: str = Query(...), cycle: Optional[str] = Query(
     if cycle:
         row = cycle_in_scope(cycle, scope)
         with engine.connect() as conn:
-            outcomes = [dict(o) for o in conn.execute(text("""
-                SELECT outcome, expected_answer FROM soa_expectation_outcomes
-                WHERE cycle_id = :c AND tier = 'value_incentives'
-            """), {"c": row['id']}).mappings()]
+            outcomes = _value_outcomes(conn, row)
     return {'merchant': (payload or {}).get('merchant') or merchant,
             'programs': rm.build_programs((payload or {}).get('incentives') or [], outcomes)}
 
@@ -213,12 +301,12 @@ async def _record_inputs(merchant: str, scope: CustomerScope, *, incentives: boo
     reads = [client.get_merchant_catalog(merchant), client.get_publications(limit=500), client.get_channels(),
              client.get_provenance(merchant), client.get_reference(merchant)]
     if incentives:
-        reads.append(client.get_merchant_incentives(merchant))
+        reads += [client.get_merchant_incentives(merchant), client.get_owned_incentives(merchant)]
     view, *results = await asyncio.gather(_tenant_view(scope.org), *reads)
     (k_status, catalog, k_err), *rest = results
     if k_err is not None and k_status != 404:
         raise HTTPException(status_code=502, detail=f"TrueSync catalog unavailable: {k_err}")
-    names = ('publications', 'channels', 'provenance', 'reference', 'incentives')
+    names = ('publications', 'channels', 'provenance', 'reference', 'incentives', 'owned_incentives')
     errors = {n: err for n, (_, _, err) in zip(names, rest) if err is not None}
     if view.get('error'):
         errors['tenant'] = view['error']
@@ -228,7 +316,8 @@ async def _record_inputs(merchant: str, scope: CustomerScope, *, incentives: boo
         'merchant_record': next((m for m in view.get('merchants') or [] if m.get('slug') == merchant), None),
         'publications': body['publications'] or [], 'channels': body['channels'] or [],
         'provenance': body['provenance'], 'reference': body['reference'],
-        'incentives': body.get('incentives'), 'read_errors': errors,
+        'incentives': body.get('incentives'), 'owned_incentives': (body.get('owned_incentives') or {}).get('incentives'),
+        'read_errors': errors,
     }
 
 
@@ -258,10 +347,26 @@ async def get_record(merchant: str = Query(...), product: str = Query(...),
                     if product in (rm._listing_sku(l), str(l.get('listing_id')))), None)
     if listing is None:
         raise HTTPException(status_code=404, detail=f"product {product!r} is not in {merchant!r}'s record")
-    return rm.build_record(merchant, listing, merchant_record=got['merchant_record'],
-                           publications=got['publications'], channels=got['channels'],
-                           provenance=got['provenance'], reference=got['reference'],
-                           incentives=got['incentives'], read_errors=got['read_errors'])
+    record = rm.build_record(merchant, listing, merchant_record=got['merchant_record'],
+                             publications=got['publications'], channels=got['channels'],
+                             provenance=got['provenance'], reference=got['reference'],
+                             incentives=got['incentives'], read_errors=got['read_errors'])
+    # 2C-2: the offer fields, history, surfaces (the TrueSync matrix's cells
+    # for this product, reused) and the issues grouped by channel.
+    client = full_loop._client(scope)
+    slugs = [c['slug'] for c in got['channels'] if c.get('is_active', True)]
+    reads = await asyncio.gather(*(client.get_merchant_verifications(merchant, channel=sl, limit=100) for sl in slugs))
+    verifications = {sl: (b if err is None else {}) for sl, (_, b, err) in zip(slugs, reads)}
+    failed = [sl for sl, (_, _, err) in zip(slugs, reads) if err is not None]
+    if failed:
+        record['read_errors'] = {**record.get('read_errors', {}), 'verifications': ', '.join(failed)}
+    matrix = rm.build_truesync(merchant, channels=got['channels'], publications=got['publications'],
+                               catalog={'listings': [listing]}, verifications=verifications,
+                               provenance=got['provenance'])
+    return parity.extend_record(record, listing=listing, owned=got['owned_incentives'], reference=got['reference'],
+                                publications=got['publications'], verifications=verifications,
+                                channels=got['channels'], truesync_product=(matrix['products'] or [None])[0],
+                                truesync_channels=matrix['channels'])
 
 
 @router.get("/studies")
@@ -345,7 +450,10 @@ def get_studio_studies(scope: CustomerScope = Depends(console_scope)):
                     SELECT e.slug, ce.role FROM soa_cycle_entities ce
                     JOIN soa_entities e ON e.id = ce.entity_id WHERE ce.cycle_id = :c
                 """), {"c": cycles[0]['id']}).mappings()]
-            out.append(rm.build_study(job, prompts, cycles, entities))
+            study = rm.build_study(job, prompts, cycles, entities)
+            # 2C-2: branded and unbranded prompt counts beside the prompts
+            study['prompt_counts'] = parity.prompt_counts(prompts)
+            out.append(study)
     return out
 
 

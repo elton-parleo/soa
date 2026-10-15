@@ -26,6 +26,7 @@ from sqlalchemy.pool import StaticPool
 
 import app.console_scope as console_scope_module
 import app.routers.console as console_router
+import app.routers.console_ops as console_ops_router
 import app.routers.full_loop as full_loop_router
 import clients.truesync_client as truesync_client_module
 import soa_shared.config as config
@@ -123,7 +124,7 @@ def db(monkeypatch):
         c.exec_driver_sql("""INSERT INTO organization_members (organization_id, user_id, email, is_operator)
             VALUES (1, 'op', 'op@parleo.io', 1), (10, 'alice', 'alice@ws.test', 0),
                    (20, 'bob', 'bob@brandco.test', 0)""")
-    for module in (customers, console_scope_module, console_router, full_loop_router):
+    for module in (customers, console_scope_module, console_router, console_ops_router, full_loop_router):
         monkeypatch.setattr(module, "engine", engine)
     return engine
 
@@ -296,10 +297,16 @@ def test_true_value_is_console_true_value(http):
     cells = {r['sku']: r['cells']['trueshopstore.com'] for r in tv['rows']}
     assert cells['snug-fit-overnight-s6']['status'] == 'wrong'
     assert cells['snug-fit-overnight-s6']['live'] == '$29.99'
-    # One run right, one wrong, one wall: the wall does not vote, the tie
-    # goes to the worse, and the runs behind the cell are counted.
+    # 2C-2: a cell is per surface. On the grounded API one run was right
+    # ($12.99) and one wrong ($14.99): the worst quoting run decides and its
+    # quote is shown. The consumer UI's wall quoted nothing: left out there.
     balm = cells['bum-balm-4oz']
-    assert balm['status'] == 'wrong' and balm['runs'] == 3
+    assert balm['status'] == 'wrong' and balm['runs'] == 2 and balm['quoted'] == '$14.99'
+    assert tv['surface'] == 'grounded_api'
+    assert balm['by_surface']['consumer_ui'] == {'quoted': '—', 'status': 'missed', 'outcome': 'absent', 'runs': 1}
+    assert {(q['agent'], q['surface'], q['outcome'], q['stated']) for q in balm['quotes']} == {
+        ('gemini', 'grounded_api', 'exact', '12.99'), ('chatgpt', 'grounded_api', 'wrong', '14.99'),
+        ('aimode', 'consumer_ui', 'absent', None)}
     # Scored against the record: the reference is the record, dated by its publication.
     assert balm['reference_source'] == 'record' and balm['observed_at'].startswith('2026-08-28')
 
@@ -328,11 +335,20 @@ def test_programs_are_the_owned_incentives_with_how_answers_did(http, upstream):
 
 
 def test_programs_count_right_among_scored_only():
-    outcomes = [{'outcome': 'exact', 'expected_answer': {'type': 'code', 'code': 'snug3'}},
-                {'outcome': 'wrong', 'expected_answer': {'type': 'code', 'code': 'SNUG3'}},
-                {'outcome': 'unverifiable', 'expected_answer': {'type': 'code', 'code': 'SNUG3'}}]
+    """2C-2: "quoted right by N of M agents" on one surface. An agent is
+    right when every scored answer it gave about the program was exact;
+    unverifiable is asked but never scored."""
+    code = {'type': 'code', 'code': 'SNUG3'}
+    outcomes = [{'outcome': 'exact', 'expected_answer': {**code, 'code': 'snug3'}, 'platform': 'chatgpt', 'surface': 'grounded_api'},
+                {'outcome': 'exact', 'expected_answer': code, 'platform': 'chatgpt', 'surface': 'grounded_api'},
+                {'outcome': 'wrong', 'expected_answer': code, 'platform': 'gemini_grounded', 'surface': 'grounded_api'},
+                {'outcome': 'unverifiable', 'expected_answer': code, 'platform': 'gemini_grounded', 'surface': 'grounded_api'},
+                {'outcome': 'exact', 'expected_answer': code, 'platform': 'chatgpt_api', 'surface': 'api'}]
     snug = rm.build_programs(OWNED['incentives'], outcomes)[1]
-    assert snug['agentsRight'] == '1 of 2 right' and snug['tone'] == 'warn' and snug['asked'] == 3
+    assert snug['agentsRight'] == 'quoted right by 1 of 2 agents' and snug['tone'] == 'warn' and snug['asked'] == 5
+    assert snug['surface'] == 'grounded_api'
+    assert snug['by_surface'] == {'grounded_api': {'asked': ['chatgpt', 'gemini'], 'right': ['chatgpt']},
+                                  'api': {'asked': ['chatgpt'], 'right': ['chatgpt']}}
 
 
 def test_accessibility_is_proxied_with_claude_in_the_vocabulary(http, upstream):
@@ -343,7 +359,9 @@ def test_accessibility_is_proxied_with_claude_in_the_vocabulary(http, upstream):
     check(access, 'Accessibility')
     claude = [r for r in access['requests'] if r.get('agent') == 'claude'][0]
     assert claude['vendor'] == 'claude'
-    assert [c['token'] for c in upstream.calls] == [TOKEN_A]
+    # 2C-2: an identity with no verified UA is not measured, and not a problem.
+    assert claude['measured'] is False and access['problems'] == 0
+    assert [c['token'] for c in upstream.calls] == [TOKEN_A, TOKEN_A]
 
 
 def test_studies_are_study_rows(http):
@@ -535,7 +553,7 @@ def test_accessibility_uses_the_scoped_tenants_token(http, upstream):
                     body=_fixture('supply_access_ws.json'), token=TOKEN_A)
     as_('bob')
     assert http.get('/api/console/accessibility', params={'merchant': 'wiggle-and-snug'}).status_code == 404
-    assert [c['token'] for c in upstream.calls] == [TOKEN_B]
+    assert [c['token'] for c in upstream.calls] == [TOKEN_B, TOKEN_B]
 
 
 def test_full_loop_is_tenant_scoped(http, upstream):
@@ -661,8 +679,9 @@ def test_true_value_for_an_external_brand_reads_the_2a_reference():
     check(tv, 'TrueValue')
     assert [c['id'] for c in tv['columns']] == ['target.com', 'walmart.com']
     cells = tv['rows'][0]['cells']
-    assert cells['target.com'] == {'quoted': '$22.99', 'live': '$21.49', 'status': 'wrong',
-                                   'outcome': 'stale', 'runs': 1, 'reference_source': 'hosted_render',
-                                   'method': 'oxylabs', 'observed_at': '2026-10-09T11:58:00+00:00'}
+    target = {k: v for k, v in cells['target.com'].items() if k not in ('by_surface', 'quotes', 'surface')}
+    assert target == {'quoted': '$22.99', 'live': '$21.49', 'status': 'wrong',
+                      'outcome': 'stale', 'runs': 1, 'reference_source': 'hosted_render',
+                      'method': 'oxylabs', 'observed_at': '2026-10-09T11:58:00+00:00'}
     assert cells['walmart.com']['status'] == 'unverifiable'
     assert cells['walmart.com']['live'] == 'unverifiable'
