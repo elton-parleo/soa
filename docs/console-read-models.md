@@ -568,7 +568,7 @@ shapes below.
 
 | # | what the live data showed | cause | fix |
 |---|---|---|---|
-| 1 | "Stated without a price, so not drawn: Member+ 5% off" beside an Oct 14 read of .09 | the ladder read member prices only from the record, which states none | one source order (`member_price_source`): the record's variant, else the newest readable page read with a `member_price` (its tier is the one the record's offers name), else "stated without a price". Each ladder step and the receipt say which ("from the record" / "from the page read Oct 14"); the record's `variants[]` (`member_source`, `member_note`) and its Member price field use the same order |
+| 1 | "Stated without a price, so not drawn: Member+ 5% off" beside an Oct 14 read of $12.09 | the ladder read member prices only from the record, which states none | one source order (`member_price_source`): the record's variant, else the newest readable page read with a `member_price` (its tier is the one the record's offers name), else "stated without a price". Each ladder step and the receipt say which ("from the record" / "from the page read Oct 14"); the record's `variants[]` (`member_source`, `member_note`) and its Member price field use the same order |
 | 2 | "wrong in 4 of 6 runs" beside "No price, 5 of 6" | cycle 229 was scored before `b3c5a29`: a swap claim then kept the sibling's own verdict in `outcome` (`exact`, the Trial Pack's own price) and the question's in `question_outcome`. The quote was in `claim_results[].stated` either way; the read model matched the swap claim on `outcome` only | `deciding_swap` matches on `question_outcome`, else `outcome`, else the first swap with a stated price. Products carry `quote_groups` (every run in exactly one group); tested: the groups sum to the row's runs and every wrong run shows a value |
 | 3 | "Not comparable" above an agent row "First, change: -2" | the agent table took a delta whatever the block said | `build_agents` follows `changes_status`: a delta only when `compared`, over the block's denominator (`named_of`), with `delta_detail`; else `delta_status` says why |
 | 4 | 514 answers, a tier table summing to 516, an agent table to 514 | an errored run has no `answer_status`, and `/answers/summary` counted a missing status as answered | one rule, below |
@@ -603,7 +603,7 @@ before. **Deploy:** soa is safe on either supply. The older read's price appears
 **The readback verdict rule (item 2).** A check is one claim. For a claim about a sibling
 (`target: swap`) or a variant the record lacks (`clash`): the verdict is the question's,
 `question_outcome` first (rows scored before `b3c5a29`), then `outcome`, the same rule the
-products table and True Value read; the "said" cell keeps the claim (".99 for Snug-Fit Trial
+products table and True Value read; the "said" cell keeps the claim ("$6.99 for Snug-Fit Trial
 Pack"); "judged against" is the **asked** variant's reference (its expected amount), never the
 sibling's; `reason` is `variant_swap` (or `variant_clash`) and `note` says "priced Snug-Fit Trial
 Pack instead" (the sibling's record name, from the study's catalog questions). Any other claim
@@ -4805,7 +4805,7 @@ step comes from a page read here; Size 1 small's Member+ step does (test_console
 
 ### A swap check, scored before b3c5a29 (2C-2c, `build_answer`)
 
-Size 1 small asked, the Trial Pack's .99 stated. The claim's own `outcome` is `exact` (it is the
+Size 1 small asked, the Trial Pack's $6.99 stated. The claim's own `outcome` is `exact` (it is the
 Trial Pack's price); the question's is `question_outcome: wrong`.
 
 ```json
