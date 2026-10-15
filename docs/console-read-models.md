@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -489,7 +489,10 @@ read and a note from the read statuses (`catalog.read`). `stage_cycle` names the
 ### The templates
 
 Every sentence above, by rule, with an example filled from counts (house rules: no dashes, no
-semicolons, pinned by a test):
+semicolons, pinned by a test). The product quote detail (2C-2a) is not a sentence template: it
+lists every distinct quote with the runs behind it and their agents, a sibling variant's price
+named, then the runs with no price, for example
+`$6.99 for Snug-Fit Trial Pack, 3 of 5 runs (ChatGPT 2, Gemini 1). $12.99, 1 of 5 runs (Gemini 1)`.
 
 | rule | when | example |
 |---|---|---|
@@ -521,6 +524,36 @@ semicolons, pinned by a test):
 | `headline.gap` | Visibility's headline, ours not first | Named in 0 of 300 unprompted answers. Pampers first in 38, Huggies in 24. |
 | `headline.lead` | Visibility's headline, ours first | First in 6 of 7 answers. |
 | `catalog.read` | Retailers read, per domain | 1 of 3 pages read, 1 challenged, 1 not read. |
+| `changes.not_comparable_subset` | the previous cycle ran a subset of this cycle's agents on the surface | Not comparable: 20260915-113207-wiggle-snug-full ran ChatGPT only on this surface. |
+| `changes.not_comparable` | the agent sets differ otherwise | Not comparable: C178 ran Gemini on this surface, this cycle ran ChatGPT and Gemini. |
+| `changes.not_comparable_tier` | this cycle reads unprompted answers, the previous asked none | Not comparable: C178 asked no unprompted questions on this surface. |
+| `changes.detail` | a compared metric | 34 of 59 this cycle against 30 of 59 in C178. |
+
+### 2C-2a: eight fixes from the first live walk (cycle 229)
+
+| # | what the live data showed | cause | fix |
+|---|---|---|---|
+| 1 | Changes: "34 of 59 against 38 of 25" | another brand's price was over `scored` (those runs are absent, never scored), and the previous cycle's named/first used its own tier and surface rule | one surface (the run's own, as Visibility reads it), the current cycle's tier for both, one denominator per metric (below); "Not comparable: …" with no delta when the agent sets differ |
+| 2 | "0 of 13 scored cells exact" with 9 exact runs | one retailer, so both agents collapsed into one worst-wins cell | with fewer than two retailers the columns are the agents on the surface (`column_kind: 'agent'`, `columns_by_surface`), each cell still worst-wins; the one-retailer cell rides beside as `retailer_cells` |
+| 3 | "Program price quoted 0 of 0" with 36 Member+ questions | programs came from the owned incentives only, whose display name never matched the question's `tier_name` | programs from the record first (`record_programs`: the generator's source), joined on the folded tier name, the code or the question's `source_ref.offer_id`; each surface carries `scored` and `exact` answers |
+| 4 | "Member+ 5% off, stated without a price" | the ladder read only supply's `member_prices` list and the offers | the variant's own member price first (`member_prices`, `entitled_member_price`, a catalog variant's `member_price`), the offers only when it states none; the receipt reads the same steps |
+| 5 | "GTIN in markup 6 of 6" with 19 pages | its denominator was pages whose record carries a GTIN | every markup check is over the pages read |
+| 6 | By stage counted prompted rows under Unprompted | one stage table for every tier | `by_stage.<surface>.stages_by_tier.<tier>` (and `all`); the console picks the reader's tier |
+| 7 | "wrong in 4 of 6 runs" beside one wrong quote; reference "the record, Sep 4" | a sibling variant's quote (`target: swap`) was dropped from the quote; the cycle cached no reference | the swap claim that decided a run is its quote, named (`swap_product`); with `merchant`, the newest readable page read is the reference, the record only when none exists (`live_basis`) |
+| 8 | the week in short said the other-brand count twice | the top signal was appended whatever the sentences before had said | the last sentence is the first signal not already stated, and is dropped when every signal is |
+
+**Changes denominators** (`CHANGE_METRICS`, both cycles on the same surface and agent set):
+
+| metric | count | over |
+|---|---|---|
+| Named, First pick | answered runs naming ours / with ours first | answered runs of the current cycle's tier (unprompted when it asked any) |
+| Prices right | exact | scored (exact, partial, stale, wrong) |
+| Wrong prices | wrong | scored |
+| Answered with another brand's price | absent with reason `other_brand` | answered price questions (catalog and value tiers) |
+
+`changes_status` per surface: `first_cycle` (no earlier scored cycle), `not_comparable` (the
+agents differ, or this cycle reads unprompted answers and the previous asked none), `compared`.
+`changes_note` says which in one line; only `compared` carries deltas.
 
 ### What the stored data cannot fill
 
@@ -3626,10 +3659,11 @@ reference read is the 2C sample's (`supply_feed_brandco.json`), whose target.com
 }
 ```
 
-### GET /api/console/overview?cycle=WS-2B-FIXTURE&merchant=wiggle-and-snug (2C-2, cut)
+### GET /api/console/overview?cycle=WS-2B-FIXTURE&merchant=wiggle-and-snug (2C-2a, cut)
 
-The W&S fixture cycle with the W&S access sample. One product of four, the consumer UI and the
-ranking rows cut (`rules` is `TEMPLATES`, also cut).
+The W&S fixture cycle with the W&S access and reference samples. One product of four, the
+consumer UI and the ranking rows cut (`rules` is `TEMPLATES`, also cut). The reference is
+`supply_reference_ws.json`'s Oct 9 read, the newest page read (2C-2a #7).
 
 ```json
 {
@@ -3704,9 +3738,12 @@ ranking rows cut (`rules` is `TEMPLATES`, also cut).
           "Prices right in 1 of 5 scored answers, 0 answered with another brand's price.",
           "No signal crossed its threshold this cycle."
         ],
-        "text": "First in 6 of 7 answers, ahead of every other brand. Prices right in 1 of 5 scored answers, 0 answered with another brand's price. No signal crossed its threshold this cycle."
+        "text": "First in 6 of 7 answers, ahead of every other brand. Prices right in 1 of 5 scored answers, 0 answered with another brand's price. No signal crossed its threshold this cycle.",
+        "signal": null
       },
       "changes": [],
+      "changes_status": "first_cycle",
+      "changes_note": "First cycle. Changes appear from the next one.",
       "tier": "all",
       "products": [
         {
@@ -3714,8 +3751,8 @@ ranking rows cut (`rules` is `TEMPLATES`, also cut).
           "sku": "bum-balm-4oz",
           "named": 2,
           "first": 2,
-          "quoted": "$14.99 (ChatGPT, 1 of 1 run). $12.99 (Gemini, 1 of 1 run)",
-          "live": "$12.99 at trueshopstore.com, the record, Aug 28",
+          "quoted": "$12.99, 1 of 2 runs (Gemini 1). $14.99, 1 of 2 runs (ChatGPT 1)",
+          "live": "$12.99 at trueshopstore.com, our own fetch, Oct 9",
           "status": "wrong",
           "issue": "Quoted a wrong price in 1 of 2 runs.",
           "route": "true-value",
@@ -3726,8 +3763,8 @@ ranking rows cut (`rules` is `TEMPLATES`, also cut).
           "answered": 2,
           "issue_rule": "product.wrong",
           "wrong_runs": 1,
-          "reference_source": "record",
-          "observed_at": "2026-08-28T18:03:06.090934+00:00",
+          "reference_source": "honest_fetch",
+          "observed_at": "2026-10-09T14:42:50+00:00",
           "live_price": "$12.99",
           "answer_ids": [
             "run-1001",
@@ -3744,6 +3781,7 @@ ranking rows cut (`rules` is `TEMPLATES`, also cut).
         "scored": 5,
         "wrong": 4,
         "stale": 0,
+        "price_answered": 5,
         "partial": 0,
         "unverifiable": 0,
         "other_brand": 0,
@@ -3772,26 +3810,6 @@ ranking rows cut (`rules` is `TEMPLATES`, also cut).
 ```json
 {
   "headline": "First in 6 of 7 answers.",
-  "headlines": {
-    "grounded_api": {
-      "text": "First in 6 of 7 answers.",
-      "tier": "all",
-      "denom": 7,
-      "named": 6,
-      "first": 6,
-      "rivals": [],
-      "tier_text": ""
-    },
-    "consumer_ui": {
-      "text": "Named in 0 of 0 answers.",
-      "tier": "all",
-      "denom": 0,
-      "named": 0,
-      "first": 0,
-      "rivals": [],
-      "tier_text": ""
-    }
-  },
   "matrix": {
     "grounded_api": {
       "surface": "grounded_api",
@@ -3874,6 +3892,62 @@ ranking rows cut (`rules` is `TEMPLATES`, also cut).
           }
         }
       ],
+      "stages_by_tier": {
+        "all": [
+          {
+            "stage": "Research",
+            "label": "Research",
+            "answered": 2,
+            "named": 2,
+            "first": 2,
+            "top": {
+              "name": "Wiggle & Snug",
+              "first": 2,
+              "you": true
+            }
+          },
+          {
+            "stage": "Ready to Buy",
+            "label": "Ready to buy",
+            "answered": 5,
+            "named": 4,
+            "first": 4,
+            "top": {
+              "name": "Wiggle & Snug",
+              "first": 4,
+              "you": true
+            }
+          }
+        ],
+        "brand_direct": [
+          {
+            "stage": "Research",
+            "label": "Research",
+            "answered": 2,
+            "named": 2,
+            "first": 2,
+            "top": {
+              "name": "Wiggle & Snug",
+              "first": 2,
+              "you": true
+            }
+          }
+        ],
+        "catalog_accuracy": [
+          {
+            "stage": "Ready to Buy",
+            "label": "Ready to buy",
+            "answered": 5,
+            "named": 4,
+            "first": 4,
+            "top": {
+              "name": "Wiggle & Snug",
+              "first": 4,
+              "you": true
+            }
+          }
+        ]
+      },
       "tiers": [
         {
           "tier": "brand_direct",
@@ -3905,13 +3979,66 @@ ranking rows cut (`rules` is `TEMPLATES`, also cut).
 }
 ```
 
-### GET /api/console/true-value?cycle=WS-2B-FIXTURE&merchant=wiggle-and-snug (2C-2, one row)
+### GET /api/console/true-value?cycle=WS-2B-FIXTURE&merchant=wiggle-and-snug (2C-2a, one row)
 
-Programs from `OWNED` (the test's owned incentives), the ladder from the pipeline's W&S record
-incentives (`wiggle_and_snug_catalog.json`).
+One retailer in the record, so the columns are the agents (`column_kind: 'agent'`), per surface.
+Each row keeps its one-retailer cell in `retailer_cells`. The live price is the newest page read
+(`live_basis: 'reference_read'`). Programs are the record's (the fixture cycle asks no value &
+incentives question, so each is not asked), the ladder the record's member prices.
 
 ```json
 {
+  "column_kind": "agent",
+  "columns": [
+    {
+      "id": "chatgpt",
+      "name": "ChatGPT",
+      "kind": "agent",
+      "retailer": "trueshopstore.com",
+      "retailer_name": "trueshopstore.com"
+    },
+    {
+      "id": "gemini",
+      "name": "Gemini",
+      "kind": "agent",
+      "retailer": "trueshopstore.com",
+      "retailer_name": "trueshopstore.com"
+    }
+  ],
+  "columns_by_surface": {
+    "consumer_ui": [
+      {
+        "id": "aimode",
+        "name": "Google AI Mode",
+        "kind": "agent",
+        "retailer": "trueshopstore.com",
+        "retailer_name": "trueshopstore.com"
+      }
+    ],
+    "grounded_api": [
+      {
+        "id": "chatgpt",
+        "name": "ChatGPT",
+        "kind": "agent",
+        "retailer": "trueshopstore.com",
+        "retailer_name": "trueshopstore.com"
+      },
+      {
+        "id": "gemini",
+        "name": "Gemini",
+        "kind": "agent",
+        "retailer": "trueshopstore.com",
+        "retailer_name": "trueshopstore.com"
+      }
+    ]
+  },
+  "retailer_columns": [
+    {
+      "id": "trueshopstore.com",
+      "name": "trueshopstore.com",
+      "you": true
+    }
+  ],
   "surface": "grounded_api",
   "surfaces": [
     {
@@ -3928,15 +4055,105 @@ incentives (`wiggle_and_snug_catalog.json`).
       "product": "Wiggle & Snug Bum Balm 4 oz",
       "sku": "bum-balm-4oz",
       "cells": {
+        "chatgpt": {
+          "quoted": "$14.99",
+          "live": "$12.99",
+          "status": "wrong",
+          "outcome": "wrong",
+          "runs": 1,
+          "reference_source": "honest_fetch",
+          "method": "fetch",
+          "observed_at": "2026-10-09T14:42:50+00:00",
+          "live_basis": "reference_read",
+          "surface": "grounded_api",
+          "by_surface": {
+            "grounded_api": {
+              "quoted": "$14.99",
+              "status": "wrong",
+              "outcome": "wrong",
+              "runs": 1
+            }
+          },
+          "quotes": [
+            {
+              "agent": "chatgpt",
+              "surface": "grounded_api",
+              "outcome": "wrong",
+              "stated": "14.99",
+              "run": "run-1002"
+            }
+          ]
+        },
+        "gemini": {
+          "quoted": "$12.99",
+          "live": "$12.99",
+          "status": "exact",
+          "outcome": "exact",
+          "runs": 1,
+          "reference_source": "honest_fetch",
+          "method": "fetch",
+          "observed_at": "2026-10-09T14:42:50+00:00",
+          "live_basis": "reference_read",
+          "surface": "grounded_api",
+          "by_surface": {
+            "grounded_api": {
+              "quoted": "$12.99",
+              "status": "exact",
+              "outcome": "exact",
+              "runs": 1
+            }
+          },
+          "quotes": [
+            {
+              "agent": "gemini",
+              "surface": "grounded_api",
+              "outcome": "exact",
+              "stated": "12.99",
+              "run": "run-1001"
+            }
+          ]
+        },
+        "aimode": {
+          "quoted": "—",
+          "live": "$12.99",
+          "status": "none",
+          "outcome": null,
+          "runs": 0,
+          "reference_source": "honest_fetch",
+          "method": "fetch",
+          "observed_at": "2026-10-09T14:42:50+00:00",
+          "live_basis": "reference_read",
+          "surface": null,
+          "by_surface": {
+            "consumer_ui": {
+              "quoted": "—",
+              "status": "missed",
+              "outcome": "absent",
+              "runs": 1
+            }
+          },
+          "quotes": [
+            {
+              "agent": "aimode",
+              "surface": "consumer_ui",
+              "outcome": "absent",
+              "stated": null,
+              "run": "run-1008"
+            }
+          ]
+        }
+      },
+      "retailer_cells": {
         "trueshopstore.com": {
           "quoted": "$14.99",
           "live": "$12.99",
           "status": "wrong",
           "outcome": "wrong",
           "runs": 2,
-          "reference_source": "record",
-          "method": null,
-          "observed_at": "2026-08-28T18:03:06.090934+00:00",
+          "reference_source": "honest_fetch",
+          "method": "fetch",
+          "observed_at": "2026-10-09T14:42:50+00:00",
+          "live_basis": "reference_read",
           "surface": "grounded_api",
           "by_surface": {
             "consumer_ui": {
@@ -4017,8 +4234,8 @@ incentives (`wiggle_and_snug_catalog.json`).
   },
   "programs": [
     {
-      "name": "Member Rewards",
-      "terms": "$16.84 member price, on all",
+      "name": "Member Rewards Member+",
+      "terms": "Member+ price on 7 variants, $1.64 to $23.49",
       "agentsRight": "not asked this cycle",
       "tone": "neu",
       "mechanic": "member_price",
@@ -4029,22 +4246,102 @@ incentives (`wiggle_and_snug_catalog.json`).
       "scored": 0,
       "right": 0,
       "surface": null,
-      "by_surface": {}
+      "by_surface": {},
+      "source": "record",
+      "offer_ids": []
     },
     {
-      "name": "SNUG3",
-      "terms": "$3.00 off, code SNUG3, on Diapers, until 2026-12-31",
+      "name": "WELCOME10",
+      "terms": "10% off, new customers",
       "agentsRight": "not asked this cycle",
       "tone": "neu",
-      "mechanic": "code",
-      "code": "SNUG3",
+      "mechanic": "percent_off",
+      "code": "WELCOME10",
       "tier_name": null,
-      "valid_until": "2026-12-31",
+      "valid_until": null,
       "asked": 0,
       "scored": 0,
       "right": 0,
       "surface": null,
-      "by_surface": {}
+      "by_surface": {},
+      "source": "record",
+      "offer_ids": [
+        "wiggle-and-snug:deal:1627:bum-balm-4oz",
+        "wiggle-and-snug:deal:1627:cloud-wipes-3pack",
+        "wiggle-and-snug:deal:1627:snug-fit-diapers-s1-big",
+        "wiggle-and-snug:deal:1627:snug-fit-diapers-s1-small",
+        "wiggle-and-snug:deal:1627:snug-fit-diapers-s2-big",
+        "wiggle-and-snug:deal:1627:snug-fit-diapers-s2-small",
+        "wiggle-and-snug:deal:1627:snug-fit-diapers-s3-big",
+        "wiggle-and-snug:deal:1627:snug-fit-diapers-s3-small",
+        "wiggle-and-snug:deal:1627:snug-fit-diapers-s4-big",
+        "wiggle-and-snug:deal:1627:snug-fit-diapers-s4-small",
+        "wiggle-and-snug:deal:1627:snug-fit-diapers-s5-big",
+        "wiggle-and-snug:deal:1627:snug-fit-diapers-s5-small",
+        "wiggle-and-snug:deal:1627:snug-fit-diapers-s6-big",
+        "wiggle-and-snug:deal:1627:snug-fit-diapers-s6-small",
+        "wiggle-and-snug:deal:1627:snug-fit-overnight-s3",
+        "wiggle-and-snug:deal:1627:snug-fit-overnight-s4",
+        "wiggle-and-snug:deal:1627:snug-fit-overnight-s5",
+        "wiggle-and-snug:deal:1627:snug-fit-overnight-s6",
+        "wiggle-and-snug:deal:1627:snug-fit-trial-pack"
+      ]
+    },
+    {
+      "name": "SNUG3",
+      "terms": "$3.00 off",
+      "agentsRight": "not asked this cycle",
+      "tone": "neu",
+      "mechanic": "mfr_coupon",
+      "code": "SNUG3",
+      "tier_name": null,
+      "valid_until": null,
+      "asked": 0,
+      "scored": 0,
+      "right": 0,
+      "surface": null,
+      "by_surface": {},
+      "source": "record",
+      "offer_ids": [
+        "brand_incentive:2"
+      ]
+    },
+    {
+      "name": "Member Rewards points",
+      "terms": "points on 19 offers",
+      "agentsRight": "not asked this cycle",
+      "tone": "neu",
+      "mechanic": "points",
+      "code": null,
+      "tier_name": null,
+      "valid_until": null,
+      "asked": 0,
+      "scored": 0,
+      "right": 0,
+      "surface": null,
+      "by_surface": {},
+      "source": "record",
+      "offer_ids": [
+        "wiggle-and-snug:deal:1629:bum-balm-4oz",
+        "wiggle-and-snug:deal:1629:cloud-wipes-3pack",
+        "wiggle-and-snug:deal:1629:snug-fit-diapers-s1-big",
+        "wiggle-and-snug:deal:1629:snug-fit-diapers-s1-small",
+        "wiggle-and-snug:deal:1629:snug-fit-diapers-s2-big",
+        "wiggle-and-snug:deal:1629:snug-fit-diapers-s2-small",
+        "wiggle-and-snug:deal:1629:snug-fit-diapers-s3-big",
+        "wiggle-and-snug:deal:1629:snug-fit-diapers-s3-small",
+        "wiggle-and-snug:deal:1629:snug-fit-diapers-s4-big",
+        "wiggle-and-snug:deal:1629:snug-fit-diapers-s4-small",
+        "wiggle-and-snug:deal:1629:snug-fit-diapers-s5-big",
+        "wiggle-and-snug:deal:1629:snug-fit-diapers-s5-small",
+        "wiggle-and-snug:deal:1629:snug-fit-diapers-s6-big",
+        "wiggle-and-snug:deal:1629:snug-fit-diapers-s6-small",
+        "wiggle-and-snug:deal:1629:snug-fit-overnight-s3",
+        "wiggle-and-snug:deal:1629:snug-fit-overnight-s4",
+        "wiggle-and-snug:deal:1629:snug-fit-overnight-s5",
+        "wiggle-and-snug:deal:1629:snug-fit-overnight-s6",
+        "wiggle-and-snug:deal:1629:snug-fit-trial-pack"
+      ]
     }
   ],
   "ladder": {
@@ -4140,13 +4437,13 @@ is not one of supply's `json_ld` / `regex` / `none`, so markup reads 0 of 3).
     },
     {
       "name": "GTIN in markup",
-      "value": "2 of 2",
-      "status": "ok",
+      "value": "2 of 3",
+      "status": "partial",
       "checked": true,
       "got": 2,
-      "of": 2,
+      "of": 3,
       "key": "gtin",
-      "basis": "pages whose record carries a GTIN, read with structured data, without a gtin_missing_on_page finding"
+      "basis": "pages read whose record carries a GTIN, read with structured data, without a gtin_missing_on_page finding, over every page read"
     },
     {
       "name": "Program price in markup",
@@ -4283,7 +4580,7 @@ is not one of supply's `json_ld` / `regex` / `none`, so markup reads 0 of 3).
       "status": "published",
       "tone": "ok"
     },
-    "… 5 more, newest first"
+    "… newest first"
   ],
   "surfaces": [
     {
@@ -4308,7 +4605,7 @@ is not one of supply's `json_ld` / `regex` / `none`, so markup reads 0 of 3).
       "published_at": null,
       "note": "not implemented in Step 2"
     },
-    "… 6 more"
+    "… cut"
   ],
   "issue_groups": {
     "groups": [
