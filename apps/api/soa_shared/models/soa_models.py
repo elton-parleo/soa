@@ -513,6 +513,12 @@ class SoaCycle(Base):
     reference_prices = Column(JSON, nullable=True)
     reference_as_of = Column(DateTime(timezone=True), nullable=True)
 
+    # 2C-3: share_of_algorithm (JSON) and share_of_algorithm_version (Text),
+    # migration f3b8d2a6c4e1, are deliberately NOT mapped here. Only
+    # app/services/console_score.py reads and writes them, by raw SQL inside
+    # a try, so every ORM read of SoaCycle keeps working on a database the
+    # migration has not reached yet.
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

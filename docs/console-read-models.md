@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -52,6 +52,7 @@ Lists (`runs`, `studio/*`) return only the scope's rows.
 | `POST /api/full-loop` | queues a full loop for the worker (202 `{full_loop_id, status: 'queued'}`) | — (soa) |
 | `GET /api/console/me` | who is signed in and the orgs they may select (2C-0) | — (the console's workspace switcher) |
 | `GET /api/console/full-loop/latest` | the scope's most recent full loop, or `null` (2C-0) | — (soa) |
+| `GET /api/console/score?cycle=<code>[&merchant=<slug>]` | the Share of Algorithm: per surface, pooled as the mean of the surface scores, stored with its scorer version (2C-3) | `Score` (beside) |
 
 Extra fields ride **beside** the typed ones; a typed field is never bent to hold
 something it does not mean. Optional typed fields (`field?: string`) are omitted,
@@ -625,7 +626,738 @@ keeps its own outcome and reference.
 - **Availability**: supply's reference payload does not project the read's availability, and
   the hosted catalog has none; the field shows only when one of them states it.
 - **A competitor grid**: needs a comparison-set domain list on supply (a separate prompt).
-- **Revenue, a Share of Algorithm score, the Fix and Prove workflow**: out of scope (Preview).
+- **Revenue, the Fix and Prove workflow**: out of scope (Preview). The Share of Algorithm score is 2C-3 (below).
+
+## 2C-3: the Share of Algorithm score
+
+`GET /api/console/score?cycle=<code>[&merchant=<slug>]`, `app/services/console_score.py`. The Audit's
+formula over loop data: the Audit's registry (`soa_shared/scan_dimensions.py`: weights, seen/said
+splits, `dimension_max`, the readiness bar), the Audit's per-dimension scoring functions
+(`lite_pillars.py`, `cycle_scoring_full.py`), called, never changed. The console only adapts loop
+counts into those functions' inputs. No model is called.
+
+### The weights, as the scorer has them
+
+Read from `soa_shared/scan_dimensions.py`. The weights are the ones the 2C-3 prompt lists as v4; in the
+code they are `SCORER_VERSION = "5"` (its docstring: v5 replaced v4's own weights, True Value 40 to 50):
+
+| pillar | dimension | weight | seen / said |
+|---|---|---|---|
+| Visibility 32 | Share of Mentions | 22 | |
+| | Recommendation Strength | 10 | |
+| Accessibility 18 | Agent Access | 5 | |
+| | Catalog & Context | 8 | |
+| | Protocol & Feed Presence | 5 | |
+| True Value 50 | Price Truth | 16 | 7 / 9 |
+| | Value Protocols | 14 | 14 / none (encode only) |
+| | Deal Citability | 12 | 7 / 5 |
+| | Member Value | 8 | 5 / 3 |
+
+Readiness bar: `VERDICT_COMPOSITE_THRESHOLD = 60`, with `VERDICT_TRUE_VALUE_RATIO_THRESHOLD = 0.25`
+beside it (`compute_verdict`: AGENT-READY needs both).
+
+**Which scorer version.** The file holds two constants. `SCORER_VERSION = "5"` is the lite Audit's
+(24 questions, one surface). `FULL_CYCLE_SCORER_VERSION = "6"` is the same registry and weights for a
+full cycle: the one difference is Deal Citability's said half, banded as a rate
+(`apply_deal_citability_rate_band`) because a citation count saturates at full-cycle volume. A loop is
+a full cycle, and its value-tier half is a rate by construction (right ÷ scored), so the console
+scores under **`FULL_CYCLE_SCORER_VERSION`** and stores that value as `scorer_version`. Reused, not
+forked: a re-weight of either bumps it and every stored console score reads stale.
+
+### Mapping, one row per Audit dimension
+
+Per surface unless the row says otherwise. "Pages read" is the latest 2A reference read of the
+merchant, `read_status` `ok` or `empty`, the same rows and predicates Accessibility's merchant
+checks count (`console_parity.build_access_checks`).
+
+| dimension | scorer input | loop source | denominator | state |
+|---|---|---|---|---|
+| Share of Mentions | `som_pct`, `total_mentions` (`score_share_of_mentions_full`) | Layer 1 (`soa_coded_mentions`) on answered **unprompted** runs: mentions of ours ÷ mentions of every cycle entity, as `MetricsCalculator` counts `soa_pct` | mentions of the cycle's entities in answered unprompted runs | `measured` when the surface has an answered unprompted run, else `not_measured` |
+| Recommendation Strength | `rsi_score` (`score_recommendation_strength_full`) | Layer 1 `strength` on our unprompted mentions, Primary +3 / Positive +1 / Neutral 0 / Negative −1, mean over our mentions, as `MetricsCalculator` counts `rsi_score` | our mentions in answered unprompted runs | as above |
+| Agent Access | `crawl_dimensions.agent_access` `{score, max}` | supply's access run: measured identities that got through; Claude-User (no verified UA) and the Parleo control are not agents measured | measured agent identities | `measured`, else `not_measured` when no identity was measured. One value for every surface |
+| Catalog & Context | `crawl_dimensions.catalog_context` | pages read with `method == json_ld` **and** a GTIN in markup (Accessibility's GTIN predicate) | pages read | `measured`, else `not_measured` with no page read. One value for every surface |
+| Protocol & Feed Presence | `crawl_dimensions.protocol_feed` | none: the supply probe does not exist | | **`not_measured`** |
+| Price Truth, seen | `crawl_dimensions.price_truth_seen` | pages read with a price | pages read | as Catalog & Context |
+| Price Truth, said | `run_signals` (`score_price_truth_said`) | catalog tier: one signal per scored run, cited = `exact` | scored (exact, partial, stale, wrong); `unverifiable`, `absent`, `unscoreable` outside it | `measured`; fewer than `MIN_OPPORTUNITY_SET_MENTIONS` (2) scored is the scorer's own `na`, and the dimension rescales onto its seen half |
+| Value Protocols | `crawl_dimensions.value_protocols_seen` | none: the manifest probe does not exist | | **`not_measured`** |
+| Deal Citability, seen | `crawl_dimensions.deal_citability_seen` | none: supply's `/reference` rows project no incentive or code (`reference_reads.offer_text` is stored, not served) | | **`not_measured`**, and with it the whole dimension (below) |
+| Deal Citability, said | `run_signals` (`score_deal_citability_said_full`) | value tier, `code` and `points` questions: cited = `exact` | scored | computed and shown, not counted while the seen half is unmeasured |
+| Member Value, seen | `crawl_dimensions.member_value_seen` | pages read with `member_price` | pages read | as Catalog & Context |
+| Member Value, said | `run_signals` (`score_member_value_said`) | value tier, `member_price` (Member+) questions: cited = `exact` | scored | `measured`; fewer than 2 scored is `na`, onto the seen half |
+
+Member Value's applicability is the scorer's (`member_value_applicable`): the record states a program
+(the study asked a `member_price` question, standing in for the Audit's membership probe) or the
+member-price half earned credit. Neither: `na`, and its 8 points leave the applicable max, as in the Audit.
+
+**Rows changed from the prompt's table, and why.**
+
+- **Share of Mentions**: the prompt had named ÷ answered. The scorer's input is a share of mentions
+  across tracked brands (`soa_pct`, capped at 50 for full marks), not a presence rate; named ÷ answered
+  fed into it would give full marks to any brand named in half the answers. The loop has the
+  honest input (Layer 1 counts every cycle entity), so the row uses it. Named ÷ answered stays as a metric row.
+- **Recommendation Strength**: the prompt had first pick ÷ answered. The scorer's input is `rsi_score`,
+  Layer 1's strength coding, which the loop stores (`soa_coded_mentions.strength`). First pick ÷ answered
+  stays as a metric row.
+- **Deal Citability, seen**: the prompt had reads carrying an incentive or code in markup. Supply's
+  reference read stores `offer_text` but `/reference` and `/retailer-prices` do not serve it, so the loop
+  has no source. `not_measured`.
+- **Deal Citability, said**: computed, but by the Audit's own rule an unmeasurable seen half takes the
+  whole dimension out of the applicable max (`build_pillars_payload` / `build_full_cycle_pillars`,
+  `seen_blocked`: "the WHOLE dimension leaves the applicable max"), said shown, uncounted.
+- **Price Truth, said**, **Member Value, said**: the scorer counts "cited a price" / "cited member
+  value" over mentions; the loop has a stronger fact, the price judged exact against the record, so
+  `exact` is the citation and `scored` the opportunity set. The value-tier signals are placed in a
+  purchase-intent stage so the scorer's own opportunity-set filter keeps them.
+
+### Not measured, and the applicable max
+
+A `not_measured` dimension leaves the applicable max by its full weight; a said half the scorer calls
+`na` rescales its dimension onto the seen half (`dimension_max`); Member Value `na` leaves by 8. The
+score is `round(earned ÷ applicable max × 100)`, as `compute_composite` does for the Audit's /92. One
+departure: `compute_composite` only shrinks its basis for Member Value, so the Audit scores an
+unmeasured Protocol & Feed (`na`) and Value Protocols as zeros in the composite. The console cannot
+call it for that reason, and sums the scorer's own dimension rows over the measured ones instead. A
+`not_measured` dimension is never 0.
+
+### The read model
+
+`GET /api/console/score?cycle=<code>[&merchant=<slug>][&rescore=true]`, tenant-scoped like every
+console read (operator `?org=`; `rescore` is operator only, a member is 403).
+
+| field | meaning |
+|---|---|
+| `scorer_version` | `FULL_CYCLE_SCORER_VERSION`, stored with the score. `adapter_revision` beside is the adapter's own cache key, never shown as a version |
+| `score` | the equal-weight mean of `surfaces[].score`, rounded once, at the end. `null` with nothing measured |
+| `earned`, `applicable_max` | the mean of the surfaces' points and applicable maxes: "N of M applicable" on the tile when M < 100 |
+| `readiness_bar` | `VERDICT_COMPOSITE_THRESHOLD`, 60 |
+| `verdict`, `verdict_note` | `compute_verdict` on the pooled score and True Value, **only when no dimension is `not_measured`** (the Audit gives one only in its `scored` state). Otherwise `null`, and the note says how many points are not measured. Member Value `na` does not withhold it |
+| `surfaces[]` | each pooled surface: `score` (unrounded: earned ÷ applicable max × 100), `earned`, `applicable_max`, its three pillars |
+| `surfaces_left_out[]` | a surface the cycle ran with no answer on it: not pooled, with the reason |
+| `pillars[].dimensions[]` | one row per Audit dimension in registry order: `score` and `applicable_max` (pooled means, 0 where a surface did not count it), `state` (`measured`, `not_measured`, `na`, or `partial` when the surfaces differ), `reason`, `numerator` / `denominator` **only when every surface reads the same one** (a crawl-side count), `source`, `parts` (the seen and said halves, each with its own state and counts, and the `line` its gap reads as) and `by_surface` |
+| `biggest_gap` | the counted dimension with the most points left (pooled), ties to the registry's order; `line` is its part with the most left, on the surface where it leaves the most |
+| `metrics[]` | the demo's five rows on the highest-fidelity pooled surface (`metric_surface`), `by_surface` beside, `surface_note` naming the surface and the tier. `delta` only when `previous.comparable`, else `null` with `delta_reason` |
+| `coverage` | pooled surfaces, questions asked on them, agents, runs, and `line` |
+| `previous` | the newest earlier scored cycle's **stored** score: `{cycle, scorer_version, score, comparable, reason, delta}`. Comparable only with the same scorer version, the same pooled surfaces and the same agents on each (2C-2a's rule). `null` on a first cycle |
+| `inputs` | what the stored score was computed from: `merchant`, `reference_run`, `access_run`, `scored_at` |
+| `stored`, `read_errors` | whether the row holds this score. A failed supply read is served and never stored, so the next read tries again |
+
+**The five rows.**
+
+| row | count | over |
+|---|---|---|
+| First recommendation | answered runs with ours first (Visibility's first pick) | answered runs of the Overview's tier (unprompted when the cycle asked any, else every answered run) |
+| Share of answers | answered runs naming ours | the same |
+| Program named when the brand is named | runs whose Layer 1 mention of ours is coded `deal_cited` or `member_value_cited` | answered runs of that tier naming ours |
+| Prices quoted exactly | exact, catalog tier | scored, catalog tier |
+| Program terms right | exact, value tier | scored, value tier |
+
+Named and first are the Overview's counts (`parity.surface_metrics`), not recomputed. The two price rows
+split the Overview's "prices right" by tier so they do not overlap.
+
+**Stored, versioned.** The score is stored on `soa_cycles.share_of_algorithm` (JSON) with
+`share_of_algorithm_version`, and served from there: a stored read makes no supply call. It is
+recomputed on the next read when its `scorer_version` or `adapter_revision` is not the current one, when
+`merchant` names another merchant than the stored one, or on an operator's `rescore`. A previous cycle is
+read as stored and never recomputed under it (its crawl side would be today's), so one stored under
+another version reads "Scored under v5, re-score to compare." where a delta would go.
+
+**Pooled.** A surface's score is its own earned ÷ applicable max. The pooled score is the mean of those.
+Every count stays per surface: a dimension's `numerator` / `denominator` exist on the pooled row only
+for a crawl-side count every surface shares; a per-surface count lives in `by_surface` and `parts`.
+
+### Deploy note (migration `f3b8d2a6c4e1`, not applied)
+
+`apps/pipeline/alembic/versions/f3b8d2a6c4e1_add_share_of_algorithm_to_soa_cycles.py` adds two nullable
+columns to `soa_cycles`: `share_of_algorithm JSON`, `share_of_algorithm_version TEXT`. Additive, so safe
+to apply ahead of the deploy. **This branch does not apply it.** Round-tripped on a throwaway local
+Postgres (`scripts/migration_roundtrip.py --from e1a7c3f9b2d4`: upgrade, downgrade, upgrade, then a
+row written and read back, the downgrade keeping the row).
+
+Either order works. Deployed before the migration, the endpoint reads and writes the columns inside a
+try: it serves the score, stores nothing (`stored: false`) and recomputes on every read. The columns are
+deliberately **not** mapped on the `SoaCycle` model: a mapped column is in every ORM select of the table,
+which would break those reads on a database the migration has not reached. Apply with
+
+```
+cd apps/pipeline && alembic upgrade f3b8d2a6c4e1
+```
+
+against the target only when deploying. After a `rescore_cycle`, re-score the cycle (`?rescore=true`,
+operator) or clear its row's `share_of_algorithm`: the stored score does not see a reclassification.
+
+### Sample: GET /api/console/score?cycle=WS-2B-FIXTURE&merchant=wiggle-and-snug (cut)
+
+With the W&S access sample (`supply_access_ws.json`) and the Oct 14 reference read (19 pages). The
+`rules` and the not-measured rows' `parts` and `by_surface` are cut.
+
+```json
+{
+  "cycle": "WS-2B-FIXTURE",
+  "scorer_version": "6",
+  "adapter_revision": 1,
+  "score": 60,
+  "earned": 20.3,
+  "applicable_max": 34.0,
+  "total_max": 100.0,
+  "readiness_bar": 60,
+  "verdict": null,
+  "verdict_note": "No readiness verdict while 63 of 100 points are not measured. The Audit gives one only when every dimension is.",
+  "surfaces": [
+    {
+      "surface": "grounded_api",
+      "label": "API with search grounding",
+      "score": 59.705882352941174,
+      "earned": 20.3,
+      "applicable_max": 34.0,
+      "pillars": [
+        {
+          "code": "visibility",
+          "score": null,
+          "applicable_max": 0.0
+        },
+        {
+          "code": "accessibility",
+          "score": 7.5,
+          "applicable_max": 13.0
+        },
+        {
+          "code": "true_value",
+          "score": 12.8,
+          "applicable_max": 21.0
+        }
+      ]
+    }
+  ],
+  "surfaces_left_out": [
+    {
+      "surface": "consumer_ui",
+      "label": "Consumer UI, logged out",
+      "reason": "no answer on this surface"
+    }
+  ],
+  "pillars": [
+    {
+      "code": "visibility",
+      "name": "Visibility",
+      "max": 32.0,
+      "score": null,
+      "applicable_max": 0.0,
+      "dimensions": [
+        {
+          "code": "share_of_mentions",
+          "name": "Share of Mentions",
+          "pillar": "visibility",
+          "max": 22.0,
+          "score": null,
+          "applicable_max": 0.0,
+          "state": "not_measured",
+          "reason": "no unprompted question answered on this surface",
+          "numerator": null,
+          "denominator": null,
+          "source": "soa_coded_mentions, answered unprompted runs",
+          "parts": "… (cut)",
+          "by_surface": "… (cut)"
+        },
+        {
+          "code": "recommendation_strength",
+          "name": "Recommendation Strength",
+          "pillar": "visibility",
+          "max": 10.0,
+          "score": null,
+          "applicable_max": 0.0,
+          "state": "not_measured",
+          "reason": "no unprompted question answered on this surface",
+          "numerator": null,
+          "denominator": null,
+          "source": "soa_coded_mentions, answered unprompted runs",
+          "parts": "… (cut)",
+          "by_surface": "… (cut)"
+        }
+      ]
+    },
+    {
+      "code": "accessibility",
+      "name": "Accessibility",
+      "max": 18.0,
+      "score": 7.5,
+      "applicable_max": 13.0,
+      "dimensions": [
+        {
+          "code": "agent_access",
+          "name": "Agent Access",
+          "pillar": "accessibility",
+          "max": 5.0,
+          "score": 5.0,
+          "applicable_max": 5.0,
+          "state": "measured",
+          "reason": null,
+          "numerator": 3,
+          "denominator": 3,
+          "source": "access run: measured agent identities",
+          "parts": [
+            {
+              "half": null,
+              "score": 5.0,
+              "max": 5.0,
+              "state": "measured",
+              "numerator": 3,
+              "denominator": 3,
+              "source": "access run: measured agent identities",
+              "reason": null,
+              "line": "Agent identities through 3 of 3"
+            }
+          ],
+          "by_surface": "… (cut)"
+        },
+        {
+          "code": "catalog_context",
+          "name": "Catalog & Context",
+          "pillar": "accessibility",
+          "max": 8.0,
+          "score": 2.5,
+          "applicable_max": 8.0,
+          "state": "measured",
+          "reason": null,
+          "numerator": 6,
+          "denominator": 19,
+          "source": "reference read: json_ld with a GTIN",
+          "parts": [
+            {
+              "half": null,
+              "score": 2.5,
+              "max": 8.0,
+              "state": "measured",
+              "numerator": 6,
+              "denominator": 19,
+              "source": "reference read: json_ld with a GTIN",
+              "reason": null,
+              "line": "Product markup with a GTIN 6 of 19 pages"
+            }
+          ],
+          "by_surface": {
+            "grounded_api": {
+              "score": 2.5,
+              "applicable_max": 8.0,
+              "state": "measured",
+              "reason": null,
+              "parts": [
+                {
+                  "half": null,
+                  "score": 2.5,
+                  "max": 8.0,
+                  "state": "measured",
+                  "numerator": 6,
+                  "denominator": 19,
+                  "source": "reference read: json_ld with a GTIN",
+                  "reason": null,
+                  "line": "Product markup with a GTIN 6 of 19 pages"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "code": "protocol_feed",
+          "name": "Protocol & Feed Presence",
+          "pillar": "accessibility",
+          "max": 5.0,
+          "score": null,
+          "applicable_max": 0.0,
+          "state": "not_measured",
+          "reason": "not measured until the supply probe exists",
+          "numerator": null,
+          "denominator": null,
+          "source": null,
+          "parts": "… (cut)",
+          "by_surface": "… (cut)"
+        }
+      ]
+    },
+    {
+      "code": "true_value",
+      "name": "True Value",
+      "max": 50.0,
+      "score": 12.8,
+      "applicable_max": 21.0,
+      "dimensions": [
+        {
+          "code": "price_truth",
+          "name": "Price Truth",
+          "pillar": "true_value",
+          "max": 16.0,
+          "score": 11.0,
+          "applicable_max": 16.0,
+          "state": "measured",
+          "reason": null,
+          "numerator": null,
+          "denominator": null,
+          "source": "reference read: a price; catalog tier, exact of scored",
+          "parts": [
+            {
+              "half": "seen",
+              "score": 7.0,
+              "max": 7.0,
+              "state": "measured",
+              "numerator": 19,
+              "denominator": 19,
+              "source": "reference read: a price",
+              "reason": null,
+              "line": "Price in markup 19 of 19 pages"
+            },
+            {
+              "half": "said",
+              "score": 4.0,
+              "max": 9.0,
+              "state": "measured",
+              "numerator": 1,
+              "denominator": 5,
+              "source": "catalog tier, exact of scored",
+              "reason": null,
+              "line": "Prices quoted exactly 1 of 5 scored"
+            }
+          ],
+          "by_surface": {
+            "grounded_api": {
+              "score": 11.0,
+              "applicable_max": 16.0,
+              "state": "measured",
+              "reason": null,
+              "parts": [
+                {
+                  "half": "seen",
+                  "score": 7.0,
+                  "max": 7.0,
+                  "state": "measured",
+                  "numerator": 19,
+                  "denominator": 19,
+                  "source": "reference read: a price",
+                  "reason": null,
+                  "line": "Price in markup 19 of 19 pages"
+                },
+                {
+                  "half": "said",
+                  "score": 4.0,
+                  "max": 9.0,
+                  "state": "measured",
+                  "numerator": 1,
+                  "denominator": 5,
+                  "source": "catalog tier, exact of scored",
+                  "reason": null,
+                  "line": "Prices quoted exactly 1 of 5 scored"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "code": "member_value",
+          "name": "Member Value",
+          "pillar": "true_value",
+          "max": 8.0,
+          "score": 1.8,
+          "applicable_max": 5.0,
+          "state": "measured",
+          "reason": null,
+          "numerator": null,
+          "denominator": null,
+          "source": "reference read: member_price; value tier, member price questions, exact of scored",
+          "parts": [
+            {
+              "half": "seen",
+              "score": 1.8,
+              "max": 5.0,
+              "state": "measured",
+              "numerator": 7,
+              "denominator": 19,
+              "source": "reference read: member_price",
+              "reason": null,
+              "line": "Member price in markup 7 of 19 pages"
+            },
+            {
+              "half": "said",
+              "score": null,
+              "max": 3.0,
+              "state": "na",
+              "numerator": null,
+              "denominator": null,
+              "source": "value tier, member price questions, exact of scored",
+              "reason": "fewer than 2 mentions in the relevant opportunity set",
+              "line": null
+            }
+          ],
+          "by_surface": {
+            "grounded_api": {
+              "score": 1.8,
+              "applicable_max": 5.0,
+              "state": "measured",
+              "reason": null,
+              "parts": [
+                {
+                  "half": "seen",
+                  "score": 1.8,
+                  "max": 5.0,
+                  "state": "measured",
+                  "numerator": 7,
+                  "denominator": 19,
+                  "source": "reference read: member_price",
+                  "reason": null,
+                  "line": "Member price in markup 7 of 19 pages"
+                },
+                {
+                  "half": "said",
+                  "score": null,
+                  "max": 3.0,
+                  "state": "na",
+                  "numerator": null,
+                  "denominator": null,
+                  "source": "value tier, member price questions, exact of scored",
+                  "reason": "fewer than 2 mentions in the relevant opportunity set",
+                  "line": null
+                }
+              ]
+            }
+          }
+        },
+        {
+          "code": "deal_citability",
+          "name": "Deal Citability",
+          "pillar": "true_value",
+          "max": 12.0,
+          "score": null,
+          "applicable_max": 0.0,
+          "state": "not_measured",
+          "reason": "its markup half is not measured, so the dimension is out of the applicable max",
+          "numerator": null,
+          "denominator": null,
+          "source": "value tier, code and points questions, exact of scored",
+          "parts": [
+            {
+              "half": "seen",
+              "score": null,
+              "max": 7.0,
+              "state": "not_measured",
+              "numerator": null,
+              "denominator": null,
+              "source": null,
+              "reason": "supply serves no incentive or code from the page read",
+              "line": null
+            },
+            {
+              "half": "said",
+              "score": null,
+              "max": 5.0,
+              "state": "na",
+              "numerator": null,
+              "denominator": null,
+              "source": "value tier, code and points questions, exact of scored",
+              "reason": "fewer than 2 mentions in the relevant opportunity set",
+              "line": null
+            }
+          ],
+          "by_surface": "… (cut)"
+        },
+        {
+          "code": "value_protocols",
+          "name": "Value Protocols",
+          "pillar": "true_value",
+          "max": 14.0,
+          "score": null,
+          "applicable_max": 0.0,
+          "state": "not_measured",
+          "reason": "not measured until the manifest probe exists",
+          "numerator": null,
+          "denominator": null,
+          "source": null,
+          "parts": "… (cut)",
+          "by_surface": "… (cut)"
+        }
+      ]
+    }
+  ],
+  "biggest_gap": {
+    "dimension": "Catalog & Context",
+    "code": "catalog_context",
+    "points": 5.5,
+    "line": "Product markup with a GTIN 6 of 19 pages",
+    "surface": null,
+    "numerator": 6,
+    "denominator": 19
+  },
+  "metric_surface": "grounded_api",
+  "metric_counts": {
+    "grounded_api": {
+      "tier": "all",
+      "agent_set": [
+        "chatgpt",
+        "gemini"
+      ],
+      "first": {
+        "value": 6,
+        "of": 7
+      },
+      "share": {
+        "value": 6,
+        "of": 7
+      },
+      "program": {
+        "value": 0,
+        "of": 6
+      },
+      "exact": {
+        "value": 1,
+        "of": 5
+      },
+      "terms": {
+        "value": 0,
+        "of": 0
+      }
+    }
+  },
+  "coverage": {
+    "surfaces": 1,
+    "questions": 6,
+    "agents": 2,
+    "runs": 7,
+    "line": "1 surface, 6 questions, 2 agents · pooled across surfaces, equal weight"
+  },
+  "inputs": {
+    "merchant": "wiggle-and-snug",
+    "reference_run": {
+      "id": 7,
+      "status": "done",
+      "started_at": "2026-10-14T17:00:00+00:00",
+      "finished_at": "2026-10-14T17:02:00+00:00",
+      "counts": {},
+      "allow_hosted_render": true
+    },
+    "access_run": {
+      "id": 12,
+      "status": "done",
+      "started_at": "2026-10-09T14:40:00+00:00",
+      "finished_at": "2026-10-09T14:41:10+00:00",
+      "counts": {
+        "tokens_checked": 6,
+        "tokens_allowed": 6,
+        "probes_made": 5,
+        "probes_ok": 5
+      }
+    },
+    "scored_at": "2026-10-15T21:23:36.733873+00:00"
+  },
+  "read_errors": {},
+  "rules": "… console_score.TEMPLATES (cut)",
+  "stored": false,
+  "previous": null,
+  "metrics": [
+    {
+      "key": "first",
+      "name": "First recommendation",
+      "value": 6,
+      "denominator": 7,
+      "surface": "grounded_api",
+      "surface_note": "on the grounded API, every answered question",
+      "delta": null,
+      "delta_reason": "First cycle. Changes appear from the next one.",
+      "by_surface": {
+        "grounded_api": {
+          "value": 6,
+          "of": 7
+        }
+      }
+    },
+    {
+      "key": "share",
+      "name": "Share of answers",
+      "value": 6,
+      "denominator": 7,
+      "surface": "grounded_api",
+      "surface_note": "on the grounded API, every answered question",
+      "delta": null,
+      "delta_reason": "First cycle. Changes appear from the next one.",
+      "by_surface": {
+        "grounded_api": {
+          "value": 6,
+          "of": 7
+        }
+      }
+    },
+    {
+      "key": "program",
+      "name": "Program named when the brand is named",
+      "value": 0,
+      "denominator": 6,
+      "surface": "grounded_api",
+      "surface_note": "on the grounded API, every answered question",
+      "delta": null,
+      "delta_reason": "First cycle. Changes appear from the next one.",
+      "by_surface": {
+        "grounded_api": {
+          "value": 0,
+          "of": 6
+        }
+      }
+    },
+    {
+      "key": "exact",
+      "name": "Prices quoted exactly",
+      "value": 1,
+      "denominator": 5,
+      "surface": "grounded_api",
+      "surface_note": "on the grounded API, catalog tier, exact of scored",
+      "delta": null,
+      "delta_reason": "First cycle. Changes appear from the next one.",
+      "by_surface": {
+        "grounded_api": {
+          "value": 1,
+          "of": 5
+        }
+      }
+    },
+    {
+      "key": "terms",
+      "name": "Program terms right",
+      "value": 0,
+      "denominator": 0,
+      "surface": "grounded_api",
+      "surface_note": "on the grounded API, value tier, exact of scored",
+      "delta": null,
+      "delta_reason": "First cycle. Changes appear from the next one.",
+      "by_surface": {
+        "grounded_api": {
+          "value": 0,
+          "of": 0
+        }
+      }
+    }
+  ]
+}
+```
+
+### The W&S fixture, by hand
+
+One pooled surface, the grounded API (the consumer UI's one run is `no_ai_answer`: left out).
+
+| pillar | dimension | from the fixture | points | applicable |
+|---|---|---|---|---|
+| Visibility | Share of Mentions | no unprompted question asked | not measured | 0 of 22 |
+| | Recommendation Strength | the same | not measured | 0 of 10 |
+| Accessibility | Agent Access | OAI-SearchBot, Googlebot, PerplexityBot through; Claude-User has no verified UA, the Parleo control is not an agent: 3 of 3, 3/3 × 5 | 5.0 | 5 |
+| | Catalog & Context | 19 pages, all `json_ld`, 6 with a GTIN: 6/19 × 8 = 2.53 | 2.5 | 8 |
+| | Protocol & Feed | no probe | not measured | 0 of 5 |
+| True Value | Price Truth | seen 19/19 × 7 = 7.0. Said: 5 scored catalog runs, 1 exact, 20%, rate band 0.40 × 9 = 3.6, the scorer's round: 4 | 11.0 | 16 |
+| | Member Value | 7 pages with a member price, so `member_value_applicable`. Seen 7/19 × 5 = 1.84. Said: no value question, the scorer's `na`, so `dimension_max` is the seen 5 | 1.8 | 5 |
+| | Deal Citability | no seen source, the whole dimension out | not measured | 0 of 12 |
+| | Value Protocols | no probe | not measured | 0 of 14 |
+| | | | **20.3** | **34** |
+
+20.3 ÷ 34 × 100 = 59.7, rounded once: **60**. Not measured: 32 + 5 + 12 + 14 = 63 points (and 3 more
+rescaled away with Member Value's thin said half), so 100 − 63 − 3 = 34, and no readiness verdict.
+Biggest gap: Catalog & Context, 8 − 2.5 = 5.5 points, "Product markup with a GTIN 6 of 19 pages".
+
+The two-surface case (`tests/test_console_2c3.py::test_the_pooled_score_is_the_mean_of_the_surface_scores`)
+adds unprompted and value-tier runs on both surfaces: the grounded API earns 45.3 of 69 (65.65), the
+consumer UI 48.3 of 69 (70.0), and the pooled score is (65.65 + 70.0) ÷ 2 = 67.8, **68**. Its docstring
+has every dimension.
 
 ## Answer divergences
 
