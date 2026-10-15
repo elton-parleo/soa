@@ -991,6 +991,549 @@ def build_run(cycle: dict, collected: int, usable: int) -> dict:
     }, ('finished', 'note'))
 
 
+# ─── Visibility (2C-1) ─────────────────────────────────────────────────────
+#
+# Who the answers name and who they name first, per surface, from the coding
+# already stored per answer. Two codings exist and both are read as stored:
+#
+#   Layer 1  soa_coded_mentions: one row per run x the cycle's entities
+#            (ours as `primary`, the comparison set), `mentioned` and
+#            `position`, the ordinal of the entity's first mention among the
+#            entities named (parser/prompts.py POSITION RULES).
+#   Layer 2  the extraction's other_brands_named: every other brand the
+#            answer names, with presented_as. It has NO order field.
+#
+# Nothing is re-read from the answer text and no model is called.
+
+#: The stage questions a study opens with carry no tier: the unprompted ones.
+VIS_UNPROMPTED = 'unprompted'
+VIS_TIER_LABELS = {VIS_UNPROMPTED: 'Unprompted', **TIER_LABELS}
+VIS_TIER_ORDER = (VIS_UNPROMPTED, 'category_control', 'brand_direct', 'catalog_accuracy', 'value_incentives')
+#: An other_brands_named entry named only as where the information came from
+#: (a cited site, a publisher) is not a brand put to the shopper.
+VIS_SOURCE_PRESENTED = ('source',)
+VIS_SOURCE_RELATIONS = ('citation_only',)
+VIS_FIRST_PICK_RULE = (
+    "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every "
+    "brand named, so when the comparison set's first brand sits second or later, another brand came first, "
+    "and the brands the answer named outside the set decide which, by where each first appears. When no "
+    "coding names that brand (unprompted answers carry no list of other brands), nobody gets the pick.")
+VISIBILITY_DIVERGENCES = [
+    "Visibility is per surface. RankRow.named and RankRow.first are the counts on `ranking.surface` "
+    "(the highest-fidelity surface with answered runs) and `ranking.denom` is that surface's answered "
+    "runs; every surface is under `surfaces`, each with its per-agent split. There is no total "
+    "across surfaces.",
+    "byQuestion is one row per run, not one per question with a first pick per agent "
+    "(Tenant.visibility): an agent can have two surfaces, and a question has several runs.",
+    "Brands outside the comparison set come from other_brands_named and are rolled up by name: a "
+    "name that starts with a comparison-set brand (or alias) is that brand ('Huggies Snug & Dry' is "
+    "Huggies), and a name that starts with another named brand is that brand. Sources "
+    "(presented_as 'source', relation 'citation_only') are left out and counted in `sources_left_out`.",
+    "RankRow.series is not sent: a sparkline needs two or more cycles, which the console reads itself.",
+    "An answer whose first brand neither coding names has `first: null` and `first_basis: 'uncoded'`, "
+    "counted per surface and agent in `ranking.first_uncoded` / `agent_first_uncoded`.",
+]
+
+
+def _brand_key(name) -> str:
+    from soa_shared.expected_answers import normalize_brand_text
+    return normalize_brand_text(name)
+
+
+def _starts_with(tokens: tuple, prefix: tuple) -> bool:
+    return bool(prefix) and tokens[:len(prefix)] == prefix
+
+
+class _Brands:
+    """The cycle's brand vocabulary: the comparison set (with aliases) first,
+    then every other brand Layer 2 coded, rolled up by name."""
+
+    def __init__(self, entities: List[dict], layer2_names: Iterable[str]):
+        self.known = []   # (tokens, display, you), longest first
+        self.aliases: Dict[str, List[str]] = {}
+        for e in entities:
+            names = [e['name'], *(_json(e.get('aliases')) or [])]
+            self.aliases[e['name']] = names
+            for n in names:
+                toks = tuple(_brand_key(n).split())
+                if toks:
+                    self.known.append((toks, e['name'], e.get('role') == 'primary'))
+        self.known.sort(key=lambda k: -len(k[0]))
+        spellings: Dict[str, Counter] = {}
+        for n in layer2_names:
+            key = _brand_key(n)
+            if key and self._entity(tuple(key.split())) is None:
+                spellings.setdefault(key, Counter())[n] += 1
+        # The shortest other name a name starts with is its root.
+        keys = sorted(spellings, key=lambda k: (len(k.split()), k))
+        self.root: Dict[str, str] = {}
+        for key in keys:
+            toks = tuple(key.split())
+            parent = next((r for r in keys if r != key and len(r.split()) < len(toks)
+                           and _starts_with(toks, tuple(r.split()))), None)
+            self.root[key] = self.root.get(parent, parent) if parent else key
+        self.display = {key: spellings[key].most_common(1)[0][0] for key in keys}
+
+    def _entity(self, toks: tuple):
+        return next(((d, you) for k, d, you in self.known if _starts_with(toks, k)), None)
+
+    def resolve(self, name: str) -> Optional[tuple]:
+        """(display name, you) for a name as written; None when it is empty."""
+        key = _brand_key(name)
+        if not key:
+            return None
+        hit = self._entity(tuple(key.split()))
+        if hit:
+            return hit
+        root = self.root.get(key, key)
+        return self.display.get(root, name), False
+
+
+def _span_hit(spans: List[dict], names: Iterable[str]) -> Optional[tuple]:
+    """(span index, offset) of the earliest stored span naming any of `names`."""
+    best = None
+    wanted = [f" {_brand_key(n)} " for n in names if _brand_key(n)]
+    for i, span in enumerate(spans or []):
+        hay = f" {_brand_key(span.get('text'))} "
+        for w in wanted:
+            at = hay.find(w)
+            if at >= 0 and (best is None or (i, at) < best):
+                best = (i, at)
+    return best
+
+
+def _visibility_run(layer1: List[dict], extraction: dict, brands: _Brands) -> tuple:
+    """(named [{name, you}], first {name, you} | None, basis, sources left out) for one run."""
+    named: Dict[str, dict] = {}
+
+    def add(name, you):
+        named.setdefault(name, {'name': name, 'you': bool(you)})
+
+    coded = sorted(layer1, key=lambda m: (m.get('position') is None, m.get('position') or 0))
+    for m in coded:
+        add(m['name'], m.get('role') == 'primary')
+    others, sources = [], 0
+    for entry in (extraction or {}).get('other_brands_named') or []:
+        if not isinstance(entry, dict) or not entry.get('name'):
+            continue
+        if entry.get('presented_as') in VIS_SOURCE_PRESENTED or entry.get('relation') in VIS_SOURCE_RELATIONS:
+            sources += 1
+            continue
+        hit = brands.resolve(entry['name'])
+        if hit:
+            others.append((entry['name'], *hit))
+            add(hit[0], hit[1])
+
+    positioned = [m for m in coded if m.get('position') is not None]
+    if positioned and positioned[0]['position'] == 1:
+        top = positioned[0]
+        return list(named.values()), {'name': top['name'], 'you': top.get('role') == 'primary'}, 'layer1_position', sources
+    # Layer 1 counts every brand the answer names, so a lowest position of 2
+    # or more means a brand outside the comparison set came first: only
+    # Layer 2 can say which. A Layer 1 brand is a candidate only when Layer 1
+    # coded no position at all.
+    candidates = [] if positioned else \
+        [(brands.aliases.get(m['name'], [m['name']]), m['name'], m.get('role') == 'primary') for m in coded]
+    candidates += [([written], display, you) for written, display, you in others]
+    if not candidates:
+        return list(named.values()), None, ('uncoded' if positioned else None), sources
+    spans = (extraction or {}).get('spans') or []
+    located = [(hit, i, display, you) for i, (names, display, you) in enumerate(candidates)
+               for hit in [_span_hit(spans, names)] if hit is not None]
+    if located:
+        _, _, display, you = min(located)
+        return list(named.values()), {'name': display, 'you': you}, 'span_position', sources
+    _, display, you = candidates[0]
+    return list(named.values()), {'name': display, 'you': you}, 'coded_order', sources
+
+
+def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict], mentions: List[dict],
+                     extractions: Dict[int, dict]) -> dict:
+    """
+    GET /api/console/visibility. `runs` carry their question (query_text,
+    query_code, tier, stage); `mentions` are Layer 1's mentioned rows with
+    the entity's name and cycle role; `extractions` are the stored Layer 2
+    extractions by run id.
+    """
+    layer2 = [e.get('name') for x in extractions.values() for e in ((x or {}).get('other_brands_named') or [])
+              if isinstance(e, dict) and e.get('name')
+              and e.get('presented_as') not in VIS_SOURCE_PRESENTED and e.get('relation') not in VIS_SOURCE_RELATIONS]
+    brands = _Brands(entities, layer2)
+    by_run: Dict[int, List[dict]] = {}
+    for m in mentions:
+        if m.get('mentioned', True):
+            by_run.setdefault(m['run_id'], []).append(m)
+    ours = next((e['name'] for e in entities if e.get('role') == 'primary'), None)
+
+    rows, sources_left_out = [], 0
+    for run in sorted(runs, key=lambda r: (r.get('query_code') or '', r.get('platform') or '', r.get('run_number') or 0, r['id'])):
+        platform = run.get('platform')
+        named, first, basis, sources = _visibility_run(by_run.get(run['id'], []), _json(extractions.get(run['id'])) or {}, brands)
+        sources_left_out += sources
+        tier = run.get('tier') or VIS_UNPROMPTED
+        rows.append(compact({
+            'q': run.get('query_text') or '', 'type': VIS_TIER_LABELS.get(run.get('tier')) or run.get('stage') or '',
+            'tier': tier, 'surface': run.get('surface') or surfaces.surface_of(platform) or 'unlabelled',
+            'agent': surfaces.agent_of(platform) or platform, 'named': named, 'first': first,
+            # beside the typed fields
+            'run': f"run-{run['id']}", 'platform': platform, 'query_code': run.get('query_code'),
+            'stage': run.get('stage'), 'answered': run.get('answer_status') == surfaces.ANSWERED,
+            'first_basis': basis,
+        }, ('first_basis',)))
+
+    counted = [r for r in rows if r['answered']]
+    surface_list = _ordered_surfaces({r['surface'] for r in rows})
+    denoms = {s: sum(1 for r in counted if r['surface'] == s) for s in surface_list}
+    agent_denoms = {s: dict(Counter(r['agent'] for r in counted if r['surface'] == s)) for s in surface_list}
+    uncoded = {s: dict(Counter(r['agent'] for r in counted if r['surface'] == s and r.get('first_basis') == 'uncoded'))
+               for s in surface_list}
+    default = next((s for s in sorted(surface_list, key=lambda s: -_SURFACE_RANK.get(s, 0)) if denoms[s]),
+                   surface_list[0] if surface_list else None)
+
+    tally: Dict[str, dict] = {}
+    if ours:
+        tally[ours] = {'name': ours, 'you': True}
+    for r in counted:
+        for n in r['named']:
+            tally.setdefault(n['name'], {'name': n['name'], 'you': n['you']})
+    ranking_rows = []
+    for name, row in tally.items():
+        per = {}
+        for s in surface_list:
+            mine = [r for r in counted if r['surface'] == s]
+            agents = {}
+            for a in agent_denoms[s]:
+                ra = [r for r in mine if r['agent'] == a]
+                agents[a] = {'named': sum(1 for r in ra if any(n['name'] == name for n in r['named'])),
+                             'first': sum(1 for r in ra if (r.get('first') or {}).get('name') == name)}
+            per[s] = {'named': sum(v['named'] for v in agents.values()),
+                      'first': sum(v['first'] for v in agents.values()), 'agents': agents}
+        top = per.get(default) or {'named': 0, 'first': 0}
+        ranking_rows.append({'name': name, 'you': row['you'], 'named': top['named'], 'first': top['first'],
+                             'surfaces': per})
+    ranking_rows.sort(key=lambda r: (-r['named'], -r['first'], not r['you'], r['name'].lower()))
+    tiers = [t for t in VIS_TIER_ORDER if any(r['tier'] == t for r in rows)]
+    tiers += sorted({r['tier'] for r in rows} - set(tiers))
+    return {
+        'cycle': cycle_code,
+        'lede': (f"Who the answers name, and who they name first, in cycle {cycle_code}. Counted per "
+                 "surface: a model-only API, a grounded API and a consumer UI are never added together."),
+        'byQuestion': rows,
+        'ranking': {'surface': default, 'rows': ranking_rows, 'denom': denoms.get(default, 0),
+                    # beside the typed fields
+                    'denoms': denoms, 'agent_denoms': agent_denoms,
+                    'first_uncoded': {s: sum(v.values()) for s, v in uncoded.items()},
+                    'agent_first_uncoded': uncoded},
+        'note': VIS_FIRST_PICK_RULE,
+        # beside the typed fields
+        'surfaces': [{'surface': s, 'label': surfaces.SURFACE_LABELS.get(s, s), 'answered': denoms[s],
+                      'runs': sum(1 for r in rows if r['surface'] == s)} for s in surface_list],
+        'tiers': [{'tier': t, 'label': VIS_TIER_LABELS.get(t, t)} for t in tiers],
+        'first_basis': dict(Counter(r.get('first_basis') for r in counted if r.get('first_basis'))),
+        'sources_left_out': sources_left_out,
+        'divergences': VISIBILITY_DIVERGENCES,
+    }
+
+
+# ─── Offer record (2C-1) ───────────────────────────────────────────────────
+#
+# Fix > Offer record: one product's record as supply holds it (the listing
+# GET /merchants/{slug}/catalog serves, its publications, its incentives),
+# with where the latest reference read of its pages disagrees. Read-only.
+
+#: Provenance, stated once. A field's `prov` says who stands behind the value.
+RECORD_PROVENANCE = {
+    ('published', 'seller'): 'retail',   # the seller published it: the retailer's own record
+    ('published', 'brand'): 'brand',     # the brand published it
+    ('scrape', None): 'parleo',          # Parleo read it off a page: our observation
+    ('agent', None): 'agent',            # taken from an agent's answer
+}
+RECORD_PROV_UNKNOWN = 'unknown'
+#: The 2A findings that are a disagreement about what the product IS (the
+#: price is True Value's, and an unreadable page is Accessibility's).
+RECORD_FINDINGS = {
+    'name_differs': 'Name', 'pack_differs': 'Pack count', 'gtin_mismatch': 'GTIN',
+    'gtin_missing_on_page': 'GTIN', 'brand_missing_on_page': 'Brand',
+}
+RECORD_ISSUE_TONE = {'conflict': 'bad', 'dropped': 'warn', 'approx': 'warn', 'info': 'neu'}
+RECORD_ISSUE_LABEL = {'conflict': 'fails validation', 'dropped': 'dropped by the channel',
+                      'approx': 'approximated by the channel', 'info': 'note'}
+NOT_CARRIED = 'not carried'
+RECORD_DIVERGENCES = [
+    "Field.prov is mapped once (RECORD_PROVENANCE): source 'published' on a seller merchant is "
+    "'retail', on a brand merchant 'brand'; 'scrape' is 'parleo'; a value taken from an agent answer "
+    "is 'agent'. A published listing whose merchant kind is unknown is 'unknown', which the console "
+    "renders neutral.",
+    "A listing's source is supply's provenance mix (listing rows); an external merchant's feed has no "
+    "listing rows, so its record is 'published' with source_basis 'feed'.",
+    "Field.was is what the latest reference read found on the page, not an earlier record value; "
+    "`diff` marks the field, and `note` says which page, when and how it was read.",
+    "Variant-level disagreements are their own fields ('Name · <variant>'), since 2A compares each "
+    "variant with each page.",
+    "`json` is the schema_org publication's artifact; empty when the product was never compiled for "
+    "schema.org (an external merchant's feed is not compiled here).",
+    "A price the record does not carry reads 'not carried', never blank.",
+    "issues are the validator and expressiveness lines of the publications that compiled (the "
+    "artifacts the channels host); a failed publish is one 'Not published to …' issue with its error, "
+    "as the TrueSync matrix shows it blocked.",
+]
+
+
+def record_prov(source: Optional[str], kind: Optional[str]) -> str:
+    if source in ('scrape', 'agent'):
+        return RECORD_PROVENANCE[(source, None)]
+    return RECORD_PROVENANCE.get((source, kind), RECORD_PROV_UNKNOWN)
+
+
+def _listing_source(mix: dict, has_publication: bool, *, from_feed: bool = False) -> tuple:
+    """(source, basis) for one listing from supply's provenance mix: the
+    merchant's when all its listings are one source; mixed, a listing with a
+    publication is 'published' and the rest 'scrape'. The mix counts listing
+    rows, which an external merchant's feed does not have: its feed is what
+    the merchant published (basis 'feed'). No basis at all is None."""
+    scraped, published = mix.get('scrape', 0) or 0, mix.get('published', 0) or 0
+    if scraped and not published:
+        return 'scrape', 'merchant'
+    if published and not scraped:
+        return 'published', 'merchant'
+    if scraped and published:
+        return ('published' if has_publication else 'scrape'), 'publication'
+    if from_feed:
+        return 'published', 'feed'
+    return ('published', 'publication') if has_publication else (None, 'unknown')
+
+
+def _price_text(value, currency) -> str:
+    return money(value, currency) if value not in (None, '') else NOT_CARRIED
+
+
+def _num(value) -> Optional[float]:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _member_prices(incentives: Optional[dict], listing_id) -> Dict[str, str]:
+    """variant_id -> the lowest member price the record's incentives state."""
+    out: Dict[str, str] = {}
+    entry = next((l for l in (incentives or {}).get('listings') or [] if l.get('listing_id') == listing_id), None)
+    for inc in (entry or {}).get('incentives') or []:
+        price = (inc.get('value') or {}).get('member_price')
+        if inc.get('mechanic') != 'member_price' or _num(price) is None:
+            continue
+        for v in inc.get('variant_scope') or ['*']:
+            if v not in out or _num(price) < _num(out[v]):
+                out[v] = str(price)
+    return out
+
+
+def _reference_rows(reference: Optional[dict], variant: dict) -> List[dict]:
+    gtin = _gtin14_or(variant.get('gtin'))
+    return [r for r in (reference or {}).get('rows') or []
+            if (r.get('variant_ref') and r.get('variant_ref') == variant.get('variant_id'))
+            or (gtin and _gtin14_or(r.get('gtin')) == gtin)]
+
+
+def _read_note(row: dict) -> str:
+    how = {'honest_fetch': 'our own fetch', 'hosted_render': 'a hosted render'}.get(row.get('reference_source'),
+                                                                                    row.get('reference_source') or 'a read')
+    when = (_iso(row.get('observed_at')) or '')[:10]
+    return f"{row.get('retailer_domain') or 'the page'}, read {when or 'at an unrecorded time'} by {how}"
+
+
+def _diff_fields(variant: dict, rows: List[dict], prov: str) -> List[dict]:
+    label = variant.get('title') or variant.get('variant_id') or 'variant'
+    out = []
+    for row in rows:
+        for f in row.get('findings') or []:
+            kind = f.get('finding')
+            if kind not in RECORD_FINDINGS:
+                continue
+            detail = f.get('detail') or {}
+            note = _read_note(row)
+            if kind == 'name_differs':
+                diff = detail.get('diff') or {}
+                bits = [f"only on the page: {' '.join(diff['only_on_page'])}" if diff.get('only_on_page') else None,
+                        f"only in the record: {' '.join(diff['only_in_record'])}" if diff.get('only_in_record') else None]
+                note += '. ' + ', '.join(b for b in bits if b) if any(bits) else ''
+            observed = f.get('observed') if f.get('observed') not in (None, '') else 'not on the page'
+            out.append(compact({'k': f"{RECORD_FINDINGS[kind]} · {label}", 'v': f.get('expected') or '—', 'prov': prov,
+                                'mono': kind in ('gtin_mismatch', 'gtin_missing_on_page') or None,
+                                'was': observed, 'diff': True, 'note': note,
+                                # beside the typed fields
+                                'finding': kind, 'variant_id': variant.get('variant_id'),
+                                'url': row.get('url')}, ('mono',)))
+    return out
+
+
+def _variant_status(rows: List[dict]) -> tuple:
+    if not rows:
+        return 'Not read yet', 'neu'
+    gaps = [f for r in rows for f in r.get('findings') or [] if f.get('finding') in RECORD_FINDINGS]
+    if gaps:
+        kinds = sorted({RECORD_FINDINGS[f['finding']].lower() for f in gaps})
+        return f"Page differs: {', '.join(kinds)}", 'warn'
+    if all(any(f.get('finding') == 'page_unreadable' for f in r.get('findings') or []) for r in rows):
+        return 'Page not read', 'neu'
+    return 'Matches the page', 'ok'
+
+
+def _record_publications(listing_id, publications: List[dict]) -> Dict[str, dict]:
+    best: Dict[str, dict] = {}
+    for pub in publications or []:
+        if pub.get('listing_id') != listing_id:
+            continue
+        slug = pub.get('channel_slug')
+        cur = best.get(slug)
+        if cur is None or (_ts(pub.get('compiled_at')), pub.get('id') or 0) > (_ts(cur.get('compiled_at')), cur.get('id') or 0):
+            best[slug] = pub
+    return best
+
+
+def _record_status(pubs: Dict[str, dict], issues: List[dict], diffs: int, hosting: Optional[str], names) -> dict:
+    failing = [s for s, p in pubs.items() if (p.get('validation') or {}).get('errors') and p.get('status') != 'failed']
+    if failing:
+        return {'label': f"Fails validation on {', '.join(names.get(s, s) for s in failing)}", 'tone': 'bad'}
+    if diffs:
+        return {'label': f"{diffs} page {'difference' if diffs == 1 else 'differences'}", 'tone': 'warn'}
+    live = [s for s, p in pubs.items() if p.get('status') == 'published']
+    if live:
+        return {'label': f"Published to {len(live)} {'channel' if len(live) == 1 else 'channels'}", 'tone': 'ok'}
+    if hosting == 'external':
+        return {'label': 'From your feed', 'tone': 'neu'}
+    return {'label': 'Not published yet', 'tone': 'neu'}
+
+
+def _listing_sku(listing: dict) -> str:
+    return str(listing.get('product_id') or listing.get('listing_id'))
+
+
+def build_record(merchant: str, listing: dict, *, merchant_record: Optional[dict], publications: List[dict],
+                 channels: List[dict], provenance: Optional[dict], reference: Optional[dict],
+                 incentives: Optional[dict], read_errors: Optional[Dict[str, str]] = None) -> dict:
+    """GET /api/console/record: the console's Record_ for one listing."""
+    kind = (merchant_record or {}).get('kind')
+    hosting = (merchant_record or {}).get('hosting')
+    lid = listing.get('listing_id')
+    names = {c.get('slug'): c.get('name') or c.get('slug') for c in channels or []}
+    pubs = _record_publications(lid, publications)
+    from_feed = hosting == 'external' or str(listing.get('product_id') or '').startswith('feed:')
+    source, basis = _listing_source((provenance or {}).get('listings') or {}, bool(pubs), from_feed=from_feed)
+    prov = record_prov(source, kind)
+    variants = listing.get('variants') or []
+    members = _member_prices(incentives, lid)
+    currency = next((v.get('currency') for v in variants if v.get('currency')), 'USD')
+
+    prices = sorted(p for p in (_num(v.get('list_price')) for v in variants) if p is not None)
+    if not prices:
+        price = NOT_CARRIED
+    elif prices[0] == prices[-1]:
+        price = money(f"{prices[0]:.2f}", currency)
+    else:
+        price = f"{money(f'{prices[0]:.2f}', currency)} to {money(f'{prices[-1]:.2f}', currency)}"
+    member_of = {v.get('variant_id'): members.get(v.get('variant_id')) or members.get('*') for v in variants}
+    member_vals = sorted({_num(m) for m in member_of.values() if m})
+    gtins = [v.get('gtin') for v in variants if v.get('gtin')]
+    counts = sorted({v.get('count') for v in variants if v.get('count')})
+
+    fields = [
+        {'k': 'Name', 'v': listing.get('title') or NOT_CARRIED, 'prov': prov},
+        {'k': 'Brand', 'v': listing.get('brand') or NOT_CARRIED, 'prov': prov},
+        {'k': 'Product page', 'v': listing.get('product_url') or NOT_CARRIED, 'prov': prov, 'mono': bool(listing.get('product_url'))},
+        {'k': 'Price', 'v': price, 'prov': prov,
+         **({'note': f"{len(variants)} variants"} if len(variants) > 1 and prices else {})},
+    ]
+    if member_vals:
+        priced = sum(1 for m in member_of.values() if m)
+        fields.append(compact({'k': 'Member price', 'v': money(f"{member_vals[0]:.2f}", currency) if len(member_vals) == 1
+                               else f"{money(f'{member_vals[0]:.2f}', currency)} to {money(f'{member_vals[-1]:.2f}', currency)}",
+                               'prov': prov, 'note': None if priced == len(variants) else f"on {priced} of {len(variants)} variants"},
+                              ('note',)))
+    fields.append({'k': 'GTIN', 'v': (gtins[0] if len(gtins) == 1 and len(variants) == 1 else
+                                      f"{len(gtins)} of {len(variants)} variants carry one" if gtins else NOT_CARRIED),
+                   'prov': prov, 'mono': len(gtins) == 1 and len(variants) == 1})
+    if counts:
+        fields.append({'k': 'Count', 'v': str(counts[0]) if len(counts) == 1 else f"{counts[0]} to {counts[-1]}", 'prov': prov})
+    fields.append(compact({'k': 'Published', 'v': (_iso(listing.get('published_at')) or '')[:10] or NOT_CARRIED,
+                           'prov': prov, 'note': listing.get('spec_version')}, ('note',)))
+
+    variant_rows, diffs = [], 0
+    for v in variants:
+        rows = _reference_rows(reference, v)
+        extra = _diff_fields(v, rows, prov)
+        diffs += len(extra)
+        fields.extend(extra)
+        status, tone = _variant_status(rows) if reference is not None else ('Not read yet', 'neu')
+        member = member_of.get(v.get('variant_id'))
+        shown = _price_text(v.get('list_price'), v.get('currency') or currency)
+        if member:
+            shown += f" · member {money(member, v.get('currency') or currency)}"
+        variant_rows.append({'id': v.get('variant_id') or v.get('gtin') or '—', 'name': v.get('title') or v.get('variant_id') or '',
+                             'price': shown, 'status': status, 'tone': tone,
+                             # beside the typed fields
+                             'gtin': v.get('gtin'), 'list_price': v.get('list_price'), 'member_price': member,
+                             'count': v.get('count'), 'pages': [r.get('url') for r in rows if r.get('url')]})
+
+    issues = []
+    failed = {slug: pub for slug, pub in pubs.items() if pub.get('status') == 'failed'}
+    if failed:
+        reasons = sorted({pub.get('error') or '; '.join((pub.get('validation') or {}).get('errors') or []) or 'failed'
+                          for pub in failed.values()})
+        issues.append({'title': f"Not published to {', '.join(names.get(s, s) for s in failed)}",
+                       'detail': f"The publish failed: {'; '.join(reasons)}.", 'tone': 'warn',
+                       'channel': ','.join(failed), 'verdict': 'blocked'})
+    for slug, pub in pubs.items():
+        if slug in failed:
+            continue
+        for line in _validator(pub):
+            if line['verdict'] == 'ok':
+                continue
+            issues.append({'title': f"{names.get(slug, slug)}: {line['field'] or 'record'} {RECORD_ISSUE_LABEL.get(line['verdict'], line['verdict'])}",
+                           'detail': line['note'], 'tone': RECORD_ISSUE_TONE.get(line['verdict'], 'neu'),
+                           # beside the typed fields
+                           'channel': slug, 'verdict': line['verdict']})
+    issues.sort(key=lambda i: ['bad', 'warn', 'neu'].index(i['tone']) if i['tone'] in ('bad', 'warn', 'neu') else 3)
+    schema = pubs.get('schema_org')
+    sub_bits = [listing.get('brand'), f"{len(variants)} {'variant' if len(variants) == 1 else 'variants'}",
+                (merchant_record or {}).get('domain')]
+    return {
+        'kind': 'offer' if kind == 'seller' else 'product',
+        'sku': _listing_sku(listing),
+        'title': listing.get('title') or f"Listing {lid}",
+        'sub': ' · '.join(b for b in sub_bits if b),
+        'status': _record_status(pubs, issues, diffs, hosting, names),
+        'fields': fields,
+        'issues': issues,
+        'json': json.dumps(schema.get('payload'), indent=2, ensure_ascii=False) if schema and schema.get('payload') is not None else '',
+        'variants': variant_rows,
+        # beside the typed fields
+        'merchant': merchant, 'listing_id': lid, 'product_url': listing.get('product_url'),
+        'merchant_kind': kind, 'hosting': hosting, 'source': source, 'source_basis': basis,
+        'json_channel': 'schema_org' if schema else None,
+        'channels': {s: {'status': p.get('status'), 'published_at': _iso(p.get('published_at'))} for s, p in pubs.items()},
+        'reference_run': (reference or {}).get('reference_run'),
+        'read_errors': read_errors or {},
+        'divergences': RECORD_DIVERGENCES,
+    }
+
+
+def build_record_list(merchant: str, catalog: Optional[dict], *, merchant_record: Optional[dict],
+                      publications: List[dict], channels: List[dict], provenance: Optional[dict],
+                      reference: Optional[dict], read_errors: Optional[Dict[str, str]] = None) -> dict:
+    """GET /api/console/record/list: one row per product, for the record list."""
+    products = []
+    for listing in (catalog or {}).get('listings') or []:
+        record = build_record(merchant, listing, merchant_record=merchant_record, publications=publications,
+                              channels=channels, provenance=provenance, reference=reference, incentives=None)
+        products.append({'sku': record['sku'], 'listing_id': record['listing_id'], 'title': record['title'],
+                         'sub': record['sub'], 'variants': len(record['variants']), 'status': record['status'],
+                         'diffs': sum(1 for f in record['fields'] if f.get('diff'))})
+    return {'merchant': merchant, 'kind': (merchant_record or {}).get('kind'),
+            'hosting': (merchant_record or {}).get('hosting'), 'products': products,
+            'read_errors': read_errors or {}}
+
+
 STUDIO_MIRROR = [
     "Entity.id is a slug string in studio.ts; soa_entities.id is an integer and slug is the string. "
     "Mapped id <- slug; soa_id carries the integer.",
@@ -1037,3 +1580,29 @@ def load_answers(conn, cycle: dict) -> List[dict]:
     return [build_answer(dict(r), dict(r), outcomes.get(r['id']), mentions.get(r['id'], []),
                          runs_per_query=cycle.get('runs_per_query'), cycle_code=cycle['cycle_code'])
             for r in runs]
+
+
+def load_visibility(conn, cycle: dict) -> dict:
+    """2C-1: the rows build_visibility reads, for one cycle."""
+    runs = [dict(r) for r in conn.execute(text("""
+        SELECT r.id, r.platform, r.run_number, r.surface, r.answer_status,
+               q.query_code, q.query_text, q.tier, q.stage
+        FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
+        WHERE r.cycle_id = :c
+    """), {'c': cycle['id']}).mappings()]
+    entities = [dict(e) for e in conn.execute(text("""
+        SELECT e.name, e.aliases, ce.role FROM soa_cycle_entities ce
+        JOIN soa_entities e ON e.id = ce.entity_id WHERE ce.cycle_id = :c
+    """), {'c': cycle['id']}).mappings()]
+    mentions = [dict(m) for m in conn.execute(text("""
+        SELECT cm.run_id, e.name, cm.position, ce.role
+        FROM soa_coded_mentions cm
+        JOIN soa_entities e ON e.id = cm.entity_id
+        JOIN soa_runs r ON r.id = cm.run_id
+        LEFT JOIN soa_cycle_entities ce ON ce.cycle_id = r.cycle_id AND ce.entity_id = cm.entity_id
+        WHERE r.cycle_id = :c AND cm.mentioned = :yes
+    """), {'c': cycle['id'], 'yes': True}).mappings()]
+    extractions = {o['run_id']: _json(o['extraction']) for o in conn.execute(text(
+        "SELECT run_id, extraction FROM soa_expectation_outcomes WHERE cycle_id = :c"), {'c': cycle['id']}).mappings()}
+    return build_visibility(cycle['cycle_code'], runs=runs, entities=entities, mentions=mentions,
+                            extractions=extractions)

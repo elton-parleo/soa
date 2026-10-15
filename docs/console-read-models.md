@@ -1,4 +1,4 @@
-# Console read models (2B, 2C)
+# Console read models (2B, 2C, 2C-1)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -40,6 +40,9 @@ Lists (`runs`, `studio/*`) return only the scope's rows.
 | `GET /api/console/studies/options`, `POST /studies/preview`, `POST /studies/generate`, `POST /studies/{study_type}/regenerate`, `GET /studies/{study_type}/status`, `POST /api/console/cycles` | the Create Study modal and "start a cycle"; **operator only** (2C) | — (soa) |
 | `GET /api/console/studies?cycle=<code>` | question x agent | `StudyRow[]` |
 | `GET /api/console/accuracy?cycle=<code>` | per-surface accuracy, never pooled | — (soa) |
+| `GET /api/console/visibility?cycle=<code>` | who the answers name and who they name first, per surface with a per-agent split, from the stored mention coding (2C-1) | `Ranking` / `RankRow`, and one `VisibilityRow` per run |
+| `GET /api/console/record/list?merchant=<slug>` | the merchant's products for the record list, each with its status (2C-1) | — (the record list) |
+| `GET /api/console/record?merchant=<slug>&product=<sku>` | one product's record, read-only: fields with provenance, page disagreements, issues, variants, the schema.org artifact (2C-1) | `Record_` |
 | `GET /api/console/runs` | the tenant's cycles | `Run[]` (studio.ts) |
 | `GET /api/console/studio/studies` | the tenant's studies with prompts | `Study[]` + `Prompt` (studio.ts) |
 | `GET /api/console/studio/entities` | entities the tenant's cycles compare | `Entity[]` (studio.ts) |
@@ -286,6 +289,104 @@ ride beside: an org whose record read fails is still listed, with `kind/hosting/
 `GET /api/console/full-loop/latest[?org=]`: the scope's newest `soa_full_loop_requests`
 row (by `created_at`, then id) in exactly the shape `/full-loop/{id}` returns, or `null`
 when the org has never run one. Scoped like every console read.
+
+### Visibility (2C-1)
+
+`GET /api/console/visibility?cycle=<code>`, `build_visibility` / `load_visibility`. Who the
+answers name and who they name first, from the coding already stored per answer. Nothing is
+re-read from the answer text and no model is called.
+
+Two codings are read, as stored:
+
+| coding | table | what it holds |
+|---|---|---|
+| Layer 1 | `soa_coded_mentions` | one row per run x the cycle's entities (ours is `role: primary`, the comparison set `competitor`): `mentioned`, and **`position`**, the ordinal of the entity's first mention among *every* brand the answer names (`parser/prompts.py`, POSITION RULES) |
+| Layer 2 | `soa_expectation_outcomes.extraction` | `other_brands_named` (name, `presented_as`, `relation`) and the stored `spans`. **No order field.** Only scored runs have one: an unprompted (untiered) question has no Layer 2 |
+
+**First pick** (`first`, and `first_basis` beside it):
+
+1. The brand Layer 1 coded at **position 1** (`layer1_position`).
+2. Layer 1 ranks every brand the answer names, so when its lowest position is 2 or more, a brand
+   outside the comparison set came first. Layer 2 has no order field, so its brands are read by
+   **span position**: the one found in the earliest stored span (`span_position`), else the first
+   listed (`coded_order`). A Layer 1 brand is a candidate here only when Layer 1 coded no position
+   at all.
+3. When neither coding names that brand (in practice: an unprompted answer, which has no Layer 2),
+   `first` is `null`, `first_basis` is `uncoded`, and the answer is counted in
+   `ranking.first_uncoded` (per surface) and `agent_first_uncoded` (per surface and agent). No
+   brand is credited with a pick nobody coded.
+
+In cycle 229 (`FL3-wiggle-and-snug-20261014`, 514 answered runs) that is 256 answers by position
+1, 6 by span position and 27 uncoded: 26 unprompted answers whose Layer 1 positions start at 2, 3
+or 4, and one catalog answer whose only other brands were sources. 225 answers name no brand.
+
+Prompted questions name the brand in the question, so read Visibility by tier: in cycle 229 Wiggle
+& Snug is named in 170 of the 214 prompted answers and in **0 of the 300 unprompted** ones, where
+Pampers takes the first pick in 38 and Huggies in 24.
+
+**Named**: Layer 1's mentioned entities in position order, then Layer 2's other brands. Layer 2
+names are rolled up: a name that starts with a comparison-set brand or alias is that brand
+(`Huggies Snug & Dry`, `HUGGIES` are Huggies), and a name that starts with another Layer 2 name
+is that name (`Millie Moon Overnight Diapers` is Millie Moon; the display is its most common
+spelling). Entries named only as a source (`presented_as: source` or `relation: citation_only`:
+cited sites, publishers) are left out and counted in `sources_left_out`.
+
+| field | from |
+|---|---|
+| `byQuestion[]` | one per run (not per question): `q`, `type` (tier label, else the stage), `tier` (`unprompted` for a question with none), `surface`, `agent`, `named [{name, you}]`, `first {name, you} \| null`; `run`, `platform`, `query_code`, `stage`, `answered`, `first_basis` beside |
+| `ranking.rows[]` | every brand named in an answered run, plus ours: `name`, `you`, and `surfaces {<surface>: {named, first, agents {<agent>: {named, first}}}}`. `named` / `first` are the counts on `ranking.surface` |
+| `ranking.surface`, `denom` | the highest-fidelity surface with answered runs (consumer_ui > grounded_api > api), and its answered runs |
+| `ranking.denoms`, `agent_denoms` | answered runs per surface, and per surface and agent |
+| `surfaces[]`, `tiers[]` | what the console's selectors offer |
+
+A run that did not answer (`no_ai_answer`, a wall) is in `byQuestion` with `answered: false` and
+in no denominator. There is no total across surfaces. `RankRow.series` is not sent; the console
+draws a sparkline only from two or more cycles it reads itself.
+
+### Offer record (2C-1)
+
+`GET /api/console/record/list?merchant=<slug>` and `GET /api/console/record?merchant=<slug>&product=<sku>`,
+`build_record_list` / `build_record`. Read-only. Proxied from supply with the org's tenant token, in
+parallel: `GET /tenant` (the merchant's kind and hosting, as `/me` reads them),
+`/merchants/{slug}/catalog` (the record: a hosted merchant's published listings, an external
+merchant's current feed), `/publications`, `/channels`, `/merchants/{slug}/provenance`,
+`/merchants/{slug}/reference` (the latest 2A reference read) and, for one record,
+`/merchants/{slug}/incentives`. The catalog is required: a 404 is "no record yet" (an empty list;
+404 for one product). Every other read degrades: its part is left out and the failure is named in
+`read_errors`.
+
+**Provenance** (`Field.prov`, `RECORD_PROVENANCE`), stated once:
+
+| the value's source | merchant kind | prov |
+|---|---|---|
+| `published` | seller | `retail` |
+| `published` | brand | `brand` |
+| `scrape` | any | `parleo` (our observation) |
+| taken from an agent answer | any | `agent` |
+| anything else (a published listing whose merchant kind is unknown, no basis) | | `unknown`, rendered neutral |
+
+A listing's source is supply's provenance mix (`/provenance`, which counts listing rows): the
+merchant's when all its listings are one source; mixed, a listing with a publication is
+`published` and the rest `scrape`. An external merchant's feed has no listing rows; its record is
+what the merchant published (`source_basis: feed`). Every field of one record has the same
+provenance today; no record field is taken from an answer yet, so `agent` does not occur.
+
+| console field | from |
+|---|---|
+| `kind` | `offer` for a seller, `product` for a brand |
+| `sku` | the listing's `product_id` (the TrueSync matrix's `sku`), else the listing id; `product=` takes either |
+| `title`, `sub` | the listing's title; brand, variant count, the merchant's domain |
+| `status` | `Fails validation on …` (bad) for a compiled publication with validation errors; `n page differences` (warn); `Published to n channels` (ok); `From your feed` or `Not published yet` (neu) |
+| `fields[]` | Name, Brand, Product page, Price (one price, or the range), Member price (when the record's incentives state one), GTIN, Count, Published (spec version in `note`); then one field per disagreement |
+| `Field.was`, `diff`, `note` | a 2A finding about what the product is (`name_differs`, `pack_differs`, `gtin_mismatch`, `gtin_missing_on_page`, `brand_missing_on_page`) on the latest reference read of one of the variant's pages: `k` = `<Name / Pack count / GTIN / Brand> · <variant>`, `v` = the record's value, `was` = what the page showed, `note` = which page, when and how it was read, and for a name the words only on one side. Price findings are True Value's, an unreadable page Accessibility's |
+| `issues[]` | the validator and expressiveness lines of the publications that compiled: conflict → bad, dropped and approximated → warn, info → neu. Failed publishes are one `Not published to …` issue (warn) with the error, as the matrix shows them blocked |
+| `json` | the schema_org publication's artifact, pretty-printed; `""` when there is none (an external merchant's feed is not compiled here) |
+| `variants[]` | `id` (variant id, else GTIN), `name`, `price` (`$22.99`, `$12.99 · member $10.99`, or `not carried`), `status` from the reference rows (`Matches the page`, `Page differs: name, pack count`, `Page not read`, `Not read yet`) and its tone; `gtin`, `list_price`, `member_price`, `count`, `pages` beside |
+
+A price the record does not carry reads `not carried` wherever a price would show, never blank.
+Extras: `merchant, listing_id, product_url, merchant_kind, hosting, source, source_basis,
+json_channel, channels, reference_run, read_errors, divergences`. `/record/list` returns
+`{merchant, kind, hosting, products: [{sku, listing_id, title, sub, variants, status, diffs}], read_errors}`.
 
 ## Answer divergences
 
@@ -2491,3 +2592,892 @@ answers, not a real tenant's.
 ### GET /api/console/full-loop/latest (2C-0)
 
 The `/full-loop/{id}` shape above, for the newest request; `null` before the first run.
+
+### GET /api/console/visibility?cycle=WS-2B-FIXTURE (2C-1)
+
+The fixture's other_brands_named are all empty and Huggies, in its comparison set, is named by no
+answer, so W&S is the only row.
+
+```json
+{
+  "cycle": "WS-2B-FIXTURE",
+  "lede": "Who the answers name, and who they name first, in cycle WS-2B-FIXTURE. Counted per surface: a model-only API, a grounded API and a consumer UI are never added together.",
+  "byQuestion": [
+    {
+      "q": "Is Wiggle & Snug Member Rewards still available?",
+      "type": "Brand-direct",
+      "tier": "brand_direct",
+      "surface": "grounded_api",
+      "agent": "chatgpt",
+      "named": [
+        {
+          "name": "Wiggle & Snug",
+          "you": true
+        }
+      ],
+      "first": {
+        "name": "Wiggle & Snug",
+        "you": true
+      },
+      "run": "run-1006",
+      "platform": "chatgpt",
+      "query_code": "WIG_144",
+      "stage": "Research",
+      "answered": true,
+      "first_basis": "layer1_position"
+    },
+    {
+      "q": "Does Wiggle & Snug sell a Snug-Fit Trial Pack?",
+      "type": "Brand-direct",
+      "tier": "brand_direct",
+      "surface": "grounded_api",
+      "agent": "gemini",
+      "named": [
+        {
+          "name": "Wiggle & Snug",
+          "you": true
+        }
+      ],
+      "first": {
+        "name": "Wiggle & Snug",
+        "you": true
+      },
+      "run": "run-1007",
+      "platform": "gemini_grounded",
+      "query_code": "WIG_148",
+      "stage": "Research",
+      "answered": true,
+      "first_basis": "layer1_position"
+    },
+    {
+      "q": "What does the Wiggle & Snug Snug-Fit Diapers Size 3 small pack cost?",
+      "type": "Catalog accuracy",
+      "tier": "catalog_accuracy",
+      "surface": "grounded_api",
+      "agent": "chatgpt",
+      "named": [],
+      "first": null,
+      "run": "run-1005",
+      "platform": "chatgpt",
+      "query_code": "WIG_154",
+      "stage": "Ready to Buy",
+      "answered": true
+    },
+    {
+      "q": "What does the Wiggle & Snug Snug-Fit Overnight Diapers Size 6 cost?",
+      "type": "Catalog accuracy",
+      "tier": "catalog_accuracy",
+      "surface": "grounded_api",
+      "agent": "gemini",
+      "named": [
+        {
+          "name": "Wiggle & Snug",
+          "you": true
+        }
+      ],
+      "first": {
+        "name": "Wiggle & Snug",
+        "you": true
+      },
+      "run": "run-1004",
+      "platform": "gemini_grounded",
+      "query_code": "WIG_165",
+      "stage": "Ready to Buy",
+      "answered": true,
+      "first_basis": "layer1_position"
+    },
+    {
+      "q": "What does the Wiggle & Snug Cloud Wipes 3-Pack cost?",
+      "type": "Catalog accuracy",
+      "tier": "catalog_accuracy",
+      "surface": "grounded_api",
+      "agent": "gemini",
+      "named": [
+        {
+          "name": "Wiggle & Snug",
+          "you": true
+        }
+      ],
+      "first": {
+        "name": "Wiggle & Snug",
+        "you": true
+      },
+      "run": "run-1003",
+      "platform": "gemini_grounded",
+      "query_code": "WIG_166",
+      "stage": "Ready to Buy",
+      "answered": true,
+      "first_basis": "layer1_position"
+    },
+    {
+      "q": "What does the Wiggle & Snug Bum Balm 4 oz cost?",
+      "type": "Catalog accuracy",
+      "tier": "catalog_accuracy",
+      "surface": "consumer_ui",
+      "agent": "aimode",
+      "named": [],
+      "first": null,
+      "run": "run-1008",
+      "platform": "aimode",
+      "query_code": "WIG_167",
+      "stage": "Ready to Buy",
+      "answered": false
+    },
+    {
+      "q": "What does the Wiggle & Snug Bum Balm 4 oz cost?",
+      "type": "Catalog accuracy",
+      "tier": "catalog_accuracy",
+      "surface": "grounded_api",
+      "agent": "chatgpt",
+      "named": [
+        {
+          "name": "Wiggle & Snug",
+          "you": true
+        }
+      ],
+      "first": {
+        "name": "Wiggle & Snug",
+        "you": true
+      },
+      "run": "run-1002",
+      "platform": "chatgpt",
+      "query_code": "WIG_167",
+      "stage": "Ready to Buy",
+      "answered": true,
+      "first_basis": "layer1_position"
+    },
+    {
+      "q": "What does the Wiggle & Snug Bum Balm 4 oz cost?",
+      "type": "Catalog accuracy",
+      "tier": "catalog_accuracy",
+      "surface": "grounded_api",
+      "agent": "gemini",
+      "named": [
+        {
+          "name": "Wiggle & Snug",
+          "you": true
+        }
+      ],
+      "first": {
+        "name": "Wiggle & Snug",
+        "you": true
+      },
+      "run": "run-1001",
+      "platform": "gemini_grounded",
+      "query_code": "WIG_167",
+      "stage": "Ready to Buy",
+      "answered": true,
+      "first_basis": "layer1_position"
+    }
+  ],
+  "ranking": {
+    "surface": "grounded_api",
+    "rows": [
+      {
+        "name": "Wiggle & Snug",
+        "you": true,
+        "named": 6,
+        "first": 6,
+        "surfaces": {
+          "grounded_api": {
+            "named": 6,
+            "first": 6,
+            "agents": {
+              "chatgpt": {
+                "named": 2,
+                "first": 2
+              },
+              "gemini": {
+                "named": 4,
+                "first": 4
+              }
+            }
+          },
+          "consumer_ui": {
+            "named": 0,
+            "first": 0,
+            "agents": {}
+          }
+        }
+      }
+    ],
+    "denom": 7,
+    "denoms": {
+      "grounded_api": 7,
+      "consumer_ui": 0
+    },
+    "agent_denoms": {
+      "grounded_api": {
+        "chatgpt": 3,
+        "gemini": 4
+      },
+      "consumer_ui": {}
+    },
+    "first_uncoded": {
+      "grounded_api": 0,
+      "consumer_ui": 0
+    },
+    "agent_first_uncoded": {
+      "grounded_api": {},
+      "consumer_ui": {}
+    }
+  },
+  "note": "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every brand named, so when the comparison set's first brand sits second or later, another brand came first, and the brands the answer named outside the set decide which, by where each first appears. When no coding names that brand (unprompted answers carry no list of other brands), nobody gets the pick.",
+  "surfaces": [
+    {
+      "surface": "grounded_api",
+      "label": "API with search grounding",
+      "answered": 7,
+      "runs": 7
+    },
+    {
+      "surface": "consumer_ui",
+      "label": "Consumer UI, logged out",
+      "answered": 0,
+      "runs": 1
+    }
+  ],
+  "tiers": [
+    {
+      "tier": "brand_direct",
+      "label": "Brand-direct"
+    },
+    {
+      "tier": "catalog_accuracy",
+      "label": "Catalog accuracy"
+    }
+  ],
+  "first_basis": {
+    "layer1_position": 6
+  },
+  "sources_left_out": 0,
+  "divergences": [
+    "Visibility is per surface. RankRow.named and RankRow.first are the counts on `ranking.surface` (the highest-fidelity surface with answered runs) and `ranking.denom` is that surface's answered runs; every surface is under `surfaces`, each with its per-agent split. There is no total across surfaces.",
+    "byQuestion is one row per run, not one per question with a first pick per agent (Tenant.visibility): an agent can have two surfaces, and a question has several runs.",
+    "Brands outside the comparison set come from other_brands_named and are rolled up by name: a name that starts with a comparison-set brand (or alias) is that brand ('Huggies Snug & Dry' is Huggies), and a name that starts with another named brand is that brand. Sources (presented_as 'source', relation 'citation_only') are left out and counted in `sources_left_out`.",
+    "RankRow.series is not sent: a sparkline needs two or more cycles, which the console reads itself.",
+    "An answer whose first brand neither coding names has `first: null` and `first_basis: 'uncoded'`, counted per surface and agent in `ranking.first_uncoded` / `agent_first_uncoded`."
+  ]
+}
+```
+
+### GET /api/console/visibility?cycle=FL3-wiggle-and-snug-20261014 (2C-1, cycle 229, cut)
+
+Built by `build_visibility` from cycle 229's stored rows, exported read-only on Oct 14 (runs,
+questions, Layer 1 mentions, Layer 2 other_brands_named and spans; no answer text beyond the
+stored spans, no customer data: the answers are public model output about Parleo's own test
+store). Two of 516 rows (one first pick by span position, one uncoded) and 4 of 36 ranking rows.
+
+```json
+{
+  "cycle": "FL3-wiggle-and-snug-20261014",
+  "lede": "Who the answers name, and who they name first, in cycle FL3-wiggle-and-snug-20261014. Counted per surface: a model-only API, a grounded API and a consumer UI are never added together.",
+  "byQuestion": [
+    {
+      "q": "What size of Wiggle & Snug Snug-Fit Diapers should I buy for a 15 lb baby?",
+      "type": "Brand-direct",
+      "tier": "brand_direct",
+      "surface": "grounded_api",
+      "agent": "chatgpt",
+      "named": [
+        {
+          "name": "Huggies",
+          "you": false
+        }
+      ],
+      "first": {
+        "name": "Huggies",
+        "you": false
+      },
+      "run": "run-13146",
+      "platform": "chatgpt",
+      "query_code": "WIG_145",
+      "stage": "Ready to Buy",
+      "answered": true,
+      "first_basis": "span_position"
+    },
+    {
+      "q": "What are the most popular baby wipe options for everyday use?",
+      "type": "Awareness",
+      "tier": "unprompted",
+      "surface": "grounded_api",
+      "agent": "chatgpt",
+      "named": [
+        {
+          "name": "Huggies",
+          "you": false
+        },
+        {
+          "name": "Pampers",
+          "you": false
+        }
+      ],
+      "first": null,
+      "run": "run-12745",
+      "platform": "chatgpt",
+      "query_code": "WIG_089",
+      "stage": "Awareness",
+      "answered": true,
+      "first_basis": "uncoded"
+    }
+  ],
+  "ranking": {
+    "surface": "grounded_api",
+    "rows": [
+      {
+        "name": "Wiggle & Snug",
+        "you": true,
+        "named": 170,
+        "first": 169,
+        "surfaces": {
+          "grounded_api": {
+            "named": 170,
+            "first": 169,
+            "agents": {
+              "chatgpt": {
+                "named": 63,
+                "first": 62
+              },
+              "gemini": {
+                "named": 107,
+                "first": 107
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "Huggies",
+        "you": false,
+        "named": 138,
+        "first": 49,
+        "surfaces": {
+          "grounded_api": {
+            "named": 138,
+            "first": 49,
+            "agents": {
+              "chatgpt": {
+                "named": 84,
+                "first": 40
+              },
+              "gemini": {
+                "named": 54,
+                "first": 9
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "Pampers",
+        "you": false,
+        "named": 89,
+        "first": 38,
+        "surfaces": {
+          "grounded_api": {
+            "named": 89,
+            "first": 38,
+            "agents": {
+              "chatgpt": {
+                "named": 37,
+                "first": 11
+              },
+              "gemini": {
+                "named": 52,
+                "first": 27
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "Parent’s Choice",
+        "you": false,
+        "named": 5,
+        "first": 1,
+        "surfaces": {
+          "grounded_api": {
+            "named": 5,
+            "first": 1,
+            "agents": {
+              "chatgpt": {
+                "named": 5,
+                "first": 1
+              },
+              "gemini": {
+                "named": 0,
+                "first": 0
+              }
+            }
+          }
+        }
+      }
+    ],
+    "denom": 514,
+    "denoms": {
+      "grounded_api": 514
+    },
+    "agent_denoms": {
+      "grounded_api": {
+        "chatgpt": 256,
+        "gemini": 258
+      }
+    },
+    "first_uncoded": {
+      "grounded_api": 27
+    },
+    "agent_first_uncoded": {
+      "grounded_api": {
+        "chatgpt": 11,
+        "gemini": 16
+      }
+    }
+  },
+  "note": "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every brand named, so when the comparison set's first brand sits second or later, another brand came first, and the brands the answer named outside the set decide which, by where each first appears. When no coding names that brand (unprompted answers carry no list of other brands), nobody gets the pick.",
+  "surfaces": [
+    {
+      "surface": "grounded_api",
+      "label": "API with search grounding",
+      "answered": 514,
+      "runs": 516
+    }
+  ],
+  "tiers": [
+    {
+      "tier": "unprompted",
+      "label": "Unprompted"
+    },
+    {
+      "tier": "brand_direct",
+      "label": "Brand-direct"
+    },
+    {
+      "tier": "catalog_accuracy",
+      "label": "Catalog accuracy"
+    },
+    {
+      "tier": "value_incentives",
+      "label": "Value & incentives"
+    }
+  ],
+  "first_basis": {
+    "layer1_position": 256,
+    "uncoded": 27,
+    "span_position": 6
+  },
+  "sources_left_out": 43,
+  "divergences": [
+    "Visibility is per surface. RankRow.named and RankRow.first are the counts on `ranking.surface` (the highest-fidelity surface with answered runs) and `ranking.denom` is that surface's answered runs; every surface is under `surfaces`, each with its per-agent split. There is no total across surfaces.",
+    "byQuestion is one row per run, not one per question with a first pick per agent (Tenant.visibility): an agent can have two surfaces, and a question has several runs.",
+    "Brands outside the comparison set come from other_brands_named and are rolled up by name: a name that starts with a comparison-set brand (or alias) is that brand ('Huggies Snug & Dry' is Huggies), and a name that starts with another named brand is that brand. Sources (presented_as 'source', relation 'citation_only') are left out and counted in `sources_left_out`.",
+    "RankRow.series is not sent: a sparkline needs two or more cycles, which the console reads itself.",
+    "An answer whose first brand neither coding names has `first: null` and `first_basis: 'uncoded'`, counted per surface and agent in `ranking.first_uncoded` / `agent_first_uncoded`."
+  ]
+}
+```
+
+### GET /api/console/record/list?merchant=wiggle-and-snug (2C-1)
+
+```json
+{
+  "merchant": "wiggle-and-snug",
+  "kind": "brand",
+  "hosting": "parleo",
+  "products": [
+    {
+      "sku": "catalog_product:27",
+      "listing_id": 90,
+      "title": "Snug-Fit Diapers",
+      "sub": "Wiggle & Snug · 12 variants · trueshopstore.com",
+      "variants": 12,
+      "status": {
+        "label": "Published to 4 channels",
+        "tone": "ok"
+      },
+      "diffs": 0
+    },
+    {
+      "sku": "catalog_product:28",
+      "listing_id": 91,
+      "title": "Snug-Fit Overnight Diapers",
+      "sub": "Wiggle & Snug · 4 variants · trueshopstore.com",
+      "variants": 4,
+      "status": {
+        "label": "1 page difference",
+        "tone": "warn"
+      },
+      "diffs": 1
+    },
+    {
+      "sku": "catalog_product:29",
+      "listing_id": 92,
+      "title": "Cloud Wipes 3-Pack",
+      "sub": "Wiggle & Snug · 1 variant · trueshopstore.com",
+      "variants": 1,
+      "status": {
+        "label": "1 page difference",
+        "tone": "warn"
+      },
+      "diffs": 1
+    },
+    {
+      "sku": "catalog_product:30",
+      "listing_id": 93,
+      "title": "Bum Balm 4 oz",
+      "sub": "Wiggle & Snug · 1 variant · trueshopstore.com",
+      "variants": 1,
+      "status": {
+        "label": "Published to 4 channels",
+        "tone": "ok"
+      },
+      "diffs": 0
+    },
+    {
+      "sku": "catalog_product:31",
+      "listing_id": 94,
+      "title": "Snug-Fit Trial Pack",
+      "sub": "Wiggle & Snug · 1 variant · trueshopstore.com",
+      "variants": 1,
+      "status": {
+        "label": "Published to 4 channels",
+        "tone": "ok"
+      },
+      "diffs": 0
+    }
+  ],
+  "read_errors": {}
+}
+```
+
+### GET /api/console/record?merchant=wiggle-and-snug&product=91 (2C-1)
+
+Supply as `test_console_truesync.py` fakes it, plus the W&S reference read
+(`tests/fixtures/console/supply_reference_ws.json`, illustrative): the Overnight Size 6 page's
+name disagrees with the record. The artifact is elided.
+
+```json
+{
+  "kind": "product",
+  "sku": "catalog_product:28",
+  "title": "Snug-Fit Overnight Diapers",
+  "sub": "Wiggle & Snug · 4 variants · trueshopstore.com",
+  "status": {
+    "label": "1 page difference",
+    "tone": "warn"
+  },
+  "fields": [
+    {
+      "k": "Name",
+      "v": "Snug-Fit Overnight Diapers",
+      "prov": "brand"
+    },
+    {
+      "k": "Brand",
+      "v": "Wiggle & Snug",
+      "prov": "brand"
+    },
+    {
+      "k": "Product page",
+      "v": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+      "prov": "brand",
+      "mono": true
+    },
+    {
+      "k": "Price",
+      "v": "$23.99 to $29.99",
+      "prov": "brand",
+      "note": "4 variants"
+    },
+    {
+      "k": "GTIN",
+      "v": "not carried",
+      "prov": "brand",
+      "mono": false
+    },
+    {
+      "k": "Count",
+      "v": "42 to 62",
+      "prov": "brand"
+    },
+    {
+      "k": "Published",
+      "v": "2026-08-28",
+      "prov": "brand",
+      "note": "schemaorg-merchant-listing-2026-08-18"
+    },
+    {
+      "k": "Name · Snug-Fit Overnight Diapers Size 6 (42 ct)",
+      "v": "Snug-Fit Overnight Diapers Size 6 (42 ct)",
+      "prov": "brand",
+      "was": "Overnight Diapers Size 6, 42 Count",
+      "diff": true,
+      "note": "trueshopstore.com, read 2026-10-09 by our own fetch. only in the record: snug fit",
+      "finding": "name_differs",
+      "variant_id": "snug-fit-overnight-s6",
+      "url": "https://trueshopstore.com/products/snug-fit-overnight-diapers"
+    }
+  ],
+  "issues": [
+    {
+      "title": "Not published to UCP / Universal Incentive Protocol, Agentic Commerce Protocol, Google Merchant Center feed",
+      "detail": "The publish failed: not implemented in Step 2.",
+      "tone": "warn",
+      "channel": "ucp_uip,acp,merchant_center",
+      "verdict": "blocked"
+    },
+    {
+      "title": "Schema.org Product/Offer: amount_off approximated by the channel",
+      "detail": "schema.org: the resulting price is expressible; the amount off itself is only a hint (specs §4).",
+      "tone": "warn",
+      "channel": "schema_org",
+      "verdict": "approx"
+    },
+    {
+      "title": "Schema.org Product/Offer: percent_off approximated by the channel",
+      "detail": "schema.org: price and priceSpecification carry the resulting price; the percentage itself is only a hint (specs §4).",
+      "tone": "warn",
+      "channel": "schema_org",
+      "verdict": "approx"
+    },
+    {
+      "title": "Schema.org Product/Offer: new_customer dropped by the channel",
+      "detail": "schema.org: no new-customer eligibility structure (specs matrix).",
+      "tone": "warn",
+      "channel": "schema_org",
+      "verdict": "dropped"
+    },
+    {
+      "title": "Schema.org Product/Offer: effective_net_price approximated by the channel",
+      "detail": "The calculator's net price includes a member-only offer, so the public Offer.price quotes list; the member price is carried in priceSpecification, gated by tier.",
+      "tone": "warn",
+      "channel": "schema_org",
+      "verdict": "approx"
+    },
+    {
+      "title": "Schema.org Product/Offer: stacking note",
+      "detail": "schema.org has no stacking vocabulary; combinability is stated in the description only (specs matrix).",
+      "tone": "neu",
+      "channel": "schema_org",
+      "verdict": "info"
+    }
+  ],
+  "json": "… the schema_org artifact, pretty-printed (elided here) …",
+  "variants": [
+    {
+      "id": "snug-fit-overnight-s3",
+      "name": "Snug-Fit Overnight Diapers Size 3 (62 ct)",
+      "price": "$23.99",
+      "status": "Not read yet",
+      "tone": "neu",
+      "gtin": null,
+      "list_price": "23.99",
+      "member_price": null,
+      "count": 62,
+      "pages": []
+    },
+    {
+      "id": "snug-fit-overnight-s4",
+      "name": "Snug-Fit Overnight Diapers Size 4 (54 ct)",
+      "price": "$25.99",
+      "status": "Not read yet",
+      "tone": "neu",
+      "gtin": null,
+      "list_price": "25.99",
+      "member_price": null,
+      "count": 54,
+      "pages": []
+    },
+    {
+      "id": "snug-fit-overnight-s5",
+      "name": "Snug-Fit Overnight Diapers Size 5 (48 ct)",
+      "price": "$27.99",
+      "status": "Not read yet",
+      "tone": "neu",
+      "gtin": null,
+      "list_price": "27.99",
+      "member_price": null,
+      "count": 48,
+      "pages": []
+    },
+    {
+      "id": "snug-fit-overnight-s6",
+      "name": "Snug-Fit Overnight Diapers Size 6 (42 ct)",
+      "price": "$29.99",
+      "status": "Page differs: name",
+      "tone": "warn",
+      "gtin": null,
+      "list_price": "29.99",
+      "member_price": null,
+      "count": 42,
+      "pages": [
+        "https://trueshopstore.com/products/snug-fit-overnight-diapers"
+      ]
+    }
+  ],
+  "merchant": "wiggle-and-snug",
+  "listing_id": 91,
+  "product_url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+  "merchant_kind": "brand",
+  "hosting": "parleo",
+  "source": "published",
+  "source_basis": "merchant",
+  "json_channel": "schema_org",
+  "channels": {
+    "deal_directory": {
+      "status": "published",
+      "published_at": "2026-08-21T20:16:23.989748Z"
+    },
+    "mcp": {
+      "status": "published",
+      "published_at": "2026-08-21T20:16:23.843494Z"
+    },
+    "deals_api": {
+      "status": "published",
+      "published_at": "2026-08-21T20:16:23.692383Z"
+    },
+    "ucp_uip": {
+      "status": "failed",
+      "published_at": null
+    },
+    "acp": {
+      "status": "failed",
+      "published_at": null
+    },
+    "merchant_center": {
+      "status": "failed",
+      "published_at": null
+    },
+    "schema_org": {
+      "status": "published",
+      "published_at": "2026-08-21T20:16:23.305701Z"
+    }
+  },
+  "reference_run": {
+    "id": 7,
+    "status": "done",
+    "started_at": "2026-10-09T14:41:20+00:00",
+    "finished_at": "2026-10-09T14:43:00+00:00",
+    "counts": {},
+    "allow_hosted_render": true
+  },
+  "read_errors": {},
+  "divergences": [
+    "Field.prov is mapped once (RECORD_PROVENANCE): source 'published' on a seller merchant is 'retail', on a brand merchant 'brand'; 'scrape' is 'parleo'; a value taken from an agent answer is 'agent'. A published listing whose merchant kind is unknown is 'unknown', which the console renders neutral.",
+    "A listing's source is supply's provenance mix (listing rows); an external merchant's feed has no listing rows, so its record is 'published' with source_basis 'feed'.",
+    "Field.was is what the latest reference read found on the page, not an earlier record value; `diff` marks the field, and `note` says which page, when and how it was read.",
+    "Variant-level disagreements are their own fields ('Name · <variant>'), since 2A compares each variant with each page.",
+    "`json` is the schema_org publication's artifact; empty when the product was never compiled for schema.org (an external merchant's feed is not compiled here).",
+    "A price the record does not carry reads 'not carried', never blank.",
+    "issues are the validator and expressiveness lines of the publications that compiled (the artifacts the channels host); a failed publish is one 'Not published to …' issue with its error, as the TrueSync matrix shows it blocked."
+  ]
+}
+```
+
+### GET /api/console/record?merchant=brandco&product=feed:brandco:00012345678905 (2C-1, external seller)
+
+Brandco is soa's external test fake, served from its feed with no price on the wipes row; the
+reference read is the 2C sample's (`supply_feed_brandco.json`), whose target.com page shows
+"216, 3" against the record's 72.
+
+```json
+{
+  "kind": "offer",
+  "sku": "feed:brandco:00012345678905",
+  "title": "Brandco Wipes",
+  "sub": "Brandco · 1 variant · brandco.test",
+  "status": {
+    "label": "1 page difference",
+    "tone": "warn"
+  },
+  "fields": [
+    {
+      "k": "Name",
+      "v": "Brandco Wipes",
+      "prov": "retail"
+    },
+    {
+      "k": "Brand",
+      "v": "Brandco",
+      "prov": "retail"
+    },
+    {
+      "k": "Product page",
+      "v": "not carried",
+      "prov": "retail",
+      "mono": false
+    },
+    {
+      "k": "Price",
+      "v": "not carried",
+      "prov": "retail"
+    },
+    {
+      "k": "GTIN",
+      "v": "00012345678905",
+      "prov": "retail",
+      "mono": true
+    },
+    {
+      "k": "Count",
+      "v": "72",
+      "prov": "retail"
+    },
+    {
+      "k": "Published",
+      "v": "2026-10-08",
+      "prov": "retail",
+      "note": "sku-feed-v1"
+    },
+    {
+      "k": "Pack count · 72 ct",
+      "v": "72",
+      "prov": "retail",
+      "was": "216, 3",
+      "diff": true,
+      "note": "target.com, read 2026-10-09 by our own fetch",
+      "finding": "pack_differs",
+      "variant_id": "00012345678905",
+      "url": "https://www.target.com/p/2"
+    }
+  ],
+  "issues": [],
+  "json": "",
+  "variants": [
+    {
+      "id": "00012345678905",
+      "name": "72 ct",
+      "price": "not carried",
+      "status": "Page differs: pack count",
+      "tone": "warn",
+      "gtin": "00012345678905",
+      "list_price": null,
+      "member_price": null,
+      "count": 72,
+      "pages": [
+        "https://www.target.com/p/2"
+      ]
+    }
+  ],
+  "merchant": "brandco",
+  "listing_id": 501,
+  "product_url": null,
+  "merchant_kind": "seller",
+  "hosting": "external",
+  "source": "published",
+  "source_basis": "feed",
+  "json_channel": null,
+  "channels": {},
+  "reference_run": {
+    "id": 4,
+    "status": "done",
+    "started_at": "2026-10-09T14:40:00+00:00",
+    "finished_at": "2026-10-09T14:44:00+00:00",
+    "counts": {},
+    "allow_hosted_render": true
+  },
+  "read_errors": {},
+  "divergences": [
+    "… as in RECORD_DIVERGENCES …"
+  ]
+}
+```

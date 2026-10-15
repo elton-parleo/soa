@@ -1,0 +1,152 @@
+{
+  "_note": "supply GET /api/truesync/merchants/wiggle-and-snug/reference, in the shape truesync/fullloop/views.py reference() returns (the Brandco sample's shape, supply_feed_brandco.json). Values are illustrative for Parleo's own test store: the Cloud Wipes pack_differs is the 3-Pack case supply's sku-feed.md describes (the page says 3, the hosted record's count is 216 and hosted variants have no multipack); the Overnight Size 6 name_differs is written for the fixture.",
+  "merchant": "wiggle-and-snug",
+  "reference_run": {
+    "id": 7,
+    "status": "done",
+    "started_at": "2026-10-09T14:41:20+00:00",
+    "finished_at": "2026-10-09T14:43:00+00:00",
+    "counts": {},
+    "allow_hosted_render": true
+  },
+  "rows": [
+    {
+      "variant_ref": "snug-fit-overnight-s6",
+      "gtin": null,
+      "sku": null,
+      "variant_label": "Snug-Fit Overnight Diapers Size 6 (42 ct)",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/snug-fit-overnight-diapers",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "fetch",
+      "observed_at": "2026-10-09T14:42:10+00:00",
+      "price": "29.99",
+      "member_price": null,
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$29.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [
+        {
+          "finding": "name_differs",
+          "expected": "Snug-Fit Overnight Diapers Size 6 (42 ct)",
+          "observed": "Overnight Diapers Size 6, 42 Count",
+          "detail": {
+            "gap": true,
+            "diff": {
+              "record_normalized": "snug fit overnight diapers size 6",
+              "page_normalized": "overnight diapers size 6",
+              "only_in_record": [
+                "snug",
+                "fit"
+              ],
+              "only_on_page": []
+            }
+          }
+        },
+        {
+          "finding": "price_observed",
+          "expected": "29.99",
+          "observed": "29.99",
+          "detail": {
+            "gap": false,
+            "method": "fetch"
+          }
+        }
+      ],
+      "gap_count": 1
+    },
+    {
+      "variant_ref": "cloud-wipes-3pack",
+      "gtin": "884400676641",
+      "sku": null,
+      "variant_label": "Cloud Wipes 3-Pack",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/cloud-wipes-3-pack",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "fetch",
+      "observed_at": "2026-10-09T14:42:30+00:00",
+      "price": "11.99",
+      "member_price": null,
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$11.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [
+        {
+          "finding": "pack_differs",
+          "expected": "216",
+          "observed": "3",
+          "detail": {
+            "gap": true,
+            "record_numbers": [
+              216
+            ],
+            "page_numbers": [
+              3
+            ]
+          }
+        },
+        {
+          "finding": "price_observed",
+          "expected": "11.99",
+          "observed": "11.99",
+          "detail": {
+            "gap": false,
+            "method": "fetch"
+          }
+        }
+      ],
+      "gap_count": 1
+    },
+    {
+      "variant_ref": "bum-balm-4oz",
+      "gtin": "884400896186",
+      "sku": null,
+      "variant_label": "Bum Balm 4 oz",
+      "retailer_domain": "trueshopstore.com",
+      "url": "https://trueshopstore.com/products/bum-balm-4-oz",
+      "read_status": "ok",
+      "reference_source": "honest_fetch",
+      "method": "fetch",
+      "observed_at": "2026-10-09T14:42:50+00:00",
+      "price": "12.99",
+      "member_price": null,
+      "list_price": null,
+      "currency": "USD",
+      "verifiable": true,
+      "cell": {
+        "live": "$12.99",
+        "quoted": null,
+        "status": null
+      },
+      "findings": [
+        {
+          "finding": "price_observed",
+          "expected": "12.99",
+          "observed": "12.99",
+          "detail": {
+            "gap": false,
+            "method": "fetch"
+          }
+        }
+      ],
+      "gap_count": 0
+    }
+  ],
+  "findings_count": 2,
+  "findings_by_type": {
+    "name_differs": 1,
+    "pack_differs": 1
+  }
+}
