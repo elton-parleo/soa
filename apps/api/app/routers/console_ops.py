@@ -27,7 +27,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, ConfigDict
 
 from app.auth import verify_token
-from app.console_scope import console_scope
+from app.console_scope import console_scope, cycle_customer_org_sql
 from app.customer_context import CustomerScope
 from app.routers import full_loop
 from app.routers.customers import _tenant_view
@@ -35,6 +35,7 @@ from app.routers.truesync import MAX_FEED_UPLOAD_BYTES, _unwrap, get_feed_templa
 from app.routers import cycles as cycles_router
 from app.routers import studies as studies_router
 from app.schemas import ComparisonEntityInput, CreateCycleRequest, RegenerateStudyRequest, StudyGenerateRequest
+from app.services import console_parity as parity
 from app.services import console_read_models as rm
 from app.services import console_studies as cs
 from soa_shared import customers, surfaces
@@ -71,13 +72,53 @@ async def get_catalog(merchant: str = Query(...), scope: CustomerScope = Depends
     client = full_loop._client(scope)
     if (record or {}).get('hosting') == 'parleo':
         catalog = _unwrap(*await client.get_merchant_catalog(merchant))
-        return rm.build_catalog(merchant, feed=None, history=[], hosted_catalog=catalog or {})
-    status, feed, error = await client.get_feed(merchant)
-    if error is not None and status != 404:
-        _unwrap(status, feed, error)
-    history = _unwrap(*await client.get_feed_history(merchant))
-    return rm.build_catalog(merchant, feed=feed if error is None else None,
-                            history=(history or {}).get('versions') or [], hosted_catalog=None)
+        body = rm.build_catalog(merchant, feed=None, history=[], hosted_catalog=catalog or {})
+    else:
+        status, feed, error = await client.get_feed(merchant)
+        if error is not None and status != 404:
+            _unwrap(status, feed, error)
+        history = _unwrap(*await client.get_feed_history(merchant))
+        body = rm.build_catalog(merchant, feed=feed if error is None else None,
+                                history=(history or {}).get('versions') or [], hosted_catalog=None)
+    return await _with_stages(body, merchant, scope)
+
+
+async def _with_stages(body: dict, merchant: str, scope: CustomerScope) -> dict:
+    """2C-2: each row's stage (measured, published, verified) and the
+    retailers read for the study (the latest 2A reference read, per domain).
+    A failed read leaves its part out and is named in `read_errors`."""
+    import asyncio
+    from app.routers.console import _true_value_inputs
+    client = full_loop._client(scope)
+    (_, reference, r_err), (_, pubs, p_err) = await asyncio.gather(client.get_reference(merchant),
+                                                                   client.get_publications(limit=500))
+    quoted: Dict[str, dict] = {}
+    with engine.connect() as conn:
+        latest = conn.execute(text(f"""
+            SELECT c.* FROM soa_cycles c
+            WHERE {cycle_customer_org_sql()} = :org AND c.status = 'complete'
+              AND EXISTS (SELECT 1 FROM soa_expectation_outcomes o WHERE o.cycle_id = c.id AND o.tier = 'catalog_accuracy')
+            ORDER BY c.start_date DESC, c.id DESC LIMIT 1
+        """), {"org": scope.org.id}).mappings().fetchone()
+        if latest is not None:
+            _, _, scored = _true_value_inputs(conn, dict(latest))
+            # the highest-fidelity surface where a run quoted a price, as True Value reads it
+            top = [sf for sf in parity.ordered_surfaces(s['surface'] for s in scored)
+                   if any(s['surface'] == sf and s.get('stated') not in (None, '') for s in scored)]
+            for item in scored:
+                if top and item['surface'] != top[0]:
+                    continue
+                for key in {item.get('variant_id'), rm._gtin14(item.get('gtin'))} - {None}:
+                    q = quoted.setdefault(key, {'quoted': 0, 'scored': 0, 'exact': 0})
+                    q['quoted'] += int(item.get('stated') not in (None, ''))
+                    q['scored'] += int(item['outcome'] in rm.SUMMARY_SCORED)
+                    q['exact'] += int(item['outcome'] == 'exact')
+    published = {p.get('listing_id') for p in (pubs or []) if p.get('status') == 'published'} if p_err is None else set()
+    body['rows'] = parity.catalog_stages(body.get('rows') or [], quoted_variants=quoted, published_listings=published)
+    body['retailers_read'] = parity.retailers_read(reference if r_err is None else None)
+    body['stage_cycle'] = latest['cycle_code'] if latest is not None else None
+    body['read_errors'] = {n: e for n, e in (('reference', r_err), ('publications', p_err)) if e is not None}
+    return body
 
 
 @router.get("/catalog/versions")

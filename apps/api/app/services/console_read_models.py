@@ -392,6 +392,39 @@ def _gtin14(value) -> Optional[str]:
     return digits.zfill(14) if digits and len(digits) <= 14 else None
 
 
+#: 2C-2: what one True Value cell says when several runs priced it. The runs
+#: that quoted a price decide: the worst of their scored outcomes (wrong,
+#: then stale, then partial, then exact). A run that priced another brand's
+#: product (an absent) or quoted nothing is left out of that. When no run
+#: quoted a price the cell is left out (`missed`). The quote shown is the
+#: deciding run's. Unverifiable stays its own status, never right or wrong.
+TV_CELL_RULE = (
+    "A cell is the worst outcome among the runs that quoted a price for it (wrong, then stale, then "
+    "partial, then exact). When no run quoted a price, it is left out. The quote shown is that run's.")
+TV_SCORED = ('wrong', 'stale', 'partial', 'exact')
+
+
+def aggregate_cell(runs: List[dict]) -> tuple:
+    """(outcome, stated) for one cell's runs, by TV_CELL_RULE. (None, None)
+    when no run asked."""
+    if not runs:
+        return None, None
+    quoting = [r for r in runs if r.get('stated') not in (None, '')]
+    scored = [r for r in quoting if r.get('outcome') in TV_SCORED]
+    if scored:
+        outcome = min((r['outcome'] for r in scored), key=TV_SCORED.index)
+        stated = Counter(str(r['stated']) for r in scored if r['outcome'] == outcome).most_common(1)[0][0]
+        return outcome, stated
+    if any(r.get('outcome') == 'unverifiable' for r in quoting):
+        return 'unverifiable', Counter(str(r['stated']) for r in quoting
+                                       if r.get('outcome') == 'unverifiable').most_common(1)[0][0]
+    return 'absent', None
+
+
+def _surface_order(keys) -> List[str]:
+    return sorted(set(keys), key=lambda s: (-_SURFACE_RANK.get(s, 0), s))
+
+
 def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domain: Optional[str],
                      record_variants: List[dict]) -> dict:
     """
@@ -403,16 +436,26 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
     variant at that page. With no reference cached (a cycle scored against
     the record), `live` is the record's price on the own-domain column.
 
-    scored: [{variant_id, gtin, retailer, outcome, stated}], one per scored
-    run of a price question.
+    2C-2: a cell is per surface (never pooled). The typed quoted/status are
+    the cell on `surface` (the highest-fidelity surface with priced runs);
+    `by_surface` beside has every surface's, and `quotes` every run's quote
+    with its agent and surface. TV_CELL_RULE decides each. `by_agent` is
+    prices exact / scored per agent, per surface.
+
+    scored: [{variant_id, gtin, retailer, outcome, stated, surface, agent,
+    run}], one per scored run of a price question.
     """
     rows_by_key: Dict[str, dict] = {}
+    alias: Dict[str, str] = {}
     columns: List[str] = []
     live: Dict[tuple, dict] = {}
 
     for row in (reference or {}).get('prices') or []:
         domain = row.get('retailer_domain')
         key = _gtin14(row.get('gtin')) or row.get('variant_ref')
+        for a in (key, row.get('variant_ref'), row.get('variant_label'), row.get('sku')):
+            if a:
+                alias.setdefault(str(a), key)
         if domain and domain not in columns:
             columns.append(domain)
         rows_by_key.setdefault(key, {'product': row.get('variant_label') or key, 'sku': row.get('gtin') or key})
@@ -423,6 +466,9 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             columns.append(own_domain)
         for v in record_variants:
             key = v['variant_id']
+            for a in (key, _gtin14(v.get('gtin'))):
+                if a:
+                    alias.setdefault(str(a), key)
             rows_by_key.setdefault(key, {'product': v.get('label') or key, 'sku': v.get('gtin') or key})
             live[(key, own_domain)] = {'price': v.get('list_price'), 'verifiable': True,
                                        'currency': v.get('currency'), 'reference_source': 'record',
@@ -430,11 +476,25 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
 
     grouped: Dict[tuple, List[dict]] = {}
     for item in scored:
-        key = _gtin14(item.get('gtin')) or item.get('variant_id')
-        if key not in rows_by_key:
+        key = next((alias[str(a)] for a in (item.get('variant_id'), _gtin14(item.get('gtin'))) if a and str(a) in alias), None)
+        if key is None:
             continue
         domain = item.get('retailer') or own_domain
         grouped.setdefault((key, domain), []).append(item)
+
+    surface_list = _surface_order(i.get('surface') or 'unlabelled' for runs in grouped.values() for i in runs)
+    # The surface the typed fields read: the highest-fidelity one where a run
+    # quoted a price (a surface of walls and refusals priced nothing).
+    quoting = {i.get('surface') or 'unlabelled' for runs in grouped.values() for i in runs if i.get('stated') not in (None, '')}
+    default = next((s for s in surface_list if s in quoting), surface_list[0] if surface_list else None)
+
+    def cell_for(runs, ref):
+        outcome, stated = aggregate_cell(runs)
+        if ref is not None and not ref.get('verifiable', True) and runs:
+            status = 'unverifiable'
+        else:
+            status = TV_STATUS.get(outcome, 'none') if outcome else 'none'
+        return {'quoted': money(stated) if stated else '—', 'status': status, 'outcome': outcome, 'runs': len(runs)}
 
     rows = []
     for key, meta in rows_by_key.items():
@@ -442,50 +502,72 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
         for domain in columns:
             ref = live.get((key, domain))
             runs = grouped.get((key, domain), [])
-            # The scored outcomes decide; an absent (no price, or a wall)
-            # decides only when no run was scored. Ties go to the worse.
-            outcome = worst(r['outcome'] for r in runs
-                            if r['outcome'] not in ('absent', 'unscoreable')) or \
-                worst(r['outcome'] for r in runs)
             if ref is None:
                 live_text = '—'
             elif not ref.get('verifiable', True):
                 live_text = 'unverifiable'
             else:
                 live_text = money(ref.get('price'), ref.get('currency') or 'USD')
-            # The quote shown is one from the runs the status reports, so a
-            # cell never reads "$12.99 ... wrong" when $12.99 was right.
-            quoted = Counter(str(r['stated']) for r in runs
-                             if r.get('stated') and r['outcome'] == outcome) or \
-                Counter(str(r['stated']) for r in runs if r.get('stated'))
+            by_surface = {s: cell_for([r for r in runs if (r.get('surface') or 'unlabelled') == s], ref)
+                          for s in surface_list if any((r.get('surface') or 'unlabelled') == s for r in runs)}
+            top = by_surface.get(default) or cell_for([], ref)
             cells[domain] = {
-                'quoted': money(quoted.most_common(1)[0][0]) if quoted else '—',
+                'quoted': top['quoted'],
                 'live': live_text,
-                'status': ('unverifiable' if ref is not None and not ref.get('verifiable', True) and runs
-                           else TV_STATUS.get(outcome, 'none') if outcome else 'none'),
+                'status': top['status'],
                 # beside the typed fields
-                'outcome': outcome,
-                'runs': len(runs),
+                'outcome': top['outcome'],
+                'runs': top['runs'],
                 # 2C: where `live` came from, so "honest fetch" and "hosted render"
                 # are told apart; 'record' when no reference was cached.
                 'reference_source': (None if ref is None else
                                      ref.get('reference_source') or ('record' if not reference else None)),
                 'method': None if ref is None else ref.get('method'),
                 'observed_at': None if ref is None else ref.get('observed_at'),
+                # 2C-2: every surface's cell, and every run's quote
+                'surface': default if top['runs'] else None,
+                'by_surface': by_surface,
+                'quotes': [{'agent': r.get('agent'), 'surface': r.get('surface') or 'unlabelled',
+                            'outcome': r.get('outcome'), 'stated': None if r.get('stated') in (None, '') else str(r['stated']),
+                            'run': r.get('run')} for r in runs],
             }
         rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': cells})
+
+    by_agent: Dict[str, Dict[str, dict]] = {}
+    for item in scored:
+        s, a = item.get('surface') or 'unlabelled', item.get('agent') or 'unknown'
+        c = by_agent.setdefault(s, {}).setdefault(a, {'exact': 0, 'scored': 0, 'wrong': 0, 'stale': 0, 'partial': 0,
+                                                       'unverifiable': 0, 'left_out': 0, 'other_brand': 0})
+        o = item.get('outcome')
+        if o in TV_SCORED:
+            c['scored'] += 1
+            if o in c:
+                c[o] += 1
+        elif o == 'unverifiable':
+            c['unverifiable'] += 1
+        elif o == 'absent':
+            c['left_out'] += 1
+            if item.get('reason_code') == 'other_brand':
+                c['other_brand'] += 1
 
     return {
         'columns': [{'id': d, 'name': _retailer_name(d), 'you': d == own_domain} for d in columns],
         'rows': rows,
         'programs': [],
         'as_of': (reference or {}).get('as_of'),
+        # 2C-2
+        'surface': default,
+        'surfaces': [{'surface': s, 'label': surfaces.SURFACE_LABELS.get(s, s)} for s in surface_list],
+        'by_agent': {s: by_agent.get(s, {}) for s in surface_list},
+        'cell_rule': TV_CELL_RULE,
         'divergences': [
             "TvCell.status is extended by 'unverifiable' (the page blocked both reference sources).",
             "A stale quote has status 'wrong' (it is wrong today); `outcome` carries 'stale'.",
-            "`programs` is empty: soa scores no program terms per retailer here.",
+            "`programs` is empty unless `merchant` is given (2C-2): then the merchant's owned incentives.",
             "Each cell carries reference_source (honest_fetch | hosted_render | record), method and "
             "observed_at beside the typed fields (2C).",
+            "2C-2: TvCell.quoted / status are the cell on `surface`; `by_surface` has each surface's and "
+            "`quotes` every run's. Never pooled across surfaces. TV_CELL_RULE decides a cell.",
         ],
     }
 
@@ -524,34 +606,57 @@ def _program_matches(inc: dict, expected: dict) -> bool:
     return False
 
 
+def _program_agents(scored: List[dict]) -> Dict[str, dict]:
+    """2C-2: per surface, the agents that answered a scored question about a
+    program and the ones that got every such answer right."""
+    out: Dict[str, dict] = {}
+    for o in scored:
+        s = o.get('surface') or surfaces.surface_of(o.get('platform')) or 'unlabelled'
+        a = surfaces.agent_of(o.get('platform')) or o.get('platform') or 'unknown'
+        entry = out.setdefault(s, {'agents': {}})
+        entry['agents'].setdefault(a, []).append(o.get('outcome'))
+    for entry in out.values():
+        per = entry.pop('agents')
+        entry['asked'] = sorted(per)
+        entry['right'] = sorted(a for a, outs in per.items() if all(x == 'exact' for x in outs))
+    return out
+
+
 def build_programs(incentives: List[dict], value_outcomes: List[dict]) -> List[dict]:
     """
     TrueValue.programs from the merchant's owned incentives (supply's
-    /incentives/owned, as entered). `agentsRight` counts this cycle's
-    value & incentives answers about that program: right / scored, where
-    scored excludes absent, unscoreable and unverifiable. A program no
+    /incentives/owned, as entered). 2C-2: `agentsRight` is "quoted right by
+    N of M agents" on the highest-fidelity surface that asked about the
+    program, where an agent is right when every scored answer it gave about
+    the program was exact (scored excludes absent, unscoreable and
+    unverifiable); `by_surface` beside has every surface. A program no
     question asked about says so rather than showing 0.
 
-    value_outcomes: [{outcome, expected_answer}] for tier value_incentives.
+    value_outcomes: [{outcome, expected_answer, platform, surface}] for tier
+    value_incentives.
     """
     out = []
     for inc in incentives or []:
         about = [o for o in value_outcomes if _program_matches(inc, _json(o.get('expected_answer')) or {})]
         scored = [o for o in about if o.get('outcome') in SUMMARY_SCORED]
         right = sum(1 for o in scored if o.get('outcome') == 'exact')
+        per = _program_agents(scored)
+        top = _surface_order(per)[0] if per else None
         if not about:
             agents_right, tone = 'not asked this cycle', 'neu'
         elif not scored:
             agents_right, tone = f"{len(about)} asked, none scored", 'neu'
         else:
-            agents_right = f"{right} of {len(scored)} right"
-            tone = 'ok' if right == len(scored) else 'bad' if right == 0 else 'warn'
+            n, m = len(per[top]['right']), len(per[top]['asked'])
+            agents_right = f"quoted right by {n} of {m} {'agent' if m == 1 else 'agents'}"
+            tone = 'ok' if n == m else 'bad' if n == 0 else 'warn'
         out.append({
             'name': inc.get('name') or inc.get('tier_name') or inc.get('code') or (inc.get('mechanic') or 'Program'),
             'terms': _program_terms(inc), 'agentsRight': agents_right, 'tone': tone,
             # beside the typed fields
             'mechanic': inc.get('mechanic'), 'code': inc.get('code'), 'tier_name': inc.get('tier_name'),
             'valid_until': inc.get('valid_until'), 'asked': len(about), 'scored': len(scored), 'right': right,
+            'surface': top, 'by_surface': per,
         })
     return out
 
@@ -631,6 +736,7 @@ def build_catalog(merchant: str, *, feed: Optional[dict], history: List[dict], h
         for listing in hosted_catalog.get('listings') or []:
             for v in listing.get('variants') or []:
                 rows.append({'gtin': v.get('gtin'), 'variant_id': v.get('variant_id'),
+                             'listing_id': listing.get('listing_id'),
                              'product_name': listing.get('title'), 'brand_name': listing.get('brand'),
                              'variant_label': v.get('title'), 'size': v.get('size'), 'pack_count': v.get('count'),
                              'multipack': None, 'price': v.get('list_price'), 'currency': v.get('currency'),
@@ -1318,6 +1424,12 @@ def _member_prices(incentives: Optional[dict], listing_id) -> Dict[str, str]:
     """variant_id -> the lowest member price the record's incentives state."""
     out: Dict[str, str] = {}
     entry = next((l for l in (incentives or {}).get('listings') or [] if l.get('listing_id') == listing_id), None)
+    # 2C-2: supply's own answer per variant (the lowest member price the
+    # record states, explicit first) when it gives one.
+    for v in (entry or {}).get('variants') or []:
+        price = v.get('entitled_member_price')
+        if v.get('variant_id') and _num(price) is not None:
+            out[v['variant_id']] = str(price)
     for inc in (entry or {}).get('incentives') or []:
         price = (inc.get('value') or {}).get('member_price')
         if inc.get('mechanic') != 'member_price' or _num(price) is None:
@@ -1328,11 +1440,35 @@ def _member_prices(incentives: Optional[dict], listing_id) -> Dict[str, str]:
     return out
 
 
-def _reference_rows(reference: Optional[dict], variant: dict) -> List[dict]:
+def _same_page(a, b) -> bool:
+    def norm(u):
+        u = str(u or '').split('#', 1)[0].split('?', 1)[0].rstrip('/').lower()
+        return u.split('//', 1)[-1].removeprefix('www.')
+    return bool(a) and bool(b) and norm(a) == norm(b)
+
+
+def reference_matches(row: dict, variant: dict, listing: Optional[dict] = None) -> bool:
+    """2C-2: does this reference read speak for this record variant? By the
+    variant's id first, then its SKU, then (a listing with one variant) its
+    page; the GTIN is a second key, never the only one. supply's read carries
+    variant_ref (`catalog_variant:<n>`, `feed_sku:<n>`, `listing:<n>`, or the
+    variant key itself), the variant key as variant_label, the merchant SKU
+    and the page URL, so a variant with no GTIN still finds its read."""
+    vid = variant.get('variant_id')
+    ids = {str(x) for x in (vid, variant.get('sku')) if x}
+    if ids & {str(row.get('variant_ref') or ''), str(row.get('variant_label') or ''), str(row.get('sku') or '')}:
+        return True
+    lid = (listing or {}).get('listing_id')
+    single = listing is not None and len(listing.get('variants') or []) <= 1
+    if single and (row.get('variant_ref') == f"listing:{lid}"
+                   or _same_page(row.get('url'), (listing or {}).get('product_url'))):
+        return True
     gtin = _gtin14_or(variant.get('gtin'))
-    return [r for r in (reference or {}).get('rows') or []
-            if (r.get('variant_ref') and r.get('variant_ref') == variant.get('variant_id'))
-            or (gtin and _gtin14_or(r.get('gtin')) == gtin)]
+    return bool(gtin) and _gtin14_or(row.get('gtin')) == gtin
+
+
+def _reference_rows(reference: Optional[dict], variant: dict, listing: Optional[dict] = None) -> List[dict]:
+    return [r for r in (reference or {}).get('rows') or [] if reference_matches(r, variant, listing)]
 
 
 def _read_note(row: dict) -> str:
@@ -1460,7 +1596,7 @@ def build_record(merchant: str, listing: dict, *, merchant_record: Optional[dict
 
     variant_rows, diffs = [], 0
     for v in variants:
-        rows = _reference_rows(reference, v)
+        rows = _reference_rows(reference, v, listing)
         extra = _diff_fields(v, rows, prov)
         diffs += len(extra)
         fields.extend(extra)

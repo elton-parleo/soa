@@ -17,9 +17,9 @@ import json
 import os
 
 from tests.test_console_read_models import (  # noqa: F401  (pytest fixtures)
-    BRANDCO_TENANT, CYCLE, TOKEN_A, TOKEN_B, WS_TENANT, as_, db, http, upstream,
+    BRANDCO_TENANT, CYCLE, OWNED, TOKEN_A, TOKEN_B, WS_TENANT, as_, db, http, upstream,
 )
-from tests.test_console_truesync import PROVENANCE, WS_CATALOG, _web, channels
+from tests.test_console_truesync import PROVENANCE, WS_CATALOG, _web, channels, envelope
 from tests.console_schema import check
 from app.services import console_read_models as rm
 
@@ -166,6 +166,9 @@ def ws_supply(upstream, *, reference=WS_REFERENCE, provenance=PROVENANCE, tenant
     upstream.answer('GET', f'{WS}/catalog', body=WS_CATALOG, token=TOKEN_A)
     upstream.answer('GET', f'{WS}/provenance', body=provenance, token=TOKEN_A)
     upstream.answer('GET', f'{WS}/incentives', body=WS_INCENTIVES, token=TOKEN_A)
+    upstream.answer('GET', f'{WS}/incentives/owned', body=OWNED, token=TOKEN_A)
+    upstream.answer('GET', f'{WS}/verifications', body=envelope(
+        _web('verifications-fetch-probe.json'), _web('verifications-gmc.json')), token=TOKEN_A)
     if reference is not None:
         upstream.answer('GET', f'{WS}/reference', body=reference, token=TOKEN_A)
 
