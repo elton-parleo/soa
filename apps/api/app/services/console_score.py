@@ -336,7 +336,7 @@ def _pool_dimension(code: str, per: List[dict]) -> dict:
         'code': code, 'name': d.name, 'pillar': d.pillar, 'max': float(d.weight),
         'score': round(mean(r['score'] if r['state'] == MEASURED else 0.0 for r in rows), 2) if counted else None,
         'applicable_max': round(mean(r['applicable_max'] for r in rows), 2),
-        'state': state, 'reason': first['reason'] if same else None,
+        'state': state, 'reason': first['reason'] if len({r['reason'] for r in rows}) == 1 else None,
         'numerator': one_part['numerator'] if same and one_part else None,
         'denominator': one_part['denominator'] if same and one_part else None,
         'source': one_part['source'] if one_part else '; '.join(p['source'] or '' for p in first['parts']).strip('; ') or None,
