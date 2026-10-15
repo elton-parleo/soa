@@ -243,10 +243,21 @@ class TrueSyncClient:
         """2A: the latest reference reads and record-vs-page findings per SKU x retailer."""
         return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/reference")
 
-    async def get_retailer_prices(self, merchant_slug: str, as_of: Optional[str] = None) -> ForwardResult:
+    async def get_retailer_prices(self, merchant_slug: str, as_of: Optional[str] = None, *,
+                                  history: bool = False, limit: Optional[int] = None) -> ForwardResult:
+        """supply's retailer-prices. 2C-2c: with `history`, ask for every
+        readable read per variant x retailer, newest first (supply #20,
+        `?history=1&limit=`). A supply before #20 ignores the parameter and
+        answers one row per variant x retailer without `history: true`: the
+        caller checks that flag rather than assuming."""
+        params = {"as_of": as_of} if as_of else {}
+        if history:
+            params["history"] = "1"
+            if limit:
+                params["limit"] = str(int(limit))
         return await self.get(
             f"/api/truesync/merchants/{_slug(merchant_slug)}/retailer-prices",
-            params={"as_of": as_of} if as_of else None,
+            params=params or None,
         )
 
     async def put_retailers(self, merchant_slug: str, domains: list) -> ForwardResult:

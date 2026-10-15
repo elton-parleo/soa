@@ -13,7 +13,7 @@ from tests.test_console_read_models import (  # noqa: F401  (pytest fixtures)
     CYCLE, OWNED, TOKEN_A, as_, db, http, tenants, upstream,
 )
 from tests.test_console_truesync import WS_CATALOG
-from tests.test_console_visibility_record import WS, WS_INCENTIVES, WS_REFERENCE, record, ws_supply
+from tests.test_console_visibility_record import WS, WS_INCENTIVES, WS_PRICE_HISTORY, WS_REFERENCE, record, ws_supply
 from tests.console_schema import check
 from app.services import console_parity as parity
 from app.services import console_read_models as rm
@@ -108,6 +108,7 @@ def test_true_value_with_a_merchant_has_programs_and_the_ladder(http, upstream):
     upstream.answer('GET', f'{WS}/incentives', body=incentives, token=TOKEN_A)
     upstream.answer('GET', f'{WS}/catalog', body=WS_CATALOG, token=TOKEN_A)
     upstream.answer('GET', f'{WS}/reference', body=WS_REFERENCE, token=TOKEN_A)
+    upstream.answer('GET', f'{WS}/retailer-prices', body=WS_PRICE_HISTORY, token=TOKEN_A)
     as_('alice')
     tv = http.get('/api/console/true-value', params={'cycle': CYCLE, 'merchant': 'wiggle-and-snug'}).json()
     check(tv, 'TrueValue')

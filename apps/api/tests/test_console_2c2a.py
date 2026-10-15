@@ -13,7 +13,7 @@ from tests.test_console_read_models import (  # noqa: F401  (pytest fixtures)
     CYCLE, TOKEN_A, _fixture, as_, db, http, upstream,
 )
 from tests.test_console_truesync import WS_CATALOG
-from tests.test_console_visibility_record import WS, WS_INCENTIVES, WS_REFERENCE
+from tests.test_console_visibility_record import WS, WS_INCENTIVES, WS_PRICE_HISTORY, WS_REFERENCE
 from tests.test_console_parity import _metric_rows
 from app.services import console_parity as parity
 from app.services import console_read_models as rm
@@ -148,7 +148,7 @@ def test_the_ladder_reads_the_variant_s_member_price_first():
     holds that price where production does, on the read, not the record."""
     listing = next(l for l in WS_CATALOG['listings'] if l['listing_id'] == 90)
     entry = copy.deepcopy(next(l for l in WS_INCENTIVES['listings'] if l['listing_id'] == 90))
-    reads = WS_REFERENCE['rows']
+    reads = WS_PRICE_HISTORY['prices']      # 2C-2c: the $12.09 is on the Oct 9 read, in supply's history
     stated, unpriced = parity.ladder_steps(entry, listing['variants'][0], [], reads=reads)
     assert (12.09, 'Member+', 'reference_read', 'member_price') in [s_[:4] for s_ in stated]
     assert 'Member+ 5% off' not in unpriced

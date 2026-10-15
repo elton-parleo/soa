@@ -136,6 +136,16 @@ def _reason_code(value) -> Optional[str]:
     return value if isinstance(value, str) and value else None
 
 
+def _describe(expectation: dict) -> str:
+    if not expectation:
+        return '—'
+    try:
+        from soa_shared.expected_answers import describe
+        return describe(expectation) or '—'
+    except Exception:  # an expectation the vocabulary cannot describe
+        return '—'
+
+
 def _claim_text(claim) -> str:
     stated = claim.get('stated')
     product = claim.get('product')
@@ -212,8 +222,31 @@ def segments(answer_text: str, spans, claims) -> List[List[dict]]:
     return [p for p in paragraphs if p]
 
 
+def sibling_name(claim: dict, variant_names: Optional[Dict[str, str]] = None) -> str:
+    """2C-2c: the record's name for the sibling a swap claim priced, else the
+    answer's own words for it."""
+    return (variant_names or {}).get(claim.get('variant_id')) or claim.get('product') or claim.get('variant_id') or 'another variant'
+
+
+def _swap_check(claim: dict, expectation: dict, variant_names: Optional[Dict[str, str]]) -> tuple:
+    """(verdict outcome, judged-against text, note, reason code) for a claim
+    about a sibling (swap) or a variant the record lacks (clash). One rule,
+    the question's, as True Value and the Overview read it: a row scored
+    before b3c5a29 keeps the sibling's own verdict in `outcome` and the
+    question's in `question_outcome`; after it `outcome` is the question's.
+    It is judged against the variant asked about, never the sibling."""
+    outcome = claim.get('question_outcome') or claim.get('outcome')
+    amount = expectation.get('amount')
+    against = money(amount, expectation.get('currency')) if amount else _live(claim, expectation)
+    if claim.get('target') == 'swap':
+        return outcome, against, f"priced {sibling_name(claim, variant_names)} instead", 'variant_swap'
+    return outcome, against, claim.get('reason') or 'a size or pack the record does not have', \
+        _reason_code(claim.get('reason_code')) or 'variant_clash'
+
+
 def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List[dict],
-                 *, runs_per_query: Optional[int], cycle_code: str) -> dict:
+                 *, runs_per_query: Optional[int], cycle_code: str,
+                 variant_names: Optional[Dict[str, str]] = None) -> dict:
     platform = run['platform']
     agent = surfaces.agent_of(platform) or platform
     extraction = _json((outcome or {}).get('extraction')) or {}
@@ -229,18 +262,25 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     checks = []
     if not brand and outcome is not None:
         for claim in claims:
-            mapped = VALUE_VERDICT.get(claim.get('outcome'), claim.get('outcome'))
+            if claim.get('target') in ('swap', 'clash'):
+                raw, live, note, reason = _swap_check(claim, expectation, variant_names)
+            else:
+                raw, live, note, reason = claim.get('outcome'), _live(claim, expectation), \
+                    claim.get('reason') or claim.get('conflict'), _reason_code(claim.get('reason_code'))
+            mapped = VALUE_VERDICT.get(raw, raw)
             # 2C: the rule that decided the claim is `reason` (a code from
-            # REASON_CODES); `note` keeps the prose.
+            # REASON_CODES); `note` keeps the prose. 2C-2c: a swap or clash
+            # claim carries the question's verdict against the asked variant.
             checks.append(compact({'claim': _claim_text(claim), 'agent': AGENT_NAMES.get(agent, agent),
-                                   'live': _live(claim, expectation), 'verdict': mapped,
-                                   'note': claim.get('reason') or claim.get('conflict'),
-                                   'reason': _reason_code(claim.get('reason_code')),
-                                   'tone': VERDICT_TONE.get(mapped, 'neu')}, ('note', 'reason')))
+                                   'live': live, 'verdict': mapped, 'note': note, 'reason': reason,
+                                   'tone': VERDICT_TONE.get(mapped, 'neu'),
+                                   'target': claim.get('target')}, ('note', 'reason', 'target')))
         if not claims:
             checks.append(compact({'claim': '—', 'agent': AGENT_NAMES.get(agent, agent),
+                                   # 2C-2c: an expectation with no amount (a code,
+                                   # points) says what it expected, not a dash
                                    'live': money(expectation.get('amount'), expectation.get('currency'))
-                                   if expectation.get('amount') else '—',
+                                   if expectation.get('amount') else _describe(expectation),
                                    'verdict': verdict, 'note': outcome.get('outcome_reason'),
                                    'reason': _reason_code(outcome.get('reason_code')),
                                    'tone': VERDICT_TONE.get(verdict, 'neu')}, ('note', 'reason')))
@@ -360,8 +400,16 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
                 for k in _ordered_surfaces(grouped)]
 
     value_rows = [r for r in rows if r.get('tier') != 'brand_direct']
+    every: Dict[str, List[dict]] = {}
+    for r in rows:
+        every.setdefault(_surface_key(r), []).append(r)
     return {
         'cycle': cycle_code,
+        # 2C-2c: per surface over every tier, by the run-count rule (runs the
+        # cycle executed, answers that say answered): what the Answers strip counts
+        'all_tiers': [{'surface': k, 'label': surfaces.SURFACE_LABELS.get(k, k), 'runs': len(every[k]),
+                       'answered': sum(1 for r in every[k] if r.get('answer_status') == surfaces.ANSWERED)}
+                      for k in _ordered_surfaces(every)],
         'surfaces': per_surface(value_rows),
         'tiers': [{'tier': t, 'label': TIER_LABELS.get(t, t), 'surfaces': per_surface(by_tier[t])}
                   for t in tier_order],
@@ -370,7 +418,7 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
 
 def load_answers_summary(conn, cycle: dict) -> dict:
     rows = [dict(r) for r in conn.execute(text("""
-        SELECT r.id AS run_id, r.platform, COALESCE(o.surface, r.surface) AS surface,
+        SELECT r.id AS run_id, r.platform, COALESCE(r.surface, o.surface) AS surface,
                r.answer_status, q.tier, o.outcome, o.reason_code, o.flags
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         LEFT JOIN soa_expectation_outcomes o ON o.run_id = r.id
@@ -556,7 +604,8 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             'by_surface': by_surface,
             'quotes': [{'agent': r.get('agent'), 'surface': surface_of_run(r), 'outcome': r.get('outcome'),
                         'stated': None if r.get('stated') in (None, '') else str(r['stated']),
-                        'run': r.get('run'), **({'swap_product': r['swap_product']} if r.get('swap_product') else {})}
+                        'run': r.get('run'), **({'swap_product': r['swap_product']} if r.get('swap_product') else {}),
+                        **({'swap_variant': r['swap_variant']} if r.get('swap_variant') else {})}
                        for r in runs],
         }
 
@@ -1202,6 +1251,28 @@ def build_prompt(row: dict, brand: Optional[str]) -> dict:
     }, ('persona',))
 
 
+#: 2C-2c: the tiers whose questions name the brand (a stage question and
+#: category control do not).
+BRANDED_TIERS = ('brand_direct', 'catalog_accuracy', 'value_incentives')
+
+
+def study_status(cycles: List[dict]) -> str:
+    """2C-2c: Draft with no cycle, Active while a cycle is planned or
+    running, Done otherwise. Generation's own state rides beside."""
+    if not cycles:
+        return 'draft'
+    if any(c.get('status') in ('planned', 'running') for c in cycles):
+        return 'active'
+    return 'done'
+
+
+def prompt_counts(prompts: List[dict]) -> dict:
+    """Branded: the questions in a tier that names the brand; unbranded: the
+    rest. The study's question count, the one the Overview uses too."""
+    branded = sum(1 for p in prompts if p.get('tier') in BRANDED_TIERS)
+    return {'branded': branded, 'unbranded': len(prompts) - branded, 'prompts': len(prompts)}
+
+
 def build_study(job: dict, prompts: List[dict], cycles: List[dict], entities: List[dict]) -> dict:
     latest = cycles[0] if cycles else {}
     platforms = _json(latest.get('platforms')) or []
@@ -1220,8 +1291,7 @@ def build_study(job: dict, prompts: List[dict], cycles: List[dict], entities: Li
         'cadence': 'once',
         'prompts': prompts,
         'shelfReads': [], 'crawl': False,
-        'status': {'complete': 'done', 'failed': 'paused', 'pending': 'draft',
-                   'running': 'draft'}.get(job.get('status'), 'draft'),
+        'status': study_status(cycles),
         'created': _iso(job.get('created_at')) or '', 'lastRun': _iso(latest.get('start_date')),
         'owner': job.get('created_by') or '',
         # beside the typed fields
@@ -1711,8 +1781,12 @@ def _listing_sku(listing: dict) -> str:
 
 def build_record(merchant: str, listing: dict, *, merchant_record: Optional[dict], publications: List[dict],
                  channels: List[dict], provenance: Optional[dict], reference: Optional[dict],
-                 incentives: Optional[dict], read_errors: Optional[Dict[str, str]] = None) -> dict:
-    """GET /api/console/record: the console's Record_ for one listing."""
+                 incentives: Optional[dict], read_errors: Optional[Dict[str, str]] = None,
+                 member_reads: Optional[List[dict]] = None) -> dict:
+    """GET /api/console/record: the console's Record_ for one listing.
+    2C-2c: `member_reads` is supply's read history (every readable read,
+    newest first); a variant's member price is the newest read of it that
+    states one. Without it, the newest read per page (/reference)."""
     kind = (merchant_record or {}).get('kind')
     hosting = (merchant_record or {}).get('hosting')
     lid = listing.get('listing_id')
@@ -1772,7 +1846,8 @@ def build_record(merchant: str, listing: dict, *, merchant_record: Optional[dict
         if member:
             member_source, member_note = 'record', 'from the record'
         else:
-            read = _newest_member_read(rows)
+            read = _newest_member_read(_reference_rows({'rows': member_reads}, v, listing)
+                                       if member_reads is not None else rows)
             if read:
                 member, member_source = str(read['member_price']), 'reference_read'
                 member_note = f"from the page read {_short_day(read.get('observed_at'))}"
@@ -1899,9 +1974,43 @@ def load_answers(conn, cycle: dict) -> List[dict]:
         WHERE r.cycle_id = :c AND cm.mentioned = :yes
     """), {'c': cycle['id'], 'yes': True}).mappings():
         mentions.setdefault(m['run_id'], []).append(dict(m))
+    names = load_variant_names(conn, cycle)
     return [build_answer(dict(r), dict(r), outcomes.get(r['id']), mentions.get(r['id'], []),
-                         runs_per_query=cycle.get('runs_per_query'), cycle_code=cycle['cycle_code'])
+                         runs_per_query=cycle.get('runs_per_query'), cycle_code=cycle['cycle_code'],
+                         variant_names=names)
             for r in runs]
+
+
+def variant_label(query_text: str, brand: Optional[str] = None) -> str:
+    """'What does the Wiggle & Snug Snug-Fit Trial Pack cost?' -> 'Snug-Fit
+    Trial Pack'. The catalog tier's wording is fixed
+    (generation/catalog_tiers.py), so this is a parse, not a guess."""
+    label = (query_text or '').removeprefix('What does the ').removesuffix(' cost?')
+    if ' cost at ' in label:
+        label = label.split(' cost at ', 1)[0]
+    if brand and label.startswith(brand + ' '):
+        label = label[len(brand) + 1:]
+    return label
+
+
+def load_variant_names(conn, cycle: dict) -> Dict[str, str]:
+    """2C-2c: variant id -> the record's name for it, from the study's
+    catalog questions (one per variant), the brand prefix dropped."""
+    brand = conn.execute(text("""
+        SELECT e.name FROM soa_cycle_entities ce JOIN soa_entities e ON e.id = ce.entity_id
+        WHERE ce.cycle_id = :c AND ce.role = 'primary'
+    """), {'c': cycle['id']}).scalar()
+    out: Dict[str, str] = {}
+    for q in conn.execute(text("""
+        SELECT query_text, source_ref FROM soa_queries WHERE study_type = :st AND tier = 'catalog_accuracy'
+    """), {'st': cycle['study_type']}).mappings():
+        vid = (_json(q['source_ref']) or {}).get('variant_id')
+        if vid:
+            out.setdefault(vid, variant_label(q['query_text'], brand))
+    return out
+
+
+
 
 
 def load_visibility(conn, cycle: dict) -> dict:

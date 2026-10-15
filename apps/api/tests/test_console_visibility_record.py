@@ -42,6 +42,11 @@ for _listing in WS_INCENTIVES['listings']:
     for _variant in _listing.get('variants') or []:
         _variant.update(member_prices=[], entitled_member_price=None, entitled_tier_name=None)
 WS_REFERENCE = _fixture('supply_reference_ws.json')
+#: 2C-2c: supply #20's read history (every readable read, newest first), and
+#: what a supply before #20 answers to the same request (no `history: true`)
+WS_PRICE_HISTORY = _fixture('supply_retailer_prices_ws.json')
+WS_PRICES_PRE_20 = {k: v for k, v in WS_PRICE_HISTORY.items() if k not in ('history', 'limit', '_note')}
+WS_PRICES_PRE_20['prices'] = [r for r in WS_PRICE_HISTORY['prices'] if r['observed_at'] >= '2026-10-14']
 BRANDCO = _fixture('supply_feed_brandco.json')
 WS = '/api/truesync/merchants/wiggle-and-snug'
 
@@ -175,6 +180,7 @@ def ws_supply(upstream, *, reference=WS_REFERENCE, provenance=PROVENANCE, tenant
     upstream.answer('GET', f'{WS}/provenance', body=provenance, token=TOKEN_A)
     upstream.answer('GET', f'{WS}/incentives', body=WS_INCENTIVES, token=TOKEN_A)
     upstream.answer('GET', f'{WS}/incentives/owned', body=OWNED, token=TOKEN_A)
+    upstream.answer('GET', f'{WS}/retailer-prices', body=WS_PRICE_HISTORY, token=TOKEN_A)
     upstream.answer('GET', f'{WS}/verifications', body=envelope(
         _web('verifications-fetch-probe.json'), _web('verifications-gmc.json')), token=TOKEN_A)
     if reference is not None:
