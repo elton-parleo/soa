@@ -85,8 +85,9 @@ def test_a_cell_never_reads_wrong_with_nothing_quoted():
     variants = [{'variant_id': 'v1', 'label': 'V1', 'list_price': '12.99', 'currency': 'USD'}]
     scored = [{**q('wrong'), 'variant_id': 'v1'}, {**q('absent', agent='gemini', run='run-2'), 'variant_id': 'v1'}]
     tv = rm.build_true_value(None, scored, own_domain='shop.test', record_variants=variants)
-    cell = tv['rows'][0]['cells']['shop.test']
+    cell = tv['rows'][0]['retailer_cells']['shop.test']
     assert (cell['status'], cell['quoted']) == ('missed', '—')
+    assert tv['rows'][0]['cells']['chatgpt']['status'] == 'missed'
     check(tv, 'TrueValue')
 
 
@@ -106,10 +107,12 @@ def test_true_value_with_a_merchant_has_programs_and_the_ladder(http, upstream):
     upstream.answer('GET', f'{WS}/incentives/owned', body=OWNED, token=TOKEN_A)
     upstream.answer('GET', f'{WS}/incentives', body=incentives, token=TOKEN_A)
     upstream.answer('GET', f'{WS}/catalog', body=WS_CATALOG, token=TOKEN_A)
+    upstream.answer('GET', f'{WS}/reference', body=WS_REFERENCE, token=TOKEN_A)
     as_('alice')
     tv = http.get('/api/console/true-value', params={'cycle': CYCLE, 'merchant': 'wiggle-and-snug'}).json()
     check(tv, 'TrueValue')
-    assert [p['name'] for p in tv['programs']] == ['Member Rewards', 'SNUG3']
+    # 2C-2a: the record's programs first; the owned Member Rewards (Member+) and SNUG3 are the same programs
+    assert [p['name'] for p in tv['programs']] == ['Member Rewards Member+', 'WELCOME10', 'SNUG3', 'Member Rewards points']
     ladder = tv['ladder']
     # Bum Balm is the variant this cycle asked about most (3 runs).
     assert ladder['variant_id'] == 'bum-balm-4oz' and ladder['sub'] == 'The product this cycle asked about most, in 3 runs.'
@@ -156,8 +159,8 @@ def test_overview_on_the_fixture_cycle(http, upstream):
         check({k: v for k, v in p.items()}, 'ProductWeek')
     balm = next(p for p in g['products'] if p['sku'] == 'bum-balm-4oz')
     assert balm['status'] == 'wrong' and balm['quote'] == '$14.99'
-    assert balm['quoted'] == '$14.99 (ChatGPT, 1 of 1 run). $12.99 (Gemini, 1 of 1 run)'
-    assert balm['live'] == '$12.99 at trueshopstore.com, the record, Aug 28'
+    assert balm['quoted'] == '$12.99, 1 of 2 runs (Gemini 1). $14.99, 1 of 2 runs (ChatGPT 1)'
+    assert balm['live'] == '$12.99 at trueshopstore.com, the record of Aug 28, no page read yet'
     assert balm['issue'] == 'Quoted a wrong price in 1 of 2 runs.'
     # the one access problem is a signal on every surface; Claude-User is not measured, not a problem
     assert [s['id'] for s in g['signals']] == ['access']
@@ -296,7 +299,7 @@ def test_the_merchant_checks_come_from_the_reference_reads():
     assert [c['key'] for c in parity.build_access_checks({'rows': rows})] == [
         'robots', 'markup', 'gtin', 'member_price', 'hosted_render', 'signed_agents', 'protocol']
     assert (checks['markup']['value'], checks['markup']['status']) == ('2 of 3', 'partial')
-    assert (checks['gtin']['value'], checks['gtin']['status']) == ('1 of 2', 'partial')
+    assert (checks['gtin']['value'], checks['gtin']['status']) == ('1 of 3', 'partial')
     assert (checks['member_price']['value'], checks['member_price']['status']) == ('1 of 3', 'partial')
     assert (checks['hosted_render']['value'], checks['hosted_render']['status']) == ('2 of 4', 'partial')
     for key in ('robots', 'signed_agents', 'protocol'):

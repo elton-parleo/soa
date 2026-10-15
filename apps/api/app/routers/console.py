@@ -122,8 +122,6 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         rows = parity.load_overview_rows(conn, row)
         vis = _visibility(conn, row)
         own_domain, variants, scored = _true_value_inputs(conn, row)
-        tv = rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
-                                 record_variants=variants)
         prev, n_scored = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
         previous = None
         if prev is not None:
@@ -134,13 +132,22 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
                            {"st": row['study_type']}).fetchone()
     brand = next((r['name'] for r in (vis.get('ranking') or {}).get('rows') or [] if r.get('you')), None) or \
         (((_json(job[0]) if job else None) or {}).get('merchant') or {}).get('study_brand') or 'the brand'
-    access, errors = None, {}
+    access, errors, reads = None, {}, None
     if merchant:
-        status, payload, error = await full_loop._client(scope).get_access(merchant)
+        client = full_loop._client(scope)
+        (_, payload, error), (_, reference, r_err) = await asyncio.gather(client.get_access(merchant),
+                                                                          client.get_reference(merchant))
         if error is None:
             access = rm.accessibility_from_supply(payload)
         else:
             errors['access'] = error
+        if r_err is None:
+            reads = (reference or {}).get('rows')
+        else:
+            errors['reference'] = r_err
+    # 2C-2a: the newest page read is the reference when the cycle cached none
+    tv = rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
+                             record_variants=variants, reads=reads)
     return parity.build_overview(row, rows=rows, visibility=vis, true_value=tv, brand=brand, access=access,
                                  previous=previous, scored_cycles=n_scored if n_scored else 1, read_errors=errors)
 
@@ -156,7 +163,7 @@ def _true_value_inputs(conn, row) -> tuple:
     """), {"st": row['study_type']}).mappings().all()
     outcomes = conn.execute(text("""
         SELECT o.run_id, o.query_id, o.outcome, o.reason_code, o.claim_results, o.expected_answer,
-               r.platform, COALESCE(o.surface, r.surface) AS surface
+               r.platform, r.surface
         FROM soa_expectation_outcomes o JOIN soa_runs r ON r.id = o.run_id
         WHERE o.cycle_id = :c AND o.tier = 'catalog_accuracy'
     """), {"c": row['id']}).mappings().all()
@@ -185,14 +192,23 @@ def _true_value_inputs(conn, row) -> tuple:
             continue
         ref = _json(q['source_ref']) or {}
         expected = _json(o['expected_answer']) or {}
-        claims = [c for c in (_json(o['claim_results']) or []) if c.get('target') == 'asked']
+        all_claims = _json(o['claim_results']) or []
+        claims = [c for c in all_claims if c.get('target') == 'asked']
         # The quote is the claim that decided the run's outcome, not merely
-        # its first: "$11.99 or $12.99" scored exact on the $12.99.
+        # its first: "$11.99 or $12.99" scored exact on the $12.99. 2C-2a:
+        # with no claim about the variant asked, a swap or clash claim that
+        # decided it is the quote (the price stated for a sibling), named.
         deciding = next((c for c in claims if c.get('outcome') == o['outcome']), claims[0] if claims else None)
+        swap = None
+        if deciding is None:
+            swap = next((c for c in all_claims if c.get('target') in ('swap', 'clash')
+                         and c.get('outcome') == o['outcome']), None)
+            deciding = swap
         scored.append({'variant_id': ref.get('variant_id'), 'gtin': ref.get('gtin'),
                        'retailer': expected.get('attributed_to') or own_domain,
                        'outcome': o['outcome'], 'reason_code': o['reason_code'],
                        'stated': deciding.get('stated') if deciding else None,
+                       'swap_product': (swap.get('product') or swap.get('variant_id')) if swap else None,
                        'run': f"run-{o['run_id']}", 'platform': o['platform'],
                        'agent': surfaces.agent_of(o['platform']) or o['platform'],
                        'surface': o['surface'] or surfaces.surface_of(o['platform']) or 'unlabelled'})
@@ -211,16 +227,20 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
     with engine.connect() as conn:
         own_domain, variants, scored = _true_value_inputs(conn, row)
         value_outcomes = _value_outcomes(conn, row) if merchant else []
-    body = rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
-                               record_variants=variants)
     if not merchant:
-        return body
+        return rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
+                                   record_variants=variants)
     client = full_loop._client(scope)
-    (_, owned, o_err), (_, incentives, i_err), (_, catalog, k_err) = await asyncio.gather(
+    (_, owned, o_err), (_, incentives, i_err), (_, catalog, k_err), (_, reference, r_err) = await asyncio.gather(
         client.get_owned_incentives(merchant), client.get_merchant_incentives(merchant),
-        client.get_merchant_catalog(merchant))
-    errors = {n: e for n, e in (('owned_incentives', o_err), ('incentives', i_err), ('catalog', k_err)) if e is not None}
-    programs = rm.build_programs((owned or {}).get('incentives') or [] if o_err is None else [], value_outcomes)
+        client.get_merchant_catalog(merchant), client.get_reference(merchant))
+    errors = {n: e for n, e in (('owned_incentives', o_err), ('incentives', i_err), ('catalog', k_err),
+                                ('reference', r_err)) if e is not None}
+    # 2C-2a: the newest page read is the reference when the cycle cached none
+    body = rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
+                               record_variants=variants, reads=(reference or {}).get('rows') if r_err is None else None)
+    programs = rm.build_programs((owned or {}).get('incentives') or [] if o_err is None else [], value_outcomes,
+                                 record=incentives if i_err is None else None)
     body['programs'] = programs
     body['ladder'], body['receipt'] = parity.build_ladder(
         catalog if k_err is None else None, incentives if i_err is None else None,
@@ -230,9 +250,13 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
 
 
 def _value_outcomes(conn, row) -> list:
+    """2C-2a: with the question's source_ref (offer_id, variant_id), which
+    the program join reads alongside the expectation."""
     return [dict(o) for o in conn.execute(text("""
-        SELECT o.outcome, o.expected_answer, r.platform, COALESCE(o.surface, r.surface) AS surface
+        SELECT o.outcome, o.expected_answer, r.platform, COALESCE(r.surface, o.surface) AS surface,
+               q.source_ref
         FROM soa_expectation_outcomes o JOIN soa_runs r ON r.id = o.run_id
+        JOIN soa_queries q ON q.id = r.query_id
         WHERE o.cycle_id = :c AND o.tier = 'value_incentives'
     """), {"c": row['id']}).mappings()]
 
@@ -257,7 +281,9 @@ async def get_programs(merchant: str = Query(...), cycle: Optional[str] = Query(
     """2C: TrueValue.programs from the merchant's owned incentives (supply,
     with the tenant token), each with how this cycle's value & incentives
     answers did on it when `cycle` is given."""
-    status, payload, error = await full_loop._client(scope).get_owned_incentives(merchant)
+    client = full_loop._client(scope)
+    (status, payload, error), (_, record, i_err) = await asyncio.gather(
+        client.get_owned_incentives(merchant), client.get_merchant_incentives(merchant))
     if error is not None:
         raise HTTPException(status_code=404 if status == 404 else 502,
                             detail=f"TrueSync incentives unavailable: {error}")
@@ -267,7 +293,8 @@ async def get_programs(merchant: str = Query(...), cycle: Optional[str] = Query(
         with engine.connect() as conn:
             outcomes = _value_outcomes(conn, row)
     return {'merchant': (payload or {}).get('merchant') or merchant,
-            'programs': rm.build_programs((payload or {}).get('incentives') or [], outcomes)}
+            'programs': rm.build_programs((payload or {}).get('incentives') or [], outcomes,
+                                          record=record if i_err is None else None)}
 
 
 @router.get("/truesync")

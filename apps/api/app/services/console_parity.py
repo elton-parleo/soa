@@ -79,6 +79,10 @@ TEMPLATES = {
     'summary.no_price': "No price was scored on this surface.",
     'summary.no_signal': "No signal crossed its threshold this cycle.",
     'changes.first_cycle': "First cycle. Changes appear from the next one.",
+    'changes.not_comparable_subset': "Not comparable: {code} ran {agents} only on this surface.",
+    'changes.not_comparable': "Not comparable: {code} ran {prev} on this surface, this cycle ran {now}.",
+    'changes.not_comparable_tier': "Not comparable: {code} asked no unprompted questions on this surface.",
+    'changes.detail': "{a} of {of_now} this cycle against {b} of {of_prev} in {code}.",
     'headline.gap': "Named in {named} of {n} {answers}.{rivals}",
     'headline.lead': "First in {first} of {n} {answers}.",
     'catalog.read': "{ok} of {pages} pages read{rest}.",
@@ -104,7 +108,13 @@ def _split(counts: Dict[str, int]) -> str:
 
 
 def _surface_of(row: dict) -> str:
+    """A run's surface, read exactly as Visibility reads it (the run's own,
+    else its platform's), so every Overview count sits on the same surface."""
     return row.get('surface') or surfaces.surface_of(row.get('platform')) or 'unlabelled'
+
+
+#: The tiers a price is asked in.
+PRICE_TIERS = ('catalog_accuracy', 'value_incentives')
 
 
 def _surface_rank(s: str) -> int:
@@ -238,10 +248,16 @@ def visibility_by_stage(rows: List[dict], surface: str) -> dict:
     stages = [s for s in STAGE_ORDER if any(r.get('stage') == s for r in mine)]
     stages += sorted({r.get('stage') for r in mine if r.get('stage') and r.get('stage') not in STAGE_ORDER})
     tiers = [t for t in rm.VIS_TIER_ORDER if any(r.get('tier') == t for r in mine)]
+
+    def by_stage(subset):
+        return [{'stage': s, 'label': STAGE_LABELS.get(s, s), **block([r for r in subset if r.get('stage') == s])}
+                for s in stages if any(r.get('stage') == s for r in subset)]
+    # 2C-2a: the stage table follows the tier the reader picked (by_tier.<tier>,
+    # 'all' for every tier); the tier table keeps every tier by definition.
     return {
         'surface': surface,
-        'stages': [{'stage': s, 'label': STAGE_LABELS.get(s, s), **block([r for r in mine if r.get('stage') == s])}
-                   for s in stages],
+        'stages': by_stage(mine),
+        'stages_by_tier': {'all': by_stage(mine), **{t: by_stage([r for r in mine if r.get('tier') == t]) for t in tiers}},
         'tiers': [{'tier': t, 'label': rm.VIS_TIER_LABELS.get(t, t), **block([r for r in mine if r.get('tier') == t])}
                   for t in tiers],
     }
@@ -264,19 +280,29 @@ def extend_visibility(body: dict, ours: Optional[str]) -> dict:
 
 def _empty_agent() -> dict:
     return {'answers': 0, 'named': 0, 'first': 0, 'named_of': 0, 'exact': 0, 'scored': 0, 'wrong': 0, 'stale': 0,
+            'price_answered': 0,
             'partial': 0, 'unverifiable': 0, 'other_brand': 0, 'left_out': 0, 'unknown': 0, 'fabricated': 0,
             'brand_scored': 0}
 
 
-def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str) -> dict:
+def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tier: Optional[str] = None) -> dict:
     """Every count the Overview reads for one surface, in total and per agent.
     rows: one per run with tier, outcome, reason_code (load_overview_rows);
-    vis_rows: Visibility's byQuestion."""
-    tier = _tier_for_reads(vis_rows)
+    vis_rows: Visibility's byQuestion. `tier` forces the named/first tier
+    (the Changes block reads both cycles on the current cycle's); by default
+    unprompted when the cycle asked any, else every answered run.
+
+    Denominators, one per metric: named and first over answered runs of that
+    tier (`named_of`); prices right and wrong over scored (exact, partial,
+    stale, wrong); another brand's price over answered price questions
+    (`price_answered`), since those runs are absent and never scored."""
+    tier = tier or _tier_for_reads(vis_rows)
     total, per = _empty_agent(), {}
+    agents = set()
     for v in vis_rows:
         if v.get('surface') != surface or not v.get('answered'):
             continue
+        agents.add(v['agent'])
         for bucket in (total, per.setdefault(v['agent'], _empty_agent())):
             bucket['answers'] += 1
             if tier == 'all' or v.get('tier') == tier:
@@ -288,6 +314,7 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str) -> dic
             continue
         agent = surfaces.agent_of(r.get('platform')) or r.get('platform')
         o, t = r.get('outcome'), r.get('tier')
+        answered = r.get('answer_status') in (None, surfaces.ANSWERED)
         for bucket in (total, per.setdefault(agent, _empty_agent())):
             if t == 'brand_direct':
                 if o in ('grounded', 'echoed', 'misattributed', 'fabricated', 'acknowledged_unknown'):
@@ -295,8 +322,9 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str) -> dic
                 bucket['fabricated'] += int(o == 'fabricated')
                 bucket['unknown'] += int(o == 'acknowledged_unknown')
                 continue
-            if t not in ('catalog_accuracy', 'value_incentives'):
+            if t not in PRICE_TIERS:
                 continue
+            bucket['price_answered'] += int(answered)
             if o in SCORED:
                 bucket['scored'] += 1
                 bucket['exact'] += int(o == 'exact')
@@ -308,7 +336,7 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str) -> dic
             elif o == 'absent':
                 bucket['left_out'] += 1
                 bucket['other_brand'] += int(r.get('reason_code') == 'other_brand')
-    return {'tier': tier, 'total': total, 'agents': per}
+    return {'tier': tier, 'total': total, 'agents': per, 'agent_set': sorted(agents)}
 
 
 def agent_note(m: dict) -> tuple:
@@ -355,32 +383,40 @@ def _money_text(value) -> Optional[str]:
 
 
 def _quoted_text(quotes: List[dict]) -> str:
-    """'$22.99 (ChatGPT, 3 of 3 runs). Gemini: no price' per agent."""
-    by_agent: Dict[str, List[dict]] = {}
+    """2C-2a: every distinct quote with the runs behind it and their agents,
+    then the runs with no price, so the detail accounts for every run the
+    issue counts. A price stated for a sibling variant names it:
+    "$6.99 for Snug-Fit Trial Pack, 3 of 6 runs (ChatGPT 2, Gemini 1)"."""
+    n = len(quotes)
+    if not n:
+        return 'Not asked'
+    groups: Dict[tuple, Counter] = {}
     for q in quotes:
-        by_agent.setdefault(q.get('agent') or 'unknown', []).append(q)
+        key = (q.get('stated'), q.get('swap_product') if q.get('stated') else None)
+        groups.setdefault(key, Counter())[q.get('agent') or 'unknown'] += 1
     parts = []
-    for agent in sorted(by_agent, key=_agent):
-        qs = by_agent[agent]
-        stated = Counter(q['stated'] for q in qs if q.get('stated'))
-        if stated:
-            price, k = stated.most_common(1)[0]
-            parts.append(f"{rm.money(price)} ({_agent(agent)}, {k} of {len(qs)} {_n(len(qs), 'run', 'runs')})")
-        else:
-            parts.append(f"{_agent(agent)}: no price in {len(qs)} {_n(len(qs), 'run', 'runs')}")
-    return '. '.join(parts) if parts else 'Not asked'
+    for (stated, swap), agents in sorted(groups.items(), key=lambda kv: (kv[0][0] is None, -sum(kv[1].values()), str(kv[0][0]))):
+        k = sum(agents.values())
+        who = ', '.join(f"{_agent(a)} {c}" for a, c in sorted(agents.items(), key=lambda kv: _agent(kv[0])))
+        what = 'No price' if stated is None else rm.money(stated) + (f" for {swap}" if swap else '')
+        parts.append(f"{what}, {k} of {n} {_n(n, 'run', 'runs')} ({who})")
+    return '. '.join(parts)
 
 
 _SOURCE_WORDS = {'honest_fetch': 'our own fetch', 'hosted_render': 'a hosted render', 'record': 'the record'}
 
 
 def _live_text(cell: dict, domain: str) -> str:
+    """The reference beside a quote: the newest page read when one exists,
+    else the record, saying which."""
     live = cell.get('live')
     if live in (None, '', '—'):
         return 'No reference read'
     if live == 'unverifiable':
         return f"Could not be read at {domain}"
     how = _SOURCE_WORDS.get(cell.get('reference_source') or '', (cell.get('reference_source') or 'a read').replace('_', ' '))
+    if cell.get('live_basis') == 'record' or cell.get('reference_source') == 'record':
+        return f"{live} at {domain}, the record of {_short_day(cell.get('observed_at'))}, no page read yet"
     return f"{live} at {domain}, {how}, {_short_day(cell.get('observed_at'))}"
 
 
@@ -413,13 +449,16 @@ def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, vari
     first from the mention coding of the runs that asked about it, the
     quotes per agent, the live price with its source, the cell's status
     (TV_CELL_RULE) and the issue."""
-    you_col = next((c['id'] for c in true_value.get('columns') or [] if c.get('you')), None)
+    retailer_cols = true_value.get('retailer_columns') or true_value.get('columns') or []
+    you_col = next((c['id'] for c in retailer_cols if c.get('you')), None)
     vis_by_run = {v['run']: v for v in vis_rows}
     out = []
     for row in true_value.get('rows') or []:
-        cols = [you_col] if you_col in row['cells'] else list(row['cells'])
+        # 2C-2a: with agent columns, the product reads its one-retailer cell
+        cells_by = row.get('retailer_cells') or row['cells']
+        cols = [you_col] if you_col in cells_by else list(cells_by)
         for col in cols:
-            cell = row['cells'][col]
+            cell = cells_by[col]
             quotes = [{**q, 'reason': reason_of_run.get(q.get('run'))} for q in cell.get('quotes') or []
                       if q.get('surface') == surface]
             if not quotes:
@@ -495,6 +534,9 @@ def build_signals(metrics: dict, products: List[dict], *, surface: str, brand: s
 
 
 def build_summary(metrics: dict, headline: dict, signals: List[dict]) -> dict:
+    """Three or four sentences: visibility (and the rivals), accuracy, then
+    the top signal the sentences before it have not already stated. When
+    every signal is already stated, there is no last sentence."""
     t = metrics['total']
     words = _answers(headline['tier'])
     if headline['first'] and not any(r['first'] >= headline['first'] for r in headline['rivals']):
@@ -506,39 +548,74 @@ def build_summary(metrics: dict, headline: dict, signals: List[dict]) -> dict:
             r = headline['rivals']
             rest = f", {r[1]['name']} in {r[1]['first']}" if len(r) > 1 else ''
             vis += ' ' + TEMPLATES['summary.rivals'].format(lead=r[0]['name'], k=r[0]['first'], rest=rest)
+    stated = set()
     if not t['scored'] and not t['unverifiable']:
         acc = TEMPLATES['summary.no_price']
     elif t['unverifiable']:
         acc = TEMPLATES['summary.accuracy_unverifiable'].format(exact=t['exact'], scored=t['scored'], other=t['other_brand'],
                                                                 u=t['unverifiable'])
+        stated |= {'other_brand', 'unverifiable'}
     else:
         acc = TEMPLATES['summary.accuracy'].format(exact=t['exact'], scored=t['scored'], other=t['other_brand'])
-    top = signals[0]['title'] if signals else TEMPLATES['summary.no_signal']
-    lines = [vis, acc, top]
-    return {'lines': lines, 'text': ' '.join(lines)}
+        stated |= {'other_brand'}
+    lines = [vis, acc]
+    fresh = [s for s in signals if s.get('rule') not in stated]
+    if fresh:
+        lines.append(fresh[0]['title'])
+    elif not signals:
+        lines.append(TEMPLATES['summary.no_signal'])
+    return {'lines': lines, 'text': ' '.join(lines), 'signal': fresh[0].get('id') if fresh else None}
 
 
-#: The metrics compared cycle to cycle: (key, label, better when it goes up).
+#: The metrics compared cycle to cycle: (key, label, better when it goes up,
+#: the denominator). One denominator rule per metric, the same in both cycles.
 CHANGE_METRICS = (
-    ('named', 'Named', True), ('first', 'First pick', True), ('exact', 'Prices right', True),
-    ('other_brand', "Answered with another brand's price", False), ('wrong', 'Wrong prices', False),
+    ('named', 'Named', True, 'named_of'), ('first', 'First pick', True, 'named_of'),
+    ('exact', 'Prices right', True, 'scored'),
+    ('other_brand', "Answered with another brand's price", False, 'price_answered'),
+    ('wrong', 'Wrong prices', False, 'scored'),
 )
 
 
-def build_changes(now: dict, prev: Optional[dict], prev_code: Optional[str]) -> List[dict]:
+def _agents_text(agents: Iterable[str]) -> str:
+    names = [_agent(a) for a in sorted(agents, key=_agent)]
+    return ' and '.join(names) if len(names) < 3 else ', '.join(names[:-1]) + ' and ' + names[-1]
+
+
+def changes_status(now: dict, prev: Optional[dict], prev_code: Optional[str]) -> tuple:
+    """('first_cycle' | 'not_comparable' | 'compared', note). Two cycles are
+    compared on a surface only when the same agents answered there and both
+    read named/first over the same tier; otherwise the block says why and
+    shows no delta."""
     if prev is None:
+        return 'first_cycle', TEMPLATES['changes.first_cycle']
+    a, b = set(now['agent_set']), set(prev['agent_set'])
+    if a != b:
+        if b and b < a:
+            return 'not_comparable', TEMPLATES['changes.not_comparable_subset'].format(code=prev_code, agents=_agents_text(b))
+        return 'not_comparable', TEMPLATES['changes.not_comparable'].format(
+            code=prev_code, prev=_agents_text(b) if b else 'no agent', now=_agents_text(a) if a else 'no agent')
+    if now['tier'] == UNPROMPTED and not prev['total']['named_of']:
+        return 'not_comparable', TEMPLATES['changes.not_comparable_tier'].format(code=prev_code)
+    return 'compared', None
+
+
+def build_changes(now: dict, prev: Optional[dict], prev_code: Optional[str]) -> List[dict]:
+    """Each metric this cycle against the previous scored one, both on the
+    same surface and agent set, each over its own denominator (CHANGE_METRICS).
+    [] unless changes_status says 'compared'."""
+    if changes_status(now, prev, prev_code)[0] != 'compared':
         return []
     out = []
-    for key, label, up_good in CHANGE_METRICS:
+    for key, label, up_good, denom in CHANGE_METRICS:
         a, b = now['total'][key], prev['total'][key]
         delta, direction = _delta(a, b)
-        of_now = now['total']['named_of'] if key in ('named', 'first') else now['total']['scored']
-        of_prev = prev['total']['named_of'] if key in ('named', 'first') else prev['total']['scored']
         tone = 'neu' if direction == 'flat' else ('ok' if (direction == 'up') == up_good else 'bad')
         out.append({'label': label, 'delta': delta, 'dir': direction, 'tone': tone,
-                    'detail': f"{a} of {of_now} this cycle against {b} of {of_prev} in {prev_code}.",
+                    'detail': TEMPLATES['changes.detail'].format(a=a, of_now=now['total'][denom], b=b,
+                                                                 of_prev=prev['total'][denom], code=prev_code),
                     'route': 'visibility' if key in ('named', 'first') else 'true-value',
-                    'metric': key, 'now': a, 'prev': b})
+                    'metric': key, 'now': a, 'prev': b, 'of_now': now['total'][denom], 'of_prev': prev['total'][denom]})
     return out
 
 
@@ -563,7 +640,9 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
     by_surface = {}
     for s in surface_list:
         metrics = surface_metrics(rows, vis_rows, s)
-        prev_metrics = surface_metrics(previous['rows'], previous['visibility'].get('byQuestion') or [], s) if previous else None
+        prev_metrics = (surface_metrics(previous['rows'], previous['visibility'].get('byQuestion') or [], s, tier=metrics['tier'])
+                        if previous else None)
+        status, note = changes_status(metrics, prev_metrics, (previous or {}).get('code'))
         head = visibility_headline(vis_rows, s, next((r['name'] for r in (visibility.get('ranking') or {}).get('rows') or [] if r.get('you')), None))
         products = build_products(true_value, vis_rows, s, variant_of_run=variant_of_run, reason_of_run=reason_of_run)
         signals = build_signals(metrics, products, surface=s, brand=brand, cycle_start=cycle.get('start_date'),
@@ -574,6 +653,8 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
             'signals': signals,
             'summary': build_summary(metrics, head, signals),
             'changes': build_changes(metrics, prev_metrics, (previous or {}).get('code')),
+            'changes_status': status,
+            'changes_note': note,
             'totals': metrics['total'],
             'tier': metrics['tier'],
         }
@@ -632,14 +713,17 @@ def build_access_checks(reference: Optional[dict]) -> List[dict]:
     rows = (reference or {}).get('rows') or []
     pages = [r for r in rows if r.get('read_status') in ('ok', 'empty')]
     with_markup = [r for r in pages if r.get('method') == 'json_ld']
-    gtin_pages = [r for r in pages if r.get('gtin') and not any(f.get('finding') == 'no_structured_data' for f in r.get('findings') or [])]
-    gtin_ok = [r for r in gtin_pages if not any(f.get('finding') == 'gtin_missing_on_page' for f in r.get('findings') or [])]
+    # 2C-2a: over every page read, like the other markup checks. A page has
+    # its GTIN in markup when its record carries one, it was read with
+    # structured data and no gtin_missing_on_page finding says otherwise.
+    gtin_ok = [r for r in pages if r.get('gtin') and not any(
+        f.get('finding') in ('no_structured_data', 'gtin_missing_on_page') for f in r.get('findings') or [])]
     member = [r for r in pages if r.get('member_price') not in (None, '')]
     hosted = [r for r in rows if r.get('reference_source') == 'hosted_render']
     out = [
         dict(_check('Product markup on product pages', len(with_markup), len(pages), key='markup'), basis="reads with method json_ld"),
-        dict(_check('GTIN in markup', len(gtin_ok), len(gtin_pages), key='gtin'),
-             basis="pages whose record carries a GTIN, read with structured data, without a gtin_missing_on_page finding"),
+        dict(_check('GTIN in markup', len(gtin_ok), len(pages), key='gtin'),
+             basis="pages read whose record carries a GTIN, read with structured data, without a gtin_missing_on_page finding, over every page read"),
         dict(_check('Program price in markup', len(member), len(pages), key='member_price'), basis="reads with member_price present"),
         dict(_check('Needs a hosted render', len(hosted), len(rows), good_when_zero=True, key='hosted_render'),
              basis="reads that came from the hosted renderer. 0 is the good answer"),
@@ -682,12 +766,19 @@ def ladder_steps(listing_entry: Optional[dict], variant: dict, owned: Optional[L
     vid = variant.get('variant_id')
     stated, unpriced = [], []
     entry = next((v for v in (listing_entry or {}).get('variants') or [] if v.get('variant_id') == vid), None)
-    # supply's per-variant member prices, when it lists them, are the same
-    # offers already read: use them, else read the member offers directly.
-    listed = [mp for mp in (entry or {}).get('member_prices') or [] if _price(mp.get('price')) is not None]
-    for mp in listed:
-        stated.append((_price(mp['price']), mp.get('tier_name') or mp.get('program_name') or 'Member',
-                       'record', mp.get('basis') or 'member_price'))
+    # 2C-2a: the variant's own member prices first (what the generator asks
+    # about: supply's per-variant member_prices and entitled_member_price, or
+    # a member_price on the catalog variant). The offers' text is read only
+    # when the variant states no member price.
+    listed = [(mp.get('price'), mp.get('tier_name') or mp.get('program_name'), mp.get('basis') or 'member_price')
+              for mp in (entry or {}).get('member_prices') or []]
+    listed.append(((entry or {}).get('entitled_member_price'), (entry or {}).get('entitled_tier_name'), 'member_price'))
+    listed.append((variant.get('member_price'), variant.get('member_tier_name') or variant.get('member_tier'), 'member_price'))
+    listed = [(p_, t_ or 'Member', b_) for p_, t_, b_ in listed if _price(p_) is not None]
+    priced_tiers = set()
+    for price, tier, basis in listed:
+        stated.append((_price(price), tier, 'record', basis))
+        priced_tiers.add(rm._norm_tier(tier))
     for inc in (listing_entry or {}).get('incentives') or []:
         scope = inc.get('variant_scope') or ['*']
         if '*' not in scope and vid not in scope:
@@ -695,7 +786,8 @@ def ladder_steps(listing_entry: Optional[dict], variant: dict, owned: Optional[L
         value = inc.get('value') or {}
         kind = inc.get('eligibility_kind')
         net = _price(value.get('effective_net_price'))
-        if kind in ('tier', 'member', 'new_customer') and value.get('discount_percent') and net is None:
+        if kind in ('tier', 'member', 'new_customer') and value.get('discount_percent') and net is None \
+                and not (inc.get('tier_name') and rm._norm_tier(inc['tier_name']) in priced_tiers):
             who = inc.get('tier_name') or inc.get('promo_code') or (kind or '').replace('_', ' ')
             unpriced.append(f"{who} {str(value['discount_percent']).rstrip('0').rstrip('.')}% off")
         if kind == 'new_customer' and net is not None:
@@ -976,7 +1068,7 @@ def prompt_counts(prompts: List[dict]) -> dict:
 def load_overview_rows(conn, cycle: dict) -> List[dict]:
     rows = []
     for r in conn.execute(text("""
-        SELECT r.id AS run_id, r.platform, COALESCE(o.surface, r.surface) AS surface, r.answer_status,
+        SELECT r.id AS run_id, r.platform, r.surface, r.answer_status,
                q.tier, q.stage, q.query_code, q.source_ref, o.outcome, o.reason_code
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         LEFT JOIN soa_expectation_outcomes o ON o.run_id = r.id

@@ -425,16 +425,24 @@ def _surface_order(keys) -> List[str]:
     return sorted(set(keys), key=lambda s: (-_SURFACE_RANK.get(s, 0), s))
 
 
+def _newest_read(reads: Optional[List[dict]], variant: dict) -> Optional[dict]:
+    """2C-2a: the newest readable reference read of a record variant (its
+    page stated a price), or None when no read of it exists."""
+    hits = [r for r in reads or [] if r.get('verifiable') and r.get('price') not in (None, '')
+            and reference_matches(r, {'variant_id': variant.get('variant_id'), 'gtin': variant.get('gtin')})]
+    return max(hits, key=lambda r: str(r.get('observed_at') or '')) if hits else None
+
+
 def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domain: Optional[str],
-                     record_variants: List[dict]) -> dict:
+                     record_variants: List[dict], reads: Optional[List[dict]] = None) -> dict:
     """
-    TrueValue: columns = retailers from the record; rows = variants;
-    cells = TvCell {quoted, live, status}.
+    TrueValue: rows = variants; cells = TvCell {quoted, live, status}.
 
     `live` is the 2A reference (supply's retailer-prices row cached on the
-    cycle); `quoted` and `status` are this cycle's scored answers for that
-    variant at that page. With no reference cached (a cycle scored against
-    the record), `live` is the record's price on the own-domain column.
+    cycle). With no reference cached (a cycle scored against the record),
+    2C-2a: `live` is the newest readable reference read of the variant's
+    page when `reads` (supply's /reference rows) has one, else the record's
+    price, and `live_basis` says which ('reference_read' | 'record').
 
     2C-2: a cell is per surface (never pooled). The typed quoted/status are
     the cell on `surface` (the highest-fidelity surface with priced runs);
@@ -442,8 +450,14 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
     with its agent and surface. TV_CELL_RULE decides each. `by_agent` is
     prices exact / scored per agent, per surface.
 
+    2C-2a: the columns are the record's retailers when it has two or more
+    (`column_kind: 'retailer'`), else the agents (`column_kind: 'agent'`):
+    with one retailer every agent would collapse into one worst-wins cell.
+    Agent columns are per surface (`columns_by_surface`); each row keeps its
+    one-retailer cell in `retailer_cells` for readers that want the product.
+
     scored: [{variant_id, gtin, retailer, outcome, stated, surface, agent,
-    run}], one per scored run of a price question.
+    run, swap_product}], one per scored run of a price question.
     """
     rows_by_key: Dict[str, dict] = {}
     alias: Dict[str, str] = {}
@@ -459,7 +473,7 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
         if domain and domain not in columns:
             columns.append(domain)
         rows_by_key.setdefault(key, {'product': row.get('variant_label') or key, 'sku': row.get('gtin') or key})
-        live[(key, domain)] = row
+        live[(key, domain)] = {**row, 'live_basis': 'reference_read'}
 
     if not reference:
         if own_domain:
@@ -470,9 +484,14 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
                 if a:
                     alias.setdefault(str(a), key)
             rows_by_key.setdefault(key, {'product': v.get('label') or key, 'sku': v.get('gtin') or key})
-            live[(key, own_domain)] = {'price': v.get('list_price'), 'verifiable': True,
-                                       'currency': v.get('currency'), 'reference_source': 'record',
-                                       'observed_at': v.get('published_at')}
+            read = _newest_read(reads, v)
+            live[(key, own_domain)] = (
+                {'price': read.get('price'), 'verifiable': True, 'currency': read.get('currency') or v.get('currency'),
+                 'reference_source': read.get('reference_source'), 'method': read.get('method'),
+                 'observed_at': read.get('observed_at'), 'live_basis': 'reference_read', 'url': read.get('url')}
+                if read else
+                {'price': v.get('list_price'), 'verifiable': True, 'currency': v.get('currency'),
+                 'reference_source': 'record', 'observed_at': v.get('published_at'), 'live_basis': 'record'})
 
     grouped: Dict[tuple, List[dict]] = {}
     for item in scored:
@@ -482,10 +501,11 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
         domain = item.get('retailer') or own_domain
         grouped.setdefault((key, domain), []).append(item)
 
-    surface_list = _surface_order(i.get('surface') or 'unlabelled' for runs in grouped.values() for i in runs)
+    surface_of_run = lambda i: i.get('surface') or 'unlabelled'  # noqa: E731
+    surface_list = _surface_order(surface_of_run(i) for runs in grouped.values() for i in runs)
     # The surface the typed fields read: the highest-fidelity one where a run
     # quoted a price (a surface of walls and refusals priced nothing).
-    quoting = {i.get('surface') or 'unlabelled' for runs in grouped.values() for i in runs if i.get('stated') not in (None, '')}
+    quoting = {surface_of_run(i) for runs in grouped.values() for i in runs if i.get('stated') not in (None, '')}
     default = next((s for s in surface_list if s in quoting), surface_list[0] if surface_list else None)
 
     def cell_for(runs, ref):
@@ -496,46 +516,67 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             status = TV_STATUS.get(outcome, 'none') if outcome else 'none'
         return {'quoted': money(stated) if stated else '—', 'status': status, 'outcome': outcome, 'runs': len(runs)}
 
+    def full_cell(runs, ref, surfaces_here):
+        if ref is None:
+            live_text = '—'
+        elif not ref.get('verifiable', True):
+            live_text = 'unverifiable'
+        else:
+            live_text = money(ref.get('price'), ref.get('currency') or 'USD')
+        by_surface = {s: cell_for([r for r in runs if surface_of_run(r) == s], ref)
+                      for s in surfaces_here if any(surface_of_run(r) == s for r in runs)}
+        top = by_surface.get(default) or cell_for([], ref)
+        return {
+            'quoted': top['quoted'], 'live': live_text, 'status': top['status'],
+            # beside the typed fields
+            'outcome': top['outcome'], 'runs': top['runs'],
+            # 2C: where `live` came from, so "honest fetch" and "hosted render"
+            # are told apart; 'record' when no reference was read.
+            'reference_source': (None if ref is None else
+                                 ref.get('reference_source') or ('record' if not reference else None)),
+            'method': None if ref is None else ref.get('method'),
+            'observed_at': None if ref is None else ref.get('observed_at'),
+            'live_basis': None if ref is None else ref.get('live_basis'),
+            # 2C-2: every surface's cell, and every run's quote
+            'surface': default if top['runs'] else None,
+            'by_surface': by_surface,
+            'quotes': [{'agent': r.get('agent'), 'surface': surface_of_run(r), 'outcome': r.get('outcome'),
+                        'stated': None if r.get('stated') in (None, '') else str(r['stated']),
+                        'run': r.get('run'), **({'swap_product': r['swap_product']} if r.get('swap_product') else {})}
+                       for r in runs],
+        }
+
+    by_agent_runs = len(columns) < 2
+    agents_on: Dict[str, List[str]] = {}
+    if by_agent_runs:
+        for runs in grouped.values():
+            for r in runs:
+                agents_on.setdefault(surface_of_run(r), [])
+                a = r.get('agent') or 'unknown'
+                if a not in agents_on[surface_of_run(r)]:
+                    agents_on[surface_of_run(r)].append(a)
+        order = list(AGENT_NAMES)
+        for s in agents_on:
+            agents_on[s].sort(key=lambda a: (order.index(a) if a in order else 99, a))
+    agent_columns = sorted({a for xs in agents_on.values() for a in xs},
+                           key=lambda a: (list(AGENT_NAMES).index(a) if a in AGENT_NAMES else 99, a))
+    domain = columns[0] if columns else own_domain
+
     rows = []
     for key, meta in rows_by_key.items():
-        cells = {}
-        for domain in columns:
-            ref = live.get((key, domain))
+        retailer_cells = {d: full_cell(grouped.get((key, d), []), live.get((key, d)), surface_list) for d in columns}
+        if by_agent_runs and agent_columns:
             runs = grouped.get((key, domain), [])
-            if ref is None:
-                live_text = '—'
-            elif not ref.get('verifiable', True):
-                live_text = 'unverifiable'
-            else:
-                live_text = money(ref.get('price'), ref.get('currency') or 'USD')
-            by_surface = {s: cell_for([r for r in runs if (r.get('surface') or 'unlabelled') == s], ref)
-                          for s in surface_list if any((r.get('surface') or 'unlabelled') == s for r in runs)}
-            top = by_surface.get(default) or cell_for([], ref)
-            cells[domain] = {
-                'quoted': top['quoted'],
-                'live': live_text,
-                'status': top['status'],
-                # beside the typed fields
-                'outcome': top['outcome'],
-                'runs': top['runs'],
-                # 2C: where `live` came from, so "honest fetch" and "hosted render"
-                # are told apart; 'record' when no reference was cached.
-                'reference_source': (None if ref is None else
-                                     ref.get('reference_source') or ('record' if not reference else None)),
-                'method': None if ref is None else ref.get('method'),
-                'observed_at': None if ref is None else ref.get('observed_at'),
-                # 2C-2: every surface's cell, and every run's quote
-                'surface': default if top['runs'] else None,
-                'by_surface': by_surface,
-                'quotes': [{'agent': r.get('agent'), 'surface': r.get('surface') or 'unlabelled',
-                            'outcome': r.get('outcome'), 'stated': None if r.get('stated') in (None, '') else str(r['stated']),
-                            'run': r.get('run')} for r in runs],
-            }
-        rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': cells})
+            cells = {a: full_cell([r for r in runs if (r.get('agent') or 'unknown') == a], live.get((key, domain)),
+                                  [s for s in surface_list if a in agents_on.get(s, [])])
+                     for a in agent_columns}
+            rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': cells, 'retailer_cells': retailer_cells})
+        else:
+            rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': retailer_cells})
 
     by_agent: Dict[str, Dict[str, dict]] = {}
     for item in scored:
-        s, a = item.get('surface') or 'unlabelled', item.get('agent') or 'unknown'
+        s, a = surface_of_run(item), item.get('agent') or 'unknown'
         c = by_agent.setdefault(s, {}).setdefault(a, {'exact': 0, 'scored': 0, 'wrong': 0, 'stale': 0, 'partial': 0,
                                                        'unverifiable': 0, 'left_out': 0, 'other_brand': 0})
         o = item.get('outcome')
@@ -550,8 +591,12 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             if item.get('reason_code') == 'other_brand':
                 c['other_brand'] += 1
 
+    retailer_columns = [{'id': d, 'name': _retailer_name(d), 'you': d == own_domain} for d in columns]
+    agent_col = lambda a: {'id': a, 'name': AGENT_NAMES.get(a, a), 'kind': 'agent', 'retailer': domain,  # noqa: E731
+                           'retailer_name': _retailer_name(domain) if domain else None}
+    agent_kind = by_agent_runs and bool(agent_columns)
     return {
-        'columns': [{'id': d, 'name': _retailer_name(d), 'you': d == own_domain} for d in columns],
+        'columns': ([agent_col(a) for a in agents_on.get(default, agent_columns)] if agent_kind else retailer_columns),
         'rows': rows,
         'programs': [],
         'as_of': (reference or {}).get('as_of'),
@@ -560,14 +605,21 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
         'surfaces': [{'surface': s, 'label': surfaces.SURFACE_LABELS.get(s, s)} for s in surface_list],
         'by_agent': {s: by_agent.get(s, {}) for s in surface_list},
         'cell_rule': TV_CELL_RULE,
+        # 2C-2a
+        'column_kind': 'agent' if agent_kind else 'retailer',
+        'columns_by_surface': ({s: [agent_col(a) for a in agents_on.get(s, [])] for s in surface_list} if agent_kind
+                               else {s: retailer_columns for s in surface_list}),
+        'retailer_columns': retailer_columns,
         'divergences': [
             "TvCell.status is extended by 'unverifiable' (the page blocked both reference sources).",
             "A stale quote has status 'wrong' (it is wrong today); `outcome` carries 'stale'.",
-            "`programs` is empty unless `merchant` is given (2C-2): then the merchant's owned incentives.",
+            "`programs` is empty unless `merchant` is given (2C-2): then the merchant's programs.",
             "Each cell carries reference_source (honest_fetch | hosted_render | record), method and "
-            "observed_at beside the typed fields (2C).",
+            "observed_at beside the typed fields (2C), and live_basis (2C-2a).",
             "2C-2: TvCell.quoted / status are the cell on `surface`; `by_surface` has each surface's and "
             "`quotes` every run's. Never pooled across surfaces. TV_CELL_RULE decides a cell.",
+            "2C-2a: with one retailer in the record the columns are agents (column_kind 'agent', per surface "
+            "in columns_by_surface); the one-retailer cell rides beside as retailer_cells.",
         ],
     }
 
@@ -598,17 +650,87 @@ def _program_terms(inc: dict) -> str:
     return ', '.join(parts) or (inc.get('mechanic') or '').replace('_', ' ')
 
 
-def _program_matches(inc: dict, expected: dict) -> bool:
+def _norm_code(value) -> Optional[str]:
+    return str(value).strip().upper() or None if value else None
+
+
+def _norm_tier(value) -> Optional[str]:
+    from soa_shared.expected_answers import normalize_tier_name
+    return normalize_tier_name(value)
+
+
+def _program_matches(inc: dict, expected: dict, source_ref: Optional[dict] = None) -> bool:
+    """2C-2a: a value & incentives answer is about a program when the
+    question's offer id is one of the program's (codes and points carry it
+    from the record), or its code matches, or its tier name matches, folded
+    the way the scorer folds it (soa_shared.expected_answers): the generator
+    wrote both from the record, so these are the same identifiers, never a
+    display name."""
+    offer = (source_ref or {}).get('offer_id')
+    if offer and offer in (inc.get('offer_ids') or []):
+        return True
     if inc.get('code') and expected.get('code'):
-        return str(expected['code']).upper() == str(inc['code']).upper()
+        return _norm_code(expected['code']) == _norm_code(inc['code'])
     if inc.get('tier_name') and expected.get('tier_name'):
-        return expected['tier_name'] == inc['tier_name']
+        return _norm_tier(expected['tier_name']) == _norm_tier(inc['tier_name'])
     return False
+
+
+def record_programs(record: Optional[dict]) -> List[dict]:
+    """2C-2a: the programs in the record (supply's /incentives, what the
+    generator read): one per loyalty tier with the member prices the record
+    states for it, one per promo code, one per points rule set. Each carries
+    the identifiers the generator wrote into its questions (tier name, code,
+    offer ids)."""
+    program = (record or {}).get('program_name')
+    tiers: Dict[str, dict] = {}
+    codes: Dict[str, dict] = {}
+    points: Dict[str, dict] = {}
+    for listing in (record or {}).get('listings') or []:
+        for v in listing.get('variants') or []:
+            stated = [(mp.get('tier_name'), mp.get('price')) for mp in v.get('member_prices') or []]
+            stated.append((v.get('entitled_tier_name'), v.get('entitled_member_price')))
+            for tier, price in stated:
+                if tier and _num(price) is not None:
+                    t = tiers.setdefault(_norm_tier(tier), {'tier_name': tier, 'prices': {}})
+                    t['prices'][v.get('variant_id')] = min(_num(price), t['prices'].get(v.get('variant_id'), _num(price)))
+        for inc in listing.get('incentives') or []:
+            code = inc.get('promo_code') or inc.get('code')
+            if code:
+                c = codes.setdefault(_norm_code(code), {'code': code, 'offer_ids': set(), 'incentive': inc})
+                if inc.get('offer_id'):
+                    c['offer_ids'].add(inc['offer_id'])
+            elif inc.get('mechanic') in ('points_earn', 'points') and inc.get('offer_id'):
+                name = inc.get('program_name') or program or 'Points'
+                points.setdefault(name, set()).add(inc['offer_id'])
+            if inc.get('tier_name') and inc.get('eligibility_kind') == 'tier':
+                tiers.setdefault(_norm_tier(inc['tier_name']), {'tier_name': inc['tier_name'], 'prices': {}})
+    out = []
+    for t in tiers.values():
+        vals = sorted(t['prices'].values())
+        terms = (f"{t['tier_name']} price on {len(vals)} {'variant' if len(vals) == 1 else 'variants'}, "
+                 + (money(f'{vals[0]:.2f}') if vals[0] == vals[-1] else f"{money(f'{vals[0]:.2f}')} to {money(f'{vals[-1]:.2f}')}")
+                 if vals else f"{t['tier_name']} discount, stated without a price")
+        out.append({'name': f"{program} {t['tier_name']}" if program else t['tier_name'], 'tier_name': t['tier_name'],
+                    'terms': terms, 'mechanic': 'member_price', 'offer_ids': [], 'source': 'record'})
+    for c in codes.values():
+        inc, value = c['incentive'], c['incentive'].get('value') or {}
+        bits = [f"{str(value['discount_percent']).rstrip('0').rstrip('.')}% off" if value.get('discount_percent') else None,
+                f"{money(value['discount_amount'])} off" if value.get('discount_amount') else None,
+                'new customers' if inc.get('eligibility_kind') == 'new_customer' else None]
+        out.append({'name': c['code'], 'code': c['code'], 'terms': ', '.join(b for b in bits if b) or f"code {c['code']}",
+                    'mechanic': inc.get('mechanic'), 'offer_ids': sorted(c['offer_ids']), 'source': 'record',
+                    'valid_until': inc.get('valid_until')})
+    for name, ids in points.items():
+        out.append({'name': f"{name} points", 'terms': f"points on {len(ids)} {'offer' if len(ids) == 1 else 'offers'}",
+                    'mechanic': 'points', 'offer_ids': sorted(ids), 'source': 'record'})
+    return out
 
 
 def _program_agents(scored: List[dict]) -> Dict[str, dict]:
     """2C-2: per surface, the agents that answered a scored question about a
-    program and the ones that got every such answer right."""
+    program and the ones that got every such answer right; 2C-2a: and the
+    scored answers and exact ones."""
     out: Dict[str, dict] = {}
     for o in scored:
         s = o.get('surface') or surfaces.surface_of(o.get('platform')) or 'unlabelled'
@@ -619,25 +741,39 @@ def _program_agents(scored: List[dict]) -> Dict[str, dict]:
         per = entry.pop('agents')
         entry['asked'] = sorted(per)
         entry['right'] = sorted(a for a, outs in per.items() if all(x == 'exact' for x in outs))
+        entry['scored'] = sum(len(outs) for outs in per.values())
+        entry['exact'] = sum(1 for outs in per.values() for x in outs if x == 'exact')
     return out
 
 
-def build_programs(incentives: List[dict], value_outcomes: List[dict]) -> List[dict]:
+def build_programs(incentives: List[dict], value_outcomes: List[dict], *, record: Optional[dict] = None) -> List[dict]:
     """
-    TrueValue.programs from the merchant's owned incentives (supply's
-    /incentives/owned, as entered). 2C-2: `agentsRight` is "quoted right by
-    N of M agents" on the highest-fidelity surface that asked about the
-    program, where an agent is right when every scored answer it gave about
-    the program was exact (scored excludes absent, unscoreable and
-    unverifiable); `by_surface` beside has every surface. A program no
-    question asked about says so rather than showing 0.
+    TrueValue.programs. 2C-2a: the record's programs first (record_programs:
+    the generator's source, so its questions join on the same identifiers),
+    then each owned incentive the record does not already have. 2C-2:
+    `agentsRight` is "quoted right by N of M agents" on the highest-fidelity
+    surface that asked about the program, where an agent is right when every
+    scored answer it gave about the program was exact (scored excludes
+    absent, unscoreable and unverifiable); `by_surface` beside has every
+    surface's agents and answers. A program no question asked about says so
+    rather than showing 0.
 
-    value_outcomes: [{outcome, expected_answer, platform, surface}] for tier
-    value_incentives.
+    value_outcomes: [{outcome, expected_answer, platform, surface,
+    source_ref}] for tier value_incentives.
     """
-    out = []
+    programs = record_programs(record)
+    have_codes = {_norm_code(p.get('code')) for p in programs if p.get('code')}
+    have_tiers = {_norm_tier(p.get('tier_name')) for p in programs if p.get('tier_name')}
     for inc in incentives or []:
-        about = [o for o in value_outcomes if _program_matches(inc, _json(o.get('expected_answer')) or {})]
+        if (inc.get('code') and _norm_code(inc['code']) in have_codes) or \
+                (inc.get('tier_name') and _norm_tier(inc['tier_name']) in have_tiers):
+            continue
+        programs.append({**inc, 'name': inc.get('name') or inc.get('tier_name') or inc.get('code') or (inc.get('mechanic') or 'Program'),
+                         'terms': _program_terms(inc), 'offer_ids': [], 'source': 'owned_incentive'})
+    out = []
+    for prog in programs:
+        about = [o for o in value_outcomes
+                 if _program_matches(prog, _json(o.get('expected_answer')) or {}, _json(o.get('source_ref')) or {})]
         scored = [o for o in about if o.get('outcome') in SUMMARY_SCORED]
         right = sum(1 for o in scored if o.get('outcome') == 'exact')
         per = _program_agents(scored)
@@ -651,12 +787,11 @@ def build_programs(incentives: List[dict], value_outcomes: List[dict]) -> List[d
             agents_right = f"quoted right by {n} of {m} {'agent' if m == 1 else 'agents'}"
             tone = 'ok' if n == m else 'bad' if n == 0 else 'warn'
         out.append({
-            'name': inc.get('name') or inc.get('tier_name') or inc.get('code') or (inc.get('mechanic') or 'Program'),
-            'terms': _program_terms(inc), 'agentsRight': agents_right, 'tone': tone,
+            'name': prog['name'], 'terms': prog['terms'], 'agentsRight': agents_right, 'tone': tone,
             # beside the typed fields
-            'mechanic': inc.get('mechanic'), 'code': inc.get('code'), 'tier_name': inc.get('tier_name'),
-            'valid_until': inc.get('valid_until'), 'asked': len(about), 'scored': len(scored), 'right': right,
-            'surface': top, 'by_surface': per,
+            'mechanic': prog.get('mechanic'), 'code': prog.get('code'), 'tier_name': prog.get('tier_name'),
+            'valid_until': prog.get('valid_until'), 'asked': len(about), 'scored': len(scored), 'right': right,
+            'surface': top, 'by_surface': per, 'source': prog.get('source'), 'offer_ids': prog.get('offer_ids') or [],
         })
     return out
 
