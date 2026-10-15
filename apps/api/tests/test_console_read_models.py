@@ -293,22 +293,30 @@ def test_true_value_is_console_true_value(http):
     as_('alice')
     tv = http.get('/api/console/true-value', params={'cycle': CYCLE}).json()
     check(tv, 'TrueValue')
-    assert [c['id'] for c in tv['columns']] == ['trueshopstore.com']
-    cells = {r['sku']: r['cells']['trueshopstore.com'] for r in tv['rows']}
-    assert cells['snug-fit-overnight-s6']['status'] == 'wrong'
-    assert cells['snug-fit-overnight-s6']['live'] == '$29.99'
-    # 2C-2: a cell is per surface. On the grounded API one run was right
-    # ($12.99) and one wrong ($14.99): the worst quoting run decides and its
-    # quote is shown. The consumer UI's wall quoted nothing: left out there.
-    balm = cells['bum-balm-4oz']
-    assert balm['status'] == 'wrong' and balm['runs'] == 2 and balm['quoted'] == '$14.99'
+    # 2C-2a: one retailer in the record, so the columns are the agents, per surface
+    assert tv['column_kind'] == 'agent' and [c['id'] for c in tv['columns']] == ['chatgpt', 'gemini']
+    assert {s: [c['id'] for c in cols] for s, cols in tv['columns_by_surface'].items()} == {
+        'consumer_ui': ['aimode'], 'grounded_api': ['chatgpt', 'gemini']}
+    assert [c['id'] for c in tv['retailer_columns']] == ['trueshopstore.com']
+    rows = {r['sku']: r for r in tv['rows']}
+    s6 = rows['snug-fit-overnight-s6']['cells']['gemini']
+    assert (s6['status'], s6['live']) == ('wrong', '$29.99')
+    # 2C-2: a cell is per surface. On the grounded API Gemini was right
+    # ($12.99) and ChatGPT wrong ($14.99): each is its own cell now. The
+    # one-retailer cell beside them is still the worst quoting run.
+    balm = rows['bum-balm-4oz']
+    assert (balm['cells']['gemini']['status'], balm['cells']['gemini']['quoted']) == ('exact', '$12.99')
+    assert (balm['cells']['chatgpt']['status'], balm['cells']['chatgpt']['quoted']) == ('wrong', '$14.99')
+    assert balm['cells']['aimode']['by_surface'] == {'consumer_ui': {'quoted': '—', 'status': 'missed', 'outcome': 'absent', 'runs': 1}}
+    whole = balm['retailer_cells']['trueshopstore.com']
+    assert whole['status'] == 'wrong' and whole['runs'] == 2 and whole['quoted'] == '$14.99'
     assert tv['surface'] == 'grounded_api'
-    assert balm['by_surface']['consumer_ui'] == {'quoted': '—', 'status': 'missed', 'outcome': 'absent', 'runs': 1}
-    assert {(q['agent'], q['surface'], q['outcome'], q['stated']) for q in balm['quotes']} == {
+    assert {(q['agent'], q['surface'], q['outcome'], q['stated']) for q in whole['quotes']} == {
         ('gemini', 'grounded_api', 'exact', '12.99'), ('chatgpt', 'grounded_api', 'wrong', '14.99'),
         ('aimode', 'consumer_ui', 'absent', None)}
-    # Scored against the record: the reference is the record, dated by its publication.
-    assert balm['reference_source'] == 'record' and balm['observed_at'].startswith('2026-08-28')
+    # Scored against the record with no page read given: the reference is the record, dated by its publication.
+    assert whole['reference_source'] == 'record' and whole['observed_at'].startswith('2026-08-28')
+    assert whole['live_basis'] == 'record'
 
 
 OWNED = {'merchant': 'wiggle-and-snug', 'incentives': [
@@ -331,7 +339,8 @@ def test_programs_are_the_owned_incentives_with_how_answers_did(http, upstream):
     assert body['programs'][1]['terms'] == '$3.00 off, code SNUG3, on Diapers, until 2026-12-31'
     # The fixture cycle asks no value & incentives question: said, not shown as 0.
     assert {p['agentsRight'] for p in body['programs']} == {'not asked this cycle'}
-    assert [c['token'] for c in upstream.calls] == [TOKEN_A]
+    # 2C-2a: the record's incentives are read too (not answered here: owned only)
+    assert [c['token'] for c in upstream.calls] == [TOKEN_A, TOKEN_A]
 
 
 def test_programs_count_right_among_scored_only():
@@ -347,8 +356,8 @@ def test_programs_count_right_among_scored_only():
     snug = rm.build_programs(OWNED['incentives'], outcomes)[1]
     assert snug['agentsRight'] == 'quoted right by 1 of 2 agents' and snug['tone'] == 'warn' and snug['asked'] == 5
     assert snug['surface'] == 'grounded_api'
-    assert snug['by_surface'] == {'grounded_api': {'asked': ['chatgpt', 'gemini'], 'right': ['chatgpt']},
-                                  'api': {'asked': ['chatgpt'], 'right': ['chatgpt']}}
+    assert snug['by_surface'] == {'grounded_api': {'asked': ['chatgpt', 'gemini'], 'right': ['chatgpt'], 'scored': 3, 'exact': 2},
+                                  'api': {'asked': ['chatgpt'], 'right': ['chatgpt'], 'scored': 1, 'exact': 1}}
 
 
 def test_accessibility_is_proxied_with_claude_in_the_vocabulary(http, upstream):
@@ -679,7 +688,7 @@ def test_true_value_for_an_external_brand_reads_the_2a_reference():
     check(tv, 'TrueValue')
     assert [c['id'] for c in tv['columns']] == ['target.com', 'walmart.com']
     cells = tv['rows'][0]['cells']
-    target = {k: v for k, v in cells['target.com'].items() if k not in ('by_surface', 'quotes', 'surface')}
+    target = {k: v for k, v in cells['target.com'].items() if k not in ('by_surface', 'quotes', 'surface', 'live_basis')}
     assert target == {'quoted': '$22.99', 'live': '$21.49', 'status': 'wrong',
                       'outcome': 'stale', 'runs': 1, 'reference_source': 'hosted_render',
                       'method': 'oxylabs', 'observed_at': '2026-10-09T11:58:00+00:00'}
