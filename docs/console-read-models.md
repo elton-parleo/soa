@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -577,6 +577,45 @@ shapes below.
 errored run included (`coverage.runs`); **answers** are the runs whose `answer_status` is
 `answered` (`coverage.answers`); the tier table (`/answers/summary` `answered`) and the agent
 table (`agents[].answers`) count answers. An errored or walled run is a run, never an answer.
+
+### 2C-2c: the member price, the readback verdicts, and four leftovers
+
+**The member price (item 1), diagnosed from code.** Three causes were possible; one applies.
+- (a) **Yes.** `/reference` (supply `views.reference` over `prices.retailer_prices`) returns one
+  row per variant x retailer: the best read of the *newest* reference run that read the page
+  (`latest_run_reads`). When the newest read of a page states no member price and an older one
+  did, the rule could not see it. Supply #20 (`feature/2a2-followups`, merged as `febc447`) adds
+  `GET /merchants/{slug}/retailer-prices?history=1&limit=`: every readable read per variant x
+  retailer, newest first, answered with `history: true`. Before #20 the handler takes only
+  `as_of`; FastAPI ignores the unknown parameter and the answer has no `history` key.
+- (b) No. The ladder (`_read_member_price`), the receipt (the ladder's steps) and the record's
+  `variants[]` (`_reference_rows`) all join with `reference_matches` (variant id, `variant_label`,
+  SKU, then GTIN), so a GTIN-less variant finds its read.
+- (c) No. Accessibility's "Program price in markup" counts `member_price` on the same `/reference`
+  rows the ladder read.
+
+Fix: `_member_reads` asks for `retailer-prices?history=1&limit=10`; when the answer says
+`history: true`, the member-price rule walks those reads newest first to the first that states
+one (the ladder, the receipt and the record's variants); otherwise it reads `/reference` as
+before. **Deploy:** soa is safe on either supply. The older read's price appears only once supply
+#20 is deployed with its migration (`e8b1d4f7a2c5`, own domains and the run reason) applied.
+
+**The readback verdict rule (item 2).** A check is one claim. For a claim about a sibling
+(`target: swap`) or a variant the record lacks (`clash`): the verdict is the question's,
+`question_outcome` first (rows scored before `b3c5a29`), then `outcome`, the same rule the
+products table and True Value read; the "said" cell keeps the claim (".99 for Snug-Fit Trial
+Pack"); "judged against" is the **asked** variant's reference (its expected amount), never the
+sibling's; `reason` is `variant_swap` (or `variant_clash`) and `note` says "priced Snug-Fit Trial
+Pack instead" (the sibling's record name, from the study's catalog questions). Any other claim
+keeps its own outcome and reference.
+
+| # | cause | fix |
+|---|---|---|
+| 3 | a run with no stored claim whose expectation has no `amount` (a code or points question) printed a dash for the reference, so the row read "— — Wrong" | the check says what was expected (`describe`); the console also leaves out any row blank on both sides, with a caption |
+| 4 | the console read the full record per product (sixteen supply reads) to draw a timeline | `/truesync` products carry `timeline` from the publications and channel checks the matrix already read; the console's API client times out every read (45 s) into an error state |
+| 5 | swap quotes were grouped by the answer's words for the sibling | grouped by the resolved sibling variant id, named once by its record name |
+| 6 | branded came from a text match on the brand; the Overview counted questions asked, Studies the study's; status came from generation | branded = questions in a tier that names the brand (brand-direct, catalog, value), unbranded the rest; the Overview's `questions` is the study's count with `asked` beside; status is Draft with no cycle, Active while one is planned or running, Done otherwise |
+| 7 | the Answers strip read `surfaces`, the value tiers only (516 minus 66 brand-direct) | `/answers/summary` adds `all_tiers` per surface, by the run-count rule; the strip shows runs and answers over every tier and says its accuracy is over price questions |
 
 ### What the stored data cannot fill
 
@@ -4761,5 +4800,99 @@ step comes from a page read here; Size 1 small's Member+ step does (test_console
   ],
   "stage_cycle": "WS-2B-FIXTURE",
   "read_errors": {}
+}
+```
+
+### A swap check, scored before b3c5a29 (2C-2c, `build_answer`)
+
+Size 1 small asked, the Trial Pack's .99 stated. The claim's own `outcome` is `exact` (it is the
+Trial Pack's price); the question's is `question_outcome: wrong`.
+
+```json
+[
+  {
+    "claim": "$6.99 for Snug-Fit Trial Pack",
+    "agent": "ChatGPT",
+    "live": "$17.99",
+    "verdict": "wrong",
+    "note": "priced Snug-Fit Trial Pack instead",
+    "reason": "variant_swap",
+    "tone": "bad",
+    "target": "swap"
+  }
+]
+```
+
+### GET /api/console/truesync?merchant=wiggle-and-snug, the 2C-2c timeline (one product, cut)
+
+```json
+{
+  "products": [
+    {
+      "sku": "catalog_product:30",
+      "name": "Bum Balm 4 oz",
+      "listing_id": 93,
+      "timeline": [
+        {
+          "at": "2026-08-21T20:15:00.801167Z",
+          "event": "Published",
+          "surface": "Deal directory / affiliate listing",
+          "channel": "deal_directory",
+          "kind": "publication",
+          "status": "published",
+          "tone": "ok"
+        },
+        {
+          "at": "2026-08-21T20:15:00.627877Z",
+          "event": "Published",
+          "surface": "Model Context Protocol server",
+          "channel": "mcp",
+          "kind": "publication",
+          "status": "published",
+          "tone": "ok"
+        },
+        {
+          "at": "2026-08-21T20:15:00.466754Z",
+          "event": "Published",
+          "surface": "Parleo Deals API",
+          "channel": "deals_api",
+          "kind": "publication",
+          "status": "published",
+          "tone": "ok"
+        },
+        {
+          "at": "2026-08-21T20:15:00.041685Z",
+          "event": "Published",
+          "surface": "Schema.org Product/Offer",
+          "channel": "schema_org",
+          "kind": "publication",
+          "status": "published",
+          "tone": "ok"
+        },
+        "… newest first"
+      ]
+    }
+  ]
+}
+```
+
+### GET /api/console/answers/summary?cycle=WS-2B-FIXTURE, the 2C-2c `all_tiers`
+
+```json
+{
+  "all_tiers": [
+    {
+      "surface": "grounded_api",
+      "label": "API with search grounding",
+      "runs": 7,
+      "answered": 7
+    },
+    {
+      "surface": "consumer_ui",
+      "label": "Consumer UI, logged out",
+      "runs": 1,
+      "answered": 0
+    }
+  ]
 }
 ```
