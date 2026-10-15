@@ -13,7 +13,7 @@ from tests.test_console_read_models import (  # noqa: F401  (pytest fixtures)
     CYCLE, TOKEN_A, _fixture, as_, db, http, upstream,
 )
 from tests.test_console_truesync import WS_CATALOG
-from tests.test_console_visibility_record import WS, WS_INCENTIVES, WS_REFERENCE, record, ws_supply
+from tests.test_console_visibility_record import WS, WS_INCENTIVES, WS_PRICE_HISTORY, WS_REFERENCE, record, ws_supply
 from tests.test_console_2c2a import _run
 from tests.test_console_parity import _metric_rows
 from app.services import console_parity as parity
@@ -32,6 +32,7 @@ def test_the_fixture_holds_member_prices_where_production_does():
     assert not any('member_price' in v for l in WS_CATALOG['listings'] for v in l['variants'])
     rows = WS_REFERENCE['rows']
     assert len(rows) == 19 and sum(1 for r in rows if r['member_price']) == 7
+    assert next(r for r in rows if r['variant_label'] == 'snug-fit-diapers-s1-small')['member_price'] is None
     assert all(r['variant_ref'].startswith('catalog_variant:') and r['method'] == 'json_ld' for r in rows)
 
 
@@ -42,12 +43,13 @@ def test_the_ladder_draws_the_page_read_s_member_price_and_names_it():
     the Oct 14 read of Size 1 small carries $12.09."""
     ladder, receipt = parity.build_ladder({'listings': [LISTING_90]}, {'listings': [ENTRY_90]}, [],
                                           [{'variant_id': S1_SMALL['variant_id']}], own_domain='trueshopstore.com',
-                                          reads=WS_REFERENCE['rows'])
+                                          reads=WS_REFERENCE['rows'], member_reads=WS_PRICE_HISTORY['prices'])
+    # 2C-2c: the newest read (Oct 14) states none; the Oct 9 read in supply's history does
     assert [(s['label'], s['value'], s['note']) for s in ladder['steps']] == [
         ('List', '$17.99', 'from the record'), ('First order, WELCOME10', '$16.19', 'from the record'),
-        ('Member+', '$12.09', 'from the page read Oct 14')]
+        ('Member+', '$12.09', 'from the page read Oct 9')]
     assert ladder['unpriced'] == []
-    assert receipt['rows'][1] == {'k': 'Member+, from the page read Oct 14', 'v': '-$5.90', 'kind': 'minus', 'tag': 'On the page'}
+    assert receipt['rows'][1] == {'k': 'Member+, from the page read Oct 9', 'v': '-$5.90', 'kind': 'minus', 'tag': 'On the page'}
     assert receipt['rows'][2] == {'k': 'The lowest stated price', 'v': '$12.09', 'kind': 'big'}
 
 
@@ -73,13 +75,13 @@ def test_the_record_s_variants_show_the_same_member_price_and_source(http, upstr
     as_('alice')
     body = record(http, str(LISTING_90['product_id']))
     s1 = next(v for v in body['variants'] if v['id'] == S1_SMALL['variant_id'])
-    assert s1['price'] == '$17.99 · member $12.09, from the page read Oct 14'
-    assert (s1['member_source'], s1['member_note']) == ('reference_read', 'from the page read Oct 14')
+    assert s1['price'] == '$17.99 · member $12.09, from the page read Oct 9'
+    assert (s1['member_source'], s1['member_note']) == ('reference_read', 'from the page read Oct 9')
     s5 = next(v for v in body['variants'] if v['id'] == 'snug-fit-diapers-s5-small')
     assert s5['price'] == '$26.99' and s5['member_price'] is None
     field = next(f for f in body['fields'] if f['k'] == 'Member price')
-    assert field['v'] == '$12.09 to $26.99' and field['prov'] == 'parleo'
-    assert field['note'] == 'from the page read Oct 14, on 7 of 12 variants. The record states none'
+    assert field['v'] == '$12.09 to $30.49' and field['prov'] == 'parleo'
+    assert field['note'] == 'from the page read Oct 14, on 8 of 12 variants. The record states none'
 
 
 # ═══ 2. Swap quotes are listed on the row asked about ════════════════════

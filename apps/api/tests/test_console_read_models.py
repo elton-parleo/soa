@@ -161,7 +161,8 @@ class Upstream:
             async def request(self, method, url, params=None, json=None, headers=None, files=None):
                 path = url.replace("https://supply.example", "")
                 token = (headers or {}).get("X-TrueSync-Key")
-                upstream.calls.append({'method': method, 'path': path, 'json': json, 'token': token})
+                upstream.calls.append({'method': method, 'path': path, 'json': json, 'token': token,
+                                       'params': params})
                 hit = upstream.routes.get((method, path, token)) or upstream.routes.get((method, path, None))
                 return Response(*(hit or (404, {'detail': 'not found'})))
 

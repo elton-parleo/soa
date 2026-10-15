@@ -130,6 +130,8 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
                         'visibility': _visibility(conn, prev)}
         job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
                            {"st": row['study_type']}).fetchone()
+        study_questions = conn.execute(text("SELECT COUNT(*) FROM soa_queries WHERE study_type = :st"),
+                                       {"st": row['study_type']}).scalar()
     brand = next((r['name'] for r in (vis.get('ranking') or {}).get('rows') or [] if r.get('you')), None) or \
         (((_json(job[0]) if job else None) or {}).get('merchant') or {}).get('study_brand') or 'the brand'
     access, errors, reads = None, {}, None
@@ -149,7 +151,8 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     tv = rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
                              record_variants=variants, reads=reads)
     return parity.build_overview(row, rows=rows, visibility=vis, true_value=tv, brand=brand, access=access,
-                                 previous=previous, scored_cycles=n_scored if n_scored else 1, read_errors=errors)
+                                 previous=previous, scored_cycles=n_scored if n_scored else 1, read_errors=errors,
+                                 study_questions=study_questions)
 
 
 def _true_value_inputs(conn, row) -> tuple:
@@ -182,9 +185,12 @@ def _true_value_inputs(conn, row) -> tuple:
     if own_domain is None:
         job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
                            {"st": row['study_type']}).fetchone()
+        study_questions = conn.execute(text("SELECT COUNT(*) FROM soa_queries WHERE study_type = :st"),
+                                       {"st": row['study_type']}).scalar()
         merchant = ((_json(job[0]) if job else None) or {}).get('merchant') or {}
         own_domain = merchant.get('own_domain') or merchant.get('domain')
 
+    names = rm.load_variant_names(conn, row)
     scored = []
     for o in outcomes:
         q = by_query.get(o['query_id'])
@@ -207,7 +213,9 @@ def _true_value_inputs(conn, row) -> tuple:
                        'retailer': expected.get('attributed_to') or own_domain,
                        'outcome': o['outcome'], 'reason_code': o['reason_code'],
                        'stated': deciding.get('stated') if deciding else None,
-                       'swap_product': (swap.get('product') or swap.get('variant_id')) if swap else None,
+                       # 2C-2c: the sibling resolved to its record name, once
+                       'swap_product': rm.sibling_name(swap, names) if swap else None,
+                       'swap_variant': swap.get('variant_id') if swap else None,
                        'run': f"run-{o['run_id']}", 'platform': o['platform'],
                        'agent': surfaces.agent_of(o['platform']) or o['platform'],
                        'surface': o['surface'] or surfaces.surface_of(o['platform']) or 'unlabelled'})
@@ -230,11 +238,12 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
         return rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
                                    record_variants=variants)
     client = full_loop._client(scope)
-    (_, owned, o_err), (_, incentives, i_err), (_, catalog, k_err), (_, reference, r_err) = await asyncio.gather(
-        client.get_owned_incentives(merchant), client.get_merchant_incentives(merchant),
-        client.get_merchant_catalog(merchant), client.get_reference(merchant))
+    (_, owned, o_err), (_, incentives, i_err), (_, catalog, k_err), (_, reference, r_err), (history, h_err) = \
+        await asyncio.gather(client.get_owned_incentives(merchant), client.get_merchant_incentives(merchant),
+                             client.get_merchant_catalog(merchant), client.get_reference(merchant),
+                             _member_reads(client, merchant))
     errors = {n: e for n, e in (('owned_incentives', o_err), ('incentives', i_err), ('catalog', k_err),
-                                ('reference', r_err)) if e is not None}
+                                ('reference', r_err), ('retailer_prices', h_err)) if e is not None}
     # 2C-2a: the newest page read is the reference when the cycle cached none
     body = rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
                                record_variants=variants, reads=(reference or {}).get('rows') if r_err is None else None)
@@ -244,9 +253,30 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
     body['ladder'], body['receipt'] = parity.build_ladder(
         catalog if k_err is None else None, incentives if i_err is None else None,
         (owned or {}).get('incentives') if o_err is None else None, scored, own_domain=own_domain,
-        reads=(reference or {}).get('rows') if r_err is None else None)
+        reads=(reference or {}).get('rows') if r_err is None else None, member_reads=history)
+    body['member_reads'] = 'history' if history is not None else 'reference'
     body['read_errors'] = errors
     return body
+
+
+#: 2C-2c: reads per variant x retailer a member price is looked for in.
+MEMBER_READ_HISTORY = 10
+
+
+async def _member_reads(client, merchant: str) -> tuple:
+    """(rows, error) for the member-price rule: every readable read per
+    variant x retailer, newest first, from supply's retailer-prices with
+    `history=1` (supply #20). /reference holds only the newest read per page,
+    so a member price an older read saw (Oct 9) and the newest did not (Oct
+    14) was out of reach. A supply that does not honour `history` answers
+    without `history: true`: then (None, None) and the caller keeps reading
+    /reference, as before."""
+    status, body, error = await client.get_retailer_prices(merchant, history=True, limit=MEMBER_READ_HISTORY)
+    if error is not None:
+        return None, error
+    if not isinstance(body, dict) or body.get('history') is not True:
+        return None, None
+    return body.get('prices') or [], None
 
 
 def _value_outcomes(conn, row) -> list:
@@ -316,8 +346,19 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
     slugs = [c['slug'] for c in channels or [] if c.get('is_active', True)]
     reads = await asyncio.gather(*(client.get_merchant_verifications(merchant, channel=s, limit=100) for s in slugs))
     verifications = {s: (body if err is None else {}) for s, (_, body, err) in zip(slugs, reads)}
-    return rm.build_truesync(merchant, channels=channels or [], publications=pubs or [], catalog=catalog or {},
+    body = rm.build_truesync(merchant, channels=channels or [], publications=pubs or [], catalog=catalog or {},
                              verifications=verifications, provenance=prov if prov_err is None else None)
+    # 2C-2c: each product's publish timeline from the journal this read already
+    # holds (publications and channel checks), so the console makes no second
+    # call per product (the full /record read was what kept it waiting).
+    names = {c.get('slug'): c.get('name') or c.get('slug') for c in channels or []}
+    for product in body['products']:
+        lid = product.get('listing_id')
+        ver = [v for env in verifications.values() for e in (env or {}).get('listings') or []
+               if e.get('listing_id') == lid for v in e.get('verifications') or []]
+        product['timeline'] = parity.record_history(lid, publications=pubs or [], verifications=ver,
+                                                    reference_rows=[], channel_names=names)
+    return body
 
 
 async def _record_inputs(merchant: str, scope: CustomerScope, *, incentives: bool) -> dict:
@@ -374,13 +415,16 @@ async def get_record(merchant: str = Query(...), product: str = Query(...),
                     if product in (rm._listing_sku(l), str(l.get('listing_id')))), None)
     if listing is None:
         raise HTTPException(status_code=404, detail=f"product {product!r} is not in {merchant!r}'s record")
+    client = full_loop._client(scope)
+    history, h_err = await _member_reads(client, merchant)
     record = rm.build_record(merchant, listing, merchant_record=got['merchant_record'],
                              publications=got['publications'], channels=got['channels'],
                              provenance=got['provenance'], reference=got['reference'],
-                             incentives=got['incentives'], read_errors=got['read_errors'])
+                             incentives=got['incentives'],
+                             read_errors={**got['read_errors'], **({'retailer_prices': h_err} if h_err else {})},
+                             member_reads=history)
     # 2C-2: the offer fields, history, surfaces (the TrueSync matrix's cells
     # for this product, reused) and the issues grouped by channel.
-    client = full_loop._client(scope)
     slugs = [c['slug'] for c in got['channels'] if c.get('is_active', True)]
     reads = await asyncio.gather(*(client.get_merchant_verifications(merchant, channel=sl, limit=100) for sl in slugs))
     verifications = {sl: (b if err is None else {}) for sl, (_, b, err) in zip(slugs, reads)}
@@ -478,8 +522,8 @@ def get_studio_studies(scope: CustomerScope = Depends(console_scope)):
                     JOIN soa_entities e ON e.id = ce.entity_id WHERE ce.cycle_id = :c
                 """), {"c": cycles[0]['id']}).mappings()]
             study = rm.build_study(job, prompts, cycles, entities)
-            # 2C-2: branded and unbranded prompt counts beside the prompts
-            study['prompt_counts'] = parity.prompt_counts(prompts)
+            # 2C-2c: branded = the tiered questions (they name the brand)
+            study['prompt_counts'] = rm.prompt_counts(prompts)
             out.append(study)
     return out
 

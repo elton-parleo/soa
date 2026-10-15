@@ -395,34 +395,35 @@ def quote_groups(quotes: List[dict]) -> List[dict]:
     """2C-2b: the runs behind a product row, grouped by what they quoted (a
     sibling variant's price named), the runs with no price last. Every run
     is in exactly one group, so the groups sum to the row's runs."""
+    # 2C-2c: a sibling is grouped by its resolved variant id, named once by
+    # its record name, however each agent wrote it
     groups: Dict[tuple, Counter] = {}
+    names: Dict[tuple, Optional[str]] = {}
     for q in quotes:
-        key = (q.get('stated'), q.get('swap_product') if q.get('stated') else None)
+        sib = (q.get('swap_variant') or q.get('swap_product')) if q.get('stated') else None
+        key = (q.get('stated'), sib)
         groups.setdefault(key, Counter())[q.get('agent') or 'unknown'] += 1
-    out = [{'stated': stated, 'swap_product': swap, 'runs': sum(agents.values()), 'agents': dict(agents)}
-           for (stated, swap), agents in groups.items()]
+        names.setdefault(key, q.get('swap_product') if sib else None)
+    out = [{'stated': stated, 'swap_product': names[(stated, sib)], 'swap_variant': sib if sib else None,
+            'runs': sum(agents.values()), 'agents': dict(agents)}
+           for (stated, sib), agents in groups.items()]
     out.sort(key=lambda g: (g['stated'] is None, -g['runs'], str(g['stated'])))
     return out
 
 
 def _quoted_text(quotes: List[dict]) -> str:
-    """2C-2a: every distinct quote with the runs behind it and their agents,
-    then the runs with no price, so the detail accounts for every run the
-    issue counts. A price stated for a sibling variant names it:
-    "$6.99 for Snug-Fit Trial Pack, 3 of 6 runs (ChatGPT 2, Gemini 1)"."""
+    """Every distinct quote with the runs behind it and their agents, then
+    the runs with no price, so the detail accounts for every run the issue
+    counts. A price stated for a sibling variant names it (2C-2c: once, by
+    its record name): "$6.99 for Snug-Fit Trial Pack, 3 of 6 runs (Gemini 3)"."""
     n = len(quotes)
     if not n:
         return 'Not asked'
-    groups: Dict[tuple, Counter] = {}
-    for q in quotes:
-        key = (q.get('stated'), q.get('swap_product') if q.get('stated') else None)
-        groups.setdefault(key, Counter())[q.get('agent') or 'unknown'] += 1
     parts = []
-    for (stated, swap), agents in sorted(groups.items(), key=lambda kv: (kv[0][0] is None, -sum(kv[1].values()), str(kv[0][0]))):
-        k = sum(agents.values())
-        who = ', '.join(f"{_agent(a)} {c}" for a, c in sorted(agents.items(), key=lambda kv: _agent(kv[0])))
-        what = 'No price' if stated is None else rm.money(stated) + (f" for {swap}" if swap else '')
-        parts.append(f"{what}, {k} of {n} {_n(n, 'run', 'runs')} ({who})")
+    for g in quote_groups(quotes):
+        who = ', '.join(f"{_agent(a)} {c}" for a, c in sorted(g['agents'].items(), key=lambda kv: _agent(kv[0])))
+        what = 'No price' if g['stated'] is None else rm.money(g['stated']) + (f" for {g['swap_product']}" if g['swap_product'] else '')
+        parts.append(f"{what}, {g['runs']} of {n} {_n(n, 'run', 'runs')} ({who})")
     return '. '.join(parts)
 
 
@@ -645,7 +646,8 @@ def build_changes(now: dict, prev: Optional[dict], prev_code: Optional[str]) -> 
 
 def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_value: dict, brand: str,
                    access: Optional[dict] = None, previous: Optional[dict] = None,
-                   scored_cycles: int = 1, read_errors: Optional[Dict[str, str]] = None) -> dict:
+                   scored_cycles: int = 1, read_errors: Optional[Dict[str, str]] = None,
+                   study_questions: Optional[int] = None) -> dict:
     """
     GET /api/console/overview: This week's blocks for one cycle, per surface.
 
@@ -698,7 +700,10 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
         'previous_cycle': (previous or {}).get('code'),
         'changes_note': None if previous else TEMPLATES['changes.first_cycle'],
         'ranking': visibility.get('ranking'),
-        'coverage': {'questions': len({r.get('query_code') for r in rows}), 'agents': len({surfaces.agent_of(r.get('platform')) or r.get('platform') for r in rows}),
+        # 2C-2c: questions is the study's count, the one Studies shows; asked
+        # is how many of them this cycle ran
+        'coverage': {'questions': study_questions if study_questions is not None else len({r.get('query_code') for r in rows}),
+                     'asked': len({r.get('query_code') for r in rows}), 'agents': len({surfaces.agent_of(r.get('platform')) or r.get('platform') for r in rows}),
                      'runs': len(rows), 'answers': sum(1 for r in rows if r.get('answer_status') == surfaces.ANSWERED),
                      'unprompted': sum(1 for v in answered if v.get('tier') == UNPROMPTED)},
         'access_run': (access or {}).get('access_run'),
@@ -888,7 +893,8 @@ def _step_note(source: str, observed) -> str:
 
 
 def build_ladder(catalog: Optional[dict], incentives: Optional[dict], owned: Optional[List[dict]],
-                 scored: List[dict], *, own_domain: Optional[str], reads: Optional[List[dict]] = None) -> tuple:
+                 scored: List[dict], *, own_domain: Optional[str], reads: Optional[List[dict]] = None,
+                 member_reads: Optional[List[dict]] = None) -> tuple:
     """(ladder, receipt) for the merchant's primary product: the variant this
     cycle asked about most (ties to the catalog's order). Steps are the
     record's list price, then each lower price stated for it, lowest last:
@@ -908,7 +914,9 @@ def build_ladder(catalog: Optional[dict], incentives: Optional[dict], owned: Opt
         return None, None
     cur = variant.get('currency') or 'USD'
     entry = next((l for l in (incentives or {}).get('listings') or [] if l.get('listing_id') == listing.get('listing_id')), None)
-    stated, unpriced = ladder_steps(entry, variant, owned, reads=reads)
+    # 2C-2c: the member price is looked for in every read (supply's history)
+    # when supply sends it, else in the newest read per page (/reference).
+    stated, unpriced = ladder_steps(entry, variant, owned, reads=member_reads if member_reads is not None else reads)
     steps = [{'label': 'List', 'value': rm.money(f"{lp:.2f}", cur), 'pct': 100, 'kind': 'ink', 'source': 'record',
               'amount': f"{lp:.2f}", 'note': 'from the record'}]
     seen = set()

@@ -1,5 +1,5 @@
 {
-  "_note": "supply GET /api/truesync/merchants/wiggle-and-snug/reference in the shape truesync/fullloop/views.py reference() returns, one row per record variant (19), as production reads Parleo's own test store: variant_ref is catalog_variant:<n>, variant_label is the variant key, gtin is the RECORD's, the URL is the listing's page, findings leave out price_observed (OBSERVATIONS). 2C-2b: the member price is on the page reads only (7 of 19 pages state one in markup); the record's variants carry none. Prices are the record's; the Overnight Size 6 name_differs and the Cloud Wipes pack_differs are written for the fixture.",
+  "_note": "supply GET /api/truesync/merchants/wiggle-and-snug/reference in the shape truesync/fullloop/views.py reference() returns, one row per record variant (19), as production reads Parleo's own test store: variant_ref is catalog_variant:<n>, variant_label is the variant key, gtin is the RECORD's, the URL is the listing's page, findings leave out price_observed (OBSERVATIONS). 2C-2b: the member price is on the page reads only (7 of 19 pages state one in markup); the record's variants carry none. 2C-2c: Size 1 small's Oct 14 read states no member price; its Oct 9 read did ($12.09, supply_retailer_prices_ws.json), which only supply's read history reaches. Prices are the record's; the Overnight Size 6 name_differs and the Cloud Wipes pack_differs are written for the fixture.",
   "merchant": "wiggle-and-snug",
   "reference_run": {
     "id": 7,
@@ -22,7 +22,7 @@
       "method": "json_ld",
       "observed_at": "2026-10-14T17:01:01+00:00",
       "price": "17.99",
-      "member_price": "12.09",
+      "member_price": null,
       "list_price": null,
       "currency": "USD",
       "verifiable": true,
@@ -190,7 +190,7 @@
       "method": "json_ld",
       "observed_at": "2026-10-14T17:01:08+00:00",
       "price": "43.99",
-      "member_price": null,
+      "member_price": "30.49",
       "list_price": null,
       "currency": "USD",
       "verifiable": true,
