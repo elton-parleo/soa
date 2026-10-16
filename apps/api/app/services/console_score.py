@@ -53,7 +53,14 @@ from app.services.cycle_scoring_full import (
     score_share_of_mentions_full,
 )
 from app.services.lite_crosswalk import RunSignal
-from app.services.lite_pillars import member_value_applicable, score_member_value_said, score_price_truth_said
+from app.services.lite_pillars import (
+    _protocol_feed_checks,
+    _value_protocols_checks,
+    member_value_applicable,
+    score_member_value_said,
+    score_price_truth_said,
+)
+from clients import truesync_client as supply_fields
 
 #: The scorer whose formula this is (reused, not forked). A re-weight bumps
 #: it and every stored console score reads stale.
@@ -61,7 +68,7 @@ SCORER_VERSION = FULL_CYCLE_SCORER_VERSION
 #: The adapter's own revision, beside the scorer's: a change to how loop
 #: counts become scorer inputs re-scores stored cycles too. Not a scorer
 #: version and never shown as one.
-ADAPTER_REVISION = 1
+ADAPTER_REVISION = 2
 
 READINESS_BAR = VERDICT_COMPOSITE_THRESHOLD
 
@@ -81,6 +88,15 @@ _VALUE_STAGE = PURCHASE_INTENT_STAGES[-1]
 #: Agent identities in supply's access run that are not an answer-time agent.
 _CONTROL_IDENTITY = 'control'
 
+#: 2E: the two dimensions scored on the worker by the Audit's own functions
+#: (scan/scorer.py, through apps/pipeline/scoring/domain_checks.py) and read
+#: here from the cycle's stored record, with the Audit's sub-check builders
+#: (lite_pillars), the ones the Audit's report reads its chips with.
+DOMAIN_CODES = ('protocol_feed', 'value_protocols')
+_DOMAIN_CHECKS = {'protocol_feed': _protocol_feed_checks, 'value_protocols': _value_protocols_checks}
+#: How many earlier stored values a score keeps in its history.
+HISTORY_KEEP = 10
+
 #: House rules as console_parity.TEMPLATES: no dashes, no semicolons.
 TEMPLATES = {
     'part.share_of_mentions': 'Share of mentions {n} of {d} brand mentions',
@@ -91,16 +107,22 @@ TEMPLATES = {
     'part.price_truth.said': 'Prices quoted exactly {n} of {d} scored',
     'part.member_value.seen': 'Member price in markup {n} of {d} pages',
     'part.member_value.said': 'Member prices right {n} of {d} scored',
+    'part.deal_citability.seen': 'Incentive in markup {n} of {d} pages',
     'part.deal_citability.said': 'Codes and points right {n} of {d} scored',
+    'part.protocol_feed': 'Protocol checks passed {n} of {d}',
+    'part.value_protocols.seen': 'Manifest checks passed {n} of {d}',
+    'check.flag': '{flag} {n} of {d} pages',
     'gap.on_surface': '{line} on {surface}',
     'reason.no_unprompted': 'no unprompted question answered on this surface',
     'reason.no_access': 'no agent identity measured in the access run',
     'reason.no_pages': 'no page read in the reference run',
     'reason.read_failed': 'the {read} read failed: {error}',
     'reason.no_merchant': 'no merchant record for this cycle',
-    'reason.protocol_feed': 'not measured until the supply probe exists',
-    'reason.value_protocols': 'not measured until the manifest probe exists',
-    'reason.deal_seen': 'supply serves no incentive or code from the page read',
+    'reason.protocol_feed': 'no domain checks on this cycle yet',
+    'reason.value_protocols': 'no domain checks on this cycle yet',
+    'reason.domain_blocked': 'the domain checks could not read {domain}',
+    'reason.deal_seen': 'supply serves no incentive in markup on its page reads (a supply before #21)',
+    'reason.deal_unscanned': "no page read has had its markup scanned for incentives yet (supply's backfill fills reads stored before 2A-3)",
     'reason.deal_whole': 'its markup half is not measured, so the dimension is out of the applicable max',
     'reason.no_program': 'the record states no member program and no page shows a member price',
     'reason.no_answers': 'no answer on this surface',
@@ -109,6 +131,7 @@ TEMPLATES = {
     'previous.version': 'Scored under v{version}, re-score to compare.',
     'previous.surfaces': 'Not comparable: {code} scored {prev}, this cycle scored {now}.',
     'previous.agents': 'Not comparable: on {surface} {code} ran {prev}, this cycle ran {now}.',
+    'previous.applicable': 'applicable points changed from {prev} to {now}',
     'verdict.withheld': 'No readiness verdict while {n} of {total} points are not measured. The Audit gives one only when every dimension is.',
     'coverage': '{surfaces}, {questions}, {agents} · pooled across surfaces, equal weight',
     'coverage.no_answers': ' · {surface} ran, no answers',
@@ -201,13 +224,72 @@ def crawl_counts(access: Optional[dict], reference_rows: Optional[List[dict]]) -
         return r.get('gtin') and not any(f.get('finding') in ('no_structured_data', 'gtin_missing_on_page')
                                          for f in r.get('findings') or [])
 
+    # 2E: Deal Citability's seen half, supply #21's incentive_in_markup. A
+    # read stored before 2A-3 (json_ld_scanned false) was not scanned: out of
+    # the count both ways, never a false
+    scanned = [m for m in (supply_fields.incentive_in_markup(r) for r in pages) if m and m['json_ld_scanned']]
     return {
         'identities': len(measured), 'through': sum(1 for r in measured if r.get('ok')),
         'pages': len(pages),
         'catalog': sum(1 for r in pages if r.get('method') == 'json_ld' and gtin_ok(r)),
         'price': sum(1 for r in pages if r.get('price') not in (None, '')),
         'member_price': sum(1 for r in pages if r.get('member_price') not in (None, '')),
+        'incentive_fields': supply_fields.carries_incentive_fields(rows),
+        'incentive_scanned': len(scanned),
+        'incentive_any': sum(1 for m in scanned if any(m[f] for f in supply_fields.INCENTIVE_FLAGS)),
+        'incentive_flags': {f: sum(1 for m in scanned if m[f]) for f in supply_fields.INCENTIVE_FLAGS},
     }
+
+
+def domain_part(code: str, record: Optional[dict]) -> dict:
+    """Protocol & Feed Presence or Value Protocols from the cycle's stored
+    domain checks: the Audit's own score for the scored domain, its coverage
+    (the Audit's 'na' on a brand-only site stays na, its 'blocked' is not
+    measured), and the Audit's sub-checks by name. No record: not measured."""
+    weight = float(DIMENSIONS_BY_CODE[code].weight)
+    half = 'seen' if code == 'value_protocols' else None
+    dim = (record or {}).get(code)
+    if not isinstance(dim, dict) or dim.get('score') is None:
+        return _unsourced_part(half, weight, f'reason.{code}')
+    domain = (record or {}).get('scored_domain')
+    source = f"domain checks on {domain}, {str((record or {}).get('checked_at') or '')[:10]}".rstrip(', ')
+    evidence = list(dim.get('evidence') or [])
+    checks = _DOMAIN_CHECKS[code](evidence)
+    base = {'half': half, 'max': weight, 'numerator': None, 'denominator': None, 'source': source,
+            'checks': checks, 'evidence': evidence}
+    if dim.get('coverage') == 'na':
+        return {**base, 'score': None, 'state': NA, 'reason': evidence[0] if evidence else None, 'line': None}
+    if dim.get('coverage') == 'blocked':
+        return {**base, 'score': None, 'state': NOT_MEASURED, 'line': None,
+                'reason': TEMPLATES['reason.domain_blocked'].format(domain=domain)}
+    n = sum(1 for c in checks if c['state'] == 'pass')
+    d = sum(1 for c in checks if c['state'] in ('pass', 'fail'))
+    key = f"part.{code}.{half}" if half else f"part.{code}"
+    return {**base, 'score': float(dim['score']), 'state': MEASURED, 'numerator': n, 'denominator': d, 'reason': None,
+            'line': TEMPLATES[key].format(n=n, d=d) if d else (evidence[0] if evidence else None)}
+
+
+def measured_from_record(record: Optional[dict]) -> List[str]:
+    """The domain-check dimensions a record makes measured: what the score
+    of record is recomputed on when it changes (with the scorer version)."""
+    return [c for c in DOMAIN_CODES if domain_part(c, record)['state'] == MEASURED]
+
+
+def deal_seen_part(crawl: dict, page_reason: str) -> dict:
+    """Deal Citability, seen: reads whose page carries any incentive flag in
+    markup over the pages read whose markup supply scanned."""
+    seen_max = float(DIMENSIONS_BY_CODE['deal_citability'].seen_max)
+    source = 'reference read: incentive_in_markup (supply), json_ld_scanned pages'
+    if not crawl['pages']:
+        return {**_unsourced_part('seen', seen_max, 'reason.deal_seen'), 'reason': page_reason, 'source': source}
+    if not crawl['incentive_fields']:
+        return {**_unsourced_part('seen', seen_max, 'reason.deal_seen'), 'source': source}
+    if not crawl['incentive_scanned']:
+        return {**_unsourced_part('seen', seen_max, 'reason.deal_unscanned'), 'source': source}
+    part = _ratio_part('deal_citability', 'seen', crawl['incentive_any'], crawl['incentive_scanned'], seen_max, source)
+    part['checks'] = [{'code': f, 'label': TEMPLATES['check.flag'].format(flag=f.replace('_', ' '), n=k, d=crawl['incentive_scanned']),
+                       'state': 'pass' if k else 'fail'} for f, k in crawl['incentive_flags'].items()]
+    return part
 
 
 def visibility_inputs(runs: List[dict], mentions: List[dict], surface: str) -> dict:
@@ -248,6 +330,15 @@ def said_signals(runs: List[dict], surface: str, *, tier: str, types: Optional[I
 
 # ─── one surface ───────────────────────────────────────────────────────────
 
+def _domain_dim(code: str, record: Optional[dict]) -> dict:
+    """A domain-check dimension's row: counted at the Audit's score when
+    measured; its 'na' leaves the applicable max as Member Value's does."""
+    part = domain_part(code, record)
+    if part['state'] == MEASURED:
+        return _dim(code, earned=part['score'], applicable=part['max'], state=MEASURED, parts=[part])
+    return _dim(code, earned=None, applicable=0, state=part['state'], parts=[part], reason=part['reason'])
+
+
 def _dim(code: str, *, earned: Optional[float], applicable: float, state: str, parts: List[dict],
          reason: Optional[str] = None) -> dict:
     d = DIMENSIONS_BY_CODE[code]
@@ -257,7 +348,8 @@ def _dim(code: str, *, earned: Optional[float], applicable: float, state: str, p
 
 
 def score_surface(surface: str, *, runs: List[dict], mentions: List[dict], crawl: dict,
-                  crawl_errors: Optional[Dict[str, str]] = None, program_stated: bool) -> dict:
+                  crawl_errors: Optional[Dict[str, str]] = None, program_stated: bool,
+                  domain_checks: Optional[dict] = None) -> dict:
     """Every dimension on one surface, from the scorer's functions, and the
     surface's score: round-free earned ÷ applicable max × 100."""
     errors = crawl_errors or {}
@@ -298,8 +390,7 @@ def score_surface(surface: str, *, runs: List[dict], mentions: List[dict], crawl
         measured = part['state'] == MEASURED
         dims.append(_dim(code, earned=part['score'] if measured else None, applicable=part['max'] if measured else 0,
                          state=part['state'], parts=[part], reason=None if measured else reason))
-    pf = _unsourced_part(None, float(DIMENSIONS_BY_CODE['protocol_feed'].weight), 'reason.protocol_feed')
-    dims.append(_dim('protocol_feed', earned=None, applicable=0, state=NOT_MEASURED, parts=[pf], reason=pf['reason']))
+    dims.append(_domain_dim('protocol_feed', domain_checks))
 
     # True Value: seen from the reference read, said from the scorer's functions
     at(f'true value said halves on {surface}')
@@ -316,7 +407,7 @@ def score_surface(surface: str, *, runs: List[dict], mentions: List[dict], crawl
                                    float(DIMENSIONS_BY_CODE['price_truth'].seen_max), 'reference read: a price', page_reason),
         'member_value': _ratio_part('member_value', 'seen', crawl['member_price'], crawl['pages'],
                                     float(DIMENSIONS_BY_CODE['member_value'].seen_max), 'reference read: member_price', page_reason),
-        'deal_citability': _unsourced_part('seen', float(DIMENSIONS_BY_CODE['deal_citability'].seen_max), 'reason.deal_seen'),
+        'deal_citability': deal_seen_part(crawl, page_reason),
     }
     for code in ('price_truth', 'member_value', 'deal_citability'):
         at(f'{code} on {surface}')
@@ -334,8 +425,7 @@ def score_surface(surface: str, *, runs: List[dict], mentions: List[dict], crawl
         said_na = t['state'] != MEASURED
         dims.append(_dim(code, earned=s['score'] + (0.0 if said_na else t['score']),
                          applicable=dimension_max(dim, said_na=said_na), state=MEASURED, parts=[s, t]))
-    vp = _unsourced_part('seen', float(DIMENSIONS_BY_CODE['value_protocols'].weight), 'reason.value_protocols')
-    dims.append(_dim('value_protocols', earned=None, applicable=0, state=NOT_MEASURED, parts=[vp], reason=vp['reason']))
+    dims.append(_domain_dim('value_protocols', domain_checks))
 
     dims.sort(key=lambda x: [d.code for d in DIMENSIONS].index(x['code']))
     counted = [x for x in dims if x['state'] == MEASURED]
@@ -496,20 +586,49 @@ def compare(now: dict, prev_code: Optional[str], prev_stored: Optional[dict]) ->
         if set(x) != set(y):
             return {**base, 'reason': TEMPLATES['previous.agents'].format(
                 surface=_surface_words(s), code=prev_code, prev=parity._agents_text(y) or 'no agent', now=parity._agents_text(x))}
+    now_max, prev_max = now.get('applicable_max'), prev_stored.get('applicable_max')
+    changed = prev_max is not None and now_max is not None and round(float(prev_max), 1) != round(float(now_max), 1)
     return {**base, 'comparable': True, 'reason': None, 'metric_counts': prev_stored.get('metric_counts'),
-            'delta': None if now['score'] is None or prev_stored.get('score') is None else now['score'] - prev_stored['score']}
+            'delta': None if now['score'] is None or prev_stored.get('score') is None else now['score'] - prev_stored['score'],
+            'applicable_max': prev_max,
+            'applicable_note': TEMPLATES['previous.applicable'].format(prev=_fmt(float(prev_max)), now=_fmt(float(now_max)))
+            if changed else None,
+            'dimension_deltas': dimension_deltas(now, prev_stored)}
+
+
+def _dims_of(body: dict) -> Dict[str, dict]:
+    return {d['code']: d for p in body.get('pillars') or [] for d in p.get('dimensions') or []}
+
+
+def dimension_deltas(now: dict, prev: dict) -> List[dict]:
+    """Each dimension's change, only where both cycles measured it: a
+    dimension measured on one side only has no delta (its points are in one
+    applicable max and not the other), in registry order."""
+    a, b = _dims_of(now), _dims_of(prev)
+    out = []
+    for d in DIMENSIONS:
+        x, y = a.get(d.code), b.get(d.code)
+        if not x or not y or x.get('state') not in (MEASURED, PARTIAL) or y.get('state') not in (MEASURED, PARTIAL):
+            continue
+        if x.get('score') is None or y.get('score') is None:
+            continue
+        out.append({'code': d.code, 'name': d.name, 'delta': round(x['score'] - y['score'], 2),
+                    'score': x['score'], 'previous': y['score']})
+    return out
 
 
 def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_rows: List[dict],
                 access: Optional[dict], reference_rows: Optional[List[dict]],
-                read_errors: Optional[Dict[str, str]] = None, inputs: Optional[dict] = None) -> dict:
+                read_errors: Optional[Dict[str, str]] = None, inputs: Optional[dict] = None,
+                domain_checks: Optional[dict] = None) -> dict:
     """GET /api/console/score without `previous` (score_with_previous adds it).
 
     runs: load_score_runs (one per run, with tier, stage, outcome and the
     expectation's type). mentions: load_score_mentions (Layer 1, with role
     and strength). vis_rows: Visibility's byQuestion. access: supply's access
     payload as accessibility_from_supply maps it. reference_rows: supply's
-    /reference rows."""
+    /reference rows. domain_checks: the cycle's stored domain-check record
+    (soa_cycles.domain_checks, 2E), or None."""
     errors = read_errors or {}
     at('crawl counts')
     crawl = crawl_counts(access, reference_rows)
@@ -518,7 +637,7 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     answered = {parity._surface_of(r) for r in runs if r.get('answer_status') == surfaces.ANSWERED}
     pooled = [s for s in ran if s in answered]
     per = [score_surface(s, runs=runs, mentions=mentions, crawl=crawl, crawl_errors=errors,
-                         program_stated=program_stated) for s in pooled]
+                         program_stated=program_stated, domain_checks=domain_checks) for s in pooled]
     at('pooling')
     scored = [p for p in per if p['score'] is not None]
     dims = [_pool_dimension(d.code, per) for d in DIMENSIONS] if per else []
@@ -541,10 +660,14 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     in_pool = [r for r in runs if parity._surface_of(r) in pooled]
     agents = {surfaces.agent_of(r.get('platform')) or r.get('platform') for r in in_pool}
     questions = len({r.get('query_code') for r in in_pool})
+    record = domain_checks or {}
     return {
         'cycle': cycle_code,
         'scorer_version': SCORER_VERSION,
         'adapter_revision': ADAPTER_REVISION,
+        # 2E: the dimensions this score counts, stored beside it: a change in
+        # the set is the second recompute trigger (needs_recompute)
+        'measured': [d['code'] for d in dims if d['state'] in (MEASURED, PARTIAL)],
         'score': score,
         'earned': round(mean(p['earned'] for p in scored), 1) if scored else None,
         'applicable_max': round(mean(p['applicable_max'] for p in scored), 1) if scored else 0.0,
@@ -574,7 +697,10 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
                                                           agents=_n(len(agents), 'agent', 'agents'))
                      + ''.join(TEMPLATES['coverage.no_answers'].format(surface=_surface_words(s))
                                for s in ran if s not in answered)},
-        'inputs': inputs or {},
+        'inputs': {**(inputs or {}), 'domain_checks': {
+            'checked_at': record.get('checked_at'), 'scored_domain': record.get('scored_domain'),
+            'version': record.get('version')} if record else None},
+        'history': [],
         'read_errors': errors,
         'rules': TEMPLATES,
     }
@@ -653,6 +779,36 @@ def stored_score(engine, cycle_id: int) -> Optional[dict]:
 
 def is_current(body: Optional[dict]) -> bool:
     return bool(body) and body.get('scorer_version') == SCORER_VERSION and body.get('adapter_revision') == ADAPTER_REVISION
+
+
+def needs_recompute(body: Optional[dict], domain_checks: Optional[dict]) -> Optional[str]:
+    """Why a stored score is recomputed on this read, or None to serve it.
+    2C-3's trigger, the scorer version (and the adapter's revision), and 2E's:
+    the set of measured dimensions changed. The cycle row says which of the
+    domain-check dimensions are measured now, with no supply call, so a
+    record stored after the score (run_domain_checks.py on 229) recomputes it
+    on the next read."""
+    if not body:
+        return 'first read'
+    if not is_current(body):
+        return 'stale'
+    was = [c for c in DOMAIN_CODES if c in (body.get('measured') or [])]
+    if was != measured_from_record(domain_checks):
+        return 'measured set changed'
+    return None
+
+
+def carry_history(new: dict, old: Optional[dict], reason: str) -> dict:
+    """The new score with the one it replaces kept in its history (newest
+    last, HISTORY_KEEP at most), so a report can show both."""
+    if not old:
+        return new
+    entry = {k: old.get(k) for k in ('score', 'earned', 'applicable_max', 'measured', 'scorer_version', 'adapter_revision')}
+    entry['scored_at'] = (old.get('inputs') or {}).get('scored_at')
+    entry['replaced_because'] = reason
+    new = dict(new)
+    new['history'] = ((old.get('history') or []) + [entry])[-HISTORY_KEEP:]
+    return new
 
 
 def store_score(engine, cycle_id: int, body: dict) -> bool:

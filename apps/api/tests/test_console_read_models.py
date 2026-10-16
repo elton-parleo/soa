@@ -379,7 +379,7 @@ def test_accessibility_is_proxied_with_claude_in_the_vocabulary(http, upstream):
     assert claude['vendor'] == 'claude'
     # 2C-2: an identity with no verified UA is not measured, and not a problem.
     assert claude['measured'] is False and access['problems'] == 0
-    assert [c['token'] for c in upstream.calls] == [TOKEN_A, TOKEN_A]
+    assert [c['token'] for c in upstream.calls] == [TOKEN_A, TOKEN_A, TOKEN_A]   # access, reference, retailers (2E)
 
 
 def test_studies_are_study_rows(http):
@@ -571,7 +571,7 @@ def test_accessibility_uses_the_scoped_tenants_token(http, upstream):
                     body=_fixture('supply_access_ws.json'), token=TOKEN_A)
     as_('bob')
     assert http.get('/api/console/accessibility', params={'merchant': 'wiggle-and-snug'}).status_code == 404
-    assert [c['token'] for c in upstream.calls] == [TOKEN_B, TOKEN_B]
+    assert [c['token'] for c in upstream.calls] == [TOKEN_B, TOKEN_B, TOKEN_B]   # access, reference, retailers (2E)
 
 
 def test_full_loop_is_tenant_scoped(http, upstream):

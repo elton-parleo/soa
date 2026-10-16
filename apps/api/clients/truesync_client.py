@@ -434,3 +434,71 @@ class TrueSyncProvisioningClient(TrueSyncClient):
         if merchant is not None:
             body["merchant"] = merchant
         return await self.forward("POST", "/api/truesync/tenants", json=body)
+
+
+# ─── 2E: supply #21's fields, read tolerantly ─────────────────────────────
+#
+# Supply #21 (2A-3) appends fields to rows it already served: every read row
+# (`/reference`, `/retailer-prices`) gains `offer_text` and
+# `incentive_in_markup`, and `/access` gains per-token `rule_source` /
+# `matched_rule` on its grid rows and a top-level `robots_by_domain`. A
+# supply before #21 sends none of them. These readers never raise: a field
+# that is missing, null or the wrong shape is None ("not measured"), never
+# an error and never a false.
+
+INCENTIVE_FLAGS = ("member_price", "promo", "subscription", "code")
+INCENTIVE_SOURCES = ("json_ld", "text", "none")
+
+
+def incentive_in_markup(row: Any) -> Optional[dict]:
+    """A read row's `incentive_in_markup`, normalized: the four flags as
+    booleans, `source`, and `json_ld_scanned` (False on a read stored before
+    2A-3 and not backfilled). None when the row has no such field (an older
+    supply), it is null (supply's "we did not see the page") or malformed."""
+    value = row.get("incentive_in_markup") if isinstance(row, dict) else None
+    if not isinstance(value, dict):
+        return None
+    flags = {k: value.get(k) is True for k in INCENTIVE_FLAGS}
+    source = value.get("source") if value.get("source") in INCENTIVE_SOURCES else None
+    return {**flags, "source": source, "json_ld_scanned": value.get("json_ld_scanned") is True}
+
+
+def carries_incentive_fields(rows: Any) -> bool:
+    """Whether a supply that knows the field served these rows: any row with
+    the key at all (null on an unread page still counts)."""
+    return any(isinstance(r, dict) and "incentive_in_markup" in r for r in rows or [])
+
+
+def robots_by_domain(payload: Any) -> Optional[list]:
+    """`/access`'s per-domain roll-up, each entry {retailer_domain, robots_url,
+    robots_status, named, total, wildcard_only} with `named` None where supply
+    sends null (a challenged or errored robots.txt: "not checked"). None when
+    the payload has no roll-up (an older supply); [] with no access run yet."""
+    entries = payload.get("robots_by_domain") if isinstance(payload, dict) else None
+    if not isinstance(entries, list):
+        return None
+    out = []
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        names = e.get("robots_names_agents") if isinstance(e.get("robots_names_agents"), dict) else {}
+        named, total = names.get("answer_time_tokens_named"), names.get("answer_time_tokens_total")
+        out.append({
+            "retailer_domain": e.get("retailer_domain"), "robots_url": e.get("robots_url"),
+            "robots_status": e.get("robots_status"),
+            "named": named if isinstance(named, int) and not isinstance(named, bool) else None,
+            "total": total if isinstance(total, int) and not isinstance(total, bool) else None,
+            "wildcard_only": names.get("wildcard_only") is True,
+        })
+    return out
+
+
+def token_rules(grid_row: Any) -> Optional[list]:
+    """A grid row's per-token robots verdicts ({token, verdict, rule_source,
+    matched_rule}), or None from a supply that does not send them."""
+    detail = grid_row.get("detail") if isinstance(grid_row, dict) else None
+    tokens = detail.get("tokens") if isinstance(detail, dict) else None
+    if not isinstance(tokens, list):
+        return None
+    return [{"token": t.get("token"), "verdict": t.get("verdict"), "rule_source": t.get("rule_source"),
+             "matched_rule": t.get("matched_rule")} for t in tokens if isinstance(t, dict)]

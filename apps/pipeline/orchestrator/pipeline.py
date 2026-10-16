@@ -413,6 +413,7 @@ class PipelineOrchestrator:
             await self._run_pass2_recode()
 
         await self._run_expectation_scoring()
+        await self._run_domain_checks()
 
         return CodingStageResult(
             coded=summary.coded,
@@ -528,6 +529,51 @@ class PipelineOrchestrator:
                 "Stage 2c (expectation scoring) failed unexpectedly for cycle %s",
                 self.cycle_code,
             )
+
+    async def _run_domain_checks(self) -> None:
+        """
+        Stage 2d (2E): the Audit's domain checks (Protocol & Feed Presence,
+        Value Protocols) and the signed-agent probe, once per cycle, against
+        the cycle's merchant's own domains (scoring/domain_checks.py), stored
+        on soa_cycles.domain_checks for the console's score of record.
+
+        Only a cycle whose questions name a merchant (a study grounded in a
+        TrueSync catalog) has domains to check; any other does nothing. A
+        cycle that already holds a record keeps it, so a re-run never moves
+        the score of record. Never raises: the checks are a second
+        measurement beside the answers, and without them the console shows
+        the two dimensions as not measured, as before.
+        """
+        from clients.truesync_catalog import TrueSyncCatalogClient
+        from scoring import domain_checks
+        from soa_shared.database import engine
+
+        try:
+            with engine.connect() as conn:
+                if not domain_checks.column_exists(conn):
+                    logger.warning("Stage 2d (domain checks) skipped for cycle %s: soa_cycles.domain_checks "
+                                   "is missing (migration b4e8f1c3a9d2 not applied)", self.cycle_code)
+                    return
+                if not domain_checks.cycle_merchant(conn, self.cycle.id):
+                    return
+            if domain_checks.stored(engine, self.cycle.id):
+                logger.info("Stage 2d (domain checks): cycle %s already holds a record, kept", self.cycle_code)
+                return
+            client = TrueSyncCatalogClient.for_study(self.study_type)
+            loop = asyncio.get_running_loop()
+            record = await loop.run_in_executor(
+                None, lambda: domain_checks.run_for_cycle(self.cycle.id, engine=engine, client=client))
+            if not record.get('domains'):
+                logger.warning("Stage 2d (domain checks) for cycle %s: nothing checked (%s)",
+                               self.cycle_code, '; '.join(record.get('errors') or []) or 'no own domain')
+                return
+            domain_checks.store(engine, self.cycle.id, record)
+            logger.info("Stage 2d (domain checks) complete for cycle %s: %s, protocol_feed %s, value_protocols %s, "
+                        "signed probe %s", self.cycle_code, record['scored_domain'],
+                        record['protocol_feed']['score'], record['value_protocols']['score'],
+                        record['signed_probe']['outcome'])
+        except Exception:
+            logger.exception("Stage 2d (domain checks) failed for cycle %s", self.cycle_code)
 
     async def _run_stage_metrics(self) -> MetricsStageResult:
         """

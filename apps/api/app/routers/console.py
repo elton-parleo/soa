@@ -46,6 +46,7 @@ from app.routers.customers import _tenant_view
 from app.services import console_parity as parity
 from app.services import console_read_models as rm
 from app.services import console_score as score_svc
+from clients import truesync_client as supply_fields
 from soa_shared import customers, surface_accuracy, surfaces
 from soa_shared.database import engine
 
@@ -192,10 +193,15 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
     score_svc.at('reading the stored score')
     stored = score_svc.stored_score(engine, row['id'])
     body = dict(stored or {}, stored=True)
-    if rescore or not score_svc.is_current(stored) or (merchant and (body.get('inputs') or {}).get('merchant') != merchant):
+    # 2E: the cycle's domain checks (soa_cycles.domain_checks), on the row
+    # cycle_in_scope already read; absent before migration b4e8f1c3a9d2
+    domain_checks = _json(row.get('domain_checks'))
+    domain_checks = domain_checks if isinstance(domain_checks, dict) else None
+    why = ('rescore' if rescore else score_svc.needs_recompute(stored, domain_checks)
+           or ('merchant' if merchant and (body.get('inputs') or {}).get('merchant') != merchant else None))
+    if why:
         started = time.monotonic()
-        score_svc.log_event('score.start', cycle=row['cycle_code'], cycle_id=row['id'], org=org,
-                            reason='rescore' if rescore else 'stale' if stored else 'first read')
+        score_svc.log_event('score.start', cycle=row['cycle_code'], cycle_id=row['id'], org=org, reason=why)
         with engine.connect() as conn:
             runs = score_svc.load_score_runs(conn, row)
             mentions = score_svc.load_score_mentions(conn, row)
@@ -224,7 +230,10 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
         body = score_svc.build_score(row['cycle_code'], runs=runs, mentions=mentions, vis_rows=vis_rows, access=access,
                                      reference_rows=reference_rows, read_errors=errors,
                                      inputs={'merchant': slug, 'reference_run': reference_run, 'access_run': access_run,
-                                             'scored_at': datetime.now(timezone.utc).isoformat()})
+                                             'scored_at': datetime.now(timezone.utc).isoformat()},
+                                     domain_checks=domain_checks)
+        # the value it replaces stays in its history (2E)
+        body = score_svc.carry_history(body, stored, why)
         # a failed supply read is served, never stored: the next read tries again
         score_svc.at('storing the score')
         body['stored'] = not errors and score_svc.store_score(engine, row['id'], body)
@@ -377,15 +386,43 @@ def _value_outcomes(conn, row) -> list:
 @router.get("/accessibility")
 async def get_accessibility(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
     client = full_loop._client(scope)
-    (status, payload, error), (_, reference, r_err) = await asyncio.gather(
-        client.get_access(merchant), client.get_reference(merchant))
+    (status, payload, error), (_, reference, r_err), (_, retailers, o_err) = await asyncio.gather(
+        client.get_access(merchant), client.get_reference(merchant), client.get_retailers(merchant))
     if error is not None:
         raise HTTPException(status_code=404 if status == 404 else 502,
                             detail=f"TrueSync access payload unavailable: {error}")
     # 2C-2: the merchant-level checks from the latest reference read; a
     # failed read leaves them 'not_checked' and is named in read_errors.
+    # 2E: robots from supply #21's roll-up on the merchant's own domain, the
+    # signed probe and the protocol profile from the newest cycle's domain checks
+    cycle_code, record = _latest_domain_checks(merchant, scope)
+    own = [d for d in (record or {}).get('own_domains') or []]
+    if not own and o_err is None:
+        listed = (retailers or {}).get('own_domains') or [(retailers or {}).get('own_domain')]
+        own = [str(d).lower().removeprefix('www.') for d in listed if d]
     return parity.extend_accessibility(rm.accessibility_from_supply(payload), reference if r_err is None else None,
-                                       reference_error=r_err)
+                                       reference_error=r_err, robots=supply_fields.robots_by_domain(payload),
+                                       own_domains=own, domain_checks=record, domain_cycle=cycle_code)
+
+
+def _latest_domain_checks(merchant: str, scope: CustomerScope) -> tuple:
+    """(cycle_code, record) of the scope's newest cycle whose domain checks
+    are this merchant's, or (None, None): none yet, or the column is not
+    there (migration b4e8f1c3a9d2)."""
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text(f"""
+                SELECT c.cycle_code, c.domain_checks FROM soa_cycles c
+                WHERE c.domain_checks IS NOT NULL AND {cycle_customer_org_sql()} = :org
+                ORDER BY c.start_date DESC, c.id DESC
+            """), {"org": scope.org.id}).all()
+    except Exception:  # noqa: BLE001 - column missing before the migration is applied
+        return None, None
+    for code, raw in rows:
+        record = _json(raw)
+        if isinstance(record, dict) and record.get('merchant') == merchant:
+            return code, record
+    return None, None
 
 
 @router.get("/programs")
