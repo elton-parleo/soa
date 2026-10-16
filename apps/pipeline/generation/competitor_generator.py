@@ -14,6 +14,23 @@ trust the model alone): manual competitor_names are user intent and
 always kept in full, topped up with generated candidates to
 MAX_CANDIDATES total, deduped case-insensitively across both sets and
 against the primary brand.
+
+LOCKSTEP: apps/api/app/services/competitor_suggestion.py is a
+deliberate, self-contained duplicate of this module with the SAME
+contract (apps/api never imports apps/pipeline — see that file's
+docstring). The prompt builder and generate_competitors' signature must
+change in BOTH files together, or not at all; a parity test asserts the
+two prompts are byte-identical for identical inputs
+(apps/api/tests/test_competitor_prompt_parity.py). Only the differences
+already there are allowed to differ: the module docstrings and the log
+prefix.
+
+site_context (competitor grounding): the caller may pass an
+already-rendered block of what the brand's own homepage says about
+itself, so the model reads the category off the store instead of
+guessing it from an ambiguous brand name. Worker-side only for now —
+apps/pipeline/scan/site_context.py::read_site_context produces it, and
+the API copy's caller still passes None (see that router's docstring).
 """
 import json
 import logging
@@ -36,7 +53,20 @@ class CompetitorCandidate:
     domain: Optional[str] = None
 
 
-def _build_competitor_prompt(brand_name: str, store_url: Optional[str], category_hint: Optional[str]) -> str:
+def _build_competitor_prompt(
+    brand_name: str,
+    store_url: Optional[str],
+    category_hint: Optional[str],
+    site_context: Optional[str] = None,
+) -> str:
+    """site_context is an already-rendered prompt block (a plain string,
+    never a dataclass — see this module's docstring on why the two copies
+    of this file share a contract but no imports): a few short labelled
+    lines of what the brand's own homepage says about itself, produced
+    worker-side by apps/pipeline/scan/site_context.py::SiteContext::
+    as_prompt_block. It is the authoritative category signal when
+    present, because a brand NAME alone is often ambiguous and the model
+    would otherwise guess the category from it."""
     context_lines = []
     if store_url:
         context_lines.append(f"Its store is at {store_url}.")
@@ -44,7 +74,17 @@ def _build_competitor_prompt(brand_name: str, store_url: Optional[str], category
         context_lines.append(f"Its product category is: {category_hint}.")
     context = " ".join(context_lines)
 
-    return f"""You are identifying direct consumer-brand competitors for "{brand_name}" for a brand comparison study. {context}
+    grounding = ""
+    if site_context:
+        grounding = (
+            f"\n\nWhat the brand's own website says about itself (fetched from its homepage):\n"
+            f"{site_context}\n"
+            f'Treat this as the authoritative description of what "{brand_name}" sells. '
+            f"If the brand name alone could belong to several categories, use the website, "
+            f"not the name, to decide."
+        )
+
+    return f"""You are identifying direct consumer-brand competitors for "{brand_name}" for a brand comparison study. {context}{grounding}
 
 Selection rules — follow exactly:
 - List brands a shopper would genuinely consider INSTEAD of "{brand_name}" — same product category, roughly the same price tier.
@@ -94,9 +134,10 @@ def _call_once(
     store_url: Optional[str],
     category_hint: Optional[str],
     api_key: str,
+    site_context: Optional[str] = None,
 ) -> list:
     client = OpenAI(api_key=api_key)
-    prompt = _build_competitor_prompt(brand_name, store_url, category_hint)
+    prompt = _build_competitor_prompt(brand_name, store_url, category_hint, site_context)
     response = client.chat.completions.create(
         model=COMPETITOR_MODEL,
         messages=[{"role": "user", "content": prompt}],
@@ -112,13 +153,14 @@ def generate_competitors(
     *,
     store_url: Optional[str] = None,
     category_hint: Optional[str] = None,
+    site_context: Optional[str] = None,
 ) -> list:
     """Returns up to 5 CompetitorCandidate rows, or [] if both the
     initial attempt and its one retry fail (bad JSON, API error, timeout,
     anything) — never raises."""
     for attempt in (1, 2):
         try:
-            return _call_once(brand_name, store_url, category_hint, api_key)
+            return _call_once(brand_name, store_url, category_hint, api_key, site_context)
         except Exception:
             log.warning(
                 f"[lite] competitor generation attempt {attempt} failed for '{brand_name}'", exc_info=True
