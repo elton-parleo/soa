@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D, 2E, 2E-2)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D, 2E, 2E-2, 2G)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -1917,6 +1917,36 @@ change.
 The console no longer renders the Overview's "Dimension by dimension" table or the Measure screens' Share of Algorithm
 row. Neither is on the demo. This endpoint still serves `pillars[].dimensions`, their parts, checks and
 `previous.dimension_deltas`.
+
+## 2G: seven demo-parity leftovers (soa's half)
+
+Api mode shows what the demo shows. soa serves what the console needs to render each item the demo's way. Tests:
+`tests/test_console_2g.py`, on the 229-shaped fixture with its 2G layer (`tests/console_fixture_229_2g.py`), on both
+databases.
+
+| item | the demo | soa |
+|---|---|---|
+| 1. Answers header | "N answers from M surfaces" counts answers | No change. `/answers/summary` `all_tiers` already gives runs and answered per surface under 2C-2b's rule. 229: 516 runs, 514 answered (grounded API 514 of 514, consumer UI 2 of 0) |
+| 2. TrueSync readback | "N of M priced it right" is about prices | Each answer carries `expected_type` (its outcome's expectation, else its question's): `price`, `member_price`, `code`, `points`, `brand_mention`. On 229 Snug-Fit Diapers has 72 price, 6 code and 12 points answers |
+| 3. True Value program tile | "Program price quoted, The first-order or member price that decides who wins" | No change (the console counts the `member_price` programs) |
+| 4. Visibility footer | "Also named but not tracked: Target 36, Tractor Supply 27, Costco 17 (all 420 answers)." | `ranking.untracked[surface]`: brands named outside the comparison set (never ours, never a comparison-set brand, never a source), each `{name, named}`, over the surface's answered runs, most named first, ten at most. 229 layer: Target 34, Costco 17, Hello Bello 9 of 514 |
+| 5. True Value row caption | "First Autoship $47.99 (Purina ladder). Quoted by 0 of 5 agents." | `program_lines[variant_id]` (`parity.program_lines`). The program price follows the ladder's rule, `member_price_source`: the record's, else the newest page read with a member price. Per surface, the agents asked a value-tier member-price question about the variant and the ones with an exact answer, plus the sentence: "Member+ $15.49 (from the page read Oct 14). Quoted by 1 of 2 agents.", or "Not asked this cycle." when there is a price and no question. A variant with neither gets no caption. Rows carry `variant_id` |
+| 6. Offer record | Shipping "Free over $39", Returns "60 days", Availability "In stock" | **Supply carries no shipping or returns.** The W&S store config has a free-shipping *deal* (`kind: free_shipping`, `spend_min: 35`), merchant-wide; no listing in `/incentives` carries it, and nothing carries a returns policy. `offer_fields` keeps its rule: shipping and returns only when the listing carries them, so nothing renders. **Availability**: the record's variant, else the newest page read. `/reference` rows drop `availability`, so the record also reads supply `/retailer-prices` (`prices`), whose rows carry it. The value is put in words ("In stock") with provenance `parleo` and "as the newest page read found it, Oct 14". The Oct 14 recording predates the field, so production's record shows availability only after a newer read |
+| 7. Catalog stage ladder | "0 Not measured · 1 Measured (you are here) · 2 Published · 3 Verified", each with a line, and modeled rankings | `stage_ladder`: the four stages with the demo's lines and the products that reached each, from the per-product stages (a product counts at each stage it reached; Not measured is one no scored cycle quoted), `here` the highest stage any product reached. No rankings: the demo's are modeled. 229 layer: 19 published, 13 measured, 0 verified, 6 not measured, here = Published |
+
+**The 2G layer** is applied on top of 229's base fixture in 2G's tests only. It doesn't change the base, and 2C-3a's
+counts are untouched.
+- Questions name their variants: catalog in record order; Member+ on Overnight Size 3, Cloud Wipes and the Trial Pack;
+  code and points on Snug-Fit Diapers.
+- The catalog runs that state a price carry it: every exact and wrong run, and every run answered with another brand's
+  price. That covers 13 variants.
+- One run moves from exact to wrong: the sixth of the first catalog question. Without it that variant would be verified,
+  and production's 229 has none.
+- Layer 2 names Target, Costco and Hello Bello, plus 43 sources.
+
+`tests/fixtures/console/supply_retailer_prices_ws_availability.json` is the recorded W&S retailer-prices payload with
+each readable row's availability as supply's own reader stores it (`parse._availability` on the store's
+`https://schema.org/InStock`).
 
 ## Answer divergences
 

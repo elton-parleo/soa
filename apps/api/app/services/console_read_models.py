@@ -312,6 +312,9 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'collector': run.get('collector') or surfaces.collector_of(platform),
         'answer_status': run.get('answer_status'),
         'tier': tier,
+        # 2G: what the question expected (price, member_price, code, points,
+        # brand_mention), so a reader can count price claims apart from the rest
+        'expected_type': expectation.get('type') or (_json(query.get('query_expected')) or {}).get('type'),
         'reason': _reason_code((outcome or {}).get('reason_code')),
         'verdict': verdict,
         'tone': BRAND_TONE.get(raw, 'neu') if brand else VERDICT_TONE.get(verdict, 'neu'),
@@ -321,7 +324,7 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'variant_id': source_ref.get('variant_id'),
         'gtin': source_ref.get('gtin'),
         'retailer': expectation.get('attributed_to') or source_ref.get('own_domain') or source_ref.get('domain'),
-    }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer'))
+    }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer', 'expected_type'))
 
 
 # ─── Answers summary (2C) ──────────────────────────────────────────────────
@@ -633,9 +636,10 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             cells = {a: full_cell([r for r in runs if (r.get('agent') or 'unknown') == a], live.get((key, domain)),
                                   [s for s in surface_list if a in agents_on.get(s, [])])
                      for a in agent_columns}
-            rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': cells, 'retailer_cells': retailer_cells})
+            rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': cells, 'retailer_cells': retailer_cells,
+                         'variant_id': key})
         else:
-            rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': retailer_cells})
+            rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': retailer_cells, 'variant_id': key})
 
     by_agent: Dict[str, Dict[str, dict]] = {}
     for item in scored:
@@ -1338,6 +1342,8 @@ VIS_TIER_ORDER = (VIS_UNPROMPTED, 'category_control', 'brand_direct', 'catalog_a
 #: (a cited site, a publisher) is not a brand put to the shopper.
 VIS_SOURCE_PRESENTED = ('source',)
 VIS_SOURCE_RELATIONS = ('citation_only',)
+#: 2G: how many brands outside the comparison set the ranking names per surface.
+VIS_UNTRACKED_KEEP = 10
 VIS_FIRST_PICK_RULE = (
     "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every "
     "brand named, so when the comparison set's first brand sits second or later, another brand came first, "
@@ -1537,6 +1543,14 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
         ranking_rows.append({'name': name, 'you': row['you'], 'named': top['named'], 'first': top['first'],
                              'surfaces': per})
     ranking_rows.sort(key=lambda r: (-r['named'], -r['first'], not r['you'], r['name'].lower()))
+    # 2G: brands named outside the comparison set, with how many answers on
+    # each surface named them (over every answered run there), most named
+    # first: the demo's "Also named but not tracked" line
+    tracked = {e['name'] for e in entities if e.get('name')}
+    untracked = {s: [{'name': r['name'], 'named': r['surfaces'][s]['named']}
+                     for r in sorted(ranking_rows, key=lambda r: (-r['surfaces'][s]['named'], r['name'].lower()))
+                     if r['name'] not in tracked and not r['you'] and r['surfaces'][s]['named'] > 0][:VIS_UNTRACKED_KEEP]
+                 for s in surface_list}
     tiers = [t for t in VIS_TIER_ORDER if any(r['tier'] == t for r in rows)]
     tiers += sorted({r['tier'] for r in rows} - set(tiers))
     return {
@@ -1548,7 +1562,8 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
                     # beside the typed fields
                     'denoms': denoms, 'agent_denoms': agent_denoms,
                     'first_uncoded': {s: sum(v.values()) for s, v in uncoded.items()},
-                    'agent_first_uncoded': uncoded},
+                    'agent_first_uncoded': uncoded,
+                    'untracked': untracked},
         'note': VIS_FIRST_PICK_RULE,
         # beside the typed fields
         'surfaces': [{'surface': s, 'label': surfaces.SURFACE_LABELS.get(s, s), 'answered': denoms[s],
@@ -1960,7 +1975,7 @@ STUDIO_MIRROR = [
 
 def load_answers(conn, cycle: dict) -> List[dict]:
     runs = conn.execute(text("""
-        SELECT r.*, q.query_code, q.query_text, q.tier, q.stage, q.source_ref
+        SELECT r.*, q.query_code, q.query_text, q.tier, q.stage, q.source_ref, q.expected_answer AS query_expected
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         WHERE r.cycle_id = :c ORDER BY q.query_code, r.platform, r.run_number
     """), {'c': cycle['id']}).mappings().all()

@@ -347,6 +347,11 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
         (owned or {}).get('incentives') if o_err is None else None, scored, own_domain=own_domain,
         reads=(reference or {}).get('rows') if r_err is None else None, member_reads=history)
     body['member_reads'] = 'history' if history is not None else 'reference'
+    # 2G: the caption under each product: its program price by the ladder's
+    # rule, and the agents that quoted it on each surface
+    body['program_lines'] = parity.program_lines(
+        catalog if k_err is None else None, incentives if i_err is None else None, value_outcomes,
+        reads=history if history is not None else ((reference or {}).get('rows') if r_err is None else None))
     body['read_errors'] = errors
     return body
 
@@ -489,12 +494,14 @@ async def _record_inputs(merchant: str, scope: CustomerScope, *, incentives: boo
     reads = [client.get_merchant_catalog(merchant), client.get_publications(limit=500), client.get_channels(),
              client.get_provenance(merchant), client.get_reference(merchant)]
     if incentives:
-        reads += [client.get_merchant_incentives(merchant), client.get_owned_incentives(merchant)]
+        # 2G: supply's retailer-prices too: its rows carry availability, which /reference drops
+        reads += [client.get_merchant_incentives(merchant), client.get_owned_incentives(merchant),
+                  client.get_retailer_prices(merchant)]
     view, *results = await asyncio.gather(_tenant_view(scope.org), *reads)
     (k_status, catalog, k_err), *rest = results
     if k_err is not None and k_status != 404:
         raise HTTPException(status_code=502, detail=f"TrueSync catalog unavailable: {k_err}")
-    names = ('publications', 'channels', 'provenance', 'reference', 'incentives', 'owned_incentives')
+    names = ('publications', 'channels', 'provenance', 'reference', 'incentives', 'owned_incentives', 'retailer_prices')
     errors = {n: err for n, (_, _, err) in zip(names, rest) if err is not None}
     if view.get('error'):
         errors['tenant'] = view['error']
@@ -505,6 +512,7 @@ async def _record_inputs(merchant: str, scope: CustomerScope, *, incentives: boo
         'publications': body['publications'] or [], 'channels': body['channels'] or [],
         'provenance': body['provenance'], 'reference': body['reference'],
         'incentives': body.get('incentives'), 'owned_incentives': (body.get('owned_incentives') or {}).get('incentives'),
+        'prices': (body.get('retailer_prices') or {}).get('prices'),
         'read_errors': errors,
     }
 
@@ -555,6 +563,7 @@ async def get_record(merchant: str = Query(...), product: str = Query(...),
                                catalog={'listings': [listing]}, verifications=verifications,
                                provenance=got['provenance'])
     return parity.extend_record(record, listing=listing, owned=got['owned_incentives'], reference=got['reference'],
+                                prices=got.get('prices'),
                                 publications=got['publications'], verifications=verifications,
                                 channels=got['channels'], truesync_product=(matrix['products'] or [None])[0],
                                 truesync_channels=matrix['channels'])

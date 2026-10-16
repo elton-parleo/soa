@@ -42,3 +42,14 @@ shape (`prices`), its 19 rows from #114's own builder
 / $1", truesync-demo-store `components/SiteChrome.tsx`), with a JSON-LD half
 of `member_price` only. Supply serves `promo: true` from the bar's text on
 every row. That is the 2E-2 Deal Citability case (`tests/test_console_2e2.py`).
+
+## 2G: availability on the read
+
+`supply_retailer_prices_ws_availability.json` is `supply_retailer_prices_ws.json`
+(supply #20's history shape, `prices`) with each readable row's `availability`
+set the way supply's reader stores it: parleo-supply-app `ef3c267`
+`truesync/fullloop/parse._availability`, applied to the store's Offer
+availability, `https://schema.org/InStock`, gives `in_stock`. The Oct 14
+recording predates the field, so every row there is null. The 2G record test
+(`tests/test_console_2g.py`) reads this file for Availability and the original
+for the case where no read carries one.
