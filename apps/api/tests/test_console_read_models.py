@@ -51,58 +51,51 @@ def _encode(value):
     return json.dumps(value) if isinstance(value, (dict, list)) else value
 
 
-@pytest.fixture
-def db(monkeypatch):
-    monkeypatch.setattr(config, "SOA_SECRET_KEY", Fernet.generate_key().decode())
-    monkeypatch.setattr(config, "TRUESYNC_TENANT_TOKEN", "")
-    monkeypatch.setattr(config, "TRUESYNC_API_BASE", "https://supply.example")
-    engine = create_engine("sqlite://", poolclass=StaticPool,
-                           connect_args={"check_same_thread": False})
-
-    @event.listens_for(engine, "connect")
-    def _now(dbapi_conn, _):
-        dbapi_conn.create_function("NOW", 0, lambda: datetime.now(timezone.utc).isoformat())
-
+def seed_console_db(engine, *, pk='INTEGER PRIMARY KEY', json='TEXT'):
+    """The console tables and the W&S fixture cycle. sqlite by default; 2C-3a
+    runs the same on a throwaway local Postgres with production's types
+    (pk='SERIAL PRIMARY KEY', json='JSON': soa's JSON columns are Postgres
+    json, which, unlike sqlite TEXT, has no equality operator)."""
     data = _fixture('ws_fixture_cycle.json')
     with engine.begin() as c:
-        c.exec_driver_sql("""CREATE TABLE organizations (id INTEGER PRIMARY KEY, name TEXT UNIQUE,
+        c.exec_driver_sql(f"""CREATE TABLE organizations (id {pk}, name TEXT UNIQUE,
             created_at TIMESTAMP, truesync_tenant_slug TEXT UNIQUE, truesync_token_sealed TEXT,
             truesync_token_id TEXT)""")
-        c.exec_driver_sql("""CREATE TABLE organization_members (id INTEGER PRIMARY KEY,
+        c.exec_driver_sql(f"""CREATE TABLE organization_members (id {pk},
             organization_id INTEGER, user_id TEXT, email TEXT, role TEXT DEFAULT 'member',
-            is_operator BOOLEAN NOT NULL DEFAULT 0, created_at TIMESTAMP)""")
-        c.exec_driver_sql("""CREATE TABLE soa_query_generation_jobs (id INTEGER PRIMARY KEY,
+            is_operator BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMP)""")
+        c.exec_driver_sql(f"""CREATE TABLE soa_query_generation_jobs (id {pk},
             study_type TEXT UNIQUE, study_name TEXT, description TEXT, target_count INTEGER,
             created_count INTEGER, status TEXT, organization_id INTEGER, customer_organization_id INTEGER,
-            created_by TEXT, created_at TIMESTAMP, study_pattern TEXT, allowed_categories TEXT,
-            retailer_names TEXT, syndicated_merchant TEXT, tier_config TEXT)""")
-        c.exec_driver_sql("""CREATE TABLE soa_entities (id INTEGER PRIMARY KEY, name TEXT, slug TEXT,
-            entity_type TEXT, category TEXT, website_url TEXT, aliases TEXT)""")
-        c.exec_driver_sql("""CREATE TABLE soa_cycles (id INTEGER PRIMARY KEY, cycle_code TEXT UNIQUE,
+            created_by TEXT, created_at TIMESTAMP, study_pattern TEXT, allowed_categories {json},
+            retailer_names TEXT, syndicated_merchant TEXT, tier_config {json})""")
+        c.exec_driver_sql(f"""CREATE TABLE soa_entities (id {pk}, name TEXT, slug TEXT,
+            entity_type TEXT, category TEXT, website_url TEXT, aliases {json})""")
+        c.exec_driver_sql(f"""CREATE TABLE soa_cycles (id {pk}, cycle_code TEXT UNIQUE,
             study_type TEXT, study_pattern TEXT, status TEXT, cycle_mode TEXT, start_date DATE,
-            end_date DATE, total_runs_planned INTEGER, completed_runs INTEGER, platforms TEXT,
+            end_date DATE, total_runs_planned INTEGER, completed_runs INTEGER, platforms {json},
             runs_per_query INTEGER, organization_id INTEGER, created_at TIMESTAMP, notes TEXT,
-            full_loop_run_id INTEGER, reference_prices TEXT)""")
-        c.exec_driver_sql("""CREATE TABLE soa_cycle_entities (id INTEGER PRIMARY KEY, cycle_id INTEGER,
+            full_loop_run_id INTEGER, reference_prices {json})""")
+        c.exec_driver_sql(f"""CREATE TABLE soa_cycle_entities (id {pk}, cycle_id INTEGER,
             entity_id INTEGER, comparison_code TEXT, role TEXT)""")
-        c.exec_driver_sql("""CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, query_code TEXT,
+        c.exec_driver_sql(f"""CREATE TABLE soa_queries (id {pk}, query_code TEXT,
             query_text TEXT, category TEXT, stage TEXT, specificity TEXT, persona TEXT, status TEXT,
             study_type TEXT, study_pattern TEXT, organization_id INTEGER, tier TEXT,
-            expected_answer TEXT, provenance TEXT, source_ref TEXT)""")
-        c.exec_driver_sql("""CREATE TABLE soa_runs (id INTEGER PRIMARY KEY, cycle_id INTEGER,
+            expected_answer {json}, provenance TEXT, source_ref {json})""")
+        c.exec_driver_sql(f"""CREATE TABLE soa_runs (id {pk}, cycle_id INTEGER,
             query_id INTEGER, platform TEXT, run_number INTEGER, run_at TIMESTAMP, raw_response TEXT,
-            status TEXT, surface TEXT, collector TEXT, answer_status TEXT, retrieved_sources TEXT)""")
-        c.exec_driver_sql("""CREATE TABLE soa_expectation_outcomes (id INTEGER PRIMARY KEY,
+            status TEXT, surface TEXT, collector TEXT, answer_status TEXT, retrieved_sources {json})""")
+        c.exec_driver_sql(f"""CREATE TABLE soa_expectation_outcomes (id {pk},
             run_id INTEGER, query_id INTEGER, cycle_id INTEGER, platform TEXT, tier TEXT,
-            expected_answer TEXT, extraction TEXT, outcome TEXT, outcome_reason TEXT, flags TEXT,
-            claim_results TEXT, source_split TEXT, reason_code TEXT, surface TEXT,
+            expected_answer {json}, extraction {json}, outcome TEXT, outcome_reason TEXT, flags {json},
+            claim_results {json}, source_split {json}, reason_code TEXT, surface TEXT,
             source_attribution TEXT, domain_cited BOOLEAN)""")
-        c.exec_driver_sql("""CREATE TABLE soa_coded_mentions (id INTEGER PRIMARY KEY, run_id INTEGER,
+        c.exec_driver_sql(f"""CREATE TABLE soa_coded_mentions (id {pk}, run_id INTEGER,
             entity_id INTEGER, mentioned BOOLEAN, position INTEGER, strength TEXT, deal_cited BOOLEAN,
             member_value_cited BOOLEAN)""")
-        c.exec_driver_sql("""CREATE TABLE soa_full_loop_requests (id INTEGER PRIMARY KEY,
-            organization_id INTEGER, merchant_slug TEXT, study_type TEXT, platforms TEXT,
-            runs_per_query INTEGER, allow_hosted_render BOOLEAN NOT NULL DEFAULT 1,
+        c.exec_driver_sql(f"""CREATE TABLE soa_full_loop_requests (id {pk},
+            organization_id INTEGER, merchant_slug TEXT, study_type TEXT, platforms {json},
+            runs_per_query INTEGER, allow_hosted_render BOOLEAN NOT NULL DEFAULT TRUE,
             supply_run_id INTEGER, supply_status TEXT, cycle_id INTEGER,
             status TEXT, error TEXT, created_by TEXT, created_at TIMESTAMP, updated_at TIMESTAMP)""")
 
@@ -123,8 +116,22 @@ def db(monkeypatch):
         customers.link_tenant(c, 10, 'wiggle-and-snug', TOKEN_A, 'aaaaaaaaaaaaaaaa')
         customers.link_tenant(c, 20, 'brandco', TOKEN_B, 'bbbbbbbbbbbbbbbb')
         c.exec_driver_sql("""INSERT INTO organization_members (organization_id, user_id, email, is_operator)
-            VALUES (1, 'op', 'op@parleo.io', 1), (10, 'alice', 'alice@ws.test', 0),
-                   (20, 'bob', 'bob@brandco.test', 0)""")
+            VALUES (1, 'op', 'op@parleo.io', TRUE), (10, 'alice', 'alice@ws.test', FALSE),
+                   (20, 'bob', 'bob@brandco.test', FALSE)""")
+
+@pytest.fixture
+def db(monkeypatch):
+    monkeypatch.setattr(config, "SOA_SECRET_KEY", Fernet.generate_key().decode())
+    monkeypatch.setattr(config, "TRUESYNC_TENANT_TOKEN", "")
+    monkeypatch.setattr(config, "TRUESYNC_API_BASE", "https://supply.example")
+    engine = create_engine("sqlite://", poolclass=StaticPool,
+                           connect_args={"check_same_thread": False})
+
+    @event.listens_for(engine, "connect")
+    def _now(dbapi_conn, _):
+        dbapi_conn.create_function("NOW", 0, lambda: datetime.now(timezone.utc).isoformat())
+
+    seed_console_db(engine)
     for module in (customers, console_scope_module, console_router, console_ops_router, full_loop_router):
         monkeypatch.setattr(module, "engine", engine)
     return engine

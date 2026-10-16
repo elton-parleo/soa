@@ -154,8 +154,10 @@ def test_the_w_s_fixture_scores_60_on_34_applicable_points(http, upstream):
     assert body['biggest_gap'] == {'dimension': 'Catalog & Context', 'code': 'catalog_context', 'points': 5.5,
                                    'line': 'Product markup with a GTIN 6 of 19 pages', 'surface': None,
                                    'numerator': 6, 'denominator': 19}
-    assert body['coverage'] == {'surfaces': 1, 'questions': 6, 'agents': 2, 'runs': 7,
-                                'line': '1 surface, 6 questions, 2 agents · pooled across surfaces, equal weight'}
+    # 2C-3a: a surface that ran with no answers is named in the coverage line
+    assert body['coverage'] == {'surfaces': 1, 'questions': 6, 'agents': 2, 'runs': 7, 'ran_no_answers': ['consumer_ui'],
+                                'line': '1 surface, 6 questions, 2 agents · pooled across surfaces, equal weight'
+                                        ' · the consumer UI ran, no answers'}
     assert body['previous'] is None and body['stored'] is False   # no column before the migration
 
 

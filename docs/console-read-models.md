@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -1358,6 +1358,59 @@ The two-surface case (`tests/test_console_2c3.py::test_the_pooled_score_is_the_m
 adds unprompted and value-tier runs on both surfaces: the grounded API earns 45.3 of 69 (65.65), the
 consumer UI 48.3 of 69 (70.0), and the pooled score is (65.65 + 70.0) ÷ 2 = 67.8, **68**. Its docstring
 has every dimension.
+
+### 2C-3a: the 500 on cycle 229, and the rules it left
+
+**What it was.** `GET /api/console/score` on production cycle 229 (`FL3-wiggle-and-snug-20261014`)
+answered 500 before any supply call. The cause was a query, not the cycle's data: `load_score_runs`
+read the questions' expectation types with `SELECT DISTINCT q.query_code, q.expected_answer`, and
+`soa_queries.expected_answer` is a Postgres `json` column. `json` has no equality operator, so Postgres
+refuses `DISTINCT` over it, on any cycle and even on an empty table:
+`sqlalchemy.exc.ProgrammingError: (psycopg2.errors.UndefinedFunction) could not identify an equality
+operator for type json`. The console tests run on sqlite, where the column is TEXT, so the W&S fixture
+never saw it. Every cycle was a 500 in production, not only 229. Fix: one row per question the cycle
+asked, by `WHERE q.id IN (SELECT r.query_id FROM soa_runs r WHERE r.cycle_id = :c)`, no `DISTINCT`.
+
+**The 229-shaped fixture.** `tests/console_fixture_229.py` builds a cycle shaped like 229 in every way
+the W&S fixture is not, and a test pins each count:
+
+| | |
+|---|---|
+| questions | 87 in the study, 86 asked, 3 runs each on ChatGPT and Gemini: 516 runs, 514 answered |
+| tiers | unprompted 300 runs, brand-direct 66, catalog 114, value 36 |
+| surfaces | the grounded API answered; the consumer UI ran 2 runs, both errored: no answer on it |
+| unprompted Layer 1 | ours named 0 times (no mention to code), Pampers 80 named / 38 first, Huggies 71 / 24, Pull-Ups 3 / 3, 26 first picks outside the comparison set |
+| catalog | 9 exact of 41 scored, 34 `absent` with `other_brand`, 0 unverifiable |
+| value | Member+ 9 of 18, codes 6 of 6, points 3 of 6 |
+| brand-direct | 26 fabricated, 12 echoed, 8 misattributed, 14 acknowledged_unknown, 5 absent, 1 grounded |
+| previous | `20260915-113207-wiggle-snug-full`, ChatGPT only, no stored score (or one stored under v5) |
+| score columns | present, both NULL |
+
+`tests/test_console_2c3a.py` runs every test on sqlite and, when `SOA_TEST_PG_URL` names a local
+Postgres, on the same schema with production's types (`seed_console_db(engine, pk=..., json='JSON')`).
+The Postgres run reproduces the 500 on `main`; the sqlite run never did.
+
+**The rules, each tested on that fixture.**
+
+- **A surface with no answers** is left out of the pool and named in coverage: `coverage.ran_no_answers`,
+  and the line ends "· the consumer UI ran, no answers". The pooled score is the mean over the surfaces
+  that scored.
+- **A brand named zero times** scores Visibility as a measured 0 (0 of 22, 0 of 10): the Audit's own
+  functions score absence as the failure, not as unmeasured.
+- **First read** on a cycle with NULL score columns computes, stores and returns in one request; the
+  second read serves the row without computing.
+- **`previous.comparable`** is false, with the reason, when the earlier cycle has no stored score or was
+  stored under another scorer version.
+- **Never a 500 for a cycle in scope.** A failure while scoring is a 422 whose detail is one line the
+  tile shows: `Score unavailable: <step> failed (<exception type>)`.
+
+**Logging.** One JSON line per event, logger `app.services.console_score`: `score.start` (cycle,
+cycle_id, org, why: first read, stale or rescore), `score.end` (cycle, org, surfaces scored, score,
+stored, read errors, `ms`) and `score.failed` (cycle, cycle_id, org, the step, the exception type and
+its message, at most 200 characters, no row data). A read served from the stored row logs nothing.
+
+**Deploy.** A redeploy of soa only: no migration (`f3b8d2a6c4e1` is already applied), no console change
+(the tile already shows the 422's detail as its error).
 
 ## Answer divergences
 
