@@ -1,0 +1,6 @@
+{
+ "_note": "supply GET /api/truesync/merchants/{slug}/retailers for the two Wiggle & Snug merchants, in the shape api/truesync_feed_router.py serves (parleo-supply-app ef3c267): own_domain (deprecated, the first), own_domains (#20) and the listed retailer domains. See README.md, 2H.",
+ "wiggle-and-snug": {"merchant": "wiggle-and-snug", "own_domain": "trueshopstore.com", "own_domains": ["trueshopstore.com"], "domains": []},
+ "wiggle-and-snug-brand": {"merchant": "wiggle-and-snug-brand", "own_domain": "wiggleandsnug.com", "own_domains": ["wiggleandsnug.com"],
+                           "domains": ["trueshopstore.com"]}
+}

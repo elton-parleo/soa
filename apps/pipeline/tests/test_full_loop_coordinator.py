@@ -401,3 +401,29 @@ def test_a_request_queued_behind_a_busy_worker_is_not_stale(db):
         c.execute(text("UPDATE soa_runs SET run_at = :t"), {'t': (NOW - timedelta(minutes=90)).isoformat()})
     assert co.time_out(co.get(rid)) is True                # and a stopped worker is
     assert co.get(rid)['error'].startswith('timed_out:') and posts(supply) == []
+
+
+# ═══ 2H: a loop runs for the merchant its request names ════════════════════
+
+def test_every_supply_call_and_the_cycle_carry_the_requests_merchant(db):
+    """An org with two merchants (Wiggle & Snug's store and its brand): the
+    request names the brand, and the worker's POST, its poll, the cycle it
+    creates and the PATCH all key on that slug, never the org's other one."""
+    supply = FakeSupply('running')
+    co = coordinator(db, supply)
+    rid = queued(db)
+    with db.begin() as c:
+        c.execute(text("UPDATE soa_full_loop_requests SET merchant_slug = 'wiggle-and-snug-brand' WHERE id = :i"), {'i': rid})
+    co.tick()
+    supply.run['status'] = 'reference_done'
+    co.tick()
+    co.tick()
+    row = co.get(rid)
+    with db.begin() as c:
+        c.execute(text("INSERT INTO soa_runs (cycle_id, run_at) VALUES (:c, :t)"), {'c': row['cycle_id'], 't': NOW.isoformat()})
+        code = c.execute(text("SELECT cycle_code FROM soa_cycles WHERE id = :i"), {'i': row['cycle_id']}).scalar()
+    cycle_status(db, row['cycle_id'], 'complete')
+    co.tick()
+    paths = {c[1] for c in supply.calls}
+    assert paths and all('/merchants/wiggle-and-snug-brand/' in p for p in paths)
+    assert '-wiggle-and-snug-brand-' in code

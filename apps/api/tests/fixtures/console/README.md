@@ -53,3 +53,15 @@ availability, `https://schema.org/InStock`, gives `in_stock`. The Oct 14
 recording predates the field, so every row there is null. The 2G record test
 (`tests/test_console_2g.py`) reads this file for Availability and the original
 for the case where no read carries one.
+
+## 2H: a tenant with two merchants
+
+`supply_tenant_ws_2h.json` is supply `/tenant` for the Wiggle & Snug tenant
+after 2F, in the shape `api/truesync_tenant_router.py` `_merchant_view`
+serves (parleo-supply-app `ef3c267`): merchants ordered by slug, the store
+(seller, Parleo-hosted, trueshopstore.com) then the brand (customer-hosted,
+wiggleandsnug.com, the 2F feed). `supply_retailers_ws_2h.json` is each
+merchant's `/retailers` in the shape `api/truesync_feed_router.py` serves.
+Values come from supply's repo (the brand's feed and its tests), not from
+production. The brand's display name, "Wiggle & Snug Brand", is this
+fixture's.

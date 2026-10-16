@@ -29,6 +29,7 @@ from pydantic import BaseModel, ConfigDict
 from app.auth import verify_token
 from app.console_scope import console_scope, cycle_customer_org_sql
 from app.customer_context import CustomerScope
+from app.console_merchants import check_merchant
 from app.routers import full_loop
 from app.routers.customers import _tenant_view
 from app.routers.truesync import MAX_FEED_UPLOAD_BYTES, _unwrap, get_feed_template
@@ -65,6 +66,7 @@ async def get_catalog(merchant: str = Query(...), scope: CustomerScope = Depends
     read-only (supply refuses a feed for it). External: its current feed
     version and rows, and every version; no feed yet (supply's 404) is an
     empty record here, not an error."""
+    await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     view = await _tenant_view(scope.org)
     record = next((m for m in view.get('merchants') or [] if m.get('slug') == merchant), None)
     if record is None and view.get('error') is None:

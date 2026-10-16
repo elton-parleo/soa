@@ -1,0 +1,11 @@
+{
+ "_note": "supply GET /api/truesync/tenant for the Wiggle & Snug tenant after 2F, in the shape api/truesync_tenant_router.py _merchant_view serves (parleo-supply-app ef3c267): merchants ordered by slug, each with domain, own_domains, kind, hosting and has_record. The store is the Parleo-hosted seller on trueshopstore.com; the brand is the customer-hosted brand on wiggleandsnug.com whose 19-variant feed 2F committed (truesync/demo/feeds/wiggle-and-snug-brand.csv). See README.md, 2H.",
+ "slug": "wiggle-and-snug",
+ "name": "Wiggle & Snug",
+ "merchants": [
+  {"slug": "wiggle-and-snug", "name": "Wiggle & Snug", "domain": "trueshopstore.com", "own_domains": ["trueshopstore.com"],
+   "kind": "seller", "hosting": "parleo", "has_record": true},
+  {"slug": "wiggle-and-snug-brand", "name": "Wiggle & Snug Brand", "domain": "wiggleandsnug.com", "own_domains": ["wiggleandsnug.com"],
+   "kind": "brand", "hosting": "external", "has_record": true}
+ ]
+}
