@@ -82,7 +82,7 @@ PRICE_HISTORY_LIMIT = 50
 # so the API's study preview builds it with the same code. Re-exported.
 from soa_shared.catalog_snapshot import (  # noqa: E402,F401
     CatalogProduct, CatalogSnapshot, CatalogVariant, PricePoint, _as_int, _domain, _merge_incentives,
-    _merge_price_history, _now, build_snapshot, merge_merchant_record,
+    _merge_price_history, _now, build_snapshot, merge_merchant_record, merge_reads,
 )
 
 
@@ -354,6 +354,10 @@ class TrueSyncCatalogClient:
             if feed_error is not None:
                 snapshot.record_error = feed_error
         merge_merchant_record(snapshot, merchant=merchant, retailers=retailers, feed=feed)
+        if snapshot.is_external and snapshot.merchant_kind != "seller":
+            # 2I: a brand's price questions come from the newest page reads.
+            prices, prices_error = self.retailer_prices(merchant_slug)
+            merge_reads(snapshot, prices, error=prices_error)
 
 
 # ─── Merging ───────────────────────────────────────────────────────────────

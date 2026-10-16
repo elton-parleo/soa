@@ -97,6 +97,10 @@ class ReferenceRow:
 def _index(payload: Optional[dict]) -> Dict[tuple, ReferenceRow]:
     out: Dict[tuple, ReferenceRow] = {}
     for raw in (payload or {}).get('prices') or []:
+        if isinstance(raw, dict) and raw.get('role') == 'comparison':
+            # 2I: a comparison page (2A-4) is read for context, never scored
+            # against: the same retailer's own row for the variant is.
+            continue
         row = ReferenceRow.from_payload(raw)
         for key in _keys(row.gtin, row.sku, row.variant_ref):
             out.setdefault((row.retailer_domain, key), row)

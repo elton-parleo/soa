@@ -177,6 +177,10 @@ def _subject(brand: Optional[str], product, variant) -> str:
     words = [w for w in (brand, product.title) if w]
     display = variant_display(product, variant)
     if display:
+        if product.title and display.lower().startswith(product.title.lower()):
+            # 2I: a feed label that already names the product ("Snug-Fit
+            # Diapers Size 1 — Small Pack (96 ct)") is not given it twice.
+            words.remove(product.title)
         words.append(display)
     return ' '.join(words)
 
@@ -466,6 +470,10 @@ def build_external_catalog_accuracy(snapshot, *, category, persona, study_patter
             ),
         }
 
+    if snapshot.merchant_kind != 'seller' and snapshot.reads is not None:
+        return _brand_catalog_accuracy_from_reads(snapshot, category=category, persona=persona,
+                                                  study_pattern=study_pattern, cap=cap)
+
     sampled = sample_variants(snapshot, cap)
     rows, asked_at, skipped_no_price, skipped_no_retailer = [], {}, [], []
     for index, (product, variant) in enumerate(sampled):
@@ -515,6 +523,73 @@ def build_external_catalog_accuracy(snapshot, *, category, persona, study_patter
         'asked_at': asked_at,
         'count': len(rows),
     }
+    return rows, report
+
+
+def _brand_catalog_accuracy_from_reads(snapshot, *, category, persona, study_pattern, cap) -> tuple:
+    """
+    2I: a brand's price questions, from the newest retailer-prices read.
+    One question per sampled variant x retailer page read for it (the
+    brand's own and comparison pages are never asked about here), naming
+    the page's retailer. The expected
+    answer is that page's price as read; a page not read yet still gets
+    its question, with no amount, and is judged against the cycle's own
+    read like every attributed price (expectation_comparator). A brand
+    none of whose pages has been read yet gets no price tier.
+    """
+    from soa_shared import retailers as af
+    from soa_shared.catalog_snapshot import price_source
+
+    sampled = sample_variants(snapshot, cap)
+    report = {
+        'sampled_variants': [v.variant_id for _p, v in sampled],
+        'variants_available': snapshot.variant_count,
+        'variant_cap': cap,
+        'sampled': len(sampled) < snapshot.variant_count,
+        'skipped_no_price': [],
+        'skipped_no_retailer': [],
+        'asked_at': {},
+        'price_source': price_source(snapshot),
+    }
+    if not report['price_source']:
+        report.update(count=0, unavailable="no pages read yet: run a full loop to read prices")
+        return [], report
+    rows, unread = [], []
+    for product, variant in sampled:
+        pages = (snapshot.reads or {}).get(variant.variant_id) or []
+        if not pages:
+            report['skipped_no_retailer'].append(variant.variant_id)
+            continue
+        for read in pages:
+            amount = ea.normalize_money(read.price) if read.read else None
+            if amount is None:
+                unread.append(f"{variant.variant_id}@{read.domain}")
+            report['asked_at'].setdefault(variant.variant_id, read.domain)
+            expectation = ea.price(amount, read.currency or variant.currency or 'USD', attributed_to=read.domain)
+            secondary = []
+            if variant.gtin:
+                secondary.append(ea.gtin(variant.gtin))
+            if variant.count and variant.count > 1:
+                secondary.append(ea.pack_count(variant.count))
+            if secondary:
+                expectation = ea.with_secondary(expectation, secondary)
+            as_read = (f"{amount} {read.currency or variant.currency or 'USD'} as read"
+                       + (f" {read.observed_at}" if read.observed_at else '')) if amount is not None \
+                else 'not read yet'
+            rows.append(_row(
+                query_text=f"What does the {_external_subject(snapshot, product, variant)} cost at {af.retailer_name(read.domain)}?",
+                tier='catalog_accuracy',
+                provenance='catalog',
+                expected_answer=expectation,
+                source_ref=_source_ref(snapshot, product, variant=variant),
+                category=category, persona=persona, study_pattern=study_pattern,
+                soa_focus='Catalog Accuracy, Price Accuracy',
+                rationale=(
+                    f"Scored against {read.domain}'s page price for {variant.variant_id} in "
+                    f"TrueSync's retailer-prices as of the cycle start (here: {as_read})."
+                ),
+            ))
+    report.update(count=len(rows), unread_pages=unread)
     return rows, report
 
 
@@ -927,6 +1002,15 @@ def expected_nulls(snapshot, tier: str) -> str:
             if snapshot.merchant_kind != 'seller' and not snapshot.retailer_list:
                 return ("None asked: the brand's feed names no retailer page, so there is "
                         "no page a price could be scored against.")
+            if snapshot.merchant_kind != 'seller' and snapshot.reads is not None:
+                from soa_shared.catalog_snapshot import price_source
+                if not price_source(snapshot):
+                    return ("None asked yet: no retailer page has been read. Run a full loop "
+                            "to read prices; questions follow the pages read.")
+                return ("Each price is asked at a retailer page and expected as that page "
+                        "reads; the cycle re-reads it at its start and scores against that "
+                        "read. A page not read yet is still asked, with no amount, and a page "
+                        "that blocked both reference sources scores unverifiable, never wrong.")
             return ("Prices are scored against each retailer page as read at the cycle "
                     "start. A page that blocked both reference sources scores "
                     "unverifiable, never wrong.")

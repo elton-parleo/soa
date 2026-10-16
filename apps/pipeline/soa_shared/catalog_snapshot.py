@@ -59,6 +59,24 @@ class PricePoint:
 
 
 @dataclass
+class PageRead:
+    """2I: one page read of a variant, a row of supply's retailer-prices
+    (`prices`): the page's domain and URL, the price it showed, and how the
+    read went. `price` is None for a page not read yet or not readable."""
+    domain: str
+    url: Optional[str] = None
+    price: Optional[str] = None
+    currency: Optional[str] = None
+    read_status: Optional[str] = None
+    observed_at: Optional[str] = None
+    role: Optional[str] = None
+
+    @property
+    def read(self) -> bool:
+        return self.read_status in ('ok', 'empty')
+
+
+@dataclass
 class CatalogSnapshot:
     available: bool
     merchant_slug: Optional[str] = None
@@ -100,6 +118,11 @@ class CatalogSnapshot:
     variant_retailers: Dict[str, List[str]] = field(default_factory=dict)
     #: Why the record could not be read, when it could not.
     record_error: Optional[str] = None
+    #: 2I: the newest retailer-prices read per variant_id, retailer pages
+    #: only (comparison and own rows left out); None when it was not read (a hosted merchant, an older
+    #: caller, or a failed read), {} when supply has no row for any variant.
+    reads: Optional[Dict[str, List[PageRead]]] = None
+    reads_error: Optional[str] = None
 
     @property
     def is_external(self) -> bool:
@@ -276,7 +299,12 @@ def merge_merchant_record(snapshot: CatalogSnapshot, *, merchant: Optional[dict]
 
     union: List[str] = []
     for row in (feed or {}).get("rows") or []:
-        key = row.get("gtin14") or row.get("gtin")
+        # 2I: the loader's identity rule, the variant's variant_key: its
+        # GTIN-14, or sku:<sku> for a variant first seen without one (supply
+        # feed/serve.py). Keyed by GTIN only, a GTIN-less variant found no
+        # retailer and was never asked about.
+        key = row.get("variant_key") or row.get("gtin14") or row.get("gtin") \
+            or (f"sku:{row['sku']}" if row.get("sku") else None)
         domains = [d for d in (_domain(r.get("domain")) for r in row.get("retailers") or []
                                if r.get("url")) if d]
         if key:
@@ -338,3 +366,60 @@ def _merge_price_history(snapshot: CatalogSnapshot, payload: dict) -> None:
                 )
                 for point in variant.get("history") or []
             ]
+
+
+def _gtin14(value) -> Optional[str]:
+    digits = ''.join(ch for ch in str(value or '') if ch.isdigit())
+    return digits.zfill(14) if digits and len(digits) <= 14 else None
+
+
+def merge_reads(snapshot: CatalogSnapshot, payload: Optional[dict], *, error: Optional[str] = None) -> CatalogSnapshot:
+    """
+    2I: supply's retailer-prices (the newest read of each variant x page,
+    rows under `prices`) onto the snapshot, by variant: its GTIN-14, its
+    sku:<sku> key, or its key as the read's variant_label. Comparison rows
+    (role: comparison, 2A-4) are left out: they are read, never asked about.
+    So are the brand's own pages (role: own): its own claims are the
+    brand-direct tier's, and its price is asked at a retailer. A page off
+    the record's retailer list is never asked about either (2B).
+    """
+    if error is not None or not isinstance(payload, dict):
+        snapshot.reads, snapshot.reads_error = None, error
+        return snapshot
+    ids = {v.variant_id for _p, v in snapshot.variants()}
+    reads: Dict[str, List[PageRead]] = {}
+    for row in payload.get('prices') or payload.get('rows') or []:
+        if not isinstance(row, dict) or row.get('role') in ('comparison', 'own'):
+            continue
+        domain = _domain(row.get('retailer_domain'))
+        if not domain or domain == snapshot.own_domain or domain not in (snapshot.retailer_list or []):
+            continue
+        keys = [_gtin14(row.get('gtin')), f"sku:{row['sku']}" if row.get('sku') else None,
+                row.get('variant_label'), row.get('variant_ref')]
+        vid = next((k for k in keys if k and k in ids), None)
+        if vid is None:
+            continue
+        reads.setdefault(vid, []).append(PageRead(
+            domain=domain, url=row.get('url'), price=row.get('price'), currency=row.get('currency'),
+            read_status=row.get('read_status'), observed_at=row.get('observed_at'), role=row.get('role')))
+    snapshot.reads, snapshot.reads_error = reads, None
+    return snapshot
+
+
+def price_source(snapshot: CatalogSnapshot) -> List[dict]:
+    """2I: per page domain, how many of the variants' pages were read and
+    when (the newest read), and how many were not: what the Create Study
+    modal names as the price source. [] when no page was read at all."""
+    out: Dict[str, dict] = {}
+    for rows in (snapshot.reads or {}).values():
+        for r in rows:
+            e = out.setdefault(r.domain, {'domain': r.domain, 'read_at': None, 'read_count': 0, 'unread_count': 0})
+            if r.read:
+                e['read_count'] += 1
+                if r.observed_at and (e['read_at'] is None or str(r.observed_at) > str(e['read_at'])):
+                    e['read_at'] = r.observed_at
+            else:
+                e['unread_count'] += 1
+    if not any(e['read_count'] for e in out.values()):
+        return []
+    return sorted(out.values(), key=lambda e: (-e['read_count'], e['domain']))

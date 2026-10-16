@@ -207,7 +207,7 @@ def test_every_read_carries_the_tenant_token(monkeypatch):
 
     assert {url.rsplit("/", 1)[-1] for url, _ in seen} == {
         "catalog", "merchants", "incentives", "price-history",
-        "tenant", "retailers", "feed",
+        "tenant", "retailers", "feed", "retailer-prices",   # 2I: a brand's page reads
     }
     for url, headers in seen:
         assert headers.get("X-TrueSync-Key") == "tst_abc_secret", url
