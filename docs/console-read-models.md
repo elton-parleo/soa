@@ -6301,3 +6301,13 @@ reported). A surface with no row is not refused. The run dialog checks every gro
 `configured: true`. That is also the worker's fallback for a cycle stored with no platforms; before 2I
 the fallback was a fixed `[chatgpt, gemini_grounded]`.
 
+
+## 2I: what the run dialog compares against
+
+`GET /api/console/runs` (the cycle picker) and `GET /api/console/full-loop/latest` also return
+`surface_ids`, `runs_per_question` and `study_id` (so does `/api/full-loop/{id}`, one shape). The existing `surfaces` on `/runs` keeps its meaning,
+the surface kinds, so the resolved ids get their own name. On `/runs` the ids are what ran
+(`soa_runs.platform`, in registry order). A pre-2D cycle stored an alias and ran it under another id
+(229 stored "gemini" and ran `gemini_grounded`). Before any run, the ids are what the cycle stored
+resolved (`soa_cycles.surfaces`), else its platforms resolved today. On `/full-loop/latest` the ids are
+the request's `platforms`, stored resolved since 2D. A reads-only request has `[]` and `study_id: null`.

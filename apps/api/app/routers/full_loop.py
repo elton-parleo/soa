@@ -118,6 +118,11 @@ def combined_status(row, *, supply_view: Optional[dict], supply_error: Optional[
         'platforms': platforms,
         'surfaces': [surfaces.get(p).as_dict() if surfaces.get(p) else {'id': p} for p in platforms],
         'runs_per_query': row['runs_per_query'],
+        # 2I: what the run dialog compares against, named as /api/console/runs
+        # names them (platforms are stored resolved since 2D)
+        'surface_ids': list(platforms),
+        'runs_per_question': row['runs_per_query'],
+        'study_id': row['study_type'],
         'error': row.get('error'),
         'created_at': _iso(row.get('created_at')),
         'updated_at': _iso(row.get('updated_at')),

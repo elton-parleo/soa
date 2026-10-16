@@ -640,7 +640,12 @@ def get_runs(ms: MerchantScope = Depends(merchant_scope)):
                        SUM(CASE WHEN answer_status = 'answered' THEN 1 ELSE 0 END)
                 FROM soa_runs WHERE cycle_id = :c
             """), {"c": cycle['id']}).fetchone()
-            out.append(rm.build_run(cycle, int(counts[0] or 0), int(counts[1] or 0)))
+            ran = [r[0] for r in conn.execute(text("SELECT DISTINCT platform FROM soa_runs WHERE cycle_id = :c"),
+                                              {"c": cycle['id']})]
+            run = rm.build_run(cycle, int(counts[0] or 0), int(counts[1] or 0))
+            # 2I: what the run dialog's comparable line compares against
+            run.update(rm.run_identity(cycle, ran))
+            out.append(run)
     return out
 
 

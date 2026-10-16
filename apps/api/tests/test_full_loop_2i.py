@@ -16,6 +16,7 @@ from tests.test_console_read_models import TOKEN_A, as_, http, start, upstream, 
 
 BRAND = 'wiggle-and-snug-brand'
 RUN = '/api/truesync/merchants/wiggle-and-snug-brand/full-loop/41'
+B4_FIELDS = ('surface_ids', 'runs_per_question', 'study_id')
 
 
 @pytest.fixture(autouse=True)
@@ -113,7 +114,7 @@ def test_reads_done_is_never_timed_out(http, db, upstream):
     ('cycle_planned', 'reference_done'), ('scored', 'scored'), ('failed', 'failed')])
 def test_a_request_with_a_study_reads_byte_for_byte_as_before(http, db, upstream, stage, supply_status):
     """The combined status of a request with a study, against the function as
-    it was on main before 2I (frozen copy)."""
+    it was on main before 2I (frozen copy): the same, plus B4's three fields."""
     as_('alice')
     rid = start(http).json()['full_loop_id']
     with db.begin() as c:
@@ -123,5 +124,45 @@ def test_a_request_with_a_study_reads_byte_for_byte_as_before(http, db, upstream
     view = {'id': 33, 'status': supply_status} if supply_status else None
     now = fl.combined_status(row, supply_view=view, supply_error=None)
     before = frozen.combined_status(row, supply_view=view, supply_error=None)
+    # identical but for B4's three added fields
+    assert {k: now.pop(k) for k in B4_FIELDS} == {'surface_ids': ['chatgpt', 'gemini_grounded'],
+                                                 'runs_per_question': 1, 'study_id': 'ws-2b-fixture'}
     assert json.dumps(now, sort_keys=True, default=str) == json.dumps(before, sort_keys=True, default=str)
     assert 'mode' not in now and 'read_at' not in now
+
+
+# ═══ B4: what the run dialog compares against ════════════════════════════
+def test_the_cycle_list_names_each_cycles_surfaces_runs_and_study(http, db, upstream):
+    """The W&S fixture cycle ran ChatGPT, Gemini with Google Search and AI
+    Mode, one run per question, of ws-2b-fixture."""
+    as_('op')
+    runs = http.get('/api/console/runs', params={'org': 10}).json()
+    first = runs[0]
+    assert (first['surface_ids'], first['runs_per_question'], first['study_id']) == (
+        ['chatgpt', 'gemini_grounded', 'aimode'], 1, 'ws-2b-fixture')
+    assert first['surfaces'] == ['consumer_ui', 'grounded_api']           # the kinds, as before
+
+
+def test_a_cycle_not_run_yet_names_what_it_stored(db):
+    from app.services import console_read_models as rm
+    planned = {'platforms': ['chatgpt', 'gemini'], 'surfaces': None, 'runs_per_query': 3, 'study_type': 'x'}
+    assert rm.run_identity(planned, [])['surface_ids'] == ['chatgpt', 'gemini_api']
+    stored = {**planned, 'surfaces': {'chatgpt': 'grounded_api', 'gemini_grounded': 'grounded_api'}}
+    assert rm.run_identity(stored, [])['surface_ids'] == ['chatgpt', 'gemini_grounded']
+    # what ran wins: 229 stored "gemini" and ran gemini_grounded
+    assert rm.run_identity(planned, ['gemini_grounded', 'chatgpt'])['surface_ids'] == ['chatgpt', 'gemini_grounded']
+
+
+def test_latest_names_its_surfaces_runs_and_study(http, db, upstream):
+    as_('alice')
+    start(http, platforms=['chatgpt', 'gemini_grounded'])
+    as_('op')
+    latest = http.get('/api/console/full-loop/latest', params={'org': 10}).json()
+    assert (latest['surface_ids'], latest['runs_per_question'], latest['study_id']) == (
+        ['chatgpt', 'gemini_grounded'], 1, 'ws-2b-fixture')
+    as_('alice')
+    reads_only(http)
+    as_('op')
+    latest = http.get('/api/console/full-loop/latest', params={'org': 10, 'merchant': BRAND}).json()
+    assert latest['merchant'] == BRAND
+    assert (latest['surface_ids'], latest['runs_per_question'], latest['study_id']) == ([], 1, None)
