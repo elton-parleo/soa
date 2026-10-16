@@ -66,7 +66,9 @@ def test_crawl_counts_with_nothing_read_are_zero_denominators():
                                               'price': 0, 'member_price': 0, 'incentive_fields': False,
                                               'incentive_scanned': 0, 'incentive_any': 0,
                                               'incentive_flags': {'member_price': 0, 'promo': 0, 'subscription': 0,
-                                                                  'code': 0}}
+                                                                  'code': 0},
+                                              'incentive_flags_text': {'member_price': 0, 'promo': 0, 'subscription': 0,
+                                                                       'code': 0}}
 
 
 def test_visibility_inputs_are_metrics_calculator_s():

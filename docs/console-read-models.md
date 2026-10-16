@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D, 2E)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D, 2E, 2E-2)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -1863,6 +1863,60 @@ and the 229-shaped fixture, built from counts, gives 22.3), adding:
 
 Previous cycle: the September cycle has no stored score (2C-3a), so there is no delta to show; when a
 comparable one has 69 applicable, the tile reads "applicable points changed from 69 to 100" beside it.
+
+## 2E-2: two score-tile fixes from cycle 229
+
+### Deal Citability's seen evidence
+
+**What 229 showed.** "member price 19 of 19 pages: yes · promo 19 of 19 pages: yes".
+
+**Why.** soa read each flag's value, not its presence. On #114's `prices[]` shape it reports exactly what
+supply serves (`tests/test_console_2e2.py`). Supply serves each flag as its **JSON-LD half OR a text half** read from the
+read's `offer_text` (`truesync/fullloop/incentive.incentive_in_markup`). `offer_text` is the first incentive-shaped
+sentence on the page (`parse.offer_text`), and on trueshopstore.com that is the announcement bar on every page (the store's
+`SiteChrome.tsx`): "Free shipping on orders of $35 or more · 30-day returns · Members earn …". Supply's text rules read
+"free shipping" as `promo` and "Members earn" as `member_price`. So with a JSON-LD half of `member_price` only, supply serves
+`promo: true` on every page, and soa printed it. The fixture `tests/fixtures/console/supply_retailer_prices_229_bar.json`
+is #114's row builder with each row's `offer_text` and `incentive_in_markup` computed by supply's own two functions
+(ef3c267) from that bar: it serves `{member_price: true, promo: true, source: json_ld}`. This session read nothing from
+production. If 229's served rows say `promo: false`, the other cause is that the stored score predated the supply
+response; the adapter revision below recomputes it either way.
+
+**The fix.**
+- **Seen count.** A page carries an incentive in markup only when a flag is true **and** supply's `source` is
+  `json_ld` (the flag came from structured data). A page whose flags come from its text alone (`source: text`) is not
+  counted, and stays in the denominator.
+- **Per-flag checks.** Each flag reads its served value (false is `fail`). A flag that is true on pages that also carry
+  `offer_text` says "the page text included", because there the served flag may be the text half. Supply serves the two
+  halves only combined, so soa cannot split them per flag without restating supply's rules. A per-half field is a supply
+  change.
+- **Recompute.** `ADAPTER_REVISION` is 3, so every stored score recomputes once and keeps the old value in its history.
+
+**229's seen half after the fix.** 19 of 19 pages, 7 of 7, if the 19 reads carry `member_price` in JSON-LD (supply's
+`source: json_ld`), which is the 2E rule, "member price in markup" counts. Unchanged in points. `promo` still reads 19
+of 19 "the page text included". If a read's member price is not in its markup (`source: text`), that read drops out.
+
+### The readiness verdict in the measured case
+
+soa computed it (`verdict()`, which calls `scan_dimensions.compute_verdict` as is: AGENT-READY at or above 60 with True
+Value at or above 25% of its applicable points, else NOT AGENT-READY) whenever no dimension is not measured. The console
+tile never rendered `verdict`, only `verdict_note`. Fixed in the console (parleohq/truesync, 2E-2): the verdict sits in
+the readiness legend, "Readiness bar 60, 28 to go, NOT AGENT-READY". All three paths are tested on both sides. **229:**
+32 is under the bar, so NOT AGENT-READY, whatever True Value is.
+
+### robots.txt names answer-time agents: 9 of 9
+
+There is one token list on both sides. Supply's M is the answer-time tokens of the access run's agents, each once
+(`robots.ANSWER_TIME_TOKENS`): 7 for the default five agents (chatgpt, gemini, aimode, perplexity, copilot), and 9 with
+`claude` (Claude-SearchBot, Claude-User), which W&S's runs include. The store's `robots.ts` gives all nine their own
+group, so 9 of 9 is the live file naming nine tokens. Supply's fixtures use the five-agent run, so they say 7. No label
+change.
+
+### api mode matches the demo (console)
+
+The console no longer renders the Overview's "Dimension by dimension" table or the Measure screens' Share of Algorithm
+row. Neither is on the demo. This endpoint still serves `pillars[].dimensions`, their parts, checks and
+`previous.dimension_deltas`.
 
 ## Answer divergences
 
