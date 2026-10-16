@@ -35,7 +35,8 @@ def test_the_record_reads_the_member_price_from_supply_s_read_history(http, upst
     s1 = next(v for v in body['variants'] if v['id'] == S1)
     assert s1['price'] == '$17.99 · member $12.09, from the page read Oct 9'
     prices = [c for c in upstream.calls if c['path'].endswith('/retailer-prices')]
-    assert prices and prices[0]['params'] == {'history': '1', 'limit': '10'}
+    # the member-price read asks for history; 2G's availability read is the plain one
+    assert {'history': '1', 'limit': '10'} in [c['params'] for c in prices]
 
 
 def test_a_supply_before_20_falls_back_to_the_newest_read(http, upstream):

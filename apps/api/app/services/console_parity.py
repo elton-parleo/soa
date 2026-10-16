@@ -20,6 +20,7 @@ Pure functions over rows (the loaders at the bottom do the SQL), so each
 rule is tested without a database.
 """
 import json
+import re
 from collections import Counter
 from datetime import date, datetime
 from typing import Dict, Iterable, List, Optional
@@ -988,6 +989,49 @@ def _step_note(source: str, observed) -> str:
         source, f"from the page read {_short_day(observed)}")
 
 
+def program_lines(catalog: Optional[dict], incentives: Optional[dict], value_outcomes: List[dict], *,
+                  reads: Optional[List[dict]] = None) -> Dict[str, dict]:
+    """2G: True Value's caption under each product, the demo's "First Autoship
+    $47.99 (Purina ladder). Quoted by 0 of 5 agents." Per record variant: its
+    program price by the ladder's own source rule (member_price_source: the
+    record, else the newest page read with a member price), and per surface
+    the agents asked a member-price question about it in the value tier and
+    the ones that quoted it right (an exact outcome). A variant with neither
+    a program price nor a question has no caption."""
+    entries = {l.get('listing_id'): l for l in (incentives or {}).get('listings') or []}
+    asked: Dict[str, List[dict]] = {}
+    for o in value_outcomes or []:
+        expected = rm._json(o.get('expected_answer')) or {}
+        vid = (rm._json(o.get('source_ref')) or {}).get('variant_id')
+        if vid and expected.get('type') == 'member_price':
+            asked.setdefault(str(vid), []).append({**o, 'tier_name': expected.get('tier_name')})
+    out: Dict[str, dict] = {}
+    for listing in (catalog or {}).get('listings') or []:
+        entry = entries.get(listing.get('listing_id'))
+        for v in listing.get('variants') or []:
+            vid = str(v.get('variant_id'))
+            src = member_price_source(entry, v, reads)
+            runs = asked.get(vid, [])
+            if not src and not runs:
+                continue
+            tier = (src or {}).get('tier') or next((r['tier_name'] for r in runs if r.get('tier_name')), None) or 'Member'
+            cur = v.get('currency') or 'USD'
+            amount = rm.money(f"{src['price']:.2f}", cur) if src else None
+            price = f"{tier} {amount} ({src['note']})." if src else f"{tier}: no price stated in the record or on the page."
+            by_surface = {}
+            for sf in sorted({r.get('surface') or 'unlabelled' for r in runs}):
+                mine = [r for r in runs if (r.get('surface') or 'unlabelled') == sf]
+                agents = sorted({surfaces.agent_of(r.get('platform')) or r.get('platform') for r in mine})
+                quoted = sorted({surfaces.agent_of(r.get('platform')) or r.get('platform') for r in mine
+                                 if r.get('outcome') == 'exact'})
+                by_surface[sf] = {'asked': agents, 'quoted': quoted,
+                                  'line': f"{price} Quoted by {len(quoted)} of {len(agents)} {_n(len(agents), 'agent', 'agents')}."}
+            out[vid] = {'price': (src or {}).get('price'), 'tier': tier, 'source': (src or {}).get('source'),
+                        'note': (src or {}).get('note'), 'by_surface': by_surface,
+                        'line': f"{price} Not asked this cycle." if not by_surface else None}
+    return out
+
+
 def build_ladder(catalog: Optional[dict], incentives: Optional[dict], owned: Optional[List[dict]],
                  scored: List[dict], *, own_domain: Optional[str], reads: Optional[List[dict]] = None,
                  member_reads: Optional[List[dict]] = None) -> tuple:
@@ -1046,6 +1090,13 @@ def build_ladder(catalog: Optional[dict], incentives: Optional[dict], owned: Opt
 
 # ─── Offer record ──────────────────────────────────────────────────────────
 
+def _availability_words(value) -> str:
+    """schema.org's 'InStock' (or its URL), 'in_stock': 'In stock'."""
+    v = str(value).rsplit('/', 1)[-1].replace('_', ' ')
+    v = re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', v).strip()
+    return v[:1].upper() + v[1:].lower() if v else v
+
+
 #: Owned-incentive mechanics in words.
 MECHANIC_WORDS = {'member_price': 'Member price', 'code': 'Code', 'percent_off': 'Percent off', 'amount_off': 'Amount off',
                   'promo_code': 'Promo code', 'points': 'Points', 'points_multiplier': 'Points multiplier',
@@ -1053,7 +1104,7 @@ MECHANIC_WORDS = {'member_price': 'Member price', 'code': 'Code', 'percent_off':
 
 
 def offer_fields(record: dict, *, owned: Optional[List[dict]], reference_rows: List[dict],
-                 verifications: List[dict], listing: dict) -> List[dict]:
+                 verifications: List[dict], listing: dict, price_rows: Optional[List[dict]] = None) -> List[dict]:
     """The offer fields the demo's record shows that this record holds: each
     owned incentive (name, mechanic, terms, ends), availability when a read
     or the record states it, last verified, shipping and returns only when
@@ -1072,12 +1123,16 @@ def offer_fields(record: dict, *, owned: Optional[List[dict]], reference_rows: L
                                'mechanic': inc.get('mechanic'), 'ends': str(inc['valid_until'])[:10] if inc.get('valid_until') else None,
                                'source': 'owned_incentive'}, ('ends',)))
     avail = sorted({str(v.get('availability')) for v in listing.get('variants') or [] if v.get('availability')})
-    read_avail = sorted({str(r.get('availability')) for r in reference_rows if r.get('availability')})
+    # 2G: else the newest read: supply's /reference rows do not carry
+    # availability, its retailer-prices rows (`prices`) do, one per page
+    reads = [r for r in list(reference_rows) + list(price_rows or []) if r.get('availability')]
+    newest = max((str(r.get('observed_at') or '') for r in reads), default=None)
+    read_avail = sorted({_availability_words(r['availability']) for r in reads if str(r.get('observed_at') or '') == newest})
     if avail:
-        out.append({'k': 'Availability', 'v': ', '.join(a.replace('_', ' ') for a in avail), 'prov': prov})
+        out.append({'k': 'Availability', 'v': ', '.join(_availability_words(a) for a in avail), 'prov': prov})
     elif read_avail:
-        out.append({'k': 'Availability', 'v': ', '.join(a.replace('_', ' ') for a in read_avail), 'prov': 'parleo',
-                    'note': 'as the latest reference read found it'})
+        out.append({'k': 'Availability', 'v': ', '.join(read_avail), 'prov': 'parleo',
+                    'note': f"as the newest page read found it, {_short_day(newest)}" if newest else 'as the newest page read found it'})
     for key, label in (('shipping', 'Shipping'), ('returns', 'Returns')):
         if listing.get(key):
             out.append({'k': label, 'v': str(listing[key]), 'prov': prov})
@@ -1174,7 +1229,8 @@ def group_issues(issues: List[dict], *, published_channels: Iterable[str],
 
 def extend_record(record: dict, *, listing: dict, owned: Optional[List[dict]], reference: Optional[dict],
                   publications: List[dict], verifications: Dict[str, dict], channels: List[dict],
-                  truesync_product: Optional[dict], truesync_channels: List[dict]) -> dict:
+                  truesync_product: Optional[dict], truesync_channels: List[dict],
+                  prices: Optional[List[dict]] = None) -> dict:
     """2C-2: the offer fields, history, surfaces and grouped issues beside
     2C-1's record."""
     lid = listing.get('listing_id')
@@ -1184,7 +1240,9 @@ def extend_record(record: dict, *, listing: dict, owned: Optional[List[dict]], r
            if e.get('listing_id') == lid for v in e.get('verifications') or []]
     names = {c.get('slug'): c.get('name') or c.get('slug') for c in channels or []}
     record = dict(record)
-    record['offer_fields'] = offer_fields(record, owned=owned, reference_rows=refs, verifications=ver, listing=listing)
+    mine = [r for r in prices or [] if any(rm.reference_matches(r, v, listing) for v in listing.get('variants') or [{}])]
+    record['offer_fields'] = offer_fields(record, owned=owned, reference_rows=refs, verifications=ver, listing=listing,
+                                          price_rows=mine)
     record['history'] = record_history(lid, publications=publications, verifications=ver, reference_rows=refs,
                                        channel_names=names)
     record['surfaces'] = record_surfaces(truesync_product, truesync_channels)
@@ -1218,6 +1276,36 @@ def catalog_stages(rows: List[dict], *, quoted_variants: Dict[str, dict], publis
         out.append({**row, 'stage': stage[-1] if stage else None, 'stages': stage,
                     'quoted_runs': q.get('quoted', 0), 'scored': q.get('scored', 0), 'exact': q.get('exact', 0), 'key': key})
     return out
+
+
+#: 2G: the demo's four stages (Setup's StageLadder), in order, each with its line.
+STAGES = (
+    (0, 'not_measured', 'Not measured', 'Connect a catalog and pick prompts'),
+    (1, 'measured', 'Measured', 'Weekly check runs, record compiled'),
+    (2, 'published', 'Published', 'Offer object live on every surface'),
+    (3, 'verified', 'Verified', 'Next check proves the move'),
+)
+
+
+def stage_ladder(rows: List[dict]) -> dict:
+    """The demo's stage ladder from the per-product stages (catalog_stages):
+    how many products reached each stage (a product counts at every stage it
+    reached; Not measured is a product no scored cycle quoted), and `here`,
+    the highest stage any product has reached. No rankings: the demo's are
+    modeled."""
+    counts = {key: 0 for _, key, _, _ in STAGES}
+    for r in rows:
+        stages = r.get('stages') or []
+        if 'measured' not in stages:
+            counts['not_measured'] += 1
+        for s in stages:
+            if s in counts:
+                counts[s] += 1
+    reached = [n for n, key, _, _ in STAGES if n and counts[key]]
+    here = max(reached) if reached else 0
+    return {'here': here, 'total': len(rows),
+            'stages': [{'n': n, 'key': key, 'name': name, 'line': line, 'products': counts[key]}
+                       for n, key, name, line in STAGES]}
 
 
 def retailers_read(reference: Optional[dict]) -> List[dict]:

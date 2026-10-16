@@ -115,6 +115,7 @@ async def _with_stages(body: dict, merchant: str, scope: CustomerScope) -> dict:
                     q['exact'] += int(item['outcome'] == 'exact')
     published = {p.get('listing_id') for p in (pubs or []) if p.get('status') == 'published'} if p_err is None else set()
     body['rows'] = parity.catalog_stages(body.get('rows') or [], quoted_variants=quoted, published_listings=published)
+    body['stage_ladder'] = parity.stage_ladder(body['rows'])   # 2G: the demo's four stages, with real counts
     body['retailers_read'] = parity.retailers_read(reference if r_err is None else None)
     body['stage_cycle'] = latest['cycle_code'] if latest is not None else None
     body['read_errors'] = {n: e for n, e in (('reference', r_err), ('publications', p_err)) if e is not None}
