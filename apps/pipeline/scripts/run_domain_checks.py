@@ -16,10 +16,13 @@ UA, robots.txt honoured, the SSRF guard, and Web Bot Auth when the key is
 set.
 
 It fetches the merchant's LIVE domains. --dry-run fetches and prints
-exactly what would be stored, and writes nothing to the database. Without
-it, the record is stored on soa_cycles.domain_checks, and the next read of
-the cycle's score recomputes (its measured set changed) and keeps the old
-value in the score's history.
+exactly what would be stored, and writes nothing to the database; on a
+cycle that already holds a record it prints the stored record beside the
+new one, field by field. Without it, the record is stored on
+soa_cycles.domain_checks: a record already there is replaced (with
+--replace), never appended, and the new one's `revision` is one past it.
+The next read of the cycle's score recomputes (its measured set or the
+record's revision changed) and keeps the old value in the score's history.
 
 Journaled: every run appends to a JSON-lines journal (--journal, default
 ./domain_checks_journal/<cycle>.jsonl): the start, the record exactly as
@@ -113,14 +116,25 @@ def main(argv=None, *, engine=None, client=None, fetch=None, out=None) -> int:
     for line in domain_checks.summary_lines(record):
         say(line)
     say()
+    if existing:
+        say(f"the stored record (revision {existing.get('revision') or 1}) beside this one "
+            f"(revision {domain_checks.next_revision(existing)} if written); * = changed:")
+        for line in domain_checks.compare_lines({**existing, 'revision': existing.get('revision') or 1},
+                                                {**record, 'revision': domain_checks.next_revision(existing)}):
+            say(line)
+        say()
     if not record.get("domains"):
         say("nothing checked: no own domain for the cycle's merchant. Nothing written.")
         journal.write("end", cycle=code, stored=False, reason="nothing checked")
         return 1
     if before_measured is not None:
         say(f"stored score's measured set: {', '.join(before_measured)}")
-    say("protocol_feed and value_protocols join the measured set on the next read of the score "
-        "(not measured before); the previous value stays in the score's history.")
+    if existing:
+        say("the score of record recomputes on its next read (the record's revision changes); "
+            "the previous value stays in the score's history.")
+    else:
+        say("protocol_feed and value_protocols join the measured set on the next read of the score "
+            "(not measured before); the previous value stays in the score's history.")
     if args.dry_run:
         say("dry run — nothing written.")
         journal.write("end", cycle=code, stored=False, reason="dry run")
@@ -129,7 +143,8 @@ def main(argv=None, *, engine=None, client=None, fetch=None, out=None) -> int:
     if existing:
         journal.write("replaced", cycle=code, record=existing)
     ok = domain_checks.store(engine, cid, record)
-    say("stored on soa_cycles.domain_checks." if ok else "NOT stored: the column is missing.")
+    say((f"{'replaced' if existing else 'stored'} on soa_cycles.domain_checks, revision {record['revision']}."
+         if ok else "NOT stored: the column is missing."))
     journal.write("end", cycle=code, stored=ok)
     say(f"journal: {journal.path}")
     return 0 if ok else 2

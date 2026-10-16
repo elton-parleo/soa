@@ -15,3 +15,9 @@ checked against the same bodies the Audit's checks are.
 No real site's markup is reproduced. `.test` never resolves; the tests patch
 `socket.getaddrinfo` and `httpx.Client.get`, so every request goes through the
 scan's real fetcher (headers, robots, SSRF guard) without reaching a network.
+
+`store_home_plain.html` (2E-1) is the same store's root as a client-rendered
+storefront serves it: no cart link, no `/products` or `/collections` link, no
+platform marker and no Offer markup, so `classify_site` on the store root
+alone calls it `brand_only` (what 229's record said of trueshopstore.com).
+Only its product page shows it is a store.
