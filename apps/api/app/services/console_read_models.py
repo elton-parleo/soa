@@ -1303,6 +1303,27 @@ def build_study(job: dict, prompts: List[dict], cycles: List[dict], entities: Li
     }, ('lastRun',))
 
 
+def run_identity(cycle: dict, ran_platforms: List[str]) -> dict:
+    """2I: the cycle's resolved surface ids, runs per question and study.
+    The ids are what ran (soa_runs.platform), in registry order; before any
+    run, what the cycle stored resolved (soa_cycles.surfaces, 2D), else its
+    platforms resolved today. A pre-2D cycle stored an alias and ran it
+    under another id (229: "gemini" ran as gemini_grounded), so what ran is
+    the only reliable answer once there are runs."""
+    order = {s.id: i for i, s in enumerate(surfaces.SURFACES)}
+    ids = sorted({p for p in ran_platforms if p}, key=lambda p: (order.get(p, len(order)), p))
+    if not ids:
+        stored = _json(cycle.get('surfaces'))
+        if isinstance(stored, dict) and stored:
+            ids = list(stored)
+        else:
+            try:
+                ids = surfaces.resolve_platforms(_json(cycle.get('platforms')) or [])
+            except surfaces.UnknownSurface:
+                ids = list(_json(cycle.get('platforms')) or [])
+    return {'surface_ids': ids, 'runs_per_question': cycle.get('runs_per_query'), 'study_id': cycle.get('study_type')}
+
+
 def build_run(cycle: dict, collected: int, usable: int) -> dict:
     platforms = _json(cycle.get('platforms')) or []
     started, finished = cycle.get('created_at') or cycle.get('start_date'), cycle.get('end_date')

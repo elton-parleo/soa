@@ -61,6 +61,10 @@ class Surface:
     consumer: bool = False
     #: Set when the surface can never run here, whatever the environment.
     never_available: Optional[str] = None
+    #: 2I: the runner's request lets the model search the web (a search or
+    #: grounding tool, or a search product's own answer). Classified from
+    #: each runner's code; only grounded surfaces are dispatched and pooled.
+    grounded: bool = False
 
     def as_dict(self, *, env=None) -> dict:
         out = asdict(self)
@@ -76,19 +80,23 @@ SURFACES: List[Surface] = [
     Surface('chatgpt_api', 'ChatGPT (OpenAI API)', API, 'openai', 'chatgpt',
             'OpenAI Responses API, no tools: answers from the model alone'),
     Surface('chatgpt', 'ChatGPT with web search (OpenAI API)', GROUNDED_API, 'openai', 'chatgpt',
-            'OpenAI Responses API with the web_search tool available; the model decides whether to search'),
+            'OpenAI Responses API with the web_search tool available; the model decides whether to search',
+            grounded=True),
     Surface('gemini_api', 'Gemini (Gemini API)', API, 'google_genai', 'gemini',
             'Gemini API, no grounding tool: answers from the model alone'),
     Surface('gemini_grounded', 'Gemini with Google Search (Gemini API)', GROUNDED_API, 'google_genai',
-            'gemini', 'Gemini API with the Google Search grounding tool'),
+            'gemini', 'Gemini API with the Google Search grounding tool', grounded=True),
     Surface('perplexity', 'Perplexity Sonar (Perplexity API)', GROUNDED_API, 'perplexity', 'perplexity',
-            'Perplexity Sonar, grounded by nature, with its citations'),
+            'Perplexity Sonar, grounded by nature, with its citations', grounded=True),
     Surface('claude', 'Claude with web search (Anthropic API)', GROUNDED_API, 'anthropic', 'claude',
-            'Anthropic Messages API with the web_search tool available; the model decides whether to search'),
+            'Anthropic Messages API with the web_search tool available; the model decides whether to search',
+            grounded=True),
     Surface('aimode', 'Google AI Mode (consumer, via SerpApi)', CONSUMER_UI, 'serpapi', 'aimode',
-            'google.com/search?udm=50, logged out, read by SerpApi (engine google_ai_mode)', consumer=True),
+            'google.com/search?udm=50, logged out, read by SerpApi (engine google_ai_mode)', consumer=True,
+            grounded=True),
     Surface('copilot', 'Bing Copilot (consumer, via SerpApi)', CONSUMER_UI, 'serpapi', 'copilot',
-            'Bing Copilot Search, logged out, read by SerpApi (engine bing_copilot)', consumer=True),
+            'Bing Copilot Search, logged out, read by SerpApi (engine bing_copilot)', consumer=True,
+            grounded=True),
     Surface('gemini_web', 'Gemini web app (consumer)', CONSUMER_UI, '-', 'gemini',
             'gemini.google.com, logged out', consumer=True, never_available=NO_VERIFIED_PROVIDER),
     Surface('chatgpt_web', 'ChatGPT web app (consumer)', CONSUMER_UI, '-', 'chatgpt',
@@ -139,6 +147,61 @@ def resolve_platforms(names: Iterable[str]) -> List[str]:
 def surfaces_by_platform(platform_ids: Iterable[str]) -> Dict[str, str]:
     """{resolved id: surface}, what soa_cycles.surfaces stores."""
     return {s.id: s.surface for s in (resolve(p) for p in platform_ids)}
+
+
+#: 2I: the surface kinds whose answers come from a model that could search.
+#: An `api` answer is the model alone: listed, never pooled into the score.
+GROUNDED_KINDS = (GROUNDED_API, CONSUMER_UI)
+
+#: 2I: what to send instead of an ungrounded id.
+GROUNDED_INSTEAD = {'gemini_api': 'gemini_grounded', 'chatgpt_api': 'chatgpt'}
+
+UNGROUNDED_SURFACE = 'ungrounded_surface_not_allowed'
+SURFACE_NOT_CONFIGURED = 'surface_not_configured'
+
+
+def is_grounded(platform: str) -> bool:
+    s = get(platform)
+    return bool(s and s.grounded)
+
+
+def ungrounded_refusal(names: Iterable[str]) -> Optional[dict]:
+    """2I: the 422 body for a dispatch naming an ungrounded surface, alias
+    or id, or None when every name is grounded. Unknown names are left to
+    resolve(), which refuses them on its own."""
+    lines = []
+    for name in names:
+        try:
+            s = resolve(name)
+        except UnknownSurface:
+            continue
+        if s.grounded:
+            continue
+        what = f"{name!r} is {s.id}" if name != s.id else repr(s.id)
+        instead = GROUNDED_INSTEAD.get(s.id)
+        lines.append(f"{what}, which answers without searching: "
+                     + (f"use {instead}" if instead else "not a grounded surface"))
+    if not lines:
+        return None
+    return {'code': UNGROUNDED_SURFACE,
+            'message': 'Only grounded surfaces run: ' + '; '.join(lines) + '.'}
+
+
+def unconfigured_refusal(platform_ids: Iterable[str], configured: Dict[str, bool]) -> Optional[dict]:
+    """2I: the 422 body for a dispatch naming a surface the worker reported
+    it has no key for, or None. A surface the worker has not reported on
+    (no row yet) is not refused: the worker reports at boot."""
+    missing = [p for p in platform_ids if configured.get(p) is False]
+    if not missing:
+        return None
+    return {'code': SURFACE_NOT_CONFIGURED,
+            'message': f"no key on the worker for {', '.join(missing)}"}
+
+
+def default_platforms(configured: Dict[str, bool]) -> List[str]:
+    """2I: the agents a run starts with: every grounded surface the worker
+    has a key for, in registry order."""
+    return [s.id for s in SURFACES if s.grounded and configured.get(s.id) is True]
 
 
 def get(platform: str) -> Optional[Surface]:

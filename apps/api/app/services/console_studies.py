@@ -19,7 +19,7 @@ from sqlalchemy import text
 
 from soa_shared import catalog_tiers as ct
 from soa_shared import expected_answers as ea
-from soa_shared.catalog_snapshot import CatalogSnapshot, _now, build_snapshot, merge_merchant_record
+from soa_shared.catalog_snapshot import CatalogSnapshot, _now, build_snapshot, merge_merchant_record, merge_reads, price_source
 from soa_shared.constants import QUERY_PERSONAS
 from soa_shared.database import engine
 
@@ -63,6 +63,11 @@ async def read_snapshot(client, merchant_slug: str) -> CatalogSnapshot:
             snapshot.record_error = f_error
             feed = None
     merge_merchant_record(snapshot, merchant=record, retailers=retailers if r_error is None else None, feed=feed)
+    if snapshot.is_external and snapshot.merchant_kind != 'seller':
+        # 2I: a brand's price questions come from the newest page reads.
+        p_status, prices, p_error = await client.get_retailer_prices(merchant_slug)
+        refused(p_status, p_error)
+        merge_reads(snapshot, prices, error=p_error)
     return snapshot
 
 
@@ -90,8 +95,12 @@ def expectation_chips(expected: dict, retailer_name=None) -> List[str]:
     chips: List[str] = []
     if kind == 'price':
         at = expected.get('attributed_to')
-        chips.append(f"Expected: {_money(expected.get('amount'), expected.get('currency'))}"
-                     + (f" at {retailer_name(at) if retailer_name else at}" if at else ''))
+        if expected.get('amount') is None and at:
+            # 2I: a page not read yet: expected as the cycle reads it.
+            chips.append(f"Expected: the price at {retailer_name(at) if retailer_name else at}, as read")
+        else:
+            chips.append(f"Expected: {_money(expected.get('amount'), expected.get('currency'))}"
+                         + (f" at {retailer_name(at) if retailer_name else at}" if at else ''))
     elif kind == 'member_price':
         chips.append(f"Expected: {_money(expected.get('amount'), expected.get('currency'))} ({expected.get('tier_name')})")
     elif kind == 'code':
@@ -166,10 +175,17 @@ def build_preview(snapshot: CatalogSnapshot, *, tiers: Dict[str, bool], stage_to
                                            sampled=report.get('sampled'), variants_available=report.get('variants_available'),
                                            variant_cap=report.get('variant_cap'), unavailable=report.get('unavailable'),
                                            skipped_no_price=report.get('skipped_no_price') or [])
+            if 'price_source' in report:
+                # 2I: a brand's prices come from its pages as read.
+                out['catalog_accuracy'].update(price_source=report['price_source'],
+                                               unread_pages=report.get('unread_pages') or [])
         if enabled['value_incentives']:
             rows, report = ct.build_value_incentives(snapshot, category=category, persona=persona, study_pattern=pattern)
             out['value_incentives'].update(count=len(rows), questions=[_question(r) for r in rows],
                                            mechanics=report.get('mechanics'), mechanics_absent=report.get('mechanics_absent'))
+            if snapshot.is_external and snapshot.merchant_kind != 'seller' and not rows:
+                # 2I (option A): a brand's value tier is its own offers only.
+                out['value_incentives']['note'] = "no offers of the brand's own"
         if enabled['brand_direct']:
             first = snapshot.products[0] if snapshot.products else None
             brand = snapshot.study_brand or snapshot.brand

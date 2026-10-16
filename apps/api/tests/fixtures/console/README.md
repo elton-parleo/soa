@@ -65,3 +65,28 @@ merchant's `/retailers` in the shape `api/truesync_feed_router.py` serves.
 Values come from supply's repo (the brand's feed and its tests), not from
 production. The brand's display name, "Wiggle & Snug Brand", is this
 fixture's.
+
+## 2I: the brand's catalog, feed and page reads
+
+`supply_ws_brand_2i.json` is the Wiggle & Snug brand (`wiggle-and-snug-brand`,
+customer-hosted, wiggleandsnug.com, retailer trueshopstore.com) in supply's
+shapes at parleo-supply-app `868e8cf`:
+
+- `catalog`: `/catalog` for an external merchant (`truesync/feed/serve.py`
+  `catalog`).
+- `feed`: `/feed` rows (`truesync/feed/store.py` `sku_view`).
+- `retailer_prices`: `/retailer-prices` rows (`truesync/fullloop/prices.py`
+  `_row`), one `own` and one `retailer` row per variant.
+
+The 19 SKUs are supply's committed 2F feed,
+`truesync/demo/feeds/wiggle-and-snug-brand.csv`. It has no GTIN and no
+price, so each variant is `sku:<sku>` and has no list price. Each
+trueshopstore.com row carries the store page's recorded Oct 14 read, the
+newest per variant in `supply_retailer_prices_ws.json`, matched on the
+variant's title. The own-site rows are not read yet. Rebuild it with:
+
+    python tests/fixtures/console/build_ws_brand_2i.py <parleo-supply-app>/truesync/demo/feeds/wiggle-and-snug-brand.csv
+
+The B2 tests (`tests/test_brand_prices_2i.py`, and the pipeline's file of the
+same name) make the partial and no-reads cases by blanking rows into the
+not-read-yet shape that `_row` serves.

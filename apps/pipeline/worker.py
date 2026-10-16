@@ -36,6 +36,7 @@ from urllib.parse import urlparse
 
 import lite_events
 import ops_alert
+from soa_shared import surfaces
 from soa_shared.database import engine
 from soa_shared.degraded_dimensions import (
     DEGRADED_REASON_ORCHESTRATION_FAILED,
@@ -2334,6 +2335,10 @@ def main():
     log.info("SoA Pipeline Worker started")
     log.info(f"Poll interval: {POLL_INTERVAL}s")
     log.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    # 2I: which runners have their key, for the API's dispatch check and
+    # the console's run dialog (soa_worker_surfaces). Booleans only.
+    from runners import configured as worker_surfaces
+    configured_now = worker_surfaces.report(engine)
 
     while True:
         try:
@@ -2348,10 +2353,10 @@ def main():
 
                 # Fallback for pre-migration cycles with NULL columns
                 if cycle_mode != "truecost" and not platforms:
-                    log.warning(
-                        f"{cycle_code}: platforms is NULL — using default [chatgpt, gemini_grounded]"
-                    )
-                    platforms = ['chatgpt', 'gemini_grounded']
+                    # 2I: every grounded surface this worker has a key for
+                    # (was a fixed [chatgpt, gemini_grounded])
+                    platforms = surfaces.default_platforms(configured_now)
+                    log.warning(f"{cycle_code}: platforms is NULL — using the grounded default {platforms}")
 
                 if cycle_mode != "truecost" and not runs_per_query:
                     log.warning(

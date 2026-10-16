@@ -353,7 +353,17 @@ def _with_attribution(expectation: dict, attributed_to: Any) -> dict:
 
 
 def price(amount: Any, currency: Any = 'USD', *, attributed_to: Any = None) -> dict:
+    """2I: with `attributed_to`, the amount may be None. A brand's price is
+    asked at a retailer page and judged against that page's read for the
+    cycle (2B), never against this amount, so a page not read yet when the
+    study was generated still makes a question; it scores unverifiable when
+    the cycle's read of it fails too."""
     normalized = normalize_money(amount)
+    if normalized is None and amount in (None, '') and attributed_to not in (None, ''):
+        code = normalize_currency(currency)
+        if not code:
+            raise ExpectedAnswerError("price expectation needs a currency")
+        return _with_attribution({'type': 'price', 'amount': None, 'currency': code}, attributed_to)
     if normalized is None:
         raise ExpectedAnswerError(f"price amount {amount!r} is not a money value")
     code = normalize_currency(currency)
@@ -553,7 +563,9 @@ def validate(expectation: Any) -> dict:
             f"{', '.join(EXPECTED_ANSWER_TYPES)}"
         )
 
-    missing = [f for f in _REQUIRED_FIELDS[kind] if expectation.get(f) in (None, '')]
+    missing = [f for f in _REQUIRED_FIELDS[kind] if expectation.get(f) in (None, '')
+               # 2I: a price asked at a retailer page may carry no amount (price())
+               and not (kind == 'price' and f == 'amount' and expectation.get('attributed_to'))]
     if missing:
         raise ExpectedAnswerError(
             f"{kind} expectation is missing {', '.join(missing)}"
@@ -644,6 +656,8 @@ def describe(expectation: dict) -> str:
     kind = expectation.get('type')
     if kind == 'price':
         where = f" at {expectation['attributed_to']}" if expectation.get('attributed_to') else ''
+        if expectation.get('amount') is None:
+            return f"the price{where}, as the page reads"
         return f"{expectation['amount']} {expectation['currency']}{where}"
     if kind == 'gtin':
         return f"GTIN {expectation['value']}"

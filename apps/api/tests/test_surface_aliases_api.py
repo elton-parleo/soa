@@ -27,13 +27,16 @@ def _start(http, code, platforms):
         'study_type': 'ws-2b-fixture', 'platforms': platforms, 'cycle_code': code})
 
 
-def test_gemini_and_gemini_grounded_start_cycles_on_different_surfaces(http, studies_db):
+def test_gemini_is_refused_and_gemini_grounded_starts_on_grounded_api(http, studies_db):
+    """2I: only grounded surfaces start. 'gemini' still means gemini_api
+    (2D), which is ungrounded, so it is refused naming what to send."""
     with studies_db.begin() as c:
         c.exec_driver_sql("ALTER TABLE soa_cycles ADD COLUMN surfaces TEXT")   # a7d2c9e4b1f6
-    assert _start(http, 'WS-2D-GEMINI', ['chatgpt', 'gemini']).status_code == 201
+    refused = _start(http, 'WS-2D-GEMINI', ['chatgpt', 'gemini'])
+    assert refused.status_code == 422
+    assert refused.json()['detail']['code'] == 'ungrounded_surface_not_allowed'
+    assert 'use gemini_grounded' in refused.json()['detail']['message']
     assert _start(http, 'WS-2D-GROUNDED', ['chatgpt', 'gemini_grounded']).status_code == 201
-    assert _cycle(studies_db, 'WS-2D-GEMINI') == (['chatgpt', 'gemini_api'],
-                                                  {'chatgpt': 'grounded_api', 'gemini_api': 'api'})
     assert _cycle(studies_db, 'WS-2D-GROUNDED') == (['chatgpt', 'gemini_grounded'],
                                                     {'chatgpt': 'grounded_api', 'gemini_grounded': 'grounded_api'})
 
@@ -62,12 +65,14 @@ def test_an_unknown_name_is_a_422_on_the_web_app_s_create_cycle(http, studies_db
 def test_the_full_loop_request_stores_resolved_ids_and_refuses_an_unknown_name(http, db):
     as_('alice')
     body = {'merchant_slug': 'wiggle-and-snug', 'study_type': 'ws-2b-fixture'}
-    started = http.post('/api/full-loop', json={**body, 'platforms': ['chatgpt', 'gemini']})
+    started = http.post('/api/full-loop', json={**body, 'platforms': ['chatgpt', 'gemini_grounded', 'chatgpt']})
     assert started.status_code == 202, started.text
     with db.connect() as c:
         stored = c.execute(text("SELECT platforms FROM soa_full_loop_requests WHERE id = :i"),
                            {'i': started.json()['full_loop_id']}).scalar()
-    assert json.loads(stored) == ['chatgpt', 'gemini_api']
+    assert json.loads(stored) == ['chatgpt', 'gemini_grounded']
+    ungrounded = http.post('/api/full-loop', json={**body, 'platforms': ['chatgpt', 'gemini']})
+    assert ungrounded.status_code == 422 and ungrounded.json()['detail']['code'] == 'ungrounded_surface_not_allowed'
     refused = http.post('/api/full-loop', json={**body, 'platforms': ['gemini_pro']})
     assert refused.status_code == 422 and refused.json()['detail'].startswith("unknown surface 'gemini_pro'")
 

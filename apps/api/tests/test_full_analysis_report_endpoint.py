@@ -215,7 +215,7 @@ def test_renders_true_for_a_cycle_with_a_complete_crawl(patched_engine):
     assert result.rendered is True
     assert result.composite == 100
     assert result.verdict == "AGENT-READY"
-    assert result.scorer_version == "6"
+    assert result.scorer_version == "7"
     assert result.continuation is None
 
     # Phase 1: the full payload schema, end to end — every new key

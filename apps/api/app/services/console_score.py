@@ -19,7 +19,9 @@ dimensions instead.
 
 Pooled across surfaces by pooling scores, never counts: each surface is
 scored on its own, the pooled score is the equal-weight mean of the
-surface scores, rounded once. Pure functions here; the loaders and the
+surface scores, rounded once. 2I (scorer 7): grounded surfaces only. An
+`api` surface (the model alone, no search) is listed beside the score as
+ungrounded and not scored. Pure functions here; the loaders and the
 stored score are at the bottom. No model is called.
 """
 import json
@@ -127,6 +129,7 @@ TEMPLATES = {
     'reason.deal_whole': 'its markup half is not measured, so the dimension is out of the applicable max',
     'reason.no_program': 'the record states no member program and no page shows a member price',
     'reason.no_answers': 'no answer on this surface',
+    'reason.ungrounded': 'ungrounded · not scored',
     'previous.first_cycle': 'First cycle. Changes appear from the next one.',
     'previous.not_stored': 'Not comparable: {code} has no stored score yet. Open it to score it.',
     'previous.version': 'Scored under v{version}, re-score to compare.',
@@ -136,6 +139,9 @@ TEMPLATES = {
     'verdict.withheld': 'No readiness verdict while {n} of {total} points are not measured. The Audit gives one only when every dimension is.',
     'coverage': '{surfaces}, {questions}, {agents} · pooled across surfaces, equal weight',
     'coverage.no_answers': ' · {surface} ran, no answers',
+    'coverage.ungrounded': ' · {surface}: ungrounded · not scored',
+    'recompute.version': 'scorer {prev} → {now}',
+    'recompute.version_changed': 'scorer {prev} → {now}: {change}',
     'unavailable': 'Score unavailable: {step} failed ({error})',
 }
 
@@ -655,7 +661,9 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     program_stated = any(r.get('tier') == 'value_incentives' and r.get('expected_type') in MEMBER_TYPES for r in runs)
     ran = parity.ordered_surfaces({parity._surface_of(r) for r in runs})
     answered = {parity._surface_of(r) for r in runs if r.get('answer_status') == surfaces.ANSWERED}
-    pooled = [s for s in ran if s in answered]
+    # 2I (scorer 7): an ungrounded surface is never pooled
+    ungrounded = [s for s in ran if s not in surfaces.GROUNDED_KINDS]
+    pooled = [s for s in ran if s in answered and s not in ungrounded]
     per = [score_surface(s, runs=runs, mentions=mentions, crawl=crawl, crawl_errors=errors,
                          program_stated=program_stated, domain_checks=domain_checks) for s in pooled]
     at('pooling')
@@ -703,19 +711,22 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
                       'applicable_max': p['applicable_max'],
                       'pillars': [{'code': k, 'score': v['score'], 'applicable_max': v['applicable_max']}
                                   for k, v in p['pillars'].items()]} for p in per],
-        'surfaces_left_out': [{'surface': s, 'label': surfaces.SURFACE_LABELS.get(s, s), 'reason': TEMPLATES['reason.no_answers']}
-                              for s in ran if s not in answered],
+        'surfaces_left_out': [{'surface': s, 'label': surfaces.SURFACE_LABELS.get(s, s),
+                               'reason': TEMPLATES['reason.ungrounded'] if s in ungrounded else TEMPLATES['reason.no_answers']}
+                              for s in ran if s not in pooled],
         'pillars': pillars,
         'biggest_gap': biggest_gap(per, dims),
         'metric_surface': pooled[0] if pooled else None,
         'metric_counts': counts,
         'coverage': {'surfaces': len(pooled), 'questions': questions, 'agents': len(agents), 'runs': len(in_pool),
-                     'ran_no_answers': [s for s in ran if s not in answered],
+                     'ran_no_answers': [s for s in ran if s not in answered and s not in ungrounded],
+                     **({'ungrounded': ungrounded} if ungrounded else {}),
                      'line': TEMPLATES['coverage'].format(surfaces=_n(len(pooled), 'surface', 'surfaces'),
                                                           questions=_n(questions, 'question', 'questions'),
                                                           agents=_n(len(agents), 'agent', 'agents'))
                      + ''.join(TEMPLATES['coverage.no_answers'].format(surface=_surface_words(s))
-                               for s in ran if s not in answered)},
+                               for s in ran if s not in answered and s not in ungrounded)
+                     + ''.join(TEMPLATES['coverage.ungrounded'].format(surface=_surface_words(s)) for s in ungrounded)},
         'inputs': {**(inputs or {}), 'domain_checks': {
             'checked_at': record.get('checked_at'), 'scored_domain': record.get('scored_domain'),
             'version': record.get('version'), 'revision': record_revision(record)} if record else None},
@@ -846,6 +857,23 @@ def needs_recompute(body: Optional[dict], domain_checks: Optional[dict]) -> Opti
     return None
 
 
+#: 2I: what each scorer version changed, for the recompute line.
+SCORER_CHANGES = {'7': 'ungrounded surfaces excluded from pooling'}
+
+
+def recompute_line(old: dict, new: dict, reason: str) -> str:
+    """Why a stored score was replaced. Across a scorer version: "scorer 6 →
+    7: ungrounded surfaces excluded from pooling" when the score moved, the
+    plain "scorer 6 → 7" when it did not; any other reason as it is."""
+    prev, now = old.get('scorer_version'), new.get('scorer_version')
+    if prev == now or prev is None or now is None:
+        return reason
+    change = SCORER_CHANGES.get(str(now))
+    if change and old.get('score') != new.get('score'):
+        return TEMPLATES['recompute.version_changed'].format(prev=prev, now=now, change=change)
+    return TEMPLATES['recompute.version'].format(prev=prev, now=now)
+
+
 def carry_history(new: dict, old: Optional[dict], reason: str) -> dict:
     """The new score with the one it replaces kept in its history (newest
     last, HISTORY_KEEP at most), so a report can show both."""
@@ -853,7 +881,7 @@ def carry_history(new: dict, old: Optional[dict], reason: str) -> dict:
         return new
     entry = {k: old.get(k) for k in ('score', 'earned', 'applicable_max', 'measured', 'scorer_version', 'adapter_revision')}
     entry['scored_at'] = (old.get('inputs') or {}).get('scored_at')
-    entry['replaced_because'] = reason
+    entry['replaced_because'] = recompute_line(old, new, reason)
     new = dict(new)
     new['history'] = ((old.get('history') or []) + [entry])[-HISTORY_KEEP:]
     return new

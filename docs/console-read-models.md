@@ -657,7 +657,7 @@ Readiness bar: `VERDICT_COMPOSITE_THRESHOLD = 60`, with `VERDICT_TRUE_VALUE_RATI
 beside it (`compute_verdict`: AGENT-READY needs both).
 
 **Which scorer version.** The file holds two constants. `SCORER_VERSION = "5"` is the lite Audit's
-(24 questions, one surface). `FULL_CYCLE_SCORER_VERSION = "6"` is the same registry and weights for a
+(24 questions, one surface). `FULL_CYCLE_SCORER_VERSION = "7"` (2I: grounded surfaces only; "6" before) is the same registry and weights for a
 full cycle: the one difference is Deal Citability's said half, banded as a rate
 (`apply_deal_citability_rate_band`) because a citation count saturates at full-cycle volume. A loop is
 a full cycle, and its value-tier half is a rate by construction (right ÷ scored), so the console
@@ -764,6 +764,15 @@ another version reads "Scored under v5, re-score to compare." where a delta woul
 **Pooled.** A surface's score is its own earned ÷ applicable max. The pooled score is the mean of those.
 Every count stays per surface: a dimension's `numerator` / `denominator` exist on the pooled row only
 for a crawl-side count every surface shares; a per-surface count lives in `by_surface` and `parts`.
+
+**Grounded only (2I, scorer 7).** The pooled score is the mean over grounded surfaces only: an `api`
+surface (the model alone, no search tool) is listed in `surfaces_left_out` as "ungrounded · not scored"
+and never pooled. `FULL_CYCLE_SCORER_VERSION` went from 6 to 7 for it, so every stored score recomputes
+on its next read. Where the number moved, the history entry reads "scorer 6 → 7: ungrounded surfaces
+excluded from pooling"; otherwise it reads "scorer 6 → 7". A cycle whose runs are all grounded (229) scores
+the same. FL4 (Oct 16, the store) is a one-surface cycle under it, scored on ChatGPT's grounded surface
+alone. New cycles cannot include an ungrounded surface: every dispatch refuses one with
+`ungrounded_surface_not_allowed` (see Surfaces, below).
 
 ### Deploy note (migration `f3b8d2a6c4e1`, not applied)
 
@@ -6263,3 +6272,42 @@ Trial Pack's price); the question's is `question_outcome: wrong`.
   ]
 }
 ```
+
+## 2I: grounded surfaces only
+
+Every path that starts answers (`POST /api/full-loop`, `POST /api/console/cycles`, and the web app's
+`POST /api/cycles`) dispatches grounded surfaces only (`soa_shared/surfaces.py`, `grounded` on each
+surface, classified from its runner's code). A name that resolves to an ungrounded surface is a 422
+`{"code": "ungrounded_surface_not_allowed", "message": ...}`, and the message names what to send
+instead. That includes the alias `gemini`, which is `gemini_api`, so the message says "use
+gemini_grounded". A surface the worker reported it has no key for is a 422 `surface_not_configured`.
+
+| surface id | runner | grounded | how we know |
+|---|---|---|---|
+| `chatgpt` | `OpenAIRunner` | yes | `openai_runner.py`: `tools=[{"type": "web_search"}]` on every request |
+| `chatgpt_api` | `OpenAIApiRunner` | no | `openai_api_runner.py`: the same call with no `tools` |
+| `gemini_grounded` | `GeminiGroundedRunner` | yes | `gemini_grounded_runner.py`: `tools=[types.Tool(google_search=types.GoogleSearch())]` |
+| `gemini_api` (alias `gemini`) | `GeminiApiRunner` | no | `gemini_runner.py`: `GenerateContentConfig()` with no tools |
+| `perplexity` | `PerplexityRunner` | yes | `perplexity_runner.py`: an online Sonar model (`…-sonar-…-online`), whose `citations` it reads |
+| `claude` | `ClaudeRunner` | yes | `claude_runner.py`: `tools=[{"type": "web_search_20250305", "name": "web_search"}]` |
+| `aimode` | `AiModeRunner` | yes | `serpapi_runner.py`: SerpApi `google_ai_mode`, Google's search answer, sources from `references` |
+| `copilot` | `CopilotRunner` | yes | `serpapi_runner.py`: SerpApi `bing_copilot`, Bing's search answer, sources from `references` |
+| `gemini_web`, `chatgpt_web` | none | no | no runner (`never_available`): nothing runs, so nothing is classified grounded |
+
+The worker writes one row per runner at boot to `soa_worker_surfaces` (migration `d2f6b8a4c1e9`):
+`{surface_id, configured, seen_at}`, booleans only, never a key. `GET /api/console/surfaces` serves each
+surface with `fidelity_label`, `grounded`, `configured` and `seen_at` (`null` until the worker has
+reported). A surface with no row is not refused. The run dialog checks every grounded surface with
+`configured: true`. That is also the worker's fallback for a cycle stored with no platforms; before 2I
+the fallback was a fixed `[chatgpt, gemini_grounded]`.
+
+
+## 2I: what the run dialog compares against
+
+`GET /api/console/runs` (the cycle picker) and `GET /api/console/full-loop/latest` also return
+`surface_ids`, `runs_per_question` and `study_id` (so does `/api/full-loop/{id}`, one shape). The existing `surfaces` on `/runs` keeps its meaning,
+the surface kinds, so the resolved ids get their own name. On `/runs` the ids are what ran
+(`soa_runs.platform`, in registry order). A pre-2D cycle stored an alias and ran it under another id
+(229 stored "gemini" and ran `gemini_grounded`). Before any run, the ids are what the cycle stored
+resolved (`soa_cycles.surfaces`), else its platforms resolved today. On `/full-loop/latest` the ids are
+the request's `platforms`, stored resolved since 2D. A reads-only request has `[]` and `study_id: null`.
