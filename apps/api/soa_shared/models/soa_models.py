@@ -2324,3 +2324,15 @@ class SoaFullLoopRequest(Base):
     created_by = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class SoaWorkerSurface(Base):
+    """2I: what the worker reported at boot, one row per runner it has: is
+    its key set. Booleans only, never a key. The API refuses a dispatch to
+    a surface reported `configured: false` and serves the rows in
+    /api/console/surfaces."""
+    __tablename__ = "soa_worker_surfaces"
+
+    surface_id = Column(Text, primary_key=True)
+    configured = Column(Boolean, nullable=False)
+    seen_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

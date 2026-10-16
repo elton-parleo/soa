@@ -30,6 +30,7 @@ from app.auth import verify_token
 from app.console_scope import console_scope, cycle_customer_org_sql
 from app.customer_context import CustomerScope
 from app.console_merchants import check_merchant
+from app import worker_surfaces
 from app.routers import full_loop
 from app.routers.customers import _tenant_view
 from app.routers.truesync import MAX_FEED_UPLOAD_BYTES, _unwrap, get_feed_template
@@ -203,7 +204,7 @@ async def get_study_options(scope: CustomerScope = Depends(operator_scope)):
     view = await _tenant_view(scope.org)
     return {
         "constraints": {k: list(v) for k, v in QUERY_CONSTRAINTS.items()},
-        "surfaces": surfaces.modal_list(),
+        "surfaces": worker_surfaces.console_list(engine),
         "merchants": view.get("merchants") or [],
         "merchants_error": view.get("error"),
         "max_questions": cs.MAX_QUESTIONS,
@@ -306,11 +307,8 @@ async def start_console_cycle(body: ConsoleCycleStart, scope: CustomerScope = De
     if not 1 <= body.runs_per_query <= 10:
         raise HTTPException(status_code=422, detail="runs_per_query is 1 to 10")
     # 2D: resolved here, so an unknown name is this 422 and not a validation
-    # error inside CreateCycleRequest below
-    try:
-        platforms = surfaces.resolve_platforms(body.platforms)
-    except surfaces.UnknownSurface as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+    # error inside CreateCycleRequest below. 2I: grounded and configured only.
+    platforms = worker_surfaces.check_dispatch(body.platforms, engine)
     refused = [f"{p}: {surfaces.unavailable_reason(p)}" for p in platforms if surfaces.unavailable_reason(p)]
     if refused:
         raise HTTPException(status_code=422, detail="surface cannot run: " + "; ".join(refused))

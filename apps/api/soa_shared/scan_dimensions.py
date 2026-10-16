@@ -465,7 +465,7 @@ def compute_verdict(composite: float, true_value_earned: float, true_value_appli
 # starting default, expected to move once real full-cycle runs
 # accumulate (same "recalibrated for the study's volume" precedent as
 # COUNT_BAND_TABLE's own Stage 25 history above).
-FULL_CYCLE_SCORER_VERSION = "6"
+FULL_CYCLE_SCORER_VERSION = "7"   # 2I: ungrounded surfaces excluded from pooling
 
 DEAL_CITABILITY_RATE_BAND_TABLE: Tuple[Tuple[Optional[float], float], ...] = (
     (0, 0.0),

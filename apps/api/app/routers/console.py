@@ -42,6 +42,7 @@ from app.auth import verify_token
 from app.console_scope import console_scope, cycle_customer_org_sql, cycle_in_scope
 from app.customer_context import CustomerScope
 from app.console_merchants import MerchantScope, check_merchant, merchant_cycles, merchant_scope, study_merchants, with_domains
+from app import worker_surfaces
 from app.routers import full_loop
 from app.routers.customers import _tenant_view
 from app.services import console_parity as parity
@@ -62,8 +63,10 @@ def _json(value):
 @router.get("/surfaces")
 def get_surfaces(scope: CustomerScope = Depends(console_scope)):
     """Every surface that will run here, with its fidelity label, then the
-    two with no verified provider (not available, with the reason)."""
-    return {"surfaces": surfaces.modal_list()}
+    two with no verified provider (not available, with the reason). 2I: each
+    with `grounded` and the worker's `configured` and `seen_at` (None until
+    the worker has reported)."""
+    return {"surfaces": worker_surfaces.console_list(engine)}
 
 
 @router.get("/answers")

@@ -5,6 +5,7 @@ from datetime import date
 import json
 import soa_shared.config as config
 from soa_shared.database import engine, session_factory
+from app import worker_surfaces
 from soa_shared.models.soa_models import SoaCycle, SoaScopeSku, SoaTruecostSnapshot
 from soa_shared.scope_resolution import materialize_and_freeze
 from soa_shared.cycle_creation import create_cycle_with_comparison_set
@@ -57,9 +58,14 @@ def create_cycle(
     executes the cycle. This endpoint returns immediately without running
     anything.
     """
+    is_truecost = data.cycle_mode == "truecost"
+    if not is_truecost and data.platforms:
+        # 2I: grounded surfaces only, and only those the worker has a key
+        # for. data.platforms is already resolved, so 'gemini' arrives as
+        # gemini_api and is refused with "use gemini_grounded".
+        worker_surfaces.check_dispatch(data.platforms, engine)
     org_id  = current_user['organization_id']
     user_id = current_user['user_id']
-    is_truecost = data.cycle_mode == "truecost"
 
     with engine.begin() as conn:
 
