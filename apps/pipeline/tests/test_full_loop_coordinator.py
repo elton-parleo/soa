@@ -38,6 +38,10 @@ class FakeSupply:
         if request.method == 'GET':
             return httpx.Response(200, json=dict(self.run))
         body = json.loads(request.content)
+        if set(body) == {'reason'}:
+            # supply's runs.pipeline_update: a reason alone annotates the run, status unchanged
+            self.run['reason'] = body['reason']
+            return httpx.Response(200, json=dict(self.run))
         if body.get('soa_cycle_id') is None:
             if self.run['status'] != 'reference_done' or body['status'] != 'failed':
                 return httpx.Response(409, json={'detail': f"full loop run 33 is {self.run['status']!r}"})
@@ -427,3 +431,51 @@ def test_every_supply_call_and_the_cycle_carry_the_requests_merchant(db):
     paths = {c[1] for c in supply.calls}
     assert paths and all('/merchants/wiggle-and-snug-brand/' in p for p in paths)
     assert '-wiggle-and-snug-brand-' in code
+
+
+
+# ═══ 2I: a reads-only request (no study) ═══════════════════════════════════
+
+def reads_only_request(db, at=None):
+    """What POST /api/full-loop records for a merchant with no study."""
+    with db.begin() as c:
+        return c.execute(text("""INSERT INTO soa_full_loop_requests (organization_id, merchant_slug,
+            study_type, platforms, runs_per_query, allow_hosted_render, status, created_by,
+            created_at, updated_at)
+            VALUES (10, 'wiggle-and-snug-brand', NULL, '[]', 1, TRUE, 'reference_pending', 'op', :at, :at)
+            RETURNING id"""), {'at': (at or NOW).isoformat()}).scalar()
+
+
+@pytest.mark.parametrize('starts_as', ['running', 'reference_done'])
+def test_a_reads_only_request_ends_at_reads_done_with_no_cycle(db, starts_as):
+    supply = FakeSupply('running', starts_as=starts_as)
+    co = coordinator(db, supply)
+    rid = reads_only_request(db)
+    with db.connect() as c:
+        cycles_before = c.execute(text("SELECT COUNT(*) FROM soa_cycles")).scalar()
+    co.tick()                                              # POST supply
+    if starts_as == 'running':
+        assert co.get(rid)['status'] == 'reference_pending'
+        supply.run['status'] = 'reference_done'
+        co.tick()                                          # poll: reference_done
+    co.tick()                                              # no study: reads_done
+    row = co.get(rid)
+    assert (row['status'], row['cycle_id'], row['error']) == ('reads_done', None, None)
+    with db.connect() as c:
+        assert c.execute(text("SELECT COUNT(*) FROM soa_cycles")).scalar() == cycles_before   # no cycle created
+    patches = [c for c in supply.calls if c[0] == 'PATCH']
+    assert patches == [('PATCH', '/api/truesync/merchants/wiggle-and-snug-brand/full-loop/33',
+                        {'reason': 'reads_only'}, 'tst_org_token')]
+    assert supply.run['status'] == 'reference_done'        # supply's run is left at reference_done
+    assert co.tick() == 0                                  # terminal: never picked up again
+
+
+def test_a_stale_sweep_leaves_reads_done_alone(db):
+    supply = FakeSupply('reference_done')
+    co = coordinator(db, supply)
+    rid = reads_only_request(db)
+    co.tick(); co.tick()
+    assert co.get(rid)['status'] == 'reads_done'
+    later = Coordinator(engine=db, client_for=supply.client, clock=lambda: NOW + timedelta(days=3))
+    assert later.tick() == 0
+    assert co.get(rid)['status'] == 'reads_done' and co.get(rid)['error'] is None

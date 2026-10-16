@@ -112,6 +112,13 @@ class SupplyFullLoopClient:
     def run(self, slug: str, run_id: int) -> SupplyResult:
         return self._call('GET', f"/api/truesync/merchants/{slug}/full-loop/{run_id}")
 
+    def annotate(self, slug: str, run_id: int, reason: str) -> SupplyResult:
+        """2I: a reason-only PATCH. It leaves the run's status as it is
+        (supply allows a reason alone: runs.pipeline_update) and tells supply's
+        orphan script (scripts/close_full_loop_runs.py) the run was meant to
+        stop at reference_done."""
+        return self._call('PATCH', f"/api/truesync/merchants/{slug}/full-loop/{run_id}", {'reason': reason})
+
     def patch(self, slug: str, run_id: int, *, soa_cycle_id: Optional[str], status: str) -> SupplyResult:
         body = {'status': status}
         if soa_cycle_id is not None:
@@ -214,6 +221,8 @@ class Coordinator:
             return self._start(row)
         if status == 'reference_pending':
             return self._poll_reference(row)
+        if status == 'reference_done' and not row['study_type']:
+            return self._reads_done(row)
         if status == 'reference_done':
             return self._create_cycle(row)
         if status == 'cycle_planned':
@@ -278,6 +287,24 @@ class Coordinator:
         if supply_status != row['supply_status']:
             self._set(row['id'], supply_status=supply_status)
         return False
+
+    #: 2I: the reason sent with a reads-only run's PATCH.
+    READS_ONLY_REASON = 'reads_only'
+
+    def _reads_done(self, row) -> bool:
+        """2I: a reads-only request (no study) ends at supply's
+        reference_done: no cycle, no scoring. The run stays reference_done on
+        supply; a reason-only PATCH says it was meant to. A failed PATCH is
+        logged, not retried: the reads are supply's and are served either way."""
+        result = self.client_for(row['organization_id']).annotate(
+            row['merchant_slug'], row['supply_run_id'], self.READS_ONLY_REASON)
+        if result.error is not None:
+            logger.warning("[full-loop] request %s: reads_only PATCH failed (%s); the run stays "
+                           "reference_done on supply", row['id'], result.error)
+        self._set(row['id'], status='reads_done')
+        logger.info("[full-loop] request %s: pages read for %s, no study (reads_done)",
+                    row['id'], row['merchant_slug'])
+        return True
 
     def _comparison_set(self, conn, row) -> list:
         """The study's latest cycle's comparison set, in this org's hands."""

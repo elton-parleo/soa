@@ -2234,7 +2234,7 @@ class SoaFullLoopRequest(Base):
     __table_args__ = (
         CheckConstraint(
             "status IN ('reference_pending','reference_done','cycle_planned',"
-            "'scoring','scored','failed')",
+            "'scoring','scored','failed','reads_done')",
             name="ck_soa_full_loop_requests_status",
         ),
         Index("ix_soa_full_loop_requests_org", "organization_id"),
@@ -2244,8 +2244,9 @@ class SoaFullLoopRequest(Base):
     id = Column(Integer, primary_key=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     merchant_slug = Column(Text, nullable=False)
-    study_type = Column(Text, nullable=False)
-    platforms = Column(JSON, nullable=False)
+    # 2I: NULL on a reads-only request (no study: the access series and reference reads only)
+    study_type = Column(Text, nullable=True)
+    platforms = Column(JSON, nullable=False, default=list, server_default='[]')
     runs_per_query = Column(Integer, nullable=False, default=1, server_default="1")
     supply_run_id = Column(Integer, nullable=True)
     supply_status = Column(Text, nullable=True)

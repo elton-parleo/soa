@@ -53,10 +53,16 @@ class FullLoopStart(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     merchant_slug: str
-    study_type: str
-    platforms: List[str] = Field(min_length=1)
+    #: 2I: absent on a merchant with no study: a reads-only request (the
+    #: access series and the reference reads, supply's stage one), no surfaces
+    study_type: Optional[str] = None
+    platforms: List[str] = Field(default_factory=list)
     runs_per_query: int = Field(default=1, ge=1, le=10)
     allow_hosted_render: bool = True
+
+    @property
+    def reads_only(self) -> bool:
+        return not self.study_type
 
 
 def _iso(value):
@@ -70,6 +76,13 @@ def _study_org(conn, study_type: str):
     if row is None:
         return None
     return row[0] if row[0] is not None else row[1]
+
+
+def _platforms(value) -> list:
+    """The stored platform list, [] when null (a reads-only request)."""
+    if value is None:
+        return []
+    return json.loads(value) if isinstance(value, str) else list(value)
 
 
 def combined_status(row, *, supply_view: Optional[dict], supply_error: Optional[str]) -> dict:
@@ -86,19 +99,23 @@ def combined_status(row, *, supply_view: Optional[dict], supply_error: Optional[
     reference = ('failed' if supply_status == 'failed' or (status == 'failed' and not row.get('supply_run_id')) else
                  'done' if supply_status in ('reference_done', 'scored') or status not in ('reference_pending',)
                  else 'running')
-    study = ('waiting' if cycle is None else
+    reads_only = not row.get('study_type')
+    study = ('none_yet' if reads_only else 'waiting' if cycle is None else
              {'planned': 'queued', 'running': 'running', 'complete': 'done', 'failed': 'failed'}
              .get(cycle['status'], cycle['status']))
-    scoring = {'scored': 'done', 'failed': 'failed'}.get(status, 'waiting')
-    return {
+    scoring = 'not_applicable' if reads_only else {'scored': 'done', 'failed': 'failed'}.get(status, 'waiting')
+    platforms = _platforms(row.get('platforms'))
+    # 2I: when the pages were read: supply's run finished_at, else (a row the
+    # worker closed) the request's own last update
+    read_at = ((supply_view or {}).get('finished_at') or (_iso(row.get('updated_at')) if status == 'reads_done' else None)) \
+        if reference == 'done' else None
+    out = {
         'id': row['id'],
         'status': status,
         'merchant': row['merchant_slug'],
         'study_type': row['study_type'],
-        'platforms': json.loads(row['platforms']) if isinstance(row['platforms'], str) else row['platforms'],
-        'surfaces': [surfaces.get(p).as_dict() if surfaces.get(p) else {'id': p}
-                     for p in (json.loads(row['platforms']) if isinstance(row['platforms'], str)
-                               else row['platforms'])],
+        'platforms': platforms,
+        'surfaces': [surfaces.get(p).as_dict() if surfaces.get(p) else {'id': p} for p in platforms],
         'runs_per_query': row['runs_per_query'],
         'error': row.get('error'),
         'created_at': _iso(row.get('created_at')),
@@ -112,15 +129,24 @@ def combined_status(row, *, supply_view: Optional[dict], supply_error: Optional[
         'cycle': cycle,
         'strip': [
             {'step': 'reference', 'label': 'Access and reference reads', 'state': reference},
-            {'step': 'study', 'label': 'Study on the chosen surfaces', 'state': study},
+            {'step': 'study', 'label': 'Study: none yet' if reads_only else 'Study on the chosen surfaces', 'state': study},
             {'step': 'scoring', 'label': 'Scored and reported to TrueSync', 'state': scoring},
         ],
     }
+    if reads_only:
+        # 2I: only on a reads-only request, so a request with a study reads
+        # exactly as before (tests/fixtures/full_loop_pre_2i.py)
+        out.update(mode='reads_only', read_at=read_at)
+    return out
 
 
 @router.post("/full-loop", status_code=202)
 async def start_full_loop(body: FullLoopStart, scope: CustomerScope = Depends(console_scope),
                           user: dict = Depends(verify_token)):
+    if body.reads_only:
+        return _queue_reads_only(body, scope, user)
+    if not body.platforms:
+        raise HTTPException(status_code=422, detail="a full loop with a study needs at least one surface")
     with engine.connect() as conn:
         owner = _study_org(conn, body.study_type)
     if owner != scope.org.id:
@@ -157,6 +183,27 @@ async def start_full_loop(body: FullLoopStart, scope: CustomerScope = Depends(co
                "ahr": body.allow_hosted_render, "by": user.get('email') or user.get('sub'),
                "now": datetime.now(timezone.utc)}).scalar()
     return {'full_loop_id': request_id, 'id': request_id, 'status': 'queued'}
+
+
+def _queue_reads_only(body: FullLoopStart, scope: CustomerScope, user: dict) -> dict:
+    """2I: a merchant with no study reads its pages first. No study, no
+    surfaces, no cycle: the worker POSTs supply and stops at its
+    reference_done (`reads_done` here). The merchant is not checked against
+    the org here, which would be a supply call: the worker's POST is refused
+    by supply (404) for a merchant that is not the token's, and the request
+    fails with that reason."""
+    if body.platforms:
+        raise HTTPException(status_code=422, detail="a reads-only request runs no surface: send no platforms")
+    with engine.begin() as conn:
+        request_id = conn.execute(text("""
+            INSERT INTO soa_full_loop_requests (organization_id, merchant_slug, study_type, platforms,
+                runs_per_query, allow_hosted_render, status, created_by, created_at, updated_at)
+            VALUES (:org, :slug, NULL, :p, 1, :ahr, 'reference_pending', :by, :now, :now)
+            RETURNING id
+        """), {"org": scope.org.id, "slug": body.merchant_slug, "p": json.dumps([]),
+               "ahr": body.allow_hosted_render, "by": user.get('email') or user.get('sub'),
+               "now": datetime.now(timezone.utc)}).scalar()
+    return {'full_loop_id': request_id, 'id': request_id, 'status': 'queued', 'mode': 'reads_only'}
 
 
 async def read_full_loop(request_id: int, scope: CustomerScope) -> dict:
