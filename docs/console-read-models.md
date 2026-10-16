@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -1411,6 +1411,47 @@ its message, at most 200 characters, no row data). A read served from the stored
 
 **Deploy.** A redeploy of soa only: no migration (`f3b8d2a6c4e1` is already applied), no console change
 (the tile already shows the 422's detail as its error).
+
+## 2D: three fixes before the next full loop
+
+### 2D-1: Postgres in CI, and the json-column sweep
+
+**CI.** `.github/workflows/ci.yml` (the repo had no workflow) runs the api and pipeline suites on every
+push and PR, each beside a `postgres:17` service container, with `SOA_TEST_PG_URL` pointing at it.
+Production's Postgres version is not recorded in the repo docs, so the image is the current Supabase
+major; change it if production's differs. `DATABASE_URL` is a dead local port, so a test that forgot to
+swap in its own engine fails rather than reaching anything. No secrets.
+
+**The harness.** `packages/testing/soa_pg_harness.py`, imported by both suites' conftests:
+`sqlite_engine()`, `postgres_engine()`, `model_schema(engine)` (every soa_shared model's table with
+production's types), and the fixtures `any_engine` (each test on sqlite, then Postgres) and `pg_engine`.
+`SOA_TEST_PG_URL` unset: the Postgres runs skip locally and **fail under GitHub Actions**. Set to a host
+that is not local: fail (each test drops the public schema). Set and unreachable: fail, never skip.
+
+**The sweep.** Every `json` column in the soa_shared models (41, none `jsonb`), against every
+`DISTINCT`, `GROUP BY`, `UNION`, `IN (subquery)` and `=` in `apps/api/app` (read models and routers),
+`soa_shared` and the rescore script. Each hit has a test in `apps/api/tests/test_pg_json_sweep.py` that
+calls the real function on both databases over the full model schema.
+
+| statement | where | lands on json? | Postgres |
+|---|---|---|---|
+| `SELECT DISTINCT e.* FROM soa_entities e JOIN soa_cycle_entities ...` | `GET /api/console/studio/entities` | **yes, `soa_entities.aliases`** | **failed** (`UndefinedFunction`), fixed: `WHERE e.id IN (SELECT ce.entity_id ...)` |
+| `SELECT q.query_code, q.expected_answer ... WHERE q.id IN (SELECT r.query_id ...)` | `console_score.load_score_runs` (#111's fix) | selected, not compared | passes |
+| `SELECT DISTINCT study_pattern FROM soa_queries` | `POST /api/cycles` | no (text) | passes |
+| `COUNT(DISTINCT cm.run_id)` | `public_lite._fetch_live_progress_counts` | no (integer) | passes |
+| `SELECT DISTINCT query_id`, `COUNT(DISTINCT query_id)` | `transcript_pick._fetch_query_index_map` | no (integer) | passes |
+| `GROUP BY r.platform`, `COUNT(DISTINCT r.id)` | `full_analysis_extras._fetch_platform_signals` | no | passes |
+| `GROUP BY ce.comparison_code, cm.position` | `GET /api/cycles/{code}/positions` | no | passes |
+| `GROUP BY q.study_type, q.category, q.study_pattern`, `GROUP BY c.study_type`, `GROUP BY study_pattern` | `GET /api/studies`, `GET /api/studies/{type}/queries` | no | passes |
+| `GROUP BY r.id` (twice each) | `cycle_scoring._fetch_run_signals`, `lite_score_batch._fetch_run_signals_batch` | no (aggregates only) | passes |
+| `GROUP BY tier, platform, outcome`, `... source_attribution`, `GROUP BY q.tier, r.platform`, `GROUP BY tier` | `tier_accuracy` | no | passes |
+| `GROUP BY COALESCE(o.surface, r.surface), o.platform, o.outcome`, `GROUP BY surface, platform, status, answer_status` | `soa_shared.surface_accuracy` | no | passes |
+| ORM `group_by(entity_id, platform)` | `finding_detector.detect_vis_01` | no | passes |
+| `GROUP BY tier, outcome` | `scripts/rescore_cycle.outcome_counts` | no | passes (2D-3's fixture, both databases) |
+
+No `UNION` and no `=` against a json column anywhere in those paths; the only `IN (subquery)` is
+#111's. **CI goes red on #111's `DISTINCT`**: proven with a throwaway commit on the 2D branch that put
+it back (the PR body has the run), then dropped.
 
 ## Answer divergences
 

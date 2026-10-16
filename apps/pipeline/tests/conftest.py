@@ -1,11 +1,15 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_APP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _APP)
+# 2D: the shared test databases (sqlite, and the local Postgres CI runs).
+sys.path.insert(0, os.path.join(_APP, '..', '..', 'packages', 'testing'))
 
 import pytest
 
 from scan import fetcher
+from soa_pg_harness import any_engine, pg_engine  # noqa: F401  (pytest fixtures)
 
 
 @pytest.fixture(autouse=True)
