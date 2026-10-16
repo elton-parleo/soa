@@ -704,8 +704,8 @@ def _decorate(verdict, expectation, extraction, *, source_ref, brand_domain,
     """The answer-level 2B results: source split, and the flags."""
     ref = source_ref or {}
     own_domain = ref.get('own_domain') or expectation.get('domain') or brand_domain
-    owned = [own_domain] + [d for d in (brand_facts or {}).get('own_domains') or []
-                            if d != own_domain]
+    owned = [own_domain] + [d for d in ((brand_facts or {}).get('own_domains') or [])
+                            + ((brand_facts or {}).get('tenant_own_domains') or []) if d != own_domain]
     retailer_list = ref.get('retailer_list') or []
     domains = af.cited_domains(extraction.get('sources_cited'),
                                _retrieved(retrieved_sources, grounding))

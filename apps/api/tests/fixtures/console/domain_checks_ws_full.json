@@ -1,0 +1,244 @@
+{
+ "version": {
+  "scan": "5",
+  "extraction_rev": "2",
+  "adapter_revision": 1
+ },
+ "checked_at": "2026-10-16T09:00:00+00:00",
+ "merchant": "wiggle-and-snug",
+ "own_domains": [
+  "trueshopstore.com"
+ ],
+ "scored_domain": "trueshopstore.com",
+ "reference_rows_from": "supply",
+ "domains": [
+  {
+   "domain": "trueshopstore.com",
+   "origin": "https://trueshopstore.com",
+   "short_circuited": false,
+   "fetches": [
+    {
+     "kind": "robots",
+     "url": "https://trueshopstore.com/robots.txt",
+     "final_url": "https://trueshopstore.com/robots.txt",
+     "status": "fetched",
+     "http_status": 200,
+     "content_type": "text/plain",
+     "body": null,
+     "bytes": 87,
+     "attempts": 1,
+     "error": null,
+     "edge_vendor_hint": null,
+     "title": null
+    },
+    {
+     "kind": "homepage",
+     "url": "https://trueshopstore.com",
+     "final_url": "https://trueshopstore.com",
+     "status": "fetched",
+     "http_status": 200,
+     "content_type": "text/html",
+     "body": null,
+     "bytes": 702,
+     "attempts": 1,
+     "error": null,
+     "edge_vendor_hint": null,
+     "title": null
+    },
+    {
+     "kind": "llms_txt",
+     "url": "https://trueshopstore.com/llms.txt",
+     "final_url": "https://trueshopstore.com/llms.txt",
+     "status": "fetched",
+     "http_status": 200,
+     "content_type": "text/plain",
+     "body": "# Acme\n\n> Acme sells widgets.\n\n## Products\n- [Widgets](https://acme.example.com/widgets)",
+     "bytes": 89,
+     "attempts": 1,
+     "error": null,
+     "edge_vendor_hint": null,
+     "title": null
+    },
+    {
+     "kind": "mcp_well_known",
+     "url": "https://trueshopstore.com/.well-known/mcp.json",
+     "final_url": "https://trueshopstore.com/.well-known/mcp.json",
+     "status": "fetched",
+     "http_status": 200,
+     "content_type": "application/json",
+     "body": "{\"capabilities\": [\"dev.ucp.shopping.discount\", \"dev.ucp.shopping.loyalty\", \"dev.acp.promotions\"], \"specVersion\": \"2025-01\"}",
+     "bytes": 123,
+     "attempts": 1,
+     "error": null,
+     "edge_vendor_hint": null,
+     "title": null
+    },
+    {
+     "kind": "product",
+     "url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+     "final_url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+     "status": "fetched",
+     "http_status": 200,
+     "content_type": "text/html",
+     "body": null,
+     "bytes": 845,
+     "attempts": 1,
+     "error": null,
+     "edge_vendor_hint": null,
+     "title": null
+    },
+    {
+     "kind": "product_unsigned",
+     "url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+     "final_url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+     "status": "fetched",
+     "http_status": 200,
+     "content_type": "text/html",
+     "body": null,
+     "bytes": 845,
+     "attempts": 1,
+     "error": null,
+     "edge_vendor_hint": null,
+     "title": null
+    }
+   ],
+   "agentic_protocol_hints": [
+    "<link> markup mentions: ['ucp']"
+   ],
+   "site_type": {
+    "site_type": "commerce_normal",
+    "reason": "commerce signals present and product pages sampled",
+    "signals": [
+     "cart/checkout link or form found in homepage nav/footer",
+     "Offer markup found on at least one fetched page"
+    ]
+   },
+   "pdp_url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+   "protocol_feed": {
+    "score": 3.8,
+    "max": 5,
+    "evidence": [
+     "/llms.txt present and non-empty",
+     "MCP endpoint declaration discoverable (well-known path)",
+     "UCP/UIP capability markup present",
+     "no agentic-commerce hints found in structured data"
+    ],
+    "fix": "Publish /llms.txt, declare an MCP endpoint (well-known manifest or <link> markup), expose UCP/UIP capability markup, and mark agentic-commerce capabilities in structured data so agent checkout protocols can discover your store.",
+    "fix_human": "Publish the files that let AI agents and checkout protocols discover and interact with your store directly.",
+    "coverage": "partial",
+    "deferred_items": [
+     {
+      "label": "Merchant Center / Deal Directory participation",
+      "reason": "loyalty-field participation in a merchant feed isn't observable from a same-origin crawl"
+     },
+     {
+      "label": "ACP Promotions participation",
+      "reason": "Agentic Commerce Protocol promotion enrollment lives in a third-party registry, not on-site markup"
+     },
+     {
+      "label": "Feed-level incentive syndication",
+      "reason": "syndicated feed contents aren't reachable by crawling the storefront itself"
+     }
+    ],
+    "cap_basis": []
+   },
+   "value_protocols": {
+    "score": 14.0,
+    "max": 14,
+    "evidence": [
+     "the manifest's capabilities list and specVersion resolve to the expected shape",
+     "declared protocol manifest version is current ('2025-01')",
+     "declares a UCP shopping-discount capability ('dev.ucp.shopping.discount')",
+     "declares a loyalty/member protocol extension ('dev.ucp.shopping.loyalty')",
+     "declares an ACP promotions capability ('dev.acp.promotions')"
+    ],
+    "fix": null,
+    "fix_human": null,
+    "coverage": "full",
+    "deferred_items": [],
+    "cap_basis": []
+   },
+   "signed_probe": {
+    "url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+    "signed": {
+     "status": "fetched",
+     "http_status": 200,
+     "edge_vendor_hint": null,
+     "title": null
+    },
+    "unsigned": {
+     "status": "fetched",
+     "http_status": 200,
+     "edge_vendor_hint": null,
+     "title": null
+    },
+    "key_id": "test-key",
+    "outcome": "both_in",
+    "reason": null
+   }
+  }
+ ],
+ "protocol_feed": {
+  "score": 3.8,
+  "max": 5,
+  "evidence": [
+   "/llms.txt present and non-empty",
+   "MCP endpoint declaration discoverable (well-known path)",
+   "UCP/UIP capability markup present",
+   "no agentic-commerce hints found in structured data"
+  ],
+  "fix": "Publish /llms.txt, declare an MCP endpoint (well-known manifest or <link> markup), expose UCP/UIP capability markup, and mark agentic-commerce capabilities in structured data so agent checkout protocols can discover your store.",
+  "fix_human": "Publish the files that let AI agents and checkout protocols discover and interact with your store directly.",
+  "coverage": "partial",
+  "deferred_items": [
+   {
+    "label": "Merchant Center / Deal Directory participation",
+    "reason": "loyalty-field participation in a merchant feed isn't observable from a same-origin crawl"
+   },
+   {
+    "label": "ACP Promotions participation",
+    "reason": "Agentic Commerce Protocol promotion enrollment lives in a third-party registry, not on-site markup"
+   },
+   {
+    "label": "Feed-level incentive syndication",
+    "reason": "syndicated feed contents aren't reachable by crawling the storefront itself"
+   }
+  ],
+  "cap_basis": []
+ },
+ "value_protocols": {
+  "score": 14.0,
+  "max": 14,
+  "evidence": [
+   "the manifest's capabilities list and specVersion resolve to the expected shape",
+   "declared protocol manifest version is current ('2025-01')",
+   "declares a UCP shopping-discount capability ('dev.ucp.shopping.discount')",
+   "declares a loyalty/member protocol extension ('dev.ucp.shopping.loyalty')",
+   "declares an ACP promotions capability ('dev.acp.promotions')"
+  ],
+  "fix": null,
+  "fix_human": null,
+  "coverage": "full",
+  "deferred_items": [],
+  "cap_basis": []
+ },
+ "signed_probe": {
+  "url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+  "signed": {
+   "status": "fetched",
+   "http_status": 200,
+   "edge_vendor_hint": null,
+   "title": null
+  },
+  "unsigned": {
+   "status": "fetched",
+   "http_status": 200,
+   "edge_vendor_hint": null,
+   "title": null
+  },
+  "key_id": "test-key",
+  "outcome": "both_in",
+  "reason": null
+ },
+ "errors": []
+}

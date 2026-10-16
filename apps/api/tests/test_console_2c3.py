@@ -55,12 +55,18 @@ def test_crawl_counts_are_accessibility_s_counts_on_the_w_s_reads():
     not an agent. Pages: the 19 Oct 14 reads, all json_ld, 6 with a GTIN, 19
     with a price, 7 with a member price."""
     counts = score.crawl_counts(rm.accessibility_from_supply(ACCESS), WS_REFERENCE['rows'])
-    assert counts == {'identities': 3, 'through': 3, 'pages': 19, 'catalog': 6, 'price': 19, 'member_price': 7}
+    assert {k: counts[k] for k in ('identities', 'through', 'pages', 'catalog', 'price', 'member_price')} == \
+        {'identities': 3, 'through': 3, 'pages': 19, 'catalog': 6, 'price': 19, 'member_price': 7}
+    # 2E: the Oct 14 reads are from a supply before #21: no incentive field at all
+    assert counts['incentive_fields'] is False and counts['incentive_scanned'] == 0
 
 
 def test_crawl_counts_with_nothing_read_are_zero_denominators():
     assert score.crawl_counts(None, None) == {'identities': 0, 'through': 0, 'pages': 0, 'catalog': 0,
-                                              'price': 0, 'member_price': 0}
+                                              'price': 0, 'member_price': 0, 'incentive_fields': False,
+                                              'incentive_scanned': 0, 'incentive_any': 0,
+                                              'incentive_flags': {'member_price': 0, 'promo': 0, 'subscription': 0,
+                                                                  'code': 0}}
 
 
 def test_visibility_inputs_are_metrics_calculator_s():

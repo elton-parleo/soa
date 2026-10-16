@@ -29,6 +29,7 @@ from sqlalchemy import text
 from soa_shared import surfaces
 
 from app.services import console_read_models as rm
+from clients.truesync_client import INCENTIVE_FLAGS, carries_incentive_fields, incentive_in_markup
 
 AGENT_NAMES = rm.AGENT_NAMES
 _json = rm._json
@@ -86,6 +87,9 @@ TEMPLATES = {
     'headline.gap': "Named in {named} of {n} {answers}.{rivals}",
     'headline.lead': "First in {first} of {n} {answers}.",
     'catalog.read': "{ok} of {pages} pages read{rest}.",
+    'catalog.incentive': "Incentive in markup: {pages} of {of} pages",
+    'catalog.incentive_unscanned': "Incentive in markup: not checked, no read scanned yet",
+    'catalog.incentive_none': "Incentive in markup: not measured, supply does not serve it yet",
 }
 
 
@@ -734,16 +738,103 @@ def _check(name, got, of, *, good_when_zero=False, unit='pages', key=None):
 
 NOT_CHECKED = [
     ('robots', 'robots.txt names answer-time agents',
-     "supply's access payload does not carry each token's rule source (an explicit group or the wildcard)"),
-    ('signed_agents', 'Edge lets signed agents in', 'signed-agent requests are not probed yet'),
-    ('protocol', 'Protocol profile (UCP, MCP, llms.txt)', 'the protocol profile is not read yet'),
+     "supply's access payload carries no robots roll-up (a supply before #21)"),
+    ('signed_agents', 'Edge lets signed agents in', 'no domain checks on a cycle for this merchant yet'),
+    ('protocol', 'Protocol profile (UCP, MCP, llms.txt)', 'no domain checks on a cycle for this merchant yet'),
 ]
+_CHECK_NAMES = {key: name for key, name, _ in NOT_CHECKED}
+
+#: 2E: the signed-agent probe's outcomes (apps/pipeline/scoring/domain_checks.py), as the row reads them.
+SIGNED_PROBE = {
+    'both_in': ('signed and unsigned both read', 'ok'),
+    'signed_only': ('signed read, unsigned refused', 'ok'),
+    'unsigned_only': ('signed refused, unsigned read', 'bad'),
+    'neither': ('signed and unsigned both refused', 'bad'),
+}
+_PROTOCOL_WORDS = {'pass': 'yes', 'fail': 'no', 'na': 'not verified'}
 
 
-def build_access_checks(reference: Optional[dict]) -> List[dict]:
+def _not_checked(key: str, why: str) -> dict:
+    return {'name': _CHECK_NAMES[key], 'value': 'not checked', 'status': 'not_checked', 'checked': False,
+            'key': key, 'basis': why}
+
+
+def robots_check(roll_up: Optional[list], own_domains: Optional[List[str]]) -> dict:
+    """'robots.txt names answer-time agents: N of M' on the merchant's own
+    domain, from supply #21's robots_by_domain (N: answer-time tokens with
+    their own User-agent group, M: the run's answer-time tokens)."""
+    key = 'robots'
+    if roll_up is None:
+        return _not_checked(key, dict((k, w) for k, _, w in NOT_CHECKED)[key])
+    if not roll_up:
+        return _not_checked(key, 'no access run yet')
+    own = [d for d in own_domains or [] if d]
+    entry = next((e for d in own for e in roll_up if (e.get('retailer_domain') or '').removeprefix('www.') == d), None)
+    if entry is None and not own and len(roll_up) == 1:
+        entry = roll_up[0]
+    if entry is None:
+        where = ', '.join(own) or "the merchant's own domain"
+        return _not_checked(key, f"the access run read no robots.txt on {where}")
+    domain = entry.get('retailer_domain')
+    if entry.get('named') is None or not entry.get('total'):
+        return _not_checked(key, f"robots.txt on {domain} was {entry.get('robots_status') or 'not read'}, so it was not checked")
+    n, m = entry['named'], entry['total']
+    value = f"{n} of {m}" + (', wildcard only' if entry.get('wildcard_only') else '')
+    return {'name': _CHECK_NAMES[key], 'value': value, 'status': 'ok' if n == m else 'bad' if n == 0 else 'partial',
+            'checked': True, 'got': n, 'of': m, 'key': key,
+            'basis': f"{entry.get('robots_url') or domain}: answer-time tokens with their own User-agent group, "
+                     f"of the access run's answer-time tokens"}
+
+
+def signed_agents_check(record: Optional[dict], cycle_code: Optional[str]) -> dict:
+    """'Edge lets signed agents in', from the domain checks' signed probe:
+    the merchant's product page fetched signed (Web Bot Auth) and unsigned,
+    the same UA. Not an Audit dimension, never in the score."""
+    key = 'signed_agents'
+    probe = (record or {}).get('signed_probe')
+    if not isinstance(probe, dict):
+        return _not_checked(key, dict((k, w) for k, _, w in NOT_CHECKED)[key])
+    if probe.get('outcome') not in SIGNED_PROBE:
+        return _not_checked(key, probe.get('reason') or 'the probe did not run')
+    value, status = SIGNED_PROBE[probe['outcome']]
+    when = str((record or {}).get('checked_at') or '')[:10]
+    return {'name': _CHECK_NAMES[key], 'value': value, 'status': status, 'checked': True, 'key': key,
+            'basis': f"{probe.get('url')} fetched once signed (Web Bot Auth) and once unsigned, the same UA, "
+                     f"for cycle {cycle_code} on {when}"}
+
+
+def protocol_check(record: Optional[dict], cycle_code: Optional[str]) -> dict:
+    """'Protocol profile (UCP, MCP, llms.txt)': the Audit's Protocol & Feed
+    sub-checks on the scored domain, from the domain checks."""
+    from app.services.lite_pillars import _protocol_feed_checks
+
+    key = 'protocol'
+    dim = (record or {}).get('protocol_feed')
+    if not isinstance(dim, dict):
+        return _not_checked(key, dict((k, w) for k, _, w in NOT_CHECKED)[key])
+    evidence = list(dim.get('evidence') or [])
+    if dim.get('coverage') == 'na':
+        return {**_not_checked(key, evidence[0] if evidence else 'not applicable'), 'value': 'not applicable'}
+    checks = {c['code']: c['state'] for c in _protocol_feed_checks(evidence)}
+    value = ', '.join(f"{label} {_PROTOCOL_WORDS.get(checks.get(code), 'no')}"
+                      for code, label in (('ucp', 'UCP'), ('mcp', 'MCP'), ('llms_txt', 'llms.txt')))
+    passed = sum(1 for v in checks.values() if v == 'pass')
+    verifiable = sum(1 for v in checks.values() if v in ('pass', 'fail'))
+    status = 'ok' if verifiable and passed == verifiable else 'bad' if passed == 0 else 'partial'
+    return {'name': _CHECK_NAMES[key], 'value': value, 'status': status, 'checked': True, 'got': passed,
+            'of': verifiable, 'key': key,
+            'basis': f"the Audit's Protocol & Feed checks on {(record or {}).get('scored_domain')}, "
+                     f"for cycle {cycle_code} on {str((record or {}).get('checked_at') or '')[:10]}"}
+
+
+def build_access_checks(reference: Optional[dict], *, robots: Optional[list] = None,
+                        own_domains: Optional[List[str]] = None, domain_checks: Optional[dict] = None,
+                        domain_cycle: Optional[str] = None) -> List[dict]:
     """The merchant-level checks, from the latest 2A reference read: one row
     per page read. A check the reads cannot answer is 'not_checked' with the
-    reason, so the list keeps the demo's shape without claiming a result."""
+    reason, so the list keeps the demo's shape without claiming a result.
+    2E: robots from supply #21's roll-up, the signed probe and the protocol
+    profile from the newest cycle's domain checks."""
     rows = (reference or {}).get('rows') or []
     pages = [r for r in rows if r.get('read_status') in ('ok', 'empty')]
     with_markup = [r for r in pages if r.get('method') == 'json_ld']
@@ -762,19 +853,24 @@ def build_access_checks(reference: Optional[dict]) -> List[dict]:
         dict(_check('Needs a hosted render', len(hosted), len(rows), good_when_zero=True, key='hosted_render'),
              basis="reads that came from the hosted renderer. 0 is the good answer"),
     ]
-    for key, name, why in NOT_CHECKED:
-        out.insert(0 if key == 'robots' else len(out), {'name': name, 'value': 'not checked', 'status': 'not_checked',
-                                                        'checked': False, 'key': key, 'basis': why})
+    out.insert(0, robots_check(robots, own_domains))
+    out.append(signed_agents_check(domain_checks, domain_cycle))
+    out.append(protocol_check(domain_checks, domain_cycle))
     return out
 
 
-def extend_accessibility(body: dict, reference: Optional[dict], reference_error: Optional[str] = None) -> dict:
+def extend_accessibility(body: dict, reference: Optional[dict], reference_error: Optional[str] = None, *,
+                         robots: Optional[list] = None, own_domains: Optional[List[str]] = None,
+                         domain_checks: Optional[dict] = None, domain_cycle: Optional[str] = None) -> dict:
     """2C-2: `checks` become the merchant-level checks; supply's per-agent
     robots/probe lines move to `agent_checks`. Each request carries
     `measured` (an unconfigured identity is not measured, never a problem)."""
     body = dict(body)
     body['agent_checks'] = body.get('checks') or []
-    body['checks'] = build_access_checks(reference)
+    body['checks'] = build_access_checks(reference, robots=robots, own_domains=own_domains,
+                                         domain_checks=domain_checks, domain_cycle=domain_cycle)
+    body['domain_checks'] = ({'cycle': domain_cycle, 'checked_at': domain_checks.get('checked_at'),
+                              'scored_domain': domain_checks.get('scored_domain')} if domain_checks else None)
     body['requests'] = [{**r, 'measured': _measured(r)} for r in body.get('requests') or []]
     body['problems'] = sum(1 for r in body['requests'] if r['measured'] and not r.get('ok'))
     if reference_error:
@@ -1137,7 +1233,16 @@ def retailers_read(reference: Optional[dict]) -> List[dict]:
         methods = Counter(r.get('method') for r in ok if r.get('method'))
         statuses = Counter(r.get('read_status') or 'not read' for r in rows if r.get('read_status') not in ('ok', 'empty'))
         rest = ''.join(f", {n} {s.replace('_', ' ')}" for s, n in sorted(statuses.items()))
+        # 2E: supply #21's incentive_in_markup, over the reads it scanned
+        scanned = [m for m in (incentive_in_markup(r) for r in ok) if m and m['json_ld_scanned']]
+        with_fields = carries_incentive_fields(rows)
+        incentive = ({'pages': sum(1 for m in scanned if any(m[f] for f in INCENTIVE_FLAGS)), 'of': len(scanned)}
+                     if scanned else None)
         out.append({'domain': domain, 'pages': len(rows), 'read': len(ok),
+                    'incentive_in_markup': incentive,
+                    'incentive_note': (TEMPLATES['catalog.incentive'].format(**incentive) if incentive else
+                                       TEMPLATES['catalog.incentive_unscanned'] if with_fields else
+                                       TEMPLATES['catalog.incentive_none']),
                     'method': ', '.join(f"{m.replace('_', ' ')} {n}" for m, n in methods.most_common()) or 'none',
                     'hosted_render': sum(1 for r in rows if r.get('reference_source') == 'hosted_render'),
                     'last_read': max((str(r['observed_at']) for r in rows if r.get('observed_at')), default=None),

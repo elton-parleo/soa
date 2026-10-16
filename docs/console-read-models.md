@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D, 2E)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -676,12 +676,12 @@ checks count (`console_parity.build_access_checks`).
 | Recommendation Strength | `rsi_score` (`score_recommendation_strength_full`) | Layer 1 `strength` on our unprompted mentions, Primary +3 / Positive +1 / Neutral 0 / Negative −1, mean over our mentions, as `MetricsCalculator` counts `rsi_score` | our mentions in answered unprompted runs | as above |
 | Agent Access | `crawl_dimensions.agent_access` `{score, max}` | supply's access run: measured identities that got through; Claude-User (no verified UA) and the Parleo control are not agents measured | measured agent identities | `measured`, else `not_measured` when no identity was measured. One value for every surface |
 | Catalog & Context | `crawl_dimensions.catalog_context` | pages read with `method == json_ld` **and** a GTIN in markup (Accessibility's GTIN predicate) | pages read | `measured`, else `not_measured` with no page read. One value for every surface |
-| Protocol & Feed Presence | `crawl_dimensions.protocol_feed` | none: the supply probe does not exist | | **`not_measured`** |
+| Protocol & Feed Presence | `crawl_dimensions.protocol_feed` | **2E:** the cycle's domain checks (`soa_cycles.domain_checks`): the Audit's `score_protocol_feed` on the merchant's own site, run on the worker | the Audit's own (verifiable sub-checks) | `measured` with a record; the Audit's `na` (brand-only site) stays `na`; no record: `not_measured`. One value for every surface |
 | Price Truth, seen | `crawl_dimensions.price_truth_seen` | pages read with a price | pages read | as Catalog & Context |
 | Price Truth, said | `run_signals` (`score_price_truth_said`) | catalog tier: one signal per scored run, cited = `exact` | scored (exact, partial, stale, wrong); `unverifiable`, `absent`, `unscoreable` outside it | `measured`; fewer than `MIN_OPPORTUNITY_SET_MENTIONS` (2) scored is the scorer's own `na`, and the dimension rescales onto its seen half |
-| Value Protocols | `crawl_dimensions.value_protocols_seen` | none: the manifest probe does not exist | | **`not_measured`** |
-| Deal Citability, seen | `crawl_dimensions.deal_citability_seen` | none: supply's `/reference` rows project no incentive or code (`reference_reads.offer_text` is stored, not served) | | **`not_measured`**, and with it the whole dimension (below) |
-| Deal Citability, said | `run_signals` (`score_deal_citability_said_full`) | value tier, `code` and `points` questions: cited = `exact` | scored | computed and shown, not counted while the seen half is unmeasured |
+| Value Protocols | `crawl_dimensions.value_protocols_seen` | **2E:** the cycle's domain checks: the Audit's `score_value_protocols` (its five manifest checks) | the Audit's own | as Protocol & Feed |
+| Deal Citability, seen | `crawl_dimensions.deal_citability_seen` | **2E:** pages read whose supply `incentive_in_markup` has any flag true (`member_price`, `promo`, `subscription`, `code`) | pages read with `json_ld_scanned: true` (an unscanned read is out of both counts, never a false) | `measured`; from a supply before #21, or with no read scanned yet, `not_measured`, and with it the whole dimension |
+| Deal Citability, said | `run_signals` (`score_deal_citability_said_full`) | value tier, `code` and `points` questions: cited = `exact` (unchanged in 2E) | scored | counted with the seen half; computed and shown, not counted, while the seen half is unmeasured |
 | Member Value, seen | `crawl_dimensions.member_value_seen` | pages read with `member_price` | pages read | as Catalog & Context |
 | Member Value, said | `run_signals` (`score_member_value_said`) | value tier, `member_price` (Member+) questions: cited = `exact` | scored | `measured`; fewer than 2 scored is `na`, onto the seen half |
 
@@ -964,7 +964,7 @@ With the W&S access sample (`supply_access_ws.json`) and the Oct 14 reference re
           "score": null,
           "applicable_max": 0.0,
           "state": "not_measured",
-          "reason": "not measured until the supply probe exists",
+          "reason": "no domain checks on this cycle yet",
           "numerator": null,
           "denominator": null,
           "source": null,
@@ -1138,8 +1138,8 @@ With the W&S access sample (`supply_access_ws.json`) and the Oct 14 reference re
               "state": "not_measured",
               "numerator": null,
               "denominator": null,
-              "source": null,
-              "reason": "supply serves no incentive or code from the page read",
+              "source": "reference read: incentive_in_markup (supply), json_ld_scanned pages",
+              "reason": "supply serves no incentive in markup on its page reads (a supply before #21)",
               "line": null
             },
             {
@@ -1164,7 +1164,7 @@ With the W&S access sample (`supply_access_ws.json`) and the Oct 14 reference re
           "score": null,
           "applicable_max": 0.0,
           "state": "not_measured",
-          "reason": "not measured until the manifest probe exists",
+          "reason": "no domain checks on this cycle yet",
           "numerator": null,
           "denominator": null,
           "source": null,
@@ -1608,6 +1608,261 @@ python3 scripts/rescore_cycle.py --cycle FL3-wiggle-and-snug-20261014 --tier bra
 
 If the dry run moves nothing, the store and the brand site are not both in the study's customer's tenant
 (`GET /tenant` with that token lists the merchants it reads).
+
+## 2E: the three dimensions 2C-3 left unmeasured
+
+Cycle 229's Share of Algorithm was 20.3 of 69 applicable: Protocol & Feed Presence (5), Value Protocols
+(14) and Deal Citability (12), 31 points, read "not measured", and the readiness verdict was withheld. 2E
+measures all three. Two come from the Audit's own domain checks, run from the worker against the
+merchant's own domains; one from supply #21's incentive-in-markup flags. One implementation of each
+check, the Audit's: nothing under `apps/pipeline/scan/`, `lite_pillars.py` or `scan_dimensions.py`
+changed, and their tests have no diff.
+
+### The Audit functions, and how the loop supplies their inputs
+
+| dimension | Audit function, called | the input it reads | how the loop supplies it |
+|---|---|---|---|
+| Protocol & Feed Presence (5) | `scan/scorer.score_protocol_feed(pages, site_type_result, short_circuited)` (v2's `score_f3_protocol_feed_presence`, rescaled onto 5) | the `llms_txt` and `mcp_well_known` pages (status, body, content type), every page's `agentic_protocol_hints`, the site type, the short-circuit flag | `apps/pipeline/scoring/domain_checks.py` fetches `/llms.txt` and `/.well-known/mcp.json` on the merchant's own domain, the store root and one product page (from the reference read the cycle was scored against), extracts the hints with `structured_data.extract`, types the site with `site_typing.classify_site` |
+| Value Protocols (14, seen only) | `scan/scorer.score_value_protocols(pages, short_circuited)` | the `mcp_well_known` page | the same fetch |
+| Deal Citability, seen (7) | none: the Audit's `score_deal_citability_seen` reads v4 value-rails markup on the pages it crawled | | supply #21's `incentive_in_markup` on the reference read (below) |
+| Deal Citability, said (5) | `cycle_scoring_full.score_deal_citability_said_full` | | unchanged from 2C-3 |
+| Agent Access (5) | `scan/scorer.score_f1_agent_access(discovery, pages, divergence_evidence)` | a robots.txt fetch and its parser, the product pages, the matrix's divergence lines: **not** a per-token roll-up | unchanged. `robots_names_agents` feeds the Accessibility row only |
+
+**Called, not forked.** Every fetch is the scan's own `fetcher.fetch`: the honest UA, robots.txt honoured
+(a product page robots.txt disallows is not fetched and the probe says so), the SSRF guard on every hop,
+challenge detection, and Web Bot Auth signing when the worker has its key. The adapter fetches only what
+the two checks read (no sitemap walk: `discover_pages` is not called), and keeps one of discovery's
+policies as it has it: when robots.txt and the store root both answer 403/429, nothing more is requested
+and both checks score that as the Audit's short circuit.
+
+**Where it runs.** On the worker, at scoring time: orchestrator stage 2d (`_run_domain_checks`), after
+Layer 2 scoring, once per cycle, for a cycle whose questions name a merchant. Its own domains are supply
+`/retailers`' `own_domains` (#20), else the deprecated `own_domain`, else the tenant record's domain; for a
+brand merchant that is the brand site. Every own domain is checked and recorded; the first (the
+merchant's own site, as the Audit scans one store) is the one scored. A cycle that already holds a record
+keeps it, and the stage never raises.
+
+**The record**, `soa_cycles.domain_checks` (JSON, migration `b4e8f1c3a9d2`), is the raw input, not only
+the result, so the score of record is reproducible:
+
+```jsonc
+{
+  "version": {"scan": "5", "extraction_rev": "2", "adapter_revision": 1},  // scan_dimensions.SCORER_VERSION, as engine.py stamps a scan
+  "checked_at": "2026-10-16T09:00:00+00:00",
+  "merchant": "wiggle-and-snug", "own_domains": ["trueshopstore.com"], "scored_domain": "trueshopstore.com",
+  "reference_rows_from": "cycle",                 // soa_cycles.reference_prices, else supply's current read
+  "domains": [{
+    "domain": "trueshopstore.com", "origin": "https://trueshopstore.com", "short_circuited": false,
+    "fetches": [                                   // kind, url, status, http_status, content_type, body, ...
+      {"kind": "llms_txt", "status": "not_found", "http_status": 404, "body": "nf", "...": "..."},
+      {"kind": "mcp_well_known", "status": "not_found", "http_status": 404, "...": "..."},
+      "… robots, homepage, product, product_unsigned (bodies never stored for a page we read)"
+    ],
+    "agentic_protocol_hints": [], "site_type": {"site_type": "commerce_normal", "reason": "…", "signals": ["…"]},
+    "protocol_feed": {"score": 0.0, "max": 5, "coverage": "partial", "evidence": ["/llms.txt not found (404)", "…"]},
+    "value_protocols": {"score": 0.0, "max": 14, "coverage": "full", "evidence": ["no protocol profile found"]},
+    "signed_probe": {"outcome": "both_in", "url": "…", "signed": {"status": "fetched", "http_status": 200}, "unsigned": {"…": "…"}}
+  }],
+  "protocol_feed": "… the scored domain's", "value_protocols": "…", "signed_probe": "…", "errors": []
+}
+```
+
+Bodies are kept for the two protocol files only (llms.txt cut to 2,000 characters, which keeps every
+fact its check reads: non-empty, not an HTML document, the content type; a manifest whole up to 64 KB).
+`domain_checks.score_entry` rebuilds the scan's pages from the record and calls the two functions; the
+live run scores through the same function, so a stored record re-scores to the stored numbers
+(`test_a_stored_record_rescores_to_the_same_numbers`, on every Audit fixture case).
+
+**The signed-agent probe** is not an Audit dimension and never enters the score. The product page is
+fetched twice, the same UA: signed (the worker's Web Bot Auth key) and unsigned (the signing module's
+own `WEB_BOT_AUTH=off` switch, for that one request, restored after; sent once, a refusal is not
+retried). Outcomes: `both_in`, `signed_only`, `unsigned_only`, `neither`, or `not_checked` with the reason
+(no key on the worker, no product page on the own domain in the reference read, robots.txt disallows it,
+the short circuit, or the page did not answer).
+
+### Supply #21's fields, read tolerantly
+
+`apps/api/clients/truesync_client.py`: `incentive_in_markup(row)`, `carries_incentive_fields(rows)`,
+`robots_by_domain(payload)`, `token_rules(grid_row)`. A row or payload without the fields (a supply before
+#21), with them null, or malformed reads as None, "not measured", never an error and never a false.
+
+**Deal Citability, seen** = reads whose page carries any flag true ÷ pages read whose markup supply
+scanned (`json_ld_scanned: true`), × 7. A read stored before 2A-3 and not backfilled
+(`json_ld_scanned: false`) is out of both counts. No row carries the field: `not_measured`, "supply serves
+no incentive in markup on its page reads (a supply before #21)". Rows carry it but none was scanned:
+`not_measured`, "no page read has had its markup scanned for incentives yet". Either way the Audit's
+`seen_blocked` rule still takes the whole dimension out, said shown and uncounted. Its parts carry the four
+flags' counts as `checks` ("promo 3 of 19 pages").
+
+### Measured, the applicable max and the verdict
+
+With a domain-check record on the cycle and a supply that serves the fields, all three dimensions are
+`measured`, the applicable max reaches 100, and the readiness verdict is the Audit's `compute_verdict`, as
+is. The Audit's own `na` on a domain check (Protocol & Feed on a brand-only site) leaves its points as
+Member Value's `na` does and does not withhold the verdict. The dimension rows of the two domain checks
+carry the Audit's sub-checks by name (`lite_pillars._protocol_feed_checks`, `_value_protocols_checks`: the
+labels are `scan_dimensions`' `how_measured`) in `parts[].checks`, with `parts[].evidence` the scorer's lines.
+
+On the 229-shaped fixture (`tests/test_console_2e.py`):
+
+| case | applicable | earned | score | verdict |
+|---|---|---|---|---|
+| everything measured: the "full" record (3.8 + 14), supply #21 rows with 10 of 19 pages flagged | **100** | 22.3 + 3.8 + 14 + (3.7 + 5.0) = 48.8 | 49 | NOT AGENT-READY |
+| the same record, supply before #21 (Deal Citability not measured) | **88** | 40.1 | 46 | withheld, 12 points |
+| no domain checks yet, supply #21 rows | 81 | | | withheld, 19 points |
+
+### The score of record: a second recompute trigger
+
+2C-3 recomputes a stored score when its `scorer_version` (or the adapter's revision) is not the current
+one. 2E adds: **the set of measured dimensions changed**. The stored body carries `measured` (the codes it
+counted) beside the score. On each read, the cycle row says which of the two domain-check dimensions its
+record makes measured, with no supply call; when that differs from the stored set, the read recomputes
+(`needs_recompute`: `first read`, `stale`, `measured set changed`; the log's `score.start` names it). The
+value it replaces is kept in the row's `history` (newest last, ten at most: score, earned, applicable
+max, measured, scorer version, adapter revision, `scored_at`, `replaced_because`), so the report can show
+both. Deal Citability's set moves with supply, which the cycle row cannot see: a supply deploy is picked
+up by the next recompute, or an operator's `?rescore=true`.
+
+`ADAPTER_REVISION` is 2 (the three mappings changed), so every score stored under 2C-3 recomputes once on
+its first read after the deploy, keeping the old value in its history.
+
+### Comparability: applicable points changed
+
+Two cycles stay comparable on 2C-2a's rule (the same pooled surfaces, the same agents on each, the same
+scorer version). When they are comparable but their applicable max differs, `previous` carries
+`applicable_note`, "applicable points changed from N to M", beside the delta, and
+`previous.dimension_deltas` lists a delta only for a dimension measured in both. With the same applicable
+max the note is null and every dimension measured in both has its delta. Tested both ways: 69 against 100
+(the six measured in both, each 0, and the line) and 100 against 100 (nine deltas, no line).
+
+### Accessibility and Catalog
+
+| row | value | source | not checked when |
+|---|---|---|---|
+| robots.txt names answer-time agents | "N of M" (", wildcard only" when no agent has its own group); ok at M, bad at 0 | supply #21 `robots_by_domain` on the merchant's own domain (the record's `own_domains`, else `/retailers`) | a supply before #21; no access run; the own domain not in the roll-up; N null (robots.txt challenged or errored) |
+| Edge lets signed agents in | "signed and unsigned both read" / "signed read, unsigned refused" (ok), "signed refused, unsigned read" / "signed and unsigned both refused" (bad) | the newest in-scope cycle's domain checks for this merchant | no record; the probe's own reason |
+| Protocol profile (UCP, MCP, llms.txt) | "UCP yes, MCP no, llms.txt yes" ("not verified" for the Audit's unverifiable sub-check) | the Audit's Protocol & Feed sub-checks on the record | no record; "not applicable" on a brand-only site |
+
+`GET /api/console/accessibility` reads `/retailers` beside `/access` and `/reference` (three supply calls)
+and returns `domain_checks: {cycle, checked_at, scored_domain}`. All seven checks carry a value or "not
+checked" with the reason.
+
+Catalog, "Retailers read for the study": each domain gains `incentive_in_markup: {pages, of}` (reads with
+any flag over the reads supply scanned) and `incentive_note`, "Incentive in markup: N of M pages", or "not
+checked, no read scanned yet", or "not measured, supply does not serve it yet".
+
+### source_split, tenant-wide
+
+`expectation_comparator`'s `source_split` (own domain / listed retailer / other, a report field on every
+tier) now reads the tenant's own domains, the set 2D gave the brand-direct classifier: `classify` puts
+`tenant_own_domains` on the facts for every tier, and `_decorate` adds them to the owned list. Off the
+brand-direct tier a refused tenant read degrades to the merchant's own list (a report field, not a reason
+to fail a price outcome); on it, a refusal still raises. No verdict moves (`test_source_split_tenant.py`;
+both golden gates untouched and passing).
+
+### Deploy note (migration `b4e8f1c3a9d2`, not applied)
+
+`apps/pipeline/alembic/versions/b4e8f1c3a9d2_add_domain_checks_to_soa_cycles.py` adds one nullable column,
+`soa_cycles.domain_checks JSON`, after `a7d2c9e4b1f6`. Additive, so safe to apply ahead of the deploy.
+**This branch does not apply it.** Round-tripped on a throwaway local Postgres: the schema built from the
+models at `a7d2c9e4b1f6` and stamped, then `scripts/migration_roundtrip.py --from a7d2c9e4b1f6` (upgrade,
+downgrade, upgrade), a row written and read back, the downgrade dropping the column and keeping the row.
+
+Either order works. Not mapped on `SoaCycle`: the worker writes it only when the column exists (stage 2d
+logs that it skipped, otherwise), the console reads it off the row `cycle_in_scope` already selects, and
+Accessibility reads it inside a try. Before the migration the two dimensions read "not measured", as
+before 2E. Apply with
+
+```
+cd apps/pipeline && alembic upgrade b4e8f1c3a9d2
+```
+
+The worker's signed probe uses the key it already has (`BOT_SIGNING_KEY`); without one the row reads "not
+checked: no Web Bot Auth key on the worker". The console needs no change to deploy in either order.
+
+### Cycle 229: `scripts/run_domain_checks.py`
+
+For a cycle scored before 2E. It runs `domain_checks.run_for_cycle` for one cycle, fetching the merchant's
+live domains with the honest UA, journals every run (JSON lines, `./domain_checks_journal/<cycle>.jsonl`:
+start, the record as it would be stored, the record it replaces, end), refuses a cycle that already
+holds a record without `--replace`, and refuses to write before the migration. `--dry-run` fetches and
+prints and writes nothing to the database. This session did not run it against anything but the fixture.
+
+On the recorded Acme Baby store (`tests/fixtures/domain_checks/`, the Audit's own llms.txt and manifest
+fixtures served at its paths, signing on):
+
+```
+cycle FL3-acme-baby-20261014 (id 229) — the Audit's domain checks, live fetches with the honest UA; no model call
+merchant acme-baby   own domains: acmebaby.test   reference read from: cycle
+  acmebaby.test   (scored)   site type commerce_normal
+    robots            fetched           200  https://acmebaby.test/robots.txt
+    homepage          fetched           200  https://acmebaby.test
+    llms_txt          fetched           200  https://acmebaby.test/llms.txt
+    mcp_well_known    fetched           200  https://acmebaby.test/.well-known/mcp.json
+    product           fetched           200  https://acmebaby.test/products/overnight-diapers-size-3
+    product_unsigned  fetched           200  https://acmebaby.test/products/overnight-diapers-size-3
+    protocol_feed     3.8 / 5  coverage partial
+      · /llms.txt present and non-empty
+      · MCP endpoint declaration discoverable (well-known path)
+      · UCP/UIP capability markup present
+      · no agentic-commerce hints found in structured data
+    value_protocols   9.0 / 14  coverage full
+      · the manifest's capabilities list and specVersion resolve to the expected shape
+      · declared protocol manifest version is current ('2025-01')
+      · declares a UCP shopping-discount capability ('dev.ucp.shopping.discount')
+      · does not declare a loyalty/member protocol extension
+      · does not declare an ACP promotions capability
+    signed probe      both_in
+
+protocol_feed and value_protocols join the measured set on the next read of the score (not measured before); the previous value stays in the score's history.
+dry run — nothing written.
+journal: domain_checks_journal/FL3-acme-baby-20261014.jsonl
+```
+
+**For production (Elton runs these; nothing here touched production).** With the migration applied, from
+`apps/pipeline` on this branch's code, with production's `DATABASE_URL`, `SOA_SECRET_KEY` (the study's
+customer token is read as every catalog read reads it) and `BOT_SIGNING_KEY`, dry run first:
+
+```
+python3 scripts/run_domain_checks.py --cycle FL3-wiggle-and-snug-20261014 --dry-run
+```
+
+Expected: one own domain, trueshopstore.com, scored; robots.txt, the store root, `/llms.txt`,
+`/.well-known/mcp.json` and one trueshopstore.com product page from 229's stored reference read, each with
+its status; the two scores with the Audit's evidence lines; the probe's outcome. If the own domains are
+not the store, or a fetch is refused where a browser is not, stop. Then the write:
+
+```
+python3 scripts/run_domain_checks.py --cycle FL3-wiggle-and-snug-20261014
+```
+
+and open the cycle's score: the read recomputes ("measured set changed") and keeps the previous value in
+`history`. For Deal Citability's seen half the Oct 14 reads must have been scanned: they were stored
+before 2A-3, so run supply's own backfill first (parleo-supply-app, #21:
+`scripts/backfill_incentive_markup.py --merchant wiggle-and-snug --dry-run`, then without `--dry-run`).
+
+### Cycle 229, expected after the checks
+
+From the stored 20.3 of 69 (the six dimensions 2C-3 measured; this session read nothing from production,
+and the 229-shaped fixture, built from counts, gives 22.3), adding:
+
+- **Protocol & Feed Presence**: the Audit's checks on trueshopstore.com. The demo store's source in this
+  workspace (truesync-demo-store) serves no `/llms.txt`, no `.well-known` route and no UCP/MCP markup; if
+  that is what trueshopstore.com serves, all four sub-checks are verifiable and absent: **0 of 5**. Each one
+  present is worth 5 ÷ (verifiable checks).
+- **Value Protocols**: no manifest: **0 of 14** ("no protocol profile found").
+- **Deal Citability**: said **5.0 of 5** (codes 6 of 6, points 3 of 6: 9 of 12, 75%, the v6 rate band's
+  top). Seen = N ÷ 19 × 7 over the 19 Oct 14 reads once backfilled, N the reads whose page carries a flag:
+  at least the 7 with a member price in JSON-LD, so **at least 2.6**.
+
+| supply | applicable | earned | score | verdict |
+|---|---|---|---|---|
+| #21 deployed, the Oct 14 reads backfilled, only the member-price pages flagged | 100 | 20.3 + 0 + 0 + 2.6 + 5.0 = **27.9** | **28** | NOT AGENT-READY (28 < 60) |
+| each further flagged read | 100 | about + 0.37 | | |
+| #21 deployed, not backfilled (`json_ld_scanned: false` on every read), or not deployed | 88 | 20.3 | **23** | withheld, 12 points not measured |
+
+Previous cycle: the September cycle has no stored score (2C-3a), so there is no delta to show; when a
+comparable one has 69 applicable, the tile reads "applicable points changed from 69 to 100" beside it.
 
 ## Answer divergences
 

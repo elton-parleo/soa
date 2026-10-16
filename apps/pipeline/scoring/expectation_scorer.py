@@ -22,7 +22,7 @@ from typing import Optional
 
 from sqlalchemy import text
 
-from clients.truesync_catalog import TrueSyncCatalogClient
+from clients.truesync_catalog import TrueSyncCatalogClient, TrueSyncNotAuthorized
 from parser.expectation_client import ExpectationClient
 from parser.extraction_postprocess import apply_labels
 from scoring import brand_direct_classifier as bdc
@@ -314,11 +314,19 @@ def classify(run, expectation, extraction, *, history=None, brand_facts=None,
     merchant = source_ref.get('merchant_slug')
     facts = brand_facts.for_merchant(merchant, study_type=run.study_type) \
         if brand_facts else {}
-    # 2D: the tenant's own domains ride on the facts for the brand-direct
-    # tier only, the one reader (brand_direct_classifier.ours)
+    # 2D: the tenant's own domains ride on the facts. Two readers: the
+    # brand-direct classifier (brand_direct_classifier.ours), where a refused
+    # token raises as every catalog read does, and since 2E every tier's
+    # source_split (expectation_comparator._decorate), a report field that
+    # degrades to the merchant's own list rather than fail a price outcome
     if tenant_domains is not None and bdc.is_brand_direct(getattr(run, 'tier', None), expectation):
         facts = {**facts, 'tenant_own_domains': tenant_domains.for_cycle(
             run.cycle_id, study_type=run.study_type)}
+    elif tenant_domains is not None:
+        try:
+            facts = {**facts, 'tenant_own_domains': tenant_domains.for_cycle(run.cycle_id, study_type=run.study_type)}
+        except TrueSyncNotAuthorized:
+            pass
 
     answer_status = getattr(run, 'answer_status', None)
     if answer_status in NO_ANSWER_STATUSES:
