@@ -1,12 +1,14 @@
 """
 Tests for runners/gemini_grounded_runner.py — mocked google-genai SDK.
 Confirms platform identifier, retrieved_sources extraction from grounding
-metadata, 503 recovery inherited from GeminiRunner, and that cycles never
-run ungrounded Gemini.
+metadata, 503 recovery inherited from GeminiRunner, and how the name
+"gemini" resolves (2D: the ungrounded gemini_api, never this runner).
 """
 import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from google.genai.errors import ServerError
 
@@ -114,12 +116,17 @@ def test_503s_fall_back_to_fallback_model_with_grounding(monkeypatch):
     assert runner.gemini_503_fallback_successes == 1
 
 
-def test_cycles_never_run_ungrounded_gemini():
+def test_no_runner_is_registered_under_the_bare_gemini_name():
     assert "gemini" not in _RUNNER_CLASSES
     assert _RUNNER_CLASSES["gemini_grounded"] is GeminiGroundedRunner
 
 
-def test_gemini_platform_runs_grounded():
-    assert normalize_platforms(["chatgpt", "gemini"]) == ["chatgpt", "gemini_grounded"]
-    assert normalize_platforms(["gemini", "gemini_grounded"]) == ["gemini_grounded"]
+def test_gemini_resolves_to_the_ungrounded_api_and_never_falls_through_to_grounded():
+    """2D: one resolver (soa_shared/surfaces.py), explicit. Until 2D the
+    orchestrator ran "gemini" as gemini_grounded."""
+    assert normalize_platforms(["chatgpt", "gemini"]) == ["chatgpt", "gemini_api"]
+    assert normalize_platforms(["gemini", "gemini_grounded"]) == ["gemini_api", "gemini_grounded"]
+    assert normalize_platforms(["gemini", "gemini_api"]) == ["gemini_api"]
     assert normalize_platforms(["chatgpt", "claude"]) == ["chatgpt", "claude"]
+    with pytest.raises(ValueError, match="unknown surface 'gemini_pro'"):
+        normalize_platforms(["gemini_pro"])

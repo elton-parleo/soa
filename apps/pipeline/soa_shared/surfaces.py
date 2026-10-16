@@ -22,7 +22,7 @@ available, with that reason, so the modal says so rather than hiding them.
 """
 import os
 from dataclasses import asdict, dataclass
-from typing import List, Optional
+from typing import Dict, Iterable, List, Optional
 
 API = 'api'
 GROUNDED_API = 'grounded_api'
@@ -96,12 +96,49 @@ SURFACES: List[Surface] = [
 ]
 
 #: Platform ids stored before 2B that are not selectable surfaces today.
-#: 'gemini' rows were the ungrounded API; new cycles that ask for "gemini"
-#: still run gemini_grounded (runners/run_orchestrator.py PLATFORM_ALIASES).
+#: 'gemini' rows were the ungrounded API. Read only: a new cycle never
+#: stores this id (see ALIASES).
 LEGACY = {'gemini': Surface('gemini', 'Gemini (Gemini API, legacy id)', API, 'google_genai', 'gemini',
                             'Stored under the pre-2B id; the ungrounded Gemini API')}
 
+#: 2D: the names a caller may send that are not surface ids, each to the id
+#: it means. Explicit and complete: a name that is neither an id nor here is
+#: refused, never resolved to anything. 'gemini' is the ungrounded API, what
+#: the September cycle's 'gemini' rows were. Before 2D it was aliased to
+#: gemini_grounded when a cycle RAN, so cycle 229, created with ["gemini"],
+#: has its runs on grounded_api: the drift docs/console-read-models.md (2D)
+#: describes. A cycle that should land where 229 did asks for
+#: gemini_grounded by name.
+ALIASES = {'gemini': 'gemini_api'}
+
 _BY_ID = {s.id: s for s in SURFACES}
+
+
+class UnknownSurface(ValueError):
+    """A name that is neither a surface id nor an alias."""
+
+
+def resolve(name: str) -> Surface:
+    """The surface a name means, by id, else by ALIASES. Raises
+    UnknownSurface otherwise. Cycle creation resolves through this and
+    stores what it returns, so a cycle and its runs carry the id and
+    surface that ran, never the alias."""
+    if name in _BY_ID:
+        return _BY_ID[name]
+    if name in ALIASES:
+        return _BY_ID[ALIASES[name]]
+    raise UnknownSurface(f"unknown surface {name!r}: send an id from /api/console/surfaces "
+                         f"(aliases: {', '.join(f'{a} = {i}' for a, i in ALIASES.items())})")
+
+
+def resolve_platforms(names: Iterable[str]) -> List[str]:
+    """The resolved ids, in order, each once (gemini and gemini_api are one)."""
+    return list(dict.fromkeys(resolve(n).id for n in names))
+
+
+def surfaces_by_platform(platform_ids: Iterable[str]) -> Dict[str, str]:
+    """{resolved id: surface}, what soa_cycles.surfaces stores."""
+    return {s.id: s.surface for s in (resolve(p) for p in platform_ids)}
 
 
 def get(platform: str) -> Optional[Surface]:

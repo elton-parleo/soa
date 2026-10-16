@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, field_validator, model_validator
 from typing import Any, Dict, List, Optional
+from soa_shared import surfaces
 from soa_shared.constants import QUERY_CONSTRAINTS
 from soa_shared.expected_answers import QUERY_TIERS
 from soa_shared.scan_dimensions import VERDICT_AGENT_READY, VERDICT_NOT_AGENT_READY
@@ -120,12 +121,13 @@ class CreateCycleRequest(BaseModel):
 
     @field_validator("platforms")
     @classmethod
-    def ground_gemini(cls, v):
-        # Gemini always runs grounded: store "gemini_grounded" for any
-        # client still sending "gemini" (the pipeline maps it too).
+    def resolve_surfaces(cls, v):
+        # 2D: each name to the surface id it means (soa_shared/surfaces.py
+        # ALIASES: "gemini" is the ungrounded gemini_api), each once. An
+        # unknown name is a 422 here, never resolved to anything.
         if v is None:
             return v
-        return list(dict.fromkeys("gemini_grounded" if p == "gemini" else p for p in v))
+        return surfaces.resolve_platforms(v)
 
     @model_validator(mode="after")
     def check_mode_requirements(self):

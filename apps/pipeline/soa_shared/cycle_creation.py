@@ -13,8 +13,49 @@ against a raw request) or irrelevant to cycle_mode='query' brand_vs_brand
 cycles with no scope SKUs (the freeze step). create_cycle's behavior is
 unchanged by this extraction: it emits the exact same SQL it did before,
 just via this function.
+
+2D: this is also where a surface name is resolved, for every caller (the
+web app's create_cycle, the console's, the full loop's coordinator, the
+lite worker). The cycle stores the resolved ids in `platforms` and
+{id: surface} in `surfaces`, never an alias, and an unknown name raises
+surfaces.UnknownSurface before anything is written.
 """
-from sqlalchemy import text
+import json
+import logging
+
+from sqlalchemy import inspect, text
+
+from soa_shared import surfaces as surface_catalogue
+
+log = logging.getLogger(__name__)
+
+
+def _resolved(platforms):
+    """(platforms as the caller passed them, re-encoded with resolved ids;
+    the {id: surface} map, or None). JSON text in, JSON text out, so the
+    callers that encode keep encoding."""
+    if platforms is None:
+        return None, None
+    names = json.loads(platforms) if isinstance(platforms, str) else list(platforms)
+    ids = surface_catalogue.resolve_platforms(names)
+    out = json.dumps(ids) if isinstance(platforms, str) else ids
+    return out, surface_catalogue.surfaces_by_platform(ids)
+
+
+def store_surfaces(conn, cycle_id: int, by_platform) -> bool:
+    """soa_cycles.surfaces, migration a7d2c9e4b1f6. Not mapped on SoaCycle and
+    written only when the column exists, so a database the migration has not
+    reached still creates cycles (and says so in the log): the same
+    discipline as 2C-3's share_of_algorithm."""
+    if by_platform is None:
+        return False
+    if 'surfaces' not in {c['name'] for c in inspect(conn).get_columns('soa_cycles')}:
+        log.warning("soa_cycles.surfaces is missing (migration a7d2c9e4b1f6 not applied): "
+                    "cycle %s stores its resolved platforms only", cycle_id)
+        return False
+    conn.execute(text("UPDATE soa_cycles SET surfaces = :s WHERE id = :id"),
+                 {"s": json.dumps(by_platform), "id": cycle_id})
+    return True
 
 
 def create_cycle_with_comparison_set(
@@ -44,8 +85,11 @@ def create_cycle_with_comparison_set(
 
     comparison_set: list of dicts with keys entity_id, comparison_code, role
     (e.g. [{"entity_id": 7, "comparison_code": "M001", "role": "primary"}, ...]).
-    platforms/truecost_tiers are passed through as-is (caller JSON-encodes
-    if using raw SQL params that require it, matching create_cycle).
+    truecost_tiers is passed through as-is (caller JSON-encodes if using raw
+    SQL params that require it, matching create_cycle). platforms is
+    resolved (2D): each name to its surface id, aliases included, and
+    stored with the surface of each; an unknown name raises
+    surfaces.UnknownSurface (a ValueError) before the insert.
 
     source_lite_request_id/study_series_id/prior_cycle_id (Full Analysis
     coexistence, Phase 2): all default None, so every pre-existing caller
@@ -55,6 +99,7 @@ def create_cycle_with_comparison_set(
 
     Returns (cycle_id, created_at).
     """
+    platforms, by_platform = _resolved(platforms)
     cycle_row = conn.execute(text("""
         INSERT INTO soa_cycles (
             cycle_code, study_type, study_pattern, status,
@@ -92,6 +137,7 @@ def create_cycle_with_comparison_set(
 
     cycle_id = cycle_row[0]
     created_at = cycle_row[1]
+    store_surfaces(conn, cycle_id, by_platform)
 
     for ce in comparison_set:
         conn.execute(text("""

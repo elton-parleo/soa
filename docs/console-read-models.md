@@ -1453,6 +1453,81 @@ No `UNION` and no `=` against a json column anywhere in those paths; the only `I
 #111's. **CI goes red on #111's `DISTINCT`**: proven with a throwaway commit on the 2D branch that put
 it back (the PR body has the run), then dropped.
 
+### 2D-2: surface aliases
+
+**The resolution table before 2D** (read from `main` at 376d7d5, before any change). A *name* is what a
+caller sends; the *runner* is the class that runs it; *stored* is what lands on the cycle and on each run.
+
+| where a name is resolved | `gemini` | `gemini_grounded` | `gemini_api` | unknown name | stored |
+|---|---|---|---|---|---|
+| runner registry, `runners/run_orchestrator._RUNNER_CLASSES` | not a key | `GeminiGroundedRunner` | `GeminiApiRunner` | not a key | - |
+| `run_orchestrator.PLATFORM_ALIASES` / `normalize_platforms`, applied when a cycle **runs** | **`gemini_grounded`** (grounded) | itself | itself | passed through, then `ValueError` "Unknown platforms" | `soa_runs.platform` = the aliased id, `surface` = its surface |
+| `RunOrchestrator` default (no platforms) | - | in the default four | - | - | - |
+| `worker.py` cycle with NULL `platforms` | - | `[chatgpt, gemini_grounded]` | - | - | - |
+| `POST /api/cycles`, `CreateCycleRequest.ground_gemini` | **`gemini_grounded`** | itself | itself | **accepted as sent** | `soa_cycles.platforms` |
+| `POST /api/console/cycles` | via `CreateCycleRequest`: `gemini_grounded` | itself | itself | 422 from `surfaces.unavailable_reason` ("unknown surface") | `soa_cycles.platforms` |
+| `POST /api/full-loop`, `/api/console/full-loop` | **accepted and stored as `gemini`** (`surfaces.LEGACY` has no unavailable reason) | itself | itself | 422 ("unknown surface") | `soa_full_loop_requests.platforms` as sent |
+| `fullloop/coordinator._create_cycle` | **passed through: `soa_cycles.platforms = ["gemini"]`** | itself | itself | passed through | `soa_cycles.platforms` as the request had it |
+| lite worker cycle creation | - | - | - | - | `["chatgpt"]` |
+| `GET /api/console/surfaces`, `/api/console/studies/options` `surfaces` (`surfaces.modal_list`) | never listed | listed, "API with search grounding" | listed, "API, no tools" | - | - |
+| reading a stored row: `surfaces.get` / `surface_of` / `agent_of` | `LEGACY`: `api`, agent gemini | `grounded_api` | `api` | `None` | - |
+| console read models' surface grouping, `console_parity._surface_of` | the row's stored `surface`, else `surface_of(platform)`: `api` | `grounded_api` | `api` | `unlabelled` | - |
+
+So the alias was resolved at **run** time, not at creation, and in two different places to the same
+grounded runner. Cycle 229 was created by the full loop with `["gemini"]` stored on the cycle, and its
+runs landed on `gemini_grounded` / `grounded_api`. The September cycle's `gemini` runs predate the alias
+(`platform = 'gemini'`, `surface = 'api'`). Same stored cycle name, two surfaces.
+
+**After 2D.** One resolver, `soa_shared/surfaces.resolve` (`ALIASES = {"gemini": "gemini_api"}`, explicit
+and complete), used at creation by every path and by the orchestrator:
+
+| where | `gemini` | `gemini_grounded` | `gemini_api` | unknown name | stored |
+|---|---|---|---|---|---|
+| `soa_shared/cycle_creation.create_cycle_with_comparison_set` (every caller) | `gemini_api` | itself | itself | `UnknownSurface`, nothing written | `soa_cycles.platforms` = resolved ids, `soa_cycles.surfaces` = `{id: surface}` (migration `a7d2c9e4b1f6`) |
+| `POST /api/cycles` (`CreateCycleRequest.resolve_surfaces`) | `gemini_api` | itself | itself | **422** | as above |
+| `POST /api/console/cycles` | `gemini_api` | itself | itself | **422** | as above |
+| `POST /api/full-loop`, `/api/console/full-loop` | `gemini_api` | itself | itself | **422** | `soa_full_loop_requests.platforms` = resolved ids |
+| `fullloop/coordinator._create_cycle` | `gemini_api` (a pre-2D request) | itself | itself | the request fails, with the reason | as above |
+| `run_orchestrator.normalize_platforms` (`PLATFORM_ALIASES` is gone) | `gemini_api`, logged as an alias | `GeminiGroundedRunner` | `GeminiApiRunner` | `ValueError` | `soa_runs.platform` = the id, `surface` = its surface |
+| `GET /api/console/surfaces`, `/studies/options` | never listed | listed with its fidelity | listed with its fidelity | - | - |
+| reading stored rows (`surfaces.get`, `_surface_of`) | unchanged: `LEGACY` `gemini` is `api` | unchanged | unchanged | unchanged | - |
+
+There is no fallthrough from a bare name to a grounded runner. **The next W&S full loop lands where 229
+did only if it asks for `gemini_grounded` by name**; `gemini` now runs the ungrounded API, which is where
+the September rows are. The Create Study picker (truesync `apps/console/src/screens/Studio.tsx`) already
+renders `/api/console/surfaces` as served, id, label, surface label and fidelity, so it needs no change.
+
+`soa_cycles.surfaces` is not mapped on `SoaCycle`, and `store_surfaces` writes it only when the column
+exists (a warning otherwise), so the deploy does not depend on the migration; apply it to record the
+surface on new cycles. Existing rows are not rewritten.
+
+**Where the drift is: `scripts/report_surface_drift.py`.** Read only (one SELECT, one GROUP BY, a READ
+ONLY transaction on Postgres). Per cycle: the stored names, what each means now, and the
+`(platform, surface, runs)` its rows carry under the name, under what it means now, and under what it
+meant before 2D. On the 229-shaped fixture as built (it stores the resolved `gemini_grounded`):
+
+```
+cycle FL3-wiggle-and-snug-20261014 (id 229)   DRIFT
+  stored platforms: ["chatgpt", "gemini_grounded"]   stored surfaces: (none, created before 2D)
+  chatgpt          means now: chatgpt (grounded_api)
+      rows: chatgpt on grounded_api x 258   ok
+  gemini_grounded  means now: gemini_grounded (grounded_api)
+      rows: gemini_grounded on consumer_ui x 2   DRIFT: on consumer_ui, the name now means grounded_api
+      rows: gemini_grounded on grounded_api x 256   ok
+```
+
+(the 2 consumer_ui rows are the fixture's two errored runs, labelled consumer_ui under the API id). With
+229 as production stores it, `["chatgpt", "gemini"]`, the same rows print:
+
+```
+  gemini           means now: gemini_api (api)
+      rows: gemini_grounded on consumer_ui x 2   DRIFT: on consumer_ui, the name now means api
+      rows: gemini_grounded on grounded_api x 256   DRIFT: on grounded_api, the name now means api
+```
+
+and a September-shaped cycle's `gemini` rows print `rows: gemini on api x N   ok`. Relabelling 229 is a
+separate decision; nothing here rewrites it.
+
 ## Answer divergences
 
 - Answer.verdict is not a console field: it carries the value outcome mapped exact->right, wrong->wrong, absent->missed, partial->partial; stale, unverifiable and unscoreable pass through verbatim with `tone`. Brand-direct rows leave it null and carry `brand_verdict`.

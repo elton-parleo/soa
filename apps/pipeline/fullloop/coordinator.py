@@ -293,9 +293,16 @@ class Coordinator:
         return [dict(e) for e in entities]
 
     def _create_cycle(self, row) -> bool:
+        from soa_shared import surfaces
         from soa_shared.cycle_creation import create_cycle_with_comparison_set
 
-        platforms = _json(row['platforms']) or []
+        # 2D: resolved before the count, as the insert resolves them: a
+        # request stored before 2D may hold "gemini", which is gemini_api now
+        try:
+            platforms = surfaces.resolve_platforms(_json(row['platforms']) or [])
+        except surfaces.UnknownSurface as exc:
+            self._set(row['id'], status='failed', error=f"could not create the cycle: {exc}")
+            return True
         today = self.clock().date()
         cycle_code = f"FL{row['supply_run_id']}-{row['merchant_slug']}-{today:%Y%m%d}"
         with self.engine.begin() as conn:

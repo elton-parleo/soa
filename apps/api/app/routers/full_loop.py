@@ -125,7 +125,14 @@ async def start_full_loop(body: FullLoopStart, scope: CustomerScope = Depends(co
         owner = _study_org(conn, body.study_type)
     if owner != scope.org.id:
         raise HTTPException(status_code=404, detail=f"study {body.study_type!r} not found")
-    for platform in body.platforms:
+    # 2D: the request stores resolved ids, never an alias ("gemini" is
+    # gemini_api); an unknown name is a 422. 229 was created from a request
+    # that stored "gemini".
+    try:
+        platforms = surfaces.resolve_platforms(body.platforms)
+    except surfaces.UnknownSurface as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    for platform in platforms:
         reason = surfaces.unavailable_reason(platform)
         if reason:
             raise HTTPException(status_code=422, detail=f"surface {platform!r} cannot run: {reason}")
@@ -137,7 +144,7 @@ async def start_full_loop(body: FullLoopStart, scope: CustomerScope = Depends(co
             VALUES (:org, :slug, :st, :p, :rpq, :ahr, 'reference_pending', :by, :now, :now)
             RETURNING id
         """), {"org": scope.org.id, "slug": body.merchant_slug, "st": body.study_type,
-               "p": json.dumps(body.platforms), "rpq": body.runs_per_query,
+               "p": json.dumps(platforms), "rpq": body.runs_per_query,
                "ahr": body.allow_hosted_render, "by": user.get('email') or user.get('sub'),
                "now": datetime.now(timezone.utc)}).scalar()
     return {'full_loop_id': request_id, 'id': request_id, 'status': 'queued'}
