@@ -23,6 +23,8 @@ surface scores, rounded once. Pure functions here; the loaders and the
 stored score are at the bottom. No model is called.
 """
 import json
+import logging
+from contextvars import ContextVar
 from statistics import mean
 from typing import Dict, Iterable, List, Optional
 
@@ -109,7 +111,35 @@ TEMPLATES = {
     'previous.agents': 'Not comparable: on {surface} {code} ran {prev}, this cycle ran {now}.',
     'verdict.withheld': 'No readiness verdict while {n} of {total} points are not measured. The Audit gives one only when every dimension is.',
     'coverage': '{surfaces}, {questions}, {agents} · pooled across surfaces, equal weight',
+    'coverage.no_answers': ' · {surface} ran, no answers',
+    'unavailable': 'Score unavailable: {step} failed ({error})',
 }
+
+
+log = logging.getLogger(__name__)
+
+#: 2C-3a: the step the computation is on, so a failure names it (the router
+#: logs it and returns it in the 422). Per request: a ContextVar.
+_STEP: ContextVar[str] = ContextVar('score_step', default='start')
+
+
+def at(step: str) -> None:
+    _STEP.set(step)
+
+
+def current_step() -> str:
+    return _STEP.get()
+
+
+def log_event(event: str, **fields) -> None:
+    """One structured line: a JSON object, so Vercel's log view and a grep
+    both read it. Counts and identifiers only, never row data."""
+    log.info(json.dumps({'event': event, **fields}, default=str))
+
+
+def unavailable(error: BaseException) -> str:
+    """The 422's one line, which the console's tile shows as is."""
+    return TEMPLATES['unavailable'].format(step=current_step(), error=type(error).__name__)
 
 
 def _n(n: int, one: str, many: str) -> str:
@@ -234,10 +264,12 @@ def score_surface(surface: str, *, runs: List[dict], mentions: List[dict], crawl
     dims = []
 
     # Visibility: the Audit's two functions over unprompted Layer 1 counts
+    at(f'visibility on {surface}')
     vis = visibility_inputs(runs, mentions, surface)
     for code, fn, n, d, value in (
             ('share_of_mentions', score_share_of_mentions_full, vis['ours'], vis['all'], vis['som_pct']),
             ('recommendation_strength', score_recommendation_strength_full, vis['picks'], vis['ours'], vis['rsi_score'])):
+        at(f'{code} on {surface}')
         source = 'soa_coded_mentions, answered unprompted runs'
         if not vis['runs']:
             part = _unsourced_part(None, float(DIMENSIONS_BY_CODE[code].weight), 'reason.no_unprompted')
@@ -252,6 +284,7 @@ def score_surface(surface: str, *, runs: List[dict], mentions: List[dict], crawl
         dims.append(_dim(code, earned=result['earned'], applicable=result['max'], state=MEASURED, parts=[part]))
 
     # Accessibility: crawl-side, one value for every surface
+    at(f'accessibility on {surface}')
     access_reason = (TEMPLATES['reason.read_failed'].format(read='access', error=errors['access'])
                      if 'access' in errors else TEMPLATES['reason.no_access'])
     page_reason = (TEMPLATES['reason.read_failed'].format(read='reference', error=errors['reference'])
@@ -269,6 +302,7 @@ def score_surface(surface: str, *, runs: List[dict], mentions: List[dict], crawl
     dims.append(_dim('protocol_feed', earned=None, applicable=0, state=NOT_MEASURED, parts=[pf], reason=pf['reason']))
 
     # True Value: seen from the reference read, said from the scorer's functions
+    at(f'true value said halves on {surface}')
     said = {
         'price_truth': _said_part('price_truth', score_price_truth_said(
             said_signals(runs, surface, tier='catalog_accuracy')), 'catalog tier, exact of scored'),
@@ -285,6 +319,7 @@ def score_surface(surface: str, *, runs: List[dict], mentions: List[dict], crawl
         'deal_citability': _unsourced_part('seen', float(DIMENSIONS_BY_CODE['deal_citability'].seen_max), 'reason.deal_seen'),
     }
     for code in ('price_truth', 'member_value', 'deal_citability'):
+        at(f'{code} on {surface}')
         dim = DIMENSIONS_BY_CODE[code]
         s, t = seen[code], said[code]
         if code == 'member_value' and not member_value_applicable('yes' if program_stated else None, s['score'] or 0.0):
@@ -476,6 +511,7 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     payload as accessibility_from_supply maps it. reference_rows: supply's
     /reference rows."""
     errors = read_errors or {}
+    at('crawl counts')
     crawl = crawl_counts(access, reference_rows)
     program_stated = any(r.get('tier') == 'value_incentives' and r.get('expected_type') in MEMBER_TYPES for r in runs)
     ran = parity.ordered_surfaces({parity._surface_of(r) for r in runs})
@@ -483,6 +519,7 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     pooled = [s for s in ran if s in answered]
     per = [score_surface(s, runs=runs, mentions=mentions, crawl=crawl, crawl_errors=errors,
                          program_stated=program_stated) for s in pooled]
+    at('pooling')
     scored = [p for p in per if p['score'] is not None]
     dims = [_pool_dimension(d.code, per) for d in DIMENSIONS] if per else []
     pillars = []
@@ -499,6 +536,7 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     # is not: the Audit still gives its verdict on those.
     unmeasured = mean(sum(d['max'] for d in s['dimensions'] if d['state'] == NOT_MEASURED) for s in per) if per else 0
     tv = next((p for p in pillars if p['code'] == 'true_value'), None)
+    at('metric rows')
     counts = {s: metric_counts(runs, mentions, vis_rows, s) for s in pooled}
     in_pool = [r for r in runs if parity._surface_of(r) in pooled]
     agents = {surfaces.agent_of(r.get('platform')) or r.get('platform') for r in in_pool}
@@ -530,9 +568,12 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
         'metric_surface': pooled[0] if pooled else None,
         'metric_counts': counts,
         'coverage': {'surfaces': len(pooled), 'questions': questions, 'agents': len(agents), 'runs': len(in_pool),
+                     'ran_no_answers': [s for s in ran if s not in answered],
                      'line': TEMPLATES['coverage'].format(surfaces=_n(len(pooled), 'surface', 'surfaces'),
                                                           questions=_n(questions, 'question', 'questions'),
-                                                          agents=_n(len(agents), 'agent', 'agents'))},
+                                                          agents=_n(len(agents), 'agent', 'agents'))
+                     + ''.join(TEMPLATES['coverage.no_answers'].format(surface=_surface_words(s))
+                               for s in ran if s not in answered)},
         'inputs': inputs or {},
         'read_errors': errors,
         'rules': TEMPLATES,
@@ -541,6 +582,7 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
 
 def with_previous(body: dict, prev_code: Optional[str], prev_stored: Optional[dict]) -> dict:
     """Adds `previous` and the five rows (whose deltas need it)."""
+    at('comparing with the previous cycle')
     previous = compare(body, prev_code, prev_stored)
     out = dict(body)
     out['previous'] = None if previous is None else {k: v for k, v in previous.items() if k != 'metric_counts'}
@@ -553,10 +595,15 @@ def with_previous(body: dict, prev_code: Optional[str], prev_stored: Optional[di
 def load_score_runs(conn, cycle: dict) -> List[dict]:
     """load_overview_rows plus the expectation's type, which the value tier's
     two said halves split on."""
+    at('loading runs')
     rows = parity.load_overview_rows(conn, cycle)
+    # 2C-3a: no DISTINCT. soa_queries.expected_answer is a Postgres json
+    # column, which has no equality operator: SELECT DISTINCT over it raised
+    # UndefinedFunction on every cycle in production (sqlite's TEXT hid it).
+    # One row per question the cycle asked, by subquery instead.
     types = {r['query_code']: (rm._json(r['expected_answer']) or {}).get('type') for r in conn.execute(text("""
-        SELECT DISTINCT q.query_code, q.expected_answer FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
-        WHERE r.cycle_id = :c
+        SELECT q.query_code, q.expected_answer FROM soa_queries q
+        WHERE q.id IN (SELECT r.query_id FROM soa_runs r WHERE r.cycle_id = :c)
     """), {'c': cycle['id']}).mappings()}
     for r in rows:
         r['expected_type'] = types.get(r.get('query_code'))
@@ -566,6 +613,7 @@ def load_score_runs(conn, cycle: dict) -> List[dict]:
 def load_score_mentions(conn, cycle: dict) -> List[dict]:
     """Layer 1 for the cycle's entities, with the columns MetricsCalculator
     reads (strength, deal_cited) and member_value_cited."""
+    at('loading mentions')
     return [dict(m) for m in conn.execute(text("""
         SELECT cm.run_id, cm.mentioned, cm.position, cm.strength, cm.deal_cited, cm.member_value_cited, ce.role
         FROM soa_coded_mentions cm
@@ -577,6 +625,7 @@ def load_score_mentions(conn, cycle: dict) -> List[dict]:
 
 def cycle_merchant(conn, cycle: dict) -> Optional[str]:
     """The merchant the cycle's questions were built from (their source_ref)."""
+    at('finding the merchant')
     counts: Dict[str, int] = {}
     for r in conn.execute(text("""
         SELECT q.source_ref FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id WHERE r.cycle_id = :c

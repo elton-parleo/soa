@@ -31,6 +31,7 @@ endpoints are untouched.
 """
 import asyncio
 import json
+import time
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
@@ -168,21 +169,43 @@ async def get_score(cycle: str = Query(...), merchant: Optional[str] = Query(Non
     differs, or on an operator's `rescore`. `previous` is the newest earlier
     scored cycle's stored score, compared only under the same scorer version,
     surfaces and agents. With no `merchant`, the cycle's own (its questions'
-    source_ref) is read for the access run and the reference read."""
+    source_ref) is read for the access run and the reference read.
+
+    2C-3a: never a 500 for a cycle in scope. A failure while scoring is
+    logged (score.failed: the cycle, the step, the exception, no row data)
+    and returned as a 422 whose detail is one line the tile shows."""
     if rescore and not customers.is_operator(user.get("sub")):
         raise HTTPException(status_code=403, detail="operator only: re-scoring a cycle is for Parleo staff")
     row = dict(cycle_in_scope(cycle, scope))
+    org = scope.org.id
+    try:
+        return await _score(row, org, merchant, rescore, scope)
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 - every failure is a readable 422, never a 500
+        score_svc.log_event('score.failed', cycle=row['cycle_code'], cycle_id=row['id'], org=org,
+                            step=score_svc.current_step(), error=type(exc).__name__, message=str(exc)[:200])
+        raise HTTPException(status_code=422, detail=score_svc.unavailable(exc))
+
+
+async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, scope: CustomerScope) -> dict:
+    score_svc.at('reading the stored score')
     stored = score_svc.stored_score(engine, row['id'])
     body = dict(stored or {}, stored=True)
     if rescore or not score_svc.is_current(stored) or (merchant and (body.get('inputs') or {}).get('merchant') != merchant):
+        started = time.monotonic()
+        score_svc.log_event('score.start', cycle=row['cycle_code'], cycle_id=row['id'], org=org,
+                            reason='rescore' if rescore else 'stale' if stored else 'first read')
         with engine.connect() as conn:
             runs = score_svc.load_score_runs(conn, row)
             mentions = score_svc.load_score_mentions(conn, row)
+            score_svc.at('loading visibility')
             vis_rows = rm.load_visibility(conn, row).get('byQuestion') or []
             slug = merchant or score_svc.cycle_merchant(conn, row)
         access, reference_rows, errors = None, None, {}
         reference_run, access_run = None, None
         if slug:
+            score_svc.at('reading supply')
             client = full_loop._client(scope)
             (_, payload, a_err), (_, reference, r_err) = await asyncio.gather(client.get_access(slug),
                                                                               client.get_reference(slug))
@@ -203,7 +226,12 @@ async def get_score(cycle: str = Query(...), merchant: Optional[str] = Query(Non
                                      inputs={'merchant': slug, 'reference_run': reference_run, 'access_run': access_run,
                                              'scored_at': datetime.now(timezone.utc).isoformat()})
         # a failed supply read is served, never stored: the next read tries again
+        score_svc.at('storing the score')
         body['stored'] = not errors and score_svc.store_score(engine, row['id'], body)
+        score_svc.log_event('score.end', cycle=row['cycle_code'], cycle_id=row['id'], org=org,
+                            surfaces=[s['surface'] for s in body['surfaces']], score=body['score'],
+                            stored=body['stored'], read_errors=sorted(errors), ms=int((time.monotonic() - started) * 1000))
+    score_svc.at('reading the previous cycle')
     with engine.connect() as conn:
         prev, _ = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
     prev_stored = score_svc.stored_score(engine, prev['id']) if prev else None
