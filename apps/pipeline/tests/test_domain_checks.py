@@ -184,9 +184,14 @@ def test_the_probe_never_enters_either_score(network, signing_on):
 
 def test_no_product_page_on_the_domain(network):
     entry = dc.fetch_domain('acmebaby.test', pdp_url=None)
-    assert entry['signed_probe']['reason'] == "no product page on the merchant's own domain in the reference read"
-    # no product page: the store root's signals still type the site
-    assert entry['site_type']['site_type'] != SITE_TYPE_BRAND_ONLY
+    assert entry['signed_probe']['reason'] == 'no readable product page in the reference read'
+    # 2E-1: no product page, the site is not typed from the store root alone
+    # (what the store root alone says is kept beside it), and Protocol & Feed
+    # is not measured, never the Audit's 'na'
+    assert entry['site_type']['site_type'] is None
+    assert entry['site_type']['store_root_only']['site_type'] != SITE_TYPE_BRAND_ONLY
+    assert entry['protocol_feed']['coverage'] == 'not_measured' and entry['protocol_feed']['score'] is None
+    assert entry['protocol_feed']['evidence'] == ['not measured: no product page']
 
 
 # ─── each check through the adapter, on the Audit's own fixtures ──────────
@@ -255,8 +260,8 @@ def test_a_product_page_body_is_never_stored(network):
 class Supply:
     """supply /retailers (#20's own_domains), /tenant and /retailer-prices."""
 
-    def __init__(self, own=('acmebaby.test',), rows=None):
-        self.own, self.rows, self.calls = list(own), rows, []
+    def __init__(self, own=('acmebaby.test',), rows=None, tenant=None):
+        self.own, self.rows, self.tenant, self.calls = list(own), rows, tenant, []
 
     def retailers(self, slug):
         self.calls.append(('retailers', slug))
@@ -267,10 +272,15 @@ class Supply:
 
     def retailer_prices(self, slug, as_of=None):
         self.calls.append(('retailer_prices', slug))
-        return {'rows': self.rows or []}, None
+        # as supply serves it (truesync/fullloop/prices.py): the rows are `prices`
+        return {'merchant': slug, 'kind': 'seller', 'as_of': '2026-10-14T17:00:00+00:00', 'prices': self.rows or []}, None
+
+    def tenant_own_domains(self):
+        self.calls.append(('tenant_own_domains',))
+        return list(self.tenant if self.tenant is not None else self.own), None
 
 
-REFERENCE = {'as_of': '2026-10-14T17:00:00+00:00', 'rows': [
+REFERENCE = {'as_of': '2026-10-14T17:00:00+00:00', 'prices': [
     {'retailer_domain': 'target.test', 'url': 'https://target.test/p/1', 'read_status': 'ok'},
     {'retailer_domain': 'acmebaby.test', 'url': PDP, 'read_status': 'ok'},
 ]}
@@ -336,7 +346,7 @@ def test_without_the_column_nothing_is_written_and_it_says_so(any_engine, networ
 
 def test_no_stored_reference_reads_supplys_current_one(any_engine, network):
     seed_cycle(any_engine, reference=None)
-    supply = Supply(rows=REFERENCE['rows'])
+    supply = Supply(rows=REFERENCE['prices'])
     record = dc.run_for_cycle(229, engine=any_engine, client=supply, now=FIXED_NOW)
     assert record['reference_rows_from'] == 'supply'
     assert record['domains'][0]['pdp_url'] == PDP
@@ -344,12 +354,18 @@ def test_no_stored_reference_reads_supplys_current_one(any_engine, network):
 
 def test_a_brand_merchant_checks_the_brand_site(any_engine, network):
     """A brand merchant's own domain is its brand site; the reference read has
-    only retailer pages, so the checks read its store root and protocol files."""
-    seed_cycle(any_engine, reference={'rows': [REFERENCE['rows'][0]]})
+    only retailer pages, so the checks read its store root and protocol files,
+    the site is not typed (2E-1), and the probe alone reads the retailer page."""
+    network['site']['https://target.test/robots.txt'] = (200, 'User-agent: *\nAllow: /\n', 'text/plain')
+    network['site']['https://target.test/p/1'] = (200, (FIX / 'pdp.html').read_text(), 'text/html')
+    seed_cycle(any_engine, reference={'prices': [REFERENCE['prices'][0]]})
     record = dc.run_for_cycle(229, engine=any_engine, client=Supply(own=('acmebaby.test',)), now=FIXED_NOW)
     assert record['domains'][0]['pdp_url'] is None
     assert record['value_protocols']['score'] == 9.0
-    assert record['signed_probe']['outcome'] == dc.NOT_CHECKED
+    assert record['protocol_feed']['coverage'] == 'not_measured'
+    assert record['signed_probe']['url'] == 'https://target.test/p/1'
+    assert record['signed_probe']['page_from'] == dc.FROM_RETAILER
+    assert record['signed_probe']['outcome'] == dc.NOT_CHECKED      # no key on the worker in this test
 
 
 def test_two_own_domains_are_both_recorded_and_the_first_is_scored(any_engine, network):
@@ -383,7 +399,7 @@ def test_the_script_dry_run_writes_nothing(any_engine, network, tmp_path):
 def test_the_script_stores_then_refuses_to_replace_without_asking(any_engine, network, tmp_path):
     seed_cycle(any_engine)
     code, out = _script(['--cycle', 'FL3-acme-baby-20261014'], any_engine, tmp_path / 'j.jsonl')
-    assert code == 0 and 'stored on soa_cycles.domain_checks.' in out
+    assert code == 0 and 'stored on soa_cycles.domain_checks, revision 1.' in out
     first = dc.stored(any_engine, 229)
     assert first['merchant'] == 'acme-baby'
     code, out = _script(['--cycle', '229'], any_engine, tmp_path / 'j.jsonl')
@@ -479,7 +495,7 @@ def _ws_site(publishes: bool):
 class _WsSupply(Supply):
     def __init__(self):
         super().__init__(own=('trueshopstore.com',), rows=[{'retailer_domain': 'trueshopstore.com', 'url': WS_PDP,
-                                                            'read_status': 'ok'}])
+                                                            'read_status': 'ok', 'method': 'json_ld'}])
 
 
 def _ws_record(engine, network, publishes):

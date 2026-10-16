@@ -249,7 +249,7 @@ def domain_part(code: str, record: Optional[dict]) -> dict:
     weight = float(DIMENSIONS_BY_CODE[code].weight)
     half = 'seen' if code == 'value_protocols' else None
     dim = (record or {}).get(code)
-    if not isinstance(dim, dict) or dim.get('score') is None:
+    if not isinstance(dim, dict) or (dim.get('score') is None and dim.get('coverage') != 'not_measured'):
         return _unsourced_part(half, weight, f'reason.{code}')
     domain = (record or {}).get('scored_domain')
     source = f"domain checks on {domain}, {str((record or {}).get('checked_at') or '')[:10]}".rstrip(', ')
@@ -259,6 +259,11 @@ def domain_part(code: str, record: Optional[dict]) -> dict:
             'checks': checks, 'evidence': evidence}
     if dim.get('coverage') == 'na':
         return {**base, 'score': None, 'state': NA, 'reason': evidence[0] if evidence else None, 'line': None}
+    if dim.get('coverage') == 'not_measured':
+        # 2E-1: the checks could not measure it (no product page to type the
+        # site on), which is not the Audit's 'na'
+        return {**base, 'score': None, 'state': NOT_MEASURED, 'line': None,
+                'reason': evidence[0] if evidence else TEMPLATES[f'reason.{code}']}
     if dim.get('coverage') == 'blocked':
         return {**base, 'score': None, 'state': NOT_MEASURED, 'line': None,
                 'reason': TEMPLATES['reason.domain_blocked'].format(domain=domain)}
@@ -699,7 +704,7 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
                                for s in ran if s not in answered)},
         'inputs': {**(inputs or {}), 'domain_checks': {
             'checked_at': record.get('checked_at'), 'scored_domain': record.get('scored_domain'),
-            'version': record.get('version')} if record else None},
+            'version': record.get('version'), 'revision': record_revision(record)} if record else None},
         'history': [],
         'read_errors': errors,
         'rules': TEMPLATES,
@@ -781,10 +786,19 @@ def is_current(body: Optional[dict]) -> bool:
     return bool(body) and body.get('scorer_version') == SCORER_VERSION and body.get('adapter_revision') == ADAPTER_REVISION
 
 
+def record_revision(record: Optional[dict]) -> Optional[int]:
+    """The domain-check record's revision (2E-1): 1 for a record stored
+    before revisions were, None for no record."""
+    if not record:
+        return None
+    return int(record.get('revision') or 1)
+
+
 def needs_recompute(body: Optional[dict], domain_checks: Optional[dict]) -> Optional[str]:
     """Why a stored score is recomputed on this read, or None to serve it.
     2C-3's trigger, the scorer version (and the adapter's revision), and 2E's:
-    the set of measured dimensions changed. The cycle row says which of the
+    the set of measured dimensions changed, or the record's revision did
+    (a re-run replaced it). The cycle row says which of the
     domain-check dimensions are measured now, with no supply call, so a
     record stored after the score (run_domain_checks.py on 229) recomputes it
     on the next read."""
@@ -795,6 +809,16 @@ def needs_recompute(body: Optional[dict], domain_checks: Optional[dict]) -> Opti
     was = [c for c in DOMAIN_CODES if c in (body.get('measured') or [])]
     if was != measured_from_record(domain_checks):
         return 'measured set changed'
+    # 2E-1: a re-run replaced the record (run_domain_checks.py --replace).
+    # A score stored before revisions were read a record of revision 1; one
+    # scored with no record (inputs.domain_checks None) read none.
+    inputs = body.get('inputs') or {}
+    if 'domain_checks' in inputs:
+        scored_on = inputs['domain_checks'] and int(inputs['domain_checks'].get('revision') or 1)
+    else:
+        scored_on = 1
+    if domain_checks and scored_on != record_revision(domain_checks):
+        return 'domain checks revision changed'
     return None
 
 

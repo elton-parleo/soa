@@ -2,15 +2,20 @@
  "version": {
   "scan": "5",
   "extraction_rev": "2",
-  "adapter_revision": 1
+  "adapter_revision": 2
  },
+ "revision": null,
  "checked_at": "2026-10-16T09:00:00+00:00",
  "merchant": "wiggle-and-snug",
  "own_domains": [
   "trueshopstore.com"
  ],
+ "tenant_own_domains": [
+  "trueshopstore.com"
+ ],
  "scored_domain": "trueshopstore.com",
  "reference_rows_from": "supply",
+ "reference_rows": 1,
  "domains": [
   {
    "domain": "trueshopstore.com",
@@ -114,6 +119,24 @@
     ]
    },
    "pdp_url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+   "probe_url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+   "pdp_selection": {
+    "domain": "trueshopstore.com",
+    "rows_seen": 1,
+    "url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+    "page": {
+     "url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+     "retailer_domain": "trueshopstore.com",
+     "method": "json_ld",
+     "read_status": "ok",
+     "observed_at": null,
+     "reference_run_id": null,
+     "variant_label": null
+    },
+    "probe_url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+    "probe_from": "own_domain",
+    "probe_page": null
+   },
    "protocol_feed": {
     "score": 3.8,
     "max": 5,
@@ -160,6 +183,7 @@
    },
    "signed_probe": {
     "url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+    "page_from": "own_domain",
     "signed": {
      "status": "fetched",
      "http_status": 200,
@@ -224,6 +248,7 @@
  },
  "signed_probe": {
   "url": "https://trueshopstore.com/products/wiggle-snug-diapers-size-3",
+  "page_from": "own_domain",
   "signed": {
    "status": "fetched",
    "http_status": 200,
