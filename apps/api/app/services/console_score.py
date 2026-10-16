@@ -68,7 +68,7 @@ SCORER_VERSION = FULL_CYCLE_SCORER_VERSION
 #: The adapter's own revision, beside the scorer's: a change to how loop
 #: counts become scorer inputs re-scores stored cycles too. Not a scorer
 #: version and never shown as one.
-ADAPTER_REVISION = 2
+ADAPTER_REVISION = 3   # 2E-2: Deal Citability's seen half counts markup only
 
 READINESS_BAR = VERDICT_COMPOSITE_THRESHOLD
 
@@ -112,6 +112,7 @@ TEMPLATES = {
     'part.protocol_feed': 'Protocol checks passed {n} of {d}',
     'part.value_protocols.seen': 'Manifest checks passed {n} of {d}',
     'check.flag': '{flag} {n} of {d} pages',
+    'check.flag_text': '{flag} {n} of {d} pages, the page text included',
     'gap.on_surface': '{line} on {surface}',
     'reason.no_unprompted': 'no unprompted question answered on this surface',
     'reason.no_access': 'no agent identity measured in the access run',
@@ -227,7 +228,8 @@ def crawl_counts(access: Optional[dict], reference_rows: Optional[List[dict]]) -
     # 2E: Deal Citability's seen half, supply #21's incentive_in_markup. A
     # read stored before 2A-3 (json_ld_scanned false) was not scanned: out of
     # the count both ways, never a false
-    scanned = [m for m in (supply_fields.incentive_in_markup(r) for r in pages) if m and m['json_ld_scanned']]
+    scanned = [(r, m) for r, m in ((r, supply_fields.incentive_in_markup(r)) for r in pages) if m and m['json_ld_scanned']]
+    flags = supply_fields.INCENTIVE_FLAGS
     return {
         'identities': len(measured), 'through': sum(1 for r in measured if r.get('ok')),
         'pages': len(pages),
@@ -236,8 +238,15 @@ def crawl_counts(access: Optional[dict], reference_rows: Optional[List[dict]]) -
         'member_price': sum(1 for r in pages if r.get('member_price') not in (None, '')),
         'incentive_fields': supply_fields.carries_incentive_fields(rows),
         'incentive_scanned': len(scanned),
-        'incentive_any': sum(1 for m in scanned if any(m[f] for f in supply_fields.INCENTIVE_FLAGS)),
-        'incentive_flags': {f: sum(1 for m in scanned if m[f]) for f in supply_fields.INCENTIVE_FLAGS},
+        # 2E-2: a page carries an incentive in markup when a flag is true AND
+        # supply says it came from structured data (source json_ld). A served
+        # flag is the JSON-LD half OR a text half read from the page's
+        # offer_text, so a site-wide "Free shipping" line sets promo on every
+        # page without any markup saying so; a text-only page does not count
+        'incentive_any': sum(1 for _, m in scanned if m['source'] == 'json_ld' and any(m[f] for f in flags)),
+        'incentive_flags': {f: sum(1 for _, m in scanned if m[f]) for f in flags},
+        # how many of a flag's pages also carry offer_text, which may be what set it
+        'incentive_flags_text': {f: sum(1 for r, m in scanned if m[f] and r.get('offer_text')) for f in flags},
     }
 
 
@@ -281,8 +290,9 @@ def measured_from_record(record: Optional[dict]) -> List[str]:
 
 
 def deal_seen_part(crawl: dict, page_reason: str) -> dict:
-    """Deal Citability, seen: reads whose page carries any incentive flag in
-    markup over the pages read whose markup supply scanned."""
+    """Deal Citability, seen: reads whose page carries an incentive in its
+    markup (a flag true, from structured data) over the pages read whose
+    markup supply scanned."""
     seen_max = float(DIMENSIONS_BY_CODE['deal_citability'].seen_max)
     source = 'reference read: incentive_in_markup (supply), json_ld_scanned pages'
     if not crawl['pages']:
@@ -292,7 +302,12 @@ def deal_seen_part(crawl: dict, page_reason: str) -> dict:
     if not crawl['incentive_scanned']:
         return {**_unsourced_part('seen', seen_max, 'reason.deal_unscanned'), 'source': source}
     part = _ratio_part('deal_citability', 'seen', crawl['incentive_any'], crawl['incentive_scanned'], seen_max, source)
-    part['checks'] = [{'code': f, 'label': TEMPLATES['check.flag'].format(flag=f.replace('_', ' '), n=k, d=crawl['incentive_scanned']),
+    # Each flag as supply serves it, its value read (a false is 'fail'); a flag
+    # true on pages that also carry offer_text says so, since supply's served
+    # flag may be the text half there (2E-2)
+    text = crawl.get('incentive_flags_text') or {}
+    part['checks'] = [{'code': f, 'label': TEMPLATES['check.flag_text' if text.get(f) else 'check.flag'].format(
+                           flag=f.replace('_', ' '), n=k, d=crawl['incentive_scanned']),
                        'state': 'pass' if k else 'fail'} for f, k in crawl['incentive_flags'].items()]
     return part
 
@@ -681,8 +696,7 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
         # The Audit issues a verdict only in its 'scored' state, with nothing
         # unmeasured (build_pillars_payload). A not-measured dimension
         # withholds it here the same way; Member Value 'na' does not.
-        'verdict': (compute_verdict(score, tv['score'] or 0.0, tv['applicable_max'])
-                    if score is not None and tv and not unmeasured else None),
+        'verdict': verdict(score, tv, unmeasured),
         'verdict_note': (TEMPLATES['verdict.withheld'].format(n=_fmt(unmeasured), total=TOTAL_MAX)
                          if score is not None and unmeasured else None),
         'surfaces': [{'surface': p['surface'], 'label': p['label'], 'score': p['score'], 'earned': p['earned'],
@@ -709,6 +723,16 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
         'read_errors': errors,
         'rules': TEMPLATES,
     }
+
+
+def verdict(score: Optional[int], true_value: Optional[dict], unmeasured: float) -> Optional[str]:
+    """The Audit's readiness verdict (scan_dimensions.compute_verdict, called
+    as is: AGENT-READY at or above the bar with True Value at or above a
+    quarter of its applicable points, else NOT AGENT-READY), only when no
+    dimension is not measured. None otherwise; verdict_note says why."""
+    if score is None or not true_value or unmeasured:
+        return None
+    return compute_verdict(score, true_value['score'] or 0.0, true_value['applicable_max'])
 
 
 def with_previous(body: dict, prev_code: Optional[str], prev_stored: Optional[dict]) -> dict:

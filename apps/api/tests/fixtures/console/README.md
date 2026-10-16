@@ -29,3 +29,16 @@ either file differs. Regenerate from `apps/pipeline` with
 `checked_at` is fixed (2026-10-16T09:00Z) and the signing key id is
 `test-key`; the signed probe ran with a throwaway key and both requests read.
 No real site's markup is in them.
+
+## 2E-2: supply's served flags on 229's shape
+
+`supply_retailer_prices_229_bar.json` is supply `/retailer-prices` in #114's
+shape (`prices`), its 19 rows from #114's own builder
+(`apps/pipeline/tests/test_domain_checks_pdp.py` `ws_payload`). Each row's
+`offer_text` and `incentive_in_markup` were computed by supply's own
+`truesync/fullloop/parse.offer_text` and `incentive.incentive_in_markup`
+(parleo-supply-app `ef3c267`). The input was the store's announcement bar
+("Free shipping on orders of $35 or more · 30-day returns · Members earn 1 pt
+/ $1", truesync-demo-store `components/SiteChrome.tsx`), with a JSON-LD half
+of `member_price` only. Supply serves `promo: true` from the bar's text on
+every row. That is the 2E-2 Deal Citability case (`tests/test_console_2e2.py`).

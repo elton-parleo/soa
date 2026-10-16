@@ -29,7 +29,8 @@ FULL = _fixture('domain_checks_ws_full.json')
 def reference_2a3(scanned=19):
     """The Oct 14 reads as supply #21 serves them: every readable row carries
     incentive_in_markup. member_price where the read has one (parse.py takes
-    it from JSON-LD only), a promo on three pages that have none; the first
+    it from JSON-LD only), a promo in markup (validThrough) on three pages
+    that have none, no offer_text anywhere; the first
     `scanned` rows were read after 2A-3 (json_ld_scanned), the rest before."""
     ref = copy.deepcopy(WS_REFERENCE)
     promo_left = 3
@@ -37,9 +38,9 @@ def reference_2a3(scanned=19):
         member = row.get('member_price') not in (None, '')
         promo = not member and promo_left > 0
         promo_left -= promo
-        row['offer_text'] = 'Save 10% with code SNUG10' if promo else None
+        row['offer_text'] = None
         row['incentive_in_markup'] = {'member_price': member, 'promo': promo, 'subscription': False, 'code': False,
-                                      'source': 'json_ld' if member else 'text' if promo else 'none',
+                                      'source': 'json_ld' if member or promo else 'none',
                                       'json_ld_scanned': i < scanned}
     return ref
 
