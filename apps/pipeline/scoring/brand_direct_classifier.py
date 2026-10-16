@@ -201,6 +201,29 @@ def own_domains(facts, expectation=None) -> list:
     return listed
 
 
+def ours(facts, expectation=None) -> list:
+    """
+    2D: every site that is the brand's own for the grounded checks: the
+    merchant's own (own_domains), then every own domain of every merchant
+    in its tenant (`tenant_own_domains`, read once per cycle by
+    expectation_scorer.TenantDomainsCache). A store and its brand site can
+    be two merchants of one tenant (W&S: trueshopstore.com,
+    wiggleandsnug.com); an answer grounded on either is grounded.
+
+    Only the two grounded checks in classify_with_code read this. The
+    ownership and no-source checks in contradicted_claims keep the
+    merchant's own list, so this rule can move a row from echoed to
+    grounded and nothing else.
+    """
+    listed = own_domains(facts, expectation)
+    seen = {_norm(d) for d in listed}
+    for domain in (facts or {}).get('tenant_own_domains') or []:
+        if domain and _norm(domain) not in seen:
+            listed.append(domain)
+            seen.add(_norm(domain))
+    return listed
+
+
 def grounding_domains(facts, expectation=None) -> set:
     """Where a source grounds a brand claim: the merchant's own sites and
     its listed retailers."""
@@ -374,6 +397,7 @@ def contradicted_claims(extraction, brand_facts=None, *, grounding=None,
 #: they newly read (the rescore names them; see scripts/rescore_cycle.py).
 CODE_GROUNDING_SUPPORT = 'grounding_support'
 CODE_OWN_DOMAINS = 'own_domains'
+CODE_TENANT_OWN_DOMAINS = 'tenant_own_domains'
 CODE_PROGRAM_NAME = 'program_name_not_tier'
 
 
@@ -409,7 +433,8 @@ def classify_with_code(extraction, expectation, *, brand_facts=None, grounding=N
       grounded             it cited one of the brand's own domains, or a
                            claim it asserted is backed by a grounding
                            support whose source is one of them or a
-                           listed retailer.
+                           listed retailer. 2D: "own" is every own
+                           domain of every merchant in the tenant (ours).
       echoed               it named the brand. Nothing else is checkable —
                            which is exactly what the old `exact` meant.
     """
@@ -443,15 +468,19 @@ def classify_with_code(extraction, expectation, *, brand_facts=None, grounding=N
     if unknown:
         return ACKNOWLEDGED_UNKNOWN, f"said it could not find {brand}: {unknown!r}", program_code
 
-    own = own_domains(facts, expectation)
+    own = {_norm(d) for d in own_domains(facts, expectation)}
     cited = {_norm(s) for s in extraction.get('sources_cited') or []}
-    for domain in own:
+    for domain in ours(facts, expectation):
         if _norm(domain) in cited:
             legacy = _norm((expectation or {}).get('domain') or facts.get('domain'))
+            if _norm(domain) not in own:
+                return GROUNDED, f"cited {domain}, an own domain of another merchant in the tenant", \
+                    program_code or CODE_TENANT_OWN_DOMAINS
             return GROUNDED, f"cited {domain}", \
                 program_code or (None if _norm(domain) == legacy else CODE_OWN_DOMAINS)
 
-    allowed = grounding_domains(facts, expectation)
+    # 2D: a support at any of the tenant's own sites grounds it too
+    allowed = grounding_domains(facts, expectation) | {_norm(d) for d in ours(facts, expectation)}
     for claim in pp.asserted_claims(extraction):
         domain = grounded_by(claim.get('claim'), grounding, allowed)
         if domain:

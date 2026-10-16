@@ -1528,6 +1528,80 @@ cycle FL3-wiggle-and-snug-20261014 (id 229)   DRIFT
 and a September-shaped cycle's `gemini` rows print `rows: gemini on api x N   ok`. Relabelling 229 is a
 separate decision; nothing here rewrites it.
 
+### 2D-3: the brand's own domains, tenant-wide
+
+**The rule.** A brand-direct answer is `grounded` when it cites one of *ours*, or a claim it asserts is
+backed by a platform grounding support whose source is one of ours or a listed retailer. Since 2D, *ours*
+is the merchant's own domains (its record's `own_domains`, else its one domain, else the expectation's)
+**plus every own domain of every merchant in its tenant**. Wiggle & Snug's store (trueshopstore.com) and
+its brand site (wiggleandsnug.com) are two supply merchants, so the store's list holds only the store, and
+cycle 229 run 12979, which cited wiggleandsnug.com, scored `echoed` on the store's cycle.
+
+- **The set.** `TrueSyncCatalogClient.tenant_own_domains`: one `GET /tenant`, then
+  `GET /merchants/{slug}/retailers` per merchant, its `own_domains` list, else the deprecated single
+  `own_domain`. Normalized (`www.`, scheme and path dropped), in tenant order, each once. Read with the
+  study's customer's token, so "the tenant" is that customer's.
+- **Once per scoring pass, cached on the cycle.** `expectation_scorer.TenantDomainsCache.for_cycle`, by
+  cycle id, for the life of the scorer (one live batch, or one rescore). It rides on the brand facts as
+  `tenant_own_domains`, for the brand-direct tier only.
+- **Degrading.** A merchant whose `/retailers` read fails is left out and named in a warning; a failed
+  `/tenant` read gives the rule before 2D (the merchant's own list). A refusal raises, as every catalog read.
+- **Only the grounded checks.** `brand_direct_classifier.ours` is read by the two grounded checks in
+  `classify_with_code` and by nothing else. The ownership check ("their official website is X") and the
+  no-source check in `contradicted_claims` keep the merchant's own list, so this rule moves rows from
+  `echoed` to `grounded` and cannot move `fabricated`. The reason code is `tenant_own_domains` when the
+  domain is another merchant's, `own_domains` (or none) as before when it is the merchant's own;
+  `rescore_cycle.py` names it, so the unattributed-moves guard passes it.
+- **What it leaves.** A claim whose only backing is a support at another tenant merchant's site, with
+  nothing cited, is still "stated with no source" and `fabricated`: 229 run 12975 (golden r40) is that
+  shape. Counting it is a change to the no-source check, which moves `fabricated`; it is not part of 2D.
+
+**Golden gates.** Both untouched and passing. No verdict golden row depends on the single-merchant rule:
+r43 *is* run 12979, and expects `grounded` / `own_domains` because its `record_facts` list both domains on
+the store's own record; with no `tenant_own_domains` on a golden row, the classifier reads it exactly as
+before.
+
+**The rescore, on the 229-shaped fixture** (`tests/test_tenant_own_domains.py`: golden rows r40-r45, 229's
+Gemini answers with their grounding, and two ChatGPT rows, stored with the outcomes the store-only record
+gives; supply's `/tenant` and `/retailers` recorded, the store answering with the deprecated single field):
+
+```
+cycle FL3-wiggle-and-snug-20261014 (id 229) — classify-only: no model call; Layer 1 and the stored Layer 2 extraction are read as they are
+before:
+    brand_direct            8  (acknowledged_unknown 1, echoed 1, fabricated 4, grounded 2)
+
+classified 8 stored row(s) twice; both passes agree
+
+rows whose outcome moved: 1 of 8
+    WIG_144 · gemini_grounded · run 1: echoed -> grounded   [brand-direct: every own domain of every merchant in the tenant is ours (2D)]   [run 12979]
+
+unattributed moves: 0
+
+dry run — nothing written.
+```
+
+The write on the same fixture moves only 12979 (`reason_code = tenant_own_domains`); fabricated is 4
+before and after.
+
+**For production (Elton runs these; nothing here touched production).** From `apps/pipeline`, on this
+branch's code, dry run first:
+
+```
+python3 scripts/rescore_cycle.py --cycle FL3-wiggle-and-snug-20261014 --tier brand_direct --classify-only --dry-run
+```
+
+Expected: one row moves, run 12979, `echoed -> grounded` under "every own domain of every merchant in the
+tenant is ours (2D)", `unattributed moves: 0`, and the before/after fabricated counts equal. If anything
+else moves, or the move is unattributed, stop. Then the write, which still refuses while any move is
+unattributed and re-checks that two passes agree:
+
+```
+python3 scripts/rescore_cycle.py --cycle FL3-wiggle-and-snug-20261014 --tier brand_direct --classify-only
+```
+
+If the dry run moves nothing, the store and the brand site are not both in the study's customer's tenant
+(`GET /tenant` with that token lists the merchants it reads).
+
 ## Answer divergences
 
 - Answer.verdict is not a console field: it carries the value outcome mapped exact->right, wrong->wrong, absent->missed, partial->partial; stale, unverifiable and unscoreable pass through verbatim with `tone`. Brand-direct rows leave it null and carry `brand_verdict`.

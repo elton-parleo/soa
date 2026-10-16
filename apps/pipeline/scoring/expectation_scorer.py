@@ -25,6 +25,7 @@ from sqlalchemy import text
 from clients.truesync_catalog import TrueSyncCatalogClient
 from parser.expectation_client import ExpectationClient
 from parser.extraction_postprocess import apply_labels
+from scoring import brand_direct_classifier as bdc
 from scoring import expectation_comparator as cmp
 from scoring import record_variants as rv
 from scoring.retailer_reference import ReferenceSet
@@ -174,6 +175,42 @@ class BrandFactsCache:
         return self._by_merchant[merchant_slug]
 
 
+class TenantDomainsCache:
+    """
+    2D: every own domain of every merchant in the cycle's tenant, read once
+    per scoring pass and cached on the cycle (by cycle id, for the life of
+    the scorer), for the brand-direct classifier's grounded checks.
+
+    W&S's store (trueshopstore.com) and its brand site (wiggleandsnug.com)
+    are two supply merchants, so the store's own record lists only the
+    store, and an answer grounded on wiggleandsnug.com scored `echoed` on
+    the store's cycle (229, run 12979). The tenant is the brand's owner:
+    a source at any of its merchants' sites is the brand's own.
+
+    An outage degrades to the merchant's own list (the rule before 2D), and
+    says so; a refusal raises, as every catalog read does.
+    """
+
+    def __init__(self, client: TrueSyncCatalogClient = None) -> None:
+        self._client = client
+        self._by_cycle = {}
+
+    def for_cycle(self, cycle_id, study_type=None):
+        if cycle_id in self._by_cycle:
+            return self._by_cycle[cycle_id]
+        client = self._client or TrueSyncCatalogClient.for_study(study_type)
+        # Duck-typed, as HistoryCache's 2B methods are: a client without the
+        # read (a test double) gives the rule before 2D, never an error.
+        read = getattr(client, 'tenant_own_domains', None)
+        domains, error = read() if read else ([], None)
+        if error is not None:
+            logger.warning("[expectation] tenant own domains for cycle %s: %s — brand-direct "
+                           "grounding reads %s", cycle_id, error,
+                           f"{domains} and the merchant's own" if domains else "the merchant's own only")
+        self._by_cycle[cycle_id] = list(domains)
+        return self._by_cycle[cycle_id]
+
+
 class ReferenceCache:
     """
     2B: one retailer-prices read per cycle, cached ON the cycle.
@@ -263,7 +300,7 @@ def citation_checks_enabled() -> bool:
 
 
 def classify(run, expectation, extraction, *, history=None, brand_facts=None,
-             references=None, domain_checker=None) -> cmp.Verdict:
+             references=None, domain_checker=None, tenant_domains=None) -> cmp.Verdict:
     """
     The deterministic half, for one run whose extraction already exists.
 
@@ -277,6 +314,11 @@ def classify(run, expectation, extraction, *, history=None, brand_facts=None,
     merchant = source_ref.get('merchant_slug')
     facts = brand_facts.for_merchant(merchant, study_type=run.study_type) \
         if brand_facts else {}
+    # 2D: the tenant's own domains ride on the facts for the brand-direct
+    # tier only, the one reader (brand_direct_classifier.ours)
+    if tenant_domains is not None and bdc.is_brand_direct(getattr(run, 'tier', None), expectation):
+        facts = {**facts, 'tenant_own_domains': tenant_domains.for_cycle(
+            run.cycle_id, study_type=run.study_type)}
 
     answer_status = getattr(run, 'answer_status', None)
     if answer_status in NO_ANSWER_STATUSES:
@@ -327,7 +369,7 @@ class ExpectationScorer:
                  history: HistoryCache = None,
                  brand_facts: BrandFactsCache = None,
                  labeler=None, references: ReferenceCache = None,
-                 domain_checker=None) -> None:
+                 domain_checker=None, tenant_domains: TenantDomainsCache = None) -> None:
         self.client = client or ExpectationClient()
         self.history = history if history is not None else HistoryCache()
         self.brand_facts = (
@@ -337,6 +379,9 @@ class ExpectationScorer:
         # catalog client (and so its token); the citation check is on
         # unless SOA_CITATION_CHECK_ENABLED=0.
         self.references = references if references is not None else ReferenceCache(
+            getattr(self.history, '_client', None))
+        # 2D: the tenant's own domains, once per cycle, same client
+        self.tenant_domains = tenant_domains if tenant_domains is not None else TenantDomainsCache(
             getattr(self.history, '_client', None))
         if domain_checker is None and citation_checks_enabled():
             from scoring.citation_check import DbDomainCheckStore, DomainChecker
@@ -516,7 +561,7 @@ class ExpectationScorer:
         verdict = classify(
             run, expectation, result.record, history=self.history,
             brand_facts=self.brand_facts, references=self.references,
-            domain_checker=self.domain_checker,
+            domain_checker=self.domain_checker, tenant_domains=self.tenant_domains,
         )
 
         try:
