@@ -203,17 +203,18 @@ def own_domains(facts, expectation=None) -> list:
 
 def ours(facts, expectation=None) -> list:
     """
-    2D: every site that is the brand's own for the grounded checks: the
-    merchant's own (own_domains), then every own domain of every merchant
-    in its tenant (`tenant_own_domains`, read once per cycle by
+    2D: every site that is the brand's own: the merchant's own
+    (own_domains), then every own domain of every merchant in its tenant
+    (`tenant_own_domains`, read once per cycle by
     expectation_scorer.TenantDomainsCache). A store and its brand site can
     be two merchants of one tenant (W&S: trueshopstore.com,
-    wiggleandsnug.com); an answer grounded on either is grounded.
+    wiggleandsnug.com); a source at either is the brand's own.
 
-    Only the two grounded checks in classify_with_code read this. The
-    ownership and no-source checks in contradicted_claims keep the
-    merchant's own list, so this rule can move a row from echoed to
-    grounded and nothing else.
+    Every ownership check reads this: the ownership claim and the
+    no-source check in contradicted_claims (through grounding_domains), and
+    the two grounded checks in classify_with_code. So a claim backed by a
+    support at the tenant's other site is sourced, not fabricated (229 run
+    12975), and an answer citing it is grounded (run 12979).
     """
     listed = own_domains(facts, expectation)
     seen = {_norm(d) for d in listed}
@@ -225,9 +226,9 @@ def ours(facts, expectation=None) -> list:
 
 
 def grounding_domains(facts, expectation=None) -> set:
-    """Where a source grounds a brand claim: the merchant's own sites and
-    its listed retailers."""
-    return {_norm(d) for d in own_domains(facts, expectation)
+    """Where a source grounds a brand claim: the brand's own sites, the
+    tenant's included (ours), and the merchant's listed retailers."""
+    return {_norm(d) for d in ours(facts, expectation)
             + list((facts or {}).get('retailer_list') or []) if d}
 
 
@@ -351,7 +352,7 @@ def contradicted_claims(extraction, brand_facts=None, *, grounding=None,
     sourced = bool(extraction.get('sources_cited'))
     allowed = grounding_domains(facts, expectation)
     titles = {_norm(t) for t in facts.get('product_titles') or [] if t}
-    own = {_norm(d) for d in own_domains(facts)}
+    own = {_norm(d) for d in ours(facts)}
 
     found = list(_tier_contradictions(extraction, facts))
     availability = _recommended_without_source(extraction)
@@ -376,7 +377,7 @@ def contradicted_claims(extraction, brand_facts=None, *, grounding=None,
             if claimed and not any(_norm(d) in own for d in claimed):
                 found.append({
                     'claim': text,
-                    'why': f"the record's own domains are {', '.join(own_domains(facts))}",
+                    'why': f"the record's own domains are {', '.join(ours(facts))}",
                 })
                 continue
 
@@ -479,13 +480,18 @@ def classify_with_code(extraction, expectation, *, brand_facts=None, grounding=N
             return GROUNDED, f"cited {domain}", \
                 program_code or (None if _norm(domain) == legacy else CODE_OWN_DOMAINS)
 
-    # 2D: a support at any of the tenant's own sites grounds it too
-    allowed = grounding_domains(facts, expectation) | {_norm(d) for d in ours(facts, expectation)}
+    # 2D: a support at any of the tenant's own sites grounds it too, and
+    # says so when the site is another merchant's
+    allowed = grounding_domains(facts, expectation)
+    merchants = allowed - ({_norm(d) for d in ours(facts, expectation)} - own)
     for claim in pp.asserted_claims(extraction):
         domain = grounded_by(claim.get('claim'), grounding, allowed)
         if domain:
+            tenant = _norm(domain) not in merchants
             return GROUNDED, (f"{claim['claim']!r} — grounded by a source at {domain} "
-                              f"(platform grounding support)"), CODE_GROUNDING_SUPPORT
+                              f"(platform grounding support"
+                              f"{', an own domain of another merchant in the tenant' if tenant else ''})"), \
+                CODE_TENANT_OWN_DOMAINS if tenant else CODE_GROUNDING_SUPPORT
 
     return ECHOED, f"named {brand}, with nothing checkable behind it", program_code
 

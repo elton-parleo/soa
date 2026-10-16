@@ -1546,15 +1546,18 @@ cycle 229 run 12979, which cited wiggleandsnug.com, scored `echoed` on the store
   `tenant_own_domains`, for the brand-direct tier only.
 - **Degrading.** A merchant whose `/retailers` read fails is left out and named in a warning; a failed
   `/tenant` read gives the rule before 2D (the merchant's own list). A refusal raises, as every catalog read.
-- **Only the grounded checks.** `brand_direct_classifier.ours` is read by the two grounded checks in
-  `classify_with_code` and by nothing else. The ownership check ("their official website is X") and the
-  no-source check in `contradicted_claims` keep the merchant's own list, so this rule moves rows from
-  `echoed` to `grounded` and cannot move `fabricated`. The reason code is `tenant_own_domains` when the
-  domain is another merchant's, `own_domains` (or none) as before when it is the merchant's own;
-  `rescore_cycle.py` names it, so the unattributed-moves guard passes it.
-- **What it leaves.** A claim whose only backing is a support at another tenant merchant's site, with
-  nothing cited, is still "stated with no source" and `fabricated`: 229 run 12975 (golden r40) is that
-  shape. Counting it is a change to the no-source check, which moves `fabricated`; it is not part of 2D.
+- **Every ownership check.** `brand_direct_classifier.ours` is read by all of them: the ownership claim
+  ("their official website is X") and the no-source check in `contradicted_claims` (through
+  `grounding_domains`), and the two grounded checks in `classify_with_code`. So a claim backed by a
+  support at the tenant's other site is sourced, not `fabricated`, and an answer citing that site is
+  `grounded`. The rule can move `echoed` and `fabricated` rows to `grounded`. (First landed with the
+  grounded checks only; widened in the fourth 2D commit.)
+- **Reason codes.** `tenant_own_domains` when the site that grounds the answer (cited, or a support's
+  source) is another merchant's; `own_domains`, `grounding_support` or none, as before, when it is the
+  merchant's own or a listed retailer. `rescore_cycle.py` names `tenant_own_domains`, so the
+  unattributed-moves guard passes it.
+- **Not the classifier.** `expectation_comparator`'s `source_split` (own / listed retailer / other, a
+  report field) still splits on the merchant's own list.
 
 **Golden gates.** Both untouched and passing. No verdict golden row depends on the single-merchant rule:
 r43 *is* run 12979, and expects `grounded` / `own_domains` because its `record_facts` list both domains on
@@ -1572,7 +1575,8 @@ before:
 
 classified 8 stored row(s) twice; both passes agree
 
-rows whose outcome moved: 1 of 8
+rows whose outcome moved: 2 of 8
+    WIG_141 · gemini_grounded · run 1: fabricated -> grounded   [brand-direct: every own domain of every merchant in the tenant is ours (2D)]   [run 12975]
     WIG_144 · gemini_grounded · run 1: echoed -> grounded   [brand-direct: every own domain of every merchant in the tenant is ours (2D)]   [run 12979]
 
 unattributed moves: 0
@@ -1580,8 +1584,9 @@ unattributed moves: 0
 dry run — nothing written.
 ```
 
-The write on the same fixture moves only 12979 (`reason_code = tenant_own_domains`); fabricated is 4
-before and after.
+The write on the same fixture moves only those two (`reason_code = tenant_own_domains` on both).
+Fabricated goes from 4 to 3; the three left are r41 (support at huggies.com), r42 (a redirect that never
+resolved) and r45 (tiers the record does not publish).
 
 **For production (Elton runs these; nothing here touched production).** From `apps/pipeline`, on this
 branch's code, dry run first:
@@ -1590,9 +1595,11 @@ branch's code, dry run first:
 python3 scripts/rescore_cycle.py --cycle FL3-wiggle-and-snug-20261014 --tier brand_direct --classify-only --dry-run
 ```
 
-Expected: one row moves, run 12979, `echoed -> grounded` under "every own domain of every merchant in the
-tenant is ours (2D)", `unattributed moves: 0`, and the before/after fabricated counts equal. If anything
-else moves, or the move is unattributed, stop. Then the write, which still refuses while any move is
+Expected: runs 12979 (`echoed -> grounded`) and 12975 (`fabricated -> grounded`) move under "every own
+domain of every merchant in the tenant is ours (2D)", with `unattributed moves: 0`; fabricated drops by
+one. Any other row that moves under the same rule is the same case (a wiggleandsnug.com citation, support
+or ownership claim on the store's cycle) and is expected. If a row moves under any other rule, or is
+unattributed, stop. Then the write, which still refuses while any move is
 unattributed and re-checks that two passes agree:
 
 ```

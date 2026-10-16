@@ -9,11 +9,15 @@ merchants, so the store's list holds only the store, and cycle 229 run
 The grounded checks now read every own domain of every merchant in the
 tenant (TrueSyncCatalogClient.tenant_own_domains, once per cycle).
 
+Every ownership check reads the tenant set: the ownership claim, the
+no-source check, and the two grounded checks.
+
 The last tests are `rescore_cycle.py --classify-only --dry-run` on a
 229-shaped brand-direct fixture: the six golden rows r40-r45 (229's Gemini
 answers, as stored, with their grounding) and two ChatGPT rows, under the
-store's record as supply serves it today. Exactly one row moves, 12979,
-echoed -> grounded; fabricated does not move. sqlite and Postgres.
+store's record as supply serves it today. Exactly two rows move: 12979
+echoed -> grounded (it cited wiggleandsnug.com) and 12975 fabricated ->
+grounded (its claim's support is at wiggleandsnug.com). sqlite and Postgres.
 """
 import json
 import os
@@ -128,17 +132,25 @@ def test_a_merchant_whose_own_record_lists_the_site_keeps_its_own_domains_code()
     assert bdc.classify_with_code(row['extraction'], WS_BRAND, brand_facts=facts)[::2] == ('grounded', 'own_domains')
 
 
-def test_only_the_grounded_checks_read_the_tenant_set():
-    """The no-source and ownership checks keep the merchant's own list, so
-    the rule moves echoed to grounded and nothing else. Run 12975 (r40) is
-    the shape that stays: its claim's only support is at wiggleandsnug.com
-    and it cites nothing, so the no-source check still calls it fabricated."""
+def test_run_12975_s_claim_is_sourced_by_a_support_at_the_tenant_s_other_site():
+    """Its only backing is a Gemini support at wiggleandsnug.com and it
+    cites nothing. On the store's own list the no-source check called that
+    fabricated; on the tenant's it is sourced, and the support grounds it."""
     r40 = _golden('r40')
-    assert bdc.classify(r40['extraction'], WS_BRAND, brand_facts=TENANT_FACTS, grounding=r40['grounding'])[0] == 'fabricated'
+    assert bdc.classify(r40['extraction'], WS_BRAND, brand_facts=STORE_FACTS, grounding=r40['grounding'])[0] == 'fabricated'
+    assert bdc.classify_with_code(r40['extraction'], WS_BRAND, brand_facts=TENANT_FACTS, grounding=r40['grounding'])[::2] == (
+        'grounded', 'tenant_own_domains')
+
+
+def test_an_ownership_claim_naming_the_tenant_s_other_site_is_not_contradicted():
+    r40 = _golden('r40')
     claim = {'claim': 'Their official website is wiggleandsnug.com.', 'claim_kind': 'ownership', 'kind': 'assertion',
              'modality': 'asserted', 'effective_modality': 'asserted'}
     ownership = {**r40['extraction'], 'brand_claims': [claim], 'sources_cited': ['trueshopstore.com']}
-    assert bdc.classify(ownership, WS_BRAND, brand_facts=TENANT_FACTS)[0] == 'fabricated'
+    assert bdc.classify(ownership, WS_BRAND, brand_facts=STORE_FACTS)[0] == 'fabricated'
+    assert bdc.classify(ownership, WS_BRAND, brand_facts=TENANT_FACTS)[0] == 'grounded'
+    elsewhere = {**ownership, 'brand_claims': [{**claim, 'claim': 'Their official website is snugbrand.com.'}]}
+    assert bdc.classify(elsewhere, WS_BRAND, brand_facts=TENANT_FACTS)[0] == 'fabricated'
 
 
 def test_a_support_at_the_tenant_s_other_site_grounds_a_cited_answer():
@@ -148,7 +160,11 @@ def test_a_support_at_the_tenant_s_other_site_grounds_a_cited_answer():
     extraction = {**r40['extraction'], 'sources_cited': ['reddit.com']}
     assert bdc.classify_with_code(extraction, WS_BRAND, brand_facts=STORE_FACTS, grounding=r40['grounding'])[0] == 'echoed'
     assert bdc.classify_with_code(extraction, WS_BRAND, brand_facts=TENANT_FACTS, grounding=r40['grounding'])[::2] == (
-        'grounded', 'grounding_support')
+        'grounded', 'tenant_own_domains')
+    retailer = {**r40['grounding'], 'sources': [{**r40['grounding']['sources'][0], 'domain': 'trueshopstore.com',
+                                                 'title': 'trueshopstore.com'}]}
+    assert bdc.classify_with_code(extraction, WS_BRAND, brand_facts=TENANT_FACTS, grounding=retailer)[::2] == (
+        'grounded', 'grounding_support')            # the merchant's own site: #104's code, as before
 
 
 # ═══ the rescore, on the 229-shaped fixture ═══════════════════════════════
@@ -220,24 +236,27 @@ def test_the_fixture_s_stored_outcomes_are_what_the_store_only_record_gives(cycl
         assert bdc.classify(extraction, WS_BRAND, brand_facts=STORE_FACTS, grounding=grounding)[0] == outcome, run_id
 
 
-def test_the_dry_run_moves_one_row_echoed_to_grounded_and_writes_nothing(cycle_229, capsys):
+def test_the_dry_run_moves_12979_and_12975_to_grounded_and_writes_nothing(cycle_229, capsys):
     before = _outcomes(cycle_229)
     assert rc.main(['--cycle', CYCLE, '--classify-only', '--dry-run']) == 0
     out = capsys.readouterr().out
-    assert 'rows whose outcome moved: 1 of 8' in out
-    assert ('WIG_144 · gemini_grounded · run 1: echoed -> grounded   [brand-direct: every own domain of '
-            'every merchant in the tenant is ours (2D)]   [run 12979]') in out
+    rule = 'brand-direct: every own domain of every merchant in the tenant is ours (2D)'
+    assert 'rows whose outcome moved: 2 of 8' in out
+    assert f'WIG_141 · gemini_grounded · run 1: fabricated -> grounded   [{rule}]   [run 12975]' in out
+    assert f'WIG_144 · gemini_grounded · run 1: echoed -> grounded   [{rule}]   [run 12979]' in out
     assert 'unattributed moves: 0' in out and 'dry run — nothing written.' in out
     assert _outcomes(cycle_229) == before
 
 
-def test_the_write_moves_only_12979_and_the_fabricated_count_holds(cycle_229, capsys):
+def test_the_write_moves_only_12979_and_12975(cycle_229, capsys):
     before = _outcomes(cycle_229)
     assert rc.main(['--cycle', CYCLE, '--classify-only']) == 0
     after = _outcomes(cycle_229)
-    assert {r: (before[r], after[r]) for r in before if before[r] != after[r]} == {12979: ('echoed', 'grounded')}
+    assert {r: (before[r], after[r]) for r in before if before[r] != after[r]} == {
+        12975: ('fabricated', 'grounded'), 12979: ('echoed', 'grounded')}
     fabricated = lambda o: sum(v == 'fabricated' for v in o.values())
-    assert fabricated(before) == fabricated(after) == 4
+    assert (fabricated(before), fabricated(after)) == (4, 3)      # r41 huggies.com, r42 unresolved, r45 invented tiers
     with cycle_229.connect() as c:
-        assert c.execute(text("SELECT reason_code FROM soa_expectation_outcomes WHERE run_id = 12979")).scalar() == \
-            'tenant_own_domains'
+        codes = dict(c.execute(text("SELECT run_id, reason_code FROM soa_expectation_outcomes "
+                                    "WHERE run_id IN (12975, 12979)")).all())
+    assert codes == {12975: 'tenant_own_domains', 12979: 'tenant_own_domains'}
