@@ -41,12 +41,14 @@ from sqlalchemy import text
 from app.auth import verify_token
 from app.console_scope import console_scope, cycle_customer_org_sql, cycle_in_scope
 from app.customer_context import CustomerScope
+from app.console_merchants import MerchantScope, check_merchant, merchant_cycles, merchant_scope, study_merchants, with_domains
 from app.routers import full_loop
 from app.routers.customers import _tenant_view
 from app.services import console_parity as parity
 from app.services import console_read_models as rm
 from app.services import console_score as score_svc
 from clients import truesync_client as supply_fields
+from clients.truesync_client import TrueSyncClient
 from soa_shared import customers, surface_accuracy, surfaces
 from soa_shared.database import engine
 
@@ -122,6 +124,8 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     reused. Every sentence is a template filled from counts (console_parity.
     TEMPLATES). With `merchant`, the last access run feeds the access signal;
     a failed read leaves it out and is named in `read_errors`."""
+    if merchant:
+        await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     row = dict(cycle_in_scope(cycle, scope))
     with engine.connect() as conn:
         rows = parity.load_overview_rows(conn, row)
@@ -175,6 +179,8 @@ async def get_score(cycle: str = Query(...), merchant: Optional[str] = Query(Non
     2C-3a: never a 500 for a cycle in scope. A failure while scoring is
     logged (score.failed: the cycle, the step, the exception, no row data)
     and returned as a 422 whose detail is one line the tile shows."""
+    if merchant:
+        await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     if rescore and not customers.is_operator(user.get("sub")):
         raise HTTPException(status_code=403, detail="operator only: re-scoring a cycle is for Parleo staff")
     row = dict(cycle_in_scope(cycle, scope))
@@ -390,6 +396,7 @@ def _value_outcomes(conn, row) -> list:
 
 @router.get("/accessibility")
 async def get_accessibility(merchant: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+    await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     client = full_loop._client(scope)
     (status, payload, error), (_, reference, r_err), (_, retailers, o_err) = await asyncio.gather(
         client.get_access(merchant), client.get_reference(merchant), client.get_retailers(merchant))
@@ -460,6 +467,7 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
     "not connected" for a tenant with no MC account), last verified, and
     the validator lines and artifact per cell. Assembled from supply with
     the tenant token (rm.build_truesync)."""
+    await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     client = full_loop._client(scope)
     (c_status, channels, c_err), (p_status, pubs, p_err), (k_status, catalog, k_err), (_, prov, prov_err) = \
         await asyncio.gather(client.get_channels(), client.get_publications(limit=500),
@@ -523,6 +531,7 @@ async def get_record_list(merchant: str = Query(...), scope: CustomerScope = Dep
     merchant's record (supply's published catalog, or an external merchant's
     current feed), each with its status. A merchant with no record yet is an
     empty list, not an error."""
+    await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     got = await _record_inputs(merchant, scope, incentives=False)
     return rm.build_record_list(merchant, got['catalog'], merchant_record=got['merchant_record'],
                                 publications=got['publications'], channels=got['channels'],
@@ -538,6 +547,7 @@ async def get_record(merchant: str = Query(...), product: str = Query(...),
     the validator's issues, the variants with member prices, and the
     compiled schema.org artifact. `product` is the list's `sku` (or the
     listing id)."""
+    await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     got = await _record_inputs(merchant, scope, incentives=True)
     listing = next((l for l in (got['catalog'] or {}).get('listings') or []
                     if product in (rm._listing_sku(l), str(l.get('listing_id')))), None)
@@ -614,9 +624,12 @@ def _scope_cycles(conn, scope):
 
 
 @router.get("/runs")
-def get_runs(scope: CustomerScope = Depends(console_scope)):
+def get_runs(ms: MerchantScope = Depends(merchant_scope)):
+    """The scope's cycles, newest first. 2H: the merchant's only (`?merchant=`,
+    else the primary): a merchant with none gets an empty list, never another
+    merchant's cycles."""
     with engine.connect() as conn:
-        cycles = _scope_cycles(conn, scope)
+        cycles = merchant_cycles(conn, ms)
         out = []
         for cycle in cycles:
             counts = conn.execute(text("""
@@ -629,12 +642,18 @@ def get_runs(scope: CustomerScope = Depends(console_scope)):
 
 
 @router.get("/studio/studies")
-def get_studio_studies(scope: CustomerScope = Depends(console_scope)):
+def get_studio_studies(ms: MerchantScope = Depends(merchant_scope)):
+    """2H: the studies generated for the merchant (`?merchant=`, else the
+    primary), each naming its merchant."""
+    scope = ms.scope
+    names = {m.get('slug'): m.get('name') for m in ms.merchants}
     with engine.connect() as conn:
+        studies = study_merchants(conn, scope.org.id)
         jobs = [dict(j) for j in conn.execute(text("""
             SELECT * FROM soa_query_generation_jobs
             WHERE COALESCE(customer_organization_id, organization_id) = :org ORDER BY created_at DESC
         """), {"org": scope.org.id}).mappings()]
+        jobs = [j for j in jobs if ms.owns(studies.get(j['study_type']))]
         out = []
         for job in jobs:
             brand = ((_json(job.get('tier_config')) or {}).get('merchant') or {}).get('study_brand')
@@ -653,6 +672,8 @@ def get_studio_studies(scope: CustomerScope = Depends(console_scope)):
             study = rm.build_study(job, prompts, cycles, entities)
             # 2C-2c: branded = the tiered questions (they name the brand)
             study['prompt_counts'] = rm.prompt_counts(prompts)
+            slug = studies.get(job['study_type']) or ms.primary
+            study['merchant'] = {'slug': slug, 'name': names.get(slug) or slug} if slug else None
             out.append(study)
     return out
 
@@ -678,6 +699,10 @@ def get_studio_entities(scope: CustomerScope = Depends(console_scope)):
     return [rm.build_entity(dict(r)) for r in rows]
 
 
+async def _none():
+    return []
+
+
 @router.get("/me")
 async def get_me(user: dict = Depends(verify_token)):
     """2C-0: the console's workspace switcher. The orgs this login may select
@@ -692,9 +717,14 @@ async def get_me(user: dict = Depends(verify_token)):
     record read fails is still listed, with kind/hosting/domain null and the
     error, rather than vanishing from the switcher."""
     user_id = user.get("sub")
-    views = await asyncio.gather(*(_tenant_view(org) for org in customers.selectable_orgs(user_id)))
+    selectable = customers.selectable_orgs(user_id)
+    views = await asyncio.gather(*(_tenant_view(org) for org in selectable))
+    # 2H: each org's merchants, with their own domains, read with that org's token
+    merchant_lists = await asyncio.gather(*(
+        with_domains(TrueSyncClient(token=customers.token_for_org(org.id)), view.get("merchants") or [])
+        if view.get("merchants") else _none() for org, view in zip(selectable, views)))
     orgs = []
-    for view in views:
+    for view, merchants in zip(views, merchant_lists):
         first = (view.get("merchants") or [None])[0] or {}
         orgs.append({
             "id": view["org_id"],
@@ -704,7 +734,7 @@ async def get_me(user: dict = Depends(verify_token)):
             "hosting": first.get("hosting"),
             "domain": first.get("domain"),
             "tenant_slug": view["tenant_slug"],
-            "merchants": view.get("merchants") or [],
+            "merchants": merchants,
             "error": view.get("error"),
         })
     return {
@@ -715,16 +745,19 @@ async def get_me(user: dict = Depends(verify_token)):
 
 
 @router.get("/full-loop/latest")
-async def get_console_full_loop_latest(scope: CustomerScope = Depends(console_scope)):
+async def get_console_full_loop_latest(ms: MerchantScope = Depends(merchant_scope)):
     """2C-0: the scope's most recent full loop in the shape /full-loop/{id}
     returns, or null when the org has never run one (the console's status
     strip shows "no run yet", which is not an error). Declared before
     /full-loop/{request_id} so 'latest' is never read as an id."""
+    # 2H: the merchant's latest (`?merchant=`, else the primary's)
+    scope = ms.scope
     with engine.connect() as conn:
         request_id = conn.execute(text("""
             SELECT id FROM soa_full_loop_requests WHERE organization_id = :org
+              AND (:m IS NULL OR merchant_slug = :m)
             ORDER BY created_at DESC, id DESC LIMIT 1
-        """), {"org": scope.org.id}).scalar()
+        """), {"org": scope.org.id, "m": ms.slug}).scalar()
     if request_id is None:
         return None
     return await full_loop.read_full_loop(request_id, scope)

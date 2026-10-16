@@ -125,6 +125,15 @@ async def start_full_loop(body: FullLoopStart, scope: CustomerScope = Depends(co
         owner = _study_org(conn, body.study_type)
     if owner != scope.org.id:
         raise HTTPException(status_code=404, detail=f"study {body.study_type!r} not found")
+    # 2H: a study is generated for one merchant, and the loop runs for that
+    # one: the coordinator keys every step on merchant_slug. Checked from the
+    # study's job, not supply, so starting a loop still makes no supply call.
+    # A study with no merchant recorded predates 2H and is not checked.
+    from app.console_merchants import study_merchants
+    with engine.connect() as conn:
+        study_merchant = study_merchants(conn, scope.org.id).get(body.study_type)
+    if study_merchant and study_merchant != body.merchant_slug:
+        raise HTTPException(status_code=404, detail=f"merchant {body.merchant_slug!r} not found for study {body.study_type!r}")
     # 2D: the request stores resolved ids, never an alias ("gemini" is
     # gemini_api); an unknown name is a 422. 229 was created from a request
     # that stored "gemini".

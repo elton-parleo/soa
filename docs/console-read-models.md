@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D, 2E, 2E-2, 2G)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D, 2E, 2E-2, 2G, 2H)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -1947,6 +1947,52 @@ counts are untouched.
 `tests/fixtures/console/supply_retailer_prices_ws_availability.json` is the recorded W&S retailer-prices payload with
 each readable row's availability as supply's own reader stores it (`parse._availability` on the store's
 `https://schema.org/InStock`).
+
+## 2H: one org, several merchants
+
+The Wiggle & Snug org (10) holds two supply merchants: the store (`wiggle-and-snug`, seller, Parleo-hosted,
+trueshopstore.com) and the brand (`wiggle-and-snug-brand`, brand, customer-hosted, wiggleandsnug.com). The console picks
+one, and every read names it with `?merchant=`. Code: `app/console_merchants.py`. Tests: `tests/test_console_2h.py` (both
+databases) and `apps/pipeline/tests/test_full_loop_coordinator.py` (the worker).
+
+**The merchants.** `GET /api/console/me` gives each org `merchants`, in supply's `/tenant` order (the Command Center's,
+by slug), read with that org's own token. The own domain comes from `/merchants/{slug}/retailers` (`own_domains[0]`, else
+`own_domain`, else the tenant record's domain). The first merchant is `primary`: the one 2C-0 used for everything, so a
+call that names no merchant behaves as before. The org's own `slug`/`kind`/`hosting`/`domain` stay the primary's.
+
+```json
+"merchants": [
+  {"slug": "wiggle-and-snug", "name": "Wiggle & Snug", "kind": "seller", "hosting": "parleo",
+   "domain": "trueshopstore.com", "primary": true},
+  {"slug": "wiggle-and-snug-brand", "name": "Wiggle & Snug Brand", "kind": "brand", "hosting": "external",
+   "domain": "wiggleandsnug.com", "primary": false}
+]
+```
+
+**`?merchant=`.** A slug that is not one of the org's is a 404 ("merchant 'x' not found"), like a cross-tenant read. When
+the tenant cannot be read, a named merchant passes unverified, and supply refuses one that is not the token's.
+
+| endpoint | before 2H | 2H |
+|---|---|---|
+| `/accessibility`, `/truesync`, `/record`, `/record/list`, `/catalog` | took `merchant` (required) | the 404 check |
+| `/overview`, `/score` | took `merchant` (optional; the cycle's own otherwise) | the 404 check when named |
+| `/true-value`, `/programs` | took `merchant` | unchanged |
+| `/runs` | per org | **gained** `?merchant=`: that merchant's cycles, else the primary's |
+| `/full-loop/latest` | per org | **gained** `?merchant=`: that merchant's latest loop, else the primary's |
+| `/studio/studies` | per org | **gained** `?merchant=`: that merchant's studies, each with `merchant: {slug, name}` |
+| `POST /api/full-loop` | `merchant_slug` in the body, unchecked | must be the merchant the study was generated for (404 otherwise), checked from the study's job, so starting a loop still makes no supply call |
+| cycle-scoped reads (`/answers`, `/visibility`, `/true-value?cycle=` …) | by cycle | unchanged: a cycle is one merchant's |
+
+**A cycle belongs to one merchant.** It's the one its study was generated for: `soa_query_generation_jobs.syndicated_merchant`,
+else the merchant in its `tier_config`. A cycle whose study names none predates 2H and belongs to the primary. A merchant
+with no cycle gets an empty list, never another merchant's cycles.
+
+**The worker.** The coordinator already keys every step on the request's `merchant_slug` (2A, #101): supply's POST, the
+poll, the cycle code (`FL<run>-<merchant>-<date>`) and the PATCH. The new test runs a brand request end to end. Nothing in
+2H runs the brand's first loop.
+
+**Studies.** Create Study already lists the org's merchants (`/studies/options`) and takes `syndicated_merchant`; the
+console defaults it to the selected merchant.
 
 ## Answer divergences
 

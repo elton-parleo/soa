@@ -379,7 +379,8 @@ def test_accessibility_is_proxied_with_claude_in_the_vocabulary(http, upstream):
     assert claude['vendor'] == 'claude'
     # 2C-2: an identity with no verified UA is not measured, and not a problem.
     assert claude['measured'] is False and access['problems'] == 0
-    assert [c['token'] for c in upstream.calls] == [TOKEN_A, TOKEN_A, TOKEN_A]   # access, reference, retailers (2E)
+    # access, reference, retailers (2E), and (2H) /tenant for the merchant check
+    assert [c['token'] for c in upstream.calls] == [TOKEN_A] * 4
 
 
 def test_studies_are_study_rows(http):
@@ -571,7 +572,8 @@ def test_accessibility_uses_the_scoped_tenants_token(http, upstream):
                     body=_fixture('supply_access_ws.json'), token=TOKEN_A)
     as_('bob')
     assert http.get('/api/console/accessibility', params={'merchant': 'wiggle-and-snug'}).status_code == 404
-    assert [c['token'] for c in upstream.calls] == [TOKEN_B, TOKEN_B, TOKEN_B]   # access, reference, retailers (2E)
+    # access, reference, retailers (2E), and (2H) /tenant for the merchant check
+    assert [c['token'] for c in upstream.calls] == [TOKEN_B] * 4
 
 
 def test_full_loop_is_tenant_scoped(http, upstream):
@@ -621,7 +623,8 @@ def test_me_pins_a_member_to_their_own_org(http, upstream):
     me = http.get('/api/console/me').json()
     assert me['is_operator'] is False
     assert [o['id'] for o in me['orgs']] == [10]
-    assert [c['token'] for c in upstream.calls] == [TOKEN_A]
+    # /tenant, then (2H) each merchant's /retailers for its own domain: the member's own token only
+    assert {c['token'] for c in upstream.calls} == {TOKEN_A}
 
 
 def test_me_still_lists_an_org_whose_record_read_fails(http, upstream):
