@@ -1,0 +1,98 @@
+name: CI
+
+# 2D: the api and pipeline suites on every push and PR, each on sqlite AND
+# on a throwaway Postgres with production's column types. SOA_TEST_PG_URL is
+# what turns the Postgres runs on (packages/testing/soa_pg_harness.py); under
+# GitHub Actions a Postgres test with it unset fails rather than skips, and
+# an unreachable database fails too. 2C-3's SELECT DISTINCT over a json
+# column reached production because nothing ran these.
+#
+# Postgres 17: production's version is not recorded in the repo docs, and
+# 17 is the current Supabase major. Change the image when production's is
+# known to differ.
+#
+# No secrets. DATABASE_URL is a dead local port: soa_shared/database.py
+# builds its engine at import, every test swaps in its own, and one that
+# forgot would fail here rather than reach anything. The model API keys are
+# placeholders, not keys: ten pipeline tests construct a runner or the
+# coder, whose constructors refuse an unset key, and mock every call after
+# that. A dev checkout gets them from .env; nothing here can reach a model.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: postgresql://nobody@127.0.0.1:1/unused
+  SOA_TEST_PG_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+  PYTHONDONTWRITEBYTECODE: "1"
+  OPEN_AI_API_KEY: ci-placeholder-not-a-key
+  GEMINI_API_KEY: ci-placeholder-not-a-key
+  PERPLEXITY_API_KEY: ci-placeholder-not-a-key
+  ANTHROPIC_CLAUDE_API_KEY: ci-placeholder-not-a-key
+
+jobs:
+  api:
+    name: API tests (sqlite + Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: apps/api/requirements.txt
+      - run: pip install -r requirements.txt pytest==7.3.1
+      - run: python -m pytest -q -p no:cacheprovider -rfEs
+
+  pipeline:
+    name: Pipeline tests (sqlite + Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: apps/pipeline
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: apps/pipeline/requirements.txt
+      - run: pip install -r requirements.txt pytest==7.3.1
+      - run: python -m pytest -q -p no:cacheprovider -rfEs

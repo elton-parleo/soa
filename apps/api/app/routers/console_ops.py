@@ -302,7 +302,13 @@ async def start_console_cycle(body: ConsoleCycleStart, scope: CustomerScope = De
     primary entity."""
     if not 1 <= body.runs_per_query <= 10:
         raise HTTPException(status_code=422, detail="runs_per_query is 1 to 10")
-    refused = [f"{p}: {surfaces.unavailable_reason(p)}" for p in body.platforms if surfaces.unavailable_reason(p)]
+    # 2D: resolved here, so an unknown name is this 422 and not a validation
+    # error inside CreateCycleRequest below
+    try:
+        platforms = surfaces.resolve_platforms(body.platforms)
+    except surfaces.UnknownSurface as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    refused = [f"{p}: {surfaces.unavailable_reason(p)}" for p in platforms if surfaces.unavailable_reason(p)]
     if refused:
         raise HTTPException(status_code=422, detail="surface cannot run: " + "; ".join(refused))
     comparison = cs.comparison_set_for(body.study_type, scope.org.id)
@@ -311,7 +317,7 @@ async def start_console_cycle(body: ConsoleCycleStart, scope: CustomerScope = De
             f"study {body.study_type!r} is not this customer's, or has no entity to measure; "
             "create its first cycle in Command Center"))
     code = body.cycle_code or f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{body.study_type}"
-    request = CreateCycleRequest(cycle_code=code, study_type=body.study_type, platforms=body.platforms,
+    request = CreateCycleRequest(cycle_code=code, study_type=body.study_type, platforms=platforms,
                                  runs_per_query=body.runs_per_query, notes=body.notes,
                                  comparison_set=[ComparisonEntityInput(**c) for c in comparison])
     return cycles_router.create_cycle(request, current_user=_as_user(user)).model_dump()

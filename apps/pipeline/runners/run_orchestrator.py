@@ -58,13 +58,12 @@ _RUNNER_CLASSES: Dict[str, type] = {
     "copilot": CopilotRunner,
 }
 
-# Gemini always runs grounded. The ungrounded API has no live retrieval and
-# answers from training data, so it is never run: a cycle that lists
-# "gemini" (any cycle created before grounding became the default) runs it
-# as "gemini_grounded", and its runs are stored under that name.
-PLATFORM_ALIASES: Dict[str, str] = {
-    "gemini": "gemini_grounded",
-}
+# 2D: no aliases of its own. A name is resolved by soa_shared/surfaces.py,
+# the one resolver cycle creation also uses, so a cycle runs what it stored.
+# Before 2D this mapped "gemini" to "gemini_grounded" at run time while the
+# cycle kept "gemini": cycle 229's drift (docs/console-read-models.md, 2D).
+# "gemini" now means gemini_api, explicitly; there is no fallthrough from a
+# bare name to a grounded runner.
 
 # Per-platform max concurrent connections (claude=1 to avoid 429 rate-limit)
 _PLATFORM_MAX_CONCURRENT: Dict[str, int] = {
@@ -80,8 +79,15 @@ _PLATFORM_MAX_CONCURRENT: Dict[str, int] = {
 
 
 def normalize_platforms(platforms: List[str]) -> List[str]:
-    """Applies PLATFORM_ALIASES, dropping any duplicate it creates."""
-    return list(dict.fromkeys(PLATFORM_ALIASES.get(p, p) for p in platforms))
+    """Each name resolved to its surface id (surfaces.resolve_platforms),
+    each once. An unknown name raises UnknownSurface, a ValueError. A cycle
+    created before 2D may still store an alias: that is logged."""
+    resolved = surfaces.resolve_platforms(platforms)
+    aliased = [p for p in platforms if p in surfaces.ALIASES]
+    if aliased:
+        logger.warning("platforms %s are aliases, run as %s (2D: cycles store resolved ids)",
+                       aliased, [surfaces.ALIASES[p] for p in aliased])
+    return resolved
 
 
 # Per-platform inter-run delays (claude needs a wider gap to avoid burst limits)
@@ -146,7 +152,7 @@ class RunOrchestrator:
             # switched off, or one with no verified provider) is refused
             # with its reason, never silently skipped.
             reason = surfaces.unavailable_reason(platform) if surfaces.get(platform) else None
-            if reason and platform not in ("gemini",):
+            if reason:
                 raise ValueError(f"Surface {platform!r} cannot run: {reason}")
         unknown = set(self.platforms) - set(_RUNNER_CLASSES)
         if unknown:

@@ -253,6 +253,7 @@ RULES = {
     'other_brand': "another brand's price (Layer 2 other_brands_named) is never ours",
     'grounding_support': 'brand-direct: a claim grounded by a platform support at a merchant domain',
     'own_domains': "brand-direct: the merchant's own domains are a list",
+    'tenant_own_domains': "brand-direct: every own domain of every merchant in the tenant is ours (2D)",
     'program_name_not_tier': "brand-direct: the programme's name is not a tier claim",
 }
 
@@ -384,7 +385,8 @@ def classify_only(cycle_code: str, tiers=None, *, scorer=None, write: bool = Tru
             surface=row['surface'], answer_status=row['answer_status'],
         )
         kwargs = dict(history=scorer.history, brand_facts=scorer.brand_facts,
-                      references=scorer.references, domain_checker=scorer.domain_checker)
+                      references=scorer.references, domain_checker=scorer.domain_checker,
+                      tenant_domains=getattr(scorer, 'tenant_domains', None))
         first = classify(run, expectation, extraction, **kwargs)
         second = classify(run, expectation, extraction, **kwargs)
         plan.append((row, run, expectation, extraction, first, second))

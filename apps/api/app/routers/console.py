@@ -614,13 +614,19 @@ def get_studio_studies(scope: CustomerScope = Depends(console_scope)):
 @router.get("/studio/entities")
 def get_studio_entities(scope: CustomerScope = Depends(console_scope)):
     """The entities this tenant's cycles compare: soa_entities is a global
-    registry, so it is narrowed to what this org's studies actually use."""
+    registry, so it is narrowed to what this org's studies actually use.
+
+    2D: no DISTINCT. soa_entities.aliases is a Postgres json column, which
+    has no equality operator: SELECT DISTINCT e.* raised UndefinedFunction
+    in production, as #111's did (sqlite's TEXT hid it). One row per entity
+    by subquery instead."""
     with engine.connect() as conn:
         rows = conn.execute(text(f"""
-            SELECT DISTINCT e.* FROM soa_entities e
-            JOIN soa_cycle_entities ce ON ce.entity_id = e.id
-            JOIN soa_cycles c ON c.id = ce.cycle_id
-            WHERE {cycle_customer_org_sql()} = :org
+            SELECT e.* FROM soa_entities e
+            WHERE e.id IN (
+                SELECT ce.entity_id FROM soa_cycle_entities ce
+                JOIN soa_cycles c ON c.id = ce.cycle_id
+                WHERE {cycle_customer_org_sql()} = :org)
             ORDER BY e.name
         """), {"org": scope.org.id}).mappings().all()
     return [rm.build_entity(dict(r)) for r in rows]

@@ -218,6 +218,40 @@ class TrueSyncCatalogClient:
         {own_domain, domains} — the retailer sites the feed may name."""
         return self._get(f"/api/truesync/merchants/{merchant_slug}/retailers")
 
+    def tenant_own_domains(self) -> tuple:
+        """
+        2D: (every own domain of every merchant in this tenant, error).
+
+        A tenant can hold a store and its brand as two merchants (Wiggle &
+        Snug: trueshopstore.com and wiggleandsnug.com), and the brand-direct
+        classifier treats a source at any of them as the brand's own. One
+        GET /tenant, then GET /merchants/{slug}/retailers per merchant: its
+        own_domains list, else the deprecated single own_domain. Normalized,
+        in tenant order, each once. A merchant whose read fails is left out
+        and named in the error; a refusal raises, as every read does.
+        """
+        from soa_shared.expected_answers import normalize_domain
+
+        payload, error = self.tenant()
+        if error is not None:
+            return [], error
+        domains, errors = [], []
+        for merchant in (payload or {}).get("merchants") or []:
+            slug = merchant.get("slug")
+            if not slug:
+                continue
+            retailers, read_error = self.retailers(slug)
+            if read_error is not None:
+                errors.append(f"{slug}: {read_error}")
+                continue
+            listed = (retailers or {}).get("own_domains")
+            if not listed:
+                listed = [(retailers or {}).get("own_domain")]
+            for domain in (normalize_domain(d) for d in listed):
+                if domain and domain not in domains:
+                    domains.append(domain)
+        return domains, ("; ".join(errors) or None)
+
     def feed(self, merchant_slug: str) -> tuple:
         """(payload, error) for GET /merchants/{slug}/feed: the current feed
         version, row by row, each row with its retailers [{domain, url}]."""

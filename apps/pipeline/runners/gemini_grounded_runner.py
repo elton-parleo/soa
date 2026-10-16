@@ -1,8 +1,9 @@
 """
 Grounded Gemini runner for SoA measurement — platform "gemini_grounded".
 
-This is the only Gemini surface cycles run: a cycle that lists "gemini" is
-run as "gemini_grounded" (see PLATFORM_ALIASES in run_orchestrator.py).
+A cycle runs it only by this name. 2D: "gemini" is the ungrounded
+gemini_api (soa_shared/surfaces.py ALIASES); until 2D it was aliased here
+when a cycle ran, which is why cycle 229's runs are on grounded_api.
 The base Gemini API (gemini_runner.py) has no live retrieval, so it answers
 from training data alone — stale program names, stale prices, no sources.
 This runner enables the google_search grounding tool so the model can

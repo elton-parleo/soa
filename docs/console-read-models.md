@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -1411,6 +1411,203 @@ its message, at most 200 characters, no row data). A read served from the stored
 
 **Deploy.** A redeploy of soa only: no migration (`f3b8d2a6c4e1` is already applied), no console change
 (the tile already shows the 422's detail as its error).
+
+## 2D: three fixes before the next full loop
+
+### 2D-1: Postgres in CI, and the json-column sweep
+
+**CI.** `.github/workflows/ci.yml` (the repo had no workflow) runs the api and pipeline suites on every
+push and PR, each beside a `postgres:17` service container, with `SOA_TEST_PG_URL` pointing at it.
+Production's Postgres version is not recorded in the repo docs, so the image is the current Supabase
+major; change it if production's differs. `DATABASE_URL` is a dead local port, so a test that forgot to
+swap in its own engine fails rather than reaching anything. No secrets.
+
+**The harness.** `packages/testing/soa_pg_harness.py`, imported by both suites' conftests:
+`sqlite_engine()`, `postgres_engine()`, `model_schema(engine)` (every soa_shared model's table with
+production's types), and the fixtures `any_engine` (each test on sqlite, then Postgres) and `pg_engine`.
+`SOA_TEST_PG_URL` unset: the Postgres runs skip locally and **fail under GitHub Actions**. Set to a host
+that is not local: fail (each test drops the public schema). Set and unreachable: fail, never skip.
+
+**The sweep.** Every `json` column in the soa_shared models (41, none `jsonb`), against every
+`DISTINCT`, `GROUP BY`, `UNION`, `IN (subquery)` and `=` in `apps/api/app` (read models and routers),
+`soa_shared` and the rescore script. Each hit has a test in `apps/api/tests/test_pg_json_sweep.py` that
+calls the real function on both databases over the full model schema.
+
+| statement | where | lands on json? | Postgres |
+|---|---|---|---|
+| `SELECT DISTINCT e.* FROM soa_entities e JOIN soa_cycle_entities ...` | `GET /api/console/studio/entities` | **yes, `soa_entities.aliases`** | **failed** (`UndefinedFunction`), fixed: `WHERE e.id IN (SELECT ce.entity_id ...)` |
+| `SELECT q.query_code, q.expected_answer ... WHERE q.id IN (SELECT r.query_id ...)` | `console_score.load_score_runs` (#111's fix) | selected, not compared | passes |
+| `SELECT DISTINCT study_pattern FROM soa_queries` | `POST /api/cycles` | no (text) | passes |
+| `COUNT(DISTINCT cm.run_id)` | `public_lite._fetch_live_progress_counts` | no (integer) | passes |
+| `SELECT DISTINCT query_id`, `COUNT(DISTINCT query_id)` | `transcript_pick._fetch_query_index_map` | no (integer) | passes |
+| `GROUP BY r.platform`, `COUNT(DISTINCT r.id)` | `full_analysis_extras._fetch_platform_signals` | no | passes |
+| `GROUP BY ce.comparison_code, cm.position` | `GET /api/cycles/{code}/positions` | no | passes |
+| `GROUP BY q.study_type, q.category, q.study_pattern`, `GROUP BY c.study_type`, `GROUP BY study_pattern` | `GET /api/studies`, `GET /api/studies/{type}/queries` | no | passes |
+| `GROUP BY r.id` (twice each) | `cycle_scoring._fetch_run_signals`, `lite_score_batch._fetch_run_signals_batch` | no (aggregates only) | passes |
+| `GROUP BY tier, platform, outcome`, `... source_attribution`, `GROUP BY q.tier, r.platform`, `GROUP BY tier` | `tier_accuracy` | no | passes |
+| `GROUP BY COALESCE(o.surface, r.surface), o.platform, o.outcome`, `GROUP BY surface, platform, status, answer_status` | `soa_shared.surface_accuracy` | no | passes |
+| ORM `group_by(entity_id, platform)` | `finding_detector.detect_vis_01` | no | passes |
+| `GROUP BY tier, outcome` | `scripts/rescore_cycle.outcome_counts` | no | passes (2D-3's fixture, both databases) |
+
+No `UNION` and no `=` against a json column anywhere in those paths; the only `IN (subquery)` is
+#111's. **CI goes red on #111's `DISTINCT`**: proven with a throwaway commit on the 2D branch that put
+it back (the PR body has the run), then dropped.
+
+### 2D-2: surface aliases
+
+**The resolution table before 2D** (read from `main` at 376d7d5, before any change). A *name* is what a
+caller sends; the *runner* is the class that runs it; *stored* is what lands on the cycle and on each run.
+
+| where a name is resolved | `gemini` | `gemini_grounded` | `gemini_api` | unknown name | stored |
+|---|---|---|---|---|---|
+| runner registry, `runners/run_orchestrator._RUNNER_CLASSES` | not a key | `GeminiGroundedRunner` | `GeminiApiRunner` | not a key | - |
+| `run_orchestrator.PLATFORM_ALIASES` / `normalize_platforms`, applied when a cycle **runs** | **`gemini_grounded`** (grounded) | itself | itself | passed through, then `ValueError` "Unknown platforms" | `soa_runs.platform` = the aliased id, `surface` = its surface |
+| `RunOrchestrator` default (no platforms) | - | in the default four | - | - | - |
+| `worker.py` cycle with NULL `platforms` | - | `[chatgpt, gemini_grounded]` | - | - | - |
+| `POST /api/cycles`, `CreateCycleRequest.ground_gemini` | **`gemini_grounded`** | itself | itself | **accepted as sent** | `soa_cycles.platforms` |
+| `POST /api/console/cycles` | via `CreateCycleRequest`: `gemini_grounded` | itself | itself | 422 from `surfaces.unavailable_reason` ("unknown surface") | `soa_cycles.platforms` |
+| `POST /api/full-loop`, `/api/console/full-loop` | **accepted and stored as `gemini`** (`surfaces.LEGACY` has no unavailable reason) | itself | itself | 422 ("unknown surface") | `soa_full_loop_requests.platforms` as sent |
+| `fullloop/coordinator._create_cycle` | **passed through: `soa_cycles.platforms = ["gemini"]`** | itself | itself | passed through | `soa_cycles.platforms` as the request had it |
+| lite worker cycle creation | - | - | - | - | `["chatgpt"]` |
+| `GET /api/console/surfaces`, `/api/console/studies/options` `surfaces` (`surfaces.modal_list`) | never listed | listed, "API with search grounding" | listed, "API, no tools" | - | - |
+| reading a stored row: `surfaces.get` / `surface_of` / `agent_of` | `LEGACY`: `api`, agent gemini | `grounded_api` | `api` | `None` | - |
+| console read models' surface grouping, `console_parity._surface_of` | the row's stored `surface`, else `surface_of(platform)`: `api` | `grounded_api` | `api` | `unlabelled` | - |
+
+So the alias was resolved at **run** time, not at creation, and in two different places to the same
+grounded runner. Cycle 229 was created by the full loop with `["gemini"]` stored on the cycle, and its
+runs landed on `gemini_grounded` / `grounded_api`. The September cycle's `gemini` runs predate the alias
+(`platform = 'gemini'`, `surface = 'api'`). Same stored cycle name, two surfaces.
+
+**After 2D.** One resolver, `soa_shared/surfaces.resolve` (`ALIASES = {"gemini": "gemini_api"}`, explicit
+and complete), used at creation by every path and by the orchestrator:
+
+| where | `gemini` | `gemini_grounded` | `gemini_api` | unknown name | stored |
+|---|---|---|---|---|---|
+| `soa_shared/cycle_creation.create_cycle_with_comparison_set` (every caller) | `gemini_api` | itself | itself | `UnknownSurface`, nothing written | `soa_cycles.platforms` = resolved ids, `soa_cycles.surfaces` = `{id: surface}` (migration `a7d2c9e4b1f6`) |
+| `POST /api/cycles` (`CreateCycleRequest.resolve_surfaces`) | `gemini_api` | itself | itself | **422** | as above |
+| `POST /api/console/cycles` | `gemini_api` | itself | itself | **422** | as above |
+| `POST /api/full-loop`, `/api/console/full-loop` | `gemini_api` | itself | itself | **422** | `soa_full_loop_requests.platforms` = resolved ids |
+| `fullloop/coordinator._create_cycle` | `gemini_api` (a pre-2D request) | itself | itself | the request fails, with the reason | as above |
+| `run_orchestrator.normalize_platforms` (`PLATFORM_ALIASES` is gone) | `gemini_api`, logged as an alias | `GeminiGroundedRunner` | `GeminiApiRunner` | `ValueError` | `soa_runs.platform` = the id, `surface` = its surface |
+| `GET /api/console/surfaces`, `/studies/options` | never listed | listed with its fidelity | listed with its fidelity | - | - |
+| reading stored rows (`surfaces.get`, `_surface_of`) | unchanged: `LEGACY` `gemini` is `api` | unchanged | unchanged | unchanged | - |
+
+There is no fallthrough from a bare name to a grounded runner. **The next W&S full loop lands where 229
+did only if it asks for `gemini_grounded` by name**; `gemini` now runs the ungrounded API, which is where
+the September rows are. The Create Study picker (truesync `apps/console/src/screens/Studio.tsx`) already
+renders `/api/console/surfaces` as served, id, label, surface label and fidelity, so it needs no change.
+
+`soa_cycles.surfaces` is not mapped on `SoaCycle`, and `store_surfaces` writes it only when the column
+exists (a warning otherwise), so the deploy does not depend on the migration; apply it to record the
+surface on new cycles. Existing rows are not rewritten.
+
+**Where the drift is: `scripts/report_surface_drift.py`.** Read only (one SELECT, one GROUP BY, a READ
+ONLY transaction on Postgres). Per cycle: the stored names, what each means now, and the
+`(platform, surface, runs)` its rows carry under the name, under what it means now, and under what it
+meant before 2D. On the 229-shaped fixture as built (it stores the resolved `gemini_grounded`):
+
+```
+cycle FL3-wiggle-and-snug-20261014 (id 229)   DRIFT
+  stored platforms: ["chatgpt", "gemini_grounded"]   stored surfaces: (none, created before 2D)
+  chatgpt          means now: chatgpt (grounded_api)
+      rows: chatgpt on grounded_api x 258   ok
+  gemini_grounded  means now: gemini_grounded (grounded_api)
+      rows: gemini_grounded on consumer_ui x 2   DRIFT: on consumer_ui, the name now means grounded_api
+      rows: gemini_grounded on grounded_api x 256   ok
+```
+
+(the 2 consumer_ui rows are the fixture's two errored runs, labelled consumer_ui under the API id). With
+229 as production stores it, `["chatgpt", "gemini"]`, the same rows print:
+
+```
+  gemini           means now: gemini_api (api)
+      rows: gemini_grounded on consumer_ui x 2   DRIFT: on consumer_ui, the name now means api
+      rows: gemini_grounded on grounded_api x 256   DRIFT: on grounded_api, the name now means api
+```
+
+and a September-shaped cycle's `gemini` rows print `rows: gemini on api x N   ok`. Relabelling 229 is a
+separate decision; nothing here rewrites it.
+
+### 2D-3: the brand's own domains, tenant-wide
+
+**The rule.** A brand-direct answer is `grounded` when it cites one of *ours*, or a claim it asserts is
+backed by a platform grounding support whose source is one of ours or a listed retailer. Since 2D, *ours*
+is the merchant's own domains (its record's `own_domains`, else its one domain, else the expectation's)
+**plus every own domain of every merchant in its tenant**. Wiggle & Snug's store (trueshopstore.com) and
+its brand site (wiggleandsnug.com) are two supply merchants, so the store's list holds only the store, and
+cycle 229 run 12979, which cited wiggleandsnug.com, scored `echoed` on the store's cycle.
+
+- **The set.** `TrueSyncCatalogClient.tenant_own_domains`: one `GET /tenant`, then
+  `GET /merchants/{slug}/retailers` per merchant, its `own_domains` list, else the deprecated single
+  `own_domain`. Normalized (`www.`, scheme and path dropped), in tenant order, each once. Read with the
+  study's customer's token, so "the tenant" is that customer's.
+- **Once per scoring pass, cached on the cycle.** `expectation_scorer.TenantDomainsCache.for_cycle`, by
+  cycle id, for the life of the scorer (one live batch, or one rescore). It rides on the brand facts as
+  `tenant_own_domains`, for the brand-direct tier only.
+- **Degrading.** A merchant whose `/retailers` read fails is left out and named in a warning; a failed
+  `/tenant` read gives the rule before 2D (the merchant's own list). A refusal raises, as every catalog read.
+- **Every ownership check.** `brand_direct_classifier.ours` is read by all of them: the ownership claim
+  ("their official website is X") and the no-source check in `contradicted_claims` (through
+  `grounding_domains`), and the two grounded checks in `classify_with_code`. So a claim backed by a
+  support at the tenant's other site is sourced, not `fabricated`, and an answer citing that site is
+  `grounded`. The rule can move `echoed` and `fabricated` rows to `grounded`. (First landed with the
+  grounded checks only; widened in the fourth 2D commit.)
+- **Reason codes.** `tenant_own_domains` when the site that grounds the answer (cited, or a support's
+  source) is another merchant's; `own_domains`, `grounding_support` or none, as before, when it is the
+  merchant's own or a listed retailer. `rescore_cycle.py` names `tenant_own_domains`, so the
+  unattributed-moves guard passes it.
+- **Not the classifier.** `expectation_comparator`'s `source_split` (own / listed retailer / other, a
+  report field) still splits on the merchant's own list.
+
+**Golden gates.** Both untouched and passing. No verdict golden row depends on the single-merchant rule:
+r43 *is* run 12979, and expects `grounded` / `own_domains` because its `record_facts` list both domains on
+the store's own record; with no `tenant_own_domains` on a golden row, the classifier reads it exactly as
+before.
+
+**The rescore, on the 229-shaped fixture** (`tests/test_tenant_own_domains.py`: golden rows r40-r45, 229's
+Gemini answers with their grounding, and two ChatGPT rows, stored with the outcomes the store-only record
+gives; supply's `/tenant` and `/retailers` recorded, the store answering with the deprecated single field):
+
+```
+cycle FL3-wiggle-and-snug-20261014 (id 229) — classify-only: no model call; Layer 1 and the stored Layer 2 extraction are read as they are
+before:
+    brand_direct            8  (acknowledged_unknown 1, echoed 1, fabricated 4, grounded 2)
+
+classified 8 stored row(s) twice; both passes agree
+
+rows whose outcome moved: 2 of 8
+    WIG_141 · gemini_grounded · run 1: fabricated -> grounded   [brand-direct: every own domain of every merchant in the tenant is ours (2D)]   [run 12975]
+    WIG_144 · gemini_grounded · run 1: echoed -> grounded   [brand-direct: every own domain of every merchant in the tenant is ours (2D)]   [run 12979]
+
+unattributed moves: 0
+
+dry run — nothing written.
+```
+
+The write on the same fixture moves only those two (`reason_code = tenant_own_domains` on both).
+Fabricated goes from 4 to 3; the three left are r41 (support at huggies.com), r42 (a redirect that never
+resolved) and r45 (tiers the record does not publish).
+
+**For production (Elton runs these; nothing here touched production).** From `apps/pipeline`, on this
+branch's code, dry run first:
+
+```
+python3 scripts/rescore_cycle.py --cycle FL3-wiggle-and-snug-20261014 --tier brand_direct --classify-only --dry-run
+```
+
+Expected: runs 12979 (`echoed -> grounded`) and 12975 (`fabricated -> grounded`) move under "every own
+domain of every merchant in the tenant is ours (2D)", with `unattributed moves: 0`; fabricated drops by
+one. Any other row that moves under the same rule is the same case (a wiggleandsnug.com citation, support
+or ownership claim on the store's cycle) and is expected. If a row moves under any other rule, or is
+unattributed, stop. Then the write, which still refuses while any move is
+unattributed and re-checks that two passes agree:
+
+```
+python3 scripts/rescore_cycle.py --cycle FL3-wiggle-and-snug-20261014 --tier brand_direct --classify-only
+```
+
+If the dry run moves nothing, the store and the brand site are not both in the study's customer's tenant
+(`GET /tenant` with that token lists the merchants it reads).
 
 ## Answer divergences
 

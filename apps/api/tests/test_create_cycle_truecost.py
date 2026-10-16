@@ -89,13 +89,23 @@ def test_schema_defaults_cycle_mode_to_query():
     assert req.cycle_mode == "query"
 
 
-def test_schema_stores_gemini_as_grounded():
+def test_schema_resolves_gemini_to_the_ungrounded_api():
+    """2D: resolved ids, never the alias; gemini and gemini_grounded are two
+    surfaces (until 2D this stored ["chatgpt", "gemini_grounded"])."""
     req = CreateCycleRequest(
         cycle_code="q1", study_type="retailer_sephora",
         platforms=["chatgpt", "gemini", "gemini_grounded"],
         runs_per_query=3, comparison_set=_comparison_set(1, 2),
     )
-    assert req.platforms == ["chatgpt", "gemini_grounded"]
+    assert req.platforms == ["chatgpt", "gemini_api", "gemini_grounded"]
+
+
+def test_schema_rejects_an_unknown_surface():
+    with pytest.raises(ValidationError, match="unknown surface 'gemini_pro'"):
+        CreateCycleRequest(
+            cycle_code="q1", study_type="retailer_sephora", platforms=["gemini_pro"],
+            runs_per_query=3, comparison_set=_comparison_set(1, 2),
+        )
 
 
 def test_schema_rejects_invalid_cycle_mode():

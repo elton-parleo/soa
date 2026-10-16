@@ -5,19 +5,18 @@ Every test here runs on the console test database twice: sqlite (as every
 console test does) and, when SOA_TEST_PG_URL names a local Postgres, the same
 schema with production's column types (soa's JSON columns are Postgres json).
 The 500 reproduces only on the second: see test_the_229_cycle_scores. The
-Postgres run is skipped when the variable is unset, and refused for any host
-that is not local.
+harness (packages/testing/soa_pg_harness.py) skips the Postgres run when the
+variable is unset outside CI, and fails it for a host that is not local or a
+database it cannot reach.
 
     SOA_TEST_PG_URL=postgresql://postgres@127.0.0.1:55432/postgres pytest tests/test_console_2c3a.py
 """
 import json
 import logging
-import os
-from urllib.parse import urlparse
 
 import pytest
 from cryptography.fernet import Fernet
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 import app.console_scope as console_scope_module
 import app.routers.console as console_router
@@ -26,42 +25,26 @@ import app.routers.full_loop as full_loop_router
 import soa_shared.config as config
 import soa_shared.customers as customers
 from app.services import console_score as score_svc
+from soa_pg_harness import postgres_engine, sqlite_engine
 from tests import console_fixture_229 as f229
 from tests.test_console_read_models import (  # noqa: F401  (pytest fixtures)
     TOKEN_A, _encode, _fixture, as_, http, seed_console_db, upstream,
 )
 from tests.test_console_visibility_record import WS, ws_supply
 
-PG_URL = os.getenv('SOA_TEST_PG_URL')
-LOCAL_HOSTS = ('127.0.0.1', 'localhost', '::1')
-
-
 @pytest.fixture(params=['sqlite', 'postgres'])
 def db(request, monkeypatch):
     """The console test database on sqlite, or on a local Postgres with
-    production's types. Overrides test_console_read_models.db for this module."""
+    production's types (packages/testing/soa_pg_harness.py). Overrides
+    test_console_read_models.db for this module."""
     monkeypatch.setattr(config, "SOA_SECRET_KEY", Fernet.generate_key().decode())
     monkeypatch.setattr(config, "TRUESYNC_TENANT_TOKEN", "")
     monkeypatch.setattr(config, "TRUESYNC_API_BASE", "https://supply.example")
     if request.param == 'sqlite':
-        from sqlalchemy.pool import StaticPool
-        from datetime import datetime, timezone
-        from sqlalchemy import event
-        engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
-
-        @event.listens_for(engine, "connect")
-        def _now(dbapi_conn, _):
-            dbapi_conn.create_function("NOW", 0, lambda: datetime.now(timezone.utc).isoformat())
+        engine = sqlite_engine()
         seed_console_db(engine)
     else:
-        if not PG_URL:
-            pytest.skip('SOA_TEST_PG_URL is not set')
-        if urlparse(PG_URL).hostname not in LOCAL_HOSTS:
-            pytest.fail(f'SOA_TEST_PG_URL must be a local Postgres, not {urlparse(PG_URL).hostname}')
-        engine = create_engine(PG_URL)
-        with engine.begin() as c:
-            c.exec_driver_sql("DROP SCHEMA public CASCADE")
-            c.exec_driver_sql("CREATE SCHEMA public")
+        engine = postgres_engine()
         seed_console_db(engine, pk='SERIAL PRIMARY KEY', json='JSON')
     for module in (customers, console_scope_module, console_router, console_ops_router, full_loop_router):
         monkeypatch.setattr(module, "engine", engine)
