@@ -210,10 +210,8 @@ SOA_TRUESYNC_READ_TIMEOUT_SECONDS: float = float(
 
 # ── 2B: consumer surfaces through SerpApi ──────────────────────────────────
 # Google AI Mode (udm=50) and Bing Copilot, logged out, read by SerpApi.
-# Off unless SOA_CONSUMER_SURFACES_ENABLED=1 AND SERPAPI_API_KEY is set (see
-# soa_shared/surfaces.py). The key is read from the environment only, never
-# from a file in the repo. One SerpApi search per call is the cost unit.
-SOA_CONSUMER_SURFACES_ENABLED: bool = os.environ.get("SOA_CONSUMER_SURFACES_ENABLED") == "1"
-SERPAPI_API_KEY: str = os.environ.get("SERPAPI_API_KEY", "")
+# The worker runs them (SOA_CONSUMER_SURFACES_ENABLED and SERPAPI_API_KEY
+# are its settings, apps/pipeline/soa_shared/config.py); the API never calls
+# SerpApi and lists them from the worker's report (app/worker_surfaces.py).
 SOA_SERPAPI_MAX_CONCURRENT: int = int(os.environ.get("SOA_SERPAPI_MAX_CONCURRENT", "2"))
 SOA_SERPAPI_TIMEOUT_SECONDS: int = int(os.environ.get("SOA_SERPAPI_TIMEOUT_SECONDS", "120"))

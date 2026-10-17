@@ -106,6 +106,8 @@ def combined_status(row, *, supply_view: Optional[dict], supply_error: Optional[
              .get(cycle['status'], cycle['status']))
     scoring = 'not_applicable' if reads_only else {'scored': 'done', 'failed': 'failed'}.get(status, 'waiting')
     platforms = _platforms(row.get('platforms'))
+    # 2I-2: availability from the worker's report, not the API's environment
+    report = worker_surfaces.configured(engine) if platforms else {}
     # 2I: when the pages were read: supply's run finished_at, else (a row the
     # worker closed) the request's own last update
     read_at = ((supply_view or {}).get('finished_at') or (_iso(row.get('updated_at')) if status == 'reads_done' else None)) \
@@ -116,7 +118,7 @@ def combined_status(row, *, supply_view: Optional[dict], supply_error: Optional[
         'merchant': row['merchant_slug'],
         'study_type': row['study_type'],
         'platforms': platforms,
-        'surfaces': [surfaces.get(p).as_dict() if surfaces.get(p) else {'id': p} for p in platforms],
+        'surfaces': [surfaces.get(p).as_dict(configured=report) if surfaces.get(p) else {'id': p} for p in platforms],
         'runs_per_query': row['runs_per_query'],
         # 2I: what the run dialog compares against, named as /api/console/runs
         # names them (platforms are stored resolved since 2D)
@@ -172,7 +174,7 @@ async def start_full_loop(body: FullLoopStart, scope: CustomerScope = Depends(co
     # worker has a key for (app/worker_surfaces.py).
     platforms = worker_surfaces.check_dispatch(body.platforms, engine)
     for platform in platforms:
-        reason = surfaces.unavailable_reason(platform)
+        reason = surfaces.reported_reason(platform)
         if reason:
             raise HTTPException(status_code=422, detail=f"surface {platform!r} cannot run: {reason}")
 

@@ -14,11 +14,14 @@ run), the API (what the Create Study modal lists) and the console read
 models (which agent an answer belongs to). Sync copies to
 apps/api/soa_shared/ and apps/pipeline/soa_shared/.
 
-Consumer surfaces run only through SerpApi, and only with
+Consumer surfaces run only through SerpApi, and only on a worker with
 SOA_CONSUMER_SURFACES_ENABLED=1 and SERPAPI_API_KEY set. There is no
-Playwright or browser-automation path, by decision. Gemini web and ChatGPT
-web have no hosted provider we have verified; they are listed as not
-available, with that reason, so the modal says so rather than hiding them.
+Playwright or browser-automation path, by decision. The dialog lists what
+the worker reports it can run (worker_list, from soa_worker_surfaces): the
+API never reads those two settings, since it never calls SerpApi. Gemini
+web and ChatGPT web have no hosted provider we have verified; they are
+listed as not available, with that reason, so the modal says so rather
+than hiding them.
 """
 import os
 from dataclasses import asdict, dataclass
@@ -66,9 +69,13 @@ class Surface:
     #: each runner's code; only grounded surfaces are dispatched and pooled.
     grounded: bool = False
 
-    def as_dict(self, *, env=None) -> dict:
+    def as_dict(self, *, env=None, configured=None) -> dict:
+        """With `configured` (the worker's report), availability comes from
+        the report (reported_reason); without it, from `env` (the worker's
+        own environment, unavailable_reason)."""
         out = asdict(self)
-        reason = unavailable_reason(self.id, env=env)
+        reason = (unavailable_reason(self.id, env=env) if configured is None
+                  else reported_reason(self.id, configured))
         out['available'] = reason is None
         out['unavailable_reason'] = reason
         out['surface_label'] = SURFACE_LABELS[self.surface]
@@ -244,13 +251,52 @@ def unavailable_reason(platform: str, *, env=None) -> Optional[str]:
     return None
 
 
+NO_KEY_ON_WORKER = 'no key on the worker'
+WORKER_NOT_REPORTED = 'the worker has not reported yet'
+
+
+def reported_reason(platform: str, configured: Optional[Dict[str, bool]] = None) -> Optional[str]:
+    """2I-2: why this surface will not run, from the worker's report
+    ({id: bool}, soa_worker_surfaces) and never from this process's
+    environment: the API holds none of the runners' settings. A surface the
+    worker has not reported on has no reason; it is not refused."""
+    s = get(platform)
+    if s is None:
+        return f'unknown surface {platform!r}'
+    if s.never_available:
+        return s.never_available
+    if (configured or {}).get(platform) is False:
+        return NO_KEY_ON_WORKER
+    return None
+
+
+def worker_list(configured: Dict[str, bool]) -> List[dict]:
+    """
+    2I-2: what the dialog shows, from the worker's report: every surface
+    with a runner, in registry order, then the surfaces with no verified
+    provider. One the worker reported no key for is listed not available
+    ('no key on the worker'); one it has not reported on is listed
+    available, with `worker_note` 'the worker has not reported yet', API
+    and consumer surfaces alike.
+    """
+    out = []
+    for s in [s for s in SURFACES if not s.never_available] + [s for s in SURFACES if s.never_available]:
+        row = s.as_dict(configured=configured)
+        state = configured.get(s.id)
+        row['worker_note'] = (None if s.never_available or state is True else
+                              NO_KEY_ON_WORKER if state is False else WORKER_NOT_REPORTED)
+        out.append(row)
+    return out
+
+
 def modal_list(env=None) -> List[dict]:
     """
     What the Create Study modal shows: every surface that will actually
-    run, with its fidelity label, then the surfaces that cannot run here
-    for a reason that is not a setting (no verified provider), shown as not
-    available with that reason. A consumer surface that is merely switched
-    off is not listed: it will not run, and the modal shows what will.
+    run in `env` (a worker's environment), with its fidelity label, then
+    the surfaces that cannot run here for a reason that is not a setting
+    (no verified provider), shown as not available with that reason. The
+    API does not call this: the dialog lists what the worker reports it can
+    run (worker_list).
     """
     runnable = [s.as_dict(env=env) for s in SURFACES if unavailable_reason(s.id, env=env) is None]
     never = [s.as_dict(env=env) for s in SURFACES if s.never_available]

@@ -18,6 +18,7 @@ import app.routers.studies as studies_router
 import app.services.console_studies as console_studies
 from soa_shared import catalog_tiers as ct
 from soa_shared.catalog_snapshot import build_snapshot
+from soa_shared.models.soa_models import SoaWorkerSurface
 from tests.test_console_read_models import (  # noqa: F401  (pytest fixtures)
     TOKEN_A, TOKEN_B, as_, db, http, tenants, upstream,
 )
@@ -162,11 +163,14 @@ def test_an_ungrounded_study_sends_no_brand_half(http, upstream, studies_db):
     assert not any('/catalog' in c['path'] for c in upstream.calls)
 
 
-def test_start_a_cycle_on_the_study_s_comparison_set(http, upstream, studies_db, monkeypatch):
-    monkeypatch.delenv('SOA_CONSUMER_SURFACES_ENABLED', raising=False)
+def test_start_a_cycle_on_the_study_s_comparison_set(http, upstream, studies_db):
+    SoaWorkerSurface.__table__.create(studies_db, checkfirst=True)
+    with studies_db.begin() as c:
+        c.execute(text("INSERT INTO soa_worker_surfaces (surface_id, configured, seen_at) "
+                       "VALUES ('aimode', :f, CURRENT_TIMESTAMP)"), {'f': False})
     as_('op')
     refused = http.post('/api/console/cycles', params={'org': 10}, json={'study_type': 'ws-2b-fixture', 'platforms': ['chatgpt', 'aimode']})
-    assert refused.status_code == 422 and 'consumer surfaces are off' in refused.json()['detail']
+    assert refused.status_code == 422 and refused.json()['detail']['code'] == 'surface_not_configured'
     started = http.post('/api/console/cycles', params={'org': 10}, json={
         'study_type': 'ws-2b-fixture', 'platforms': ['chatgpt', 'gemini_grounded'], 'cycle_code': 'WS-2C-TEST'})
     assert started.status_code == 201, started.text
