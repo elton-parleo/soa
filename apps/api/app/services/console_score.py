@@ -142,6 +142,7 @@ TEMPLATES = {
     'coverage.ungrounded': ' · {surface}: ungrounded · not scored',
     'recompute.version': 'scorer {prev} → {now}',
     'recompute.version_changed': 'scorer {prev} → {now}: {change}',
+    'recompute.input_changed': ' · {input} changed',
     'unavailable': 'Score unavailable: {step} failed ({error})',
 }
 
@@ -861,17 +862,78 @@ def needs_recompute(body: Optional[dict], domain_checks: Optional[dict]) -> Opti
 SCORER_CHANGES = {'7': 'ungrounded surfaces excluded from pooling'}
 
 
+_NOT_CARRIED = object()
+
+
+def _domain_checks_input(body: dict):
+    """inputs.domain_checks.revision; None for a score that read no record,
+    _NOT_CARRIED for one stored before the score recorded it."""
+    inputs = body.get('inputs') or {}
+    if 'domain_checks' not in inputs:
+        return _NOT_CARRIED
+    record = inputs['domain_checks']
+    return record and record.get('revision')
+
+
+def _reference_read_input(body: dict):
+    """When the reference read the score used was read (its run's read_at,
+    else finished_at). A score with no reference run (a failed read) does not
+    carry one."""
+    run = (body.get('inputs') or {}).get('reference_run')
+    if not isinstance(run, dict):
+        return _NOT_CARRIED
+    return run.get('read_at') or run.get('finished_at') or _NOT_CARRIED
+
+
+def _incentive_flags_input(body: dict):
+    """Deal Citability's seen half as the score stored it: its state, n of d,
+    and each flag's check. _NOT_CARRIED when the body has no such part."""
+    for pillar in body.get('pillars') or []:
+        for d in pillar.get('dimensions') or []:
+            if d.get('code') != 'deal_citability':
+                continue
+            for row in (d.get('by_surface') or {}).values():
+                for part in row.get('parts') or []:
+                    if part.get('half') == 'seen':
+                        return (part.get('state'), part.get('numerator'), part.get('denominator'), part.get('reason'),
+                                [(c.get('code'), c.get('state')) for c in part.get('checks') or []])
+    return _NOT_CARRIED
+
+
+#: 2I-2: the inputs re-read from supply or the cycle that can move a score
+#: across a scorer version, each read from the stored body itself.
+RECOMPUTE_INPUTS = (('domain checks', _domain_checks_input),
+                    ('reference read', _reference_read_input),
+                    ('incentive flags', _incentive_flags_input))
+
+
+def changed_inputs(old: dict, new: dict) -> List[str]:
+    """The inputs that differ between two scores, compared only where both
+    carry the input: none is guessed."""
+    out = []
+    for name, read in RECOMPUTE_INPUTS:
+        a, b = read(old), read(new)
+        if a is not _NOT_CARRIED and b is not _NOT_CARRIED and a != b:
+            out.append(name)
+    return out
+
+
 def recompute_line(old: dict, new: dict, reason: str) -> str:
     """Why a stored score was replaced. Across a scorer version: "scorer 6 →
-    7: ungrounded surfaces excluded from pooling" when the score moved, the
-    plain "scorer 6 → 7" when it did not; any other reason as it is."""
+    7: ungrounded surfaces excluded from pooling" when an ungrounded surface
+    was in fact dropped (the new score's coverage.ungrounded) and the score
+    moved. Otherwise "scorer 6 → 7", with " · <input> changed" for each
+    input the two stored bodies show differs (changed_inputs). Any other
+    reason as it is."""
     prev, now = old.get('scorer_version'), new.get('scorer_version')
     if prev == now or prev is None or now is None:
         return reason
     change = SCORER_CHANGES.get(str(now))
-    if change and old.get('score') != new.get('score'):
+    dropped = (new.get('coverage') or {}).get('ungrounded')
+    if change and dropped and old.get('score') != new.get('score'):
         return TEMPLATES['recompute.version_changed'].format(prev=prev, now=now, change=change)
-    return TEMPLATES['recompute.version'].format(prev=prev, now=now)
+    return (TEMPLATES['recompute.version'].format(prev=prev, now=now)
+            + ''.join(TEMPLATES['recompute.input_changed'].format(input=i) for i in changed_inputs(old, new)))
 
 
 def carry_history(new: dict, old: Optional[dict], reason: str) -> dict:
@@ -881,6 +943,8 @@ def carry_history(new: dict, old: Optional[dict], reason: str) -> dict:
         return new
     entry = {k: old.get(k) for k in ('score', 'earned', 'applicable_max', 'measured', 'scorer_version', 'adapter_revision')}
     entry['scored_at'] = (old.get('inputs') or {}).get('scored_at')
+    # 2I-2: the per-pillar scores it had, so the console can show the deltas
+    entry['pillars'] = [{k: p.get(k) for k in ('code', 'score', 'applicable_max')} for p in old.get('pillars') or []]
     entry['replaced_because'] = recompute_line(old, new, reason)
     new = dict(new)
     new['history'] = ((old.get('history') or []) + [entry])[-HISTORY_KEEP:]

@@ -309,7 +309,7 @@ async def start_console_cycle(body: ConsoleCycleStart, scope: CustomerScope = De
     # 2D: resolved here, so an unknown name is this 422 and not a validation
     # error inside CreateCycleRequest below. 2I: grounded and configured only.
     platforms = worker_surfaces.check_dispatch(body.platforms, engine)
-    refused = [f"{p}: {surfaces.unavailable_reason(p)}" for p in platforms if surfaces.unavailable_reason(p)]
+    refused = [f"{p}: {surfaces.reported_reason(p)}" for p in platforms if surfaces.reported_reason(p)]
     if refused:
         raise HTTPException(status_code=422, detail="surface cannot run: " + "; ".join(refused))
     comparison = cs.comparison_set_for(body.study_type, scope.org.id)

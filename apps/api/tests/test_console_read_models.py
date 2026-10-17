@@ -34,6 +34,7 @@ import soa_shared.customers as customers
 from app.app import app
 from app.auth import verify_token
 from app.services import console_read_models as rm
+from soa_shared.models.soa_models import SoaWorkerSurface
 from tests.console_schema import check
 
 FIXTURES = os.path.join(os.path.dirname(__file__), 'fixtures', 'console')
@@ -530,11 +531,14 @@ def test_a_request_marked_timed_out_by_the_worker_reads_back_as_written(http, db
     assert latest['status'] == 'failed' and latest['error'].startswith('timed_out:')
 
 
-def test_a_surface_that_cannot_run_is_refused_before_supply_is_called(http, upstream, monkeypatch):
-    monkeypatch.delenv('SOA_CONSUMER_SURFACES_ENABLED', raising=False)
+def test_a_surface_that_cannot_run_is_refused_before_supply_is_called(http, upstream, db):
+    SoaWorkerSurface.__table__.create(db, checkfirst=True)
+    with db.begin() as c:
+        c.execute(text("INSERT INTO soa_worker_surfaces (surface_id, configured, seen_at) "
+                       "VALUES ('aimode', :f, CURRENT_TIMESTAMP)"), {'f': False})
     as_('alice')
     response = start(http, platforms=['aimode'])
-    assert response.status_code == 422 and 'consumer surfaces are off' in response.json()['detail']
+    assert response.status_code == 422 and response.json()['detail']['code'] == 'surface_not_configured'
     assert upstream.calls == []
 
 

@@ -39,8 +39,9 @@ def configured(engine) -> Dict[str, bool]:
 def check_dispatch(names: Iterable[str], engine) -> List[str]:
     """The resolved ids to store, or a 422: an ungrounded surface (alias or
     id) is `ungrounded_surface_not_allowed`, an unknown name is refused as
-    2D refuses it, one the worker has no key for is `surface_not_configured`,
-    and one that cannot run here at all is refused with its reason."""
+    2D refuses it, and one the worker has no key for is
+    `surface_not_configured`. The callers then refuse one that cannot run
+    anywhere (surfaces.reported_reason)."""
     names = list(names)
     refusal = surfaces.ungrounded_refusal(names)
     if refusal:
@@ -55,13 +56,15 @@ def check_dispatch(names: Iterable[str], engine) -> List[str]:
     return platforms
 
 
-def console_list(engine, env=None) -> List[dict]:
-    """GET /api/console/surfaces: the modal list (2B), each with
-    fidelity_label, grounded, and the worker's configured and seen_at
-    (None when it has not reported)."""
+def console_list(engine) -> List[dict]:
+    """GET /api/console/surfaces: what the worker reports it can run
+    (surfaces.worker_list), each with fidelity_label, grounded, and the
+    worker's configured and seen_at (None when it has not reported). 2I-2:
+    consumer surfaces too; the API's own environment is not read, since the
+    API never calls SerpApi."""
     seen = reported(engine)
     out = []
-    for s in surfaces.modal_list(env=env):
+    for s in surfaces.worker_list({sid: row['configured'] for sid, row in seen.items()}):
         row = seen.get(s['id']) or {}
         out.append({**s, 'fidelity_label': s['surface_label'], 'grounded': s['grounded'],
                     'configured': row.get('configured'), 'seen_at': row.get('seen_at')})

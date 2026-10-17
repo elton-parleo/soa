@@ -1728,9 +1728,18 @@ counted) beside the score. On each read, the cycle row says which of the two dom
 record makes measured, with no supply call; when that differs from the stored set, the read recomputes
 (`needs_recompute`: `first read`, `stale`, `measured set changed`; the log's `score.start` names it). The
 value it replaces is kept in the row's `history` (newest last, ten at most: score, earned, applicable
-max, measured, scorer version, adapter revision, `scored_at`, `replaced_because`), so the report can show
-both. Deal Citability's set moves with supply, which the cycle row cannot see: a supply deploy is picked
-up by the next recompute, or an operator's `?rescore=true`.
+max, measured, scorer version, adapter revision, `scored_at`, `pillars` (2I-2: each pillar's code, score
+and applicable max), `replaced_because`), so the report can show both. Deal Citability's set moves with
+supply, which the cycle row cannot see: a supply deploy is picked up by the next recompute, or an
+operator's `?rescore=true`.
+
+2I-2: across a scorer version, `replaced_because` is "scorer 6 → 7: ungrounded surfaces excluded from
+pooling" only when the new score's `coverage.ungrounded` is non-empty and the score moved. Otherwise it is
+"scorer 6 → 7", plus " · domain checks changed", " · reference read changed" or " · incentive flags
+changed" for each input the two stored bodies show differs (`inputs.domain_checks.revision`,
+`inputs.reference_run`'s `read_at` else `finished_at`, Deal Citability's seen half and its flag checks).
+An input the old body does not carry is not compared. 229 (every run grounded) reads "scorer 6 → 7 ·
+reference read changed" when its stored score used an older reference read, never the ungrounded line.
 
 `ADAPTER_REVISION` is 2 (the three mappings changed), so every score stored under 2C-3 recomputes once on
 its first read after the deploy, keeping the old value in its history.
@@ -6300,6 +6309,21 @@ surface with `fidelity_label`, `grounded`, `configured` and `seen_at` (`null` un
 reported). A surface with no row is not refused. The run dialog checks every grounded surface with
 `configured: true`. That is also the worker's fallback for a cycle stored with no platforms; before 2I
 the fallback was a fixed `[chatgpt, gemini_grounded]`.
+
+**2I-2: the dialog lists what the worker reports it can run.** `aimode` and `copilot` are listed from
+the same report, never from the API's environment: `SOA_CONSUMER_SURFACES_ENABLED` and
+`SERPAPI_API_KEY` are the worker's settings (the API never calls SerpApi), and no API code reads them.
+Before 2I-2 the API hid a consumer surface unless its own process had both. Each row also carries
+`worker_note`:
+
+| worker's report for `aimode` | `configured` | `available` | `unavailable_reason` | `worker_note` | dispatch naming it |
+|---|---|---|---|---|---|
+| `true` | `true` | `true` | `null` | `null` | accepted |
+| `false` | `false` | `false` | `"no key on the worker"` | `"no key on the worker"` | 422 `surface_not_configured` |
+| no row | `null` | `true` | `null` | `"the worker has not reported yet"` | accepted (unchecked) |
+
+An API surface reads the same way. Gemini web and ChatGPT web stay listed last, not available, with
+their reason and no `worker_note`.
 
 
 ## 2I: what the run dialog compares against
