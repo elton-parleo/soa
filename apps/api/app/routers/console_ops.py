@@ -244,9 +244,12 @@ async def preview_study(body: StudyPreviewRequest, scope: CustomerScope = Depend
 
 class ConsoleStudyGenerate(StudyGenerateRequest):
     """POST /api/studies/generate's body, plus the tiers as the modal holds
-    them. The syndicated merchant's customer is the console's scope."""
+    them. The syndicated merchant's customer is the console's scope.
+    2I-4: `merchant` is the merchant selected in the console, the one the
+    study is for; older clients send none."""
     tiers: Optional[Dict[str, bool]] = None
     brand_direct_count: Optional[int] = None
+    merchant: Optional[str] = None
 
 
 @router.post("/studies/generate", status_code=201)
@@ -256,8 +259,21 @@ async def generate_console_study(body: ConsoleStudyGenerate, scope: CustomerScop
     job the worker runs, brand-catalog mode included). Before that, the
     grand total, stage questions plus the catalog tiers the record will
     produce, is checked against the 100 cap here, server-side, not only
-    in the modal."""
-    data = body.model_dump(exclude={"tiers", "brand_direct_count"})
+    in the modal.
+
+    2I-4: every console study is the scope org's (customer_organization_id)
+    and the selected merchant's, brand box or not, so /studio/studies lists
+    it on that merchant. `merchant` must be one of the org's (404, as 2H);
+    with the brand box it must be the syndicated merchant (422). Without the
+    box it is recorded as tier_config.merchant.slug, which study_merchants
+    reads. No `merchant`: a brand study is the syndicated merchant's, any
+    other the primary's, as before, and the response says which."""
+    ms = await check_merchant(scope, body.merchant)   # 2H: a slug that is not the org's is a 404
+    if body.syndicated_merchant and body.merchant and body.merchant != body.syndicated_merchant:
+        raise HTTPException(status_code=422, detail=(
+            f"merchant {body.merchant!r} is not the syndicated merchant {body.syndicated_merchant!r}: "
+            "a brand study is generated for the merchant whose catalog it reads"))
+    data = body.model_dump(exclude={"tiers", "brand_direct_count", "merchant"})
     preview = None
     if body.syndicated_merchant:
         tiers = body.tiers if body.tiers is not None else {
@@ -269,8 +285,18 @@ async def generate_console_study(body: ConsoleStudyGenerate, scope: CustomerScop
             raise HTTPException(status_code=422, detail=preview["tally"]["text"])
         data["tier_config"] = cs.tier_config(tiers, body.brand_direct_count)
         data["customer_org_id"] = scope.org.id
-    result = studies_router.generate_study(StudyGenerateRequest(**data), current_user=_as_user(user))
-    return {**result.model_dump(), "tally": (preview or {}).get("tally")}
+        result = studies_router.generate_study(StudyGenerateRequest(**data), current_user=_as_user(user))
+        merchant = {"slug": body.syndicated_merchant, "from": "request" if body.merchant else "syndicated_merchant"}
+    else:
+        current = _as_user(user)
+        request = StudyGenerateRequest(**data)
+        result = studies_router.queue_generation_job(
+            request, current, customer_org_id=studies_router.resolve_customer_org(current["user_id"], scope.org.id),
+            tier_config={**(request.tier_config or {}), "merchant": {"slug": body.merchant}} if body.merchant
+            else request.tier_config)
+        merchant = ({"slug": body.merchant, "from": "request"} if body.merchant
+                    else {"slug": ms.primary, "from": "primary", "note": "no merchant sent: the study is the org's primary merchant's"})
+    return {**result.model_dump(), "tally": (preview or {}).get("tally"), "merchant": merchant}
 
 
 @router.post("/studies/{study_type}/regenerate", status_code=202)

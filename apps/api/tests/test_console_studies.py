@@ -153,13 +153,16 @@ def test_generate_queues_the_job_for_this_customer(http, upstream, studies_db):
 
 
 def test_an_ungrounded_study_sends_no_brand_half(http, upstream, studies_db):
+    # 2I-4: but it is still the console org's study (customer_organization_id),
+    # and, with no merchant sent, the primary's
     tenants(upstream)
     as_('op')
     body = http.post('/api/console/studies/generate', params={'org': 10}, json={'study_name': 'Plain', 'target_count': 20}).json()
     with studies_db.connect() as c:
         job = c.execute(text("SELECT syndicated_merchant, tier_config, customer_organization_id FROM soa_query_generation_jobs "
                              "WHERE study_type = :st"), {'st': body['study_type']}).one()
-    assert tuple(job) == (None, None, None) and body['tally'] is None
+    assert tuple(job) == (None, None, 10) and body['tally'] is None
+    assert body['merchant']['from'] == 'primary'
     assert not any('/catalog' in c['path'] for c in upstream.calls)
 
 
