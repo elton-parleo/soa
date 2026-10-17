@@ -33,6 +33,9 @@ def first(db, upstream, monkeypatch):
         for col in ('truecost_tiers TEXT', 'created_by TEXT', 'source_lite_request_id INTEGER',
                     'study_series_id TEXT', 'prior_cycle_id INTEGER'):
             c.exec_driver_sql(f"ALTER TABLE soa_cycles ADD COLUMN {col}")
+        if db.dialect.name == 'postgresql':   # production's timestamptz (test_full_loop_2i's production_timestamps)
+            for col in ('created_at', 'updated_at'):
+                c.exec_driver_sql(f"ALTER TABLE soa_full_loop_requests ALTER COLUMN {col} TYPE TIMESTAMPTZ")
         if db.dialect.name == 'postgresql':   # the seed writes its ids; the serials start after them
             for table in ('soa_entities', 'soa_cycles', 'soa_cycle_entities', 'soa_query_generation_jobs', 'soa_queries'):
                 c.exec_driver_sql(f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), (SELECT MAX(id) FROM {table}))")
@@ -83,3 +86,68 @@ def test_a_study_with_no_merchant_is_a_422_saying_so(http, first):
     as_('op')
     r = http.post('/api/console/cycles', params={'org': 10}, json={'study_type': STUDY, 'platforms': ['chatgpt']})
     assert r.status_code == 422 and r.json()['detail'] == 'could not create the cycle: the study belongs to no merchant'
+
+
+# ═══ B2: the request's failure reason, and the step it failed at ═════════
+RUN = f'/api/truesync/merchants/{BRAND}/full-loop/41'
+OCT16 = 'could not create the cycle: the study has no earlier cycle to take a comparison set from'
+
+#: (step, the request as the coordinator leaves it at that failure, supply's run as GET answers it, the cycle)
+FAILURES = [
+    ('reads', {'supply_run_id': None, 'supply_status': None,
+               'error': 'TrueSync full loop did not start: upstream returned 502'}, None, None),
+    ('reads', {'supply_run_id': 41, 'supply_status': 'failed', 'error': 'supply full loop failed: render timed out'},
+     'failed', None),
+    ('reads', {'supply_run_id': 41, 'supply_status': 'running',
+               'error': 'timed_out: no progress for 60 minutes (last: reference_pending)'}, 'running', None),
+    ('cycle', {'supply_run_id': 41, 'supply_status': 'reference_done', 'error': OCT16}, 'reference_done', None),
+    ('study', {'supply_run_id': 41, 'supply_status': 'failed', 'error': 'cycle failed: every run failed'},
+     'failed', 'failed'),
+    ('study', {'supply_run_id': 41, 'supply_status': 'reference_done',
+               'error': 'timed_out: no progress for 60 minutes (last: cycle_planned)'}, 'reference_done', 'running'),
+    ('scoring', {'supply_run_id': 41, 'supply_status': 'conflict',
+                 'error': "supply refused the PATCH (409): full loop run 41 is already scored by cycle '7'"},
+     'scored', 'complete'),
+]
+
+
+def failed_request(db, upstream, fields, run_status, cycle_status):
+    cycle_id = None
+    with db.begin() as c:
+        if cycle_status:
+            cycle_id = c.execute(text("INSERT INTO soa_cycles (cycle_code, study_type, study_pattern, status, cycle_mode, "
+                                      "start_date, organization_id, full_loop_run_id) VALUES ('FL41-wsb-20261016', :st, "
+                                      "'retailer', :s, 'query', '2026-10-16', 1, 41) RETURNING id"),
+                                 {'st': STUDY, 's': cycle_status}).scalar()
+        rid = c.execute(text("""INSERT INTO soa_full_loop_requests (organization_id, merchant_slug, study_type, platforms,
+            runs_per_query, supply_run_id, supply_status, cycle_id, status, error, created_by, created_at, updated_at)
+            VALUES (10, :m, :st, :p, 1, :run, :ss, :c, 'failed', :e, 'op', :t, :t) RETURNING id"""),
+                        {'m': BRAND, 'st': STUDY, 'p': json.dumps(['chatgpt']), 'run': fields['supply_run_id'],
+                         'ss': fields['supply_status'], 'c': cycle_id, 'e': fields['error'],
+                         't': '2026-10-17T03:45:00+00:00'}).scalar()
+    if run_status:
+        upstream.answer('GET', RUN, body={'id': 41, 'status': run_status, 'finished_at': '2026-10-17T03:44:10+00:00'},
+                        token=TOKEN_A)
+    return rid
+
+
+@pytest.mark.parametrize('step, fields, run_status, cycle_status', FAILURES)
+def test_a_failed_request_names_its_step_and_keeps_its_error(http, first, upstream, step, fields, run_status, cycle_status):
+    rid = failed_request(first, upstream, fields, run_status, cycle_status)
+    as_('op')
+    by_id = http.get(f'/api/full-loop/{rid}', params={'org': 10}).json()
+    latest = http.get('/api/console/full-loop/latest', params={'org': 10, 'merchant': BRAND}).json()
+    for view in (by_id, latest):
+        assert (view['status'], view['failed_step'], view['error']) == ('failed', step, fields['error'])
+    assert by_id == latest
+
+
+def test_a_request_that_has_not_failed_has_no_failed_step(http, first, upstream):
+    with first.begin() as c:
+        rid = c.execute(text("""INSERT INTO soa_full_loop_requests (organization_id, merchant_slug, study_type, platforms,
+            runs_per_query, supply_run_id, supply_status, status, created_by, created_at, updated_at)
+            VALUES (10, :m, :st, '["chatgpt"]', 1, 41, 'reference_done', 'reference_done', 'op', NOW(), NOW()) RETURNING id"""),
+                        {'m': BRAND, 'st': STUDY}).scalar()
+    upstream.answer('GET', RUN, body={'id': 41, 'status': 'reference_done'}, token=TOKEN_A)
+    as_('op')
+    assert 'failed_step' not in http.get(f'/api/full-loop/{rid}', params={'org': 10}).json()

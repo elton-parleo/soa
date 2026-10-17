@@ -6372,3 +6372,23 @@ guessed set every later cycle would copy. The coordinator reads with the org's t
 (`TrueSyncCatalogClient`), built only when a first cycle needs it; the API reads `/tenant` (the
 switcher's read) and `/retailers` with the org's async client before the rule runs.
 
+
+### 2I-5: why a loop failed
+
+`GET /api/console/full-loop/latest` and `GET /api/full-loop/{id}` serve the request's `error` as the
+coordinator wrote it, unchanged (the Oct 16 request keeps its pre-2I-5 wording). A failed request
+also carries **`failed_step`**, `reads | cycle | study | scoring`, from what the request reached,
+not from the error's words (`app/routers/full_loop.py` `failed_step`):
+
+| `failed_step` | the request | the coordinator's failures |
+|---|---|---|
+| `reads` | no supply run, or supply's run not `reference_done` / `scored` | did not start, supply failed it, refused the read, `orphaned_by_restart`, timed out before the reads finished |
+| `cycle` | reads finished, no cycle | `could not create the cycle: …` (no active questions, no merchant, a supply read for the set), timed out at `reference_done` |
+| `study` | a cycle that did not complete | `cycle failed: …`, the cycle is gone, timed out while planned or running |
+| `scoring` | the cycle completed | supply refused the PATCH (409 `conflict`, 401/403/404) |
+
+A cycle decides first: a failed cycle PATCHes supply's run to `failed` as well, so supply's status
+alone cannot tell the reads from the study. The key is only on a failed request: every other state
+reads byte for byte as before (`tests/test_full_loop_2i.py`). The strip's three chip states are
+unchanged; the console colours the chip `failed_step` names (`reads` the reads chip, `cycle` and
+`study` the study chip, `scoring` the scoring chip).
