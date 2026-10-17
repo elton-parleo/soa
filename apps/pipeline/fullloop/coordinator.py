@@ -142,13 +142,15 @@ def _json(value):
 
 class Coordinator:
     def __init__(self, engine=None, client_for: Callable[[int], SupplyFullLoopClient] = None,
-                 clock: Callable[[], datetime] = None) -> None:
+                 clock: Callable[[], datetime] = None, catalog_for: Callable[[int], object] = None) -> None:
         if engine is None:
             from soa_shared.database import engine as default_engine
             engine = default_engine
         self.engine = engine
         self.client_for = client_for or _default_client_for
         self.clock = clock or (lambda: datetime.now(timezone.utc))
+        #: 2I-5: the catalog client a first cycle's comparison set reads with
+        self.catalog_for = catalog_for or self._catalog_client
 
     # ─── rows ────────────────────────────────────────────────────────
 
@@ -306,21 +308,16 @@ class Coordinator:
                     row['id'], row['merchant_slug'])
         return True
 
-    def _comparison_set(self, conn, row) -> list:
-        """The study's latest cycle's comparison set, in this org's hands."""
-        prior = conn.execute(text(
-            "SELECT id FROM soa_cycles WHERE study_type = :st ORDER BY start_date DESC, id DESC LIMIT 1"
-        ), {'st': row['study_type']}).fetchone()
-        if prior is None:
-            return []
-        entities = conn.execute(text(
-            "SELECT entity_id, comparison_code, role FROM soa_cycle_entities WHERE cycle_id = :c "
-            "ORDER BY comparison_code"
-        ), {'c': prior[0]}).mappings().all()
-        return [dict(e) for e in entities]
+    def _catalog_client(self, org_id: int):
+        """2I-5: the supply reads a first cycle's comparison set needs (/tenant,
+        /retailers), with the org's tenant token. Built only when called."""
+        from clients.truesync_catalog import TrueSyncCatalogClient
+        from soa_shared import customers
+        return TrueSyncCatalogClient(token=customers.token_for_org(org_id))
 
     def _create_cycle(self, row) -> bool:
         from soa_shared import surfaces
+        from soa_shared.comparison_sets import ComparisonSetError, comparison_set_for_study
         from soa_shared.cycle_creation import create_cycle_with_comparison_set
 
         # 2D: resolved before the count, as the insert resolves them: a
@@ -339,10 +336,20 @@ class Coordinator:
             queries = conn.execute(text(
                 "SELECT COUNT(*) FROM soa_queries WHERE study_type = :st AND status = 'Active'"),
                 {'st': row['study_type']}).scalar() or 0
-            comparison = self._comparison_set(conn, row)
-            if pattern is None or not comparison:
-                why = ('the study has no active questions' if pattern is None else
-                       'the study has no earlier cycle to take a comparison set from')
+            # 2I-5: a first cycle too (soa_shared.comparison_sets): the latest
+            # cycle's set, else the study's merchant and its competitor list
+            why, comparison = None, []
+            if pattern is None:
+                why = 'the study has no active questions'
+            else:
+                try:
+                    comparison = comparison_set_for_study(conn, row['study_type'], row['organization_id'],
+                                                          supply=_LazyCatalog(self, row['organization_id']))
+                except ComparisonSetError as exc:
+                    why = str(exc)
+                if why is None and not comparison:
+                    why = 'the study belongs to no merchant'
+            if why is not None:
                 conn.execute(text(
                     "UPDATE soa_full_loop_requests SET status = 'failed', error = :e, "
                     "updated_at = :u WHERE id = :id"),
@@ -396,6 +403,24 @@ class Coordinator:
         self._set(row['id'], status=outcome, supply_status=(result.body or {}).get('status', outcome),
                   error=error)
         return True
+
+
+class _LazyCatalog:
+    """The catalog client, built on its first read: a second cycle copies
+    its set and never needs a token."""
+
+    def __init__(self, coordinator: Coordinator, org_id: int) -> None:
+        self._make = lambda: coordinator.catalog_for(org_id)
+        self._client = None
+
+    def __getattr__(self, name):
+        if self._client is None:
+            from soa_shared.comparison_sets import ComparisonSetError
+            try:
+                self._client = self._make()
+            except Exception as exc:  # noqa: BLE001 - no token: the request says so
+                raise ComparisonSetError(f"no TrueSync token for this customer: {exc}") from exc
+        return getattr(self._client, name)
 
 
 def process_full_loops(coordinator: Coordinator = None) -> int:

@@ -124,9 +124,10 @@ def test_a_request_with_a_study_reads_byte_for_byte_as_before(http, db, upstream
     view = {'id': 33, 'status': supply_status} if supply_status else None
     now = fl.combined_status(row, supply_view=view, supply_error=None)
     before = frozen.combined_status(row, supply_view=view, supply_error=None)
-    # identical but for B4's three added fields
+    # identical but for B4's three added fields, and 2I-5's failed_step on a failed request
     assert {k: now.pop(k) for k in B4_FIELDS} == {'surface_ids': ['chatgpt', 'gemini_grounded'],
                                                  'runs_per_question': 1, 'study_id': 'ws-2b-fixture'}
+    assert now.pop('failed_step', None) == ('reads' if stage == 'failed' else None)
     assert json.dumps(now, sort_keys=True, default=str) == json.dumps(before, sort_keys=True, default=str)
     assert 'mode' not in now and 'read_at' not in now
 

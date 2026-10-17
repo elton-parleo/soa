@@ -1,0 +1,56 @@
+{
+ "_note": "2I-5: supply GET /api/truesync/merchants/wiggle-and-snug-brand/retailers in the shape api/truesync_feed_router.py _retailers_view serves on parleo-supply-app main at 868e8cf (2A-4): the 2H recorded payload (api/tests/fixtures/console/supply_retailers_ws_2h.json) with comparison_domains, the competitor sites the merchant reads for comparison. `none`: the brand as it is today, no list entered. `two`: the list the soa wizard (2I-6) will enter, Pampers then Huggies. `tenant` is the 2H /tenant payload, unchanged.",
+ "tenant": {
+  "slug": "wiggle-and-snug",
+  "name": "Wiggle & Snug",
+  "merchants": [
+   {
+    "slug": "wiggle-and-snug",
+    "name": "Wiggle & Snug",
+    "domain": "trueshopstore.com",
+    "own_domains": [
+     "trueshopstore.com"
+    ],
+    "kind": "seller",
+    "hosting": "parleo",
+    "has_record": true
+   },
+   {
+    "slug": "wiggle-and-snug-brand",
+    "name": "Wiggle & Snug Brand",
+    "domain": "wiggleandsnug.com",
+    "own_domains": [
+     "wiggleandsnug.com"
+    ],
+    "kind": "brand",
+    "hosting": "external",
+    "has_record": true
+   }
+  ]
+ },
+ "none": {
+  "merchant": "wiggle-and-snug-brand",
+  "own_domain": "wiggleandsnug.com",
+  "own_domains": [
+   "wiggleandsnug.com"
+  ],
+  "domains": [
+   "trueshopstore.com"
+  ],
+  "comparison_domains": []
+ },
+ "two": {
+  "merchant": "wiggle-and-snug-brand",
+  "own_domain": "wiggleandsnug.com",
+  "own_domains": [
+   "wiggleandsnug.com"
+  ],
+  "domains": [
+   "trueshopstore.com"
+  ],
+  "comparison_domains": [
+   "pampers.com",
+   "huggies.com"
+  ]
+ }
+}

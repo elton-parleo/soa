@@ -86,6 +86,35 @@ def _platforms(value) -> list:
     return json.loads(value) if isinstance(value, str) else list(value)
 
 
+#: 2I-5: where a failed request stopped, for the console's chip and its "Failed at <step>" line
+FAILED_STEPS = ('reads', 'cycle', 'study', 'scoring')
+
+
+def failed_step(row, cycle: Optional[dict], supply_status: Optional[str]) -> Optional[str]:
+    """Where the coordinator (apps/pipeline/fullloop/coordinator.py) set
+    `failed`, from what the request reached, not from its error's words:
+
+      reads    supply's reads never finished: the POST did not start a run,
+               supply failed it, refused the read, the worker stopped
+               mid-POST, or it timed out before reference_done
+      cycle    the reads finished and no cycle was created (_create_cycle:
+               no active questions, no merchant, a supply read for the set)
+      study    the cycle exists and did not complete: it failed, is gone,
+               or timed out while planned or running
+      scoring  the cycle completed and supply refused the PATCH
+
+    None when the request has not failed."""
+    if row['status'] != 'failed':
+        return None
+    # a cycle decides first: a failed cycle PATCHes supply's run to failed
+    # too, so supply's status alone cannot tell the reads from the study
+    if row.get('cycle_id'):
+        return 'scoring' if cycle is not None and cycle.get('status') == 'complete' else 'study'
+    if not row.get('supply_run_id') or supply_status not in ('reference_done', 'scored'):
+        return 'reads'
+    return 'cycle'
+
+
 def combined_status(row, *, supply_view: Optional[dict], supply_error: Optional[str]) -> dict:
     """The one object the console's button and status strip read."""
     cycle = None
@@ -141,6 +170,9 @@ def combined_status(row, *, supply_view: Optional[dict], supply_error: Optional[
             {'step': 'scoring', 'label': 'Scored and reported to TrueSync', 'state': scoring},
         ],
     }
+    if status == 'failed':
+        # 2I-5: only on a failed request, so every other state reads as before
+        out['failed_step'] = failed_step(row, cycle, supply_status)
     if reads_only:
         # 2I: only on a reads-only request, so a request with a study reads
         # exactly as before (tests/fixtures/full_loop_pre_2i.py)

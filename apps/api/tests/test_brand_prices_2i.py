@@ -137,11 +137,13 @@ def test_a_sellers_questions_are_unchanged_by_reads():
     assert before[0], 'the seller fixture asks questions'
 
 
-# ═══ the three expected_answers copies ═══════════════════════════════════
-def test_the_three_expected_answers_copies_are_identical():
-    api = os.path.join(ROOT, 'apps', 'api', 'soa_shared', 'expected_answers.py')
-    for other in (os.path.join(ROOT, 'apps', 'pipeline', 'soa_shared', 'expected_answers.py'),
-                  os.path.join(ROOT, 'packages', 'shared', 'soa_shared', 'expected_answers.py')):
+# ═══ the three copies of each shared module ══════════════════════════════
+# 2I-5 adds comparison_sets.py, the first-cycle rule the coordinator and the console share.
+@pytest.mark.parametrize('module', ['expected_answers.py', 'comparison_sets.py'])
+def test_the_three_copies_are_identical(module):
+    api = os.path.join(ROOT, 'apps', 'api', 'soa_shared', module)
+    for other in (os.path.join(ROOT, 'apps', 'pipeline', 'soa_shared', module),
+                  os.path.join(ROOT, 'packages', 'shared', 'soa_shared', module)):
         assert filecmp.cmp(api, other, shallow=False), other
 
 
