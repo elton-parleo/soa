@@ -177,20 +177,36 @@ def generate_study(
     finishes and read back through
     GET /studies/{study_type}/generation-status.
     """
-    org_id  = current_user['organization_id']
-    user_id = current_user['user_id']
-    study_type = _slugify_study_name(data.study_name)
-
     # A grounded study is read with its customer's token, so which customer
     # it is gets decided — and checked — here, by the same rule the TrueSync
     # proxy applies: an operator may name any customer, anyone else only
     # their own. Ungrounded studies have no customer.
     customer_org_id = None
     if data.syndicated_merchant:
-        try:
-            customer_org_id = customers.resolve_selection(user_id, data.customer_org_id).id
-        except customers.CustomerError as exc:
-            raise HTTPException(status_code=exc.status, detail=str(exc))
+        customer_org_id = resolve_customer_org(current_user['user_id'], data.customer_org_id)
+    return queue_generation_job(data, current_user, customer_org_id=customer_org_id,
+                                tier_config=data.tier_config)
+
+
+def resolve_customer_org(user_id, customer_org_id) -> int:
+    """The customer org a study is generated for, checked against the user's rights."""
+    try:
+        return customers.resolve_selection(user_id, customer_org_id).id
+    except customers.CustomerError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc))
+
+
+def queue_generation_job(data: StudyGenerateRequest, current_user: dict, *,
+                         customer_org_id: Optional[int], tier_config: Optional[dict]) -> StudyGenerateResponse:
+    """Writes the generation job row. The web route above passes the
+    request's own tier_config and a customer only for a grounded study;
+    2I-4: the console passes its org for every study, and for one with no
+    brand a tier_config that only names the merchant it was made for (a
+    key the request model's tier validator would refuse, so it is passed
+    here rather than through the model)."""
+    org_id  = current_user['organization_id']
+    user_id = current_user['user_id']
+    study_type = _slugify_study_name(data.study_name)
 
     with engine.connect() as conn:
         result = conn.execute(
@@ -248,7 +264,7 @@ def generate_study(
                 # sampled variant ids, per-tier counts, expected-nulls
                 # notes — because a request is not evidence of what a
                 # study contains.
-                "tier_config":           _as_json(data.tier_config),
+                "tier_config":           _as_json(tier_config),
                 "customer_org_id":       customer_org_id,
             },
         )
