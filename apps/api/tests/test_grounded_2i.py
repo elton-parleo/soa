@@ -156,9 +156,10 @@ def test_the_229_fixture_scores_the_same_under_6_and_7(http, upstream, db, monke
 
 def test_the_recompute_line_names_the_change_only_when_the_number_moved():
     old = {'scorer_version': '6', 'score': 32}
-    assert score_svc.recompute_line(old, {'scorer_version': '7', 'score': 32}, 'stale') == 'scorer 6 → 7'
-    assert score_svc.recompute_line({'scorer_version': '6', 'score': 24}, {'scorer_version': '7', 'score': 20}, 'stale') \
-        == 'scorer 6 → 7: ungrounded surfaces excluded from pooling'
+    dropped = {'coverage': {'ungrounded': ['api']}}   # 2I-2: and only when an ungrounded surface was dropped
+    assert score_svc.recompute_line(old, {'scorer_version': '7', 'score': 32, **dropped}, 'stale') == 'scorer 6 → 7'
+    assert score_svc.recompute_line({'scorer_version': '6', 'score': 24}, {'scorer_version': '7', 'score': 20, **dropped},
+                                    'stale') == 'scorer 6 → 7: ungrounded surfaces excluded from pooling'
     assert score_svc.recompute_line({'scorer_version': '7', 'score': 20}, {'scorer_version': '7', 'score': 21},
                                     'rescore') == 'rescore'
 

@@ -249,7 +249,7 @@ def test_history_is_kept_newest_last_and_bounded():
     new = score_svc.carry_history({'score': 49, 'history': []}, old, 'stale')
     assert len(new['history']) == score_svc.HISTORY_KEEP
     assert new['history'][-1] == {'score': 30, 'earned': 20.3, 'applicable_max': 69.0, 'measured': ['a'],
-                                  'scorer_version': '6', 'adapter_revision': 1, 'scored_at': 't0',
+                                  'scorer_version': '6', 'adapter_revision': 1, 'scored_at': 't0', 'pillars': [],
                                   'replaced_because': 'stale'}
 
 
