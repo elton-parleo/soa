@@ -215,16 +215,34 @@ def build_preview(snapshot: CatalogSnapshot, *, tiers: Dict[str, bool], stage_to
     }
 
 
-def comparison_set_for(study_type: str, org_id: int) -> List[dict]:
-    """The study's last cycle's comparison set, else its brand as primary.
-    Empty when the study is not this customer's."""
+class _PrefetchedSupply:
+    """2I-5: the two supply reads soa_shared.comparison_sets makes, read
+    beforehand with the org's async client and answered synchronously."""
+
+    def __init__(self, record, record_error, retailers, retailers_error):
+        self._record, self._retailers = (record, record_error), (retailers, retailers_error)
+
+    def merchant_record(self, slug):
+        return self._record
+
+    def retailers(self, slug):
+        return self._retailers
+
+
+async def prefetch_supply(client, merchants: List[dict], merchants_error: Optional[str], slug: str) -> _PrefetchedSupply:
+    """The merchant's /tenant record (the switcher's read) and its /retailers."""
+    record = next((m for m in merchants if m.get('slug') == slug), None)
+    record_error = None if record else (merchants_error or f"merchant {slug!r} is not in this tenant")
+    _status, body, error = await client.get_retailers(slug)
+    return _PrefetchedSupply(record, record_error, body if isinstance(body, dict) else None, error)
+
+
+def study_in_org(study_type: str, org_id: int) -> bool:
     with engine.connect() as conn:
-        job = conn.execute(text("""
-            SELECT study_type, syndicated_merchant FROM soa_query_generation_jobs
+        return conn.execute(text("""
+            SELECT 1 FROM soa_query_generation_jobs
             WHERE study_type = :st AND COALESCE(customer_organization_id, organization_id) = :org
-        """), {"st": study_type, "org": org_id}).mappings().fetchone()
-        if job is None:
-            return []
+        """), {"st": study_type, "org": org_id}).fetchone() is not None
         last = conn.execute(text("""
             SELECT id FROM soa_cycles WHERE study_type = :st ORDER BY start_date DESC, id DESC LIMIT 1
         """), {"st": study_type}).scalar()

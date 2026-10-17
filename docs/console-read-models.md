@@ -238,7 +238,7 @@ They already apply the studio.ts mapping below; 2C changes none of it.
   app's routes, unchanged.
 - **`POST /api/console/cycles`** `{study_type, platforms, runs_per_query?, cycle_code?, notes?}`:
   a surface that cannot run here (`soa_shared/surfaces.unavailable_reason`) is refused before
-  anything is written; the comparison set is the study's last cycle's, else its brand as primary;
+  anything is written; the comparison set is `soa_shared/comparison_sets.py`'s (2I-5, below);
   then the web app's `create_cycle`. The code defaults to `YYYYMMDD-HHMMSS-<study_type>`.
 
 ### StudyRow / StudyCell
@@ -6335,3 +6335,40 @@ the surface kinds, so the resolved ids get their own name. On `/runs` the ids ar
 (229 stored "gemini" and ran `gemini_grounded`). Before any run, the ids are what the cycle stored
 resolved (`soa_cycles.surfaces`), else its platforms resolved today. On `/full-loop/latest` the ids are
 the request's `platforms`, stored resolved since 2D. A reads-only request has `[]` and `study_id: null`.
+
+## 2I-5: a study's first cycle
+
+On production (Oct 16, 8:44 PM) Wiggle & Snug Brand's first full loop read its pages, then failed
+with no cycle: "could not create the cycle: the study has no earlier cycle to take a comparison set
+from". The coordinator took the set only from the study's latest cycle, so the full loop had never
+been able to run a study's first cycle (FL3 and FL4 worked because the store's study had a September
+cycle made in the web app). The console's Start cycle had a partial rule and otherwise answered 422
+"create its first cycle in Command Center".
+
+A first cycle needs nothing declared: the mention coder learns the brands the answers name (the
+ranking, "who agents name first" and the agent columns come from coding, not from the set). The set
+only decides which rivals are tracked as full rows and which are "also named but not tracked" (2G).
+One rule now serves both callers, `soa_shared/comparison_sets.comparison_set_for_study` (identical in
+the three `soa_shared` copies):
+
+1. The study's latest cycle has entities: copied, by comparison code. No supply read.
+2. Else the study's merchant, `tier_config.merchant.slug`, else `syndicated_merchant` (#120 sets one
+   on every console study), is **M001, primary**: its `soa_entities` row by slug, created when missing
+   from supply's `/tenant` record: `name` the merchant's name ("Wiggle & Snug Brand"), `slug` the
+   merchant slug, `entity_type` `brand` for a brand merchant else `retailer`, `website_url`
+   `https://<own domain>/`, `aliases` `[<own domain>]`.
+3. The rivals are the merchant's `comparison_domains` from supply's
+   `GET /merchants/{slug}/retailers` (2A-4), in its order, **M002 onward, competitor**: each the
+   `soa_entities` row whose alias or `website_url` host is that domain, else a new row of the
+   merchant's entity type. **A created rival is named by its domain** (`huggies.com`, slug
+   `huggies-com`) until the soa wizard's competitor field (2I-6) supplies its name. An empty list: the
+   primary alone.
+4. No merchant (no job in the org, or a job naming none: a study generated before #120): no set, and
+   the request fails "could not create the cycle: the study belongs to no merchant" (Start cycle: 422).
+
+A supply read that fails on a first cycle fails the request with the read ("could not create the
+cycle: could not read '<slug>''s retailers from TrueSync: …"; Start cycle: 502) rather than create a
+guessed set every later cycle would copy. The coordinator reads with the org's tenant token
+(`TrueSyncCatalogClient`), built only when a first cycle needs it; the API reads `/tenant` (the
+switcher's read) and `/retailers` with the org's async client before the rule runs.
+

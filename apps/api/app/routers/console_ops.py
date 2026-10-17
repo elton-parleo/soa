@@ -29,7 +29,7 @@ from pydantic import BaseModel, ConfigDict
 from app.auth import verify_token
 from app.console_scope import console_scope, cycle_customer_org_sql
 from app.customer_context import CustomerScope
-from app.console_merchants import check_merchant
+from app.console_merchants import check_merchant, org_merchants
 from app import worker_surfaces
 from app.routers import full_loop
 from app.routers.customers import _tenant_view
@@ -40,7 +40,7 @@ from app.schemas import ComparisonEntityInput, CreateCycleRequest, RegenerateStu
 from app.services import console_parity as parity
 from app.services import console_read_models as rm
 from app.services import console_studies as cs
-from soa_shared import customers, surfaces
+from soa_shared import comparison_sets, customers, surfaces
 from soa_shared.constants import QUERY_CONSTRAINTS
 from soa_shared.database import engine
 from sqlalchemy import text
@@ -328,8 +328,9 @@ async def start_console_cycle(body: ConsoleCycleStart, scope: CustomerScope = De
     """Starts a cycle of one of the scope's studies on surfaces from
     /api/console/surfaces, through the web app's own create_cycle. A
     surface that cannot run here is refused before anything is written.
-    The comparison set is the study's last cycle's, else its brand as the
-    primary entity."""
+    The comparison set is soa_shared.comparison_sets' (2I-5): the study's
+    last cycle's, else, for its first cycle, the study's merchant as the
+    primary and its competitor list from supply as the rivals."""
     if not 1 <= body.runs_per_query <= 10:
         raise HTTPException(status_code=422, detail="runs_per_query is 1 to 10")
     # 2D: resolved here, so an unknown name is this 422 and not a validation
@@ -338,11 +339,22 @@ async def start_console_cycle(body: ConsoleCycleStart, scope: CustomerScope = De
     refused = [f"{p}: {surfaces.reported_reason(p)}" for p in platforms if surfaces.reported_reason(p)]
     if refused:
         raise HTTPException(status_code=422, detail="surface cannot run: " + "; ".join(refused))
-    comparison = cs.comparison_set_for(body.study_type, scope.org.id)
+    if not cs.study_in_org(body.study_type, scope.org.id):
+        raise HTTPException(status_code=422, detail=f"study {body.study_type!r} is not this customer's")
+    supply = None
+    with engine.connect() as conn:
+        first = not comparison_sets.latest_cycle_set(conn, body.study_type)
+        merchant = comparison_sets.study_merchant(conn, body.study_type, scope.org.id) if first else None
+    if first and merchant:   # a first cycle: what supply holds for the merchant, read with the org's token
+        merchants, merchants_error = await org_merchants(scope.org)
+        supply = await cs.prefetch_supply(full_loop._client(scope), merchants, merchants_error, merchant)
+    try:
+        with engine.begin() as conn:
+            comparison = comparison_sets.comparison_set_for_study(conn, body.study_type, scope.org.id, supply=supply)
+    except comparison_sets.ComparisonSetError as exc:
+        raise HTTPException(status_code=502, detail=f"could not create the cycle: {exc}")
     if not comparison:
-        raise HTTPException(status_code=422, detail=(
-            f"study {body.study_type!r} is not this customer's, or has no entity to measure; "
-            "create its first cycle in Command Center"))
+        raise HTTPException(status_code=422, detail="could not create the cycle: the study belongs to no merchant")
     code = body.cycle_code or f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{body.study_type}"
     request = CreateCycleRequest(cycle_code=code, study_type=body.study_type, platforms=platforms,
                                  runs_per_query=body.runs_per_query, notes=body.notes,

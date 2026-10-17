@@ -209,13 +209,17 @@ def test_a_transient_supply_outage_is_retried_on_the_next_tick(db):
 
 
 def test_no_comparison_set_fails_with_the_reason(db):
+    """2I-5: a study with no cycle takes its merchant's set (test_first_cycle_2i5.py); one
+    with no job in the org, and so no merchant, fails saying so."""
     with db.begin() as c:
         c.exec_driver_sql("DELETE FROM soa_cycles")
+        c.exec_driver_sql("""CREATE TABLE soa_query_generation_jobs (id INTEGER PRIMARY KEY, study_type TEXT,
+            organization_id INTEGER, customer_organization_id INTEGER, syndicated_merchant TEXT, tier_config TEXT)""")
     supply = FakeSupply('reference_done')
     co = coordinator(db, supply)
     rid = request(db, status='reference_done')
     co.tick()
-    assert 'comparison set' in co.get(rid)['error']
+    assert co.get(rid)['error'] == 'could not create the cycle: the study belongs to no merchant'
 
 
 # ═══ the dispatch: the worker makes supply's POST ═════════════════════════
