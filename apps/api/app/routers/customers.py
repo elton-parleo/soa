@@ -16,6 +16,19 @@ GET /api/customers/lookup?domain=&org_id=  (operator only)
     What taking a domain would mean for that account (Step 2A-0): unknown
     (create), unclaimed (claim — with what is on file), mine, unavailable.
 
+GET /api/customers/{org_id}/merchants/{slug}/competitors  (operator only)
+PUT /api/customers/{org_id}/merchants/{slug}/competitors  {competitors: [{name, domain}]}
+    2I-6: the competitors a merchant's cycles track, entered once, in the
+    wizard or on the customer in Command Center. One save writes, in order:
+    (1) supply's comparison_domains (PUT /merchants/{slug}/comparison-domains,
+    2A-4: 409 for an own or retailer domain, 422 on format), then (2) one
+    soa_entities row per competitor (soa_shared.comparison_sets.upsert_competitor:
+    matched by domain alias or website, else created with the name given; a
+    match named by its domain is renamed). Supply refusing leaves the entities
+    untouched; entities failing after supply saved says so, and saving again
+    finishes it. Both answer with the read-back: supply's list joined to soa's
+    entity names, "no entity yet" (name null) where a domain has none.
+
 POST /api/customers  (operator only)
     Step 1 of the wizard, "Account & customer". A merchant's identity is its
     domain: a domain the scrapers or the audit tool already know is CLAIMED,
@@ -310,3 +323,109 @@ async def _merchant_for_existing(org, body, found):
     if error is not None:
         _fail(status or 502, f"TrueSync did not create the customer: {error}")
     return org, merchant, "created"
+
+
+# ─── 2I-6: competitors to track ─────────────────────────────────────────
+
+#: supply's own rule (truesync/tenancy.py _HOSTNAME_RE): bare lowercase hostnames, at most 50 (MAX_COMPARISON_DOMAINS)
+HOSTNAME_RE = re.compile(r"^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$")
+MAX_COMPETITORS = 50
+
+
+class Competitor(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    domain: str
+
+
+class CompetitorList(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    competitors: List[Competitor]
+
+
+def competitor_problems(rows: List[Competitor]) -> List[str]:
+    """Format, as supply checks it, before anything is written."""
+    problems = []
+    if len(rows) > MAX_COMPETITORS:
+        problems.append(f"at most {MAX_COMPETITORS} competitors")
+    domains = [r.domain for r in rows]
+    bad = [d for d in domains if d.startswith("www.") or not HOSTNAME_RE.match(d)]
+    if bad:
+        problems.append("not bare lowercase hostnames (no scheme, path, port, uppercase or leading www.): "
+                        + ", ".join(map(repr, bad)))
+    repeated = sorted({d for d in domains if domains.count(d) > 1})
+    if repeated:
+        problems.append("listed more than once: " + ", ".join(map(repr, repeated)))
+    if any(not r.name.strip() for r in rows):
+        problems.append("every competitor needs a name")
+    return problems
+
+
+def _competitor_client(org_id: int):
+    org = customers.get_org(org_id)
+    if org is None:
+        _fail(404, f"account {org_id} is not a linked customer account")
+    try:
+        return TrueSyncClient(token=customers.token_for_org(org.id))
+    except customers.CustomerError as exc:
+        _fail(exc.status, str(exc))
+
+
+def competitors_view(slug: str, retailers: dict) -> dict:
+    """supply's /retailers view, its comparison_domains joined to soa's entity names."""
+    from soa_shared.comparison_sets import match_entity
+    listed = list((retailers or {}).get("comparison_domains") or [])
+    with engine.connect() as conn:
+        known = [dict(r) for r in conn.execute(text(
+            "SELECT id, name, website_url, aliases FROM soa_entities ORDER BY id")).mappings()]
+        names = {e["id"]: e["name"] for e in known}
+        rows = []
+        for domain in listed:
+            entity = match_entity(conn, domain, known)
+            rows.append({"domain": domain, "entity_id": entity, "name": names.get(entity)})
+    return {
+        "merchant": slug,
+        "own_domains": list((retailers or {}).get("own_domains") or []),
+        "retailer_domains": list((retailers or {}).get("domains") or []),
+        "competitors": rows,
+    }
+
+
+@router.get("/customers/{org_id}/merchants/{slug}/competitors")
+async def get_competitors(org_id: int, slug: str, user: dict = Depends(require_operator)):
+    status, retailers, error = await _competitor_client(org_id).get_retailers(slug)
+    if error is not None:
+        _fail(status or 502, f"TrueSync did not answer with {slug}'s competitor list: {error}")
+    return competitors_view(slug, retailers)
+
+
+@router.put("/customers/{org_id}/merchants/{slug}/competitors")
+async def put_competitors(org_id: int, slug: str, body: CompetitorList, user: dict = Depends(require_operator)):
+    from soa_shared.comparison_sets import upsert_competitor
+    problems = competitor_problems(body.competitors)
+    if problems:
+        _fail(422, "; ".join(problems), code="invalid")
+    client = _competitor_client(org_id)
+    # (1) supply: the list it reads pages for and every cycle's rivals come from
+    status, retailers, error = await client.put_comparison_domains(slug, [r.domain for r in body.competitors])
+    if error is not None:
+        _fail(status or 502, f"TrueSync refused the competitor list, so nothing was saved: {error}",
+              code="supply_refused")
+    # (2) soa: the entities the coder tracks, named as entered
+    _status, tenant, _error = await client.get_tenant()
+    record = next((m for m in (tenant or {}).get("merchants", []) if m.get("slug") == slug), {})
+    entity_type = "brand" if record.get("kind") != "seller" else "retailer"
+    saved = []
+    try:
+        with engine.begin() as conn:
+            for row in body.competitors:
+                entity_id, action = upsert_competitor(conn, row.name.strip(), row.domain, entity_type)
+                saved.append({"domain": row.domain, "entity_id": entity_id, "action": action})
+    except Exception as exc:  # noqa: BLE001 - said, with what did save
+        log.exception("competitors for %s: entities not written", slug)
+        _fail(500, "TrueSync saved the competitor list, but soa's entities were not written "
+                   f"({exc.__class__.__name__}); save again to finish", code="entities_failed")
+    return {**competitors_view(slug, retailers), "saved": saved}
+

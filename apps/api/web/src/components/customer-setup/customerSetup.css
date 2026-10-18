@@ -113,3 +113,11 @@
 .csw .claim.unavailable { border-color: #fecaca; background: var(--bad-bg); }
 .csw .claim.unavailable .claim-head { color: var(--bad-ink); margin: 0; }
 .csw .note.provenance { margin: 0 0 12px; }
+
+/* 2I-6: competitors to track (CompetitorsSection, CompetitorsPanel) */
+.csw .ent.comp input:first-child { flex: 0 0 38%; }
+.csw .row-problem { font-size: 12px; color: var(--bad-ink); margin: -3px 0 8px 2px; }
+.csw .saved-list { margin-top: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; font-size: 12.5px; }
+.csw .saved-list .k { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 6px; }
+.csw .saved-list ul { margin: 0; padding-left: 16px; line-height: 1.7; }
+.csw .saved-list .muted { color: var(--muted); font-weight: 500; font-style: italic; }

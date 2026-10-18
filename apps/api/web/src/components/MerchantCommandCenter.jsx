@@ -9,6 +9,7 @@ import DrawerErrorBoundary from './merchant-command-center/DrawerErrorBoundary.j
 import CustomerSwitcher from './merchant-command-center/CustomerSwitcher.jsx'
 import ProspectView from './merchant-command-center/ProspectView.jsx'
 import CustomerSetupWizard from './customer-setup/CustomerSetupWizard.jsx'
+import CompetitorsPanel from './customer-setup/CompetitorsPanel.jsx'
 import { listCustomers } from '../customersApi.js'
 import { getSelection, setSelection, resolveSelection } from '../customerSelection.js'
 import {
@@ -92,6 +93,7 @@ export default function MerchantCommandCenter({ onNavigate }) {
   const [customersError, setCustomersError] = useState(null)
   const [selection,      setSelectionState] = useState(() => getSelection())
   const [wizard,         setWizard]         = useState(null)        // { mode, existing } | null
+  const [competitorsFor, setCompetitorsFor] = useState(null)        // 2I-6: { orgId, merchant } | null
 
   const [brand,        setBrand]        = useState(null)
   const [channels,     setChannels]     = useState([])
@@ -664,6 +666,16 @@ export default function MerchantCommandCenter({ onNavigate }) {
 
             <div className="mcc-spacer" />
 
+            {/* 2I-6: the competitors every cycle of this merchant tracks, either hosting */}
+            {!inProspectMode && merchant && isOperator && (
+            <button
+              className="mcc-btn"
+              onClick={() => setCompetitorsFor({ orgId: org.org_id, merchant })}
+            >
+              Competitors
+            </button>
+            )}
+
             {/* Re-entry for a customer-hosted merchant: a new feed version,
                 or its owned offers, through the wizard's own screens. */}
             {!inProspectMode && external && isOperator && (
@@ -981,6 +993,14 @@ export default function MerchantCommandCenter({ onNavigate }) {
       </div>
 
       <Toasts toasts={toasts} onDismiss={dismissToast} />
+
+      <CompetitorsPanel
+        open={!!competitorsFor}
+        orgId={competitorsFor?.orgId}
+        merchant={competitorsFor?.merchant}
+        onClose={() => setCompetitorsFor(null)}
+        onSaved={(v) => pushToast('ok', `Saved — ${v.competitors.length} competitor${v.competitors.length === 1 ? '' : 's'} tracked`)}
+      />
 
       {/* The setup wizard: a new customer, or re-entry on this one. When it
           finishes, the customer it made or changed is selected and the

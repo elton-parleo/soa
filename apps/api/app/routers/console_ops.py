@@ -343,9 +343,8 @@ async def start_console_cycle(body: ConsoleCycleStart, scope: CustomerScope = De
         raise HTTPException(status_code=422, detail=f"study {body.study_type!r} is not this customer's")
     supply = None
     with engine.connect() as conn:
-        first = not comparison_sets.latest_cycle_set(conn, body.study_type)
-        merchant = comparison_sets.study_merchant(conn, body.study_type, scope.org.id) if first else None
-    if first and merchant:   # a first cycle: what supply holds for the merchant, read with the org's token
+        merchant = comparison_sets.study_merchant(conn, body.study_type, scope.org.id)
+    if merchant:   # what supply holds for the merchant (2I-6: a later cycle adds its new competitors), the org's token
         merchants, merchants_error = await org_merchants(scope.org)
         supply = await cs.prefetch_supply(full_loop._client(scope), merchants, merchants_error, merchant)
     try:

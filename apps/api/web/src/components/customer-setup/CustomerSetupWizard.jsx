@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { createCustomer, lookupDomain } from '../../customersApi.js'
+import { createCustomer, lookupDomain, saveCompetitors } from '../../customersApi.js'
+import CompetitorsSection, { competitorProblems, emptyCompetitor, filledCompetitors } from './CompetitorsSection.jsx'
 import { truesyncApi } from '../../truesyncApi.js'
 import {
   MECHANICS, emptyRow, toIncentives, fromIncentive, describeOffers,
@@ -18,6 +19,11 @@ import './customerSetup.css'
  *                           the merchant with kind + hosting, its retailer
  *                           list. Must happen here: validating a feed needs
  *                           the merchant and its retailer list to exist.
+ *                           2I-6: then its competitors to track, if any were
+ *                           entered (PUT .../competitors: TrueSync's list,
+ *                           then soa's entities). A refusal leaves the
+ *                           customer made and the rows editable; Continue
+ *                           saves them again.
  *   2  Product feed         on file drop: feed/validate (writes no record,
  *                           stages the preview). Skipped for hosting=parleo:
  *                           a Parleo-hosted merchant's record is its brand
@@ -174,6 +180,9 @@ export default function CustomerSetupWizard({
   const [kind, setKind] = useState('seller')
   const [hosting, setHosting] = useState('external')
   const [retailers, setRetailers] = useState([''])
+  // 2I-6: competitors to track, and what TrueSync holds once they are saved
+  const [competitors, setCompetitors] = useState([emptyCompetitor()])
+  const [competitorsSaved, setCompetitorsSaved] = useState(null)
   // What step 1 created: { orgId, orgName, merchant, action, provenance }.
   // Once set, step 1 is a record of what exists, not a form.
   const [created, setCreated] = useState(null)
@@ -202,6 +211,7 @@ export default function CustomerSetupWizard({
     setStepIndex(0); setError(null); setBusy(null)
     setAccountChoice('new'); setAccountName(''); setMerchantName(''); setDomain('')
     setKind('seller'); setHosting('external'); setRetailers([''])
+    setCompetitors([emptyCompetitor()]); setCompetitorsSaved(null)
     setFiles([]); setPreview(null); setFilter('all'); setContinueWithValid(false)
     setOffers([emptyRow('loyalty_program')]); setOfferErrors({})
     setFound(null); setLooking(false); setProvenance(null)
@@ -290,7 +300,33 @@ export default function CustomerSetupWizard({
     if (accountChoice === 'new' && !accountName.trim()) return 'Name the account.'
     if (!merchantName.trim()) return 'Name the customer.'
     if (!domain.trim()) return "Give the customer's domain."
+    if (Object.keys(competitorProblemsNow()).length) return 'Fix the competitors marked below, or remove them.'
     return null
+  }
+
+  function competitorProblemsNow() {
+    return competitorProblems(competitors, {
+      own: [bareDomain(created?.merchant?.domain || domain)].filter(Boolean),
+      retailers: retailers.map(bareDomain).filter(Boolean),
+    })
+  }
+
+  // 2I-6: after the customer exists. True when there is nothing (left) to save.
+  async function saveStep1Competitors(made) {
+    const list = filledCompetitors(competitors)
+    if (!list.length || competitorsSaved) return true
+    if (Object.keys(competitorProblemsNow()).length) { setError('Fix the competitors marked below, or remove them.'); return false }
+    setBusy('Saving the competitors…')
+    try {
+      setCompetitorsSaved(await saveCompetitors(made.orgId, made.merchant.slug, list))
+      return true
+    } catch (err) {
+      setError(`The customer was created, but its competitors were not saved: ${err.message} `
+        + 'Fix them and press Continue to save them again.')
+      return false
+    } finally {
+      setBusy(null)
+    }
   }
 
   async function runStep1() {
@@ -312,6 +348,7 @@ export default function CustomerSetupWizard({
         action: result.merchant_action, provenance: result.provenance,
       }
       setCreated(made)
+      if (!(await saveStep1Competitors(made))) return null
       return made
     } catch (err) {
       if (typeof err.orgId === 'number') {
@@ -384,6 +421,8 @@ export default function CustomerSetupWizard({
   async function next() {
     if (step === 'account' && !created) {
       if (!(await runStep1())) return
+    } else if (step === 'account' && mode === 'new' && !(await saveStep1Competitors(created))) {
+      return
     }
     if (step === 'feed' && !feedReady) return
     if (step === 'offers' && !checkOffers()) return
@@ -592,6 +631,14 @@ export default function CustomerSetupWizard({
                   )}
                 </div>
               </div>
+            )}
+
+            {step === 'account' && mode === 'new' && (
+              <CompetitorsSection rows={competitors} onChange={setCompetitors}
+                own={[bareDomain(created?.merchant?.domain || domain)].filter(Boolean)}
+                retailers={retailers.map(bareDomain).filter(Boolean)}
+                disabled={!!competitorsSaved || !!busy}
+                saved={competitorsSaved ? competitorsSaved.competitors : null} />
             )}
 
             {/* ── 2: Product feed ─────────────────────────────── */}

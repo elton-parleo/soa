@@ -1,0 +1,5 @@
+{
+ "_note": "2I-6: what Perplexity answered every FL7 run with the retired model (Oct 17): HTTP 400, error type invalid_model. RECONSTRUCTED, not recorded: no response body was kept, and production is not read. The envelope is the OpenAI-compatible error object the openai SDK parses ({error: {message, type, code}}); the message names the model as Perplexity's does. The test pins that the runner surfaces it as the run's error, whatever its exact words.",
+ "status": 400,
+ "body": {"error": {"message": "Invalid model 'llama-3.1-sonar-large-128k-online'. Permitted models can be found in the documentation at https://docs.perplexity.ai/getting-started/models.", "type": "invalid_model", "code": 400}}
+}

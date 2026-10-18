@@ -22,6 +22,10 @@ API never reads those two settings, since it never calls SerpApi. Gemini
 web and ChatGPT web have no hosted provider we have verified; they are
 listed as not available, with that reason, so the modal says so rather
 than hiding them.
+
+2I-6: a surface names a configuration, not a model. Perplexity's runner asks
+the model SOA_PERPLEXITY_MODEL configures (soa_shared/config.py, default
+sonar-pro); it is grounded whichever Sonar model that is.
 """
 import os
 from dataclasses import asdict, dataclass

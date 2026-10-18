@@ -31,6 +31,11 @@ SOA_INTER_RUN_DELAY_SECONDS: float = float(os.environ.get("SOA_INTER_RUN_DELAY_S
 SOA_CLAUDE_TIMEOUT_SECONDS: int = int(os.environ.get("SOA_CLAUDE_TIMEOUT_SECONDS", "120"))
 SOA_OPENAI_TIMEOUT_SECONDS: int = int(os.environ.get("SOA_OPENAI_TIMEOUT_SECONDS", "120"))
 SOA_PERPLEXITY_TIMEOUT_SECONDS: int = int(os.environ.get("SOA_PERPLEXITY_TIMEOUT_SECONDS", "120"))
+#: 2I-6: the Sonar model the Perplexity runner asks. The hard-coded
+#: llama-3.1-sonar-large-128k-online was retired (400 invalid_model, FL7).
+#: sonar-pro: "everyday research questions, light multi-step lookups with
+#: current information" (docs.perplexity.ai, Migrate from Sonar, read 2026-10-17).
+SOA_PERPLEXITY_MODEL: str = os.environ.get("SOA_PERPLEXITY_MODEL", "sonar-pro")
 SOA_GEMINI_TIMEOUT_SECONDS: int = int(os.environ.get("SOA_GEMINI_TIMEOUT_SECONDS", "120"))
 
 # Gemini 503 UNAVAILABLE retry config

@@ -6392,3 +6392,54 @@ alone cannot tell the reads from the study. The key is only on a failed request:
 reads byte for byte as before (`tests/test_full_loop_2i.py`). The strip's three chip states are
 unchanged; the console colours the chip `failed_step` names (`reads` the reads chip, `cycle` and
 `study` the study chip, `scoring` the scoring chip).
+
+## 2I-6: competitors to track, entered once
+
+The brand's first cycle (FL7, Oct 17) tracked Wiggle & Snug alone, as 2I-5's rule makes a first cycle
+when the merchant has no competitor list: the coder records the comparison set's brands, so Pampers
+and Huggies were invisible on every consumer answer and "named but not tracked" was empty.
+Competitors are now entered once per merchant, as name + domain: in the setup wizard's first step
+("Competitors to track", beside the retailers) and on an existing customer in the Command Center
+(the **Competitors** button: `CompetitorsPanel`, the same `CompetitorsSection`).
+
+**One save, two writes, in order** (`PUT /api/customers/{org}/merchants/{slug}/competitors`):
+
+1. supply: the merchant's `comparison_domains` through `PUT /api/truesync/merchants/{slug}/comparison-domains`
+   (2A-4, `tenant_writer`; replaces the list, `[]` clears it). Supply refuses an own or retailer domain
+   (409) and a malformed one (422); soa checks the same format first. A refusal leaves soa untouched.
+2. soa: one `soa_entities` row per competitor (`comparison_sets.upsert_competitor`): the row whose
+   alias or `website_url` host is the domain (its name kept, unless it is the domain itself, as 2I-5
+   names a rival it creates: then it takes the name given), else a new row with the name given, slug
+   from the name, `website_url` `https://<domain>/`, `aliases` `[<domain>]`. A failure here, after
+   supply saved, says so (`entities_failed`); saving again finishes it.
+
+Removing a competitor removes its domain from supply; its entity stays (entities are global).
+`GET` on the same path reads supply's `/retailers` back and joins `comparison_domains` to entity
+names: a domain with no entity reads **"no entity yet"**, so the two cannot drift silently.
+
+**The comparison set** (`soa_shared/comparison_sets.py`): a first cycle is as 2I-5 (M001 the
+merchant, M002 onward the list). A later cycle is now the previous cycle's set **plus** any listed
+domain it does not hold yet, numbered on from its last code: rivals = previous rivals ∪ the current
+list, in that order. **A domain removed from the list stays in later cycles' sets** until an operator
+removes it from the cycle entities: a set only grows by itself, so cycles stay comparable. A later
+cycle whose list cannot be read is copied as it was (the next one picks the addition up).
+
+### 2I-6: no share-of-mentions score without a rival (console scorer 8)
+
+Share of mentions counts our mentions over every tracked entity's, so a cycle whose comparison set
+is the brand alone scores it 1 of 1 whenever the brand is named: FL7's grounded surface scored 54
+with the brand named in 1 of 15 answers. On a cycle with no `competitor` in `soa_cycle_entities`
+(`console_score.load_tracked_rivals`), the dimension is **not measured**,
+`reason.no_rivals` ("no competitor is tracked on this cycle: add competitors in the wizard"; a colon,
+since no template carries a semicolon); its points leave the applicable max and the verdict is
+withheld, as for any unmeasured dimension (2C-3). Recommendation strength and the named counts do not
+depend on the set. The console's `SCORER_VERSION` is **8**, its own: the full-cycle scorer it reuses
+(`FULL_CYCLE_SCORER_VERSION`, Full Analysis) does not apply the rule and stays 7. The recompute line
+names each version's change between the stored and the new score that applies to the new one
+(`SCORER_CHANGES`, `SCORER_CHANGE_APPLIES`): "scorer 7 → 8: share of mentions not measured without a
+tracked competitor", and "scorer 6 → 8: ungrounded surfaces excluded from pooling" for a v6 score.
+
+Not measuring moves a score either way, by what the dimension was earning: FL7's (all 22 points, 1 of
+1) leaves and the score drops; on cycle 229's runs with its three rivals removed (the brand never
+named, 0 of 22) the score rises from 32 to 47 on 47 applicable points. 229 and FL4 as they ran track
+rivals and score as before.

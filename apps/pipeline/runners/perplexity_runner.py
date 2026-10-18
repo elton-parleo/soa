@@ -9,12 +9,21 @@ real user has when querying Perplexity. Response variance from live
 retrieval is expected and must NOT be reduced or normalized; the SoA
 methodology depends on natural output variance across runs.
 
+2I-6: the model is SOA_PERPLEXITY_MODEL (soa_shared/config.py, default
+sonar-pro), not a constant: the hard-coded llama-3.1-sonar-large-128k-online
+was retired and every run answered 400 invalid_model. Perplexity ended
+support for Sonar Chat Completions on 2026-09-27; synchronous requests like
+these keep working, reformulated as Agent API requests (docs.perplexity.ai,
+"Migrate from Sonar", read 2026-10-17).
+
 Temperature is supported by Perplexity and defaults to 0.8, providing
 moderate response variance across repeated runs of the same query.
 
 Token extraction uses the same field paths as OpenAI:
     response.usage.prompt_tokens / completion_tokens
 """
+from typing import Optional
+
 from openai import AsyncOpenAI
 
 import soa_shared.config as config
@@ -32,7 +41,7 @@ class PerplexityRunner(BasePlatformRunner):
 
     def __init__(
         self,
-        model: str = "llama-3.1-sonar-large-128k-online",
+        model: Optional[str] = None,
         temperature: float = 0.8,
         timeout_seconds: int = SOA_PERPLEXITY_TIMEOUT_SECONDS,
     ):
@@ -40,7 +49,7 @@ class PerplexityRunner(BasePlatformRunner):
             raise RuntimeError(
                 "PERPLEXITY_API_KEY is not set. Add it to /soa/.env."
             )
-        super().__init__(model=model, timeout_seconds=timeout_seconds)
+        super().__init__(model=model or config.SOA_PERPLEXITY_MODEL, timeout_seconds=timeout_seconds)
         self.temperature = temperature
         self._client = AsyncOpenAI(
             api_key=config.PERPLEXITY_API_KEY,

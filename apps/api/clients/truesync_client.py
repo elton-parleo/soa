@@ -266,6 +266,16 @@ class TrueSyncClient:
             json={"domains": domains},
         )
 
+    async def put_comparison_domains(self, merchant_slug: str, domains: list) -> ForwardResult:
+        """2I-6: supply's operator-editable comparison set (2A-4): PUT
+        /merchants/{slug}/comparison-domains {domains}. Replaces the list
+        ([] clears it); 409 when a domain is the merchant's own or a retailer's,
+        422 on format. Answers with the /retailers view."""
+        return await self.forward(
+            "PUT", f"/api/truesync/merchants/{_slug(merchant_slug)}/comparison-domains",
+            json={"domains": domains},
+        )
+
     async def validate_feed(
         self, merchant_slug: str, files: list, skip_reachability: bool = False,
     ) -> ForwardResult:
