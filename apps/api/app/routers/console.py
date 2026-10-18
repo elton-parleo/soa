@@ -214,6 +214,7 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
         with engine.connect() as conn:
             runs = score_svc.load_score_runs(conn, row)
             mentions = score_svc.load_score_mentions(conn, row)
+            rivals = score_svc.load_tracked_rivals(conn, row)
             score_svc.at('loading visibility')
             vis_rows = rm.load_visibility(conn, row).get('byQuestion') or []
             slug = merchant or score_svc.cycle_merchant(conn, row)
@@ -240,7 +241,7 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
                                      reference_rows=reference_rows, read_errors=errors,
                                      inputs={'merchant': slug, 'reference_run': reference_run, 'access_run': access_run,
                                              'scored_at': datetime.now(timezone.utc).isoformat()},
-                                     domain_checks=domain_checks)
+                                     domain_checks=domain_checks, rivals=rivals)
         # the value it replaces stays in its history (2E)
         body = score_svc.carry_history(body, stored, why)
         # a failed supply read is served, never stored: the next read tries again

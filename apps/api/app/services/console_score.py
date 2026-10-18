@@ -65,8 +65,11 @@ from app.services.lite_pillars import (
 from clients import truesync_client as supply_fields
 
 #: The scorer whose formula this is (reused, not forked). A re-weight bumps
-#: it and every stored console score reads stale.
-SCORER_VERSION = FULL_CYCLE_SCORER_VERSION
+#: it and every stored console score reads stale. 2I-6: "8" is
+#: FULL_CYCLE_SCORER_VERSION ("7") plus a rule only the console applies (share
+#: of mentions is not measured on a cycle that tracks no rival), so it is the
+#: console's own: the full-cycle scorer, and what it stamps, stay "7".
+SCORER_VERSION = "8"
 #: The adapter's own revision, beside the scorer's: a change to how loop
 #: counts become scorer inputs re-scores stored cycles too. Not a scorer
 #: version and never shown as one.
@@ -130,6 +133,7 @@ TEMPLATES = {
     'reason.no_program': 'the record states no member program and no page shows a member price',
     'reason.no_answers': 'no answer on this surface',
     'reason.ungrounded': 'ungrounded · not scored',
+    'reason.no_rivals': 'no competitor is tracked on this cycle: add competitors in the wizard',
     'previous.first_cycle': 'First cycle. Changes appear from the next one.',
     'previous.not_stored': 'Not comparable: {code} has no stored score yet. Open it to score it.',
     'previous.version': 'Scored under v{version}, re-score to compare.',
@@ -376,9 +380,16 @@ def _dim(code: str, *, earned: Optional[float], applicable: float, state: str, p
 
 def score_surface(surface: str, *, runs: List[dict], mentions: List[dict], crawl: dict,
                   crawl_errors: Optional[Dict[str, str]] = None, program_stated: bool,
-                  domain_checks: Optional[dict] = None) -> dict:
+                  domain_checks: Optional[dict] = None, rivals_tracked: bool = True) -> dict:
     """Every dimension on one surface, from the scorer's functions, and the
-    surface's score: round-free earned ÷ applicable max × 100."""
+    surface's score: round-free earned ÷ applicable max × 100.
+
+    2I-6 (scorer 8): share of mentions counts our mentions over every
+    tracked entity's, so a cycle that tracks no rival scores it 1 of 1
+    whenever we are named (FL7). Without a rival it is not measured: its
+    points leave the applicable max and the verdict is withheld, as for any
+    unmeasured dimension. Recommendation strength (our first picks over our
+    mentions) and the named counts do not depend on the set."""
     errors = crawl_errors or {}
     dims = []
 
@@ -390,8 +401,10 @@ def score_surface(surface: str, *, runs: List[dict], mentions: List[dict], crawl
             ('recommendation_strength', score_recommendation_strength_full, vis['picks'], vis['ours'], vis['rsi_score'])):
         at(f'{code} on {surface}')
         source = 'soa_coded_mentions, answered unprompted runs'
-        if not vis['runs']:
-            part = _unsourced_part(None, float(DIMENSIONS_BY_CODE[code].weight), 'reason.no_unprompted')
+        unmeasured = ('reason.no_unprompted' if not vis['runs'] else
+                      'reason.no_rivals' if code == 'share_of_mentions' and not rivals_tracked else None)
+        if unmeasured:
+            part = _unsourced_part(None, float(DIMENSIONS_BY_CODE[code].weight), unmeasured)
             part['source'] = source
             dims.append(_dim(code, earned=None, applicable=0, state=NOT_MEASURED, parts=[part], reason=part['reason']))
             continue
@@ -647,7 +660,7 @@ def dimension_deltas(now: dict, prev: dict) -> List[dict]:
 def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_rows: List[dict],
                 access: Optional[dict], reference_rows: Optional[List[dict]],
                 read_errors: Optional[Dict[str, str]] = None, inputs: Optional[dict] = None,
-                domain_checks: Optional[dict] = None) -> dict:
+                domain_checks: Optional[dict] = None, rivals: Optional[int] = None) -> dict:
     """GET /api/console/score without `previous` (score_with_previous adds it).
 
     runs: load_score_runs (one per run, with tier, stage, outcome and the
@@ -655,7 +668,9 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     and strength). vis_rows: Visibility's byQuestion. access: supply's access
     payload as accessibility_from_supply maps it. reference_rows: supply's
     /reference rows. domain_checks: the cycle's stored domain-check record
-    (soa_cycles.domain_checks, 2E), or None."""
+    (soa_cycles.domain_checks, 2E), or None. rivals: how many competitors the
+    cycle's comparison set tracks (load_tracked_rivals); None when not read,
+    which scores as before 2I-6."""
     errors = read_errors or {}
     at('crawl counts')
     crawl = crawl_counts(access, reference_rows)
@@ -666,7 +681,8 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     ungrounded = [s for s in ran if s not in surfaces.GROUNDED_KINDS]
     pooled = [s for s in ran if s in answered and s not in ungrounded]
     per = [score_surface(s, runs=runs, mentions=mentions, crawl=crawl, crawl_errors=errors,
-                         program_stated=program_stated, domain_checks=domain_checks) for s in pooled]
+                         program_stated=program_stated, domain_checks=domain_checks,
+                         rivals_tracked=rivals is None or rivals > 0) for s in pooled]
     at('pooling')
     scored = [p for p in per if p['score'] is not None]
     dims = [_pool_dimension(d.code, per) for d in DIMENSIONS] if per else []
@@ -790,6 +806,13 @@ def load_score_mentions(conn, cycle: dict) -> List[dict]:
     """), {'c': cycle['id']}).mappings()]
 
 
+def load_tracked_rivals(conn, cycle: dict) -> int:
+    """2I-6: how many competitors the cycle's comparison set tracks."""
+    return conn.execute(text(
+        "SELECT COUNT(*) FROM soa_cycle_entities WHERE cycle_id = :c AND role = 'competitor'"),
+        {'c': cycle['id']}).scalar() or 0
+
+
 def cycle_merchant(conn, cycle: dict) -> Optional[str]:
     """The merchant the cycle's questions were built from (their source_ref)."""
     at('finding the merchant')
@@ -859,7 +882,20 @@ def needs_recompute(body: Optional[dict], domain_checks: Optional[dict]) -> Opti
 
 
 #: 2I: what each scorer version changed, for the recompute line.
-SCORER_CHANGES = {'7': 'ungrounded surfaces excluded from pooling'}
+SCORER_CHANGES = {'7': 'ungrounded surfaces excluded from pooling',
+                  '8': 'share of mentions not measured without a tracked competitor'}
+
+
+def _no_rivals(body: dict) -> bool:
+    """Share of mentions went unmeasured for want of a rival on some surface."""
+    return any(row.get('reason') == TEMPLATES['reason.no_rivals']
+               for p in body.get('pillars') or [] for d in p.get('dimensions') or [] if d.get('code') == 'share_of_mentions'
+               for row in (d.get('by_surface') or {}).values())
+
+
+#: whether the new score is one the version's change applies to
+SCORER_CHANGE_APPLIES = {'7': lambda new: bool((new.get('coverage') or {}).get('ungrounded')),
+                         '8': _no_rivals}
 
 
 _NOT_CARRIED = object()
@@ -928,10 +964,15 @@ def recompute_line(old: dict, new: dict, reason: str) -> str:
     prev, now = old.get('scorer_version'), new.get('scorer_version')
     if prev == now or prev is None or now is None:
         return reason
-    change = SCORER_CHANGES.get(str(now))
-    dropped = (new.get('coverage') or {}).get('ungrounded')
-    if change and dropped and old.get('score') != new.get('score'):
-        return TEMPLATES['recompute.version_changed'].format(prev=prev, now=now, change=change)
+    # 2I-6: every version's change between the two that applies to the new score (6 -> 8 can be both)
+    try:
+        between = [str(v) for v in range(int(prev) + 1, int(now) + 1)]
+    except ValueError:
+        between = [str(now)]
+    changes = [SCORER_CHANGES[v] for v in between
+               if v in SCORER_CHANGES and SCORER_CHANGE_APPLIES.get(v, lambda _new: False)(new)]
+    if changes and old.get('score') != new.get('score'):
+        return TEMPLATES['recompute.version_changed'].format(prev=prev, now=now, change=', '.join(changes))
     return (TEMPLATES['recompute.version'].format(prev=prev, now=now)
             + ''.join(TEMPLATES['recompute.input_changed'].format(input=i) for i in changed_inputs(old, new)))
 
