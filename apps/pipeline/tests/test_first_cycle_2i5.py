@@ -131,19 +131,20 @@ def test_a_competitor_list_is_tracked_in_its_order_an_existing_entity_matched_by
                                          'website_url': 'https://huggies.com/', 'aliases': ['huggies.com']}
 
 
-def test_the_second_cycle_copies_the_first_and_reads_nothing(db, reads):
+def test_the_second_cycle_copies_the_first_and_a_removed_domain_stays(db, reads):
+    """2I-6: a later cycle reads the list to add to the copy; an emptied list removes nothing."""
     reads['listed'] = 'two'
     co = coordinator(db, FakeSupply('reference_done'))
     first = co.get((lambda r: (co.tick(), r)[1])(loop(db)))['cycle_id']
     with db.begin() as c:
         c.execute(text("UPDATE soa_full_loop_requests SET status = 'scored'"))
         c.execute(text("UPDATE soa_cycles SET status = 'complete', start_date = '2026-10-16'"))
-    reads['listed'], reads['calls'] = 'none', []          # the list changed on supply: the copy does not follow it
+    reads['listed'], reads['calls'] = 'none', []          # the list emptied on supply: the set keeps its rivals
     rid = loop(db, run=34)
     co.tick()
     second = co.get(rid)['cycle_id']
     assert second != first and cycle_set(db, second) == cycle_set(db, first)
-    assert len(cycle_set(db, second)) == 3 and reads['calls'] == []
+    assert len(cycle_set(db, second)) == 3 and reads['calls'] == [f'/api/truesync/merchants/{BRAND}/retailers']
 
 
 # ═══ a study with a cycle: today's set ═══════════════════════════════════

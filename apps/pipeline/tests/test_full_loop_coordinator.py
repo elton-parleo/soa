@@ -86,6 +86,9 @@ def db():
             entity_id INTEGER, comparison_code TEXT, role TEXT)""")
         c.exec_driver_sql("""CREATE TABLE soa_queries (id INTEGER PRIMARY KEY, study_type TEXT,
             study_pattern TEXT, status TEXT)""")
+        # 2I-5/2I-6: the comparison set reads the study's merchant from its job (none here: 'acme' predates them)
+        c.exec_driver_sql("""CREATE TABLE soa_query_generation_jobs (id INTEGER PRIMARY KEY, study_type TEXT,
+            organization_id INTEGER, customer_organization_id INTEGER, syndicated_merchant TEXT, tier_config TEXT)""")
         c.exec_driver_sql("INSERT INTO soa_queries (study_type, study_pattern, status) VALUES "
                           "('acme', 'brand_at_retail', 'Active'), ('acme', 'brand_at_retail', 'Active')")
         c.exec_driver_sql("""INSERT INTO soa_cycles (id, cycle_code, study_type, study_pattern, status,
@@ -213,8 +216,6 @@ def test_no_comparison_set_fails_with_the_reason(db):
     with no job in the org, and so no merchant, fails saying so."""
     with db.begin() as c:
         c.exec_driver_sql("DELETE FROM soa_cycles")
-        c.exec_driver_sql("""CREATE TABLE soa_query_generation_jobs (id INTEGER PRIMARY KEY, study_type TEXT,
-            organization_id INTEGER, customer_organization_id INTEGER, syndicated_merchant TEXT, tier_config TEXT)""")
     supply = FakeSupply('reference_done')
     co = coordinator(db, supply)
     rid = request(db, status='reference_done')

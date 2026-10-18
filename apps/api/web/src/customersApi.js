@@ -74,5 +74,31 @@ export async function lookupDomain(domain, { orgId = null, signal } = {}) {
   return res.json()
 }
 
+/**
+ * 2I-6: a merchant's competitors to track. Both answer with the read-back:
+ * { merchant, own_domains, retailer_domains, competitors: [{ domain, name, entity_id }] }
+ * (name null: supply lists the domain and soa has no entity for it yet).
+ * The save writes supply's list, then soa's entities; a refusal carries
+ * `details.code` ('invalid' | 'supply_refused' | 'entities_failed').
+ */
+export async function getCompetitors(orgId, slug) {
+  const res = await fetch(`/api/customers/${orgId}/merchants/${encodeURIComponent(slug)}/competitors`, { headers: apiAuthHeaders() })
+  if (!res.ok) {
+    let detail = `competitors → ${res.status}`
+    try {
+      const body = await res.json()
+      detail = typeof body.detail === 'string' ? body.detail : body.detail?.message || detail
+    } catch (_) {}
+    throw new TrueSyncError(detail, { status: res.status })
+  }
+  return res.json()
+}
+
+export async function saveCompetitors(orgId, slug, competitors) {
+  return proxyWrite('PUT', `/api/customers/${orgId}/merchants/${encodeURIComponent(slug)}/competitors`, {
+    json: { competitors },
+  })
+}
+
 export const KIND_LABEL = { seller: 'Seller', brand: 'Brand' }
 export const HOSTING_LABEL = { parleo: 'Parleo-hosted', external: 'Customer-hosted' }

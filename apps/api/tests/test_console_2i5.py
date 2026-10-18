@@ -70,14 +70,21 @@ def test_start_cycle_on_a_never_run_study_is_201_with_the_merchant_and_its_compe
     assert {c['path'] for c in upstream.calls} >= {'/api/truesync/tenant', f'/api/truesync/merchants/{BRAND}/retailers'}
 
 
-def test_a_second_start_copies_the_first_and_reads_no_competitor_list(http, first, upstream):
+def test_a_second_start_copies_the_first_and_adds_a_newly_listed_competitor(http, first, upstream):
+    """2I-6: rivals = the previous cycle's rivals, then the list's new ones, numbered on."""
     as_('op')
     assert http.post('/api/console/cycles', params={'org': 10}, json={
         'study_type': STUDY, 'platforms': ['chatgpt'], 'cycle_code': 'WSB-FIRST'}).status_code == 201
-    upstream.calls.clear()
+    later = {**SUPPLY['two'], 'comparison_domains': ['huggies.com', 'luvs.com']}   # pampers.com removed, luvs.com added
+    upstream.answer('GET', f'/api/truesync/merchants/{BRAND}/retailers', body=later, token=TOKEN_A)
     assert http.post('/api/console/cycles', params={'org': 10}, json={
         'study_type': STUDY, 'platforms': ['chatgpt'], 'cycle_code': 'WSB-SECOND'}).status_code == 201
-    assert not any('/retailers' in c['path'] for c in upstream.calls)
+    with first.connect() as c:
+        rows = [tuple(x) for x in c.execute(text(
+            "SELECT e.slug, ce.comparison_code FROM soa_cycle_entities ce JOIN soa_cycles cy ON cy.id = ce.cycle_id "
+            "JOIN soa_entities e ON e.id = ce.entity_id WHERE cy.cycle_code = 'WSB-SECOND' ORDER BY ce.comparison_code"))]
+    # the removed pampers.com stays until an operator removes it from the set
+    assert rows == [(BRAND, 'M001'), ('pampers-com', 'M002'), ('huggies', 'M003'), ('luvs-com', 'M004')]
 
 
 def test_a_study_with_no_merchant_is_a_422_saying_so(http, first):

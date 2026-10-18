@@ -14,7 +14,7 @@ import { createCustomer, lookupDomain } from '../../../customersApi.js'
 import { truesyncApi } from '../../../truesyncApi.js'
 import PREVIEW from '../__fixtures__/feed-preview-acme-pets.json'
 
-vi.mock('../../../customersApi.js', () => ({ createCustomer: vi.fn(), lookupDomain: vi.fn() }))
+vi.mock('../../../customersApi.js', () => ({ createCustomer: vi.fn(), lookupDomain: vi.fn(), saveCompetitors: vi.fn() }))
 vi.mock('../../../truesyncApi.js', () => ({
   truesyncApi: {
     validateFeed: vi.fn(), commitFeed: vi.fn(), putOwnedIncentives: vi.fn(),

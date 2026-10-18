@@ -14,7 +14,9 @@ export const CUSTOMERS = {
     {
       org_id: 7, name: 'Wiggle & Snug', tenant_slug: 'wiggle-and-snug', error: null,
       merchants: [{ slug: 'wiggle-and-snug', name: 'Wiggle & Snug', domain: 'trueshopstore.com',
-                    kind: 'seller', hosting: 'parleo', has_record: true }],
+                    kind: 'seller', hosting: 'parleo', has_record: true },
+                  { slug: 'wiggle-and-snug-brand', name: 'Wiggle & Snug Brand', domain: 'wiggleandsnug.com',
+                    kind: 'brand', hosting: 'external', has_record: true }],
     },
   ],
 }
@@ -44,4 +46,15 @@ export async function lookupDomain(domain) {
   }
   if (domain === 'bee.test') return { status: 'unavailable', domain }
   return { status: 'unknown', domain }
+}
+
+// 2I-6: the brand's competitors as TrueSync lists them, joined to soa's
+// entities: Huggies has one, pampers.com was entered on supply directly.
+let COMPETITORS = [{ domain: 'huggies.com', entity_id: 4, name: 'Huggies' }, { domain: 'pampers.com', entity_id: null, name: null }]
+export async function getCompetitors() {
+  return { merchant: 'wiggle-and-snug-brand', own_domains: ['wiggleandsnug.com'], retailer_domains: ['trueshopstore.com'], competitors: COMPETITORS }
+}
+export async function saveCompetitors(orgId, slug, rows) {
+  COMPETITORS = rows.map((r, i) => ({ domain: r.domain, entity_id: 10 + i, name: r.name }))
+  return getCompetitors()
 }
