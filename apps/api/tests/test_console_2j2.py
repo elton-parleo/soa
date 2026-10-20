@@ -17,11 +17,16 @@
    missed it: catalog_stages keyed a row by variant_id (a feed row has none)
    else its GTIN (none), and True Value keyed the read by its variant_ref
    (`feed_sku:<n>`) with the bare SKU as an alias, never `sku:<sku>`.
+
+3. The Prompts read model, GET /api/console/prompts?merchant= (console_prompts):
+   the merchant's current study in sets, with the agents from the surfaces
+   report.
 """
 import json
 import os
 
 import pytest
+from sqlalchemy import text
 
 from app.services import console_parity as parity
 from soa_shared import catalog_tiers as ct
@@ -32,6 +37,8 @@ from tests.test_console_2i8 import FIXTURES, _read
 from tests.test_console_read_models import TOKEN_A, WS_TENANT, _encode, as_, http, upstream  # noqa: F401  (fixtures)
 
 STORE_PRODUCTS = os.path.join(os.path.dirname(__file__), 'fixtures', 'console', 'store_products_2j2.json')
+#: the Prompts sample docs/console-read-models.md shows, for the console's fixtures
+PROMPTS_SAMPLE = os.path.join(os.path.dirname(__file__), 'fixtures', 'console', 'prompts_fl12_2j2.json')
 
 
 def _brand(db):
@@ -159,6 +166,13 @@ def test_the_overview_has_the_gtin_less_products_too(http, db):
 
 
 @pytest.fixture
+def pampers_tenant(upstream):
+    tenant = {**WS_TENANT, 'merchants': WS_TENANT['merchants'] + [f2j2.TENANT_MERCHANT]}
+    upstream.answer('GET', '/api/truesync/tenant', body=tenant, token=TOKEN_A)
+    return upstream
+
+
+@pytest.fixture
 def pampers_supply(upstream):
     tenant = {**WS_TENANT, 'merchants': WS_TENANT['merchants'] + [f2j2.TENANT_MERCHANT]}
     base = f'/api/truesync/merchants/{f2j2.MERCHANT}'
@@ -193,3 +207,79 @@ def test_catalog_row_keys_order():
     assert parity.catalog_row_keys({'variant_key': 'sku:A-1', 'gtin': None, 'sku': 'A-1'}) == ['sku:A-1']
     assert parity.catalog_row_keys({'variant_key': '00037000863434', 'gtin14': '00037000863434',
                                     'gtin': '00037000863434', 'sku': 'S'}) == ['00037000863434', 'sku:S']
+
+
+# ═══ 3. The Prompts read model ═══════════════════════════════════════════
+
+def _prompts(http, user='op', **params):
+    as_(user)
+    query = {'merchant': f2j2.MERCHANT, **({'org': 10} if user == 'op' else {}), **params}
+    return http.get('/api/console/prompts', params=query)
+
+
+def test_prompts_are_the_current_study_in_four_sets_on_six_agents(http, db, pampers_tenant):
+    _brand(db)
+    r = _prompts(http)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body['study'] == {'id': f2j2.STUDY, 'name': 'Wiggle & Snug full'} and body['cycle'] == f2j2.CYCLE
+    assert body['headline'] == '88 prompts in 4 sets, 1 run each on 6 agents'
+    assert (body['prompts'], body['set_count'], body['runs_per_question'], body['runs_per_question_source'],
+            body['agents_on_last_cycle'], body['answers_per_cycle'], body['cadence']) == (88, 4, 1, 'cycle', 6, 528, None)
+    assert [(s['tier'], s['name'], s['count'], s['answers_per_cycle']) for s in body['sets']] == [
+        ('category_control', 'Category control', 51, 306), ('brand_direct', 'Brand-direct', 11, 66),
+        ('catalog_accuracy', 'Catalog accuracy', 20, 120), ('value_incentives', 'Value & incentives', 6, 36)]
+    assert sum(s['count'] for s in body['sets']) == body['prompts']
+    catalog = body['sets'][2]
+    assert catalog['examples'] == ['What does the Pampers Swaddlers NB 84 cost at walmart.com?',
+                                   'What does the Pampers Swaddlers NB 84 cost at amazon.com?',
+                                   'What does the Pampers Swaddlers S1 96 cost at walmart.com?']
+    assert catalog['line'] == '20 prompts, 120 answers a cycle'
+    assert all(len(s['examples']) == 3 for s in body['sets'])
+
+
+def test_the_agents_are_the_surfaces_report_s_with_their_last_cycle(http, db, pampers_tenant):
+    _brand(db)
+    agents = _prompts(http).json()['agents']
+    assert [a['id'] for a in agents] == ['chatgpt', 'gemini_grounded', 'aimode', 'perplexity', 'copilot', 'claude']
+    assert [a['name'] for a in agents] == ['ChatGPT', 'Gemini', 'Google AI Mode', 'Perplexity', 'Copilot', 'Claude']
+    by = {a['id']: a for a in agents}
+    assert by['chatgpt']['method'] == 'API with search grounding' and by['aimode']['method'] == 'Consumer UI, logged out'
+    # 87 of the 88 questions ran; AI Mode errored once with no answer
+    assert (by['chatgpt']['last_status'], by['chatgpt']['last_runs'], by['chatgpt']['last_answered']) == ('answered', 87, 87)
+    assert (by['aimode']['last_status'], by['aimode']['last_answered'], by['aimode']['last_errored']) == ('partial', 86, 1)
+
+
+def test_runs_per_question_is_the_last_full_loop_request_s(http, db, pampers_tenant):
+    _brand(db)
+    with db.begin() as c:
+        for rpq, at in ((2, '2026-10-18T10:00:00+00:00'), (3, '2026-10-19T10:00:00+00:00')):
+            c.execute(text("INSERT INTO soa_full_loop_requests (organization_id, merchant_slug, study_type, platforms, "
+                           "runs_per_query, status, created_at) VALUES (10, :m, :st, :p, :r, 'scored', :at)"),
+                      {'m': f2j2.MERCHANT, 'st': f2j2.STUDY, 'p': '[]', 'r': rpq, 'at': at})
+        c.execute(text("INSERT INTO soa_full_loop_requests (organization_id, merchant_slug, study_type, platforms, "
+                       "runs_per_query, status, created_at) VALUES (10, :m, NULL, '[]', 5, 'reads_done', :at)"),
+                  {'m': f2j2.MERCHANT, 'at': '2026-10-20T10:00:00+00:00'})   # reads-only: no study
+    body = _prompts(http).json()
+    assert (body['runs_per_question'], body['runs_per_question_source']) == (3, 'full_loop')
+    assert body['headline'] == '88 prompts in 4 sets, 3 runs each on 6 agents'
+    assert body['answers_per_cycle'] == 528      # questions x agents on the last cycle
+
+
+def test_a_member_reads_their_own_merchant_s_prompts(http, db, pampers_tenant):
+    _brand(db)
+    assert _prompts(http, 'alice').json()['prompts'] == 88
+    assert _prompts(http, 'alice', org=20).status_code == 403
+    assert _prompts(http, merchant='not-ours').status_code == 404
+
+
+def test_a_merchant_with_no_study_has_no_sets(http, db, pampers_tenant):
+    body = _prompts(http).json()
+    assert body['study'] is None and body['sets'] == [] and body['prompts'] == 0
+    assert body['headline'] == '0 prompts in 0 sets'
+
+
+def test_the_documented_sample_is_the_endpoint_s_response(http, db, pampers_tenant):
+    _brand(db)
+    with open(PROMPTS_SAMPLE) as fh:
+        assert _prompts(http).json() == json.load(fh)

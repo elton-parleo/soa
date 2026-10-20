@@ -53,6 +53,7 @@ Lists (`runs`, `studio/*`) return only the scope's rows.
 | `GET /api/console/me` | who is signed in and the orgs they may select (2C-0) | — (the console's workspace switcher) |
 | `GET /api/console/full-loop/latest` | the scope's most recent full loop, or `null` (2C-0) | — (soa) |
 | `GET /api/console/score?cycle=<code>[&merchant=<slug>]` | the Share of Algorithm: per surface, pooled as the mean of the surface scores, stored with its scorer version (2C-3) | `Score` (beside) |
+| `GET /api/console/prompts[?merchant=<slug>]` | the merchant's current study as the Prompts page shows it: sets (the tiers in stage order) with counts, three examples and answers a cycle, runs per question, the agents with method and last-cycle status (2J-2) | — (soa; the demo's `#pg.prompts`) |
 
 Extra fields ride **beside** the typed ones; a typed field is never bent to hold
 something it does not mean. Optional typed fields (`field?: string`) are omitted,
@@ -6638,3 +6639,71 @@ The two joins that missed:
 
 A row with a GTIN was found by its GTIN before and is unchanged. On the fixture every one of the 10 rows
 is measured (`stage_ladder` not measured 0, measured 10); each GTIN-less row has 8 quotes, 5 of them exact.
+
+### The Prompts read model
+
+`GET /api/console/prompts?merchant=<slug>` (an org member for their own org; an operator with `?org=`;
+`merchant` absent is the primary, one that is not the org's is a 404, as every 2H read). The demo's
+Prompts page (`#pg.prompts`: "36 prompts in 4 sets, 1 run each on 5 agents, every week", the sets with
+counts and answers, three example prompts per set, the agents with method and last status), from stored
+data only (`app/services/console_prompts.py`): no LLM call, no new table.
+
+| field | from |
+|---|---|
+| `study` | the merchant's current study: the study of its newest cycle, else the newest study generated for it (`study_merchants`); `null` when it has none, with `sets: []` |
+| `cycle`, `last_run` | the study's last cycle: its newest with a run, else its newest |
+| `prompts` | the study's questions (`soa_queries`), every one, as Studies and the Overview count them |
+| `sets[]` | the study's tiers in stage order (Visibility's: unprompted, category control, brand-direct, catalog, value); an untiered question is in `unprompted`. Each: `tier`, `name` (`VIS_TIER_LABELS`), `count`, `examples` (its first three questions in generation order), `answers_per_cycle` = `count` × the agents that ran on the last cycle, `line` |
+| `runs_per_question`, `runs_per_question_source` | the newest full-loop request for the study (`soa_full_loop_requests.runs_per_query`; a reads-only request has no study and is not it), `'full_loop'`; else the last cycle's `runs_per_query`, `'cycle'`; else `null` |
+| `agents_on_last_cycle`, `answers_per_cycle` | distinct platforms with a run on the last cycle; `prompts` × that |
+| `agents[]` | the surfaces report (`GET /api/console/surfaces`, 2I-2): each surface that can be dispatched (grounded and available) and any that ran on the last cycle, in the demo's agent order. `method` is its fidelity label, `method_detail` the line beside it; `last_status` is `answered` (every run answered), `partial`, `no_answers` or `not_run`, with `last_runs`, `last_answered`, `last_errored` |
+| `cadence` | `null`. soa stores no schedule (`build_study`'s `cadence` divergence says the same), so the headline says nothing about how often and `line` reads "a cycle", not "a week" |
+| `headline` | "{prompts} prompts in {sets} sets, {runs} run(s) each on {agents} agents", each part only when known |
+
+`answers_per_cycle` does not multiply by `runs_per_question`: it is questions × agents, as the brief for
+this screen defines it. On the FL12-shaped brand fixture (`tests/fixtures/console/prompts_fl12_2j2.json`,
+pinned to the endpoint's response; the category-control and value examples are the fixture's placeholder
+text):
+
+```json
+{
+  "merchant": "pampers",
+  "study": {"id": "wiggle-snug-full", "name": "Wiggle & Snug full"},
+  "cycle": "FL3-wiggle-and-snug-20261014", "last_run": "2026-10-14",
+  "prompts": 88, "set_count": 4,
+  "runs_per_question": 1, "runs_per_question_source": "cycle", "full_loop_id": null,
+  "agents_on_last_cycle": 6, "answers_per_cycle": 528, "cadence": null,
+  "headline": "88 prompts in 4 sets, 1 run each on 6 agents",
+  "sets": [
+    {"tier": "category_control", "name": "Category control", "count": 51,
+     "examples": ["question 1001", "question 1002", "question 1003"],
+     "answers_per_cycle": 306, "line": "51 prompts, 306 answers a cycle"},
+    {"tier": "brand_direct", "name": "Brand-direct", "count": 11,
+     "examples": ["question 1051", "question 1052", "question 1053"],
+     "answers_per_cycle": 66, "line": "11 prompts, 66 answers a cycle"},
+    {"tier": "catalog_accuracy", "name": "Catalog accuracy", "count": 20,
+     "examples": ["What does the Pampers Swaddlers NB 84 cost at walmart.com?",
+                  "What does the Pampers Swaddlers NB 84 cost at amazon.com?",
+                  "What does the Pampers Swaddlers S1 96 cost at walmart.com?"],
+     "answers_per_cycle": 120, "line": "20 prompts, 120 answers a cycle"},
+    {"tier": "value_incentives", "name": "Value & incentives", "count": 6,
+     "examples": ["question 1081", "question 1082", "question 1083"],
+     "answers_per_cycle": 36, "line": "6 prompts, 36 answers a cycle"}
+  ],
+  "agents": [
+    {"id": "chatgpt", "agent": "chatgpt", "name": "ChatGPT", "label": "ChatGPT with web search (OpenAI API)",
+     "surface": "grounded_api", "method": "API with search grounding",
+     "method_detail": "OpenAI Responses API with the web_search tool available; the model decides whether to search",
+     "collector": "openai", "grounded": true, "available": true, "worker_note": "the worker has not reported yet",
+     "last_status": "answered", "last_runs": 87, "last_answered": 87, "last_errored": 0},
+    {"id": "aimode", "agent": "aimode", "name": "Google AI Mode", "label": "Google AI Mode (consumer, via SerpApi)",
+     "surface": "consumer_ui", "method": "Consumer UI, logged out",
+     "method_detail": "google.com/search?udm=50, logged out, read by SerpApi (engine google_ai_mode)",
+     "collector": "serpapi", "grounded": true, "available": true, "worker_note": "the worker has not reported yet",
+     "last_status": "partial", "last_runs": 87, "last_answered": 86, "last_errored": 1}
+  ]
+}
+```
+
+(Four of the six agents cut: Gemini, Perplexity, Copilot and Claude, each `answered`, 87 of 87. The
+fixture file has all six, in the order ChatGPT, Gemini, Google AI Mode, Perplexity, Copilot, Claude.)
