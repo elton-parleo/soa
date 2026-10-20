@@ -17,6 +17,7 @@ from sqlalchemy import text
 import app.routers.cycles as cycles_router
 import app.services.console_studies as console_studies
 from soa_shared.models.soa_models import SoaWorkerSurface
+from tests.console_tables import add_columns
 from tests.test_console_2c3a import db  # noqa: F401  (fixture)
 from tests.test_console_read_models import TOKEN_A, as_, http, upstream  # noqa: F401  (fixtures)
 
@@ -30,12 +31,8 @@ BRAND, STUDY = 'wiggle-and-snug-brand', 'ws_brand_smoke_test_1a2b3c'
 def first(db, upstream, monkeypatch):
     """The brand's smoke-test study as #120 records it, five active questions, never run."""
     with db.begin() as c:
-        for col in ('truecost_tiers TEXT', 'created_by TEXT', 'source_lite_request_id INTEGER',
-                    'study_series_id TEXT', 'prior_cycle_id INTEGER'):
-            c.exec_driver_sql(f"ALTER TABLE soa_cycles ADD COLUMN {col}")
-        if db.dialect.name == 'postgresql':   # production's timestamptz (test_full_loop_2i's production_timestamps)
-            for col in ('created_at', 'updated_at'):
-                c.exec_driver_sql(f"ALTER TABLE soa_full_loop_requests ALTER COLUMN {col} TYPE TIMESTAMPTZ")
+        add_columns(c, 'soa_cycles', 'truecost_tiers', 'created_by', 'source_lite_request_id', 'study_series_id',
+                    'prior_cycle_id')
         if db.dialect.name == 'postgresql':   # the seed writes its ids; the serials start after them
             for table in ('soa_entities', 'soa_cycles', 'soa_cycle_entities', 'soa_query_generation_jobs', 'soa_queries'):
                 c.exec_driver_sql(f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), (SELECT MAX(id) FROM {table}))")

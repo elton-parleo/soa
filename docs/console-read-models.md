@@ -6707,3 +6707,33 @@ text):
 
 (Four of the six agents cut: Gemini, Perplexity, Copilot and Claude, each `answered`, 87 of 87. The
 fixture file has all six, in the order ChatGPT, Gemini, Google AI Mode, Perplexity, Copilot, Claude.)
+
+### The console test schema takes the models' types
+
+The console test schema (`tests/test_console_read_models.seed_console_db`, which every console test
+module and the Postgres runs share) hand-declared its column types: `soa_full_loop_requests.created_at`
+and `updated_at` were `TIMESTAMP` where production's are `timestamptz` (migration `c4e2b7d9a1f3`, found
+in 2I). On Postgres an aware datetime written to `TIMESTAMP` is shifted by the session's zone, so a fresh
+request looked hours old to the staleness rule, and two modules ALTERed the columns back per test.
+
+Now `tests/console_tables.py` creates the tables from the models: each column's type is its
+`soa_shared.models` column's, compiled for the engine's dialect (`TIMESTAMP WITH TIME ZONE`, `JSON`,
+`VARCHAR`, `SERIAL` ids on Postgres; on sqlite a JSON column stays `TEXT`, since sqlite's `JSON` type name
+has numeric affinity). What stays declared there is not a type: which columns each table carries, the
+primary key, and the constraints and defaults the old schema had. Nullability is not mirrored (the
+recorded fixtures leave out columns production requires). `add_columns(conn, table, *names)` adds a
+column the schema leaves out with its model's type; `studies_db`, `test_console_2i4`'s `jobs` and
+`test_console_2i5`'s `first` use it instead of typing them by hand. Columns that are in a migration but
+not in the models (`soa_cycles.share_of_algorithm`, `share_of_algorithm_version`, `domain_checks`,
+`surfaces`) are still added by the tests that apply those migrations, typed as before.
+
+Removed: `test_full_loop_2i.production_timestamps` and `test_console_2i5`'s copy of it (the per-test
+`ALTER COLUMN … TYPE TIMESTAMPTZ`). `tests/test_console_schema_2j2.py` fails when the schema drifts:
+every console column's reflected type in the test database is its model's (sqlite and Postgres), the
+timestamps are `timestamptz` on Postgres, and no test ALTERs a console column's type.
+
+One pinned value moved, on Postgres only: `/answers`' `runAt` now carries its offset
+(`2026-10-09T15:00:00+00:00`), as production's `timestamptz` serves it and as sqlite already did.
+`tests/fixtures/console/per_surface_2i8.json`'s four Postgres `answers` digests are now sqlite's: every
+per-surface view is the same on both. The models are the source here; that they match the migrations is
+checked by hand for the console tables' timestamps (all `DateTime(timezone=True)` in both), not by a test.

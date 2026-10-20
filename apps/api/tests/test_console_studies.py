@@ -19,6 +19,7 @@ import app.services.console_studies as console_studies
 from soa_shared import catalog_tiers as ct
 from soa_shared.catalog_snapshot import build_snapshot
 from soa_shared.models.soa_models import SoaWorkerSurface
+from tests.console_tables import add_columns
 from tests.test_console_read_models import (  # noqa: F401  (pytest fixtures)
     TOKEN_A, TOKEN_B, as_, db, http, tenants, upstream,
 )
@@ -33,13 +34,10 @@ TIERS_ON = {'brand_direct': True, 'catalog_accuracy': True, 'value_incentives': 
 @pytest.fixture
 def studies_db(db, monkeypatch):
     with db.begin() as c:
-        for col in ('stage_targets TEXT', 'rotate_named_retailer BOOLEAN', 'naming_rule_enabled BOOLEAN',
-                    'personas TEXT', 'specificity_mode TEXT', 'error_message TEXT', 'provenance TEXT',
-                    'updated_at TIMESTAMP'):
-            c.exec_driver_sql(f"ALTER TABLE soa_query_generation_jobs ADD COLUMN {col}")
-        for col in ('truecost_tiers TEXT', 'created_by TEXT', 'source_lite_request_id INTEGER',
-                    'study_series_id TEXT', 'prior_cycle_id INTEGER'):
-            c.exec_driver_sql(f"ALTER TABLE soa_cycles ADD COLUMN {col}")
+        add_columns(c, 'soa_query_generation_jobs', 'stage_targets', 'rotate_named_retailer', 'naming_rule_enabled',
+                    'personas', 'specificity_mode', 'error_message', 'provenance', 'updated_at')
+        add_columns(c, 'soa_cycles', 'truecost_tiers', 'created_by', 'source_lite_request_id', 'study_series_id',
+                    'prior_cycle_id')
     for module in (console_ops, cycles_router, studies_router, console_studies):
         monkeypatch.setattr(module, "engine", db)
     return db

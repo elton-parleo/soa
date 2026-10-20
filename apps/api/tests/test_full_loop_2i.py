@@ -19,18 +19,6 @@ RUN = '/api/truesync/merchants/wiggle-and-snug-brand/full-loop/41'
 B4_FIELDS = ('surface_ids', 'runs_per_question', 'study_id')
 
 
-@pytest.fixture(autouse=True)
-def production_timestamps(db):
-    """The console test schema declares soa_full_loop_requests' timestamps as
-    TIMESTAMP; production's are timestamptz (c4e2b7d9a1f3). On Postgres an
-    aware datetime written to TIMESTAMP is shifted by the session's zone, which
-    makes a fresh request look hours old to the staleness rule."""
-    if db.dialect.name == 'postgresql':
-        with db.begin() as c:
-            for col in ('created_at', 'updated_at'):
-                c.exec_driver_sql(f"ALTER TABLE soa_full_loop_requests ALTER COLUMN {col} TYPE TIMESTAMPTZ")
-
-
 def reads_only(http, **overrides):
     return http.post('/api/full-loop', json={'merchant_slug': BRAND, **overrides})
 
