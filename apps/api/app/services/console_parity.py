@@ -517,35 +517,87 @@ def product_issue(quotes: List[dict]) -> tuple:
     return 'product.right', TEMPLATES['product.right'].format(n=right, runs=runs, runs_word=word)
 
 
+def _retailers_text(domains: List[str]) -> str:
+    names = sorted({rm._retailer_name(d) for d in domains})
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
+
+
+def _quoted_across_text(quotes: List[dict]) -> str:
+    """2J-2: _quoted_text for a product read across retailers: each quote
+    names the retailers it was quoted at, "Walmart $24.97, 2 of 12 runs
+    (ChatGPT 1, Google AI Mode 1). Amazon and Walmart $27.97, ...". The runs
+    with no price are last and name no retailer."""
+    n = len(quotes)
+    if not n:
+        return 'Not asked'
+    parts = []
+    for g in quote_groups(quotes):
+        sib = g['swap_variant'] or g['swap_product']
+        at = [q['retailer'] for q in quotes if q.get('stated') == g['stated']
+              and ((q.get('swap_variant') or q.get('swap_product')) if q.get('stated') else None) == sib]
+        who = ', '.join(f"{_agent(a)} {c}" for a, c in sorted(g['agents'].items(), key=lambda kv: _agent(kv[0])))
+        what = ('No price' if g['stated'] is None else
+                f"{_retailers_text(at)} {rm.money(g['stated'])}" + (f" for {g['swap_product']}" if g['swap_product'] else ''))
+        parts.append(f"{what}, {g['runs']} of {n} {_n(n, 'run', 'runs')} ({who})")
+    return '. '.join(parts)
+
+
+#: worst first: a product read across retailers takes its worst cell's status
+_PRODUCT_SEVERITY = {'wrong': 0, 'partial': 1, 'none': 2, 'exact': 3}
+
+
 def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, variant_of_run: Dict[str, str],
                    reason_of_run: Dict[str, Optional[str]]) -> List[dict]:
     """ProductWeek per True Value row asked about on this surface: named and
     first from the mention coding of the runs that asked about it, the
     quotes per agent, the live price with its source, the cell's status
-    (TV_CELL_RULE) and the issue."""
+    (TV_CELL_RULE) and the issue.
+
+    2J-2: the row reads its `you` cell when that cell has quotes on the
+    surface. A brand's `you` cell is its own site, which no agent quotes
+    (it sets no price), so with none there the row reads the retailer cells
+    together: every quote, each naming its retailer; `live` each retailer's
+    live price; the status the worst cell's; the issue over every quote.
+    A store's `you` cell (the store) has the quotes and reads as before."""
     retailer_cols = true_value.get('retailer_columns') or true_value.get('columns') or []
     you_col = next((c['id'] for c in retailer_cols if c.get('you')), None)
     vis_by_run = {v['run']: v for v in vis_rows}
+
+    def quotes_of(cell, col):
+        return [{**q, 'reason': reason_of_run.get(q.get('run')), 'retailer': col} for q in cell.get('quotes') or []
+                if _on(q.get('surface'), surface)]
+
+    def counts(quotes):
+        runs = [vis_by_run[q['run']] for q in quotes if q.get('run') in vis_by_run]
+        answered = [v for v in runs if v.get('answered')]
+        return answered, {
+            'named': sum(1 for v in answered if any(n.get('you') for n in v.get('named') or [])),
+            'first': sum(1 for v in answered if (v.get('first') or {}).get('you')),
+        }
+
     out = []
     for row in true_value.get('rows') or []:
         # 2C-2a: with agent columns, the product reads its one-retailer cell
         cells_by = row.get('retailer_cells') or row['cells']
+        if you_col in cells_by and not quotes_of(cells_by[you_col], you_col):
+            across = [(col, cell, quotes_of(cell, col)) for col, cell in cells_by.items() if col != you_col]
+            across = [(col, cell, qs) for col, cell, qs in across if qs]
+            if across:
+                out.append(_product_across(row, across, surface, counts))
+            continue
         cols = [you_col] if you_col in cells_by else list(cells_by)
         for col in cols:
             cell = cells_by[col]
-            quotes = [{**q, 'reason': reason_of_run.get(q.get('run'))} for q in cell.get('quotes') or []
-                      if _on(q.get('surface'), surface)]
+            quotes = quotes_of(cell, col)
             if not quotes:
                 continue
             sc = (cell.get('by_surface') or {}).get(surface) or {}
-            runs = [vis_by_run[q['run']] for q in quotes if q.get('run') in vis_by_run]
-            answered = [v for v in runs if v.get('answered')]
+            answered, nf = counts(quotes)
             rule, issue = product_issue(quotes)
             status = sc.get('status') or 'none'
             out.append({
                 'name': row['product'], 'sku': row['sku'],
-                'named': sum(1 for v in answered if any(n.get('you') for n in v.get('named') or [])),
-                'first': sum(1 for v in answered if (v.get('first') or {}).get('you')),
+                'named': nf['named'], 'first': nf['first'],
                 'quoted': _quoted_text(quotes), 'live': _live_text(cell, col),
                 'status': PRODUCT_STATUS.get(status, 'none'), 'issue': issue, 'route': 'true-value',
                 # beside the typed fields
@@ -557,9 +609,44 @@ def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, vari
                 'answer_ids': [q['run'] for q in quotes if q.get('run')],
                 'quote_groups': quote_groups(quotes),
             })
-    severity = {'wrong': 0, 'partial': 1, 'none': 2, 'exact': 3}
-    out.sort(key=lambda p: (severity.get(p['status'], 4), -p['wrong_runs'], -p['named'], p['name']))
+    out.sort(key=lambda p: (_PRODUCT_SEVERITY.get(p['status'], 4), -p['wrong_runs'], -p['named'], p['name']))
     return out
+
+
+def _product_across(row: dict, across: List[tuple], surface: str, counts) -> dict:
+    """2J-2: one ProductWeek over a row's retailer cells (col, cell, quotes),
+    for a `you` cell no agent quoted. `retailer` and the reference fields
+    beside the typed ones are the worst cell's; `retailers` lists each
+    cell's quote, status and live price."""
+    def status_of(cell):
+        return ((cell.get('by_surface') or {}).get(surface) or {}).get('status') or 'none'
+
+    worst_col, worst_cell, _ = min(across, key=lambda a: _PRODUCT_SEVERITY.get(PRODUCT_STATUS.get(status_of(a[1]), 'none'), 4))
+    quotes = [q for _col, _cell, qs in across for q in qs]
+    answered, nf = counts(quotes)
+    rule, issue = product_issue(quotes)
+    status = status_of(worst_cell)
+    return {
+        'name': row['product'], 'sku': row['sku'],
+        'named': nf['named'], 'first': nf['first'],
+        'quoted': _quoted_across_text(quotes),
+        'live': '. '.join(_live_text(cell, col) for col, cell, _qs in across),
+        'status': PRODUCT_STATUS.get(status, 'none'), 'issue': issue, 'route': 'true-value',
+        # beside the typed fields
+        'cell_status': status, 'quote': ((worst_cell.get('by_surface') or {}).get(surface) or {}).get('quoted'),
+        'retailer': worst_col, 'runs': len(quotes), 'answered': len(answered), 'issue_rule': rule,
+        'wrong_runs': sum(1 for q in quotes if q.get('outcome') in ('wrong', 'stale')),
+        'reference_source': worst_cell.get('reference_source'), 'observed_at': worst_cell.get('observed_at'),
+        'live_price': worst_cell.get('live'),
+        'answer_ids': [q['run'] for q in quotes if q.get('run')],
+        'quote_groups': quote_groups(quotes),
+        'read_across': True,
+        'retailers': [{'retailer': col, 'name': rm._retailer_name(col), 'runs': len(qs),
+                       'quote': ((cell.get('by_surface') or {}).get(surface) or {}).get('quoted'),
+                       'cell_status': status_of(cell), 'live_price': cell.get('live'),
+                       'reference_source': cell.get('reference_source'), 'observed_at': cell.get('observed_at')}
+                      for col, cell, qs in across],
+    }
 
 
 def build_signals(metrics: dict, products: List[dict], *, surface: str, brand: str, cycle_start,
@@ -1308,16 +1395,29 @@ def extend_record(record: dict, *, listing: dict, owned: Optional[List[dict]], r
 STAGES = ('measured', 'published', 'verified')
 
 
+def catalog_row_keys(row: dict) -> List[str]:
+    """2J-2: the keys a catalog row's quotes can be filed under, in order: a
+    hosted row's variant_id, a feed row's variant_key (supply's: the GTIN-14,
+    or sku:<sku> for a row with no GTIN), the GTIN-14, sku:<sku>. A question
+    carries the variant's id as its variant_id; a feed row has no variant_id,
+    so a GTIN-less row was keyed by nothing and never read as measured."""
+    keys = [row.get('variant_id'), row.get('variant_key'), rm._gtin14(row.get('gtin')),
+            f"sku:{row['sku']}" if row.get('sku') else None]
+    return list(dict.fromkeys(str(k) for k in keys if k))
+
+
 def catalog_stages(rows: List[dict], *, quoted_variants: Dict[str, dict], published_listings: Iterable,
                    ) -> List[dict]:
     """Per catalog row: `measured` when a scored cycle quoted it, `published`
     when any channel published it, `verified` when the latest scored cycle's
-    prices for it all agree with the record (and at least one was scored)."""
+    prices for it all agree with the record (and at least one was scored).
+    A row's quotes are found under any of its keys (catalog_row_keys)."""
     pub = set(published_listings)
     out = []
     for row in rows:
-        key = row.get('variant_id') or rm._gtin14(row.get('gtin'))
-        q = quoted_variants.get(row.get('variant_id')) or quoted_variants.get(rm._gtin14(row.get('gtin')) or '') or {}
+        keys = catalog_row_keys(row)
+        key = keys[0] if keys else None
+        q = next((quoted_variants[k] for k in keys if k in quoted_variants), {})
         stage = []
         if q.get('quoted'):
             stage.append('measured')

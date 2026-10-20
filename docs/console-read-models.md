@@ -53,6 +53,7 @@ Lists (`runs`, `studio/*`) return only the scope's rows.
 | `GET /api/console/me` | who is signed in and the orgs they may select (2C-0) | — (the console's workspace switcher) |
 | `GET /api/console/full-loop/latest` | the scope's most recent full loop, or `null` (2C-0) | — (soa) |
 | `GET /api/console/score?cycle=<code>[&merchant=<slug>]` | the Share of Algorithm: per surface, pooled as the mean of the surface scores, stored with its scorer version (2C-3) | `Score` (beside) |
+| `GET /api/console/prompts[?merchant=<slug>]` | the merchant's current study as the Prompts page shows it: sets (the tiers in stage order) with counts, three examples and answers a cycle, runs per question, the agents with method and last-cycle status (2J-2) | — (soa; the demo's `#pg.prompts`) |
 
 Extra fields ride **beside** the typed ones; a typed field is never bent to hold
 something it does not mean. Optional typed fields (`field?: string`) are omitted,
@@ -6637,3 +6638,168 @@ the brand is named in none of 229's answers) and scores 32 on 69. 229 as recorde
 
 The generator keeps the brand out of category-control questions (`generation/syndicated_study.py`): see the module
 docstring there and `tier_config.category_control` (`branded_dropped`, `branded_regenerated`, `line`).
+
+## 2J-2: a brand's read models
+
+### Products this week on a brand
+
+FL12 (Pampers) showed no "Products this week" block although True Value had every variant with quotes.
+A brand's True Value has its own site as the `you` column (`retailer_columns[].you`, `pampers.com`),
+and no agent quotes it: the brand sets no price there, so its catalog questions name a retailer
+(`expected_answer.attributed_to`). `build_products` read only the `you` cell when the row had one, so
+every row was skipped and the Overview hid the block. The W&S store worked because its `you` column is
+the store, which its questions ask about.
+
+The rule now (`console_parity.build_products`): a row reads its `you` cell when that cell has quotes on
+the surface, else the retailer cells together (`_product_across`):
+
+| field | read across retailers |
+|---|---|
+| `quoted` | every quote, grouped by price, each naming the retailers it was quoted at, then the runs with no price: "Amazon and Walmart $27.97, 5 of 12 runs (Gemini 2, Google AI Mode 1, Perplexity 2). …" |
+| `live` | each retailer's live price, as `_live_text` words it, in column order |
+| `status`, `cell_status` | the worst cell's (wrong, partial, none, exact) |
+| `issue`, `wrong_runs`, `runs`, `quote_groups`, `named`, `first` | over every quote |
+| `retailer`, `quote`, `live_price`, `reference_source`, `observed_at` | the worst cell's |
+| `read_across` (new) | `true` |
+| `retailers` (new) | per retailer cell with quotes: `retailer`, `name`, `runs`, `quote`, `cell_status`, `live_price`, `reference_source`, `observed_at` |
+
+A store's products are unchanged on every surface, `all` included (`tests/test_console_2j2.py` pins the
+W&S fixtures to main's output, byte for byte). On the FL12-shaped brand fixture
+(`tests/console_fixture_2j2.py`; its prices and names are the fixture's, not production's), Swaddlers NB
+84 on `all`:
+
+```json
+{
+  "name": "Swaddlers NB 84", "sku": "00037000863434", "named": 0, "first": 0,
+  "quoted": "Amazon and Walmart $27.97, 5 of 12 runs (Gemini 2, Google AI Mode 1, Perplexity 2). Amazon and Walmart $24.97, 3 of 12 runs (ChatGPT 2, Google AI Mode 1). No price, 4 of 12 runs (Claude 2, Copilot 2)",
+  "live": "$24.97 at walmart.com, our own fetch, Oct 19. $27.97 at amazon.com, our own fetch, Oct 19",
+  "status": "wrong", "issue": "Quoted a wrong price in 3 of 12 runs.", "route": "true-value",
+  "cell_status": "wrong", "quote": "$27.97", "retailer": "walmart.com", "runs": 12, "answered": 12,
+  "issue_rule": "product.wrong", "wrong_runs": 3, "live_price": "$24.97", "read_across": true,
+  "retailers": [
+    {"retailer": "walmart.com", "name": "Walmart", "runs": 6, "quote": "$27.97", "cell_status": "wrong", "live_price": "$24.97"},
+    {"retailer": "amazon.com", "name": "Amazon", "runs": 6, "quote": "$24.97", "cell_status": "wrong", "live_price": "$27.97"}
+  ]
+}
+```
+
+(`answer_ids`, `quote_groups` and the per-retailer `reference_source`/`observed_at` cut.)
+
+### Catalog stages for a GTIN-less row
+
+FL12's Catalog read "Not measured, 4 of 10" for its four feed rows with no GTIN (Ultra, Pure, AMORE,
+Cruisers S5), and True Value showed them "not quoted" at every retailer, although the study asked about
+them. **Case (a): the quotes exist and the joins missed them.** It is not a generator gap: the brand mode
+(`catalog_tiers._build_catalog_from_reads`) asks about a GTIN-less variant at each retailer page read,
+keyed by supply's variant key, `sku:<sku>` (`catalog_snapshot.merge_merchant_record` and `merge_reads`
+key it the same way since 2I), and writes that key as the question's `source_ref.variant_id`. On the
+FL12-shaped fixture the generator, run on the fixture's supply payloads, writes exactly the fixture's 20
+questions, the four GTIN-less variants at Walmart and Amazon among them (`tests/test_console_2j2.py`).
+
+The two joins that missed:
+
+| where | before | now |
+|---|---|---|
+| `console_parity.catalog_stages` (Catalog's `stages`, `stage_ladder`) | a row's quotes under its `variant_id` else its GTIN-14. A feed row carries no `variant_id`, only `variant_key`, so a GTIN-less feed row was keyed by nothing | under the first of `catalog_row_keys`: `variant_id`, `variant_key` (the GTIN-14, or `sku:<sku>`), the GTIN-14, `sku:<sku>`. `key` is the first of them |
+| `console_read_models.build_true_value` (a cycle with a cached reference) | the read's row keyed by its GTIN-14 else `variant_ref`, aliased by `variant_ref`, `variant_label` and the bare SKU. A GTIN-less read's `variant_ref` is `feed_sku:<n>`, so a question's `sku:<sku>` found no row and its quotes were dropped | also aliased by `sku:<sku>`: the quotes fill the row's retailer cells, and the Overview's products (above) include the row |
+
+A row with a GTIN was found by its GTIN before and is unchanged. On the fixture every one of the 10 rows
+is measured (`stage_ladder` not measured 0, measured 10); each GTIN-less row has 8 quotes, 5 of them exact.
+
+### The Prompts read model
+
+`GET /api/console/prompts?merchant=<slug>` (an org member for their own org; an operator with `?org=`;
+`merchant` absent is the primary, one that is not the org's is a 404, as every 2H read). The demo's
+Prompts page (`#pg.prompts`: "36 prompts in 4 sets, 1 run each on 5 agents, every week", the sets with
+counts and answers, three example prompts per set, the agents with method and last status), from stored
+data only (`app/services/console_prompts.py`): no LLM call, no new table.
+
+| field | from |
+|---|---|
+| `study` | the merchant's current study: the study of its newest cycle, else the newest study generated for it (`study_merchants`); `null` when it has none, with `sets: []` |
+| `cycle`, `last_run` | the study's last cycle: its newest with a run, else its newest |
+| `prompts` | the study's questions (`soa_queries`), every one, as Studies and the Overview count them |
+| `sets[]` | the study's tiers in stage order (Visibility's: unprompted, category control, brand-direct, catalog, value); an untiered question is in `unprompted`. Each: `tier`, `name` (`VIS_TIER_LABELS`), `count`, `examples` (its first three questions in generation order), `answers_per_cycle` = `count` × the agents that ran on the last cycle, `line` |
+| `runs_per_question`, `runs_per_question_source` | the newest full-loop request for the study (`soa_full_loop_requests.runs_per_query`; a reads-only request has no study and is not it), `'full_loop'`; else the last cycle's `runs_per_query`, `'cycle'`; else `null` |
+| `agents_on_last_cycle`, `answers_per_cycle` | distinct platforms with a run on the last cycle; `prompts` × that |
+| `agents[]` | the surfaces report (`GET /api/console/surfaces`, 2I-2): each surface that can be dispatched (grounded and available) and any that ran on the last cycle, in the demo's agent order. `method` is its fidelity label, `method_detail` the line beside it; `last_status` is `answered` (every run answered), `partial`, `no_answers` or `not_run`, with `last_runs`, `last_answered`, `last_errored` |
+| `cadence` | `null`. soa stores no schedule (`build_study`'s `cadence` divergence says the same), so the headline says nothing about how often and `line` reads "a cycle", not "a week" |
+| `headline` | "{prompts} prompts in {sets} sets, {runs} run(s) each on {agents} agents", each part only when known |
+
+`answers_per_cycle` does not multiply by `runs_per_question`: it is questions × agents, as the brief for
+this screen defines it. On the FL12-shaped brand fixture (`tests/fixtures/console/prompts_fl12_2j2.json`,
+pinned to the endpoint's response; the category-control and value examples are the fixture's placeholder
+text):
+
+```json
+{
+  "merchant": "pampers",
+  "study": {"id": "wiggle-snug-full", "name": "Wiggle & Snug full"},
+  "cycle": "FL3-wiggle-and-snug-20261014", "last_run": "2026-10-14",
+  "prompts": 88, "set_count": 4,
+  "runs_per_question": 1, "runs_per_question_source": "cycle", "full_loop_id": null,
+  "agents_on_last_cycle": 6, "answers_per_cycle": 528, "cadence": null,
+  "headline": "88 prompts in 4 sets, 1 run each on 6 agents",
+  "sets": [
+    {"tier": "category_control", "name": "Category control", "count": 51,
+     "examples": ["question 1001", "question 1002", "question 1003"],
+     "answers_per_cycle": 306, "line": "51 prompts, 306 answers a cycle"},
+    {"tier": "brand_direct", "name": "Brand-direct", "count": 11,
+     "examples": ["question 1051", "question 1052", "question 1053"],
+     "answers_per_cycle": 66, "line": "11 prompts, 66 answers a cycle"},
+    {"tier": "catalog_accuracy", "name": "Catalog accuracy", "count": 20,
+     "examples": ["What does the Pampers Swaddlers NB 84 cost at walmart.com?",
+                  "What does the Pampers Swaddlers NB 84 cost at amazon.com?",
+                  "What does the Pampers Swaddlers S1 96 cost at walmart.com?"],
+     "answers_per_cycle": 120, "line": "20 prompts, 120 answers a cycle"},
+    {"tier": "value_incentives", "name": "Value & incentives", "count": 6,
+     "examples": ["question 1081", "question 1082", "question 1083"],
+     "answers_per_cycle": 36, "line": "6 prompts, 36 answers a cycle"}
+  ],
+  "agents": [
+    {"id": "chatgpt", "agent": "chatgpt", "name": "ChatGPT", "label": "ChatGPT with web search (OpenAI API)",
+     "surface": "grounded_api", "method": "API with search grounding",
+     "method_detail": "OpenAI Responses API with the web_search tool available; the model decides whether to search",
+     "collector": "openai", "grounded": true, "available": true, "worker_note": "the worker has not reported yet",
+     "last_status": "answered", "last_runs": 87, "last_answered": 87, "last_errored": 0},
+    {"id": "aimode", "agent": "aimode", "name": "Google AI Mode", "label": "Google AI Mode (consumer, via SerpApi)",
+     "surface": "consumer_ui", "method": "Consumer UI, logged out",
+     "method_detail": "google.com/search?udm=50, logged out, read by SerpApi (engine google_ai_mode)",
+     "collector": "serpapi", "grounded": true, "available": true, "worker_note": "the worker has not reported yet",
+     "last_status": "partial", "last_runs": 87, "last_answered": 86, "last_errored": 1}
+  ]
+}
+```
+
+(Four of the six agents cut: Gemini, Perplexity, Copilot and Claude, each `answered`, 87 of 87. The
+fixture file has all six, in the order ChatGPT, Gemini, Google AI Mode, Perplexity, Copilot, Claude.)
+
+### The console test schema takes the models' types
+
+The console test schema (`tests/test_console_read_models.seed_console_db`, which every console test
+module and the Postgres runs share) hand-declared its column types: `soa_full_loop_requests.created_at`
+and `updated_at` were `TIMESTAMP` where production's are `timestamptz` (migration `c4e2b7d9a1f3`, found
+in 2I). On Postgres an aware datetime written to `TIMESTAMP` is shifted by the session's zone, so a fresh
+request looked hours old to the staleness rule, and two modules ALTERed the columns back per test.
+
+Now `tests/console_tables.py` creates the tables from the models: each column's type is its
+`soa_shared.models` column's, compiled for the engine's dialect (`TIMESTAMP WITH TIME ZONE`, `JSON`,
+`VARCHAR`, `SERIAL` ids on Postgres; on sqlite a JSON column stays `TEXT`, since sqlite's `JSON` type name
+has numeric affinity). What stays declared there is not a type: which columns each table carries, the
+primary key, and the constraints and defaults the old schema had. Nullability is not mirrored (the
+recorded fixtures leave out columns production requires). `add_columns(conn, table, *names)` adds a
+column the schema leaves out with its model's type; `studies_db`, `test_console_2i4`'s `jobs` and
+`test_console_2i5`'s `first` use it instead of typing them by hand. Columns that are in a migration but
+not in the models (`soa_cycles.share_of_algorithm`, `share_of_algorithm_version`, `domain_checks`,
+`surfaces`) are still added by the tests that apply those migrations, typed as before.
+
+Removed: `test_full_loop_2i.production_timestamps` and `test_console_2i5`'s copy of it (the per-test
+`ALTER COLUMN … TYPE TIMESTAMPTZ`). `tests/test_console_schema_2j2.py` fails when the schema drifts:
+every console column's reflected type in the test database is its model's (sqlite and Postgres), the
+timestamps are `timestamptz` on Postgres, and no test ALTERs a console column's type.
+
+One pinned value moved, on Postgres only: `/answers`' `runAt` now carries its offset
+(`2026-10-09T15:00:00+00:00`), as production's `timestamptz` serves it and as sqlite already did.
+`tests/fixtures/console/per_surface_2i8.json`'s four Postgres `answers` digests are now sqlite's: every
+per-surface view is the same on both. The models are the source here; that they match the migrations is
+checked by hand for the console tables' timestamps (all `DateTime(timezone=True)` in both), not by a test.

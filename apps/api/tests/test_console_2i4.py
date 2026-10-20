@@ -17,6 +17,7 @@ import pytest
 from sqlalchemy import text
 
 import app.routers.studies as studies_router
+from tests.console_tables import add_columns
 from tests.test_console_2c3a import db  # noqa: F401  (fixture)
 from tests.test_console_2h import BRAND, STORE, supply  # noqa: F401  (fixture)
 from tests.test_console_read_models import TOKEN_A, as_, http, upstream  # noqa: F401  (fixtures)
@@ -27,9 +28,8 @@ from tests.test_console_studies import BASE, TIERS_ON, WS
 def jobs(db, monkeypatch):
     """The generation job's brief columns (production's), and the web route's engine."""
     with db.begin() as c:
-        for col in ('stage_targets TEXT', 'rotate_named_retailer BOOLEAN', 'naming_rule_enabled BOOLEAN',
-                    'personas TEXT', 'specificity_mode TEXT'):
-            c.exec_driver_sql(f"ALTER TABLE soa_query_generation_jobs ADD COLUMN {col}")
+        add_columns(c, 'soa_query_generation_jobs', 'stage_targets', 'rotate_named_retailer', 'naming_rule_enabled',
+                    'personas', 'specificity_mode')
         if db.dialect.name == 'postgresql':   # the seed writes its ids; the serial starts after them
             c.exec_driver_sql("SELECT setval(pg_get_serial_sequence('soa_query_generation_jobs', 'id'), "
                               "(SELECT MAX(id) FROM soa_query_generation_jobs))")

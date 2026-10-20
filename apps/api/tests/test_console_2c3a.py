@@ -45,7 +45,7 @@ def db(request, monkeypatch):
         seed_console_db(engine)
     else:
         engine = postgres_engine()
-        seed_console_db(engine, pk='SERIAL PRIMARY KEY', json='JSON')
+        seed_console_db(engine)
     for module in (customers, console_scope_module, console_router, console_ops_router, full_loop_router):
         monkeypatch.setattr(module, "engine", engine)
     yield engine

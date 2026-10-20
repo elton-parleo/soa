@@ -155,7 +155,9 @@ def test_every_per_surface_value_is_what_main_served(name, http, db, upstream):
             os.makedirs(DUMP, exist_ok=True)
             with open(os.path.join(DUMP, f"{name}-{endpoint.replace('/', '_')}-{db.dialect.name}.json"), 'w') as fh:
                 json.dump(view, fh, indent=1, sort_keys=True)
-    # keyed by dialect: /answers' runAt carries its offset on sqlite only, as on main
+    # keyed by dialect. 2J-2: the same on both since the console test schema takes the models' types:
+    # /answers' runAt carried its offset on sqlite only while Postgres declared run_at TIMESTAMP,
+    # where production's (and now the test schema's) is timestamptz
     with open(SNAPSHOT) as fh:
         assert got == json.load(fh)[db.dialect.name][name]
 

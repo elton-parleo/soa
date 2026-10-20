@@ -49,6 +49,7 @@ from app import worker_surfaces
 from app.routers import full_loop
 from app.routers.customers import _tenant_view
 from app.services import console_parity as parity
+from app.services import console_prompts
 from app.services import console_read_models as rm
 from app.services import console_revenue as revenue_svc
 from app.services import console_score as score_svc
@@ -697,6 +698,39 @@ def get_studio_studies(ms: MerchantScope = Depends(merchant_scope)):
             study['merchant'] = {'slug': slug, 'name': names.get(slug) or slug} if slug else None
             out.append(study)
     return out
+
+
+@router.get("/prompts")
+def get_prompts(ms: MerchantScope = Depends(merchant_scope)):
+    """2J-2: the Prompts page for the merchant (`?merchant=`, else the
+    primary): its current study's questions in sets (the tiers, in stage
+    order) with counts, three examples each and the answers a cycle, the
+    runs per question and the agents with their method and last-cycle
+    status (console_prompts). No LLM, no new table."""
+    scope = ms.scope
+    with engine.connect() as conn:
+        studies = study_merchants(conn, scope.org.id)
+        jobs = [dict(j) for j in conn.execute(text("""
+            SELECT * FROM soa_query_generation_jobs
+            WHERE COALESCE(customer_organization_id, organization_id) = :org ORDER BY created_at DESC, id DESC
+        """), {"org": scope.org.id}).mappings()]
+        jobs = [j for j in jobs if ms.owns(studies.get(j['study_type']))]
+        cycles = merchant_cycles(conn, ms)
+        job = console_prompts.current_study(cycles, jobs)
+        questions, cycle, ran, request = [], None, {}, None
+        if job is not None:
+            questions = [dict(q) for q in conn.execute(text(
+                "SELECT tier, query_text, query_code, stage FROM soa_queries WHERE study_type = :st ORDER BY id"),
+                {"st": job['study_type']}).mappings()]
+            cycle = console_prompts.last_cycle(conn, cycles, job['study_type'])
+            ran = console_prompts.agent_runs(conn, cycle)
+            request = conn.execute(text("""
+                SELECT id, runs_per_query FROM soa_full_loop_requests
+                WHERE organization_id = :org AND study_type = :st AND (:m IS NULL OR merchant_slug = :m)
+                ORDER BY created_at DESC, id DESC LIMIT 1
+            """), {"org": scope.org.id, "st": job['study_type'], "m": ms.slug}).mappings().first()
+    return console_prompts.build_prompts(ms.slug, job, questions, cycle, ran, worker_surfaces.console_list(engine),
+                                         dict(request) if request else None)
 
 
 @router.get("/studio/entities")
