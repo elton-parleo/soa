@@ -2103,8 +2103,8 @@ the dollars from one read; soa serves the inputs and the measured shares (`app/s
 One row per org x merchant: `scope_value` (annual sales in scope, all channels), `scope_display`, `scope_source`,
 `influence`, `horizon`, `penalty`, `lost_gainable`, `currency`, `updated_by`, `updated_at`. A null share reads the
 default in `soa_shared/revenue.py` (the demo's INFLUENCE 11.4%, HORIZON 20%, PENALTY 14%, their source sentences
-verbatim); `lost_gainable`, the share of lost first picks the record can win back, defaults to 0, so the gainable
-line never claims a win-back nobody chose. Sales in scope has no default: until the merchant enters it, the model
+verbatim); `lost_gainable`, the share of lost first picks the record can win back, defaults to 25%, the figure the
+demo uses for Pampers (Elton, Oct 20); the merchant changes it on Impact. Sales in scope has no default: until the merchant enters it, the model
 shows the shares and no dollars ("enter sales in scope on Impact").
 
 | endpoint | does |
@@ -2149,7 +2149,7 @@ dollars, as in the demo.
 The driver titles, `measured` sentences, fixes and the basis are templates filled from counts (`TEMPLATES` in
 `console_revenue.py`), one per driver and merchant kind (brand, retailer). On the FL12-shaped fixture
 (`tests/test_console_2i9.py`): Lost 57 of 102 (56%), Missed 98 of 132 (74%) raw and 33% once counted; at $4.0B in
-scope and the defaults, $36M lost, $21M missed, $57M at stake, $21M gainable ($30M with a 25% win-back share).
+scope and the defaults, $36M lost, $21M missed, $57M at stake, $30M gainable ($21M with a 0% win-back share).
 
 ## Answer divergences
 

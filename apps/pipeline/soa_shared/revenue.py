@@ -13,8 +13,9 @@ Sales in scope is the merchant's own figure and has no default: until it is
 entered the model shows the measured shares and no dollars. The three public
 parameters default to the demo's figures with the demo's source sentences,
 copied verbatim from v2common.ts INFLUENCE / HORIZON / PENALTY, so the two
-apps cite the same text. The win-back share of Lost defaults to 0, so the
-gainable line never claims a win-back nobody chose.
+apps cite the same text. The win-back share of Lost defaults to 25%, the
+figure the demo uses for Pampers (Elton, Oct 20); the merchant changes it on
+Impact.
 
 Sync copies to apps/api/soa_shared/, apps/pipeline/soa_shared/ and
 packages/shared/soa_shared/ (the identical-copies test).
@@ -47,14 +48,15 @@ PENALTY = {
                'the time and an alternative 3.8%, about a 10 point gap.'),
 }
 #: The share of Lost the record can win back. The demo chooses it per tenant
-#: (Pampers 25%, Petco 24%) from the questions its record answers; here the
-#: merchant chooses it, and until then nothing of Lost counts as gainable.
+#: (Pampers 25%, Petco 24%) from the questions its record answers. Here it
+#: defaults to the demo's Pampers figure (Elton, Oct 20) and the merchant
+#: changes it on Impact.
 LOST_GAINABLE = {
     'label': 'Share of lost first picks the record can win back',
-    'value': 0.0,
-    'display': '0%',
+    'value': 0.25,
+    'display': '25%',
     'source': ('Gainable counts all of Missed, since you own the record, plus the first picks lost on questions your '
-               'record answers. Left at 0 until you choose which those are.'),
+               'record answers. 25% by default, the share the demo uses for Pampers. Change it to your own.'),
 }
 #: Sales in scope: the merchant's own figure, never defaulted
 SCOPE = {

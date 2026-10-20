@@ -183,7 +183,7 @@ TEMPLATES = {
               "where the {choice} didn't already go elsewhere, so no shopper counts twice ({miss_pct} once). The "
               "unprompted share is applied to all AI-touched sales, on the assumption that the study's question mix "
               "stands in for the shopper's journey. Gainable counts all of Missed, since you own the record, plus "
-              "{win_back} of Lost, the share you chose the record can win back."),
+              "{win_back} of Lost, the win-back share set on Impact."),
     'hero_basis': ("{lost_pct} of unprompted answers put another {rival} first, plus {miss_raw} of price answers get "
                    "{name} wrong, each shopper counted once"),
     'by_agent.note': "{agent}: {n} of the {of} answers that go against you.",

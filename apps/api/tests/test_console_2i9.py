@@ -38,7 +38,7 @@ def test_with_nothing_saved_the_shares_read_the_demo_s_defaults_and_sales_in_sco
                              'source': defaults.SCOPE['source']}
     assert {k: (body[k]['value'], body[k]['display'], body[k]['default']) for k in ('influence', 'horizon', 'penalty', 'lost_gainable')} == {
         'influence': (0.114, '11.4%', True), 'horizon': (0.2, '20%', True), 'penalty': (0.14, '14%', True),
-        'lost_gainable': (0.0, '0%', True)}
+        'lost_gainable': (0.25, '25%', True)}   # the demo's Pampers figure (Elton, Oct 20)
     # the demo's source sentences, verbatim (v2common.ts)
     assert body['influence']['source'].startswith('Similarweb, Sep 10 2026: an AI tool was part of 11.4% of US desktop')
     assert body['horizon']['source'].startswith('Morgan Stanley: agentic shoppers could reach $385B')
@@ -58,7 +58,7 @@ def test_put_writes_the_fields_sent_records_who_and_get_reads_them_back(http, in
     # a second write changes only what it sends; null resets one field
     body = _inputs(http, 'PUT', json={'influence': 0.15, 'lost_gainable': None}).json()
     assert (body['influence']['value'], body['influence']['display']) == (0.15, '15%')
-    assert (body['lost_gainable']['value'], body['lost_gainable']['default']) == (0.0, True)
+    assert (body['lost_gainable']['value'], body['lost_gainable']['default']) == (0.25, True)
     assert body['scope']['value'] == 3.99e9
     assert _inputs(http).json() == body
 
@@ -190,7 +190,7 @@ def test_fl12_s_shares_by_hand(http, db, upstream):
     assert body['shares']['missed_raw'] == pytest.approx(float(RAW))
     assert body['shares']['missed'] == pytest.approx(float(MISSED))      # counted once
     lost, missed = body['drivers']
-    assert (lost['kind'], lost['share'], lost['gainable']) == ('lost', pytest.approx(float(LOST)), 0.0)
+    assert (lost['kind'], lost['share'], lost['gainable']) == ('lost', pytest.approx(float(LOST)), 0.25)   # the default
     assert (missed['kind'], missed['share'], missed['gainable']) == ('missed', pytest.approx(float(MISSED)), 1.0)
     # no sales in scope yet: the shares and no dollars, with the reason
     assert body['dollars'] is False and body['dollars_reason'] == 'enter sales in scope on Impact'
