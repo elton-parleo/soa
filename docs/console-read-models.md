@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D, 2E, 2E-2, 2G, 2H, 2I-8)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D, 2E, 2E-2, 2G, 2H, 2I-8, 2I-9)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -2084,6 +2084,72 @@ one alone." The samples below were taken before 2I-8 and do not carry `all`.
 **`?surface=`.** No console endpoint takes a surface parameter: each returns every surface keyed,
 and the console picks. `?surface=all` and no parameter are the same response (pinned for
 answers, answers/summary, true-value, visibility and overview).
+
+## 2I-9: the revenue model
+
+The console's Impact screen, its Overview revenue block and the dollars on the screens the demo puts them on
+(Answers, Visibility, True Value, Accessibility, the Product record, Trade promotions, TrueSync, the Overview
+signals' pool chips) model what wrong and missing answers cost a merchant a year. The model is the console demo's
+(`apps/console/src/data/v2common.ts` `computeRevenue`, `computeRange`, `money`), unchanged, and the console computes
+the dollars from one read; soa serves the inputs and the measured shares (`app/services/console_revenue.py`).
+
+    aiTouched = sales in scope x share of shopping through an AI answer
+    driver $  = aiTouched x measured share x conversion effect      (Lost, Missed)
+    at stake  = the drivers summed;  gainable = each driver x its gainable share
+    by 2030   = the same with the 2030 AI share, sales held flat
+
+### Inputs (`soa_merchant_revenue_inputs`, migration `e5b1d7f3a8c2`, not applied)
+
+One row per org x merchant: `scope_value` (annual sales in scope, all channels), `scope_display`, `scope_source`,
+`influence`, `horizon`, `penalty`, `lost_gainable`, `currency`, `updated_by`, `updated_at`. A null share reads the
+default in `soa_shared/revenue.py` (the demo's INFLUENCE 11.4%, HORIZON 20%, PENALTY 14%, their source sentences
+verbatim); `lost_gainable`, the share of lost first picks the record can win back, defaults to 0, so the gainable
+line never claims a win-back nobody chose. Sales in scope has no default: until the merchant enters it, the model
+shows the shares and no dollars ("enter sales in scope on Impact").
+
+| endpoint | does |
+|---|---|
+| `GET /api/console/revenue-inputs?merchant=<slug>` | each field with its value, display, source and whether it is the default |
+| `PUT /api/console/revenue-inputs?merchant=<slug>` | writes the fields sent; null resets one; shares 0 to 1, scope 0 or more, else 422 with nothing written; records `updated_by` |
+| `DELETE /api/console/revenue-inputs?merchant=<slug>` | back to the defaults |
+| `GET /api/console/revenue?cycle=<code>&merchant=<slug>` | the inputs, the shares and counts, the `RevenueModel` (`scope`, `influence`, `horizon`, `penalty`, `drivers[]`), `byAgent`, `access`, `basis`, `heroBasis`; `today` / `by_2030` beside for checking |
+| `GET /api/console/revenue/history?merchant=<slug>` | per scored cycle, oldest first: shares, counts, today's at stake and gainable, recomputed with the current inputs (nothing stored) |
+
+Tenancy as every console read: a member naming another org is 403, a merchant that is not the org's is 404, rows
+are keyed by org. **Sales in scope is a customer's financial figure**: it appears on these endpoints, read for that
+merchant (by its org's members, or an operator naming the org), and on nothing else: no operator-wide list, no
+Command Center screen, no export.
+
+### The shares, over every agent (`all`)
+
+**Lost** = answered unprompted runs (2I-7's rule, `soa_shared/unprompted.py`) whose first pick is a brand other than
+ours, tracked or not, over the answered unprompted runs. An answer naming no brand is in the denominator and not
+lost. For a brand merchant so is one whose first pick is a retailer (`soa_shared/retailers.py` names it); for a
+seller the comparison set is other stores, so another store first is lost. The denominator is the unprompted set
+because that is where a brand choice can happen; the share is applied to all AI-touched sales on the demo's
+assumption that the study's question mix stands in for the shopper's journey. The denominator is Visibility's
+"of N unprompted answers" on All agents.
+
+**Missed** (raw) = catalog-tier answered runs that got the price wrong (wrong or stale), quoted another brand's price,
+or left out a price the reference had, over the catalog-tier answered runs scored or so left out. Unverifiable is
+outside both, as everywhere; a run that left out a price the reference did not have is outside both too. Then
+counted once, by the demo's brand rule: `missed = raw x (1 - lost)`, a price miss counted only for shoppers the
+brand choice did not already send elsewhere. Same definition for brands and retailers; the demo's size-chart
+measurement for brands is a later second Missed line.
+
+**Gainable**: all of Missed (the merchant owns the record), plus `lost_gainable` of Lost.
+
+**Not measured**: a cycle with no unprompted question has no Lost share; `dollars` is false with "no unprompted
+question this cycle", and no driver is sent. The price share is still counted. Never a $0.
+
+**byAgent**: each agent's share of the answers that go against the merchant (the Lost set plus the Missed set).
+**access**: the identities the last access run could not read the pages with, their count and the demo's fix, no
+dollars, as in the demo.
+
+The driver titles, `measured` sentences, fixes and the basis are templates filled from counts (`TEMPLATES` in
+`console_revenue.py`), one per driver and merchant kind (brand, retailer). On the FL12-shaped fixture
+(`tests/test_console_2i9.py`): Lost 57 of 102 (56%), Missed 98 of 132 (74%) raw and 33% once counted; at $4.0B in
+scope and the defaults, $36M lost, $21M missed, $57M at stake, $21M gainable ($30M with a 25% win-back share).
 
 ## Answer divergences
 
