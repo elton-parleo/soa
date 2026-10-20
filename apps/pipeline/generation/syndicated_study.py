@@ -23,6 +23,16 @@ in the design mock say the same thing: "Written by AI from the catalog"
 against brand-direct, "Built from the catalog, not by AI" against the
 other two.
 
+2I-7: category control names no brand. A category-control question is the
+floor, what the category returns when the brand is not named; one that
+names it put the brand in the answer and measures nothing (FL12, Pampers:
+13 of the first 25). So the stage writer is told the rule when the tier is
+on, and every question it returns is checked with soa_shared/unprompted.py,
+the rule the console's score counts by. A question that names the brand is
+regenerated once; a replacement that still names it is dropped and
+counted, so the tier can come in under the stage target rather than carry
+a branded question (keep_brand_out).
+
 Degradation is the other thing worth reading. A study whose brand cannot
 be read still gets generated — as the ungrounded study it would have been
 with the toggle off — because failing a job that holds fifty good
@@ -35,12 +45,15 @@ import logging
 from collections import Counter
 from typing import Optional
 
+from soa_shared import unprompted
 from soa_shared.constants import QUERY_PERSONAS
 
 from generation import catalog_tiers as ct
 from generation.query_generator import (
     generate_and_review_study,
     generate_brand_direct,
+    generate_general_queries,
+    normalize_query_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -135,6 +148,101 @@ def _primary_persona(personas, rows=None) -> str:
     return QUERY_PERSONAS[0]
 
 
+def control_terms(snapshot) -> tuple:
+    """(brand, product names, terms) the category-control rule is stated
+    and checked with: the study's brand and its catalog's product names, as
+    the console reads them back from tier_config.merchant (study_brand_terms
+    adds the entity's aliases there)."""
+    if not snapshot:
+        return None, [], []
+    brand = getattr(snapshot, 'study_brand', None) or getattr(snapshot, 'brand', None)
+    names = [p.title for p in (snapshot.products if snapshot.available else []) if p.title]
+    return brand, names, unprompted.brand_terms(brand, (), names)
+
+
+def control_line(count: int, dropped: int, checked: bool) -> str:
+    """The tier's one line, as the preview and the generation status show it."""
+    if not checked:
+        return f"{count} question{'' if count == 1 else 's'}, not checked: no brand to check against"
+    line = f"{count} question{'' if count == 1 else 's'}, none naming the brand"
+    if dropped:
+        line += f" ({dropped} dropped for naming it)"
+    return line
+
+
+def keep_brand_out(rows: list, terms: list, regenerate) -> tuple:
+    """
+    The category-control check. Returns (kept rows, report).
+
+    Every row is checked with unprompted.is_unprompted. The ones that name
+    the brand are handed to `regenerate(stage_counts, avoid_texts)` ONCE,
+    for as many questions per stage as failed; each replacement is checked
+    the same way and against the rows already kept (an exact duplicate is
+    no replacement). What still names the brand is dropped and counted: a
+    question that names the brand is not a category-control question, so
+    the tier comes in short rather than carry it.
+
+    With no terms there is nothing to check against, and every row is kept.
+    """
+    if not terms:
+        return list(rows), {'checked_against': [], 'branded_regenerated': 0, 'branded_dropped': []}
+    kept = [r for r in rows if unprompted.is_unprompted(r, terms)]
+    branded = [r for r in rows if not unprompted.is_unprompted(r, terms)]
+    report = {
+        'checked_against': list(terms),
+        'branded_regenerated': len(branded),
+        'branded_found': [{'query_text': r.get('query_text'), 'stage': r.get('stage'),
+                           'names': unprompted.names_any(r.get('query_text'), terms)} for r in branded],
+        'branded_dropped': [],
+    }
+    if not branded:
+        return kept, report
+
+    stages = dict(Counter(r.get('stage') for r in branded))
+    try:
+        fresh = regenerate(stages, [r.get('query_text') for r in rows]) or []
+    except Exception as exc:  # noqa: BLE001 - a failed regeneration drops the branded rows, never the study
+        logger.warning("[generation] category-control regeneration failed: %s", exc)
+        report['regeneration_error'] = type(exc).__name__
+        fresh = []
+
+    # at most as many per stage as failed, in the writer's order; a
+    # replacement that names the brand or repeats a kept question fills nothing
+    seen = {normalize_query_text(r.get('query_text')) for r in kept}
+    room = dict(stages)
+    replacements, still = [], []
+    for row in fresh:
+        key = normalize_query_text(row.get('query_text'))
+        if room.get(row.get('stage'), 0) <= 0 or key in seen:
+            continue
+        if not unprompted.is_unprompted(row, terms):
+            still.append(row)
+            continue
+        seen.add(key)
+        room[row.get('stage')] -= 1
+        replacements.append(row)
+    # each replacement takes a branded question's place, in study order;
+    # a branded question with no replacement of its stage is dropped
+    pending = {}
+    for r in replacements:
+        pending.setdefault(r.get('stage'), []).append(r)
+    out, dropped = [], []
+    for r in rows:
+        if unprompted.is_unprompted(r, terms):
+            out.append(r)
+        elif pending.get(r.get('stage')):
+            out.append(pending[r.get('stage')].pop(0))
+        else:
+            dropped.append(r)
+    report['replaced'] = len(replacements)
+    report['branded_dropped'] = [{'query_text': r.get('query_text'), 'stage': r.get('stage'),
+                                  'names': unprompted.names_any(r.get('query_text'), terms)} for r in dropped]
+    report['replacements_naming_the_brand'] = [
+        {'query_text': r.get('query_text'), 'stage': r.get('stage'),
+         'names': unprompted.names_any(r.get('query_text'), terms)} for r in still]
+    return out, report
+
+
 def build_syndicated_study(
     *,
     snapshot,
@@ -177,6 +285,13 @@ def build_syndicated_study(
     if specificity_mode:
         generate_kwargs['specificity_mode'] = specificity_mode
 
+    # 2I-7: with the control tier on, the stage writer is told the
+    # category-control rule, and its questions are checked after. Off, the
+    # call below is the one this code made before the tiers existed.
+    control_on = config['category_control']['enabled']
+    brand, product_names, terms = control_terms(snapshot) if control_on else (None, [], [])
+    control = {'brand': brand, 'product_names': product_names} if control_on and brand else None
+
     # ── The study's own questions ────────────────────────────────────
     #
     # Generated exactly as they are today, catalog or no catalog: the
@@ -190,6 +305,7 @@ def build_syndicated_study(
         rotate_named_retailer=rotate_named_retailer,
         naming_rule_enabled=naming_rule_enabled,
         **generate_kwargs,
+        **({'category_control': control} if control else {}),
     )
 
     # After the generation call, not before: with no personas in the
@@ -202,10 +318,35 @@ def build_syndicated_study(
         # the tier says what they are FOR — a floor showing what the
         # category returns when the brand is not named — and that is why
         # they are not additive to the count.
+        #
+        # 2I-7: tagged only once checked. One that names the brand is
+        # regenerated once and then dropped (keep_brand_out).
+        def regenerate(stages, avoid):
+            fresh, _report = generate_general_queries(
+                stage_targets=stages,
+                retailer_names=retailer_names,
+                rotate_named_retailer=rotate_named_retailer,
+                naming_rule_enabled=naming_rule_enabled,
+                category_control=control,
+                avoid_texts=avoid,
+                **generate_kwargs,
+            )
+            return fresh
+
+        requested = len(rows)
+        rows, check = keep_brand_out(rows, terms, regenerate)
         for row in rows:
             row['tier'] = 'category_control'
             row['provenance'] = 'ai'
-        config['category_control']['count'] = len(rows)
+        dropped = len(check['branded_dropped'])
+        config['category_control'].update(check)
+        config['category_control'].update({
+            'count': len(rows),
+            'generated': requested,
+            'dropped': dropped,
+            'line': control_line(len(rows), dropped, bool(terms)),
+        })
+        provenance['category_control_check'] = {k: check[k] for k in check if k != 'checked_against'}
     else:
         config['category_control']['count'] = 0
 
@@ -244,6 +385,9 @@ def build_syndicated_study(
         'retailer_list': list(getattr(snapshot, 'retailer_list', None) or []),
         'study_brand': getattr(snapshot, 'study_brand', None) or snapshot.brand,
         'record_error': getattr(snapshot, 'record_error', None),
+        # 2I-7: the brand's product names, the terms beside its name that
+        # the console's unprompted rule reads back (soa_shared/unprompted.py)
+        'product_names': [p.title for p in snapshot.products if p.title],
     }
 
     # ── The catalog tiers, BUILT FIRST ───────────────────────────────

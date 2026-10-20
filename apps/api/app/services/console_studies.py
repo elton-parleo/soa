@@ -201,7 +201,14 @@ def build_preview(snapshot: CatalogSnapshot, *, tiers: Dict[str, bool], stage_to
             if enabled[k]:
                 out[k]['unavailable'] = snapshot.error or 'catalog unavailable'
     if enabled['category_control']:
-        out['category_control'].update(count=stage_total or 0, additive=False)
+        # 2I-7: the generator checks every one against the brand's terms
+        # (soa_shared/unprompted.py) and drops one that still names it
+        n = stage_total or 0
+        brand = snapshot.study_brand or snapshot.brand
+        out['category_control'].update(
+            count=n, additive=False, checked=bool(brand),
+            line=(f"{n} question{'' if n == 1 else 's'}, none naming the brand" if brand
+                  else f"{n} question{'' if n == 1 else 's'}, not checked: no brand to check against"))
     return {
         'merchant': {'slug': snapshot.merchant_slug, 'brand': snapshot.brand, 'domain': snapshot.domain,
                      'kind': snapshot.merchant_kind, 'hosting': snapshot.hosting, 'available': snapshot.available,

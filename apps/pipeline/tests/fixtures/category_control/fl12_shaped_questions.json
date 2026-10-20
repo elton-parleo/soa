@@ -1,0 +1,258 @@
+{
+ "_note": "FL12-SHAPED, NOT RECORDED. Cycle FL12-pampers-20261020's category-control questions are not in this repository and were not read from production. The first two questions are the two the 2I-7 brief quotes from FL12 verbatim; the other 48 are written here in its shape: 50 category_control questions, 13 of the first 25 naming the brand, 37 naming none. names_the_brand is the expected answer of the rule. Replace with an export of FL12's soa_queries (query_text, tier) to make the test a recording.",
+ "brand": "Pampers",
+ "aliases": [],
+ "product_names": [],
+ "questions": [
+  {
+   "query_text": "What Pampers diaper line should I start with for a newborn?",
+   "tier": "category_control",
+   "names_the_brand": true
+  },
+  {
+   "query_text": "What is the difference between Pampers Swaddlers, Baby-Dry, and Cruisers 360?",
+   "tier": "category_control",
+   "names_the_brand": true
+  },
+  {
+   "query_text": "Are Pampers diapers worth the price for a newborn?",
+   "tier": "category_control",
+   "names_the_brand": true
+  },
+  {
+   "query_text": "Best diapers for a newborn",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Do Pampers Swaddlers run small for a 9 pound baby?",
+   "tier": "category_control",
+   "names_the_brand": true
+  },
+  {
+   "query_text": "What diapers are best for a newborn with sensitive skin?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Is Pampers Pure Protection good for sensitive skin?",
+   "tier": "category_control",
+   "names_the_brand": true
+  },
+  {
+   "query_text": "How many diapers does a newborn go through in a day?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Which Pampers size should I buy for a 3 month old?",
+   "tier": "category_control",
+   "names_the_brand": true
+  },
+  {
+   "query_text": "Which diapers stop blowouts for a breastfed baby?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Are pampers overnights better than regular diapers for leaks?",
+   "tier": "category_control",
+   "names_the_brand": true
+  },
+  {
+   "query_text": "What is the best overnight diaper for a heavy wetter?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Where can I find PAMPERS diapers on sale this week?",
+   "tier": "category_control",
+   "names_the_brand": true
+  },
+  {
+   "query_text": "Are fragrance-free wipes better for a newborn?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Pampers or store brand diapers for daycare?",
+   "tier": "category_control",
+   "names_the_brand": true
+  },
+  {
+   "query_text": "How do I know when to move up a diaper size?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Do Pampers Cruisers 360 work for a crawling baby?",
+   "tier": "category_control",
+   "names_the_brand": true
+  },
+  {
+   "query_text": "Best diapers for a crawling baby who won't sit still",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Is the Pampers subscription cheaper than buying in store?",
+   "tier": "category_control",
+   "names_the_brand": true
+  },
+  {
+   "query_text": "What diaper fits a chunky 6 month old best?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "What do parents say about Pampers Sensitive wipes?",
+   "tier": "category_control",
+   "names_the_brand": true
+  },
+  {
+   "query_text": "Are pull-up style diapers good for potty training?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Should I switch from Pampers to a cloth diaper?",
+   "tier": "category_control",
+   "names_the_brand": true
+  },
+  {
+   "query_text": "What should I look for in diapers for eczema-prone skin?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Cheapest way to buy diapers in bulk",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Are eco-friendly disposable diapers worth it?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "What wipes are safe to use from birth?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Best diaper rash cream for a newborn",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "How do I stop diaper leaks at night?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Do diaper subscriptions actually save money?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Which diapers have a wetness indicator?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Best swim diapers for a baby's first pool trip",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "What size diapers should I stock up on before the baby arrives?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Are plant-based diapers as absorbent as regular ones?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "What diapers are best for a premature baby?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "How often should I change a newborn's diaper at night?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Best travel-size wipes for a diaper bag",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "What diapers do hospitals use for newborns?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Which diapers are softest on a newborn's skin?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Are store brand diapers as good as name brands?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Best diapers for a baby with a wide waist",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "What diapers work best with a cloth diaper cover?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "How do I choose between diaper sizes when my baby is between two?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Best overnight pull-ups for a toddler",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Are hypoallergenic diapers worth the extra cost?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "What wipes don't leave a residue?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Which diapers hold up best for long car trips?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "Best diapers for a baby with frequent diaper rash",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "What is the most absorbent diaper for naps?",
+   "tier": "category_control",
+   "names_the_brand": false
+  },
+  {
+   "query_text": "How do I tell if a diaper is too tight?",
+   "tier": "category_control",
+   "names_the_brand": false
+  }
+ ]
+}

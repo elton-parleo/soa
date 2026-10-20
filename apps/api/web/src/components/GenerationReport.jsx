@@ -273,8 +273,11 @@ function TierCounts({ counts, text }) {
             >
               {s.reason
                 ? `${TIER_LABELS[s.tier] || s.tier} could not be built — ${s.reason}`
-                : `${TIER_LABELS[s.tier] || s.tier} is ${s.short} short: `
-                  + `${s.delivered} of ${s.requested} requested`}
+                : s.dropped
+                  ? `${TIER_LABELS[s.tier] || s.tier} is ${s.short} short: ${s.delivered} of ${s.requested} kept, `
+                    + `${s.dropped} dropped for naming the brand`
+                  : `${TIER_LABELS[s.tier] || s.tier} is ${s.short} short: `
+                    + `${s.delivered} of ${s.requested} requested`}
             </div>
           ))}
         </div>

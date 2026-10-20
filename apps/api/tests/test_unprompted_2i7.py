@@ -14,7 +14,6 @@ questions, FL8's shape) scores as before. On sqlite and a local Postgres.
 """
 import json
 
-import pytest
 from sqlalchemy import bindparam, text
 
 from app.services import console_read_models as rm

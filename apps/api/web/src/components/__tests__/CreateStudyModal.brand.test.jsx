@@ -273,6 +273,9 @@ describe('in brand mode', () => {
 
     expect(screen.getByTestId('tier-category_control'))
       .toHaveTextContent('uses the stage counts above')
+    // 2I-7: and none of them names the brand
+    expect(screen.getByTestId('tier-category_control'))
+      .toHaveTextContent(/questions?, none naming the brand/)
   })
 
   it('defaults the control tier off and the other three on', async () => {

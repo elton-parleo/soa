@@ -112,6 +112,15 @@ def test_the_variant_cap_samples_and_says_so(http, upstream, studies_db):
     assert accuracy['count'] == 5 and accuracy['sampled'] is True and accuracy['variants_available'] == 19
 
 
+def test_the_control_line_says_none_names_the_brand(http, upstream, studies_db):
+    """2I-7: the generator checks every category-control question against the
+    brand's terms and drops one that still names it."""
+    ws_supply(upstream)
+    control = preview(http, tiers={**TIERS_ON, 'category_control': True})['tiers']['category_control']
+    assert (control['count'], control['additive'], control['checked']) == (50, False, True)
+    assert control['line'] == '50 questions, none naming the brand'
+
+
 def test_an_unreadable_catalog_is_said_not_hidden(http, upstream, studies_db):
     tenants(upstream)
     upstream.answer('GET', f'{BASE}/catalog', status=502, body={'detail': 'supply down'}, token=TOKEN_A)
