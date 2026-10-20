@@ -140,8 +140,9 @@ def test_a_sellers_questions_are_unchanged_by_reads():
 # ═══ the three copies of each shared module ══════════════════════════════
 # 2I-5 adds comparison_sets.py, the first-cycle rule the coordinator and the console share;
 # 2I-7 unprompted.py, the rule the console's score and the study generator share; 2I-8 surfaces.py,
-# whose ALL (the console's pooled read) no runner may stamp on a run.
-@pytest.mark.parametrize('module', ['expected_answers.py', 'comparison_sets.py', 'unprompted.py', 'surfaces.py'])
+# whose ALL (the console's pooled read) no runner may stamp on a run; 2I-9 revenue.py, the revenue model's
+# public inputs, whose sources the console's Impact cites.
+@pytest.mark.parametrize('module', ['expected_answers.py', 'comparison_sets.py', 'unprompted.py', 'surfaces.py', 'revenue.py'])
 def test_the_three_copies_are_identical(module):
     api = os.path.join(ROOT, 'apps', 'api', 'soa_shared', module)
     for other in (os.path.join(ROOT, 'apps', 'pipeline', 'soa_shared', module),
