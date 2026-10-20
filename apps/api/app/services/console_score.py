@@ -32,7 +32,7 @@ from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
-from soa_shared import surfaces
+from soa_shared import surfaces, unprompted
 from soa_shared.scan_dimensions import (
     DIMENSIONS,
     DIMENSIONS_BY_CODE,
@@ -69,7 +69,9 @@ from clients import truesync_client as supply_fields
 #: FULL_CYCLE_SCORER_VERSION ("7") plus a rule only the console applies (share
 #: of mentions is not measured on a cycle that tracks no rival), so it is the
 #: console's own: the full-cycle scorer, and what it stamps, stay "7".
-SCORER_VERSION = "8"
+#: 2I-7: "9", category-control questions count as unprompted (and a question
+#: naming the brand does not), soa_shared/unprompted.py.
+SCORER_VERSION = "9"
 #: The adapter's own revision, beside the scorer's: a change to how loop
 #: counts become scorer inputs re-scores stored cycles too. Not a scorer
 #: version and never shown as one.
@@ -120,6 +122,8 @@ TEMPLATES = {
     'check.flag_text': '{flag} {n} of {d} pages, the page text included',
     'gap.on_surface': '{line} on {surface}',
     'reason.no_unprompted': 'no unprompted question answered on this surface',
+    'reason.all_named_the_brand': ('no unprompted question answered on this surface: every category-control '
+                                   'question names the brand ({n} answered), and a question that names it is not counted'),
     'reason.no_access': 'no agent identity measured in the access run',
     'reason.no_pages': 'no page read in the reference run',
     'reason.read_failed': 'the {read} read failed: {error}',
@@ -323,17 +327,28 @@ def deal_seen_part(crawl: dict, page_reason: str) -> dict:
     return part
 
 
-def visibility_inputs(runs: List[dict], mentions: List[dict], surface: str) -> dict:
+def visibility_inputs(runs: List[dict], mentions: List[dict], surface: str, terms: Iterable[str] = ()) -> dict:
     """The scorer's som_pct / rsi_score / total_mentions for one surface, over
     answered unprompted runs, counted as MetricsCalculator counts them: our
     mentions over every cycle entity's mentions, and the mean Layer 1 strength
-    weight over our mentions."""
-    unprompted = {r['run_id'] for r in runs if parity._surface_of(r) == surface and not r.get('tier')
-                  and r.get('answer_status') == surfaces.ANSWERED}
-    ours = [m for m in mentions if m['run_id'] in unprompted and m.get('mentioned') and m.get('role') == 'primary']
-    every = [m for m in mentions if m['run_id'] in unprompted and m.get('mentioned') and m.get('role')]
+    weight over our mentions.
+
+    2I-7 (scorer 9): unprompted is soa_shared/unprompted.py's rule, the one
+    the read models count by: no tier or category_control, and a question
+    that names none of the brand's `terms`. Before, only an untiered run
+    counted, so a study generated with the brand box on (its stage questions
+    tagged category_control) measured no Visibility at all (FL12).
+    `named_the_brand` is how many answered runs of an unprompted tier were
+    left out for naming the brand."""
+    answered = [r for r in runs if parity._surface_of(r) == surface and r.get('answer_status') == surfaces.ANSWERED
+                and unprompted.is_unprompted_tier(r.get('tier'))]
+    unprompted_runs = {r['run_id'] for r in answered if unprompted.is_unprompted(r, terms)}
+    ours = [m for m in mentions if m['run_id'] in unprompted_runs and m.get('mentioned') and m.get('role') == 'primary']
+    every = [m for m in mentions if m['run_id'] in unprompted_runs and m.get('mentioned') and m.get('role')]
     return {
-        'runs': len(unprompted), 'ours': len(ours), 'all': len(every),
+        'runs': len(unprompted_runs), 'ours': len(ours), 'all': len(every),
+        'named_the_brand': len(answered) - len(unprompted_runs),
+        'category_control': sum(1 for r in answered if r.get('tier') == 'category_control'),
         'picks': sum(1 for m in ours if m.get('strength') == 'Primary'),
         'som_pct': (len(ours) / len(every) * 100) if every else None,
         'rsi_score': (sum(STRENGTH_WEIGHTS.get(m.get('strength'), 0) for m in ours) / len(ours)) if ours else None,
@@ -380,7 +395,8 @@ def _dim(code: str, *, earned: Optional[float], applicable: float, state: str, p
 
 def score_surface(surface: str, *, runs: List[dict], mentions: List[dict], crawl: dict,
                   crawl_errors: Optional[Dict[str, str]] = None, program_stated: bool,
-                  domain_checks: Optional[dict] = None, rivals_tracked: bool = True) -> dict:
+                  domain_checks: Optional[dict] = None, rivals_tracked: bool = True,
+                  terms: Iterable[str] = ()) -> dict:
     """Every dimension on one surface, from the scorer's functions, and the
     surface's score: round-free earned ÷ applicable max × 100.
 
@@ -395,16 +411,19 @@ def score_surface(surface: str, *, runs: List[dict], mentions: List[dict], crawl
 
     # Visibility: the Audit's two functions over unprompted Layer 1 counts
     at(f'visibility on {surface}')
-    vis = visibility_inputs(runs, mentions, surface)
+    vis = visibility_inputs(runs, mentions, surface, terms)
     for code, fn, n, d, value in (
             ('share_of_mentions', score_share_of_mentions_full, vis['ours'], vis['all'], vis['som_pct']),
             ('recommendation_strength', score_recommendation_strength_full, vis['picks'], vis['ours'], vis['rsi_score'])):
         at(f'{code} on {surface}')
         source = 'soa_coded_mentions, answered unprompted runs'
-        unmeasured = ('reason.no_unprompted' if not vis['runs'] else
+        unmeasured = ('reason.all_named_the_brand' if not vis['runs'] and vis['named_the_brand'] else
+                      'reason.no_unprompted' if not vis['runs'] else
                       'reason.no_rivals' if code == 'share_of_mentions' and not rivals_tracked else None)
         if unmeasured:
             part = _unsourced_part(None, float(DIMENSIONS_BY_CODE[code].weight), unmeasured)
+            if unmeasured == 'reason.all_named_the_brand':
+                part['reason'] = part['reason'].format(n=vis['named_the_brand'])
             part['source'] = source
             dims.append(_dim(code, earned=None, applicable=0, state=NOT_MEASURED, parts=[part], reason=part['reason']))
             continue
@@ -552,20 +571,22 @@ METRICS = (
 )
 
 
-def metric_counts(runs: List[dict], mentions: List[dict], vis_rows: List[dict], surface: str) -> dict:
+def metric_counts(runs: List[dict], mentions: List[dict], vis_rows: List[dict], surface: str,
+                  terms: Iterable[str] = ()) -> dict:
     """The counts behind the five rows on one surface, from the counts the
     Overview already reads: named and first over answered runs of the
     Overview's tier (unprompted when the cycle asked any, parity.surface_
     metrics); program named = our Layer 1 mention coded deal_cited or
     member_value_cited, over the answered runs of that tier naming us; prices
     exact of scored on the catalog tier, program terms exact of scored on the
-    value tier."""
+    value tier. 2I-7: unprompted by soa_shared/unprompted.py, as the score."""
     vis = parity.surface_metrics(runs, vis_rows, surface)
     tier = vis['tier']
     catalog = parity.surface_metrics([r for r in runs if r.get('tier') == 'catalog_accuracy'], [], surface)['total']
     value = parity.surface_metrics([r for r in runs if r.get('tier') == 'value_incentives'], [], surface)['total']
     in_tier = {r['run_id'] for r in runs if parity._surface_of(r) == surface and r.get('answer_status') == surfaces.ANSWERED
-               and (tier == 'all' or (r.get('tier') or rm.VIS_UNPROMPTED) == tier)}
+               and (tier == 'all' or (unprompted.is_unprompted(r, terms) if tier == rm.VIS_UNPROMPTED
+                                      else r.get('tier') == tier))}
     ours = [m for m in mentions if m['run_id'] in in_tier and m.get('role') == 'primary' and m.get('mentioned')]
     return {
         'tier': tier, 'agent_set': vis['agent_set'],
@@ -660,7 +681,8 @@ def dimension_deltas(now: dict, prev: dict) -> List[dict]:
 def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_rows: List[dict],
                 access: Optional[dict], reference_rows: Optional[List[dict]],
                 read_errors: Optional[Dict[str, str]] = None, inputs: Optional[dict] = None,
-                domain_checks: Optional[dict] = None, rivals: Optional[int] = None) -> dict:
+                domain_checks: Optional[dict] = None, rivals: Optional[int] = None,
+                terms: Optional[Iterable[str]] = None) -> dict:
     """GET /api/console/score without `previous` (score_with_previous adds it).
 
     runs: load_score_runs (one per run, with tier, stage, outcome and the
@@ -670,8 +692,10 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     /reference rows. domain_checks: the cycle's stored domain-check record
     (soa_cycles.domain_checks, 2E), or None. rivals: how many competitors the
     cycle's comparison set tracks (load_tracked_rivals); None when not read,
-    which scores as before 2I-6."""
+    which scores as before 2I-6. terms: the brand's terms
+    (rm.load_brand_terms); None or empty checks the tier alone (2I-7)."""
     errors = read_errors or {}
+    terms = list(terms or [])
     at('crawl counts')
     crawl = crawl_counts(access, reference_rows)
     program_stated = any(r.get('tier') == 'value_incentives' and r.get('expected_type') in MEMBER_TYPES for r in runs)
@@ -682,7 +706,7 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     pooled = [s for s in ran if s in answered and s not in ungrounded]
     per = [score_surface(s, runs=runs, mentions=mentions, crawl=crawl, crawl_errors=errors,
                          program_stated=program_stated, domain_checks=domain_checks,
-                         rivals_tracked=rivals is None or rivals > 0) for s in pooled]
+                         rivals_tracked=rivals is None or rivals > 0, terms=terms) for s in pooled]
     at('pooling')
     scored = [p for p in per if p['score'] is not None]
     dims = [_pool_dimension(d.code, per) for d in DIMENSIONS] if per else []
@@ -701,10 +725,13 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     unmeasured = mean(sum(d['max'] for d in s['dimensions'] if d['state'] == NOT_MEASURED) for s in per) if per else 0
     tv = next((p for p in pillars if p['code'] == 'true_value'), None)
     at('metric rows')
-    counts = {s: metric_counts(runs, mentions, vis_rows, s) for s in pooled}
+    counts = {s: metric_counts(runs, mentions, vis_rows, s, terms) for s in pooled}
     in_pool = [r for r in runs if parity._surface_of(r) in pooled]
     agents = {surfaces.agent_of(r.get('platform')) or r.get('platform') for r in in_pool}
     questions = len({r.get('query_code') for r in in_pool})
+    # 2I-7: the unprompted questions this score counted, and the ones left out
+    asked = {r.get('query_code'): r for r in in_pool if unprompted.is_unprompted_tier(r.get('tier'))}
+    counted = [q for q, r in asked.items() if unprompted.is_unprompted(r, terms)]
     record = domain_checks or {}
     return {
         'cycle': cycle_code,
@@ -744,6 +771,11 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
                      + ''.join(TEMPLATES['coverage.no_answers'].format(surface=_surface_words(s))
                                for s in ran if s not in answered and s not in ungrounded)
                      + ''.join(TEMPLATES['coverage.ungrounded'].format(surface=_surface_words(s)) for s in ungrounded)},
+        # 2I-7: the unprompted questions counted (soa_shared/unprompted.py),
+        # those of an unprompted tier left out for naming the brand, and how
+        # many of the tier's were category control
+        'unprompted': {'questions': len(counted), 'named_the_brand': len(asked) - len(counted),
+                       'category_control': sum(1 for r in asked.values() if r.get('tier') == 'category_control')},
         'inputs': {**(inputs or {}), 'domain_checks': {
             'checked_at': record.get('checked_at'), 'scored_domain': record.get('scored_domain'),
             'version': record.get('version'), 'revision': record_revision(record)} if record else None},
@@ -883,7 +915,8 @@ def needs_recompute(body: Optional[dict], domain_checks: Optional[dict]) -> Opti
 
 #: 2I: what each scorer version changed, for the recompute line.
 SCORER_CHANGES = {'7': 'ungrounded surfaces excluded from pooling',
-                  '8': 'share of mentions not measured without a tracked competitor'}
+                  '8': 'share of mentions not measured without a tracked competitor',
+                  '9': 'category-control questions count as unprompted'}
 
 
 def _no_rivals(body: dict) -> bool:
@@ -894,8 +927,16 @@ def _no_rivals(body: dict) -> bool:
 
 
 #: whether the new score is one the version's change applies to
+def _category_control(body: dict) -> bool:
+    """2I-7: the cycle asked category-control questions, or one of its
+    unprompted questions named the brand: the two the rule changed."""
+    u = body.get('unprompted') or {}
+    return bool(u.get('category_control') or u.get('named_the_brand'))
+
+
 SCORER_CHANGE_APPLIES = {'7': lambda new: bool((new.get('coverage') or {}).get('ungrounded')),
-                         '8': _no_rivals}
+                         '8': _no_rivals,
+                         '9': _category_control}
 
 
 _NOT_CARRIED = object()

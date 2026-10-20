@@ -18,7 +18,7 @@ from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
-from soa_shared import surfaces
+from soa_shared import surfaces, unprompted
 
 # ─── vocabularies ──────────────────────────────────────────────────────────
 
@@ -1242,12 +1242,13 @@ def build_entity(row: dict) -> dict:
     }, ('domain', 'category'))
 
 
-def build_prompt(row: dict, brand: Optional[str]) -> dict:
-    from soa_shared import expected_answers as ea
+def build_prompt(row: dict, brand: Optional[str], terms: Iterable[str] = ()) -> dict:
+    """terms: study_brand_terms (2I-7); `brand` alone when none are read."""
+    terms = list(terms) or unprompted.brand_terms(brand)
     return compact({
         'id': row['query_code'], 'text': row['query_text'],
         'stage': STAGE_TO_STUDIO.get(row.get('stage'), row.get('stage')),
-        'branded': bool(brand) and ea.names_brand(row['query_text'], brand),
+        'branded': bool(unprompted.names_any(row['query_text'], terms)),
         'persona': row.get('persona'),
         # soa's provenance vocabulary, which is not the console's source
         'source': {'catalog': 'csv', 'ai_from_catalog': 'ai', 'ai': 'ai'}.get(row.get('provenance'), 'ai'),
@@ -1256,7 +1257,8 @@ def build_prompt(row: dict, brand: Optional[str]) -> dict:
 
 
 #: 2C-2c: the tiers whose questions name the brand (a stage question and
-#: category control do not).
+#: category control do not). 2I-7: a category-control or stage question
+#: whose text names the brand counts as branded too (soa_shared/unprompted.py).
 BRANDED_TIERS = ('brand_direct', 'catalog_accuracy', 'value_incentives')
 
 
@@ -1270,10 +1272,12 @@ def study_status(cycles: List[dict]) -> str:
     return 'done'
 
 
-def prompt_counts(prompts: List[dict]) -> dict:
-    """Branded: the questions in a tier that names the brand; unbranded: the
-    rest. The study's question count, the one the Overview uses too."""
-    branded = sum(1 for p in prompts if p.get('tier') in BRANDED_TIERS)
+def prompt_counts(prompts: List[dict], terms: Iterable[str] = ()) -> dict:
+    """Branded: the questions in a tier that names the brand, and (2I-7) any
+    other whose text names it; unbranded: the rest, the unprompted ones the
+    score counts. The study's question count, the one the Overview uses too."""
+    branded = sum(1 for p in prompts if p.get('tier') in BRANDED_TIERS
+                  or not unprompted.is_unprompted({'tier': p.get('tier'), 'query_text': p.get('text')}, terms))
     return {'branded': branded, 'unbranded': len(prompts) - branded, 'prompts': len(prompts)}
 
 
@@ -1356,6 +1360,9 @@ def build_run(cycle: dict, collected: int, usable: int) -> dict:
 # Nothing is re-read from the answer text and no model is called.
 
 #: The stage questions a study opens with carry no tier: the unprompted ones.
+#: 2I-7: so do category-control questions (the same questions, tagged), less
+#: any that names the brand (soa_shared/unprompted.py). A row's `tier` stays
+#: its tier; its `unprompted` says whether it counts as unprompted.
 VIS_UNPROMPTED = 'unprompted'
 VIS_TIER_LABELS = {VIS_UNPROMPTED: 'Unprompted', **TIER_LABELS}
 VIS_TIER_ORDER = (VIS_UNPROMPTED, 'category_control', 'brand_direct', 'catalog_accuracy', 'value_incentives')
@@ -1500,12 +1507,15 @@ def _visibility_run(layer1: List[dict], extraction: dict, brands: _Brands) -> tu
 
 
 def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict], mentions: List[dict],
-                     extractions: Dict[int, dict]) -> dict:
+                     extractions: Dict[int, dict], terms: Iterable[str] = ()) -> dict:
     """
     GET /api/console/visibility. `runs` carry their question (query_text,
     query_code, tier, stage); `mentions` are Layer 1's mentioned rows with
     the entity's name and cycle role; `extractions` are the stored Layer 2
     extractions by run id.
+    terms: the brand's terms (load_brand_terms). 2I-7: each row says
+    whether its question is unprompted (soa_shared/unprompted.py), which the
+    score and the Overview count over.
     """
     layer2 = [e.get('name') for x in extractions.values() for e in ((x or {}).get('other_brands_named') or [])
               if isinstance(e, dict) and e.get('name')
@@ -1530,6 +1540,7 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
             # beside the typed fields
             'run': f"run-{run['id']}", 'platform': platform, 'query_code': run.get('query_code'),
             'stage': run.get('stage'), 'answered': run.get('answer_status') == surfaces.ANSWERED,
+            'unprompted': unprompted.is_unprompted(run, terms),
             'first_basis': basis,
         }, ('first_basis',)))
 
@@ -2072,4 +2083,26 @@ def load_visibility(conn, cycle: dict) -> dict:
     extractions = {o['run_id']: _json(o['extraction']) for o in conn.execute(text(
         "SELECT run_id, extraction FROM soa_expectation_outcomes WHERE cycle_id = :c"), {'c': cycle['id']}).mappings()}
     return build_visibility(cycle['cycle_code'], runs=runs, entities=entities, mentions=mentions,
-                            extractions=extractions)
+                            extractions=extractions, terms=load_brand_terms(conn, cycle))
+
+
+def study_brand_terms(tier_config, primary: Optional[dict]) -> List[str]:
+    """2I-7: the terms that name the brand (soa_shared/unprompted.py): the
+    primary entity's name and aliases, and the product names the generator
+    stored from the catalog (tier_config.merchant.product_names, written
+    from 2I-7 on; a study generated before has none)."""
+    merchant = ((_json(tier_config) or {}).get('merchant') or {})
+    primary = primary or {}
+    return unprompted.brand_terms(primary.get('name'), _json(primary.get('aliases')) or [],
+                                  merchant.get('product_names') or [])
+
+
+def load_brand_terms(conn, cycle: dict) -> List[str]:
+    """study_brand_terms for one cycle: its primary entity, its study's job."""
+    primary = conn.execute(text("""
+        SELECT e.name, e.aliases FROM soa_cycle_entities ce JOIN soa_entities e ON e.id = ce.entity_id
+        WHERE ce.cycle_id = :c AND ce.role = 'primary'
+    """), {'c': cycle['id']}).mappings().first()
+    job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
+                       {'st': cycle.get('study_type')}).fetchone() if cycle.get('study_type') else None
+    return study_brand_terms(job[0] if job else None, dict(primary) if primary else None)

@@ -6443,3 +6443,58 @@ Not measuring moves a score either way, by what the dimension was earning: FL7's
 1) leaves and the score drops; on cycle 229's runs with its three rivals removed (the brand never
 named, 0 of 22) the score rises from 32 to 47 on 47 applicable points. 229 and FL4 as they ran track
 rivals and score as before.
+
+## 2I-7: category-control questions are unprompted (console scorer 9)
+
+One rule decides which questions are unprompted, `soa_shared/unprompted.py` `is_unprompted(run_or_question, terms)`
+(identical in `apps/api`, `apps/pipeline` and `packages/shared`), read by the score, the read models and the study
+generator's category-control check:
+
+- the question's tier is `category_control` or absent, **and**
+- its text names none of the brand's terms, matched by `expected_answers.names_brand`: case-insensitive, whole
+  words, `&` read as "and", punctuation flattened ("Wiggle & Snug", "wiggle and snug" and "WIGGLE & SNUG" all name
+  it; a brand called "Bum" is not named by "album").
+
+The terms (`unprompted.brand_terms`, loaded by `console_read_models.load_brand_terms` per cycle and
+`study_brand_terms` per study) are the cycle's primary entity's `name` and `aliases`, and the brand's product
+names from its catalog, which the generator stores on the job as `tier_config.merchant.product_names` (from 2I-7
+on; a study generated before stores none, and its questions are checked against the name and aliases alone).
+
+Why both halves. A study generated with the syndicated-brand box on tags its stage questions `category_control`;
+one generated with it off leaves them untiered. They are the same questions, but the score counted only untiered
+runs, so a box-on study (FL12, Pampers, Oct 19) found no unprompted answer and left Visibility not measured
+(`reason.no_unprompted`, "32 of 100 points are not measured"), and the screens fell back to every answered
+question. And a category-control question exists to ask with no brand named ("Best diapers for a newborn"); one
+that names the brand put the brand in the answer and is not a share-of-mentions measurement. FL12 asked 13 of them
+in its first 25.
+
+Where it is read:
+
+| Call site | Before | Now |
+| --- | --- | --- |
+| `console_score.visibility_inputs` (share of mentions, recommendation strength) | `not r.get('tier')` | `is_unprompted(r, terms)`; `named_the_brand` counts the runs of an unprompted tier left out |
+| `console_score.metric_counts` (Overview tiles' "program named" over the unprompted runs) | `(tier or 'unprompted') == tier` | `is_unprompted(r, terms)` |
+| `console_read_models.build_visibility` byQuestion | `tier` only | each row adds `unprompted` (the rule); `tier` stays the question's tier |
+| `console_parity._tier_for_reads`, `visibility_headline` ("Named in N of M unprompted answers"), `surface_metrics` (Overview tiles "First recommendation / Share of answers … unprompted answers", the agent table's `named_of`), the Overview's `coverage.unprompted` | `row.tier == 'unprompted'` | `row.unprompted` |
+| `console_read_models.prompt_counts` (studio study list) | branded = a branded tier | branded = a branded tier, or any other question naming the brand |
+| `console_read_models.build_prompt` `branded` | names the study brand | names any of the terms |
+
+The "every answered question" fallback stays for a cycle that asked no unprompted question at all. Visibility's
+per-tier breakdown (`tiers`, `by_stage.stages_by_tier`) still groups by the question's tier.
+
+The score's `SCORER_VERSION` is **9**: `SCORER_CHANGES['9']` "category-control questions count as unprompted",
+applying (`SCORER_CHANGE_APPLIES`) when the new score's `unprompted` block shows a category-control question or one
+left out for naming the brand. Every stored score reads stale and is recomputed on its next read: no re-run. The
+body adds `unprompted: {questions, named_the_brand, category_control}` (distinct questions on the pooled surfaces).
+When every unprompted-tier question on a surface names the brand, both Visibility dimensions are not measured with
+`reason.all_named_the_brand`: "no unprompted question answered on this surface: every category-control question
+names the brand ({n} answered), and a question that names it is not counted".
+
+On cycle 229's runs with its 50 stage questions tagged `category_control` and 13 rewritten to name the brand
+(FL12's shape, `tests/test_unprompted_2i7.py`): scorer 8 scored 60 on 37 applicable points with Visibility not
+measured; scorer 9 measures it over the 37 unbranded questions' 222 grounded answers (share of mentions 0 of 26:
+the brand is named in none of 229's answers) and scores 32 on 69. 229 as recorded (untiered, FL8's shape) scores
+32 on 69 under both.
+
+The generator keeps the brand out of category-control questions (`generation/syndicated_study.py`): see the module
+docstring there and `tier_config.category_control` (`branded_dropped`, `branded_regenerated`, `line`).
