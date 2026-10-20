@@ -542,7 +542,11 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
     for row in (reference or {}).get('prices') or []:
         domain = row.get('retailer_domain')
         key = _gtin14(row.get('gtin')) or row.get('variant_ref')
-        for a in (key, row.get('variant_ref'), row.get('variant_label'), row.get('sku')):
+        # 2J-2: and sku:<sku>, supply's key for a variant with no GTIN, which
+        # a question asked about it carries as its variant_id; its read's
+        # variant_ref is feed_sku:<n>, so without it the quotes found no row
+        for a in (key, row.get('variant_ref'), row.get('variant_label'), row.get('sku'),
+                  f"sku:{row['sku']}" if row.get('sku') else None):
             if a:
                 alias.setdefault(str(a), key)
         if domain and domain not in columns:

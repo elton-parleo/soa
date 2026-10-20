@@ -1395,16 +1395,29 @@ def extend_record(record: dict, *, listing: dict, owned: Optional[List[dict]], r
 STAGES = ('measured', 'published', 'verified')
 
 
+def catalog_row_keys(row: dict) -> List[str]:
+    """2J-2: the keys a catalog row's quotes can be filed under, in order: a
+    hosted row's variant_id, a feed row's variant_key (supply's: the GTIN-14,
+    or sku:<sku> for a row with no GTIN), the GTIN-14, sku:<sku>. A question
+    carries the variant's id as its variant_id; a feed row has no variant_id,
+    so a GTIN-less row was keyed by nothing and never read as measured."""
+    keys = [row.get('variant_id'), row.get('variant_key'), rm._gtin14(row.get('gtin')),
+            f"sku:{row['sku']}" if row.get('sku') else None]
+    return list(dict.fromkeys(str(k) for k in keys if k))
+
+
 def catalog_stages(rows: List[dict], *, quoted_variants: Dict[str, dict], published_listings: Iterable,
                    ) -> List[dict]:
     """Per catalog row: `measured` when a scored cycle quoted it, `published`
     when any channel published it, `verified` when the latest scored cycle's
-    prices for it all agree with the record (and at least one was scored)."""
+    prices for it all agree with the record (and at least one was scored).
+    A row's quotes are found under any of its keys (catalog_row_keys)."""
     pub = set(published_listings)
     out = []
     for row in rows:
-        key = row.get('variant_id') or rm._gtin14(row.get('gtin'))
-        q = quoted_variants.get(row.get('variant_id')) or quoted_variants.get(rm._gtin14(row.get('gtin')) or '') or {}
+        keys = catalog_row_keys(row)
+        key = keys[0] if keys else None
+        q = next((quoted_variants[k] for k in keys if k in quoted_variants), {})
         stage = []
         if q.get('quoted'):
             stage.append('measured')

@@ -104,6 +104,24 @@ def feed() -> dict:
             'rows': rows}
 
 
+def catalog() -> dict:
+    """supply's GET /merchants/pampers/catalog for the feed: one listing per
+    variant, each variant keyed as supply keys it (variant_id)."""
+    return {'merchant': MERCHANT, 'listings': [
+        {'listing_id': 9100 + n, 'product_url': f'https://www.{OWN}/{sku.lower()}',
+         'published_at': '2026-10-18T16:00:00+00:00', 'spec_version': 'sku-feed',
+         'product_id': f'feed:{MERCHANT}:{variant_id(sku, gtin)}', 'title': label, 'brand': 'Pampers',
+         'variants': [{'variant_id': variant_id(sku, gtin), 'title': label, 'size': None, 'count': None,
+                       'attributes': {}, 'list_price': None, 'currency': 'USD', 'gtin': gtin}]}
+        for n, (label, sku, gtin, _walmart) in enumerate(VARIANTS)]}
+
+
+#: supply's GET /tenant entry and GET /merchants/pampers/retailers
+TENANT_MERCHANT = {'slug': MERCHANT, 'name': 'Pampers', 'domain': OWN, 'own_domains': [OWN], 'kind': 'brand',
+                   'hosting': 'external', 'has_record': True}
+RETAILERS_RECORD = {'merchant': MERCHANT, 'own_domain': OWN, 'own_domains': [OWN], 'domains': list(RETAILERS)}
+
+
 def build() -> Dict[str, List[dict]]:
     d = f2i8.build()
     job = d['generation_jobs'][0]

@@ -6617,3 +6617,24 @@ W&S fixtures to main's output, byte for byte). On the FL12-shaped brand fixture
 ```
 
 (`answer_ids`, `quote_groups` and the per-retailer `reference_source`/`observed_at` cut.)
+
+### Catalog stages for a GTIN-less row
+
+FL12's Catalog read "Not measured, 4 of 10" for its four feed rows with no GTIN (Ultra, Pure, AMORE,
+Cruisers S5), and True Value showed them "not quoted" at every retailer, although the study asked about
+them. **Case (a): the quotes exist and the joins missed them.** It is not a generator gap: the brand mode
+(`catalog_tiers._build_catalog_from_reads`) asks about a GTIN-less variant at each retailer page read,
+keyed by supply's variant key, `sku:<sku>` (`catalog_snapshot.merge_merchant_record` and `merge_reads`
+key it the same way since 2I), and writes that key as the question's `source_ref.variant_id`. On the
+FL12-shaped fixture the generator, run on the fixture's supply payloads, writes exactly the fixture's 20
+questions, the four GTIN-less variants at Walmart and Amazon among them (`tests/test_console_2j2.py`).
+
+The two joins that missed:
+
+| where | before | now |
+|---|---|---|
+| `console_parity.catalog_stages` (Catalog's `stages`, `stage_ladder`) | a row's quotes under its `variant_id` else its GTIN-14. A feed row carries no `variant_id`, only `variant_key`, so a GTIN-less feed row was keyed by nothing | under the first of `catalog_row_keys`: `variant_id`, `variant_key` (the GTIN-14, or `sku:<sku>`), the GTIN-14, `sku:<sku>`. `key` is the first of them |
+| `console_read_models.build_true_value` (a cycle with a cached reference) | the read's row keyed by its GTIN-14 else `variant_ref`, aliased by `variant_ref`, `variant_label` and the bare SKU. A GTIN-less read's `variant_ref` is `feed_sku:<n>`, so a question's `sku:<sku>` found no row and its quotes were dropped | also aliased by `sku:<sku>`: the quotes fill the row's retailer cells, and the Overview's products (above) include the row |
+
+A row with a GTIN was found by its GTIN before and is unchanged. On the fixture every one of the 10 rows
+is measured (`stage_ladder` not measured 0, measured 10); each GTIN-less row has 8 quotes, 5 of them exact.

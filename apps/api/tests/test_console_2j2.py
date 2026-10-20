@@ -8,6 +8,15 @@
    block (FL12). A row now reads its `you` cell when that cell has quotes,
    else the retailer cells together. A store reads as before: its products
    on every surface are pinned to main's (fixtures/console/store_products_2j2.json).
+
+2. Catalog stages for a GTIN-less row. FL12's Catalog said "Not measured" for
+   its four feed rows with no GTIN and True Value showed them "not quoted",
+   though the study asked about them. The generator does ask (case (a), not a
+   generator gap): its brand mode keys a GTIN-less variant by supply's
+   `sku:<sku>` and writes that as the question's variant_id. Both joins
+   missed it: catalog_stages keyed a row by variant_id (a feed row has none)
+   else its GTIN (none), and True Value keyed the read by its variant_ref
+   (`feed_sku:<n>`) with the bare SKU as an alias, never `sku:<sku>`.
 """
 import json
 import os
@@ -15,10 +24,12 @@ import os
 import pytest
 
 from app.services import console_parity as parity
+from soa_shared import catalog_tiers as ct
+from soa_shared.catalog_snapshot import build_snapshot, merge_merchant_record, merge_reads
 from tests import console_fixture_2j2 as f2j2
 from tests.test_console_2c3a import db  # noqa: F401  (fixture)
 from tests.test_console_2i8 import FIXTURES, _read
-from tests.test_console_read_models import _encode, as_, http, upstream  # noqa: F401  (fixtures)
+from tests.test_console_read_models import TOKEN_A, WS_TENANT, _encode, as_, http, upstream  # noqa: F401  (fixtures)
 
 STORE_PRODUCTS = os.path.join(os.path.dirname(__file__), 'fixtures', 'console', 'store_products_2j2.json')
 
@@ -103,3 +114,82 @@ def test_a_store_s_products_are_byte_identical_to_main(http, db, name):
     body = _read(http, FIXTURES[name](db), 'overview')
     now = {s: v['products'] for s, v in body['by_surface'].items()}
     assert json.dumps(now, sort_keys=True) == json.dumps(pinned, sort_keys=True)
+
+
+# ═══ 2. Catalog stages for a GTIN-less row ═══════════════════════════════
+
+def _generated():
+    snap = build_snapshot(f2j2.catalog(), merchants=[], incentives=None, merchant_slug=f2j2.MERCHANT)
+    merge_merchant_record(snap, merchant=f2j2.TENANT_MERCHANT, retailers=f2j2.RETAILERS_RECORD, feed=f2j2.feed())
+    merge_reads(snap, f2j2.reference_prices())
+    return ct.build_catalog_accuracy(snap, category='Baby Care', persona='Value-Conscious Parent',
+                                     study_pattern='brand_at_retail')
+
+
+def test_the_generator_asks_about_every_gtin_less_variant_as_the_fixture_does():
+    rows, report = _generated()
+    asked = {(r['source_ref']['variant_id'], r['expected_answer']['attributed_to']) for r in rows}
+    gtinless = {f2j2.variant_id(sku, gtin) for label, sku, gtin, _p in f2j2.VARIANTS if not gtin}
+    assert gtinless == {'sku:PAM-ULTRA-120', 'sku:PAM-PURE-2-74', 'sku:PAM-AMORE-3-60', 'sku:PAM-CR-5-92'}
+    assert {(v, d) for v in gtinless for d in f2j2.RETAILERS} <= asked
+    assert report['skipped_no_retailer'] == [] and report['skipped_no_price'] == [] and len(rows) == 20
+    # the fixture's questions are the generator's: the same variant ids at the same retailers
+    fixture = {(q['source_ref']['variant_id'], q['expected_answer']['attributed_to'])
+               for q in f2j2.build()['queries'] if q['tier'] == 'catalog_accuracy'}
+    assert fixture == asked
+
+
+def test_true_value_files_a_gtin_less_row_s_quotes_under_its_read(http, db):
+    tv = _get(http, 'true-value', cycle=_brand(db))
+    rows = {r['product']: r for r in tv['rows']}
+    for label in f2j2.GTINLESS:
+        cells = rows[label]['cells']
+        assert len(cells['walmart.com']['quotes']) == 6 and len(cells['amazon.com']['quotes']) == 6, label
+        assert cells['walmart.com']['quoted'] != '—' and cells['amazon.com']['quoted'] != '—', label
+        assert not cells['pampers.com']['quotes']
+    ultra = rows['Ultra']['cells']
+    assert (ultra['walmart.com']['quoted'], ultra['walmart.com']['live']) == ('$25.97', '$22.97')
+    assert len(tv['rows']) == len(f2j2.VARIANTS)       # no second row for the same variant
+
+
+def test_the_overview_has_the_gtin_less_products_too(http, db):
+    products = _products(http, db)
+    assert set(f2j2.GTINLESS) <= set(products) and len(products) == 10
+    assert products['Ultra']['runs'] == 12 and products['Ultra']['read_across'] is True
+
+
+@pytest.fixture
+def pampers_supply(upstream):
+    tenant = {**WS_TENANT, 'merchants': WS_TENANT['merchants'] + [f2j2.TENANT_MERCHANT]}
+    base = f'/api/truesync/merchants/{f2j2.MERCHANT}'
+    upstream.answer('GET', '/api/truesync/tenant', body=tenant, token=TOKEN_A)
+    upstream.answer('GET', f'{base}/feed', body=f2j2.feed(), token=TOKEN_A)
+    upstream.answer('GET', f'{base}/feed/history', body={'merchant': f2j2.MERCHANT, 'versions': []}, token=TOKEN_A)
+    upstream.answer('GET', f'{base}/reference', body={'rows': []}, token=TOKEN_A)
+    upstream.answer('GET', '/api/truesync/publications', body=[], token=TOKEN_A)
+    return upstream
+
+
+def test_catalog_stages_a_gtin_less_feed_row_measured(http, db, pampers_supply):
+    _brand(db)
+    body = _get(http, 'catalog', merchant=f2j2.MERCHANT)
+    assert body['source'] == 'feed' and body['stage_cycle'] == f2j2.CYCLE
+    by = {r['variant_label']: r for r in body['rows']}
+    for label in f2j2.GTINLESS:
+        row = by[label]
+        assert row['gtin'] is None and row['key'] == row['variant_key'] and row['key'].startswith('sku:')
+        assert row['stages'] == ['measured'], label
+        # 4 of 6 agents quote a price at each retailer: exact ChatGPT and AI Mode at Walmart,
+        # Gemini, Perplexity and AI Mode at Amazon
+        assert (row['quoted_runs'], row['scored'], row['exact']) == (8, 8, 5), label
+    assert all(r['stages'] == ['measured'] for r in body['rows'])
+    ladder = {s['key']: s['products'] for s in body['stage_ladder']['stages']}
+    assert ladder['not_measured'] == 0 and ladder['measured'] == 10
+
+
+def test_catalog_row_keys_order():
+    assert parity.catalog_row_keys({'variant_id': 'bum-balm-4oz', 'gtin': '012345678905'}) == \
+        ['bum-balm-4oz', '00012345678905']
+    assert parity.catalog_row_keys({'variant_key': 'sku:A-1', 'gtin': None, 'sku': 'A-1'}) == ['sku:A-1']
+    assert parity.catalog_row_keys({'variant_key': '00037000863434', 'gtin14': '00037000863434',
+                                    'gtin': '00037000863434', 'sku': 'S'}) == ['00037000863434', 'sku:S']
