@@ -28,6 +28,9 @@ endpoints are untouched.
     GET /api/console/me                            who is signed in and the orgs they may select (2C-0)
     GET /api/console/full-loop/latest              the scope's most recent full loop, or null (2C-0)
     GET /api/console/score?cycle=<code>            the Share of Algorithm, per surface and pooled (2C-3)
+    GET|PUT|DELETE /api/console/revenue-inputs?merchant=<slug>  the revenue model's inputs, per merchant (2I-9)
+    GET /api/console/revenue?cycle=<code>&merchant=<slug>       the revenue model: inputs, measured shares (2I-9)
+    GET /api/console/revenue/history?merchant=<slug>            shares and dollars per scored cycle (2I-9)
 """
 import asyncio
 import json
@@ -35,7 +38,7 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy import text
 
 from app.auth import verify_token
@@ -47,6 +50,7 @@ from app.routers import full_loop
 from app.routers.customers import _tenant_view
 from app.services import console_parity as parity
 from app.services import console_read_models as rm
+from app.services import console_revenue as revenue_svc
 from app.services import console_score as score_svc
 from clients import truesync_client as supply_fields
 from clients.truesync_client import TrueSyncClient
@@ -783,3 +787,115 @@ async def get_console_full_loop_latest(ms: MerchantScope = Depends(merchant_scop
 @router.get("/full-loop/{request_id}")
 async def get_console_full_loop(request_id: int, scope: CustomerScope = Depends(console_scope)):
     return await full_loop.read_full_loop(request_id, scope)
+
+
+# ─── 2I-9: the revenue model's inputs, per merchant ────────────────────────
+#
+# Sales in scope is the merchant's own financial figure. It is served here,
+# on that merchant's console reads (an org member, or an operator naming the
+# org), and on /revenue; never on an operator-wide list or the Command Center.
+
+async def _revenue_merchant(scope: CustomerScope, merchant: Optional[str]) -> str:
+    ms = await check_merchant(scope, merchant)   # a slug that is not the org's is a 404
+    if not ms.slug:
+        raise HTTPException(status_code=422, detail="no merchant: name one with ?merchant=")
+    return ms.slug
+
+
+@router.get("/revenue-inputs")
+async def get_revenue_inputs(merchant: Optional[str] = Query(None), scope: CustomerScope = Depends(console_scope)):
+    """2I-9: the merchant's revenue inputs, each with its default and source."""
+    slug = await _revenue_merchant(scope, merchant)
+    with engine.connect() as conn:
+        return revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, slug), slug)
+
+
+@router.put("/revenue-inputs")
+async def put_revenue_inputs(body: dict = Body(...), merchant: Optional[str] = Query(None),
+                             scope: CustomerScope = Depends(console_scope), user: dict = Depends(verify_token)):
+    """2I-9: write the fields sent (null resets one to its default). Shares are
+    0 to 1, sales in scope 0 or more; anything else is a 422 and nothing is
+    written."""
+    slug = await _revenue_merchant(scope, merchant)
+    try:
+        fields = revenue_svc.validated(body)
+    except revenue_svc.InputError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    with engine.begin() as conn:
+        revenue_svc.save_inputs(conn, scope.org.id, slug, fields, user.get("email") or user.get("sub"))
+    with engine.connect() as conn:
+        return revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, slug), slug)
+
+
+@router.delete("/revenue-inputs")
+async def delete_revenue_inputs(merchant: Optional[str] = Query(None), scope: CustomerScope = Depends(console_scope)):
+    """2I-9: back to the defaults (sales in scope not entered)."""
+    slug = await _revenue_merchant(scope, merchant)
+    with engine.begin() as conn:
+        revenue_svc.delete_inputs(conn, scope.org.id, slug)
+    return revenue_svc.inputs_view(None, slug)
+
+
+
+def _merchant_meta(ms: MerchantScope) -> dict:
+    m = next((x for x in ms.merchants if x.get('slug') == ms.slug), {}) if ms.merchants else {}
+    return {'kind': 'brand' if m.get('kind') == 'brand' else 'retailer', 'name': m.get('name') or ms.slug,
+            'domain': m.get('domain')}
+
+
+def _revenue_model(conn, row: dict, inputs: dict, meta: dict, access_requests) -> dict:
+    vis_rows = rm.load_visibility(conn, row).get('byQuestion') or []
+    catalog = revenue_svc.load_catalog_rows(conn, row)
+    shares = revenue_svc.revenue_shares(vis_rows, catalog, inputs['lost_gainable']['value'], kind=meta['kind'])
+    return revenue_svc.build_model(shares, inputs, cycle=row['cycle_code'], kind=meta['kind'], name=meta['name'],
+                                   domain=meta['domain'], access_requests=access_requests)
+
+
+@router.get("/revenue")
+async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(None),
+                      scope: CustomerScope = Depends(console_scope)):
+    """2I-9: the revenue model for one cycle of one merchant: its inputs, the
+    measured shares over every agent and the counts behind them, in the
+    RevenueModel shape the console's computeRevenue takes, with byAgent and
+    the access line. The console computes the dollars; `today` and `by_2030`
+    ride beside for checking. With no unprompted question, or no sales in
+    scope, `dollars` is false and `dollars_reason` says why: never a $0."""
+    ms = await check_merchant(scope, merchant)
+    if not ms.slug:
+        raise HTTPException(status_code=422, detail="no merchant: name one with ?merchant=")
+    row = dict(cycle_in_scope(cycle, scope))
+    errors, requests = {}, None
+    _, payload, error = await full_loop._client(scope).get_access(ms.slug)
+    if error is None:
+        requests = [{**r, 'measured': parity._measured(r)} for r in (rm.accessibility_from_supply(payload).get('requests') or [])]
+    else:
+        errors['access'] = error
+    with engine.connect() as conn:
+        inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, ms.slug), ms.slug)
+        body = _revenue_model(conn, row, inputs, _merchant_meta(ms), requests)
+    body['merchant'] = ms.slug
+    body['read_errors'] = errors
+    return body
+
+
+@router.get("/revenue/history")
+async def get_revenue_history(merchant: Optional[str] = Query(None), scope: CustomerScope = Depends(console_scope)):
+    """2I-9: the shares and today's at stake and gainable per scored cycle of
+    the merchant, oldest first, recomputed with the current inputs (nothing is
+    stored). No scenario lines."""
+    ms = await check_merchant(scope, merchant)
+    if not ms.slug:
+        raise HTTPException(status_code=422, detail="no merchant: name one with ?merchant=")
+    meta = _merchant_meta(ms)
+    out = []
+    with engine.connect() as conn:
+        inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, ms.slug), ms.slug)
+        scored = {r[0] for r in conn.execute(text("SELECT DISTINCT cycle_id FROM soa_expectation_outcomes"))}
+        cycles = [c for c in merchant_cycles(conn, ms) if c['id'] in scored and c.get('status') == 'complete']
+        for c in reversed(cycles):
+            c = {**c, 'customer_org_id': scope.org.id}
+            m = _revenue_model(conn, c, inputs, meta, None)
+            out.append({'cycle': c['cycle_code'], 'started': rm._iso(c.get('start_date')), 'measured': m['measured'],
+                        'reason': m['reason'], 'shares': m['shares'], 'counts': m['counts'],
+                        'exposed': (m['today'] or {}).get('exposed'), 'gainable': (m['today'] or {}).get('gainable')})
+    return {'merchant': ms.slug, 'dollars': inputs['scope']['entered'], 'currency': inputs['currency'], 'cycles': out}

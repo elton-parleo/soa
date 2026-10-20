@@ -2336,3 +2336,26 @@ class SoaWorkerSurface(Base):
     surface_id = Column(Text, primary_key=True)
     configured = Column(Boolean, nullable=False)
     seen_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class SoaMerchantRevenueInputs(Base):
+    """2I-9: the revenue model's inputs one merchant of one org chose on
+    Impact. Sales in scope is the merchant's own financial figure: served only
+    on that merchant's console reads (/api/console/revenue-inputs, /revenue),
+    never on an operator-wide list or the Command Center. A null share reads
+    the public default (soa_shared/revenue.py); a null scope reads as not
+    entered, and the model then shows no dollars."""
+    __tablename__ = "soa_merchant_revenue_inputs"
+
+    org_id = Column(Integer, primary_key=True)
+    merchant_slug = Column(Text, primary_key=True)
+    scope_value = Column(Numeric, nullable=True)
+    scope_display = Column(Text, nullable=True)
+    scope_source = Column(Text, nullable=True)
+    influence = Column(Float, nullable=True)
+    horizon = Column(Float, nullable=True)
+    penalty = Column(Float, nullable=True)
+    lost_gainable = Column(Float, nullable=True)
+    currency = Column(Text, nullable=True)
+    updated_by = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
