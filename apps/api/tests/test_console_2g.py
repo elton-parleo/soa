@@ -42,7 +42,10 @@ def test_the_run_count_rule_516_runs_514_answered(http, cycle):
     that says answered. soa serves both per surface in all_tiers."""
     summary = _get(http, '/api/console/answers/summary')
     every = {c['surface']: (c['runs'], c['answered']) for c in summary['all_tiers']}
-    assert sum(r for r, _ in every.values()) == 516 and sum(a for _, a in every.values()) == 514
+    # 2I-8: `all` is every surface together, the header's count
+    assert every['all'] == (516, 514)
+    assert sum(r for s, (r, _) in every.items() if s != 'all') == 516
+    assert sum(a for s, (_, a) in every.items() if s != 'all') == 514
     assert every['grounded_api'] == (514, 514) and every['consumer_ui'] == (2, 0)
     answers = _get(http, '/api/console/answers')
     assert len(answers) == 516 and sum(a['answer_status'] == 'answered' for a in answers) == 514

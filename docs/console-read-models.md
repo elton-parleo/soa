@@ -1,4 +1,4 @@
-# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D, 2E, 2E-2, 2G, 2H)
+# Console read models (2B, 2C, 2C-1, 2C-2, 2C-2a, 2C-2b, 2C-2c, 2C-3, 2C-3a, 2D, 2E, 2E-2, 2G, 2H, 2I-8)
 
 soa's results in the shapes the console reads (parleohq/truesync, branch
 `console-demo`, `apps/console/src/data/types.ts` and `studio.ts`). The console
@@ -32,7 +32,7 @@ Lists (`runs`, `studio/*`) return only the scope's rows.
 |---|---|---|
 | `GET /api/console/surfaces` | the surface list the modal shows | — (soa) |
 | `GET /api/console/answers?cycle=<code>` | one per run | `Answer[]` |
-| `GET /api/console/answers/summary?cycle=<code>` | per tier and per surface: every outcome, `unverifiable`, `answered_with_other_brand` (2C) | — (soa) |
+| `GET /api/console/answers/summary?cycle=<code>` | per tier, every agent together (`all`, 2I-8) and per surface: every outcome, `unverifiable`, `answered_with_other_brand` (2C) | — (soa) |
 | `GET /api/console/true-value?cycle=<code>` | variants x retailers | `TrueValue` |
 | `GET /api/console/programs?merchant=<slug>[&cycle=<code>]` | the merchant's owned incentives, with how the cycle's value answers did (2C) | `TrueValue.programs` |
 | `GET /api/console/accessibility?merchant=<slug>` | supply's access payload | `Accessibility` |
@@ -41,10 +41,10 @@ Lists (`runs`, `studio/*`) return only the scope's rows.
 | `GET /api/console/studies/options`, `POST /studies/preview`, `POST /studies/generate`, `POST /studies/{study_type}/regenerate`, `GET /studies/{study_type}/status`, `POST /api/console/cycles` | the Create Study modal and "start a cycle"; **operator only** (2C) | — (soa) |
 | `GET /api/console/studies?cycle=<code>` | question x agent | `StudyRow[]` |
 | `GET /api/console/accuracy?cycle=<code>` | per-surface accuracy, never pooled | — (soa) |
-| `GET /api/console/visibility?cycle=<code>` | who the answers name and who they name first, per surface with a per-agent split, from the stored mention coding (2C-1) | `Ranking` / `RankRow`, and one `VisibilityRow` per run |
+| `GET /api/console/visibility?cycle=<code>` | who the answers name and who they name first, every agent together (`all`, the default, 2I-8) and per surface, each with a per-agent split, from the stored mention coding (2C-1) | `Ranking` / `RankRow`, and one `VisibilityRow` per run |
 | `GET /api/console/record/list?merchant=<slug>` | the merchant's products for the record list, each with its status (2C-1) | — (the record list) |
 | `GET /api/console/record?merchant=<slug>&product=<sku>` | one product's record, read-only: fields with provenance, page disagreements, issues, variants, the schema.org artifact (2C-1) | `Record_` |
-| `GET /api/console/overview?cycle=<code>[&merchant=<slug>]` | This week, per surface: agents, products, signals, the week in short, changes, Visibility's ranking (2C-2) | `AgentWeek[]`, `ProductWeek[]`, `Signal[]`, `WeekChange[]` |
+| `GET /api/console/overview?cycle=<code>[&merchant=<slug>]` | This week, every agent together (`all`, the default, 2I-8) and per surface: agents, products, signals, the week in short, changes, Visibility's ranking (2C-2) | `AgentWeek[]`, `ProductWeek[]`, `Signal[]`, `WeekChange[]` |
 | `GET /api/console/runs` | the tenant's cycles | `Run[]` (studio.ts) |
 | `GET /api/console/studio/studies` | the tenant's studies with prompts | `Study[]` + `Prompt` (studio.ts) |
 | `GET /api/console/studio/entities` | entities the tenant's cycles compare | `Entity[]` (studio.ts) |
@@ -120,7 +120,7 @@ as `not_scored`.
 
 | field | meaning |
 |---|---|
-| `surfaces[]` | one entry per surface kind (`api`, `grounded_api`, `consumer_ui`) across the value tiers. Brand-direct outcomes are not a price verdict and are only under `tiers` |
+| `surfaces[]` | 2I-8: `all` ("All agents", every run whatever its surface) first, then one entry per surface kind (`api`, `grounded_api`, `consumer_ui`) across the value tiers. Brand-direct outcomes are not a price verdict and are only under `tiers` |
 | `tiers[].surfaces[]` | the same entry per tier (`brand_direct`, `catalog_accuracy`, `value_incentives`, `category_control`) and surface |
 | `runs`, `answered` | runs, and runs whose `answer_status` is `answered` |
 | `counts` | every outcome verbatim (`exact`, `wrong`, `partial`, `stale`, `absent`, `unverifiable`, `unscoreable`, the brand outcomes, `not_scored`) |
@@ -129,8 +129,11 @@ as `not_scored`.
 | `answered_with_other_brand` | `absent` with `reason_code: other_brand` |
 | `flags` | runs carrying `fabricated_citation`, `fabricated_availability`, `variant_swap` |
 
-There is no all-surfaces total, by tier or overall: an accuracy averaged across a
-model-only API, a grounded API and a consumer UI describes none of them.
+2I-8: `all` pools **counts**, never accuracies: its `counts` are the surfaces' counts summed and
+its accuracy is exact over scored on those sums (a mean of the surfaces' accuracies is never
+taken). `unverifiable` stays outside it. Before 2I-8 there was no all-surfaces entry; since 2I no
+cycle runs the ungrounded `api` surface, so `all` adds grounded APIs and consumer UIs, the agents
+the demo counts together.
 
 ### TrueValue
 
@@ -140,7 +143,7 @@ model-only API, a grounded API and a consumer UI describes none of them.
 | `rows` | one per variant (`sku` = GTIN, or the record's variant id) |
 | `TvCell.live` | the 2A reference row's price, `unverifiable` when supply says `verifiable: false`; the record's price when no reference is cached |
 | `TvCell.quoted` | 2C-2: the deciding run's stated price (most common among the runs with that outcome); `—` when no run quoted one |
-| `TvCell.status` | 2C-2, `TV_CELL_RULE`, on one surface: the **worst** outcome among the runs that **quoted a price** (wrong, then stale, then partial, then exact); a run that quoted nothing, or priced another brand's product (absent), does not vote; no quoting run → `missed` (left out). Mapped exact → `exact`, wrong → `wrong`, partial → `partial`, absent → `missed`, stale → `wrong` (`outcome` says `stale`), unverifiable → **`unverifiable`** (extension), no question → `none`. A cell never reads WRONG with nothing quoted |
+| `TvCell.status` | 2C-2, `TV_CELL_RULE`, on `surface` (2I-8: `all`, every agent's quotes together; each surface's own cell in `by_surface`): the **worst** outcome among the runs that **quoted a price** (wrong, then stale, then partial, then exact); a run that quoted nothing, or priced another brand's product (absent), does not vote; no quoting run → `missed` (left out). Mapped exact → `exact`, wrong → `wrong`, partial → `partial`, absent → `missed`, stale → `wrong` (`outcome` says `stale`), unverifiable → **`unverifiable`** (extension), no question → `none`. A cell never reads WRONG with nothing quoted |
 | `programs` | `[]` without `merchant`; with it (2C-2) the owned incentives as `/programs` maps them |
 
 Extras on each cell: `outcome` (the raw soa outcome), `runs`, and (2C) `reference_source`
@@ -399,8 +402,10 @@ json_channel, channels, reference_run, read_errors, divergences`. `/record/list`
 outcomes, the mention coding, the True Value cells, the 2A reference and access reads, the
 publication journal and the owned incentives. Nothing new is measured, nothing is modeled, and
 no model is called: every sentence is a template from `TEMPLATES`, filled from counts. Two
-rules hold everywhere: counts are per surface (never pooled, a per-agent split beneath), and
-`unverifiable` never sits in an accuracy.
+rules hold everywhere: counts are shown for every agent together by default, as the demo shows
+them, with each surface's own count beside it as a filter (2I-8; before, per surface and never
+pooled), a per-agent split beneath each; and `unverifiable` never sits in an accuracy. The score
+pools surfaces by score, not by count (2C-3, unchanged).
 
 ### Two fixes first
 
@@ -2011,6 +2016,61 @@ poll, the cycle code (`FL<run>-<merchant>-<date>`) and the PATCH. The new test r
 
 **Studies.** Create Study already lists the org's merchants (`/studies/options`) and takes `syndicated_merchant`; the
 console defaults it to the selected merchant.
+
+## 2I-8: every agent together, a surface is a filter
+
+The console demo counts all five agents together and never names a surface ("Pampers is named
+in 25 of 29 category answers and put first in 5", one "Who each agent picks first" grid with
+ChatGPT, Gemini, AI Mode, Perplexity and Copilot as columns). The api console, by a rule 2B
+introduced and 2C to 2C-2 carried, counted per surface and defaulted to the highest-fidelity
+surface with answered runs, so FL12's Overview showed the consumer UI's 34 of 102 unprompted
+answers and hid the four grounded agents. Decision (Oct 20): match the demo.
+
+**The rule now.** Counts are shown for every agent together by default, as the demo shows them.
+Each surface's own count sits beside it, as a filter. The score pools surfaces by score, not by
+count (`console_score.py`, unchanged, scorer 9).
+
+**One mechanism.** A pseudo-surface `all` (`soa_shared/surfaces.py` `ALL`, label "All agents",
+helpers `with_all` and `on_surface`), computed over every run in the cycle, listed first in every
+surface list and the default wherever a read model picked "the highest-fidelity surface with
+answered runs". Each surface's entry is unchanged: `tests/test_console_2i8.py` pins every
+per-surface value on four fixtures (W&S, W&S on two surfaces, 229/FL8, the FL12-shaped
+`console_fixture_2i8`) to main's output, byte for byte, with `all` taken out. `all` is a
+read-model key only: it is no surface kind and no surface id, so `resolve` refuses it and no
+cycle, full loop or runner can carry it.
+
+| where | what `all` holds |
+|---|---|
+| `parity.ordered_surfaces` | ranks `all` first (`_SURFACE_RANK`) |
+| `visibility_headline` | the gap sentence over every agent's unprompted answers: FL12-shaped, "First in 33 of 102 unprompted answers." (22 of 68 grounded plus 11 of 34 consumer) |
+| `visibility_matrix` | one column per agent across the surfaces, in the demo's order (ChatGPT, Gemini, AI Mode, Perplexity, Copilot, then Claude); a question an agent did not run has no cell, one it ran with no answer has `answered: 0` and no pick. Each surface's matrix keeps its columns by name, as before |
+| `visibility_by_stage` | stages and tiers over every answered run |
+| `extend_visibility` | `headline` = `headlines.all`, `matrix.all`, `by_stage.all` |
+| `build_visibility` | `ranking.surface = 'all'`, `denom`, `denoms.all`, `agent_denoms.all` (demo order), `first_uncoded.all`, `agent_first_uncoded.all`, each row's `surfaces.all` with the full agent split and its typed `named`/`first`, `untracked.all` (the 2G footer over every answered run), `surfaces[0]` |
+| `surface_metrics`, `build_agents` | the agent table over every agent, six rows in the demo's order on FL12 |
+| `build_products` | ProductWeek named, first, quoted, live over every agent's quotes; `cell_status` is the cell's `by_surface.all` |
+| `build_signals` | the counts over every agent; the detail reads "across every agent" where a surface reads "on the grounded API" |
+| `build_summary` | the same sentences over every agent; no price scored reads "No price was scored by any agent." |
+| `changes_status`, `build_changes` | compared on `all` when the same agents answered in both cycles, whatever their surfaces |
+| `build_overview` | `surface: 'all'`, `surfaces` begins with it, `by_surface.all` |
+| `build_answers_summary` | `all_tiers`, `surfaces` and each tier's `surfaces` begin with `all`: counts summed, accuracy exact ÷ scored over the sums |
+| `build_true_value` | `surface: 'all'`; each cell's typed `quoted`/`status`/`outcome`/`runs` by TV_CELL_RULE over every agent's quotes, `by_surface.all` beside the surfaces; `by_agent.all` and `columns_by_surface.all` with every agent (demo order); `columns` is `all`'s |
+| `_program_agents`, `build_programs` | `by_surface.all`; `agentsRight` over every agent |
+| `program_lines` (2G caption) | `by_surface.all`: "Quoted by N of M agents." over every agent asked |
+| `/catalog` stage counts (`console_ops.get_catalog`) | "measured" counts every agent's quotes, as True Value's typed cell does |
+
+Left per surface: `/api/console/accuracy` (2B, `soa_shared/surface_accuracy.py`, which the console
+does not read), the Studies grid (`build_study_rows`, a cell per agent, not per surface), and the
+score.
+
+**Templates.** New, for `all`: `summary.no_price_all` "No price was scored by any agent.",
+`changes.not_comparable_subset_all` "Not comparable: {code} ran {agents} only.",
+`changes.not_comparable_all` "Not comparable: {code} ran {prev}, this cycle ran {now}.",
+`changes.not_comparable_tier_all` "Not comparable: {code} asked no unprompted questions.".
+Changed, same output on a surface: `signal.other_brand` and `signal.fabricated` details read
+"{n} of {asked} price answers {on}." (`on` is "on the grounded API", or "across every agent").
+Visibility's `lede` reads "… Every agent together, as the demo counts them. Pick a surface to count
+one alone." The samples below were taken before 2I-8 and do not carry `all`.
 
 ## Answer divergences
 

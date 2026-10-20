@@ -154,11 +154,12 @@ def build() -> Dict[str, List[dict]]:
     return out
 
 
-def load(engine, encode) -> None:
+def load(engine, encode, data=None) -> None:
     """Into the console test database: the W&S fixture's own cycle is taken
-    out (it would otherwise be 229's previous scored cycle) and 229 put in."""
+    out (it would otherwise be 229's previous scored cycle) and 229 put in.
+    `data` loads another build of the same shape (2I-8's console_fixture_2i8)."""
     from sqlalchemy import text
-    data = build()
+    data = data or build()
     with engine.begin() as c:
         for t in ('soa_expectation_outcomes', 'soa_coded_mentions'):
             c.execute(text(f"DELETE FROM {t} WHERE run_id IN (SELECT id FROM soa_runs WHERE cycle_id = 1)"))

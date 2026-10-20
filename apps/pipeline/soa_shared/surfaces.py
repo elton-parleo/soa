@@ -36,11 +36,30 @@ GROUNDED_API = 'grounded_api'
 CONSUMER_UI = 'consumer_ui'
 SURFACE_KINDS = (API, GROUNDED_API, CONSUMER_UI)
 
+#: 2I-8: the console's pooled read, every run in the cycle whatever its
+#: surface, as the console demo counts them. A read-model key, listed first
+#: and read by default; never a surface kind, never a run's surface, never
+#: dispatched (resolve refuses it: it is no surface id or alias).
+ALL = 'all'
+
 SURFACE_LABELS = {
+    ALL: 'All agents',
     API: 'API, no tools',
     GROUNDED_API: 'API with search grounding',
     CONSUMER_UI: 'Consumer UI, logged out',
 }
+
+
+def with_all(keys: Iterable[str]) -> List[str]:
+    """2I-8: a read model's surface list, `all` first, then the surfaces in
+    the order given. Empty when there are none (a cycle with no run)."""
+    keys = [k for k in keys if k != ALL]
+    return [ALL, *keys] if keys else []
+
+
+def on_surface(row_surface: Optional[str], surface: str) -> bool:
+    """2I-8: whether a row counts toward `surface`: every row toward `all`."""
+    return surface == ALL or row_surface == surface
 
 ANSWERED = 'answered'
 NO_AI_ANSWER = 'no_ai_answer'

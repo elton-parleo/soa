@@ -59,15 +59,18 @@ def test_visibility_is_per_surface_with_the_agent_split(http):
     check(body, 'Visibility')
     assert body['cycle'] == CYCLE and len(body['byQuestion']) == 8
     ranking = body['ranking']
-    # grounded_api is the highest-fidelity surface with answered runs; consumer_ui (aimode) had none.
-    assert ranking['surface'] == 'grounded_api'
-    assert ranking['denoms'] == {'grounded_api': 7, 'consumer_ui': 0} and ranking['denom'] == 7
+    # 2I-8: every agent together is the default; consumer_ui (aimode) answered none, so it is grounded_api's
+    assert ranking['surface'] == 'all'
+    assert ranking['denoms'] == {'all': 7, 'grounded_api': 7, 'consumer_ui': 0} and ranking['denom'] == 7
+    assert [s['surface'] for s in body['surfaces']] == ['all', 'grounded_api', 'consumer_ui']
     [ws] = ranking['rows']
     assert ws['name'] == 'Wiggle & Snug' and ws['you'] is True
     assert (ws['named'], ws['first']) == (6, 6)
     assert ws['surfaces']['grounded_api']['agents'] == {'chatgpt': {'named': 2, 'first': 2},
                                                         'gemini': {'named': 4, 'first': 4}}
     assert ws['surfaces']['consumer_ui'] == {'named': 0, 'first': 0, 'agents': {}}
+    assert ws['surfaces']['all'] == {'named': 6, 'first': 6, 'agents': {'chatgpt': {'named': 2, 'first': 2},
+                                                                       'gemini': {'named': 4, 'first': 4}}}
     assert ranking['agent_denoms']['grounded_api'] == {'chatgpt': 3, 'gemini': 4}
     # Huggies is in the comparison set but no answer named it: not a row.
     assert [r['name'] for r in ranking['rows']] == ['Wiggle & Snug']
@@ -155,8 +158,8 @@ def test_first_pick_is_layer_1_position_1_then_span_position():
     assert by['run-3']['tier'] == 'unprompted' and by['run-3']['type'] == 'Awareness'
     assert by['run-4']['first'] == {'name': 'Pampers', 'you': False} and by['run-4']['first_basis'] == 'coded_order'
     assert by['run-5']['first'] == {'name': 'Pampers', 'you': False}
-    assert body['ranking']['first_uncoded'] == {'grounded_api': 1}
-    assert body['ranking']['agent_first_uncoded'] == {'grounded_api': {'chatgpt': 1}}
+    assert body['ranking']['first_uncoded'] == {'all': 1, 'grounded_api': 1}
+    assert body['ranking']['agent_first_uncoded'] == {'all': {'chatgpt': 1}, 'grounded_api': {'chatgpt': 1}}
     assert body['tiers'][0] == {'tier': 'unprompted', 'label': 'Unprompted'}
 
 
@@ -167,7 +170,8 @@ def test_an_unanswered_run_is_outside_every_denominator():
     body = rm.build_visibility('C', runs=runs, entities=ENTITIES, mentions=mentions, extractions={})
     ws = body['ranking']['rows'][0]
     assert body['ranking']['denom'] == 2 and (ws['named'], ws['first']) == (1, 1)
-    assert body['ranking']['agent_denoms'] == {'grounded_api': {'chatgpt': 1, 'gemini': 1}}
+    assert body['ranking']['agent_denoms'] == {'all': {'chatgpt': 1, 'gemini': 1},
+                                               'grounded_api': {'chatgpt': 1, 'gemini': 1}}
 
 
 # ═══ Offer record ═════════════════════════════════════════════════════════

@@ -9,6 +9,12 @@ knows, the payload carries the extra field BESIDE the typed one rather than
 bending it, and says so in `divergences` — the same rule supply's Command
 Center payloads follow.
 
+2I-8: counts are shown for every agent together by default, as the console
+demo shows them: each read keyed by surface leads with `all` (soa_shared/
+surfaces.py ALL, every run in the cycle), its default, and keeps each
+surface's own entry beside it, unchanged, for the console's surface filter.
+The score pools surfaces by score, not by count (console_score.py).
+
 Pure functions over rows (the loaders at the bottom do the SQL), so each
 mapping is tested without a database.
 """
@@ -383,10 +389,13 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
     product in place of ours). One row per run; a run with no outcome
     counts as `not_scored`.
 
-    Never pooled across surfaces: there is no all-surfaces total, by tier or
-    overall, by design (soa_shared/surface_accuracy.py). `surfaces` is per
-    surface across the value tiers; brand-direct, whose outcomes are not a
-    price verdict, is only in `tiers`.
+    2I-8: every list begins with `all` ("All agents"), every run whatever its
+    surface, as the console demo counts them: counts summed over the
+    surfaces, accuracy exact over scored on those sums, `unverifiable` still
+    outside it. Each surface's own entry follows, as before, for the
+    console's surface filter. `surfaces` is per surface across the value
+    tiers; brand-direct, whose outcomes are not a price verdict, is only in
+    `tiers`.
 
     rows: [{tier, surface, platform, answer_status, outcome, reason_code, flags}]
     """
@@ -396,14 +405,14 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
     tier_order = [t for t in TIER_LABELS if t in by_tier] + sorted(t for t in by_tier if t not in TIER_LABELS)
 
     def per_surface(subset: List[dict]) -> List[dict]:
-        grouped: Dict[str, List[dict]] = {}
+        grouped: Dict[str, List[dict]] = {surfaces.ALL: subset}
         for r in subset:
             grouped.setdefault(_surface_key(r), []).append(r)
         return [{'surface': k, 'label': surfaces.SURFACE_LABELS.get(k, k), **_summary_cell(grouped[k])}
-                for k in _ordered_surfaces(grouped)]
+                for k in surfaces.with_all(_ordered_surfaces(set(grouped) - {surfaces.ALL}))]
 
     value_rows = [r for r in rows if r.get('tier') != 'brand_direct']
-    every: Dict[str, List[dict]] = {}
+    every: Dict[str, List[dict]] = {surfaces.ALL: rows}
     for r in rows:
         every.setdefault(_surface_key(r), []).append(r)
     return {
@@ -412,7 +421,7 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
         # cycle executed, answers that say answered): what the Answers strip counts
         'all_tiers': [{'surface': k, 'label': surfaces.SURFACE_LABELS.get(k, k), 'runs': len(every[k]),
                        'answered': sum(1 for r in every[k] if r.get('answer_status') == surfaces.ANSWERED)}
-                      for k in _ordered_surfaces(every)],
+                      for k in surfaces.with_all(_ordered_surfaces(set(every) - {surfaces.ALL}))],
         'surfaces': per_surface(value_rows),
         'tiers': [{'tier': t, 'label': TIER_LABELS.get(t, t), 'surfaces': per_surface(by_tier[t])}
                   for t in tier_order],
@@ -509,11 +518,12 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
     page when `reads` (supply's /reference rows) has one, else the record's
     price, and `live_basis` says which ('reference_read' | 'record').
 
-    2C-2: a cell is per surface (never pooled). The typed quoted/status are
-    the cell on `surface` (the highest-fidelity surface with priced runs);
-    `by_surface` beside has every surface's, and `quotes` every run's quote
-    with its agent and surface. TV_CELL_RULE decides each. `by_agent` is
-    prices exact / scored per agent, per surface.
+    2C-2: `by_surface` has each surface's cell, and `quotes` every run's
+    quote with its agent and surface. TV_CELL_RULE decides each. `by_agent`
+    is prices exact / scored per agent, per surface. 2I-8: the typed
+    quoted/status are the cell on `surface`, which is `all`: TV_CELL_RULE
+    over every agent's quotes, as the console demo counts them; `by_surface`
+    and `by_agent` begin with `all`, each surface's own beside it.
 
     2C-2a: the columns are the record's retailers when it has two or more
     (`column_kind: 'retailer'`), else the agents (`column_kind: 'agent'`):
@@ -568,10 +578,10 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
 
     surface_of_run = lambda i: i.get('surface') or 'unlabelled'  # noqa: E731
     surface_list = _surface_order(surface_of_run(i) for runs in grouped.values() for i in runs)
-    # The surface the typed fields read: the highest-fidelity one where a run
-    # quoted a price (a surface of walls and refusals priced nothing).
-    quoting = {surface_of_run(i) for runs in grouped.values() for i in runs if i.get('stated') not in (None, '')}
-    default = next((s for s in surface_list if s in quoting), surface_list[0] if surface_list else None)
+    # 2I-8: the typed fields read every agent together (`all`), each
+    # surface's own cell beside it
+    keys = surfaces.with_all(surface_list)
+    default = keys[0] if keys else None
 
     def cell_for(runs, ref):
         outcome, stated = aggregate_cell(runs)
@@ -588,8 +598,9 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             live_text = 'unverifiable'
         else:
             live_text = money(ref.get('price'), ref.get('currency') or 'USD')
-        by_surface = {s: cell_for([r for r in runs if surface_of_run(r) == s], ref)
-                      for s in surfaces_here if any(surface_of_run(r) == s for r in runs)}
+        by_surface = {s: cell_for([r for r in runs if surfaces.on_surface(surface_of_run(r), s)], ref)
+                      for s in surfaces.with_all(surfaces_here)
+                      if any(surfaces.on_surface(surface_of_run(r), s) for r in runs)}
         top = by_surface.get(default) or cell_for([], ref)
         return {
             'quoted': top['quoted'], 'live': live_text, 'status': top['status'],
@@ -643,20 +654,27 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
 
     by_agent: Dict[str, Dict[str, dict]] = {}
     for item in scored:
-        s, a = surface_of_run(item), item.get('agent') or 'unknown'
-        c = by_agent.setdefault(s, {}).setdefault(a, {'exact': 0, 'scored': 0, 'wrong': 0, 'stale': 0, 'partial': 0,
-                                                       'unverifiable': 0, 'left_out': 0, 'other_brand': 0})
-        o = item.get('outcome')
-        if o in TV_SCORED:
-            c['scored'] += 1
-            if o in c:
-                c[o] += 1
-        elif o == 'unverifiable':
-            c['unverifiable'] += 1
-        elif o == 'absent':
-            c['left_out'] += 1
-            if item.get('reason_code') == 'other_brand':
-                c['other_brand'] += 1
+        a = item.get('agent') or 'unknown'
+        for s in (surface_of_run(item), surfaces.ALL):
+            c = by_agent.setdefault(s, {}).setdefault(a, {'exact': 0, 'scored': 0, 'wrong': 0, 'stale': 0,
+                                                           'partial': 0, 'unverifiable': 0, 'left_out': 0,
+                                                           'other_brand': 0})
+            o = item.get('outcome')
+            if o in TV_SCORED:
+                c['scored'] += 1
+                if o in c:
+                    c[o] += 1
+            elif o == 'unverifiable':
+                c['unverifiable'] += 1
+            elif o == 'absent':
+                c['left_out'] += 1
+                if item.get('reason_code') == 'other_brand':
+                    c['other_brand'] += 1
+    order = list(AGENT_NAMES)
+    if surfaces.ALL in by_agent:
+        by_agent[surfaces.ALL] = dict(sorted(by_agent[surfaces.ALL].items(),
+                                             key=lambda kv: (order.index(kv[0]) if kv[0] in order else 99, kv[0])))
+    agents_on[surfaces.ALL] = agent_columns
 
     retailer_columns = [{'id': d, 'name': _retailer_name(d), 'you': d == own_domain} for d in columns]
     agent_col = lambda a: {'id': a, 'name': AGENT_NAMES.get(a, a), 'kind': 'agent', 'retailer': domain,  # noqa: E731
@@ -669,13 +687,13 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
         'as_of': (reference or {}).get('as_of'),
         # 2C-2
         'surface': default,
-        'surfaces': [{'surface': s, 'label': surfaces.SURFACE_LABELS.get(s, s)} for s in surface_list],
-        'by_agent': {s: by_agent.get(s, {}) for s in surface_list},
+        'surfaces': [{'surface': s, 'label': surfaces.SURFACE_LABELS.get(s, s)} for s in keys],
+        'by_agent': {s: by_agent.get(s, {}) for s in keys},
         'cell_rule': TV_CELL_RULE,
         # 2C-2a
         'column_kind': 'agent' if agent_kind else 'retailer',
-        'columns_by_surface': ({s: [agent_col(a) for a in agents_on.get(s, [])] for s in surface_list} if agent_kind
-                               else {s: retailer_columns for s in surface_list}),
+        'columns_by_surface': ({s: [agent_col(a) for a in agents_on.get(s, [])] for s in keys} if agent_kind
+                               else {s: retailer_columns for s in keys}),
         'retailer_columns': retailer_columns,
         'divergences': [
             "TvCell.status is extended by 'unverifiable' (the page blocked both reference sources).",
@@ -684,9 +702,10 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             "Each cell carries reference_source (honest_fetch | hosted_render | record), method and "
             "observed_at beside the typed fields (2C), and live_basis (2C-2a).",
             "2C-2: TvCell.quoted / status are the cell on `surface`; `by_surface` has each surface's and "
-            "`quotes` every run's. Never pooled across surfaces. TV_CELL_RULE decides a cell.",
+            "`quotes` every run's. TV_CELL_RULE decides a cell. 2I-8: `surface` is `all`, every agent's "
+            "quotes together, as the demo counts them; each surface's cell is beside it in `by_surface`.",
             "2C-2a: with one retailer in the record the columns are agents (column_kind 'agent', per surface "
-            "in columns_by_surface); the one-retailer cell rides beside as retailer_cells.",
+            "in columns_by_surface, `all` with every agent); the one-retailer cell rides beside as retailer_cells.",
         ],
     }
 
@@ -797,13 +816,13 @@ def record_programs(record: Optional[dict]) -> List[dict]:
 def _program_agents(scored: List[dict]) -> Dict[str, dict]:
     """2C-2: per surface, the agents that answered a scored question about a
     program and the ones that got every such answer right; 2C-2a: and the
-    scored answers and exact ones."""
-    out: Dict[str, dict] = {}
+    scored answers and exact ones. 2I-8: `all` first, every agent."""
+    out: Dict[str, dict] = {surfaces.ALL: {'agents': {}}} if scored else {}
     for o in scored:
         s = o.get('surface') or surfaces.surface_of(o.get('platform')) or 'unlabelled'
         a = surfaces.agent_of(o.get('platform')) or o.get('platform') or 'unknown'
-        entry = out.setdefault(s, {'agents': {}})
-        entry['agents'].setdefault(a, []).append(o.get('outcome'))
+        for key in (surfaces.ALL, s):
+            out.setdefault(key, {'agents': {}})['agents'].setdefault(a, []).append(o.get('outcome'))
     for entry in out.values():
         per = entry.pop('agents')
         entry['asked'] = sorted(per)
@@ -818,8 +837,8 @@ def build_programs(incentives: List[dict], value_outcomes: List[dict], *, record
     TrueValue.programs. 2C-2a: the record's programs first (record_programs:
     the generator's source, so its questions join on the same identifiers),
     then each owned incentive the record does not already have. 2C-2:
-    `agentsRight` is "quoted right by N of M agents" on the highest-fidelity
-    surface that asked about the program, where an agent is right when every
+    `agentsRight` is "quoted right by N of M agents" over every agent (2I-8:
+    `all`; before, the highest-fidelity surface that asked about the program), where an agent is right when every
     scored answer it gave about the program was exact (scored excludes
     absent, unscoreable and unverifiable); `by_surface` beside has every
     surface's agents and answers. A program no question asked about says so
@@ -1159,7 +1178,8 @@ def accessibility_from_supply(payload: Optional[dict]) -> dict:
 
 # ─── Studies ───────────────────────────────────────────────────────────────
 
-_SURFACE_RANK = {'consumer_ui': 3, 'grounded_api': 2, 'api': 1}
+#: 2I-8: `all` (every surface's runs together) ranks above every surface.
+_SURFACE_RANK = {surfaces.ALL: 4, 'consumer_ui': 3, 'grounded_api': 2, 'api': 1}
 
 
 def build_study_rows(queries: List[dict], runs: List[dict], outcomes: Dict[int, dict],
@@ -1347,7 +1367,8 @@ def build_run(cycle: dict, collected: int, usable: int) -> dict:
 
 # ─── Visibility (2C-1) ─────────────────────────────────────────────────────
 #
-# Who the answers name and who they name first, per surface, from the coding
+# Who the answers name and who they name first, every agent together (2I-8:
+# `all`, the default) and per surface, from the coding
 # already stored per answer. Two codings exist and both are read as stored:
 #
 #   Layer 1  soa_coded_mentions: one row per run x the cycle's entities
@@ -1378,10 +1399,10 @@ VIS_FIRST_PICK_RULE = (
     "and the brands the answer named outside the set decide which, by where each first appears. When no "
     "coding names that brand (unprompted answers carry no list of other brands), nobody gets the pick.")
 VISIBILITY_DIVERGENCES = [
-    "Visibility is per surface. RankRow.named and RankRow.first are the counts on `ranking.surface` "
-    "(the highest-fidelity surface with answered runs) and `ranking.denom` is that surface's answered "
-    "runs; every surface is under `surfaces`, each with its per-agent split. There is no total "
-    "across surfaces.",
+    "2I-8: Visibility counts every agent together, as the demo does. RankRow.named and RankRow.first "
+    "are the counts on `ranking.surface`, which is `all` (every answered run, whatever its surface), "
+    "and `ranking.denom` is its answered runs; each surface is beside it under `surfaces`, `all` first, "
+    "each with its per-agent split, for the console's surface filter.",
     "byQuestion is one row per run, not one per question with a first pick per agent "
     "(Tenant.visibility): an agent can have two surfaces, and a question has several runs.",
     "Brands outside the comparison set come from other_brands_named and are rolled up by name: a "
@@ -1506,6 +1527,15 @@ def _visibility_run(layer1: List[dict], extraction: dict, brands: _Brands) -> tu
     return list(named.values()), {'name': display, 'you': you}, 'coded_order', sources
 
 
+def _agent_counts(rows: List[dict], surface: str) -> dict:
+    """{agent: rows}; on `all`, agents in the demo's column order (AGENT_NAMES)."""
+    counts = dict(Counter(r['agent'] for r in rows))
+    if surface != surfaces.ALL:
+        return counts
+    order = list(AGENT_NAMES)
+    return dict(sorted(counts.items(), key=lambda kv: (order.index(kv[0]) if kv[0] in order else 99, kv[0])))
+
+
 def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict], mentions: List[dict],
                      extractions: Dict[int, dict], terms: Iterable[str] = ()) -> dict:
     """
@@ -1545,13 +1575,15 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
         }, ('first_basis',)))
 
     counted = [r for r in rows if r['answered']]
-    surface_list = _ordered_surfaces({r['surface'] for r in rows})
-    denoms = {s: sum(1 for r in counted if r['surface'] == s) for s in surface_list}
-    agent_denoms = {s: dict(Counter(r['agent'] for r in counted if r['surface'] == s)) for s in surface_list}
-    uncoded = {s: dict(Counter(r['agent'] for r in counted if r['surface'] == s and r.get('first_basis') == 'uncoded'))
+    # 2I-8: `all` first, every agent together, as the console demo counts
+    # them, and the default; each surface's own entry beside it
+    surface_list = surfaces.with_all(_ordered_surfaces({r['surface'] for r in rows}))
+    on = surfaces.on_surface
+    denoms = {s: sum(1 for r in counted if on(r['surface'], s)) for s in surface_list}
+    agent_denoms = {s: _agent_counts([r for r in counted if on(r['surface'], s)], s) for s in surface_list}
+    uncoded = {s: _agent_counts([r for r in counted if on(r['surface'], s) and r.get('first_basis') == 'uncoded'], s)
                for s in surface_list}
-    default = next((s for s in sorted(surface_list, key=lambda s: -_SURFACE_RANK.get(s, 0)) if denoms[s]),
-                   surface_list[0] if surface_list else None)
+    default = surface_list[0] if surface_list else None
 
     tally: Dict[str, dict] = {}
     if ours:
@@ -1563,7 +1595,7 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
     for name, row in tally.items():
         per = {}
         for s in surface_list:
-            mine = [r for r in counted if r['surface'] == s]
+            mine = [r for r in counted if on(r['surface'], s)]
             agents = {}
             for a in agent_denoms[s]:
                 ra = [r for r in mine if r['agent'] == a]
@@ -1587,8 +1619,8 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
     tiers += sorted({r['tier'] for r in rows} - set(tiers))
     return {
         'cycle': cycle_code,
-        'lede': (f"Who the answers name, and who they name first, in cycle {cycle_code}. Counted per "
-                 "surface: a model-only API, a grounded API and a consumer UI are never added together."),
+        'lede': (f"Who the answers name, and who they name first, in cycle {cycle_code}. Every agent "
+                 "together, as the demo counts them. Pick a surface to count one alone."),
         'byQuestion': rows,
         'ranking': {'surface': default, 'rows': ranking_rows, 'denom': denoms.get(default, 0),
                     # beside the typed fields
@@ -1599,7 +1631,7 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
         'note': VIS_FIRST_PICK_RULE,
         # beside the typed fields
         'surfaces': [{'surface': s, 'label': surfaces.SURFACE_LABELS.get(s, s), 'answered': denoms[s],
-                      'runs': sum(1 for r in rows if r['surface'] == s)} for s in surface_list],
+                      'runs': sum(1 for r in rows if on(r['surface'], s))} for s in surface_list],
         'tiers': [{'tier': t, 'label': VIS_TIER_LABELS.get(t, t)} for t in tiers],
         'first_basis': dict(Counter(r.get('first_basis') for r in counted if r.get('first_basis'))),
         'sources_left_out': sources_left_out,

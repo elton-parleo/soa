@@ -167,7 +167,11 @@ def test_coverage_tiers_and_agents_agree_when_a_run_errored(http, upstream, db):
         c.execute(text("DELETE FROM soa_expectation_outcomes WHERE run_id = 1003"))
     body = _overview(http, upstream)
     summary = http.get('/api/console/answers/summary', params={'cycle': CYCLE}).json()
-    tier_answers = sum(c['answered'] for t in summary['tiers'] for c in t['surfaces'])
-    agent_answers = sum(a['answers'] for s in body['by_surface'].values() for a in s['agents'])
+    # 2I-8: per surface, `all` aside (it is every surface's runs again)
+    tier_answers = sum(c['answered'] for t in summary['tiers'] for c in t['surfaces'] if c['surface'] != 'all')
+    agent_answers = sum(a['answers'] for k, s in body['by_surface'].items() if k != 'all' for a in s['agents'])
     assert body['coverage']['runs'] == 8
     assert (body['coverage']['answers'], tier_answers, agent_answers) == (6, 6, 6)
+    # and on `all` alone, the same counts
+    assert sum(c['answered'] for t in summary['tiers'] for c in t['surfaces'] if c['surface'] == 'all') == 6
+    assert sum(a['answers'] for a in body['by_surface']['all']['agents']) == 6

@@ -182,6 +182,6 @@ def test_the_answers_strip_counts_runs_and_answers_over_every_tier(http, db):
     as_('alice')
     body = http.get('/api/console/answers/summary', params={'cycle': CYCLE}).json()
     every = {s['surface']: (s['runs'], s['answered']) for s in body['all_tiers']}
-    assert every == {'grounded_api': (7, 6), 'consumer_ui': (1, 0)}
+    assert every == {'all': (8, 6), 'grounded_api': (7, 6), 'consumer_ui': (1, 0)}   # 2I-8: `all` first
     value = {s['surface']: s['runs'] for s in body['surfaces']}
-    assert value == {'grounded_api': 5, 'consumer_ui': 1}          # brand-direct is not a price question
+    assert value == {'all': 6, 'grounded_api': 5, 'consumer_ui': 1}          # brand-direct is not a price question

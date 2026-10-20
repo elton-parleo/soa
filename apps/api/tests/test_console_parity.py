@@ -94,7 +94,10 @@ def test_a_cell_never_reads_wrong_with_nothing_quoted():
 def test_true_value_is_per_surface_with_the_agent_split(http):
     as_('alice')
     tv = http.get('/api/console/true-value', params={'cycle': CYCLE}).json()
-    assert [s['surface'] for s in tv['surfaces']] == ['consumer_ui', 'grounded_api'] and tv['surface'] == 'grounded_api'
+    # 2I-8: `all` first and the default, each surface beside it
+    assert [s['surface'] for s in tv['surfaces']] == ['all', 'consumer_ui', 'grounded_api'] and tv['surface'] == 'all'
+    assert tv['by_agent']['all'] == {**tv['by_agent']['grounded_api'], **tv['by_agent']['consumer_ui']}
+    assert list(tv['by_agent']['all']) == ['chatgpt', 'gemini', 'aimode']      # the demo's column order
     assert tv['by_agent']['grounded_api'] == {
         'chatgpt': {'exact': 0, 'scored': 2, 'wrong': 2, 'stale': 0, 'partial': 0, 'unverifiable': 0, 'left_out': 0, 'other_brand': 0},
         'gemini': {'exact': 1, 'scored': 3, 'wrong': 2, 'stale': 0, 'partial': 0, 'unverifiable': 0, 'left_out': 0, 'other_brand': 0}}
@@ -148,7 +151,9 @@ def test_overview_on_the_fixture_cycle(http, upstream):
     upstream.answer('GET', f'{WS}/access', body=_access_with_a_problem(), token=TOKEN_A)
     as_('alice')
     body = http.get('/api/console/overview', params={'cycle': CYCLE, 'merchant': 'wiggle-and-snug'}).json()
-    assert body['surface'] == 'grounded_api' and body['changes_note'] == 'First cycle. Changes appear from the next one.'
+    # 2I-8: `all` is the default; the per-surface blocks are as before
+    assert body['surface'] == 'all' and body['changes_note'] == 'First cycle. Changes appear from the next one.'
+    assert [s['surface'] for s in body['surfaces']] == ['all', 'consumer_ui', 'grounded_api']
     g = body['by_surface']['grounded_api']
     assert g['changes'] == []
     for a in g['agents']:
