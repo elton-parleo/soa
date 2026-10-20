@@ -6571,3 +6571,49 @@ the brand is named in none of 229's answers) and scores 32 on 69. 229 as recorde
 
 The generator keeps the brand out of category-control questions (`generation/syndicated_study.py`): see the module
 docstring there and `tier_config.category_control` (`branded_dropped`, `branded_regenerated`, `line`).
+
+## 2J-2: a brand's read models
+
+### Products this week on a brand
+
+FL12 (Pampers) showed no "Products this week" block although True Value had every variant with quotes.
+A brand's True Value has its own site as the `you` column (`retailer_columns[].you`, `pampers.com`),
+and no agent quotes it: the brand sets no price there, so its catalog questions name a retailer
+(`expected_answer.attributed_to`). `build_products` read only the `you` cell when the row had one, so
+every row was skipped and the Overview hid the block. The W&S store worked because its `you` column is
+the store, which its questions ask about.
+
+The rule now (`console_parity.build_products`): a row reads its `you` cell when that cell has quotes on
+the surface, else the retailer cells together (`_product_across`):
+
+| field | read across retailers |
+|---|---|
+| `quoted` | every quote, grouped by price, each naming the retailers it was quoted at, then the runs with no price: "Amazon and Walmart $27.97, 5 of 12 runs (Gemini 2, Google AI Mode 1, Perplexity 2). …" |
+| `live` | each retailer's live price, as `_live_text` words it, in column order |
+| `status`, `cell_status` | the worst cell's (wrong, partial, none, exact) |
+| `issue`, `wrong_runs`, `runs`, `quote_groups`, `named`, `first` | over every quote |
+| `retailer`, `quote`, `live_price`, `reference_source`, `observed_at` | the worst cell's |
+| `read_across` (new) | `true` |
+| `retailers` (new) | per retailer cell with quotes: `retailer`, `name`, `runs`, `quote`, `cell_status`, `live_price`, `reference_source`, `observed_at` |
+
+A store's products are unchanged on every surface, `all` included (`tests/test_console_2j2.py` pins the
+W&S fixtures to main's output, byte for byte). On the FL12-shaped brand fixture
+(`tests/console_fixture_2j2.py`; its prices and names are the fixture's, not production's), Swaddlers NB
+84 on `all`:
+
+```json
+{
+  "name": "Swaddlers NB 84", "sku": "00037000863434", "named": 0, "first": 0,
+  "quoted": "Amazon and Walmart $27.97, 5 of 12 runs (Gemini 2, Google AI Mode 1, Perplexity 2). Amazon and Walmart $24.97, 3 of 12 runs (ChatGPT 2, Google AI Mode 1). No price, 4 of 12 runs (Claude 2, Copilot 2)",
+  "live": "$24.97 at walmart.com, our own fetch, Oct 19. $27.97 at amazon.com, our own fetch, Oct 19",
+  "status": "wrong", "issue": "Quoted a wrong price in 3 of 12 runs.", "route": "true-value",
+  "cell_status": "wrong", "quote": "$27.97", "retailer": "walmart.com", "runs": 12, "answered": 12,
+  "issue_rule": "product.wrong", "wrong_runs": 3, "live_price": "$24.97", "read_across": true,
+  "retailers": [
+    {"retailer": "walmart.com", "name": "Walmart", "runs": 6, "quote": "$27.97", "cell_status": "wrong", "live_price": "$24.97"},
+    {"retailer": "amazon.com", "name": "Amazon", "runs": 6, "quote": "$24.97", "cell_status": "wrong", "live_price": "$27.97"}
+  ]
+}
+```
+
+(`answer_ids`, `quote_groups` and the per-retailer `reference_source`/`observed_at` cut.)

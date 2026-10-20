@@ -1,0 +1,801 @@
+{
+ "_note": "2J-2: the Overview's products on every surface (all included) for the store fixtures, taken on main (d5a4f78) before build_products read a brand's retailer cells. test_console_2j2 pins them byte for byte.",
+ "ws": {
+  "all": [
+   {
+    "answer_ids": [
+     "run-1001",
+     "run-1002",
+     "run-1008"
+    ],
+    "answered": 2,
+    "cell_status": "wrong",
+    "first": 2,
+    "issue": "Quoted a wrong price in 1 of 3 runs.",
+    "issue_rule": "product.wrong",
+    "live": "$12.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$12.99",
+    "name": "Wiggle & Snug Bum Balm 4 oz",
+    "named": 2,
+    "observed_at": "2026-08-28T18:03:06.090934+00:00",
+    "quote": "$14.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "gemini": 1
+      },
+      "runs": 1,
+      "stated": "12.99",
+      "swap_product": null,
+      "swap_variant": null
+     },
+     {
+      "agents": {
+       "chatgpt": 1
+      },
+      "runs": 1,
+      "stated": "14.99",
+      "swap_product": null,
+      "swap_variant": null
+     },
+     {
+      "agents": {
+       "aimode": 1
+      },
+      "runs": 1,
+      "stated": null,
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$12.99, 1 of 3 runs (Gemini 1). $14.99, 1 of 3 runs (ChatGPT 1). No price, 1 of 3 runs (Google AI Mode 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 3,
+    "sku": "bum-balm-4oz",
+    "status": "wrong",
+    "wrong_runs": 1
+   },
+   {
+    "answer_ids": [
+     "run-1003"
+    ],
+    "answered": 1,
+    "cell_status": "wrong",
+    "first": 1,
+    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue_rule": "product.wrong",
+    "live": "$11.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$11.99",
+    "name": "Wiggle & Snug Cloud Wipes 3-Pack",
+    "named": 1,
+    "observed_at": "2026-08-28T18:58:45.042456+00:00",
+    "quote": "$14.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "gemini": 1
+      },
+      "runs": 1,
+      "stated": "14.99",
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$14.99, 1 of 1 run (Gemini 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 1,
+    "sku": "cloud-wipes-3pack",
+    "status": "wrong",
+    "wrong_runs": 1
+   },
+   {
+    "answer_ids": [
+     "run-1004"
+    ],
+    "answered": 1,
+    "cell_status": "wrong",
+    "first": 1,
+    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue_rule": "product.wrong",
+    "live": "$29.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$29.99",
+    "name": "Wiggle & Snug Snug-Fit Overnight Diapers Size 6",
+    "named": 1,
+    "observed_at": "2026-08-28T18:01:14.698561+00:00",
+    "quote": "$16.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "gemini": 1
+      },
+      "runs": 1,
+      "stated": "16.99",
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$16.99, 1 of 1 run (Gemini 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 1,
+    "sku": "snug-fit-overnight-s6",
+    "status": "wrong",
+    "wrong_runs": 1
+   },
+   {
+    "answer_ids": [
+     "run-1005"
+    ],
+    "answered": 1,
+    "cell_status": "wrong",
+    "first": 0,
+    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue_rule": "product.wrong",
+    "live": "$22.99 at trueshopstore.com, the record of Sep 4, no page read yet",
+    "live_price": "$22.99",
+    "name": "Wiggle & Snug Snug-Fit Diapers Size 3 small pack",
+    "named": 0,
+    "observed_at": "2026-09-04T20:49:40.991623+00:00",
+    "quote": "$9.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "chatgpt": 1
+      },
+      "runs": 1,
+      "stated": "9.99",
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$9.99, 1 of 1 run (ChatGPT 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 1,
+    "sku": "snug-fit-diapers-s3-small",
+    "status": "wrong",
+    "wrong_runs": 1
+   }
+  ],
+  "consumer_ui": [
+   {
+    "answer_ids": [
+     "run-1008"
+    ],
+    "answered": 0,
+    "cell_status": "missed",
+    "first": 0,
+    "issue": "No price quoted in 1 of 1 run.",
+    "issue_rule": "product.left_out",
+    "live": "$12.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$12.99",
+    "name": "Wiggle & Snug Bum Balm 4 oz",
+    "named": 0,
+    "observed_at": "2026-08-28T18:03:06.090934+00:00",
+    "quote": "\u2014",
+    "quote_groups": [
+     {
+      "agents": {
+       "aimode": 1
+      },
+      "runs": 1,
+      "stated": null,
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "No price, 1 of 1 run (Google AI Mode 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 1,
+    "sku": "bum-balm-4oz",
+    "status": "none",
+    "wrong_runs": 0
+   }
+  ],
+  "grounded_api": [
+   {
+    "answer_ids": [
+     "run-1001",
+     "run-1002"
+    ],
+    "answered": 2,
+    "cell_status": "wrong",
+    "first": 2,
+    "issue": "Quoted a wrong price in 1 of 2 runs.",
+    "issue_rule": "product.wrong",
+    "live": "$12.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$12.99",
+    "name": "Wiggle & Snug Bum Balm 4 oz",
+    "named": 2,
+    "observed_at": "2026-08-28T18:03:06.090934+00:00",
+    "quote": "$14.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "gemini": 1
+      },
+      "runs": 1,
+      "stated": "12.99",
+      "swap_product": null,
+      "swap_variant": null
+     },
+     {
+      "agents": {
+       "chatgpt": 1
+      },
+      "runs": 1,
+      "stated": "14.99",
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$12.99, 1 of 2 runs (Gemini 1). $14.99, 1 of 2 runs (ChatGPT 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 2,
+    "sku": "bum-balm-4oz",
+    "status": "wrong",
+    "wrong_runs": 1
+   },
+   {
+    "answer_ids": [
+     "run-1003"
+    ],
+    "answered": 1,
+    "cell_status": "wrong",
+    "first": 1,
+    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue_rule": "product.wrong",
+    "live": "$11.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$11.99",
+    "name": "Wiggle & Snug Cloud Wipes 3-Pack",
+    "named": 1,
+    "observed_at": "2026-08-28T18:58:45.042456+00:00",
+    "quote": "$14.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "gemini": 1
+      },
+      "runs": 1,
+      "stated": "14.99",
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$14.99, 1 of 1 run (Gemini 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 1,
+    "sku": "cloud-wipes-3pack",
+    "status": "wrong",
+    "wrong_runs": 1
+   },
+   {
+    "answer_ids": [
+     "run-1004"
+    ],
+    "answered": 1,
+    "cell_status": "wrong",
+    "first": 1,
+    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue_rule": "product.wrong",
+    "live": "$29.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$29.99",
+    "name": "Wiggle & Snug Snug-Fit Overnight Diapers Size 6",
+    "named": 1,
+    "observed_at": "2026-08-28T18:01:14.698561+00:00",
+    "quote": "$16.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "gemini": 1
+      },
+      "runs": 1,
+      "stated": "16.99",
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$16.99, 1 of 1 run (Gemini 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 1,
+    "sku": "snug-fit-overnight-s6",
+    "status": "wrong",
+    "wrong_runs": 1
+   },
+   {
+    "answer_ids": [
+     "run-1005"
+    ],
+    "answered": 1,
+    "cell_status": "wrong",
+    "first": 0,
+    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue_rule": "product.wrong",
+    "live": "$22.99 at trueshopstore.com, the record of Sep 4, no page read yet",
+    "live_price": "$22.99",
+    "name": "Wiggle & Snug Snug-Fit Diapers Size 3 small pack",
+    "named": 0,
+    "observed_at": "2026-09-04T20:49:40.991623+00:00",
+    "quote": "$9.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "chatgpt": 1
+      },
+      "runs": 1,
+      "stated": "9.99",
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$9.99, 1 of 1 run (ChatGPT 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 1,
+    "sku": "snug-fit-diapers-s3-small",
+    "status": "wrong",
+    "wrong_runs": 1
+   }
+  ]
+ },
+ "ws_two": {
+  "all": [
+   {
+    "answer_ids": [
+     "run-1004",
+     "run-3205"
+    ],
+    "answered": 2,
+    "cell_status": "wrong",
+    "first": 1,
+    "issue": "Quoted a wrong price in 2 of 2 runs.",
+    "issue_rule": "product.wrong",
+    "live": "$29.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$29.99",
+    "name": "Wiggle & Snug Snug-Fit Overnight Diapers Size 6",
+    "named": 1,
+    "observed_at": "2026-08-28T18:01:14.698561+00:00",
+    "quote": "$16.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "gemini": 1
+      },
+      "runs": 1,
+      "stated": "16.99",
+      "swap_product": null,
+      "swap_variant": null
+     },
+     {
+      "agents": {
+       "aimode": 1
+      },
+      "runs": 1,
+      "stated": null,
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$16.99, 1 of 2 runs (Gemini 1). No price, 1 of 2 runs (Google AI Mode 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 2,
+    "sku": "snug-fit-overnight-s6",
+    "status": "wrong",
+    "wrong_runs": 2
+   },
+   {
+    "answer_ids": [
+     "run-1001",
+     "run-1002",
+     "run-1008",
+     "run-3203"
+    ],
+    "answered": 3,
+    "cell_status": "wrong",
+    "first": 2,
+    "issue": "Quoted a wrong price in 1 of 4 runs.",
+    "issue_rule": "product.wrong",
+    "live": "$12.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$12.99",
+    "name": "Wiggle & Snug Bum Balm 4 oz",
+    "named": 2,
+    "observed_at": "2026-08-28T18:03:06.090934+00:00",
+    "quote": "$14.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "gemini": 1
+      },
+      "runs": 1,
+      "stated": "12.99",
+      "swap_product": null,
+      "swap_variant": null
+     },
+     {
+      "agents": {
+       "chatgpt": 1
+      },
+      "runs": 1,
+      "stated": "14.99",
+      "swap_product": null,
+      "swap_variant": null
+     },
+     {
+      "agents": {
+       "aimode": 2
+      },
+      "runs": 2,
+      "stated": null,
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$12.99, 1 of 4 runs (Gemini 1). $14.99, 1 of 4 runs (ChatGPT 1). No price, 2 of 4 runs (Google AI Mode 2)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 4,
+    "sku": "bum-balm-4oz",
+    "status": "wrong",
+    "wrong_runs": 1
+   },
+   {
+    "answer_ids": [
+     "run-1003",
+     "run-3204"
+    ],
+    "answered": 2,
+    "cell_status": "wrong",
+    "first": 1,
+    "issue": "Quoted a wrong price in 1 of 2 runs.",
+    "issue_rule": "product.wrong",
+    "live": "$11.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$11.99",
+    "name": "Wiggle & Snug Cloud Wipes 3-Pack",
+    "named": 1,
+    "observed_at": "2026-08-28T18:58:45.042456+00:00",
+    "quote": "$14.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "gemini": 1
+      },
+      "runs": 1,
+      "stated": "14.99",
+      "swap_product": null,
+      "swap_variant": null
+     },
+     {
+      "agents": {
+       "aimode": 1
+      },
+      "runs": 1,
+      "stated": null,
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$14.99, 1 of 2 runs (Gemini 1). No price, 1 of 2 runs (Google AI Mode 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 2,
+    "sku": "cloud-wipes-3pack",
+    "status": "wrong",
+    "wrong_runs": 1
+   },
+   {
+    "answer_ids": [
+     "run-1005"
+    ],
+    "answered": 1,
+    "cell_status": "wrong",
+    "first": 0,
+    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue_rule": "product.wrong",
+    "live": "$22.99 at trueshopstore.com, the record of Sep 4, no page read yet",
+    "live_price": "$22.99",
+    "name": "Wiggle & Snug Snug-Fit Diapers Size 3 small pack",
+    "named": 0,
+    "observed_at": "2026-09-04T20:49:40.991623+00:00",
+    "quote": "$9.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "chatgpt": 1
+      },
+      "runs": 1,
+      "stated": "9.99",
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$9.99, 1 of 1 run (ChatGPT 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 1,
+    "sku": "snug-fit-diapers-s3-small",
+    "status": "wrong",
+    "wrong_runs": 1
+   }
+  ],
+  "consumer_ui": [
+   {
+    "answer_ids": [
+     "run-3205"
+    ],
+    "answered": 1,
+    "cell_status": "missed",
+    "first": 0,
+    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue_rule": "product.wrong",
+    "live": "$29.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$29.99",
+    "name": "Wiggle & Snug Snug-Fit Overnight Diapers Size 6",
+    "named": 0,
+    "observed_at": "2026-08-28T18:01:14.698561+00:00",
+    "quote": "\u2014",
+    "quote_groups": [
+     {
+      "agents": {
+       "aimode": 1
+      },
+      "runs": 1,
+      "stated": null,
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "No price, 1 of 1 run (Google AI Mode 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 1,
+    "sku": "snug-fit-overnight-s6",
+    "status": "none",
+    "wrong_runs": 1
+   },
+   {
+    "answer_ids": [
+     "run-1008",
+     "run-3203"
+    ],
+    "answered": 1,
+    "cell_status": "missed",
+    "first": 0,
+    "issue": "No price quoted in 1 of 2 runs.",
+    "issue_rule": "product.left_out",
+    "live": "$12.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$12.99",
+    "name": "Wiggle & Snug Bum Balm 4 oz",
+    "named": 0,
+    "observed_at": "2026-08-28T18:03:06.090934+00:00",
+    "quote": "\u2014",
+    "quote_groups": [
+     {
+      "agents": {
+       "aimode": 2
+      },
+      "runs": 2,
+      "stated": null,
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "No price, 2 of 2 runs (Google AI Mode 2)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 2,
+    "sku": "bum-balm-4oz",
+    "status": "none",
+    "wrong_runs": 0
+   },
+   {
+    "answer_ids": [
+     "run-3204"
+    ],
+    "answered": 1,
+    "cell_status": "missed",
+    "first": 0,
+    "issue": "Right in 1 of 1 run.",
+    "issue_rule": "product.right",
+    "live": "$11.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$11.99",
+    "name": "Wiggle & Snug Cloud Wipes 3-Pack",
+    "named": 0,
+    "observed_at": "2026-08-28T18:58:45.042456+00:00",
+    "quote": "\u2014",
+    "quote_groups": [
+     {
+      "agents": {
+       "aimode": 1
+      },
+      "runs": 1,
+      "stated": null,
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "No price, 1 of 1 run (Google AI Mode 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 1,
+    "sku": "cloud-wipes-3pack",
+    "status": "none",
+    "wrong_runs": 0
+   }
+  ],
+  "grounded_api": [
+   {
+    "answer_ids": [
+     "run-1001",
+     "run-1002"
+    ],
+    "answered": 2,
+    "cell_status": "wrong",
+    "first": 2,
+    "issue": "Quoted a wrong price in 1 of 2 runs.",
+    "issue_rule": "product.wrong",
+    "live": "$12.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$12.99",
+    "name": "Wiggle & Snug Bum Balm 4 oz",
+    "named": 2,
+    "observed_at": "2026-08-28T18:03:06.090934+00:00",
+    "quote": "$14.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "gemini": 1
+      },
+      "runs": 1,
+      "stated": "12.99",
+      "swap_product": null,
+      "swap_variant": null
+     },
+     {
+      "agents": {
+       "chatgpt": 1
+      },
+      "runs": 1,
+      "stated": "14.99",
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$12.99, 1 of 2 runs (Gemini 1). $14.99, 1 of 2 runs (ChatGPT 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 2,
+    "sku": "bum-balm-4oz",
+    "status": "wrong",
+    "wrong_runs": 1
+   },
+   {
+    "answer_ids": [
+     "run-1003"
+    ],
+    "answered": 1,
+    "cell_status": "wrong",
+    "first": 1,
+    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue_rule": "product.wrong",
+    "live": "$11.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$11.99",
+    "name": "Wiggle & Snug Cloud Wipes 3-Pack",
+    "named": 1,
+    "observed_at": "2026-08-28T18:58:45.042456+00:00",
+    "quote": "$14.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "gemini": 1
+      },
+      "runs": 1,
+      "stated": "14.99",
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$14.99, 1 of 1 run (Gemini 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 1,
+    "sku": "cloud-wipes-3pack",
+    "status": "wrong",
+    "wrong_runs": 1
+   },
+   {
+    "answer_ids": [
+     "run-1004"
+    ],
+    "answered": 1,
+    "cell_status": "wrong",
+    "first": 1,
+    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue_rule": "product.wrong",
+    "live": "$29.99 at trueshopstore.com, the record of Aug 28, no page read yet",
+    "live_price": "$29.99",
+    "name": "Wiggle & Snug Snug-Fit Overnight Diapers Size 6",
+    "named": 1,
+    "observed_at": "2026-08-28T18:01:14.698561+00:00",
+    "quote": "$16.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "gemini": 1
+      },
+      "runs": 1,
+      "stated": "16.99",
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$16.99, 1 of 1 run (Gemini 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 1,
+    "sku": "snug-fit-overnight-s6",
+    "status": "wrong",
+    "wrong_runs": 1
+   },
+   {
+    "answer_ids": [
+     "run-1005"
+    ],
+    "answered": 1,
+    "cell_status": "wrong",
+    "first": 0,
+    "issue": "Quoted a wrong price in 1 of 1 run.",
+    "issue_rule": "product.wrong",
+    "live": "$22.99 at trueshopstore.com, the record of Sep 4, no page read yet",
+    "live_price": "$22.99",
+    "name": "Wiggle & Snug Snug-Fit Diapers Size 3 small pack",
+    "named": 0,
+    "observed_at": "2026-09-04T20:49:40.991623+00:00",
+    "quote": "$9.99",
+    "quote_groups": [
+     {
+      "agents": {
+       "chatgpt": 1
+      },
+      "runs": 1,
+      "stated": "9.99",
+      "swap_product": null,
+      "swap_variant": null
+     }
+    ],
+    "quoted": "$9.99, 1 of 1 run (ChatGPT 1)",
+    "reference_source": "record",
+    "retailer": "trueshopstore.com",
+    "route": "true-value",
+    "runs": 1,
+    "sku": "snug-fit-diapers-s3-small",
+    "status": "wrong",
+    "wrong_runs": 1
+   }
+  ]
+ }
+}
