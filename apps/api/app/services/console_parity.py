@@ -151,7 +151,20 @@ def _short_day(value) -> str:
 # ─── Visibility extras ─────────────────────────────────────────────────────
 
 def _tier_for_reads(rows: List[dict]) -> str:
-    return UNPROMPTED if any(r.get('tier') == UNPROMPTED for r in rows) else 'all'
+    """UNPROMPTED when the cycle asked any unprompted question, else 'all'.
+    2I-7: a row is unprompted by its `unprompted` (build_visibility, the
+    soa_shared/unprompted.py rule: category control counts, a question
+    naming the brand does not); a row built without it, by its tier."""
+    return UNPROMPTED if any(_unprompted(r) for r in rows) else 'all'
+
+
+def _unprompted(row: dict) -> bool:
+    return row['unprompted'] if 'unprompted' in row else row.get('tier') == UNPROMPTED
+
+
+def _in_tier(row: dict, tier: str) -> bool:
+    """Whether a Visibility row counts toward named/first under `tier`."""
+    return tier == 'all' or (_unprompted(row) if tier == UNPROMPTED else row.get('tier') == tier)
 
 
 def _tier_words(tier: str) -> str:
@@ -179,8 +192,7 @@ def visibility_headline(rows: List[dict], surface: str, ours: Optional[str]) -> 
     """The gap sentence for one surface: unprompted answers when the cycle
     asked any, else every answered run."""
     tier = _tier_for_reads(rows)
-    mine = [r for r in rows if r.get('answered') and r.get('surface') == surface
-            and (tier == 'all' or r.get('tier') == tier)]
+    mine = [r for r in rows if r.get('answered') and r.get('surface') == surface and _in_tier(r, tier)]
     n = len(mine)
     picks = _picks(mine)
     me = picks.get(ours or '', {'named': 0, 'first': 0})
@@ -292,7 +304,7 @@ def _empty_agent() -> dict:
 
 def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tier: Optional[str] = None) -> dict:
     """Every count the Overview reads for one surface, in total and per agent.
-    rows: one per run with tier, outcome, reason_code (load_overview_rows);
+    rows: one per run with tier, query_text, outcome, reason_code (load_overview_rows);
     vis_rows: Visibility's byQuestion. `tier` forces the named/first tier
     (the Changes block reads both cycles on the current cycle's); by default
     unprompted when the cycle asked any, else every answered run.
@@ -310,7 +322,7 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tie
         agents.add(v['agent'])
         for bucket in (total, per.setdefault(v['agent'], _empty_agent())):
             bucket['answers'] += 1
-            if tier == 'all' or v.get('tier') == tier:
+            if _in_tier(v, tier):
                 bucket['named_of'] += 1
                 bucket['named'] += int(any(n.get('you') for n in v.get('named') or []))
                 bucket['first'] += int(bool((v.get('first') or {}).get('you')))
@@ -710,7 +722,7 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
         'coverage': {'questions': study_questions if study_questions is not None else len({r.get('query_code') for r in rows}),
                      'asked': len({r.get('query_code') for r in rows}), 'agents': len({surfaces.agent_of(r.get('platform')) or r.get('platform') for r in rows}),
                      'runs': len(rows), 'answers': sum(1 for r in rows if r.get('answer_status') == surfaces.ANSWERED),
-                     'unprompted': sum(1 for v in answered if v.get('tier') == UNPROMPTED)},
+                     'unprompted': sum(1 for v in answered if _unprompted(v))},
         'access_run': (access or {}).get('access_run'),
         'read_errors': read_errors or {},
         'rules': {k: v for k, v in TEMPLATES.items()},
@@ -1351,7 +1363,7 @@ def load_overview_rows(conn, cycle: dict) -> List[dict]:
     rows = []
     for r in conn.execute(text("""
         SELECT r.id AS run_id, r.platform, r.surface, r.answer_status,
-               q.tier, q.stage, q.query_code, q.source_ref, o.outcome, o.reason_code
+               q.tier, q.stage, q.query_code, q.query_text, q.source_ref, o.outcome, o.reason_code
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         LEFT JOIN soa_expectation_outcomes o ON o.run_id = r.id
         WHERE r.cycle_id = :c

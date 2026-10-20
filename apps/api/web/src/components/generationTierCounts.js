@@ -89,6 +89,20 @@ export function shortfalls(config) {
       })
     }
   }
+  // 2I-7: a category-control question that still named the brand after one
+  // regeneration is dropped (generation/syndicated_study.py keep_brand_out),
+  // so the tier can come in under the stage target. Said, never hidden.
+  const control = entry(config, 'category_control')
+  const dropped = control?.enabled ? Number(control.dropped) || 0 : 0
+  if (dropped > 0) {
+    out.push({
+      tier: 'category_control',
+      short: dropped,
+      requested: Number(control.generated) || (Number(control.count) || 0) + dropped,
+      delivered: Number(control.count) || 0,
+      dropped,
+    })
+  }
   return out
 }
 

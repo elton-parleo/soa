@@ -75,6 +75,15 @@ describe('shortfalls', () => {
     ])
   })
 
+  it('reports category-control questions dropped for naming the brand', () => {
+    expect(shortfalls({
+      ...C80512,
+      category_control: { enabled: true, stage_total: 50, generated: 50, count: 47, dropped: 3 },
+    })).toEqual([
+      { tier: 'category_control', short: 3, requested: 50, delivered: 47, dropped: 3 },
+    ])
+  })
+
   it('says nothing about a tier that delivered what it asked for', () => {
     expect(shortfalls(C80512)).toEqual([])
   })

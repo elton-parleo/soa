@@ -217,6 +217,7 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
             rivals = score_svc.load_tracked_rivals(conn, row)
             score_svc.at('loading visibility')
             vis_rows = rm.load_visibility(conn, row).get('byQuestion') or []
+            terms = rm.load_brand_terms(conn, row)
             slug = merchant or score_svc.cycle_merchant(conn, row)
         access, reference_rows, errors = None, None, {}
         reference_run, access_run = None, None
@@ -241,7 +242,7 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
                                      reference_rows=reference_rows, read_errors=errors,
                                      inputs={'merchant': slug, 'reference_run': reference_run, 'access_run': access_run,
                                              'scored_at': datetime.now(timezone.utc).isoformat()},
-                                     domain_checks=domain_checks, rivals=rivals)
+                                     domain_checks=domain_checks, rivals=rivals, terms=terms)
         # the value it replaces stays in its history (2E)
         body = score_svc.carry_history(body, stored, why)
         # a failed supply read is served, never stored: the next read tries again
@@ -666,21 +667,26 @@ def get_studio_studies(ms: MerchantScope = Depends(merchant_scope)):
         out = []
         for job in jobs:
             brand = ((_json(job.get('tier_config')) or {}).get('merchant') or {}).get('study_brand')
-            prompts = [rm.build_prompt(dict(q), brand) for q in conn.execute(text(
-                "SELECT * FROM soa_queries WHERE study_type = :st ORDER BY query_code"),
-                {"st": job['study_type']}).mappings()]
             cycles = [dict(c) for c in conn.execute(text(
                 "SELECT * FROM soa_cycles WHERE study_type = :st ORDER BY start_date DESC, id DESC"),
                 {"st": job['study_type']}).mappings()]
             entities = []
             if cycles:
                 entities = [dict(e) for e in conn.execute(text("""
-                    SELECT e.slug, ce.role FROM soa_cycle_entities ce
+                    SELECT e.slug, e.name, e.aliases, ce.role FROM soa_cycle_entities ce
                     JOIN soa_entities e ON e.id = ce.entity_id WHERE ce.cycle_id = :c
                 """), {"c": cycles[0]['id']}).mappings()]
+            # 2I-7: the brand's terms, as the score reads them; the study's
+            # brand when no cycle has named its primary entity yet
+            primary = next((e for e in entities if e.get('role') == 'primary'), None) or {'name': brand}
+            terms = rm.study_brand_terms(job.get('tier_config'), primary)
+            prompts = [rm.build_prompt(dict(q), brand, terms) for q in conn.execute(text(
+                "SELECT * FROM soa_queries WHERE study_type = :st ORDER BY query_code"),
+                {"st": job['study_type']}).mappings()]
             study = rm.build_study(job, prompts, cycles, entities)
-            # 2C-2c: branded = the tiered questions (they name the brand)
-            study['prompt_counts'] = rm.prompt_counts(prompts)
+            # 2C-2c: branded = the tiered questions (they name the brand);
+            # 2I-7: and any other question whose text names it
+            study['prompt_counts'] = rm.prompt_counts(prompts, terms)
             slug = studies.get(job['study_type']) or ms.primary
             study['merchant'] = {'slug': slug, 'name': names.get(slug) or slug} if slug else None
             out.append(study)

@@ -51,6 +51,10 @@ RETRY_BUDGET_GENERAL = 2
 # reported shortfall.
 REPLACEMENT_ROUNDS = 2
 
+# 2I-7: how many of the brand's product names the category-control rule
+# lists in the prompt (the check after reads them all).
+MAX_CONTROL_LINES = 20
+
 # QUERY_CONSTRAINTS fields the DB allows NULL for (soa_queries.<field>.
 # nullable=True) — absent/None from a generated row means "unconstrained,"
 # not invalid, same skip-when-None convention app/routers/studies.py::
@@ -615,6 +619,7 @@ def _build_general_prompt(
     specificity_mode: str = SPECIFICITY_MATCH_TO_STAGE,
     catalog_context: Optional[str] = None,
     brand_direct: Optional[str] = None,
+    category_control: Optional[dict] = None,
 ) -> str:
     """
     The general-study counterpart to _build_lite_prompt.
@@ -657,6 +662,17 @@ def _build_general_prompt(
     stage. The model obeyed. Every question in the first real brand-mode
     study omitted the brand, which made its brand_mention expectation
     unmeetable: a correct answer and a useless one scored the same.
+
+    category_control ({'brand', 'product_names'}) is 2I-7: the study's own
+    stage questions, written for a study whose brand box is on, so they are
+    its category-control tier. Before, they were written with nothing but
+    the naming rule, which governs retailers, and the operator's "What to
+    ask about" text, which for a brand study is about the brand: FL12 asked
+    "What Pampers diaper line should I start with for a newborn?" and 12
+    more like it in its first 25. The rule is now stated, and the
+    description is handed over with an instruction to read it as the
+    category. The check that the model listened is syndicated_study's,
+    with soa_shared/unprompted.py.
     """
     constraint_values = dict(QUERY_CONSTRAINTS)
     constraint_values['category'] = list(allowed_categories)
@@ -784,9 +800,31 @@ def _build_general_prompt(
             f"of the real ones."
         )
 
+    description_text = description or 'No additional description provided.'
+    control_text = ""
+    if category_control and category_control.get('brand'):
+        brand = category_control['brand']
+        lines = [n for n in category_control.get('product_names') or [] if n]
+        line_text = (f" or any of its product lines ({', '.join(lines[:MAX_CONTROL_LINES])})" if lines else
+                     " or any of its product lines")
+        description_text += (
+            f"\n\nThe description above is guidance for the whole study, which is about {brand}. "
+            f"For THESE questions read it as describing the category the shopper is shopping in "
+            f"and the need they have, never as a brand to ask about: carry the need into the "
+            f"question, never the brand."
+        )
+        control_text = (
+            f"\n\nThese are the study's CATEGORY-CONTROL questions: they measure what the category "
+            f"returns when no brand is named, so a brand an answer names was earned by the answer. "
+            f"No question may name {brand}, in any spelling,{line_text}, at any stage, not even as "
+            f"an example, and no question may name any other brand. A retailer may be named only "
+            f"where the naming rule above allows it. A question that names {brand} or one of its "
+            f"lines will be discarded."
+        )
+
     return f"""Generate exactly {total} distinct search-style questions for a brand/market research study called "{study_name}".
 
-Study description: {description or 'No additional description provided.'}
+Study description: {description_text}
 
 Distribute the {total} questions EXACTLY as follows:
 {distribution_text}
@@ -798,7 +836,7 @@ Each question becomes one row in a database table. For EACH question provide ALL
 For "category": choose only from the values listed above. Every question must be about a subject that genuinely belongs to one of them — if a question would need a category outside that list, do not ask it.
 For "status": always 'Active'.
 {specificity_text}
-{naming_text}{catalog_text}
+{naming_text}{control_text}{catalog_text}
 
 Also provide:
 - query_text: the actual question/prompt a user might type into an AI assistant or search engine
@@ -825,6 +863,8 @@ def generate_general_queries(
     catalog_context: Optional[str] = None,
     require_brand: Optional[str] = None,
     catalog_texts: Optional[list] = None,
+    category_control: Optional[dict] = None,
+    avoid_texts: Optional[list] = None,
 ) -> tuple:
     """
     The general-study path: caller-supplied per-stage targets, a
@@ -874,6 +914,12 @@ def generate_general_queries(
     If the retries run out the shortfall is reported, which is the
     honest end state for a tier that could not produce twelve scoreable
     questions.
+
+    category_control states the category-control rule in the prompt
+    (_build_general_prompt); avoid_texts are questions the model must not
+    repeat, for a regeneration whose study already holds them. Neither is a
+    drop here: syndicated_study checks the rule once, after, so a branded
+    question is regenerated once and then dropped (2I-7).
     """
     stage_targets = {k: v for k, v in stage_targets.items() if v > 0}
     allowed = set(allowed_categories)
@@ -958,7 +1004,7 @@ def generate_general_queries(
         # without kept, a replacement for a deduped row would be written
         # by a model that cannot see any of the rows it must not repeat,
         # which is how the duplicate got there in the first place.
-        avoid = list(catalog_texts or [])
+        avoid = list(catalog_texts or []) + list(avoid_texts or [])
         avoid += [row['query_text'] for row in kept]
         avoid += [row['query_text'] for row in accepted_rows]
         prompt = _build_general_prompt(
@@ -970,6 +1016,7 @@ def generate_general_queries(
             specificity_mode=specificity_mode,
             catalog_context=catalog_context,
             brand_direct=require_brand,
+            category_control=category_control,
         )
         prompt_calls['n'] += 1
         return prompt
@@ -1057,6 +1104,7 @@ def generate_and_review_study(
     naming_rule_enabled: bool = True,
     personas: Optional[list] = None,
     specificity_mode: str = SPECIFICITY_MATCH_TO_STAGE,
+    category_control: Optional[dict] = None,
 ) -> tuple:
     """
     The whole general path in one call: generate, then review, then
@@ -1071,7 +1119,11 @@ def generate_and_review_study(
     rows is exactly what generate_general_queries returned: the reviews
     are advisory and remove nothing. A caller that persists rows should
     persist these and surface the provenance alongside them.
+
+    category_control: the 2I-7 rule for a study whose brand box is on,
+    passed only then, so a study without it makes the call it made before.
     """
+    extra = {'category_control': category_control} if category_control else {}
     rows, report = generate_general_queries(
         study_name=study_name,
         description=description,
@@ -1084,6 +1136,7 @@ def generate_and_review_study(
         naming_rule_enabled=naming_rule_enabled,
         personas=personas,
         specificity_mode=specificity_mode,
+        **extra,
     )
 
     semantic_groups = review_semantic_duplicates(rows, api_key)

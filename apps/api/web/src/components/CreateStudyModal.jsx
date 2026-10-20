@@ -972,7 +972,10 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
                             {!on ? ''
                               : row.additive
                                 ? `${tier?.count ?? 0} question${tier?.count === 1 ? '' : 's'}`
-                                : 'uses the stage counts above'}
+                                : row.key === 'category_control'
+                                  // 2I-7: the generator drops one that still names the brand
+                                  ? `uses the stage counts above: ${stageTotal} question${stageTotal === 1 ? '' : 's'}, none naming the brand`
+                                  : 'uses the stage counts above'}
                           </span>
                         </div>
                         <div style={{ fontSize: 12, color: T.slate, lineHeight: 1.5 }}>
