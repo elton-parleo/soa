@@ -71,7 +71,10 @@ from clients import truesync_client as supply_fields
 #: console's own: the full-cycle scorer, and what it stamps, stay "7".
 #: 2I-7: "9", category-control questions count as unprompted (and a question
 #: naming the brand does not), soa_shared/unprompted.py.
-SCORER_VERSION = "9"
+#: 2I-8a: "10", the five metric rows count every agent (`all`), as the rest of
+#: the Overview does since 2I-8. The stored score carries the rows' counts, so
+#: a stored cycle re-scores to serve them; the score itself does not move.
+SCORER_VERSION = "10"
 #: The adapter's own revision, beside the scorer's: a change to how loop
 #: counts become scorer inputs re-scores stored cycles too. Not a scorer
 #: version and never shown as one.
@@ -143,6 +146,8 @@ TEMPLATES = {
     'previous.version': 'Scored under v{version}, re-score to compare.',
     'previous.surfaces': 'Not comparable: {code} scored {prev}, this cycle scored {now}.',
     'previous.agents': 'Not comparable: on {surface} {code} ran {prev}, this cycle ran {now}.',
+    # 2I-8a: a previous score stored before the rows counted every agent has no `all` counts
+    'previous.no_all': 'Not comparable: {code} was scored before metric rows counted every agent',
     'previous.applicable': 'applicable points changed from {prev} to {now}',
     'verdict.withheld': 'No readiness verdict while {n} of {total} points are not measured. The Audit gives one only when every dimension is.',
     'coverage': '{surfaces}, {questions}, {agents} · pooled across surfaces, equal weight',
@@ -579,12 +584,14 @@ def metric_counts(runs: List[dict], mentions: List[dict], vis_rows: List[dict], 
     metrics); program named = our Layer 1 mention coded deal_cited or
     member_value_cited, over the answered runs of that tier naming us; prices
     exact of scored on the catalog tier, program terms exact of scored on the
-    value tier. 2I-7: unprompted by soa_shared/unprompted.py, as the score."""
+    value tier. 2I-7: unprompted by soa_shared/unprompted.py, as the score.
+    2I-8a: on `all`, every run given (build_score passes the pooled ones)."""
     vis = parity.surface_metrics(runs, vis_rows, surface)
     tier = vis['tier']
     catalog = parity.surface_metrics([r for r in runs if r.get('tier') == 'catalog_accuracy'], [], surface)['total']
     value = parity.surface_metrics([r for r in runs if r.get('tier') == 'value_incentives'], [], surface)['total']
-    in_tier = {r['run_id'] for r in runs if parity._surface_of(r) == surface and r.get('answer_status') == surfaces.ANSWERED
+    in_tier = {r['run_id'] for r in runs if surfaces.on_surface(parity._surface_of(r), surface)
+               and r.get('answer_status') == surfaces.ANSWERED
                and (tier == 'all' or (unprompted.is_unprompted(r, terms) if tier == rm.VIS_UNPROMPTED
                                       else r.get('tier') == tier))}
     ours = [m for m in mentions if m['run_id'] in in_tier and m.get('role') == 'primary' and m.get('mentioned')]
@@ -600,16 +607,19 @@ def metric_counts(runs: List[dict], mentions: List[dict], vis_rows: List[dict], 
 
 
 def _surface_note(surface: str, tier: str, key: str) -> str:
-    where = f"on {_surface_words(surface)}"
+    # 2I-8a: "across every agent" on `all`, 2I-8's copy map
+    where = parity._on_words(surface)
     if key in ('first', 'share', 'program'):
         return f"{where}, {'unprompted answers' if tier == rm.VIS_UNPROMPTED else 'every answered question'}"
     return f"{where}, {'catalog' if key == 'exact' else 'value'} tier, exact of scored"
 
 
 def build_metrics(counts: Dict[str, dict], surface: str, previous: Optional[dict]) -> List[dict]:
-    """The five rows on `surface` (the highest-fidelity pooled one, as the
-    Overview reads it), every surface beside. A delta only when the previous
-    cycle is comparable, else null with the reason."""
+    """The five rows on `surface` (2I-8a: `all`, every pooled agent, as the
+    Overview reads it; before, the highest-fidelity pooled surface), each
+    pooled surface's value and denominator beside in `by_surface`. A delta
+    only when the previous cycle is comparable and stored counts on the same
+    key, else null with the reason (a score stored before 2I-8a has no `all`)."""
     out = []
     comparable = bool(previous and previous.get('comparable'))
     prev_counts = (previous or {}).get('metric_counts') or {}
@@ -618,12 +628,14 @@ def build_metrics(counts: Dict[str, dict], surface: str, previous: Optional[dict
         delta, reason = None, None
         if comparable and surface in prev_counts:
             delta = now['value'] - prev_counts[surface][key]['value']
+        elif comparable:
+            reason = TEMPLATES['previous.no_all'].format(code=previous.get('cycle'))
         else:
             reason = (previous or {}).get('reason') or TEMPLATES['previous.first_cycle']
         out.append({'key': key, 'name': name, 'value': now['value'], 'denominator': now['of'], 'surface': surface,
                     'surface_note': _surface_note(surface, counts[surface]['tier'], key), 'delta': delta,
                     'delta_reason': reason,
-                    'by_surface': {s: c[key] for s, c in counts.items()}})
+                    'by_surface': {s: c[key] for s, c in counts.items() if s != surfaces.ALL}})
     return out
 
 
@@ -727,6 +739,10 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     at('metric rows')
     counts = {s: metric_counts(runs, mentions, vis_rows, s, terms) for s in pooled}
     in_pool = [r for r in runs if parity._surface_of(r) in pooled]
+    # 2I-8a: the rows count every pooled agent together, as the Overview does
+    if pooled:
+        counts = {surfaces.ALL: metric_counts(in_pool, mentions, [v for v in vis_rows if v.get('surface') in pooled],
+                                              surfaces.ALL, terms), **counts}
     agents = {surfaces.agent_of(r.get('platform')) or r.get('platform') for r in in_pool}
     questions = len({r.get('query_code') for r in in_pool})
     # 2I-7: the unprompted questions this score counted, and the ones left out
@@ -760,7 +776,7 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
                               for s in ran if s not in pooled],
         'pillars': pillars,
         'biggest_gap': biggest_gap(per, dims),
-        'metric_surface': pooled[0] if pooled else None,
+        'metric_surface': surfaces.ALL if pooled else None,
         'metric_counts': counts,
         'coverage': {'surfaces': len(pooled), 'questions': questions, 'agents': len(agents), 'runs': len(in_pool),
                      'ran_no_answers': [s for s in ran if s not in answered and s not in ungrounded],
@@ -916,7 +932,8 @@ def needs_recompute(body: Optional[dict], domain_checks: Optional[dict]) -> Opti
 #: 2I: what each scorer version changed, for the recompute line.
 SCORER_CHANGES = {'7': 'ungrounded surfaces excluded from pooling',
                   '8': 'share of mentions not measured without a tracked competitor',
-                  '9': 'category-control questions count as unprompted'}
+                  '9': 'category-control questions count as unprompted',
+                  '10': 'metric rows count every agent'}
 
 
 def _no_rivals(body: dict) -> bool:
@@ -936,7 +953,9 @@ def _category_control(body: dict) -> bool:
 
 SCORER_CHANGE_APPLIES = {'7': lambda new: bool((new.get('coverage') or {}).get('ungrounded')),
                          '8': _no_rivals,
-                         '9': _category_control}
+                         '9': _category_control,
+                         # 2I-8a never moves a score (only the rows beside it), so it never explains one
+                         '10': lambda _new: False}
 
 
 _NOT_CARRIED = object()

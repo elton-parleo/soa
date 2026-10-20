@@ -85,6 +85,8 @@ DEFAULT_READERS = {
     'visibility': ('headline', 'lede', 'divergences'),
     'overview': ('surface', 'rules'),
     'true-value': ('surface', 'columns', 'divergences'),
+    # 2I-8a: the five metric rows count every agent, under scorer 10
+    'score': ('metric_surface', 'metrics', 'scorer_version', 'rules'),
 }
 #: a True Value cell's typed fields, read on the default surface
 CELL_TYPED = ('quoted', 'status', 'outcome', 'runs', 'surface')

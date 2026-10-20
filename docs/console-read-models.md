@@ -2058,6 +2058,15 @@ cycle, full loop or runner can carry it.
 | `_program_agents`, `build_programs` | `by_surface.all`; `agentsRight` over every agent |
 | `program_lines` (2G caption) | `by_surface.all`: "Quoted by N of M agents." over every agent asked |
 | `/catalog` stage counts (`console_ops.get_catalog`) | "measured" counts every agent's quotes, as True Value's typed cell does |
+| `console_score.metric_counts`, `build_metrics` (2I-8a) | the score block's five rows on `all` (`metric_surface`), every pooled agent: on the FL12 shape first 33 of 102, share 51 of 102, program 0 of 51, prices exact 22 of 42, terms 24 of 30, noted "across every agent, unprompted answers" / "across every agent, catalog tier, exact of scored"; each row's `by_surface` keeps the pooled surfaces' value and denominator, as before. A delta compares `all` to `all`; a previous score whose counts have no `all` gives none, with "Not comparable: {code} was scored before metric rows counted every agent" |
+
+**2I-8a: scorer 10.** The rows are counts beside the score, not the score: its dimensions stay per surface and pool
+by score. The stored score carries the rows' counts (`metric_counts`, `metric_surface`) and the rows are built from them
+on each read, so a stored cycle would keep its single-surface rows: `SCORER_VERSION` goes from 9 to 10
+(`SCORER_CHANGES['10']`, "metric rows count every agent"), and each cycle re-scores on its next read. The score, earned,
+applicable max, dimensions and verdict do not move (`tests/test_console_2i8a.py` pins the body on 229, 229 with the
+brand box on and the six-agent FL12 shape), so the history line reads plain "scorer 9 → 10". A previous cycle still at
+v9 reads "Scored under v9, re-score to compare." until it is read again. The worker carries no console scorer version.
 
 Left per surface: `/api/console/accuracy` (2B, `soa_shared/surface_accuracy.py`, which the console
 does not read), the Studies grid (`build_study_rows`, a cell per agent, not per surface), and the
