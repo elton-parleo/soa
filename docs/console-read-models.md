@@ -2072,6 +2072,10 @@ Changed, same output on a surface: `signal.other_brand` and `signal.fabricated` 
 Visibility's `lede` reads "… Every agent together, as the demo counts them. Pick a surface to count
 one alone." The samples below were taken before 2I-8 and do not carry `all`.
 
+**`?surface=`.** No console endpoint takes a surface parameter: each returns every surface keyed,
+and the console picks. `?surface=all` and no parameter are the same response (pinned for
+answers, answers/summary, true-value, visibility and overview).
+
 ## Answer divergences
 
 - Answer.verdict is not a console field: it carries the value outcome mapped exact->right, wrong->wrong, absent->missed, partial->partial; stale, unverifiable and unscoreable pass through verbatim with `tone`. Brand-direct rows leave it null and carry `brand_verdict`.

@@ -434,3 +434,19 @@ def test_a_full_loop_naming_all_is_refused(http, db):
     assert r.status_code == 422, r.text
     with db.connect() as c:
         assert c.execute(text("SELECT COUNT(*) FROM soa_full_loop_requests")).scalar() == 0
+
+
+# ═══ B2: `?surface=all` is no parameter ═════════════════════════════════
+
+@pytest.mark.parametrize('endpoint', ['answers', 'answers/summary', 'true-value', 'visibility', 'overview'])
+def test_surface_all_and_no_surface_are_the_same_response(endpoint, http, db, upstream):
+    """No console endpoint takes `surface`: each returns every surface keyed,
+    `all` first, and the console picks. `?surface=all` is the same response."""
+    cycle = _fl12(db)
+    _supply(upstream)
+    as_('op')
+    params = {'cycle': cycle, 'org': 10, **({'merchant': 'wiggle-and-snug'} if endpoint in ('overview', 'true-value') else {})}
+    plain = http.get(f'/api/console/{endpoint}', params=params)
+    pooled = http.get(f'/api/console/{endpoint}', params={**params, 'surface': 'all'})
+    assert plain.status_code == pooled.status_code == 200
+    assert plain.json() == pooled.json()
