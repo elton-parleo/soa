@@ -250,21 +250,26 @@ def test_a_check_with_no_claim_carries_the_outcome_s_reason():
     assert answer['reason'] == 'other_brand'
 
 
-def test_answers_summary_is_per_tier_and_surface_never_pooled(http):
+def test_answers_summary_is_per_tier_and_surface_with_all_first(http):
     as_('alice')
     body = http.get('/api/console/answers/summary', params={'cycle': CYCLE}).json()
     assert body['cycle'] == CYCLE
-    assert [s['surface'] for s in body['surfaces']] == ['grounded_api', 'consumer_ui']
-    grounded = body['surfaces'][0]
+    # 2I-8: every agent together first, then each surface as before
+    assert [s['surface'] for s in body['surfaces']] == ['all', 'grounded_api', 'consumer_ui']
+    pooled = body['surfaces'][0]
+    assert pooled['label'] == 'All agents' and pooled['counts'] == {'exact': 1, 'wrong': 4, 'absent': 1}
+    assert pooled['scored'] == 5 and pooled['accuracy'] == 0.2 and pooled['runs'] == 6
+    grounded = body['surfaces'][1]
     assert grounded['counts'] == {'exact': 1, 'wrong': 4} and grounded['scored'] == 5
     assert grounded['accuracy'] == 0.2 and grounded['unverifiable'] == 0
     assert grounded['answered_with_other_brand'] == 0
-    consumer = body['surfaces'][1]
+    consumer = body['surfaces'][2]
     assert consumer['counts'] == {'absent': 1} and consumer['scored'] == 0 and consumer['accuracy'] is None
     assert consumer['answered'] == 0
     tiers = {t['tier']: t for t in body['tiers']}
     assert list(tiers) == ['brand_direct', 'catalog_accuracy']
-    brand = tiers['brand_direct']['surfaces'][0]
+    brand = tiers['brand_direct']['surfaces'][1]
+    assert tiers['brand_direct']['surfaces'][0]['counts'] == brand['counts']   # one surface: `all` is it
     assert brand['counts'] == {'grounded': 1, 'acknowledged_unknown': 1}
     assert brand['flags']['fabricated_citation'] == 1 and brand['accuracy'] is None
     for entry in [*body['surfaces'], *(s for t in body['tiers'] for s in t['surfaces'])]:
@@ -284,10 +289,14 @@ def test_answers_summary_counts_other_brand_and_keeps_unverifiable_out_of_accura
     ]
     body = rm.build_answers_summary(rows, cycle_code='C')
     by_surface = {s['surface']: s for s in body['surfaces']}
-    assert list(by_surface) == ['api', 'grounded_api']
+    assert list(by_surface) == ['all', 'api', 'grounded_api']
     g = by_surface['grounded_api']
     assert g['answered_with_other_brand'] == 1 and g['unverifiable'] == 1
     assert g['scored'] == 1 and g['accuracy'] == 1.0
+    # 2I-8: pooled counts, exact over scored on the sums, unverifiable outside it
+    a = by_surface['all']
+    assert a['counts'] == {'absent': 2, 'unverifiable': 1, 'exact': 1, 'wrong': 1, 'not_scored': 1}
+    assert (a['scored'], a['accuracy'], a['unverifiable'], a['answered_with_other_brand']) == (2, 0.5, 1, 1)
     assert by_surface['api']['counts'] == {'wrong': 1, 'not_scored': 1}
 
 
@@ -304,9 +313,10 @@ def test_true_value_is_console_true_value(http):
     tv = http.get('/api/console/true-value', params={'cycle': CYCLE}).json()
     check(tv, 'TrueValue')
     # 2C-2a: one retailer in the record, so the columns are the agents, per surface
-    assert tv['column_kind'] == 'agent' and [c['id'] for c in tv['columns']] == ['chatgpt', 'gemini']
+    # 2I-8: the default columns are every agent (`all`), in the demo's order
+    assert tv['column_kind'] == 'agent' and [c['id'] for c in tv['columns']] == ['chatgpt', 'gemini', 'aimode']
     assert {s: [c['id'] for c in cols] for s, cols in tv['columns_by_surface'].items()} == {
-        'consumer_ui': ['aimode'], 'grounded_api': ['chatgpt', 'gemini']}
+        'all': ['chatgpt', 'gemini', 'aimode'], 'consumer_ui': ['aimode'], 'grounded_api': ['chatgpt', 'gemini']}
     assert [c['id'] for c in tv['retailer_columns']] == ['trueshopstore.com']
     rows = {r['sku']: r for r in tv['rows']}
     s6 = rows['snug-fit-overnight-s6']['cells']['gemini']
@@ -317,10 +327,13 @@ def test_true_value_is_console_true_value(http):
     balm = rows['bum-balm-4oz']
     assert (balm['cells']['gemini']['status'], balm['cells']['gemini']['quoted']) == ('exact', '$12.99')
     assert (balm['cells']['chatgpt']['status'], balm['cells']['chatgpt']['quoted']) == ('wrong', '$14.99')
-    assert balm['cells']['aimode']['by_surface'] == {'consumer_ui': {'quoted': '—', 'status': 'missed', 'outcome': 'absent', 'runs': 1}}
+    assert balm['cells']['aimode']['by_surface'] == {'all': {'quoted': '—', 'status': 'missed', 'outcome': 'absent', 'runs': 1},
+                                                     'consumer_ui': {'quoted': '—', 'status': 'missed', 'outcome': 'absent', 'runs': 1}}
     whole = balm['retailer_cells']['trueshopstore.com']
-    assert whole['status'] == 'wrong' and whole['runs'] == 2 and whole['quoted'] == '$14.99'
-    assert tv['surface'] == 'grounded_api'
+    # 2I-8: the typed cell is every agent's quotes (`all`): AI Mode's run counts, quoted nothing, so the worst quote decides
+    assert whole['status'] == 'wrong' and whole['runs'] == 3 and whole['quoted'] == '$14.99'
+    assert whole['by_surface']['grounded_api'] == {'quoted': '$14.99', 'status': 'wrong', 'outcome': 'wrong', 'runs': 2}
+    assert tv['surface'] == 'all'
     assert {(q['agent'], q['surface'], q['outcome'], q['stated']) for q in whole['quotes']} == {
         ('gemini', 'grounded_api', 'exact', '12.99'), ('chatgpt', 'grounded_api', 'wrong', '14.99'),
         ('aimode', 'consumer_ui', 'absent', None)}
@@ -354,7 +367,7 @@ def test_programs_are_the_owned_incentives_with_how_answers_did(http, upstream):
 
 
 def test_programs_count_right_among_scored_only():
-    """2C-2: "quoted right by N of M agents" on one surface. An agent is
+    """2C-2: "quoted right by N of M agents" (2I-8: over every agent). An agent is
     right when every scored answer it gave about the program was exact;
     unverifiable is asked but never scored."""
     code = {'type': 'code', 'code': 'SNUG3'}
@@ -365,8 +378,9 @@ def test_programs_count_right_among_scored_only():
                 {'outcome': 'exact', 'expected_answer': code, 'platform': 'chatgpt_api', 'surface': 'api'}]
     snug = rm.build_programs(OWNED['incentives'], outcomes)[1]
     assert snug['agentsRight'] == 'quoted right by 1 of 2 agents' and snug['tone'] == 'warn' and snug['asked'] == 5
-    assert snug['surface'] == 'grounded_api'
-    assert snug['by_surface'] == {'grounded_api': {'asked': ['chatgpt', 'gemini'], 'right': ['chatgpt'], 'scored': 3, 'exact': 2},
+    assert snug['surface'] == 'all'
+    assert snug['by_surface'] == {'all': {'asked': ['chatgpt', 'gemini'], 'right': ['chatgpt'], 'scored': 4, 'exact': 3},
+                                  'grounded_api': {'asked': ['chatgpt', 'gemini'], 'right': ['chatgpt'], 'scored': 3, 'exact': 2},
                                   'api': {'asked': ['chatgpt'], 'right': ['chatgpt'], 'scored': 1, 'exact': 1}}
 
 

@@ -105,12 +105,8 @@ async def _with_stages(body: dict, merchant: str, scope: CustomerScope) -> dict:
         """), {"org": scope.org.id}).mappings().fetchone()
         if latest is not None:
             _, _, scored = _true_value_inputs(conn, dict(latest))
-            # the highest-fidelity surface where a run quoted a price, as True Value reads it
-            top = [sf for sf in parity.ordered_surfaces(s['surface'] for s in scored)
-                   if any(s['surface'] == sf and s.get('stated') not in (None, '') for s in scored)]
+            # 2I-8: every agent's runs, as True Value's typed cell reads them (`all`)
             for item in scored:
-                if top and item['surface'] != top[0]:
-                    continue
                 for key in {item.get('variant_id'), rm._gtin14(item.get('gtin'))} - {None}:
                     q = quoted.setdefault(key, {'quoted': 0, 'scored': 0, 'exact': 0})
                     q['quoted'] += int(item.get('stated') not in (None, ''))

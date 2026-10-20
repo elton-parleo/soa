@@ -11,14 +11,14 @@ endpoints are untouched.
 
     GET /api/console/surfaces                      the modal's surface list
     GET /api/console/answers?cycle=<code>          Answer[]
-    GET /api/console/answers/summary?cycle=<code>  per tier x surface counts, never pooled (2C)
+    GET /api/console/answers/summary?cycle=<code>  per tier: every agent together (`all`), then per surface (2C, 2I-8)
     GET /api/console/true-value?cycle=<code>       TrueValue
     GET /api/console/programs?merchant=<slug>      TrueValue.programs, from owned incentives (2C)
     GET /api/console/accessibility?merchant=<slug> Accessibility (from supply)
     GET /api/console/truesync?merchant=<slug>      the TrueSync matrix, assembled from supply (2C)
     GET /api/console/studies?cycle=<code>          StudyRow[]
     GET /api/console/accuracy?cycle=<code>         per-surface accuracy, never pooled
-    GET /api/console/visibility?cycle=<code>       who is named and who is named first, per surface (2C-1)
+    GET /api/console/visibility?cycle=<code>       who is named and who is named first, `all` then per surface (2C-1, 2I-8)
     GET /api/console/record/list?merchant=<slug>   the merchant's products, for the record list (2C-1)
     GET /api/console/record?merchant=<slug>&product=<sku>  one product's record (Record_), read-only (2C-1)
     GET /api/console/runs                          Run[]   (studio.ts)
@@ -79,7 +79,8 @@ def get_answers(cycle: str = Query(...), scope: CustomerScope = Depends(console_
 @router.get("/answers/summary")
 def get_answers_summary(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
     """2C: per tier and per surface, every outcome counted, unverifiable on
-    its own, and answered_with_other_brand. Never pooled across surfaces."""
+    its own, and answered_with_other_brand. 2I-8: every agent together
+    (`all`) first, counts summed; each surface beside it."""
     row = cycle_in_scope(cycle, scope)
     with engine.connect() as conn:
         return rm.load_answers_summary(conn, dict(row))
@@ -104,8 +105,8 @@ def _label_from_question(query_text: str) -> str:
 def get_visibility(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
     """2C-1: Measure > Visibility. Who each answer names and who it names
     first, from the stored mention coding (Layer 1 position, Layer 2
-    other_brands_named), per surface with a per-agent split. Never pooled
-    across surfaces; no model call."""
+    other_brands_named), every agent together (`all`, 2I-8) and per surface,
+    each with a per-agent split; no model call."""
     row = cycle_in_scope(cycle, scope)
     with engine.connect() as conn:
         return _visibility(conn, dict(row))
@@ -121,7 +122,8 @@ def _visibility(conn, row: dict) -> dict:
 @router.get("/overview")
 async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(None),
                        scope: CustomerScope = Depends(console_scope)):
-    """2C-2: This week for one cycle, per surface: the agent table, the
+    """2C-2: This week for one cycle, every agent together (`all`, 2I-8) and
+    per surface: the agent table, the
     products, up to four signals, the week in short, the changes against the
     previous scored cycle (none on a first cycle) and Visibility's ranking,
     reused. Every sentence is a template filled from counts (console_parity.

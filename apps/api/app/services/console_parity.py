@@ -9,9 +9,14 @@ called: every sentence here is a template filled from counts, and each
 template is written down once (TEMPLATES) so docs/console-read-models.md
 can quote it.
 
-Two rules from 2C hold everywhere:
-  * counts are per surface (api, grounded_api, consumer_ui), never pooled;
-    a per-agent split sits beneath each surface.
+Two rules hold everywhere:
+  * 2I-8: counts are shown for every agent together by default, as the
+    console demo shows them: the pseudo-surface `all` (soa_shared/surfaces.py
+    ALL), every run in the cycle, listed first and read by default. Each
+    surface's own count (api, grounded_api, consumer_ui) sits beside it, for
+    the console's surface filter, exactly as before. A per-agent split sits
+    beneath each. The score pools surfaces by score, never by count
+    (console_score.py, unchanged).
   * `unverifiable` is counted on its own and never sits in an accuracy.
 
 House copy rules for every template: no em dashes, no semicolons.
@@ -33,6 +38,8 @@ from app.services import console_read_models as rm
 from clients.truesync_client import INCENTIVE_FLAGS, carries_incentive_fields, incentive_in_markup
 
 AGENT_NAMES = rm.AGENT_NAMES
+ALL = surfaces.ALL
+_on = surfaces.on_surface
 _json = rm._json
 
 # ─── vocabulary ────────────────────────────────────────────────────────────
@@ -63,9 +70,9 @@ TEMPLATES = {
     'product.right': "Right in {n} of {runs} {runs_word}.",
     'product.not_asked': "Not asked on this surface this cycle.",
     'signal.other_brand': ("Answered {n} price {questions} with another brand's price.",
-                           "{n} of {asked} price answers on {surface}. {split}."),
+                           "{n} of {asked} price answers {on}. {split}."),
     'signal.fabricated': ("{n} brand answers stated facts {brand} never published.",
-                          "{n} of {asked} brand-direct answers on {surface}. {split}."),
+                          "{n} of {asked} brand-direct answers {on}. {split}."),
     'signal.fabricated_caveat': "Sources were not captured before Oct 14, so some of these may rest on a page we did not see.",
     'signal.wrong_product': ("Wrong price on {product} in {n} runs.",
                              "Quoted {quote} against {live}. {split}."),
@@ -79,11 +86,16 @@ TEMPLATES = {
     'summary.accuracy': "Prices right in {exact} of {scored} scored answers, {other} answered with another brand's price.",
     'summary.accuracy_unverifiable': "Prices right in {exact} of {scored} scored answers, {other} answered with another brand's price, {u} not checked.",
     'summary.no_price': "No price was scored on this surface.",
+    'summary.no_price_all': "No price was scored by any agent.",
     'summary.no_signal': "No signal crossed its threshold this cycle.",
     'changes.first_cycle': "First cycle. Changes appear from the next one.",
     'changes.not_comparable_subset': "Not comparable: {code} ran {agents} only on this surface.",
     'changes.not_comparable': "Not comparable: {code} ran {prev} on this surface, this cycle ran {now}.",
     'changes.not_comparable_tier': "Not comparable: {code} asked no unprompted questions on this surface.",
+    # 2I-8: the same on `all`, every agent together
+    'changes.not_comparable_subset_all': "Not comparable: {code} ran {agents} only.",
+    'changes.not_comparable_all': "Not comparable: {code} ran {prev}, this cycle ran {now}.",
+    'changes.not_comparable_tier_all': "Not comparable: {code} asked no unprompted questions.",
     'changes.detail': "{a} of {of_now} this cycle against {b} of {of_prev} in {code}.",
     'headline.gap': "Named in {named} of {n} {answers}.{rivals}",
     'headline.lead': "First in {first} of {n} {answers}.",
@@ -104,7 +116,18 @@ def _agent(a: Optional[str]) -> str:
 
 def _surface_label(s: Optional[str]) -> str:
     return {'api': 'the model-only API', 'grounded_api': 'the grounded API',
-            'consumer_ui': 'the consumer UI'}.get(s or '', s or 'an unlabelled surface')
+            'consumer_ui': 'the consumer UI', ALL: 'every agent'}.get(s or '', s or 'an unlabelled surface')
+
+
+def _on_words(s: Optional[str]) -> str:
+    """Where a count was taken, as a signal's detail says it: 'on the grounded
+    API', or (2I-8) 'across every agent'."""
+    return 'across every agent' if s == ALL else f"on {_surface_label(s)}"
+
+
+def _rule(key: str, surface: Optional[str]) -> str:
+    """2I-8: a template's `all` wording where it has one."""
+    return f"{key}_all" if surface == ALL and f"{key}_all" in TEMPLATES else key
 
 
 def _split(counts: Dict[str, int]) -> str:
@@ -192,7 +215,7 @@ def visibility_headline(rows: List[dict], surface: str, ours: Optional[str]) -> 
     """The gap sentence for one surface: unprompted answers when the cycle
     asked any, else every answered run."""
     tier = _tier_for_reads(rows)
-    mine = [r for r in rows if r.get('answered') and r.get('surface') == surface and _in_tier(r, tier)]
+    mine = [r for r in rows if r.get('answered') and _on(r.get('surface'), surface) and _in_tier(r, tier)]
     n = len(mine)
     picks = _picks(mine)
     me = picks.get(ours or '', {'named': 0, 'first': 0})
@@ -213,12 +236,21 @@ def visibility_headline(rows: List[dict], surface: str, ours: Optional[str]) -> 
             'rivals': [{'name': k, 'first': v} for k, v in others[:3]], 'tier_text': tier_text.strip()}
 
 
+def _demo_order(agents: Iterable[str]) -> List[str]:
+    """2I-8: the demo's column order (ChatGPT, Gemini, AI Mode, Perplexity,
+    Copilot, then Claude: AGENT_NAMES), any other agent after, by name."""
+    order = list(AGENT_NAMES)
+    return sorted(set(agents), key=lambda a: (order.index(a) if a in order else 99, a))
+
+
 def visibility_matrix(rows: List[dict], surface: str) -> dict:
     """Prompt x agent first pick on one surface, prompts in stage order. A
     cell is the first pick most of the question's runs gave (ties to ours,
-    then by name), with every pick counted beside it."""
-    mine = [r for r in rows if r.get('surface') == surface]
-    agents = sorted({r['agent'] for r in mine})
+    then by name), with every pick counted beside it. 2I-8: on `all`, one
+    column per agent across the surfaces, in the demo's order; a question an
+    agent did not run has no cell for it."""
+    mine = [r for r in rows if _on(r.get('surface'), surface)]
+    agents = _demo_order(r['agent'] for r in mine) if surface == ALL else sorted({r['agent'] for r in mine})
     questions: Dict[str, dict] = {}
     for r in mine:
         key = r.get('query_code') or r.get('q')
@@ -253,7 +285,7 @@ def visibility_matrix(rows: List[dict], surface: str) -> dict:
 def visibility_by_stage(rows: List[dict], surface: str) -> dict:
     """First-pick share per stage and per tier on one surface: answered runs,
     ours named and first, and the brand first most often."""
-    mine = [r for r in rows if r.get('surface') == surface and r.get('answered')]
+    mine = [r for r in rows if _on(r.get('surface'), surface) and r.get('answered')]
 
     def block(subset):
         picks = _picks(subset)
@@ -281,7 +313,8 @@ def visibility_by_stage(rows: List[dict], surface: str) -> dict:
 
 
 def extend_visibility(body: dict, ours: Optional[str]) -> dict:
-    """2C-2: headline, matrix and by_stage, per surface, beside 2C-1's read."""
+    """2C-2: headline, matrix and by_stage, per surface, beside 2C-1's read.
+    2I-8: `all` first (body['surfaces'] lists it), and the default."""
     rows = body.get('byQuestion') or []
     surface_list = [s['surface'] for s in body.get('surfaces') or []]
     default = (body.get('ranking') or {}).get('surface')
@@ -317,7 +350,7 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tie
     total, per = _empty_agent(), {}
     agents = set()
     for v in vis_rows:
-        if v.get('surface') != surface or not v.get('answered'):
+        if not _on(v.get('surface'), surface) or not v.get('answered'):
             continue
         agents.add(v['agent'])
         for bucket in (total, per.setdefault(v['agent'], _empty_agent())):
@@ -327,7 +360,7 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tie
                 bucket['named'] += int(any(n.get('you') for n in v.get('named') or []))
                 bucket['first'] += int(bool((v.get('first') or {}).get('you')))
     for r in rows:
-        if _surface_of(r) != surface:
+        if not _on(_surface_of(r), surface):
             continue
         agent = surfaces.agent_of(r.get('platform')) or r.get('platform')
         o, t = r.get('outcome'), r.get('tier')
@@ -501,7 +534,7 @@ def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, vari
         for col in cols:
             cell = cells_by[col]
             quotes = [{**q, 'reason': reason_of_run.get(q.get('run'))} for q in cell.get('quotes') or []
-                      if q.get('surface') == surface]
+                      if _on(q.get('surface'), surface)]
             if not quotes:
                 continue
             sc = (cell.get('by_surface') or {}).get(surface) or {}
@@ -535,18 +568,18 @@ def build_signals(metrics: dict, products: List[dict], *, surface: str, brand: s
     price (>= 5), fabricated brand-direct facts (>= 5), wrong prices on one
     product (>= 3), any unverifiable price, any access problem."""
     t, per = metrics['total'], metrics['agents']
-    where = _surface_label(surface)
+    where = _on_words(surface)
     out = []
     if t['other_brand'] >= 5:
         title, detail = TEMPLATES['signal.other_brand']
         asked = t['scored'] + t['left_out'] + t['unverifiable']
         out.append({'id': 'other_brand', 'title': title.format(n=t['other_brand'], questions=_n(t['other_brand'], 'question', 'questions')),
-                    'detail': detail.format(n=t['other_brand'], asked=asked, surface=where,
+                    'detail': detail.format(n=t['other_brand'], asked=asked, on=where,
                                             split=_split({a: m['other_brand'] for a, m in per.items()})),
                     'tag': 'Lost pool', 'tone': 'bad', 'route': 'answers', 'rule': 'other_brand', 'count': t['other_brand']})
     if t['fabricated'] >= 5:
         title, detail = TEMPLATES['signal.fabricated']
-        text_ = detail.format(n=t['fabricated'], asked=t['brand_scored'], surface=where,
+        text_ = detail.format(n=t['fabricated'], asked=t['brand_scored'], on=where,
                               split=_split({a: m['fabricated'] for a, m in per.items()}))
         start = _day(cycle_start)
         if start is None or start < GROUNDING_SOURCES_FROM:
@@ -575,7 +608,7 @@ def build_signals(metrics: dict, products: List[dict], *, surface: str, brand: s
     return out[:4]
 
 
-def build_summary(metrics: dict, headline: dict, signals: List[dict]) -> dict:
+def build_summary(metrics: dict, headline: dict, signals: List[dict], surface: Optional[str] = None) -> dict:
     """Three or four sentences: visibility (and the rivals), accuracy, then
     the top signal the sentences before it have not already stated. When
     every signal is already stated, there is no last sentence."""
@@ -592,7 +625,7 @@ def build_summary(metrics: dict, headline: dict, signals: List[dict]) -> dict:
             vis += ' ' + TEMPLATES['summary.rivals'].format(lead=r[0]['name'], k=r[0]['first'], rest=rest)
     stated = set()
     if not t['scored'] and not t['unverifiable']:
-        acc = TEMPLATES['summary.no_price']
+        acc = TEMPLATES[_rule('summary.no_price', surface)]
     elif t['unverifiable']:
         acc = TEMPLATES['summary.accuracy_unverifiable'].format(exact=t['exact'], scored=t['scored'], other=t['other_brand'],
                                                                 u=t['unverifiable'])
@@ -624,29 +657,33 @@ def _agents_text(agents: Iterable[str]) -> str:
     return ' and '.join(names) if len(names) < 3 else ', '.join(names[:-1]) + ' and ' + names[-1]
 
 
-def changes_status(now: dict, prev: Optional[dict], prev_code: Optional[str]) -> tuple:
+def changes_status(now: dict, prev: Optional[dict], prev_code: Optional[str],
+                   surface: Optional[str] = None) -> tuple:
     """('first_cycle' | 'not_comparable' | 'compared', note). Two cycles are
     compared on a surface only when the same agents answered there and both
     read named/first over the same tier; otherwise the block says why and
-    shows no delta."""
+    shows no delta. 2I-8: on `all`, when the same agents answered in both
+    cycles, whatever their surfaces; the note then names no surface."""
     if prev is None:
         return 'first_cycle', TEMPLATES['changes.first_cycle']
     a, b = set(now['agent_set']), set(prev['agent_set'])
     if a != b:
         if b and b < a:
-            return 'not_comparable', TEMPLATES['changes.not_comparable_subset'].format(code=prev_code, agents=_agents_text(b))
-        return 'not_comparable', TEMPLATES['changes.not_comparable'].format(
+            return 'not_comparable', TEMPLATES[_rule('changes.not_comparable_subset', surface)].format(
+                code=prev_code, agents=_agents_text(b))
+        return 'not_comparable', TEMPLATES[_rule('changes.not_comparable', surface)].format(
             code=prev_code, prev=_agents_text(b) if b else 'no agent', now=_agents_text(a) if a else 'no agent')
     if now['tier'] == UNPROMPTED and not prev['total']['named_of']:
-        return 'not_comparable', TEMPLATES['changes.not_comparable_tier'].format(code=prev_code)
+        return 'not_comparable', TEMPLATES[_rule('changes.not_comparable_tier', surface)].format(code=prev_code)
     return 'compared', None
 
 
-def build_changes(now: dict, prev: Optional[dict], prev_code: Optional[str]) -> List[dict]:
+def build_changes(now: dict, prev: Optional[dict], prev_code: Optional[str],
+                  surface: Optional[str] = None) -> List[dict]:
     """Each metric this cycle against the previous scored one, both on the
     same surface and agent set, each over its own denominator (CHANGE_METRICS).
     [] unless changes_status says 'compared'."""
-    if changes_status(now, prev, prev_code)[0] != 'compared':
+    if changes_status(now, prev, prev_code, surface)[0] != 'compared':
         return []
     out = []
     for key, label, up_good, denom in CHANGE_METRICS:
@@ -667,6 +704,8 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
                    study_questions: Optional[int] = None) -> dict:
     """
     GET /api/console/overview: This week's blocks for one cycle, per surface.
+    2I-8: `all` first (every agent together, as the demo counts them) and the
+    default; each surface's blocks beside it, for the console's filter.
 
     rows: load_overview_rows (one per run). visibility: the 2C-1 read with
     extend_visibility applied. true_value: build_true_value. access: supply's
@@ -674,7 +713,7 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
     newest earlier scored cycle, or None.
     """
     vis_rows = visibility.get('byQuestion') or []
-    surface_list = ordered_surfaces({_surface_of(r) for r in rows} | {v['surface'] for v in vis_rows})
+    surface_list = surfaces.with_all(ordered_surfaces({_surface_of(r) for r in rows} | {v['surface'] for v in vis_rows}))
     default = (visibility.get('ranking') or {}).get('surface') or (surface_list[0] if surface_list else None)
     variant_of_run = {f"run-{r['run_id']}": r.get('variant_id') for r in rows}
     reason_of_run = {f"run-{r['run_id']}": r.get('reason_code') for r in rows}
@@ -685,7 +724,7 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
         metrics = surface_metrics(rows, vis_rows, s)
         prev_metrics = (surface_metrics(previous['rows'], previous['visibility'].get('byQuestion') or [], s, tier=metrics['tier'])
                         if previous else None)
-        status, note = changes_status(metrics, prev_metrics, (previous or {}).get('code'))
+        status, note = changes_status(metrics, prev_metrics, (previous or {}).get('code'), s)
         if prev_metrics is not None:
             prev_metrics['code'] = previous.get('code')
         head = visibility_headline(vis_rows, s, next((r['name'] for r in (visibility.get('ranking') or {}).get('rows') or [] if r.get('you')), None))
@@ -696,8 +735,8 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
             'agents': build_agents(metrics, prev_metrics, status),
             'products': products,
             'signals': signals,
-            'summary': build_summary(metrics, head, signals),
-            'changes': build_changes(metrics, prev_metrics, (previous or {}).get('code')),
+            'summary': build_summary(metrics, head, signals, s),
+            'changes': build_changes(metrics, prev_metrics, (previous or {}).get('code'), s),
             'changes_status': status,
             'changes_note': note,
             'totals': metrics['total'],
@@ -1009,7 +1048,8 @@ def program_lines(catalog: Optional[dict], incentives: Optional[dict], value_out
     record, else the newest page read with a member price), and per surface
     the agents asked a member-price question about it in the value tier and
     the ones that quoted it right (an exact outcome). A variant with neither
-    a program price nor a question has no caption."""
+    a program price nor a question has no caption. 2I-8: `all` first, every
+    agent asked, the demo's caption."""
     entries = {l.get('listing_id'): l for l in (incentives or {}).get('listings') or []}
     asked: Dict[str, List[dict]] = {}
     for o in value_outcomes or []:
@@ -1031,8 +1071,8 @@ def program_lines(catalog: Optional[dict], incentives: Optional[dict], value_out
             amount = rm.money(f"{src['price']:.2f}", cur) if src else None
             price = f"{tier} {amount} ({src['note']})." if src else f"{tier}: no price stated in the record or on the page."
             by_surface = {}
-            for sf in sorted({r.get('surface') or 'unlabelled' for r in runs}):
-                mine = [r for r in runs if (r.get('surface') or 'unlabelled') == sf]
+            for sf in surfaces.with_all(sorted({r.get('surface') or 'unlabelled' for r in runs})):
+                mine = [r for r in runs if _on(r.get('surface') or 'unlabelled', sf)]
                 agents = sorted({surfaces.agent_of(r.get('platform')) or r.get('platform') for r in mine})
                 quoted = sorted({surfaces.agent_of(r.get('platform')) or r.get('platform') for r in mine
                                  if r.get('outcome') == 'exact'})
