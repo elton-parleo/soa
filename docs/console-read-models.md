@@ -7106,3 +7106,19 @@ name Googlebot. `rm.group_identities(requests)` gives `[{identity, tokens, label
 groups ("3 agent identities could not read the pages." / "Googlebot (2 tokens), bingbot, Parleo (control). From the
 last access run."), and so does Impact's Access line (`access.n` the identities, new `access.tokens` the requests).
 `parity._measured` is `rm.access_measured`.
+
+### B5: Missed counts wrong prices; no price is reported, not counted
+
+Decision (Elton, Oct 21): an agent that declines to price is not a wrong answer. 2I-9's Missed share counted
+"wrong, another brand's price, or left out the price the page had" over the scored price answers; on FL13 that was
+89 of 100, 42 of them answers that gave no price at all.
+
+`console_revenue.revenue_shares`: the Missed numerator is **wrong (stale included) plus another brand's price**, the
+denominator the **scored price answers** (exact, partial, stale, wrong, another brand's). An answered catalog run
+that gave no price (`absent`, not `other_brand`) is counted on its own as **`missed.no_price_runs`** (also in
+`/revenue`'s `counts.missed`), and the Missed driver carries **`no_price`**: `{count, line}`, "42 answers gave no
+price at all." Once-counting is unchanged (missed = raw x (1 - lost)). FL13's shape (47 wrong, 42 no price, 11
+exact): raw Missed 47 of 58, 81% (was 89 of 100), `no_price_runs` 42. The driver sentence reads "{n} of the {of}
+price answers got the price wrong or quoted another brand's price, {pct}."; the retailer title reads "{name}'s price
+is wrong". The demo's Petco wording ("missing or wrong") is the earlier definition, 2I-9's. FL12's shape in
+`test_console_2i9.py`: 62 of 96 (was 98 of 132), $18.2M missed at $4.0B (was $20.9M).

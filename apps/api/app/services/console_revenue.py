@@ -149,12 +149,16 @@ def delete_inputs(conn, org_id: int, merchant: str) -> None:
 #   newborns" names the brand, so it is not unprompted, but its first pick is
 #   a brand choice). With no comparison question the set is the unprompted
 #   one and every sentence reads as before; with one, they say brand-choice.
-# Missed: of the answered catalog-tier runs that were scored or left the
-#   price out where the reference had one, the share that got the price wrong
-#   (wrong or stale), quoted another brand's price, or left out a price the
-#   reference had. Unverifiable is outside both, as everywhere. Then counted
-#   once, by the demo's rule: missed = raw x (1 - lost), a price miss counted
-#   only for shoppers the brand choice did not already send elsewhere.
+# Missed (2K-4 §B5, Elton, Oct 21: an agent that declines to price is not a
+#   wrong answer): of the scored price answers (exact, partial, stale, wrong,
+#   and another brand's price), the share that got the price wrong (wrong or
+#   stale) or quoted another brand's price. An answer that gave no price at
+#   all (`absent`, not another brand's) is counted on its own, `no_price`,
+#   and said on the driver's second line; 2I-9 counted it as missed when the
+#   reference had a price ("missing or wrong", the demo's Petco wording).
+#   Unverifiable is outside both, as everywhere. Then counted once, by the
+#   demo's rule: missed = raw x (1 - lost), a price miss counted only for
+#   shoppers the brand choice did not already send elsewhere.
 
 SCORED_PRICE = ('exact', 'partial', 'stale', 'wrong')
 MISSED_PRICE = ('wrong', 'stale')
@@ -172,10 +176,10 @@ TEMPLATES = {
     'lost.fix.brand': "Publish the brand's facts as one record agents can read, so brand-choice answers can find it",
     'lost.fix.retailer': "Publish the offer record so cheapest-place answers can see your price",
     'missed.title.brand': "Prices and deals agents get wrong",
-    'missed.title.retailer': "{name}'s price is missing or wrong",
-    'missed.measured': ("{n} of the {of} price answers got the price wrong, quoted another brand's price or left out the "
-                        "price the page had, {pct}. Counted once: only for shoppers the brand choice did not already "
-                        "send elsewhere, {once}."),
+    'missed.title.retailer': "{name}'s price is wrong",
+    'missed.measured': ("{n} of the {of} price answers got the price wrong or quoted another brand's price, {pct}. "
+                        "Counted once: only for shoppers the brand choice did not already send elsewhere, {once}."),
+    'missed.no_price': "{n} {answers} gave no price at all.",
     'missed.fix.brand': "One record per SKU, on every surface retailers and agents read",
     'missed.fix.retailer': "One offer record with the price and program terms, published to every surface",
     'access.title': "Agents can't read {domain}, so they quote other sources",
@@ -184,7 +188,7 @@ TEMPLATES = {
     'access.none': "Every measured agent identity read the pages in the last access run.",
     'basis': ("Each share is measured on the questions where it can happen, over every agent, in cycle {cycle}. Brand "
               "choice: {lost_n} of {lost_of} {set} answers put another {rival} first ({lost_pct}). Price: "
-              "{miss_n} of {miss_of} price answers got the price wrong or left it out ({miss_raw}). The model assumes "
+              "{miss_n} of {miss_of} price answers got the price wrong or quoted another brand's ({miss_raw}). The model assumes "
               "an AI-assisted purchase passes through both, a {choice} and then a price, and counts a price miss only "
               "where the {choice} didn't already go elsewhere, so no shopper counts twice ({miss_pct} once). The "
               "{set} share is applied to all AI-touched sales, on the assumption that the study's question mix "
@@ -235,15 +239,15 @@ def revenue_shares(vis_rows: list, catalog_rows: list, lost_gainable: float = 0.
     lost = [v for v in unprompted if lost_pick(v)]
 
     answered = [r for r in catalog_rows if r.get('answer_status') == surfaces.ANSWERED]
-    has_ref = lambda r: r.get('reference_price') not in (None, '')  # noqa: E731
+
+    other_brand = lambda r: r.get('outcome') == 'absent' and r.get('reason_code') == 'other_brand'  # noqa: E731
 
     def missed_price(r) -> bool:
-        o = r.get('outcome')
-        if o in MISSED_PRICE:
-            return True
-        return o == 'absent' and (r.get('reason_code') == 'other_brand' or has_ref(r))
-    denom = [r for r in answered if r.get('outcome') in SCORED_PRICE or missed_price(r)]
+        return r.get('outcome') in MISSED_PRICE or other_brand(r)
+    denom = [r for r in answered if r.get('outcome') in SCORED_PRICE or other_brand(r)]
     missed = [r for r in denom if missed_price(r)]
+    # 2K-4: an answer that gave no price is not a wrong one: counted on its own
+    no_price = [r for r in answered if r.get('outcome') == 'absent' and not other_brand(r)]
 
     lost_share = len(lost) / len(unprompted) if unprompted else None
     raw = len(missed) / len(denom) if denom else None
@@ -272,6 +276,7 @@ def revenue_shares(vis_rows: list, catalog_rows: list, lost_gainable: float = 0.
                  'gainable': float(lost_gainable or 0.0)},
         'missed': {'raw': raw, 'share': once, 'n': len(missed), 'of': len(denom),
                    'unverifiable': sum(1 for r in answered if r.get('outcome') == 'unverifiable'),
+                   'no_price_runs': len(no_price),
                    'first_answer': f"run-{min(r['run_id'] for r in missed)}" if missed else None, 'gainable': 1.0},
         'by_agent': by_agent, 'against': len(against),
         # 2K-1: what the Lost set is called in every sentence
@@ -322,7 +327,11 @@ def build_model(shares: dict, inputs: dict, *, cycle: str, kind: str, name: str,
                             'measured': TEMPLATES['missed.measured'].format(n=M['n'], of=M['of'], pct=_pct(M['raw']),
                                                                             once=_pct(M['share'])),
                             'share': M['share'], 'gainable': 1.0, 'fix': TEMPLATES[f'missed.fix.{k}'],
-                            'route': 'true-value', **({'answerId': M['first_answer']} if M['first_answer'] else {})})
+                            'route': 'true-value', **({'answerId': M['first_answer']} if M['first_answer'] else {}),
+                            # 2K-4: the answers that gave no price, said on a second line, never counted
+                            **({'no_price': {'count': M['no_price_runs'], 'line': TEMPLATES['missed.no_price'].format(
+                                n=M['no_price_runs'], answers='answer' if M['no_price_runs'] == 1 else 'answers')}}
+                               if M['no_price_runs'] else {})})
     entered = inputs['scope']['entered']
     dollars = shares['measured'] and entered
     rival = 'brand' if k == 'brand' else 'store'
@@ -354,7 +363,7 @@ def build_model(shares: dict, inputs: dict, *, cycle: str, kind: str, name: str,
         'shares': {'lost': L['share'], 'missed_raw': M['raw'], 'missed': M['share']},
         'counts': {'lost': {k2: L[k2] for k2 in ('n', 'of', 'you_first')}, 'lost_set': set_words,
                    'lost_rivals': [list(x) for x in L['rivals']],
-                   'missed': {k2: M[k2] for k2 in ('n', 'of', 'unverifiable')}, 'against': shares['against']},
+                   'missed': {k2: M[k2] for k2 in ('n', 'of', 'unverifiable', 'no_price_runs')}, 'against': shares['against']},
         'basis': (TEMPLATES['basis'].format(cycle=cycle, lost_n=L['n'], lost_of=L['of'], lost_pct=_pct(L['share']),
                                             rival=rival, miss_n=M['n'], miss_of=M['of'],
                                             miss_raw=_pct(M['raw']) if M['raw'] is not None else 'not measured',

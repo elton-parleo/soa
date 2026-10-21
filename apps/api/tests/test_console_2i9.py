@@ -121,11 +121,14 @@ def test_the_inputs_are_tenant_isolated(http, inputs_table, upstream):
 #   2 exact (12), 1 wrong (6), 1 left out with no reference price (6, outside).
 # Lost: of the 102 unprompted answers, Pampers first in 27 and Huggies in 30,
 #   ours in 33, nobody in 12: 57 of 102.
-# Missed: the 19 catalog questions as 2I-8 built them, per agent 2 exact,
-#   5 wrong, 6 another brand's price, 6 left out (the reference had 12.99);
-#   AI Mode and Copilot quote 5 of the wrong ones right: grounded 17 of 19
-#   missed, consumer 12 of 19. 4 x 17 + 2 x 12 = 92 of 114, plus the new
-#   wrong 6 of 18 scored: 98 of 132. Once-counted: 98/132 x (1 - 57/102).
+# Missed (2K-4 §B5: an answer that gave no price is not a wrong one): the 19
+#   catalog questions as 2I-8 built them, per agent 2 exact, 5 wrong, 6
+#   another brand's price, 6 left out (no price given); AI Mode and Copilot
+#   quote 5 of the wrong ones right: grounded 11 of 13 scored missed,
+#   consumer 6 of 13. 4 x 11 + 2 x 6 = 56 of 78, plus the new 6 wrong of 18
+#   scored: 62 of 96. The 36 left out and the new question's 6 gave no price:
+#   42 no_price_runs, said and not counted (2I-9 read 98 of 132).
+#   Once-counted: 62/96 x (1 - 57/102).
 import copy  # noqa: E402
 from fractions import Fraction  # noqa: E402
 
@@ -137,7 +140,7 @@ from tests.test_console_2i8 import _fl12 as _load_fl12  # noqa: E402
 from tests.test_console_read_models import TOKEN_A, _encode, _fixture  # noqa: E402
 
 LOST = Fraction(57, 102)
-RAW = Fraction(98, 132)
+RAW = Fraction(62, 96)
 MISSED = RAW * (1 - LOST)
 AGENTS6 = f2i8.AGENTS
 
@@ -185,7 +188,7 @@ def test_fl12_s_shares_by_hand(http, db, upstream):
     assert body['measured'] is True and body['reason'] is None
     assert body['counts']['lost'] == {'n': 57, 'of': 102, 'you_first': 33}
     assert body['counts']['lost_rivals'] == [['Huggies', 30], ['Pampers', 27]]
-    assert body['counts']['missed'] == {'n': 98, 'of': 132, 'unverifiable': 18}
+    assert body['counts']['missed'] == {'n': 62, 'of': 96, 'unverifiable': 18, 'no_price_runs': 42}
     assert body['shares']['lost'] == pytest.approx(float(LOST))
     assert body['shares']['missed_raw'] == pytest.approx(float(RAW))
     assert body['shares']['missed'] == pytest.approx(float(MISSED))      # counted once
@@ -225,8 +228,8 @@ def test_fl12_s_dollars_at_the_defaults(http, db, upstream, lost_gainable):
     assert t['gainable'] == pytest.approx(missed_d + lost_d * lost_gainable)
     assert t['in_answers'] == pytest.approx(ai * float(LOST + MISSED))
     assert body['by_2030']['exposed'] == pytest.approx((lost_d + missed_d) * 0.2 / 0.114)
-    # FL12's shape at $4.0B: $36M lost, $21M missed, $57M at stake, $21M gainable (+$8.9M at 25%)
-    assert (round(lost_d / 1e6, 1), round(missed_d / 1e6, 1)) == (35.7, 20.9)
+    # FL12's shape at $4.0B: $36M lost, $18M missed (2K-4; $21M when a missing price counted)
+    assert (round(lost_d / 1e6, 1), round(missed_d / 1e6, 1)) == (35.7, 18.2)
 
 
 def test_the_driver_sentences_and_by_agent(http, db, upstream):
@@ -238,18 +241,19 @@ def test_the_driver_sentences_and_by_agent(http, db, upstream):
     assert lost['title'] == 'Another brand gets the first pick'
     assert lost['measured'] == ('57 of the 102 unprompted answers put another brand first, 56%. '
                                 'Huggies first in 30, Pampers in 27. Wiggle & Snug came first in 33.')
-    assert missed['measured'] == ("98 of the 132 price answers got the price wrong, quoted another brand's price or left "
-                                  "out the price the page had, 74%. Counted once: only for shoppers the brand choice did "
-                                  "not already send elsewhere, 33%.")
+    assert missed['measured'] == ("62 of the 96 price answers got the price wrong or quoted another brand's price, 65%. "
+                                  "Counted once: only for shoppers the brand choice did not already send elsewhere, 28%.")
+    # 2K-4: the answers that gave no price, a second line, not in the share
+    assert missed['no_price'] == {'count': 42, 'line': '42 answers gave no price at all.'}
     assert lost['answerId'].startswith('run-') and missed['answerId'].startswith('run-')
     assert (lost['route'], missed['route']) == ('visibility', 'true-value')
-    # byAgent: each agent's share of the 57 + 98 answers that go against you
+    # byAgent: each agent's share of the 57 + 62 answers that go against you
     by = {b['agent']: b for b in body['byAgent']}
     assert [b['agent'] for b in body['byAgent']] == ['chatgpt', 'gemini', 'aimode', 'perplexity', 'copilot', 'claude']
-    assert sum(b['n'] for b in body['byAgent']) == body['counts']['against'] == 57 + 98
-    # lost: 17 unprompted less ours first (Claude 4, AI Mode 6) less the 2 nobody leads; missed: 17 or 12, plus the new wrong
-    assert by['claude']['n'] == (17 - 4 - 2) + (17 + 1) and by['aimode']['n'] == (17 - 6 - 2) + (12 + 1)
-    assert by['claude']['note'] == 'Claude: 29 of the 155 answers that go against you.'
+    assert sum(b['n'] for b in body['byAgent']) == body['counts']['against'] == 57 + 62
+    # lost: 17 unprompted less ours first (Claude 4, AI Mode 6) less the 2 nobody leads; missed: 11 or 6, plus the new wrong
+    assert by['claude']['n'] == (17 - 4 - 2) + (11 + 1) and by['aimode']['n'] == (17 - 6 - 2) + (6 + 1)
+    assert by['claude']['note'] == 'Claude: 23 of the 119 answers that go against you.'
     assert sum(b['share'] for b in body['byAgent']) == pytest.approx(1.0)
 
 
@@ -287,9 +291,10 @@ def test_229_s_shares(http, db, upstream):
     body = _revenue(http, f229.CYCLE_229)
     # 300 unprompted answers: Pampers first in 38, Huggies 24, Pull-Ups 3; 26 uncoded and the rest name nobody
     assert body['counts']['lost'] == {'n': 65, 'of': 300, 'you_first': 0}
-    # catalog: 9 exact, 32 wrong, 34 another brand's price, 37 left out (the record had 12.99); 2 errored
-    assert body['counts']['missed'] == {'n': 103, 'of': 112, 'unverifiable': 0}
-    assert body['shares']['missed'] == pytest.approx(103 / 112 * (1 - 65 / 300))
+    # catalog: 9 exact, 32 wrong, 34 another brand's price, 37 left out (the record had 12.99); 2 errored.
+    # 2K-4: the 37 that gave no price are counted on their own (2I-9 read 103 of 112)
+    assert body['counts']['missed'] == {'n': 66, 'of': 75, 'unverifiable': 0, 'no_price_runs': 37}
+    assert body['shares']['missed'] == pytest.approx(66 / 75 * (1 - 65 / 300))
 
 
 def test_no_unprompted_question_withholds_the_dollars_with_the_reason_never_0(http, db, upstream):
@@ -303,7 +308,7 @@ def test_no_unprompted_question_withholds_the_dollars_with_the_reason_never_0(ht
     assert body['measured'] is False and body['reason'] == 'no unprompted question this cycle'
     assert body['dollars'] is False and body['dollars_reason'] == 'no unprompted question this cycle'
     assert body['drivers'] == [] and body['today'] is None and body['shares']['lost'] is None
-    assert body['counts']['missed']['of'] == 132          # the price share is still counted, and shown
+    assert body['counts']['missed']['of'] == 96           # the price share is still counted, and shown
 
 
 def test_history_over_two_cycles(http, db, upstream):
