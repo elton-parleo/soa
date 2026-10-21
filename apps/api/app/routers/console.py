@@ -48,6 +48,7 @@ from app.console_merchants import MerchantScope, check_merchant, merchant_cycles
 from app import worker_surfaces
 from app.routers import full_loop
 from app.routers.customers import _tenant_view
+from app.services import console_claims
 from app.services import console_parity as parity
 from app.services import console_prompts
 from app.services import console_read_models as rm
@@ -75,10 +76,36 @@ def get_surfaces(scope: CustomerScope = Depends(console_scope)):
 
 
 @router.get("/answers")
-def get_answers(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
-    row = cycle_in_scope(cycle, scope)
+async def get_answers(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+    """2K-3: each answer's claim_kind reads the merchant's catalog features
+    (_claim_features); a failed catalog read leaves 2K-1's lexicon with the
+    endorsement words."""
+    row = dict(cycle_in_scope(cycle, scope))
+    features, _error = await _claim_features(row, scope)
     with engine.connect() as conn:
-        return rm.load_answers(conn, dict(row))
+        return rm.load_answers(conn, row, features)
+
+
+async def _claim_features(row: dict, scope: CustomerScope, merchant: Optional[str] = None) -> tuple:
+    """2K-3 (B4): (the feature terms of the cycle's merchant's published
+    catalog, the read's error or None), for claim_kind (console_claims).
+    The merchant is `merchant`, else the study's (tier_config.merchant.slug,
+    else its syndicated merchant); the brand's own terms are left out of the
+    features, as the brand terms are loaded (load_brand_terms). No merchant:
+    no features, no read."""
+    with engine.connect() as conn:
+        job = conn.execute(text(
+            "SELECT tier_config, syndicated_merchant FROM soa_query_generation_jobs WHERE study_type = :st "
+            "ORDER BY id DESC LIMIT 1"), {"st": row.get('study_type')}).mappings().first()
+        terms = rm.load_brand_terms(conn, row)
+    slug = merchant or (((_json(job['tier_config']) or {}).get('merchant') or {}).get('slug') if job else None) or \
+        (job['syndicated_merchant'] if job else None)
+    if not slug:
+        return [], None
+    status, catalog, error = await full_loop._client(scope).get_merchant_catalog(slug)
+    if error is not None and status and 400 <= status < 500:
+        return console_claims.feature_terms(None, terms), None   # a merchant with no catalog: nothing to read
+    return console_claims.feature_terms(catalog if error is None else None, terms), error
 
 
 @router.get("/answers/summary")
@@ -137,15 +164,16 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     if merchant:
         await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     row = dict(cycle_in_scope(cycle, scope))
+    features, f_err = await _claim_features(row, scope, merchant)   # 2K-3
     with engine.connect() as conn:
-        rows = parity.load_overview_rows(conn, row)
+        rows = parity.load_overview_rows(conn, row, features)
         vis = _visibility(conn, row)
         own_domain, variants, scored = _true_value_inputs(conn, row)
         prev, n_scored = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
         previous = None
         if prev is not None:
             prev = {**prev, 'customer_org_id': row['customer_org_id']}
-            previous = {'code': prev['cycle_code'], 'rows': parity.load_overview_rows(conn, prev),
+            previous = {'code': prev['cycle_code'], 'rows': parity.load_overview_rows(conn, prev, features),
                         'visibility': _visibility(conn, prev)}
         job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
                            {"st": row['study_type']}).fetchone()
@@ -154,6 +182,8 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     brand = next((r['name'] for r in (vis.get('ranking') or {}).get('rows') or [] if r.get('you')), None) or \
         (((_json(job[0]) if job else None) or {}).get('merchant') or {}).get('study_brand') or 'the brand'
     access, errors, reads = None, {}, None
+    if f_err is not None:
+        errors['catalog'] = f_err
     if merchant:
         client = full_loop._client(scope)
         (_, payload, error), (_, reference, r_err) = await asyncio.gather(client.get_access(merchant),
@@ -169,9 +199,12 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     # 2C-2a: the newest page read is the reference when the cycle cached none
     tv = rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
                              record_variants=variants, reads=reads)
-    return parity.build_overview(row, rows=rows, visibility=vis, true_value=tv, brand=brand, access=access,
+    body = parity.build_overview(row, rows=rows, visibility=vis, true_value=tv, brand=brand, access=access,
                                  previous=previous, scored_cycles=n_scored if n_scored else 1, read_errors=errors,
                                  study_questions=study_questions)
+    # 2K-3 (B5): the start day in the merchant's zone, beside `started` (the UTC start_date)
+    body.update(rm.cycle_dates(row, rm.study_timezone(job[0] if job else None)))
+    return body
 
 
 @router.get("/score")
@@ -353,15 +386,20 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
         return rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
                                    record_variants=variants)
     client = full_loop._client(scope)
-    (_, owned, o_err), (_, incentives, i_err), (_, catalog, k_err), (_, reference, r_err), (history, h_err) = \
+    (_, owned, o_err), (_, incentives, i_err), (_, catalog, k_err), (_, reference, r_err), (history, h_err), \
+        (f_status, feed, f_err) = \
         await asyncio.gather(client.get_owned_incentives(merchant), client.get_merchant_incentives(merchant),
                              client.get_merchant_catalog(merchant), client.get_reference(merchant),
-                             _member_reads(client, merchant))
+                             _member_reads(client, merchant), client.get_feed(merchant))
     errors = {n: e for n, e in (('owned_incentives', o_err), ('incentives', i_err), ('catalog', k_err),
                                 ('reference', r_err), ('retailer_prices', h_err)) if e is not None}
+    if f_err is not None and not (f_status and 400 <= f_status < 500):
+        errors['feed'] = f_err   # 2K-3: a merchant with no feed (hosted, or none committed) is not an error
     # 2C-2a: the newest page read is the reference when the cycle cached none
     body = rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
-                               record_variants=variants, reads=(reference or {}).get('rows') if r_err is None else None)
+                               record_variants=variants, reads=(reference or {}).get('rows') if r_err is None else None,
+                               feed_rows=rm.feed_sku_rows(feed if f_err is None else None,
+                                                          catalog if k_err is None else None))
     programs = rm.build_programs((owned or {}).get('incentives') or [] if o_err is None else [], value_outcomes,
                                  record=incentives if i_err is None else None)
     body['programs'] = programs
@@ -933,10 +971,13 @@ async def get_revenue_history(merchant: Optional[str] = Query(None), scope: Cust
         inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, ms.slug), ms.slug)
         scored = {r[0] for r in conn.execute(text("SELECT DISTINCT cycle_id FROM soa_expectation_outcomes"))}
         cycles = [c for c in merchant_cycles(conn, ms) if c['id'] in scored and c.get('status') == 'complete']
+        zones = rm.study_timezones(conn, [c['study_type'] for c in cycles])   # 2K-3
         for c in reversed(cycles):
             c = {**c, 'customer_org_id': scope.org.id}
             m = _revenue_model(conn, c, inputs, meta, None)
-            out.append({'cycle': c['cycle_code'], 'started': rm._iso(c.get('start_date')), 'measured': m['measured'],
+            out.append({'cycle': c['cycle_code'], 'started': rm._iso(c.get('start_date')),
+                        'start_date_local': rm.cycle_dates(c, zones.get(c['study_type']))['start_date_local'],
+                        'measured': m['measured'],
                         'reason': m['reason'], 'shares': m['shares'], 'counts': m['counts'],
                         'exposed': (m['today'] or {}).get('exposed'), 'gainable': (m['today'] or {}).get('gainable')})
     return {'merchant': ms.slug, 'dollars': inputs['scope']['entered'], 'currency': inputs['currency'], 'cycles': out}

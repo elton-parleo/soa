@@ -140,13 +140,22 @@ def per_surface_view(endpoint, body):
         for a in body:
             a.pop('claim_kind', None)
             a.pop('claim_kind_label', None)
+            # 2K-3 adds the question's code and stage
+            a.pop('query_code', None)
+            a.pop('stage', None)
     if endpoint == 'overview':
         # 2K-1 adds the `recommended` bucket beside `fabricated` (0 on every fixture here)
         body = _without_zero(body, 'recommended')
+        # 2K-3 adds the start day in the merchant's zone beside `started`
+        for k in ('start_date_local', 'created_at_local', 'timezone'):
+            body.pop(k, None)
     if endpoint in ('visibility', 'overview') and body.get('ranking'):
         body['ranking'] = _ranking(body['ranking'])
     if endpoint == 'true-value':
         for row in body.get('rows') or []:
+            # 2K-3 adds each row's GTIN and feed SKU (a GTIN-less row's sku is its feed SKU when known)
+            row.pop('gtin', None)
+            row.pop('feed_sku', None)
             for cells in (row.get('cells') or {}, row.get('retailer_cells') or {}):
                 for cell in cells.values():
                     for k in CELL_TYPED:

@@ -147,6 +147,9 @@ def build_prompts(merchant: Optional[str], job: Optional[dict], questions: List[
         'study': ({'id': job['study_type'], 'name': job.get('study_name') or job['study_type']} if job else None),
         'cycle': (cycle or {}).get('cycle_code'),
         'last_run': rm._iso((cycle or {}).get('start_date')),
+        # 2K-3: the last cycle's start day in the merchant's zone
+        'last_run_local': rm.cycle_dates(cycle, rm.study_timezone((job or {}).get('tier_config')))['start_date_local']
+        if cycle else None,
         'prompts': total,
         'set_count': len(sets),
         'runs_per_question': runs,

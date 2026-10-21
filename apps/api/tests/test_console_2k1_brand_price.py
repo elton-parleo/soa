@@ -31,7 +31,7 @@ from tests.test_console_read_models import _encode, as_, http, upstream  # noqa:
 
 QUOTE = '9.97'
 ASKED = (('Swaddlers NB 84', 'PAM-SW-NB-84', '00037000863434'), ('Ultra', 'PAM-ULTRA-120', None))
-NOTE = "the brand's site sets no price; the agent priced it anyway"
+NOTE = "The brand's site sets no price. The agent priced it anyway."   # 2K-3: two sentences
 FIRST_RUN = 95000
 
 

@@ -39,6 +39,10 @@ ROWS = FIXTURE['rows']
 RECOMMENDATION_ONLY = {'fl12-bd-01', 'fl12-bd-02', 'fl12-bd-03', 'fl12-bd-11', 'fl12-bd-12', 'fl12-bd-14', 'fl12-bd-16'}
 #: where the rule and a reader disagree: a checkable claim the brief's list does not name
 MISSES = {'fl12-bd-02', 'fl12-bd-11'}
+#: 2K-3: what the console reads, with the endorsement words and no catalog features (soa's test fake
+#: serves W&S no catalog): "most popular ... in US hospitals" (bd-02) is an attribute; bd-11's
+#: wetness indicator needs the merchant's catalog (test_console_2k3.py)
+CONSOLE_RECOMMENDATION_ONLY = RECOMMENDATION_ONLY - {'fl12-bd-02'}
 
 
 def test_the_two_copies_are_identical():
@@ -103,7 +107,7 @@ def _with_fixture_extractions(db) -> dict:
 
 def test_the_signal_counts_attribute_answers_and_says_the_rest_on_a_second_line(http, db, upstream):
     assigned = _with_fixture_extractions(db)
-    recommended = sum(1 for rid in assigned.values() if rid in RECOMMENDATION_ONLY)
+    recommended = sum(1 for rid in assigned.values() if rid in CONSOLE_RECOMMENDATION_ONLY)
     stated = len(assigned) - recommended
     assert stated >= 5 and recommended > 0
     as_('op')
@@ -126,7 +130,7 @@ def test_the_answers_list_carries_the_kind_as_a_chip(http, db, upstream):
     for run, row_id in assigned.items():
         a = answers[f'run-{run}']
         assert a['brand_verdict'] == 'fabricated'           # the outcome is not changed
-        if row_id in RECOMMENDATION_ONLY:
+        if row_id in CONSOLE_RECOMMENDATION_ONLY:
             assert (a['claim_kind'], a['claim_kind_label']) == ('recommendation_only', 'Recommendation only')
         else:
             assert (a['claim_kind'], a['claim_kind_label']) == ('attribute', 'Stated a fact')
