@@ -1,0 +1,39 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 711,
+    "output_tokens": 14,
+    "total_tokens": 725
+   }
+  },
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 711,
+    "output_tokens": 14,
+    "total_tokens": 725
+   }
+  }
+ ],
+ "facts": {
+  "agent": "ChatGPT",
+  "brand": "Pampers",
+  "brand_verdict": "fabricated",
+  "kind": "answer",
+  "meaning": [
+   "The answer stated something about the brand that the brand never published and no source backs."
+  ],
+  "question": "question 1055",
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "why": [
+   "brand_fabricated"
+  ]
+ },
+ "facts_digest": "3304b3404084320170b1f000f8dd12036389841dfc6a8186ebd1a9bda49ff611",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "435109f1d840d987468390f4b0d435b0a63ae9e6855509fad4b9ea234e617e0a",
+ "subject": "answer:run-70325"
+}

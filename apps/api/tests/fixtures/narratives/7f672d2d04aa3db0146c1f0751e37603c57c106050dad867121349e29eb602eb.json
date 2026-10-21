@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Copilot first picked Huggies over Pampers on question 1015. The answer named Huggies first, then Pampers.\"}",
+   "usage": {
+    "input_tokens": 724,
+    "output_tokens": 41,
+    "total_tokens": 765
+   }
+  },
+  {
+   "response": "{\"line\":\"Copilot first picked Huggies and then Pampers, even though the question asked it to choose a brand. The first pick was another brand, not Pampers.\"}",
+   "usage": {
+    "input_tokens": 724,
+    "output_tokens": 47,
+    "total_tokens": 771
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Copilot",
+  "brand": "Pampers",
+  "first pick": "Huggies",
+  "kind": "answer",
+  "meaning": [
+   "On a question that let the assistant choose a brand, its first pick was another brand."
+  ],
+  "named in order": [
+   "Huggies",
+   "Pampers"
+  ],
+  "question": "question 1015",
+  "surface": "Consumer UI, logged out",
+  "why": [
+   "rival_first_pick"
+  ]
+ },
+ "facts_digest": "7f672d2d04aa3db0146c1f0751e37603c57c106050dad867121349e29eb602eb",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "0fd7a08461f07510273416d3aba7cb7dd2479cdf876aeb56bf0a8312132117e2",
+ "subject": "answer:run-70089"
+}

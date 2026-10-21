@@ -1,0 +1,101 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"ChatGPT quoted Amazon for Pampers Swaddlers S1 96 at $27.97, but Amazon charged $30.97. Gemini and Perplexity quoted Walmart at $30.97, but Walmart charged $27.97.\"}",
+   "usage": {
+    "input_tokens": 998,
+    "output_tokens": 164,
+    "total_tokens": 1162
+   }
+  },
+  {
+   "response": "{\"line\":\"ChatGPT quoted Amazon at $27.97, but Amazon charged $30.97 on Oct 19. Gemini and Perplexity quoted Walmart at $30.97, but Walmart charged $27.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 998,
+    "output_tokens": 60,
+    "total_tokens": 1058
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "00037000863441",
+   "feed_sku:901",
+   "PAM-SW-1-96",
+   "sku:PAM-SW-1-96"
+  ],
+  "answers": 12,
+  "brand": "Pampers",
+  "cell_status": {
+   "Amazon": "wrong",
+   "Walmart": "wrong"
+  },
+  "gave_no_price": [
+   "Claude"
+  ],
+  "issue": {
+   "answers": 3,
+   "meaning": "quoted a wrong price",
+   "of": 12,
+   "rule": "product.wrong"
+  },
+  "kind": "product",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "Swaddlers S1 96",
+  "retailer_prices_that_day": {
+   "Amazon": {
+    "date": "Oct 19",
+    "price": "30.97"
+   },
+   "Walmart": {
+    "date": "Oct 19",
+    "price": "27.97"
+   }
+  },
+  "right_quotes": [
+   {
+    "agents": [
+     "Gemini",
+     "Google AI Mode",
+     "Perplexity"
+    ],
+    "quoted": "30.97",
+    "retailer": "Amazon"
+   },
+   {
+    "agents": [
+     "ChatGPT",
+     "Google AI Mode"
+    ],
+    "quoted": "27.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "wrong_quotes": [
+   {
+    "agents": [
+     "ChatGPT"
+    ],
+    "quoted": "27.97",
+    "retailer": "Amazon",
+    "retailer_charged": "30.97"
+   },
+   {
+    "agents": [
+     "Gemini",
+     "Perplexity"
+    ],
+    "quoted": "30.97",
+    "retailer": "Walmart",
+    "retailer_charged": "27.97"
+   }
+  ]
+ },
+ "facts_digest": "4343cbf7bc9fb9d3aeec42d26fc2ac58e529621f7f374a5e236b194c538c8494",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "2262f1013d0c994d670d6002739303645f47bbfd76ed3f9eb8d700c65ac7b0a3",
+ "subject": "product:00037000863441"
+}

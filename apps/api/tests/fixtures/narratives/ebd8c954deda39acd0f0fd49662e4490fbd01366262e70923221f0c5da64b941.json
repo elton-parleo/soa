@@ -1,0 +1,39 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 712,
+    "output_tokens": 14,
+    "total_tokens": 726
+   }
+  },
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 712,
+    "output_tokens": 35,
+    "total_tokens": 747
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Perplexity",
+  "brand": "Pampers",
+  "brand_verdict": "fabricated",
+  "kind": "answer",
+  "meaning": [
+   "The answer stated something about the brand that the brand never published and no source backs."
+  ],
+  "question": "question 1051",
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "why": [
+   "brand_fabricated"
+  ]
+ },
+ "facts_digest": "ebd8c954deda39acd0f0fd49662e4490fbd01366262e70923221f0c5da64b941",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "29a3072b0e1989853d2e0a6fdcde9cdf070fcca78b87e9a4229f443fedec9b2d",
+ "subject": "answer:run-70304"
+}

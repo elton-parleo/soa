@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini gave Pampers as $?? but Pampers retail price was $12.09 that day. The quoted price was wrong.\"}",
+   "usage": {
+    "input_tokens": 721,
+    "output_tokens": 40,
+    "total_tokens": 761
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini said $12.99 for Pampers. Pampers cost $12.09 at the retailer that day.\"}",
+   "usage": {
+    "input_tokens": 721,
+    "output_tokens": 37,
+    "total_tokens": 758
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Gemini",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "question": "question 1083",
+  "retailer_price_that_day": {
+   "price": "12.09"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "daf358e937ae2c215da391aaed8786fb285ed5bc6c76767cbb1e8e9eb9da7a60",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "3e4f51142c21e968b064258e78e029a61133e715d4fb6386f0e5b87e027693f3",
+ "subject": "answer:run-70494"
+}

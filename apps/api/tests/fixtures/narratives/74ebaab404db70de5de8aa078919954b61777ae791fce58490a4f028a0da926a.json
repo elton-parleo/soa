@@ -1,0 +1,101 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gets Pampers Swaddlers S2 84 right at Amazon: Gemini, Google AI Mode, Perplexity quoted $30.97. Amazon charged $30.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 998,
+    "output_tokens": 53,
+    "total_tokens": 1051
+   }
+  },
+  {
+   "response": "{\"line\":\"ChatGPT quoted Amazon at $27.97, but Amazon charged $30.97. Gemini and Perplexity quoted Walmart at $30.97, but Walmart charged $27.97.\"}",
+   "usage": {
+    "input_tokens": 998,
+    "output_tokens": 120,
+    "total_tokens": 1118
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "00037000863458",
+   "feed_sku:902",
+   "PAM-SW-2-84",
+   "sku:PAM-SW-2-84"
+  ],
+  "answers": 12,
+  "brand": "Pampers",
+  "cell_status": {
+   "Amazon": "wrong",
+   "Walmart": "wrong"
+  },
+  "gave_no_price": [
+   "Claude"
+  ],
+  "issue": {
+   "answers": 3,
+   "meaning": "quoted a wrong price",
+   "of": 12,
+   "rule": "product.wrong"
+  },
+  "kind": "product",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "Swaddlers S2 84",
+  "retailer_prices_that_day": {
+   "Amazon": {
+    "date": "Oct 19",
+    "price": "30.97"
+   },
+   "Walmart": {
+    "date": "Oct 19",
+    "price": "27.97"
+   }
+  },
+  "right_quotes": [
+   {
+    "agents": [
+     "Gemini",
+     "Google AI Mode",
+     "Perplexity"
+    ],
+    "quoted": "30.97",
+    "retailer": "Amazon"
+   },
+   {
+    "agents": [
+     "ChatGPT",
+     "Google AI Mode"
+    ],
+    "quoted": "27.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "wrong_quotes": [
+   {
+    "agents": [
+     "ChatGPT"
+    ],
+    "quoted": "27.97",
+    "retailer": "Amazon",
+    "retailer_charged": "30.97"
+   },
+   {
+    "agents": [
+     "Gemini",
+     "Perplexity"
+    ],
+    "quoted": "30.97",
+    "retailer": "Walmart",
+    "retailer_charged": "27.97"
+   }
+  ]
+ },
+ "facts_digest": "74ebaab404db70de5de8aa078919954b61777ae791fce58490a4f028a0da926a",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "ce3107b119239f492b26985fdfe1d1d186e1794b180cfda09cef65f27756bc8c",
+ "subject": "product:00037000863458"
+}

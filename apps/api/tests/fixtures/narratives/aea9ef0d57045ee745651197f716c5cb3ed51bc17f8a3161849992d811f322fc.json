@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Copilot says Pampers is $12.09. Pampers charged $12.09 that day. Price was wrong for the shopper.\"}",
+   "usage": {
+    "input_tokens": 722,
+    "output_tokens": 41,
+    "total_tokens": 763
+   }
+  },
+  {
+   "response": "{\"line\":\"Copilot said Pampers for $12.09, but Consumer UI retailer price that day was $12.09. The quoted price was not the price charged.\"}",
+   "usage": {
+    "input_tokens": 722,
+    "output_tokens": 46,
+    "total_tokens": 768
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Copilot",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "question": "question 1083",
+  "retailer_price_that_day": {
+   "price": "12.09"
+  },
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "aea9ef0d57045ee745651197f716c5cb3ed51bc17f8a3161849992d811f322fc",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "cb5f5b8e13717cfd2584b36b395258028fa7d9219372318346195b734556a2d3",
+ "subject": "answer:run-70497"
+}

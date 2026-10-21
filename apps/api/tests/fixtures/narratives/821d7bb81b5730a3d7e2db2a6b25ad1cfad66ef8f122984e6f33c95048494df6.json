@@ -1,0 +1,100 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"ChatGPT quoted Amazon $22.97 but Amazon charged $25.97 on Oct 19. Gemini and Perplexity quoted Walmart $25.97 but Walmart charged $22.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 992,
+    "output_tokens": 56,
+    "total_tokens": 1048
+   }
+  },
+  {
+   "response": "{\"line\":\"Quotes wrong for Pampers Ultra. ChatGPT said Amazon $22.97 but Amazon charged $25.97 on Oct 19. Gemini and Perplexity said Walmart $25.97 but Walmart charged $22.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 992,
+    "output_tokens": 63,
+    "total_tokens": 1055
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "feed_sku:906",
+   "PAM-ULTRA-120",
+   "sku:PAM-ULTRA-120"
+  ],
+  "answers": 12,
+  "brand": "Pampers",
+  "cell_status": {
+   "Amazon": "wrong",
+   "Walmart": "wrong"
+  },
+  "gave_no_price": [
+   "Claude"
+  ],
+  "issue": {
+   "answers": 3,
+   "meaning": "quoted a wrong price",
+   "of": 12,
+   "rule": "product.wrong"
+  },
+  "kind": "product",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "Ultra",
+  "retailer_prices_that_day": {
+   "Amazon": {
+    "date": "Oct 19",
+    "price": "25.97"
+   },
+   "Walmart": {
+    "date": "Oct 19",
+    "price": "22.97"
+   }
+  },
+  "right_quotes": [
+   {
+    "agents": [
+     "Gemini",
+     "Google AI Mode",
+     "Perplexity"
+    ],
+    "quoted": "25.97",
+    "retailer": "Amazon"
+   },
+   {
+    "agents": [
+     "ChatGPT",
+     "Google AI Mode"
+    ],
+    "quoted": "22.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "wrong_quotes": [
+   {
+    "agents": [
+     "ChatGPT"
+    ],
+    "quoted": "22.97",
+    "retailer": "Amazon",
+    "retailer_charged": "25.97"
+   },
+   {
+    "agents": [
+     "Gemini",
+     "Perplexity"
+    ],
+    "quoted": "25.97",
+    "retailer": "Walmart",
+    "retailer_charged": "22.97"
+   }
+  ]
+ },
+ "facts_digest": "821d7bb81b5730a3d7e2db2a6b25ad1cfad66ef8f122984e6f33c95048494df6",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "65587b42d5a5671a8656697ef1b4ef65962b5c2ccaf7fe8ade727b4c092f6688",
+ "subject": "product:feed_sku:906"
+}

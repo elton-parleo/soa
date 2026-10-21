@@ -1,0 +1,100 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"ChatGPT said Pure is $31.97 at Amazon, but Amazon charged $34.97 on Oct 19. Gemini and Perplexity swapped it at Walmart with $34.97, while Walmart charged $31.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 992,
+    "output_tokens": 64,
+    "total_tokens": 1056
+   }
+  },
+  {
+   "response": "{\"line\":\"ChatGPT quoted Amazon Pure at $31.97, but Amazon charged $34.97 on Oct 19. Gemini and Perplexity quoted Walmart Pure at $34.97, but Walmart charged $31.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 992,
+    "output_tokens": 62,
+    "total_tokens": 1054
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "feed_sku:907",
+   "PAM-PURE-2-74",
+   "sku:PAM-PURE-2-74"
+  ],
+  "answers": 12,
+  "brand": "Pampers",
+  "cell_status": {
+   "Amazon": "wrong",
+   "Walmart": "wrong"
+  },
+  "gave_no_price": [
+   "Claude"
+  ],
+  "issue": {
+   "answers": 3,
+   "meaning": "quoted a wrong price",
+   "of": 12,
+   "rule": "product.wrong"
+  },
+  "kind": "product",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "Pure",
+  "retailer_prices_that_day": {
+   "Amazon": {
+    "date": "Oct 19",
+    "price": "34.97"
+   },
+   "Walmart": {
+    "date": "Oct 19",
+    "price": "31.97"
+   }
+  },
+  "right_quotes": [
+   {
+    "agents": [
+     "Gemini",
+     "Google AI Mode",
+     "Perplexity"
+    ],
+    "quoted": "34.97",
+    "retailer": "Amazon"
+   },
+   {
+    "agents": [
+     "ChatGPT",
+     "Google AI Mode"
+    ],
+    "quoted": "31.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "wrong_quotes": [
+   {
+    "agents": [
+     "ChatGPT"
+    ],
+    "quoted": "31.97",
+    "retailer": "Amazon",
+    "retailer_charged": "34.97"
+   },
+   {
+    "agents": [
+     "Gemini",
+     "Perplexity"
+    ],
+    "quoted": "34.97",
+    "retailer": "Walmart",
+    "retailer_charged": "31.97"
+   }
+  ]
+ },
+ "facts_digest": "811e2134e4ad7c53b469f1d40e5e084ce00f158a8eb051813b6bef9706d76326",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "69c551464d1ede427392006fcff4ed22e189b6f4f6271ea22519acc4b0b2f713",
+ "subject": "product:feed_sku:907"
+}

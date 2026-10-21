@@ -1,0 +1,50 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"ChatGPT said $29.97 for Pampers Baby Dry S3 136. Amazon charged $32.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 779,
+    "output_tokens": 41,
+    "total_tokens": 820
+   }
+  },
+  {
+   "response": "{\"line\":\"ChatGPT said $29.97 for Pampers Baby Dry S3 136. Amazon charged $32.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 779,
+    "output_tokens": 41,
+    "total_tokens": 820
+   }
+  }
+ ],
+ "facts": {
+  "agent": "ChatGPT",
+  "agent_quoted": [
+   {
+    "price_quoted": "29.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "question": "What does the Pampers Baby Dry S3 136 cost at amazon.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "32.97",
+   "retailer": "Amazon"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "8468fdcba43a77a33f2fcc32afa50e8e6dfb9cdb0535beee6f4ea2128e72da30",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "33c246b26986fd5b213852dc108243916d3a486ee62f80298b14e6f72d82c166",
+ "subject": "answer:run-90043"
+}

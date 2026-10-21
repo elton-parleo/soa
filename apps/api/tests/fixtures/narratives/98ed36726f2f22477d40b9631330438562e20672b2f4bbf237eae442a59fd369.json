@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"ChatGPT first picked Huggies, with Pampers second. The first pick was another brand.\"}",
+   "usage": {
+    "input_tokens": 723,
+    "output_tokens": 33,
+    "total_tokens": 756
+   }
+  },
+  {
+   "response": "{\"line\":\"ChatGPT puts Huggies first over Pampers. Facts say the answer’s first pick was another brand on a question that let it choose.\"}",
+   "usage": {
+    "input_tokens": 723,
+    "output_tokens": 42,
+    "total_tokens": 765
+   }
+  }
+ ],
+ "facts": {
+  "agent": "ChatGPT",
+  "brand": "Pampers",
+  "first pick": "Huggies",
+  "kind": "answer",
+  "meaning": [
+   "On a question that let the assistant choose a brand, its first pick was another brand."
+  ],
+  "named in order": [
+   "Huggies",
+   "Pampers"
+  ],
+  "question": "question 1012",
+  "surface": "API with search grounding",
+  "why": [
+   "rival_first_pick"
+  ]
+ },
+ "facts_digest": "98ed36726f2f22477d40b9631330438562e20672b2f4bbf237eae442a59fd369",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "735a825af98217710f57ce4875f9c9b439c76a049a6b4094d96487d7211ca611",
+ "subject": "answer:run-70067"
+}

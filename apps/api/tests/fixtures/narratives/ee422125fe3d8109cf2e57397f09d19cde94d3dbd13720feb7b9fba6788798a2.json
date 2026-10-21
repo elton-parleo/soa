@@ -1,0 +1,45 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 771,
+    "output_tokens": 14,
+    "total_tokens": 785
+   }
+  },
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 771,
+    "output_tokens": 14,
+    "total_tokens": 785
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Copilot",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The only price in the answer was for another brand's product, so it gave none for this one."
+  ],
+  "question": "What does the Pampers Cruisers 360 S4 104 cost at walmart.com?",
+  "reason_code": "other_brand",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "39.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "verdict": "no price",
+  "why": [
+   "other_brand_price"
+  ]
+ },
+ "facts_digest": "ee422125fe3d8109cf2e57397f09d19cde94d3dbd13720feb7b9fba6788798a2",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "c0e1f1752e43d74042a1882219d49ca9e9b3e1277bec2470a33e7197dfbf04d4",
+ "subject": "answer:run-90053"
+}

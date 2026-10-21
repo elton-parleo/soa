@@ -1,0 +1,39 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 711,
+    "output_tokens": 14,
+    "total_tokens": 725
+   }
+  },
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 711,
+    "output_tokens": 14,
+    "total_tokens": 725
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Gemini",
+  "brand": "Pampers",
+  "brand_verdict": "fabricated",
+  "kind": "answer",
+  "meaning": [
+   "The answer stated something about the brand that the brand never published and no source backs."
+  ],
+  "question": "question 1051",
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "why": [
+   "brand_fabricated"
+  ]
+ },
+ "facts_digest": "b58b8c0f891ea18947506d1f2b4ebecf7ad90f4d2ebfa1e66c205bb1911afa5e",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "03b3546d52b32dc3f2f4f04beb57d53f985101a0e7cec49f1d9c96f5e6e00c13",
+ "subject": "answer:run-70302"
+}

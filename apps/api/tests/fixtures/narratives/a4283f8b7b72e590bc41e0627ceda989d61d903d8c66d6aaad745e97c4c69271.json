@@ -1,0 +1,39 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 712,
+    "output_tokens": 14,
+    "total_tokens": 726
+   }
+  },
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 712,
+    "output_tokens": 66,
+    "total_tokens": 778
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Google AI Mode",
+  "brand": "Pampers",
+  "brand_verdict": "misattributed",
+  "kind": "answer",
+  "meaning": [
+   "The answer described another brand's product as if it were this brand's."
+  ],
+  "question": "question 1058",
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "why": [
+   "brand_misattributed"
+  ]
+ },
+ "facts_digest": "a4283f8b7b72e590bc41e0627ceda989d61d903d8c66d6aaad745e97c4c69271",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "feef5936b2062cdcd1fadf153eb4e79e3c5b45b7470fb902d33c99555b7af5fb",
+ "subject": "answer:run-70345"
+}

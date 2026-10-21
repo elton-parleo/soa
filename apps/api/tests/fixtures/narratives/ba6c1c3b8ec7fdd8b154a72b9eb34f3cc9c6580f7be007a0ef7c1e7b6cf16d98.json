@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Claude first picked Huggies, with Pampers second. On question 1012, it picked a rival brand first instead of Pampers.\"}",
+   "usage": {
+    "input_tokens": 722,
+    "output_tokens": 42,
+    "total_tokens": 764
+   }
+  },
+  {
+   "response": "{\"line\":\"Claude picked Huggies first over Pampers. Facts show Huggies then Pampers in that answer, so the assistant did not put Pampers first.\"}",
+   "usage": {
+    "input_tokens": 722,
+    "output_tokens": 45,
+    "total_tokens": 767
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Claude",
+  "brand": "Pampers",
+  "first pick": "Huggies",
+  "kind": "answer",
+  "meaning": [
+   "On a question that let the assistant choose a brand, its first pick was another brand."
+  ],
+  "named in order": [
+   "Huggies",
+   "Pampers"
+  ],
+  "question": "question 1012",
+  "surface": "API with search grounding",
+  "why": [
+   "rival_first_pick"
+  ]
+ },
+ "facts_digest": "ba6c1c3b8ec7fdd8b154a72b9eb34f3cc9c6580f7be007a0ef7c1e7b6cf16d98",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "3aa299c7302572d5cb54134b66ce69ca5b9c5fc1ecb4f3a01318035acb7f48d3",
+ "subject": "answer:run-70072"
+}
