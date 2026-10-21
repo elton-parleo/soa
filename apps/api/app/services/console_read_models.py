@@ -24,7 +24,7 @@ from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
-from soa_shared import surfaces, unprompted
+from soa_shared import claim_kinds, surfaces, unprompted
 
 # ─── vocabularies ──────────────────────────────────────────────────────────
 
@@ -136,6 +136,9 @@ def _severity(outcome, brand: bool, flags) -> str:
 #: 2C: the classifier's reason codes (scoring/expectation_comparator.py
 #: REASON_*), carried in Check.reason and Answer.reason. A code soa adds
 #: later passes through verbatim; the console renders an unknown one neutral.
+#: 2K-1: the Answers chip per claim_kind
+CLAIM_KIND_LABELS = {claim_kinds.ATTRIBUTE: 'Stated a fact', claim_kinds.RECOMMENDATION_ONLY: 'Recommendation only'}
+
 REASON_CODES = ('other_brand', 'not_our_product', 'variant_clash', 'product_inferred', 'variant_swap',
                 # 2K-1: a price attributed to the brand's own page, which sets none
                 'brand_sets_no_price')
@@ -270,6 +273,7 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     raw = (outcome or {}).get('outcome')
 
     verdict = None if brand or raw is None else VALUE_VERDICT.get(raw, raw)
+    kind = claim_kinds.claim_kind(extraction) if brand and outcome is not None else None
     brand_verdict = raw if brand else None
     checks = []
     if not brand and outcome is not None:
@@ -331,12 +335,16 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'verdict': verdict,
         'tone': BRAND_TONE.get(raw, 'neu') if brand else VERDICT_TONE.get(verdict, 'neu'),
         'brand_verdict': brand_verdict,
+        # 2K-1 (A9): a brand-direct answer's kind, the Answers list's chip: it
+        # stated an attribute, or only recommended the brand (soa_shared/claim_kinds.py)
+        'claim_kind': kind,
+        'claim_kind_label': CLAIM_KIND_LABELS.get(kind),
         'flags': [f.get('flag') for f in flags],
         'flag_details': flags,
         'variant_id': source_ref.get('variant_id'),
         'gtin': source_ref.get('gtin'),
         'retailer': expectation.get('attributed_to') or source_ref.get('own_domain') or source_ref.get('domain'),
-    }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer', 'expected_type'))
+    }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer', 'expected_type', 'claim_kind', 'claim_kind_label'))
 
 
 # ─── Answers summary (2C) ──────────────────────────────────────────────────

@@ -32,7 +32,7 @@ from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
-from soa_shared import surfaces
+from soa_shared import claim_kinds, surfaces
 
 from app.services import console_read_models as rm
 from clients.truesync_client import INCENTIVE_FLAGS, carries_incentive_fields, incentive_in_markup
@@ -75,6 +75,8 @@ TEMPLATES = {
                            "{n} of {asked} price answers {on}. {split}."),
     'signal.fabricated': ("{n} brand answers stated facts {brand} never published.",
                           "{n} of {asked} brand-direct answers {on}. {split}."),
+    # 2K-1 (A9): the second line, the fabricated answers that stated no attribute (claim_kind recommendation_only)
+    'signal.fabricated_recommended': "{n} recommended {brand} without stating a fact.",
     'signal.fabricated_caveat': "Sources were not captured before Oct 14, so some of these may rest on a page we did not see.",
     'signal.wrong_product': ("Wrong price on {product} in {n} runs.",
                              "Quoted {quote} against {live}. {split}."),
@@ -348,7 +350,10 @@ def _empty_agent() -> dict:
     return {'answers': 0, 'named': 0, 'first': 0, 'named_of': 0, 'exact': 0, 'scored': 0, 'wrong': 0, 'stale': 0,
             'price_answered': 0,
             'partial': 0, 'unverifiable': 0, 'other_brand': 0, 'left_out': 0, 'unknown': 0, 'fabricated': 0,
-            'brand_scored': 0}
+            'brand_scored': 0,
+            # 2K-1 (A9): `fabricated` counts the answers that stated an attribute (or whose
+            # extraction cannot say); these stated none (soa_shared/claim_kinds.py)
+            'recommended': 0}
 
 
 def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tier: Optional[str] = None) -> dict:
@@ -388,7 +393,9 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tie
             if t == 'brand_direct':
                 if o in ('grounded', 'echoed', 'misattributed', 'fabricated', 'acknowledged_unknown'):
                     bucket['brand_scored'] += 1
-                bucket['fabricated'] += int(o == 'fabricated')
+                recommends = r.get('claim_kind') == claim_kinds.RECOMMENDATION_ONLY
+                bucket['fabricated'] += int(o == 'fabricated' and not recommends)
+                bucket['recommended'] += int(o == 'fabricated' and recommends)
                 bucket['unknown'] += int(o == 'acknowledged_unknown')
                 continue
             if t not in PRICE_TIERS:
@@ -694,8 +701,14 @@ def build_signals(metrics: dict, products: List[dict], *, surface: str, brand: s
         start = _day(cycle_start)
         if start is None or start < GROUNDING_SOURCES_FROM:
             text_ += ' ' + TEMPLATES['signal.fabricated_caveat']
-        out.append({'id': 'fabricated', 'title': title.format(n=t['fabricated'], brand=brand), 'detail': text_,
-                    'tag': 'Missed pool', 'tone': 'bad', 'route': 'answers', 'rule': 'fabricated', 'count': t['fabricated']})
+        signal = {'id': 'fabricated', 'title': title.format(n=t['fabricated'], brand=brand), 'detail': text_,
+                  'tag': 'Missed pool', 'tone': 'bad', 'route': 'answers', 'rule': 'fabricated', 'count': t['fabricated']}
+        if t.get('recommended'):
+            # 2K-1: the classifier's `fabricated` also holds answers that only recommended the
+            # brand; counted apart, on a second line, and never in the headline
+            signal['recommended'] = {'count': t['recommended'],
+                                     'line': TEMPLATES['signal.fabricated_recommended'].format(n=t['recommended'], brand=brand)}
+        out.append(signal)
     worst = max(products, key=lambda p: (p['wrong_runs'], p['name']), default=None)
     if worst and worst['wrong_runs'] >= 3:
         title, detail = TEMPLATES['signal.wrong_product']
@@ -1531,13 +1544,16 @@ def load_overview_rows(conn, cycle: dict) -> List[dict]:
     rows = []
     for r in conn.execute(text("""
         SELECT r.id AS run_id, r.platform, r.surface, r.answer_status,
-               q.tier, q.stage, q.query_code, q.query_text, q.source_ref, o.outcome, o.reason_code
+               q.tier, q.stage, q.query_code, q.query_text, q.source_ref, o.outcome, o.reason_code, o.extraction
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         LEFT JOIN soa_expectation_outcomes o ON o.run_id = r.id
         WHERE r.cycle_id = :c
     """), {'c': cycle['id']}).mappings():
         row = dict(r)
         row['variant_id'] = (_json(row.pop('source_ref')) or {}).get('variant_id')
+        # 2K-1 (A9): whether a brand-direct answer stated an attribute, from its stored extraction
+        extraction = row.pop('extraction', None)
+        row['claim_kind'] = claim_kinds.claim_kind(_json(extraction)) if row.get('tier') == 'brand_direct' else None
         rows.append(row)
     # 2K-1: a price attributed to the brand's own page, which sets none, is not scored
     unpriced = rm.brand_sets_no_price_runs(conn, cycle)

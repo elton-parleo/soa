@@ -1,0 +1,999 @@
+{
+ "_note": "FL12-SHAPED, NOT RECORDED. FL12's brand-direct answers are not in this repository and were not read from production. Row 1 is the answer the 2K-1 brief quotes; the other 15 are written here in the shape of brand-direct answers about Pampers. `extraction` is what the pipeline's own segmenter (parser/extraction_postprocess.apply_labels) makes of the text with every span labelled an asserted assertion, plus the structured values the transcription would fill; `outcome` is the frozen classifier's verdict on it (every row is `fabricated`: asserted, no source). `reader_label` is a reader's call: does the answer state a checkable fact about the brand? Built by a one-off script, not a test: apps/pipeline/tests/fixtures/build_brand_direct_fl12_2k1.py.",
+ "rows": [
+  {
+   "id": "fl12-bd-01",
+   "answer": "For a newborn, you should buy Pampers Swaddlers. They are widely considered the gold standard.",
+   "outcome": "fabricated",
+   "outcome_reason": "'For a newborn, you should buy Pampers Swaddlers.' \u2014 stated with no source",
+   "reader_label": "recommendation_only",
+   "note": "the brief's example: a recommendation, nothing checkable",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "For a newborn, you should buy Pampers Swaddlers.",
+      "sentence": "For a newborn, you should buy Pampers Swaddlers.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "retail",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     },
+     {
+      "claim": "They are widely considered the gold standard.",
+      "sentence": "They are widely considered the gold standard.",
+      "span_id": 2,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "For a newborn, you should buy Pampers Swaddlers.",
+      "inherits_hedge": false
+     },
+     {
+      "id": 2,
+      "text": "They are widely considered the gold standard.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "For a newborn, you should buy Pampers Swaddlers.",
+      "kind": "assertion",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 2,
+      "text": "They are widely considered the gold standard.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-02",
+   "answer": "Pampers Swaddlers are the most popular newborn diaper in US hospitals.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Pampers Swaddlers are the most popular newborn diaper in US hospitals.' \u2014 stated with no source",
+   "reader_label": "attribute",
+   "note": "a checkable claim (hospital use) outside the brief's list: the rule misses it",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Pampers Swaddlers are the most popular newborn diaper in US hospitals.",
+      "sentence": "Pampers Swaddlers are the most popular newborn diaper in US hospitals.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Pampers Swaddlers are the most popular newborn diaper in US hospitals.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Pampers Swaddlers are the most popular newborn diaper in US hospitals.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-03",
+   "answer": "Pampers Pure Protection is a great pick for sensitive skin. Parents love how soft it feels.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Pampers Pure Protection is a great pick for sensitive skin.' \u2014 stated with no source",
+   "reader_label": "recommendation_only",
+   "note": "praise",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Pampers Pure Protection is a great pick for sensitive skin.",
+      "sentence": "Pampers Pure Protection is a great pick for sensitive skin.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     },
+     {
+      "claim": "Parents love how soft it feels.",
+      "sentence": "Parents love how soft it feels.",
+      "span_id": 2,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Pampers Pure Protection is a great pick for sensitive skin.",
+      "inherits_hedge": false
+     },
+     {
+      "id": 2,
+      "text": "Parents love how soft it feels.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Pampers Pure Protection is a great pick for sensitive skin.",
+      "kind": "assertion",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 2,
+      "text": "Parents love how soft it feels.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-04",
+   "answer": "Pampers Swaddlers cost about $0.30 per diaper.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Pampers Swaddlers cost about $0.30 per diaper.' \u2014 stated with no source",
+   "reader_label": "attribute",
+   "note": "a price",
+   "extraction": {
+    "prices": [
+     {
+      "amount": "0.30",
+      "currency": "USD",
+      "attributed_product": "Pampers Swaddlers"
+     }
+    ],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Pampers Swaddlers cost about $0.30 per diaper.",
+      "sentence": "Pampers Swaddlers cost about $0.30 per diaper.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Pampers Swaddlers cost about $0.30 per diaper.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Pampers Swaddlers cost about $0.30 per diaper.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-05",
+   "answer": "Pampers Pure is made with premium cotton and is free of chlorine bleaching.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Pampers Pure is made with premium cotton and is free of chlorine bleaching.' \u2014 stated with no source",
+   "reader_label": "attribute",
+   "note": "material and ingredient",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Pampers Pure is made with premium cotton and is free of chlorine bleaching.",
+      "sentence": "Pampers Pure is made with premium cotton and is free of chlorine bleaching.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Pampers Pure is made with premium cotton and is free of chlorine bleaching.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Pampers Pure is made with premium cotton and is free of chlorine bleaching.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-06",
+   "answer": "Pampers is sold exclusively at Target in the US.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Pampers is sold exclusively at Target in the US.' \u2014 stated with no source",
+   "reader_label": "attribute",
+   "note": "a retailer, availability",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "recommended_retailers": [],
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Pampers is sold exclusively at Target in the US.",
+      "sentence": "Pampers is sold exclusively at Target in the US.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "retail",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Pampers is sold exclusively at Target in the US.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Pampers is sold exclusively at Target in the US.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [
+     {
+      "name": "Target",
+      "role": null
+     }
+    ],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-07",
+   "answer": "Size 1 Pampers Swaddlers fit babies from 8 to 14 lb.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Size 1 Pampers Swaddlers fit babies from 8 to 14 lb.' \u2014 stated with no source",
+   "reader_label": "attribute",
+   "note": "size and weight",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Size 1 Pampers Swaddlers fit babies from 8 to 14 lb.",
+      "sentence": "Size 1 Pampers Swaddlers fit babies from 8 to 14 lb.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Size 1 Pampers Swaddlers fit babies from 8 to 14 lb.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Size 1 Pampers Swaddlers fit babies from 8 to 14 lb.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-08",
+   "answer": "Pampers Club members earn rewards points on every pack.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Pampers Club members earn rewards points on every pack.' \u2014 stated with no source",
+   "reader_label": "attribute",
+   "note": "a program",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Pampers Club members earn rewards points on every pack.",
+      "sentence": "Pampers Club members earn rewards points on every pack.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "loyalty",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Pampers Club members earn rewards points on every pack.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Pampers Club members earn rewards points on every pack.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-09",
+   "answer": "Pampers Cruisers 360 come in a 132-count box.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Pampers Cruisers 360 come in a 132-count box.' \u2014 stated with no source",
+   "reader_label": "attribute",
+   "note": "a count and pack",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [
+     {
+      "value": 132,
+      "attributed_product": "Pampers Cruisers 360"
+     }
+    ],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Pampers Cruisers 360 come in a 132-count box.",
+      "sentence": "Pampers Cruisers 360 come in a 132-count box.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Pampers Cruisers 360 come in a 132-count box.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Pampers Cruisers 360 come in a 132-count box.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-10",
+   "answer": "Pampers Baby-Dry has been discontinued.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Pampers Baby-Dry has been discontinued.' \u2014 stated with no source",
+   "reader_label": "attribute",
+   "note": "availability",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Pampers Baby-Dry has been discontinued.",
+      "sentence": "Pampers Baby-Dry has been discontinued.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Pampers Baby-Dry has been discontinued.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Pampers Baby-Dry has been discontinued.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-11",
+   "answer": "Pampers Swaddlers have a wetness indicator that turns blue.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Pampers Swaddlers have a wetness indicator that turns blue.' \u2014 stated with no source",
+   "reader_label": "attribute",
+   "note": "a product feature outside the brief's list: the rule misses it",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Pampers Swaddlers have a wetness indicator that turns blue.",
+      "sentence": "Pampers Swaddlers have a wetness indicator that turns blue.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Pampers Swaddlers have a wetness indicator that turns blue.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Pampers Swaddlers have a wetness indicator that turns blue.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-12",
+   "answer": "I'd go with Pampers Cruisers 360 for an active crawler. Many parents swear by them.",
+   "outcome": "fabricated",
+   "outcome_reason": "\"I'd go with Pampers Cruisers 360 for an active crawler.\" \u2014 stated with no source",
+   "reader_label": "recommendation_only",
+   "note": "a recommendation",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "I'd go with Pampers Cruisers 360 for an active crawler.",
+      "sentence": "I'd go with Pampers Cruisers 360 for an active crawler.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     },
+     {
+      "claim": "Many parents swear by them.",
+      "sentence": "Many parents swear by them.",
+      "span_id": 2,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "I'd go with Pampers Cruisers 360 for an active crawler.",
+      "inherits_hedge": false
+     },
+     {
+      "id": 2,
+      "text": "Many parents swear by them.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "I'd go with Pampers Cruisers 360 for an active crawler.",
+      "kind": "assertion",
+      "modality": "asserted"
+     },
+     {
+      "span_id": 2,
+      "text": "Many parents swear by them.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-13",
+   "answer": "Pampers is owned by Procter & Gamble.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Pampers is owned by Procter & Gamble.' \u2014 stated with no source",
+   "reader_label": "attribute",
+   "note": "ownership",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Pampers is owned by Procter & Gamble.",
+      "sentence": "Pampers is owned by Procter & Gamble.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "ownership",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Pampers is owned by Procter & Gamble.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Pampers is owned by Procter & Gamble.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-14",
+   "answer": "Honestly, Pampers Swaddlers are the best overall choice for most newborns.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Honestly, Pampers Swaddlers are the best overall choice for most newborns.' \u2014 stated with no source",
+   "reader_label": "recommendation_only",
+   "note": "a recommendation",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Honestly, Pampers Swaddlers are the best overall choice for most newborns.",
+      "sentence": "Honestly, Pampers Swaddlers are the best overall choice for most newborns.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Honestly, Pampers Swaddlers are the best overall choice for most newborns.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Honestly, Pampers Swaddlers are the best overall choice for most newborns.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-15",
+   "answer": "Pampers Swaddlers are hypoallergenic and dermatologist-approved.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Pampers Swaddlers are hypoallergenic and dermatologist-approved.' \u2014 stated with no source",
+   "reader_label": "attribute",
+   "note": "an ingredient claim",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Pampers Swaddlers are hypoallergenic and dermatologist-approved.",
+      "sentence": "Pampers Swaddlers are hypoallergenic and dermatologist-approved.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Pampers Swaddlers are hypoallergenic and dermatologist-approved.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Pampers Swaddlers are hypoallergenic and dermatologist-approved.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  },
+  {
+   "id": "fl12-bd-16",
+   "answer": "Pampers Baby-Dry is a reliable everyday option that most families find works well overnight.",
+   "outcome": "fabricated",
+   "outcome_reason": "'Pampers Baby-Dry is a reliable everyday option that most families find works well overnight.' \u2014 stated with no source",
+   "reader_label": "recommendation_only",
+   "note": "a recommendation",
+   "extraction": {
+    "prices": [],
+    "codes": [],
+    "pack_counts": [],
+    "gtins": [],
+    "member_prices": [],
+    "points": [],
+    "brand_mentioned": true,
+    "sources_cited": [],
+    "extraction_confident": true,
+    "extraction_note": null,
+    "other_brands_named": [],
+    "loyalty_tiers_named": [],
+    "brand_unknown_statement": null,
+    "transcribed_unknown_statement": null,
+    "brand_claims": [
+     {
+      "claim": "Pampers Baby-Dry is a reliable everyday option that most families find works well overnight.",
+      "sentence": "Pampers Baby-Dry is a reliable everyday option that most families find works well overnight.",
+      "span_id": 1,
+      "kind": "assertion",
+      "modality": "asserted",
+      "claim_kind": "other",
+      "lexicon_hedged": false,
+      "inherits_hedge": false,
+      "effective_modality": "asserted"
+     }
+    ],
+    "spans": [
+     {
+      "id": 1,
+      "text": "Pampers Baby-Dry is a reliable everyday option that most families find works well overnight.",
+      "inherits_hedge": false
+     }
+    ],
+    "span_labels": [
+     {
+      "span_id": 1,
+      "text": "Pampers Baby-Dry is a reliable everyday option that most families find works well overnight.",
+      "kind": "assertion",
+      "modality": "asserted"
+     }
+    ],
+    "retailer_mentions": [],
+    "recommended_retailers": [],
+    "hedged_unsourced": [],
+    "needs_review": [],
+    "postprocess": []
+   }
+  }
+ ]
+}

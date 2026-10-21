@@ -6952,3 +6952,47 @@ not read. The page was read; the brand sets no price there by design.
 
 On the FL12-shaped brand fixture with 12 answers priced at pampers.com (`tests/test_console_2k1_brand_price.py`):
 "could not be checked" drops by exactly those 12 runs (12 to none); Price Truth's denominator stays 80 scored.
+
+### Recommendations are not fabricated facts (`claim_kind`, A9)
+
+FL12's signal "36 brand answers stated facts Pampers never published" counts answers like "For a newborn, you
+should buy Pampers Swaddlers. They are widely considered the gold standard", which make no checkable claim: the
+frozen classifier (`scoring/brand_direct_classifier.py`) calls any asserted, unsourced brand claim `fabricated`.
+The Layer 2 extractor (segmentation, transcription, labels, prompts; frozen at `85c2cfe`) and the `fabricated`
+outcome are not changed.
+
+The stored extraction carries enough to decide, so a derived field sits beside the outcome:
+`soa_shared/claim_kinds.py` (identical in `apps/api` and `apps/pipeline`, beside `retailers.py`)
+`claim_kind(extraction)`:
+
+- **`attribute`**: any structured value (`prices`, `member_prices`, `pack_counts`, `gtins`, `sizes`, `codes`,
+  `points`, `loyalty_tiers_named`, `retailer_mentions`, `recommended_retailers`), or any labelled span
+  (`span_labels`, else the transcribed `brand_claims`), hedged or not, naming a price, size, weight, count, pack,
+  retailer or written domain (`retailers.retailers_named`), program, availability, ingredient, material or owner
+  (the `LEXICON` regexes, case-insensitive, whole words);
+- **`recommendation_only`**: labelled spans, none naming any of those;
+- **`None`**: nothing labelled to decide on (an extraction from before the labeller), never guessed.
+
+The transcription's own per-claim `claim_kind` (loyalty | retail | ownership | other) is not read: its `retail`
+words include "buy" and "store", so the brief's example would read as a retail claim. The rule is tuned to miss
+toward `attribute`, which keeps a real fabrication in the headline count.
+
+Where it is read: `load_overview_rows` derives it per brand-direct run; `surface_metrics` counts `fabricated` over
+the `attribute` (and undecided) answers and `recommended` over the rest. The Overview's signal reads "{n} brand
+answers stated facts {brand} never published." over `attribute` only (still from 5), and carries
+`recommended: {count, line}`: "{m} recommended {brand} without stating a fact." The Answers list (`build_answer`)
+adds `claim_kind` and `claim_kind_label` ("Stated a fact" | "Recommendation only") on a brand-direct answer, for
+the console's chip; the chip itself is drawn in the console app, not in this repo.
+
+Precision, on 16 FL12-shaped fabricated answers (`packages/testing/fixtures/brand_direct_fl12_2k1.json`, written
+for this, not recorded; extractions made by the pipeline's own segmenter, each row checked `fabricated` by the
+frozen classifier): the rule reclassifies **7 of 16** to `recommendation_only`. A reader labels 5 of those 7
+recommendations; the other 2 state a checkable fact the brief's list does not name ("the most popular newborn
+diaper in US hospitals", "a wetness indicator that turns blue"). Precision 5 of 7, all 5 of the reader's
+recommendations found, 14 of 16 agree. These are cases written to probe the rule, not a sample of FL12's answers,
+so they say nothing about FL12's real split. On the recorded W&S extraction golden rows (Parleo's own test store)
+that the classifier, run with reduced brand facts, calls `fabricated` (23), the rule reclassifies none: each names
+a price, size, retailer or program.
+
+The real fix is a Layer 2 revision: a label for "recommends without a claim" in the labelling enum and prompt,
+the golden set re-labelled, and a re-score. This rule is the read-side stand-in until then.

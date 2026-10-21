@@ -119,6 +119,14 @@ def _ranking(r):
     return r
 
 
+def _without_zero(x, key):
+    if isinstance(x, dict):
+        return {k: _without_zero(v, key) for k, v in x.items() if not (k == key and v == 0)}
+    if isinstance(x, list):
+        return [_without_zero(v, key) for v in x]
+    return x
+
+
 def per_surface_view(endpoint, body):
     body = _strip_volatile(_strip_all(copy.deepcopy(body)))
     for k in DEFAULT_READERS.get(endpoint, ()):
@@ -127,6 +135,14 @@ def per_surface_view(endpoint, body):
         # 2K-1 adds `brand_choice` beside each row (unprompted or comparison); no value it served moved
         for row in body.get('byQuestion') or []:
             row.pop('brand_choice', None)
+    if endpoint == 'answers':
+        # 2K-1 adds `claim_kind` and its chip label beside a brand-direct answer
+        for a in body:
+            a.pop('claim_kind', None)
+            a.pop('claim_kind_label', None)
+    if endpoint == 'overview':
+        # 2K-1 adds the `recommended` bucket beside `fabricated` (0 on every fixture here)
+        body = _without_zero(body, 'recommended')
     if endpoint in ('visibility', 'overview') and body.get('ranking'):
         body['ranking'] = _ranking(body['ranking'])
     if endpoint == 'true-value':
