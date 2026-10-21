@@ -205,6 +205,9 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
                                  study_questions=study_questions, study=study)
     # 2K-3 (B5): the start day in the merchant's zone, beside `started` (the UTC start_date)
     body.update(rm.cycle_dates(row, rm.study_timezone(job[0] if job else None)))
+    # 2K-4 (B2): the cycle's study, with its own date in the merchant's zone ("The Oct 20 study")
+    with engine.connect() as conn:
+        body['study'] = rm.load_study_block(conn, row.get('study_type'))
     return body
 
 

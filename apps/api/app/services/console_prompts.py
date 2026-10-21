@@ -144,7 +144,9 @@ def build_prompts(merchant: Optional[str], job: Optional[dict], questions: List[
         headline += f" on {_plural(on_last, 'agent', 'agents')}"
     return {
         'merchant': merchant,
-        'study': ({'id': job['study_type'], 'name': job.get('study_name') or job['study_type']} if job else None),
+        # 2K-4 (B2): and the study's own date in the merchant's zone, for "The Oct 20 study"
+        'study': ({'id': job['study_type'], 'name': job.get('study_name') or job['study_type'], **rm.study_dates(job)}
+                  if job else None),
         'cycle': (cycle or {}).get('cycle_code'),
         'last_run': rm._iso((cycle or {}).get('start_date')),
         # 2K-3: the last cycle's start day in the merchant's zone

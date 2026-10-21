@@ -132,6 +132,10 @@ def combined_status(row, *, supply_view: Optional[dict], supply_error: Optional[
                                            'full_loop_run_id')}
                 cycle.update(start_date=rm._iso(c.get('start_date')),
                              **rm.cycle_dates(c, rm.study_timezones(conn, [c['study_type']]).get(c['study_type'])))
+    study_block = None
+    if row.get('study_type'):
+        with engine.connect() as conn:
+            study_block = rm.load_study_block(conn, row['study_type'])
     supply_status = (supply_view or {}).get('status') or row.get('supply_status')
     status = row['status']
     reference = ('failed' if supply_status == 'failed' or (status == 'failed' and not row.get('supply_run_id')) else
@@ -172,6 +176,8 @@ def combined_status(row, *, supply_view: Optional[dict], supply_error: Optional[
             'read_error': supply_error,
         },
         'cycle': cycle,
+        # 2K-4 (B2): the study, with its own date in the merchant's zone ("The Oct 20 study")
+        'study': study_block,
         'strip': [
             {'step': 'reference', 'label': 'Access and reference reads', 'state': reference},
             {'step': 'study', 'label': 'Study: none yet' if reads_only else 'Study on the chosen surfaces', 'state': study},

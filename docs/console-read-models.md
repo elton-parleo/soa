@@ -7083,3 +7083,15 @@ the tile delta and the five metric tiles' `delta`/`delta_reason` follow it), the
 (`{cycle, comparable, condition, reason}` against the cycle before; null on the first). The study and its questions
 come from `rm.study_identity`. The score's agents reason reads in the shared wording (it was "on {surface} {code}
 ran …"); the score body's `rules` keep their 2C-3 templates, as the body is pinned.
+
+### B2: the study's own date
+
+Prompts and the Overview header read "The Oct 21 study" for a study generated at 23:10 PDT on Oct 20. Neither label
+read the study. The Overview's read the cycle's `created_at_local` (from `/runs`); Prompts read the cycle's start,
+soa's `last_run`, which was the cycle's **UTC `start_date`** until 2K-3 (`last_run_local` since). Only
+`/studio/studies` served the study's own `created_at_local`.
+
+`rm.study_dates(job)` / `rm.load_study_block(conn, study_type)`: the study's `created_at` (UTC), `created_at_local`
+in the merchant's zone (as 2K-1's) and `timezone`. Served on `/api/console/prompts` (`study`), `/api/console/overview`
+(new `study` block: id, name and the three), `/api/full-loop/{id}` and `/api/console/full-loop/latest` (new `study`
+block); `/studio/studies` already carried it. A study created 06:10 UTC on Oct 21 is `2026-10-20T23:10:00-07:00`.

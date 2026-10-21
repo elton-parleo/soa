@@ -1573,6 +1573,30 @@ def study_timezones(conn, study_types: Iterable[str]) -> Dict[str, str]:
     return out
 
 
+def study_dates(job: Optional[dict]) -> dict:
+    """2K-4 (B2): the study's own date, for "The Oct 20 study": its
+    generation job's created_at (UTC) and the same moment in the merchant's
+    zone (`created_at_local`), with the zone. A study generated 23:10 PDT on
+    Oct 20 is the Oct 20 study, whenever its cycle ran."""
+    if not job:
+        return {'created_at': None, 'created_at_local': None, 'timezone': None}
+    zone = study_timezone(job.get('tier_config'))
+    return {'created_at': _iso(job.get('created_at')), 'created_at_local': local_time.local_iso(job.get('created_at'), zone),
+            'timezone': zone}
+
+
+def load_study_block(conn, study_type: Optional[str]) -> Optional[dict]:
+    """2K-4 (B2): {id, name, created_at, created_at_local, timezone} of a
+    study, from its newest generation job; None without one."""
+    if not study_type:
+        return None
+    job = conn.execute(text("SELECT study_type, study_name, created_at, tier_config FROM soa_query_generation_jobs "
+                            "WHERE study_type = :st ORDER BY id DESC LIMIT 1"), {'st': study_type}).mappings().first()
+    if job is None:
+        return None
+    return {'id': job['study_type'], 'name': job['study_name'] or job['study_type'], **study_dates(dict(job))}
+
+
 def study_identity(conn, cycle: Optional[dict]) -> dict:
     """2K-4 (B1): {'study', 'questions': {query_code: tier}} of a cycle's
     study, what soa_shared/cycle_compare compares first."""
