@@ -316,7 +316,7 @@ class Coordinator:
         return TrueSyncCatalogClient(token=customers.token_for_org(org_id))
 
     def _create_cycle(self, row) -> bool:
-        from soa_shared import surfaces
+        from soa_shared import local_time, surfaces
         from soa_shared.comparison_sets import ComparisonSetError, comparison_set_for_study
         from soa_shared.cycle_creation import create_cycle_with_comparison_set
 
@@ -328,8 +328,15 @@ class Coordinator:
             self._set(row['id'], status='failed', error=f"could not create the cycle: {exc}")
             return True
         today = self.clock().date()
-        cycle_code = f"FL{row['supply_run_id']}-{row['merchant_slug']}-{today:%Y%m%d}"
         with self.engine.begin() as conn:
+            # 2K-1: the code carries the merchant's local date (FL12-pampers-20261020
+            # ran on Oct 19 in Los Angeles): the study's tier_config.merchant.timezone,
+            # else SOA_DEFAULT_TIMEZONE (America/Los_Angeles). Existing codes keep theirs.
+            config = conn.execute(text(
+                "SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st ORDER BY id DESC LIMIT 1"),
+                {'st': row['study_type']}).scalar()
+            local = local_time.local_date(self.clock(), local_time.merchant_timezone(config))
+            cycle_code = f"FL{row['supply_run_id']}-{row['merchant_slug']}-{local:%Y%m%d}"
             pattern = conn.execute(text(
                 "SELECT study_pattern FROM soa_queries WHERE study_type = :st AND status = 'Active' "
                 "LIMIT 1"), {'st': row['study_type']}).fetchone()

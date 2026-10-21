@@ -388,6 +388,11 @@ def build_syndicated_study(
     """
     config = normalize_tier_config(tier_config)
     category = _primary_category(allowed_categories)
+    # 2K-1: the merchant's timezone the wizard set, kept on the merchant block
+    # this rebuilds below (soa_shared/local_time.merchant_timezone reads it)
+    zone = ((tier_config or {}).get('merchant') or {}).get('timezone') if isinstance(tier_config, dict) else None
+    if zone:
+        config['merchant'] = {'timezone': zone}
 
     generate_kwargs = {
         'study_name': study_name,
@@ -538,6 +543,7 @@ def build_syndicated_study(
         # 2I-7: the brand's product names, the terms beside its name that
         # the console's unprompted rule reads back (soa_shared/unprompted.py)
         'product_names': [p.title for p in snapshot.products if p.title],
+        **({'timezone': zone} if zone else {}),
     }
 
     # ── The catalog tiers, BUILT FIRST ───────────────────────────────

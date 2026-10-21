@@ -391,6 +391,11 @@ def _run_regeneration(
 
     tiers = list(regenerate.get("tiers") or [])
     config = normalize_tier_config(tier_config)
+    # 2K-1: what normalizing drops and a catalog rebuild does not touch: the
+    # comparison tier's record and the merchant's timezone
+    if isinstance(tier_config, dict) and isinstance(tier_config.get("comparison"), dict):
+        config["comparison"] = tier_config["comparison"]
+    zone = ((tier_config or {}).get("merchant") or {}).get("timezone") if isinstance(tier_config, dict) else None
     category = _primary_category(kwargs.get("allowed_categories"))
 
     existing = _existing_questions(study_type)
@@ -473,6 +478,7 @@ def _run_regeneration(
         if config.get(tier):
             config[tier]["expected_nulls"] = ct.expected_nulls(snapshot, tier)
     config["merchant"] = {
+        **({"timezone": zone} if zone else {}),
         "slug": snapshot.merchant_slug, "brand": snapshot.brand,
         "domain": snapshot.domain, "products": snapshot.product_count,
         "variants": snapshot.variant_count, "gtins": snapshot.gtin_count,

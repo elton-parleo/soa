@@ -514,3 +514,14 @@ describe('controlLine', () => {
       + 'Comparison: 1 question, each naming the brand and a rival')
   })
 })
+
+// 2K-1: the time zone is sent only when changed from the default shown
+describe('timezonePayload', () => {
+  it('sends nothing for the default, so an untouched modal sends what it always did', async () => {
+    const { timezonePayload, DEFAULT_TIMEZONE } = await import('../CreateStudyModal.jsx')
+    expect(DEFAULT_TIMEZONE).toBe('America/Los_Angeles')
+    expect(timezonePayload(DEFAULT_TIMEZONE)).toEqual({})
+    expect(timezonePayload('  ')).toEqual({})
+    expect(timezonePayload(' America/New_York ')).toEqual({ timezone: 'America/New_York' })
+  })
+})

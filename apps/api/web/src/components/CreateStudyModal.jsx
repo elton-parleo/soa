@@ -111,6 +111,17 @@ export function controlLine(stageTotal, comparison) {
     + `Comparison: ${comparison} question${plural(comparison)}, each naming the brand and a rival`
 }
 
+// 2K-1: the merchant's time zone, for new cycle codes and the study's display
+// date. The server's default (SOA_DEFAULT_TIMEZONE) is this one; the field
+// shows it and sends a zone only when it is changed, so an untouched modal
+// sends the payload it always did.
+export const DEFAULT_TIMEZONE = 'America/Los_Angeles'
+
+export function timezonePayload(value) {
+  const zone = (value || '').trim()
+  return zone && zone !== DEFAULT_TIMEZONE ? { timezone: zone } : {}
+}
+
 export const DEFAULT_TIER_STATE = Object.fromEntries(
   TIER_ROWS.map(row => [row.key, row.defaultOn]),
 )
@@ -365,6 +376,7 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
   const [error, setError] = useState(null)
 
   const [studyName, setStudyName] = useState('')
+  const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE)
   const [description, setDescription] = useState('')
   const [studyPattern, setStudyPattern] = useState('')
   const [retailers, setRetailers] = useState([''])
@@ -434,6 +446,7 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
     if (!open) return
 
     setStudyName('')
+    setTimezone(DEFAULT_TIMEZONE)
     setDescription('')
     setRetailers([''])
     setRotateFirstNamed(true)
@@ -703,6 +716,7 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
         naming_rule_enabled: namingRule,
         personas,
         specificity_mode: specificityMode,
+        ...timezonePayload(timezone),
         ...brandPayload(),
       })
       onCreated(result.study_type)
@@ -769,6 +783,22 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
               placeholder="e.g. Prestige Beauty — Retailer Study"
               style={inputStyle}
             />
+          </div>
+
+          {/* 1b. The merchant's time zone (2K-1) */}
+          <div>
+            <label style={labelStyle} htmlFor="study-timezone">Merchant time zone</label>
+            <input
+              id="study-timezone"
+              type="text"
+              value={timezone}
+              onChange={e => setTimezone(e.target.value)}
+              placeholder={DEFAULT_TIMEZONE}
+              style={inputStyle}
+            />
+            <div style={helperStyle}>
+              Cycle codes and the study's date use this zone's calendar day. An IANA name, e.g. America/New_York.
+            </div>
           </div>
 
           {/* 2. Study pattern */}

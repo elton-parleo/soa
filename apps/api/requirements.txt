@@ -35,3 +35,7 @@ openai>=1.57.0,<2.0.0
 # HTTP — pinned for compatibility with httpcore 1.x
 httpx>=0.27.0,<0.29.0
 httpcore>=1.0.0,<2.0.0
+
+# 2K-1: the IANA zone database for zoneinfo (soa_shared/local_time.py), where the
+# host has none (a slim image or a serverless runtime). Pure data.
+tzdata>=2024.1

@@ -6996,3 +6996,25 @@ a price, size, retailer or program.
 
 The real fix is a Layer 2 revision: a label for "recommends without a claim" in the labelling enum and prompt,
 the golden set re-labelled, and a re-score. This rule is the read-side stand-in until then.
+
+### Local dates on cycle codes and study labels
+
+Cycle codes carried the UTC date: `FL12-pampers-20261020` ran on Oct 19 in Los Angeles, and the console called the
+study generated that evening "the Oct 20 study". `soa_shared/local_time.py` (three identical copies) gives the
+merchant's zone: the study's **`tier_config.merchant.timezone`** (an IANA name) when set and valid, else
+**`SOA_DEFAULT_TIMEZONE`**, else **`America/Los_Angeles`**.
+
+- New cycle codes use the merchant's local date: the full loop's `FL{run}-{merchant}-{YYYYMMDD}`
+  (`fullloop/coordinator.py`, the zone of the study's newest generation job) and the console's Start cycle default
+  `{YYYYMMDD-HHMMSS}-{study}` (`POST /api/console/cycles`, when no code is sent). A cycle planned at 04:26 UTC on
+  Oct 20 is `…-20261019` with the default zone. Existing codes are not renamed; `start_date` and every stored stamp
+  stay as they were (UTC).
+- `GET /api/console/runs` (cycles) and `GET /api/console/studio/studies` serve **`created_at_local`** (ISO 8601 with
+  the zone's offset, `2026-10-19T21:26:00-07:00`) and **`timezone`** beside the UTC stamp (`started`, `created`), so
+  the console formats the study's display date from it. A naive stored stamp is read as UTC.
+- The Create Study wizard (web modal) has a "Merchant time zone" field showing the default; it sends `timezone` only
+  when changed, so an untouched modal sends the payload it always did. `StudyGenerateRequest.timezone` is validated
+  (an unknown zone is a 422) and stored as `tier_config.merchant.timezone`; `tier_config` now admits the `merchant`
+  block. The generator keeps it when it rebuilds `tier_config.merchant` (and a catalog regenerate keeps it and the
+  comparison tier's record).
+- `tzdata` is a dependency of both apps, so the zone database is there on a host that has none.

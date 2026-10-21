@@ -648,6 +648,7 @@ def get_runs(ms: MerchantScope = Depends(merchant_scope)):
     merchant's cycles."""
     with engine.connect() as conn:
         cycles = merchant_cycles(conn, ms)
+        zones = rm.study_timezones(conn, [c['study_type'] for c in cycles])   # 2K-1
         out = []
         for cycle in cycles:
             counts = conn.execute(text("""
@@ -657,7 +658,7 @@ def get_runs(ms: MerchantScope = Depends(merchant_scope)):
             """), {"c": cycle['id']}).fetchone()
             ran = [r[0] for r in conn.execute(text("SELECT DISTINCT platform FROM soa_runs WHERE cycle_id = :c"),
                                               {"c": cycle['id']})]
-            run = rm.build_run(cycle, int(counts[0] or 0), int(counts[1] or 0))
+            run = rm.build_run(cycle, int(counts[0] or 0), int(counts[1] or 0), zones.get(cycle['study_type']))
             # 2I: what the run dialog's comparable line compares against
             run.update(rm.run_identity(cycle, ran))
             out.append(run)

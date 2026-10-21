@@ -24,7 +24,7 @@ from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
-from soa_shared import claim_kinds, surfaces, unprompted
+from soa_shared import claim_kinds, local_time, surfaces, unprompted
 
 # ─── vocabularies ──────────────────────────────────────────────────────────
 
@@ -1452,6 +1452,10 @@ def build_study(job: dict, prompts: List[dict], cycles: List[dict], entities: Li
         'owner': job.get('created_by') or '',
         # beside the typed fields
         'platforms': platforms, 'generation_status': job.get('status'),
+        # 2K-1: the merchant's local time, for the study's display date ("the Oct 19 study");
+        # `created` stays UTC
+        'created_at_local': local_time.local_iso(job.get('created_at'), study_timezone(tier_config)),
+        'timezone': study_timezone(tier_config),
     }, ('lastRun',))
 
 
@@ -1476,7 +1480,25 @@ def run_identity(cycle: dict, ran_platforms: List[str]) -> dict:
     return {'surface_ids': ids, 'runs_per_question': cycle.get('runs_per_query'), 'study_id': cycle.get('study_type')}
 
 
-def build_run(cycle: dict, collected: int, usable: int) -> dict:
+def study_timezone(tier_config) -> str:
+    """2K-1: the study's merchant's IANA zone (tier_config.merchant.timezone),
+    else SOA_DEFAULT_TIMEZONE, else America/Los_Angeles (soa_shared/local_time.py)."""
+    return local_time.merchant_timezone(_json(tier_config))
+
+
+def study_timezones(conn, study_types: Iterable[str]) -> Dict[str, str]:
+    """{study_type: its zone}, from each study's newest generation job."""
+    out: Dict[str, str] = {}
+    for st in sorted({s for s in study_types if s}):
+        config = conn.execute(text(
+            "SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st ORDER BY id DESC LIMIT 1"),
+            {'st': st}).scalar()
+        out[st] = study_timezone(config)
+    return out
+
+
+def build_run(cycle: dict, collected: int, usable: int, tz: Optional[str] = None) -> dict:
+    """tz (2K-1): the study's merchant's zone, for `created_at_local`."""
     platforms = _json(cycle.get('platforms')) or []
     started, finished = cycle.get('created_at') or cycle.get('start_date'), cycle.get('end_date')
     return compact({
@@ -1490,6 +1512,9 @@ def build_run(cycle: dict, collected: int, usable: int) -> dict:
         'platforms': platforms,
         'surfaces': sorted({surfaces.surface_of(p) for p in platforms if surfaces.surface_of(p)}),
         'full_loop_run_id': cycle.get('full_loop_run_id'),
+        # 2K-1: beside the UTC stamp, in the merchant's local time
+        'created_at_local': local_time.local_iso(cycle.get('created_at'), tz or local_time.default_timezone()),
+        'timezone': tz or local_time.default_timezone(),
     }, ('finished', 'note'))
 
 
