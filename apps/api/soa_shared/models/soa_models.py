@@ -2297,6 +2297,32 @@ class SoaDomainCheck(Base):
 
 
 # ---------------------------------------------------------------------------
+# 2L-3. soa_narratives — the console's one-line narratives, one per cycle and
+# subject ('answer:run-<id>' or 'product:<key>'), written by a model from the
+# scorer's facts and checked before they are stored (soa_shared/narratives.py).
+# A line is served only while facts_digest is the facts' digest now.
+# ---------------------------------------------------------------------------
+
+class SoaNarrative(Base):
+    __tablename__ = "soa_narratives"
+    __table_args__ = (
+        UniqueConstraint("cycle_id", "subject", name="uq_soa_narratives_cycle_subject"),
+        CheckConstraint("status IN ('accepted','dropped','null')", name="ck_soa_narratives_status"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    cycle_id = Column(Integer, ForeignKey("soa_cycles.id", ondelete="CASCADE"), nullable=False, index=True)
+    subject = Column(Text, nullable=False)
+    facts_digest = Column(Text, nullable=False)
+    line = Column(Text, nullable=True)
+    status = Column(Text, nullable=False)
+    reason = Column(Text, nullable=True)
+    model = Column(Text, nullable=False)
+    calls = Column(JSON, nullable=True)
+    written_at = Column(DateTime(timezone=True), nullable=False)
+
+
+# ---------------------------------------------------------------------------
 # 2B. soa_full_loop_requests — one "Run full loop" press from soa: the
 # supply full-loop run it started, the cycle it created once the reference
 # reads were done, and where it stands. GET /api/full-loop/{id} reads it

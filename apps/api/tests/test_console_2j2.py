@@ -119,7 +119,8 @@ def test_a_store_s_products_are_byte_identical_to_main(http, db, name):
     with open(STORE_PRODUCTS) as fh:
         pinned = json.load(fh)[name]
     body = _read(http, FIXTURES[name](db), 'overview')
-    now = {s: v['products'] for s, v in body['by_surface'].items()}
+    # 2L-3 adds each product's narrative beside the typed fields (null with SOA_NARRATIVES_ENABLED off)
+    now = {s: [{k: v for k, v in p.items() if k != 'narrative'} for p in v['products']] for s, v in body['by_surface'].items()}
     assert json.dumps(now, sort_keys=True) == json.dumps(pinned, sort_keys=True)
 
 

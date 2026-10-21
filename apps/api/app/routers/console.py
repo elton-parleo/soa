@@ -49,6 +49,7 @@ from app import worker_surfaces
 from app.routers import full_loop
 from app.routers.customers import _tenant_view
 from app.services import console_claims
+from app.services import console_narratives as narratives_svc
 from app.services import console_parity as parity
 from app.services import console_prompts
 from app.services import console_read_models as rm
@@ -83,7 +84,8 @@ async def get_answers(cycle: str = Query(...), scope: CustomerScope = Depends(co
     row = dict(cycle_in_scope(cycle, scope))
     features, _error = await _claim_features(row, scope)
     with engine.connect() as conn:
-        return rm.load_answers(conn, row, features)
+        # 2L-3: each answer's narrative, null when it has none
+        return narratives_svc.with_answers(rm.load_answers(conn, row, features), narratives_svc.lines_for(conn, row['id']))
 
 
 async def _claim_features(row: dict, scope: CustomerScope, merchant: Optional[str] = None) -> tuple:
@@ -212,6 +214,9 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     # (2L-4 wires the tile); absent for a brand with no retired line
     if vis.get('retired_named'):
         body['retired_named'] = vis['retired_named']
+    # 2L-3: the products' and the signals' example answers' narratives
+    with engine.connect() as conn:
+        narratives_svc.with_overview(body, narratives_svc.lines_for(conn, row['id']))
     return body
 
 
@@ -392,9 +397,10 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
     with engine.connect() as conn:
         own_domain, variants, scored = _true_value_inputs(conn, row)
         value_outcomes = _value_outcomes(conn, row) if merchant else []
+        lines = narratives_svc.lines_for(conn, row['id'])   # 2L-3: each row's caption
     if not merchant:
-        return rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
-                                   record_variants=variants)
+        return narratives_svc.with_true_value(rm.build_true_value(_json(row.get('reference_prices')), scored,
+                                                                  own_domain=own_domain, record_variants=variants), lines)
     client = full_loop._client(scope)
     (_, owned, o_err), (_, incentives, i_err), (_, catalog, k_err), (_, reference, r_err), (history, h_err), \
         (f_status, feed, f_err) = \
@@ -425,7 +431,7 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
         catalog if k_err is None else None, incentives if i_err is None else None, value_outcomes,
         reads=history if history is not None else ((reference or {}).get('rows') if r_err is None else None))
     body['read_errors'] = errors
-    return body
+    return narratives_svc.with_true_value(body, lines)
 
 
 #: 2C-2c: reads per variant x retailer a member price is looked for in.
