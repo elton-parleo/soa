@@ -220,6 +220,8 @@ class StudyPreviewRequest(BaseModel):
     allowed_categories: Optional[List[str]] = None
     personas: Optional[List[str]] = None
     study_pattern: Optional[str] = None
+    # 2K-1: the per-stage counts; the Comparison stage's are the comparison tier
+    stage_targets: Optional[Dict[str, int]] = None
 
 
 @router.post("/studies/preview")
@@ -235,7 +237,7 @@ async def preview_study(body: StudyPreviewRequest, scope: CustomerScope = Depend
     return cs.build_preview(snapshot, tiers=body.tiers, stage_total=body.stage_total,
                             brand_direct_count=body.brand_direct_count, variant_cap=body.variant_cap,
                             allowed_categories=body.allowed_categories, personas=body.personas,
-                            study_pattern=body.study_pattern)
+                            study_pattern=body.study_pattern, stage_targets=body.stage_targets)
 
 
 class ConsoleStudyGenerate(StudyGenerateRequest):
@@ -276,7 +278,7 @@ async def generate_console_study(body: ConsoleStudyGenerate, scope: CustomerScop
             k: bool((body.tier_config or {}).get(k, {}).get("enabled")) for k in cs.TIER_KEYS}
         snapshot = await cs.read_snapshot(full_loop._client(scope), body.syndicated_merchant)
         preview = cs.build_preview(snapshot, tiers=tiers, stage_total=body.target_count,
-                                   brand_direct_count=body.brand_direct_count)
+                                   brand_direct_count=body.brand_direct_count, stage_targets=body.stage_targets)
         if preview["tally"]["total"] > cs.MAX_QUESTIONS:
             raise HTTPException(status_code=422, detail=preview["tally"]["text"])
         data["tier_config"] = cs.tier_config(tiers, body.brand_direct_count)

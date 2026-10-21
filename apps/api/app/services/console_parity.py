@@ -49,6 +49,8 @@ STAGE_ORDER = ('Awareness', 'Research', 'Comparison', 'Ready to Buy')
 STAGE_LABELS = {'Awareness': 'Awareness', 'Research': 'Research', 'Comparison': 'Comparison',
                 'Ready to Buy': 'Ready to buy'}
 UNPROMPTED = rm.VIS_UNPROMPTED
+#: 2K-1: the brand-choice set, unprompted plus the comparison tier (soa_shared/unprompted.is_brand_choice)
+BRAND_CHOICE = rm.VIS_BRAND_CHOICE
 SCORED = rm.SUMMARY_SCORED
 #: Grounding supports (the sources behind a grounded answer) are stored from
 #: Oct 14 2026 on (#104). A fabricated brand-direct verdict on a cycle that
@@ -96,6 +98,9 @@ TEMPLATES = {
     'changes.not_comparable_subset_all': "Not comparable: {code} ran {agents} only.",
     'changes.not_comparable_all': "Not comparable: {code} ran {prev}, this cycle ran {now}.",
     'changes.not_comparable_tier_all': "Not comparable: {code} asked no unprompted questions.",
+    # 2K-1: this cycle reads brand-choice answers (it asked comparison questions) and the previous asked none
+    'changes.not_comparable_comparison': "Not comparable: {code} asked no comparison questions on this surface.",
+    'changes.not_comparable_comparison_all': "Not comparable: {code} asked no comparison questions.",
     'changes.detail': "{a} of {of_now} this cycle against {b} of {of_prev} in {code}.",
     'headline.gap': "Named in {named} of {n} {answers}.{rivals}",
     'headline.lead': "First in {first} of {n} {answers}.",
@@ -174,11 +179,19 @@ def _short_day(value) -> str:
 # ─── Visibility extras ─────────────────────────────────────────────────────
 
 def _tier_for_reads(rows: List[dict]) -> str:
-    """UNPROMPTED when the cycle asked any unprompted question, else 'all'.
+    """BRAND_CHOICE when the cycle asked any comparison question (2K-1),
+    else UNPROMPTED when it asked any unprompted question, else 'all'.
     2I-7: a row is unprompted by its `unprompted` (build_visibility, the
     soa_shared/unprompted.py rule: category control counts, a question
     naming the brand does not); a row built without it, by its tier."""
+    if any(r.get('tier') == rm.COMPARISON for r in rows):
+        return BRAND_CHOICE
     return UNPROMPTED if any(_unprompted(r) for r in rows) else 'all'
+
+
+def _brand_choice(row: dict) -> bool:
+    """2K-1: unprompted, or a comparison question (build_visibility's `brand_choice`)."""
+    return row['brand_choice'] if 'brand_choice' in row else (_unprompted(row) or row.get('tier') == rm.COMPARISON)
 
 
 def _unprompted(row: dict) -> bool:
@@ -187,16 +200,19 @@ def _unprompted(row: dict) -> bool:
 
 def _in_tier(row: dict, tier: str) -> bool:
     """Whether a Visibility row counts toward named/first under `tier`."""
+    if tier == BRAND_CHOICE:
+        return _brand_choice(row)
     return tier == 'all' or (_unprompted(row) if tier == UNPROMPTED else row.get('tier') == tier)
 
 
 def _tier_words(tier: str) -> str:
-    return 'unprompted' if tier == UNPROMPTED else ''
+    return {UNPROMPTED: 'unprompted', BRAND_CHOICE: 'brand-choice'}.get(tier, '')
 
 
 def _answers(tier: str) -> str:
-    """'unprompted answers' when the cycle asked any, else 'answers'."""
-    return 'unprompted answers' if tier == UNPROMPTED else 'answers'
+    """'brand-choice answers' when the cycle asked comparison questions (2K-1),
+    else 'unprompted answers' when it asked any, else 'answers'."""
+    return {UNPROMPTED: 'unprompted answers', BRAND_CHOICE: 'brand-choice answers'}.get(tier, 'answers')
 
 
 def _picks(rows: List[dict]) -> Dict[str, dict]:
@@ -348,6 +364,7 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tie
     (`price_answered`), since those runs are absent and never scored."""
     tier = tier or _tier_for_reads(vis_rows)
     total, per = _empty_agent(), {}
+    comparison_answers = 0
     agents = set()
     for v in vis_rows:
         if not _on(v.get('surface'), surface) or not v.get('answered'):
@@ -355,6 +372,8 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tie
         agents.add(v['agent'])
         for bucket in (total, per.setdefault(v['agent'], _empty_agent())):
             bucket['answers'] += 1
+            if bucket is total and v.get('tier') == rm.COMPARISON:
+                comparison_answers += 1
             if _in_tier(v, tier):
                 bucket['named_of'] += 1
                 bucket['named'] += int(any(n.get('you') for n in v.get('named') or []))
@@ -386,7 +405,9 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tie
             elif o == 'absent':
                 bucket['left_out'] += 1
                 bucket['other_brand'] += int(r.get('reason_code') == 'other_brand')
-    return {'tier': tier, 'total': total, 'agents': per, 'agent_set': sorted(agents)}
+    return {'tier': tier, 'total': total, 'agents': per, 'agent_set': sorted(agents),
+            # 2K-1: answered comparison questions here, for the Changes rule
+            'comparison_answers': comparison_answers}
 
 
 def agent_note(m: dict) -> tuple:
@@ -764,6 +785,8 @@ def changes_status(now: dict, prev: Optional[dict], prev_code: Optional[str],
             code=prev_code, prev=_agents_text(b) if b else 'no agent', now=_agents_text(a) if a else 'no agent')
     if now['tier'] == UNPROMPTED and not prev['total']['named_of']:
         return 'not_comparable', TEMPLATES[_rule('changes.not_comparable_tier', surface)].format(code=prev_code)
+    if now['tier'] == BRAND_CHOICE and not prev.get('comparison_answers', 0):
+        return 'not_comparable', TEMPLATES[_rule('changes.not_comparable_comparison', surface)].format(code=prev_code)
     return 'compared', None
 
 
@@ -850,7 +873,10 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
         'coverage': {'questions': study_questions if study_questions is not None else len({r.get('query_code') for r in rows}),
                      'asked': len({r.get('query_code') for r in rows}), 'agents': len({surfaces.agent_of(r.get('platform')) or r.get('platform') for r in rows}),
                      'runs': len(rows), 'answers': sum(1 for r in rows if r.get('answer_status') == surfaces.ANSWERED),
-                     'unprompted': sum(1 for v in answered if _unprompted(v))},
+                     'unprompted': sum(1 for v in answered if _unprompted(v)),
+                     # 2K-1: with a comparison question, the brand-choice answers the first picks count over
+                     **({'brand_choice': sum(1 for v in answered if _brand_choice(v))}
+                        if any(v.get('tier') == rm.COMPARISON for v in answered) else {})},
         'access_run': (access or {}).get('access_run'),
         'read_errors': read_errors or {},
         'rules': {k: v for k, v in TEMPLATES.items()},

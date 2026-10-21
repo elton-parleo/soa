@@ -19,7 +19,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import '@testing-library/jest-dom'
 
-import CreateStudyModal, { TIER_ROWS } from '../CreateStudyModal.jsx'
+import CreateStudyModal, { TIER_ROWS, controlLine } from '../CreateStudyModal.jsx'
 import { api } from '../../api.js'
 import { truesyncApi } from '../../truesyncApi.js'
 import { listCustomers } from '../../customersApi.js'
@@ -496,5 +496,21 @@ describe('when TrueSync cannot be reached', () => {
 
     await screen.findByText(/Could not read that catalog/)
     expect(screen.queryByTestId('tier-catalog_accuracy')).not.toBeInTheDocument()
+  })
+})
+
+// 2K-1: with a Comparison stage, the category-control row gives the
+// comparison tier its own line, and category control is the rest
+describe('controlLine', () => {
+  it('is 2I-7\'s line with no Comparison stage', () => {
+    expect(controlLine(50, 0)).toBe('uses the stage counts above: 50 questions, none naming the brand')
+  })
+  it('splits off the Comparison stage as the comparison tier', () => {
+    expect(controlLine(50, 12)).toBe(
+      'uses the stage counts above: 38 questions, none naming the brand. '
+      + 'Comparison: 12 questions, each naming the brand and a rival')
+    expect(controlLine(2, 1)).toBe(
+      'uses the stage counts above: 1 question, none naming the brand. '
+      + 'Comparison: 1 question, each naming the brand and a rival')
   })
 })

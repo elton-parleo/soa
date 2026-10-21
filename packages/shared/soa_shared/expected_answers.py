@@ -146,14 +146,24 @@ def outcomes_for_tier(tier):
 #                            same item group, and was scored against it
 ANSWER_FLAGS = ['fabricated_citation', 'fabricated_availability', 'variant_swap']
 
-# The four question tiers. `null` on a query means it was generated
+# The question tiers. `null` on a query means it was generated
 # without a syndicated brand — which is every query that existed before
 # this vocabulary did.
+#
+# 2K-1 (E29): `comparison` is a question that names the merchant and at
+# least one rival (tracked or not) and asks which to choose: "Pampers vs
+# Huggies for newborns". The brand's first pick is still the measure, so
+# it is a brand-choice question (soa_shared/unprompted.is_brand_choice),
+# counted in Lost and the first-pick tiles, but not unprompted: the
+# question named the brand, so it is no share-of-mentions test. The
+# study's Comparison-stage questions carry it when the brand box is on
+# (generation/syndicated_study.py); category control names no brand.
 QUERY_TIERS = [
     'brand_direct',
     'catalog_accuracy',
     'value_incentives',
     'category_control',
+    'comparison',
 ]
 
 # How a question came to exist. `catalog` and `ai_from_catalog` both

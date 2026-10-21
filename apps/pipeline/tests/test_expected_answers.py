@@ -264,7 +264,8 @@ def test_the_constraint_admits_every_value_either_axis_can_produce():
         assert outcome in ea.EXPECTATION_OUTCOMES
 
 
-def test_the_four_tiers():
+def test_the_five_tiers():
+    # 2K-1 added comparison (f7c2a9e4b1d6 widens the constraint)
     assert ea.QUERY_TIERS == [
-        "brand_direct", "catalog_accuracy", "value_incentives", "category_control",
+        "brand_direct", "catalog_accuracy", "value_incentives", "category_control", "comparison",
     ]

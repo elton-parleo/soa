@@ -112,8 +112,8 @@ def test_the_default_leaves_the_control_tier_out(db):
     parser = argparse.ArgumentParser()
     # The same default the script computes.
     from soa_shared.expected_answers import QUERY_TIERS
-    default = [t for t in QUERY_TIERS if t != "category_control"]
-    assert "category_control" not in default
+    default = [t for t in QUERY_TIERS if t not in rc.NO_EXPECTATION_TIERS]
+    assert "category_control" not in default and "comparison" not in default   # 2K-1: no expectation either
     assert default == ["brand_direct", "catalog_accuracy", "value_incentives"]
 
 

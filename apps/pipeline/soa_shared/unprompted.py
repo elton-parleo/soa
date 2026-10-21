@@ -22,6 +22,16 @@ A category-control question that names the brand is not a share-of-mentions
 measurement: the question put the brand in the answer. FL12 (Oct 19, the
 Pampers first loop) asked 13 of them in its first 25.
 
+2K-1 (E29): brand choice. A comparison question ("Pampers vs Huggies for
+newborns", tier `comparison`) names the merchant and at least one rival and
+asks which to choose. It is not unprompted (it names the brand), but the
+answer's first pick is still a brand choice, so the brand-choice set is the
+unprompted set plus the comparison tier (is_brand_choice). Lost and the
+first-pick tiles read the brand-choice set; share of mentions and the score's
+Visibility dimension stay on the unprompted set (a question that names the
+brand is no share-of-mentions test). is_comparison is the generator's check
+that a Comparison-stage question names the brand and a rival.
+
 No model is called.
 """
 from typing import Iterable, List, Optional
@@ -30,6 +40,8 @@ from .expected_answers import names_brand, normalize_brand_text
 
 #: The tiers whose questions name no brand by design.
 UNPROMPTED_TIERS = ('category_control',)
+#: 2K-1: the tier whose questions name the brand and a rival, and ask which to choose.
+COMPARISON_TIER = 'comparison'
 
 
 def brand_terms(name: Optional[str] = None, aliases: Optional[Iterable] = None,
@@ -62,3 +74,24 @@ def is_unprompted(run_or_question: dict, terms: Iterable[str] = ()) -> bool:
     if not is_unprompted_tier(run_or_question.get('tier')):
         return False
     return not names_any(run_or_question.get('query_text'), terms)
+
+
+def is_comparison(question, brand: Iterable[str], rivals: Iterable[str]) -> bool:
+    """2K-1: a question (its text, or anything with `query_text`) is a
+    comparison question when it names one of the brand's terms and at
+    least one rival term that is not itself a brand term (so 'Pampers
+    Swaddlers vs Pampers Baby-Dry' is no comparison). Rival terms are the
+    merchant's competitors, tracked or not, and whatever the caller adds;
+    with no rival terms nothing is a comparison."""
+    text = question.get('query_text') if isinstance(question, dict) else question
+    brand = list(brand or [])
+    own = {normalize_brand_text(t) for t in brand}
+    rivals = [r for r in rivals or [] if normalize_brand_text(r) and normalize_brand_text(r) not in own
+              and not any(normalize_brand_text(r) == b or names_brand(r, b) for b in brand)]
+    return bool(names_any(text, brand)) and bool(names_any(text, rivals))
+
+
+def is_brand_choice(run_or_question: dict, terms: Iterable[str] = ()) -> bool:
+    """2K-1: the answer's first pick is a brand choice: an unprompted
+    question, or one of the comparison tier."""
+    return run_or_question.get('tier') == COMPARISON_TIER or is_unprompted(run_or_question, terms)

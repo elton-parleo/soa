@@ -6855,3 +6855,72 @@ One pinned value moved, on Postgres only: `/answers`' `runAt` now carries its of
 `tests/fixtures/console/per_surface_2i8.json`'s four Postgres `answers` digests are now sqlite's: every
 per-surface view is the same on both. The models are the source here; that they match the migrations is
 checked by hand for the console tables' timestamps (all `DateTime(timezone=True)` in both), not by a test.
+
+## 2K-1: the brand-choice set, the comparison tier (console scorer 11)
+
+### Two sets, and which numbers read which
+
+2I-7 made category control mean "names no brand", which is right for a share-of-mentions test, but it took the
+study's comparison-stage questions ("Pampers vs Huggies for newborns", "Pampers Swaddlers vs Huggies Little
+Snugglers") with it: tagged `category_control` and naming the brand, they left the unprompted set and the
+generator regenerated them away. They are brand-choice moments: the answer's first pick is still the measure.
+
+`QUERY_TIERS` gains **`comparison`** (`soa_shared/expected_answers.py`, three identical copies): a question that
+names the merchant and at least one rival (tracked or not) and asks which to choose. Migration `f7c2a9e4b1d6`
+widens `ck_soa_queries_tier` to admit it. `tier` is a text column, but that CHECK constraint (from `a9f3c21b7e40`)
+lists the tiers literally, so Postgres would have refused the new value without it. The migration writes no
+row; its downgrade refuses while any question is `comparison`.
+
+`soa_shared/unprompted.py` (three identical copies) adds:
+
+- `is_comparison(question, brand_terms, rival_terms)`: the text names one of the brand's terms and at least one
+  rival term that is not itself a brand term ("Pampers Swaddlers vs Pampers Baby-Dry" is no comparison).
+  Matched as `names_brand` matches: case-insensitive, whole words.
+- `is_brand_choice(run) = is_unprompted(run) or tier == 'comparison'`. `is_unprompted` is unchanged: a
+  comparison question names the brand, so it is not unprompted.
+
+| Number | Set |
+| --- | --- |
+| Lost (2I-9's share, numerator and denominator, every agent), its driver sentence, `basis`, `heroBasis` | brand-choice |
+| Visibility's headline (`headlines.<surface>`, `tier: brand_choice`, "First in N of M brand-choice answers" / "Named in N of M brand-choice answers") | brand-choice when the cycle asked a comparison question, else unprompted as before |
+| The Overview's First recommendation, Share of answers and program-named tiles, the agent table's `named_of`, `console_score.metric_counts` (`surface_note` "… brand-choice answers") | the same |
+| The Changes block | the same; a previous cycle that asked no comparison question is not comparable ("Not comparable: {code} asked no comparison questions.") |
+| Share of mentions, recommendation strength (the score's Visibility dimensions, `visibility_inputs`) | unprompted only: a question that names the brand is not a share-of-mentions test |
+
+Visibility's byQuestion rows add `brand_choice` beside `unprompted`; a comparison row's `tier` is `comparison` and
+its `type` "Comparison". The per-tier tables (`tiers`, `by_stage.stages_by_tier`, the Prompts read model's sets,
+the answers summary) get a Comparison row after Category control. The Overview's `coverage` adds `brand_choice`
+when the cycle asked a comparison question. `prompt_counts` adds `comparison` (the study's comparison questions,
+which are also counted branded) when the study has any. The revenue model's `counts.lost_set` says which set Lost
+read (`brand-choice` | `unprompted`); every sentence reads as before on a cycle without comparison questions.
+
+Console `SCORER_VERSION` **11**, `SCORER_CHANGES['11']` "brand-choice set for Lost and the first-pick tiles". No
+dimension reads the new set, so it never explains a moved score (`SCORER_CHANGE_APPLIES['11']` is false). Pinned:
+on 229, 2I-7's FL12 and 2I-8's FL12 the whole score body, metric rows included, is scorer 10's but for the version
+(`tests/test_console_2k1_score_pin.py`, sha256 written on `acb74b1`).
+
+On FL12's six-agent shape with 12 comparison questions (`tests/console_fixture_2k1.py`, FL12-shaped, not
+recorded): 17 unprompted + 12 comparison questions x 6 agents = **174 brand-choice answers**. Lost is 57 of the 102
+unprompted answers plus 30 (Pampers) + 12 (Huggies) of the 72 comparison answers: **99 of 174, 57%**. The headline
+reads "Named in 117 of 174 brand-choice answers. Pampers first in 57, Huggies in 42."; the first-pick tile 57 of
+174. The score is the same as with those 12 questions tagged branded category control.
+
+### The generator writes the comparison tier
+
+With the brand box's category control on and a brand to name, the Comparison stage's questions are the comparison
+tier (`generation/syndicated_study.py`, `keep_comparisons`). The stage writer is told the rule for that stage only
+(`query_generator._build_general_prompt(comparison={'brand', 'rivals'})`): name the brand and a rival and ask which
+to choose, and give the rival in a `rival` field. Rivals: the merchant's competitor list first
+(`worker.merchant_rivals`: supply's `comparison_domains`, each named by its soa_entities row; a domain with no
+named entity is left out), then a rival the writer names itself, the category's usual names, accepted only when
+the question names it and it is not one of the brand's terms or a retailer (`soa_shared/retailers.py`). Each
+question is checked with `is_comparison` before storage; one naming no rival is regenerated once, then dropped and
+counted, as 2I-7 does for category control. The tier is recorded on `tier_config.comparison` (`count`,
+`generated`, `regenerated`, `replaced`, `dropped`, `found`, `rivals`, `rivals_named`, `line`), and category
+control's `count` is its own questions only. With no Comparison stage, or the tier off, the call is 2I-7's.
+
+The Create Study preview (`POST /api/console/studies/preview`, new optional `stage_targets`) adds a `comparison`
+entry with its `line` ("12 questions, each naming the brand and a rival"), and category control counts the rest.
+The web modal's category-control row says the same ("…Comparison: 12 questions, each naming the brand and a
+rival"); the "What to ask about" copy is unchanged. The generation report names a dropped comparison question
+("dropped for naming no rival").

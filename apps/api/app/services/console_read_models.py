@@ -65,7 +65,8 @@ CELL_TONE = {
 SEVERITY = ['wrong', 'fabricated', 'misattributed', 'stale', 'partial', 'acknowledged_unknown',
             'absent', 'echoed', 'unverifiable', 'unscoreable', 'exact', 'grounded']
 TIER_LABELS = {'brand_direct': 'Brand-direct', 'catalog_accuracy': 'Catalog accuracy',
-               'value_incentives': 'Value & incentives', 'category_control': 'Category control'}
+               'value_incentives': 'Value & incentives', 'category_control': 'Category control',
+               'comparison': 'Comparison'}
 
 ANSWER_DIVERGENCES = [
     "Answer.verdict is not a console field: it carries the value outcome mapped exact->right, "
@@ -1310,10 +1311,17 @@ def study_status(cycles: List[dict]) -> str:
 def prompt_counts(prompts: List[dict], terms: Iterable[str] = ()) -> dict:
     """Branded: the questions in a tier that names the brand, and (2I-7) any
     other whose text names it; unbranded: the rest, the unprompted ones the
-    score counts. The study's question count, the one the Overview uses too."""
+    score counts. The study's question count, the one the Overview uses too.
+    2K-1: a comparison question names the brand, so it is branded; a study
+    that has any also says how many (`comparison`), the brand-choice
+    questions beside the unbranded ones."""
     branded = sum(1 for p in prompts if p.get('tier') in BRANDED_TIERS
                   or not unprompted.is_unprompted({'tier': p.get('tier'), 'query_text': p.get('text')}, terms))
-    return {'branded': branded, 'unbranded': len(prompts) - branded, 'prompts': len(prompts)}
+    out = {'branded': branded, 'unbranded': len(prompts) - branded, 'prompts': len(prompts)}
+    comparison = sum(1 for p in prompts if p.get('tier') == COMPARISON)
+    if comparison:
+        out['comparison'] = comparison
+    return out
 
 
 def build_study(job: dict, prompts: List[dict], cycles: List[dict], entities: List[dict]) -> dict:
@@ -1400,8 +1408,14 @@ def build_run(cycle: dict, collected: int, usable: int) -> dict:
 #: any that names the brand (soa_shared/unprompted.py). A row's `tier` stays
 #: its tier; its `unprompted` says whether it counts as unprompted.
 VIS_UNPROMPTED = 'unprompted'
+#: 2K-1: the comparison tier (it names the brand and a rival) and the set the
+#: first-pick reads count over when a cycle asked one: unprompted plus it
+#: (soa_shared/unprompted.is_brand_choice). A row's `brand_choice` says
+#: whether it is in that set.
+COMPARISON = 'comparison'
+VIS_BRAND_CHOICE = 'brand_choice'
 VIS_TIER_LABELS = {VIS_UNPROMPTED: 'Unprompted', **TIER_LABELS}
-VIS_TIER_ORDER = (VIS_UNPROMPTED, 'category_control', 'brand_direct', 'catalog_accuracy', 'value_incentives')
+VIS_TIER_ORDER = (VIS_UNPROMPTED, 'category_control', COMPARISON, 'brand_direct', 'catalog_accuracy', 'value_incentives')
 #: An other_brands_named entry named only as where the information came from
 #: (a cited site, a publisher) is not a brand put to the shopper.
 VIS_SOURCE_PRESENTED = ('source',)
@@ -1586,6 +1600,7 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
             'run': f"run-{run['id']}", 'platform': platform, 'query_code': run.get('query_code'),
             'stage': run.get('stage'), 'answered': run.get('answer_status') == surfaces.ANSWERED,
             'unprompted': unprompted.is_unprompted(run, terms),
+            'brand_choice': unprompted.is_brand_choice(run, terms),
             'first_basis': basis,
         }, ('first_basis',)))
 

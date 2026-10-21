@@ -129,7 +129,7 @@ def test_fl12_measures_visibility_over_the_37_unbranded_control_questions(http, 
     asked = _fl12(db)
     _supply(upstream)
     body = _score(http)
-    assert body['scorer_version'] == '10'
+    assert body['scorer_version'] == '11'
     assert body['unprompted'] == {'questions': 37, 'named_the_brand': 13, 'category_control': 50}
     som, rec = _dims(body, 'share_of_mentions'), _dims(body, 'recommendation_strength')
     assert som['state'] == 'measured' and rec['state'] == 'measured'
@@ -187,7 +187,7 @@ def test_the_recompute_line_names_the_change_on_fl12(http, db, upstream):
     _supply(upstream)
     body = _score(http)
     old = {'scorer_version': '8', 'score': (body['score'] or 0) + 7}
-    assert score_svc.recompute_line(old, body, 'stale') == 'scorer 8 → 10: category-control questions count as unprompted'
+    assert score_svc.recompute_line(old, body, 'stale') == 'scorer 8 → 11: category-control questions count as unprompted'
     assert score_svc.SCORER_CHANGES['9'] == 'category-control questions count as unprompted'
 
 
@@ -216,7 +216,7 @@ def test_229_untiered_scores_as_before_but_for_the_version(http, db, upstream):
     _supply(upstream)
     body = _score(http)
     # main (scorer 8) scores 229 at 32, 22.3 of 69.0
-    assert (body['score'], body['earned'], body['applicable_max'], body['scorer_version']) == (32, 22.3, 69.0, '10')
+    assert (body['score'], body['earned'], body['applicable_max'], body['scorer_version']) == (32, 22.3, 69.0, '11')
     assert body['unprompted'] == {'questions': 50, 'named_the_brand': 0, 'category_control': 0}
     keep, mentions, untiered = _old_rule_counts(db)
     with db.connect() as c:
@@ -227,7 +227,7 @@ def test_229_untiered_scores_as_before_but_for_the_version(http, db, upstream):
     part = _dims(body, 'share_of_mentions')['parts'][0]
     assert (part['numerator'], part['denominator']) == (0, 154)
     # a v8 score of the same number reads the plain version line: the change does not apply
-    assert score_svc.recompute_line({'scorer_version': '8', 'score': 50}, body, 'stale') == 'scorer 8 → 10'
+    assert score_svc.recompute_line({'scorer_version': '8', 'score': 50}, body, 'stale') == 'scorer 8 → 11'
 
 
 def test_a_branded_untiered_question_is_left_out_too(http, db, upstream):

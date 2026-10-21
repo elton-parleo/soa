@@ -85,7 +85,7 @@ DEFAULT_READERS = {
     'visibility': ('headline', 'lede', 'divergences'),
     'overview': ('surface', 'rules'),
     'true-value': ('surface', 'columns', 'divergences'),
-    # 2I-8a: the five metric rows count every agent, under scorer 10
+    # 2I-8a: the five metric rows count every agent, under scorer 10 (2K-1: 11, the same rows)
     'score': ('metric_surface', 'metrics', 'scorer_version', 'rules'),
 }
 #: a True Value cell's typed fields, read on the default surface
@@ -123,6 +123,10 @@ def per_surface_view(endpoint, body):
     body = _strip_volatile(_strip_all(copy.deepcopy(body)))
     for k in DEFAULT_READERS.get(endpoint, ()):
         body.pop(k, None)
+    if endpoint == 'visibility':
+        # 2K-1 adds `brand_choice` beside each row (unprompted or comparison); no value it served moved
+        for row in body.get('byQuestion') or []:
+            row.pop('brand_choice', None)
     if endpoint in ('visibility', 'overview') and body.get('ranking'):
         body['ranking'] = _ranking(body['ranking'])
     if endpoint == 'true-value':

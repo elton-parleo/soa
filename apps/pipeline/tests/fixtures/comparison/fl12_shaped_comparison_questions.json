@@ -1,0 +1,19 @@
+{
+ "_note": "FL12-SHAPED, NOT RECORDED. Cycle FL12-pampers-20261020's Comparison-stage questions are not in this repository and were not read from production. The first two are the two the 2K-1 brief quotes from the study; the other 10 are written here in their shape: 12 comparison-stage questions naming Pampers and a rival, which 2I-7 tagged category_control and now regenerates away. rivals is a competitor list in FL12's shape (Huggies, Luvs, Hello Bello), not supply's recorded one. Replace with an export of FL12's soa_queries (query_text, stage, tier) to make the test a recording.",
+ "brand": "Pampers",
+ "rivals": ["Huggies", "Luvs", "Hello Bello"],
+ "questions": [
+  {"query_text": "Pampers vs Huggies for newborns", "stage": "Comparison"},
+  {"query_text": "Pampers Swaddlers vs Huggies Little Snugglers", "stage": "Comparison"},
+  {"query_text": "Pampers vs Luvs for a baby on a budget?", "stage": "Comparison"},
+  {"query_text": "Pampers Cruisers vs Huggies Little Movers for a crawling baby", "stage": "Comparison"},
+  {"query_text": "Pampers or Huggies overnight diapers for a heavy wetter?", "stage": "Comparison"},
+  {"query_text": "Pampers vs Hello Bello for sensitive skin", "stage": "Comparison"},
+  {"query_text": "Pampers Pure vs Hello Bello: which is gentler?", "stage": "Comparison"},
+  {"query_text": "Pampers vs Huggies wipes for a newborn", "stage": "Comparison"},
+  {"query_text": "Pampers Easy Ups vs Huggies Pull-Ups for potty training", "stage": "Comparison"},
+  {"query_text": "Pampers Baby-Dry vs Luvs for daycare", "stage": "Comparison"},
+  {"query_text": "Which is better for blowouts, Pampers or Huggies?", "stage": "Comparison"},
+  {"query_text": "Pampers vs Huggies size 3: which fits a chunky baby?", "stage": "Comparison"}
+ ]
+}

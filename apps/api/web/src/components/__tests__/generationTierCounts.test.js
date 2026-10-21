@@ -84,6 +84,15 @@ describe('shortfalls', () => {
     ])
   })
 
+  it('reports comparison questions dropped for naming no rival (2K-1)', () => {
+    expect(shortfalls({
+      ...C80512,
+      comparison: { enabled: true, generated: 12, count: 11, dropped: 1 },
+    })).toEqual([
+      { tier: 'comparison', short: 1, requested: 12, delivered: 11, dropped: 1 },
+    ])
+  })
+
   it('says nothing about a tier that delivered what it asked for', () => {
     expect(shortfalls(C80512)).toEqual([])
   })

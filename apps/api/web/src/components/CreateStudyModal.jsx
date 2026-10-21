@@ -95,6 +95,22 @@ export const TIER_ROWS = [
   },
 ]
 
+/**
+ * The category-control row's count line. 2K-1: with the brand box on, the
+ * Comparison stage's questions are the comparison tier (the brand and a
+ * rival, asking which to choose), so they get their own line and category
+ * control is the rest of the stage counts.
+ */
+export function controlLine(stageTotal, comparison) {
+  const plural = n => (n === 1 ? '' : 's')
+  if (!comparison) {
+    return `uses the stage counts above: ${stageTotal} question${plural(stageTotal)}, none naming the brand`
+  }
+  const control = Math.max(stageTotal - comparison, 0)
+  return `uses the stage counts above: ${control} question${plural(control)}, none naming the brand. `
+    + `Comparison: ${comparison} question${plural(comparison)}, each naming the brand and a rival`
+}
+
 export const DEFAULT_TIER_STATE = Object.fromEntries(
   TIER_ROWS.map(row => [row.key, row.defaultOn]),
 )
@@ -973,8 +989,9 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
                               : row.additive
                                 ? `${tier?.count ?? 0} question${tier?.count === 1 ? '' : 's'}`
                                 : row.key === 'category_control'
-                                  // 2I-7: the generator drops one that still names the brand
-                                  ? `uses the stage counts above: ${stageTotal} question${stageTotal === 1 ? '' : 's'}, none naming the brand`
+                                  // 2I-7: the generator drops one that still names the brand.
+                                  // 2K-1: the Comparison stage is the comparison tier, its own line.
+                                  ? controlLine(stageTotal, Number(stageCounts?.Comparison) || 0)
                                   : 'uses the stage counts above'}
                           </span>
                         </div>
