@@ -80,16 +80,21 @@ def _build(
     snapshot, tier_config, *,
     stage_rows=None, brand_rows=None, personas=_UNSET, **kwargs,
 ):
-    stage_rows = _stage_rows() if stage_rows is None else stage_rows
+    given = stage_rows
     brand_rows = _brand_rows() if brand_rows is None else brand_rows
+
+    def stage_call_rows(**kw):
+        # 2L-4: as many as the stage counts it was handed ask for (the
+        # where-to-buy and cheapest-place questions come out of them)
+        rows = _stage_rows(sum((kw.get("stage_targets") or {}).values())) if given is None else given
+        return rows, {"requested_by_stage": dict(STAGE_TARGETS)}
     # _UNSET rather than a default of ["Value-Conscious Parent"], so a
     # test can ask for personas=None — the case the whole persona
     # fallback exists for — without it reading as "not specified".
     personas = ["Value-Conscious Parent"] if personas is _UNSET else personas
 
     with patch.object(
-        ss, "generate_and_review_study",
-        return_value=(stage_rows, {"requested_by_stage": dict(STAGE_TARGETS)}),
+        ss, "generate_and_review_study", side_effect=stage_call_rows,
     ) as stage_call, patch.object(
         ss, "generate_brand_direct",
         return_value=(brand_rows, {"requested": len(brand_rows)}),
@@ -195,9 +200,13 @@ def test_brand_direct_is_additive_and_stamped(snapshot):
     rows, _prov, config, _s, brand_call = _build(
         snapshot, {"brand_direct": {"enabled": True, "count": 12}},
     )
+    # 2L-4: plus a where-to-buy and a cheapest-place question per sampled
+    # variant (19), which the stage counts absorb: still 62
     assert len(rows) == 62
     brand_call.assert_called_once()
-    assert config["brand_direct"]["count"] == 12
+    assert config["brand_direct"]["count"] == 12 + 38
+    assert config["brand_direct"]["intents"]["count"] == 38
+    assert sum(config["brand_direct"]["intents"]["absorbed"].values()) == 38
 
 
 def test_the_catalog_tiers_are_additive(snapshot):
@@ -294,8 +303,8 @@ def test_the_tally_splits_by_who_wrote_the_question(snapshot):
     config["category_control"]["stage_total"] = 50
 
     assert ss.tally(config) == {
-        "ai_written": 62,       # 50 stage + 12 brand-direct
-        "from_catalog": 25,     # 19 accuracy + 6 value
+        "ai_written": 24,       # 50 stage - 38 absorbed + 12 brand-direct
+        "from_catalog": 63,     # 2L-4: 38 where-to-buy and cheapest-place + 19 accuracy + 6 value
         "total": 87,
     }
 
@@ -394,8 +403,9 @@ def test_brand_direct_is_handed_the_catalog_questions_to_avoid(snapshot):
     texts = brand_call.call_args.kwargs["catalog_texts"]
     assert texts, "brand-direct must know what the catalog tiers are asking"
 
+    # 2L-4: and the where-to-buy and cheapest-place questions, not to restate
     catalog = [r["query_text"] for r in rows if r.get("tier") in
-               ("catalog_accuracy", "value_incentives")]
+               ("catalog_accuracy", "value_incentives") or (r.get("source_ref") or {}).get("intent")]
     assert sorted(texts) == sorted(catalog)
 
 

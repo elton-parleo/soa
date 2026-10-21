@@ -7258,3 +7258,42 @@ with the successor listing's brand) and `/api/console/record` and `/record/list`
 variant is). Absent on an active one.
 
 `SOA_2L2_SAMPLE_DUMP=<dir>` with `tests/test_console_2l2_retired.py` writes the console's samples.
+
+## 2L-4: where agents send shoppers first, and the brand Overview's five tiles
+
+Decision (Elton, Oct 21): the demo's Pampers workspace reads "Where agents send Pampers shoppers first" (Walmart 33,
+Target 31, Amazon 19 of 99 where-to-buy and cheapest-place answers) and five charter tiles. Built in three steps.
+
+**B0, the check.** Retailers are coded on every scored run, whatever brand the answer names. Layer 2's extraction
+(`soa_expectation_outcomes.extraction`) is written for every run whose question carries an expectation
+(`orchestrator/pipeline.scoreable_run_ids`): every tier but category control, an empty one for an unreadable answer.
+Its schema requires `retailer_mentions: [{name, role}]` (the store as written; `role` recommendation | source |
+unavailable, from the labelling pass, null before it) beside `recommended_retailers`. It has no position field, and
+the transcription's list order is not promised to be the answer's. The order comes from the same record's `spans`:
+the answer cut by `span_segmenter.segment`, verbatim, in order and covering it, the same spans Visibility's first pick
+reads (`_span_hit`). Layer 1 (`soa_coded_mentions`: entity, position, cycle role primary | competitor) codes the
+comparison set's brands only, never a store. Category-control answers have no extraction, so no coded stores.
+
+**B1, the questions.** Two `intent`s on the brand-direct tier, no new tier and no migration: `source_ref.intent` is
+`where_to_buy` or `cheapest_place`. `catalog_tiers.build_intent_questions` writes one of each per variant in the
+catalog-accuracy tier's sample (`sample_variants`, the same cap), template-built: "Where can I buy {product}?",
+"Cheapest place to buy {product}?", naming the product as the catalog tier does and no store (a product name that
+names one is left out and listed). Stage Ready to Buy, specificity Narrow, provenance `catalog`, expectation
+`brand_mention` as every brand-direct question's, so each answer is scored and its stores coded. The written
+brand-direct questions are handed them as texts not to restate.
+
+The stage counts absorb them (`catalog_tiers.absorb_intents`): Ready to Buy first, then the other stages one at a
+time, largest first, never Comparison (the comparison tier). `tier_config.brand_direct.intents` is `{count,
+where_to_buy, cheapest_place, sampled_variants, names_a_retailer, stage, absorbed: {stage: n}, not_absorbed,
+stage_targets}` (the brief's targets, before). A brand-direct regeneration never touches the stage questions, so
+nothing absorbs them there: `absorbed` is `{}` and the study grows by their count. The tally counts them from the
+catalog (templates). The Create Study preview's `tiers.brand_direct.intents` is two lines, `[{intent, label, count,
+line, stage, questions}]` ("10 where-to-buy questions, one per sampled product, naming no retailer"), beside
+`absorbed`, `absorbed_by_stage`, `not_absorbed` and `absorbed_line`; category control's count is what is left.
+
+The default mix on Pampers, taking its record as FL12's study shows it (20 catalog-accuracy questions, 10 variants at
+two retailer pages each; not re-read from production here) and the console's default 50, Balanced (13, 13, 12, 12): 50 stage questions become 30 (Awareness 9, Research 9, Comparison 12, Ready to Buy 0: Ready to Buy's 12,
+then 4 each from Research and Awareness), plus 12 brand-direct, 10 where-to-buy, 10 cheapest-place, 20 catalog
+accuracy and 6 value: 88, as before, within the 100 limit. The live Pampers study's next brand-direct regeneration
+adds the 20 without absorbing them: 108, over the limit the Create Study modal enforces (regeneration does not check
+it).

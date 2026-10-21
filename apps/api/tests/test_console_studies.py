@@ -100,8 +100,15 @@ def test_the_preview_is_the_generator_s_own_questions(http, upstream, studies_db
     assert brand['count'] == 12 and brand['illustrative'] is True
     assert brand['questions'][0]['expected'] == ['Expected: brand named, trueshopstore.com cited']
     # 50 stage questions + 12 brand-direct + 19 + 6: the 87 catalog_tiers.py documents.
-    assert body['tally'] == {'ai_written': 62, 'from_catalog': 25, 'total': 87, 'limit': 100, 'within': True, 'tone': 'ok',
-                             'text': '62 AI-written + 25 from the catalog = 87 questions, within the 100 limit'}
+    # 2L-4: 19 where-to-buy and 19 cheapest-place, templates, which the stage
+    # counts absorb: still 87, now 12 + 12 AI-written and 38 + 25 from the catalog
+    assert [(i['intent'], i['count'], i['line']) for i in brand['intents']] == [
+        ('where_to_buy', 19, '19 where-to-buy questions, one per sampled product, naming no retailer'),
+        ('cheapest_place', 19, '19 cheapest-place questions, one per sampled product, naming no retailer')]
+    assert brand['intents'][0]['questions'][0]['query_text'] == 'Where can I buy Wiggle & Snug Snug-Fit Diapers Size 1 small pack?'
+    assert (brand['absorbed'], brand['not_absorbed']) == (38, 0)
+    assert body['tally'] == {'ai_written': 24, 'from_catalog': 63, 'total': 87, 'limit': 100, 'within': True, 'tone': 'ok',
+                             'text': '24 AI-written + 63 from the catalog = 87 questions, within the 100 limit'}
 
 
 def test_the_variant_cap_samples_and_says_so(http, upstream, studies_db):
@@ -115,8 +122,9 @@ def test_the_control_line_says_none_names_the_brand(http, upstream, studies_db):
     brand's terms and drops one that still names it."""
     ws_supply(upstream)
     control = preview(http, tiers={**TIERS_ON, 'category_control': True})['tiers']['category_control']
-    assert (control['count'], control['additive'], control['checked']) == (50, False, True)
-    assert control['line'] == '50 questions, none naming the brand'
+    # 2L-4: 38 of the 50 are where-to-buy and cheapest-place questions instead
+    assert (control['count'], control['additive'], control['checked']) == (12, False, True)
+    assert control['line'] == '12 questions, none naming the brand'
 
 
 def test_an_unreadable_catalog_is_said_not_hidden(http, upstream, studies_db):
@@ -134,7 +142,7 @@ def test_generate_refuses_over_the_cap_server_side(http, upstream, studies_db):
     response = http.post('/api/console/studies/generate', params={'org': 10}, json={
         'study_name': 'W&S after syndication', 'target_count': 70, 'syndicated_merchant': 'wiggle-and-snug', 'tiers': TIERS_ON})
     assert response.status_code == 422
-    assert response.json()['detail'] == '82 AI-written + 25 from the catalog = 107 questions, over the 100 limit. Reduce a stage or untick a tier.'
+    assert response.json()['detail'] == '44 AI-written + 63 from the catalog = 107 questions, over the 100 limit. Reduce a stage or untick a tier.'
 
 
 def test_generate_queues_the_job_for_this_customer(http, upstream, studies_db):

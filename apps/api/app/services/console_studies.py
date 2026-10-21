@@ -141,6 +141,17 @@ def _question(row: dict) -> dict:
             'variant_id': (row.get('source_ref') or {}).get('variant_id')}
 
 
+def absorbed_line(absorbed: int, left: int) -> Optional[str]:
+    """2L-4: the preview's line under the intent lines, when any were absorbed."""
+    if not absorbed and not left:
+        return None
+    line = f"{absorbed} taken out of the stage counts, Ready to Buy first, so the study stays the size you set"
+    if left:
+        line = (f"{absorbed} taken out of the stage counts, Ready to Buy first; {left} more than the stages "
+                "outside Comparison hold, added to the total")
+    return line
+
+
 def tier_config(tiers: Dict[str, bool], brand_direct_count: Optional[int] = None) -> dict:
     """The request's tier_config, as the web modal's brandPayload() sends it."""
     return {k: ({'enabled': bool(tiers.get(k)), 'count': brand_direct_count or ct.DEFAULT_BRAND_DIRECT_COUNT}
@@ -150,9 +161,14 @@ def tier_config(tiers: Dict[str, bool], brand_direct_count: Optional[int] = None
 def tally(stage_total: int, tiers: dict) -> dict:
     """Who wrote the question (syndicated_study.tally, catalogTiers.js tallyText):
     brand-direct is AI-written with the catalog open; accuracy and value are
-    templates over the record; category control is a tag and adds nothing."""
-    ai = (stage_total or 0) + (tiers['brand_direct']['count'] if tiers['brand_direct']['enabled'] else 0)
-    catalog = sum(tiers[k]['count'] for k in ('catalog_accuracy', 'value_incentives') if tiers[k]['enabled'])
+    templates over the record; category control is a tag and adds nothing.
+    2L-4: the where-to-buy and cheapest-place questions are templates too,
+    and the stage counts absorbed what they could of them."""
+    bd = tiers['brand_direct']
+    intents = sum(i['count'] for i in bd.get('intents') or []) if bd['enabled'] else 0
+    absorbed = (bd.get('absorbed') or 0) if bd['enabled'] else 0
+    ai = (stage_total or 0) - absorbed + (bd['count'] if bd['enabled'] else 0)
+    catalog = intents + sum(tiers[k]['count'] for k in ('catalog_accuracy', 'value_incentives') if tiers[k]['enabled'])
     total = ai + catalog
     parts = (f"{ai} AI-written + {catalog} from the catalog = {total} questions" if catalog
              else f"{total} question{'' if total == 1 else 's'} total")
@@ -205,6 +221,19 @@ def build_preview(snapshot: CatalogSnapshot, *, tiers: Dict[str, bool], stage_to
                                        questions=[{'query_text': f"Where can I buy {brand}{' ' + first.title if first and first.title else ''}?",
                                                    'tier': 'brand_direct', 'illustrative': True,
                                                    'expected': expectation_chips({'type': 'brand_mention', 'domain': snapshot.domain})}] if brand else [])
+            # 2L-4: the two intent lines under Brand-direct, word for word, and
+            # what the stage counts absorb of them (catalog_tiers.absorb_intents)
+            rows, report = ct.build_intent_questions(snapshot, category=category, persona=persona,
+                                                     study_pattern=pattern, cap=cap)
+            targets = stage_targets if stage_targets else ({'Ready to Buy': stage_total} if stage_total else {})
+            _, taken, left = ct.absorb_intents(targets, report['count'])
+            out['brand_direct'].update(
+                intents=[{'intent': i, 'label': ct.INTENT_LABELS[i], 'count': report[i], 'line': ct.intent_line(i, report[i]),
+                          'stage': ct.INTENT_STAGE,
+                          'questions': [_question(r) for r in rows if (r.get('source_ref') or {}).get('intent') == i]}
+                         for i in ct.INTENTS if report[i]],
+                absorbed=sum(taken.values()), absorbed_by_stage=taken, not_absorbed=left,
+                absorbed_line=absorbed_line(sum(taken.values()), left))
         for k in TIER_KEYS:
             if enabled[k]:
                 out[k]['expected_nulls'] = ct.expected_nulls(snapshot, k)
@@ -218,6 +247,8 @@ def build_preview(snapshot: CatalogSnapshot, *, tiers: Dict[str, bool], stage_to
         n = stage_total or 0
         brand = snapshot.study_brand or snapshot.brand
         compared = int((stage_targets or {}).get(COMPARISON_STAGE) or 0) if brand else 0
+        # 2L-4: what the intent questions took out of the stage counts
+        n = max(n - (out['brand_direct'].get('absorbed') or 0), 0)
         if compared:
             n = max(n - compared, 0)
             out['comparison'] = {'enabled': True, 'count': compared, 'additive': False, 'source': 'ai',

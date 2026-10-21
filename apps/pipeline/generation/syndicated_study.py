@@ -418,6 +418,18 @@ def build_syndicated_study(
     comparison_on = bool(control and (stage_targets or {}).get(COMPARISON_STAGE))
     comparison = {'brand': brand, 'rivals': rivals} if comparison_on else None
 
+    # 2L-4: the where-to-buy and cheapest-place questions (brand-direct,
+    # Ready to Buy) come out of the stage counts, so the study's size is
+    # what the brief allocated (catalog_tiers.absorb_intents). Nothing
+    # moves with the brand-direct tier off or no catalog to read.
+    asked_targets = stage_targets
+    intents_on = bool(config['brand_direct']['enabled'] and snapshot and snapshot.available)
+    n_intents = ct.intent_count(snapshot, variant_cap) if intents_on else 0
+    absorbed, unabsorbed = {}, 0
+    if n_intents:
+        absorbed_targets, absorbed, unabsorbed = ct.absorb_intents(stage_targets, n_intents)
+        stage_targets = {s: n for s, n in absorbed_targets.items() if n}
+
     # ── The study's own questions ────────────────────────────────────
     #
     # Generated exactly as they are today, catalog or no catalog: the
@@ -583,11 +595,15 @@ def build_syndicated_study(
 
     # ── Brand-direct ─────────────────────────────────────────────────
     if config['brand_direct']['enabled']:
+        # 2L-4: built before the written ones, which are told not to restate them
+        intent_rows, intent_report = ct.build_intent_questions(
+            snapshot, category=category, persona=persona, study_pattern=study_pattern, cap=variant_cap,
+        )
         brand_rows, brand_report = generate_brand_direct(
             snapshot,
-            stage_targets=stage_targets,
+            stage_targets=asked_targets,
             count=config['brand_direct'].get('count'),
-            catalog_texts=[row['query_text'] for row in catalog_rows],
+            catalog_texts=[row['query_text'] for row in catalog_rows + intent_rows],
             **generate_kwargs,
         )
         # 2B: a question may name a retailer only from the record's list.
@@ -607,10 +623,12 @@ def build_syndicated_study(
         retired_rows, retired_report = ct.build_retired_line_questions(
             snapshot, category=category, persona=persona, study_pattern=study_pattern,
         )
-        brand_rows = brand_rows + retired_rows
+        brand_rows = brand_rows + retired_rows + intent_rows
         rows.extend(brand_rows)
         config['brand_direct'].update({
             'retired_lines': retired_report,
+            'intents': {**intent_report, 'stage': ct.INTENT_STAGE, 'absorbed': absorbed,
+                        'not_absorbed': unabsorbed, 'stage_targets': asked_targets},
             'retailer_not_in_list_drops': retailer_drops,
             'count': len(brand_rows),
             'requested': brand_report.get('requested'),
@@ -653,11 +671,15 @@ def tally(config: dict) -> dict:
     config = normalize_tier_config(config)
     stage_total = config['category_control'].get('stage_total') or 0
 
-    ai_written = stage_total + (
-        config['brand_direct'].get('count') or 0
+    # 2L-4: the intent questions are templates, so from the catalog, and
+    # the stage counts absorbed what they could of them
+    intents = (config['brand_direct'].get('intents') or {}) if config['brand_direct']['enabled'] else {}
+    absorbed = sum((intents.get('absorbed') or {}).values())
+    ai_written = stage_total - absorbed + (
+        (config['brand_direct'].get('count') or 0) - (intents.get('count') or 0)
         if config['brand_direct']['enabled'] else 0
     )
-    from_catalog = sum(
+    from_catalog = (intents.get('count') or 0) + sum(
         config[tier].get('count') or 0
         for tier in ('catalog_accuracy', 'value_incentives')
         if config[tier]['enabled']
