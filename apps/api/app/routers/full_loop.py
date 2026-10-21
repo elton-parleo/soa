@@ -34,6 +34,7 @@ from sqlalchemy import text
 from app.auth import verify_token
 from app.console_scope import console_scope
 from app.customer_context import CustomerScope
+from app.services import console_read_models as rm
 from clients.truesync_client import TrueSyncClient
 from soa_shared import surfaces
 from soa_shared.database import engine
@@ -121,9 +122,16 @@ def combined_status(row, *, supply_view: Optional[dict], supply_error: Optional[
     if row.get('cycle_id'):
         with engine.connect() as conn:
             c = conn.execute(text(
-                "SELECT id, cycle_code, status, completed_runs, total_runs_planned, full_loop_run_id "
+                "SELECT id, cycle_code, status, completed_runs, total_runs_planned, full_loop_run_id, "
+                "study_type, start_date, created_at "
                 "FROM soa_cycles WHERE id = :id"), {"id": row['cycle_id']}).mappings().fetchone()
-        cycle = dict(c) if c else None
+            if c:
+                # 2K-3 (B5): the cycle's start day and moment in the merchant's zone, beside start_date (UTC)
+                c = dict(c)
+                cycle = {k: c[k] for k in ('id', 'cycle_code', 'status', 'completed_runs', 'total_runs_planned',
+                                           'full_loop_run_id')}
+                cycle.update(start_date=rm._iso(c.get('start_date')),
+                             **rm.cycle_dates(c, rm.study_timezones(conn, [c['study_type']]).get(c['study_type'])))
     supply_status = (supply_view or {}).get('status') or row.get('supply_status')
     status = row['status']
     reference = ('failed' if supply_status == 'failed' or (status == 'failed' and not row.get('supply_run_id')) else

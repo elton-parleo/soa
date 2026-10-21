@@ -34,6 +34,7 @@ from sqlalchemy import text
 
 from soa_shared import claim_kinds, surfaces
 
+from app.services import console_claims
 from app.services import console_read_models as rm
 from clients.truesync_client import INCENTIVE_FLAGS, carries_incentive_fields, incentive_in_markup
 
@@ -1540,7 +1541,10 @@ def prompt_counts(prompts: List[dict]) -> dict:
 
 # ─── loaders ───────────────────────────────────────────────────────────────
 
-def load_overview_rows(conn, cycle: dict) -> List[dict]:
+def load_overview_rows(conn, cycle: dict, features: Optional[List[str]] = None) -> List[dict]:
+    """features (2K-3): the merchant's catalog feature terms, which extend
+    claim_kind's fact lexicon (app/services/console_claims.py). None, the
+    score's read, is 2K-1's rule exactly."""
     rows = []
     for r in conn.execute(text("""
         SELECT r.id AS run_id, r.platform, r.surface, r.answer_status,
@@ -1553,7 +1557,8 @@ def load_overview_rows(conn, cycle: dict) -> List[dict]:
         row['variant_id'] = (_json(row.pop('source_ref')) or {}).get('variant_id')
         # 2K-1 (A9): whether a brand-direct answer stated an attribute, from its stored extraction
         extraction = row.pop('extraction', None)
-        row['claim_kind'] = claim_kinds.claim_kind(_json(extraction)) if row.get('tier') == 'brand_direct' else None
+        row['claim_kind'] = (console_claims.claim_kind(_json(extraction), features)
+                             if row.get('tier') == 'brand_direct' else None)
         rows.append(row)
     # 2K-1: a price attributed to the brand's own page, which sets none, is not scored
     unpriced = rm.brand_sets_no_price_runs(conn, cycle)

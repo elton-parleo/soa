@@ -26,6 +26,8 @@ from sqlalchemy import text
 
 from soa_shared import claim_kinds, local_time, surfaces, unprompted
 
+from app.services import console_claims
+
 # ─── vocabularies ──────────────────────────────────────────────────────────
 
 AGENT_NAMES = {
@@ -261,7 +263,9 @@ def _swap_check(claim: dict, expectation: dict, variant_names: Optional[Dict[str
 
 def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List[dict],
                  *, runs_per_query: Optional[int], cycle_code: str,
-                 variant_names: Optional[Dict[str, str]] = None) -> dict:
+                 variant_names: Optional[Dict[str, str]] = None, features: Optional[List[str]] = None) -> dict:
+    """features (2K-3): the merchant's catalog feature terms for claim_kind
+    (app/services/console_claims.py); None reads 2K-1's rule."""
     platform = run['platform']
     agent = surfaces.agent_of(platform) or platform
     extraction = _json((outcome or {}).get('extraction')) or {}
@@ -273,7 +277,7 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     raw = (outcome or {}).get('outcome')
 
     verdict = None if brand or raw is None else VALUE_VERDICT.get(raw, raw)
-    kind = claim_kinds.claim_kind(extraction) if brand and outcome is not None else None
+    kind = console_claims.claim_kind(extraction, features) if brand and outcome is not None else None
     brand_verdict = raw if brand else None
     checks = []
     if not brand and outcome is not None:
@@ -328,6 +332,9 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'collector': run.get('collector') or surfaces.collector_of(platform),
         'answer_status': run.get('answer_status'),
         'tier': tier,
+        # 2K-3: the study's question code (the drawer's "Q13") and its stage
+        'query_code': query.get('query_code'),
+        'stage': query.get('stage'),
         # 2G: what the question expected (price, member_price, code, points,
         # brand_mention), so a reader can count price claims apart from the rest
         'expected_type': expectation.get('type') or (_json(query.get('query_expected')) or {}).get('type'),
@@ -540,7 +547,26 @@ NOT_PRICED = 'not priced'
 #: none_by_design for its variant. Outside every accuracy and outside the
 #: "could not be checked" count; the quote is still shown.
 BRAND_SETS_NO_PRICE = 'brand_sets_no_price'
-BRAND_SETS_NO_PRICE_NOTE = "the brand's site sets no price; the agent priced it anyway"
+#: 2K-3: two sentences (house rule: no semicolons). The scorer
+#: (scoring/retailer_reference.py) still stores 2K-1's wording on a claim it
+#: scores; _house_note rewrites that at read time, nothing stored changes.
+BRAND_SETS_NO_PRICE_NOTE = "The brand's site sets no price. The agent priced it anyway."
+LEGACY_NOTES = {"the brand's site sets no price; the agent priced it anyway": BRAND_SETS_NO_PRICE_NOTE}
+
+
+def _house_note(row: dict) -> dict:
+    """The row with a stored note in 2K-1's wording read in the house's
+    (LEGACY_NOTES): its outcome_reason and its claims' reasons."""
+    if row.get('outcome_reason') in LEGACY_NOTES:
+        row['outcome_reason'] = LEGACY_NOTES[row['outcome_reason']]
+    raw = row.get('claim_results')
+    if raw is not None and any(n in str(raw) for n in LEGACY_NOTES):
+        claims = _json(raw) or []
+        for c in claims:
+            if isinstance(c, dict) and c.get('reason') in LEGACY_NOTES:
+                c['reason'] = LEGACY_NOTES[c['reason']]
+        row['claim_results'] = claims
+    return row
 
 
 def _not_priced_pages(reference: Optional[dict]) -> set:
@@ -603,9 +629,10 @@ def brand_sets_no_price_runs(conn, cycle: dict) -> set:
 
 def not_priced(row: dict, runs: set, key: str = 'run_id') -> dict:
     """The row with its outcome re-read as the brand's own page setting no
-    price, when it is one of `runs`; else as it is. Its claims too."""
+    price, when it is one of `runs`; else as it is (2K-3: a stored note in
+    the house wording, _house_note). Its claims too."""
     if row.get(key) not in runs:
-        return row
+        return _house_note(row)
     row['outcome'] = 'unscoreable'
     row['reason_code'] = BRAND_SETS_NO_PRICE
     if 'outcome_reason' in row:
@@ -619,8 +646,21 @@ def not_priced(row: dict, runs: set, key: str = 'run_id') -> dict:
     return row
 
 
+def feed_sku_rows(feed: Optional[dict], catalog: Optional[dict]) -> List[dict]:
+    """2K-3: the merchant's own codes as the Catalog screen joins them:
+    supply's feed rows (an external merchant: sku, gtin14, variant_key),
+    then the published catalog's variants (a hosted one: variant_id
+    `sku:<sku>`, gtin), for build_true_value's `feed_rows`."""
+    rows = [r for r in (feed or {}).get('rows') or [] if isinstance(r, dict)]
+    for listing in (catalog or {}).get('listings') or []:
+        for v in listing.get('variants') or []:
+            rows.append({'sku': v.get('sku'), 'gtin': v.get('gtin'), 'variant_key': v.get('variant_id')})
+    return rows
+
+
 def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domain: Optional[str],
-                     record_variants: List[dict], reads: Optional[List[dict]] = None) -> dict:
+                     record_variants: List[dict], reads: Optional[List[dict]] = None,
+                     feed_rows: Optional[List[dict]] = None) -> dict:
     """
     TrueValue: rows = variants; cells = TvCell {quoted, live, status}.
 
@@ -645,9 +685,18 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
 
     scored: [{variant_id, gtin, retailer, outcome, stated, surface, agent,
     run, swap_product}], one per scored run of a price question.
+
+    2K-3: each row carries `gtin` (None without one) and `feed_sku`, the
+    merchant's own code from its feed: the reference read's `sku`, a record
+    variant keyed `sku:<sku>`, or `feed_rows` (supply's feed rows, or the
+    hosted catalog's variants, as the Catalog screen joins them) matched on
+    the row's aliases. A row with no GTIN serves that code as its `sku` in
+    place of supply's reference (`feed_sku:<n>`); a GTIN row's `sku` stays
+    its GTIN, the key the console joins an answer to its row by.
     """
     rows_by_key: Dict[str, dict] = {}
     alias: Dict[str, str] = {}
+    feed_sku: Dict[str, str] = {}
     columns: List[str] = []
     live: Dict[tuple, dict] = {}
 
@@ -663,7 +712,10 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
                 alias.setdefault(str(a), key)
         if domain and domain not in columns:
             columns.append(domain)
-        rows_by_key.setdefault(key, {'product': row.get('variant_label') or key, 'sku': row.get('gtin') or key})
+        rows_by_key.setdefault(key, {'product': row.get('variant_label') or key, 'sku': row.get('gtin') or key,
+                                     'gtin': _gtin14(row.get('gtin'))})
+        if row.get('sku'):
+            feed_sku.setdefault(key, str(row['sku']))
         live[(key, domain)] = {**row, 'live_basis': 'reference_read'}
 
     if not reference:
@@ -674,7 +726,10 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
             for a in (key, _gtin14(v.get('gtin'))):
                 if a:
                     alias.setdefault(str(a), key)
-            rows_by_key.setdefault(key, {'product': v.get('label') or key, 'sku': v.get('gtin') or key})
+            rows_by_key.setdefault(key, {'product': v.get('label') or key, 'sku': v.get('gtin') or key,
+                                         'gtin': _gtin14(v.get('gtin'))})
+            if str(key).startswith('sku:'):
+                feed_sku.setdefault(key, str(key)[len('sku:'):])
             read = _newest_read(reads, v)
             live[(key, own_domain)] = (
                 {'price': read.get('price'), 'verifiable': True, 'currency': read.get('currency') or v.get('currency'),
@@ -683,6 +738,21 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
                 if read else
                 {'price': v.get('list_price'), 'verifiable': True, 'currency': v.get('currency'),
                  'reference_source': 'record', 'observed_at': v.get('published_at'), 'live_basis': 'record'})
+
+    for f in feed_rows or []:
+        code = f.get('sku') or (str(f['variant_key'])[len('sku:'):] if str(f.get('variant_key') or '').startswith('sku:')
+                                else None)
+        if not code:
+            continue
+        for a in (_gtin14(f.get('gtin14') or f.get('gtin')), f.get('variant_key'), f"sku:{code}", code,
+                  f.get('variant_label')):
+            if a and str(a) in alias:
+                feed_sku.setdefault(alias[str(a)], str(code))
+                break
+    for key, meta in rows_by_key.items():
+        meta['feed_sku'] = feed_sku.get(key)
+        if not meta['gtin'] and meta['feed_sku']:
+            meta['sku'] = meta['feed_sku']
 
     grouped: Dict[tuple, List[dict]] = {}
     for item in scored:
@@ -769,9 +839,10 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
                                   [s for s in surface_list if a in agents_on.get(s, [])])
                      for a in agent_columns}
             rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': cells, 'retailer_cells': retailer_cells,
-                         'variant_id': key})
+                         'variant_id': key, 'gtin': meta['gtin'], 'feed_sku': meta['feed_sku']})
         else:
-            rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': retailer_cells, 'variant_id': key})
+            rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': retailer_cells, 'variant_id': key,
+                         'gtin': meta['gtin'], 'feed_sku': meta['feed_sku']})
 
     by_agent: Dict[str, Dict[str, dict]] = {}
     for item in scored:
@@ -1077,7 +1148,10 @@ def build_catalog(merchant: str, *, feed: Optional[dict], history: List[dict], h
         rows = []
         for listing in hosted_catalog.get('listings') or []:
             for v in listing.get('variants') or []:
+                vid = str(v.get('variant_id') or '')
                 rows.append({'gtin': v.get('gtin'), 'variant_id': v.get('variant_id'),
+                             # 2K-3: the merchant's own code, as a feed row carries it
+                             'sku': v.get('sku') or (vid[len('sku:'):] if vid.startswith('sku:') else None),
                              'listing_id': listing.get('listing_id'),
                              'product_name': listing.get('title'), 'brand_name': listing.get('brand'),
                              'variant_label': v.get('title'), 'size': v.get('size'), 'pack_count': v.get('count'),
@@ -1228,7 +1302,7 @@ def build_truesync(merchant: str, *, channels: List[dict], publications: List[di
             else:
                 state = TS_CELL.get(pub.get('status'), 'compiled')
                 note = 'withdrawn' if pub.get('status') == 'withdrawn' else pub.get('error') or \
-                    ('; '.join((pub.get('validation') or {}).get('errors') or []) or None)
+                    ('. '.join((pub.get('validation') or {}).get('errors') or []) or None)   # 2K-3: no semicolons
             cell = compact({'s': state, 'd': drift, 'n': len(findings) if probe_ok and findings else None,
                             'at': _ts(newest.get('created_at')) if newest else None, 'note': note,
                             # beside the typed fields
@@ -1456,7 +1530,9 @@ def build_study(job: dict, prompts: List[dict], cycles: List[dict], entities: Li
         # `created` stays UTC
         'created_at_local': local_time.local_iso(job.get('created_at'), study_timezone(tier_config)),
         'timezone': study_timezone(tier_config),
-    }, ('lastRun',))
+        # 2K-3: the last run's day in the merchant's zone, beside lastRun (UTC)
+        'last_run_local': cycle_dates(latest, study_timezone(tier_config))['start_date_local'] if latest else None,
+    }, ('lastRun', 'last_run_local'))
 
 
 def run_identity(cycle: dict, ran_platforms: List[str]) -> dict:
@@ -1497,6 +1573,18 @@ def study_timezones(conn, study_types: Iterable[str]) -> Dict[str, str]:
     return out
 
 
+def cycle_dates(cycle: dict, tz: Optional[str] = None) -> dict:
+    """2K-3 (B5): beside a cycle's UTC `start_date`, the day it started in
+    the merchant's zone (`start_date_local`: its created_at there, as a
+    date), the moment (`created_at_local`) and the zone. Nothing stored
+    changes. A cycle created 04:26 UTC on Oct 20 in Los Angeles started on
+    Oct 19. None when the cycle carries no created_at."""
+    zone = tz or local_time.default_timezone()
+    day = local_time.local_date(cycle.get('created_at'), zone)
+    return {'start_date_local': day.isoformat() if day else None,
+            'created_at_local': local_time.local_iso(cycle.get('created_at'), zone), 'timezone': zone}
+
+
 def build_run(cycle: dict, collected: int, usable: int, tz: Optional[str] = None) -> dict:
     """tz (2K-1): the study's merchant's zone, for `created_at_local`."""
     platforms = _json(cycle.get('platforms')) or []
@@ -1512,9 +1600,8 @@ def build_run(cycle: dict, collected: int, usable: int, tz: Optional[str] = None
         'platforms': platforms,
         'surfaces': sorted({surfaces.surface_of(p) for p in platforms if surfaces.surface_of(p)}),
         'full_loop_run_id': cycle.get('full_loop_run_id'),
-        # 2K-1: beside the UTC stamp, in the merchant's local time
-        'created_at_local': local_time.local_iso(cycle.get('created_at'), tz or local_time.default_timezone()),
-        'timezone': tz or local_time.default_timezone(),
+        # 2K-1: beside the UTC stamp, in the merchant's local time; 2K-3: and the local start day
+        **cycle_dates(cycle, tz),
     }, ('finished', 'note'))
 
 
@@ -2114,10 +2201,11 @@ def build_record(merchant: str, listing: dict, *, merchant_record: Optional[dict
     issues = []
     failed = {slug: pub for slug, pub in pubs.items() if pub.get('status') == 'failed'}
     if failed:
-        reasons = sorted({pub.get('error') or '; '.join((pub.get('validation') or {}).get('errors') or []) or 'failed'
+        # 2K-3: sentences, not semicolons
+        reasons = sorted({pub.get('error') or '. '.join((pub.get('validation') or {}).get('errors') or []) or 'failed'
                           for pub in failed.values()})
         issues.append({'title': f"Not published to {', '.join(names.get(s, s) for s in failed)}",
-                       'detail': f"The publish failed: {'; '.join(reasons)}.", 'tone': 'warn',
+                       'detail': f"The publish failed: {'. '.join(r.rstrip('.') for r in reasons)}.", 'tone': 'warn',
                        'channel': ','.join(failed), 'verdict': 'blocked'})
     for slug, pub in pubs.items():
         if slug in failed:
@@ -2197,7 +2285,7 @@ STUDIO_MIRROR = [
 
 # ─── loaders ───────────────────────────────────────────────────────────────
 
-def load_answers(conn, cycle: dict) -> List[dict]:
+def load_answers(conn, cycle: dict, features: Optional[List[str]] = None) -> List[dict]:
     runs = conn.execute(text("""
         SELECT r.*, q.query_code, q.query_text, q.tier, q.stage, q.source_ref, q.expected_answer AS query_expected
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
@@ -2217,7 +2305,7 @@ def load_answers(conn, cycle: dict) -> List[dict]:
     names = load_variant_names(conn, cycle)
     return [build_answer(dict(r), dict(r), outcomes.get(r['id']), mentions.get(r['id'], []),
                          runs_per_query=cycle.get('runs_per_query'), cycle_code=cycle['cycle_code'],
-                         variant_names=names)
+                         variant_names=names, features=features)
             for r in runs]
 
 

@@ -7018,3 +7018,38 @@ merchant's zone: the study's **`tier_config.merchant.timezone`** (an IANA name) 
   block. The generator keeps it when it rebuilds `tier_config.merchant` (and a catalog regenerate keeps it and the
   comparison tier's record).
 - `tzdata` is a dependency of both apps, so the zone database is there on a host that has none.
+
+## 2K-3: five small data and copy items that show in a run's output
+
+API only: no migration, no model call, nothing stored changes, no file under `apps/pipeline` (the worker's deploy
+root) and `console_score.py` untouched. Tests: `apps/api/tests/test_console_2k3.py`.
+
+- **B1, the feed SKU on True Value rows.** Every `/api/console/true-value` row carries **`gtin`** (the GTIN-14, or
+  null) and **`feed_sku`** (the merchant's own code). A row with no GTIN serves that code as its **`sku`**
+  (`PAM-ULTRA-120`) in place of supply's reference (`feed_sku:<n>`, still its `variant_id`); a GTIN row's `sku`
+  stays its GTIN, the key the console joins an answer to its row by. The code comes from the cached read's `sku`, a
+  record variant keyed `sku:<sku>`, and, with `?merchant=`, supply's feed rows and the published catalog's variants
+  (`feed_sku_rows`), joined on the row's aliases as the Catalog screen joins them. A merchant with no feed (a 4xx) is
+  not a read error. `/api/console/catalog` rows of a hosted merchant carry `sku` too.
+- **B2, the question code on answers.** Every `/api/console/answers` item carries **`query_code`** (as stored,
+  `PAM_013`) and **`stage`** from `soa_queries`.
+- **B3, no semicolons.** 2K-1's line is "The brand's site sets no price. The agent priced it anyway."
+  (`BRAND_SETS_NO_PRICE_NOTE`). The scorer still stores 2K-1's wording on a claim it scores
+  (`scoring/retailer_reference.py`, worker side); `_house_note` rewrites it at read. Also two sentences now: the
+  record's publish-failed detail and a channel cell's validation note (joined with ". "), the feed upload's size
+  error and "surface cannot run" (422 details). Not changed here, as they are worker-side copies: the surface
+  descriptions in `soa_shared/surfaces.py` and the tier descriptions in `soa_shared/catalog_tiers.py`.
+- **B4, the claim_kind lexicon** (`app/services/console_claims.py`). Beside 2K-1's rule, a labelled span naming a
+  **feature** of the merchant's published catalog (attribute names and values, sizes and weight ranges; the brand's
+  own terms and naming keys left out; a bare size word only as "size X"/"X size") or an **endorsement** (hospitals,
+  pediatricians, "#1", "most popular", "best-selling", awards, "clinically", dermatologists) is an attribute.
+  `/answers` and `/overview` read the study's merchant's catalog (`_claim_features`); a failed read (not a 4xx) is
+  `read_errors.catalog` on the Overview and the rule keeps the endorsement words. `load_overview_rows` with no
+  features, the score's read, is 2K-1's rule exactly. On 2K-1's 16 FL12-shaped answers with an FL12-shaped catalog:
+  the two misses (`fl12-bd-02` endorsement, `fl12-bd-11` feature) read `attribute`, the five true recommendations
+  stay `recommendation_only`, none moves the other way: 16 of 16 agree with the reader.
+- **B5, the local start date.** `cycle_dates(cycle, tz)`: **`start_date_local`** (the cycle's `created_at` in the
+  merchant's zone, as a date), `created_at_local`, `timezone`. On `/overview` (beside `started`), `/runs`,
+  `/full-loop/{id}` and `/full-loop/latest` (`cycle.start_date` and `cycle.start_date_local`), `/revenue/history`
+  (per cycle); `/studio/studies` and `/prompts` serve `last_run_local`. A cycle created 04:26 UTC on Oct 20 started
+  Oct 19 in Los Angeles. Null when the cycle has no `created_at`.

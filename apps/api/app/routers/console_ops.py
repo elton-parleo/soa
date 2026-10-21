@@ -152,7 +152,7 @@ async def validate_catalog(
         parts.append(("files", (upload.filename or "upload", body, upload.content_type or "application/octet-stream")))
     if total > MAX_FEED_UPLOAD_BYTES:
         raise HTTPException(status_code=413,
-                            detail=f"the upload is {total:,} bytes; the limit here is {MAX_FEED_UPLOAD_BYTES:,}")
+                            detail=f"The upload is {total:,} bytes. The limit here is {MAX_FEED_UPLOAD_BYTES:,}.")
     client = full_loop._client(scope)
     preview = _unwrap(*await client.validate_feed(merchant, parts, skip_reachability))
     r_status, reference, r_error = await client.get_reference(merchant)
@@ -337,7 +337,7 @@ async def start_console_cycle(body: ConsoleCycleStart, scope: CustomerScope = De
     platforms = worker_surfaces.check_dispatch(body.platforms, engine)
     refused = [f"{p}: {surfaces.reported_reason(p)}" for p in platforms if surfaces.reported_reason(p)]
     if refused:
-        raise HTTPException(status_code=422, detail="surface cannot run: " + "; ".join(refused))
+        raise HTTPException(status_code=422, detail="surface cannot run: " + ". ".join(refused))   # 2K-3: no semicolons
     if not cs.study_in_org(body.study_type, scope.org.id):
         raise HTTPException(status_code=422, detail=f"study {body.study_type!r} is not this customer's")
     supply = None
