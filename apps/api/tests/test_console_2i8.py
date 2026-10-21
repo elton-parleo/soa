@@ -20,6 +20,7 @@ from app.routers import console as console_router
 from app.services import console_parity as parity
 from app.services import console_read_models as rm
 from soa_shared import surfaces
+from tests.score_2l4 import before_2l4
 from tests import console_fixture_2i8 as f2i8
 from tests import console_fixture_229 as f229
 from tests.test_console_2c3 import _two_surfaces, _with_store
@@ -128,6 +129,9 @@ def _without_zero(x, key):
 
 
 def per_surface_view(endpoint, body):
+    if endpoint == 'score':
+        # 2L-4: the brand tiles beside the five, and the rows the merchant's kind picks
+        body = before_2l4(body)
     body = _strip_volatile(_strip_all(copy.deepcopy(body)))
     for k in DEFAULT_READERS.get(endpoint, ()):
         body.pop(k, None)

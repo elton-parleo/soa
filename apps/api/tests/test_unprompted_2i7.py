@@ -19,6 +19,7 @@ from sqlalchemy import bindparam, text
 from app.services import console_read_models as rm
 from app.services import console_score as score_svc
 from soa_shared import unprompted
+from tests.score_2l4 import retailer_rows
 from tests import console_fixture_229 as f229
 from tests.test_console_2c3a import _cycle_229, _get, _supply, db  # noqa: F401
 from tests.test_console_read_models import as_, http, upstream  # noqa: F401  (pytest fixtures)
@@ -173,7 +174,7 @@ def test_fl12_measures_visibility_over_the_37_unbranded_control_questions(http, 
     assert sum(a['named_of'] for a in grounded['agents']) == 222
     assert over['coverage']['unprompted'] == 222
     assert body['metric_counts']['grounded_api']['first']['of'] == 222
-    tiles = {m['key']: m for m in score_svc.with_previous(body, None, None)['metrics']}
+    tiles = {m['key']: m for m in retailer_rows(score_svc.with_previous(body, None, None))}
     assert tiles['first']['surface_note'].endswith('unprompted answers')
     [study] = [s for s in http.get('/api/console/studio/studies', params={'org': 10}).json()
                if s['id'] == f229.STUDY]

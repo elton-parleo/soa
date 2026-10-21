@@ -1223,3 +1223,128 @@ def build_retired_line_questions(snapshot, *, category, persona, study_pattern) 
                        + (f"; {line['successor']['product_name']} replaced it." if line['successor'] else ".")),
         ))
     return rows, {'count': len(rows), 'lines': [l['line'] for l in lines]}
+
+
+# ─── Where to buy, cheapest place (2L-4) ───────────────────────────────────
+#
+# The demo's prompt sets ask where to buy a product and where it is cheapest
+# without naming a store, so the answer chooses the stores. A catalog-accuracy
+# question names one retailer ("What does X cost at Amazon?") and so cannot
+# say which store an agent sends a shopper to. These two are brand-direct
+# questions (no new tier) carrying an `intent` in their source_ref, one of
+# each per sampled variant, template-built like the catalog tiers.
+
+WHERE_TO_BUY = 'where_to_buy'
+CHEAPEST_PLACE = 'cheapest_place'
+INTENTS = (WHERE_TO_BUY, CHEAPEST_PLACE)
+INTENT_LABELS = {WHERE_TO_BUY: 'Where to buy', CHEAPEST_PLACE: 'Cheapest place'}
+#: Asked where the shopper has decided what to buy and is choosing a store.
+INTENT_STAGE = CATALOG_STAGE
+#: The stage counts absorb the intent questions, but never the Comparison
+#: stage's: with category control on, those are the comparison tier.
+UNABSORBED_STAGES = ('Comparison',)
+
+
+def intent_question_text(intent: str, subject: str) -> str:
+    """"Where can I buy Pampers Swaddlers Size 1 (96 ct)?" /
+    "Cheapest place to buy Pampers Swaddlers Size 1 (96 ct)?\""""
+    if intent == WHERE_TO_BUY:
+        return f"Where can I buy {subject}?"
+    return f"Cheapest place to buy {subject}?"
+
+
+def intent_line(intent: str, count: int) -> str:
+    """The preview's line under Brand-direct for one intent."""
+    noun = 'where-to-buy' if intent == WHERE_TO_BUY else 'cheapest-place'
+    return (f"{count} {noun} question{'' if count == 1 else 's'}, one per sampled product, "
+            f"naming no retailer")
+
+
+def _intent_subject(snapshot, product, variant) -> str:
+    if is_external(snapshot):
+        return _external_subject(snapshot, product, variant)
+    return _subject(snapshot.brand, product, variant)
+
+
+def intent_count(snapshot, cap: int = DEFAULT_VARIANT_CAP) -> int:
+    """How many intent questions build_intent_questions writes: two per
+    sampled variant, none without a brand to name."""
+    if not snapshot or not getattr(snapshot, 'available', True) or not snapshot.brand:
+        return 0
+    return len(INTENTS) * len(sample_variants(snapshot, cap))
+
+
+def absorb_intents(stage_targets: Optional[dict], count: int) -> tuple:
+    """
+    (the stage targets with `count` questions taken out, {stage: taken},
+    what no stage could take). Ready to Buy first, where the questions are
+    asked; then the other stages one question at a time, largest first
+    (the later stage on a tie); never the Comparison stage.
+    """
+    from soa_shared.constants import QUERY_STAGES
+    targets = {s: max(0, int(n or 0)) for s, n in (stage_targets or {}).items()}
+    taken: dict = {}
+    left = max(0, int(count or 0))
+    first = min(left, targets.get(INTENT_STAGE, 0))
+    if first:
+        targets[INTENT_STAGE] -= first
+        taken[INTENT_STAGE] = first
+        left -= first
+    order = {s: i for i, s in enumerate(QUERY_STAGES)}
+    others = [s for s in targets if s != INTENT_STAGE and s not in UNABSORBED_STAGES]
+    while left and any(targets[s] for s in others):
+        stage = max((s for s in others if targets[s]), key=lambda s: (targets[s], order.get(s, -1)))
+        targets[stage] -= 1
+        taken[stage] = taken.get(stage, 0) + 1
+        left -= 1
+    return targets, taken, left
+
+
+def build_intent_questions(snapshot, *, category, persona, study_pattern,
+                           cap: int = DEFAULT_VARIANT_CAP) -> tuple:
+    """
+    One where-to-buy and one cheapest-place question per sampled variant
+    (the catalog-accuracy tier's sample), naming the product and no store:
+    "Where can I buy Pampers Swaddlers Size 1 (96 ct)?", "Cheapest place
+    to buy Pampers AMORE Size 1 (132 ct)?". Brand-direct, stage Ready to
+    Buy, expectation brand_mention as every brand-direct question's, so
+    each answer is scored and its retailers coded (retailer_mentions);
+    `source_ref.intent` says which question it is, and the console's
+    routing table reads it (console_read_models.build_routing).
+
+    A question whose product name happens to name a store is left out and
+    listed (`names_a_retailer`): it would be asking about that store.
+
+    Returns (rows, report) with report {count, where_to_buy, cheapest_place,
+    sampled_variants, names_a_retailer}.
+    """
+    from soa_shared import retailers as af
+
+    report = {'count': 0, WHERE_TO_BUY: 0, CHEAPEST_PLACE: 0, 'sampled_variants': [], 'names_a_retailer': []}
+    if not snapshot or not snapshot.brand:
+        return [], report
+    brand = getattr(snapshot, 'study_brand', None) or snapshot.brand
+    domain = (snapshot.own_domain if is_external(snapshot) else None) or snapshot.domain
+    sampled = sample_variants(snapshot, cap)
+    report['sampled_variants'] = [v.variant_id for _p, v in sampled]
+    rows = []
+    for intent in INTENTS:
+        for product, variant in sampled:
+            text = intent_question_text(intent, _intent_subject(snapshot, product, variant))
+            if af.retailers_named(text):
+                report['names_a_retailer'].append(text)
+                continue
+            source_ref = _source_ref(snapshot, product, variant=variant)
+            source_ref['intent'] = intent
+            rows.append(_row(
+                query_text=text, tier='brand_direct', provenance='catalog',
+                expected_answer=ea.brand_mention(brand, domain), source_ref=source_ref,
+                category=category, persona=persona, study_pattern=study_pattern,
+                stage=INTENT_STAGE, specificity='Narrow',
+                soa_focus='Retailer coverage' if intent == WHERE_TO_BUY else 'Cheapest place',
+                rationale=(f"Names {variant.variant_id} and no store, so the stores in the answer are "
+                           "the agent's own choice."),
+            ))
+            report[intent] += 1
+    report['count'] = len(rows)
+    return rows, report

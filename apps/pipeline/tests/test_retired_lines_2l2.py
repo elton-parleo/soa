@@ -154,7 +154,7 @@ def test_the_study_asks_the_retired_line_question_and_still_prices_the_line(reti
     asked = [r for r in rows if (r.get('source_ref') or {}).get('retired_line')]
     assert [r['query_text'] for r in asked] == [
         'Is Wiggle & Snug Snug-Fit Overnight Diapers still sold, and what replaced it?']
-    assert config['brand_direct']['count'] == 13
+    assert config['brand_direct']['count'] == 13 + 38   # 2L-4: and 38 where-to-buy and cheapest-place
     assert config['brand_direct']['retired_lines'] == {'count': 1, 'lines': ['Snug-Fit Overnight Diapers']}
     # agents still price a retired line: its variants stay in catalog accuracy
     priced = {r['source_ref'].get('variant_id') for r in rows if r.get('tier') == 'catalog_accuracy'}

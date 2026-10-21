@@ -211,7 +211,11 @@ def test_the_ai_tier_is_rebuilt_when_it_is_named(db, snapshot):
     }])
 
     brand_direct = [q for q in questions(db) if q[1] == "brand_direct"]
-    assert [q[0] for q in brand_direct] == ["Where do I get Wiggle & Snug size 4?"]
+    # 2L-4: then a where-to-buy and a cheapest-place question per sampled variant
+    assert brand_direct[0][0] == "Where do I get Wiggle & Snug size 4?"
+    assert len(brand_direct) == 1 + 2 * 19
+    assert brand_direct[1][0].startswith("Where can I buy Wiggle & Snug ")
+    assert brand_direct[-1][0].startswith("Cheapest place to buy Wiggle & Snug ")
 
 
 # ── replace, never double ─────────────────────────────────────────────────
@@ -336,7 +340,10 @@ def test_regenerating_brand_direct_alone_still_sees_the_catalog_questions(db, sn
     seed(db, tiers=["brand_direct"])
     run(snapshot, capture=seen)
 
-    assert sorted(seen["catalog_texts"]) == sorted([
+    # 2L-4: plus the where-to-buy and cheapest-place questions it writes beside them
+    intents = [t for t in seen["catalog_texts"] if t.startswith(("Where can I buy ", "Cheapest place to buy "))]
+    assert len(intents) == 2 * 19
+    assert sorted(t for t in seen["catalog_texts"] if t not in intents) == sorted([
         "What does the old Size 3 pack cost?",
         "Any promo codes?",
     ])
