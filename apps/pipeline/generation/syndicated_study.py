@@ -56,6 +56,7 @@ from collections import Counter
 from typing import Optional
 
 from soa_shared import unprompted
+from soa_shared.retired_lines import retired_lines
 from soa_shared.constants import QUERY_PERSONAS
 
 from generation import catalog_tiers as ct
@@ -543,6 +544,9 @@ def build_syndicated_study(
         # 2I-7: the brand's product names, the terms beside its name that
         # the console's unprompted rule reads back (soa_shared/unprompted.py)
         'product_names': [p.title for p in snapshot.products if p.title],
+        # 2L-2: the record's retired lines and their successors
+        # (soa_shared/retired_lines.py), which the read model counts against
+        'retired': retired_lines(snapshot),
         **({'timezone': zone} if zone else {}),
     }
 
@@ -599,8 +603,14 @@ def build_syndicated_study(
                 else:
                     kept.append(row)
             brand_rows = kept
+        # 2L-2: one question per retired line, beside the generated ones
+        retired_rows, retired_report = ct.build_retired_line_questions(
+            snapshot, category=category, persona=persona, study_pattern=study_pattern,
+        )
+        brand_rows = brand_rows + retired_rows
         rows.extend(brand_rows)
         config['brand_direct'].update({
+            'retired_lines': retired_report,
             'retailer_not_in_list_drops': retailer_drops,
             'count': len(brand_rows),
             'requested': brand_report.get('requested'),
