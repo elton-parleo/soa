@@ -1573,6 +1573,16 @@ def study_timezones(conn, study_types: Iterable[str]) -> Dict[str, str]:
     return out
 
 
+def study_identity(conn, cycle: Optional[dict]) -> dict:
+    """2K-4 (B1): {'study', 'questions': {query_code: tier}} of a cycle's
+    study, what soa_shared/cycle_compare compares first."""
+    if not cycle:
+        return {'study': None, 'questions': {}}
+    questions = {r['query_code']: r['tier'] for r in conn.execute(text(
+        "SELECT query_code, tier FROM soa_queries WHERE study_type = :st"), {'st': cycle.get('study_type')}).mappings()}
+    return {'study': cycle.get('study_type'), 'questions': questions}
+
+
 def cycle_dates(cycle: dict, tz: Optional[str] = None) -> dict:
     """2K-3 (B5): beside a cycle's UTC `start_date`, the day it started in
     the merchant's zone (`start_date_local`: its created_at there, as a

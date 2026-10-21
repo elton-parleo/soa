@@ -7053,3 +7053,33 @@ root) and `console_score.py` untouched. Tests: `apps/api/tests/test_console_2k3.
   `/full-loop/{id}` and `/full-loop/latest` (`cycle.start_date` and `cycle.start_date_local`), `/revenue/history`
   (per cycle); `/studio/studies` and `/prompts` serve `last_run_local`. A cycle created 04:26 UTC on Oct 20 started
   Oct 19 in Los Angeles. Null when the cycle has no `created_at`.
+
+## 2K-4: five findings from the FL13 walk
+
+### B1: one comparability rule
+
+On FL13 the Share of Algorithm tile read "-6 vs FL12-pampers-20261020" and the metric tiles showed deltas while the
+Changes block said "Not comparable": the score checked its scorer version, its pooled surfaces and its agents, the
+Changes block its agents and the set it reads, and neither checked the question set. FL12 and FL13 were different
+studies.
+
+`soa_shared/cycle_compare.py` (api and pipeline copies, identical; the pipeline imports none of it) holds
+**`cycles_comparable(now, prev)`** over `facts(...)` of each cycle. Two cycles are comparable when, in this order:
+the same scorer version (when both carry one), the same study or identical question codes and tiers, the same
+measured surfaces (when both carry them), the same agents on each surface compared, and the earlier cycle measured
+the set this one reads (unprompted answers, or with a comparison question the brand-choice set). It returns
+`(comparable, condition, reason)`; the reason names the first condition that fails:
+
+- `version`: "Scored under v10, re-score to compare."
+- `study`: "Not comparable: FL12-pampers-20261020 ran a different study (pampers-fl12)."
+- `surfaces`: "Not comparable: {code} scored the grounded API, this cycle scored …"
+- `agents`: "Not comparable: {code} ran Claude only on the grounded API." (the score names the surface; the Changes
+  block says "on this surface", and nothing on `all`)
+- `measured`: "Not comparable: {code} asked no comparison questions."
+
+Readers: the score (`console_score.compare`: `previous.comparable`, `previous.reason`, new `previous.condition`;
+the tile delta and the five metric tiles' `delta`/`delta_reason` follow it), the Overview's Changes block
+(`console_parity.changes_status`) and `/api/console/revenue/history`, whose cycles now carry **`vs_previous`**
+(`{cycle, comparable, condition, reason}` against the cycle before; null on the first). The study and its questions
+come from `rm.study_identity`. The score's agents reason reads in the shared wording (it was "on {surface} {code}
+ran …"); the score body's `rules` keep their 2C-3 templates, as the body is pinned.

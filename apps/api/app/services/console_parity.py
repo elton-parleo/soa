@@ -32,7 +32,7 @@ from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
-from soa_shared import claim_kinds, surfaces
+from soa_shared import claim_kinds, cycle_compare, surfaces
 
 from app.services import console_claims
 from app.services import console_read_models as rm
@@ -787,21 +787,28 @@ def changes_status(now: dict, prev: Optional[dict], prev_code: Optional[str],
     compared on a surface only when the same agents answered there and both
     read named/first over the same tier; otherwise the block says why and
     shows no delta. 2I-8: on `all`, when the same agents answered in both
-    cycles, whatever their surfaces; the note then names no surface."""
+    cycles, whatever their surfaces; the note then names no surface.
+
+    2K-4 (B1): soa_shared/cycle_compare.cycles_comparable decides, as it does
+    for the score and the revenue history: first the study (a metrics dict
+    carries `study` and `questions` when build_overview was given them),
+    then the agents, then the set the first-pick numbers read."""
     if prev is None:
         return 'first_cycle', TEMPLATES['changes.first_cycle']
-    a, b = set(now['agent_set']), set(prev['agent_set'])
-    if a != b:
-        if b and b < a:
-            return 'not_comparable', TEMPLATES[_rule('changes.not_comparable_subset', surface)].format(
-                code=prev_code, agents=_agents_text(b))
-        return 'not_comparable', TEMPLATES[_rule('changes.not_comparable', surface)].format(
-            code=prev_code, prev=_agents_text(b) if b else 'no agent', now=_agents_text(a) if a else 'no agent')
-    if now['tier'] == UNPROMPTED and not prev['total']['named_of']:
-        return 'not_comparable', TEMPLATES[_rule('changes.not_comparable_tier', surface)].format(code=prev_code)
-    if now['tier'] == BRAND_CHOICE and not prev.get('comparison_answers', 0):
-        return 'not_comparable', TEMPLATES[_rule('changes.not_comparable_comparison', surface)].format(code=prev_code)
-    return 'compared', None
+    ok, _condition, reason = cycle_compare.cycles_comparable(
+        comparison_facts('this cycle', now), comparison_facts(prev_code, prev, measured=True),
+        on='' if surface == ALL else ' on this surface', agent_name=_agent)
+    return ('compared', None) if ok else ('not_comparable', reason)
+
+
+def comparison_facts(code: Optional[str], metrics: dict, *, measured: bool = False) -> dict:
+    """2K-4: a surface_metrics dict as cycle_compare reads it: its study
+    and questions (when given), the agents that answered, the set it reads
+    and, for the earlier cycle, how many answers it has in each set."""
+    return cycle_compare.facts(code or 'the previous cycle', study=metrics.get('study'), questions=metrics.get('questions'),
+                               agents={'here': metrics['agent_set']}, reads=metrics['tier'],
+                               measured={UNPROMPTED: metrics['total']['named_of'],
+                                         'comparison': metrics.get('comparison_answers', 0)} if measured else None)
 
 
 def build_changes(now: dict, prev: Optional[dict], prev_code: Optional[str],
@@ -827,7 +834,7 @@ def build_changes(now: dict, prev: Optional[dict], prev_code: Optional[str],
 def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_value: dict, brand: str,
                    access: Optional[dict] = None, previous: Optional[dict] = None,
                    scored_cycles: int = 1, read_errors: Optional[Dict[str, str]] = None,
-                   study_questions: Optional[int] = None) -> dict:
+                   study_questions: Optional[int] = None, study: Optional[dict] = None) -> dict:
     """
     GET /api/console/overview: This week's blocks for one cycle, per surface.
     2I-8: `all` first (every agent together, as the demo counts them) and the
@@ -836,7 +843,8 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
     rows: load_overview_rows (one per run). visibility: the 2C-1 read with
     extend_visibility applied. true_value: build_true_value. access: supply's
     access payload, or None. previous: {'code', 'rows', 'visibility'} for the
-    newest earlier scored cycle, or None.
+    newest earlier scored cycle, or None. 2K-4: study ({'study',
+    'questions'}) and previous['study'] feed the comparability rule.
     """
     vis_rows = visibility.get('byQuestion') or []
     surface_list = surfaces.with_all(ordered_surfaces({_surface_of(r) for r in rows} | {v['surface'] for v in vis_rows}))
@@ -850,6 +858,9 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
         metrics = surface_metrics(rows, vis_rows, s)
         prev_metrics = (surface_metrics(previous['rows'], previous['visibility'].get('byQuestion') or [], s, tier=metrics['tier'])
                         if previous else None)
+        metrics.update(study or {})
+        if prev_metrics is not None:
+            prev_metrics.update(previous.get('study') or {})
         status, note = changes_status(metrics, prev_metrics, (previous or {}).get('code'), s)
         if prev_metrics is not None:
             prev_metrics['code'] = previous.get('code')
