@@ -7337,3 +7337,36 @@ rows do not carry yet (the reader records one in its evidence), so that note doe
 `coverage`: the answered where-to-buy answers with a coding, and how many name two or more of the merchant's retailers.
 Counted by hand in `tests/test_console_2l4_routing.py` on the FL13 shape. `SOA_2L4_SAMPLE_DUMP=<dir>` writes the
 console's samples.
+
+**B3, the brand Overview's five tiles.** `/api/console/score` counts a second set beside the five metric rows, in
+every surface's `metric_counts`: `attribute`, `coverage`, `presence`, `retired`, `promo` (null when there is nothing to
+count). `metric_kind` is the merchant's (`brand` for a brand per supply's `/tenant`, else the study's
+`tier_config.merchant.kind`; anything else is `retailer`), `metrics_by_kind` serves both sets of rows
+(`{retailer: [...], brand: [...]}`) and `metrics` is the merchant's. Retailer merchants read the five they had. The
+scorer version is unchanged: these are counts, not the score. A stored score whose counts lack the brand set is
+recomputed on its next read (`needs_recompute`: "brand tiles not counted"). The score pins
+(`test_console_2k1_score_pin.py`, 2I-8a's, 2I-8's) hold with the brand set put aside (`tests/score_2l4.py`).
+
+The brand rows, the demo's charter set in its order (`BRAND_METRICS`), each the retailer row's shape plus `state`
+(measured | not_measured), `reason` and `sub`:
+
+| key | name | counts | sub-line |
+| --- | --- | --- | --- |
+| attribute | Attribute accuracy | not measured: no attribute check exists yet | |
+| coverage | Retailer coverage | `routing.coverage`: where-to-buy answers naming 2+ of the merchant's retailers, of those coded | "38 of 49 where-to-buy answers name 2 or more of Walmart, Target, Amazon" |
+| presence | Category presence | Share of answers (`share`), the same value, denominator and note | "Category answers naming Wiggle & Snug. First in 33, Huggies first in 30" |
+| retired | Retired product named | 2L-2's `retired_named`, the first line's brand-choice answers naming it; not measured with no retired line | "Category answers naming Pure, which pampers.com retired. AMORE, its successor: 3" |
+| promo | Promo pass-through | not measured: retailer-page deals are not read yet | |
+
+On `all` a brand tile sums the pooled surfaces' counts, as the five rows do. Coverage is not measured when the cycle
+asked no where-to-buy question (a study before 2L-4, until its regeneration). Deltas and comparability are 2K-4's: a
+not-measured tile has none and no reason; a measured one has the delta when the previous cycle is comparable and
+stored the tile, "Not comparable: {code} was scored before this tile was counted" when it is comparable and did not,
+else the comparability reason. On the FL13 shape (`tests/test_console_2l4_tiles.py`): coverage 38 of 49, presence 51 of
+102, retired 10 of 102, attribute and promo not measured. `SOA_2L4_SAMPLE_DUMP=<dir>` writes `score-2l4.json`,
+`overview-2l4.json` and `visibility-2l4.json` for the console.
+
+On Pampers today, before the regeneration that adds the 20 questions: presence measured; coverage not measured (no
+where-to-buy answers yet); retired not measured until 2L-2's feed upload marks Pure retired and a generation or
+regeneration writes it into `tier_config.merchant.retired` (the same regeneration adds the 20), then measured from the
+next cycle; attribute accuracy and promo pass-through not measured.

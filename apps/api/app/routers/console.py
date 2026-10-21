@@ -170,8 +170,7 @@ async def _routing_inputs(scope: CustomerScope, row: dict, merchant: Optional[st
         slug = merchant or score_svc.cycle_merchant(conn, row)
     if not slug:
         return None, {'merchant': 'no merchant record for this cycle'}
-    merchants, _m_err = await check_merchant_list(scope)
-    kind = next((m.get('kind') for m in merchants if m.get('slug') == slug), None)
+    kind = await _tenant_kind(scope, slug)
     if kind and kind != 'brand':
         return {'kind': kind}, {}
     client = full_loop._client(scope)
@@ -183,10 +182,12 @@ async def _routing_inputs(scope: CustomerScope, row: dict, merchant: Optional[st
     return facts, {k: v for k, v in (('retailers', r_err), ('reference', f_err)) if v}
 
 
-async def check_merchant_list(scope: CustomerScope) -> tuple:
-    """The org's merchants (supply's /tenant) and the read's error."""
+async def _tenant_kind(scope: CustomerScope, slug: str) -> Optional[str]:
+    """2L-4: the merchant's kind ('brand' | 'seller') from supply's /tenant;
+    None when it cannot be read or does not list the merchant."""
     from app.console_merchants import org_merchants
-    return await org_merchants(scope.org)
+    merchants, _error = await org_merchants(scope.org)
+    return next((m.get('kind') for m in merchants if m.get('slug') == slug), None)
 
 
 @router.get("/overview")
@@ -307,11 +308,22 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
             runs = score_svc.load_score_runs(conn, row)
             mentions = score_svc.load_score_mentions(conn, row)
             rivals = score_svc.load_tracked_rivals(conn, row)
-            score_svc.at('loading visibility')
-            vis_rows = rm.load_visibility(conn, row).get('byQuestion') or []
             terms = rm.load_brand_terms(conn, row)
             slug = merchant or score_svc.cycle_merchant(conn, row)
-        access, reference_rows, errors = None, None, {}
+            stored_kind = (rm.study_merchant_block(conn, row) or {}).get('kind')
+        # 2L-4: the merchant's kind picks the five rows; a brand's tiles read
+        # Visibility's routing (supply's retailer list) and retired lines
+        score_svc.at('reading the merchant kind')
+        kind = (await _tenant_kind(scope, slug) if slug else None) or stored_kind
+        facts, routing_errors = await _routing_inputs(scope, row, slug) if kind == 'brand' else (None, {})
+        with engine.connect() as conn:
+            score_svc.at('loading visibility')
+            vis = rm.load_visibility(conn, row, facts)
+        vis_rows = vis.get('byQuestion') or []
+        ours = next((r['name'] for r in (vis.get('ranking') or {}).get('rows') or [] if r.get('you')), None)
+        brand_inputs = {'routing': vis.get('routing'), 'retired_named': vis.get('retired_named'),
+                        'brand': ours or (facts or {}).get('brand')}
+        access, reference_rows, errors = None, None, dict(routing_errors)
         reference_run, access_run = None, None
         if slug:
             score_svc.at('reading supply')
@@ -335,7 +347,8 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
                                      inputs={'merchant': slug, 'reference_run': reference_run, 'access_run': access_run,
                                              'scored_at': datetime.now(timezone.utc).isoformat(),
                                              **score_svc.reference_input(cached_reference)},
-                                     domain_checks=domain_checks, rivals=rivals, terms=terms)
+                                     domain_checks=domain_checks, rivals=rivals, terms=terms,
+                                     kind=kind, brand_inputs=brand_inputs)
         # the value it replaces stays in its history (2E)
         body = score_svc.carry_history(body, stored, why)
         # a failed supply read is served, never stored: the next read tries again

@@ -16,6 +16,7 @@ import pytest
 from sqlalchemy import text
 
 from soa_shared import cycle_compare as cc
+from tests.score_2l4 import retailer_rows
 from tests import console_fixture_229 as f229
 from tests.test_console_2c3a import _supply, db  # noqa: F401  (fixture)
 from tests.test_console_2i9 import WS, _fl12_money, _inputs
@@ -92,7 +93,7 @@ def test_fl12_to_fl13_is_not_comparable_on_every_reader_with_the_same_reason(htt
     score = http.get('/api/console/score', params={'cycle': cycle, 'merchant': WS, 'org': 10}).json()
     assert score['previous']['comparable'] is False and score['previous']['condition'] == 'study'
     assert score['previous']['reason'] == DIFFERENT and 'delta' not in score['previous']
-    assert all(m['delta'] is None and m['delta_reason'] == DIFFERENT for m in score['metrics'])
+    assert all(m['delta'] is None and m['delta_reason'] == DIFFERENT for m in retailer_rows(score))
     over = http.get('/api/console/overview', params={'cycle': cycle, 'org': 10}).json()
     for s, block in over['by_surface'].items():
         assert (block['changes_status'], block['changes_note'], block['changes']) == ('not_comparable', DIFFERENT, []), s

@@ -2922,6 +2922,13 @@ def load_visibility(conn, cycle: dict, merchant: Optional[dict] = None) -> dict:
                             retired=retired, retired_by=retired_by, answer_texts=texts, merchant=merchant)
 
 
+def study_merchant_block(conn, cycle: dict) -> dict:
+    """2L-4: tier_config.merchant of the cycle's study, as generation wrote it ({} for none)."""
+    job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
+                       {'st': cycle.get('study_type')}).fetchone() if cycle.get('study_type') else None
+    return ((_json(job[0]) if job else None) or {}).get('merchant') or {}
+
+
 def asks_intents(conn, cycle: dict) -> bool:
     """2L-4: whether the cycle's study has a where-to-buy or cheapest-place
     question (brand-direct, source_ref.intent), so `routing` needs supply."""
@@ -2940,9 +2947,7 @@ def routing_merchant(conn, cycle: dict, *, kind: Optional[str], retailers: Optio
     it could not be read, the list the study was generated with
     (tier_config.merchant.retailer_list), and `retailers_source` says which.
     reference: supply's /reference payload, for the walled notes."""
-    job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
-                       {'st': cycle.get('study_type')}).fetchone() if cycle.get('study_type') else None
-    stored = ((_json(job[0]) if job else None) or {}).get('merchant') or {}
+    stored = study_merchant_block(conn, cycle)
     if retailers_error is None and isinstance(retailers, dict):
         listed, source = list(retailers.get('domains') or []), 'supply'
         own = list(retailers.get('own_domains') or [retailers.get('own_domain')])

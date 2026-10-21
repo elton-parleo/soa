@@ -17,6 +17,7 @@ import pytest
 from sqlalchemy import text
 
 from app.services import console_score as score_svc
+from tests.score_2l4 import before_2l4, retailer_rows
 from tests import console_fixture_2i8 as f2i8
 from tests.test_console_2c3a import _cycle_229, _get, _supply, db  # noqa: F401
 from tests.test_console_2i8 import _fl12 as _fl12_2i8
@@ -54,7 +55,7 @@ def _score(http, db, upstream, name):
 @pytest.mark.parametrize('name', list(FIXTURES))
 def test_the_score_is_what_main_served_but_for_the_rows_and_the_version(name, http, db, upstream):
     body = _score(http, db, upstream, name)
-    view = score_view(body)
+    view = score_view(before_2l4(body))
     got = hashlib.sha256(json.dumps(view, sort_keys=True).encode()).hexdigest()
     if DUMP:
         os.makedirs(DUMP, exist_ok=True)
@@ -78,8 +79,8 @@ MAIN_BY_SURFACE = {
 
 def test_fl12_s_rows_count_every_agent_as_the_overview_does(http, db, upstream):
     body = _score(http, db, upstream, 'fl12_2i8')
-    rows = {m['key']: m for m in body['metrics']}
-    assert body['metric_surface'] == 'all' and all(m['surface'] == 'all' for m in body['metrics'])
+    rows = {m['key']: m for m in retailer_rows(body)}
+    assert body['metric_surface'] == 'all' and all(m['surface'] == 'all' for m in retailer_rows(body))
     assert {k: (m['value'], m['denominator']) for k, m in rows.items()} == {
         'first': (33, 102), 'share': (51, 102), 'program': (0, 51), 'exact': (22, 42), 'terms': (24, 30)}
     assert {k: m['by_surface'] for k, m in rows.items()} == MAIN_BY_SURFACE

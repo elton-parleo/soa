@@ -26,6 +26,7 @@ stored score are at the bottom. No model is called.
 """
 import json
 import logging
+from collections import Counter
 from contextvars import ContextVar
 from statistics import mean
 from typing import Dict, Iterable, List, Optional
@@ -583,8 +584,85 @@ METRICS = (
 )
 
 
+#: 2L-4: a brand merchant's five tiles, the demo's charter set in its order:
+#: (key, name). Retailer merchants keep METRICS.
+BRAND_METRICS = (
+    ('attribute', 'Attribute accuracy'),
+    ('coverage', 'Retailer coverage'),
+    ('presence', 'Category presence'),
+    ('retired', 'Retired product named'),
+    ('promo', 'Promo pass-through'),
+)
+#: 2L-4: the brand tiles' copy, filled from their counts. Kept out of
+#: TEMPLATES, which the score serves as `rules` and is pinned.
+BRAND_TILE_TEMPLATES = {
+    'attribute.not_measured': ("Not measured yet: each product's attributes are not yet checked against the brand's "
+                               "record."),
+    'promo.not_measured': "Not measured: retailer-page deals are not read yet.",
+    'retired.not_measured': "Not measured: the brand's record has no retired line.",
+    'coverage.not_measured': ("Not measured: this cycle asked no where-to-buy question. The study's next "
+                              "regeneration adds them."),
+    'coverage.sub': '{n} of {d} where-to-buy answers name 2 or more of {names}',
+    'presence.sub': 'Category answers naming {brand}. First in {first}',
+    'presence.rival': ', {rival} first in {n}',
+    'retired.sub': 'Category answers naming {label}, which {by} retired',
+    'retired.successor': '. {successor}, its successor: {n}',
+    'previous.no_tile': 'Not comparable: {code} was scored before this tile was counted',
+    'note.coverage': '{where}, where-to-buy answers',
+    'note.retired': '{where}, brand-choice answers',
+}
+
+
+def brand_counts(brand_inputs: Optional[dict], vis_rows: List[dict], surface: str, tier: str, totals: dict,
+                 surface_set: Optional[List[str]] = None) -> dict:
+    """2L-4: the brand tiles' counts on one surface. `brand_inputs` is
+    {routing, retired_named, brand} from Visibility (rm.build_routing,
+    rm.build_retired_named). On `all` the per-surface counts of
+    `surface_set` (the pooled surfaces) are summed, as the score pools
+    them. A tile with nothing to count is None, its tile "not measured".
+
+    presence is Share of answers (named of named_of on the Overview's
+    tier), with first and the rival first most often for its sub-line;
+    coverage the where-to-buy answers naming 2 or more of the merchant's
+    retailers; retired the first retired line's brand-choice answers
+    naming it."""
+    inputs = brand_inputs or {}
+    keys = [s for s in (surface_set or []) if s != surfaces.ALL] if surface == surfaces.ALL else [surface]
+
+    def summed(per: dict, a: str, b: str) -> Optional[dict]:
+        got = [per.get(s) for s in keys if per.get(s)]
+        return {'value': sum(g[a] for g in got), 'of': sum(g[b] for g in got)} if got else None
+
+    rivals = Counter((v.get('first') or {}).get('name') for v in vis_rows
+                     if parity._on(v.get('surface'), surface) and v.get('answered') and parity._in_tier(v, tier)
+                     and v.get('first') and not v['first'].get('you'))
+    rival = rivals.most_common(1)[0] if rivals else None
+    routing = inputs.get('routing')
+    coverage = summed(routing.get('coverage') or {}, 'named_two_plus', 'answers') if routing else None
+    if coverage is not None:
+        coverage['names'] = list(routing.get('retailers') or [])
+    line = ((inputs.get('retired_named') or {}).get('lines') or [None])[0]
+    retired = None
+    if line:
+        retired = summed(line.get('brand_choice') or {}, 'named', 'answers') or {'value': 0, 'of': 0}
+        succ = summed({s: c for s, c in (line.get('brand_choice') or {}).items() if c.get('successor_named') is not None},
+                      'successor_named', 'answers')
+        retired.update(label=line.get('label'), by=(inputs.get('retired_named') or {}).get('retired_by'),
+                       successor=(line.get('successor') or {}).get('label'),
+                       successor_named=succ['value'] if succ else None)
+    return {
+        'attribute': None,
+        'coverage': coverage,
+        'presence': {'value': totals['named'], 'of': totals['named_of'], 'first': totals['first'],
+                     'brand': inputs.get('brand'), 'rival': {'name': rival[0], 'first': rival[1]} if rival else None},
+        'retired': retired,
+        'promo': None,
+    }
+
+
 def metric_counts(runs: List[dict], mentions: List[dict], vis_rows: List[dict], surface: str,
-                  terms: Iterable[str] = ()) -> dict:
+                  terms: Iterable[str] = (), brand_inputs: Optional[dict] = None,
+                  surface_set: Optional[List[str]] = None) -> dict:
     """The counts behind the five rows on one surface, from the counts the
     Overview already reads: named and first over answered runs of the
     Overview's tier (unprompted when the cycle asked any, parity.surface_
@@ -606,6 +684,8 @@ def metric_counts(runs: List[dict], mentions: List[dict], vis_rows: List[dict], 
                                       else r.get('tier') == tier))}
     ours = [m for m in mentions if m['run_id'] in in_tier and m.get('role') == 'primary' and m.get('mentioned')]
     return {
+        # 2L-4: the brand tiles' counts beside the five, every merchant's
+        **brand_counts(brand_inputs, vis_rows, surface, tier, vis['total'], surface_set),
         'tier': tier, 'agent_set': vis['agent_set'],
         'first': {'value': vis['total']['first'], 'of': vis['total']['named_of']},
         'share': {'value': vis['total']['named'], 'of': vis['total']['named_of']},
@@ -622,6 +702,67 @@ def _surface_note(surface: str, tier: str, key: str) -> str:
     if key in ('first', 'share', 'program'):
         return f"{where}, {parity._answers(tier) if tier in (rm.VIS_UNPROMPTED, rm.VIS_BRAND_CHOICE) else 'every answered question'}"
     return f"{where}, {'catalog' if key == 'exact' else 'value'} tier, exact of scored"
+
+
+def _brand_sub(key: str, c: Optional[dict]) -> Optional[str]:
+    """2L-4: a brand tile's sub-line, from its counts."""
+    t = BRAND_TILE_TEMPLATES
+    if c is None:
+        return None
+    if key == 'coverage':
+        return t['coverage.sub'].format(n=c['value'], d=c['of'], names=', '.join(c.get('names') or [])
+                                        or "the merchant's retailers")
+    if key == 'presence':
+        line = t['presence.sub'].format(brand=c.get('brand') or 'the brand', first=c.get('first', 0))
+        if c.get('rival'):
+            line += t['presence.rival'].format(rival=c['rival']['name'], n=c['rival']['first'])
+        return line
+    if key == 'retired':
+        line = t['retired.sub'].format(label=c.get('label'), by=c.get('by') or 'the brand')
+        if c.get('successor') and c.get('successor_named') is not None:
+            line += t['retired.successor'].format(successor=c['successor'], n=c['successor_named'])
+        return line
+    return None
+
+
+def _brand_note(key: str, surface: str, tier: str) -> Optional[str]:
+    where = parity._on_words(surface)
+    if key == 'presence':
+        return _surface_note(surface, tier, 'share')
+    if key in ('coverage', 'retired'):
+        return BRAND_TILE_TEMPLATES[f'note.{key}'].format(where=where)
+    return None
+
+
+def build_brand_metrics(counts: Dict[str, dict], surface: str, previous: Optional[dict]) -> List[dict]:
+    """2L-4: a brand merchant's five tiles (BRAND_METRICS) on `surface`, the
+    retailer rows' shape plus `state` (measured | not_measured), `reason`
+    and `sub`. A not-measured tile has no value, denominator or delta. A
+    delta as build_metrics gives one; a previous score stored before the
+    tile was counted has none, and says so."""
+    out = []
+    comparable = bool(previous and previous.get('comparable'))
+    prev_counts = (previous or {}).get('metric_counts') or {}
+    for key, name in BRAND_METRICS:
+        now = counts[surface].get(key)
+        delta, reason = None, None
+        if now is not None:
+            prev = (prev_counts.get(surface) or {}).get(key) if comparable else None
+            if prev is not None:
+                delta = now['value'] - prev['value']
+            elif comparable:
+                reason = BRAND_TILE_TEMPLATES['previous.no_tile'].format(code=previous.get('cycle'))
+            else:
+                reason = (previous or {}).get('reason') or TEMPLATES['previous.first_cycle']
+        out.append({'key': key, 'name': name, 'state': 'measured' if now is not None else 'not_measured',
+                    'reason': None if now is not None else BRAND_TILE_TEMPLATES[f'{key}.not_measured'],
+                    'value': now['value'] if now else None, 'denominator': now['of'] if now else None,
+                    'sub': _brand_sub(key, now), 'surface': surface,
+                    'surface_note': _brand_note(key, surface, counts[surface]['tier']) if now else None,
+                    'delta': delta, 'delta_reason': reason,
+                    'by_surface': {s: {'value': c[key]['value'], 'of': c[key]['of']} for s, c in counts.items()
+                                   if s != surfaces.ALL and c.get(key)}})
+    return out
 
 
 def build_metrics(counts: Dict[str, dict], surface: str, previous: Optional[dict]) -> List[dict]:
@@ -727,7 +868,8 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
                 access: Optional[dict], reference_rows: Optional[List[dict]],
                 read_errors: Optional[Dict[str, str]] = None, inputs: Optional[dict] = None,
                 domain_checks: Optional[dict] = None, rivals: Optional[int] = None,
-                terms: Optional[Iterable[str]] = None) -> dict:
+                terms: Optional[Iterable[str]] = None, kind: Optional[str] = None,
+                brand_inputs: Optional[dict] = None) -> dict:
     """GET /api/console/score without `previous` (score_with_previous adds it).
 
     runs: load_score_runs (one per run, with tier, stage, outcome and the
@@ -738,7 +880,10 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     (soa_cycles.domain_checks, 2E), or None. rivals: how many competitors the
     cycle's comparison set tracks (load_tracked_rivals); None when not read,
     which scores as before 2I-6. terms: the brand's terms
-    (rm.load_brand_terms); None or empty checks the tier alone (2I-7)."""
+    (rm.load_brand_terms); None or empty checks the tier alone (2I-7).
+    kind: 2L-4, the merchant's ('brand' | 'seller'), which picks the five
+    rows (`metric_kind`); brand_inputs: Visibility's routing and
+    retired_named and the brand's name, the brand tiles' counts."""
     errors = read_errors or {}
     terms = list(terms or [])
     at('crawl counts')
@@ -770,12 +915,12 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
     unmeasured = mean(sum(d['max'] for d in s['dimensions'] if d['state'] == NOT_MEASURED) for s in per) if per else 0
     tv = next((p for p in pillars if p['code'] == 'true_value'), None)
     at('metric rows')
-    counts = {s: metric_counts(runs, mentions, vis_rows, s, terms) for s in pooled}
+    counts = {s: metric_counts(runs, mentions, vis_rows, s, terms, brand_inputs) for s in pooled}
     in_pool = [r for r in runs if parity._surface_of(r) in pooled]
     # 2I-8a: the rows count every pooled agent together, as the Overview does
     if pooled:
         counts = {surfaces.ALL: metric_counts(in_pool, mentions, [v for v in vis_rows if v.get('surface') in pooled],
-                                              surfaces.ALL, terms), **counts}
+                                              surfaces.ALL, terms, brand_inputs, pooled), **counts}
     agents = {surfaces.agent_of(r.get('platform')) or r.get('platform') for r in in_pool}
     questions = len({r.get('query_code') for r in in_pool})
     # 2I-7: the unprompted questions this score counted, and the ones left out
@@ -811,6 +956,8 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
         'biggest_gap': biggest_gap(per, dims),
         'metric_surface': surfaces.ALL if pooled else None,
         'metric_counts': counts,
+        # 2L-4: which five rows the merchant reads; both sets are counted
+        'metric_kind': 'brand' if kind == 'brand' else 'retailer',
         'coverage': {'surfaces': len(pooled), 'questions': questions, 'agents': len(agents), 'runs': len(in_pool),
                      'ran_no_answers': [s for s in ran if s not in answered and s not in ungrounded],
                      **({'ungrounded': ungrounded} if ungrounded else {}),
@@ -851,7 +998,15 @@ def with_previous(body: dict, prev_code: Optional[str], prev_stored: Optional[di
     previous = compare(body, prev_code, prev_stored, studies)
     out = dict(body)
     out['previous'] = None if previous is None else {k: v for k, v in previous.items() if k != 'metric_counts'}
-    out['metrics'] = build_metrics(body['metric_counts'], body['metric_surface'], previous) if body['metric_surface'] else []
+    ms = body['metric_surface']
+    # 2L-4: both sets, keyed by merchant kind; `metrics` is the merchant's
+    out['metrics_by_kind'] = {
+        'retailer': build_metrics(body['metric_counts'], ms, previous) if ms else [],
+        'brand': build_brand_metrics(body['metric_counts'], ms, previous)
+        if ms and 'presence' in (body['metric_counts'].get(ms) or {}) else [],
+    }
+    out['metric_kind'] = body.get('metric_kind') or 'retailer'
+    out['metrics'] = out['metrics_by_kind'][out['metric_kind']]
     return out
 
 
@@ -963,6 +1118,9 @@ def needs_recompute(body: Optional[dict], domain_checks: Optional[dict],
         return 'first read'
     if not is_current(body):
         return 'stale'
+    # 2L-4: a score stored before the brand tiles were counted beside the five
+    if body.get('metric_surface') and 'presence' not in ((body.get('metric_counts') or {}).get(body['metric_surface']) or {}):
+        return 'brand tiles not counted'
     was = [c for c in DOMAIN_CODES if c in (body.get('measured') or [])]
     if was != measured_from_record(domain_checks):
         return 'measured set changed'

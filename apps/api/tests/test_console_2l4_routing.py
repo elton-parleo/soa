@@ -27,7 +27,6 @@ First store named, of 97 answers that name one: Walmart 35, Target 23, Amazon
 22, Other stores 17 (Costco 5, Sam's Club 5, Kroger 4, Publix 2, eBay 1).
 """
 import json
-import os
 
 from sqlalchemy import text
 
@@ -117,22 +116,11 @@ def _get(http, endpoint, **params):
     return r.json()
 
 
-def _dump(name, body):
-    """SOA_2L4_SAMPLE_DUMP=<dir>: the console's samples, unedited."""
-    out = os.environ.get('SOA_2L4_SAMPLE_DUMP')
-    if out:
-        os.makedirs(out, exist_ok=True)
-        with open(os.path.join(out, name), 'w') as fh:
-            json.dump(body, fh, indent=1, sort_keys=True)
-
-
 def test_the_ranking_on_the_fl13_shape_by_hand(http, db, upstream):
     _fl13_shape(db, http, upstream)
     _intents(db)
     _supply(upstream)
-    vis = _get(http, 'visibility')
-    _dump('visibility-2l4.json', vis)
-    routing = vis['routing']
+    routing = _get(http, 'visibility')['routing']
     assert routing['title'] == 'Where agents send Wiggle & Snug shoppers first'
     assert routing['sub'] == 'First store named in 97 where-to-buy and cheapest-place answers'
     assert [(r['name'], r['first'], r.get('note')) for r in routing['rows']] == [
