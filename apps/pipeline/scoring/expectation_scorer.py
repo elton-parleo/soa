@@ -252,6 +252,20 @@ class ReferenceCache:
         self._by_cycle[cycle_id] = reference
         return reference
 
+    def with_payload(self, cycle_id, payload):
+        """2J-4: score this cycle against `payload` instead of its stored
+        copy, for this cache's life (rescore_cycle --refresh-reference's
+        plan, before anything is written). `stale` still reads the previous
+        cycle's stored rows."""
+        with engine.connect() as conn:
+            row = conn.execute(text(
+                "SELECT id, cycle_code, study_type, start_date FROM soa_cycles WHERE id = :id"
+            ), {"id": cycle_id}).fetchone()
+        prior_code, prior_payload = self._prior(row)
+        self._by_cycle[cycle_id] = ReferenceSet(payload, prior_payload=prior_payload,
+                                                prior_cycle_code=prior_code) if payload else None
+        return self._by_cycle[cycle_id]
+
     def _read(self, cycle, study_type, merchant_slug):
         as_of = _cycle_start(cycle)
         client = self._client or TrueSyncCatalogClient.for_study(study_type)

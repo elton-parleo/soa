@@ -53,18 +53,56 @@ explains is `unattributed`, and while any exists the real run refuses to
 write and prints them: "unattributed: classifier output changed on
 identical inputs" when the stored expectation matches the question's
 current one field for field, else the fields that differ.
+
+--refresh-reference (2J-4), with --classify-only, refreshes the cycle's
+cached retailer-prices after supply corrected its stored reads (supply's
+reparse_reads.py --apply). The cached copy (soa_cycles.reference_prices) is
+read once at a cycle's first scoring and never again. The console's True
+Value grid and products block read it directly, and the price outcomes
+(which the Missed share and the score's price rows count) are classified
+against it.
+
+    python3 scripts/rescore_cycle.py --cycle <code> --refresh-reference --classify-only --dry-run
+    python3 scripts/rescore_cycle.py --cycle <code> --refresh-reference --classify-only --backup <path>
+    python3 scripts/rescore_cycle.py --cycle <code> --classify-only --restore <path>
+
+It reads supply's retailer-prices as of the cycle's STORED reference_as_of,
+never now, so it picks up the corrected reads of the same run and not a
+newer run. It prints the diff, cell by cell (variant x retailer: price,
+method, read_status, verifiable, reference_source), then the outcome counts
+before and after and the moves per tier, from classify-only's plan against
+the fetched copy. With --dry-run it writes nothing. Without it, it refuses
+with no --backup or an existing one; writes the cached copy to the backup
+(the column's text exactly, and its sha256); replaces it with supply's
+payload plus `refreshed_at` and `previous_sha256` (an envelope inside the
+JSON, so no migration); and re-classifies. --restore puts a backup back,
+byte for byte, under the same guards plus two: the backup must be this
+cycle's, and the cycle's reference must be the one the refresh wrote.
+
+The stale rule is untouched. `stale_basis` reads the PREVIOUS cycle's
+cached rows, and this does not refresh them: refreshing cycle N does not
+change what cycle N+1 considers stale unless N+1 is refreshed and
+re-classified too, with the same flag.
+
+The console's stored score recomputes on its next read: `refreshed_at`
+differs from the one the stored score was computed on (console_score.
+needs_recompute, 'cycle reference refreshed').
 """
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import sys
 from collections import Counter
+from datetime import datetime, timezone
+from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import bindparam, text  # noqa: E402
 
+from soa_shared import expected_answers as ea  # noqa: E402
 from soa_shared.database import engine  # noqa: E402
 from soa_shared.expected_answers import QUERY_TIERS  # noqa: E402
 
@@ -458,6 +496,302 @@ def _main_classify_only(args) -> int:
     return 0
 
 
+# ─── 2J-4: refresh the cycle's cached reference ────────────────────────────
+
+#: the cell fields a refresh diffs, per variant x retailer
+REFERENCE_FIELDS = ('price', 'method', 'read_status', 'verifiable', 'reference_source')
+
+
+def _iso(value):
+    """A stored timestamp as ISO 8601, UTC when the column hands it back
+    naive (sqlite's text), as supply is asked for it."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.isoformat()
+
+
+def _sha256(raw) -> str:
+    return hashlib.sha256((raw or '').encode('utf-8')).hexdigest()
+
+
+def stored_reference(conn, cycle_code: str) -> dict:
+    """The cycle's cached retailer-prices: the stored text exactly as the
+    column holds it (`raw`, what a backup keeps and a restore writes back),
+    parsed (`payload`), its as_of and the merchant it was read for."""
+    row = conn.execute(text("""
+        SELECT id, cycle_code, study_type, CAST(reference_prices AS TEXT) AS raw, reference_as_of
+        FROM soa_cycles WHERE cycle_code = :code
+    """), {"code": cycle_code}).mappings().fetchone()
+    if not row:
+        raise SystemExit(f"no cycle with code {cycle_code!r}")
+    payload = _as_json(row['raw']) if row['raw'] else None
+    merchant = (payload or {}).get('merchant')
+    if not merchant:
+        counts = Counter()
+        for (ref,) in conn.execute(text("""
+            SELECT q.source_ref FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
+            WHERE r.cycle_id = :cid
+        """), {"cid": row['id']}):
+            slug = (_as_json(ref) or {}).get('merchant_slug')
+            if slug:
+                counts[slug] += 1
+        merchant = counts.most_common(1)[0][0] if counts else None
+    return {'cid': row['id'], 'cycle_code': row['cycle_code'], 'study_type': row['study_type'],
+            'raw': row['raw'], 'payload': payload, 'merchant': merchant,
+            'as_of': _iso(row['reference_as_of']) or (payload or {}).get('as_of')}
+
+
+def _cell_key(row: dict) -> tuple:
+    from scoring.retailer_reference import gtin14
+    variant = row.get('variant_label') or row.get('variant_ref') or gtin14(row.get('gtin')) or row.get('sku')
+    domain = ea.normalize_domain(row.get('retailer_domain'))
+    # a retailer's row is the default; the brand's own page and a
+    # comparison page (2A-4) say so
+    role = row.get('role') if row.get('role') not in (None, 'retailer') else ''
+    return (str(variant), domain, role)
+
+
+def reference_diff(before: Optional[dict], after: Optional[dict]) -> list:
+    """Every (variant, retailer, field, was, now) that differs between two
+    retailer-prices payloads, cell by cell. A cell only one side has is
+    one entry, field `(cell)`."""
+    index = lambda p: {_cell_key(r): r for r in (p or {}).get('prices') or [] if isinstance(r, dict)}  # noqa: E731
+    was, now = index(before), index(after)
+    out = []
+    for key in sorted(set(was) | set(now), key=lambda k: tuple(str(x) for x in k)):
+        variant, domain = key[0] + (f" ({key[2]})" if key[2] else ''), key[1]
+        a, b = was.get(key), now.get(key)
+        if a is None or b is None:
+            out.append((variant, domain, '(cell)', 'absent' if a is None else 'present',
+                        'absent' if b is None else 'present'))
+            continue
+        for field in REFERENCE_FIELDS:
+            if a.get(field) != b.get(field):
+                out.append((variant, domain, field, a.get(field), b.get(field)))
+    return out
+
+
+def _render_reference_diff(diff: list) -> str:
+    if not diff:
+        return '    (no cell differs)'
+    head = ('variant', 'retailer', 'field', 'cached', 'supply now')
+    body = [tuple('null' if v is None else str(v) for v in row) for row in diff]
+    widths = [max(len(r[i]) for r in [head] + body) for i in range(5)]
+    line = lambda r: '    ' + '  '.join(c.ljust(w) for c, w in zip(r, widths)).rstrip()  # noqa: E731
+    return '\n'.join([line(head), line(tuple('-' * w for w in widths))] + [line(r) for r in body])
+
+
+def transitions(moved: list, tiers_of: dict) -> dict:
+    """{tier: Counter((was, now))} from classify_only's moved rows."""
+    out = {}
+    for run_id, _code, _p, _n, was, now, _rule in moved:
+        out.setdefault(tiers_of.get(run_id) or '(untiered)', Counter())[(was, now)] += 1
+    return out
+
+
+def _render_transitions(by_tier: dict) -> str:
+    lines = [f"    {tier:<20} {was} -> {now}: {n}"
+             for tier in sorted(by_tier) for (was, now), n in sorted(by_tier[tier].items())]
+    return '\n'.join(lines) or '    (no row would move)'
+
+
+def projected(before: dict, moved: list, tiers_of: dict) -> dict:
+    after = {tier: Counter(c) for tier, c in before.items()}
+    for run_id, _code, _p, _n, was, now, _rule in moved:
+        tier = tiers_of.get(run_id) or '(untiered)'
+        after.setdefault(tier, Counter())[was] -= 1
+        after[tier][now] += 1
+    return {t: Counter({o: n for o, n in c.items() if n}) for t, c in after.items()}
+
+
+def envelope(payload: dict, *, previous_raw, now: datetime) -> dict:
+    """Supply's payload as fetched, with the refresh recorded beside it:
+    `refreshed_at` and `previous_sha256` (the replaced text's). No column,
+    so no migration; the console's score reads `refreshed_at` to recompute."""
+    return {**payload, 'refreshed_at': now.isoformat(), 'previous_sha256': _sha256(previous_raw)}
+
+
+def fetch_reference(cycle: dict, client=None) -> dict:
+    """supply's retailer-prices for the cycle's merchant AS OF THE CYCLE'S
+    STORED as_of, never now: the corrected reads of the same run. The
+    client is the one the cycle's first scoring read through
+    (ReferenceCache: the study's customer token)."""
+    from clients.truesync_catalog import TrueSyncCatalogClient
+    client = client or TrueSyncCatalogClient.for_study(cycle['study_type'])
+    payload, error = client.retailer_prices(cycle['merchant'], as_of=cycle['as_of'])
+    if error is not None or not isinstance(payload, dict):
+        raise SystemExit(f"REFUSED: supply's retailer-prices for {cycle['merchant']} as of "
+                         f"{cycle['as_of']} failed ({error}). Nothing was written.")
+    return payload
+
+
+def _plan(cycle_code: str, cid: int, payload: dict, tiers, scorer_factory) -> dict:
+    """classify_only's plan against `payload`, writing nothing."""
+    scorer = scorer_factory()
+    scorer.references.with_payload(cid, payload)
+    return classify_only(cycle_code, tiers, scorer=scorer, write=False)
+
+
+def _default_scorer():
+    from scoring.expectation_scorer import ExpectationScorer
+    return ExpectationScorer(client=_NoModel(), labeler=False)
+
+
+def _replace_reference(cid: int, raw: str) -> None:
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE soa_cycles SET reference_prices = :p WHERE id = :id"),
+                     {"p": raw, "id": cid})
+
+
+def _swap(cycle: dict, new_payload: dict, new_raw_for_write, *, tiers, write: bool, scorer_factory,
+          before_write=None, label: str) -> dict:
+    """The shared half of a refresh and a restore: diff, plan, print, and
+    (when `write`) replace the payload and re-classify. `new_raw_for_write`
+    is called only when writing; `before_write` runs first (the backup)."""
+    print(f"cycle {cycle['cycle_code']} (id {cycle['cid']}) — {label}: merchant {cycle['merchant']}, "
+          f"as of {cycle['as_of']}; no model call")
+    diff = reference_diff(cycle['payload'], new_payload)
+    print(f"\nreference cells that differ: {len({(d[0], d[1]) for d in diff})}")
+    print(_render_reference_diff(diff))
+
+    with engine.connect() as conn:
+        before = outcome_counts(conn, cycle['cid'])
+        tiers_of = {rid: v[3] for rid, v in row_outcomes(conn, cycle['cid']).items()}
+    baseline = classify_only(cycle['cycle_code'], tiers, scorer=scorer_factory(), write=False)
+    plan = _plan(cycle['cycle_code'], cycle['cid'], new_payload, tiers, scorer_factory)
+    by_tier = transitions(plan['moved'], tiers_of)
+    print("\noutcomes before:")
+    print(_render(before))
+    print("outcomes after (planned):")
+    print(_render(projected(before, plan['moved'], tiers_of)))
+    print("\nmoves, per tier:")
+    print(_render_transitions(by_tier))
+    print(f"\nrows whose outcome would move: {len(plan['moved'])} of {plan['rows']}")
+    for run_id, code, platform, number, was, now, rule in plan['moved']:
+        print(f"    {code} · {platform} · run {number}: {was} -> {now}   [{rule}]   [run {run_id}]")
+    if baseline['moved']:
+        print(f"\nof which {len(baseline['moved'])} would move on the CACHED reference too (a classifier "
+              f"change since the last classify-only); they are written with the rest")
+    result = {'diff': diff, 'moved': plan['moved'], 'by_tier': by_tier, 'written': False}
+    if not plan['deterministic']:
+        print("\nREFUSED: two classification passes disagreed. Nothing was written.")
+        return {**result, 'refused': 'nondeterministic'}
+    if plan['unattributed']:
+        print(f"\nREFUSED: {len(plan['unattributed'])} move(s) no named rule explains. Nothing was written.")
+        return {**result, 'refused': 'unattributed'}
+    if not diff:
+        print("\nno cell differs: nothing to write.")
+        return result
+    if not write:
+        print("\ndry run — nothing written.")
+        return result
+
+    if before_write:
+        before_write()
+    _replace_reference(cycle['cid'], new_raw_for_write())
+    done = classify_only(cycle['cycle_code'], tiers, scorer=scorer_factory(), write=True)
+    if not done['written']:
+        print("\nPROBLEM: the reference was replaced but the re-classify did not write "
+              "(see above). Put the previous one back with --restore.")
+        return {**result, 'refused': 'rescore_not_written'}
+    with engine.connect() as conn:
+        after = outcome_counts(conn, cycle['cid'])
+    print(f"\nwritten: reference replaced; {len(done['moved'])} row(s) moved")
+    for run_id, code, platform, number, was, now, rule in done['moved']:
+        print(f"    {code} · {platform} · run {number}: {was} -> {now}   [{rule}]   [run {run_id}]")
+    print("after:")
+    print(_render(after))
+    print("\nthe console's stored score recomputes on its next read ('cycle reference refreshed').")
+    return {**result, 'written': True, 'moved_written': done['moved']}
+
+
+def refresh_reference(cycle_code: str, *, backup: Optional[str], write: bool = True, tiers=None,
+                      client=None, scorer_factory=None, now: Optional[datetime] = None) -> dict:
+    """
+    2J-4: re-read the cycle's retailer-prices from supply as of its stored
+    as_of, diff it against the cached copy, and (when `write`) back the
+    cached copy up to `backup`, replace it, and re-classify.
+
+    The stale rule is untouched: `stale_basis` reads the PREVIOUS cycle's
+    cached rows, which this does not refresh. Refreshing cycle N does not
+    change what cycle N+1 considers stale unless N+1 is refreshed and
+    re-classified too (the same flag, on N+1).
+    """
+    scorer_factory = scorer_factory or _default_scorer
+    if write:
+        _check_new_backup(backup)
+    with engine.connect() as conn:
+        cycle = stored_reference(conn, cycle_code)
+    if cycle['payload'] is None:
+        raise SystemExit(f"REFUSED: {cycle_code} has no cached reference to refresh; a plain "
+                         f"re-score reads one. Nothing was written.")
+    if not cycle['merchant'] or not cycle['as_of']:
+        raise SystemExit(f"REFUSED: {cycle_code}'s cached reference names no merchant or as_of. "
+                         f"Nothing was written.")
+    fetched = fetch_reference(cycle, client)
+    stamp = now or datetime.now(timezone.utc)
+    new_raw = json.dumps(envelope(fetched, previous_raw=cycle['raw'], now=stamp))
+
+    def write_backup():
+        with open(backup, 'x') as fh:
+            json.dump({'cycle_code': cycle['cycle_code'], 'cycle_id': cycle['cid'],
+                       'merchant': cycle['merchant'], 'reference_as_of': cycle['as_of'],
+                       'reference_prices_raw': cycle['raw'], 'sha256': _sha256(cycle['raw']),
+                       'replaced_by_sha256': _sha256(new_raw), 'written_at': stamp.isoformat()},
+                      fh, indent=2)
+        print(f"\nbackup written: {backup}")
+
+    return _swap(cycle, fetched, lambda: new_raw, tiers=tiers, write=write, scorer_factory=scorer_factory,
+                 before_write=write_backup, label='refresh reference')
+
+
+def restore_reference(cycle_code: str, backup: str, *, write: bool = True, tiers=None,
+                      scorer_factory=None) -> dict:
+    """Put a --refresh-reference backup back, byte for byte, and
+    re-classify. Refuses a backup of another cycle, and a cycle whose
+    reference changed since the refresh that wrote the backup."""
+    scorer_factory = scorer_factory or _default_scorer
+    if not backup or not os.path.exists(backup):
+        raise SystemExit(f"REFUSED: no backup at {backup!r}. Nothing was written.")
+    with open(backup) as fh:
+        saved = json.load(fh)
+    with engine.connect() as conn:
+        cycle = stored_reference(conn, cycle_code)
+    if saved.get('cycle_code') != cycle['cycle_code'] or saved.get('cycle_id') != cycle['cid']:
+        raise SystemExit(f"REFUSED: {backup} is a backup of {saved.get('cycle_code')!r} "
+                         f"(id {saved.get('cycle_id')}), not {cycle_code}. Nothing was written.")
+    if _sha256(cycle['raw']) != saved.get('replaced_by_sha256'):
+        raise SystemExit(f"REFUSED: {cycle_code}'s reference changed since this backup's refresh "
+                         f"(sha256 {_sha256(cycle['raw'])[:12]}, expected "
+                         f"{str(saved.get('replaced_by_sha256'))[:12]}). Nothing was written.")
+    raw = saved['reference_prices_raw']
+    return _swap(cycle, _as_json(raw), lambda: raw, tiers=tiers, write=write,
+                 scorer_factory=scorer_factory, label=f'restore reference from {backup}')
+
+
+def _check_new_backup(backup) -> None:
+    if not backup:
+        raise SystemExit("REFUSED: --refresh-reference without --dry-run needs --backup <path>. "
+                         "Nothing was written.")
+    if os.path.exists(backup):
+        raise SystemExit(f"REFUSED: {backup} exists; a backup is never overwritten. Nothing was written.")
+
+
+def _main_reference(args) -> int:
+    if args.restore:
+        result = restore_reference(args.cycle, args.restore, write=not args.dry_run, tiers=args.tiers)
+    else:
+        result = refresh_reference(args.cycle, backup=args.backup, write=not args.dry_run, tiers=args.tiers)
+    return 1 if result.get('refused') else 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="Re-score one or more tiers of a cycle, in place.",
@@ -491,7 +825,38 @@ def main(argv=None) -> int:
             "would move and writes nothing."
         ),
     )
+    parser.add_argument(
+        "--refresh-reference", action="store_true",
+        help=(
+            "2J-4, with --classify-only: re-read supply's retailer-prices for the "
+            "cycle's merchant as of the cycle's STORED reference_as_of (never now), "
+            "print the cell-by-cell diff against the cached copy and the price "
+            "outcomes that would move, then (without --dry-run) back the cached "
+            "copy up to --backup, replace it and re-classify. The previous "
+            "cycle's cached rows, which `stale` reads, are not refreshed."
+        ),
+    )
+    parser.add_argument(
+        "--backup", metavar="PATH",
+        help="with --refresh-reference: where the replaced copy is written; required "
+             "without --dry-run, and never overwritten",
+    )
+    parser.add_argument(
+        "--restore", metavar="BACKUP",
+        help="with --classify-only: put a --refresh-reference backup back, byte for "
+             "byte, and re-classify; refused for another cycle's backup or a cycle "
+             "whose reference changed since",
+    )
     args = parser.parse_args(argv)
+
+    if args.refresh_reference or args.restore:
+        if not args.classify_only:
+            parser.error("--refresh-reference and --restore run with --classify-only")
+        if args.refresh_reference and args.restore:
+            parser.error("--refresh-reference and --restore are one or the other")
+        return _main_reference(args)
+    if args.backup:
+        parser.error("--backup goes with --refresh-reference")
 
     if args.classify_only:
         return _main_classify_only(args)

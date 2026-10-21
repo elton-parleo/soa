@@ -213,7 +213,9 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
     # cycle_in_scope already read; absent before migration b4e8f1c3a9d2
     domain_checks = _json(row.get('domain_checks'))
     domain_checks = domain_checks if isinstance(domain_checks, dict) else None
-    why = ('rescore' if rescore else score_svc.needs_recompute(stored, domain_checks)
+    # 2J-4: the cycle's cached retailer-prices, for its refresh stamp
+    cached_reference = _json(row.get('reference_prices'))
+    why = ('rescore' if rescore else score_svc.needs_recompute(stored, domain_checks, cached_reference)
            or ('merchant' if merchant and (body.get('inputs') or {}).get('merchant') != merchant else None))
     if why:
         started = time.monotonic()
@@ -248,7 +250,8 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
         body = score_svc.build_score(row['cycle_code'], runs=runs, mentions=mentions, vis_rows=vis_rows, access=access,
                                      reference_rows=reference_rows, read_errors=errors,
                                      inputs={'merchant': slug, 'reference_run': reference_run, 'access_run': access_run,
-                                             'scored_at': datetime.now(timezone.utc).isoformat()},
+                                             'scored_at': datetime.now(timezone.utc).isoformat(),
+                                             **score_svc.reference_input(cached_reference)},
                                      domain_checks=domain_checks, rivals=rivals, terms=terms)
         # the value it replaces stays in its history (2E)
         body = score_svc.carry_history(body, stored, why)

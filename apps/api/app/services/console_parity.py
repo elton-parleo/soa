@@ -488,6 +488,8 @@ def _live_text(cell: dict, domain: str) -> str:
         return 'No reference read'
     if live == 'unverifiable':
         return f"Could not be read at {domain}"
+    if live == rm.NOT_PRICED:
+        return f"No price set at {domain}, the brand's own site, {_short_day(cell.get('observed_at'))}"
     how = _SOURCE_WORDS.get(cell.get('reference_source') or '', (cell.get('reference_source') or 'a read').replace('_', ' '))
     if cell.get('live_basis') == 'record' or cell.get('reference_source') == 'record':
         return f"{live} at {domain}, the record of {_short_day(cell.get('observed_at'))}, no page read yet"

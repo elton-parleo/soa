@@ -507,6 +507,15 @@ def _newest_read(reads: Optional[List[dict]], variant: dict) -> Optional[dict]:
     return max(hits, key=lambda r: str(r.get('observed_at') or '')) if hits else None
 
 
+#: 2J-4: supply 2J-1 serves a brand's own page that sets no price as
+#: `method: none_by_design` (`verifiable: false`, "brand site, no price
+#: set"). Its answers still score unverifiable, as supply's contract says;
+#: the cell's `live` says the page was read and prices nothing, not that it
+#: could not be read.
+NOT_PRICED_METHOD = 'none_by_design'
+NOT_PRICED = 'not priced'
+
+
 def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domain: Optional[str],
                      record_variants: List[dict], reads: Optional[List[dict]] = None) -> dict:
     """
@@ -598,6 +607,8 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
     def full_cell(runs, ref, surfaces_here):
         if ref is None:
             live_text = '—'
+        elif ref.get('method') == NOT_PRICED_METHOD:
+            live_text = NOT_PRICED
         elif not ref.get('verifiable', True):
             live_text = 'unverifiable'
         else:
