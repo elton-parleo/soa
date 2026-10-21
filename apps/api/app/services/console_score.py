@@ -901,7 +901,23 @@ def record_revision(record: Optional[dict]) -> Optional[int]:
     return int(record.get('revision') or 1)
 
 
-def needs_recompute(body: Optional[dict], domain_checks: Optional[dict]) -> Optional[str]:
+def reference_refreshed_at(reference: Optional[dict]) -> Optional[str]:
+    """2J-4: when rescore_cycle --refresh-reference last replaced the
+    cycle's cached retailer-prices (the payload's own `refreshed_at`), None
+    for a copy never refreshed."""
+    return reference.get('refreshed_at') if isinstance(reference, dict) else None
+
+
+def reference_input(reference: Optional[dict]) -> dict:
+    """The score's `inputs` entry for the cached reference it was computed
+    on: `cycle_reference_refreshed_at` for a refreshed copy, nothing for one
+    never refreshed (so such a cycle's score body is as it was)."""
+    refreshed = reference_refreshed_at(reference)
+    return {'cycle_reference_refreshed_at': refreshed} if refreshed else {}
+
+
+def needs_recompute(body: Optional[dict], domain_checks: Optional[dict],
+                    reference: Optional[dict] = None) -> Optional[str]:
     """Why a stored score is recomputed on this read, or None to serve it.
     2C-3's trigger, the scorer version (and the adapter's revision), and 2E's:
     the set of measured dimensions changed, or the record's revision did
@@ -926,6 +942,12 @@ def needs_recompute(body: Optional[dict], domain_checks: Optional[dict]) -> Opti
         scored_on = 1
     if domain_checks and scored_on != record_revision(domain_checks):
         return 'domain checks revision changed'
+    # 2J-4: a refresh (or a restore) re-classified the cycle's price
+    # outcomes against a new cached reference, which no other trigger sees.
+    # A score stored before 2J-4 read a copy never refreshed (None).
+    refreshed = reference_refreshed_at(reference)
+    if refreshed != inputs.get('cycle_reference_refreshed_at'):
+        return 'cycle reference refreshed' if refreshed else 'cycle reference restored'
     return None
 
 

@@ -142,7 +142,7 @@ the demo counts together.
 |---|---|
 | `columns` | the retailers in the record: the domains in the cycle's cached retailer-prices (2A). A cycle scored against the record (a hosted seller) has one column, its own domain |
 | `rows` | one per variant (`sku` = GTIN, or the record's variant id) |
-| `TvCell.live` | the 2A reference row's price, `unverifiable` when supply says `verifiable: false`; the record's price when no reference is cached |
+| `TvCell.live` | the 2A reference row's price, `unverifiable` when supply says `verifiable: false`; the record's price when no reference is cached. 2J-4: `not priced` for a brand's own page that sets no price (supply 2J-1's `method: none_by_design`, `verifiable: false`, "brand site, no price set"): the page was read, not unreadable. Its answers still score `unverifiable`, as supply's contract says, and the products block reads "No price set at <domain>, the brand's own site, <day>" |
 | `TvCell.quoted` | 2C-2: the deciding run's stated price (most common among the runs with that outcome); `—` when no run quoted one |
 | `TvCell.status` | 2C-2, `TV_CELL_RULE`, on `surface` (2I-8: `all`, every agent's quotes together; each surface's own cell in `by_surface`): the **worst** outcome among the runs that **quoted a price** (wrong, then stale, then partial, then exact); a run that quoted nothing, or priced another brand's product (absent), does not vote; no quoting run → `missed` (left out). Mapped exact → `exact`, wrong → `wrong`, partial → `partial`, absent → `missed`, stale → `wrong` (`outcome` says `stale`), unverifiable → **`unverifiable`** (extension), no question → `none`. A cell never reads WRONG with nothing quoted |
 | `programs` | `[]` without `merchant`; with it (2C-2) the owned incentives as `/programs` maps them |
@@ -799,6 +799,7 @@ cd apps/pipeline && alembic upgrade f3b8d2a6c4e1
 
 against the target only when deploying. After a `rescore_cycle`, re-score the cycle (`?rescore=true`,
 operator) or clear its row's `share_of_algorithm`: the stored score does not see a reclassification.
+A `--refresh-reference` (2J-4) is the exception: its stamp recomputes the score on the next read.
 
 ### Sample: GET /api/console/score?cycle=WS-2B-FIXTURE&merchant=wiggle-and-snug (cut)
 
@@ -1749,6 +1750,57 @@ reference read changed" when its stored score used an older reference read, neve
 
 `ADAPTER_REVISION` is 2 (the three mappings changed), so every score stored under 2C-3 recomputes once on
 its first read after the deploy, keeping the old value in its history.
+
+### The cached reference, and refreshing it (2J-4)
+
+A cycle's first scoring reads supply's `retailer-prices` once, as of the cycle's start, and caches
+it on the cycle (`soa_cycles.reference_prices`, `reference_as_of`;
+`scoring/expectation_scorer.ReferenceCache`). Every later read of the cycle uses that copy: the True
+Value grid and the products block read it directly (`build_true_value`), and the price outcomes, which
+the Missed share (2I-9) and the score's price rows count, were classified against it; so is every
+re-score and classify-only re-score (which is what makes a re-score reproducible). Nothing re-reads it
+on its own.
+
+When supply corrects its stored reads (2J-1's `reparse_reads.py --apply`: Amazon $0.00, Target
+$10.00, pampers.com "9.97 usd" on FL12), the copy is refreshed with
+`apps/pipeline/scripts/rescore_cycle.py --refresh-reference --classify-only`:
+
+```
+python3 scripts/rescore_cycle.py --cycle <code> --refresh-reference --classify-only --dry-run
+python3 scripts/rescore_cycle.py --cycle <code> --refresh-reference --classify-only --backup <path>
+python3 scripts/rescore_cycle.py --cycle <code> --classify-only --restore <path>
+```
+
+- **Read.** `retailer-prices?as_of=<the cycle's stored reference_as_of>` for the cycle's merchant
+  (the cached payload's `merchant`, else its questions'), through the client the first scoring read
+  through (`TrueSyncCatalogClient.for_study`, the study's customer token). Never as of now: the
+  refresh takes the corrected reads of the same run, not a newer run.
+- **Diff.** Cell by cell (variant x retailer; the brand's own page and a comparison page are
+  labelled): `price`, `method`, `read_status`, `verifiable`, `reference_source`, as a table; then the
+  outcome counts before and after and the moves per tier, from classify-only's plan against the
+  fetched copy (no model call). Moves that would happen on the cached copy too are counted apart.
+- **`--dry-run`** prints and writes nothing.
+- **Write.** Refused with no `--backup`, with a backup file that exists, for an unknown cycle, for a
+  cycle with no cached copy, on a failed supply read, and when the plan is not deterministic or has an
+  unattributed move. Otherwise: the backup (the column's text exactly, its sha256, and the sha256 of
+  the copy replacing it), then `reference_prices` = supply's payload plus `refreshed_at` and
+  `previous_sha256` (inside the JSON: no migration; `reference_as_of` unchanged), then the
+  classify-only write, printing the moved rows.
+- **`--restore`** puts a backup back byte for byte and re-classifies, under the same guards, and
+  refuses another cycle's backup or a cycle whose copy is no longer the one the refresh wrote.
+- **Stale.** Untouched. `stale_basis` reads the previous cycle's cached rows, which a refresh does
+  not change. Refreshing cycle N does not change what N+1 considers stale unless N+1 is refreshed and
+  re-classified too.
+
+**The stored score recomputes on its next read.** Before 2J-4 it would not: the score reads the
+cycle's outcomes (its two price rows) and supply's live `/reference`, and its triggers (scorer
+version, measured set, domain-check revision) see neither the cached copy nor the outcomes a
+re-classify moves. `needs_recompute` now compares the copy's `refreshed_at` with
+`inputs.cycle_reference_refreshed_at`, which a score computed on a refreshed copy carries (a copy
+never refreshed adds nothing, so those bodies are unchanged): a refresh recomputes once with
+`replaced_because` "cycle reference refreshed", a restore once with "cycle reference restored", the
+replaced value kept in the history. A plain `--classify-only` with no refresh still needs
+`?rescore=true` (below).
 
 ### Comparability: applicable points changed
 
