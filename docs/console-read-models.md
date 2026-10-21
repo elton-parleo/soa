@@ -7201,3 +7201,60 @@ Both return `{id, archived, archived_at}`. `{id}` is the study's id as `/studio/
   newest) skips an archived one.
 - Its cycles stay readable: every cycle-keyed read (`/answers`, `/overview?cycle=`, `/true-value`, ...) and `/runs`
   are unchanged.
+
+## 2L-2: retired products and their successors
+
+Decision (Elton, Oct 21): two optional feed columns and one count. The demo's Pampers workspace reads "Pure named 10
+times in 29 category answers, AMORE, its successor, 0". Until now the record had no way to say a line was retired.
+
+**The record.** Supply's feed takes `status` (active | retired) and `successor_sku` on a SKU row
+(parleo-supply-app, 2L-2), and its catalog, `/retailer-prices` and published record serve `status` and `successor`
+(`{variant_id, sku, gtin, product_name, title}`) on every variant. The catalog snapshot keeps both
+(`CatalogVariant.status`, `.successor`; a record from before 2L-2 reads as active). No migration: the lines ride in
+`tier_config.merchant.retired`, a question's `expected_answer` and `source_ref`, all JSON.
+
+**A retired line** (`soa_shared/retired_lines.py`, api and pipeline copies identical) is a catalog product whose
+variants are all retired. `line` is its name with the brand taken off the front ("Pure Protection"), `label` the
+line's first word ("Pure"), `terms` what an answer must contain to have named it, as whole words after
+`normalize_brand_text`: the product name, the line and the brand with the label ("Pampers Pure"). "pure" on its own
+is not the line. `retired_lines(snapshot)` is stored at generation as `tier_config.merchant.retired`:
+`[{listing_id, variant_ids, product_name, line, label, terms, successor: {variant_id, sku, product_name, line,
+label, terms} | null}]` (and by a brand-direct or catalog regeneration).
+
+**The generator.** Retired variants stay in catalog accuracy: agents still price them. Category control is
+unchanged (it already asks the category need without naming a brand). For each retired line,
+`catalog_tiers.build_retired_line_questions` adds one template-built brand-direct question, provenance `catalog`,
+stage Research: "Is Pampers Pure Protection still sold, and what replaced it?" (the brand in front when the product
+name lacks it; "…still sold?" for a last of line). Its expectation is `brand_mention`, scored as every brand-direct
+answer is, with the successor on it (`expected_answer.successor`) as the answer the question asks for; its
+`source_ref.retired_line` is `{variant_ids, line}`. `tier_config.brand_direct.retired_lines` is `{count, lines}`.
+
+**`retired_named`** on `/api/console/visibility` (and the same block on `/api/console/overview`, the fifth brand
+tile's input, which 2L-4 wires), only when the study has a retired line:
+
+```json
+{"lines": [{"line": "Pure Protection", "label": "Pure", "product_name": "Pampers Pure Protection",
+            "variant_ids": ["sku:sku_pg_pure_s1"],
+            "successor": {"variant_id": "sku:sku_pg_amore_s1_132", "sku": "sku_pg_amore_s1_132",
+                          "product_name": "Pampers AMORE", "line": "AMORE", "label": "AMORE"},
+            "brand_choice": {"all": {"answers": 102, "named": 10, "successor_named": 3, "no_text": 0}, "…": "per surface"},
+            "brand_direct": {"answers": 5, "named_successor": 2, "still_sold": null},
+            "headline": "Pure named in 10 of 102 brand-choice answers, AMORE in 3.",
+            "sentence": "Agents named Pure, which pampers.com retired, 10 times in 102 category answers and AMORE, its successor, 3 times."}],
+ "retired_by": "pampers.com", "rule": "…", "still_sold_note": "…"}
+```
+
+`brand_choice` counts the answered brand-choice answers (`unprompted.is_brand_choice`), per surface with `all`
+first. "Named" reads the answer as the agent gave it (`soa_runs.raw_response`): a category question has no
+expectation, so it is never scored and has no stored extraction. `brand_direct` counts the answered runs of the
+question about the line. **`still_sold` is null**: the stored extraction has no availability field (its claim kinds
+are loyalty, retail, ownership, other), so whether an answer said the line is still sold is not counted, and
+`still_sold_note` says so. Counted by hand in `tests/test_console_2l2_retired.py` on the FL13 shape.
+
+**The chip.** A retired variant carries `retired: {successor: {variant_id, sku, product_name, label} | null}`
+(`rm.retired_view`): on `/api/console/catalog` rows (from the feed's `lifecycle` and `successor_variant_key`, or the
+hosted catalog's `status`), `/api/console/true-value` rows (the feed row's, else the retailer-prices row's, labelled
+with the successor listing's brand) and `/api/console/record` and `/record/list` (the line is retired when every
+variant is). Absent on an active one.
+
+`SOA_2L2_SAMPLE_DUMP=<dir>` with `tests/test_console_2l2_retired.py` writes the console's samples.

@@ -208,6 +208,10 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     # 2K-4 (B2): the cycle's study, with its own date in the merchant's zone ("The Oct 20 study")
     with engine.connect() as conn:
         body['study'] = rm.load_study_block(conn, row.get('study_type'))
+    # 2L-2: Visibility's retired-line counts, the fifth brand tile's input
+    # (2L-4 wires the tile); absent for a brand with no retired line
+    if vis.get('retired_named'):
+        body['retired_named'] = vis['retired_named']
     return body
 
 
@@ -405,7 +409,8 @@ async def get_true_value(cycle: str = Query(...), merchant: Optional[str] = Quer
     body = rm.build_true_value(_json(row.get('reference_prices')), scored, own_domain=own_domain,
                                record_variants=variants, reads=(reference or {}).get('rows') if r_err is None else None,
                                feed_rows=rm.feed_sku_rows(feed if f_err is None else None,
-                                                          catalog if k_err is None else None))
+                                                          catalog if k_err is None else None),
+                               brands=rm.catalog_brands(catalog if k_err is None else None))
     programs = rm.build_programs((owned or {}).get('incentives') or [] if o_err is None else [], value_outcomes,
                                  record=incentives if i_err is None else None)
     body['programs'] = programs

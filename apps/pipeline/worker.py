@@ -37,6 +37,7 @@ from urllib.parse import urlparse
 import lite_events
 import ops_alert
 from soa_shared import surfaces
+from soa_shared.retired_lines import retired_lines
 from soa_shared.database import engine
 from soa_shared.degraded_dimensions import (
     DEGRADED_REASON_ORCHESTRATION_FAILED,
@@ -465,8 +466,14 @@ def _run_regeneration(
             personas=kwargs.get("personas"),
             catalog_texts=catalog_texts,
         )
+        # 2L-2: one question per retired line, as the first generation asks
+        retired_rows, retired_report = ct.build_retired_line_questions(
+            snapshot, category=category, persona=persona, study_pattern=kwargs.get('study_pattern'),
+        )
+        built = built + retired_rows
         rows.extend(built)
         config["brand_direct"].update({
+            "retired_lines": retired_report,
             "count": len(built),
             "requested": report.get("requested"),
             "shortfall": report.get("shortfall"),
@@ -483,6 +490,8 @@ def _run_regeneration(
         "domain": snapshot.domain, "products": snapshot.product_count,
         "variants": snapshot.variant_count, "gtins": snapshot.gtin_count,
         "codes": snapshot.code_count, "read_at": snapshot.read_at,
+        # 2L-2: kept with the record the regenerated questions came from
+        "retired": retired_lines(snapshot),
     }
     # Consumed: the marker is gone from what gets written back, so a
     # worker restart cannot regenerate the same study twice.

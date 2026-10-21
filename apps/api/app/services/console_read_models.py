@@ -24,7 +24,7 @@ from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
-from soa_shared import claim_kinds, local_time, surfaces, unprompted
+from soa_shared import claim_kinds, local_time, retired_lines, surfaces, unprompted
 
 from app.services import console_claims
 
@@ -737,9 +737,14 @@ def feed_sku_rows(feed: Optional[dict], catalog: Optional[dict]) -> List[dict]:
 
 def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domain: Optional[str],
                      record_variants: List[dict], reads: Optional[List[dict]] = None,
-                     feed_rows: Optional[List[dict]] = None) -> dict:
+                     feed_rows: Optional[List[dict]] = None, brands: Optional[Dict[str, str]] = None) -> dict:
     """
     TrueValue: rows = variants; cells = TvCell {quoted, live, status}.
+
+    2L-2: a retired variant's row carries `retired` (retired_view): from the
+    feed's row when it has one, else from the retailer-prices row, whose
+    successor is labelled with its own brand (`brands`: variant_id -> the
+    catalog listing's brand) taken off its name.
 
     `live` is the 2A reference (supply's retailer-prices row cached on the
     cycle). With no reference cached (a cycle scored against the record),
@@ -774,6 +779,7 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
     rows_by_key: Dict[str, dict] = {}
     alias: Dict[str, str] = {}
     feed_sku: Dict[str, str] = {}
+    retired: Dict[str, dict] = {}
     columns: List[str] = []
     live: Dict[tuple, dict] = {}
 
@@ -793,6 +799,10 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
                                      'gtin': _gtin14(row.get('gtin'))})
         if row.get('sku'):
             feed_sku.setdefault(key, str(row['sku']))
+        if row.get('status') == 'retired':   # 2L-2: supply's retailer-prices row says so
+            succ = row.get('successor') or {}
+            retired.setdefault(key, retired_view('retired', row.get('successor'),
+                                                 (brands or {}).get(str(succ.get('variant_id')))))
         live[(key, domain)] = {**row, 'live_basis': 'reference_read'}
 
     if not reference:
@@ -816,6 +826,7 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
                 {'price': v.get('list_price'), 'verifiable': True, 'currency': v.get('currency'),
                  'reference_source': 'record', 'observed_at': v.get('published_at'), 'live_basis': 'record'})
 
+    feed_retired_by = feed_retired([f for f in feed_rows or [] if isinstance(f, dict)])
     for f in feed_rows or []:
         code = f.get('sku') or (str(f['variant_key'])[len('sku:'):] if str(f.get('variant_key') or '').startswith('sku:')
                                 else None)
@@ -825,9 +836,12 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
                   f.get('variant_label')):
             if a and str(a) in alias:
                 feed_sku.setdefault(alias[str(a)], str(code))
+                if code in feed_retired_by:   # the feed's row knows its brand: it wins
+                    retired[alias[str(a)]] = feed_retired_by[code]
                 break
     for key, meta in rows_by_key.items():
         meta['feed_sku'] = feed_sku.get(key)
+        meta['retired'] = retired.get(key)
         if not meta['gtin'] and meta['feed_sku']:
             meta['sku'] = meta['feed_sku']
 
@@ -916,10 +930,12 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
                                   [s for s in surface_list if a in agents_on.get(s, [])])
                      for a in agent_columns}
             rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': cells, 'retailer_cells': retailer_cells,
-                         'variant_id': key, 'gtin': meta['gtin'], 'feed_sku': meta['feed_sku']})
+                         'variant_id': key, 'gtin': meta['gtin'], 'feed_sku': meta['feed_sku'],
+                         **({'retired': meta['retired']} if meta['retired'] else {})})
         else:
             rows.append({'product': meta['product'], 'sku': meta['sku'], 'cells': retailer_cells, 'variant_id': key,
-                         'gtin': meta['gtin'], 'feed_sku': meta['feed_sku']})
+                         'gtin': meta['gtin'], 'feed_sku': meta['feed_sku'],
+                         **({'retired': meta['retired']} if meta['retired'] else {})})
 
     by_agent: Dict[str, Dict[str, dict]] = {}
     for item in scored:
@@ -1214,6 +1230,46 @@ def annotate_feed_preview(preview: dict, reference: Optional[dict], *, reference
     return preview
 
 
+# ─── Retired (2L-2) ────────────────────────────────────────────────────────
+
+def retired_view(status: Optional[str], successor: Optional[dict], brand: Optional[str] = None) -> Optional[dict]:
+    """2L-2: a retired variant's `retired`, the console's "Retired → AMORE"
+    chip and successor link: {successor: {variant_id, sku, product_name,
+    label} | None}. None for an active variant (or one from before 2L-2)."""
+    if status != 'retired':
+        return None
+    if not successor:
+        return {'successor': None}
+    name = successor.get('product_name') or successor.get('title')
+    return {'successor': {'variant_id': successor.get('variant_id'), 'sku': successor.get('sku'),
+                          'product_name': name, 'label': retired_lines.label(name, brand)}}
+
+
+def feed_retired(rows: List[dict]) -> Dict[str, dict]:
+    """retired_view for each retired row of supply's /feed (lifecycle and
+    successor_variant_key, on a retired row only), keyed by its variant_key,
+    sku and gtin14; the successor is the row whose variant_key it names."""
+    by_key = {r.get('variant_key') or r.get('gtin14'): r for r in rows if r.get('variant_key') or r.get('gtin14')}
+    out: Dict[str, dict] = {}
+    for r in rows:
+        if r.get('lifecycle') != 'retired':
+            continue
+        succ = by_key.get(r.get('successor_variant_key')) if r.get('successor_variant_key') else None
+        view = retired_view('retired', {'variant_id': r.get('successor_variant_key'), 'sku': succ.get('sku'),
+                                        'product_name': succ.get('product_name'), 'title': succ.get('variant_label')}
+                            if succ else None, r.get('brand_name'))
+        for k in (r.get('variant_key'), r.get('sku'), r.get('gtin14')):
+            if k:
+                out[str(k)] = view
+    return out
+
+
+def catalog_brands(catalog: Optional[dict]) -> Dict[str, str]:
+    """variant_id -> its listing's brand, from supply's catalog."""
+    return {str(v.get('variant_id')): listing.get('brand') for listing in (catalog or {}).get('listings') or []
+            for v in listing.get('variants') or [] if listing.get('brand') and v.get('variant_id')}
+
+
 def build_catalog(merchant: str, *, feed: Optional[dict], history: List[dict], hosted_catalog: Optional[dict]) -> dict:
     """GET /api/console/catalog: one shape for both kinds of merchant.
     `source` is 'feed' (an external merchant's committed feed), 'hosted'
@@ -1233,7 +1289,10 @@ def build_catalog(merchant: str, *, feed: Optional[dict], history: List[dict], h
                              'product_name': listing.get('title'), 'brand_name': listing.get('brand'),
                              'variant_label': v.get('title'), 'size': v.get('size'), 'pack_count': v.get('count'),
                              'multipack': None, 'price': v.get('list_price'), 'currency': v.get('currency'),
-                             'published_at': _iso(listing.get('published_at')), 'product_url': listing.get('product_url')})
+                             'published_at': _iso(listing.get('published_at')), 'product_url': listing.get('product_url'),
+                             # 2L-2: on a retired variant only
+                             **({'retired': retired_view(v.get('status'), v.get('successor'), listing.get('brand'))}
+                                if v.get('status') == 'retired' else {})})
         return {'merchant': merchant, 'source': 'hosted', 'read_only': True,
                 'note': 'Hosted on Parleo: this catalog comes from the store config. Edit it there. No feed upload applies.',
                 'version': None, 'rows': rows, 'versions': []}
@@ -1241,8 +1300,15 @@ def build_catalog(merchant: str, *, feed: Optional[dict], history: List[dict], h
         return {'merchant': merchant, 'source': 'none', 'read_only': False,
                 'note': 'No feed committed yet. Download the template, fill it in and upload it here.',
                 'version': None, 'rows': [], 'versions': history or []}
+    rows = [dict(r) for r in feed.get('rows') or []]
+    # 2L-2: supply's rows as given, plus `retired` on a retired one
+    retired = feed_retired(rows)
+    for r in rows:
+        view = retired.get(str(r.get('variant_key') or r.get('sku') or r.get('gtin14') or ''))
+        if view:
+            r['retired'] = view
     return {'merchant': merchant, 'source': 'feed', 'read_only': False, 'note': None,
-            'version': feed.get('version'), 'rows': feed.get('rows') or [], 'versions': history or []}
+            'version': feed.get('version'), 'rows': rows, 'versions': history or []}
 
 
 # ─── TrueSync matrix (2C) ──────────────────────────────────────────────────
@@ -1943,7 +2009,8 @@ def _agent_counts(rows: List[dict], surface: str) -> dict:
 
 
 def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict], mentions: List[dict],
-                     extractions: Dict[int, dict], terms: Iterable[str] = ()) -> dict:
+                     extractions: Dict[int, dict], terms: Iterable[str] = (), retired: Iterable[dict] = (),
+                     retired_by: Optional[str] = None, answer_texts: Optional[Dict[int, str]] = None) -> dict:
     """
     GET /api/console/visibility. `runs` carry their question (query_text,
     query_code, tier, stage); `mentions` are Layer 1's mentioned rows with
@@ -1952,6 +2019,12 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
     terms: the brand's terms (load_brand_terms). 2I-7: each row says
     whether its question is unprompted (soa_shared/unprompted.py), which the
     score and the Overview count over.
+    retired, retired_by, answer_texts: 2L-2, the study's retired lines
+    (tier_config.merchant.retired), who retired them (the brand's domain)
+    and each run's answer text by run id; with any line, the body carries
+    `retired_named` (build_retired_named), else not at all. A run's
+    `source_ref` (its question's) says which retired line a brand-direct
+    question asked about.
     """
     layer2 = [e.get('name') for x in extractions.values() for e in ((x or {}).get('other_brands_named') or [])
               if isinstance(e, dict) and e.get('name')
@@ -2043,7 +2116,102 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
         'first_basis': dict(Counter(r.get('first_basis') for r in counted if r.get('first_basis'))),
         'sources_left_out': sources_left_out,
         'divergences': VISIBILITY_DIVERGENCES,
+        **({'retired_named': build_retired_named(list(retired), rows=rows, runs=runs, texts=answer_texts or {},
+                                                 surface_list=surface_list, retired_by=retired_by)}
+           if retired else {}),
     }
+
+
+# ─── Retired product named (2L-2) ──────────────────────────────────────────
+#
+# Visibility's "Retired product named" block, and the Overview's fifth brand
+# tile input: for each line the brand's record says is retired
+# (soa_shared/retired_lines.py), how many brand-choice answers named it and
+# how many named its successor, and how the brand-direct question about it
+# was answered. "Named" is the line's terms as whole words in the answer as
+# the agent gave it (soa_runs.raw_response): a category question carries no
+# expectation, so it is never scored and has no stored extraction to read.
+# Deterministic, no model.
+
+RETIRED_NAMED_RULE = (
+    "Counted over answered brand-choice answers (category and comparison questions; "
+    "soa_shared/unprompted.is_brand_choice). An answer names a line when its text "
+    "contains the product name, the line's name, or the brand with the line's first word, "
+    "as whole words; the line's first word alone does not count."
+)
+#: Why `still_sold` is null: the extraction stores no availability field.
+RETIRED_STILL_SOLD_NOTE = (
+    "Not counted: the stored extraction has no field saying whether an answer called the line "
+    "still sold, so only which answers named it, and its successor, are counted."
+)
+
+
+def _times(n: int) -> str:
+    return f"{n} time" if n == 1 else f"{n} times"
+
+
+def build_retired_named(retired: List[dict], *, rows: List[dict], runs: List[dict], texts: Dict[int, str],
+                        surface_list: List[str], retired_by: Optional[str] = None) -> dict:
+    """
+    {lines: [{line, label, product_name, variant_ids, successor, brand_choice,
+    brand_direct, headline, sentence}], rule, still_sold_note}. `rows` are
+    build_visibility's byQuestion rows (each `run` is `run-<id>`); `runs`
+    the loaded runs with their question's `source_ref`; `texts` each run's
+    answer text by run id.
+
+    brand_choice: per surface (`all` first), the answered brand-choice
+    answers (`answers`), how many named the line (`named`) and how many its
+    successor (`successor_named`), plus `no_text`: answers with no stored
+    text, counted in `answers` and never as naming anything.
+    brand_direct: the answered runs of the question asked about this line
+    (source_ref.retired_line), how many named the successor, and
+    `still_sold`: null, with RETIRED_STILL_SOLD_NOTE.
+    """
+    refs = {r['id']: _json(r.get('source_ref')) or {} for r in runs}
+    on = surfaces.on_surface
+    texts_of = {}
+    for r in rows:
+        run_id = int(r['run'][len('run-'):])
+        texts_of[r['run']] = (run_id, texts.get(run_id) or None)
+    answered = [r for r in rows if r['answered']]
+    choice = [r for r in answered if r.get('brand_choice')]
+    by = retired_by or 'the brand'
+    lines = []
+    for line in retired:
+        succ = line.get('successor') or None
+
+        def named(r, terms):
+            return bool(terms) and retired_lines.names(texts_of[r['run']][1], terms)
+
+        per = {}
+        for s in surface_list:
+            mine = [r for r in choice if on(r['surface'], s)]
+            per[s] = {'answers': len(mine),
+                      'named': sum(1 for r in mine if named(r, line.get('terms'))),
+                      'successor_named': sum(1 for r in mine if succ and named(r, succ.get('terms'))) if succ else None,
+                      'no_text': sum(1 for r in mine if texts_of[r['run']][1] is None)}
+        asked = [r for r in answered if r.get('tier') == 'brand_direct'
+                 and ((refs.get(texts_of[r['run']][0]) or {}).get('retired_line') or {}).get('line') == line.get('line')]
+        top = per.get(surface_list[0]) if surface_list else {'answers': 0, 'named': 0, 'successor_named': 0}
+        label = line.get('label') or line.get('line')
+        headline = f"{label} named in {top['named']} of {top['answers']} brand-choice answers"
+        sentence = f"Agents named {label}, which {by} retired, {_times(top['named'])} in {top['answers']} category answers"
+        if succ:
+            headline += f", {succ.get('label')} in {top['successor_named']}"
+            sentence += f" and {succ.get('label')}, its successor, {_times(top['successor_named'])}"
+        lines.append({
+            'line': line.get('line'), 'label': label, 'product_name': line.get('product_name'),
+            'variant_ids': line.get('variant_ids') or [],
+            'successor': {k: succ.get(k) for k in ('variant_id', 'sku', 'product_name', 'line', 'label')} if succ else None,
+            'brand_choice': per,
+            'brand_direct': {'answers': len(asked),
+                             'named_successor': sum(1 for r in asked if named(r, succ.get('terms'))) if succ else None,
+                             'still_sold': None},
+            'headline': headline + '.',
+            'sentence': sentence + '.',
+        })
+    return {'lines': lines, 'retired_by': retired_by, 'rule': RETIRED_NAMED_RULE,
+            'still_sold_note': RETIRED_STILL_SOLD_NOTE}
 
 
 # ─── Offer record (2C-1) ───────────────────────────────────────────────────
@@ -2393,6 +2561,11 @@ def build_record(merchant: str, listing: dict, *, merchant_record: Optional[dict
         'variants': variant_rows,
         # beside the typed fields
         'merchant': merchant, 'listing_id': lid, 'product_url': listing.get('product_url'),
+        # 2L-2: the line is retired when every variant is (soa_shared/retired_lines.py)
+        'retired': (next((r for r in (retired_view(v.get('status'), v.get('successor'), listing.get('brand'))
+                                      for v in variants) if r and r['successor']), None)
+                    or retired_view('retired', None))
+                   if variants and all(v.get('status') == 'retired' for v in variants) else None,
         'merchant_kind': kind, 'hosting': hosting, 'source': source, 'source_basis': basis,
         'json_channel': 'schema_org' if schema else None,
         'channels': {s: {'status': p.get('status'), 'published_at': _iso(p.get('published_at'))} for s, p in pubs.items()},
@@ -2412,7 +2585,8 @@ def build_record_list(merchant: str, catalog: Optional[dict], *, merchant_record
                               channels=channels, provenance=provenance, reference=reference, incentives=None)
         products.append({'sku': record['sku'], 'listing_id': record['listing_id'], 'title': record['title'],
                          'sub': record['sub'], 'variants': len(record['variants']), 'status': record['status'],
-                         'diffs': sum(1 for f in record['fields'] if f.get('diff'))})
+                         'diffs': sum(1 for f in record['fields'] if f.get('diff')),
+                         **({'retired': record['retired']} if record.get('retired') else {})})
     return {'merchant': merchant, 'kind': (merchant_record or {}).get('kind'),
             'hosting': (merchant_record or {}).get('hosting'), 'products': products,
             'read_errors': read_errors or {}}
@@ -2508,7 +2682,7 @@ def load_visibility(conn, cycle: dict) -> dict:
     """2C-1: the rows build_visibility reads, for one cycle."""
     runs = [dict(r) for r in conn.execute(text("""
         SELECT r.id, r.platform, r.run_number, r.surface, r.answer_status,
-               q.query_code, q.query_text, q.tier, q.stage
+               q.query_code, q.query_text, q.tier, q.stage, q.source_ref
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         WHERE r.cycle_id = :c
     """), {'c': cycle['id']}).mappings()]
@@ -2526,8 +2700,23 @@ def load_visibility(conn, cycle: dict) -> dict:
     """), {'c': cycle['id'], 'yes': True}).mappings()]
     extractions = {o['run_id']: _json(o['extraction']) for o in conn.execute(text(
         "SELECT run_id, extraction FROM soa_expectation_outcomes WHERE cycle_id = :c"), {'c': cycle['id']}).mappings()}
+    retired, retired_by = load_retired(conn, cycle)
+    # 2L-2: the answers' own text, read only for a study with a retired line
+    texts = {r['id']: r['raw_response'] for r in conn.execute(text(
+        "SELECT id, raw_response FROM soa_runs WHERE cycle_id = :c"), {'c': cycle['id']}).mappings()} if retired else {}
     return build_visibility(cycle['cycle_code'], runs=runs, entities=entities, mentions=mentions,
-                            extractions=extractions, terms=load_brand_terms(conn, cycle))
+                            extractions=extractions, terms=load_brand_terms(conn, cycle),
+                            retired=retired, retired_by=retired_by, answer_texts=texts)
+
+
+def load_retired(conn, cycle: dict) -> tuple:
+    """2L-2: (the study's retired lines, the brand's domain) from its job's
+    tier_config.merchant, written at generation; ([], None) for a study
+    generated before 2L-2 or a brand with no retired line."""
+    job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
+                       {'st': cycle.get('study_type')}).fetchone() if cycle.get('study_type') else None
+    merchant = ((_json(job[0]) if job else None) or {}).get('merchant') or {}
+    return list(merchant.get('retired') or []), merchant.get('own_domain') or merchant.get('domain')
 
 
 def study_brand_terms(tier_config, primary: Optional[dict]) -> List[str]:

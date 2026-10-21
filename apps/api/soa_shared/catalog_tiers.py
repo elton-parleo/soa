@@ -1172,3 +1172,54 @@ def stamp_brand_direct(rows: List[dict], snapshot) -> List[dict]:
         row['expected_answer'] = dict(expectation)
         row['source_ref'] = dict(source_ref)
     return rows
+
+
+# ─── Retired lines (2L-2) ──────────────────────────────────────────────────
+
+#: The stage a retired-line question is asked in: the shopper already has the
+#: brand's line in mind and is deciding whether it can still be bought.
+RETIRED_LINE_STAGE = 'Research'
+
+
+def build_retired_line_questions(snapshot, *, category, persona, study_pattern) -> tuple:
+    """
+    One brand-direct question per retired line (soa_shared/retired_lines.py),
+    template-built, no model: "Is Pampers Pure Protection still sold, and what
+    replaced it?". Asked beside the brand-direct tier, not in place of any of
+    it, and only when the record has a retired line.
+
+    The expectation is brand_mention, as every brand-direct question's, so it
+    is scored on the brand axis like the rest; the successor rides on it
+    (`successor`: variant_id, sku, product_name, line, label) as the answer
+    the question asks for. The read model counts which answers named it
+    (console_read_models.build_retired_named). Retired variants stay in the
+    catalog-accuracy tier: agents still price them, which is the point.
+
+    Returns (rows, report) with report {count, lines}.
+    """
+    from soa_shared import retired_lines as rl
+
+    lines = rl.retired_lines(snapshot)
+    if not lines or not snapshot.brand:
+        return [], {'count': 0, 'lines': []}
+    brand = getattr(snapshot, 'study_brand', None) or snapshot.brand
+    domain = (snapshot.own_domain if is_external(snapshot) else None) or snapshot.domain
+    by_listing = {p.listing_id: p for p in snapshot.products}
+    rows = []
+    for line in lines:
+        expectation = ea.brand_mention(brand, domain)
+        if line['successor']:
+            expectation['successor'] = {k: line['successor'][k] for k in
+                                        ('variant_id', 'sku', 'product_name', 'line', 'label')}
+        source_ref = _source_ref(snapshot, by_listing[line['listing_id']])
+        source_ref['retired_line'] = {'variant_ids': line['variant_ids'], 'line': line['line']}
+        rows.append(_row(
+            query_text=rl.question_text(line, brand), tier='brand_direct', provenance='catalog',
+            expected_answer=expectation, source_ref=source_ref,
+            category=category, persona=persona, study_pattern=study_pattern,
+            stage=RETIRED_LINE_STAGE, specificity='Narrow',
+            soa_focus='Retired product',
+            rationale=(f"{line['product_name']} is retired in the brand's record"
+                       + (f"; {line['successor']['product_name']} replaced it." if line['successor'] else ".")),
+        ))
+    return rows, {'count': len(rows), 'lines': [l['line'] for l in lines]}
