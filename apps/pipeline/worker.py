@@ -449,7 +449,12 @@ def _run_regeneration(
         # are. On a brand-direct-only regeneration — the common case,
         # and the one that fixes a study rather than replacing it — the
         # second set is all of them.
-        catalog_texts = [row["query_text"] for row in rebuilt_catalog]
+        # 2L-4: the where-to-buy and cheapest-place questions, as the first
+        # generation writes them, before the written ones that avoid them
+        intent_rows, intent_report = ct.build_intent_questions(
+            snapshot, category=category, persona=persona, study_pattern=kwargs.get('study_pattern'),
+        )
+        catalog_texts = [row["query_text"] for row in rebuilt_catalog + intent_rows]
         catalog_texts += [
             row["query_text"] for row in existing
             if row.get("tier") in CATALOG_TIERS and row.get("tier") not in tiers
@@ -470,10 +475,14 @@ def _run_regeneration(
         retired_rows, retired_report = ct.build_retired_line_questions(
             snapshot, category=category, persona=persona, study_pattern=kwargs.get('study_pattern'),
         )
-        built = built + retired_rows
+        built = built + retired_rows + intent_rows
         rows.extend(built)
         config["brand_direct"].update({
             "retired_lines": retired_report,
+            # 2L-4: a regeneration never touches the stage questions, so
+            # nothing absorbs these: the study grows by their count
+            "intents": {**intent_report, "stage": ct.INTENT_STAGE, "absorbed": {},
+                        "not_absorbed": intent_report["count"]},
             "count": len(built),
             "requested": report.get("requested"),
             "shortfall": report.get("shortfall"),

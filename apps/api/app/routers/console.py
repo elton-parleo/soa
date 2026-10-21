@@ -136,21 +136,60 @@ def _label_from_question(query_text: str) -> str:
 
 
 @router.get("/visibility")
-def get_visibility(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+async def get_visibility(cycle: str = Query(...), merchant: Optional[str] = Query(None),
+                         scope: CustomerScope = Depends(console_scope)):
     """2C-1: Measure > Visibility. Who each answer names and who it names
     first, from the stored mention coding (Layer 1 position, Layer 2
     other_brands_named), every agent together (`all`, 2I-8) and per surface,
-    each with a per-agent split; no model call."""
-    row = cycle_in_scope(cycle, scope)
+    each with a per-agent split; no model call. 2L-4: for a brand whose
+    study asks where to buy, `routing`, which reads supply's retailer list
+    and reference reads for the cycle's merchant (or the one named)."""
+    if merchant:
+        await check_merchant(scope, merchant)
+    row = dict(cycle_in_scope(cycle, scope))
+    facts, errors = await _routing_inputs(scope, row, merchant)
     with engine.connect() as conn:
-        return _visibility(conn, dict(row))
+        return _visibility(conn, row, facts, errors)
 
 
-def _visibility(conn, row: dict) -> dict:
+def _visibility(conn, row: dict, merchant: Optional[dict] = None, errors: Optional[dict] = None) -> dict:
     """2C-1's read with 2C-2's headline, matrix and by-stage, per surface."""
-    body = rm.load_visibility(conn, row)
+    body = rm.load_visibility(conn, row, merchant)
+    if body.get('routing') is not None:
+        body['routing']['read_errors'] = errors or {}
     ours = next((r['name'] for r in (body.get('ranking') or {}).get('rows') or [] if r.get('you')), None)
     return parity.extend_visibility(body, ours)
+
+
+async def _routing_inputs(scope: CustomerScope, row: dict, merchant: Optional[str]) -> tuple:
+    """2L-4: (rm.routing_merchant's facts, read errors) for a cycle whose
+    study asks where to buy; (None, {}) for one that does not, with no
+    supply call. A merchant supply's /tenant says is not a brand gets no
+    reads either. A failed read is named, never raised."""
+    with engine.connect() as conn:
+        if not rm.asks_intents(conn, row):
+            return None, {}
+        slug = merchant or score_svc.cycle_merchant(conn, row)
+    if not slug:
+        return None, {'merchant': 'no merchant record for this cycle'}
+    kind = await _tenant_kind(scope, slug)
+    if kind and kind != 'brand':
+        return {'kind': kind}, {}
+    client = full_loop._client(scope)
+    (_, retailers, r_err), (_, reference, f_err) = await asyncio.gather(client.get_retailers(slug),
+                                                                      client.get_reference(slug))
+    with engine.connect() as conn:
+        facts = rm.routing_merchant(conn, row, kind=kind, retailers=retailers, retailers_error=r_err,
+                                    reference=reference if f_err is None else None)
+    return facts, {k: v for k, v in (('retailers', r_err), ('reference', f_err)) if v}
+
+
+async def _tenant_kind(scope: CustomerScope, slug: str) -> Optional[str]:
+    """2L-4: the merchant's kind ('brand' | 'seller') from supply's /tenant;
+    None when it cannot be read or does not list the merchant."""
+    from app.console_merchants import org_merchants
+    merchants, _error = await org_merchants(scope.org)
+    return next((m.get('kind') for m in merchants if m.get('slug') == slug), None)
 
 
 @router.get("/overview")
@@ -167,9 +206,10 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     row = dict(cycle_in_scope(cycle, scope))
     features, f_err = await _claim_features(row, scope, merchant)   # 2K-3
+    facts, routing_errors = await _routing_inputs(scope, row, merchant)   # 2L-4
     with engine.connect() as conn:
         rows = parity.load_overview_rows(conn, row, features)
-        vis = _visibility(conn, row)
+        vis = _visibility(conn, row, facts, routing_errors)
         own_domain, variants, scored = _true_value_inputs(conn, row)
         prev, n_scored = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
         previous = None
@@ -214,6 +254,9 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     # (2L-4 wires the tile); absent for a brand with no retired line
     if vis.get('retired_named'):
         body['retired_named'] = vis['retired_named']
+    # 2L-4: Visibility's routing, whose coverage is the second brand tile's input
+    if vis.get('routing'):
+        body['routing'] = vis['routing']
     # 2L-3: the products' and the signals' example answers' narratives
     with engine.connect() as conn:
         narratives_svc.with_overview(body, narratives_svc.lines_for(conn, row['id']))
@@ -270,11 +313,22 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
             runs = score_svc.load_score_runs(conn, row)
             mentions = score_svc.load_score_mentions(conn, row)
             rivals = score_svc.load_tracked_rivals(conn, row)
-            score_svc.at('loading visibility')
-            vis_rows = rm.load_visibility(conn, row).get('byQuestion') or []
             terms = rm.load_brand_terms(conn, row)
             slug = merchant or score_svc.cycle_merchant(conn, row)
-        access, reference_rows, errors = None, None, {}
+            stored_kind = (rm.study_merchant_block(conn, row) or {}).get('kind')
+        # 2L-4: the merchant's kind picks the five rows; a brand's tiles read
+        # Visibility's routing (supply's retailer list) and retired lines
+        score_svc.at('reading the merchant kind')
+        kind = (await _tenant_kind(scope, slug) if slug else None) or stored_kind
+        facts, routing_errors = await _routing_inputs(scope, row, slug) if kind == 'brand' else (None, {})
+        with engine.connect() as conn:
+            score_svc.at('loading visibility')
+            vis = rm.load_visibility(conn, row, facts)
+        vis_rows = vis.get('byQuestion') or []
+        ours = next((r['name'] for r in (vis.get('ranking') or {}).get('rows') or [] if r.get('you')), None)
+        brand_inputs = {'routing': vis.get('routing'), 'retired_named': vis.get('retired_named'),
+                        'brand': ours or (facts or {}).get('brand')}
+        access, reference_rows, errors = None, None, dict(routing_errors)
         reference_run, access_run = None, None
         if slug:
             score_svc.at('reading supply')
@@ -298,7 +352,8 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
                                      inputs={'merchant': slug, 'reference_run': reference_run, 'access_run': access_run,
                                              'scored_at': datetime.now(timezone.utc).isoformat(),
                                              **score_svc.reference_input(cached_reference)},
-                                     domain_checks=domain_checks, rivals=rivals, terms=terms)
+                                     domain_checks=domain_checks, rivals=rivals, terms=terms,
+                                     kind=kind, brand_inputs=brand_inputs)
         # the value it replaces stays in its history (2E)
         body = score_svc.carry_history(body, stored, why)
         # a failed supply read is served, never stored: the next read tries again

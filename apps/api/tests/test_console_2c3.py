@@ -12,6 +12,7 @@ import json
 import pytest
 from sqlalchemy import text
 
+from tests.score_2l4 import retailer_rows
 from tests.test_console_read_models import (  # noqa: F401  (pytest fixtures)
     CYCLE, TOKEN_A, _fixture, as_, db, http, upstream,
 )
@@ -174,10 +175,10 @@ def test_the_w_s_metric_rows_are_the_overview_s_counts(http, upstream):
     _supply(upstream)
     as_('alice')
     body = _score(http)
-    rows = {m['key']: (m['value'], m['denominator'], m['delta']) for m in body['metrics']}
+    rows = {m['key']: (m['value'], m['denominator'], m['delta']) for m in retailer_rows(body)}
     assert rows == {'first': (6, 7, None), 'share': (6, 7, None), 'program': (0, 6, None),
                     'exact': (1, 5, None), 'terms': (0, 0, None)}
-    first = body['metrics'][0]
+    first = retailer_rows(body)[0]
     # 2I-8a: every agent together (one surface answered here, so the grounded API's counts)
     assert first['surface'] == 'all' and first['surface_note'] == 'across every agent, every answered question'
     assert first['by_surface'] == {'grounded_api': {'value': 6, 'of': 7}}
@@ -316,12 +317,12 @@ def test_the_pooled_score_is_the_mean_of_the_surface_scores(http, upstream, db):
     assert body['biggest_gap']['line'].startswith('Share of mentions ')
     assert body['coverage']['line'] == '2 surfaces, 10 questions, 3 agents · pooled across surfaces, equal weight'
     # 2I-8a: the five rows count every agent (`all`), each surface's beside it, as before
-    first = body['metrics'][0]
+    first = retailer_rows(body)[0]
     assert first['surface'] == 'all' and set(first['by_surface']) == {'consumer_ui', 'grounded_api'}
     assert first['by_surface']['consumer_ui'] == {'value': 1, 'of': 2}
     assert (first['value'], first['denominator']) == (
         sum(v['value'] for v in first['by_surface'].values()), sum(v['of'] for v in first['by_surface'].values()))
-    terms = next(m for m in body['metrics'] if m['key'] == 'terms')
+    terms = next(m for m in retailer_rows(body) if m['key'] == 'terms')
     assert terms['by_surface'] == {'consumer_ui': {'value': 2, 'of': 2}, 'grounded_api': {'value': 3, 'of': 4}}
     assert (terms['value'], terms['denominator']) == (5, 6)
 
@@ -389,7 +390,7 @@ def test_a_previous_cycle_scored_under_another_version_is_not_comparable(http, u
     assert body['previous'] == {'cycle': 'WS-EARLIER', 'scorer_version': '5', 'score': 41, 'comparable': False,
                                 'reason': 'Scored under v5, re-score to compare.', 'condition': 'version'}
     assert all(m['delta'] is None and m['delta_reason'] == 'Scored under v5, re-score to compare.'
-               for m in body['metrics'])
+               for m in retailer_rows(body))
 
 
 def test_a_previous_cycle_with_no_stored_score_is_not_comparable(http, upstream, db):
@@ -412,7 +413,7 @@ def test_a_comparable_previous_cycle_gives_deltas(http, upstream, db):
     _previous_cycle(db, stored=earlier)
     body = _score(http)
     assert body['previous']['comparable'] is True and body['previous']['delta'] == 5
-    rows = {m['key']: m for m in body['metrics']}
+    rows = {m['key']: m for m in retailer_rows(body)}
     assert rows['exact']['delta'] == 1 - 3 and rows['exact']['delta_reason'] is None
     assert rows['first']['delta'] == 0
 
@@ -430,7 +431,7 @@ def test_a_previous_score_stored_before_the_rows_counted_every_agent_has_no_row_
     _previous_cycle(db, stored=earlier)
     body = _score(http)
     assert body['previous']['comparable'] is True and body['previous']['delta'] == 5
-    for m in body['metrics']:
+    for m in retailer_rows(body):
         assert m['delta'] is None
         assert m['delta_reason'] == 'Not comparable: WS-EARLIER was scored before metric rows counted every agent'
 

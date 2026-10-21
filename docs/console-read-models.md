@@ -7259,6 +7259,117 @@ variant is). Absent on an active one.
 
 `SOA_2L2_SAMPLE_DUMP=<dir>` with `tests/test_console_2l2_retired.py` writes the console's samples.
 
+## 2L-4: where agents send shoppers first, and the brand Overview's five tiles
+
+Decision (Elton, Oct 21): the demo's Pampers workspace reads "Where agents send Pampers shoppers first" (Walmart 33,
+Target 31, Amazon 19 of 99 where-to-buy and cheapest-place answers) and five charter tiles. Built in three steps.
+
+**B0, the check.** Retailers are coded on every scored run, whatever brand the answer names. Layer 2's extraction
+(`soa_expectation_outcomes.extraction`) is written for every run whose question carries an expectation
+(`orchestrator/pipeline.scoreable_run_ids`): every tier but category control, an empty one for an unreadable answer.
+Its schema requires `retailer_mentions: [{name, role}]` (the store as written; `role` recommendation | source |
+unavailable, from the labelling pass, null before it) beside `recommended_retailers`. It has no position field, and
+the transcription's list order is not promised to be the answer's. The order comes from the same record's `spans`:
+the answer cut by `span_segmenter.segment`, verbatim, in order and covering it, the same spans Visibility's first pick
+reads (`_span_hit`). Layer 1 (`soa_coded_mentions`: entity, position, cycle role primary | competitor) codes the
+comparison set's brands only, never a store. Category-control answers have no extraction, so no coded stores.
+
+**B1, the questions.** Two `intent`s on the brand-direct tier, no new tier and no migration: `source_ref.intent` is
+`where_to_buy` or `cheapest_place`. `catalog_tiers.build_intent_questions` writes one of each per variant in the
+catalog-accuracy tier's sample (`sample_variants`, the same cap), template-built: "Where can I buy {product}?",
+"Cheapest place to buy {product}?", naming the product as the catalog tier does and no store (a product name that
+names one is left out and listed). Stage Ready to Buy, specificity Narrow, provenance `catalog`, expectation
+`brand_mention` as every brand-direct question's, so each answer is scored and its stores coded. The written
+brand-direct questions are handed them as texts not to restate.
+
+The stage counts absorb them (`catalog_tiers.absorb_intents`): Ready to Buy first, then the other stages one at a
+time, largest first, never Comparison (the comparison tier). `tier_config.brand_direct.intents` is `{count,
+where_to_buy, cheapest_place, sampled_variants, names_a_retailer, stage, absorbed: {stage: n}, not_absorbed,
+stage_targets}` (the brief's targets, before). A brand-direct regeneration never touches the stage questions, so
+nothing absorbs them there: `absorbed` is `{}` and the study grows by their count. The tally counts them from the
+catalog (templates). The Create Study preview's `tiers.brand_direct.intents` is two lines, `[{intent, label, count,
+line, stage, questions}]` ("10 where-to-buy questions, one per sampled product, naming no retailer"), beside
+`absorbed`, `absorbed_by_stage`, `not_absorbed` and `absorbed_line`; category control's count is what is left.
+
+The default mix on Pampers, taking its record as FL12's study shows it (20 catalog-accuracy questions, 10 variants at
+two retailer pages each; not re-read from production here) and the console's default 50, Balanced (13, 13, 12, 12): 50 stage questions become 30 (Awareness 9, Research 9, Comparison 12, Ready to Buy 0: Ready to Buy's 12,
+then 4 each from Research and Awareness), plus 12 brand-direct, 10 where-to-buy, 10 cheapest-place, 20 catalog
+accuracy and 6 value: 88, as before, within the 100 limit. The live Pampers study's next brand-direct regeneration
+adds the 20 without absorbing them: 108, over the limit the Create Study modal enforces (regeneration does not check
+it).
+
+**B2, `routing`** on `/api/console/visibility` (and the same block on `/api/console/overview`, the Retailer coverage
+tile's input), for a brand merchant whose study has a where-to-buy or cheapest-place question; absent otherwise, and
+for a retailer merchant (a seller: its stores are its rivals, which the ranking already shows). Visibility takes an
+optional `merchant`; the cycle's own is read from its questions' `source_ref` otherwise. Only a study with an intent
+question makes supply reads here: `/tenant` (the kind), `/retailers` (the list) and `/reference` (the notes).
+
+```json
+{"title": "Where agents send Wiggle & Snug shoppers first",
+ "sub": "First store named in 97 where-to-buy and cheapest-place answers",
+ "rows": [{"name": "Walmart", "domain": "walmart.com", "first": 35, "you": false, "surfaces": {"all": 35, "…": 0}},
+          {"name": "Target", "domain": "target.com", "first": 23, "you": false, "note": "Walled every read", "surfaces": {}},
+          {"name": "Amazon", "domain": "amazon.com", "first": 22, "you": false, "surfaces": {}},
+          {"name": "Other stores", "domain": null, "first": 17, "you": false,
+           "note": "Costco, Sam's Club, Kroger, Publix, eBay", "surfaces": {}}],
+ "total": 97, "totals": {"all": 97, "…": 0}, "answers": 100, "no_store": 2, "uncoded": 1,
+ "footnote": "A brand wants agents to show every retailer the same way. Today the store an agent names first is whichever page it happened to read.",
+ "rule": "…", "retailers": ["Walmart", "Target", "Amazon"], "retailers_source": "supply",
+ "coverage": {"all": {"answers": 49, "named_two_plus": 38}, "…": "per surface"}, "coverage_rule": "…",
+ "coverage_line": "38 of 49 where-to-buy answers name 2 or more of Walmart, Target, Amazon", "read_errors": {}}
+```
+
+Per answer (`rm.stores_in_order`): the stores Layer 2 coded (`retailer_mentions`), less any coded `unavailable` (the
+answer says it is not sold there), each resolved to its retailer by `soa_shared/retailers.py` (an alias such as
+"Subscribe & Save" is Amazon; a store outside the enum keeps its name), placed by the earliest stored span naming it,
+then coded order for one no span names. The first is the store the answer sends the shopper to first. `total` counts
+the answers that name a store, as the demo does ("First store named, across every answer that names one"); `answers`
+is the answered intent runs, `no_store` the coded ones naming none and `uncoded` those with no extraction yet.
+
+Rows: each of the merchant's retailers (supply's `/retailers` `domains`, own domains left out), most sent first first,
+then "Other stores" with the rest named by count. The brand's own site is a row (`you`) only when an answer sends a
+shopper there first. When `/retailers` cannot be read, the list the study was generated with
+(`tier_config.merchant.retailer_list`) is used and `retailers_source` is `study`; `read_errors` names the failed reads.
+Notes come from supply's reference reads: "Walled every read" when every read of the domain was `blocked` or
+`challenged`; "Third-party seller only" when every priced read there names a `seller`, which supply's `/reference`
+rows do not carry yet (the reader records one in its evidence), so that note does not appear until it does.
+
+`coverage`: the answered where-to-buy answers with a coding, and how many name two or more of the merchant's retailers.
+Counted by hand in `tests/test_console_2l4_routing.py` on the FL13 shape. `SOA_2L4_SAMPLE_DUMP=<dir>` writes the
+console's samples.
+
+**B3, the brand Overview's five tiles.** `/api/console/score` counts a second set beside the five metric rows, in
+every surface's `metric_counts`: `attribute`, `coverage`, `presence`, `retired`, `promo` (null when there is nothing to
+count). `metric_kind` is the merchant's (`brand` for a brand per supply's `/tenant`, else the study's
+`tier_config.merchant.kind`; anything else is `retailer`), `metrics_by_kind` serves both sets of rows
+(`{retailer: [...], brand: [...]}`) and `metrics` is the merchant's. Retailer merchants read the five they had. The
+scorer version is unchanged: these are counts, not the score. A stored score whose counts lack the brand set is
+recomputed on its next read (`needs_recompute`: "brand tiles not counted"). The score pins
+(`test_console_2k1_score_pin.py`, 2I-8a's, 2I-8's) hold with the brand set put aside (`tests/score_2l4.py`).
+
+The brand rows, the demo's charter set in its order (`BRAND_METRICS`), each the retailer row's shape plus `state`
+(measured | not_measured), `reason` and `sub`:
+
+| key | name | counts | sub-line |
+| --- | --- | --- | --- |
+| attribute | Attribute accuracy | not measured: no attribute check exists yet | |
+| coverage | Retailer coverage | `routing.coverage`: where-to-buy answers naming 2+ of the merchant's retailers, of those coded | "38 of 49 where-to-buy answers name 2 or more of Walmart, Target, Amazon" |
+| presence | Category presence | Share of answers (`share`), the same value, denominator and note | "Category answers naming Wiggle & Snug. First in 33, Huggies first in 30" |
+| retired | Retired product named | 2L-2's `retired_named`, the first line's brand-choice answers naming it; not measured with no retired line | "Category answers naming Pure, which pampers.com retired. AMORE, its successor: 3" |
+| promo | Promo pass-through | not measured: retailer-page deals are not read yet | |
+
+On `all` a brand tile sums the pooled surfaces' counts, as the five rows do. Coverage is not measured when the cycle
+asked no where-to-buy question (a study before 2L-4, until its regeneration). Deltas and comparability are 2K-4's: a
+not-measured tile has none and no reason; a measured one has the delta when the previous cycle is comparable and
+stored the tile, "Not comparable: {code} was scored before this tile was counted" when it is comparable and did not,
+else the comparability reason. On the FL13 shape (`tests/test_console_2l4_tiles.py`): coverage 38 of 49, presence 51 of
+102, retired 10 of 102, attribute and promo not measured. `SOA_2L4_SAMPLE_DUMP=<dir>` writes `score-2l4.json`,
+`overview-2l4.json` and `visibility-2l4.json` for the console.
+
+On Pampers today, before the regeneration that adds the 20 questions: presence measured; coverage not measured (no
+where-to-buy answers yet); retired not measured until 2L-2's feed upload marks Pure retired and a generation or
+regeneration writes it into `tier_config.merchant.retired` (the same regeneration adds the 20), then measured from the
+next cycle; attribute accuracy and promo pass-through not measured.
 ## 2L-3: one-line narratives, written from the scorer's facts and checked
 
 Decision (Elton, Oct 21): the demo's Answers rows read "Sends the AMORE shopper to Amazon at about $36.18.

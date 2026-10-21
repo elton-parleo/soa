@@ -17,6 +17,7 @@ from sqlalchemy import text
 
 from app.services import console_score as score_svc
 from soa_shared.models.soa_models import SoaMerchantRevenueInputs
+from tests.score_2l4 import retailer_rows
 from tests import console_fixture_2k1 as f2k1
 from tests import console_fixture_229 as f229
 from tests.test_console_2c3a import _get, _supply, db  # noqa: F401
@@ -96,7 +97,7 @@ def test_the_first_pick_tiles_and_metric_counts_read_brand_choice_share_of_menti
     _fl12_comparison(db)
     _supply(upstream)
     body = _get(http, rescore=1).json()
-    rows = {m['key']: m for m in body['metrics']}
+    rows = {m['key']: m for m in retailer_rows(body)}
     assert (rows['first']['value'], rows['first']['denominator']) == (57, 174)
     assert (rows['share']['value'], rows['share']['denominator']) == (117, 174)
     assert rows['first']['surface_note'] == 'across every agent, brand-choice answers'
@@ -129,7 +130,7 @@ def test_the_score_does_not_move_when_the_12_are_comparison_rather_than_branded_
     assert as_control['unprompted'] == {'questions': 17, 'named_the_brand': 33, 'category_control': 50}
     assert {k: with_comparison[k] for k in keep} == {k: as_control[k] for k in keep}
     # and the first-pick rows fall back to the unprompted set
-    assert {m['key']: m['denominator'] for m in as_control['metrics']}['first'] == 102
+    assert {m['key']: m['denominator'] for m in retailer_rows(as_control)}['first'] == 102
 
 
 def test_the_study_list_counts_the_comparison_tier(http, db, upstream):
