@@ -1,0 +1,45 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 768,
+    "output_tokens": 14,
+    "total_tokens": 782
+   }
+  },
+  {
+   "response": "{\"line\":\"Copilot gives no price for Pampers Swaddlers NB 84. Amazon charged $27.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 768,
+    "output_tokens": 39,
+    "total_tokens": 807
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Copilot",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The only price in the answer was for another brand's product, so it gave none for this one."
+  ],
+  "question": "What does the Pampers Swaddlers NB 84 cost at amazon.com?",
+  "reason_code": "other_brand",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "27.97",
+   "retailer": "Amazon"
+  },
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "verdict": "no price",
+  "why": [
+   "other_brand_price"
+  ]
+ },
+ "facts_digest": "54ea4b167ab84f92a7df13bf87c5872b89c724fc1deb57d9f58fb49d3654973b",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "8e2eb34646fa349a74ab0ea60acf8f46e7a1a9f7d23db7a93e9c54847a7f55a2",
+ "subject": "answer:run-90011"
+}

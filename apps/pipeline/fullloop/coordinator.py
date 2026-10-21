@@ -19,7 +19,9 @@ database (the same way a planned cycle reaches the worker):
   cycle_planned      the cycle exists; the worker's ordinary planned-cycle
                      path runs and scores it (orchestrator Stage 1-2c).
                      When it is complete or failed, PATCH supply.
-  scored | failed    terminal. `error` says why on failed.
+  scored | failed    terminal. `error` says why on failed. On scored, with
+                     SOA_NARRATIVES_ENABLED=1, the cycle's console
+                     narratives are written first (2L-3, _narratives).
 
 The supply calls, with the org's tenant token (customers.token_for_org),
 exactly as access-series.md "5. Run full loop" specifies:
@@ -142,7 +144,8 @@ def _json(value):
 
 class Coordinator:
     def __init__(self, engine=None, client_for: Callable[[int], SupplyFullLoopClient] = None,
-                 clock: Callable[[], datetime] = None, catalog_for: Callable[[int], object] = None) -> None:
+                 clock: Callable[[], datetime] = None, catalog_for: Callable[[int], object] = None,
+                 writer_for: Callable[[], object] = None) -> None:
         if engine is None:
             from soa_shared.database import engine as default_engine
             engine = default_engine
@@ -151,6 +154,8 @@ class Coordinator:
         self.clock = clock or (lambda: datetime.now(timezone.utc))
         #: 2I-5: the catalog client a first cycle's comparison set reads with
         self.catalog_for = catalog_for or self._catalog_client
+        #: 2L-3: the narrative writer, None with SOA_NARRATIVES_ENABLED off
+        self.writer_for = writer_for or _default_writer
 
     # ─── rows ────────────────────────────────────────────────────────
 
@@ -407,9 +412,39 @@ class Coordinator:
                            row['id'], result.error)
             return False
         error = None if outcome == 'scored' else f"cycle failed: {cycle[2] or 'see the cycle'}"
+        if outcome == 'scored':
+            self._narratives(cycle[0])
         self._set(row['id'], status=outcome, supply_status=(result.body or {}).get('status', outcome),
                   error=error)
         return True
+
+    def _narratives(self, cycle_id: int) -> None:
+        """2L-3: the scored cycle's console narratives (soa_shared/narratives.py),
+        once: a subject whose stored line has the current facts' digest is
+        skipped, so a _finish repeated after a failed PATCH or a restart calls
+        the model only for what is missing. Never raises: without its lines
+        the console shows its templates, and rescore_cycle.py --narratives
+        writes them later."""
+        from soa_shared import narratives
+        writer = self.writer_for()
+        if writer is None:
+            return
+        try:
+            with self.engine.connect() as conn:
+                if not narratives.table_exists(conn):
+                    logger.warning("[full-loop] cycle %s: narratives skipped, %s is missing "
+                                   "(migration c8e2f4a6b1d3 not applied)", cycle_id, narratives.TABLE)
+                    return
+            reports = narratives.write_cycle(self.engine, cycle_id, writer)
+            counts = {s: sum(1 for r in reports if r['status'] == s) for s in ('accepted', 'dropped', 'null')}
+            logger.info("[full-loop] cycle %s: narratives written, %s", cycle_id, counts)
+        except Exception:  # noqa: BLE001 - the lines are a nicety beside the score
+            logger.exception("[full-loop] cycle %s: narratives failed", cycle_id)
+
+
+def _default_writer():
+    from soa_shared import narratives
+    return narratives.configured()
 
 
 class _LazyCatalog:

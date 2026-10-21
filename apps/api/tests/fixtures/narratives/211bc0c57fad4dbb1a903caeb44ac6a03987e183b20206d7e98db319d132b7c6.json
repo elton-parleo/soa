@@ -1,0 +1,50 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"ChatGPT quoted $27.97 for Pampers Swaddlers S1 96 at Amazon. Amazon charged $30.97 on Oct 19, so the shopper was given the wrong price.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "output_tokens": 53,
+    "total_tokens": 833
+   }
+  },
+  {
+   "response": "{\"line\":\"ChatGPT quotes $27.97. Amazon charged $30.97 on Oct 19 for Pampers Swaddlers S1 96 on amazon.com.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "output_tokens": 45,
+    "total_tokens": 825
+   }
+  }
+ ],
+ "facts": {
+  "agent": "ChatGPT",
+  "agent_quoted": [
+   {
+    "price_quoted": "27.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "question": "What does the Pampers Swaddlers S1 96 cost at amazon.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "30.97",
+   "retailer": "Amazon"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "211bc0c57fad4dbb1a903caeb44ac6a03987e183b20206d7e98db319d132b7c6",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "8eb85fcfc0215cb94c0d97dbab7af91245e472c6dfccc8fe0da96d28fe771910",
+ "subject": "answer:run-90019"
+}

@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Google AI Mode first picked Huggies while Pampers came second. This means it did not put Pampers first on the brand choice question.\"}",
+   "usage": {
+    "input_tokens": 725,
+    "output_tokens": 42,
+    "total_tokens": 767
+   }
+  },
+  {
+   "response": "{\"line\":\"Google AI Mode first picked Huggies over Pampers when choosing a brand. The answer then named Pampers second.\"}",
+   "usage": {
+    "input_tokens": 725,
+    "output_tokens": 37,
+    "total_tokens": 762
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Google AI Mode",
+  "brand": "Pampers",
+  "first pick": "Huggies",
+  "kind": "answer",
+  "meaning": [
+   "On a question that let the assistant choose a brand, its first pick was another brand."
+  ],
+  "named in order": [
+   "Huggies",
+   "Pampers"
+  ],
+  "question": "question 1012",
+  "surface": "Consumer UI, logged out",
+  "why": [
+   "rival_first_pick"
+  ]
+ },
+ "facts_digest": "07012fa6c34ab87c25100eb31f611baebc2e8179df9f5dcfa478f58bacf35e07",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "85f772404d2ccab5624c1cea78ab18bee5ac9186a7329e6356033de5d0578cd7",
+ "subject": "answer:run-70069"
+}

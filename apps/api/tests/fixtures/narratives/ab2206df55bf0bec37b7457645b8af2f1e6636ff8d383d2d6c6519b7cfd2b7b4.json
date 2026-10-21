@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Perplexity puts Huggies first for Pampers, and lists Pampers second. Facts say that on the brand-choice question it picked a rival brand first.\"}",
+   "usage": {
+    "input_tokens": 724,
+    "output_tokens": 46,
+    "total_tokens": 770
+   }
+  },
+  {
+   "response": "{\"line\":\"Perplexity first picked Huggies, but Pampers was second. The question let the assistant choose a brand and its first pick was another brand.\"}",
+   "usage": {
+    "input_tokens": 724,
+    "output_tokens": 44,
+    "total_tokens": 768
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Perplexity",
+  "brand": "Pampers",
+  "first pick": "Huggies",
+  "kind": "answer",
+  "meaning": [
+   "On a question that let the assistant choose a brand, its first pick was another brand."
+  ],
+  "named in order": [
+   "Huggies",
+   "Pampers"
+  ],
+  "question": "question 1012",
+  "surface": "API with search grounding",
+  "why": [
+   "rival_first_pick"
+  ]
+ },
+ "facts_digest": "ab2206df55bf0bec37b7457645b8af2f1e6636ff8d383d2d6c6519b7cfd2b7b4",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "cacde296085ffdd82f9e7e8b412339c5093107861df6f5f6091175247e4ca15e",
+ "subject": "answer:run-70070"
+}

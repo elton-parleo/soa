@@ -1,0 +1,101 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Says wrong prices for Pampers Easy Ups S5 66. ChatGPT quoted Amazon at $34.97 when Amazon charged $37.97. Gemini and Perplexity quoted Walmart at $37.97 when Walmart charged $34.97.\"}",
+   "usage": {
+    "input_tokens": 997,
+    "output_tokens": 64,
+    "total_tokens": 1061
+   }
+  },
+  {
+   "response": "{\"line\":\"Easy Ups S5 66: ChatGPT said Amazon $34.97 but Amazon charged $37.97 on Oct 19. Gemini and Perplexity said Walmart $37.97 but Walmart charged $34.97.\"}",
+   "usage": {
+    "input_tokens": 997,
+    "output_tokens": 209,
+    "total_tokens": 1206
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "00037000863489",
+   "feed_sku:905",
+   "PAM-EU-5-66",
+   "sku:PAM-EU-5-66"
+  ],
+  "answers": 12,
+  "brand": "Pampers",
+  "cell_status": {
+   "Amazon": "wrong",
+   "Walmart": "wrong"
+  },
+  "gave_no_price": [
+   "Claude"
+  ],
+  "issue": {
+   "answers": 3,
+   "meaning": "quoted a wrong price",
+   "of": 12,
+   "rule": "product.wrong"
+  },
+  "kind": "product",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "Easy Ups S5 66",
+  "retailer_prices_that_day": {
+   "Amazon": {
+    "date": "Oct 19",
+    "price": "37.97"
+   },
+   "Walmart": {
+    "date": "Oct 19",
+    "price": "34.97"
+   }
+  },
+  "right_quotes": [
+   {
+    "agents": [
+     "Gemini",
+     "Google AI Mode",
+     "Perplexity"
+    ],
+    "quoted": "37.97",
+    "retailer": "Amazon"
+   },
+   {
+    "agents": [
+     "ChatGPT",
+     "Google AI Mode"
+    ],
+    "quoted": "34.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "wrong_quotes": [
+   {
+    "agents": [
+     "ChatGPT"
+    ],
+    "quoted": "34.97",
+    "retailer": "Amazon",
+    "retailer_charged": "37.97"
+   },
+   {
+    "agents": [
+     "Gemini",
+     "Perplexity"
+    ],
+    "quoted": "37.97",
+    "retailer": "Walmart",
+    "retailer_charged": "34.97"
+   }
+  ]
+ },
+ "facts_digest": "376a5cfc282b4b2a5bfe9e3f39fea40a26d2987e3eb8f58b04615b2b2397447a",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "4a1c0d4fa87092d7ca57223baf272e9e5d84e7b4832689d24ce7a0d62bf3151b",
+ "subject": "product:00037000863489"
+}

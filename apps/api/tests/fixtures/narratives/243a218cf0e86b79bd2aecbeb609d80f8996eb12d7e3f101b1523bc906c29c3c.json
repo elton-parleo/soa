@@ -1,0 +1,39 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 711,
+    "output_tokens": 43,
+    "total_tokens": 754
+   }
+  },
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 711,
+    "output_tokens": 14,
+    "total_tokens": 725
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Copilot",
+  "brand": "Pampers",
+  "brand_verdict": "misattributed",
+  "kind": "answer",
+  "meaning": [
+   "The answer described another brand's product as if it were this brand's."
+  ],
+  "question": "question 1058",
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "why": [
+   "brand_misattributed"
+  ]
+ },
+ "facts_digest": "243a218cf0e86b79bd2aecbeb609d80f8996eb12d7e3f101b1523bc906c29c3c",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "52e50d1adf200d0f34b1acf2acdf86baa364536a4b4044c3371c652bb9c3fa2f",
+ "subject": "answer:run-70347"
+}

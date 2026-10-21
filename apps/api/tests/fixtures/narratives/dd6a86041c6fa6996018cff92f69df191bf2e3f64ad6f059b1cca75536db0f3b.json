@@ -1,0 +1,45 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Copilot gave no Walmart price for Pampers Swaddlers NB 84. Walmart charged $24.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 769,
+    "output_tokens": 40,
+    "total_tokens": 809
+   }
+  },
+  {
+   "response": "{\"line\":\"Copilot gave no Walmart price for the Pampers Swaddlers NB 84. Walmart listed it at $24.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 769,
+    "output_tokens": 43,
+    "total_tokens": 812
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Copilot",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The only price in the answer was for another brand's product, so it gave none for this one."
+  ],
+  "question": "What does the Pampers Swaddlers NB 84 cost at walmart.com?",
+  "reason_code": "other_brand",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "24.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "verdict": "no price",
+  "why": [
+   "other_brand_price"
+  ]
+ },
+ "facts_digest": "dd6a86041c6fa6996018cff92f69df191bf2e3f64ad6f059b1cca75536db0f3b",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "cdded0c7317d5fcefa9b22e424c19adb0a522a40f181d8f0a4935c3d95079ebd",
+ "subject": "answer:run-90005"
+}

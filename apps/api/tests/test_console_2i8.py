@@ -150,12 +150,20 @@ def per_surface_view(endpoint, body):
             # 2L-1 adds each check's reference basis
             for c in a.get('checks') or []:
                 c.pop('live_basis', None)
+            # 2L-3 adds the answer's narrative (null with SOA_NARRATIVES_ENABLED off)
+            a.pop('narrative', None)
     if endpoint == 'overview':
         # 2K-1 adds the `recommended` bucket beside `fabricated` (0 on every fixture here)
         body = _without_zero(body, 'recommended')
         # 2K-3 adds the start day in the merchant's zone beside `started`; 2K-4 the cycle's study
         for k in ('start_date_local', 'created_at_local', 'timezone', 'study'):
             body.pop(k, None)
+        # 2L-3 adds each product's and each signal's narrative
+        for block in (body.get('by_surface') or {}).values():
+            for item in (block.get('products') or []) + (block.get('signals') or []):
+                item.pop('narrative', None)
+        for item in (body.get('products') or []) + (body.get('signals') or []):
+            item.pop('narrative', None)
     if endpoint in ('visibility', 'overview') and body.get('ranking'):
         body['ranking'] = _ranking(body['ranking'])
     if endpoint == 'true-value':
@@ -163,6 +171,8 @@ def per_surface_view(endpoint, body):
             # 2K-3 adds each row's GTIN and feed SKU (a GTIN-less row's sku is its feed SKU when known)
             row.pop('gtin', None)
             row.pop('feed_sku', None)
+            # 2L-3 adds each row's narrative, the caption under the product
+            row.pop('narrative', None)
             for cells in (row.get('cells') or {}, row.get('retailer_cells') or {}):
                 for cell in cells.values():
                     for k in CELL_TYPED:

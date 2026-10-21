@@ -1,0 +1,50 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Perplexity quoted $37.97 for Pampers Easy Ups S5 66 at Walmart. Walmart charged $34.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 781,
+    "output_tokens": 44,
+    "total_tokens": 825
+   }
+  },
+  {
+   "response": "{\"line\":\"Perplexity quoted $37.97 for Pampers Easy Ups S5 66 at Walmart. Walmart charged $34.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 781,
+    "output_tokens": 44,
+    "total_tokens": 825
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Perplexity",
+  "agent_quoted": [
+   {
+    "price_quoted": "37.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "question": "What does the Pampers Easy Ups S5 66 cost at walmart.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "34.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "e2929bdb7ccd69f464a4f99816f10056d28e311bd4eb61fe20b4ca28127e999e",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "7df0c06eb4e266a0d318c89ce3b02783b1708670863e6a43a9252e60aff2177d",
+ "subject": "answer:run-90064"
+}

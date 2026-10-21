@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Pampers first pick was Huggies, then Pampers. Facts say this happened because the assistant picked a rival first.\"}",
+   "usage": {
+    "input_tokens": 723,
+    "output_tokens": 39,
+    "total_tokens": 762
+   }
+  },
+  {
+   "response": "{\"line\":\"On question 1014, ChatGPT picked Huggies first, then Pampers. Its first pick was a rival brand before your brand in the named order.\"}",
+   "usage": {
+    "input_tokens": 723,
+    "output_tokens": 46,
+    "total_tokens": 769
+   }
+  }
+ ],
+ "facts": {
+  "agent": "ChatGPT",
+  "brand": "Pampers",
+  "first pick": "Huggies",
+  "kind": "answer",
+  "meaning": [
+   "On a question that let the assistant choose a brand, its first pick was another brand."
+  ],
+  "named in order": [
+   "Huggies",
+   "Pampers"
+  ],
+  "question": "question 1014",
+  "surface": "API with search grounding",
+  "why": [
+   "rival_first_pick"
+  ]
+ },
+ "facts_digest": "cad928c3d84dcb496b838ff4f9c3755c5944776840d32a7351a4ef171caf7ab1",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "991437206a985f436812003e65f61d9cc84fea9f45a7b54b18ecc1de1a205120",
+ "subject": "answer:run-70079"
+}

@@ -7370,3 +7370,77 @@ On Pampers today, before the regeneration that adds the 20 questions: presence m
 where-to-buy answers yet); retired not measured until 2L-2's feed upload marks Pure retired and a generation or
 regeneration writes it into `tier_config.merchant.retired` (the same regeneration adds the 20), then measured from the
 next cycle; attribute accuracy and promo pass-through not measured.
+## 2L-3: one-line narratives, written from the scorer's facts and checked
+
+Decision (Elton, Oct 21): the demo's Answers rows read "Sends the AMORE shopper to Amazon at about $36.18.
+Amazon charged $47.99 that day ...", ours read "stated 49.77; the page said 49.77". One model call per
+flagged answer and per product row writes the line from the facts the scorer already holds; every number and
+name in it is checked against those facts before it is stored; the templates stay for everything else and for
+any line that fails. Code: `soa_shared/narratives.py` (both app copies), `app/services/console_narratives.py`,
+`fullloop/coordinator.py` `_narratives`, `scripts/rescore_cycle.py --narratives`, migration `c8e2f4a6b1d3`
+(`soa_narratives`, a side table: a product row is no stored row).
+
+### What the model is given
+
+Only what the scorer stored. Per flagged answer (a wrong or stale price on a value tier, an other-brand price,
+a fabricated or misattributed brand verdict, a fabricated citation or availability flag, a rival first pick
+on a brand-choice question): the question, the agent and surface, the brand (or store) by name, each quoted
+price and product with the claim's verdict, the cell's reference price, retailer and day, the verdict and the
+scorer's note, the brand verdict and `claim_kind`, the first pick and the brands in the order named, the flag
+details, and of the answer's text only the labelled spans (`span_labels`, label not `none`) and the spans
+holding a quoted price. Per product row (each variant in the cycle's cached retailer-prices that a catalog
+question asked about): each retailer's price that day, the wrong and right quotes grouped by retailer and
+price with the agents behind each, who gave no price, who priced another brand, the cell statuses
+(TV_CELL_RULE) and the issue rule (`product_issue`'s). Verdicts are in the console's words and every reason an
+answer was flagged has a fixed sentence (`MEANINGS`); none carries a number.
+
+### The checks (a line failing any is dropped and the template shows)
+
+| check | rule |
+|---|---|
+| `amount_not_in_facts` | every dollar amount is one the facts hold (no differences, no rounding) |
+| `number_not_in_facts` | every other number too (counts, pack sizes, dates) |
+| `unpaired_amount` | each amount shares its sentence with a retailer or agent the facts tie it to |
+| `who_said_what` | in a clause naming agents and a quoting verb, each named agent quoted each amount (at the retailer named before it); in a "<retailer> charged $X" clause, X is that retailer's price that day |
+| `name_not_in_facts` | every retailer and agent named, and every capitalised word inside a sentence, is in the facts |
+| `agent_not_named` | an answer's line names its agent; a product's names at least one |
+| `banned` | the console's copy scan (`apps/console/tools/audit.py` BAN), "AI", "model", semicolons, em and en dashes, and the facts' own vocabulary leaking ("merchant", "reader", "facts", any `_`) |
+| `too_long` | at most 220 characters |
+
+Two calls on the same request; the line is taken only when both write one and both pass (the first is kept).
+One null beside one line is `calls_disagree:null`. Both null: `null`, the facts held nothing to say.
+
+### Stored and served
+
+`soa_narratives`: one row per cycle and subject (`answer:run-<id>`, `product:<True Value row key>`) with the
+facts digest (sha256 of the facts), line, status (`accepted`, `dropped`, `null`), reason, model, each call's
+answer, usage and check, and the time. Written by the worker when a full loop's cycle completes (before the
+request is marked scored; a repeat skips subjects whose stored digest is current) and by
+`rescore_cycle.py --cycle <code> --narratives [--dry-run]`, which rewrites every subject (the dry run calls
+the model, prints the lines and stores nothing).
+
+`narrative` (beside the typed fields): `/answers` each Answer; `/overview` each product of the `all` surface
+(the facts are every agent's quotes, so a single surface's row keeps its template) and each signal, the line
+of its example answer (`answerId`); `/true-value` each row, the caption under the product. A string while the
+stored line is accepted and its digest is the facts' digest now; `null` otherwise, so a rescore that changes
+a row's facts puts its template back until the line is rewritten. Both halves run only with
+`SOA_NARRATIVES_ENABLED=1` (default off); the model is `SOA_NARRATIVE_MODEL`, default `config.SOA_CODING_MODEL`.
+
+### Recorded, measured (FL13-shaped fixture, Oct 21)
+
+`tests/narratives_fixture.py` (console_fixture_2j2: 122 flagged answers, 10 products). Recorded with
+`scripts/record_narratives.py --cycle fl13`; tests replay the recordings and never call a model. gpt-5.4-nano
+(2026-03-17 snapshot), reasoning effort low, verbosity low:
+
+* 132 subjects, 264 calls a cycle; input tokens median 724 / max 999, output median 40 / max 209; 81 to 89 s
+  at four in flight; **$0.053 a cycle** at $0.20 / $1.25 per million tokens (OpenAI's price as supply's 2A-5
+  recorded it, Oct 21 2026, **unverified**).
+* Accepted 70, null 35, dropped 27: 13 `calls_disagree:null`, 7 `banned` (field names, "facts"), 5
+  `unpaired_amount`, 2 `agent_not_named`. The fixture's 2I-8 rows carry filler questions and reasons
+  ("question 1083", "r"), which is most of the nulls and the unpaired amounts.
+* A second recording run (`--compare`): of the 60 lines accepted both times, 57 differ in wording; 27
+  subjects changed status; 22 of 264 calls wrote a line that failed a check (each dropped, never shown).
+* Effort none (the 2A-5 extractor's) leaked the facts' field names and wrote first-pick clauses the facts do
+  not hold; low did not, at about the same tokens. One accepted product line in the first round credited
+  ChatGPT with Walmart's price and Gemini with Amazon's while every number and name was in the facts: that is
+  what `who_said_what` was added for, and it drops that line.

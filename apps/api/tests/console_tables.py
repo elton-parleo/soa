@@ -49,6 +49,9 @@ CONSOLE_TABLES: Dict[str, Tuple[str, ...]] = {
     'soa_full_loop_requests': ('id', 'organization_id', 'merchant_slug', 'study_type', 'platforms', 'runs_per_query',
                                'allow_hosted_render', 'supply_run_id', 'supply_status', 'cycle_id', 'status', 'error',
                                'created_by', 'created_at', 'updated_at'),
+    # 2L-3
+    'soa_narratives': ('id', 'cycle_id', 'subject', 'facts_digest', 'line', 'status', 'reason', 'model', 'calls',
+                       'written_at'),
 }
 
 #: (table, column) -> what follows the type: constraints and defaults, not types

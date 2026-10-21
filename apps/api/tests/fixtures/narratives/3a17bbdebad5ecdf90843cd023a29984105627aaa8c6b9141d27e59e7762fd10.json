@@ -1,0 +1,101 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Says $24.97 for Pampers Swaddlers NB 84 but Amazon charged $27.97 on Oct 19. Also says $27.97 for Walmart but Walmart charged $24.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 997,
+    "output_tokens": 60,
+    "total_tokens": 1057
+   }
+  },
+  {
+   "response": "{\"line\":\"For Pampers Swaddlers NB 84, ChatGPT quoted Amazon $24.97 but Amazon charged $27.97 on Oct 19. Gemini and Perplexity quoted Walmart $27.97 but Walmart charged $24.97.\"}",
+   "usage": {
+    "input_tokens": 997,
+    "output_tokens": 62,
+    "total_tokens": 1059
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "00037000863434",
+   "feed_sku:900",
+   "PAM-SW-NB-84",
+   "sku:PAM-SW-NB-84"
+  ],
+  "answers": 12,
+  "brand": "Pampers",
+  "cell_status": {
+   "Amazon": "wrong",
+   "Walmart": "wrong"
+  },
+  "gave_no_price": [
+   "Claude"
+  ],
+  "issue": {
+   "answers": 3,
+   "meaning": "quoted a wrong price",
+   "of": 12,
+   "rule": "product.wrong"
+  },
+  "kind": "product",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "Swaddlers NB 84",
+  "retailer_prices_that_day": {
+   "Amazon": {
+    "date": "Oct 19",
+    "price": "27.97"
+   },
+   "Walmart": {
+    "date": "Oct 19",
+    "price": "24.97"
+   }
+  },
+  "right_quotes": [
+   {
+    "agents": [
+     "Gemini",
+     "Google AI Mode",
+     "Perplexity"
+    ],
+    "quoted": "27.97",
+    "retailer": "Amazon"
+   },
+   {
+    "agents": [
+     "ChatGPT",
+     "Google AI Mode"
+    ],
+    "quoted": "24.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "wrong_quotes": [
+   {
+    "agents": [
+     "ChatGPT"
+    ],
+    "quoted": "24.97",
+    "retailer": "Amazon",
+    "retailer_charged": "27.97"
+   },
+   {
+    "agents": [
+     "Gemini",
+     "Perplexity"
+    ],
+    "quoted": "27.97",
+    "retailer": "Walmart",
+    "retailer_charged": "24.97"
+   }
+  ]
+ },
+ "facts_digest": "3a17bbdebad5ecdf90843cd023a29984105627aaa8c6b9141d27e59e7762fd10",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "0c02bdb07f0075b248a3e170955bb0cfadb034cb00a19e403a867ae4883112eb",
+ "subject": "product:00037000863434"
+}

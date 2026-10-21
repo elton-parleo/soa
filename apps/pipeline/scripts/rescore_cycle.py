@@ -84,6 +84,15 @@ cached rows, and this does not refresh them: refreshing cycle N does not
 change what cycle N+1 considers stale unless N+1 is refreshed and
 re-classified too, with the same flag.
 
+--narratives (2L-3) rewrites the cycle's console narratives from what is
+stored (soa_shared/narratives.py): two model calls per flagged answer and per
+product row, each line checked against its facts before it is stored, and
+the template shown for any that fails. Nothing is re-scored. --dry-run calls
+the model and prints every line, and stores nothing:
+
+    python3 scripts/rescore_cycle.py --cycle <code> --narratives --dry-run
+    python3 scripts/rescore_cycle.py --cycle <code> --narratives
+
 The console's stored score recomputes on its next read: `refreshed_at`
 differs from the one the stored score was computed on (console_score.
 needs_recompute, 'cycle reference refreshed').
@@ -796,6 +805,30 @@ def _main_reference(args) -> int:
     return 1 if result.get('refused') else 0
 
 
+def _main_narratives(args, writer=None, log=print) -> int:
+    """2L-3: --narratives. Every subject's line beside its facts' digest, the
+    counts, the dropped lines and why, and the calls and tokens."""
+    from soa_shared import narratives
+
+    writer = writer or narratives.LiveWriter()
+    with engine.connect() as conn:
+        cid = cycle_id(conn, args.cycle)
+        if not args.dry_run and not narratives.table_exists(conn):
+            raise SystemExit(f"{narratives.TABLE} is missing (migration c8e2f4a6b1d3 not applied); "
+                             "run with --dry-run to read the lines")
+    log(f"cycle {args.cycle} (id {cid}), narratives, model {getattr(writer, 'model', '?')}"
+        f"{' (dry run: the model is called, nothing is stored)' if args.dry_run else ''}")
+    reports = narratives.write_cycle(engine, cid, writer, dry_run=args.dry_run, force=True, log=log)
+    for r in sorted(reports, key=lambda r: r['subject']):
+        log(f"  {r['subject']}  [{r['status']}{': ' + r['reason'] if r['reason'] else ''}]  {r['line'] or ''}")
+    counts = {s: sum(1 for r in reports if r['status'] == s) for s in ('accepted', 'dropped', 'null')}
+    totals = narratives.usage_totals(reports)
+    log(f"accepted {counts['accepted']}, dropped {counts['dropped']}, null {counts['null']}; "
+        f"{totals['calls']} calls, {totals['input_tokens']} input / {totals['output_tokens']} output tokens"
+        f"{'' if args.dry_run else '; stored'}")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description="Re-score one or more tiers of a cycle, in place.",
@@ -851,7 +884,21 @@ def main(argv=None) -> int:
              "byte, and re-classify; refused for another cycle's backup or a cycle "
              "whose reference changed since",
     )
+    parser.add_argument(
+        "--narratives", action="store_true",
+        help=(
+            "2L-3: rewrite the cycle's console narratives (soa_shared/narratives.py) "
+            "from the stored outcomes: two model calls per flagged answer and per "
+            "product row, every line checked against its facts. Nothing is re-scored. "
+            "With --dry-run, calls the model and prints the lines, and stores nothing."
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.narratives:
+        if args.classify_only or args.refresh_reference or args.restore or args.backup or args.tiers:
+            parser.error("--narratives runs on its own (with --dry-run or not)")
+        return _main_narratives(args)
 
     if args.refresh_reference or args.restore:
         if not args.classify_only:

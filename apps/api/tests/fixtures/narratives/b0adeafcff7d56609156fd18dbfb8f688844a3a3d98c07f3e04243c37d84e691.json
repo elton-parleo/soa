@@ -1,0 +1,50 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini quoted $27.97 for Pampers Swaddlers NB 84. Walmart charged $24.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "output_tokens": 41,
+    "total_tokens": 821
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini quoted $27.97 for Pampers Swaddlers NB 84 at Walmart. Walmart charged $24.97 on Oct 19, so the quoted price was too high.\"}",
+   "usage": {
+    "input_tokens": 780,
+    "output_tokens": 51,
+    "total_tokens": 831
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Gemini",
+  "agent_quoted": [
+   {
+    "price_quoted": "27.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "question": "What does the Pampers Swaddlers NB 84 cost at walmart.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "24.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "b0adeafcff7d56609156fd18dbfb8f688844a3a3d98c07f3e04243c37d84e691",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "df25d93313569bc300e3f6061d29e6536788bd4488c953a22ea81f71aa0c6188",
+ "subject": "answer:run-90002"
+}

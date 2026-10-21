@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"ChatGPT said Pampers costs $12.09. Retailer charged $12.09 that day. The assistant got the price wrong.\"}",
+   "usage": {
+    "input_tokens": 721,
+    "output_tokens": 41,
+    "total_tokens": 762
+   }
+  },
+  {
+   "response": "{\"line\":\"ChatGPT gave Pampers at $12.09, but the retailer charged $12.09 that day.\"}",
+   "usage": {
+    "input_tokens": 721,
+    "output_tokens": 35,
+    "total_tokens": 756
+   }
+  }
+ ],
+ "facts": {
+  "agent": "ChatGPT",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "question": "question 1083",
+  "retailer_price_that_day": {
+   "price": "12.09"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "7979e7427a98242e93407543750ef45fd0dfe9dec01d36a33fd4ae73a130dbc8",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "e69a12df67aefd7e96488c17d134fa91e738f721661de6b4b8bac4054a0084c4",
+ "subject": "answer:run-70493"
+}
