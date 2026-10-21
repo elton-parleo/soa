@@ -40,7 +40,9 @@ def _plural(n: int, one: str, many: str) -> str:
 
 def current_study(cycles: List[dict], jobs: List[dict]) -> Optional[dict]:
     """The job of the merchant's newest cycle, else its newest job.
-    cycles: the merchant's, newest first. jobs: the merchant's, newest first."""
+    cycles: the merchant's, newest first. jobs: the merchant's, newest first.
+    2L-1: an archived study is never the default."""
+    jobs = [j for j in jobs if j.get('archived_at') is None]
     by_type = {j['study_type']: j for j in jobs}
     for c in cycles:
         if c['study_type'] in by_type:

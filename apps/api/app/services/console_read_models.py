@@ -1635,10 +1635,30 @@ def build_study(job: dict, prompts: List[dict], cycles: List[dict], entities: Li
         # 2K-1: the merchant's local time, for the study's display date ("the Oct 19 study");
         # `created` stays UTC
         'created_at_local': local_time.local_iso(job.get('created_at'), study_timezone(tier_config)),
+        # 2L-1: archived studies are listed only with ?archived=1
+        'archived': job.get('archived_at') is not None, 'archived_at': _iso(job.get('archived_at')),
         'timezone': study_timezone(tier_config),
         # 2K-3: the last run's day in the merchant's zone, beside lastRun (UTC)
         'last_run_local': cycle_dates(latest, study_timezone(tier_config))['start_date_local'] if latest else None,
     }, ('lastRun', 'last_run_local'))
+
+
+#: 2L-1 (B3): a full loop is running until its request is scored, failed or
+#: reads-only done (soa_full_loop_requests.status), or while a cycle runs.
+LOOP_RUNNING = ('reference_pending', 'reference_done', 'cycle_planned', 'scoring')
+
+
+def running_loops(conn, study_type: str) -> Optional[str]:
+    """What runs for the study, in words, or None: a full-loop request in
+    flight, else a running cycle."""
+    request = conn.execute(text(
+        "SELECT id, status FROM soa_full_loop_requests WHERE study_type = :st AND status IN ("
+        + ", ".join(f"'{s}'" for s in LOOP_RUNNING) + ") ORDER BY id DESC"), {'st': study_type}).mappings().first()
+    if request:
+        return f"request {request['id']}, {request['status'].replace('_', ' ')}"
+    cycle = conn.execute(text("SELECT cycle_code FROM soa_cycles WHERE study_type = :st AND status = 'running' "
+                              "ORDER BY id DESC"), {'st': study_type}).scalar()
+    return f"cycle {cycle}" if cycle else None
 
 
 def run_identity(cycle: dict, ran_platforms: List[str]) -> dict:

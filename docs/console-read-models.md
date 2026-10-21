@@ -7175,3 +7175,29 @@ Left as they are, not user-facing: `soa_models.py` column comments (database doc
 operator diagnostics (`… is not set; run scripts/backfill_customer_accounts.py`), docstrings, and the brand-direct
 generation prompt in `catalog_tiers.py` (model input). The run dialog's "Not comparable to …: …; …" line is the
 console's own (`RunLoopDialog.comparableLine`), reworded there (truesync, 2L-1 A1).
+
+### B3: archive a study
+
+Decision (Elton, Oct 21): "New study" stays the only way to change a study's questions (an in-place edit would break
+week-over-week), and the study list gets an archive.
+
+There is no `soa_studies` table: a study is a `study_type`, defined by its generation job row (see the model). So
+the one additive column is **`soa_query_generation_jobs.archived_at`** (`timestamptz`, nullable; migration
+`a2c4e6f8b1d3`, round-tripped on a throwaway local Postgres with `scripts/migration_roundtrip.py --from
+f7c2a9e4b1d6`, never applied anywhere else). NULL: not archived. No row is written by the migration.
+
+| endpoint | who | does |
+|---|---|---|
+| `POST /api/console/studio/studies/{id}/archive` | operator (a member is 403) | stamps `archived_at` (archiving again keeps the first stamp). **409** while a loop of the study runs: a full-loop request in `reference_pending`, `reference_done`, `cycle_planned` or `scoring`, or a cycle `running` ("A full loop of this study is running (request 12, scoring). Archive it once the loop finishes."). 404 for a study not the org's |
+| `POST /api/console/studio/studies/{id}/unarchive` | operator | clears it |
+
+Both return `{id, archived, archived_at}`. `{id}` is the study's id as `/studio/studies` serves it (its
+`study_type`).
+
+- `GET /api/console/studio/studies` leaves an archived study out; `?archived=1` lists every study. Each study
+  carries `archived` and `archived_at`. The run dialog's study choice reads this list, so an archived study is not
+  offered.
+- `GET /api/console/prompts`: the default study (`console_prompts.current_study`, the newest cycle's study, else the
+  newest) skips an archived one.
+- Its cycles stay readable: every cycle-keyed read (`/answers`, `/overview?cycle=`, `/true-value`, ...) and `/runs`
+  are unchanged.

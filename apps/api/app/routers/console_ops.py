@@ -19,6 +19,8 @@ does for the web app.
     POST /api/console/studies/{study_type}/regenerate   rebuild a grounded study's catalog tiers from the record as it is now
     GET  /api/console/studies/{study_type}/status       generation status and provenance
     POST /api/console/cycles                            start a cycle of a study on surfaces from /api/console/surfaces
+    POST /api/console/studio/studies/{id}/archive       2L-1: archive a study (409 while a loop of it runs)
+    POST /api/console/studio/studies/{id}/unarchive     2L-1: bring it back
 """
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
@@ -303,6 +305,54 @@ async def regenerate_console_study(study_type: str, body: RegenerateStudyRequest
                                    scope: CustomerScope = Depends(operator_scope),
                                    user: dict = Depends(verify_token)):
     return studies_router.regenerate_study(study_type, body, current_user=_as_user(user))
+
+
+# ─── 2L-1 (B3): archive a study ────────────────────────────────────────────
+#
+# Decision (Elton, Oct 21): "New study" stays the only way to change a study's
+# questions, and the study list gets an archive. An archived study leaves
+# /studio/studies (back with ?archived=1), so the run dialog's study choice,
+# and the Prompts default; its cycles stay readable. Nothing else changes.
+
+def _own_study(conn, scope: CustomerScope, study_type: str) -> dict:
+    job = conn.execute(text("""
+        SELECT id, study_type, archived_at FROM soa_query_generation_jobs
+        WHERE study_type = :st AND COALESCE(customer_organization_id, organization_id) = :org
+    """), {"st": study_type, "org": scope.org.id}).mappings().first()
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"study {study_type!r} not found")
+    return dict(job)
+
+
+def _archive_view(conn, study_type: str) -> dict:
+    at = conn.execute(text("SELECT archived_at FROM soa_query_generation_jobs WHERE study_type = :st"),
+                      {"st": study_type}).scalar()
+    return {"id": study_type, "archived": at is not None, "archived_at": rm._iso(at)}
+
+
+@router.post("/studio/studies/{study_type}/archive")
+async def archive_study(study_type: str, scope: CustomerScope = Depends(operator_scope)):
+    """Archives the study. 409 while a full loop of it runs (a request not yet
+    scored, failed or reads-only done) or a cycle of it is running. Archiving
+    an archived study keeps its first archived_at."""
+    with engine.begin() as conn:
+        job = _own_study(conn, scope, study_type)
+        running = rm.running_loops(conn, study_type)
+        if running:
+            raise HTTPException(status_code=409, detail=(
+                f"A full loop of this study is running ({running}). Archive it once the loop finishes."))
+        if job["archived_at"] is None:
+            conn.execute(text("UPDATE soa_query_generation_jobs SET archived_at = :at WHERE id = :id"),
+                         {"at": datetime.now(timezone.utc), "id": job["id"]})
+        return _archive_view(conn, study_type)
+
+
+@router.post("/studio/studies/{study_type}/unarchive")
+async def unarchive_study(study_type: str, scope: CustomerScope = Depends(operator_scope)):
+    with engine.begin() as conn:
+        job = _own_study(conn, scope, study_type)
+        conn.execute(text("UPDATE soa_query_generation_jobs SET archived_at = NULL WHERE id = :id"), {"id": job["id"]})
+        return _archive_view(conn, study_type)
 
 
 @router.get("/studies/{study_type}/status")

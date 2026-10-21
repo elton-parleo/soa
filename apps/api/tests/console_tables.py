@@ -30,7 +30,7 @@ CONSOLE_TABLES: Dict[str, Tuple[str, ...]] = {
     'soa_query_generation_jobs': ('id', 'study_type', 'study_name', 'description', 'target_count', 'created_count',
                                   'status', 'organization_id', 'customer_organization_id', 'created_by', 'created_at',
                                   'study_pattern', 'allowed_categories', 'retailer_names', 'syndicated_merchant',
-                                  'tier_config'),
+                                  'tier_config', 'archived_at'),
     'soa_entities': ('id', 'name', 'slug', 'entity_type', 'category', 'website_url', 'aliases'),
     'soa_cycles': ('id', 'cycle_code', 'study_type', 'study_pattern', 'status', 'cycle_mode', 'start_date', 'end_date',
                    'total_runs_planned', 'completed_runs', 'platforms', 'runs_per_query', 'organization_id',
