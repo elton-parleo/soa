@@ -143,6 +143,9 @@ def per_surface_view(endpoint, body):
             # 2K-3 adds the question's code and stage
             a.pop('query_code', None)
             a.pop('stage', None)
+            # 2L-1 adds each check's reference basis
+            for c in a.get('checks') or []:
+                c.pop('live_basis', None)
     if endpoint == 'overview':
         # 2K-1 adds the `recommended` bucket beside `fabricated` (0 on every fixture here)
         body = _without_zero(body, 'recommended')

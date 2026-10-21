@@ -7122,3 +7122,28 @@ exact): raw Missed 47 of 58, 81% (was 89 of 100), `no_price_runs` 42. The driver
 price answers got the price wrong or quoted another brand's price, {pct}."; the retailer title reads "{name}'s price
 is wrong". The demo's Petco wording ("missing or wrong") is the earlier definition, 2I-9's. FL12's shape in
 `test_console_2i9.py`: 62 of 96 (was 98 of 132), $18.2M missed at $4.0B (was $20.9M).
+
+## 2L-1: four small items
+
+### B1: the reference on a "left out" check row
+
+A check row whose answer gave no price (no claim, or only a claim about another product) read the question's
+stored amount as its `live`. FL13's questions were generated before their pages were read and stored `0.00`, so the
+drawer and the TrueSync readback said "Judged against $0.00" (the console patched that client-side in 2K-4).
+
+`build_answer` now judges such a row against the True Value cell it is asked in: the cycle's cached reference row
+(`soa_cycles.reference_prices`) for the variant at the retailer the question names, keyed as True Value keys it
+(GTIN-14, `variant_ref`, `sku`, `sku:<sku>`): `rm.reference_index` / `rm.cell_reference`. Each Check carries
+`live_basis` beside `live`, as TvCell does: `reference_read` (the page's read), `record` (the record's price, a
+hosted merchant) or `question` (the question's own amount, when the cycle cached no row for that cell). `0.00` is
+never served as a reference: with no row and no amount (or `0.00`) the row says `"—"` and has no `live_basis`.
+
+| | before | after |
+|---|---|---|
+| no claim, FL13 question (`amount: "0.00"`, attributed to walmart.com) | `{"claim": "—", "live": "$0.00", ...}` | `{"claim": "—", "live": "$24.97 at walmart.com", "live_basis": "reference_read", ...}` |
+| a claim about another product (`target: not_ours`) | `"live": "—"` | the cell's reference, as above |
+| no cached reference, `amount: "0.00"` | `"live": "$0.00"` | `"live": "—"` |
+| a quoted claim | unchanged, plus `live_basis` | |
+
+Applied on read (`load_answers` reads the cycle's cached reference once): stored cycles read right without a
+rescore, nothing stored is rewritten. Same cell as True Value's `live` and `live_basis`.
