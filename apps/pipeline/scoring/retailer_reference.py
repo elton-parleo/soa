@@ -34,6 +34,24 @@ ABSENT = 'absent'
 UNSCOREABLE = 'unscoreable'
 UNVERIFIABLE = 'unverifiable'
 
+#: 2K-1: supply 2J-1 serves a brand's own page that sets no price as
+#: `method: none_by_design` (price null, read_status ok, verifiable false,
+#: "brand site, no price set"). A price claim attributed to that page is not
+#: a claim we could not check: there is no price to check it against, by the
+#: brand's design. It is not scored (`unscoreable`, reason code
+#: `brand_sets_no_price`), outside every accuracy and outside the
+#: unverifiable count. Attribution to a retailer is unaffected.
+NONE_BY_DESIGN = 'none_by_design'
+REASON_BRAND_SETS_NO_PRICE = 'brand_sets_no_price'
+BRAND_SETS_NO_PRICE_NOTE = "the brand's site sets no price; the agent priced it anyway"
+
+
+def brand_sets_no_price(row) -> bool:
+    """The page is the brand's own and sets no price by design (supply 2J-1).
+    A row that names its role says `own`; supply serves none_by_design only
+    for a brand's own domain."""
+    return row is not None and row.method == NONE_BY_DESIGN and row.role in (None, 'own')
+
 
 def gtin14(value) -> Optional[str]:
     digits = ''.join(ch for ch in str(value or '') if ch.isdigit())
@@ -59,6 +77,7 @@ class ReferenceRow:
     reference_source: Optional[str]
     method: Optional[str]
     observed_at: Optional[str]
+    role: Optional[str] = None
 
     @classmethod
     def from_payload(cls, row: dict) -> 'ReferenceRow':
@@ -78,6 +97,7 @@ class ReferenceRow:
             reference_source=row.get('reference_source'),
             method=row.get('method'),
             observed_at=row.get('observed_at'),
+            role=row.get('role'),
         )
 
     def value(self, member: bool) -> Optional[str]:
@@ -168,7 +188,10 @@ def judge_claim(amount, *, row: Optional[ReferenceRow], prior: Optional[Referenc
     """
     One price claim against one page's reference. Returns (outcome, reason).
 
-      unscoreable   the claim is not price-shaped
+      unscoreable   the claim is not price-shaped; or (2K-1) the page is the
+                    brand's own and sets no price by design (none_by_design):
+                    nothing to check against, so not scored
+                    (REASON_BRAND_SETS_NO_PRICE)
       unverifiable  no reference row, or the row is verifiable=false — the
                     page blocked both reference sources (or was not read).
                     A finding, never `wrong`.
@@ -185,6 +208,8 @@ def judge_claim(amount, *, row: Optional[ReferenceRow], prior: Optional[Referenc
     label = 'member price' if member else 'price'
     if row is None:
         return UNVERIFIABLE, 'no reference row for this page'
+    if brand_sets_no_price(row):
+        return UNSCOREABLE, BRAND_SETS_NO_PRICE_NOTE
     if not row.verifiable:
         return UNVERIFIABLE, row.unverifiable_reason or f"page unreadable ({row.read_status})"
     reference = row.value(member)

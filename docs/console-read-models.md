@@ -142,7 +142,7 @@ the demo counts together.
 |---|---|
 | `columns` | the retailers in the record: the domains in the cycle's cached retailer-prices (2A). A cycle scored against the record (a hosted seller) has one column, its own domain |
 | `rows` | one per variant (`sku` = GTIN, or the record's variant id) |
-| `TvCell.live` | the 2A reference row's price, `unverifiable` when supply says `verifiable: false`; the record's price when no reference is cached. 2J-4: `not priced` for a brand's own page that sets no price (supply 2J-1's `method: none_by_design`, `verifiable: false`, "brand site, no price set"): the page was read, not unreadable. Its answers still score `unverifiable`, as supply's contract says, and the products block reads "No price set at <domain>, the brand's own site, <day>" |
+| `TvCell.live` | the 2A reference row's price, `unverifiable` when supply says `verifiable: false`; the record's price when no reference is cached. 2J-4: `not priced` for a brand's own page that sets no price (supply 2J-1's `method: none_by_design`, `verifiable: false`, "brand site, no price set"): the page was read, not unreadable. 2K-1: its answers are not scored (`unscoreable`, `brand_sets_no_price`, see "2K-1: the brand's own page"), and the products block reads "No price set at <domain>, the brand's own site, <day>" |
 | `TvCell.quoted` | 2C-2: the deciding run's stated price (most common among the runs with that outcome); `—` when no run quoted one |
 | `TvCell.status` | 2C-2, `TV_CELL_RULE`, on `surface` (2I-8: `all`, every agent's quotes together; each surface's own cell in `by_surface`): the **worst** outcome among the runs that **quoted a price** (wrong, then stale, then partial, then exact); a run that quoted nothing, or priced another brand's product (absent), does not vote; no quoting run → `missed` (left out). Mapped exact → `exact`, wrong → `wrong`, partial → `partial`, absent → `missed`, stale → `wrong` (`outcome` says `stale`), unverifiable → **`unverifiable`** (extension), no question → `none`. A cell never reads WRONG with nothing quoted |
 | `programs` | `[]` without `merchant`; with it (2C-2) the owned incentives as `/programs` maps them |
@@ -6924,3 +6924,31 @@ entry with its `line` ("12 questions, each naming the brand and a rival"), and c
 The web modal's category-control row says the same ("…Comparison: 12 questions, each naming the brand and a
 rival"); the "What to ask about" copy is unchanged. The generation report names a dropped comparison question
 ("dropped for naming no rival").
+
+### The brand's own page carries no price (`brand_sets_no_price`)
+
+After supply 2J-1 a brand's own-domain read is `none_by_design` (price null, `read_status ok`, `verifiable false`,
+"brand site, no price set"). 2J-4 made the True Value cell read `not priced`, but the answers judged against that
+row still scored `unverifiable` and counted in "N prices could not be checked", a finding about a page we could
+not read. The page was read; the brand sets no price there by design.
+
+- Scorer (`apps/pipeline/scoring/retailer_reference.py` `judge_claim`): a catalog-tier price claim judged against
+  a `none_by_design` row of the brand's own (`role` own, or unstated) is **`unscoreable`**, reason code
+  **`brand_sets_no_price`**, reason "the brand's site sets no price; the agent priced it anyway". Outside every
+  accuracy (`unscoreable` is in none) and outside the unverifiable count. A retailer page is unaffected: one that
+  states no price is still `unverifiable`.
+- Console, for a cycle scored before 2K-1 (`console_read_models.brand_sets_no_price_runs` / `not_priced`): an
+  `unverifiable` catalog run whose stored claim was judged against a `none_by_design` row (the claim's
+  `reference.method`), or whose question is attributed to a page the cycle's cached reference serves as
+  `none_by_design` for its variant (GTIN-14, variant id, `sku:<sku>`), is read as `unscoreable` /
+  `brand_sets_no_price`. Every loader that counts price outcomes applies it: the Overview's rows and signals
+  (`load_overview_rows`, so the score's said halves too), the answers summary, the Answers list and drawer, True
+  Value's quotes, the studies grid and the revenue model's catalog rows. Nothing stored is rewritten; a re-score
+  stores the same outcome.
+- The drawer still shows the agent's quote: the check's `claim` is the quote, `verdict` `unscoreable`, `reason`
+  `brand_sets_no_price`, `note` and the answer's `summary` "the brand's site sets no price; the agent priced it
+  anyway", `live` "no price set at pampers.com, the brand's own site". The True Value cell is `live: not priced`,
+  `status: none` (not `unverifiable`).
+
+On the FL12-shaped brand fixture with 12 answers priced at pampers.com (`tests/test_console_2k1_brand_price.py`):
+"could not be checked" drops by exactly those 12 runs (12 to none); Price Truth's denominator stays 80 scored.

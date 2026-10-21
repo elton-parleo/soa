@@ -372,6 +372,8 @@ def build_model(shares: dict, inputs: dict, *, cycle: str, kind: str, name: str,
 def load_catalog_rows(conn, cycle: dict) -> list:
     """One row per catalog-tier run, with the reference price its expectation
     carried (the record's or the page's, as scored)."""
+    from app.services import console_read_models as rm
+    unpriced = rm.brand_sets_no_price_runs(conn, cycle)   # 2K-1
     out = []
     for r in conn.execute(text("""
         SELECT r.id AS run_id, r.platform, r.answer_status, o.outcome, o.reason_code, o.expected_answer
@@ -380,7 +382,7 @@ def load_catalog_rows(conn, cycle: dict) -> list:
         WHERE r.cycle_id = :c AND q.tier = 'catalog_accuracy'
         ORDER BY r.id
     """), {'c': cycle['id']}).mappings():
-        row = dict(r)
+        row = rm.not_priced(dict(r), unpriced)
         exp = row.pop('expected_answer')
         if isinstance(exp, str):
             import json as _j

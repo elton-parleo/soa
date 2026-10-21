@@ -283,6 +283,8 @@ def _true_value_inputs(conn, row) -> tuple:
         FROM soa_expectation_outcomes o JOIN soa_runs r ON r.id = o.run_id
         WHERE o.cycle_id = :c AND o.tier = 'catalog_accuracy'
     """), {"c": row['id']}).mappings().all()
+    unpriced = rm.brand_sets_no_price_runs(conn, row)   # 2K-1
+    outcomes = [rm.not_priced(dict(o), unpriced) for o in outcomes]
 
     by_query = {q['id']: q for q in questions}
     own_domain, variants = None, []
@@ -604,7 +606,8 @@ def get_studies(cycle: str = Query(...), scope: CustomerScope = Depends(console_
         queries = [dict(q) for q in conn.execute(text(
             "SELECT id, query_code, query_text, tier, stage FROM soa_queries WHERE study_type = :st "
             "ORDER BY query_code"), {"st": row['study_type']}).mappings() if q['id'] in query_ids]
-        outcomes = {o['run_id']: dict(o) for o in conn.execute(text(
+        unpriced = rm.brand_sets_no_price_runs(conn, row)   # 2K-1
+        outcomes = {o['run_id']: rm.not_priced(dict(o), unpriced) for o in conn.execute(text(
             "SELECT * FROM soa_expectation_outcomes WHERE cycle_id = :c"), {"c": row['id']}).mappings()}
         picks: Dict[int, str] = {}
         primary_named: Dict[int, bool] = {}

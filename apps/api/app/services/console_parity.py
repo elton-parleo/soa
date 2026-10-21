@@ -1539,7 +1539,9 @@ def load_overview_rows(conn, cycle: dict) -> List[dict]:
         row = dict(r)
         row['variant_id'] = (_json(row.pop('source_ref')) or {}).get('variant_id')
         rows.append(row)
-    return rows
+    # 2K-1: a price attributed to the brand's own page, which sets none, is not scored
+    unpriced = rm.brand_sets_no_price_runs(conn, cycle)
+    return [rm.not_priced(r, unpriced) for r in rows]
 
 
 def previous_scored_cycle(conn, cycle: dict, org_sql: str) -> tuple:
