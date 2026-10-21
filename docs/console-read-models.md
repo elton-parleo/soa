@@ -7053,3 +7053,72 @@ root) and `console_score.py` untouched. Tests: `apps/api/tests/test_console_2k3.
   `/full-loop/{id}` and `/full-loop/latest` (`cycle.start_date` and `cycle.start_date_local`), `/revenue/history`
   (per cycle); `/studio/studies` and `/prompts` serve `last_run_local`. A cycle created 04:26 UTC on Oct 20 started
   Oct 19 in Los Angeles. Null when the cycle has no `created_at`.
+
+## 2K-4: five findings from the FL13 walk
+
+### B1: one comparability rule
+
+On FL13 the Share of Algorithm tile read "-6 vs FL12-pampers-20261020" and the metric tiles showed deltas while the
+Changes block said "Not comparable": the score checked its scorer version, its pooled surfaces and its agents, the
+Changes block its agents and the set it reads, and neither checked the question set. FL12 and FL13 were different
+studies.
+
+`soa_shared/cycle_compare.py` (api and pipeline copies, identical; the pipeline imports none of it) holds
+**`cycles_comparable(now, prev)`** over `facts(...)` of each cycle. Two cycles are comparable when, in this order:
+the same scorer version (when both carry one), the same study or identical question codes and tiers, the same
+measured surfaces (when both carry them), the same agents on each surface compared, and the earlier cycle measured
+the set this one reads (unprompted answers, or with a comparison question the brand-choice set). It returns
+`(comparable, condition, reason)`; the reason names the first condition that fails:
+
+- `version`: "Scored under v10, re-score to compare."
+- `study`: "Not comparable: FL12-pampers-20261020 ran a different study (pampers-fl12)."
+- `surfaces`: "Not comparable: {code} scored the grounded API, this cycle scored …"
+- `agents`: "Not comparable: {code} ran Claude only on the grounded API." (the score names the surface; the Changes
+  block says "on this surface", and nothing on `all`)
+- `measured`: "Not comparable: {code} asked no comparison questions."
+
+Readers: the score (`console_score.compare`: `previous.comparable`, `previous.reason`, new `previous.condition`;
+the tile delta and the five metric tiles' `delta`/`delta_reason` follow it), the Overview's Changes block
+(`console_parity.changes_status`) and `/api/console/revenue/history`, whose cycles now carry **`vs_previous`**
+(`{cycle, comparable, condition, reason}` against the cycle before; null on the first). The study and its questions
+come from `rm.study_identity`. The score's agents reason reads in the shared wording (it was "on {surface} {code}
+ran …"); the score body's `rules` keep their 2C-3 templates, as the body is pinned.
+
+### B2: the study's own date
+
+Prompts and the Overview header read "The Oct 21 study" for a study generated at 23:10 PDT on Oct 20. Neither label
+read the study. The Overview's read the cycle's `created_at_local` (from `/runs`); Prompts read the cycle's start,
+soa's `last_run`, which was the cycle's **UTC `start_date`** until 2K-3 (`last_run_local` since). Only
+`/studio/studies` served the study's own `created_at_local`.
+
+`rm.study_dates(job)` / `rm.load_study_block(conn, study_type)`: the study's `created_at` (UTC), `created_at_local`
+in the merchant's zone (as 2K-1's) and `timezone`. Served on `/api/console/prompts` (`study`), `/api/console/overview`
+(new `study` block: id, name and the three), `/api/full-loop/{id}` and `/api/console/full-loop/latest` (new `study`
+block); `/studio/studies` already carried it. A study created 06:10 UTC on Oct 21 is `2026-10-20T23:10:00-07:00`.
+
+### B4: access identities named once
+
+FL13's Overview read "Access problems: Googlebot, Googlebot, bingbot, Parleo (control)": two tokens share the display
+name Googlebot. `rm.group_identities(requests)` gives `[{identity, tokens, label}]` in first-seen order, `label`
+"Googlebot (2 tokens)" for a name with more than one token. `/api/console/accessibility` serves
+**`problem_identities`** (the measured requests that did not get through, grouped; every request is still in
+`requests`), which the Overview's Access problems tile reads. The Overview's access signal counts and names the
+groups ("3 agent identities could not read the pages." / "Googlebot (2 tokens), bingbot, Parleo (control). From the
+last access run."), and so does Impact's Access line (`access.n` the identities, new `access.tokens` the requests).
+`parity._measured` is `rm.access_measured`.
+
+### B5: Missed counts wrong prices; no price is reported, not counted
+
+Decision (Elton, Oct 21): an agent that declines to price is not a wrong answer. 2I-9's Missed share counted
+"wrong, another brand's price, or left out the price the page had" over the scored price answers; on FL13 that was
+89 of 100, 42 of them answers that gave no price at all.
+
+`console_revenue.revenue_shares`: the Missed numerator is **wrong (stale included) plus another brand's price**, the
+denominator the **scored price answers** (exact, partial, stale, wrong, another brand's). An answered catalog run
+that gave no price (`absent`, not `other_brand`) is counted on its own as **`missed.no_price_runs`** (also in
+`/revenue`'s `counts.missed`), and the Missed driver carries **`no_price`**: `{count, line}`, "42 answers gave no
+price at all." Once-counting is unchanged (missed = raw x (1 - lost)). FL13's shape (47 wrong, 42 no price, 11
+exact): raw Missed 47 of 58, 81% (was 89 of 100), `no_price_runs` 42. The driver sentence reads "{n} of the {of}
+price answers got the price wrong or quoted another brand's price, {pct}."; the retailer title reads "{name}'s price
+is wrong". The demo's Petco wording ("missing or wrong") is the earlier definition, 2I-9's. FL12's shape in
+`test_console_2i9.py`: 62 of 96 (was 98 of 132), $18.2M missed at $4.0B (was $20.9M).

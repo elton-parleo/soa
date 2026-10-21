@@ -222,7 +222,9 @@ def test_prompts_are_the_current_study_in_four_sets_on_six_agents(http, db, pamp
     r = _prompts(http)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body['study'] == {'id': f2j2.STUDY, 'name': 'Wiggle & Snug full'} and body['cycle'] == f2j2.CYCLE
+    # 2K-4 (B2): the study's own date beside its name (the fixture's job has no created_at)
+    assert body['study'] == {'id': f2j2.STUDY, 'name': 'Wiggle & Snug full', 'created_at': None, 'created_at_local': None,
+                             'timezone': 'America/Los_Angeles'} and body['cycle'] == f2j2.CYCLE
     assert body['headline'] == '88 prompts in 4 sets, 1 run each on 6 agents'
     assert (body['prompts'], body['set_count'], body['runs_per_question'], body['runs_per_question_source'],
             body['agents_on_last_cycle'], body['answers_per_cycle'], body['cadence']) == (88, 4, 1, 'cycle', 6, 528, None)

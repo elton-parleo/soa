@@ -32,7 +32,7 @@ from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
-from soa_shared import surfaces, unprompted
+from soa_shared import cycle_compare, surfaces, unprompted
 from soa_shared.scan_dimensions import (
     DIMENSIONS,
     DIMENSIONS_BY_CODE,
@@ -148,6 +148,8 @@ TEMPLATES = {
     'reason.no_rivals': 'no competitor is tracked on this cycle: add competitors in the wizard',
     'previous.first_cycle': 'First cycle. Changes appear from the next one.',
     'previous.not_stored': 'Not comparable: {code} has no stored score yet. Open it to score it.',
+    # 2K-4 (B1): kept in `rules` as served (the score body is pinned); the reasons served
+    # come from soa_shared/cycle_compare.TEMPLATES, one set for every reader
     'previous.version': 'Scored under v{version}, re-score to compare.',
     'previous.surfaces': 'Not comparable: {code} scored {prev}, this cycle scored {now}.',
     'previous.agents': 'Not comparable: on {surface} {code} ran {prev}, this cycle ran {now}.',
@@ -647,34 +649,57 @@ def build_metrics(counts: Dict[str, dict], surface: str, previous: Optional[dict
     return out
 
 
-def compare(now: dict, prev_code: Optional[str], prev_stored: Optional[dict]) -> Optional[dict]:
+def compare(now: dict, prev_code: Optional[str], prev_stored: Optional[dict],
+            studies: Optional[tuple] = None) -> Optional[dict]:
     """2C-2a's rule, plus the scorer: comparable only with the same pooled
-    surfaces, the same agents on each, and the same scorer version."""
+    surfaces, the same agents on each, and the same scorer version. 2K-4
+    (B1): soa_shared/cycle_compare.cycles_comparable decides, as it does for
+    the Changes block and the revenue history, so the same study (or the
+    same questions) and the same measured set come first and second;
+    studies is ({'study', 'questions'} now, the same for the previous)."""
     if prev_code is None:
         return None
     base = {'cycle': prev_code, 'scorer_version': None, 'score': None, 'comparable': False}
     if not prev_stored:
         return {**base, 'reason': TEMPLATES['previous.not_stored'].format(code=prev_code)}
     base.update(scorer_version=prev_stored.get('scorer_version'), score=prev_stored.get('score'))
-    if prev_stored.get('scorer_version') != now['scorer_version']:
-        return {**base, 'reason': TEMPLATES['previous.version'].format(version=prev_stored.get('scorer_version'))}
-    a, b = [s['surface'] for s in now['surfaces']], [s['surface'] for s in prev_stored.get('surfaces') or []]
-    if set(a) != set(b):
-        words = lambda xs: ' and '.join(_surface_words(x) for x in xs) or 'no surface'
-        return {**base, 'reason': TEMPLATES['previous.surfaces'].format(code=prev_code, prev=words(b), now=words(a))}
-    for s in a:
-        x, y = now['metric_counts'][s]['agent_set'], (prev_stored.get('metric_counts') or {}).get(s, {}).get('agent_set') or []
-        if set(x) != set(y):
-            return {**base, 'reason': TEMPLATES['previous.agents'].format(
-                surface=_surface_words(s), code=prev_code, prev=parity._agents_text(y) or 'no agent', now=parity._agents_text(x))}
+    ok, condition, reason = cycle_compare.cycles_comparable(
+        *score_facts(now, prev_code, prev_stored, studies), on=None, agent_name=parity._agent, surface_name=_surface_words)
+    if not ok:
+        return {**base, 'reason': reason, 'condition': condition}
     now_max, prev_max = now.get('applicable_max'), prev_stored.get('applicable_max')
     changed = prev_max is not None and now_max is not None and round(float(prev_max), 1) != round(float(now_max), 1)
-    return {**base, 'comparable': True, 'reason': None, 'metric_counts': prev_stored.get('metric_counts'),
+    return {**base, 'comparable': True, 'reason': None, 'condition': None, 'metric_counts': prev_stored.get('metric_counts'),
             'delta': None if now['score'] is None or prev_stored.get('score') is None else now['score'] - prev_stored['score'],
             'applicable_max': prev_max,
             'applicable_note': TEMPLATES['previous.applicable'].format(prev=_fmt(float(prev_max)), now=_fmt(float(now_max)))
             if changed else None,
             'dimension_deltas': dimension_deltas(now, prev_stored)}
+
+
+def score_facts(now: dict, prev_code: str, prev_stored: dict, studies: Optional[tuple]) -> tuple:
+    """2K-4: (this cycle, the previous) as cycle_compare reads a score: the
+    scorer version, the pooled surfaces, the agents on each, the set the
+    first-pick rows read and, for the previous, the sets its stored rows
+    measured."""
+    now_study, prev_study = studies or ({}, {})
+    pooled = [s['surface'] for s in now['surfaces']]
+    counts, prev_counts = now.get('metric_counts') or {}, prev_stored.get('metric_counts') or {}
+    ms = now.get('metric_surface')
+    reads = (counts.get(ms) or {}).get('tier')
+    prev_m = prev_counts.get(ms) or {}
+    prev_tier, prev_of = prev_m.get('tier'), ((prev_m.get('first') or {}).get('of') or 0)
+    measured = {cycle_compare.UNPROMPTED: prev_of if prev_tier in (rm.VIS_UNPROMPTED, rm.VIS_BRAND_CHOICE) else 0,
+                'comparison': prev_of if prev_tier == rm.VIS_BRAND_CHOICE else 0}
+    a = cycle_compare.facts('this cycle', study=now_study.get('study'), questions=now_study.get('questions'),
+                            scorer_version=now['scorer_version'], surfaces=pooled,
+                            agents={s: (counts.get(s) or {}).get('agent_set') or [] for s in pooled},
+                            reads=reads if prev_m else None)
+    b = cycle_compare.facts(prev_code, study=prev_study.get('study'), questions=prev_study.get('questions'),
+                            scorer_version=prev_stored.get('scorer_version'),
+                            surfaces=[s['surface'] for s in prev_stored.get('surfaces') or []],
+                            agents={s: (prev_counts.get(s) or {}).get('agent_set') or [] for s in pooled}, measured=measured)
+    return a, b
 
 
 def _dims_of(body: dict) -> Dict[str, dict]:
@@ -819,10 +844,11 @@ def verdict(score: Optional[int], true_value: Optional[dict], unmeasured: float)
     return compute_verdict(score, true_value['score'] or 0.0, true_value['applicable_max'])
 
 
-def with_previous(body: dict, prev_code: Optional[str], prev_stored: Optional[dict]) -> dict:
+def with_previous(body: dict, prev_code: Optional[str], prev_stored: Optional[dict],
+                  studies: Optional[tuple] = None) -> dict:
     """Adds `previous` and the five rows (whose deltas need it)."""
     at('comparing with the previous cycle')
-    previous = compare(body, prev_code, prev_stored)
+    previous = compare(body, prev_code, prev_stored, studies)
     out = dict(body)
     out['previous'] = None if previous is None else {k: v for k, v in previous.items() if k != 'metric_counts'}
     out['metrics'] = build_metrics(body['metric_counts'], body['metric_surface'], previous) if body['metric_surface'] else []

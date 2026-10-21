@@ -2,7 +2,10 @@
   "merchant": "pampers",
   "study": {
     "id": "wiggle-snug-full",
-    "name": "Wiggle & Snug full"
+    "name": "Wiggle & Snug full",
+    "created_at": null,
+    "created_at_local": null,
+    "timezone": "America/Los_Angeles"
   },
   "cycle": "FL3-wiggle-and-snug-20261014",
   "last_run": "2026-10-14",

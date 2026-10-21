@@ -146,8 +146,8 @@ def per_surface_view(endpoint, body):
     if endpoint == 'overview':
         # 2K-1 adds the `recommended` bucket beside `fabricated` (0 on every fixture here)
         body = _without_zero(body, 'recommended')
-        # 2K-3 adds the start day in the merchant's zone beside `started`
-        for k in ('start_date_local', 'created_at_local', 'timezone'):
+        # 2K-3 adds the start day in the merchant's zone beside `started`; 2K-4 the cycle's study
+        for k in ('start_date_local', 'created_at_local', 'timezone', 'study'):
             body.pop(k, None)
     if endpoint in ('visibility', 'overview') and body.get('ranking'):
         body['ranking'] = _ranking(body['ranking'])

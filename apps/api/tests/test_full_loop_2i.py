@@ -116,6 +116,8 @@ def test_a_request_with_a_study_reads_byte_for_byte_as_before(http, db, upstream
     assert {k: now.pop(k) for k in B4_FIELDS} == {'surface_ids': ['chatgpt', 'gemini_grounded'],
                                                  'runs_per_question': 1, 'study_id': 'ws-2b-fixture'}
     assert now.pop('failed_step', None) == ('reads' if stage == 'failed' else None)
+    # 2K-3 adds the cycle's local dates (no cycle here); 2K-4 the study, with its own local date
+    assert now.pop('study')['id'] == 'ws-2b-fixture'
     assert json.dumps(now, sort_keys=True, default=str) == json.dumps(before, sort_keys=True, default=str)
     assert 'mode' not in now and 'read_at' not in now
 

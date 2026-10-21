@@ -385,8 +385,9 @@ def test_a_previous_cycle_scored_under_another_version_is_not_comparable(http, u
     _supply(upstream)
     as_('alice')
     body = _score(http)
+    # 2K-4: `condition` names the first failing condition (soa_shared/cycle_compare)
     assert body['previous'] == {'cycle': 'WS-EARLIER', 'scorer_version': '5', 'score': 41, 'comparable': False,
-                                'reason': 'Scored under v5, re-score to compare.'}
+                                'reason': 'Scored under v5, re-score to compare.', 'condition': 'version'}
     assert all(m['delta'] is None and m['delta_reason'] == 'Scored under v5, re-score to compare.'
                for m in body['metrics'])
 
@@ -444,7 +445,8 @@ def test_a_previous_cycle_on_other_agents_is_not_comparable(http, upstream, db):
     _previous_cycle(db, stored=earlier)
     prev = _score(http)['previous']
     assert prev['comparable'] is False
-    assert prev['reason'] == 'Not comparable: on the grounded API WS-EARLIER ran ChatGPT, this cycle ran ChatGPT and Gemini.'
+    # 2K-4: the shared rule's wording, as the Changes block says it, the surface named
+    assert prev['reason'] == 'Not comparable: WS-EARLIER ran ChatGPT only on the grounded API.'
 
 
 # ═══ tenancy ═════════════════════════════════════════════════════════════

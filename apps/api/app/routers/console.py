@@ -56,7 +56,7 @@ from app.services import console_revenue as revenue_svc
 from app.services import console_score as score_svc
 from clients import truesync_client as supply_fields
 from clients.truesync_client import TrueSyncClient
-from soa_shared import customers, surface_accuracy, surfaces
+from soa_shared import customers, cycle_compare, surface_accuracy, surfaces
 from soa_shared.database import engine
 
 router = APIRouter(prefix="/console", tags=["console"])
@@ -174,7 +174,8 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         if prev is not None:
             prev = {**prev, 'customer_org_id': row['customer_org_id']}
             previous = {'code': prev['cycle_code'], 'rows': parity.load_overview_rows(conn, prev, features),
-                        'visibility': _visibility(conn, prev)}
+                        'visibility': _visibility(conn, prev), 'study': rm.study_identity(conn, prev)}
+        study = rm.study_identity(conn, row)   # 2K-4 (B1): the study and its questions, compared first
         job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
                            {"st": row['study_type']}).fetchone()
         study_questions = conn.execute(text("SELECT COUNT(*) FROM soa_queries WHERE study_type = :st"),
@@ -201,9 +202,12 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
                              record_variants=variants, reads=reads)
     body = parity.build_overview(row, rows=rows, visibility=vis, true_value=tv, brand=brand, access=access,
                                  previous=previous, scored_cycles=n_scored if n_scored else 1, read_errors=errors,
-                                 study_questions=study_questions)
+                                 study_questions=study_questions, study=study)
     # 2K-3 (B5): the start day in the merchant's zone, beside `started` (the UTC start_date)
     body.update(rm.cycle_dates(row, rm.study_timezone(job[0] if job else None)))
+    # 2K-4 (B2): the cycle's study, with its own date in the merchant's zone ("The Oct 20 study")
+    with engine.connect() as conn:
+        body['study'] = rm.load_study_block(conn, row.get('study_type'))
     return body
 
 
@@ -297,8 +301,10 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
     score_svc.at('reading the previous cycle')
     with engine.connect() as conn:
         prev, _ = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
+        # 2K-4 (B1): each cycle's study and questions, compared first (soa_shared/cycle_compare)
+        studies = (rm.study_identity(conn, row), rm.study_identity(conn, prev)) if prev else None
     prev_stored = score_svc.stored_score(engine, prev['id']) if prev else None
-    return score_svc.with_previous(body, prev['cycle_code'] if prev else None, prev_stored)
+    return score_svc.with_previous(body, prev['cycle_code'] if prev else None, prev_stored, studies=studies)
 
 
 def _true_value_inputs(conn, row) -> tuple:
@@ -922,8 +928,9 @@ def _merchant_meta(ms: MerchantScope) -> dict:
             'domain': m.get('domain')}
 
 
-def _revenue_model(conn, row: dict, inputs: dict, meta: dict, access_requests) -> dict:
-    vis_rows = rm.load_visibility(conn, row).get('byQuestion') or []
+def _revenue_model(conn, row: dict, inputs: dict, meta: dict, access_requests, vis_rows: Optional[list] = None) -> dict:
+    if vis_rows is None:
+        vis_rows = rm.load_visibility(conn, row).get('byQuestion') or []
     catalog = revenue_svc.load_catalog_rows(conn, row)
     shares = revenue_svc.revenue_shares(vis_rows, catalog, inputs['lost_gainable']['value'], kind=meta['kind'])
     return revenue_svc.build_model(shares, inputs, cycle=row['cycle_code'], kind=meta['kind'], name=meta['name'],
@@ -961,7 +968,10 @@ async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(N
 async def get_revenue_history(merchant: Optional[str] = Query(None), scope: CustomerScope = Depends(console_scope)):
     """2I-9: the shares and today's at stake and gainable per scored cycle of
     the merchant, oldest first, recomputed with the current inputs (nothing is
-    stored). No scenario lines."""
+    stored). No scenario lines. 2K-4 (B1): each cycle's `vs_previous`
+    ({comparable, condition, reason}) against the cycle before it, by the
+    rule the score and the Changes block read (soa_shared/cycle_compare);
+    null on the first."""
     ms = await check_merchant(scope, merchant)
     if not ms.slug:
         raise HTTPException(status_code=422, detail="no merchant: name one with ?merchant=")
@@ -972,10 +982,21 @@ async def get_revenue_history(merchant: Optional[str] = Query(None), scope: Cust
         scored = {r[0] for r in conn.execute(text("SELECT DISTINCT cycle_id FROM soa_expectation_outcomes"))}
         cycles = [c for c in merchant_cycles(conn, ms) if c['id'] in scored and c.get('status') == 'complete']
         zones = rm.study_timezones(conn, [c['study_type'] for c in cycles])   # 2K-3
+        before = None
         for c in reversed(cycles):
             c = {**c, 'customer_org_id': scope.org.id}
-            m = _revenue_model(conn, c, inputs, meta, None)
-            out.append({'cycle': c['cycle_code'], 'started': rm._iso(c.get('start_date')),
+            vis_rows = rm.load_visibility(conn, c).get('byQuestion') or []
+            m = _revenue_model(conn, c, inputs, meta, None, vis_rows)
+            # every agent together, as the revenue model counts them
+            here = {**parity.surface_metrics([], vis_rows, surfaces.ALL), **rm.study_identity(conn, c)}
+            vs = None
+            if before is not None:
+                ok, condition, reason = cycle_compare.cycles_comparable(
+                    parity.comparison_facts('this cycle', here), parity.comparison_facts(before[0], before[1], measured=True),
+                    agent_name=parity._agent)
+                vs = {'cycle': before[0], 'comparable': ok, 'condition': condition, 'reason': reason}
+            before = (c['cycle_code'], here)
+            out.append({'cycle': c['cycle_code'], 'started': rm._iso(c.get('start_date')), 'vs_previous': vs,
                         'start_date_local': rm.cycle_dates(c, zones.get(c['study_type']))['start_date_local'],
                         'measured': m['measured'],
                         'reason': m['reason'], 'shares': m['shares'], 'counts': m['counts'],

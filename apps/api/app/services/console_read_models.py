@@ -1348,6 +1348,33 @@ def build_truesync(merchant: str, *, channels: List[dict], publications: List[di
 
 # ─── Accessibility ─────────────────────────────────────────────────────────
 
+def access_measured(request: dict) -> bool:
+    """An identity whose probe was never configured is not measured, which
+    is not a problem: it never counts as one."""
+    if request.get('measured') is not None:
+        return bool(request['measured'])
+    return not str(request.get('result') or '').startswith('not measured')
+
+
+def access_problems(requests: Iterable[dict]) -> List[dict]:
+    """The measured requests that did not get through."""
+    return [r for r in requests or [] if access_measured(r) and not r.get('ok')]
+
+
+def group_identities(requests: Iterable[dict]) -> List[dict]:
+    """2K-4 (B4): access requests by display name, each named once.
+    Two tokens can share one (Googlebot and its Google-Extended sibling
+    both read "Googlebot"), and "Googlebot, Googlebot, bingbot" counted the
+    name twice. [{identity, tokens, label}] in first-seen order; label is
+    "Googlebot (2 tokens)" for a name with more than one."""
+    groups: Dict[str, int] = {}
+    for r in requests or []:
+        name = r.get('identity') or '?'
+        groups[name] = groups.get(name, 0) + 1
+    return [{'identity': name, 'tokens': n, 'label': name if n == 1 else f"{name} ({n} tokens)"}
+            for name, n in groups.items()]
+
+
 def accessibility_from_supply(payload: Optional[dict]) -> dict:
     """
     supply's GET /merchants/{slug}/access, already Accessibility-shaped,
@@ -1364,6 +1391,8 @@ def accessibility_from_supply(payload: Optional[dict]) -> dict:
         requests.append(row)
     if access:
         access['requests'] = requests
+        # 2K-4 (B4): the identities that did not get through, each display name once
+        access['problem_identities'] = group_identities(access_problems(requests))
     divergences = [d for d in payload.get('divergences') or [] if "no 'claude'" not in d]
     divergences.append("AccessRow.vendor can be 'claude' (vendor 'claude', agent 'claude'); "
                        "the console adds it to AgentId in 2C-0.")
@@ -1571,6 +1600,40 @@ def study_timezones(conn, study_types: Iterable[str]) -> Dict[str, str]:
             {'st': st}).scalar()
         out[st] = study_timezone(config)
     return out
+
+
+def study_dates(job: Optional[dict]) -> dict:
+    """2K-4 (B2): the study's own date, for "The Oct 20 study": its
+    generation job's created_at (UTC) and the same moment in the merchant's
+    zone (`created_at_local`), with the zone. A study generated 23:10 PDT on
+    Oct 20 is the Oct 20 study, whenever its cycle ran."""
+    if not job:
+        return {'created_at': None, 'created_at_local': None, 'timezone': None}
+    zone = study_timezone(job.get('tier_config'))
+    return {'created_at': _iso(job.get('created_at')), 'created_at_local': local_time.local_iso(job.get('created_at'), zone),
+            'timezone': zone}
+
+
+def load_study_block(conn, study_type: Optional[str]) -> Optional[dict]:
+    """2K-4 (B2): {id, name, created_at, created_at_local, timezone} of a
+    study, from its newest generation job; None without one."""
+    if not study_type:
+        return None
+    job = conn.execute(text("SELECT study_type, study_name, created_at, tier_config FROM soa_query_generation_jobs "
+                            "WHERE study_type = :st ORDER BY id DESC LIMIT 1"), {'st': study_type}).mappings().first()
+    if job is None:
+        return None
+    return {'id': job['study_type'], 'name': job['study_name'] or job['study_type'], **study_dates(dict(job))}
+
+
+def study_identity(conn, cycle: Optional[dict]) -> dict:
+    """2K-4 (B1): {'study', 'questions': {query_code: tier}} of a cycle's
+    study, what soa_shared/cycle_compare compares first."""
+    if not cycle:
+        return {'study': None, 'questions': {}}
+    questions = {r['query_code']: r['tier'] for r in conn.execute(text(
+        "SELECT query_code, tier FROM soa_queries WHERE study_type = :st"), {'st': cycle.get('study_type')}).mappings()}
+    return {'study': cycle.get('study_type'), 'questions': questions}
 
 
 def cycle_dates(cycle: dict, tz: Optional[str] = None) -> dict:
