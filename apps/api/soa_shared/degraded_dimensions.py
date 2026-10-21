@@ -102,7 +102,7 @@ DEGRADED_REASON_FAILED = (
 # can just as easily be our reader's own limitation.
 DEGRADED_REASON_NO_PRODUCT_PAGES_TEMPLATE = (
     "we read {n} of your sitemaps but couldn't locate product pages to "
-    "sample this run — this can be our reader's limitation; on-site "
+    "sample this run. This can be our reader's limitation. On-site "
     "checks weren't evaluated"
 )
 # Production outage (2026-09-22): the crawl's own orchestration raised

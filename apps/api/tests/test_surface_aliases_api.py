@@ -35,7 +35,7 @@ def test_gemini_is_refused_and_gemini_grounded_starts_on_grounded_api(http, stud
     refused = _start(http, 'WS-2D-GEMINI', ['chatgpt', 'gemini'])
     assert refused.status_code == 422
     assert refused.json()['detail']['code'] == 'ungrounded_surface_not_allowed'
-    assert 'use gemini_grounded' in refused.json()['detail']['message']
+    assert 'Use gemini_grounded.' in refused.json()['detail']['message']
     assert _start(http, 'WS-2D-GROUNDED', ['chatgpt', 'gemini_grounded']).status_code == 201
     assert _cycle(studies_db, 'WS-2D-GROUNDED') == (['chatgpt', 'gemini_grounded'],
                                                     {'chatgpt': 'grounded_api', 'gemini_grounded': 'grounded_api'})

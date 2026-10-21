@@ -2263,7 +2263,7 @@ store; no customer data. Arrays are cut to their first entries.
       "surface": "grounded_api",
       "collector": "openai",
       "agent": "chatgpt",
-      "fidelity": "OpenAI Responses API with the web_search tool available; the model decides whether to search",
+      "fidelity": "OpenAI Responses API with the web_search tool available. The model decides whether to search.",
       "consumer": false,
       "available": true,
       "unavailable_reason": null,
@@ -2311,7 +2311,7 @@ store; no customer data. Arrays are cut to their first entries.
       "surface": "grounded_api",
       "collector": "anthropic",
       "agent": "claude",
-      "fidelity": "Anthropic Messages API with the web_search tool available; the model decides whether to search",
+      "fidelity": "Anthropic Messages API with the web_search tool available. The model decides whether to search.",
       "consumer": false,
       "available": true,
       "unavailable_reason": null,
@@ -2326,7 +2326,7 @@ store; no customer data. Arrays are cut to their first entries.
       "fidelity": "gemini.google.com, logged out",
       "consumer": true,
       "available": false,
-      "unavailable_reason": "no hosted provider we have verified; not built (no browser automation)",
+      "unavailable_reason": "No hosted provider we have verified. Not built (no browser automation).",
       "surface_label": "Consumer UI, logged out"
     },
     {
@@ -2338,7 +2338,7 @@ store; no customer data. Arrays are cut to their first entries.
       "fidelity": "chatgpt.com, logged out",
       "consumer": true,
       "available": false,
-      "unavailable_reason": "no hosted provider we have verified; not built (no browser automation)",
+      "unavailable_reason": "No hosted provider we have verified. Not built (no browser automation).",
       "surface_label": "Consumer UI, logged out"
     }
   ]
@@ -3809,7 +3809,7 @@ Brandco is soa's external test fake; supply's preview is shaped by its `feed/val
         }
       ],
       "illustrative": true,
-      "expected_nulls": "Zero until Wiggle & Snug is retrievable at all on a surface; visibility gates everything below it."
+      "expected_nulls": "Zero until Wiggle & Snug is retrievable at all on a surface. Visibility gates everything below it."
     },
     "catalog_accuracy": {
       "enabled": true,
@@ -4289,7 +4289,7 @@ Brandco is soa's external test fake; supply's preview is shaped by its `feed/val
       "surface": "grounded_api",
       "collector": "openai",
       "agent": "chatgpt",
-      "fidelity": "OpenAI Responses API with the web_search tool available; the model decides whether to search",
+      "fidelity": "OpenAI Responses API with the web_search tool available. The model decides whether to search.",
       "consumer": false,
       "available": true,
       "unavailable_reason": null,
@@ -6811,7 +6811,7 @@ text):
   "agents": [
     {"id": "chatgpt", "agent": "chatgpt", "name": "ChatGPT", "label": "ChatGPT with web search (OpenAI API)",
      "surface": "grounded_api", "method": "API with search grounding",
-     "method_detail": "OpenAI Responses API with the web_search tool available; the model decides whether to search",
+     "method_detail": "OpenAI Responses API with the web_search tool available. The model decides whether to search.",
      "collector": "openai", "grounded": true, "available": true, "worker_note": "the worker has not reported yet",
      "last_status": "answered", "last_runs": 87, "last_answered": 87, "last_errored": 0},
     {"id": "aimode", "agent": "aimode", "name": "Google AI Mode", "label": "Google AI Mode (consumer, via SerpApi)",
@@ -7147,3 +7147,31 @@ never served as a reference: with no row and no amount (or `0.00`) the row says 
 
 Applied on read (`load_answers` reads the cycle's cached reference once): stored cycles read right without a
 rescore, nothing stored is rewritten. Same cell as True Value's `live` and `live_basis`.
+
+### B2: worker-shared copy as sentences
+
+House rule: no semicolons and no em dashes in user-facing copy. Every copy of each module changed together
+(`apps/api/soa_shared`, `apps/pipeline/soa_shared`, `packages/shared/soa_shared`; `catalog_tiers.py` has no
+`packages/shared` copy). `tests/test_2l1_shared_copy.py` pins the copies identical and the strings clean.
+
+| where | before | after |
+|---|---|---|
+| `surfaces.py` ChatGPT with web search, fidelity | `…web_search tool available; the model decides whether to search` | `…web_search tool available. The model decides whether to search.` |
+| `surfaces.py` Claude with web search, fidelity | same | same |
+| `surfaces.py` legacy `gemini`, fidelity | `Stored under the pre-2B id; the ungrounded Gemini API` | `Stored under the pre-2B id. The ungrounded Gemini API.` |
+| `surfaces.py` `NO_VERIFIED_PROVIDER` (Gemini web, ChatGPT web) | `no hosted provider we have verified; not built (no browser automation)` | `No hosted provider we have verified. Not built (no browser automation).` |
+| `surfaces.py` grounded-only 422 | `Only grounded surfaces run: 'gemini' is gemini_api, which answers without searching: use gemini_grounded; ….` | `Only grounded surfaces run. 'gemini' (gemini_api) answers without searching. Use gemini_grounded. …` |
+| `catalog_tiers.expected_nulls` category control | `…unbranded category questions; these show…` | `…unbranded category questions. These show…` |
+| `catalog_tiers.expected_nulls` catalog, no page read | `…Run a full loop to read prices; questions follow the pages read.` | `…to read prices. Questions follow the pages read.` |
+| `catalog_tiers.expected_nulls` catalog, a brand | `…expected as that page reads; the cycle re-reads it…` | `…expected as that page reads. The cycle re-reads it…` |
+| `catalog_tiers.expected_nulls` brand direct | `…on a surface; visibility gates everything below it.` | `…on a surface. Visibility gates everything below it.` |
+| `catalog_tiers` catalog question rationale | `…is 22.99 USD; the answer either states it…` | `…is 22.99 USD. The answer either states it…` |
+| `degraded_dimensions` no product pages | `…to sample this run — this can be our reader's limitation; on-site checks weren't evaluated` | `…to sample this run. This can be our reader's limitation. On-site checks weren't evaluated` |
+| `scan_dimensions` Structured data, how scored | `Share of sampled pages passing; identifiers weighted.` | `Share of sampled pages passing. Identifiers weighted.` |
+| `scan_dimensions` Protocol & Feed, how scored | `Presence checks; feed participation is verified…` | `Presence checks. Feed participation is verified…` |
+| `expected_answers.validate` unknown type | `unknown expected_answer type 'x'; must be one of …` | `unknown expected_answer type 'x'. It must be one of …` |
+
+Left as they are, not user-facing: `soa_models.py` column comments (database documentation), `customers.py`'s
+operator diagnostics (`… is not set; run scripts/backfill_customer_accounts.py`), docstrings, and the brand-direct
+generation prompt in `catalog_tiers.py` (model input). The run dialog's "Not comparable to …: …; …" line is the
+console's own (`RunLoopDialog.comparableLine`), reworded there (truesync, 2L-1 A1).
