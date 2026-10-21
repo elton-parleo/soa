@@ -7297,3 +7297,43 @@ then 4 each from Research and Awareness), plus 12 brand-direct, 10 where-to-buy,
 accuracy and 6 value: 88, as before, within the 100 limit. The live Pampers study's next brand-direct regeneration
 adds the 20 without absorbing them: 108, over the limit the Create Study modal enforces (regeneration does not check
 it).
+
+**B2, `routing`** on `/api/console/visibility` (and the same block on `/api/console/overview`, the Retailer coverage
+tile's input), for a brand merchant whose study has a where-to-buy or cheapest-place question; absent otherwise, and
+for a retailer merchant (a seller: its stores are its rivals, which the ranking already shows). Visibility takes an
+optional `merchant`; the cycle's own is read from its questions' `source_ref` otherwise. Only a study with an intent
+question makes supply reads here: `/tenant` (the kind), `/retailers` (the list) and `/reference` (the notes).
+
+```json
+{"title": "Where agents send Wiggle & Snug shoppers first",
+ "sub": "First store named in 97 where-to-buy and cheapest-place answers",
+ "rows": [{"name": "Walmart", "domain": "walmart.com", "first": 35, "you": false, "surfaces": {"all": 35, "…": 0}},
+          {"name": "Target", "domain": "target.com", "first": 23, "you": false, "note": "Walled every read", "surfaces": {}},
+          {"name": "Amazon", "domain": "amazon.com", "first": 22, "you": false, "surfaces": {}},
+          {"name": "Other stores", "domain": null, "first": 17, "you": false,
+           "note": "Costco, Sam's Club, Kroger, Publix, eBay", "surfaces": {}}],
+ "total": 97, "totals": {"all": 97, "…": 0}, "answers": 100, "no_store": 2, "uncoded": 1,
+ "footnote": "A brand wants agents to show every retailer the same way. Today the store an agent names first is whichever page it happened to read.",
+ "rule": "…", "retailers": ["Walmart", "Target", "Amazon"], "retailers_source": "supply",
+ "coverage": {"all": {"answers": 49, "named_two_plus": 38}, "…": "per surface"}, "coverage_rule": "…",
+ "coverage_line": "38 of 49 where-to-buy answers name 2 or more of Walmart, Target, Amazon", "read_errors": {}}
+```
+
+Per answer (`rm.stores_in_order`): the stores Layer 2 coded (`retailer_mentions`), less any coded `unavailable` (the
+answer says it is not sold there), each resolved to its retailer by `soa_shared/retailers.py` (an alias such as
+"Subscribe & Save" is Amazon; a store outside the enum keeps its name), placed by the earliest stored span naming it,
+then coded order for one no span names. The first is the store the answer sends the shopper to first. `total` counts
+the answers that name a store, as the demo does ("First store named, across every answer that names one"); `answers`
+is the answered intent runs, `no_store` the coded ones naming none and `uncoded` those with no extraction yet.
+
+Rows: each of the merchant's retailers (supply's `/retailers` `domains`, own domains left out), most sent first first,
+then "Other stores" with the rest named by count. The brand's own site is a row (`you`) only when an answer sends a
+shopper there first. When `/retailers` cannot be read, the list the study was generated with
+(`tier_config.merchant.retailer_list`) is used and `retailers_source` is `study`; `read_errors` names the failed reads.
+Notes come from supply's reference reads: "Walled every read" when every read of the domain was `blocked` or
+`challenged`; "Third-party seller only" when every priced read there names a `seller`, which supply's `/reference`
+rows do not carry yet (the reader records one in its evidence), so that note does not appear until it does.
+
+`coverage`: the answered where-to-buy answers with a coding, and how many name two or more of the merchant's retailers.
+Counted by hand in `tests/test_console_2l4_routing.py` on the FL13 shape. `SOA_2L4_SAMPLE_DUMP=<dir>` writes the
+console's samples.

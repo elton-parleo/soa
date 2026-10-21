@@ -134,21 +134,59 @@ def _label_from_question(query_text: str) -> str:
 
 
 @router.get("/visibility")
-def get_visibility(cycle: str = Query(...), scope: CustomerScope = Depends(console_scope)):
+async def get_visibility(cycle: str = Query(...), merchant: Optional[str] = Query(None),
+                         scope: CustomerScope = Depends(console_scope)):
     """2C-1: Measure > Visibility. Who each answer names and who it names
     first, from the stored mention coding (Layer 1 position, Layer 2
     other_brands_named), every agent together (`all`, 2I-8) and per surface,
-    each with a per-agent split; no model call."""
-    row = cycle_in_scope(cycle, scope)
+    each with a per-agent split; no model call. 2L-4: for a brand whose
+    study asks where to buy, `routing`, which reads supply's retailer list
+    and reference reads for the cycle's merchant (or the one named)."""
+    if merchant:
+        await check_merchant(scope, merchant)
+    row = dict(cycle_in_scope(cycle, scope))
+    facts, errors = await _routing_inputs(scope, row, merchant)
     with engine.connect() as conn:
-        return _visibility(conn, dict(row))
+        return _visibility(conn, row, facts, errors)
 
 
-def _visibility(conn, row: dict) -> dict:
+def _visibility(conn, row: dict, merchant: Optional[dict] = None, errors: Optional[dict] = None) -> dict:
     """2C-1's read with 2C-2's headline, matrix and by-stage, per surface."""
-    body = rm.load_visibility(conn, row)
+    body = rm.load_visibility(conn, row, merchant)
+    if body.get('routing') is not None:
+        body['routing']['read_errors'] = errors or {}
     ours = next((r['name'] for r in (body.get('ranking') or {}).get('rows') or [] if r.get('you')), None)
     return parity.extend_visibility(body, ours)
+
+
+async def _routing_inputs(scope: CustomerScope, row: dict, merchant: Optional[str]) -> tuple:
+    """2L-4: (rm.routing_merchant's facts, read errors) for a cycle whose
+    study asks where to buy; (None, {}) for one that does not, with no
+    supply call. A merchant supply's /tenant says is not a brand gets no
+    reads either. A failed read is named, never raised."""
+    with engine.connect() as conn:
+        if not rm.asks_intents(conn, row):
+            return None, {}
+        slug = merchant or score_svc.cycle_merchant(conn, row)
+    if not slug:
+        return None, {'merchant': 'no merchant record for this cycle'}
+    merchants, _m_err = await check_merchant_list(scope)
+    kind = next((m.get('kind') for m in merchants if m.get('slug') == slug), None)
+    if kind and kind != 'brand':
+        return {'kind': kind}, {}
+    client = full_loop._client(scope)
+    (_, retailers, r_err), (_, reference, f_err) = await asyncio.gather(client.get_retailers(slug),
+                                                                      client.get_reference(slug))
+    with engine.connect() as conn:
+        facts = rm.routing_merchant(conn, row, kind=kind, retailers=retailers, retailers_error=r_err,
+                                    reference=reference if f_err is None else None)
+    return facts, {k: v for k, v in (('retailers', r_err), ('reference', f_err)) if v}
+
+
+async def check_merchant_list(scope: CustomerScope) -> tuple:
+    """The org's merchants (supply's /tenant) and the read's error."""
+    from app.console_merchants import org_merchants
+    return await org_merchants(scope.org)
 
 
 @router.get("/overview")
@@ -165,9 +203,10 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     row = dict(cycle_in_scope(cycle, scope))
     features, f_err = await _claim_features(row, scope, merchant)   # 2K-3
+    facts, routing_errors = await _routing_inputs(scope, row, merchant)   # 2L-4
     with engine.connect() as conn:
         rows = parity.load_overview_rows(conn, row, features)
-        vis = _visibility(conn, row)
+        vis = _visibility(conn, row, facts, routing_errors)
         own_domain, variants, scored = _true_value_inputs(conn, row)
         prev, n_scored = parity.previous_scored_cycle(conn, row, cycle_customer_org_sql())
         previous = None
@@ -212,6 +251,9 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     # (2L-4 wires the tile); absent for a brand with no retired line
     if vis.get('retired_named'):
         body['retired_named'] = vis['retired_named']
+    # 2L-4: Visibility's routing, whose coverage is the second brand tile's input
+    if vis.get('routing'):
+        body['routing'] = vis['routing']
     return body
 
 

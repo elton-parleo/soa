@@ -2010,7 +2010,8 @@ def _agent_counts(rows: List[dict], surface: str) -> dict:
 
 def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict], mentions: List[dict],
                      extractions: Dict[int, dict], terms: Iterable[str] = (), retired: Iterable[dict] = (),
-                     retired_by: Optional[str] = None, answer_texts: Optional[Dict[int, str]] = None) -> dict:
+                     retired_by: Optional[str] = None, answer_texts: Optional[Dict[int, str]] = None,
+                     merchant: Optional[dict] = None) -> dict:
     """
     GET /api/console/visibility. `runs` carry their question (query_text,
     query_code, tier, stage); `mentions` are Layer 1's mentioned rows with
@@ -2025,6 +2026,10 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
     `retired_named` (build_retired_named), else not at all. A run's
     `source_ref` (its question's) says which retired line a brand-direct
     question asked about.
+    merchant: 2L-4, the cycle's merchant as routing_merchant reads it ({kind,
+    retailers, own_domains, reads, brand, retailers_source}); a brand with a
+    where-to-buy or cheapest-place question gets `routing` (build_routing),
+    anything else none at all.
     """
     layer2 = [e.get('name') for x in extractions.values() for e in ((x or {}).get('other_brands_named') or [])
               if isinstance(e, dict) and e.get('name')
@@ -2119,7 +2124,18 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
         **({'retired_named': build_retired_named(list(retired), rows=rows, runs=runs, texts=answer_texts or {},
                                                  surface_list=surface_list, retired_by=retired_by)}
            if retired else {}),
+        **_routing_block(rows, runs, extractions, surface_list, merchant, ours),
     }
+
+
+def _routing_block(rows, runs, extractions, surface_list, merchant: Optional[dict], ours: Optional[str]) -> dict:
+    """2L-4: {'routing': ...} for a brand merchant whose cycle asked an intent question, else {}."""
+    if not merchant or merchant.get('kind') != 'brand':
+        return {}
+    block = build_routing(rows, runs, extractions, surface_list=surface_list, brand=merchant.get('brand') or ours,
+                          retailers=merchant.get('retailers') or [], own_domains=merchant.get('own_domains') or [],
+                          reads=merchant.get('reads'), retailers_source=merchant.get('retailers_source'))
+    return {'routing': block} if block else {}
 
 
 # ─── Retired product named (2L-2) ──────────────────────────────────────────
@@ -2212,6 +2228,202 @@ def build_retired_named(retired: List[dict], *, rows: List[dict], runs: List[dic
         })
     return {'lines': lines, 'retired_by': retired_by, 'rule': RETIRED_NAMED_RULE,
             'still_sold_note': RETIRED_STILL_SOLD_NOTE}
+
+
+# ─── Where agents send shoppers first (2L-4) ───────────────────────────────
+#
+# Visibility's "Where agents send <brand> shoppers first" and the brand
+# Overview's Retailer coverage tile. Read from the stores each answer's
+# Layer 2 extraction coded (`retailer_mentions`, on every scored run), in the
+# order the answer names them: the record's stored `spans` are the answer cut
+# verbatim and in order, so the earliest span naming a store places it, as
+# Visibility's first pick places brands (_span_hit). A store the coding did
+# not find in any span keeps its coded order, after those it did. A store the
+# answer says is unavailable there is not one it sends the shopper to.
+# Counted over the brand-direct where-to-buy and cheapest-place questions
+# (source_ref.intent, catalog_tiers.build_intent_questions). Deterministic,
+# no model. A retailer merchant has no block: its stores are its rivals, and
+# Visibility already ranks them.
+
+ROUTING_INTENTS = ('where_to_buy', 'cheapest_place')
+WHERE_TO_BUY = 'where_to_buy'
+#: A store coded with this role is not one the answer sends the shopper to.
+ROUTING_NOT_SENT = ('unavailable',)
+#: A reference read with this status never reached the page.
+WALLED_STATUSES = ('blocked', 'challenged')
+ROUTING_OTHER = 'Other stores'
+ROUTING_WALLED_NOTE = 'Walled every read'
+ROUTING_THIRD_PARTY_NOTE = 'Third-party seller only'
+#: The demo's footnote, as written.
+ROUTING_FOOTNOTE = ('A brand wants agents to show every retailer the same way. Today the store an agent names first '
+                    'is whichever page it happened to read.')
+ROUTING_RULE = (
+    "First store named: the first store each where-to-buy or cheapest-place answer names, from the stores coded "
+    "when it was scored (retailer_mentions), placed by where the answer first names each. Counted over the "
+    "answers that name a store. A store the answer says is unavailable there is not counted as sent to.")
+COVERAGE_RULE = (
+    "Retailer coverage: where-to-buy answers naming two or more of the merchant's retailers (supply's retailer "
+    "list), of the answered where-to-buy answers whose stores were coded.")
+
+
+def _store(name) -> Optional[tuple]:
+    """(key, display, domain | None) for a store as the coding wrote it: a
+    known retailer or a written domain is its domain (soa_shared/retailers.py),
+    anything else its own name."""
+    from soa_shared import retailers as af
+    if not isinstance(name, str) or not name.strip():
+        return None
+    domains = af.retailers_named(name)
+    if domains:
+        return domains[0], af.retailer_name(domains[0]), domains[0]
+    return _brand_key(name), name.strip(), None
+
+
+def _store_names(written: str, display: str, domain: Optional[str]) -> List[str]:
+    """Every way an answer may write the store, for placing it in the spans."""
+    from soa_shared import retailers as af
+    names = [written, display] + ([domain] if domain else [])
+    if domain:
+        names += [alias for alias, d in af.KNOWN_RETAILERS.items() if d == domain]
+    return list(dict.fromkeys(n for n in names if n))
+
+
+def stores_in_order(extraction: Optional[dict]) -> Optional[List[dict]]:
+    """The stores an answer sends the shopper to, first named first:
+    [{key, name, domain}]. None when the answer has no coding (not scored)."""
+    if not isinstance(extraction, dict):
+        return None
+    spans = extraction.get('spans') or []
+    found: Dict[str, tuple] = {}
+    for i, m in enumerate(extraction.get('retailer_mentions') or []):
+        if not isinstance(m, dict) or m.get('role') in ROUTING_NOT_SENT:
+            continue
+        store = _store(m.get('name'))
+        if store is None or store[0] in found:
+            continue
+        key, display, domain = store
+        hit = _span_hit(spans, _store_names(m['name'], display, domain))
+        found[key] = (hit is None, hit or (0, 0), i, {'key': key, 'name': display, 'domain': domain})
+    return [v[3] for v in sorted(found.values(), key=lambda v: v[:3])]
+
+
+def _walled(reads: Optional[List[dict]]) -> Dict[str, str]:
+    """{domain: note} from supply's reference reads: every read of the domain
+    walled, or every price read there from a third-party seller (a `seller`
+    on the row, when supply serves one)."""
+    by: Dict[str, List[dict]] = {}
+    for r in reads or []:
+        d = (r.get('retailer_domain') or '').lower().removeprefix('www.')
+        if d:
+            by.setdefault(d, []).append(r)
+    out = {}
+    for d, rows in by.items():
+        if all(r.get('read_status') in WALLED_STATUSES for r in rows):
+            out[d] = ROUTING_WALLED_NOTE
+            continue
+        priced = [r for r in rows if r.get('read_status') == 'ok' and r.get('price') is not None]
+        if priced and all(r.get('seller') for r in priced):
+            out[d] = ROUTING_THIRD_PARTY_NOTE
+    return out
+
+
+def _names_list(names: List[str]) -> str:
+    return ', '.join(names)
+
+
+def build_routing(rows: List[dict], runs: List[dict], extractions: Dict[int, dict], *, surface_list: List[str],
+                  brand: Optional[str], retailers: List[str], own_domains: Iterable[str] = (),
+                  reads: Optional[List[dict]] = None, retailers_source: Optional[str] = None) -> Optional[dict]:
+    """
+    {title, sub, rows: [{name, domain, first, you, note, surfaces}], total,
+    answers, no_store, uncoded, footnote, rule, coverage, retailers, ...};
+    None when the cycle asked no where-to-buy or cheapest-place question.
+
+    `rows` are build_visibility's byQuestion rows; `runs` the loaded runs
+    with their question's `source_ref`; `extractions` Layer 2 by run id.
+    `retailers` are the merchant's retailer domains (supply's /retailers
+    `domains`): each is a row, most sent first first; every other store is
+    counted in one "Other stores" row whose note names them. The brand's own
+    site is a row only when an answer sends a shopper there first.
+
+    `coverage`, per surface (`all` first): the answered where-to-buy answers
+    whose stores were coded (`answers`) and how many named two or more of
+    the merchant's retailers (`named_two_plus`), the Overview's Retailer
+    coverage tile.
+    """
+    refs = {r['id']: _json(r.get('source_ref')) or {} for r in runs}
+    on = surfaces.on_surface
+    asked = []
+    for r in rows:
+        run_id = int(r['run'][len('run-'):])
+        intent = (refs.get(run_id) or {}).get('intent')
+        if r['answered'] and intent in ROUTING_INTENTS:
+            asked.append((r, intent, stores_in_order(extractions.get(run_id))))
+    if not any(intent in ROUTING_INTENTS for ref in refs.values() for intent in [ref.get('intent')]):
+        return None
+    mine = [d.lower().removeprefix('www.') for d in retailers or [] if d]
+    own = {d.lower().removeprefix('www.') for d in own_domains or [] if d}
+    mine = [d for d in dict.fromkeys(mine) if d not in own]
+    coded = [(r, intent, stores) for r, intent, stores in asked if stores is not None]
+    sent = [(r, stores[0]) for r, _i, stores in coded if stores]
+
+    def bucket(store) -> str:
+        if store['domain'] in mine:
+            return store['domain']
+        if store['domain'] in own:
+            return 'own:' + store['domain']
+        return ROUTING_OTHER
+
+    from soa_shared import retailers as af
+    notes = _walled(reads)
+    counts = {s: Counter(bucket(st) for r, st in sent if on(r['surface'], s)) for s in surface_list}
+    default = surface_list[0] if surface_list else surfaces.ALL
+    top = counts.get(default) or Counter()
+    keys = list(mine) + sorted({k for c in counts.values() for k in c if k.startswith('own:')})
+    table = []
+    for k in keys:
+        domain = k[len('own:'):] if k.startswith('own:') else k
+        table.append({'name': domain if k.startswith('own:') else af.retailer_name(domain), 'domain': domain,
+                      'first': top.get(k, 0), 'you': k.startswith('own:'),
+                      **({'note': notes[domain]} if domain in notes else {}),
+                      'surfaces': {s: counts[s].get(k, 0) for s in surface_list}})
+    table.sort(key=lambda x: -x['first'])   # stable: the merchant's list order on a tie
+    others = Counter(st['name'] for r, st in sent if bucket(st) == ROUTING_OTHER and on(r['surface'], default))
+    if any(counts[s].get(ROUTING_OTHER) for s in surface_list):
+        table.append({'name': ROUTING_OTHER, 'domain': None, 'first': top.get(ROUTING_OTHER, 0), 'you': False,
+                      'note': _names_list([n for n, _c in sorted(others.items(), key=lambda kv: (-kv[1], kv[0].lower()))]),
+                      'surfaces': {s: counts[s].get(ROUTING_OTHER, 0) for s in surface_list}})
+    total = sum(1 for r, _st in sent if on(r['surface'], default))
+    names = [af.retailer_name(d) for d in mine]
+    coverage = {}
+    for s in surface_list:
+        wtb = [stores for r, intent, stores in coded if intent == WHERE_TO_BUY and on(r['surface'], s)]
+        coverage[s] = {'answers': len(wtb),
+                       'named_two_plus': sum(1 for stores in wtb if len({st['domain'] for st in stores} & set(mine)) >= 2)}
+    who = brand or 'the brand'
+    return {
+        'title': f"Where agents send {who} shoppers first",
+        'sub': f"First store named in {total} where-to-buy and cheapest-place answers",
+        'rows': table,
+        'total': total,
+        'totals': {s: sum(1 for r, _st in sent if on(r['surface'], s)) for s in surface_list},
+        'answers': sum(1 for r, _i, _st in asked if on(r['surface'], default)),
+        'no_store': sum(1 for r, _i, stores in coded if not stores and on(r['surface'], default)),
+        'uncoded': sum(1 for r, _i, stores in asked if stores is None and on(r['surface'], default)),
+        'footnote': ROUTING_FOOTNOTE,
+        'rule': ROUTING_RULE,
+        'retailers': names,
+        'retailers_source': retailers_source,
+        'coverage': coverage,
+        'coverage_rule': COVERAGE_RULE,
+        'coverage_line': coverage_line(coverage.get(default) or {'answers': 0, 'named_two_plus': 0}, names),
+    }
+
+
+def coverage_line(c: dict, names: List[str]) -> str:
+    """'45 of 49 where-to-buy answers name 2 or more of Walmart, Target, Amazon'"""
+    return (f"{c['named_two_plus']} of {c['answers']} where-to-buy answers name 2 or more of "
+            f"{_names_list(names) if names else 'the merchant' + chr(39) + 's retailers'}")
 
 
 # ─── Offer record (2C-1) ───────────────────────────────────────────────────
@@ -2678,8 +2890,9 @@ def load_variant_names(conn, cycle: dict) -> Dict[str, str]:
 
 
 
-def load_visibility(conn, cycle: dict) -> dict:
-    """2C-1: the rows build_visibility reads, for one cycle."""
+def load_visibility(conn, cycle: dict, merchant: Optional[dict] = None) -> dict:
+    """2C-1: the rows build_visibility reads, for one cycle. 2L-4: merchant
+    as routing_merchant reads it, for `routing`."""
     runs = [dict(r) for r in conn.execute(text("""
         SELECT r.id, r.platform, r.run_number, r.surface, r.answer_status,
                q.query_code, q.query_text, q.tier, q.stage, q.source_ref
@@ -2706,7 +2919,39 @@ def load_visibility(conn, cycle: dict) -> dict:
         "SELECT id, raw_response FROM soa_runs WHERE cycle_id = :c"), {'c': cycle['id']}).mappings()} if retired else {}
     return build_visibility(cycle['cycle_code'], runs=runs, entities=entities, mentions=mentions,
                             extractions=extractions, terms=load_brand_terms(conn, cycle),
-                            retired=retired, retired_by=retired_by, answer_texts=texts)
+                            retired=retired, retired_by=retired_by, answer_texts=texts, merchant=merchant)
+
+
+def asks_intents(conn, cycle: dict) -> bool:
+    """2L-4: whether the cycle's study has a where-to-buy or cheapest-place
+    question (brand-direct, source_ref.intent), so `routing` needs supply."""
+    if not cycle.get('study_type'):
+        return False
+    refs = conn.execute(text("SELECT source_ref FROM soa_queries WHERE study_type = :st AND tier = 'brand_direct'"),
+                        {'st': cycle['study_type']}).scalars()
+    return any((_json(r) or {}).get('intent') in ROUTING_INTENTS for r in refs)
+
+
+def routing_merchant(conn, cycle: dict, *, kind: Optional[str], retailers: Optional[dict], reference: Optional[dict],
+                     retailers_error: Optional[str] = None) -> dict:
+    """2L-4: the merchant facts `routing` reads. kind: the merchant record's
+    (supply's /tenant), else the one the study was generated for
+    (tier_config.merchant.kind). retailers: supply's /retailers payload; when
+    it could not be read, the list the study was generated with
+    (tier_config.merchant.retailer_list), and `retailers_source` says which.
+    reference: supply's /reference payload, for the walled notes."""
+    job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
+                       {'st': cycle.get('study_type')}).fetchone() if cycle.get('study_type') else None
+    stored = ((_json(job[0]) if job else None) or {}).get('merchant') or {}
+    if retailers_error is None and isinstance(retailers, dict):
+        listed, source = list(retailers.get('domains') or []), 'supply'
+        own = list(retailers.get('own_domains') or [retailers.get('own_domain')])
+    else:
+        listed, source = list(stored.get('retailer_list') or []), 'study'
+        own = [stored.get('own_domain')]
+    return {'kind': kind or stored.get('kind'), 'retailers': listed, 'own_domains': [d for d in own if d],
+            'reads': (reference or {}).get('rows'), 'brand': stored.get('study_brand') or stored.get('brand'),
+            'retailers_source': source}
 
 
 def load_retired(conn, cycle: dict) -> tuple:
