@@ -25,6 +25,7 @@ export const TIER_LABELS = {
   catalog_accuracy: 'catalog accuracy',
   value_incentives: 'value & incentives',
   category_control: 'category control',
+  comparison:       'comparison',
 }
 
 function entry(config, tier) {
@@ -101,6 +102,19 @@ export function shortfalls(config) {
       requested: Number(control.generated) || (Number(control.count) || 0) + dropped,
       delivered: Number(control.count) || 0,
       dropped,
+    })
+  }
+  // 2K-1: a comparison-stage question that still named no rival after one
+  // regeneration is dropped (syndicated_study.keep_comparisons). Said too.
+  const comparison = entry(config, 'comparison')
+  const cdropped = comparison?.enabled ? Number(comparison.dropped) || 0 : 0
+  if (cdropped > 0) {
+    out.push({
+      tier: 'comparison',
+      short: cdropped,
+      requested: Number(comparison.generated) || (Number(comparison.count) || 0) + cdropped,
+      delivered: Number(comparison.count) || 0,
+      dropped: cdropped,
     })
   }
   return out

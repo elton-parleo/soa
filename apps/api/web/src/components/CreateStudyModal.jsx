@@ -95,6 +95,33 @@ export const TIER_ROWS = [
   },
 ]
 
+/**
+ * The category-control row's count line. 2K-1: with the brand box on, the
+ * Comparison stage's questions are the comparison tier (the brand and a
+ * rival, asking which to choose), so they get their own line and category
+ * control is the rest of the stage counts.
+ */
+export function controlLine(stageTotal, comparison) {
+  const plural = n => (n === 1 ? '' : 's')
+  if (!comparison) {
+    return `uses the stage counts above: ${stageTotal} question${plural(stageTotal)}, none naming the brand`
+  }
+  const control = Math.max(stageTotal - comparison, 0)
+  return `uses the stage counts above: ${control} question${plural(control)}, none naming the brand. `
+    + `Comparison: ${comparison} question${plural(comparison)}, each naming the brand and a rival`
+}
+
+// 2K-1: the merchant's time zone, for new cycle codes and the study's display
+// date. The server's default (SOA_DEFAULT_TIMEZONE) is this one; the field
+// shows it and sends a zone only when it is changed, so an untouched modal
+// sends the payload it always did.
+export const DEFAULT_TIMEZONE = 'America/Los_Angeles'
+
+export function timezonePayload(value) {
+  const zone = (value || '').trim()
+  return zone && zone !== DEFAULT_TIMEZONE ? { timezone: zone } : {}
+}
+
 export const DEFAULT_TIER_STATE = Object.fromEntries(
   TIER_ROWS.map(row => [row.key, row.defaultOn]),
 )
@@ -349,6 +376,7 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
   const [error, setError] = useState(null)
 
   const [studyName, setStudyName] = useState('')
+  const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE)
   const [description, setDescription] = useState('')
   const [studyPattern, setStudyPattern] = useState('')
   const [retailers, setRetailers] = useState([''])
@@ -418,6 +446,7 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
     if (!open) return
 
     setStudyName('')
+    setTimezone(DEFAULT_TIMEZONE)
     setDescription('')
     setRetailers([''])
     setRotateFirstNamed(true)
@@ -687,6 +716,7 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
         naming_rule_enabled: namingRule,
         personas,
         specificity_mode: specificityMode,
+        ...timezonePayload(timezone),
         ...brandPayload(),
       })
       onCreated(result.study_type)
@@ -753,6 +783,22 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
               placeholder="e.g. Prestige Beauty — Retailer Study"
               style={inputStyle}
             />
+          </div>
+
+          {/* 1b. The merchant's time zone (2K-1) */}
+          <div>
+            <label style={labelStyle} htmlFor="study-timezone">Merchant time zone</label>
+            <input
+              id="study-timezone"
+              type="text"
+              value={timezone}
+              onChange={e => setTimezone(e.target.value)}
+              placeholder={DEFAULT_TIMEZONE}
+              style={inputStyle}
+            />
+            <div style={helperStyle}>
+              Cycle codes and the study's date use this zone's calendar day. An IANA name, e.g. America/New_York.
+            </div>
           </div>
 
           {/* 2. Study pattern */}
@@ -973,8 +1019,9 @@ export default function CreateStudyModal({ open, onClose, onCreated }) {
                               : row.additive
                                 ? `${tier?.count ?? 0} question${tier?.count === 1 ? '' : 's'}`
                                 : row.key === 'category_control'
-                                  // 2I-7: the generator drops one that still names the brand
-                                  ? `uses the stage counts above: ${stageTotal} question${stageTotal === 1 ? '' : 's'}, none naming the brand`
+                                  // 2I-7: the generator drops one that still names the brand.
+                                  // 2K-1: the Comparison stage is the comparison tier, its own line.
+                                  ? controlLine(stageTotal, Number(stageCounts?.Comparison) || 0)
                                   : 'uses the stage counts above'}
                           </span>
                         </div>

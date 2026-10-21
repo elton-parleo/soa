@@ -24,7 +24,7 @@ from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
-from soa_shared import surfaces, unprompted
+from soa_shared import claim_kinds, local_time, surfaces, unprompted
 
 # ─── vocabularies ──────────────────────────────────────────────────────────
 
@@ -65,7 +65,8 @@ CELL_TONE = {
 SEVERITY = ['wrong', 'fabricated', 'misattributed', 'stale', 'partial', 'acknowledged_unknown',
             'absent', 'echoed', 'unverifiable', 'unscoreable', 'exact', 'grounded']
 TIER_LABELS = {'brand_direct': 'Brand-direct', 'catalog_accuracy': 'Catalog accuracy',
-               'value_incentives': 'Value & incentives', 'category_control': 'Category control'}
+               'value_incentives': 'Value & incentives', 'category_control': 'Category control',
+               'comparison': 'Comparison'}
 
 ANSWER_DIVERGENCES = [
     "Answer.verdict is not a console field: it carries the value outcome mapped exact->right, "
@@ -135,7 +136,12 @@ def _severity(outcome, brand: bool, flags) -> str:
 #: 2C: the classifier's reason codes (scoring/expectation_comparator.py
 #: REASON_*), carried in Check.reason and Answer.reason. A code soa adds
 #: later passes through verbatim; the console renders an unknown one neutral.
-REASON_CODES = ('other_brand', 'not_our_product', 'variant_clash', 'product_inferred', 'variant_swap')
+#: 2K-1: the Answers chip per claim_kind
+CLAIM_KIND_LABELS = {claim_kinds.ATTRIBUTE: 'Stated a fact', claim_kinds.RECOMMENDATION_ONLY: 'Recommendation only'}
+
+REASON_CODES = ('other_brand', 'not_our_product', 'variant_clash', 'product_inferred', 'variant_swap',
+                # 2K-1: a price attributed to the brand's own page, which sets none
+                'brand_sets_no_price')
 
 
 def _reason_code(value) -> Optional[str]:
@@ -163,6 +169,9 @@ def _live(claim, expectation) -> str:
     against = reference.get('against') if reference else claim.get('against')
     if against is None and claim.get('target') == 'asked' and not reference:
         against = expectation.get('amount')
+    if reference and reference.get('method') == NOT_PRICED_METHOD:
+        # 2K-1: read, and sets no price by design: not unreadable
+        return f"no price set at {reference.get('retailer_domain') or 'the brand site'}, the brand's own site"
     if reference and not reference.get('verifiable', True):
         return f"unverifiable: {reference.get('unverifiable_reason') or 'page unreadable'}"
     where = f" at {reference.get('retailer_domain')}" if reference.get('retailer_domain') else ''
@@ -264,6 +273,7 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     raw = (outcome or {}).get('outcome')
 
     verdict = None if brand or raw is None else VALUE_VERDICT.get(raw, raw)
+    kind = claim_kinds.claim_kind(extraction) if brand and outcome is not None else None
     brand_verdict = raw if brand else None
     checks = []
     if not brand and outcome is not None:
@@ -325,12 +335,16 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'verdict': verdict,
         'tone': BRAND_TONE.get(raw, 'neu') if brand else VERDICT_TONE.get(verdict, 'neu'),
         'brand_verdict': brand_verdict,
+        # 2K-1 (A9): a brand-direct answer's kind, the Answers list's chip: it
+        # stated an attribute, or only recommended the brand (soa_shared/claim_kinds.py)
+        'claim_kind': kind,
+        'claim_kind_label': CLAIM_KIND_LABELS.get(kind),
         'flags': [f.get('flag') for f in flags],
         'flag_details': flags,
         'variant_id': source_ref.get('variant_id'),
         'gtin': source_ref.get('gtin'),
         'retailer': expectation.get('attributed_to') or source_ref.get('own_domain') or source_ref.get('domain'),
-    }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer', 'expected_type'))
+    }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer', 'expected_type', 'claim_kind', 'claim_kind_label'))
 
 
 # ─── Answers summary (2C) ──────────────────────────────────────────────────
@@ -436,7 +450,8 @@ def load_answers_summary(conn, cycle: dict) -> dict:
         LEFT JOIN soa_expectation_outcomes o ON o.run_id = r.id
         WHERE r.cycle_id = :c
     """), {'c': cycle['id']}).mappings()]
-    return build_answers_summary(rows, cycle_code=cycle['cycle_code'])
+    unpriced = brand_sets_no_price_runs(conn, cycle)
+    return build_answers_summary([not_priced(r, unpriced) for r in rows], cycle_code=cycle['cycle_code'])
 
 
 # ─── TrueValue ─────────────────────────────────────────────────────────────
@@ -509,11 +524,99 @@ def _newest_read(reads: Optional[List[dict]], variant: dict) -> Optional[dict]:
 
 #: 2J-4: supply 2J-1 serves a brand's own page that sets no price as
 #: `method: none_by_design` (`verifiable: false`, "brand site, no price
-#: set"). Its answers still score unverifiable, as supply's contract says;
-#: the cell's `live` says the page was read and prices nothing, not that it
-#: could not be read.
+#: set"). The cell's `live` says the page was read and prices nothing, not
+#: that it could not be read. (2J-4 left its answers unverifiable; 2K-1 does
+#: not score them: BRAND_SETS_NO_PRICE below.)
 NOT_PRICED_METHOD = 'none_by_design'
 NOT_PRICED = 'not priced'
+
+#: 2K-1: and a catalog-tier price claim attributed to that page is not
+#: scored. The scorer says so from 2K-1 on (scoring/retailer_reference.py:
+#: `unscoreable`, reason code `brand_sets_no_price`); a cycle scored before
+#: stored `unverifiable`, and these read models re-read it so, from the
+#: cycle's cached reference: an unverifiable catalog run whose claim was
+#: judged against a none_by_design row (the claim's `reference.method`), or
+#: whose question is attributed to a page the cached reference serves as
+#: none_by_design for its variant. Outside every accuracy and outside the
+#: "could not be checked" count; the quote is still shown.
+BRAND_SETS_NO_PRICE = 'brand_sets_no_price'
+BRAND_SETS_NO_PRICE_NOTE = "the brand's site sets no price; the agent priced it anyway"
+
+
+def _not_priced_pages(reference: Optional[dict]) -> set:
+    """(domain, variant key) of every none_by_design row of the brand's own."""
+    out = set()
+    for row in (reference or {}).get('prices') or []:
+        if row.get('method') != NOT_PRICED_METHOD or row.get('role') not in (None, 'own'):
+            continue
+        domain = _domain_key(row.get('retailer_domain'))
+        for key in (_gtin14(row.get('gtin')), row.get('variant_ref'),
+                    f"sku:{row['sku']}" if row.get('sku') else None, row.get('sku')):
+            if key:
+                out.add((domain, str(key)))
+    return out
+
+
+def _domain_key(value) -> Optional[str]:
+    from soa_shared.expected_answers import normalize_domain
+    return normalize_domain(value)
+
+
+def is_brand_sets_no_price(outcome: dict, *, expected=None, source_ref=None, pages: Optional[set] = None) -> bool:
+    """Whether a stored catalog-tier outcome row is a price the brand's own
+    page sets none for (BRAND_SETS_NO_PRICE)."""
+    if outcome.get('reason_code') == BRAND_SETS_NO_PRICE:
+        return True
+    if outcome.get('outcome') != 'unverifiable':
+        return False
+    claims = _json(outcome.get('claim_results')) or []
+    if any((c.get('reference') or {}).get('method') == NOT_PRICED_METHOD for c in claims if isinstance(c, dict)):
+        return True
+    expected = _json(expected if expected is not None else outcome.get('expected_answer')) or {}
+    ref = _json(source_ref) or {}
+    domain = _domain_key(expected.get('attributed_to'))
+    if not domain or not pages:
+        return False
+    keys = {str(k) for k in (_gtin14(ref.get('gtin')), _gtin14(ref.get('variant_id')), ref.get('variant_id'),
+                             ref.get('variant_ref')) if k}
+    return any((domain, k) in pages for k in keys)
+
+
+def brand_sets_no_price_runs(conn, cycle: dict) -> set:
+    """The cycle's catalog-tier runs whose price the brand's own page sets
+    none for. One read of the outcomes; the cycle row's cached reference."""
+    reference = cycle.get('reference_prices') if 'reference_prices' in cycle else conn.execute(text(
+        "SELECT reference_prices FROM soa_cycles WHERE id = :c"), {'c': cycle['id']}).scalar()
+    pages = _not_priced_pages(_json(reference))
+    out = set()
+    for r in conn.execute(text("""
+        SELECT o.run_id, o.outcome, o.reason_code, o.claim_results, o.expected_answer, q.source_ref
+        FROM soa_expectation_outcomes o JOIN soa_queries q ON q.id = o.query_id
+        WHERE o.cycle_id = :c AND o.tier = 'catalog_accuracy'
+          AND (o.outcome = 'unverifiable' OR o.reason_code = :code)
+    """), {'c': cycle['id'], 'code': BRAND_SETS_NO_PRICE}).mappings():
+        row = dict(r)
+        if is_brand_sets_no_price(row, source_ref=row.get('source_ref'), pages=pages):
+            out.add(row['run_id'])
+    return out
+
+
+def not_priced(row: dict, runs: set, key: str = 'run_id') -> dict:
+    """The row with its outcome re-read as the brand's own page setting no
+    price, when it is one of `runs`; else as it is. Its claims too."""
+    if row.get(key) not in runs:
+        return row
+    row['outcome'] = 'unscoreable'
+    row['reason_code'] = BRAND_SETS_NO_PRICE
+    if 'outcome_reason' in row:
+        row['outcome_reason'] = BRAND_SETS_NO_PRICE_NOTE
+    if row.get('claim_results') is not None:
+        claims = _json(row['claim_results']) or []
+        for c in claims:
+            if isinstance(c, dict) and c.get('target', 'asked') == 'asked' and c.get('outcome') in ('unverifiable', 'unscoreable'):
+                c.update(outcome='unscoreable', reason_code=BRAND_SETS_NO_PRICE, reason=BRAND_SETS_NO_PRICE_NOTE)
+        row['claim_results'] = claims
+    return row
 
 
 def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domain: Optional[str],
@@ -598,7 +701,10 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
 
     def cell_for(runs, ref):
         outcome, stated = aggregate_cell(runs)
-        if ref is not None and not ref.get('verifiable', True) and runs:
+        if ref is not None and ref.get('method') == NOT_PRICED_METHOD:
+            # 2K-1: the brand's own page sets no price: its quotes are not scored
+            status = 'none'
+        elif ref is not None and not ref.get('verifiable', True) and runs:
             status = 'unverifiable'
         else:
             status = TV_STATUS.get(outcome, 'none') if outcome else 'none'
@@ -1310,10 +1416,17 @@ def study_status(cycles: List[dict]) -> str:
 def prompt_counts(prompts: List[dict], terms: Iterable[str] = ()) -> dict:
     """Branded: the questions in a tier that names the brand, and (2I-7) any
     other whose text names it; unbranded: the rest, the unprompted ones the
-    score counts. The study's question count, the one the Overview uses too."""
+    score counts. The study's question count, the one the Overview uses too.
+    2K-1: a comparison question names the brand, so it is branded; a study
+    that has any also says how many (`comparison`), the brand-choice
+    questions beside the unbranded ones."""
     branded = sum(1 for p in prompts if p.get('tier') in BRANDED_TIERS
                   or not unprompted.is_unprompted({'tier': p.get('tier'), 'query_text': p.get('text')}, terms))
-    return {'branded': branded, 'unbranded': len(prompts) - branded, 'prompts': len(prompts)}
+    out = {'branded': branded, 'unbranded': len(prompts) - branded, 'prompts': len(prompts)}
+    comparison = sum(1 for p in prompts if p.get('tier') == COMPARISON)
+    if comparison:
+        out['comparison'] = comparison
+    return out
 
 
 def build_study(job: dict, prompts: List[dict], cycles: List[dict], entities: List[dict]) -> dict:
@@ -1339,6 +1452,10 @@ def build_study(job: dict, prompts: List[dict], cycles: List[dict], entities: Li
         'owner': job.get('created_by') or '',
         # beside the typed fields
         'platforms': platforms, 'generation_status': job.get('status'),
+        # 2K-1: the merchant's local time, for the study's display date ("the Oct 19 study");
+        # `created` stays UTC
+        'created_at_local': local_time.local_iso(job.get('created_at'), study_timezone(tier_config)),
+        'timezone': study_timezone(tier_config),
     }, ('lastRun',))
 
 
@@ -1363,7 +1480,25 @@ def run_identity(cycle: dict, ran_platforms: List[str]) -> dict:
     return {'surface_ids': ids, 'runs_per_question': cycle.get('runs_per_query'), 'study_id': cycle.get('study_type')}
 
 
-def build_run(cycle: dict, collected: int, usable: int) -> dict:
+def study_timezone(tier_config) -> str:
+    """2K-1: the study's merchant's IANA zone (tier_config.merchant.timezone),
+    else SOA_DEFAULT_TIMEZONE, else America/Los_Angeles (soa_shared/local_time.py)."""
+    return local_time.merchant_timezone(_json(tier_config))
+
+
+def study_timezones(conn, study_types: Iterable[str]) -> Dict[str, str]:
+    """{study_type: its zone}, from each study's newest generation job."""
+    out: Dict[str, str] = {}
+    for st in sorted({s for s in study_types if s}):
+        config = conn.execute(text(
+            "SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st ORDER BY id DESC LIMIT 1"),
+            {'st': st}).scalar()
+        out[st] = study_timezone(config)
+    return out
+
+
+def build_run(cycle: dict, collected: int, usable: int, tz: Optional[str] = None) -> dict:
+    """tz (2K-1): the study's merchant's zone, for `created_at_local`."""
     platforms = _json(cycle.get('platforms')) or []
     started, finished = cycle.get('created_at') or cycle.get('start_date'), cycle.get('end_date')
     return compact({
@@ -1377,6 +1512,9 @@ def build_run(cycle: dict, collected: int, usable: int) -> dict:
         'platforms': platforms,
         'surfaces': sorted({surfaces.surface_of(p) for p in platforms if surfaces.surface_of(p)}),
         'full_loop_run_id': cycle.get('full_loop_run_id'),
+        # 2K-1: beside the UTC stamp, in the merchant's local time
+        'created_at_local': local_time.local_iso(cycle.get('created_at'), tz or local_time.default_timezone()),
+        'timezone': tz or local_time.default_timezone(),
     }, ('finished', 'note'))
 
 
@@ -1400,8 +1538,14 @@ def build_run(cycle: dict, collected: int, usable: int) -> dict:
 #: any that names the brand (soa_shared/unprompted.py). A row's `tier` stays
 #: its tier; its `unprompted` says whether it counts as unprompted.
 VIS_UNPROMPTED = 'unprompted'
+#: 2K-1: the comparison tier (it names the brand and a rival) and the set the
+#: first-pick reads count over when a cycle asked one: unprompted plus it
+#: (soa_shared/unprompted.is_brand_choice). A row's `brand_choice` says
+#: whether it is in that set.
+COMPARISON = 'comparison'
+VIS_BRAND_CHOICE = 'brand_choice'
 VIS_TIER_LABELS = {VIS_UNPROMPTED: 'Unprompted', **TIER_LABELS}
-VIS_TIER_ORDER = (VIS_UNPROMPTED, 'category_control', 'brand_direct', 'catalog_accuracy', 'value_incentives')
+VIS_TIER_ORDER = (VIS_UNPROMPTED, 'category_control', COMPARISON, 'brand_direct', 'catalog_accuracy', 'value_incentives')
 #: An other_brands_named entry named only as where the information came from
 #: (a cited site, a publisher) is not a brand put to the shopper.
 VIS_SOURCE_PRESENTED = ('source',)
@@ -1586,6 +1730,7 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
             'run': f"run-{run['id']}", 'platform': platform, 'query_code': run.get('query_code'),
             'stage': run.get('stage'), 'answered': run.get('answer_status') == surfaces.ANSWERED,
             'unprompted': unprompted.is_unprompted(run, terms),
+            'brand_choice': unprompted.is_brand_choice(run, terms),
             'first_basis': basis,
         }, ('first_basis',)))
 
@@ -2058,7 +2203,8 @@ def load_answers(conn, cycle: dict) -> List[dict]:
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         WHERE r.cycle_id = :c ORDER BY q.query_code, r.platform, r.run_number
     """), {'c': cycle['id']}).mappings().all()
-    outcomes = {o['run_id']: dict(o) for o in conn.execute(text(
+    unpriced = brand_sets_no_price_runs(conn, cycle)
+    outcomes = {o['run_id']: not_priced(dict(o), unpriced) for o in conn.execute(text(
         "SELECT * FROM soa_expectation_outcomes WHERE cycle_id = :c"), {'c': cycle['id']}).mappings()}
     mentions: Dict[int, List[dict]] = {}
     for m in conn.execute(text("""

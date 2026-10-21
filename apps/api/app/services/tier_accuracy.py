@@ -39,7 +39,7 @@ from soa_shared import expected_answers as ea
 # Display order, and the order the report renders them in: the tier a
 # shopper's question sounds most like first, the control last.
 TIER_ORDER = [
-    'brand_direct', 'catalog_accuracy', 'value_incentives', 'category_control',
+    'brand_direct', 'catalog_accuracy', 'value_incentives', 'category_control', 'comparison',
 ]
 
 TIER_LABELS = {
@@ -47,6 +47,7 @@ TIER_LABELS = {
     'catalog_accuracy': 'Catalog accuracy',
     'value_incentives': 'Value & incentives',
     'category_control': 'Category control',
+    'comparison':       'Comparison',
 }
 
 # 2B: `partial` is a claim we could check, so it sits in the denominator

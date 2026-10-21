@@ -33,6 +33,16 @@ regenerated once; a replacement that still names it is dropped and
 counted, so the tier can come in under the stage target rather than carry
 a branded question (keep_brand_out).
 
+2K-1 (E29): the comparison tier. With category control on, the study's
+Comparison-stage questions are not category control: "Pampers vs Huggies
+for newborns" is a brand-choice moment, and 2I-7 regenerated it away for
+naming the brand. They are written as comparison questions (the brand and a
+rival, asking which to choose; rivals from the merchant's competitor list
+first, then a rival the writer names and declares), tagged `comparison`, and
+checked with soa_shared/unprompted.is_comparison. One naming no rival is
+regenerated once, then dropped and counted (keep_comparisons), as 2I-7 does
+for category control.
+
 Degradation is the other thing worth reading. A study whose brand cannot
 be read still gets generated — as the ungrounded study it would have been
 with the toggle off — because failing a job that holds fifty good
@@ -50,6 +60,7 @@ from soa_shared.constants import QUERY_PERSONAS
 
 from generation import catalog_tiers as ct
 from generation.query_generator import (
+    COMPARISON_STAGE,
     generate_and_review_study,
     generate_brand_direct,
     generate_general_queries,
@@ -243,6 +254,106 @@ def keep_brand_out(rows: list, terms: list, regenerate) -> tuple:
     return out, report
 
 
+def comparison_line(count: int, dropped: int) -> str:
+    """The comparison tier's one line, as the preview and the generation status show it."""
+    line = f"{count} question{'' if count == 1 else 's'}, each naming the brand and a rival"
+    if dropped:
+        line += f" ({dropped} dropped for naming no rival)"
+    return line
+
+
+def admissible_rival(name, brand_terms: list) -> bool:
+    """A rival the writer declared counts when it is a name, is not one of
+    the brand's own terms (or a line of it), and is not a retailer: a store
+    is not a brand to choose against (soa_shared/retailers.py)."""
+    from soa_shared.retailers import retailers_named
+    from soa_shared.expected_answers import names_brand, normalize_brand_text
+    key = normalize_brand_text(name) if isinstance(name, str) else ''
+    if not key:
+        return False
+    if any(key == normalize_brand_text(t) or names_brand(name, t) for t in brand_terms):
+        return False
+    return not retailers_named(name)
+
+
+def _passes(row: dict, terms: list, rivals: list) -> tuple:
+    """(is a comparison, the rival terms it was checked against): the
+    listed rivals, plus the one the writer declared when admissible."""
+    declared = row.get('rival')
+    checked = list(rivals) + ([declared] if admissible_rival(declared, terms) and declared not in rivals else [])
+    return unprompted.is_comparison(row, terms, checked), checked
+
+
+def keep_comparisons(rows: list, terms: list, rivals: list, regenerate) -> tuple:
+    """
+    The comparison check (2K-1). Returns (kept rows, report).
+
+    Every Comparison-stage row is checked with unprompted.is_comparison
+    against the brand's terms and the rivals (the listed competitors, plus
+    the rival the writer declared, when it is a brand and not the merchant
+    or a retailer). Those that fail are handed to `regenerate(n, avoid_texts)`
+    ONCE; each replacement is checked the same way and against the rows
+    already kept. What still names no rival is dropped and counted, so the
+    tier can come in under the stage target rather than carry a question
+    that is not a comparison.
+    """
+    def named(row, checked):
+        return unprompted.names_any(row.get('query_text'), checked)
+
+    kept, failed, rivals_named = [], [], Counter()
+    passed = set()
+    for r in rows:
+        ok, checked = _passes(r, terms, rivals)
+        if ok:
+            kept.append(r)
+            passed.add(id(r))
+            rivals_named.update(named(r, [c for c in checked if c not in terms]))
+        else:
+            failed.append(r)
+    report = {'checked_against': {'brand': list(terms), 'rivals': list(rivals)},
+              'regenerated': len(failed), 'replaced': 0, 'dropped': [],
+              'found': [{'query_text': r.get('query_text'), 'rival': r.get('rival')} for r in failed]}
+    if failed:
+        try:
+            fresh = regenerate(len(failed), [r.get('query_text') for r in rows]) or []
+        except Exception as exc:  # noqa: BLE001 - a failed regeneration drops the rows, never the study
+            logger.warning("[generation] comparison regeneration failed: %s", exc)
+            report['regeneration_error'] = type(exc).__name__
+            fresh = []
+        seen = {normalize_query_text(r.get('query_text')) for r in kept}
+        replacements = []
+        for row in fresh:
+            key = normalize_query_text(row.get('query_text'))
+            if len(replacements) >= len(failed) or key in seen:
+                continue
+            ok, checked = _passes(row, terms, rivals)
+            if not ok:
+                continue
+            seen.add(key)
+            replacements.append(row)
+            rivals_named.update(named(row, [c for c in checked if c not in terms]))
+        # each replacement takes a failed question's place, in study order
+        out, pending = [], list(replacements)
+        for r in rows:
+            if id(r) in passed:
+                out.append(r)
+            elif pending:
+                out.append(pending.pop(0))
+            else:
+                report['dropped'].append({'query_text': r.get('query_text'), 'rival': r.get('rival')})
+        kept = out
+        report['replaced'] = len(replacements)
+    report['rivals_named'] = sorted(rivals_named.items(), key=lambda kv: (-kv[1], kv[0]))
+    return kept, report
+
+
+def _stage_order(rows: list) -> list:
+    """The study's rows in stage order (QUERY_STAGES), stable within a stage."""
+    from soa_shared.constants import QUERY_STAGES
+    rank = {s: i for i, s in enumerate(QUERY_STAGES)}
+    return sorted(rows, key=lambda r: rank.get(r.get('stage'), len(rank)))
+
+
 def build_syndicated_study(
     *,
     snapshot,
@@ -259,9 +370,13 @@ def build_syndicated_study(
     personas=None,
     specificity_mode=None,
     variant_cap: int = ct.DEFAULT_VARIANT_CAP,
+    rivals=None,
 ) -> tuple:
     """
     Returns (rows, provenance, resolved_tier_config).
+
+    rivals: the merchant's competitor names (2K-1), the comparison tier's
+    first choice of rival; the worker reads them (worker.merchant_rivals).
 
     `rows` is every question in study order — the stage-count questions
     first, then brand-direct, then the catalog tiers — in the shape
@@ -273,6 +388,11 @@ def build_syndicated_study(
     """
     config = normalize_tier_config(tier_config)
     category = _primary_category(allowed_categories)
+    # 2K-1: the merchant's timezone the wizard set, kept on the merchant block
+    # this rebuilds below (soa_shared/local_time.merchant_timezone reads it)
+    zone = ((tier_config or {}).get('merchant') or {}).get('timezone') if isinstance(tier_config, dict) else None
+    if zone:
+        config['merchant'] = {'timezone': zone}
 
     generate_kwargs = {
         'study_name': study_name,
@@ -291,6 +411,11 @@ def build_syndicated_study(
     control_on = config['category_control']['enabled']
     brand, product_names, terms = control_terms(snapshot) if control_on else (None, [], [])
     control = {'brand': brand, 'product_names': product_names} if control_on and brand else None
+    # 2K-1: with the control tier on and a brand to name, the Comparison
+    # stage is the comparison tier: the brand and a rival
+    rivals = [r for r in (rivals or []) if admissible_rival(r, terms)] if control else []
+    comparison_on = bool(control and (stage_targets or {}).get(COMPARISON_STAGE))
+    comparison = {'brand': brand, 'rivals': rivals} if comparison_on else None
 
     # ── The study's own questions ────────────────────────────────────
     #
@@ -306,6 +431,7 @@ def build_syndicated_study(
         naming_rule_enabled=naming_rule_enabled,
         **generate_kwargs,
         **({'category_control': control} if control else {}),
+        **({'comparison': comparison} if comparison else {}),
     )
 
     # After the generation call, not before: with no personas in the
@@ -333,18 +459,47 @@ def build_syndicated_study(
             )
             return fresh
 
+        compared = [r for r in rows if comparison_on and r.get('stage') == COMPARISON_STAGE]
+        rows = [r for r in rows if not (comparison_on and r.get('stage') == COMPARISON_STAGE)]
         requested = len(rows)
         rows, check = keep_brand_out(rows, terms, regenerate)
         for row in rows:
             row['tier'] = 'category_control'
             row['provenance'] = 'ai'
+        if comparison_on:
+            def regenerate_comparisons(n, avoid):
+                fresh, _report = generate_general_queries(
+                    stage_targets={COMPARISON_STAGE: n},
+                    retailer_names=retailer_names,
+                    rotate_named_retailer=rotate_named_retailer,
+                    naming_rule_enabled=naming_rule_enabled,
+                    category_control=control,
+                    comparison=comparison,
+                    avoid_texts=avoid,
+                    **generate_kwargs,
+                )
+                return fresh
+
+            asked = len(compared)
+            compared, ccheck = keep_comparisons(compared, terms, rivals, regenerate_comparisons)
+            for row in compared:
+                row['tier'] = 'comparison'
+                row['provenance'] = 'ai'
+                row.pop('rival', None)
+            cdropped = len(ccheck['dropped'])
+            config['comparison'] = {**ccheck, 'enabled': True, 'count': len(compared), 'generated': asked,
+                                    'dropped': cdropped, 'rivals': rivals,
+                                    'line': comparison_line(len(compared), cdropped)}
+            provenance['comparison_check'] = {k: ccheck[k] for k in ccheck if k != 'checked_against'}
+            rows = _stage_order(rows + compared)
         dropped = len(check['branded_dropped'])
+        controls = sum(1 for r in rows if r.get('tier') == 'category_control')
         config['category_control'].update(check)
         config['category_control'].update({
-            'count': len(rows),
+            'count': controls,
             'generated': requested,
             'dropped': dropped,
-            'line': control_line(len(rows), dropped, bool(terms)),
+            'line': control_line(controls, dropped, bool(terms)),
         })
         provenance['category_control_check'] = {k: check[k] for k in check if k != 'checked_against'}
     else:
@@ -388,6 +543,7 @@ def build_syndicated_study(
         # 2I-7: the brand's product names, the terms beside its name that
         # the console's unprompted rule reads back (soa_shared/unprompted.py)
         'product_names': [p.title for p in snapshot.products if p.title],
+        **({'timezone': zone} if zone else {}),
     }
 
     # ── The catalog tiers, BUILT FIRST ───────────────────────────────

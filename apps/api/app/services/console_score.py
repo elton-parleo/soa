@@ -74,7 +74,12 @@ from clients import truesync_client as supply_fields
 #: 2I-8a: "10", the five metric rows count every agent (`all`), as the rest of
 #: the Overview does since 2I-8. The stored score carries the rows' counts, so
 #: a stored cycle re-scores to serve them; the score itself does not move.
-SCORER_VERSION = "10"
+#: 2K-1: "11", the brand-choice set (unprompted plus the comparison tier,
+#: soa_shared/unprompted.is_brand_choice) for Lost and the first-pick rows
+#: (first, share, program) when a cycle asked comparison questions. No
+#: dimension reads it (share of mentions and recommendation strength stay on
+#: unprompted), so the score does not move; the rows' counts beside it do.
+SCORER_VERSION = "11"
 #: The adapter's own revision, beside the scorer's: a change to how loop
 #: counts become scorer inputs re-scores stored cycles too. Not a scorer
 #: version and never shown as one.
@@ -585,7 +590,9 @@ def metric_counts(runs: List[dict], mentions: List[dict], vis_rows: List[dict], 
     member_value_cited, over the answered runs of that tier naming us; prices
     exact of scored on the catalog tier, program terms exact of scored on the
     value tier. 2I-7: unprompted by soa_shared/unprompted.py, as the score.
-    2I-8a: on `all`, every run given (build_score passes the pooled ones)."""
+    2I-8a: on `all`, every run given (build_score passes the pooled ones).
+    2K-1 (scorer 11): brand-choice (unprompted plus comparison) when the
+    cycle asked a comparison question, as the Overview reads it."""
     vis = parity.surface_metrics(runs, vis_rows, surface)
     tier = vis['tier']
     catalog = parity.surface_metrics([r for r in runs if r.get('tier') == 'catalog_accuracy'], [], surface)['total']
@@ -593,6 +600,7 @@ def metric_counts(runs: List[dict], mentions: List[dict], vis_rows: List[dict], 
     in_tier = {r['run_id'] for r in runs if surfaces.on_surface(parity._surface_of(r), surface)
                and r.get('answer_status') == surfaces.ANSWERED
                and (tier == 'all' or (unprompted.is_unprompted(r, terms) if tier == rm.VIS_UNPROMPTED
+                                      else unprompted.is_brand_choice(r, terms) if tier == rm.VIS_BRAND_CHOICE
                                       else r.get('tier') == tier))}
     ours = [m for m in mentions if m['run_id'] in in_tier and m.get('role') == 'primary' and m.get('mentioned')]
     return {
@@ -610,7 +618,7 @@ def _surface_note(surface: str, tier: str, key: str) -> str:
     # 2I-8a: "across every agent" on `all`, 2I-8's copy map
     where = parity._on_words(surface)
     if key in ('first', 'share', 'program'):
-        return f"{where}, {'unprompted answers' if tier == rm.VIS_UNPROMPTED else 'every answered question'}"
+        return f"{where}, {parity._answers(tier) if tier in (rm.VIS_UNPROMPTED, rm.VIS_BRAND_CHOICE) else 'every answered question'}"
     return f"{where}, {'catalog' if key == 'exact' else 'value'} tier, exact of scored"
 
 
@@ -955,7 +963,8 @@ def needs_recompute(body: Optional[dict], domain_checks: Optional[dict],
 SCORER_CHANGES = {'7': 'ungrounded surfaces excluded from pooling',
                   '8': 'share of mentions not measured without a tracked competitor',
                   '9': 'category-control questions count as unprompted',
-                  '10': 'metric rows count every agent'}
+                  '10': 'metric rows count every agent',
+                  '11': 'brand-choice set for Lost and the first-pick tiles'}
 
 
 def _no_rivals(body: dict) -> bool:
@@ -977,7 +986,9 @@ SCORER_CHANGE_APPLIES = {'7': lambda new: bool((new.get('coverage') or {}).get('
                          '8': _no_rivals,
                          '9': _category_control,
                          # 2I-8a never moves a score (only the rows beside it), so it never explains one
-                         '10': lambda _new: False}
+                         '10': lambda _new: False,
+                         # 2K-1 never moves a score either: no dimension reads the brand-choice set
+                         '11': lambda _new: False}
 
 
 _NOT_CARRIED = object()

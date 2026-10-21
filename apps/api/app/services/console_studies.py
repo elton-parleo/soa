@@ -29,6 +29,15 @@ MAX_QUESTIONS = 100
 TIER_KEYS = ('brand_direct', 'catalog_accuracy', 'value_incentives', 'category_control')
 TIER_SOURCE = {'brand_direct': 'ai_from_catalog', 'catalog_accuracy': 'catalog',
                'value_incentives': 'catalog', 'category_control': 'ai'}
+#: 2K-1: the stage whose questions a brand study writes as its comparison
+#: tier (generation/query_generator.COMPARISON_STAGE)
+COMPARISON_STAGE = 'Comparison'
+
+
+def comparison_line(count: int) -> str:
+    """The preview's Comparison line (generation/syndicated_study.comparison_line
+    before any is dropped)."""
+    return f"{count} question{'' if count == 1 else 's'}, each naming the brand and a rival"
 
 
 async def read_snapshot(client, merchant_slug: str) -> CatalogSnapshot:
@@ -160,7 +169,10 @@ def tally(stage_total: int, tiers: dict) -> dict:
 def build_preview(snapshot: CatalogSnapshot, *, tiers: Dict[str, bool], stage_total: int,
                   brand_direct_count: Optional[int] = None, variant_cap: Optional[int] = None,
                   allowed_categories: Optional[List[str]] = None, personas: Optional[List[str]] = None,
-                  study_pattern: Optional[str] = None) -> dict:
+                  study_pattern: Optional[str] = None, stage_targets: Optional[Dict[str, int]] = None) -> dict:
+    """stage_targets (2K-1): the per-stage counts, when the caller sends
+    them; with category control on and a brand, the Comparison stage's are
+    the comparison tier, its own line, and category control is the rest."""
     enabled = {k: bool(tiers.get(k)) for k in TIER_KEYS}
     category = (allowed_categories or ['General'])[0] or 'General'
     persona = (personas or [None])[0] or QUERY_PERSONAS[0]
@@ -205,6 +217,11 @@ def build_preview(snapshot: CatalogSnapshot, *, tiers: Dict[str, bool], stage_to
         # (soa_shared/unprompted.py) and drops one that still names it
         n = stage_total or 0
         brand = snapshot.study_brand or snapshot.brand
+        compared = int((stage_targets or {}).get(COMPARISON_STAGE) or 0) if brand else 0
+        if compared:
+            n = max(n - compared, 0)
+            out['comparison'] = {'enabled': True, 'count': compared, 'additive': False, 'source': 'ai',
+                                 'questions': [], 'stage': COMPARISON_STAGE, 'line': comparison_line(compared)}
         out['category_control'].update(
             count=n, additive=False, checked=bool(brand),
             line=(f"{n} question{'' if n == 1 else 's'}, none naming the brand" if brand

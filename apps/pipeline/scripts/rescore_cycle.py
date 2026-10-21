@@ -106,6 +106,10 @@ from soa_shared import expected_answers as ea  # noqa: E402
 from soa_shared.database import engine  # noqa: E402
 from soa_shared.expected_answers import QUERY_TIERS  # noqa: E402
 
+#: The tiers whose questions carry no expected answer, so nothing scores them:
+#: category control and (2K-1) comparison. The default leaves them out.
+NO_EXPECTATION_TIERS = ('category_control', 'comparison')
+
 
 def cycle_id(conn, cycle_code: str) -> int:
     row = conn.execute(
@@ -861,7 +865,7 @@ def main(argv=None) -> int:
     if args.classify_only:
         return _main_classify_only(args)
 
-    tiers = args.tiers or [t for t in QUERY_TIERS if t != 'category_control']
+    tiers = args.tiers or [t for t in QUERY_TIERS if t not in NO_EXPECTATION_TIERS]
 
     with engine.connect() as conn:
         cid = cycle_id(conn, args.cycle)

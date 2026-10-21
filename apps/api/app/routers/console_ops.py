@@ -40,7 +40,7 @@ from app.schemas import ComparisonEntityInput, CreateCycleRequest, RegenerateStu
 from app.services import console_parity as parity
 from app.services import console_read_models as rm
 from app.services import console_studies as cs
-from soa_shared import comparison_sets, customers, surfaces
+from soa_shared import comparison_sets, customers, local_time, surfaces
 from soa_shared.constants import QUERY_CONSTRAINTS
 from soa_shared.database import engine
 from sqlalchemy import text
@@ -220,6 +220,8 @@ class StudyPreviewRequest(BaseModel):
     allowed_categories: Optional[List[str]] = None
     personas: Optional[List[str]] = None
     study_pattern: Optional[str] = None
+    # 2K-1: the per-stage counts; the Comparison stage's are the comparison tier
+    stage_targets: Optional[Dict[str, int]] = None
 
 
 @router.post("/studies/preview")
@@ -235,7 +237,7 @@ async def preview_study(body: StudyPreviewRequest, scope: CustomerScope = Depend
     return cs.build_preview(snapshot, tiers=body.tiers, stage_total=body.stage_total,
                             brand_direct_count=body.brand_direct_count, variant_cap=body.variant_cap,
                             allowed_categories=body.allowed_categories, personas=body.personas,
-                            study_pattern=body.study_pattern)
+                            study_pattern=body.study_pattern, stage_targets=body.stage_targets)
 
 
 class ConsoleStudyGenerate(StudyGenerateRequest):
@@ -276,10 +278,10 @@ async def generate_console_study(body: ConsoleStudyGenerate, scope: CustomerScop
             k: bool((body.tier_config or {}).get(k, {}).get("enabled")) for k in cs.TIER_KEYS}
         snapshot = await cs.read_snapshot(full_loop._client(scope), body.syndicated_merchant)
         preview = cs.build_preview(snapshot, tiers=tiers, stage_total=body.target_count,
-                                   brand_direct_count=body.brand_direct_count)
+                                   brand_direct_count=body.brand_direct_count, stage_targets=body.stage_targets)
         if preview["tally"]["total"] > cs.MAX_QUESTIONS:
             raise HTTPException(status_code=422, detail=preview["tally"]["text"])
-        data["tier_config"] = cs.tier_config(tiers, body.brand_direct_count)
+        data["tier_config"] = cs.tier_config(tiers, body.brand_direct_count)   # the timezone is merged back in (2K-1)
         data["customer_org_id"] = scope.org.id
         result = studies_router.generate_study(StudyGenerateRequest(**data), current_user=_as_user(user))
         merchant = {"slug": body.syndicated_merchant, "from": "request" if body.merchant else "syndicated_merchant"}
@@ -288,8 +290,9 @@ async def generate_console_study(body: ConsoleStudyGenerate, scope: CustomerScop
         request = StudyGenerateRequest(**data)
         result = studies_router.queue_generation_job(
             request, current, customer_org_id=studies_router.resolve_customer_org(current["user_id"], scope.org.id),
-            tier_config={**(request.tier_config or {}), "merchant": {"slug": body.merchant}} if body.merchant
-            else request.tier_config)
+            tier_config={**(request.tier_config or {}),
+                         "merchant": {**((request.tier_config or {}).get("merchant") or {}), "slug": body.merchant}}
+            if body.merchant else request.tier_config)
         merchant = ({"slug": body.merchant, "from": "request"} if body.merchant
                     else {"slug": ms.primary, "from": "primary", "note": "no merchant sent: the study is the org's primary merchant's"})
     return {**result.model_dump(), "tally": (preview or {}).get("tally"), "merchant": merchant}
@@ -350,7 +353,11 @@ async def start_console_cycle(body: ConsoleCycleStart, scope: CustomerScope = De
         raise HTTPException(status_code=502, detail=f"could not create the cycle: {exc}")
     if not comparison:
         raise HTTPException(status_code=422, detail="could not create the cycle: the study belongs to no merchant")
-    code = body.cycle_code or f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{body.study_type}"
+    # 2K-1: a new code carries the merchant's local date and time (the study's
+    # tier_config.merchant.timezone, else SOA_DEFAULT_TIMEZONE); a code sent is kept
+    with engine.connect() as conn:
+        zone = rm.study_timezones(conn, [body.study_type])[body.study_type]
+    code = body.cycle_code or f"{local_time.local_datetime(datetime.now(timezone.utc), zone):%Y%m%d-%H%M%S}-{body.study_type}"
     request = CreateCycleRequest(cycle_code=code, study_type=body.study_type, platforms=platforms,
                                  runs_per_query=body.runs_per_query, notes=body.notes,
                                  comparison_set=[ComparisonEntityInput(**c) for c in comparison])

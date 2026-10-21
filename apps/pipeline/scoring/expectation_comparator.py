@@ -457,6 +457,9 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
         reference_row = row.as_dict() if row else None
         if reference_row is not None:
             reference_row['against'] = row.value(member)
+            # 2K-1: the brand's own page sets no price; the claim is not scored
+            if outcome == UNSCOREABLE and rr.brand_sets_no_price(row):
+                reference_row['reason_code'] = rr.REASON_BRAND_SETS_NO_PRICE
         return outcome, why, reference_row
 
     for claim in claims:
@@ -478,6 +481,8 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
                 outcome, reason, row = judge_retailer(
                     claim, ref.get('variant_id'), ref.get('gtin'))
                 entry.update(outcome=outcome, reason=reason, reference=row, matched_at=None)
+                if row and row.get('reason_code'):
+                    entry['reason_code'] = row.pop('reason_code')
             else:
                 outcome, matched_at = _judge_record(
                     claim, current=expectation['amount'], history=history, member=member)

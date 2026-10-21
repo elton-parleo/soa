@@ -74,7 +74,7 @@ def test_is_the_single_head():
         if down:
             down_revisions.add(down.group(1))
 
-    assert revisions - down_revisions == {"e5b1d7f3a8c2"}
+    assert revisions - down_revisions == {"f7c2a9e4b1d6"}
 
 
 # ── upgrade: soa_queries ──────────────────────────────────────────────────
@@ -150,7 +150,9 @@ def test_constraint_text_matches_the_shared_vocabulary():
         for call in mock_op.create_check_constraint.call_args_list
     }
 
-    for value in QUERY_TIERS:
+    # The four tiers as they stood when this migration was written; 2K-1
+    # (f7c2a9e4b1d6) added comparison later, and its test is the tripwire now.
+    for value in [t for t in QUERY_TIERS if t != 'comparison']:
         assert f"'{value}'" in conditions["ck_soa_queries_tier"]
     for value in QUERY_PROVENANCES:
         assert f"'{value}'" in conditions["ck_soa_queries_provenance"]

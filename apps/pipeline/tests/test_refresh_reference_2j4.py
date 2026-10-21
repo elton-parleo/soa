@@ -7,6 +7,8 @@ retailer_prices_fl12_2j4.json) is supply's retailer-prices for one variant
 as of the cycle's stored as_of, before and after reparse_reads.py --apply:
 Amazon $0.00 -> $27.97, Target $10.00 -> unverifiable (page read, no
 price), pampers.com 9.97 -> none_by_design. Every agent quoted $27.97.
+2K-1: a quote attributed to the brand's own none_by_design page moves to
+`unscoreable` (brand_sets_no_price), not `unverifiable`.
 
 Held here, on sqlite and Postgres: the diff table; --dry-run writes
 nothing; the write backs up, replaces the payload with the envelope and
@@ -167,9 +169,10 @@ def test_the_diff_table_and_the_moves(fl12, capsys):
     assert 'Swaddlers NB 84 (own)  pampers.com  method       regex   none_by_design' in out
     assert {(code, was, now) for _r, code, _p, _n, was, now, _rule in result['moved']} == {
         ('PAM_CAT_1', 'wrong', 'exact'), ('PAM_CAT_2', 'wrong', 'unverifiable'),
-        ('PAM_CAT_3', 'wrong', 'unverifiable')}
-    assert dict(result['by_tier']['catalog_accuracy']) == {('wrong', 'exact'): 1, ('wrong', 'unverifiable'): 2}
-    assert 'catalog_accuracy        4  (exact 1, unverifiable 2, wrong 1)' in out
+        ('PAM_CAT_3', 'wrong', 'unscoreable')}
+    assert dict(result['by_tier']['catalog_accuracy']) == {('wrong', 'exact'): 1, ('wrong', 'unverifiable'): 1,
+                                                           ('wrong', 'unscoreable'): 1}
+    assert 'catalog_accuracy        4  (exact 1, unscoreable 1, unverifiable 1, wrong 1)' in out
     assert 'dry run — nothing written.' in out
 
 
@@ -195,7 +198,7 @@ def test_apply_backs_up_replaces_with_the_envelope_and_moves_the_rows(fl12, tmp_
     after = _outcomes(fl12)
     assert after[1201][0] == 'exact'
     assert after[1202] == ('unverifiable', 'page read, but it states no price for this SKU')
-    assert after[1203] == ('unverifiable', 'brand site, no price set')
+    assert after[1203] == ('unscoreable', "the brand's site sets no price; the agent priced it anyway")
     assert after[1204][0] == 'wrong'
     # the reference_as_of column is the cycle's, unchanged
     with fl12.connect() as c:

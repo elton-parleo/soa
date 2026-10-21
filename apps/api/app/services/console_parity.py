@@ -32,7 +32,7 @@ from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
-from soa_shared import surfaces
+from soa_shared import claim_kinds, surfaces
 
 from app.services import console_read_models as rm
 from clients.truesync_client import INCENTIVE_FLAGS, carries_incentive_fields, incentive_in_markup
@@ -49,6 +49,8 @@ STAGE_ORDER = ('Awareness', 'Research', 'Comparison', 'Ready to Buy')
 STAGE_LABELS = {'Awareness': 'Awareness', 'Research': 'Research', 'Comparison': 'Comparison',
                 'Ready to Buy': 'Ready to buy'}
 UNPROMPTED = rm.VIS_UNPROMPTED
+#: 2K-1: the brand-choice set, unprompted plus the comparison tier (soa_shared/unprompted.is_brand_choice)
+BRAND_CHOICE = rm.VIS_BRAND_CHOICE
 SCORED = rm.SUMMARY_SCORED
 #: Grounding supports (the sources behind a grounded answer) are stored from
 #: Oct 14 2026 on (#104). A fabricated brand-direct verdict on a cycle that
@@ -73,6 +75,8 @@ TEMPLATES = {
                            "{n} of {asked} price answers {on}. {split}."),
     'signal.fabricated': ("{n} brand answers stated facts {brand} never published.",
                           "{n} of {asked} brand-direct answers {on}. {split}."),
+    # 2K-1 (A9): the second line, the fabricated answers that stated no attribute (claim_kind recommendation_only)
+    'signal.fabricated_recommended': "{n} recommended {brand} without stating a fact.",
     'signal.fabricated_caveat': "Sources were not captured before Oct 14, so some of these may rest on a page we did not see.",
     'signal.wrong_product': ("Wrong price on {product} in {n} runs.",
                              "Quoted {quote} against {live}. {split}."),
@@ -96,6 +100,9 @@ TEMPLATES = {
     'changes.not_comparable_subset_all': "Not comparable: {code} ran {agents} only.",
     'changes.not_comparable_all': "Not comparable: {code} ran {prev}, this cycle ran {now}.",
     'changes.not_comparable_tier_all': "Not comparable: {code} asked no unprompted questions.",
+    # 2K-1: this cycle reads brand-choice answers (it asked comparison questions) and the previous asked none
+    'changes.not_comparable_comparison': "Not comparable: {code} asked no comparison questions on this surface.",
+    'changes.not_comparable_comparison_all': "Not comparable: {code} asked no comparison questions.",
     'changes.detail': "{a} of {of_now} this cycle against {b} of {of_prev} in {code}.",
     'headline.gap': "Named in {named} of {n} {answers}.{rivals}",
     'headline.lead': "First in {first} of {n} {answers}.",
@@ -174,11 +181,19 @@ def _short_day(value) -> str:
 # ─── Visibility extras ─────────────────────────────────────────────────────
 
 def _tier_for_reads(rows: List[dict]) -> str:
-    """UNPROMPTED when the cycle asked any unprompted question, else 'all'.
+    """BRAND_CHOICE when the cycle asked any comparison question (2K-1),
+    else UNPROMPTED when it asked any unprompted question, else 'all'.
     2I-7: a row is unprompted by its `unprompted` (build_visibility, the
     soa_shared/unprompted.py rule: category control counts, a question
     naming the brand does not); a row built without it, by its tier."""
+    if any(r.get('tier') == rm.COMPARISON for r in rows):
+        return BRAND_CHOICE
     return UNPROMPTED if any(_unprompted(r) for r in rows) else 'all'
+
+
+def _brand_choice(row: dict) -> bool:
+    """2K-1: unprompted, or a comparison question (build_visibility's `brand_choice`)."""
+    return row['brand_choice'] if 'brand_choice' in row else (_unprompted(row) or row.get('tier') == rm.COMPARISON)
 
 
 def _unprompted(row: dict) -> bool:
@@ -187,16 +202,19 @@ def _unprompted(row: dict) -> bool:
 
 def _in_tier(row: dict, tier: str) -> bool:
     """Whether a Visibility row counts toward named/first under `tier`."""
+    if tier == BRAND_CHOICE:
+        return _brand_choice(row)
     return tier == 'all' or (_unprompted(row) if tier == UNPROMPTED else row.get('tier') == tier)
 
 
 def _tier_words(tier: str) -> str:
-    return 'unprompted' if tier == UNPROMPTED else ''
+    return {UNPROMPTED: 'unprompted', BRAND_CHOICE: 'brand-choice'}.get(tier, '')
 
 
 def _answers(tier: str) -> str:
-    """'unprompted answers' when the cycle asked any, else 'answers'."""
-    return 'unprompted answers' if tier == UNPROMPTED else 'answers'
+    """'brand-choice answers' when the cycle asked comparison questions (2K-1),
+    else 'unprompted answers' when it asked any, else 'answers'."""
+    return {UNPROMPTED: 'unprompted answers', BRAND_CHOICE: 'brand-choice answers'}.get(tier, 'answers')
 
 
 def _picks(rows: List[dict]) -> Dict[str, dict]:
@@ -332,7 +350,10 @@ def _empty_agent() -> dict:
     return {'answers': 0, 'named': 0, 'first': 0, 'named_of': 0, 'exact': 0, 'scored': 0, 'wrong': 0, 'stale': 0,
             'price_answered': 0,
             'partial': 0, 'unverifiable': 0, 'other_brand': 0, 'left_out': 0, 'unknown': 0, 'fabricated': 0,
-            'brand_scored': 0}
+            'brand_scored': 0,
+            # 2K-1 (A9): `fabricated` counts the answers that stated an attribute (or whose
+            # extraction cannot say); these stated none (soa_shared/claim_kinds.py)
+            'recommended': 0}
 
 
 def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tier: Optional[str] = None) -> dict:
@@ -348,6 +369,7 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tie
     (`price_answered`), since those runs are absent and never scored."""
     tier = tier or _tier_for_reads(vis_rows)
     total, per = _empty_agent(), {}
+    comparison_answers = 0
     agents = set()
     for v in vis_rows:
         if not _on(v.get('surface'), surface) or not v.get('answered'):
@@ -355,6 +377,8 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tie
         agents.add(v['agent'])
         for bucket in (total, per.setdefault(v['agent'], _empty_agent())):
             bucket['answers'] += 1
+            if bucket is total and v.get('tier') == rm.COMPARISON:
+                comparison_answers += 1
             if _in_tier(v, tier):
                 bucket['named_of'] += 1
                 bucket['named'] += int(any(n.get('you') for n in v.get('named') or []))
@@ -369,7 +393,9 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tie
             if t == 'brand_direct':
                 if o in ('grounded', 'echoed', 'misattributed', 'fabricated', 'acknowledged_unknown'):
                     bucket['brand_scored'] += 1
-                bucket['fabricated'] += int(o == 'fabricated')
+                recommends = r.get('claim_kind') == claim_kinds.RECOMMENDATION_ONLY
+                bucket['fabricated'] += int(o == 'fabricated' and not recommends)
+                bucket['recommended'] += int(o == 'fabricated' and recommends)
                 bucket['unknown'] += int(o == 'acknowledged_unknown')
                 continue
             if t not in PRICE_TIERS:
@@ -386,7 +412,9 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tie
             elif o == 'absent':
                 bucket['left_out'] += 1
                 bucket['other_brand'] += int(r.get('reason_code') == 'other_brand')
-    return {'tier': tier, 'total': total, 'agents': per, 'agent_set': sorted(agents)}
+    return {'tier': tier, 'total': total, 'agents': per, 'agent_set': sorted(agents),
+            # 2K-1: answered comparison questions here, for the Changes rule
+            'comparison_answers': comparison_answers}
 
 
 def agent_note(m: dict) -> tuple:
@@ -673,8 +701,14 @@ def build_signals(metrics: dict, products: List[dict], *, surface: str, brand: s
         start = _day(cycle_start)
         if start is None or start < GROUNDING_SOURCES_FROM:
             text_ += ' ' + TEMPLATES['signal.fabricated_caveat']
-        out.append({'id': 'fabricated', 'title': title.format(n=t['fabricated'], brand=brand), 'detail': text_,
-                    'tag': 'Missed pool', 'tone': 'bad', 'route': 'answers', 'rule': 'fabricated', 'count': t['fabricated']})
+        signal = {'id': 'fabricated', 'title': title.format(n=t['fabricated'], brand=brand), 'detail': text_,
+                  'tag': 'Missed pool', 'tone': 'bad', 'route': 'answers', 'rule': 'fabricated', 'count': t['fabricated']}
+        if t.get('recommended'):
+            # 2K-1: the classifier's `fabricated` also holds answers that only recommended the
+            # brand; counted apart, on a second line, and never in the headline
+            signal['recommended'] = {'count': t['recommended'],
+                                     'line': TEMPLATES['signal.fabricated_recommended'].format(n=t['recommended'], brand=brand)}
+        out.append(signal)
     worst = max(products, key=lambda p: (p['wrong_runs'], p['name']), default=None)
     if worst and worst['wrong_runs'] >= 3:
         title, detail = TEMPLATES['signal.wrong_product']
@@ -764,6 +798,8 @@ def changes_status(now: dict, prev: Optional[dict], prev_code: Optional[str],
             code=prev_code, prev=_agents_text(b) if b else 'no agent', now=_agents_text(a) if a else 'no agent')
     if now['tier'] == UNPROMPTED and not prev['total']['named_of']:
         return 'not_comparable', TEMPLATES[_rule('changes.not_comparable_tier', surface)].format(code=prev_code)
+    if now['tier'] == BRAND_CHOICE and not prev.get('comparison_answers', 0):
+        return 'not_comparable', TEMPLATES[_rule('changes.not_comparable_comparison', surface)].format(code=prev_code)
     return 'compared', None
 
 
@@ -850,7 +886,10 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
         'coverage': {'questions': study_questions if study_questions is not None else len({r.get('query_code') for r in rows}),
                      'asked': len({r.get('query_code') for r in rows}), 'agents': len({surfaces.agent_of(r.get('platform')) or r.get('platform') for r in rows}),
                      'runs': len(rows), 'answers': sum(1 for r in rows if r.get('answer_status') == surfaces.ANSWERED),
-                     'unprompted': sum(1 for v in answered if _unprompted(v))},
+                     'unprompted': sum(1 for v in answered if _unprompted(v)),
+                     # 2K-1: with a comparison question, the brand-choice answers the first picks count over
+                     **({'brand_choice': sum(1 for v in answered if _brand_choice(v))}
+                        if any(v.get('tier') == rm.COMPARISON for v in answered) else {})},
         'access_run': (access or {}).get('access_run'),
         'read_errors': read_errors or {},
         'rules': {k: v for k, v in TEMPLATES.items()},
@@ -1505,15 +1544,20 @@ def load_overview_rows(conn, cycle: dict) -> List[dict]:
     rows = []
     for r in conn.execute(text("""
         SELECT r.id AS run_id, r.platform, r.surface, r.answer_status,
-               q.tier, q.stage, q.query_code, q.query_text, q.source_ref, o.outcome, o.reason_code
+               q.tier, q.stage, q.query_code, q.query_text, q.source_ref, o.outcome, o.reason_code, o.extraction
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         LEFT JOIN soa_expectation_outcomes o ON o.run_id = r.id
         WHERE r.cycle_id = :c
     """), {'c': cycle['id']}).mappings():
         row = dict(r)
         row['variant_id'] = (_json(row.pop('source_ref')) or {}).get('variant_id')
+        # 2K-1 (A9): whether a brand-direct answer stated an attribute, from its stored extraction
+        extraction = row.pop('extraction', None)
+        row['claim_kind'] = claim_kinds.claim_kind(_json(extraction)) if row.get('tier') == 'brand_direct' else None
         rows.append(row)
-    return rows
+    # 2K-1: a price attributed to the brand's own page, which sets none, is not scored
+    unpriced = rm.brand_sets_no_price_runs(conn, cycle)
+    return [rm.not_priced(r, unpriced) for r in rows]
 
 
 def previous_scored_cycle(conn, cycle: dict, org_sql: str) -> tuple:

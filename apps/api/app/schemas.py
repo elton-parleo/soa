@@ -562,6 +562,10 @@ class StudyGenerateRequest(BaseModel):
     naming_rule_enabled:   Optional[bool] = None
     personas:              Optional[List[str]] = None
     specificity_mode:      Optional[str] = None
+    # 2K-1: the merchant's IANA zone, for new cycle codes and the study's
+    # display date. Stored as tier_config.merchant.timezone; absent, the
+    # server's SOA_DEFAULT_TIMEZONE (America/Los_Angeles) applies.
+    timezone:              Optional[str] = None
 
     # ─── Syndicated brand ─────────────────────────────────────────────
     #
@@ -643,18 +647,40 @@ class StudyGenerateRequest(BaseModel):
             )
         return v
 
+    @field_validator('timezone')
+    @classmethod
+    def validate_timezone(cls, v):
+        from soa_shared.local_time import is_timezone
+        if v is None:
+            return v
+        if not is_timezone(v):
+            raise ValueError(f"timezone {v!r} is not an IANA zone name (e.g. 'America/Los_Angeles')")
+        return v.strip()
+
     @field_validator('tier_config')
     @classmethod
     def validate_tier_config(cls, v):
         if v is None:
             return v
-        unknown = [t for t in v if t not in QUERY_TIERS]
+        # 2K-1: `merchant` is tier_config's merchant block (timezone, and what
+        # the generator records), not a tier
+        unknown = [t for t in v if t not in QUERY_TIERS and t != 'merchant']
         if unknown:
             raise ValueError(
                 f"unknown tier(s): {', '.join(unknown)}; must be one of "
                 f"{', '.join(QUERY_TIERS)}"
             )
         return v
+
+    @model_validator(mode='after')
+    def timezone_on_the_merchant(self):
+        """2K-1: the timezone rides in tier_config.merchant, where the cycle
+        codes and the console read it (soa_shared/local_time.merchant_timezone)."""
+        if self.timezone:
+            config = dict(self.tier_config or {})
+            config['merchant'] = {**(config.get('merchant') or {}), 'timezone': self.timezone}
+            self.tier_config = config
+        return self
 
     @model_validator(mode='after')
     def validate_tiers_have_a_brand(self):

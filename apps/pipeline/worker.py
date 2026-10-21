@@ -391,6 +391,11 @@ def _run_regeneration(
 
     tiers = list(regenerate.get("tiers") or [])
     config = normalize_tier_config(tier_config)
+    # 2K-1: what normalizing drops and a catalog rebuild does not touch: the
+    # comparison tier's record and the merchant's timezone
+    if isinstance(tier_config, dict) and isinstance(tier_config.get("comparison"), dict):
+        config["comparison"] = tier_config["comparison"]
+    zone = ((tier_config or {}).get("merchant") or {}).get("timezone") if isinstance(tier_config, dict) else None
     category = _primary_category(kwargs.get("allowed_categories"))
 
     existing = _existing_questions(study_type)
@@ -473,6 +478,7 @@ def _run_regeneration(
         if config.get(tier):
             config[tier]["expected_nulls"] = ct.expected_nulls(snapshot, tier)
     config["merchant"] = {
+        **({"timezone": zone} if zone else {}),
         "slug": snapshot.merchant_slug, "brand": snapshot.brand,
         "domain": snapshot.domain, "products": snapshot.product_count,
         "variants": snapshot.variant_count, "gtins": snapshot.gtin_count,
@@ -497,6 +503,39 @@ def _run_regeneration(
         "[generation] job %s regenerated %s for %r: %d removed, %d written",
         job_id, ", ".join(tiers), study_type, removed, len(rows),
     )
+
+
+def merchant_rivals(client, merchant_slug) -> list:
+    """
+    2K-1: the merchant's competitors by name, the comparison tier's rivals.
+    Supply's comparison_domains (GET /merchants/{slug}/retailers, 2A-4), in
+    its order, each named by its soa_entities row (2I-6 saves a competitor
+    as name + domain; soa_shared.comparison_sets.match_entity). A domain with
+    no named entity yet is left out: a bare domain is not how a shopper
+    names a brand. A failed read is [] and logged: the writer then names a
+    rival it knows, which the check accepts when it is a brand.
+    """
+    from soa_shared.comparison_sets import match_entity
+    from soa_shared.expected_answers import normalize_domain
+
+    try:
+        payload, error = client.retailers(merchant_slug)
+    except Exception as exc:  # noqa: BLE001 - a refused or failed read costs the list, never the study
+        payload, error = None, str(exc)
+    if error is not None:
+        log.warning("[generation] %s: competitor list not read (%s); the writer names rivals", merchant_slug, error)
+        return []
+    out = []
+    with engine.connect() as conn:
+        for domain in (normalize_domain(d) for d in (payload or {}).get('comparison_domains') or []):
+            if not domain:
+                continue
+            entity = match_entity(conn, domain)
+            name = conn.execute(text("SELECT name FROM soa_entities WHERE id = :i"),
+                                {"i": entity}).scalar() if entity is not None else None
+            if name and normalize_domain(name) != domain and name not in out:
+                out.append(name)
+    return out
 
 
 def _run_syndicated_generation(
@@ -528,7 +567,8 @@ def _run_syndicated_generation(
     from clients.truesync_catalog import TrueSyncCatalogClient
     from generation.syndicated_study import build_syndicated_study
 
-    snapshot = TrueSyncCatalogClient.for_study(study_type).snapshot(
+    client = TrueSyncCatalogClient.for_study(study_type)
+    snapshot = client.snapshot(
         syndicated_merchant, with_history=False,
     )
     if not snapshot.available:
@@ -541,6 +581,7 @@ def _run_syndicated_generation(
         snapshot=snapshot,
         tier_config=tier_config,
         stage_targets=stage_targets,
+        rivals=merchant_rivals(client, syndicated_merchant),
         **kwargs,
     )
 

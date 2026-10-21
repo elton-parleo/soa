@@ -293,7 +293,7 @@ class SoaQuery(Base):
         comment=(
             "Which syndicated-brand tier this question belongs to: "
             "brand_direct, catalog_accuracy, value_incentives, "
-            "category_control. NULL for a study generated without a brand."
+            "category_control, comparison (2K-1). NULL for a study generated without a brand."
         ),
     )
 

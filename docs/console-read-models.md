@@ -142,7 +142,7 @@ the demo counts together.
 |---|---|
 | `columns` | the retailers in the record: the domains in the cycle's cached retailer-prices (2A). A cycle scored against the record (a hosted seller) has one column, its own domain |
 | `rows` | one per variant (`sku` = GTIN, or the record's variant id) |
-| `TvCell.live` | the 2A reference row's price, `unverifiable` when supply says `verifiable: false`; the record's price when no reference is cached. 2J-4: `not priced` for a brand's own page that sets no price (supply 2J-1's `method: none_by_design`, `verifiable: false`, "brand site, no price set"): the page was read, not unreadable. Its answers still score `unverifiable`, as supply's contract says, and the products block reads "No price set at <domain>, the brand's own site, <day>" |
+| `TvCell.live` | the 2A reference row's price, `unverifiable` when supply says `verifiable: false`; the record's price when no reference is cached. 2J-4: `not priced` for a brand's own page that sets no price (supply 2J-1's `method: none_by_design`, `verifiable: false`, "brand site, no price set"): the page was read, not unreadable. 2K-1: its answers are not scored (`unscoreable`, `brand_sets_no_price`, see "2K-1: the brand's own page"), and the products block reads "No price set at <domain>, the brand's own site, <day>" |
 | `TvCell.quoted` | 2C-2: the deciding run's stated price (most common among the runs with that outcome); `—` when no run quoted one |
 | `TvCell.status` | 2C-2, `TV_CELL_RULE`, on `surface` (2I-8: `all`, every agent's quotes together; each surface's own cell in `by_surface`): the **worst** outcome among the runs that **quoted a price** (wrong, then stale, then partial, then exact); a run that quoted nothing, or priced another brand's product (absent), does not vote; no quoting run → `missed` (left out). Mapped exact → `exact`, wrong → `wrong`, partial → `partial`, absent → `missed`, stale → `wrong` (`outcome` says `stale`), unverifiable → **`unverifiable`** (extension), no question → `none`. A cell never reads WRONG with nothing quoted |
 | `programs` | `[]` without `merchant`; with it (2C-2) the owned incentives as `/programs` maps them |
@@ -6855,3 +6855,166 @@ One pinned value moved, on Postgres only: `/answers`' `runAt` now carries its of
 `tests/fixtures/console/per_surface_2i8.json`'s four Postgres `answers` digests are now sqlite's: every
 per-surface view is the same on both. The models are the source here; that they match the migrations is
 checked by hand for the console tables' timestamps (all `DateTime(timezone=True)` in both), not by a test.
+
+## 2K-1: the brand-choice set, the comparison tier (console scorer 11)
+
+### Two sets, and which numbers read which
+
+2I-7 made category control mean "names no brand", which is right for a share-of-mentions test, but it took the
+study's comparison-stage questions ("Pampers vs Huggies for newborns", "Pampers Swaddlers vs Huggies Little
+Snugglers") with it: tagged `category_control` and naming the brand, they left the unprompted set and the
+generator regenerated them away. They are brand-choice moments: the answer's first pick is still the measure.
+
+`QUERY_TIERS` gains **`comparison`** (`soa_shared/expected_answers.py`, three identical copies): a question that
+names the merchant and at least one rival (tracked or not) and asks which to choose. Migration `f7c2a9e4b1d6`
+widens `ck_soa_queries_tier` to admit it. `tier` is a text column, but that CHECK constraint (from `a9f3c21b7e40`)
+lists the tiers literally, so Postgres would have refused the new value without it. The migration writes no
+row; its downgrade refuses while any question is `comparison`.
+
+`soa_shared/unprompted.py` (three identical copies) adds:
+
+- `is_comparison(question, brand_terms, rival_terms)`: the text names one of the brand's terms and at least one
+  rival term that is not itself a brand term ("Pampers Swaddlers vs Pampers Baby-Dry" is no comparison).
+  Matched as `names_brand` matches: case-insensitive, whole words.
+- `is_brand_choice(run) = is_unprompted(run) or tier == 'comparison'`. `is_unprompted` is unchanged: a
+  comparison question names the brand, so it is not unprompted.
+
+| Number | Set |
+| --- | --- |
+| Lost (2I-9's share, numerator and denominator, every agent), its driver sentence, `basis`, `heroBasis` | brand-choice |
+| Visibility's headline (`headlines.<surface>`, `tier: brand_choice`, "First in N of M brand-choice answers" / "Named in N of M brand-choice answers") | brand-choice when the cycle asked a comparison question, else unprompted as before |
+| The Overview's First recommendation, Share of answers and program-named tiles, the agent table's `named_of`, `console_score.metric_counts` (`surface_note` "… brand-choice answers") | the same |
+| The Changes block | the same; a previous cycle that asked no comparison question is not comparable ("Not comparable: {code} asked no comparison questions.") |
+| Share of mentions, recommendation strength (the score's Visibility dimensions, `visibility_inputs`) | unprompted only: a question that names the brand is not a share-of-mentions test |
+
+Visibility's byQuestion rows add `brand_choice` beside `unprompted`; a comparison row's `tier` is `comparison` and
+its `type` "Comparison". The per-tier tables (`tiers`, `by_stage.stages_by_tier`, the Prompts read model's sets,
+the answers summary) get a Comparison row after Category control. The Overview's `coverage` adds `brand_choice`
+when the cycle asked a comparison question. `prompt_counts` adds `comparison` (the study's comparison questions,
+which are also counted branded) when the study has any. The revenue model's `counts.lost_set` says which set Lost
+read (`brand-choice` | `unprompted`); every sentence reads as before on a cycle without comparison questions.
+
+Console `SCORER_VERSION` **11**, `SCORER_CHANGES['11']` "brand-choice set for Lost and the first-pick tiles". No
+dimension reads the new set, so it never explains a moved score (`SCORER_CHANGE_APPLIES['11']` is false). Pinned:
+on 229, 2I-7's FL12 and 2I-8's FL12 the whole score body, metric rows included, is scorer 10's but for the version
+(`tests/test_console_2k1_score_pin.py`, sha256 written on `acb74b1`).
+
+On FL12's six-agent shape with 12 comparison questions (`tests/console_fixture_2k1.py`, FL12-shaped, not
+recorded): 17 unprompted + 12 comparison questions x 6 agents = **174 brand-choice answers**. Lost is 57 of the 102
+unprompted answers plus 30 (Pampers) + 12 (Huggies) of the 72 comparison answers: **99 of 174, 57%**. The headline
+reads "Named in 117 of 174 brand-choice answers. Pampers first in 57, Huggies in 42."; the first-pick tile 57 of
+174. The score is the same as with those 12 questions tagged branded category control.
+
+### The generator writes the comparison tier
+
+With the brand box's category control on and a brand to name, the Comparison stage's questions are the comparison
+tier (`generation/syndicated_study.py`, `keep_comparisons`). The stage writer is told the rule for that stage only
+(`query_generator._build_general_prompt(comparison={'brand', 'rivals'})`): name the brand and a rival and ask which
+to choose, and give the rival in a `rival` field. Rivals: the merchant's competitor list first
+(`worker.merchant_rivals`: supply's `comparison_domains`, each named by its soa_entities row; a domain with no
+named entity is left out), then a rival the writer names itself, the category's usual names, accepted only when
+the question names it and it is not one of the brand's terms or a retailer (`soa_shared/retailers.py`). Each
+question is checked with `is_comparison` before storage; one naming no rival is regenerated once, then dropped and
+counted, as 2I-7 does for category control. The tier is recorded on `tier_config.comparison` (`count`,
+`generated`, `regenerated`, `replaced`, `dropped`, `found`, `rivals`, `rivals_named`, `line`), and category
+control's `count` is its own questions only. With no Comparison stage, or the tier off, the call is 2I-7's.
+
+The Create Study preview (`POST /api/console/studies/preview`, new optional `stage_targets`) adds a `comparison`
+entry with its `line` ("12 questions, each naming the brand and a rival"), and category control counts the rest.
+The web modal's category-control row says the same ("…Comparison: 12 questions, each naming the brand and a
+rival"); the "What to ask about" copy is unchanged. The generation report names a dropped comparison question
+("dropped for naming no rival").
+
+### The brand's own page carries no price (`brand_sets_no_price`)
+
+After supply 2J-1 a brand's own-domain read is `none_by_design` (price null, `read_status ok`, `verifiable false`,
+"brand site, no price set"). 2J-4 made the True Value cell read `not priced`, but the answers judged against that
+row still scored `unverifiable` and counted in "N prices could not be checked", a finding about a page we could
+not read. The page was read; the brand sets no price there by design.
+
+- Scorer (`apps/pipeline/scoring/retailer_reference.py` `judge_claim`): a catalog-tier price claim judged against
+  a `none_by_design` row of the brand's own (`role` own, or unstated) is **`unscoreable`**, reason code
+  **`brand_sets_no_price`**, reason "the brand's site sets no price; the agent priced it anyway". Outside every
+  accuracy (`unscoreable` is in none) and outside the unverifiable count. A retailer page is unaffected: one that
+  states no price is still `unverifiable`.
+- Console, for a cycle scored before 2K-1 (`console_read_models.brand_sets_no_price_runs` / `not_priced`): an
+  `unverifiable` catalog run whose stored claim was judged against a `none_by_design` row (the claim's
+  `reference.method`), or whose question is attributed to a page the cycle's cached reference serves as
+  `none_by_design` for its variant (GTIN-14, variant id, `sku:<sku>`), is read as `unscoreable` /
+  `brand_sets_no_price`. Every loader that counts price outcomes applies it: the Overview's rows and signals
+  (`load_overview_rows`, so the score's said halves too), the answers summary, the Answers list and drawer, True
+  Value's quotes, the studies grid and the revenue model's catalog rows. Nothing stored is rewritten; a re-score
+  stores the same outcome.
+- The drawer still shows the agent's quote: the check's `claim` is the quote, `verdict` `unscoreable`, `reason`
+  `brand_sets_no_price`, `note` and the answer's `summary` "the brand's site sets no price; the agent priced it
+  anyway", `live` "no price set at pampers.com, the brand's own site". The True Value cell is `live: not priced`,
+  `status: none` (not `unverifiable`).
+
+On the FL12-shaped brand fixture with 12 answers priced at pampers.com (`tests/test_console_2k1_brand_price.py`):
+"could not be checked" drops by exactly those 12 runs (12 to none); Price Truth's denominator stays 80 scored.
+
+### Recommendations are not fabricated facts (`claim_kind`, A9)
+
+FL12's signal "36 brand answers stated facts Pampers never published" counts answers like "For a newborn, you
+should buy Pampers Swaddlers. They are widely considered the gold standard", which make no checkable claim: the
+frozen classifier (`scoring/brand_direct_classifier.py`) calls any asserted, unsourced brand claim `fabricated`.
+The Layer 2 extractor (segmentation, transcription, labels, prompts; frozen at `85c2cfe`) and the `fabricated`
+outcome are not changed.
+
+The stored extraction carries enough to decide, so a derived field sits beside the outcome:
+`soa_shared/claim_kinds.py` (identical in `apps/api` and `apps/pipeline`, beside `retailers.py`)
+`claim_kind(extraction)`:
+
+- **`attribute`**: any structured value (`prices`, `member_prices`, `pack_counts`, `gtins`, `sizes`, `codes`,
+  `points`, `loyalty_tiers_named`, `retailer_mentions`, `recommended_retailers`), or any labelled span
+  (`span_labels`, else the transcribed `brand_claims`), hedged or not, naming a price, size, weight, count, pack,
+  retailer or written domain (`retailers.retailers_named`), program, availability, ingredient, material or owner
+  (the `LEXICON` regexes, case-insensitive, whole words);
+- **`recommendation_only`**: labelled spans, none naming any of those;
+- **`None`**: nothing labelled to decide on (an extraction from before the labeller), never guessed.
+
+The transcription's own per-claim `claim_kind` (loyalty | retail | ownership | other) is not read: its `retail`
+words include "buy" and "store", so the brief's example would read as a retail claim. The rule is tuned to miss
+toward `attribute`, which keeps a real fabrication in the headline count.
+
+Where it is read: `load_overview_rows` derives it per brand-direct run; `surface_metrics` counts `fabricated` over
+the `attribute` (and undecided) answers and `recommended` over the rest. The Overview's signal reads "{n} brand
+answers stated facts {brand} never published." over `attribute` only (still from 5), and carries
+`recommended: {count, line}`: "{m} recommended {brand} without stating a fact." The Answers list (`build_answer`)
+adds `claim_kind` and `claim_kind_label` ("Stated a fact" | "Recommendation only") on a brand-direct answer, for
+the console's chip; the chip itself is drawn in the console app, not in this repo.
+
+Precision, on 16 FL12-shaped fabricated answers (`packages/testing/fixtures/brand_direct_fl12_2k1.json`, written
+for this, not recorded; extractions made by the pipeline's own segmenter, each row checked `fabricated` by the
+frozen classifier): the rule reclassifies **7 of 16** to `recommendation_only`. A reader labels 5 of those 7
+recommendations; the other 2 state a checkable fact the brief's list does not name ("the most popular newborn
+diaper in US hospitals", "a wetness indicator that turns blue"). Precision 5 of 7, all 5 of the reader's
+recommendations found, 14 of 16 agree. These are cases written to probe the rule, not a sample of FL12's answers,
+so they say nothing about FL12's real split. On the recorded W&S extraction golden rows (Parleo's own test store)
+that the classifier, run with reduced brand facts, calls `fabricated` (23), the rule reclassifies none: each names
+a price, size, retailer or program.
+
+The real fix is a Layer 2 revision: a label for "recommends without a claim" in the labelling enum and prompt,
+the golden set re-labelled, and a re-score. This rule is the read-side stand-in until then.
+
+### Local dates on cycle codes and study labels
+
+Cycle codes carried the UTC date: `FL12-pampers-20261020` ran on Oct 19 in Los Angeles, and the console called the
+study generated that evening "the Oct 20 study". `soa_shared/local_time.py` (three identical copies) gives the
+merchant's zone: the study's **`tier_config.merchant.timezone`** (an IANA name) when set and valid, else
+**`SOA_DEFAULT_TIMEZONE`**, else **`America/Los_Angeles`**.
+
+- New cycle codes use the merchant's local date: the full loop's `FL{run}-{merchant}-{YYYYMMDD}`
+  (`fullloop/coordinator.py`, the zone of the study's newest generation job) and the console's Start cycle default
+  `{YYYYMMDD-HHMMSS}-{study}` (`POST /api/console/cycles`, when no code is sent). A cycle planned at 04:26 UTC on
+  Oct 20 is `…-20261019` with the default zone. Existing codes are not renamed; `start_date` and every stored stamp
+  stay as they were (UTC).
+- `GET /api/console/runs` (cycles) and `GET /api/console/studio/studies` serve **`created_at_local`** (ISO 8601 with
+  the zone's offset, `2026-10-19T21:26:00-07:00`) and **`timezone`** beside the UTC stamp (`started`, `created`), so
+  the console formats the study's display date from it. A naive stored stamp is read as UTC.
+- The Create Study wizard (web modal) has a "Merchant time zone" field showing the default; it sends `timezone` only
+  when changed, so an untouched modal sends the payload it always did. `StudyGenerateRequest.timezone` is validated
+  (an unknown zone is a 422) and stored as `tier_config.merchant.timezone`; `tier_config` now admits the `merchant`
+  block. The generator keeps it when it rebuilds `tier_config.merchant` (and a catalog regenerate keeps it and the
+  comparison tier's record).
+- `tzdata` is a dependency of both apps, so the zone database is there on a host that has none.

@@ -54,6 +54,10 @@ REPLACEMENT_ROUNDS = 2
 # 2I-7: how many of the brand's product names the category-control rule
 # lists in the prompt (the check after reads them all).
 MAX_CONTROL_LINES = 20
+#: 2K-1: the stage whose questions a brand study writes as its comparison tier
+#: (soa_shared.constants.QUERY_STAGES), and how many rivals the prompt lists.
+COMPARISON_STAGE = 'Comparison'
+MAX_COMPARISON_RIVALS = 8
 
 # QUERY_CONSTRAINTS fields the DB allows NULL for (soa_queries.<field>.
 # nullable=True) — absent/None from a generated row means "unconstrained,"
@@ -222,6 +226,10 @@ def _validate_generated_row(row: dict) -> tuple:
         'soa_focus':  row.get('soa_focus'),
         'rationale':  row.get('rationale'),
     }
+    # 2K-1: the rival a comparison question names, declared by the writer.
+    # Only a comparison prompt asks for it; a row without one is unchanged.
+    if row.get('rival'):
+        cleaned['rival'] = str(row['rival']).strip()
 
     for field, allowed in QUERY_CONSTRAINTS.items():
         val = row.get(field)
@@ -620,6 +628,7 @@ def _build_general_prompt(
     catalog_context: Optional[str] = None,
     brand_direct: Optional[str] = None,
     category_control: Optional[dict] = None,
+    comparison: Optional[dict] = None,
 ) -> str:
     """
     The general-study counterpart to _build_lite_prompt.
@@ -673,6 +682,15 @@ def _build_general_prompt(
     description is handed over with an instruction to read it as the
     category. The check that the model listened is syndicated_study's,
     with soa_shared/unprompted.py.
+
+    comparison ({'brand', 'rivals'}) is 2K-1 (E29): in a study with
+    category control on, the Comparison stage's questions are the
+    comparison tier, not category control. "Pampers vs Huggies for
+    newborns" is a brand-choice moment, and 2I-7 regenerated it away for
+    naming the brand. Each names the brand and at least one rival (the
+    merchant's competitors first; with none listed, a rival the writer
+    knows in the category, declared in `rival`) and asks which to choose.
+    syndicated_study checks it with soa_shared/unprompted.is_comparison.
     """
     constraint_values = dict(QUERY_CONSTRAINTS)
     constraint_values['category'] = list(allowed_categories)
@@ -822,6 +840,28 @@ def _build_general_prompt(
             f"lines will be discarded."
         )
 
+    comparison_text = ""
+    response_keys = ("query_text, category, stage, specificity, persona, status, subscription_state, "
+                     "soa_focus, rationale")
+    if comparison and comparison.get('brand') and stage_counts.get(COMPARISON_STAGE):
+        brand = comparison['brand']
+        rivals = [r for r in comparison.get('rivals') or [] if r][:MAX_COMPARISON_RIVALS]
+        rival_text = (f"Name at least one of these rivals, spread across them: {', '.join(rivals)}. "
+                      f"If one of them does not fit a question, another well-known rival brand in the "
+                      f"category may be named instead." if rivals else
+                      "Name at least one well-known rival brand in the category, a real brand a shopper "
+                      "would weigh against it (never a retailer or a store brand).")
+        comparison_text = (
+            f"\n\nEXCEPT the {COMPARISON_STAGE!r} stage. Those questions are the study's COMPARISON "
+            f"questions, and the no-brand rule above does not apply to them: each must name {brand}, "
+            f"spelled exactly that way, AND at least one rival brand, and ask which to choose, the way "
+            f"a shopper weighing them types it (\"{brand} vs <rival> for a newborn\", \"{brand} or "
+            f"<rival> for overnight leaks?\"). {rival_text} A {COMPARISON_STAGE!r} question that does "
+            f"not name both {brand} and a rival will be discarded. For each {COMPARISON_STAGE!r} "
+            f"question also give `rival`: the rival brand it names, exactly as written in the question."
+        )
+        response_keys += ", rival (Comparison stage only)"
+
     return f"""Generate exactly {total} distinct search-style questions for a brand/market research study called "{study_name}".
 
 Study description: {description_text}
@@ -836,7 +876,7 @@ Each question becomes one row in a database table. For EACH question provide ALL
 For "category": choose only from the values listed above. Every question must be about a subject that genuinely belongs to one of them — if a question would need a category outside that list, do not ask it.
 For "status": always 'Active'.
 {specificity_text}
-{naming_text}{control_text}{catalog_text}
+{naming_text}{control_text}{comparison_text}{catalog_text}
 
 Also provide:
 - query_text: the actual question/prompt a user might type into an AI assistant or search engine
@@ -844,7 +884,7 @@ Also provide:
 - rationale: one sentence explaining why this query is useful for the study (free text)
 
 Respond with ONLY a JSON array of {total} objects, each with keys:
-query_text, category, stage, specificity, persona, status, subscription_state, soa_focus, rationale.
+{response_keys}.
 No markdown, no explanation, just the JSON array.{avoid_text}"""
 
 
@@ -865,6 +905,7 @@ def generate_general_queries(
     catalog_texts: Optional[list] = None,
     category_control: Optional[dict] = None,
     avoid_texts: Optional[list] = None,
+    comparison: Optional[dict] = None,
 ) -> tuple:
     """
     The general-study path: caller-supplied per-stage targets, a
@@ -919,7 +960,8 @@ def generate_general_queries(
     (_build_general_prompt); avoid_texts are questions the model must not
     repeat, for a regeneration whose study already holds them. Neither is a
     drop here: syndicated_study checks the rule once, after, so a branded
-    question is regenerated once and then dropped (2I-7).
+    question is regenerated once and then dropped (2I-7). comparison is the
+    same for the Comparison stage (2K-1): stated here, checked there.
     """
     stage_targets = {k: v for k, v in stage_targets.items() if v > 0}
     allowed = set(allowed_categories)
@@ -1017,6 +1059,7 @@ def generate_general_queries(
             catalog_context=catalog_context,
             brand_direct=require_brand,
             category_control=category_control,
+            **({'comparison': comparison} if comparison else {}),
         )
         prompt_calls['n'] += 1
         return prompt
@@ -1105,6 +1148,7 @@ def generate_and_review_study(
     personas: Optional[list] = None,
     specificity_mode: str = SPECIFICITY_MATCH_TO_STAGE,
     category_control: Optional[dict] = None,
+    comparison: Optional[dict] = None,
 ) -> tuple:
     """
     The whole general path in one call: generate, then review, then
@@ -1124,6 +1168,9 @@ def generate_and_review_study(
     passed only then, so a study without it makes the call it made before.
     """
     extra = {'category_control': category_control} if category_control else {}
+    if comparison:
+        # 2K-1: with category control, the Comparison stage is the comparison tier
+        extra['comparison'] = comparison
     rows, report = generate_general_queries(
         study_name=study_name,
         description=description,

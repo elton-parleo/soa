@@ -283,6 +283,8 @@ def _true_value_inputs(conn, row) -> tuple:
         FROM soa_expectation_outcomes o JOIN soa_runs r ON r.id = o.run_id
         WHERE o.cycle_id = :c AND o.tier = 'catalog_accuracy'
     """), {"c": row['id']}).mappings().all()
+    unpriced = rm.brand_sets_no_price_runs(conn, row)   # 2K-1
+    outcomes = [rm.not_priced(dict(o), unpriced) for o in outcomes]
 
     by_query = {q['id']: q for q in questions}
     own_domain, variants = None, []
@@ -604,7 +606,8 @@ def get_studies(cycle: str = Query(...), scope: CustomerScope = Depends(console_
         queries = [dict(q) for q in conn.execute(text(
             "SELECT id, query_code, query_text, tier, stage FROM soa_queries WHERE study_type = :st "
             "ORDER BY query_code"), {"st": row['study_type']}).mappings() if q['id'] in query_ids]
-        outcomes = {o['run_id']: dict(o) for o in conn.execute(text(
+        unpriced = rm.brand_sets_no_price_runs(conn, row)   # 2K-1
+        outcomes = {o['run_id']: rm.not_priced(dict(o), unpriced) for o in conn.execute(text(
             "SELECT * FROM soa_expectation_outcomes WHERE cycle_id = :c"), {"c": row['id']}).mappings()}
         picks: Dict[int, str] = {}
         primary_named: Dict[int, bool] = {}
@@ -645,6 +648,7 @@ def get_runs(ms: MerchantScope = Depends(merchant_scope)):
     merchant's cycles."""
     with engine.connect() as conn:
         cycles = merchant_cycles(conn, ms)
+        zones = rm.study_timezones(conn, [c['study_type'] for c in cycles])   # 2K-1
         out = []
         for cycle in cycles:
             counts = conn.execute(text("""
@@ -654,7 +658,7 @@ def get_runs(ms: MerchantScope = Depends(merchant_scope)):
             """), {"c": cycle['id']}).fetchone()
             ran = [r[0] for r in conn.execute(text("SELECT DISTINCT platform FROM soa_runs WHERE cycle_id = :c"),
                                               {"c": cycle['id']})]
-            run = rm.build_run(cycle, int(counts[0] or 0), int(counts[1] or 0))
+            run = rm.build_run(cycle, int(counts[0] or 0), int(counts[1] or 0), zones.get(cycle['study_type']))
             # 2I: what the run dialog's comparable line compares against
             run.update(rm.run_identity(cycle, ran))
             out.append(run)
