@@ -67,7 +67,7 @@ def test_the_modal_lists_only_what_will_run_plus_the_two_with_no_provider():
     assert ids[-2:] == ['gemini_web', 'chatgpt_web']
     for entry in off[-2:]:
         assert entry['available'] is False
-        assert 'no hosted provider we have verified' in entry['unavailable_reason']
+        assert 'No hosted provider we have verified.' in entry['unavailable_reason']
     on = surfaces.modal_list(env={'SOA_CONSUMER_SURFACES_ENABLED': '1', 'SERPAPI_API_KEY': 'k'})
     assert {'aimode', 'copilot'} <= {s['id'] for s in on if s['available']}
     for entry in on:
@@ -78,7 +78,7 @@ def test_the_orchestrator_refuses_a_consumer_surface_that_is_off(monkeypatch):
     monkeypatch.delenv('SOA_CONSUMER_SURFACES_ENABLED', raising=False)
     with pytest.raises(ValueError, match='consumer surfaces are off'):
         ro.RunOrchestrator('C-1', platforms=['aimode'])
-    with pytest.raises(ValueError, match='no hosted provider'):
+    with pytest.raises(ValueError, match='No hosted provider'):
         ro.RunOrchestrator('C-1', platforms=['gemini_web'])
 
 

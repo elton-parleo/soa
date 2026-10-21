@@ -51,7 +51,7 @@ def test_the_two_with_no_provider_stay_as_they_were(http, db):
     entries = http.get('/api/console/surfaces').json()['surfaces']
     assert [e['id'] for e in entries][-2:] == ['gemini_web', 'chatgpt_web']
     for e in entries[-2:]:
-        assert e['available'] is False and 'no hosted provider we have verified' in e['unavailable_reason']
+        assert e['available'] is False and 'No hosted provider we have verified.' in e['unavailable_reason']
         assert e['worker_note'] is None
 
 

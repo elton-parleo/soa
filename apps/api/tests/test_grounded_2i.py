@@ -64,7 +64,7 @@ def test_the_full_loop_refuses_an_ungrounded_surface_or_alias(http, db, upstream
     r = http.post('/api/full-loop', json={**BODY, 'platforms': ['chatgpt', name]})
     assert r.status_code == 422
     assert r.json()['detail']['code'] == 'ungrounded_surface_not_allowed'
-    assert f'use {instead}' in r.json()['detail']['message']
+    assert f'Use {instead}.' in r.json()['detail']['message']
     assert _count(db, 'soa_full_loop_requests') == before and upstream.calls == []
 
 
@@ -79,7 +79,7 @@ def test_the_console_and_the_web_app_refuse_it_too(http, studies_db):
     for r in (console, web):
         assert r.status_code == 422, r.text
         assert r.json()['detail']['code'] == 'ungrounded_surface_not_allowed'
-        assert 'use gemini_grounded' in r.json()['detail']['message']
+        assert 'Use gemini_grounded.' in r.json()['detail']['message']
     assert _count(studies_db, 'soa_cycles') == before
 
 

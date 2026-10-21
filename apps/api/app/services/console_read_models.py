@@ -180,6 +180,66 @@ def _live(claim, expectation) -> str:
     return f"{money(against, expectation.get('currency'))}{where}"
 
 
+#: 2L-1 (B1): a check row's reference is never $0.00. An answer that gave no
+#: price (no claim, or only a claim about something else) is judged against
+#: the True Value cell it is asked in: the cycle's cached reference row for
+#: the variant at the retailer the question names, its price and its basis
+#: (`live_basis`, as TvCell's). A cycle scored before this read its question's
+#: stored amount instead, which a page not read when the study was generated
+#: stored as 0.00 (FL13); the read applies to stored cycles, nothing stored is
+#: rewritten. With no reference and no amount the row says "—".
+def _is_zero(value) -> bool:
+    try:
+        from soa_shared.expected_answers import normalize_money
+    except Exception:  # pragma: no cover
+        return False
+    return normalize_money(value) == '0.00'
+
+
+def reference_index(reference: Optional[dict]) -> Dict[tuple, dict]:
+    """(domain, variant key) -> the cycle's cached reference row, keyed as
+    True Value keys its rows (GTIN-14, variant_ref, sku, sku:<sku>)."""
+    out: Dict[tuple, dict] = {}
+    for row in (reference or {}).get('prices') or []:
+        if not isinstance(row, dict) or row.get('role') == 'comparison':
+            continue
+        domain = _domain_key(row.get('retailer_domain'))
+        for key in (_gtin14(row.get('gtin')), row.get('variant_ref'), row.get('sku'),
+                    f"sku:{row['sku']}" if row.get('sku') else None):
+            if domain and key:
+                out.setdefault((domain, str(key)), row)
+    return out
+
+
+def cell_reference(index: Optional[Dict[tuple, dict]], expectation: dict, source_ref: Optional[dict]) -> Optional[dict]:
+    """The reference row of the True Value cell an answer is asked in, or None."""
+    domain = _domain_key(expectation.get('attributed_to'))
+    if not index or not domain:
+        return None
+    ref = source_ref or {}
+    for key in (_gtin14(ref.get('gtin')), _gtin14(ref.get('variant_id')), ref.get('variant_id'), ref.get('variant_ref')):
+        if key and (domain, str(key)) in index:
+            return index[(domain, str(key))]
+    return None
+
+
+def _reference_check(expectation: dict, row: Optional[dict]) -> tuple:
+    """(live, live_basis) for a check whose answer quoted no price for the
+    variant asked about: the cell's reference, else the question's own
+    amount, never 0.00."""
+    if row is not None:
+        member = expectation.get('type') == 'member_price'
+        against = row.get('member_price') if member else row.get('price')
+        live = _live({'reference': {**row, 'against': None if _is_zero(against) else against}},
+                     {**expectation, 'currency': row.get('currency') or expectation.get('currency')})
+        return (live, 'reference_read') if not live.startswith('—') else ('—', None)
+    amount = expectation.get('amount')
+    if amount and not _is_zero(amount):
+        return money(amount, expectation.get('currency')), \
+            'question' if expectation.get('attributed_to') else 'record'
+    return None, None
+
+
 def segments(answer_text: str, spans, claims) -> List[List[dict]]:
     """
     paragraphs: Segment[][] from the stored spans, verbatim.
@@ -263,9 +323,12 @@ def _swap_check(claim: dict, expectation: dict, variant_names: Optional[Dict[str
 
 def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List[dict],
                  *, runs_per_query: Optional[int], cycle_code: str,
-                 variant_names: Optional[Dict[str, str]] = None, features: Optional[List[str]] = None) -> dict:
+                 variant_names: Optional[Dict[str, str]] = None, features: Optional[List[str]] = None,
+                 references: Optional[Dict[tuple, dict]] = None) -> dict:
     """features (2K-3): the merchant's catalog feature terms for claim_kind
-    (app/services/console_claims.py); None reads 2K-1's rule."""
+    (app/services/console_claims.py); None reads 2K-1's rule. references
+    (2L-1): the cycle's reference_index, for the reference of a check whose
+    answer gave no price."""
     platform = run['platform']
     agent = surfaces.agent_of(platform) or platform
     extraction = _json((outcome or {}).get('extraction')) or {}
@@ -281,29 +344,43 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     brand_verdict = raw if brand else None
     checks = []
     if not brand and outcome is not None:
+        priced = expectation.get('type') in ('price', 'member_price')
+        cell = cell_reference(references, expectation, _json(query.get('source_ref'))) if priced else None
         for claim in claims:
             if claim.get('target') in ('swap', 'clash'):
                 raw, live, note, reason = _swap_check(claim, expectation, variant_names)
             else:
                 raw, live, note, reason = claim.get('outcome'), _live(claim, expectation), \
                     claim.get('reason') or claim.get('conflict'), _reason_code(claim.get('reason_code'))
+            basis = 'reference_read' if claim.get('reference') else 'record' if claim.get('against') else None
+            if priced and (live.startswith('—') or _is_zero(live.split(' ')[0].lstrip('$'))):
+                # 2L-1: no reference on the claim (another product's price,
+                # one the scorer had no row for): the cell's, never $0.00
+                live, basis = _reference_check(expectation, cell)
+                live = live or '—'
             mapped = VALUE_VERDICT.get(raw, raw)
             # 2C: the rule that decided the claim is `reason` (a code from
             # REASON_CODES); `note` keeps the prose. 2C-2c: a swap or clash
             # claim carries the question's verdict against the asked variant.
             checks.append(compact({'claim': _claim_text(claim), 'agent': AGENT_NAMES.get(agent, agent),
-                                   'live': live, 'verdict': mapped, 'note': note, 'reason': reason,
+                                   'live': live, 'live_basis': basis, 'verdict': mapped, 'note': note, 'reason': reason,
                                    'tone': VERDICT_TONE.get(mapped, 'neu'),
-                                   'target': claim.get('target')}, ('note', 'reason', 'target')))
+                                   'target': claim.get('target')}, ('note', 'reason', 'target', 'live_basis')))
         if not claims:
+            # 2L-1: an answer that gave no price is judged against the cell's
+            # reference whether or not it quoted one. 2C-2c: an expectation
+            # with no amount (a code, points) says what it expected, not a dash
+            live, basis = _reference_check(expectation, cell) if priced else (None, None)
+            if live is None:
+                live = '—' if priced and expectation.get('attributed_to') else (
+                    money(expectation.get('amount'), expectation.get('currency'))
+                    if expectation.get('amount') and not _is_zero(expectation.get('amount')) else
+                    '—' if priced else _describe(expectation))
             checks.append(compact({'claim': '—', 'agent': AGENT_NAMES.get(agent, agent),
-                                   # 2C-2c: an expectation with no amount (a code,
-                                   # points) says what it expected, not a dash
-                                   'live': money(expectation.get('amount'), expectation.get('currency'))
-                                   if expectation.get('amount') else _describe(expectation),
+                                   'live': live, 'live_basis': basis,
                                    'verdict': verdict, 'note': outcome.get('outcome_reason'),
                                    'reason': _reason_code(outcome.get('reason_code')),
-                                   'tone': VERDICT_TONE.get(verdict, 'neu')}, ('note', 'reason')))
+                                   'tone': VERDICT_TONE.get(verdict, 'neu')}, ('note', 'reason', 'live_basis')))
 
     # 2C: which True Value cell this answer is judged in (variant x retailer),
     # so the console's drawer can show the reference price behind the verdict.
@@ -1624,10 +1701,30 @@ def build_study(job: dict, prompts: List[dict], cycles: List[dict], entities: Li
         # 2K-1: the merchant's local time, for the study's display date ("the Oct 19 study");
         # `created` stays UTC
         'created_at_local': local_time.local_iso(job.get('created_at'), study_timezone(tier_config)),
+        # 2L-1: archived studies are listed only with ?archived=1
+        'archived': job.get('archived_at') is not None, 'archived_at': _iso(job.get('archived_at')),
         'timezone': study_timezone(tier_config),
         # 2K-3: the last run's day in the merchant's zone, beside lastRun (UTC)
         'last_run_local': cycle_dates(latest, study_timezone(tier_config))['start_date_local'] if latest else None,
     }, ('lastRun', 'last_run_local'))
+
+
+#: 2L-1 (B3): a full loop is running until its request is scored, failed or
+#: reads-only done (soa_full_loop_requests.status), or while a cycle runs.
+LOOP_RUNNING = ('reference_pending', 'reference_done', 'cycle_planned', 'scoring')
+
+
+def running_loops(conn, study_type: str) -> Optional[str]:
+    """What runs for the study, in words, or None: a full-loop request in
+    flight, else a running cycle."""
+    request = conn.execute(text(
+        "SELECT id, status FROM soa_full_loop_requests WHERE study_type = :st AND status IN ("
+        + ", ".join(f"'{s}'" for s in LOOP_RUNNING) + ") ORDER BY id DESC"), {'st': study_type}).mappings().first()
+    if request:
+        return f"request {request['id']}, {request['status'].replace('_', ' ')}"
+    cycle = conn.execute(text("SELECT cycle_code FROM soa_cycles WHERE study_type = :st AND status = 'running' "
+                              "ORDER BY id DESC"), {'st': study_type}).scalar()
+    return f"cycle {cycle}" if cycle else None
 
 
 def run_identity(cycle: dict, ran_platforms: List[str]) -> dict:
@@ -2540,9 +2637,12 @@ def load_answers(conn, cycle: dict, features: Optional[List[str]] = None) -> Lis
     """), {'c': cycle['id'], 'yes': True}).mappings():
         mentions.setdefault(m['run_id'], []).append(dict(m))
     names = load_variant_names(conn, cycle)
+    reference = cycle.get('reference_prices') if 'reference_prices' in cycle else conn.execute(text(
+        "SELECT reference_prices FROM soa_cycles WHERE id = :c"), {'c': cycle['id']}).scalar()
+    index = reference_index(_json(reference))   # 2L-1: a left-out check's reference
     return [build_answer(dict(r), dict(r), outcomes.get(r['id']), mentions.get(r['id'], []),
                          runs_per_query=cycle.get('runs_per_query'), cycle_code=cycle['cycle_code'],
-                         variant_names=names, features=features)
+                         variant_names=names, features=features, references=index)
             for r in runs]
 
 

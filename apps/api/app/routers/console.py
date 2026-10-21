@@ -715,9 +715,11 @@ def get_runs(ms: MerchantScope = Depends(merchant_scope)):
 
 
 @router.get("/studio/studies")
-def get_studio_studies(ms: MerchantScope = Depends(merchant_scope)):
+def get_studio_studies(ms: MerchantScope = Depends(merchant_scope),
+                       archived: bool = Query(False, description="2L-1: include archived studies")):
     """2H: the studies generated for the merchant (`?merchant=`, else the
-    primary), each naming its merchant."""
+    primary), each naming its merchant. 2L-1: an archived study is left out
+    unless ?archived=1 (then every study, each with `archived`)."""
     scope = ms.scope
     names = {m.get('slug'): m.get('name') for m in ms.merchants}
     with engine.connect() as conn:
@@ -726,7 +728,7 @@ def get_studio_studies(ms: MerchantScope = Depends(merchant_scope)):
             SELECT * FROM soa_query_generation_jobs
             WHERE COALESCE(customer_organization_id, organization_id) = :org ORDER BY created_at DESC
         """), {"org": scope.org.id}).mappings()]
-        jobs = [j for j in jobs if ms.owns(studies.get(j['study_type']))]
+        jobs = [j for j in jobs if ms.owns(studies.get(j['study_type'])) and (archived or j.get('archived_at') is None)]
         out = []
         for job in jobs:
             brand = ((_json(job.get('tier_config')) or {}).get('merchant') or {}).get('study_brand')

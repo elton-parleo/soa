@@ -70,7 +70,7 @@ ANSWER_STATUSES = (ANSWERED, NO_AI_ANSWER, SIGN_IN_WALL, BLOCKED)
 #: excluded from accuracy.
 NO_ANSWER_STATUSES = (NO_AI_ANSWER, SIGN_IN_WALL, BLOCKED)
 
-NO_VERIFIED_PROVIDER = 'no hosted provider we have verified; not built (no browser automation)'
+NO_VERIFIED_PROVIDER = 'No hosted provider we have verified. Not built (no browser automation).'
 
 
 @dataclass(frozen=True)
@@ -110,7 +110,7 @@ SURFACES: List[Surface] = [
     Surface('chatgpt_api', 'ChatGPT (OpenAI API)', API, 'openai', 'chatgpt',
             'OpenAI Responses API, no tools: answers from the model alone'),
     Surface('chatgpt', 'ChatGPT with web search (OpenAI API)', GROUNDED_API, 'openai', 'chatgpt',
-            'OpenAI Responses API with the web_search tool available; the model decides whether to search',
+            'OpenAI Responses API with the web_search tool available. The model decides whether to search.',
             grounded=True),
     Surface('gemini_api', 'Gemini (Gemini API)', API, 'google_genai', 'gemini',
             'Gemini API, no grounding tool: answers from the model alone'),
@@ -119,7 +119,7 @@ SURFACES: List[Surface] = [
     Surface('perplexity', 'Perplexity Sonar (Perplexity API)', GROUNDED_API, 'perplexity', 'perplexity',
             'Perplexity Sonar, grounded by nature, with its citations', grounded=True),
     Surface('claude', 'Claude with web search (Anthropic API)', GROUNDED_API, 'anthropic', 'claude',
-            'Anthropic Messages API with the web_search tool available; the model decides whether to search',
+            'Anthropic Messages API with the web_search tool available. The model decides whether to search.',
             grounded=True),
     Surface('aimode', 'Google AI Mode (consumer, via SerpApi)', CONSUMER_UI, 'serpapi', 'aimode',
             'google.com/search?udm=50, logged out, read by SerpApi (engine google_ai_mode)', consumer=True,
@@ -137,7 +137,7 @@ SURFACES: List[Surface] = [
 #: 'gemini' rows were the ungrounded API. Read only: a new cycle never
 #: stores this id (see ALIASES).
 LEGACY = {'gemini': Surface('gemini', 'Gemini (Gemini API, legacy id)', API, 'google_genai', 'gemini',
-                            'Stored under the pre-2B id; the ungrounded Gemini API')}
+                            'Stored under the pre-2B id. The ungrounded Gemini API.')}
 
 #: 2D: the names a caller may send that are not surface ids, each to the id
 #: it means. Explicit and complete: a name that is neither an id nor here is
@@ -207,14 +207,15 @@ def ungrounded_refusal(names: Iterable[str]) -> Optional[dict]:
             continue
         if s.grounded:
             continue
-        what = f"{name!r} is {s.id}" if name != s.id else repr(s.id)
+        what = f"{name!r} ({s.id})" if name != s.id else repr(s.id)
         instead = GROUNDED_INSTEAD.get(s.id)
-        lines.append(f"{what}, which answers without searching: "
-                     + (f"use {instead}" if instead else "not a grounded surface"))
+        lines.append(f"{what} answers without searching. "
+                     + (f"Use {instead}." if instead else "It is not a grounded surface."))
     if not lines:
         return None
+    # 2L-1: one sentence per surface, no semicolons (house rule)
     return {'code': UNGROUNDED_SURFACE,
-            'message': 'Only grounded surfaces run: ' + '; '.join(lines) + '.'}
+            'message': 'Only grounded surfaces run. ' + ' '.join(lines)}
 
 
 def unconfigured_refusal(platform_ids: Iterable[str], configured: Dict[str, bool]) -> Optional[dict]:

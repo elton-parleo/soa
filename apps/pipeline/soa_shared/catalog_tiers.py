@@ -684,7 +684,7 @@ def build_catalog_accuracy(
                 soa_focus='Catalog Accuracy, Price Accuracy',
                 rationale=(
                     f"The published list price for {variant.variant_id} is "
-                    f"{amount} {variant.currency or 'USD'}; the answer either "
+                    f"{amount} {variant.currency or 'USD'}. The answer either "
                     f"states it, states a price we published before, or states "
                     f"one we never did."
                 ),
@@ -980,7 +980,7 @@ def expected_nulls(snapshot, tier: str) -> str:
     if tier == 'category_control':
         return (
             f"Near zero. {brand} is not expected to win unbranded category "
-            f"questions; these show what the category returns without it."
+            f"questions. These show what the category returns without it."
         )
     if tier == 'value_incentives':
         absent = []
@@ -1006,9 +1006,9 @@ def expected_nulls(snapshot, tier: str) -> str:
                 from soa_shared.catalog_snapshot import price_source
                 if not price_source(snapshot):
                     return ("None asked yet: no retailer page has been read. Run a full loop "
-                            "to read prices; questions follow the pages read.")
+                            "to read prices. Questions follow the pages read.")
                 return ("Each price is asked at a retailer page and expected as that page "
-                        "reads; the cycle re-reads it at its start and scores against that "
+                        "reads. The cycle re-reads it at its start and scores against that "
                         "read. A page not read yet is still asked, with no amount, and a page "
                         "that blocked both reference sources scores unverifiable, never wrong.")
             return ("Prices are scored against each retailer page as read at the cycle "
@@ -1019,7 +1019,7 @@ def expected_nulls(snapshot, tier: str) -> str:
             "absent price on those is a distribution gap, not an accuracy failure."
         )
     return (
-        f"Zero until {brand} is retrievable at all on a surface; visibility "
+        f"Zero until {brand} is retrievable at all on a surface. Visibility "
         f"gates everything below it."
     )
 

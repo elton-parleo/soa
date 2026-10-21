@@ -2263,7 +2263,7 @@ store; no customer data. Arrays are cut to their first entries.
       "surface": "grounded_api",
       "collector": "openai",
       "agent": "chatgpt",
-      "fidelity": "OpenAI Responses API with the web_search tool available; the model decides whether to search",
+      "fidelity": "OpenAI Responses API with the web_search tool available. The model decides whether to search.",
       "consumer": false,
       "available": true,
       "unavailable_reason": null,
@@ -2311,7 +2311,7 @@ store; no customer data. Arrays are cut to their first entries.
       "surface": "grounded_api",
       "collector": "anthropic",
       "agent": "claude",
-      "fidelity": "Anthropic Messages API with the web_search tool available; the model decides whether to search",
+      "fidelity": "Anthropic Messages API with the web_search tool available. The model decides whether to search.",
       "consumer": false,
       "available": true,
       "unavailable_reason": null,
@@ -2326,7 +2326,7 @@ store; no customer data. Arrays are cut to their first entries.
       "fidelity": "gemini.google.com, logged out",
       "consumer": true,
       "available": false,
-      "unavailable_reason": "no hosted provider we have verified; not built (no browser automation)",
+      "unavailable_reason": "No hosted provider we have verified. Not built (no browser automation).",
       "surface_label": "Consumer UI, logged out"
     },
     {
@@ -2338,7 +2338,7 @@ store; no customer data. Arrays are cut to their first entries.
       "fidelity": "chatgpt.com, logged out",
       "consumer": true,
       "available": false,
-      "unavailable_reason": "no hosted provider we have verified; not built (no browser automation)",
+      "unavailable_reason": "No hosted provider we have verified. Not built (no browser automation).",
       "surface_label": "Consumer UI, logged out"
     }
   ]
@@ -3809,7 +3809,7 @@ Brandco is soa's external test fake; supply's preview is shaped by its `feed/val
         }
       ],
       "illustrative": true,
-      "expected_nulls": "Zero until Wiggle & Snug is retrievable at all on a surface; visibility gates everything below it."
+      "expected_nulls": "Zero until Wiggle & Snug is retrievable at all on a surface. Visibility gates everything below it."
     },
     "catalog_accuracy": {
       "enabled": true,
@@ -4289,7 +4289,7 @@ Brandco is soa's external test fake; supply's preview is shaped by its `feed/val
       "surface": "grounded_api",
       "collector": "openai",
       "agent": "chatgpt",
-      "fidelity": "OpenAI Responses API with the web_search tool available; the model decides whether to search",
+      "fidelity": "OpenAI Responses API with the web_search tool available. The model decides whether to search.",
       "consumer": false,
       "available": true,
       "unavailable_reason": null,
@@ -6811,7 +6811,7 @@ text):
   "agents": [
     {"id": "chatgpt", "agent": "chatgpt", "name": "ChatGPT", "label": "ChatGPT with web search (OpenAI API)",
      "surface": "grounded_api", "method": "API with search grounding",
-     "method_detail": "OpenAI Responses API with the web_search tool available; the model decides whether to search",
+     "method_detail": "OpenAI Responses API with the web_search tool available. The model decides whether to search.",
      "collector": "openai", "grounded": true, "available": true, "worker_note": "the worker has not reported yet",
      "last_status": "answered", "last_runs": 87, "last_answered": 87, "last_errored": 0},
     {"id": "aimode", "agent": "aimode", "name": "Google AI Mode", "label": "Google AI Mode (consumer, via SerpApi)",
@@ -7122,6 +7122,85 @@ exact): raw Missed 47 of 58, 81% (was 89 of 100), `no_price_runs` 42. The driver
 price answers got the price wrong or quoted another brand's price, {pct}."; the retailer title reads "{name}'s price
 is wrong". The demo's Petco wording ("missing or wrong") is the earlier definition, 2I-9's. FL12's shape in
 `test_console_2i9.py`: 62 of 96 (was 98 of 132), $18.2M missed at $4.0B (was $20.9M).
+
+## 2L-1: four small items
+
+### B1: the reference on a "left out" check row
+
+A check row whose answer gave no price (no claim, or only a claim about another product) read the question's
+stored amount as its `live`. FL13's questions were generated before their pages were read and stored `0.00`, so the
+drawer and the TrueSync readback said "Judged against $0.00" (the console patched that client-side in 2K-4).
+
+`build_answer` now judges such a row against the True Value cell it is asked in: the cycle's cached reference row
+(`soa_cycles.reference_prices`) for the variant at the retailer the question names, keyed as True Value keys it
+(GTIN-14, `variant_ref`, `sku`, `sku:<sku>`): `rm.reference_index` / `rm.cell_reference`. Each Check carries
+`live_basis` beside `live`, as TvCell does: `reference_read` (the page's read), `record` (the record's price, a
+hosted merchant) or `question` (the question's own amount, when the cycle cached no row for that cell). `0.00` is
+never served as a reference: with no row and no amount (or `0.00`) the row says `"—"` and has no `live_basis`.
+
+| | before | after |
+|---|---|---|
+| no claim, FL13 question (`amount: "0.00"`, attributed to walmart.com) | `{"claim": "—", "live": "$0.00", ...}` | `{"claim": "—", "live": "$24.97 at walmart.com", "live_basis": "reference_read", ...}` |
+| a claim about another product (`target: not_ours`) | `"live": "—"` | the cell's reference, as above |
+| no cached reference, `amount: "0.00"` | `"live": "$0.00"` | `"live": "—"` |
+| a quoted claim | unchanged, plus `live_basis` | |
+
+Applied on read (`load_answers` reads the cycle's cached reference once): stored cycles read right without a
+rescore, nothing stored is rewritten. Same cell as True Value's `live` and `live_basis`.
+
+### B2: worker-shared copy as sentences
+
+House rule: no semicolons and no em dashes in user-facing copy. Every copy of each module changed together
+(`apps/api/soa_shared`, `apps/pipeline/soa_shared`, `packages/shared/soa_shared`; `catalog_tiers.py` has no
+`packages/shared` copy). `tests/test_2l1_shared_copy.py` pins the copies identical and the strings clean.
+
+| where | before | after |
+|---|---|---|
+| `surfaces.py` ChatGPT with web search, fidelity | `…web_search tool available; the model decides whether to search` | `…web_search tool available. The model decides whether to search.` |
+| `surfaces.py` Claude with web search, fidelity | same | same |
+| `surfaces.py` legacy `gemini`, fidelity | `Stored under the pre-2B id; the ungrounded Gemini API` | `Stored under the pre-2B id. The ungrounded Gemini API.` |
+| `surfaces.py` `NO_VERIFIED_PROVIDER` (Gemini web, ChatGPT web) | `no hosted provider we have verified; not built (no browser automation)` | `No hosted provider we have verified. Not built (no browser automation).` |
+| `surfaces.py` grounded-only 422 | `Only grounded surfaces run: 'gemini' is gemini_api, which answers without searching: use gemini_grounded; ….` | `Only grounded surfaces run. 'gemini' (gemini_api) answers without searching. Use gemini_grounded. …` |
+| `catalog_tiers.expected_nulls` category control | `…unbranded category questions; these show…` | `…unbranded category questions. These show…` |
+| `catalog_tiers.expected_nulls` catalog, no page read | `…Run a full loop to read prices; questions follow the pages read.` | `…to read prices. Questions follow the pages read.` |
+| `catalog_tiers.expected_nulls` catalog, a brand | `…expected as that page reads; the cycle re-reads it…` | `…expected as that page reads. The cycle re-reads it…` |
+| `catalog_tiers.expected_nulls` brand direct | `…on a surface; visibility gates everything below it.` | `…on a surface. Visibility gates everything below it.` |
+| `catalog_tiers` catalog question rationale | `…is 22.99 USD; the answer either states it…` | `…is 22.99 USD. The answer either states it…` |
+| `degraded_dimensions` no product pages | `…to sample this run — this can be our reader's limitation; on-site checks weren't evaluated` | `…to sample this run. This can be our reader's limitation. On-site checks weren't evaluated` |
+| `scan_dimensions` Structured data, how scored | `Share of sampled pages passing; identifiers weighted.` | `Share of sampled pages passing. Identifiers weighted.` |
+| `scan_dimensions` Protocol & Feed, how scored | `Presence checks; feed participation is verified…` | `Presence checks. Feed participation is verified…` |
+| `expected_answers.validate` unknown type | `unknown expected_answer type 'x'; must be one of …` | `unknown expected_answer type 'x'. It must be one of …` |
+
+Left as they are, not user-facing: `soa_models.py` column comments (database documentation), `customers.py`'s
+operator diagnostics (`… is not set; run scripts/backfill_customer_accounts.py`), docstrings, and the brand-direct
+generation prompt in `catalog_tiers.py` (model input). The run dialog's "Not comparable to …: …; …" line is the
+console's own (`RunLoopDialog.comparableLine`), reworded there (truesync, 2L-1 A1).
+
+### B3: archive a study
+
+Decision (Elton, Oct 21): "New study" stays the only way to change a study's questions (an in-place edit would break
+week-over-week), and the study list gets an archive.
+
+There is no `soa_studies` table: a study is a `study_type`, defined by its generation job row (see the model). So
+the one additive column is **`soa_query_generation_jobs.archived_at`** (`timestamptz`, nullable; migration
+`a2c4e6f8b1d3`, round-tripped on a throwaway local Postgres with `scripts/migration_roundtrip.py --from
+f7c2a9e4b1d6`, never applied anywhere else). NULL: not archived. No row is written by the migration.
+
+| endpoint | who | does |
+|---|---|---|
+| `POST /api/console/studio/studies/{id}/archive` | operator (a member is 403) | stamps `archived_at` (archiving again keeps the first stamp). **409** while a loop of the study runs: a full-loop request in `reference_pending`, `reference_done`, `cycle_planned` or `scoring`, or a cycle `running` ("A full loop of this study is running (request 12, scoring). Archive it once the loop finishes."). 404 for a study not the org's |
+| `POST /api/console/studio/studies/{id}/unarchive` | operator | clears it |
+
+Both return `{id, archived, archived_at}`. `{id}` is the study's id as `/studio/studies` serves it (its
+`study_type`).
+
+- `GET /api/console/studio/studies` leaves an archived study out; `?archived=1` lists every study. Each study
+  carries `archived` and `archived_at`. The run dialog's study choice reads this list, so an archived study is not
+  offered.
+- `GET /api/console/prompts`: the default study (`console_prompts.current_study`, the newest cycle's study, else the
+  newest) skips an archived one.
+- Its cycles stay readable: every cycle-keyed read (`/answers`, `/overview?cycle=`, `/true-value`, ...) and `/runs`
+  are unchanged.
 
 ## 2L-2: retired products and their successors
 

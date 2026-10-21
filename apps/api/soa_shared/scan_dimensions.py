@@ -252,7 +252,7 @@ DIMENSIONS: Tuple[Dimension, ...] = (
             "name, price, availability complete",
             "GTIN/brand identifiers consistent",
         ),
-        how_scored="Share of sampled pages passing; identifiers weighted.",
+        how_scored="Share of sampled pages passing. Identifiers weighted.",
     ),
     Dimension(
         code="protocol_feed", name="Protocol & Feed Presence",
@@ -263,7 +263,7 @@ DIMENSIONS: Tuple[Dimension, ...] = (
             "MCP declaration",
             "a UCP profile exists",
         ),
-        how_scored="Presence checks; feed participation is verified in the full analysis.",
+        how_scored="Presence checks. Feed participation is verified in the full analysis.",
     ),
     Dimension(
         code="price_truth", name="Price Truth",

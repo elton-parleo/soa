@@ -207,7 +207,7 @@ def test_a_check_with_no_claim_carries_the_outcome_s_reason():
     answer = rm.build_answer(run, {'tier': 'catalog_accuracy', 'query_text': 'q'}, outcome, [],
                              runs_per_query=1, cycle_code='C')
     check(answer, 'Answer')
-    assert answer['checks'] == [{'claim': '—', 'agent': 'Gemini', 'live': '$23.99', 'verdict': 'missed',
+    assert answer['checks'] == [{'claim': '—', 'agent': 'Gemini', 'live': '$23.99', 'live_basis': 'record', 'verdict': 'missed',
                                  'note': outcome['outcome_reason'], 'reason': 'other_brand', 'tone': 'warn'}]
     assert answer['reason'] == 'other_brand'
 

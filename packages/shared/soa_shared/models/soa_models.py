@@ -1421,6 +1421,16 @@ class SoaQueryGenerationJob(Base):
         ),
     )
 
+    # 2L-1 (B3): when the study was archived (Elton, Oct 21: "New study" stays
+    # the only way to change questions, and the study list gets an archive).
+    # An archived study leaves the run dialog's study choice and the Prompts
+    # default; its cycles stay readable. NULL: not archived.
+    archived_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When an operator archived the study (2L-1). NULL: not archived.",
+    )
+
     __table_args__ = (
         CheckConstraint(
             "status IN ('pending', 'running', 'complete', 'failed')",

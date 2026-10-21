@@ -569,7 +569,7 @@ def validate(expectation: Any) -> dict:
     kind = expectation.get('type')
     if kind not in EXPECTED_ANSWER_TYPES:
         raise ExpectedAnswerError(
-            f"unknown expected_answer type {kind!r}; must be one of "
+            f"unknown expected_answer type {kind!r}. It must be one of "
             f"{', '.join(EXPECTED_ANSWER_TYPES)}"
         )
 
