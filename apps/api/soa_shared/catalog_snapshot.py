@@ -36,6 +36,13 @@ class CatalogVariant:
     member_tier_name: Optional[str] = None
     points_rules: List[dict] = field(default_factory=list)
 
+    # 2L-2: the feed's `status` (active | retired) and, when retired, the
+    # variant that replaced it ({variant_id, sku, gtin, product_name, title}),
+    # as supply's catalog serves them. A record from before 2L-2 has neither:
+    # active, no successor. See soa_shared/retired_lines.py.
+    status: str = 'active'
+    successor: Optional[dict] = None
+
 
 @dataclass
 class CatalogProduct:
@@ -219,6 +226,8 @@ def build_snapshot(
                     list_price=variant.get("list_price"),
                     currency=variant.get("currency"),
                     gtin=variant.get("gtin"),
+                    status=variant.get("status") or 'active',
+                    successor=variant.get("successor") or None,
                 )
                 for variant in listing.get("variants") or []
                 if variant.get("variant_id")
