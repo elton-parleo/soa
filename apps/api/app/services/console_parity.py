@@ -725,9 +725,11 @@ def build_signals(metrics: dict, products: List[dict], *, surface: str, brand: s
                     'tag': 'Access', 'tone': 'warn', 'route': 'true-value', 'rule': 'unverifiable', 'count': t['unverifiable']})
     if access_problems:
         title, detail = TEMPLATES['signal.access']
-        n = len(access_problems)
+        # 2K-4 (B4): each display name once, its tokens counted ("Googlebot (2 tokens)")
+        groups = rm.group_identities(access_problems)
+        n = len(groups)
         out.append({'id': 'access', 'title': title.format(n=n, identities=_n(n, 'identity', 'identities')),
-                    'detail': detail.format(who=', '.join(r.get('identity') or '?' for r in access_problems)),
+                    'detail': detail.format(who=', '.join(g['label'] for g in groups)),
                     'tag': 'Access', 'tone': 'bad', 'route': 'accessibility', 'rule': 'access', 'count': n})
     return out[:4]
 
@@ -912,10 +914,8 @@ def build_overview(cycle: dict, *, rows: List[dict], visibility: dict, true_valu
 
 def _measured(request: dict) -> bool:
     """An identity whose probe was never configured is not measured, which
-    is not a problem: it never counts as one."""
-    if request.get('measured') is not None:
-        return bool(request['measured'])
-    return not str(request.get('result') or '').startswith('not measured')
+    is not a problem: it never counts as one (rm.access_measured)."""
+    return rm.access_measured(request)
 
 
 def _check(name, got, of, *, good_when_zero=False, unit='pages', key=None):

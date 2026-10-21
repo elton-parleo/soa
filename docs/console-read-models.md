@@ -7095,3 +7095,14 @@ soa's `last_run`, which was the cycle's **UTC `start_date`** until 2K-3 (`last_r
 in the merchant's zone (as 2K-1's) and `timezone`. Served on `/api/console/prompts` (`study`), `/api/console/overview`
 (new `study` block: id, name and the three), `/api/full-loop/{id}` and `/api/console/full-loop/latest` (new `study`
 block); `/studio/studies` already carried it. A study created 06:10 UTC on Oct 21 is `2026-10-20T23:10:00-07:00`.
+
+### B4: access identities named once
+
+FL13's Overview read "Access problems: Googlebot, Googlebot, bingbot, Parleo (control)": two tokens share the display
+name Googlebot. `rm.group_identities(requests)` gives `[{identity, tokens, label}]` in first-seen order, `label`
+"Googlebot (2 tokens)" for a name with more than one token. `/api/console/accessibility` serves
+**`problem_identities`** (the measured requests that did not get through, grouped; every request is still in
+`requests`), which the Overview's Access problems tile reads. The Overview's access signal counts and names the
+groups ("3 agent identities could not read the pages." / "Googlebot (2 tokens), bingbot, Parleo (control). From the
+last access run."), and so does Impact's Access line (`access.n` the identities, new `access.tokens` the requests).
+`parity._measured` is `rm.access_measured`.

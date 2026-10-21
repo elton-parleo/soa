@@ -21,6 +21,7 @@ from typing import Optional
 
 from sqlalchemy import text
 
+from app.services import console_read_models as rm
 from soa_shared import revenue as defaults
 
 INPUT_FIELDS = ('scope_value', 'scope_display', 'scope_source', 'influence', 'horizon', 'penalty', 'lost_gainable',
@@ -328,10 +329,12 @@ def build_model(shares: dict, inputs: dict, *, cycle: str, kind: str, name: str,
     blocked = [r for r in access_requests or [] if r.get('measured', True) and not r.get('ok')]
     access = None
     if access_requests is not None:
-        who = ', '.join(r.get('identity') or '?' for r in blocked)
-        access = {'n': len(blocked), 'identities': [r.get('identity') for r in blocked],
+        # 2K-4 (B4): each display name once, its tokens counted ("Googlebot (2 tokens)")
+        groups = rm.group_identities(blocked)
+        who = ', '.join(g['label'] for g in groups)
+        access = {'n': len(groups), 'identities': [g['identity'] for g in groups], 'tokens': len(blocked),
                   'title': TEMPLATES['access.title'].format(domain=domain or 'your pages'),
-                  'measured': (TEMPLATES['access.measured'].format(n=len(blocked), identities=_ident(len(blocked)), who=who)
+                  'measured': (TEMPLATES['access.measured'].format(n=len(groups), identities=_ident(len(groups)), who=who)
                                if blocked else TEMPLATES['access.none']),
                   'fix': TEMPLATES['access.fix'], 'route': 'accessibility'}
     model = {

@@ -1348,6 +1348,33 @@ def build_truesync(merchant: str, *, channels: List[dict], publications: List[di
 
 # ─── Accessibility ─────────────────────────────────────────────────────────
 
+def access_measured(request: dict) -> bool:
+    """An identity whose probe was never configured is not measured, which
+    is not a problem: it never counts as one."""
+    if request.get('measured') is not None:
+        return bool(request['measured'])
+    return not str(request.get('result') or '').startswith('not measured')
+
+
+def access_problems(requests: Iterable[dict]) -> List[dict]:
+    """The measured requests that did not get through."""
+    return [r for r in requests or [] if access_measured(r) and not r.get('ok')]
+
+
+def group_identities(requests: Iterable[dict]) -> List[dict]:
+    """2K-4 (B4): access requests by display name, each named once.
+    Two tokens can share one (Googlebot and its Google-Extended sibling
+    both read "Googlebot"), and "Googlebot, Googlebot, bingbot" counted the
+    name twice. [{identity, tokens, label}] in first-seen order; label is
+    "Googlebot (2 tokens)" for a name with more than one."""
+    groups: Dict[str, int] = {}
+    for r in requests or []:
+        name = r.get('identity') or '?'
+        groups[name] = groups.get(name, 0) + 1
+    return [{'identity': name, 'tokens': n, 'label': name if n == 1 else f"{name} ({n} tokens)"}
+            for name, n in groups.items()]
+
+
 def accessibility_from_supply(payload: Optional[dict]) -> dict:
     """
     supply's GET /merchants/{slug}/access, already Accessibility-shaped,
@@ -1364,6 +1391,8 @@ def accessibility_from_supply(payload: Optional[dict]) -> dict:
         requests.append(row)
     if access:
         access['requests'] = requests
+        # 2K-4 (B4): the identities that did not get through, each display name once
+        access['problem_identities'] = group_identities(access_problems(requests))
     divergences = [d for d in payload.get('divergences') or [] if "no 'claude'" not in d]
     divergences.append("AccessRow.vendor can be 'claude' (vendor 'claude', agent 'claude'); "
                        "the console adds it to AgentId in 2C-0.")
