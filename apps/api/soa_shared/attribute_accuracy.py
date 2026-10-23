@@ -170,8 +170,9 @@ def one_liner(stated: Optional[dict], truth: Optional[dict], brand_site: str = '
 def answer_attribute(source_ref: Optional[dict], extraction: Optional[dict], answer: Optional[str] = None,
                      brand_site: Optional[str] = None) -> Optional[dict]:
     """
-    An attribute question's answer, judged: {size, stated, evidence, truth,
-    truth_source, verdict, line} (line is one_liner's). None for any other
+    An attribute question's answer, judged: {size, count, stated, evidence,
+    truth, truth_source, site, verdict, line} (line is one_liner's; site the
+    brand site whose size chart is the truth). None for any other
     question. The stated range is the stored coding (the extraction's
     weight_range / weight_evidence, expectation_scorer.code_attribute), else
     coded here from the answer text (an outcome stored before the coder).
@@ -187,7 +188,7 @@ def answer_attribute(source_ref: Optional[dict], extraction: Optional[dict], ans
     truth = ref.get('weight_truth')
     site = brand_site or ref.get('own_domain') or ref.get('domain') or 'the brand site'
     return {'size': ref.get('size'), 'count': ref.get('count'), 'stated': stated, 'evidence': evidence,
-            'truth': truth, 'truth_source': ref.get('weight_truth_source'),
+            'truth': truth, 'truth_source': ref.get('weight_truth_source'), 'site': site,
             'verdict': verdict(stated, truth), 'line': one_liner(stated, truth, site)}
 
 
