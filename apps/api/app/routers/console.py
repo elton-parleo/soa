@@ -375,7 +375,10 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
     domain_checks = domain_checks if isinstance(domain_checks, dict) else None
     # 2J-4: the cycle's cached retailer-prices, for its refresh stamp
     cached_reference = _json(row.get('reference_prices'))
-    why = ('rescore' if rescore else score_svc.needs_recompute(stored, domain_checks, cached_reference)
+    # 2N-2: and when the cycle's outcomes were last written, for a re-score with no refresh
+    with engine.connect() as conn:
+        outcomes_at = score_svc.outcomes_scored_at(conn, row['id']) if stored else None
+    why = ('rescore' if rescore else score_svc.needs_recompute(stored, domain_checks, cached_reference, outcomes_at)
            or ('merchant' if merchant and (body.get('inputs') or {}).get('merchant') != merchant else None))
     if why:
         started = time.monotonic()

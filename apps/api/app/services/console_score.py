@@ -28,6 +28,7 @@ import json
 import logging
 from collections import Counter
 from contextvars import ContextVar
+from datetime import datetime, timezone
 from statistics import mean
 from typing import Dict, Iterable, List, Optional
 
@@ -682,9 +683,10 @@ def brand_counts(brand_inputs: Optional[dict], vis_rows: List[dict], surface: st
                 from soa_shared import promo_pass_through as ppt
                 tid = ppt.deal_id(top)
                 here = [j for j in passed.get('judged') or [] if j.get('surface') in keys and tid in j['live']]
-                deal = {'short': top['short'], 'asked': len(here), 'named': sum(1 for j in here if tid in j['named'])} \
-                    if passed.get('judged') is not None else {'short': top['short'], 'asked': top['asked'],
-                                                             'named': top['named']}
+                # 2N-2: the deal's kind in its retailer's words, as the Trade promotions row (kind_label)
+                named = {'short': top['short'], 'kind_label': top.get('kind_label')}
+                deal = {**named, 'asked': len(here), 'named': sum(1 for j in here if tid in j['named'])} \
+                    if passed.get('judged') is not None else {**named, 'asked': top['asked'], 'named': top['named']}
             promo = {'value': sum((per.get(s) or {}).get('k', 0) for s in keys), 'of': n,
                      'loose': sum((per.get(s) or {}).get('loose', 0) for s in keys),
                      'subscribe': sum((per.get(s) or {}).get('subscribe', 0) for s in keys), 'deal': deal}
@@ -1150,8 +1152,32 @@ def reference_input(reference: Optional[dict]) -> dict:
     return {'cycle_reference_refreshed_at': refreshed} if refreshed else {}
 
 
+def outcomes_scored_at(conn, cycle_id: int) -> Optional[str]:
+    """2N-2: when the cycle's Layer 2 outcomes were last written (the newest
+    soa_expectation_outcomes.scored_at, ISO 8601), None for a cycle with none
+    (or a table without the column: the score is served as stored, as before)."""
+    try:
+        value = conn.execute(text("SELECT MAX(scored_at) FROM soa_expectation_outcomes WHERE cycle_id = :c"),
+                             {'c': cycle_id}).scalar()
+    except Exception:  # noqa: BLE001 - a test schema without scored_at
+        return None
+    if value is None:
+        return None
+    return value.isoformat() if hasattr(value, 'isoformat') else str(value)
+
+
+def _instant(value) -> Optional[datetime]:
+    """An ISO 8601 stamp as an aware datetime; one with no zone is UTC (the
+    column's NOW() on Postgres, sqlite's text). None when it does not parse."""
+    try:
+        at = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+    except (TypeError, ValueError):
+        return None
+    return at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+
+
 def needs_recompute(body: Optional[dict], domain_checks: Optional[dict],
-                    reference: Optional[dict] = None) -> Optional[str]:
+                    reference: Optional[dict] = None, outcomes_at: Optional[str] = None) -> Optional[str]:
     """Why a stored score is recomputed on this read, or None to serve it.
     2C-3's trigger, the scorer version (and the adapter's revision), and 2E's:
     the set of measured dimensions changed, or the record's revision did
@@ -1185,6 +1211,13 @@ def needs_recompute(body: Optional[dict], domain_checks: Optional[dict],
     refreshed = reference_refreshed_at(reference)
     if refreshed != inputs.get('cycle_reference_refreshed_at'):
         return 'cycle reference refreshed' if refreshed else 'cycle reference restored'
+    # 2N-2: rescore_cycle re-scored the outcomes after the score was stored, with
+    # no reference refresh to stamp it. FL14's Attribute accuracy tile read
+    # "answers 0 of 0" and its promo note the old deal kind, a score stored before
+    # 2N-1 and served since. `outcomes_at` is outcomes_scored_at()'s.
+    scored, written = _instant(inputs.get('scored_at')), _instant(outcomes_at) if outcomes_at else None
+    if scored and written and written > scored:
+        return 'outcomes re-scored'
     return None
 
 

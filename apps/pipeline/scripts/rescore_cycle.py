@@ -95,7 +95,9 @@ the model and prints every line, and stores nothing:
 
 The console's stored score recomputes on its next read: `refreshed_at`
 differs from the one the stored score was computed on (console_score.
-needs_recompute, 'cycle reference refreshed').
+needs_recompute, 'cycle reference refreshed'). 2N-2: a re-score with no
+refresh recomputes it too, the outcomes' scored_at being newer than the
+score ('outcomes re-scored').
 """
 import argparse
 import asyncio
