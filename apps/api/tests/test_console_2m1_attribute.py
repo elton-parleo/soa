@@ -187,11 +187,11 @@ def _truth_rows(truths=None):
 def _cache_truths(db, cycle_id=229, truths=None):
     """The cycle's cached retailer-prices, with the own-page rows that carry the truth."""
     with db.begin() as c:
-        payload = json.loads(c.execute(text("SELECT reference_prices FROM soa_cycles WHERE id = :c"),
-                                       {'c': cycle_id}).scalar() or '{}')
+        payload = c.execute(text("SELECT reference_prices FROM soa_cycles WHERE id = :c"), {'c': cycle_id}).scalar() or {}
+        payload = dict(payload) if isinstance(payload, dict) else json.loads(payload)
         payload['prices'] = list(payload.get('prices') or []) + _truth_rows(truths)
         c.execute(text("UPDATE soa_cycles SET reference_prices = :p WHERE id = :c"),
-                  {'p': json.dumps(payload), 'c': cycle_id})
+                  {'p': _encode(payload), 'c': cycle_id})
 
 
 def _shape(db, http, upstream):
@@ -379,7 +379,7 @@ def test_a_study_generated_with_no_truth_is_judged_against_supplys_reference(htt
     acc = _get(http, 'overview', merchant=WS)['attribute_accuracy']
     assert acc['answers'] == {'n': 45, 'k': 37}
     with db.connect() as c:
-        refs = [json.loads(r) for r in c.execute(text(
+        refs = [r if isinstance(r, dict) else json.loads(r) for r in c.execute(text(
             "SELECT source_ref FROM soa_queries WHERE study_type = :st AND tier = 'brand_direct'"),
             {'st': f229.STUDY}).scalars()]
     assert all(r.get('weight_truth') is None for r in refs if r.get('intent') == 'attribute')
@@ -391,8 +391,12 @@ def test_each_cycle_is_judged_against_its_own_reference(http, db, upstream):
     never read."""
     _shape(db, http, upstream)
     with db.begin() as c:
-        c.execute(text("UPDATE soa_queries SET source_ref = REPLACE(source_ref, '\"weight_truth\": null', "
-                       "'\"weight_truth\": {\"min\": 1, \"max\": 2}') WHERE study_type = :st"), {'st': f229.STUDY})
+        for qid, ref in c.execute(text("SELECT id, source_ref FROM soa_queries WHERE study_type = :st"),
+                                  {'st': f229.STUDY}).all():
+            ref = ref if isinstance(ref, dict) else json.loads(ref or '{}')
+            if ref.get('intent') == 'attribute':
+                c.execute(text("UPDATE soa_queries SET source_ref = :r WHERE id = :i"),
+                          {'r': _encode({**ref, 'weight_truth': R(1, 2)}), 'i': qid})
     other = {'prices': _truth_rows({'v2': R(22, 37)})}
     with db.connect() as c:
         row = dict(c.execute(text("SELECT * FROM soa_cycles WHERE id = 229")).mappings().one())
