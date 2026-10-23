@@ -67,6 +67,14 @@ SOA_DEFAULT_INTER_RUN_DELAY: float = float(os.environ.get("SOA_DEFAULT_INTER_RUN
 
 # Parser
 SOA_CODING_MODEL: str = "gpt-5.4-nano-2026-03-17"
+# The coding model's price, USD per million tokens, the input to the narratives'
+# cost-per-cycle estimate (narratives.usage_totals, scripts/record_narratives.py,
+# rescore_cycle.py --narratives). Read from OpenAI's pricing page
+# (https://developers.openai.com/api/docs/pricing, standard tier, gpt-5.4-nano) on
+# 2026-10-22. Unverified against an invoice: say so wherever a dollar figure is shown.
+SOA_CODING_MODEL_PRICE: dict = {'input': 0.20, 'cached_input': 0.02, 'output': 1.25,
+                                'source': 'https://developers.openai.com/api/docs/pricing',
+                                'as_of': '2026-10-22', 'verified': False}
 SOA_MAX_CODING_CONCURRENT: int = int(os.environ.get("SOA_MAX_CODING_CONCURRENT", "5"))
 
 # Incentive scoring (Rung-0) — compares stated incentives against Deal Engine ground truth

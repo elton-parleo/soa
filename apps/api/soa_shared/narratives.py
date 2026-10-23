@@ -1510,6 +1510,17 @@ def write_cycle(engine, cycle_id: int, writer: Writer, *, dry_run: bool = False,
     return reports
 
 
+def dollars(totals: dict, model: Optional[str] = None) -> Optional[float]:
+    """The calls' cost at config.SOA_CODING_MODEL_PRICE (unverified, its
+    as_of says when it was read), or None for a model it is not the price
+    of. The cost-per-cycle estimate: a cycle's usage_totals through this."""
+    from soa_shared import config
+    if (model or config.SOA_CODING_MODEL) != config.SOA_CODING_MODEL:
+        return None
+    price = config.SOA_CODING_MODEL_PRICE
+    return (totals['input_tokens'] * price['input'] + totals['output_tokens'] * price['output']) / 1_000_000
+
+
 def usage_totals(reports: List[dict]) -> dict:
     calls = [c for r in reports for c in r.get('calls') or []]
     tokens_in = [int((c.get('usage') or {}).get('input_tokens') or 0) for c in calls]

@@ -830,6 +830,12 @@ def _main_narratives(args, writer=None, log=print) -> int:
     log(f"accepted {counts['accepted']}, dropped {counts['dropped']}, null {counts['null']}; "
         f"{totals['calls']} calls, {totals['input_tokens']} input / {totals['output_tokens']} output tokens"
         f"{'' if args.dry_run else '; stored'}")
+    from soa_shared import config
+    cost = narratives.dollars(totals, getattr(writer, 'model', None))
+    if cost is not None:
+        price = config.SOA_CODING_MODEL_PRICE
+        log(f"about ${cost:.4f} for this cycle at ${price['input']:.2f} / ${price['output']:.2f} per million "
+            f"tokens (OpenAI's price as read on {price['as_of']}, unverified)")
     return 0
 
 

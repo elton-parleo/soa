@@ -101,9 +101,12 @@ def test_stdlib_quoting_bug_worked_around_disallow_star_for_named_agent():
     assert claudebot["rule"] == "Disallow: *"
     assert divergence == ["robots.txt blocks ClaudeBot specifically — the general '*' rule allows it"]
 
-    # Sanity: confirms the stdlib bug this guards against is real.
+    # Sanity: the stdlib bug this guards against is real where the stdlib
+    # still quotes '*' (CPython 3.11, 3.12); the RFC 9309 parser (3.13
+    # branch, 3.14) fixed it, and the matrix reads the same either way.
     rp = discovery.robot_parser
-    assert rp.can_fetch("ClaudeBot", "https://example.com/") is True
+    quotes_star = urllib.robotparser.RuleLine("*", False).path == "%2A"
+    assert rp.can_fetch("ClaudeBot", "https://example.com/") is quotes_star
 
 
 def test_allow_beats_disallow_on_exact_specificity_tie():
@@ -160,3 +163,13 @@ def test_no_default_group_at_all_defaults_to_allowed():
         assert row["root"] == "allowed"
         assert row["product_pages"] == "allowed"
     assert divergence == []
+
+
+def test_a_dollar_anchor_is_read_back_from_either_parser():
+    """'$' anchors the end: /dp/x$ blocks /dp/x, not /dp/x/reviews. The RFC
+    9309 parser keeps the anchor on RuleLine.fullmatch, not in the path."""
+    discovery = _parsed("User-agent: *\nDisallow: /dp/x$\n")
+    matrix, _ = build_agent_access_matrix(discovery, ["https://example.com/dp/x", "https://example.com/dp/x/reviews"])
+    row = _row(matrix, "GPTBot")
+    assert row["product_pages"] == "partial"
+    assert row["root"] == "allowed"

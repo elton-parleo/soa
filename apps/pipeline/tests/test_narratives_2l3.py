@@ -125,7 +125,9 @@ def test_rescore_narratives_refuses_to_store_without_the_table(rescore_db, monke
         c.exec_driver_sql(NARRATIVES_TABLE)
     out = []
     assert rc._main_narratives(_args(), writer=object(), log=out.append) == 0
-    assert out[-1].endswith('; stored')
+    assert out[-2].endswith('; stored')
+    # 2M-3: the cost-per-cycle estimate at the configured model's published price, said to be unverified
+    assert out[-1].startswith('about $') and out[-1].endswith('unverified)')
 
 
 def test_rescore_narratives_runs_on_its_own():
