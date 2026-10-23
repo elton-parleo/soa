@@ -554,12 +554,15 @@ def overall_direction(directions: Iterable[Optional[str]]) -> Optional[str]:
 
 
 def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[str], brand_choice: bool,
-                merchant: Merchant, attribute: Optional[dict] = None, promo_missed: bool = False) -> List[str]:
+                merchant: Merchant, attribute: Optional[dict] = None, promo_missed: bool = False,
+                catalog_intent: Optional[str] = None) -> List[str]:
     """The reasons an answer gets a line (empty: it keeps its template).
     2M-1: `attribute` is an accuracy answer's verdict (attribute_accuracy.
     answer_attribute); a mismatch or an absent range is flagged. 2M-2:
     `promo_missed`, a cheapest-place answer that named none of the deals live
-    for its variant that day, adds promo_missed after the other reasons."""
+    for its variant that day, adds promo_missed after the other reasons.
+    2N-1: a catalog-built question's answer (`catalog_intent`,
+    claim_kinds.catalog_intent) is never flagged by the brand-claim rule."""
     o = outcome or {}
     if (attribute or {}).get('verdict') in ('mismatch', 'absent'):
         return [f"attribute_{attribute['verdict']}"]
@@ -569,7 +572,7 @@ def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[st
         why.append(f'{raw}_price')
     if raw == 'absent' and reason == 'other_brand':
         why.append('other_brand_price')
-    if tier == BRAND_TIER and raw in FLAGGED_BRAND:
+    if tier == BRAND_TIER and raw in FLAGGED_BRAND and not catalog_intent:
         why.append(f'brand_{raw}')
     for f in _json(o.get('flags')) or []:
         if isinstance(f, dict) and f.get('flag') in FLAGGED_FLAGS:
@@ -620,7 +623,9 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     attribute = attribute_accuracy.answer_attribute(ref, _json((outcome or {}).get('extraction')),
                                                     run.get('raw_response'), truths=truths) if outcome else None
     missed = promo_missed(run, deals) if outcome else []
-    why = why_flagged(run.get('tier'), outcome, first, brand_choice, merchant, attribute, promo_missed=bool(missed))
+    intent = claim_kinds.catalog_intent(ref) if run.get('tier') == BRAND_TIER else None
+    why = why_flagged(run.get('tier'), outcome, first, brand_choice, merchant, attribute, promo_missed=bool(missed),
+                      catalog_intent=intent)
     if not why:
         return None
     if attribute is not None and why[0].startswith('attribute_'):
@@ -664,8 +669,9 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
         'verdict': None if brand else VERDICT_WORDS.get(o.get('outcome'), o.get('outcome')),
         'reason_code': o.get('reason_code'),
         'scorer_note': o.get('outcome_reason'),
-        'brand_verdict': o.get('outcome') if brand else None,
-        'claim_kind': CLAIM_KIND_WORDS.get(claim_kinds.claim_kind(extraction)) if brand else None,
+        # 2N-1: the brand-claim verdict is the AI-written questions' only
+        'brand_verdict': o.get('outcome') if brand and not intent else None,
+        'claim_kind': CLAIM_KIND_WORDS.get(claim_kinds.claim_kind(extraction)) if brand and not intent else None,
         'first pick': first if rival or brand_choice else None,
         'named in order': named if rival or brand_choice else None,
         'flags': [_drop_none({'flag': f.get('flag'), 'detail': f.get('detail') or f.get('evidence')}) for f in flags],

@@ -138,6 +138,63 @@ def _severity(outcome, brand: bool, flags) -> str:
             'absent': 'low', 'exact': 'ok', 'unscoreable': 'low'}.get(outcome, 'low')
 
 
+def _and(names: List[str]) -> str:
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
+
+
+def catalog_verdict(intent: str, source_ref: dict, extraction: Optional[dict], answer: Optional[str], *,
+                    attribute: Optional[dict] = None, deals: Optional[dict] = None) -> dict:
+    """
+    2N-1: a catalog-built brand-direct answer's own verdict (never the
+    brand-claim rule's): {verdict, line, severity, tone}.
+
+      where_to_buy    coverage: the stores it sends the shopper to (the
+                      routing coding) against the brand's retailer list.
+                      covered (two or more listed), partial, no_store.
+      cheapest_place  deal pass-through: whether it named a deal live for
+                      the SKU that day (`deals`, the cycle's cached rows').
+                      named_deal, missed_deal, no_deal_live.
+      attribute       the weight range (attribute_accuracy.answer_attribute).
+      retired         still sold / successor: not coded (RETIRED_STILL_SOLD_NOTE).
+    """
+    ref = source_ref or {}
+    if intent == claim_kinds.ATTRIBUTE_INTENT:
+        v = (attribute or {}).get('verdict')
+        return {'verdict': v, 'line': (attribute or {}).get('line'),
+                'severity': {'match': 'ok', 'mismatch': 'high', 'absent': 'medium'}.get(v, 'low'),
+                'tone': {'match': 'ok', 'mismatch': 'bad', 'absent': 'bad'}.get(v, 'neu')}
+    if intent == claim_kinds.RETIRED:
+        line = (ref.get('retired_line') or {}).get('line') or 'the line'
+        return {'verdict': None, 'line': f"asked about {line}, which the brand retired. Whether the answer called it "
+                                         f"still sold is not coded", 'severity': 'low', 'tone': 'neu'}
+    stores = stores_in_order(extraction)
+    if stores is None:
+        return {'verdict': None, 'line': None, 'severity': 'low', 'tone': 'neu'}
+    names = [st['name'] for st in stores]
+    if intent == claim_kinds.CHEAPEST_PLACE:
+        live = ppt.live_for(deals, ref)
+        where = f"named {names[0]} as the cheapest place" if names else 'named no store'
+        if not live:
+            return {'verdict': 'no_deal_live', 'line': f"{where}, with no deal live for this SKU that day",
+                    'severity': 'low', 'tone': 'neu'}
+        named = ppt.judge(answer, live)['named']
+        if named:
+            deal = next(d for d in live if ppt.deal_id(d) in named)
+            return {'verdict': 'named_deal', 'line': f"named the {ppt.short(deal)} live that day",
+                    'severity': 'ok', 'tone': 'ok'}
+        return {'verdict': 'missed_deal', 'line': f"{where} and named none of the deals live that day "
+                                                  f"({_and([ppt.short(d) for d in live])})",
+                'severity': 'medium', 'tone': 'bad'}
+    listed = set(ref.get('retailer_list') or [])
+    on = [st for st in stores if st.get('domain') and (not listed or st['domain'] in listed)]
+    if not stores:
+        return {'verdict': 'no_store', 'line': 'named no store', 'severity': 'medium', 'tone': 'bad'}
+    covered = len({st['domain'] for st in on}) >= 2
+    return {'verdict': 'covered' if covered else 'partial',
+            'line': f"named {_and(names)}, {len(on)} of the brand's retailers",
+            'severity': 'ok' if covered else 'low', 'tone': 'ok' if covered else 'neu'}
+
+
 #: 2C: the classifier's reason codes (scoring/expectation_comparator.py
 #: REASON_*), carried in Check.reason and Answer.reason. A code soa adds
 #: later passes through verbatim; the console renders an unknown one neutral.
@@ -327,12 +384,14 @@ def _swap_check(claim: dict, expectation: dict, variant_names: Optional[Dict[str
 def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List[dict],
                  *, runs_per_query: Optional[int], cycle_code: str,
                  variant_names: Optional[Dict[str, str]] = None, features: Optional[List[str]] = None,
-                 references: Optional[Dict[tuple, dict]] = None, truths: Optional[dict] = None) -> dict:
+                 references: Optional[Dict[tuple, dict]] = None, truths: Optional[dict] = None,
+                 deals: Optional[dict] = None) -> dict:
     """features (2K-3): the merchant's catalog feature terms for claim_kind
     (app/services/console_claims.py); None reads 2K-1's rule. references
     (2L-1): the cycle's reference_index, for the reference of a check whose
     answer gave no price. truths (2N-1): the cycle's brand truths
-    (attribute_accuracy.truth_index), for an accuracy answer."""
+    (attribute_accuracy.truth_index), for an accuracy answer; deals the
+    deals live that day (its cached rows'), for a cheapest-place answer."""
     platform = run['platform']
     agent = surfaces.agent_of(platform) or platform
     extraction = _json((outcome or {}).get('extraction')) or {}
@@ -344,8 +403,10 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     raw = (outcome or {}).get('outcome')
 
     verdict = None if brand or raw is None else VALUE_VERDICT.get(raw, raw)
-    kind = console_claims.claim_kind(extraction, features) if brand and outcome is not None else None
-    brand_verdict = raw if brand else None
+    # 2N-1: a catalog-built brand-direct question is judged by its own verdict, not the brand-claim rule
+    intent = claim_kinds.catalog_intent(_json(query.get('source_ref'))) if brand else None
+    kind = console_claims.claim_kind(extraction, features) if brand and not intent and outcome is not None else None
+    brand_verdict = raw if brand and not intent else None
     checks = []
     if not brand and outcome is not None:
         priced = expectation.get('type') in ('price', 'member_price')
@@ -396,6 +457,10 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
                                                     truths=truths) if outcome is not None else None
     if attribute is not None and attribute['stated'] is not None:
         kind = claim_kinds.ATTRIBUTE
+    own = catalog_verdict(intent, source_ref, extraction, run.get('raw_response'), attribute=attribute,
+                          deals=deals) if intent and outcome is not None else None
+    if own is not None and flags and any(f.get('flag') == 'fabricated_availability' for f in flags):
+        own = {**own, 'severity': 'high', 'tone': 'bad'}   # a store off the brand's list is coverage's miss
     named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99)]
     first = next((m['name'] for m in mentions if m.get('position') == 1), '')
     return compact({
@@ -405,8 +470,8 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'queryType': TIER_LABELS.get(tier) or query.get('stage') or '',
         'runAt': _iso(run.get('run_at')),
         'runs': f"run {run.get('run_number')} of {runs_per_query}" if runs_per_query else None,
-        'severity': 'high' if (attribute or {}).get('verdict') == 'mismatch' else _severity(raw, brand, flags),
-        'summary': (attribute or {}).get('line') or (outcome or {}).get('outcome_reason') or (
+        'severity': own['severity'] if own else _severity(raw, brand, flags),
+        'summary': (own or {}).get('line') or (outcome or {}).get('outcome_reason') or (
             f"No answer ({run.get('answer_status')})" if run.get('answer_status') not in (None, 'answered')
             else 'Not scored'),
         'paragraphs': segments(run.get('raw_response'), extraction.get('spans'), claims),
@@ -428,7 +493,9 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'expected_type': expectation.get('type') or (_json(query.get('query_expected')) or {}).get('type'),
         'reason': _reason_code((outcome or {}).get('reason_code')),
         'verdict': verdict,
-        'tone': BRAND_TONE.get(raw, 'neu') if brand else VERDICT_TONE.get(verdict, 'neu'),
+        'tone': own['tone'] if own else BRAND_TONE.get(raw, 'neu') if brand else VERDICT_TONE.get(verdict, 'neu'),
+        # 2N-1: a catalog-built question's own verdict (catalog_verdict)
+        'intent_verdict': (own or {}).get('verdict'),
         'brand_verdict': brand_verdict,
         # 2K-1 (A9): a brand-direct answer's kind, the Answers list's chip: it
         # stated an attribute, or only recommended the brand (soa_shared/claim_kinds.py)
@@ -444,7 +511,7 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'intent': source_ref.get('intent'),
         'attribute': None if attribute is None else {k: v for k, v in attribute.items() if k != 'line'},
     }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer', 'expected_type', 'claim_kind', 'claim_kind_label',
-        'intent', 'attribute'))
+        'intent', 'attribute', 'intent_verdict'))
 
 
 # ─── Answers summary (2C) ──────────────────────────────────────────────────
@@ -511,10 +578,20 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
     tiers; brand-direct, whose outcomes are not a price verdict, is only in
     `tiers`.
 
-    rows: [{tier, surface, platform, answer_status, outcome, reason_code, flags}]
+    rows: [{tier, surface, platform, answer_status, outcome, reason_code, flags, intent}]
+
+    2N-1: brand-direct's cells count the AI-written questions' answers only,
+    the ones the brand-claim rule judges. A catalog-built question's answers
+    (`intent`, claim_kinds.catalog_intent) carry their own verdict and are
+    outside those counts; each cell says how many there were (`catalog_built`,
+    present when the study asked one).
     """
     by_tier: Dict[str, List[dict]] = {}
+    catalog_built: List[dict] = []
     for r in rows:
+        if r.get('tier') == 'brand_direct' and r.get('intent'):
+            catalog_built.append(r)
+            continue
         by_tier.setdefault(r.get('tier') or 'untiered', []).append(r)
     tier_order = [t for t in TIER_LABELS if t in by_tier] + sorted(t for t in by_tier if t not in TIER_LABELS)
 
@@ -529,7 +606,7 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
     every: Dict[str, List[dict]] = {surfaces.ALL: rows}
     for r in rows:
         every.setdefault(_surface_key(r), []).append(r)
-    return {
+    body = {
         'cycle': cycle_code,
         # 2C-2c: per surface over every tier, by the run-count rule (runs the
         # cycle executed, answers that say answered): what the Answers strip counts
@@ -540,16 +617,24 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
         'tiers': [{'tier': t, 'label': TIER_LABELS.get(t, t), 'surfaces': per_surface(by_tier[t])}
                   for t in tier_order],
     }
+    for t in body['tiers'] if catalog_built else []:   # absent on a study with none, as before
+        if t['tier'] == 'brand_direct':
+            for cell in t['surfaces']:
+                cell['catalog_built'] = sum(1 for r in catalog_built
+                                            if cell['surface'] == surfaces.ALL or _surface_key(r) == cell['surface'])
+    return body
 
 
 def load_answers_summary(conn, cycle: dict) -> dict:
     rows = [dict(r) for r in conn.execute(text("""
         SELECT r.id AS run_id, r.platform, COALESCE(r.surface, o.surface) AS surface,
-               r.answer_status, q.tier, o.outcome, o.reason_code, o.flags
+               r.answer_status, q.tier, q.source_ref, o.outcome, o.reason_code, o.flags
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         LEFT JOIN soa_expectation_outcomes o ON o.run_id = r.id
         WHERE r.cycle_id = :c
     """), {'c': cycle['id']}).mappings()]
+    for r in rows:   # 2N-1
+        r['intent'] = claim_kinds.catalog_intent(_json(r.pop('source_ref')))
     unpriced = brand_sets_no_price_runs(conn, cycle)
     return build_answers_summary([not_priced(r, unpriced) for r in rows], cycle_code=cycle['cycle_code'])
 
@@ -2869,9 +2954,10 @@ def load_answers(conn, cycle: dict, features: Optional[List[str]] = None) -> Lis
         "SELECT reference_prices FROM soa_cycles WHERE id = :c"), {'c': cycle['id']}).scalar()
     index = reference_index(_json(reference))   # 2L-1: a left-out check's reference
     truths = attribute_accuracy.truth_index(_json(reference))   # 2N-1: the cycle's brand truths
+    deals = ppt.deals_from_rows([r for r in (_json(reference) or {}).get('prices') or [] if isinstance(r, dict)])
     return [build_answer(dict(r), dict(r), outcomes.get(r['id']), mentions.get(r['id'], []),
                          runs_per_query=cycle.get('runs_per_query'), cycle_code=cycle['cycle_code'],
-                         variant_names=names, features=features, references=index, truths=truths)
+                         variant_names=names, features=features, references=index, truths=truths, deals=deals)
             for r in runs]
 
 

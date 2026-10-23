@@ -392,6 +392,8 @@ def surface_metrics(rows: List[dict], vis_rows: List[dict], surface: str, *, tie
         answered = r.get('answer_status') == surfaces.ANSWERED
         for bucket in (total, per.setdefault(agent, _empty_agent())):
             if t == 'brand_direct':
+                if r.get('intent'):
+                    continue   # 2N-1: a catalog-built question is outside the brand-claim counts
                 if o in ('grounded', 'echoed', 'misattributed', 'fabricated', 'acknowledged_unknown'):
                     bucket['brand_scored'] += 1
                 recommends = r.get('claim_kind') == claim_kinds.RECOMMENDATION_ONLY
@@ -1565,11 +1567,14 @@ def load_overview_rows(conn, cycle: dict, features: Optional[List[str]] = None) 
         WHERE r.cycle_id = :c
     """), {'c': cycle['id']}).mappings():
         row = dict(r)
-        row['variant_id'] = (_json(row.pop('source_ref')) or {}).get('variant_id')
+        ref = _json(row.pop('source_ref')) or {}
+        row['variant_id'] = ref.get('variant_id')
+        # 2N-1: a catalog-built brand-direct question carries its own verdict, never the brand-claim rule's
+        row['intent'] = claim_kinds.catalog_intent(ref)
         # 2K-1 (A9): whether a brand-direct answer stated an attribute, from its stored extraction
         extraction = row.pop('extraction', None)
         row['claim_kind'] = (console_claims.claim_kind(_json(extraction), features)
-                             if row.get('tier') == 'brand_direct' else None)
+                             if claim_kinds.is_brand_claim(row.get('tier'), ref) else None)
         rows.append(row)
     # 2K-1: a price attributed to the brand's own page, which sets none, is not scored
     unpriced = rm.brand_sets_no_price_runs(conn, cycle)
