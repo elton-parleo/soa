@@ -21,11 +21,13 @@ mapping is tested without a database.
 import json
 import re
 from collections import Counter
+from decimal import Decimal
 from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
 from soa_shared import attribute_accuracy, claim_kinds, local_time, retired_lines, surfaces, unprompted
+from soa_shared import promo_pass_through as ppt
 
 from app.services import console_claims
 
@@ -3183,3 +3185,255 @@ def build_weight_drift(reference: Optional[dict], brand: Optional[str] = None) -
                             'now': phrase(v.get('truth')), 'prov': 'retail', 'kind': 'page',
                             'variant_ref': v.get('variant_ref'), 'url': p.get('url'), 'evidence': p.get('evidence')})
     return out
+
+
+# ─── Promo pass-through (2M-2) ─────────────────────────────────────────────
+#
+# The demo's fifth brand tile and its Trade promotions screen: of the
+# answered cheapest-place answers (source_ref.intent 'cheapest_place',
+# 2L-4), how many named a deal live on a retailer shelf for the question's
+# variant on the cycle's read date (supply's /deals, parleo-supply-app 2M-2;
+# soa_shared/promo_pass_through.py). Where-to-buy answers are counted the
+# same way and reported apart. Deterministic; no model.
+
+
+#: The copy, kept out of console_parity.TEMPLATES as 2M-1's is.
+PROMO_TEMPLATES = {
+    'tile.note': 'Cheapest-place answers naming a deal live that day. {deal}: named {k} of {n}',
+    'tile.note.none': 'Cheapest-place answers naming a deal live that day',
+    'changes.label': 'Deals named, cheapest-place answers',
+    'changes.new': '{k} of {n}. {named}{biggest} First cycle with this question.',
+    'changes.detail': '{k} of {n} this cycle against {b} of {m} in {code}.',
+    'changes.biggest': '{deal} ran on {skus} and {named} of {asked} answers named it.',
+    'prove.title': 'Trade promotions',
+    'prove.sub': 'Deals live on a retailer shelf for the {brand} SKUs on {date}, and whether agents passed them on.',
+    'prove.kick': 'Promo pass-through, {date}',
+    'prove.label': 'cheapest-place answers named a deal that was live on a shelf that day',
+    'prove.sub.subscribe': 'Subscribe & Save came up in {s} answers, and the charter counts it as a standing program.',
+    'prove.note': ('Manufacturer mode never sets a price. Every figure here is what a named retailer showed on '
+                   '{date}.'),
+    'prove.note.walled': ' {names} walled every read, so their deals could not be checked.',
+    'prove.none': 'No deals read this cycle: supply found no deal live on a retailer shelf for these SKUs on {date}.',
+    'prove.agents': 'Named {k} of {n}',
+    'baseline.label': 'Promo pass-through',
+    'baseline.note': 'Named a deal live that day',
+}
+
+
+def promo_as_of(cycle: dict) -> Optional[str]:
+    """The cycle's read date as supply's /deals takes it: the as_of of the
+    retailer-prices read cached on the cycle (2B), else the cycle's creation,
+    else its start day (a bare date: that whole day)."""
+    for key in ('reference_as_of', 'created_at'):
+        value = cycle.get(key)
+        if value:
+            return value.isoformat() if hasattr(value, 'isoformat') else str(value)
+    start = cycle.get('start_date')
+    return (start.isoformat() if hasattr(start, 'isoformat') else str(start))[:10] if start else None
+
+
+def asks_cheapest_place(conn, cycle: dict) -> bool:
+    """2M-2: whether the cycle's study has a cheapest-place question."""
+    if not cycle.get('study_type'):
+        return False
+    refs = conn.execute(text("SELECT source_ref FROM soa_queries WHERE study_type = :st AND tier = 'brand_direct'"),
+                        {'st': cycle['study_type']}).scalars()
+    return any((_json(r) or {}).get('intent') == ppt.CHEAPEST_PLACE for r in refs)
+
+
+def promo_answers(conn, cycle: dict) -> List[dict]:
+    """Every answered run of the cycle's cheapest-place and where-to-buy
+    questions: {run_id, platform, surface, intent, source_ref, text, query}."""
+    rows = conn.execute(text("""
+        SELECT r.id, r.platform, r.surface, r.answer_status, r.raw_response, q.query_text, q.source_ref
+        FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
+        WHERE r.cycle_id = :c AND q.tier = 'brand_direct'
+        ORDER BY r.id
+    """), {'c': cycle['id']}).mappings().all()
+    out = []
+    for r in rows:
+        ref = _json(r['source_ref']) or {}
+        if ref.get('intent') not in ppt.INTENTS:
+            continue
+        if (r['answer_status'] or surfaces.ANSWERED) != surfaces.ANSWERED or not (r['raw_response'] or '').strip():
+            continue
+        out.append({'run_id': r['id'], 'platform': r['platform'],
+                    'surface': r['surface'] or surfaces.surface_of(r['platform']),
+                    'intent': ref['intent'], 'source_ref': ref, 'text': r['raw_response'], 'query': r['query_text']})
+    return out
+
+
+def _read_day(deals: Optional[dict], as_of: Optional[str]) -> Optional[str]:
+    """"Oct 20" for the deals' read date (supply's read_date, else the as_of)."""
+    day = (deals or {}).get('read_date') or (as_of or '')[:10]
+    try:
+        from datetime import date
+        d = date.fromisoformat(day)
+        return f"{d.strftime('%b')} {d.day}"
+    except (TypeError, ValueError):
+        return None
+
+
+def build_promo_pass_through(answers: List[dict], deals: Optional[dict], as_of: Optional[str] = None) -> Optional[dict]:
+    """
+    /overview's promo_pass_through, the Promo pass-through tile's input:
+    {n, k, loose, subscribe, per_deal: [{retailer, retailer_domain, text,
+    kind, title, short, asked, named}], by_surface, where_to_buy: {n, k,
+    loose, subscribe, by_surface}, rule, read_date, as_of, walled, note}.
+    None when the cycle has no answered cheapest-place answer: the tile
+    reads "not measured".
+    """
+    cheapest = ppt.count(answers, deals, ppt.CHEAPEST_PLACE)
+    if not cheapest['n']:
+        return None
+    where = ppt.count(answers, deals, ppt.WHERE_TO_BUY)
+    top = ppt.biggest(cheapest['per_deal'])
+    note = PROMO_TEMPLATES['tile.note'].format(deal=top['short'], k=top['named'], n=top['asked']) if top \
+        else PROMO_TEMPLATES['tile.note.none']
+    return {
+        'n': cheapest['n'], 'k': cheapest['k'], 'loose': cheapest['loose'], 'subscribe': cheapest['subscribe'],
+        'per_deal': [{k: v for k, v in d.items() if k != 'id'} for d in cheapest['per_deal']],
+        'by_surface': cheapest['by_surface'],
+        'where_to_buy': {k: where[k] for k in ('n', 'k', 'loose', 'subscribe', 'by_surface')},
+        'rule': ppt.RULE, 'as_of': as_of, 'read_date': (deals or {}).get('read_date'),
+        'deals_read': deals is not None, 'live_deals': len((deals or {}).get('deals') or []),
+        'walled': list((deals or {}).get('walled') or []), 'note': note,
+        'judged': cheapest['judged'],
+    }
+
+
+def promo_changes(now: Optional[dict], prev: Optional[dict], prev_code: Optional[str], surface: str,
+                  compared: bool) -> List[dict]:
+    """
+    2M-2: the Overview's Changes line "Deals named, cheapest-place answers"
+    on `surface`: k of n. Against a compared previous cycle that measured it,
+    a delta; otherwise `new`, with the deals named and the biggest deal's
+    count, as the demo writes it.
+    """
+    if not now:
+        return []
+
+    def cell(block):
+        if surface == surfaces.ALL:
+            return {'n': block['n'], 'k': block['k']}
+        found = [c for s, c in (block.get('by_surface') or {}).items() if surfaces.on_surface(s, surface)]
+        return {'n': sum(c['n'] for c in found), 'k': sum(c['k'] for c in found)}
+
+    here = cell(now)
+    if not here['n']:
+        return []
+    then = cell(prev) if compared and prev else None
+    t = PROMO_TEMPLATES
+    if then and then['n']:
+        d = here['k'] - then['k']
+        delta, direction = (f"+{d}" if d > 0 else str(d) if d < 0 else '0'), ('up' if d > 0 else 'down' if d < 0 else 'flat')
+        tone = 'neu' if direction == 'flat' else ('ok' if direction == 'up' else 'bad')
+        detail = t['changes.detail'].format(k=here['k'], n=here['n'], b=then['k'], m=then['n'], code=prev_code)
+    else:
+        delta, direction = 'new', 'flat'
+        tone = 'bad' if here['k'] * 2 < here['n'] else 'neu'
+        named = [d for d in now['per_deal'] if d['named']]
+        said = ' and '.join(f"{d['title']} {d['named']} {'time' if d['named'] == 1 else 'times'}" for d in named)
+        top = ppt.biggest(now['per_deal'])
+        skus = len({j['variant_id'] for j in now.get('judged') or [] if top and ppt.deal_id(top) in j['live']}) if top else 0
+        biggest = t['changes.biggest'].format(deal=top['short'], skus=f"{skus} SKU{'s' if skus != 1 else ''}",
+                                              named=top['named'], asked=top['asked']) if top else ''
+        detail = t['changes.new'].format(k=here['k'], n=here['n'], named=f"Named: {said}. " if said else '',
+                                         biggest=biggest).replace('  ', ' ')
+    return [{'label': t['changes.label'], 'delta': delta, 'dir': direction, 'tone': tone, 'detail': detail.strip(),
+             'route': 'prove', 'metric': 'promo', 'now': here['k'], 'of_now': here['n'],
+             'prev': (then or {}).get('k'), 'of_prev': (then or {}).get('n')}]
+
+
+def _variant_words(entry: dict) -> str:
+    return entry.get('product_name') or entry.get('variant_label') or entry.get('sku') or entry.get('variant_ref') or ''
+
+
+def _price_words(entry: dict) -> Optional[str]:
+    price, was = entry.get('price') or entry.get('shelf_price'), entry.get('was_price')
+    if price and was:
+        return f"${was} to ${price}"
+    return f"${price}" if price else None
+
+
+def _deal_value(deal: dict) -> Optional[str]:
+    value, unit = deal.get('value'), deal.get('value_unit')
+    if value is None:
+        variants = deal.get('variants') or []
+        cuts = sorted({(Decimal(v['was_price']) - Decimal(v['price'])).quantize(Decimal('0.01'))
+                       for v in variants if v.get('was_price') and v.get('price')})
+        if not cuts:
+            return None
+        return f"${cuts[0]}" if len(cuts) == 1 else f"${cuts[0]} to ${cuts[-1]}"
+    v = format(Decimal(str(value)).normalize(), 'f')
+    return f"{v}% off" if unit == 'percent' else f"${Decimal(str(value)).quantize(Decimal('0.01'))}"
+
+
+def _deal_terms(deal: dict) -> str:
+    from soa_shared import retailers as af
+    if deal.get('kind') == 'member_cash':
+        return deal.get('program') or 'Members'
+    words = {'multi_buy': deal.get('terms') or 'Multi-buy', 'rollback_or_was': 'Rollback' if 'rollback' in
+             (deal.get('text') or '').lower() else 'Was price', 'sale': 'Sale', 'coupon': 'Coupon',
+             'other': deal.get('terms') or 'Deal'}
+    term = words.get(deal.get('kind'), 'Deal')
+    return f"{af.retailer_name(deal.get('retailer_domain'))}, {term}" if deal.get('kind') == 'multi_buy' else term
+
+
+def build_prove(promo: Optional[dict], deals: Optional[dict], brand: Optional[str], as_of: Optional[str]) -> dict:
+    """
+    /prove, the Trade promotions screen: {state, title, sub, rows: [{retailer,
+    retailer_domain, title, detail, terms, agents, value, tone, kind, asked,
+    named}], aside: {kick, value, label, sub}, note, walled, rule}. One row
+    per deal live that day; `agents` "Named k of n" over the cheapest-place
+    answers about a SKU it ran on. state `measured`; `no_deals` when supply
+    read the shelves and found none; `not_measured` when the cycle asked no
+    cheapest-place question or supply could not be read.
+    """
+    from soa_shared import retailers as af
+    t = PROMO_TEMPLATES
+    day = _read_day(deals, as_of) or 'the read date'
+    walled = [af.retailer_name(d) for d in (deals or {}).get('walled') or []]
+    note = t['prove.note'].format(date=day) + (
+        t['prove.note.walled'].format(names=' and '.join([', '.join(walled[:-1]), walled[-1]] if len(walled) > 1 else walled))
+        if walled else '')
+    per = {d['title']: d for d in (promo or {}).get('per_deal') or []}
+    rows = []
+    for deal in (deals or {}).get('deals') or []:
+        variants = deal.get('variants') or []
+        tally = per.get(ppt.title(deal)) or {'asked': 0, 'named': 0}
+        where = ', '.join(dict.fromkeys(_variant_words(v) for v in variants))
+        prices = '. '.join(dict.fromkeys(f"{_variant_words(v)} {_price_words(v)}" for v in variants if _price_words(v)))
+        detail = f"Live on {where}." + (f" {prices}." if prices else '')
+        asked, named = tally['asked'], tally['named']
+        rows.append({'retailer': af.retailer_name(deal.get('retailer_domain')), 'retailer_domain': deal.get('retailer_domain'),
+                     'title': ppt.title(deal), 'detail': detail, 'terms': _deal_terms(deal),
+                     'agents': t['prove.agents'].format(k=named, n=asked) if asked else 'Not asked this cycle',
+                     'value': _deal_value(deal), 'kind': deal.get('kind'), 'asked': asked, 'named': named,
+                     'tone': 'ok' if asked and named * 2 >= asked else ('warn' if named else 'bad'),
+                     'skus': len(variants)})
+    rows.sort(key=lambda r: (-r['asked'], r['named'], r['retailer'] or ''))
+    who = brand or 'the brand'
+    if promo is None or deals is None:
+        state = 'not_measured'
+    else:
+        state = 'measured' if rows else 'no_deals'
+    aside = None
+    if promo is not None:
+        named = [d for d in promo['per_deal'] if d['named']]
+        said = ' and '.join(f"{d['title']} {d['named']} {'time' if d['named'] == 1 else 'times'}" for d in named)
+        sub = ' '.join(x for x in (f"{said}." if said else None,
+                                   t['prove.sub.subscribe'].format(s=promo['subscribe']) if promo['subscribe'] else None) if x)
+        aside = {'kick': t['prove.kick'].format(date=day), 'value': f"{promo['k']} of {promo['n']}",
+                 'label': t['prove.label'], 'sub': sub or None}
+    return {'state': state, 'title': t['prove.title'], 'sub': t['prove.sub'].format(brand=who, date=day),
+            'rows': rows, 'aside': aside, 'note': note if state != 'no_deals' else t['prove.none'].format(date=day),
+            'walled': walled, 'rule': ppt.RULE, 'read_date': (deals or {}).get('read_date'), 'as_of': as_of}
+
+
+def promo_baseline(promo: Optional[dict]) -> Optional[dict]:
+    """Impact's baseline row: {key, label, value, note, n, k}; None when not measured."""
+    if promo is None:
+        return None
+    return {'key': 'promo', 'label': PROMO_TEMPLATES['baseline.label'], 'value': f"{promo['k']} of {promo['n']}",
+            'note': PROMO_TEMPLATES['baseline.note'], 'n': promo['n'], 'k': promo['k']}

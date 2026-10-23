@@ -601,6 +601,9 @@ BRAND_TILE_TEMPLATES = {
     'attribute.sub': 'Weight range for the size asked: pages {pk} of {pn}, answers {ak} of {an}',
     'note.attribute': '{where}, retailer pages and accuracy answers',
     'promo.not_measured': "Not measured: retailer-page deals are not read yet.",
+    'promo.sub': 'Cheapest-place answers naming a deal live that day. {deal}: named {k} of {n}',
+    'promo.sub.none': 'Cheapest-place answers naming a deal live that day. No deal was live on these SKUs',
+    'note.promo': '{where}, cheapest-place answers',
     'retired.not_measured': "Not measured: the brand's record has no retired line.",
     'coverage.not_measured': ("Not measured: this cycle asked no where-to-buy question. The study's next "
                               "regeneration adds them."),
@@ -629,7 +632,10 @@ def brand_counts(brand_inputs: Optional[dict], vis_rows: List[dict], surface: st
     retailers; retired the first retired line's brand-choice answers
     naming it. 2M-1: attribute is the weight range for the size asked,
     matches over the retailer pages supply read (every surface) plus the
-    surface's judged accuracy answers (rm.build_attribute_accuracy)."""
+    surface's judged accuracy answers (rm.build_attribute_accuracy). 2M-2:
+    promo is the cheapest-place answers naming a deal live on a retailer
+    shelf for the SKU that day, of the surface's answered cheapest-place
+    answers (rm.build_promo_pass_through), the deal asked about most beside."""
     inputs = brand_inputs or {}
     keys = [s for s in (surface_set or []) if s != surfaces.ALL] if surface == surfaces.ALL else [surface]
 
@@ -663,13 +669,32 @@ def brand_counts(brand_inputs: Optional[dict], vis_rows: List[dict], surface: st
         pn, pk = accuracy['pages']['n'], accuracy['pages']['k']
         if pn or an:
             attribute = {'value': pk + ak, 'of': pn + an, 'pages': {'n': pn, 'k': pk}, 'answers': {'n': an, 'k': ak}}
+    promo = None
+    passed = inputs.get('promo_pass_through')
+    if passed:
+        per = passed.get('by_surface') or {}
+        n = sum((per.get(s) or {}).get('n', 0) for s in keys)
+        if n:
+            top = (passed.get('per_deal') or [None])[0]
+            deal = None
+            if top is not None:
+                # the deal asked about most, counted on this tile's surfaces
+                from soa_shared import promo_pass_through as ppt
+                tid = ppt.deal_id(top)
+                here = [j for j in passed.get('judged') or [] if j.get('surface') in keys and tid in j['live']]
+                deal = {'short': top['short'], 'asked': len(here), 'named': sum(1 for j in here if tid in j['named'])} \
+                    if passed.get('judged') is not None else {'short': top['short'], 'asked': top['asked'],
+                                                             'named': top['named']}
+            promo = {'value': sum((per.get(s) or {}).get('k', 0) for s in keys), 'of': n,
+                     'loose': sum((per.get(s) or {}).get('loose', 0) for s in keys),
+                     'subscribe': sum((per.get(s) or {}).get('subscribe', 0) for s in keys), 'deal': deal}
     return {
         'attribute': attribute,
         'coverage': coverage,
         'presence': {'value': totals['named'], 'of': totals['named_of'], 'first': totals['first'],
                      'brand': inputs.get('brand'), 'rival': {'name': rival[0], 'first': rival[1]} if rival else None},
         'retired': retired,
-        'promo': None,
+        'promo': promo,
     }
 
 
@@ -725,6 +750,10 @@ def _brand_sub(key: str, c: Optional[dict]) -> Optional[str]:
     if key == 'attribute':
         return t['attribute.sub'].format(pk=c['pages']['k'], pn=c['pages']['n'], ak=c['answers']['k'],
                                          an=c['answers']['n'])
+    if key == 'promo':
+        deal = c.get('deal')
+        return t['promo.sub'].format(deal=deal['short'], k=deal['named'], n=deal['asked']) \
+            if deal and deal['asked'] else t['promo.sub.none']
     if key == 'coverage':
         return t['coverage.sub'].format(n=c['value'], d=c['of'], names=', '.join(c.get('names') or [])
                                         or "the merchant's retailers")
@@ -745,7 +774,7 @@ def _brand_note(key: str, surface: str, tier: str) -> Optional[str]:
     where = parity._on_words(surface)
     if key == 'presence':
         return _surface_note(surface, tier, 'share')
-    if key in ('coverage', 'retired', 'attribute'):
+    if key in ('coverage', 'retired', 'attribute', 'promo'):
         return BRAND_TILE_TEMPLATES[f'note.{key}'].format(where=where)
     return None
 
