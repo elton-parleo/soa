@@ -35,6 +35,7 @@ from typing import Dict, Iterable, List, Optional
 from sqlalchemy import text
 
 from soa_shared import cycle_compare, surfaces, unprompted
+from soa_shared.expected_answers import BRAND_CODER_VERSION
 from soa_shared.scan_dimensions import (
     DIMENSIONS,
     DIMENSIONS_BY_CODE,
@@ -81,7 +82,16 @@ from clients import truesync_client as supply_fields
 #: (first, share, program) when a cycle asked comparison questions. No
 #: dimension reads it (share of mentions and recommendation strength stay on
 #: unprompted), so the score does not move; the rows' counts beside it do.
-SCORER_VERSION = "11"
+#: 2O-1: "12", brand-direct answers coded by two agreeing calls (the
+#: brand-claim coder, soa_shared/expected_answers.BRAND_CODER_VERSION). No
+#: dimension reads the brand-direct outcome, so the score does not move; a
+#: cycle is compared on this version only once every brand-direct outcome it
+#: holds was coded by it (comparable_version): one re-scored with
+#: rescore_cycle.py since. A cycle whose outcomes one call wrote compares as
+#: "11", the version they were coded under.
+SCORER_VERSION = "12"
+#: The version a cycle whose brand-direct outcomes predate 2O-1 compares as.
+SINGLE_CALL_CODER_VERSION = "11"
 #: The adapter's own revision, beside the scorer's: a change to how loop
 #: counts become scorer inputs re-scores stored cycles too. Not a scorer
 #: version and never shown as one.
@@ -880,11 +890,11 @@ def score_facts(now: dict, prev_code: str, prev_stored: dict, studies: Optional[
     measured = {cycle_compare.UNPROMPTED: prev_of if prev_tier in (rm.VIS_UNPROMPTED, rm.VIS_BRAND_CHOICE) else 0,
                 'comparison': prev_of if prev_tier == rm.VIS_BRAND_CHOICE else 0}
     a = cycle_compare.facts('this cycle', study=now_study.get('study'), questions=now_study.get('questions'),
-                            scorer_version=now['scorer_version'], surfaces=pooled,
+                            scorer_version=comparable_version(now), surfaces=pooled,
                             agents={s: (counts.get(s) or {}).get('agent_set') or [] for s in pooled},
                             reads=reads if prev_m else None)
     b = cycle_compare.facts(prev_code, study=prev_study.get('study'), questions=prev_study.get('questions'),
-                            scorer_version=prev_stored.get('scorer_version'),
+                            scorer_version=comparable_version(prev_stored),
                             surfaces=[s['surface'] for s in prev_stored.get('surfaces') or []],
                             agents={s: (prev_counts.get(s) or {}).get('agent_set') or [] for s in pooled}, measured=measured)
     return a, b
@@ -978,6 +988,8 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
         'cycle': cycle_code,
         'scorer_version': SCORER_VERSION,
         'adapter_revision': ADAPTER_REVISION,
+        # 2O-1: how many of the cycle's scored brand-direct answers the two-call coder coded
+        'brand_coder': brand_coder(runs),
         # 2E: the dimensions this score counts, stored beside it: a change in
         # the set is the second recompute trigger (needs_recompute)
         'measured': [d['code'] for d in dims if d['state'] in (MEASURED, PARTIAL)],
@@ -1026,6 +1038,30 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
         'read_errors': errors,
         'rules': TEMPLATES,
     }
+
+
+def brand_coder(runs: List[dict]) -> dict:
+    """2O-1: {version, coded, of}: of the cycle's scored brand-direct runs,
+    how many the current brand-claim coder (BRAND_CODER_VERSION) coded."""
+    scored = [r for r in runs if r.get('tier') == 'brand_direct' and r.get('outcome') is not None]
+    return {'version': BRAND_CODER_VERSION, 'of': len(scored),
+            'coded': sum(1 for r in scored if r.get('coder_version') == BRAND_CODER_VERSION)}
+
+
+def comparable_version(body: Optional[dict]) -> Optional[str]:
+    """The scorer version a stored score is compared under (2K-4's version
+    condition). A score computed under this version over brand-direct
+    outcomes the two-call coder did not all code compares as the version
+    they were coded under (SINGLE_CALL_CODER_VERSION): it is current, and
+    not comparable to a cycle re-scored on the new coder until its own
+    outcomes are."""
+    if not body:
+        return None
+    version = body.get('scorer_version')
+    coder = body.get('brand_coder')
+    if str(version) == SCORER_VERSION and isinstance(coder, dict) and coder.get('coded', 0) < coder.get('of', 0):
+        return SINGLE_CALL_CODER_VERSION
+    return version
 
 
 def verdict(score: Optional[int], true_value: Optional[dict], unmeasured: float) -> Optional[str]:
@@ -1226,7 +1262,8 @@ SCORER_CHANGES = {'7': 'ungrounded surfaces excluded from pooling',
                   '8': 'share of mentions not measured without a tracked competitor',
                   '9': 'category-control questions count as unprompted',
                   '10': 'metric rows count every agent',
-                  '11': 'brand-choice set for Lost and the first-pick tiles'}
+                  '11': 'brand-choice set for Lost and the first-pick tiles',
+                  '12': 'brand-direct answers coded by two agreeing calls'}
 
 
 def _no_rivals(body: dict) -> bool:
@@ -1250,7 +1287,9 @@ SCORER_CHANGE_APPLIES = {'7': lambda new: bool((new.get('coverage') or {}).get('
                          # 2I-8a never moves a score (only the rows beside it), so it never explains one
                          '10': lambda _new: False,
                          # 2K-1 never moves a score either: no dimension reads the brand-choice set
-                         '11': lambda _new: False}
+                         '11': lambda _new: False,
+                         # 2O-1 never moves a score: no dimension reads the brand-direct outcome
+                         '12': lambda _new: False}
 
 
 _NOT_CARRIED = object()

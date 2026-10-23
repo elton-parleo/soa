@@ -136,7 +136,7 @@ def test_the_w_s_fixture_scores_60_on_34_applicable_points(http, upstream):
     body = _score(http)
     assert (body['score'], body['earned'], body['applicable_max']) == (60, 20.3, 34.0)
     # 2I-6: the console's scorer is 8, the full-cycle scorer it reuses still 7
-    assert body['scorer_version'] == '11' and FULL_CYCLE_SCORER_VERSION == '7'
+    assert body['scorer_version'] == '12' and FULL_CYCLE_SCORER_VERSION == '7'
     assert body['readiness_bar'] == 60 and body['total_max'] == 100.0
     assert body['verdict'] is None
     assert body['verdict_note'] == ('No readiness verdict while 63 of 100 points are not measured. '
@@ -362,7 +362,7 @@ def test_the_score_is_stored_with_its_version_and_served_from_the_row(http, upst
     assert first['stored'] is True
     with db.connect() as c:
         raw, version = c.execute(text("SELECT share_of_algorithm, share_of_algorithm_version FROM soa_cycles WHERE id = 1")).one()
-    assert version == '11' and json.loads(raw)['score'] == 60
+    assert version == '12' and json.loads(raw)['score'] == 60
     calls = len(upstream.calls)
     again = _score(http)
     assert len(upstream.calls) == calls          # served from the row: no supply read
@@ -377,7 +377,7 @@ def test_a_score_stored_under_another_version_is_recomputed(http, upstream, db):
     _supply(upstream)
     as_('alice')
     body = _score(http)
-    assert (body['score'], body['scorer_version'], body['stored']) == (60, '11', True)
+    assert (body['score'], body['scorer_version'], body['stored']) == (60, '12', True)
 
 
 def test_a_previous_cycle_scored_under_another_version_is_not_comparable(http, upstream, db):
@@ -407,7 +407,7 @@ def test_a_comparable_previous_cycle_gives_deltas(http, upstream, db):
     _supply(upstream)
     as_('alice')
     now = _score(http)
-    earlier = json.loads(json.dumps({k: now[k] for k in ('scorer_version', 'adapter_revision', 'surfaces', 'metric_counts')}))
+    earlier = json.loads(json.dumps({k: now[k] for k in ('scorer_version', 'adapter_revision', 'brand_coder', 'surfaces', 'metric_counts')}))
     earlier['score'] = 55
     earlier['metric_counts']['all']['exact'] = {'value': 3, 'of': 5}     # 2I-8a: the rows compare `all` to `all`
     _previous_cycle(db, stored=earlier)
@@ -425,7 +425,7 @@ def test_a_previous_score_stored_before_the_rows_counted_every_agent_has_no_row_
     _supply(upstream)
     as_('alice')
     now = _score(http)
-    earlier = json.loads(json.dumps({k: now[k] for k in ('scorer_version', 'adapter_revision', 'surfaces', 'metric_counts')}))
+    earlier = json.loads(json.dumps({k: now[k] for k in ('scorer_version', 'adapter_revision', 'brand_coder', 'surfaces', 'metric_counts')}))
     earlier['score'] = 55
     del earlier['metric_counts']['all']
     _previous_cycle(db, stored=earlier)
@@ -441,7 +441,7 @@ def test_a_previous_cycle_on_other_agents_is_not_comparable(http, upstream, db):
     _supply(upstream)
     as_('alice')
     now = _score(http)
-    earlier = json.loads(json.dumps({k: now[k] for k in ('scorer_version', 'adapter_revision', 'surfaces', 'metric_counts', 'score')}))
+    earlier = json.loads(json.dumps({k: now[k] for k in ('scorer_version', 'adapter_revision', 'brand_coder', 'surfaces', 'metric_counts', 'score')}))
     earlier['metric_counts']['grounded_api']['agent_set'] = ['chatgpt']
     _previous_cycle(db, stored=earlier)
     prev = _score(http)['previous']

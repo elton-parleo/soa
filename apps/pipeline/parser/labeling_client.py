@@ -27,6 +27,7 @@ from typing import Optional
 from openai import AsyncOpenAI
 
 import soa_shared.config as config
+from parser.expectation_client import request_options, text_options
 from parser.label_prompts import (
     build_labeling_prompt,
     build_labeling_schema,
@@ -58,7 +59,10 @@ class LabelingClient:
         self.model = model
         self._client = AsyncOpenAI(api_key=config.OPEN_AI_API_KEY)
 
-    async def label(self, record: dict, *, answer_text: str) -> LabelingResult:
+    async def label(self, record: dict, *, answer_text: str,
+                    settings: Optional[dict] = None) -> LabelingResult:
+        """`settings` (2O-1): expectation_client.CODER_SETTINGS for the
+        brand-claim coder's calls, None for every other call."""
         spans = spans_to_label(record, answer_text)
         if not any(spans.values()):
             # Nothing to label is not a failure and is not a call.
@@ -80,6 +84,7 @@ class LabelingClient:
                     instructions=build_labeling_prompt(),
                     input=[{"role": "user", "content": payload}],
                     text={
+                        **text_options(settings),
                         "format": {
                             "type": "json_schema",
                             "name": "span_labeling_schema",
@@ -87,6 +92,7 @@ class LabelingClient:
                             "strict": True,
                         }
                     },
+                    **request_options(settings),
                 )
                 usage = getattr(response, "usage", None)
                 return LabelingResult(

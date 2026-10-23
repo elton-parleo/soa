@@ -1,0 +1,514 @@
+{
+ "_note": "HAND-BUILT, NOT RECORDED. No OPEN_AI_API_KEY was present in the session that wrote 2O-1, so no call was recorded. Each case is the record a call would leave (its transcription with labels applied, as parser/extraction_postprocess.apply_labels stores it) and a usage written for the cost test, not measured. Brand Pampers, own domain pampers.com.",
+ "brand": "Pampers",
+ "domain": "pampers.com",
+ "cases": [
+  {
+   "name": "agree_echoed",
+   "answer": "Pampers Swaddlers are a popular choice for newborns, and many parents start with them.",
+   "calls": [
+    {
+     "prices": [],
+     "codes": [],
+     "pack_counts": [],
+     "sizes": [],
+     "gtins": [],
+     "member_prices": [],
+     "points": [],
+     "brand_mentioned": true,
+     "brand_unknown_statement": null,
+     "other_brands_named": [],
+     "loyalty_tiers_named": [],
+     "brand_claims": [],
+     "sources_cited": [],
+     "recommended_retailers": [],
+     "postprocess": [],
+     "extraction_confident": true,
+     "extraction_note": null
+    },
+    {
+     "prices": [],
+     "codes": [],
+     "pack_counts": [],
+     "sizes": [],
+     "gtins": [],
+     "member_prices": [],
+     "points": [],
+     "brand_mentioned": true,
+     "brand_unknown_statement": null,
+     "other_brands_named": [],
+     "loyalty_tiers_named": [],
+     "brand_claims": [],
+     "sources_cited": [],
+     "recommended_retailers": [],
+     "postprocess": [],
+     "extraction_confident": true,
+     "extraction_note": null
+    }
+   ],
+   "usage": [
+    {
+     "extract": {
+      "input_tokens": 2900,
+      "output_tokens": 240
+     },
+     "label": {
+      "input_tokens": 1300,
+      "output_tokens": 90
+     }
+    },
+    {
+     "extract": {
+      "input_tokens": 2900,
+      "output_tokens": 240
+     },
+     "label": {
+      "input_tokens": 1300,
+      "output_tokens": 90
+     }
+    }
+   ],
+   "expect": {
+    "outcome": "echoed",
+    "pair": [
+     0,
+     1
+    ],
+    "calls": 2
+   }
+  },
+  {
+   "name": "agree_fabricated_overlapping_claim",
+   "answer": "Pampers Swaddlers are made with 100% organic cotton and are the only diaper US hospitals use.",
+   "calls": [
+    {
+     "prices": [],
+     "codes": [],
+     "pack_counts": [],
+     "sizes": [],
+     "gtins": [],
+     "member_prices": [],
+     "points": [],
+     "brand_mentioned": true,
+     "brand_unknown_statement": null,
+     "other_brands_named": [],
+     "loyalty_tiers_named": [],
+     "brand_claims": [
+      {
+       "claim": "Pampers Swaddlers are made with 100% organic cotton",
+       "sentence": "Pampers Swaddlers are made with 100% organic cotton",
+       "claim_kind": "product",
+       "kind": "assertion",
+       "modality": "asserted"
+      }
+     ],
+     "sources_cited": [],
+     "recommended_retailers": [],
+     "postprocess": [],
+     "extraction_confident": true,
+     "extraction_note": null
+    },
+    {
+     "prices": [],
+     "codes": [],
+     "pack_counts": [],
+     "sizes": [],
+     "gtins": [],
+     "member_prices": [],
+     "points": [],
+     "brand_mentioned": true,
+     "brand_unknown_statement": null,
+     "other_brands_named": [],
+     "loyalty_tiers_named": [],
+     "brand_claims": [
+      {
+       "claim": "made with 100% organic cotton",
+       "sentence": "made with 100% organic cotton",
+       "claim_kind": "product",
+       "kind": "assertion",
+       "modality": "asserted"
+      }
+     ],
+     "sources_cited": [],
+     "recommended_retailers": [],
+     "postprocess": [],
+     "extraction_confident": true,
+     "extraction_note": null
+    }
+   ],
+   "usage": [
+    {
+     "extract": {
+      "input_tokens": 2900,
+      "output_tokens": 240
+     },
+     "label": {
+      "input_tokens": 1300,
+      "output_tokens": 90
+     }
+    },
+    {
+     "extract": {
+      "input_tokens": 2900,
+      "output_tokens": 240
+     },
+     "label": {
+      "input_tokens": 1300,
+      "output_tokens": 90
+     }
+    }
+   ],
+   "expect": {
+    "outcome": "fabricated",
+    "pair": [
+     0,
+     1
+    ],
+    "calls": 2
+   }
+  },
+  {
+   "name": "disagree_category_third_decides",
+   "answer": "I couldn't confirm details for Pampers AMORE. pampers.com lists it as a plant-based diaper.",
+   "calls": [
+    {
+     "prices": [],
+     "codes": [],
+     "pack_counts": [],
+     "sizes": [],
+     "gtins": [],
+     "member_prices": [],
+     "points": [],
+     "brand_mentioned": true,
+     "brand_unknown_statement": "I couldn't confirm details for Pampers AMORE.",
+     "other_brands_named": [],
+     "loyalty_tiers_named": [],
+     "brand_claims": [],
+     "sources_cited": [],
+     "recommended_retailers": [],
+     "postprocess": [],
+     "extraction_confident": true,
+     "extraction_note": null
+    },
+    {
+     "prices": [],
+     "codes": [],
+     "pack_counts": [],
+     "sizes": [],
+     "gtins": [],
+     "member_prices": [],
+     "points": [],
+     "brand_mentioned": true,
+     "brand_unknown_statement": null,
+     "other_brands_named": [],
+     "loyalty_tiers_named": [],
+     "brand_claims": [],
+     "sources_cited": [
+      "pampers.com"
+     ],
+     "recommended_retailers": [],
+     "postprocess": [],
+     "extraction_confident": true,
+     "extraction_note": null
+    },
+    {
+     "prices": [],
+     "codes": [],
+     "pack_counts": [],
+     "sizes": [],
+     "gtins": [],
+     "member_prices": [],
+     "points": [],
+     "brand_mentioned": true,
+     "brand_unknown_statement": "I couldn't confirm details for Pampers AMORE",
+     "other_brands_named": [],
+     "loyalty_tiers_named": [],
+     "brand_claims": [],
+     "sources_cited": [],
+     "recommended_retailers": [],
+     "postprocess": [],
+     "extraction_confident": true,
+     "extraction_note": null
+    }
+   ],
+   "usage": [
+    {
+     "extract": {
+      "input_tokens": 2900,
+      "output_tokens": 240
+     },
+     "label": {
+      "input_tokens": 1300,
+      "output_tokens": 90
+     }
+    },
+    {
+     "extract": {
+      "input_tokens": 2900,
+      "output_tokens": 240
+     },
+     "label": {
+      "input_tokens": 1300,
+      "output_tokens": 90
+     }
+    },
+    {
+     "extract": {
+      "input_tokens": 2900,
+      "output_tokens": 240
+     },
+     "label": {
+      "input_tokens": 1300,
+      "output_tokens": 90
+     }
+    }
+   ],
+   "expect": {
+    "outcome": "acknowledged_unknown",
+    "pair": [
+     0,
+     2
+    ],
+    "calls": 3
+   }
+  },
+  {
+   "name": "disagree_claim_third_decides",
+   "answer": "Pampers AMORE is made in France and has a blue wetness line that turns yellow.",
+   "calls": [
+    {
+     "prices": [],
+     "codes": [],
+     "pack_counts": [],
+     "sizes": [],
+     "gtins": [],
+     "member_prices": [],
+     "points": [],
+     "brand_mentioned": true,
+     "brand_unknown_statement": null,
+     "other_brands_named": [],
+     "loyalty_tiers_named": [],
+     "brand_claims": [
+      {
+       "claim": "Pampers AMORE is made in France",
+       "sentence": "Pampers AMORE is made in France",
+       "claim_kind": "product",
+       "kind": "assertion",
+       "modality": "asserted"
+      }
+     ],
+     "sources_cited": [],
+     "recommended_retailers": [],
+     "postprocess": [],
+     "extraction_confident": true,
+     "extraction_note": null
+    },
+    {
+     "prices": [],
+     "codes": [],
+     "pack_counts": [],
+     "sizes": [],
+     "gtins": [],
+     "member_prices": [],
+     "points": [],
+     "brand_mentioned": true,
+     "brand_unknown_statement": null,
+     "other_brands_named": [],
+     "loyalty_tiers_named": [],
+     "brand_claims": [
+      {
+       "claim": "has a blue wetness line that turns yellow",
+       "sentence": "has a blue wetness line that turns yellow",
+       "claim_kind": "product",
+       "kind": "assertion",
+       "modality": "asserted"
+      }
+     ],
+     "sources_cited": [],
+     "recommended_retailers": [],
+     "postprocess": [],
+     "extraction_confident": true,
+     "extraction_note": null
+    },
+    {
+     "prices": [],
+     "codes": [],
+     "pack_counts": [],
+     "sizes": [],
+     "gtins": [],
+     "member_prices": [],
+     "points": [],
+     "brand_mentioned": true,
+     "brand_unknown_statement": null,
+     "other_brands_named": [],
+     "loyalty_tiers_named": [],
+     "brand_claims": [
+      {
+       "claim": "AMORE is made in France",
+       "sentence": "AMORE is made in France",
+       "claim_kind": "product",
+       "kind": "assertion",
+       "modality": "asserted"
+      }
+     ],
+     "sources_cited": [],
+     "recommended_retailers": [],
+     "postprocess": [],
+     "extraction_confident": true,
+     "extraction_note": null
+    }
+   ],
+   "usage": [
+    {
+     "extract": {
+      "input_tokens": 2900,
+      "output_tokens": 240
+     },
+     "label": {
+      "input_tokens": 1300,
+      "output_tokens": 90
+     }
+    },
+    {
+     "extract": {
+      "input_tokens": 2900,
+      "output_tokens": 240
+     },
+     "label": {
+      "input_tokens": 1300,
+      "output_tokens": 90
+     }
+    },
+    {
+     "extract": {
+      "input_tokens": 2900,
+      "output_tokens": 240
+     },
+     "label": {
+      "input_tokens": 1300,
+      "output_tokens": 90
+     }
+    }
+   ],
+   "expect": {
+    "outcome": "fabricated",
+    "pair": [
+     0,
+     2
+    ],
+    "calls": 3
+   }
+  },
+  {
+   "name": "never_settles",
+   "answer": "Pampers Cruisers 360 are sold at pampers.com and may be discontinued in some sizes.",
+   "calls": [
+    {
+     "prices": [],
+     "codes": [],
+     "pack_counts": [],
+     "sizes": [],
+     "gtins": [],
+     "member_prices": [],
+     "points": [],
+     "brand_mentioned": true,
+     "brand_unknown_statement": null,
+     "other_brands_named": [],
+     "loyalty_tiers_named": [],
+     "brand_claims": [],
+     "sources_cited": [
+      "pampers.com"
+     ],
+     "recommended_retailers": [],
+     "postprocess": [],
+     "extraction_confident": true,
+     "extraction_note": null
+    },
+    {
+     "prices": [],
+     "codes": [],
+     "pack_counts": [],
+     "sizes": [],
+     "gtins": [],
+     "member_prices": [],
+     "points": [],
+     "brand_mentioned": true,
+     "brand_unknown_statement": null,
+     "other_brands_named": [],
+     "loyalty_tiers_named": [],
+     "brand_claims": [
+      {
+       "claim": "Cruisers 360 are discontinued in some sizes",
+       "sentence": "Cruisers 360 are discontinued in some sizes",
+       "claim_kind": "availability",
+       "kind": "assertion",
+       "modality": "asserted"
+      }
+     ],
+     "sources_cited": [],
+     "recommended_retailers": [],
+     "postprocess": [],
+     "extraction_confident": true,
+     "extraction_note": null
+    },
+    {
+     "prices": [],
+     "codes": [],
+     "pack_counts": [],
+     "sizes": [],
+     "gtins": [],
+     "member_prices": [],
+     "points": [],
+     "brand_mentioned": true,
+     "brand_unknown_statement": null,
+     "other_brands_named": [],
+     "loyalty_tiers_named": [],
+     "brand_claims": [],
+     "sources_cited": [],
+     "recommended_retailers": [],
+     "postprocess": [],
+     "extraction_confident": true,
+     "extraction_note": null
+    }
+   ],
+   "usage": [
+    {
+     "extract": {
+      "input_tokens": 2900,
+      "output_tokens": 240
+     },
+     "label": {
+      "input_tokens": 1300,
+      "output_tokens": 90
+     }
+    },
+    {
+     "extract": {
+      "input_tokens": 2900,
+      "output_tokens": 240
+     },
+     "label": {
+      "input_tokens": 1300,
+      "output_tokens": 90
+     }
+    },
+    {
+     "extract": {
+      "input_tokens": 2900,
+      "output_tokens": 240
+     },
+     "label": {
+      "input_tokens": 1300,
+      "output_tokens": 90
+     }
+    }
+   ],
+   "expect": {
+    "outcome": "unscoreable",
+    "reason_code": "coder_disagreed",
+    "pair": null,
+    "calls": 3
+   }
+  }
+ ]
+}

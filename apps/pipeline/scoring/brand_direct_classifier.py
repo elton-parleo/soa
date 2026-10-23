@@ -409,9 +409,19 @@ def classify(extraction, expectation, *, brand_facts=None, grounding=None) -> tu
 
 
 def classify_with_code(extraction, expectation, *, brand_facts=None, grounding=None) -> tuple:
+    """(assessment, reason, reason code). See classify_with_span."""
+    return classify_with_span(extraction, expectation, brand_facts=brand_facts,
+                              grounding=grounding)[:3]
+
+
+def classify_with_span(extraction, expectation, *, brand_facts=None, grounding=None) -> tuple:
     """
-    (assessment, reason). The order the checks run in IS the ruling, so
-    it is written out rather than implied:
+    (assessment, reason, reason code, span). The span is the claim that
+    decided a fabricated or grounded answer (the first contradicted claim,
+    the cited own domain, or the claim a grounding support backs), what
+    2O-1's agreement compares between two calls; None for every other
+    assessment. The order the checks run in IS the ruling, so it is
+    written out rather than implied:
 
       unscoreable          we could not read the answer. Ours, not theirs,
                            and never folded into anything else.
@@ -442,22 +452,22 @@ def classify_with_code(extraction, expectation, *, brand_facts=None, grounding=N
     extraction = extraction or {}
 
     if not extraction.get('extraction_confident', True):
-        return UNSCOREABLE, extraction.get('extraction_note') or 'the answer could not be read', None
+        return UNSCOREABLE, extraction.get('extraction_note') or 'the answer could not be read', None, None
 
     brand = (expectation or {}).get('brand')
     if not extraction.get('brand_mentioned'):
-        return ABSENT, f"the answer did not name {brand}", None
+        return ABSENT, f"the answer did not name {brand}", None, None
 
     other = misattributed_to(extraction)
     if other:
-        return MISATTRIBUTED, f"named {brand} but described {other}", None
+        return MISATTRIBUTED, f"named {brand} but described {other}", None, None
 
     facts = brand_facts or {}
     contradicted = contradicted_claims(extraction, facts, grounding=grounding,
                                        expectation=expectation)
     if contradicted:
         first = contradicted[0]
-        return FABRICATED, f"{first['claim']!r} — {first['why']}", None
+        return FABRICATED, f"{first['claim']!r} — {first['why']}", None, first['claim']
     # Rule 4 decided it when the programme-name "tier" was the only
     # contradiction: with it counted, the answer would be fabricated.
     program_rule = bool(list(_tier_contradictions(
@@ -467,7 +477,7 @@ def classify_with_code(extraction, expectation, *, brand_facts=None, grounding=N
 
     unknown = extraction.get('brand_unknown_statement')
     if unknown:
-        return ACKNOWLEDGED_UNKNOWN, f"said it could not find {brand}: {unknown!r}", program_code
+        return ACKNOWLEDGED_UNKNOWN, f"said it could not find {brand}: {unknown!r}", program_code, None
 
     own = {_norm(d) for d in own_domains(facts, expectation)}
     cited = {_norm(s) for s in extraction.get('sources_cited') or []}
@@ -476,9 +486,9 @@ def classify_with_code(extraction, expectation, *, brand_facts=None, grounding=N
             legacy = _norm((expectation or {}).get('domain') or facts.get('domain'))
             if _norm(domain) not in own:
                 return GROUNDED, f"cited {domain}, an own domain of another merchant in the tenant", \
-                    program_code or CODE_TENANT_OWN_DOMAINS
+                    program_code or CODE_TENANT_OWN_DOMAINS, domain
             return GROUNDED, f"cited {domain}", \
-                program_code or (None if _norm(domain) == legacy else CODE_OWN_DOMAINS)
+                program_code or (None if _norm(domain) == legacy else CODE_OWN_DOMAINS), domain
 
     # 2D: a support at any of the tenant's own sites grounds it too, and
     # says so when the site is another merchant's
@@ -491,9 +501,84 @@ def classify_with_code(extraction, expectation, *, brand_facts=None, grounding=N
             return GROUNDED, (f"{claim['claim']!r} — grounded by a source at {domain} "
                               f"(platform grounding support"
                               f"{', an own domain of another merchant in the tenant' if tenant else ''})"), \
-                CODE_TENANT_OWN_DOMAINS if tenant else CODE_GROUNDING_SUPPORT
+                CODE_TENANT_OWN_DOMAINS if tenant else CODE_GROUNDING_SUPPORT, claim['claim']
 
-    return ECHOED, f"named {brand}, with nothing checkable behind it", program_code
+    return ECHOED, f"named {brand}, with nothing checkable behind it", program_code, None
+
+
+# ─── 2O-1: two calls must agree ───────────────────────────────────────────
+#
+# The category is decided from a model's transcription, and one call was
+# not repeatable: a rescore of FL14 with no rule change for this tier moved
+# 55 of its 258 answers (grounded -> fabricated, fabricated -> echoed,
+# echoed -> grounded, acknowledged_unknown <-> grounded). So the coder makes
+# two calls, each transcribed and labelled on its own and classified here,
+# and keeps a category only when the two agree; a third call breaks a
+# disagreement (parser/expectation_client.CODER_SETTINGS has the settings).
+# The decision is ordinary deterministic Python over the stored calls, so a
+# classify-only re-score re-takes it.
+
+#: The assessments whose claim must agree as well as their category.
+SPAN_ASSESSMENTS = (FABRICATED, GROUNDED)
+#: Calls per answer, and the one more a disagreement makes.
+CODER_CALLS = 2
+CODER_MAX_CALLS = 3
+
+#: Words two claims share without being the same claim.
+_SPAN_STOP = frozenset(
+    'a an and are as at be by for from has have in is it its of on or that the their this to was were with'.split())
+
+
+def spans_overlap(a, b) -> bool:
+    """Two calls' claims are the same claim: one contains the other, or
+    they share at least half the words of the shorter (stop words aside).
+    The extractor quotes the answer, and two quotes of one sentence differ
+    at their edges, not in their words. A cited domain is its own span and
+    overlaps only itself."""
+    na, nb = _norm(a), _norm(b)
+    if not na or not nb:
+        return False
+    if na in nb or nb in na:
+        return True
+    ta, tb = set(na.split()) - _SPAN_STOP, set(nb.split()) - _SPAN_STOP
+    if not ta or not tb:
+        return False
+    return 2 * len(ta & tb) >= min(len(ta), len(tb))
+
+
+def code_call(extraction, expectation, *, brand_facts=None, grounding=None) -> dict:
+    """One call's category: {outcome, reason, reason_code, span}."""
+    outcome, reason, code, span = classify_with_span(extraction, expectation, brand_facts=brand_facts,
+                                                     grounding=grounding)
+    return {'outcome': outcome, 'reason': reason, 'reason_code': code, 'span': span}
+
+
+def agree(a: dict, b: dict) -> bool:
+    """The same category and, for fabricated or grounded, an overlapping claim."""
+    if a.get('outcome') != b.get('outcome'):
+        return False
+    if a.get('outcome') in SPAN_ASSESSMENTS:
+        return spans_overlap(a.get('span'), b.get('span'))
+    return True
+
+
+def settle(codes) -> Optional[tuple]:
+    """The first pair of calls that agree, as (i, j), or None. Two calls:
+    they agree or they do not. Three: two of three decides, the earliest
+    pair first."""
+    for i in range(len(codes)):
+        for j in range(i + 1, len(codes)):
+            if agree(codes[i], codes[j]):
+                return i, j
+    return None
+
+
+def coder_calls(extraction) -> list:
+    """The calls stored on a version-2 record (extraction['coder']['calls']),
+    or [] for a record a single call wrote."""
+    coder = (extraction or {}).get('coder')
+    calls = coder.get('calls') if isinstance(coder, dict) else None
+    return [c for c in calls if isinstance(c, dict)] if isinstance(calls, list) else []
 
 
 def is_brand_direct(tier, expectation) -> bool:

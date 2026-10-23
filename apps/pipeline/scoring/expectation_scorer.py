@@ -23,7 +23,7 @@ from typing import Optional
 from sqlalchemy import text
 
 from clients.truesync_catalog import TrueSyncCatalogClient, TrueSyncNotAuthorized
-from parser.expectation_client import ExpectationClient
+from parser.expectation_client import CODER_SETTINGS, ExpectationClient
 from parser.extraction_postprocess import apply_labels
 from scoring import brand_direct_classifier as bdc
 from scoring import expectation_comparator as cmp
@@ -508,6 +508,80 @@ class ExpectationScorer:
             """), payload)
             conn.commit()
 
+    # ─── The model calls ──────────────────────────────────────────────
+
+    async def _code_once(self, run, *, brand, brand_domain, settings=None) -> dict:
+        """One transcription of the answer and its labels: {record, model,
+        usage: {extract, label}}. `settings` is CODER_SETTINGS for the
+        brand-claim coder (2O-1), None for every other tier."""
+        result = await self.client.extract(
+            run.raw_response, brand=brand, brand_domain=brand_domain,
+            **({'settings': settings} if settings else {}),
+        )
+        usage = {'extract': dict(getattr(result, 'usage', None) or {})}
+
+        # Step 1b: what each transcribed span IS. A failed call leaves
+        # every span unlabelled, which asserted_claims reads as no claims
+        # — never as claims nobody classified.
+        if self.labeler is not None:
+            labels = await self.labeler.label(
+                result.record, answer_text=run.raw_response,
+                **({'settings': settings} if settings else {}),
+            )
+            usage['label'] = dict(getattr(labels, 'usage', None) or {})
+            result.record = apply_labels(
+                result.record, labels.labels,
+                answer_text=run.raw_response, brand=brand,
+            )
+            if labels.error:
+                logger.warning(
+                    "[expectation] run %s: labelling failed (%s) — spans are "
+                    "recorded and unlabelled", run.id, labels.error,
+                )
+        return {'record': result.record, 'model': result.model, 'usage': usage}
+
+    def _classify(self, run, expectation, record) -> cmp.Verdict:
+        return classify(
+            run, expectation, record, history=self.history,
+            brand_facts=self.brand_facts, references=self.references,
+            domain_checker=self.domain_checker, tenant_domains=self.tenant_domains,
+        )
+
+    async def _code_brand_direct(self, run, expectation, *, brand, brand_domain) -> tuple:
+        """
+        2O-1 (H27): the brand-claim coder. Two calls, each transcribed,
+        labelled and classified on its own; a category is kept only when
+        they agree (the same category, and for fabricated or grounded an
+        overlapping claim: brand_direct_classifier.agree). A disagreement
+        makes a third call and two of three decides; with no majority the
+        answer is `unscoreable` for coder_disagreed.
+
+        Returns (record, verdict, model). The record is the settling call's
+        (the first call's when nothing settled) with `coder` beside it:
+        every call's record, its category, its usage, and the settings, so
+        the comparator re-takes the decision from what is stored.
+        """
+        calls = [await self._code_once(run, brand=brand, brand_domain=brand_domain,
+                                       settings=CODER_SETTINGS)
+                 for _ in range(bdc.CODER_CALLS)]
+        record, verdict = self._settled(run, expectation, calls)
+        if (verdict.coder or {}).get('pair') is None and len(calls) < bdc.CODER_MAX_CALLS:
+            calls.append(await self._code_once(run, brand=brand, brand_domain=brand_domain,
+                                               settings=CODER_SETTINGS))
+            record, verdict = self._settled(run, expectation, calls)
+        return record, verdict, calls[0]['model']
+
+    def _settled(self, run, expectation, calls) -> tuple:
+        coder = {'version': ea.BRAND_CODER_VERSION, 'settings': CODER_SETTINGS,
+                 'calls': [c['record'] for c in calls], 'usage': [c['usage'] for c in calls]}
+        verdict = self._classify(run, expectation, {**calls[0]['record'], 'coder': coder})
+        decided = verdict.coder or {}
+        pair = decided.get('pair')
+        coder.update(outcomes=decided.get('outcomes'), pair=pair)
+        record = {**calls[pair[0] if pair else 0]['record'], 'coder': coder}
+        # the flags and the source split are the settling call's
+        return record, self._classify(run, expectation, record)
+
     # ─── One run ──────────────────────────────────────────────────────
 
     async def score_run(self, run_id: int) -> ScoreRunResult:
@@ -527,7 +601,8 @@ class ExpectationScorer:
             # absent, never sent to the extractor (there is nothing to read).
             from parser.expectation_prompts import EMPTY_EXTRACTION
             extraction = {**EMPTY_EXTRACTION, 'extraction_confident': True,
-                          'extraction_note': f"surface returned {run.answer_status}"}
+                          'extraction_note': f"surface returned {run.answer_status}",
+                          **_coder_stamp(run, expectation)}
             verdict = classify(run, expectation, extraction)
             try:
                 self._store(run=run, expectation=expectation,
@@ -546,6 +621,7 @@ class ExpectationScorer:
             extraction = {
                 **EMPTY_EXTRACTION,
                 'extraction_note': f"run status {run.status!r}, no answer text",
+                **_coder_stamp(run, expectation),
             }
             verdict = cmp.compare(expectation, extraction, tier=run.tier)
             try:
@@ -569,46 +645,37 @@ class ExpectationScorer:
                  or source_ref.get('brand')
                  or facts.get('brand'))
 
-        result = await self.client.extract(
-            run.raw_response, brand=brand,
-            # So the post-processor can tell the brand's own site from
-            # another brand when the answer writes one as the other.
-            brand_domain=(expectation.get('domain') or source_ref.get('domain')
-                          or facts.get('domain')),
-        )
+        # So the post-processor can tell the brand's own site from another
+        # brand when the answer writes one as the other.
+        brand_domain = (expectation.get('domain') or source_ref.get('domain')
+                        or facts.get('domain'))
 
-        # Step 1b: what each transcribed span IS. A failed call leaves
-        # every span unlabelled, which asserted_claims reads as no claims
-        # — never as claims nobody classified.
-        if self.labeler is not None:
-            labels = await self.labeler.label(
-                result.record, answer_text=run.raw_response,
-            )
-            result.record = apply_labels(
-                result.record, labels.labels,
-                answer_text=run.raw_response, brand=brand,
-            )
-            if labels.error:
-                logger.warning(
-                    "[expectation] run %s: labelling failed (%s) — spans are "
-                    "recorded and unlabelled", run_id, labels.error,
-                )
-
-        verdict = classify(
-            run, expectation, result.record, history=self.history,
-            brand_facts=self.brand_facts, references=self.references,
-            domain_checker=self.domain_checker, tenant_domains=self.tenant_domains,
-        )
+        if bdc.is_brand_direct(getattr(run, 'tier', None), expectation):
+            # 2O-1: the brand-claim coder, two calls that must agree
+            record, verdict, model = await self._code_brand_direct(
+                run, expectation, brand=brand, brand_domain=brand_domain)
+        else:
+            call = await self._code_once(run, brand=brand, brand_domain=brand_domain)
+            record, model = call['record'], call['model']
+            verdict = self._classify(run, expectation, record)
 
         try:
             self._store(run=run, expectation=expectation,
-                        extraction=result.record, verdict=verdict,
-                        model=result.model)
+                        extraction=record, verdict=verdict,
+                        model=model)
         except Exception as exc:
             logger.exception("[expectation] run %s: could not store", run_id)
             return ScoreRunResult(run_id, 'db_error', error_message=str(exc))
 
         return ScoreRunResult(run_id, 'success', outcome=verdict.outcome)
+
+
+def _coder_stamp(run, expectation) -> dict:
+    """2O-1: a brand-direct row scored with no model call (a wall, an answer
+    that never arrived) is still this coder version's, with no calls."""
+    if bdc.is_brand_direct(getattr(run, 'tier', None), expectation):
+        return {'coder': {'version': ea.BRAND_CODER_VERSION, 'calls': []}}
+    return {}
 
 
 def code_attribute(source_ref: dict, extraction: dict, answer: str, truth: dict = None) -> dict:

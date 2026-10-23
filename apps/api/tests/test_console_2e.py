@@ -264,7 +264,7 @@ def _store_on_previous(db, body):
 def _comparable_twin(body):
     """A previous cycle's stored score comparable with this one: same pooled
     surfaces, the same agents on each, the same scorer version."""
-    return {k: body[k] for k in ('scorer_version', 'adapter_revision', 'score', 'earned', 'applicable_max',
+    return {k: body[k] for k in ('scorer_version', 'adapter_revision', 'brand_coder', 'score', 'earned', 'applicable_max',
                                  'surfaces', 'pillars', 'metric_counts', 'measured')}
 
 

@@ -30,6 +30,27 @@ logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 2
 
+#: 2O-1: the brand-claim coder's settings, the 2A-5 extractor's (supply
+#: truesync/fullloop/extract.py): reasoning effort none and verbosity low.
+#: No temperature is sent, as neither the 2A-5 extractor nor the narratives
+#: writer (soa_shared/narratives.py) sends one to this model family: effort
+#: none is the setting used in its place. Determinism is measured by the two
+#: calls agreeing, not assumed. Brand-direct only: every other tier's call is
+#: unchanged.
+CODER_SETTINGS = {"reasoning": {"effort": "none"}, "verbosity": "low"}
+
+
+def request_options(settings: Optional[dict]) -> dict:
+    """responses.create's extra arguments for `settings` (CODER_SETTINGS or
+    None): `reasoning` as given, `verbosity` folded into `text`."""
+    settings = settings or {}
+    return {"reasoning": settings["reasoning"]} if settings.get("reasoning") else {}
+
+
+def text_options(settings: Optional[dict]) -> dict:
+    settings = settings or {}
+    return {"verbosity": settings["verbosity"]} if settings.get("verbosity") else {}
+
 
 @dataclass
 class ExtractionResult:
@@ -61,7 +82,7 @@ class ExpectationClient:
         self._client = AsyncOpenAI(api_key=config.OPEN_AI_API_KEY)
 
     async def extract(self, answer_text: str, *, brand: str = None,
-                      brand_domain: str = None) -> ExtractionResult:
+                      brand_domain: str = None, settings: Optional[dict] = None) -> ExtractionResult:
         """
         One answer -> one extraction record. Never raises.
 
@@ -79,6 +100,9 @@ class ExpectationClient:
         described — and records what it decided. Applied on every return
         path, including the failures, so no record leaves here
         half-processed.
+
+        `settings` (2O-1): CODER_SETTINGS for the brand-claim coder's calls,
+        None for every other call (the request it made before).
         """
         if not answer_text or not answer_text.strip():
             return ExtractionResult(
@@ -102,6 +126,7 @@ class ExpectationClient:
                         "content": f"Answer to transcribe:\n{answer_text}",
                     }],
                     text={
+                        **text_options(settings),
                         "format": {
                             "type": "json_schema",
                             "name": "expectation_extraction_schema",
@@ -109,6 +134,7 @@ class ExpectationClient:
                             "strict": True,
                         }
                     },
+                    **request_options(settings),
                 )
                 record = self._finish(
                     json.loads(response.output_text),

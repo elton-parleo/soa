@@ -24,8 +24,12 @@ run_id and the scorer deletes before inserting), so running it twice is
 the same as running it once. It does not touch soa_runs, soa_coded_
 mentions, or anything Layer 1 produced.
 
-It costs one extraction call per run. --dry-run prints the plan and the
-current counts and makes no model call and no write.
+It costs one extraction call per run, and (2O-1) two per brand-direct
+answer, a third when they disagree: the brand-claim coder keeps a category
+only when two calls agree (scoring/brand_direct_classifier.settle). After a
+re-score it prints the coder's calls, how often the first two agreed, and
+their tokens. --dry-run prints the plan and the current counts and makes no
+model call and no write.
 
 --classify-only (2B) makes NO model call at all. It re-runs the
 deterministic classifier (scoring/expectation_comparator.py, through the
@@ -296,6 +300,80 @@ def diff_untouched(before: dict, after: dict, targeted) -> list:
     return moved
 
 
+# ─── 2O-1: the brand-claim coder's calls ──────────────────────────────────
+
+def coder_report(extractions) -> dict:
+    """What the two-call coder did on a cycle's brand-direct rows, from their
+    stored `coder` blocks: answers coded (a row with no call, a wall, is not),
+    calls, how many settled on the first two, on a third, or not at all, the
+    agreement rate of the first two, and each call's tokens (the extraction
+    and the labelling). A row scored before 2O-1 carries no block and is
+    counted in `single_call`."""
+    out = {'answers': 0, 'single_call': 0, 'calls': 0, 'agreed_first_two': 0, 'third_calls': 0,
+           'settled_by_third': 0, 'unsettled': 0, 'input_tokens': 0, 'output_tokens': 0}
+    for extraction in extractions:
+        coder = (extraction or {}).get('coder') if isinstance(extraction, dict) else None
+        if not isinstance(coder, dict):
+            out['single_call'] += 1
+            continue
+        calls = coder.get('calls') or []
+        if not calls:
+            continue
+        out['answers'] += 1
+        out['calls'] += len(calls)
+        pair = coder.get('pair')
+        if pair == [0, 1]:
+            out['agreed_first_two'] += 1
+        if len(calls) > 2:
+            out['third_calls'] += 1
+            out['settled_by_third' if pair else 'unsettled'] += 1
+        elif not pair:
+            out['unsettled'] += 1
+        for usage in coder.get('usage') or []:
+            for part in (usage or {}).values():
+                out['input_tokens'] += int((part or {}).get('input_tokens') or 0)
+                out['output_tokens'] += int((part or {}).get('output_tokens') or 0)
+    out['agreement_rate'] = round(out['agreed_first_two'] / out['answers'], 3) if out['answers'] else None
+    return out
+
+
+def coder_dollars(report: dict, model: Optional[str]) -> Optional[float]:
+    """The coder's tokens at config.SOA_CODING_MODEL_PRICE, or None when the
+    coder's model is not the model that price is for."""
+    from soa_shared import config
+    if not model or model != config.SOA_CODING_MODEL:
+        return None
+    price = config.SOA_CODING_MODEL_PRICE
+    return (report['input_tokens'] * price['input'] + report['output_tokens'] * price['output']) / 1_000_000
+
+
+def _render_coder(report: dict, model: Optional[str]) -> str:
+    if not report['answers']:
+        return '    (no brand-direct answer coded by the two-call coder)'
+    dollars = coder_dollars(report, model)
+    cost = (f"${dollars:.2f} at the stored price (unverified)" if dollars is not None else
+            f"no stored price for {model or 'the coder model'} (config.SOA_CODING_MODEL_PRICE is "
+            f"another model's)")
+    return '\n'.join([
+        f"    answers coded        {report['answers']}  ({report['single_call']} row(s) still single-call)",
+        f"    calls                {report['calls']}  (an extraction and a labelling each)",
+        f"    first two agreed     {report['agreed_first_two']}  ({report['agreement_rate']:.1%})",
+        f"    third call           {report['third_calls']}  (settled {report['settled_by_third']}, "
+        f"unsettled {report['unsettled']} -> unscoreable, coder_disagreed)",
+        f"    tokens               {report['input_tokens']} input / {report['output_tokens']} output; {cost}",
+    ])
+
+
+def brand_direct_extractions(conn, cid: int) -> tuple:
+    """(each brand-direct row's stored extraction, the extraction model)."""
+    rows = conn.execute(text("""
+        SELECT extraction, extraction_model FROM soa_expectation_outcomes
+        WHERE cycle_id = :cid AND tier = 'brand_direct'
+    """), {"cid": cid}).fetchall()
+    models = Counter(r[1] for r in rows if r[1])
+    return [_as_json(r[0]) for r in rows], (models.most_common(1)[0][0] if models else None)
+
+
 # ─── 2B: classify-only ─────────────────────────────────────────────────────
 
 RULES = {
@@ -308,6 +386,7 @@ RULES = {
     'own_domains': "brand-direct: the merchant's own domains are a list",
     'tenant_own_domains': "brand-direct: every own domain of every merchant in the tenant is ours (2D)",
     'program_name_not_tier': "brand-direct: the programme's name is not a tier claim",
+    'coder_disagreed': 'brand-direct (2O-1): no two of the coder\'s calls agreed',
 }
 
 
@@ -949,8 +1028,12 @@ def main(argv=None) -> int:
         return 0
 
     if args.dry_run:
+        with engine.connect() as conn:
+            brand = len(run_ids_for(conn, cid, ['brand_direct'])) if 'brand_direct' in tiers else 0
         print(f"\ndry run — no model calls, no writes. "
-              f"A real run costs {len(run_ids)} extraction calls.")
+              f"A real run costs {len(run_ids) - brand} extraction calls for the other tiers and, "
+              f"for the {brand} brand-direct answer(s), two coder calls each (2O-1), a third on a "
+              f"disagreement; each call is an extraction and a labelling.")
         return 0
 
     if not os.getenv("OPEN_AI_API_KEY"):
@@ -980,6 +1063,12 @@ def main(argv=None) -> int:
     moved_rows = row_diff(before_rows, after_rows)
     print(f"\nrows whose outcome moved: {len(moved_rows)} of {len(after_rows)}")
     print(_render_rows(moved_rows))
+
+    if 'brand_direct' in tiers:
+        with engine.connect() as conn:
+            extractions, model = brand_direct_extractions(conn, cid)
+        print("\nbrand-direct coder (2O-1):")
+        print(_render_coder(coder_report(extractions), model))
 
     for failure in summary.failures[:10]:
         print(f"    FAILED run {failure.run_id}: {failure.status} "

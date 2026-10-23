@@ -3,7 +3,8 @@
 Lost and the first-pick tiles) is not read by any dimension, so on the three
 fixtures 2I-8a pins, the whole score body, metric rows included, is what
 scorer 10 served (main at acb74b1), but for the version: sha256 of the body
-less the version and the volatile fields. The pin was written by this test
+less the version and the volatile fields (2O-1: and the brand-direct coder count,
+which no dimension reads; scorer 12 moves no score either). The pin was written by this test
 run on acb74b1 with SOA_2K1_PIN_DUMP set. On sqlite and a local Postgres
 (2I-8a's pins are the same on both dialects, so one hash serves both).
 """
@@ -35,8 +36,13 @@ def _strip(x):
     return x
 
 
+#: 2O-1 (scorer 12): the version, and the brand-direct coder count beside it
+#: (console_score.brand_coder), which no dimension reads
+NOT_PINNED = ('scorer_version', 'brand_coder')
+
+
 def body_view(body):
-    return _strip({k: v for k, v in copy.deepcopy(body).items() if k != 'scorer_version'})
+    return _strip({k: v for k, v in copy.deepcopy(body).items() if k not in NOT_PINNED})
 
 
 @pytest.mark.parametrize('name', list(FIXTURES))
