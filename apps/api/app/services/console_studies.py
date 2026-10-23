@@ -226,7 +226,8 @@ def build_preview(snapshot: CatalogSnapshot, *, tiers: Dict[str, bool], stage_to
             rows, report = ct.build_intent_questions(snapshot, category=category, persona=persona,
                                                      study_pattern=pattern, cap=cap)
             targets = stage_targets if stage_targets else ({'Ready to Buy': stage_total} if stage_total else {})
-            _, taken, left = ct.absorb_intents(targets, report['count'])
+            # 2M-1: the attribute questions add to the study; only the two routing intents are absorbed
+            _, taken, left = ct.absorb_intents(targets, sum(report[i] for i in ct.ABSORBED_INTENTS))
             out['brand_direct'].update(
                 intents=[{'intent': i, 'label': ct.INTENT_LABELS[i], 'count': report[i], 'line': ct.intent_line(i, report[i]),
                           'stage': ct.INTENT_STAGE,

@@ -91,7 +91,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import inspect, text
 
-from soa_shared import claim_kinds, surfaces
+from soa_shared import attribute_accuracy, claim_kinds, surfaces
 from soa_shared import unprompted
 from soa_shared.expected_answers import normalize_domain, normalize_money
 from soa_shared.retailers import KNOWN_RETAILERS, RETAILER_NAMES, retailer_name
@@ -142,6 +142,9 @@ MEANINGS = {
     'fabricated_citation': "The answer cited a source that does not exist or does not say this.",
     'fabricated_availability': "The answer said where the product is sold, and that is not true.",
     'rival_first_pick': "On a question that let the assistant choose a brand, its first pick was another brand.",
+    # 2M-1: an accuracy question's answer against the brand's size chart
+    'attribute_mismatch': "The weight range the assistant gave for this size is not the one the brand's site states.",
+    'attribute_absent': "The assistant gave no weight range for this size, which the brand's site states.",
 }
 CLAIM_KIND_WORDS = {claim_kinds.ATTRIBUTE: 'stated a fact about the brand',
                     claim_kinds.RECOMMENDATION_ONLY: 'only recommended the brand, stated no fact'}
@@ -267,8 +270,43 @@ charged $47.99 that day."
 """
 
 
+#: 2M-1: an accuracy answer's line, the demo's: "gave 22 to 37 lb, the
+#: Cruisers and Zzz scale, where pampers.com says 15 to 34". Its own prompt,
+#: so the other answers' requests (and their recordings) are unchanged.
+ATTRIBUTE_PROMPT = """You write the one line a product console shows beside a shopping assistant's \
+answer to a question about the weight range a diaper size is for. You get the facts a scorer \
+recorded and nothing else.
+
+The facts:
+- size and product: what was asked about.
+- weight_range_stated: the range the assistant gave for that size, or null when it gave none.
+- weight_range_brand: the range the brand's site (brand_site) states for that size.
+- same_as: other products whose range on the brand's site is the one the assistant gave, when \
+there are any.
+
+What the line says, in this pattern and only this pattern:
+
+<assistant> gave <weight_range_stated>[, the <same_as> scale,] where <brand_site> says <weight_range_brand>.
+
+When weight_range_stated is null: <assistant> gave no weight range for <size>, which <brand_site> \
+states as <weight_range_brand>. Write the ranges exactly as the facts write them. Name a same_as \
+product only as the facts write it, and only when same_as is given.
+
+Rules:
+- One sentence, at most 200 characters.
+""" + _COMMON_RULES + """
+
+Style, from the demo: "ChatGPT gave 22 to 37 lb, the Cruisers and Zzz scale, where pampers.com \
+says 15 to 34."
+"""
+
+
 def system_prompt(facts: dict) -> str:
-    return PRODUCT_PROMPT if facts.get('kind') == PRODUCT else SYSTEM_PROMPT
+    if facts.get('kind') == PRODUCT:
+        return PRODUCT_PROMPT
+    if any(str(w).startswith('attribute_') for w in facts.get('why') or []):
+        return ATTRIBUTE_PROMPT
+    return SYSTEM_PROMPT
 
 
 SCHEMA = {
@@ -454,9 +492,13 @@ def overall_direction(directions: Iterable[Optional[str]]) -> Optional[str]:
 
 
 def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[str], brand_choice: bool,
-                merchant: Merchant) -> List[str]:
-    """The reasons an answer gets a line (empty: it keeps its template)."""
+                merchant: Merchant, attribute: Optional[dict] = None) -> List[str]:
+    """The reasons an answer gets a line (empty: it keeps its template).
+    2M-1: `attribute` is an accuracy answer's verdict (attribute_accuracy.
+    answer_attribute); a mismatch or an absent range is flagged."""
     o = outcome or {}
+    if (attribute or {}).get('verdict') in ('mismatch', 'absent'):
+        return [f"attribute_{attribute['verdict']}"]
     raw, reason = o.get('outcome'), o.get('reason_code')
     why = []
     if tier in VALUE_TIERS and raw in FLAGGED_VALUE:
@@ -474,18 +516,24 @@ def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[st
 
 
 def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merchant: Merchant,
-                 index: Dict[tuple, dict]) -> Optional[dict]:
+                 index: Dict[tuple, dict], scales: Optional[List[dict]] = None) -> Optional[dict]:
     """The facts for one answer, or None when it is not flagged. `run`
-    carries its question (query_text, tier, source_ref); `index` is the
-    cycle's reference rows by (domain, key)."""
+    carries its question (query_text, tier, source_ref, raw_response); `index` is the
+    cycle's reference rows by (domain, key). 2M-1: `scales` is the cycle's
+    accuracy questions' {product, size, truth}, for same_as."""
     if run.get('answer_status') not in (None, surfaces.ANSWERED):
         return None
     named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99)]
     first = next((m['name'] for m in mentions if m.get('position') == 1), None)
     brand_choice = unprompted.is_brand_choice(run, merchant.terms)
-    why = why_flagged(run.get('tier'), outcome, first, brand_choice, merchant)
+    ref = _json(run.get('source_ref')) or {}
+    attribute = attribute_accuracy.answer_attribute(ref, _json((outcome or {}).get('extraction')),
+                                                    run.get('raw_response')) if outcome else None
+    why = why_flagged(run.get('tier'), outcome, first, brand_choice, merchant, attribute)
     if not why:
         return None
+    if attribute is not None and why[0].startswith('attribute_'):
+        return attribute_facts(run, attribute, why, merchant, ref, scales)
     o = outcome or {}
     extraction = _json(o.get('extraction')) or {}
     expected = _json(o.get('expected_answer')) or {}
@@ -531,6 +579,33 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
         'named in order': named if rival or brand_choice else None,
         'flags': [_drop_none({'flag': f.get('flag'), 'detail': f.get('detail') or f.get('evidence')}) for f in flags],
         'answer_spans': spans,
+    })
+
+
+def attribute_facts(run: dict, attribute: dict, why: List[str], merchant: Merchant, ref: dict,
+                    scales: Optional[List[dict]]) -> dict:
+    """2M-1: an accuracy answer's facts: what was asked, the range it gave,
+    the brand site's, and the other products whose range it gave (same_as)."""
+    stated = attribute.get('stated')
+    same_as = [s['product'] for s in scales or []
+               if stated and s.get('truth') and s.get('size') == attribute.get('size')
+               and s.get('product') != ref.get('line') and attribute_accuracy.same(stated, s['truth'])]
+    return _drop_none({
+        'kind': ANSWER,
+        'why': why,
+        'meaning': [MEANINGS[w] for w in why if w in MEANINGS],
+        'question': run.get('query_text'),
+        'agent': _agent(run.get('platform')),
+        'surface': surfaces.SURFACE_LABELS.get(run.get('surface') or surfaces.surface_of(run.get('platform') or ''),
+                                               run.get('surface')),
+        **merchant.facts(),
+        'product': ref.get('line'),
+        'size': attribute.get('size'),
+        'weight_range_stated': attribute_accuracy.phrase(stated),
+        'weight_range_brand': attribute_accuracy.phrase(attribute.get('truth')),
+        'brand_site': ref.get('own_domain') or ref.get('domain'),
+        'same_as': list(dict.fromkeys(same_as)) or None,
+        'answer_spans': [attribute['evidence']] if attribute.get('evidence') else None,
     })
 
 
@@ -709,10 +784,19 @@ def load_cycle_facts(conn, cycle_id: int) -> Dict[str, dict]:
             if domain:
                 index.setdefault((domain, k), row)
     runs = [dict(r) for r in conn.execute(text("""
-        SELECT r.id, r.platform, r.surface, r.answer_status, q.query_text, q.tier, q.stage, q.source_ref
+        SELECT r.id, r.platform, r.surface, r.answer_status, r.raw_response, q.query_text, q.tier, q.stage,
+               q.source_ref
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         WHERE r.cycle_id = :c ORDER BY r.id
     """), {'c': cycle_id}).mappings()]
+    # 2M-1: every accuracy question's product, size and brand truth, for same_as
+    scales = []
+    for run in runs:
+        ref = _json(run.get('source_ref')) or {}
+        if ref.get('intent') == attribute_accuracy.ATTRIBUTE_INTENT and ref.get('weight_truth'):
+            entry = {'product': ref.get('line'), 'size': ref.get('size'), 'truth': ref['weight_truth']}
+            if entry not in scales:
+                scales.append(entry)
     outcomes = {o['run_id']: dict(o) for o in conn.execute(text("""
         SELECT run_id, outcome, reason_code, outcome_reason, claim_results, expected_answer, extraction, flags
         FROM soa_expectation_outcomes WHERE cycle_id = :c
@@ -726,7 +810,7 @@ def load_cycle_facts(conn, cycle_id: int) -> Dict[str, dict]:
         mentions.setdefault(m['run_id'], []).append(dict(m))
     out: Dict[str, dict] = {}
     for run in runs:
-        facts = answer_facts(run, outcomes.get(run['id']), mentions.get(run['id'], []), merchant, index)
+        facts = answer_facts(run, outcomes.get(run['id']), mentions.get(run['id'], []), merchant, index, scales)
         if facts:
             out[f"{ANSWER}:run-{run['id']}"] = facts
     catalog = [{**run, **{k: v for k, v in (outcomes.get(run['id']) or {}).items() if k != 'run_id'}}

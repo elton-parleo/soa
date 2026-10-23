@@ -37,6 +37,7 @@ CreateStudyModal.brand.test.jsx), so an edit to one that is not made to
 the other fails a test rather than drifting quietly into a study.
 """
 import logging
+import re
 from typing import List, Optional
 
 from soa_shared import expected_answers as ea
@@ -1236,8 +1237,19 @@ def build_retired_line_questions(snapshot, *, category, persona, study_pattern) 
 
 WHERE_TO_BUY = 'where_to_buy'
 CHEAPEST_PLACE = 'cheapest_place'
-INTENTS = (WHERE_TO_BUY, CHEAPEST_PLACE)
-INTENT_LABELS = {WHERE_TO_BUY: 'Where to buy', CHEAPEST_PLACE: 'Cheapest place'}
+#: 2M-1: the demo's Accuracy set, "What weight range is <line> <size> for, and
+#: how many diapers come in the <count> ct pack?", one per sampled variant,
+#: naming no store. Its expected answer is the brand truth for the size's
+#: weight range (source_ref.weight_truth, soa_shared/attribute_accuracy.py).
+#: Added to the study, never absorbed by the stage counts.
+ATTRIBUTE = 'attribute'
+INTENTS = (WHERE_TO_BUY, CHEAPEST_PLACE, ATTRIBUTE)
+#: The intents the stage counts absorb (2L-4); the attribute questions add.
+ABSORBED_INTENTS = (WHERE_TO_BUY, CHEAPEST_PLACE)
+#: At most this many attribute questions (the demo's Accuracy set), sampled
+#: as the other tiers are, so a default study stays under the hundred cap.
+ATTRIBUTE_CAP = 10
+INTENT_LABELS = {WHERE_TO_BUY: 'Where to buy', CHEAPEST_PLACE: 'Cheapest place', ATTRIBUTE: 'Accuracy'}
 #: Asked where the shopper has decided what to buy and is choosing a store.
 INTENT_STAGE = CATALOG_STAGE
 #: The stage counts absorb the intent questions, but never the Comparison
@@ -1253,8 +1265,42 @@ def intent_question_text(intent: str, subject: str) -> str:
     return f"Cheapest place to buy {subject}?"
 
 
+def attribute_question_text(line: str, size: str, count: Optional[int]) -> str:
+    """2M-1: "What weight range is Pampers Swaddlers Size 4 for, and how many
+    diapers come in the 120 ct pack?" (no count: the first half only)."""
+    text = f"What weight range is {line} {size} for"
+    return f"{text}, and how many diapers come in the {count} ct pack?" if count else f"{text}?"
+
+
+_SIZE_WORDS = re.compile(r"\b(?:size\s*(?:newborn|preemie|\d{1,2})|newborn|preemie)\b", re.I)
+
+
+def attribute_parts(snapshot, product, variant) -> tuple:
+    """(line, size, count) of a variant for the attribute question: the
+    product named by its brand, the size as the record writes it ("Size 4",
+    "Newborn", from the variant's size, else its title; None when neither
+    names a diaper size: "4 oz" is no size to ask a weight for), the pack count."""
+    brand = product.brand or snapshot.brand
+    if brand and ea.names_brand(product.title or '', brand):
+        brand = None
+    line = ' '.join(w for w in (brand, product.title) if w)
+    found = None
+    for text in (variant.size, variant.title, variant_display(product, variant)):
+        m = _SIZE_WORDS.search(text or '')
+        if m:
+            found = m.group(0)
+            break
+    if found:
+        found = re.sub(r"^size", "Size", found, flags=re.I)
+        found = 'Newborn' if found.lower() in ('newborn', 'size newborn') else found
+    return line.strip(), found, variant.count
+
+
 def intent_line(intent: str, count: int) -> str:
     """The preview's line under Brand-direct for one intent."""
+    if intent == ATTRIBUTE:
+        return (f"{count} accuracy question{'' if count == 1 else 's'} (weight range and pack count), "
+                f"one per sampled product, naming no retailer, added to the study")
     noun = 'where-to-buy' if intent == WHERE_TO_BUY else 'cheapest-place'
     return (f"{count} {noun} question{'' if count == 1 else 's'}, one per sampled product, "
             f"naming no retailer")
@@ -1267,11 +1313,12 @@ def _intent_subject(snapshot, product, variant) -> str:
 
 
 def intent_count(snapshot, cap: int = DEFAULT_VARIANT_CAP) -> int:
-    """How many intent questions build_intent_questions writes: two per
-    sampled variant, none without a brand to name."""
+    """How many intent questions the stage counts absorb (ABSORBED_INTENTS):
+    two per sampled variant, none without a brand to name. 2M-1's attribute
+    questions add to the study and are not counted here."""
     if not snapshot or not getattr(snapshot, 'available', True) or not snapshot.brand:
         return 0
-    return len(INTENTS) * len(sample_variants(snapshot, cap))
+    return len(ABSORBED_INTENTS) * len(sample_variants(snapshot, cap))
 
 
 def absorb_intents(stage_targets: Optional[dict], count: int) -> tuple:
@@ -1315,12 +1362,23 @@ def build_intent_questions(snapshot, *, category, persona, study_pattern,
     A question whose product name happens to name a store is left out and
     listed (`names_a_retailer`): it would be asking about that store.
 
+    2M-1: and one attribute question per sampled variant ("What weight
+    range is Pampers Swaddlers Size 4 for, and how many diapers come in the
+    120 ct pack?"), stage Ready to Buy, soa_focus Accuracy, its source_ref
+    carrying `size`, `count` and the brand truth (`weight_truth`,
+    `weight_truth_source`: supply's, snapshot.weight_truth, else the feed's
+    range on the variant; None when there is none, and the question is still
+    asked). At most ATTRIBUTE_CAP: the first of the sampled variants that
+    name a diaper size, in sample order; one that names none is left out
+    (`no_size`).
+
     Returns (rows, report) with report {count, where_to_buy, cheapest_place,
-    sampled_variants, names_a_retailer}.
+    attribute, sampled_variants, names_a_retailer, no_size, no_truth}.
     """
     from soa_shared import retailers as af
 
-    report = {'count': 0, WHERE_TO_BUY: 0, CHEAPEST_PLACE: 0, 'sampled_variants': [], 'names_a_retailer': []}
+    report = {'count': 0, WHERE_TO_BUY: 0, CHEAPEST_PLACE: 0, ATTRIBUTE: 0, 'sampled_variants': [],
+              'names_a_retailer': [], 'no_size': [], 'no_truth': []}
     if not snapshot or not snapshot.brand:
         return [], report
     brand = getattr(snapshot, 'study_brand', None) or snapshot.brand
@@ -1330,6 +1388,15 @@ def build_intent_questions(snapshot, *, category, persona, study_pattern,
     rows = []
     for intent in INTENTS:
         for product, variant in sampled:
+            if intent == ATTRIBUTE:
+                if report[ATTRIBUTE] >= ATTRIBUTE_CAP:
+                    break
+                row = _attribute_row(snapshot, product, variant, brand=brand, domain=domain, category=category,
+                                     persona=persona, study_pattern=study_pattern, report=report)
+                if row is not None:
+                    rows.append(row)
+                    report[intent] += 1
+                continue
             text = intent_question_text(intent, _intent_subject(snapshot, product, variant))
             if af.retailers_named(text):
                 report['names_a_retailer'].append(text)
@@ -1348,3 +1415,32 @@ def build_intent_questions(snapshot, *, category, persona, study_pattern,
             report[intent] += 1
     report['count'] = len(rows)
     return rows, report
+
+
+def _attribute_row(snapshot, product, variant, *, brand, domain, category, persona, study_pattern, report):
+    """2M-1: one attribute question, or None (no size to name, or it names a store)."""
+    from soa_shared import retailers as af
+
+    line, size, count = attribute_parts(snapshot, product, variant)
+    if not size:
+        report['no_size'].append(variant.variant_id)
+        return None
+    text = attribute_question_text(line, size, count)
+    if af.retailers_named(text):
+        report['names_a_retailer'].append(text)
+        return None
+    found = (getattr(snapshot, 'weight_truth', None) or {}).get(variant.variant_id)
+    if found is None and getattr(variant, 'weight_range', None):
+        found = {'truth': variant.weight_range, 'source': 'feed'}
+    if found is None:
+        report['no_truth'].append(variant.variant_id)
+    source_ref = _source_ref(snapshot, product, variant=variant)
+    source_ref.update(intent=ATTRIBUTE, line=line, size=size, count=count,
+                      weight_truth=(found or {}).get('truth'), weight_truth_source=(found or {}).get('source'))
+    return _row(
+        query_text=text, tier='brand_direct', provenance='catalog',
+        expected_answer=ea.brand_mention(brand, domain), source_ref=source_ref,
+        category=category, persona=persona, study_pattern=study_pattern,
+        stage=INTENT_STAGE, specificity='Narrow', soa_focus='Accuracy',
+        rationale=(f"Asks the weight range {size} is for, which the brand's size chart states; names no store."),
+    )

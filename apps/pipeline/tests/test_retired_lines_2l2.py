@@ -149,12 +149,12 @@ def retired_snapshot(payloads):  # noqa: F811
 
 def test_the_study_asks_the_retired_line_question_and_still_prices_the_line(retired_snapshot):
     rows, _prov, config, _s, _b = _build(retired_snapshot, ALL_ON)
-    # 50 stage + 12 brand-direct + 1 retired-line + 19 accuracy + 6 value
-    assert len(rows) == 50 + 12 + 1 + 19 + 6
+    # 50 stage + 12 brand-direct + 1 retired-line + 19 accuracy + 6 value + 10 attribute (2M-1)
+    assert len(rows) == 50 + 12 + 1 + 19 + 6 + 10
     asked = [r for r in rows if (r.get('source_ref') or {}).get('retired_line')]
     assert [r['query_text'] for r in asked] == [
         'Is Wiggle & Snug Snug-Fit Overnight Diapers still sold, and what replaced it?']
-    assert config['brand_direct']['count'] == 13 + 38   # 2L-4: and 38 where-to-buy and cheapest-place
+    assert config['brand_direct']['count'] == 13 + 38 + 10   # 2L-4: and 38 where-to-buy and cheapest-place; 2M-1: 10 attribute
     assert config['brand_direct']['retired_lines'] == {'count': 1, 'lines': ['Snug-Fit Overnight Diapers']}
     # agents still price a retired line: its variants stay in catalog accuracy
     priced = {r['source_ref'].get('variant_id') for r in rows if r.get('tier') == 'catalog_accuracy'}
@@ -166,6 +166,6 @@ def test_the_study_asks_the_retired_line_question_and_still_prices_the_line(reti
 def test_a_study_with_no_retired_line_is_unchanged(payloads):  # noqa: F811
     snap = build_snapshot(payloads['catalog'], merchants=payloads['merchants'], incentives=payloads['incentives'])
     rows, _prov, config, _s, _b = _build(snap, ALL_ON)
-    assert len(rows) == 50 + 12 + 19 + 6
+    assert len(rows) == 50 + 12 + 19 + 6 + 10   # 2M-1: and 10 attribute questions
     assert config['merchant']['retired'] == []
     assert config['brand_direct']['retired_lines'] == {'count': 0, 'lines': []}

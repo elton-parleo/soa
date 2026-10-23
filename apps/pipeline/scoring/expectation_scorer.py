@@ -440,6 +440,7 @@ class ExpectationScorer:
         rather than relying on this.
         """
         source_ref = _as_dict(run.source_ref) or {}
+        extraction = code_attribute(source_ref, extraction, getattr(run, 'raw_response', None))
         payload = {
             "run_id": run.id,
             "query_id": run.query_id,
@@ -595,6 +596,24 @@ class ExpectationScorer:
             return ScoreRunResult(run_id, 'db_error', error_message=str(exc))
 
         return ScoreRunResult(run_id, 'success', outcome=verdict.outcome)
+
+
+def code_attribute(source_ref: dict, extraction: dict, answer: str) -> dict:
+    """
+    2M-1: on an attribute question's run (source_ref.intent 'attribute'), the
+    weight range the answer states for the asked size, deterministically
+    (soa_shared/attribute_accuracy.weight_from_answer), as the extraction's
+    `weight_range` / `weight_evidence` (None when it states none). Every
+    other run's extraction is returned as it is. No model.
+    """
+    from soa_shared import attribute_accuracy as aa
+
+    if (source_ref or {}).get('intent') != aa.ATTRIBUTE_INTENT or not isinstance(extraction, dict):
+        return extraction
+    if answer is None and 'weight_range' in extraction:
+        return extraction  # no answer text to read: the stored coding stands
+    stated, evidence = aa.weight_from_answer(answer, source_ref.get('size'))
+    return {**extraction, 'weight_range': stated, 'weight_evidence': evidence}
 
 
 def _as_dict(value):

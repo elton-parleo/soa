@@ -201,11 +201,12 @@ def test_brand_direct_is_additive_and_stamped(snapshot):
         snapshot, {"brand_direct": {"enabled": True, "count": 12}},
     )
     # 2L-4: plus a where-to-buy and a cheapest-place question per sampled
-    # variant (19), which the stage counts absorb: still 62
-    assert len(rows) == 62
+    # variant (19), which the stage counts absorb: still 62. 2M-1: and 10
+    # attribute questions, which add: 72
+    assert len(rows) == 72
     brand_call.assert_called_once()
-    assert config["brand_direct"]["count"] == 12 + 38
-    assert config["brand_direct"]["intents"]["count"] == 38
+    assert config["brand_direct"]["count"] == 12 + 38 + 10
+    assert config["brand_direct"]["intents"]["count"] == 48
     assert sum(config["brand_direct"]["intents"]["absorbed"].values()) == 38
 
 
@@ -216,7 +217,7 @@ def test_the_catalog_tiers_are_additive(snapshot):
     # variant, pack count riding as a secondary) + 6 value.
     assert config["catalog_accuracy"]["count"] == 19
     assert config["value_incentives"]["count"] == 6
-    assert len(rows) == 50 + 12 + 19 + 6
+    assert len(rows) == 50 + 12 + 19 + 6 + 10   # 2M-1: and 10 attribute questions
 
 
 def test_the_default_study_lands_inside_the_hundred_question_cap(snapshot):
@@ -227,7 +228,7 @@ def test_the_default_study_lands_inside_the_hundred_question_cap(snapshot):
     _rows, _prov, config, _s, _b = _build(snapshot, ALL_ON)
     config["category_control"]["stage_total"] = 50
 
-    assert tally(config)["total"] == 87
+    assert tally(config)["total"] == 97   # 2M-1: 87 + 10 attribute questions
     assert tally(config)["total"] < 100
 
 
@@ -304,8 +305,8 @@ def test_the_tally_splits_by_who_wrote_the_question(snapshot):
 
     assert ss.tally(config) == {
         "ai_written": 24,       # 50 stage - 38 absorbed + 12 brand-direct
-        "from_catalog": 63,     # 2L-4: 38 where-to-buy and cheapest-place + 19 accuracy + 6 value
-        "total": 87,
+        "from_catalog": 73,     # 2L-4: 38 where-to-buy and cheapest-place + 19 accuracy + 6 value; 2M-1: + 10 attribute
+        "total": 97,
     }
 
 

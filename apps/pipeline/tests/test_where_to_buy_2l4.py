@@ -19,7 +19,8 @@ def test_one_of_each_per_sampled_variant_naming_no_store(snapshot):  # noqa: F81
     rows, report = ct.build_intent_questions(snapshot, category='Baby Care', persona='Value-Conscious Parent',
                                              study_pattern='brand_at_retail')
     sampled = [v.variant_id for _p, v in ct.sample_variants(snapshot)]
-    assert (report['where_to_buy'], report['cheapest_place'], report['count']) == (19, 19, 38)
+    # 2M-1: plus ATTRIBUTE_CAP (10) attribute questions, which test_attribute_2m1.py covers
+    assert (report['where_to_buy'], report['cheapest_place'], report['attribute'], report['count']) == (19, 19, 10, 48)
     assert report['sampled_variants'] == sampled
     by = {i: [r for r in rows if r['source_ref']['intent'] == i] for i in ct.INTENTS}
     assert [r['source_ref']['variant_id'] for r in by['where_to_buy']] == sampled
@@ -54,9 +55,10 @@ def test_the_study_stays_the_size_of_its_brief(snapshot):  # noqa: F811
     asked = stage_call.call_args.kwargs['stage_targets']
     # Ready to Buy's 16, then Research's 12 and Awareness's 10; Comparison kept
     assert asked == {'Comparison': 12}
-    assert len(rows) == sum(STAGE_TARGETS.values()) + 12 + 19 + 6
+    # 2M-1: the 10 attribute questions add to the study (87 + 10)
+    assert len(rows) == sum(STAGE_TARGETS.values()) + 12 + 19 + 6 + 10
     intents = config['brand_direct']['intents']
-    assert (intents['count'], intents['not_absorbed'], intents['stage']) == (38, 0, 'Ready to Buy')
+    assert (intents['count'], intents['not_absorbed'], intents['stage']) == (48, 0, 'Ready to Buy')
     assert intents['absorbed'] == {'Ready to Buy': 16, 'Research': 12, 'Awareness': 10}
     assert intents['stage_targets'] == STAGE_TARGETS
 
