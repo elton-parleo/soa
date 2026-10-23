@@ -113,7 +113,7 @@ from sqlalchemy import inspect, text
 from soa_shared import attribute_accuracy, claim_kinds, per_unit, promo_pass_through, surfaces
 from soa_shared import unprompted
 from soa_shared.expected_answers import normalize_domain, normalize_money
-from soa_shared.retailers import KNOWN_RETAILERS, RETAILER_NAMES, retailer_name
+from soa_shared.retailers import KNOWN_RETAILERS, RETAILER_NAMES, retailer_name, retailers_named
 
 FLAG = "SOA_NARRATIVES_ENABLED"
 MODEL_ENV = "SOA_NARRATIVE_MODEL"
@@ -334,29 +334,37 @@ says 15 to 34."
 #: 2M-2: a cheapest-place answer that named no deal live that day, the demo's:
 #: "Amazon charged $47.99 that day and ran save 40% on 1 when you buy 2, which
 #: the answer never mentions". Its own prompt, so the other answers' requests
-#: (and their recordings) are unchanged.
+#: (and their recordings) are unchanged. 2O-1 (B3): the old pattern's optional
+#: quote, left out, wrote "Gemini Amazon charged $36.18 that day and ran ..."
+#: (run-15118, 15342), the retailer's price as the agent's. The agent now sends
+#: the shopper somewhere and never mentions the deal; its own quote, when it
+#: gave one, is its own sentence.
 PROMO_PROMPT = """You write the one line a product console shows beside a shopping assistant's \
 answer to "cheapest place to buy" a product. You get the facts a scorer recorded and nothing else.
 
 The facts:
 - agent_quoted: what the assistant quoted, when it quoted a price.
+- sent_to: the retailers the assistant sent the shopper to, in its order, when it named any.
 - deals_live_that_day: the deals retailers ran on this product that day: the retailer, the deal \
 as the console titles it, its terms, and the retailer's price that day.
 
 What the line says, in this pattern and only this pattern:
 
-<assistant> [quoted $<price> at <retailer>. ]<retailer> charged $<price that day> that day and \
-ran <deal>, which the answer never mentions.
+[<assistant> quoted $<price> at <retailer>. ]<assistant> sent the shopper to <retailer in sent_to> \
+and never mentioned <deal's retailer>'s <deal>, live that day.
 
-Name one deal, the first in deals_live_that_day, written as the facts write it. Leave out the \
-price that day when the facts give none.
+The first sentence only when agent_quoted gives a price, with that price at that retailer. When \
+sent_to is empty, write <assistant> never mentioned <deal's retailer>'s <deal>, live that day. \
+Name one deal, the first in deals_live_that_day, written exactly as the facts write it. Never put \
+a retailer's name right after the assistant's name, and never write what a retailer charged in \
+the assistant's sentence.
 
 Rules:
 - One or two short sentences, at most 220 characters.
 """ + _COMMON_RULES + """
 
-Style, from the demo: "Perplexity sends the AMORE shopper to Amazon at $36.18. Amazon charged \
-$47.99 that day and ran save 40% on 1 when you buy 2, which the answer never mentions."
+Style, from the demo: "Gemini sent the shopper to Walmart and never mentioned Amazon's 25% off \
+list price on AMORE Size 1, $36.18 from $47.99, live that day."
 """
 
 
@@ -375,6 +383,9 @@ What the line says, in this pattern and only this pattern:
 
 <assistant> named <the stores in named_stores, joined with commas and a final "and"> as places to \
 buy it. <brand> never published that list.
+
+With one store in named_stores: <assistant> named <store> as the place to buy it. <brand> never \
+published that list.
 
 Rules:
 - One or two short sentences, at most 200 characters.
@@ -636,6 +647,30 @@ def _deal_fact(deal: dict) -> dict:
                        'deal_price': _money(variant.get('price'))})
 
 
+def sent_to(extraction: dict, quoted: List[dict]) -> Optional[List[str]]:
+    """2O-1 (B3): the retailers a cheapest-place answer sent the shopper to, in
+    its order, as the console names them: the ones the labeller called a
+    recommendation (retailer_mentions), else the transcription's
+    recommended_retailers, else the retailers its quotes were judged at
+    (agent_quoted's judged_at). None when it named none."""
+    mentions = (extraction or {}).get('retailer_mentions')
+    if mentions is not None:
+        names = [m.get('name') for m in mentions if isinstance(m, dict) and m.get('role') == 'recommendation']
+    else:
+        names = list((extraction or {}).get('recommended_retailers') or [])
+    if not [n for n in names if n]:
+        names = [q.get('judged_at') or q.get('asked_at') for q in quoted]
+    out = []
+    for name in names:
+        if not name:
+            continue
+        domains = retailers_named(name)
+        shown = retailer_name(domains[0]) if domains else str(name).strip()
+        if shown and shown not in out:
+            out.append(shown)
+    return out or None
+
+
 def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merchant: Merchant,
                  index: Dict[tuple, dict], scales: Optional[List[dict]] = None,
                  deals: Optional[dict] = None, truths: Optional[dict] = None) -> Optional[dict]:
@@ -711,6 +746,8 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
         'answer_spans': spans,
         # 2M-2: the deals live that day the answer never mentions
         'deals_live_that_day': [_deal_fact(d) for d in missed] or None,
+        # 2O-1 (B3): and where the answer sent the shopper instead
+        'sent_to': sent_to(extraction, quoted) if missed else None,
     })
 
 
@@ -1253,6 +1290,8 @@ def _said_and_true(facts: dict) -> Tuple[set, Dict[str, str]]:
 
 #: "and so did Perplexity": an agent given another's quote with no amount
 #: beside it, which the clauses below cannot read (2L-3a, the FL13 fixture)
+#: an agent's name with a retailer's name right after it, no word between
+_AGENT_THEN_RETAILER = re.compile(r"\b(" + _AGENT_ALT + r")\s+(" + _RETAILER_ALT + r")\b")
 _BORROWED = re.compile(r"\b(?:so|as) did\b|\bdid too\b|\blikewise\b|\bthe same price\b", re.I)
 
 
@@ -1269,6 +1308,11 @@ def _who_said_what(line: str, facts: dict) -> Optional[str]:
     m = _BORROWED.search(line)
     if m:
         return f"borrowed:{m.group(0)}"
+    # 2O-1 (B3): "Gemini Amazon charged $36.18 that day" (run-15118, 15342) reads
+    # as Gemini's quote: an agent's name with a retailer's right after it
+    m = _AGENT_THEN_RETAILER.search(line)
+    if m:
+        return f"{m.group(1)} {m.group(2)}"
     speakers, quoting = [], False
     for clause in _CLAUSE.split(_AGENT_PAIR.sub(r"\1 & ", line)):
         agents = _agents_in(clause)
@@ -1415,6 +1459,9 @@ _DASH = re.compile(r"[‒–—―]|--")
 _DASHED_RUN = re.compile(r"\S*\s?(?:[‒–—―]|--)\s?\S*")
 
 
+_PLACES = re.compile(r"\bas places to buy it\b")
+
+
 def normalise(line: str, facts: dict) -> str:
     """2N-1: a product line's issue follows the sentence before it with a
     period. 2M-3: a dash the source wrote becomes a hyphen, so the line is kept:
@@ -1429,6 +1476,9 @@ def normalise(line: str, facts: dict) -> str:
         run = m.group(0).strip('.,:;!?()"')
         return _DASH.sub('-', m.group(0)) if run and run in known else m.group(0)
     line = _DASHED_RUN.sub(held, line)
+    # 2O-1 (B3): one store is the place to buy it, not places
+    if len(facts.get('named_stores') or []) == 1:
+        line = _PLACES.sub('as the place to buy it', line)
     # 2N-1: the issue is its own sentence: "... on Oct 23 6 of 6 agents ..." gets its period
     issue = str(facts.get('issue') or '') if facts.get('kind') == PRODUCT else ''
     at = line.find(issue) if issue else -1
