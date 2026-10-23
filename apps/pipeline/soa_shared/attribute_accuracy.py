@@ -156,15 +156,15 @@ def phrase(rng: Optional[dict]) -> Optional[str]:
 
 
 def one_liner(stated: Optional[dict], truth: Optional[dict], brand_site: str = 'the brand site') -> Optional[str]:
-    """The /answers row line: "stated 22 to 37 lb; pampers.com says 15 to 34"."""
+    """The /answers row line: "stated 22 to 37 lb, where pampers.com says 15 to 34" (no semicolon: the console's copy rule)."""
     if truth is None:
-        return f"stated {phrase(stated)}; no brand truth on record" if stated else None
+        return f"stated {phrase(stated)}, with no brand truth on record" if stated else None
     said = phrase(truth).removesuffix(' lb')
     if stated is None:
-        return f"stated no weight range; {brand_site} says {said}"
+        return f"stated no weight range, where {brand_site} says {said}"
     if verdict(stated, truth) == 'match':
         return f"stated {phrase(stated)}, as {brand_site} says"
-    return f"stated {phrase(stated)}; {brand_site} says {said}"
+    return f"stated {phrase(stated)}, where {brand_site} says {said}"
 
 
 def answer_attribute(source_ref: Optional[dict], extraction: Optional[dict], answer: Optional[str] = None,

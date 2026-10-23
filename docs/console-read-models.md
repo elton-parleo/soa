@@ -7476,8 +7476,8 @@ stated range rides in the stored extraction: no migration.
 ### B3: /answers
 
 An attribute answer's row: `intent: 'attribute'`, `attribute: {size, count, stated, evidence, truth, truth_source,
-verdict}`, `summary` its one-liner ("stated 22 to 37 lb; pampers.com says 15 to 34", "stated under 10 lb, as
-pampers.com says", "stated no weight range; pampers.com says 15 to 34"), severity high on a mismatch, and claim_kind
+verdict}`, `summary` its one-liner ("stated 22 to 37 lb, where pampers.com says 15 to 34", "stated under 10 lb, as
+pampers.com says", "stated no weight range, where pampers.com says 15 to 34"), severity high on a mismatch, and claim_kind
 `attribute` (2K-1's existing kind) when it stated a range. Every brand-direct row carries `intent`, for the Accuracy chip.
 
 ### B4: /overview, /score, /truesync

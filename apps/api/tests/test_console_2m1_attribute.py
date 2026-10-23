@@ -247,7 +247,7 @@ def test_each_attribute_answer_gets_its_verdict_and_one_liner(http, db, upstream
         (37, 6, 2, 5)
     miss = next(r for r in rows if r['query'].startswith('What weight range is Pampers Swaddlers Size 4')
                 and r['attribute']['verdict'] == 'mismatch')
-    assert miss['summary'] == 'stated 22 to 37 lb; pampers.com says 15 to 34'
+    assert miss['summary'] == 'stated 22 to 37 lb, where pampers.com says 15 to 34'
     assert miss['severity'] == 'high' and miss['claim_kind'] == 'attribute'
     assert miss['attribute'] == {'size': 'Size 4', 'count': 120, 'stated': R(22, 37),
                                  'evidence': 'Size 4 is for babies 22-37 lbs', 'truth': R(15, 34),
@@ -255,9 +255,9 @@ def test_each_attribute_answer_gets_its_verdict_and_one_liner(http, db, upstream
     right = next(r for r in rows if r['attribute']['verdict'] == 'match')
     assert right['summary'] == 'stated under 10 lb, as pampers.com says'
     none = next(r for r in rows if r['attribute']['verdict'] == 'absent')
-    assert none['summary'] == 'stated no weight range; pampers.com says 15 to 34'
+    assert none['summary'] == 'stated no weight range, where pampers.com says 15 to 34'
     pure = next(r for r in rows if 'Pure Protection' in r['query'])
-    assert pure['attribute']['verdict'] is None and pure['summary'] == 'stated 8 to 14 lb; no brand truth on record'
+    assert pure['attribute']['verdict'] is None and pure['summary'] == 'stated 8 to 14 lb, with no brand truth on record'
 
 
 # ---------------------------------------------------------------------------
