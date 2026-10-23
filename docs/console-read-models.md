@@ -7591,3 +7591,82 @@ where-to-buy, and three live deals (an Amazon multi-buy on 5 SKUs, a Walmart Rol
 * the tile, Changes, /prove, no deals, a failed read, and a retailer merchant unaffected.
 
 `apps/pipeline/tests/test_promo_2m2.py` covers the narrative facts.
+
+## 2N-1: what the first parity cycle (FL14-pampers-20261023) showed
+
+Six fixes from reading the live console on Oct 23. No migration. Deterministic; no model.
+
+### B1: attribute accuracy against the cycle's truth
+
+2M-1's generator copied the truth onto the question (`source_ref.weight_truth`) when the only reads were FL13's,
+before weight extraction existed, so FL14's accuracy answers read "with no brand truth on record" though supply read
+the truth that cycle. The truth is now the cycle's, resolved at scoring and on read
+(`attribute_accuracy.truth_index` / `truth_for`): the retailer-prices rows cached on the cycle (each variant's
+`attribute.truth`, the feed's `weight_range` first), then supply's /reference (the payload the drift rows read) for
+the current cycle, then what the scorer stored. The scorer writes `weight_truth` / `weight_truth_source` on an
+attribute run's extraction. The question's copy is never read; it stays the preview's `no_truth` report.
+
+### B2: a catalog-built brand-direct question carries only its own verdict
+
+`claim_kinds.catalog_intent`: where-to-buy, cheapest-place, accuracy (`source_ref.intent`) and the retired line
+(`source_ref.retired_line`). Their answers are outside the brand-claim counts (the Overview's tallies and the
+fabricated signal, the By tier cells, which carry `catalog_built`, the count left out, when the study asked one), the
+severity ladder's fabricated rung and the narratives' `brand_fabricated`. On /answers each carries `intent_verdict`
+and its own line (`catalog_verdict`): coverage (`covered | partial | no_store`, "named Amazon, Target and Walmart, 3
+of the brand's retailers"), deal pass-through (`named_deal | missed_deal | no_deal_live`), the weight range, still
+sold / successor (not coded). `brand_verdict` and `claim_kind` are the AI-written questions' only. FL14's shape:
+123 fabricated of 258 becomes 30 of 72; the Week in short's 121 becomes 29.
+
+### B3: the price check's variant names
+
+* Descriptors are not variants (`variant_rules.DESCRIPTORS`: Fragrance-Free, Wetness Indicator, Soft and Absorbent,
+  Baby / Disposable Diapers); Overnights, Pure and Ultra are lines (`SOA_VARIANT_MARKERS`). A quoted name contained in
+  the retailer page's own title for the variant is that variant (`record_variants.in_title`, when the row carries
+  `page_title`, `title` or `name`; supply's retailer-prices rows do not serve the page's name today).
+* "Not ours" needs another product's name: a pronoun is no product (rule 3), and a description of ours (generic
+  words, descriptors and the asked variant's own words, with its size or count: "the NB 84-count option") is the
+  asked variant (`describes_asked`).
+* A per-unit quote (`soa_shared/per_unit.py`: a per-unit phrase, the words after the amount, or over $0 and under $2
+  against a pack over $10) is the claim outcome `per_unit`, outside scored and outside wrong. A run of nothing else is
+  stored `unscoreable` with reason `per_unit` (the outcome column's check constraint is unchanged); the console reads
+  it `per_unit`, "per-diaper price, not comparable" (`read_outcome`, `TV_STATUS`, `aggregate_cell`). The narratives
+  read the same rule.
+
+### B4: product rows
+
+`product.unverifiable` only when every retailer cell of the row was walled; otherwise the rule over the retailers
+read, the rest named after it ("Right in 12 of 12 runs. Target could not be read."), in `product_issue` and the
+narratives' `issue_rule` alike. A product line's issue follows the sentence before it with a period (`normalise`).
+A product's `status` (the CHECK column) follows its issue rule (`status_for`): left out, unverifiable and not asked
+read none, wrong and another brand's price wrong, right the cells' exact or partial.
+
+### B5: Visibility and routing
+
+* For a brand, `ranking.brand_choice` (category control and comparison: title "Who agents pick first, Pampers
+  category prompts", sub "180 category and comparison answers", rows, denoms) and `ranking.default_tier:
+  'brand_choice'`. The typed ranking stays every question, the chip.
+* Our line names are our aliases (`line_aliases` over the study's product names and retired lines: Swaddlers, Baby
+  Dry, Cruisers 360, Pure Protection); a comparison-set brand is also its name without company words
+  (`entity_aliases`: Honest).
+* A retailer or a retailer's label (`retailers.is_store_name`: Walmart, Amazon, Target, Costco, Kirkland, Hy-Vee)
+  leaves the brand table.
+* Routing: a store named by the brand ("Pampers Official Store") is the brand's own site row.
+
+### B6: trade promotions, Changes, Impact
+
+* A deal's title from its fields, "<Retailer>: <kind phrase> on <line>" ("Amazon: 25% off list price on AMORE Size
+  1, $36.18 from $47.99"; a deal on more than one line names none). Its kind in the retailer's words
+  (`RETAILER_CUT_WORDS`: Walmart Rollback, Amazon list price cut, Target sale, Kroger sale price), on the row as
+  `kind_label` and in the short name every note reads ("Amazon list price cut"). The shelf's evidence goes in the
+  row's detail, trimmed of its price-per-count noise (`promo_pass_through.evidence`).
+* Changes for a brand also reads "Retired product named", "First pick, category questions" and "Retailer coverage"
+  (`brand_changes`), each new on a first cycle and a delta against a compared one.
+* `/revenue.baseline` for a brand: Attribute accuracy, Retailer coverage, Promo pass-through, Category presence
+  (`brand_baseline`), each `{key, label, value, note, n, k}`.
+
+### Tests
+
+`apps/api/tests/test_console_2n1_parity.py` (FL14's shape for B2, the B3 read, B4 to B6), the B1 cases in
+`test_console_2m1_attribute.py` (a study generated with no truth, judged against supply's reference: 37 of 45; two
+cycles' references, each its own), `apps/pipeline/tests/test_price_names_2n1.py` (each quoted string against its
+reference) and `test_attribute_2m1.py` (the truth the scorer stores).

@@ -9,6 +9,12 @@ agent, AI Mode unanswered: 5 answers each, coded from the answer text
 an outcome stored before the coder). Supply's /reference carries the ranges
 (its `attributes`, parleo-supply-app#28).
 
+2N-1: the questions were generated with no truth (source_ref.weight_truth
+None, as FL14's were: FL13's reads had no weight extraction), and the truth
+is the cycle's: its cached retailer-prices rows carry each variant's
+`attribute.truth` (the brand's own page row), and /reference its
+`attributes`. The counts below are judged against those.
+
 Answers, by hand (the brand truth in brackets; every parse form appears):
   v0 Swaddlers Newborn   [under 10]  4 match ("under 10 lb", "up to 10 lb", ...), 1 "up to 12 lb"   4/5
   v1 Swaddlers Size 1    [8 to 14]   5 match ("8 to 14 lb", "8–14 lbs", "8-14 pounds")              5/5
@@ -133,8 +139,8 @@ def _attribute_questions(db):
         for vid, line, size, count, truth, texts in QUESTIONS:
             qid += 1
             ref = {'merchant_slug': WS, 'listing_id': 60 + qid % 100, 'variant_id': vid, 'intent': 'attribute',
-                   'line': line, 'size': size, 'count': count, 'weight_truth': truth,
-                   'weight_truth_source': 'feed' if truth else None, 'own_domain': 'pampers.com'}
+                   'line': line, 'size': size, 'count': count, 'weight_truth': None,
+                   'weight_truth_source': None, 'own_domain': 'pampers.com'}
             c.execute(text("INSERT INTO soa_queries (id, query_code, query_text, stage, status, study_type, study_pattern, "
                            "organization_id, tier, expected_answer, provenance, source_ref) VALUES (:i, :c, :t, "
                            "'Ready to Buy', 'Active', :st, 'brand_at_retail', 1, 'brand_direct', :e, 'catalog', :r)"),
@@ -162,9 +168,36 @@ def _attribute_questions(db):
                            'e': _encode({'type': 'brand_mention', 'brand': 'Pampers'})})
 
 
+def _truth_rows(truths=None):
+    """2N-1: the brand's own page row per variant, as supply's retailer-prices serves it
+    (the truth rides on every row of the variant)."""
+    out = []
+    for vid, _line, size, count, truth, _texts in QUESTIONS:
+        truth = (truths or {}).get(vid, truth)
+        if truth is None:
+            continue
+        out.append({'variant_ref': f'feed_sku:{vid}', 'gtin': None, 'sku': vid, 'variant_label': f'{size}, {count} ct',
+                    'retailer_domain': 'pampers.com', 'url': f'https://www.pampers.com/{vid}', 'role': 'own',
+                    'read_status': 'ok', 'verifiable': False, 'method': 'none_by_design', 'price': None,
+                    'weight_range': None,
+                    'attribute': {'stated': truth, 'truth': truth, 'truth_source': 'brand_page', 'verdict': 'match'}})
+    return out
+
+
+def _cache_truths(db, cycle_id=229, truths=None):
+    """The cycle's cached retailer-prices, with the own-page rows that carry the truth."""
+    with db.begin() as c:
+        payload = c.execute(text("SELECT reference_prices FROM soa_cycles WHERE id = :c"), {'c': cycle_id}).scalar() or {}
+        payload = dict(payload) if isinstance(payload, dict) else json.loads(payload)
+        payload['prices'] = list(payload.get('prices') or []) + _truth_rows(truths)
+        c.execute(text("UPDATE soa_cycles SET reference_prices = :p WHERE id = :c"),
+                  {'p': _encode(payload), 'c': cycle_id})
+
+
 def _shape(db, http, upstream):
     _fl13_shape(db, http, upstream)
     _attribute_questions(db)
+    _cache_truths(db)
     _supply(upstream)
     upstream.answer('GET', f'/api/truesync/merchants/{WS}/reference', body=ATTRIBUTE_REFERENCE, token=TOKEN_A)
 
@@ -251,7 +284,7 @@ def test_each_attribute_answer_gets_its_verdict_and_one_liner(http, db, upstream
     assert miss['severity'] == 'high' and miss['claim_kind'] == 'attribute'
     assert miss['attribute'] == {'size': 'Size 4', 'count': 120, 'stated': R(22, 37),
                                  'evidence': 'Size 4 is for babies 22-37 lbs', 'truth': R(15, 34),
-                                 'truth_source': 'feed', 'site': 'pampers.com', 'verdict': 'mismatch'}
+                                 'truth_source': 'brand_page', 'site': 'pampers.com', 'verdict': 'mismatch'}
     right = next(r for r in rows if r['attribute']['verdict'] == 'match')
     assert right['summary'] == 'stated under 10 lb, as pampers.com says'
     none = next(r for r in rows if r['attribute']['verdict'] == 'absent')
@@ -330,3 +363,64 @@ def test_every_parse_form_against_its_truth():
     for answer, size, truth, expected in cases:
         stated, _evidence = aa.weight_from_answer(answer, size)
         assert aa.verdict(stated, truth) == expected, (answer, stated)
+
+
+# ---------------------------------------------------------------------------
+# 2N-1 (B1): the truth is the cycle's reference's, never the study's
+# ---------------------------------------------------------------------------
+
+def test_a_study_generated_with_no_truth_is_judged_against_supplys_reference(http, db, upstream):
+    """FL14's shape: the questions carry no truth and the cycle's cached rows carry none
+    either (cached before supply read the weight); /reference has it, and the tile counts."""
+    _fl13_shape(db, http, upstream)
+    _attribute_questions(db)
+    _supply(upstream)
+    upstream.answer('GET', f'/api/truesync/merchants/{WS}/reference', body=ATTRIBUTE_REFERENCE, token=TOKEN_A)
+    acc = _get(http, 'overview', merchant=WS)['attribute_accuracy']
+    assert acc['answers'] == {'n': 45, 'k': 37}
+    with db.connect() as c:
+        refs = [r if isinstance(r, dict) else json.loads(r) for r in c.execute(text(
+            "SELECT source_ref FROM soa_queries WHERE study_type = :st AND tier = 'brand_direct'"),
+            {'st': f229.STUDY}).scalars()]
+    assert all(r.get('weight_truth') is None for r in refs if r.get('intent') == 'attribute')
+
+
+def test_each_cycle_is_judged_against_its_own_reference(http, db, upstream):
+    """The same answers, two cycles' references: Swaddlers Size 4 is 15 to 34 in one and 22
+    to 37 in the other, and each cycle's verdicts follow its own. A truth on the question is
+    never read."""
+    _shape(db, http, upstream)
+    with db.begin() as c:
+        for qid, ref in c.execute(text("SELECT id, source_ref FROM soa_queries WHERE study_type = :st"),
+                                  {'st': f229.STUDY}).all():
+            ref = ref if isinstance(ref, dict) else json.loads(ref or '{}')
+            if ref.get('intent') == 'attribute':
+                c.execute(text("UPDATE soa_queries SET source_ref = :r WHERE id = :i"),
+                          {'r': _encode({**ref, 'weight_truth': R(1, 2)}), 'i': qid})
+    other = {'prices': _truth_rows({'v2': R(22, 37)})}
+    with db.connect() as c:
+        row = dict(c.execute(text("SELECT * FROM soa_cycles WHERE id = 229")).mappings().one())
+        mine = [a for a in rm.attribute_answers(c, row) if a['variant'] == 'Pampers Swaddlers Size 4']
+        theirs = [a for a in rm.attribute_answers(c, {**row, 'reference_prices': json.dumps(other)})
+                  if a['variant'] == 'Pampers Swaddlers Size 4']
+    assert [a['verdict'] for a in mine] == ['mismatch', 'mismatch', 'mismatch', 'match', 'absent']
+    assert [a['verdict'] for a in theirs] == ['match', 'match', 'match', 'mismatch', 'absent']
+    assert {aa.phrase(a['truth']) for a in mine} == {'15 to 34 lb'} and {aa.phrase(a['truth']) for a in theirs} == {'22 to 37 lb'}
+
+
+def test_the_truth_index_takes_the_feed_first_and_the_cycles_payload_first():
+    rows = [{'sku': 'a', 'role': 'retailer', 'weight_range': None,
+             'attribute': {'truth': R(15, 34), 'truth_source': 'brand_page'}},
+            {'sku': 'a', 'role': 'own', 'weight_range': R(14, 33)},
+            {'sku': 'b', 'role': 'comparison', 'attribute': {'truth': R(1, 2)}}]
+    index = aa.truth_index({'prices': rows}, {'attributes': [{'sku': 'a', 'truth': R(9, 9)}, {'sku': 'c', 'truth': R(3, 4)}]})
+    assert aa.truth_for(index, {'variant_id': 'a'}) == {'truth': R(14, 33), 'source': 'feed'}
+    assert aa.truth_for(index, {'variant_id': 'b'}) is None              # a comparison page is never the truth
+    assert aa.truth_for(index, {'variant_id': 'sku:c'}) == {'truth': R(3, 4), 'source': None}
+    gtin = aa.truth_index({'prices': [{'gtin': '37000123456', 'attribute': {'truth': R(8, 14)}}]})
+    assert aa.truth_for(gtin, {'variant_id': '00037000123456'})['truth'] == R(8, 14)
+    # the study's copy is never the truth; the scorer's stored one is, when no reference is at hand
+    ref = {'intent': 'attribute', 'size': 'Size 1', 'weight_truth': R(8, 14)}
+    assert aa.answer_attribute(ref, {}, 'Size 1 is 8 to 14 lb.')['verdict'] is None
+    stored = {'weight_truth': R(8, 14), 'weight_truth_source': 'feed'}
+    assert aa.answer_attribute(ref, stored, 'Size 1 is 8 to 14 lb.')['verdict'] == 'match'

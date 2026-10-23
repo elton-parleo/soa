@@ -78,6 +78,8 @@ class ReferenceRow:
     method: Optional[str]
     observed_at: Optional[str]
     role: Optional[str] = None
+    #: 2N-1: the page's own name for the product (its title), when supply serves it
+    title: Optional[str] = None
 
     @classmethod
     def from_payload(cls, row: dict) -> 'ReferenceRow':
@@ -98,6 +100,7 @@ class ReferenceRow:
             method=row.get('method'),
             observed_at=row.get('observed_at'),
             role=row.get('role'),
+            title=row.get('page_title') or row.get('title') or row.get('name'),
         )
 
     def value(self, member: bool) -> Optional[str]:

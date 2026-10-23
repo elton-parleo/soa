@@ -220,8 +220,9 @@ def test_changes_and_the_impact_baseline(http, db, upstream):
         "multi-buy ran on 5 SKUs and 2 of 25 answers named it. First cycle with this question.")
     revenue = _get(http, 'revenue', merchant=WS)
     _dump('revenue-2m2.json', revenue)
-    assert revenue['baseline'][-1] == {'key': 'promo', 'label': 'Promo pass-through', 'value': '5 of 50',
-                                       'note': 'Named a deal live that day', 'n': 50, 'k': 5}
+    # 2N-1: one of the brand's four, in the demo's order
+    assert next(b for b in revenue['baseline'] if b['key'] == 'promo') == {
+        'key': 'promo', 'label': 'Promo pass-through', 'value': '5 of 50', 'note': 'Named a deal live that day', 'n': 50, 'k': 5}
     assert rm.promo_baseline(None) is None
     assert rm.promo_baseline({'n': 50, 'k': 5}) == {'key': 'promo', 'label': 'Promo pass-through', 'value': '5 of 50',
                                                      'note': 'Named a deal live that day', 'n': 50, 'k': 5}
@@ -245,10 +246,11 @@ def test_the_trade_promotions_table(http, db, upstream):
     assert body['state'] == 'measured' and body['title'] == 'Trade promotions'
     assert [(r['title'], r['agents'], r['value'], r['terms'], r['tone']) for r in body['rows']] == [
         ('Amazon: save 40% on 1 when you buy 2', 'Named 2 of 25', '40% off', 'Amazon, when you buy 2', 'warn'),
-        ('Walmart: Rollback', 'Named 2 of 10', '$10.00', 'Rollback', 'warn'),
+        # 2N-1: the title from the deal's fields ($59.77 to $49.77 is 17% off), on no line: it ran on two
+        ('Walmart: Rollback, 17% off', 'Named 2 of 10', '$10.00', 'Rollback', 'warn'),
         ("Sam's Club: $15 Sam's Cash on $100 of P&G", 'Named 1 of 5', '$15.00', "Sam's Cash", 'warn')]
-    assert body['rows'][1]['detail'] == ('Live on Pampers Swaddlers v5, Pampers Swaddlers v6. Pampers Swaddlers v5 '
-                                         '$59.77 to $49.77. Pampers Swaddlers v6 $59.77 to $49.77.')
+    assert body['rows'][1]['detail'].startswith('Live on Pampers Swaddlers v5, Pampers Swaddlers v6. Pampers Swaddlers v5 '
+                                                '$59.77 to $49.77. Pampers Swaddlers v6 $59.77 to $49.77.')
     assert body['aside']['value'] == '5 of 50' and body['aside']['kick'] == 'Promo pass-through, Oct 14'
     assert body['aside']['label'] == 'cheapest-place answers named a deal that was live on a shelf that day'
     assert body['aside']['sub'].startswith("Answers named Amazon multi-buy twice, Walmart Rollback twice and Sam's Club")
@@ -292,3 +294,38 @@ def test_a_study_with_no_cheapest_place_question_reads_no_deals(http, db, upstre
     before = len(upstream.calls)
     assert 'promo_pass_through' not in _get(http, 'overview', merchant=WS)
     assert not [c for c in upstream.calls[before:] if c['path'].endswith('/deals')]
+
+
+# 2N-1 (B6): FL14's one live deal, as supply read it, beside the three above: its shelf evidence was
+# its title, and its kind read Rollback. SOA_2N1_SAMPLE_DUMP=<dir> writes the console's samples.
+FL14_TEXT = '$36.18 with 25 percent savings -25% $ 36 . 18 $0.27 per count ( $0.27 $0.27 / count) List Price: $47.99'
+FL14_CUT = {'retailer_domain': 'amazon.com', 'kind': 'rollback_or_was', 'text': FL14_TEXT, 'value': '25.00',
+            'value_unit': 'percent', 'terms': None, 'program': None,
+            'variants': [{**_variant('v8', '36.18', '36.18', '47.99'), 'product_name': 'Pampers AMORE Diapers',
+                          'variant_label': 'Size 1, 132 ct', 'evidence': FL14_TEXT}]}
+
+
+def test_fl14_s_deal_titled_from_its_fields(http, db, upstream):
+    from tests import test_console_2m1_attribute as t2m1
+    _shape(db, http, upstream, deals={**DEALS, 'deals': [MULTI, CASH, ROLLBACK, FL14_CUT]})
+    # 2M-1's accuracy questions beside them, judged against the cycle's truth (2N-1 B1), for Impact's baseline
+    t2m1._attribute_questions(db)
+    t2m1._cache_truths(db)
+    upstream.answer('GET', f'/api/truesync/merchants/{WS}/reference', body=t2m1.ATTRIBUTE_REFERENCE, token=TOKEN_A)
+    prove = _get(http, 'prove', merchant=WS)
+    row = next(r for r in prove['rows'] if r['retailer_domain'] == 'amazon.com' and r['kind'] == 'rollback_or_was')
+    assert row['title'] == 'Amazon: 25% off list price on AMORE Size 1, $36.18 from $47.99'
+    assert (row['kind_label'], row['terms']) == ('list price cut', 'List price cut')
+    # a shelf's words with no figure in them ("on the page") stay out of the detail
+    assert all('The shelf said: on the page' not in r['detail'] for r in prove['rows'])
+    assert row['detail'].endswith('The shelf said: $36.18 with 25 percent savings -25% List Price: $47.99.')
+    overview = _get(http, 'overview', merchant=WS)
+    revenue = _get(http, 'revenue', merchant=WS)
+    assert [b['key'] for b in revenue['baseline']] == ['attribute', 'promo', 'category']
+    assert revenue['baseline'][0]['value'] == '61 of 79'
+    out = os.environ.get('SOA_2N1_SAMPLE_DUMP')
+    if out:
+        os.makedirs(out, exist_ok=True)
+        for name, body in (('prove-2n1.json', prove), ('overview-2n1.json', overview), ('revenue-2n1.json', revenue)):
+            with open(os.path.join(out, name), 'w') as fh:
+                json.dump(body, fh, indent=1, sort_keys=True)

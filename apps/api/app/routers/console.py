@@ -239,8 +239,9 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         previous = None
         if prev is not None:
             prev = {**prev, 'customer_org_id': row['customer_org_id']}
+            # 2N-1: with the merchant's facts, so its routing (Retailer coverage) compares
             previous = {'code': prev['cycle_code'], 'rows': parity.load_overview_rows(conn, prev, features),
-                        'visibility': _visibility(conn, prev), 'study': rm.study_identity(conn, prev)}
+                        'visibility': _visibility(conn, prev, facts), 'study': rm.study_identity(conn, prev)}
         study = rm.study_identity(conn, row)   # 2K-4 (B1): the study and its questions, compared first
         job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
                            {"st": row['study_type']}).fetchone()
@@ -293,7 +294,7 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
             attr_reference = None
             body.setdefault('read_errors', {})['reference'] = a_err
     with engine.connect() as conn:
-        answers = rm.attribute_answers(conn, row) if asks else []
+        answers = rm.attribute_answers(conn, row, attr_reference) if asks else []
         accuracy = rm.build_attribute_accuracy(answers, attr_reference) if asks or attr_reference else None
         prev_answers = rm.attribute_answers(conn, prev) if asks and prev is not None else None
     if accuracy is not None:   # absent, as routing and retired_named are, when there is nothing to count
@@ -305,6 +306,13 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
             block['changes'] = list(block.get('changes') or []) + rm.attribute_changes(
                 answers, prev_answers, (previous or {}).get('code'), s,
                 compared=block.get('changes_status') == 'compared', site=site)
+    # 2N-1: a brand's first-cycle Changes, after the weight range and before the deals:
+    # Retired product named, First pick (category questions), Retailer coverage
+    if (vis.get('ranking') or {}).get('default_tier') == rm.VIS_BRAND_CHOICE:
+        for s, block in (body.get('by_surface') or {}).items():
+            block['changes'] = list(block.get('changes') or []) + rm.brand_changes(
+                vis, (previous or {}).get('visibility'), (previous or {}).get('code'), s,
+                compared=block.get('changes_status') == 'compared', brand=brand)
     # 2M-2: the Promo pass-through tile's input (the fifth brand tile) and its
     # Changes line, "Deals named, cheapest-place answers"; absent when the
     # cycle asked no cheapest-place question
@@ -502,7 +510,7 @@ def _true_value_inputs(conn, row) -> tuple:
             deciding = swap
         scored.append({'variant_id': ref.get('variant_id'), 'gtin': ref.get('gtin'),
                        'retailer': expected.get('attributed_to') or own_domain,
-                       'outcome': o['outcome'], 'reason_code': o['reason_code'],
+                       'outcome': rm.read_outcome(o['outcome'], o['reason_code']), 'reason_code': o['reason_code'],
                        'stated': deciding.get('stated') if deciding else None,
                        # 2C-2c: the sibling resolved to its record name, once
                        'swap_product': rm.sibling_name(swap, names) if swap else None,
@@ -1142,9 +1150,29 @@ async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(N
     promo, _deals, _as_of, p_err = await _promo_inputs(scope, row, ms.slug)
     if p_err is not None:
         errors['deals'] = p_err
-    baseline = rm.promo_baseline(promo)
-    if baseline is not None:
-        body['baseline'] = list(body.get('baseline') or []) + [baseline]
+    meta = _merchant_meta(ms)
+    if meta['kind'] == 'brand':
+        # 2N-1: the demo's other three: Attribute accuracy, Retailer coverage, Category presence
+        facts, routing_errors = await _routing_inputs(scope, row, ms.slug)
+        errors.update(routing_errors)
+        with engine.connect() as conn:
+            vis = _visibility(conn, row, facts, routing_errors)
+            asks = rm.asks_attribute(conn, row)
+        reference = None
+        if asks:
+            _, reference, r_err = await full_loop._client(scope).get_reference(ms.slug)
+            if r_err is not None:
+                errors['reference'], reference = r_err, None
+        with engine.connect() as conn:
+            attribute = rm.load_attribute_accuracy(conn, row, reference) if asks else None
+        rows = rm.brand_baseline(attribute=attribute, vis=vis, promo=promo, brand=meta['name'],
+                                 day=parity._short_day(row.get('start_date')))
+        if rows:
+            body['baseline'] = list(body.get('baseline') or []) + rows
+    else:
+        baseline = rm.promo_baseline(promo)
+        if baseline is not None:
+            body['baseline'] = list(body.get('baseline') or []) + [baseline]
     body['merchant'] = ms.slug
     body['read_errors'] = errors
     return body

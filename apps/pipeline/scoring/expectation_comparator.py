@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from soa_shared import expected_answers as ea
+from soa_shared import per_unit as pu
 from scoring import answer_flags as af
 from scoring import brand_direct_classifier as bdc
 from scoring import record_variants as rv
@@ -63,13 +64,18 @@ UNVERIFIABLE = 'unverifiable'
 #: the engine's checkQuote keeps (exact > partial > wrong > none), with
 #: stale placed beside exact because it IS an exact match, to an earlier
 #: publication.
-_RANK = {EXACT: 6, STALE: 5, PARTIAL: 4, WRONG: 3, UNVERIFIABLE: 2, UNSCOREABLE: 1}
+#: 2N-1: a per-unit quote's own claim outcome, outside scored and outside
+#: wrong (soa_shared/per_unit.py); a run of nothing else is unscoreable,
+#: reason per_unit.
+PER_UNIT = pu.PER_UNIT
+_RANK = {EXACT: 6, STALE: 5, PARTIAL: 4, WRONG: 3, UNVERIFIABLE: 2, UNSCOREABLE: 1, PER_UNIT: 0}
 
 #: Reason codes the 2B rules write, for the drill-down and the console.
 REASON_PRODUCT_INFERRED = 'product_inferred'
 REASON_VARIANT_CLASH = 'variant_clash'
 REASON_VARIANT_SWAP = 'variant_swap'
 REASON_NOT_OUR_PRODUCT = 'not_our_product'
+REASON_PER_UNIT = pu.PER_UNIT
 REASON_OTHER_BRAND = 'other_brand'
 
 
@@ -462,18 +468,37 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
                 reference_row['reason_code'] = rr.REASON_BRAND_SETS_NO_PRICE
         return outcome, why, reference_row
 
+    spans = [str(sp.get('text') or '') for sp in extraction.get('spans') or [] if isinstance(sp, dict)]
+    asked_row = reference.row(attributed_to, gtin=ref.get('gtin') or ref.get('variant_id'),
+                              variant_ref=ref.get('variant_ref')) if attributed_to and reference is not None else None
+    against = (asked_row.value(member) if asked_row is not None and asked_row.verifiable else None) \
+        if attributed_to else expectation.get('amount')
     for claim in claims:
         product = claim['product']
         if claim['amount'] is None and not attributed_to:
             continue  # legacy: a non-price amount was never a claim
-        attributed = attributes_to(product, terms)
+        entry = {'stated': claim['raw'], 'amount': claim['amount'], 'product': product,
+                 'tier': claim['tier']}
+        # 2N-1: a per-unit quote ("$0.33 per diaper") is not the pack's price: its own outcome
+        if pu.is_per_unit(claim['raw'], product, spans, against):
+            entry.update(target='asked', variant_id=ref.get('variant_id'), outcome=PER_UNIT, reason=pu.NOTE,
+                         reason_code=REASON_PER_UNIT)
+            out.append(entry)
+            continue
+        # 2N-1: a pronoun names no product (rule 3's inferred product); a
+        # description of ours ("the NB 84-count option") names the asked variant
+        if rv.is_pronoun(product):
+            product = None
+        attributed = attributes_to(product, terms) or (
+            asked is not None and rv.describes_asked(product, asked))
         if asked is not None and product:
             why = rv.conflicts(product, asked, hints_attribute=attributed)
+            # 2N-1: the retailer page's own title for the variant names it
+            if why is not None and asked_row is not None and rv.in_title(product, asked_row.title):
+                why = None
         else:
             why = None if attributed else 'names a sibling variant'
 
-        entry = {'stated': claim['raw'], 'amount': claim['amount'], 'product': product,
-                 'tier': claim['tier']}
         if why is None:
             entry['target'] = 'asked'
             entry['variant_id'] = ref.get('variant_id')
@@ -540,6 +565,8 @@ def _judge_price_like(expectation, extraction, *, member, terms, history, histor
         outcome = best['outcome']
         stated = [str(c['stated']) for c in asked_claims]
         label = expectation['amount'] if not member else ea.describe(expectation)
+        if outcome == PER_UNIT:
+            return UNSCOREABLE, pu.NOTE, None, out, swapped, REASON_PER_UNIT
         if outcome == EXACT:
             reason = best.get('reason') or (
                 f"stated {expectation['amount']}" if not member

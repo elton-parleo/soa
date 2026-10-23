@@ -110,7 +110,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import inspect, text
 
-from soa_shared import attribute_accuracy, claim_kinds, promo_pass_through, surfaces
+from soa_shared import attribute_accuracy, claim_kinds, per_unit, promo_pass_through, surfaces
 from soa_shared import unprompted
 from soa_shared.expected_answers import normalize_domain, normalize_money
 from soa_shared.retailers import KNOWN_RETAILERS, RETAILER_NAMES, retailer_name
@@ -149,7 +149,8 @@ FLAGGED_BRAND = ('fabricated', 'misattributed')
 FLAGGED_FLAGS = ('fabricated_citation', 'fabricated_availability')
 #: The scorer's outcomes in the console's words (console_read_models.VALUE_VERDICT).
 VERDICT_WORDS = {'exact': 'right', 'wrong': 'wrong', 'stale': 'stale', 'partial': 'partial', 'absent': 'no price',
-                 'unverifiable': 'could not be checked', 'unscoreable': 'not scored', 'missed': 'no price'}
+                 'unverifiable': 'could not be checked', 'unscoreable': 'not scored', 'missed': 'no price',
+                 'per_unit': per_unit.NOTE}
 #: Why an answer was flagged, in words with no number in them: the scorer's
 #: rules (expectation_comparator, brand_direct_classifier, answer_flags).
 MEANINGS = {
@@ -176,8 +177,8 @@ DIRECTION_WORDS = {BELOW: "quoted below the retailer's price", ABOVE: "quoted ab
                    SAME: "quoted the retailer's price", RANGE: "range includes the retailer's price",
                    PER_UNIT: 'per-unit quote, not comparable'}
 #: "$0.30 per diaper", "$0.45 each", "$0.48/ct": the words after a per-unit amount.
-_PER_UNIT_AFTER = re.compile(r"^\s*(?:(?:/|per\b|a\b|an\b)\s*(?:diaper|wipe|count|ct|unit|piece|pull-?up|pant|pad)s?\b"
-                             r"|each\b)", re.I)
+#: 2N-1: the scorer's rule (soa_shared/per_unit.py), one definition for both.
+_PER_UNIT_AFTER = per_unit.AFTER
 
 #: The console's banned-word scan (parleohq/truesync console-demo,
 #: apps/console/tools/audit.py BAN), verbatim, plus the house rules.
@@ -516,16 +517,10 @@ def _spans(extraction: dict, claims: List[dict]) -> List[str]:
 
 def _per_unit(amount: str, spans: List[str], against: Optional[str]) -> bool:
     """A quote for one diaper, not the pack: the answer's words after the
-    amount say so ("$0.30 per diaper", "$0.45 each"), or it is under a
-    dollar against a retailer's price of five or more."""
-    for span in spans:
-        for m in _AMOUNT.finditer(span):
-            if normalize_money(m.group(1).replace(',', '')) == amount and _PER_UNIT_AFTER.match(span[m.end():m.end() + 30]):
-                return True
-    try:
-        return against is not None and float(amount) < 1 and float(against) >= 5
-    except ValueError:
-        return False
+    amount say so ("$0.30 per diaper", "$0.45 each"), or it is under $2
+    against a retailer's price over $10. 2N-1: the scorer's rule
+    (soa_shared/per_unit.py); a claim it scored per_unit is one."""
+    return per_unit.said_after(amount, spans) or per_unit.below_pack(amount, against)
 
 
 def _direction(amount: Optional[str], against: Optional[str], spans: List[str]) -> Optional[str]:
@@ -554,12 +549,15 @@ def overall_direction(directions: Iterable[Optional[str]]) -> Optional[str]:
 
 
 def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[str], brand_choice: bool,
-                merchant: Merchant, attribute: Optional[dict] = None, promo_missed: bool = False) -> List[str]:
+                merchant: Merchant, attribute: Optional[dict] = None, promo_missed: bool = False,
+                catalog_intent: Optional[str] = None) -> List[str]:
     """The reasons an answer gets a line (empty: it keeps its template).
     2M-1: `attribute` is an accuracy answer's verdict (attribute_accuracy.
     answer_attribute); a mismatch or an absent range is flagged. 2M-2:
     `promo_missed`, a cheapest-place answer that named none of the deals live
-    for its variant that day, adds promo_missed after the other reasons."""
+    for its variant that day, adds promo_missed after the other reasons.
+    2N-1: a catalog-built question's answer (`catalog_intent`,
+    claim_kinds.catalog_intent) is never flagged by the brand-claim rule."""
     o = outcome or {}
     if (attribute or {}).get('verdict') in ('mismatch', 'absent'):
         return [f"attribute_{attribute['verdict']}"]
@@ -569,7 +567,7 @@ def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[st
         why.append(f'{raw}_price')
     if raw == 'absent' and reason == 'other_brand':
         why.append('other_brand_price')
-    if tier == BRAND_TIER and raw in FLAGGED_BRAND:
+    if tier == BRAND_TIER and raw in FLAGGED_BRAND and not catalog_intent:
         why.append(f'brand_{raw}')
     for f in _json(o.get('flags')) or []:
         if isinstance(f, dict) and f.get('flag') in FLAGGED_FLAGS:
@@ -605,11 +603,12 @@ def _deal_fact(deal: dict) -> dict:
 
 def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merchant: Merchant,
                  index: Dict[tuple, dict], scales: Optional[List[dict]] = None,
-                 deals: Optional[dict] = None) -> Optional[dict]:
+                 deals: Optional[dict] = None, truths: Optional[dict] = None) -> Optional[dict]:
     """The facts for one answer, or None when it is not flagged. `run`
     carries its question (query_text, tier, source_ref, raw_response); `index` is the
     cycle's reference rows by (domain, key). 2M-1: `scales` is the cycle's
-    accuracy questions' {product, size, truth}, for same_as."""
+    accuracy questions' {product, size, truth}, for same_as. 2N-1: `truths`
+    the cycle's brand truths (attribute_accuracy.truth_index)."""
     if run.get('answer_status') not in (None, surfaces.ANSWERED):
         return None
     named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99)]
@@ -617,9 +616,11 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     brand_choice = unprompted.is_brand_choice(run, merchant.terms)
     ref = _json(run.get('source_ref')) or {}
     attribute = attribute_accuracy.answer_attribute(ref, _json((outcome or {}).get('extraction')),
-                                                    run.get('raw_response')) if outcome else None
+                                                    run.get('raw_response'), truths=truths) if outcome else None
     missed = promo_missed(run, deals) if outcome else []
-    why = why_flagged(run.get('tier'), outcome, first, brand_choice, merchant, attribute, promo_missed=bool(missed))
+    intent = claim_kinds.catalog_intent(ref) if run.get('tier') == BRAND_TIER else None
+    why = why_flagged(run.get('tier'), outcome, first, brand_choice, merchant, attribute, promo_missed=bool(missed),
+                      catalog_intent=intent)
     if not why:
         return None
     if attribute is not None and why[0].startswith('attribute_'):
@@ -663,8 +664,9 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
         'verdict': None if brand else VERDICT_WORDS.get(o.get('outcome'), o.get('outcome')),
         'reason_code': o.get('reason_code'),
         'scorer_note': o.get('outcome_reason'),
-        'brand_verdict': o.get('outcome') if brand else None,
-        'claim_kind': CLAIM_KIND_WORDS.get(claim_kinds.claim_kind(extraction)) if brand else None,
+        # 2N-1: the brand-claim verdict is the AI-written questions' only
+        'brand_verdict': o.get('outcome') if brand and not intent else None,
+        'claim_kind': CLAIM_KIND_WORDS.get(claim_kinds.claim_kind(extraction)) if brand and not intent else None,
         'first pick': first if rival or brand_choice else None,
         'named in order': named if rival or brand_choice else None,
         'flags': [_drop_none({'flag': f.get('flag'), 'detail': f.get('detail') or f.get('evidence')}) for f in flags],
@@ -702,20 +704,38 @@ def attribute_facts(run: dict, attribute: dict, why: List[str], merchant: Mercha
 
 
 def issue_rule(quotes: List[dict]) -> Tuple[str, int, int]:
-    """console_parity.product_issue's rule: (rule, n, runs)."""
+    """console_parity.product_issue's rule: (rule, n, runs). 2N-1: a price
+    that could not be checked is the issue only when every retailer the row
+    was asked at could not be read; otherwise the rule runs over the quotes
+    at the retailers that were (walled_retailers names the rest)."""
     runs = len(quotes)
     if not runs:
         return 'product.not_asked', 0, 0
+    walled = walled_retailers(quotes)
+    checked = [q for q in quotes if str(q.get('asked_at')) not in walled]
+    if not checked:
+        return 'product.unverifiable', sum(1 for q in quotes if q['verdict'] == 'unverifiable'), runs
     counts = {
-        'product.other_brand': sum(1 for q in quotes if q['verdict'] == 'absent' and q.get('reason_code') == 'other_brand'),
-        'product.wrong': sum(1 for q in quotes if q['verdict'] in ('wrong', 'stale')),
-        'product.left_out': sum(1 for q in quotes if q['verdict'] == 'absent' and q.get('reason_code') != 'other_brand'),
-        'product.unverifiable': sum(1 for q in quotes if q['verdict'] == 'unverifiable'),
+        'product.other_brand': sum(1 for q in checked if q['verdict'] == 'absent' and q.get('reason_code') == 'other_brand'),
+        'product.wrong': sum(1 for q in checked if q['verdict'] in ('wrong', 'stale')),
+        'product.left_out': sum(1 for q in checked if q['verdict'] == 'absent' and q.get('reason_code') != 'other_brand'),
     }
     rule, n = max(counts.items(), key=lambda kv: kv[1])
     if n:
-        return rule, n, runs
-    return 'product.right', sum(1 for q in quotes if q['verdict'] == 'exact'), runs
+        return rule, n, len(checked)
+    return 'product.right', sum(1 for q in checked if q['verdict'] == 'exact'), len(checked)
+
+
+def _and(names: List[str]) -> str:
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
+
+
+def walled_retailers(quotes: List[dict]) -> List[str]:
+    """2N-1: the retailers every quote at which could not be checked, in name order."""
+    by: Dict[str, List[dict]] = {}
+    for q in quotes:
+        by.setdefault(str(q.get('asked_at')), []).append(q)
+    return sorted(r for r, qs in by.items() if all(q['verdict'] == 'unverifiable' for q in qs))
 
 
 def product_facts(reference: Optional[dict], catalog_runs: List[dict], merchant: Merchant) -> Dict[str, dict]:
@@ -805,6 +825,14 @@ def issue_sentence(quotes: List[dict], agents: int, prices: Dict[str, dict]) -> 
     rule, _n, _runs = issue_rule(quotes)
     if rule == 'product.not_asked':
         return None, None
+    walled = walled_retailers(quotes)
+    if rule != 'product.unverifiable' and walled:
+        # 2N-1: the issue over the retailers read, the rest named after it
+        quotes = [q for q in quotes if str(q.get('asked_at')) not in walled]
+        agents = len({q['agent'] for q in quotes})
+        issue, direction = issue_sentence(quotes, agents, prices)
+        names = [w for w in walled if w != 'None']
+        return (f"{issue}. {_and(names)} could not be read" if names and issue else issue), direction
 
     def count(pick) -> int:
         return len({q['agent'] for q in quotes if pick(q)})
@@ -883,12 +911,15 @@ def load_cycle_facts(conn, cycle_id: int) -> Dict[str, dict]:
     """), {'c': cycle_id}).mappings()]
     # 2M-2: the deals live that day, from the cached rows' `deals` (supply 2M-2)
     deals = promo_pass_through.deals_from_rows(_reference_rows(reference))
-    # 2M-1: every accuracy question's product, size and brand truth, for same_as
+    # 2M-1: every accuracy question's product, size and brand truth, for same_as;
+    # 2N-1: the truth is the cycle's reference's, never the question's copy
+    truths = attribute_accuracy.truth_index(reference)
     scales = []
     for run in runs:
         ref = _json(run.get('source_ref')) or {}
-        if ref.get('intent') == attribute_accuracy.ATTRIBUTE_INTENT and ref.get('weight_truth'):
-            entry = {'product': ref.get('line'), 'size': ref.get('size'), 'truth': ref['weight_truth']}
+        found = attribute_accuracy.truth_for(truths, ref)
+        if ref.get('intent') == attribute_accuracy.ATTRIBUTE_INTENT and found:
+            entry = {'product': ref.get('line'), 'size': ref.get('size'), 'truth': found['truth']}
             if entry not in scales:
                 scales.append(entry)
     outcomes = {o['run_id']: dict(o) for o in conn.execute(text("""
@@ -905,7 +936,7 @@ def load_cycle_facts(conn, cycle_id: int) -> Dict[str, dict]:
     out: Dict[str, dict] = {}
     for run in runs:
         facts = answer_facts(run, outcomes.get(run['id']), mentions.get(run['id'], []), merchant, index, scales,
-                             deals)
+                             deals, truths)
         if facts:
             out[f"{ANSWER}:run-{run['id']}"] = facts
     catalog = [{**run, **{k: v for k, v in (outcomes.get(run['id']) or {}).items() if k != 'run_id'}}
@@ -1347,7 +1378,8 @@ _DASHED_RUN = re.compile(r"\S*\s?(?:[‒–—―]|--)\s?\S*")
 
 
 def normalise(line: str, facts: dict) -> str:
-    """2M-3: a dash the source wrote becomes a hyphen, so the line is kept:
+    """2N-1: a product line's issue follows the sentence before it with a
+    period. 2M-3: a dash the source wrote becomes a hyphen, so the line is kept:
     one inside quotation marks (run-14475), or inside a run of the line the
     facts write with that dash, a product name's "Diapers – Size 5" or
     "(8–14 lbs)" (run-14723, 14852, 14864). Any other dash is the
@@ -1358,7 +1390,13 @@ def normalise(line: str, facts: dict) -> str:
     def held(m) -> str:
         run = m.group(0).strip('.,:;!?()"')
         return _DASH.sub('-', m.group(0)) if run and run in known else m.group(0)
-    return _DASHED_RUN.sub(held, line)
+    line = _DASHED_RUN.sub(held, line)
+    # 2N-1: the issue is its own sentence: "... on Oct 23 6 of 6 agents ..." gets its period
+    issue = str(facts.get('issue') or '') if facts.get('kind') == PRODUCT else ''
+    at = line.find(issue) if issue else -1
+    if at > 0 and not line[:at].rstrip().endswith(('.', '!', '?', ':')):
+        line = line[:at].rstrip() + '. ' + line[at:]
+    return line
 
 
 def _plain(text_: str) -> str:

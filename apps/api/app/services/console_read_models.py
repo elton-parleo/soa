@@ -26,7 +26,7 @@ from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
-from soa_shared import attribute_accuracy, claim_kinds, local_time, retired_lines, surfaces, unprompted
+from soa_shared import attribute_accuracy, claim_kinds, local_time, per_unit, retired_lines, surfaces, unprompted
 from soa_shared import promo_pass_through as ppt
 
 from app.services import console_claims
@@ -44,10 +44,12 @@ AGENT_NAMES = {
 VALUE_VERDICT = {
     'exact': 'right', 'wrong': 'wrong', 'absent': 'missed', 'partial': 'partial',
     'stale': 'stale', 'unverifiable': 'unverifiable', 'unscoreable': 'unscoreable',
+    # 2N-1: a per-unit quote, outside scored and outside wrong (soa_shared/per_unit.py)
+    'per_unit': 'per_unit',
 }
 VERDICT_TONE = {
     'right': 'ok', 'wrong': 'bad', 'missed': 'warn', 'partial': 'warn',
-    'stale': 'warn', 'unverifiable': 'neu', 'unscoreable': 'neu',
+    'stale': 'warn', 'unverifiable': 'neu', 'unscoreable': 'neu', 'per_unit': 'neu',
 }
 BRAND_TONE = {
     'grounded': 'ok', 'echoed': 'neu', 'misattributed': 'bad', 'fabricated': 'bad',
@@ -59,7 +61,15 @@ MARK = {'exact': 'ok', 'wrong': 'wrong', 'partial': 'miss', 'stale': 'miss'}
 #: TvCell.status, extended by `unverifiable`. A stale quote is wrong today;
 #: the raw outcome rides beside it in `outcome`.
 TV_STATUS = {'exact': 'exact', 'wrong': 'wrong', 'partial': 'partial', 'absent': 'missed',
-             'stale': 'wrong', 'unverifiable': 'unverifiable', 'unscoreable': 'none'}
+             'stale': 'wrong', 'unverifiable': 'unverifiable', 'unscoreable': 'none', 'per_unit': 'per_unit'}
+#: 2N-1: the console's words for a per-unit quote's cell and check.
+PER_UNIT_LABEL = per_unit.NOTE
+
+
+def read_outcome(outcome: Optional[str], reason_code: Optional[str]) -> Optional[str]:
+    """The run's outcome as the console reads it: a run stored unscoreable for a
+    per-unit quote (reason per_unit, the scorer's 2N-1 rule) reads per_unit."""
+    return per_unit.PER_UNIT if outcome == 'unscoreable' and reason_code == per_unit.PER_UNIT else outcome
 #: StudyCell.s per outcome (value and brand vocabularies).
 CELL_TONE = {
     'exact': 'ok', 'grounded': 'ok', 'wrong': 'bad', 'fabricated': 'bad', 'misattributed': 'bad',
@@ -136,6 +146,63 @@ def _severity(outcome, brand: bool, flags) -> str:
                 'acknowledged_unknown': 'medium', 'absent': 'low'}.get(outcome, 'low')
     return {'wrong': 'high', 'partial': 'medium', 'stale': 'medium', 'unverifiable': 'low',
             'absent': 'low', 'exact': 'ok', 'unscoreable': 'low'}.get(outcome, 'low')
+
+
+def _and(names: List[str]) -> str:
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
+
+
+def catalog_verdict(intent: str, source_ref: dict, extraction: Optional[dict], answer: Optional[str], *,
+                    attribute: Optional[dict] = None, deals: Optional[dict] = None) -> dict:
+    """
+    2N-1: a catalog-built brand-direct answer's own verdict (never the
+    brand-claim rule's): {verdict, line, severity, tone}.
+
+      where_to_buy    coverage: the stores it sends the shopper to (the
+                      routing coding) against the brand's retailer list.
+                      covered (two or more listed), partial, no_store.
+      cheapest_place  deal pass-through: whether it named a deal live for
+                      the SKU that day (`deals`, the cycle's cached rows').
+                      named_deal, missed_deal, no_deal_live.
+      attribute       the weight range (attribute_accuracy.answer_attribute).
+      retired         still sold / successor: not coded (RETIRED_STILL_SOLD_NOTE).
+    """
+    ref = source_ref or {}
+    if intent == claim_kinds.ATTRIBUTE_INTENT:
+        v = (attribute or {}).get('verdict')
+        return {'verdict': v, 'line': (attribute or {}).get('line'),
+                'severity': {'match': 'ok', 'mismatch': 'high', 'absent': 'low'}.get(v, 'low'),
+                'tone': {'match': 'ok', 'mismatch': 'bad', 'absent': 'bad'}.get(v, 'neu')}
+    if intent == claim_kinds.RETIRED:
+        line = (ref.get('retired_line') or {}).get('line') or 'the line'
+        return {'verdict': None, 'line': f"asked about {line}, which the brand retired. Whether the answer called it "
+                                         f"still sold is not coded", 'severity': 'low', 'tone': 'neu'}
+    stores = stores_in_order(extraction)
+    if stores is None:
+        return {'verdict': None, 'line': None, 'severity': 'low', 'tone': 'neu'}
+    names = [st['name'] for st in stores]
+    if intent == claim_kinds.CHEAPEST_PLACE:
+        live = ppt.live_for(deals, ref)
+        where = f"named {names[0]} as the cheapest place" if names else 'named no store'
+        if not live:
+            return {'verdict': 'no_deal_live', 'line': f"{where}, with no deal live for this SKU that day",
+                    'severity': 'low', 'tone': 'neu'}
+        named = ppt.judge(answer, live)['named']
+        if named:
+            deal = next(d for d in live if ppt.deal_id(d) in named)
+            return {'verdict': 'named_deal', 'line': f"named the {ppt.short(deal)} live that day",
+                    'severity': 'ok', 'tone': 'ok'}
+        return {'verdict': 'missed_deal', 'line': f"{where} and named none of the deals live that day "
+                                                  f"({_and([ppt.short(d) for d in live])})",
+                'severity': 'medium', 'tone': 'bad'}
+    listed = set(ref.get('retailer_list') or [])
+    on = [st for st in stores if st.get('domain') and (not listed or st['domain'] in listed)]
+    if not stores:
+        return {'verdict': 'no_store', 'line': 'named no store', 'severity': 'medium', 'tone': 'bad'}
+    covered = len({st['domain'] for st in on}) >= 2
+    return {'verdict': 'covered' if covered else 'partial',
+            'line': f"named {_and(names)}, {len(on)} of the brand's retailers",
+            'severity': 'ok' if covered else 'low', 'tone': 'ok' if covered else 'neu'}
 
 
 #: 2C: the classifier's reason codes (scoring/expectation_comparator.py
@@ -327,11 +394,14 @@ def _swap_check(claim: dict, expectation: dict, variant_names: Optional[Dict[str
 def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List[dict],
                  *, runs_per_query: Optional[int], cycle_code: str,
                  variant_names: Optional[Dict[str, str]] = None, features: Optional[List[str]] = None,
-                 references: Optional[Dict[tuple, dict]] = None) -> dict:
+                 references: Optional[Dict[tuple, dict]] = None, truths: Optional[dict] = None,
+                 deals: Optional[dict] = None) -> dict:
     """features (2K-3): the merchant's catalog feature terms for claim_kind
     (app/services/console_claims.py); None reads 2K-1's rule. references
     (2L-1): the cycle's reference_index, for the reference of a check whose
-    answer gave no price."""
+    answer gave no price. truths (2N-1): the cycle's brand truths
+    (attribute_accuracy.truth_index), for an accuracy answer; deals the
+    deals live that day (its cached rows'), for a cheapest-place answer."""
     platform = run['platform']
     agent = surfaces.agent_of(platform) or platform
     extraction = _json((outcome or {}).get('extraction')) or {}
@@ -340,11 +410,13 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     flags = _json((outcome or {}).get('flags')) or []
     tier = query.get('tier')
     brand = tier == 'brand_direct'
-    raw = (outcome or {}).get('outcome')
+    raw = read_outcome((outcome or {}).get('outcome'), (outcome or {}).get('reason_code'))
 
     verdict = None if brand or raw is None else VALUE_VERDICT.get(raw, raw)
-    kind = console_claims.claim_kind(extraction, features) if brand and outcome is not None else None
-    brand_verdict = raw if brand else None
+    # 2N-1: a catalog-built brand-direct question is judged by its own verdict, not the brand-claim rule
+    intent = claim_kinds.catalog_intent(_json(query.get('source_ref'))) if brand else None
+    kind = console_claims.claim_kind(extraction, features) if brand and not intent and outcome is not None else None
+    brand_verdict = raw if brand and not intent else None
     checks = []
     if not brand and outcome is not None:
         priced = expectation.get('type') in ('price', 'member_price')
@@ -391,10 +463,14 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     # 2M-1: an attribute question's answer, judged against the brand truth:
     # its own one-liner and drawer facts, and claim_kind attribute when it
     # stated a range (soa_shared/attribute_accuracy.py)
-    attribute = attribute_accuracy.answer_attribute(source_ref, extraction, run.get('raw_response')) \
-        if outcome is not None else None
+    attribute = attribute_accuracy.answer_attribute(source_ref, extraction, run.get('raw_response'),
+                                                    truths=truths) if outcome is not None else None
     if attribute is not None and attribute['stated'] is not None:
         kind = claim_kinds.ATTRIBUTE
+    own = catalog_verdict(intent, source_ref, extraction, run.get('raw_response'), attribute=attribute,
+                          deals=deals) if intent and outcome is not None else None
+    if own is not None and flags and any(f.get('flag') == 'fabricated_availability' for f in flags):
+        own = {**own, 'severity': 'high', 'tone': 'bad'}   # a store off the brand's list is coverage's miss
     named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99)]
     first = next((m['name'] for m in mentions if m.get('position') == 1), '')
     return compact({
@@ -404,8 +480,8 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'queryType': TIER_LABELS.get(tier) or query.get('stage') or '',
         'runAt': _iso(run.get('run_at')),
         'runs': f"run {run.get('run_number')} of {runs_per_query}" if runs_per_query else None,
-        'severity': 'high' if (attribute or {}).get('verdict') == 'mismatch' else _severity(raw, brand, flags),
-        'summary': (attribute or {}).get('line') or (outcome or {}).get('outcome_reason') or (
+        'severity': own['severity'] if own else _severity(raw, brand, flags),
+        'summary': (own or {}).get('line') or (outcome or {}).get('outcome_reason') or (
             f"No answer ({run.get('answer_status')})" if run.get('answer_status') not in (None, 'answered')
             else 'Not scored'),
         'paragraphs': segments(run.get('raw_response'), extraction.get('spans'), claims),
@@ -427,7 +503,9 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'expected_type': expectation.get('type') or (_json(query.get('query_expected')) or {}).get('type'),
         'reason': _reason_code((outcome or {}).get('reason_code')),
         'verdict': verdict,
-        'tone': BRAND_TONE.get(raw, 'neu') if brand else VERDICT_TONE.get(verdict, 'neu'),
+        'tone': own['tone'] if own else BRAND_TONE.get(raw, 'neu') if brand else VERDICT_TONE.get(verdict, 'neu'),
+        # 2N-1: a catalog-built question's own verdict (catalog_verdict)
+        'intent_verdict': (own or {}).get('verdict'),
         'brand_verdict': brand_verdict,
         # 2K-1 (A9): a brand-direct answer's kind, the Answers list's chip: it
         # stated an attribute, or only recommended the brand (soa_shared/claim_kinds.py)
@@ -439,11 +517,12 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'gtin': source_ref.get('gtin'),
         'retailer': expectation.get('attributed_to') or source_ref.get('own_domain') or source_ref.get('domain'),
         # 2M-1: the brand-direct intent (2L-4's where_to_buy / cheapest_place, 2M-1's
-        # attribute), the Answers list's Accuracy chip; and the attribute verdict
-        'intent': source_ref.get('intent'),
+        # attribute), the Answers list's Accuracy chip; and the attribute verdict.
+        # 2N-1: a retired line's question reads 'retired' (claim_kinds.catalog_intent)
+        'intent': source_ref.get('intent') or intent,
         'attribute': None if attribute is None else {k: v for k, v in attribute.items() if k != 'line'},
     }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer', 'expected_type', 'claim_kind', 'claim_kind_label',
-        'intent', 'attribute'))
+        'intent', 'attribute', 'intent_verdict'))
 
 
 # ─── Answers summary (2C) ──────────────────────────────────────────────────
@@ -510,10 +589,20 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
     tiers; brand-direct, whose outcomes are not a price verdict, is only in
     `tiers`.
 
-    rows: [{tier, surface, platform, answer_status, outcome, reason_code, flags}]
+    rows: [{tier, surface, platform, answer_status, outcome, reason_code, flags, intent}]
+
+    2N-1: brand-direct's cells count the AI-written questions' answers only,
+    the ones the brand-claim rule judges. A catalog-built question's answers
+    (`intent`, claim_kinds.catalog_intent) carry their own verdict and are
+    outside those counts; each cell says how many there were (`catalog_built`,
+    present when the study asked one).
     """
     by_tier: Dict[str, List[dict]] = {}
+    catalog_built: List[dict] = []
     for r in rows:
+        if r.get('tier') == 'brand_direct' and r.get('intent'):
+            catalog_built.append(r)
+            continue
         by_tier.setdefault(r.get('tier') or 'untiered', []).append(r)
     tier_order = [t for t in TIER_LABELS if t in by_tier] + sorted(t for t in by_tier if t not in TIER_LABELS)
 
@@ -528,7 +617,7 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
     every: Dict[str, List[dict]] = {surfaces.ALL: rows}
     for r in rows:
         every.setdefault(_surface_key(r), []).append(r)
-    return {
+    body = {
         'cycle': cycle_code,
         # 2C-2c: per surface over every tier, by the run-count rule (runs the
         # cycle executed, answers that say answered): what the Answers strip counts
@@ -539,16 +628,24 @@ def build_answers_summary(rows: List[dict], *, cycle_code: str) -> dict:
         'tiers': [{'tier': t, 'label': TIER_LABELS.get(t, t), 'surfaces': per_surface(by_tier[t])}
                   for t in tier_order],
     }
+    for t in body['tiers'] if catalog_built else []:   # absent on a study with none, as before
+        if t['tier'] == 'brand_direct':
+            for cell in t['surfaces']:
+                cell['catalog_built'] = sum(1 for r in catalog_built
+                                            if cell['surface'] == surfaces.ALL or _surface_key(r) == cell['surface'])
+    return body
 
 
 def load_answers_summary(conn, cycle: dict) -> dict:
     rows = [dict(r) for r in conn.execute(text("""
         SELECT r.id AS run_id, r.platform, COALESCE(r.surface, o.surface) AS surface,
-               r.answer_status, q.tier, o.outcome, o.reason_code, o.flags
+               r.answer_status, q.tier, q.source_ref, o.outcome, o.reason_code, o.flags
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         LEFT JOIN soa_expectation_outcomes o ON o.run_id = r.id
         WHERE r.cycle_id = :c
     """), {'c': cycle['id']}).mappings()]
+    for r in rows:   # 2N-1
+        r['intent'] = claim_kinds.catalog_intent(_json(r.pop('source_ref')))
     unpriced = brand_sets_no_price_runs(conn, cycle)
     return build_answers_summary([not_priced(r, unpriced) for r in rows], cycle_code=cycle['cycle_code'])
 
@@ -594,6 +691,9 @@ def aggregate_cell(runs: List[dict]) -> tuple:
     if any(r.get('outcome') == 'unverifiable' for r in quoting):
         return 'unverifiable', Counter(str(r['stated']) for r in quoting
                                        if r.get('outcome') == 'unverifiable').most_common(1)[0][0]
+    if any(r.get('outcome') == per_unit.PER_UNIT for r in quoting):   # 2N-1: quoted, per diaper
+        return per_unit.PER_UNIT, Counter(str(r['stated']) for r in quoting
+                                          if r.get('outcome') == per_unit.PER_UNIT).most_common(1)[0][0]
     return 'absent', None
 
 
@@ -611,6 +711,27 @@ def deciding_swap(claims: List[dict], outcome: Optional[str]) -> Optional[dict]:
     swaps = [c for c in claims or [] if c.get('target') in ('swap', 'clash') and c.get('stated') not in (None, '')]
     return (next((c for c in swaps if (c.get('question_outcome') or c.get('outcome')) == outcome), None)
             or (swaps[0] if swaps else None))
+
+
+def other_pack(reads: Optional[List[dict]], variant: dict, domain: Optional[str]) -> Optional[dict]:
+    """2N-1: {price, pack, text} when supply's newest read of the variant's
+    page at `domain` found the page's pack is not the variant's (its
+    `pack_differs` finding): "other pack ($49.77 for 56 ct)". None otherwise."""
+    want = _domain_key(domain)
+    hits = [r for r in reads or [] if _domain_key(r.get('retailer_domain')) == want
+            and reference_matches(r, variant) and any(f.get('finding') == 'pack_differs' for f in r.get('findings') or [])]
+    if not hits:
+        return None
+    row = max(hits, key=lambda r: str(r.get('observed_at') or ''))
+    finding = next(f for f in row.get('findings') or [] if f.get('finding') == 'pack_differs')
+    numbers = [n for n in (finding.get('detail') or {}).get('page_numbers') or [] if str(n).strip()]
+    pack = f"{numbers[0]} ct" if numbers else (str(finding.get('observed')) if finding.get('observed') else None)
+    seen = next((f.get('observed') for f in row.get('findings') or [] if f.get('finding') == 'price_observed'), None)
+    price = row.get('price') or seen
+    if not price:
+        return None
+    shown = money(price, row.get('currency') or 'USD')
+    return {'price': shown, 'pack': pack, 'text': f"other pack ({shown} for {pack})" if pack else f"other pack ({shown})"}
 
 
 def _newest_read(reads: Optional[List[dict]], variant: dict) -> Optional[dict]:
@@ -939,6 +1060,11 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
     rows = []
     for key, meta in rows_by_key.items():
         retailer_cells = {d: full_cell(grouped.get((key, d), []), live.get((key, d)), surface_list) for d in columns}
+        for d, cell in retailer_cells.items():
+            # 2N-1: a page priced for another pack is no price to check against
+            pack = other_pack(reads, {'variant_id': key, 'gtin': meta['gtin']}, d) if cell['status'] == 'unverifiable' else None
+            if pack:
+                cell['other_pack'] = pack
         if by_agent_runs and agent_columns:
             runs = grouped.get((key, domain), [])
             cells = {a: full_cell([r for r in runs if (r.get('agent') or 'unknown') == a], live.get((key, domain)),
@@ -1872,6 +1998,7 @@ VIS_UNPROMPTED = 'unprompted'
 #: whether it is in that set.
 COMPARISON = 'comparison'
 VIS_BRAND_CHOICE = 'brand_choice'
+VIS_BRAND_CHOICE_LABEL = 'Category and comparison'
 VIS_TIER_LABELS = {VIS_UNPROMPTED: 'Unprompted', **TIER_LABELS}
 VIS_TIER_ORDER = (VIS_UNPROMPTED, 'category_control', COMPARISON, 'brand_direct', 'catalog_accuracy', 'value_incentives')
 #: An other_brands_named entry named only as where the information came from
@@ -1911,15 +2038,45 @@ def _starts_with(tokens: tuple, prefix: tuple) -> bool:
     return bool(prefix) and tokens[:len(prefix)] == prefix
 
 
+#: 2N-1: the words around a company's name that are not its name ("The Honest Company" is "Honest").
+_COMPANY_WORDS = re.compile(r"^(?:the)\s+|\s+(?:company|co\.?|inc\.?|corporation|corp\.?|brands?)$", re.I)
+#: The generic words a product name ends with, not its line ("Baby Dry Diapers" is "Baby Dry").
+_LINE_TAIL = re.compile(r"(?:\s+(?:diapers?|nappies|pants|wipes|training pants|underwear|overnights?|"
+                        r"size\s*\S+|\d+\s*(?:ct|count)))+$", re.I)
+
+
+def entity_aliases(name: Optional[str]) -> List[str]:
+    """2N-1: a comparison-set brand's name as answers write it without its
+    company words: "The Honest Company" -> ["Honest"]."""
+    short = _COMPANY_WORDS.sub('', _COMPANY_WORDS.sub('', (name or '').strip())).strip()
+    return [short] if short and short.lower() != (name or '').strip().lower() else []
+
+
+def line_aliases(product_names: Iterable[str], brand: Optional[str]) -> List[str]:
+    """2N-1: the merchant's line names from its catalog's product names, the
+    brand and the generic tail taken off: "Pampers Swaddlers Diapers" ->
+    "Swaddlers", "Pampers Baby Dry" -> "Baby Dry". A sub-line is the brand's,
+    never a brand of its own."""
+    out = []
+    for name in product_names or []:
+        line = _LINE_TAIL.sub('', retired_lines.line_name(name, brand)).strip(' ,-')
+        if line and _brand_key(line) and _brand_key(line) != _brand_key(brand) and line not in out:
+            out.append(line)
+    return out
+
+
 class _Brands:
     """The cycle's brand vocabulary: the comparison set (with aliases) first,
-    then every other brand Layer 2 coded, rolled up by name."""
+    then every other brand Layer 2 coded, rolled up by name. 2N-1: each
+    brand also by its name without company words ("Honest"), ours by its
+    catalog's line names (`lines`: "Swaddlers", "Baby Dry", "Cruisers")."""
 
-    def __init__(self, entities: List[dict], layer2_names: Iterable[str]):
+    def __init__(self, entities: List[dict], layer2_names: Iterable[str], lines: Iterable[str] = ()):
         self.known = []   # (tokens, display, you), longest first
         self.aliases: Dict[str, List[str]] = {}
         for e in entities:
-            names = [e['name'], *(_json(e.get('aliases')) or [])]
+            names = [e['name'], *(_json(e.get('aliases')) or []), *entity_aliases(e['name']),
+                     *(list(lines) if e.get('role') == 'primary' else [])]
             self.aliases[e['name']] = names
             for n in names:
                 toks = tuple(_brand_key(n).split())
@@ -1979,6 +2136,7 @@ def _visibility_run(layer1: List[dict], extraction: dict, brands: _Brands) -> tu
     coded = sorted(layer1, key=lambda m: (m.get('position') is None, m.get('position') or 0))
     for m in coded:
         add(m['name'], m.get('role') == 'primary')
+    from soa_shared import retailers as af
     others, sources = [], 0
     for entry in (extraction or {}).get('other_brands_named') or []:
         if not isinstance(entry, dict) or not entry.get('name'):
@@ -1986,6 +2144,8 @@ def _visibility_run(layer1: List[dict], extraction: dict, brands: _Brands) -> tu
         if entry.get('presented_as') in VIS_SOURCE_PRESENTED or entry.get('relation') in VIS_SOURCE_RELATIONS:
             sources += 1
             continue
+        if af.is_store_name(entry['name']):
+            continue   # 2N-1: a retailer is no brand (it is in the routing table)
         hit = brands.resolve(entry['name'])
         if hit:
             others.append((entry['name'], *hit))
@@ -2026,7 +2186,7 @@ def _agent_counts(rows: List[dict], surface: str) -> dict:
 def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict], mentions: List[dict],
                      extractions: Dict[int, dict], terms: Iterable[str] = (), retired: Iterable[dict] = (),
                      retired_by: Optional[str] = None, answer_texts: Optional[Dict[int, str]] = None,
-                     merchant: Optional[dict] = None) -> dict:
+                     merchant: Optional[dict] = None, lines: Iterable[str] = (), kind: Optional[str] = None) -> dict:
     """
     GET /api/console/visibility. `runs` carry their question (query_text,
     query_code, tier, stage); `mentions` are Layer 1's mentioned rows with
@@ -2045,11 +2205,17 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
     retailers, own_domains, reads, brand, retailers_source}); a brand with a
     where-to-buy or cheapest-place question gets `routing` (build_routing),
     anything else none at all.
+    lines, kind: 2N-1, the merchant's line names (line_aliases), which name
+    it, and its kind. For a brand the ranking opens on the brand-choice
+    answers (category control and comparison: `ranking.brand_choice`,
+    `ranking.default_tier`); the every-question ranking stays the typed
+    fields, the chip beside it.
     """
+    from soa_shared import retailers as af
     layer2 = [e.get('name') for x in extractions.values() for e in ((x or {}).get('other_brands_named') or [])
-              if isinstance(e, dict) and e.get('name')
+              if isinstance(e, dict) and e.get('name') and not af.is_store_name(e.get('name'))
               and e.get('presented_as') not in VIS_SOURCE_PRESENTED and e.get('relation') not in VIS_SOURCE_RELATIONS]
-    brands = _Brands(entities, layer2)
+    brands = _Brands(entities, layer2, lines)
     by_run: Dict[int, List[dict]] = {}
     for m in mentions:
         if m.get('mentioned', True):
@@ -2085,6 +2251,66 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
                for s in surface_list}
     default = surface_list[0] if surface_list else None
 
+    ranking_rows = _ranking_rows(counted, surface_list, agent_denoms, default, ours)
+    # 2G: brands named outside the comparison set, with how many answers on
+    # each surface named them (over every answered run there), most named
+    # first: the demo's "Also named but not tracked" line
+    tracked = {e['name'] for e in entities if e.get('name')}
+    untracked = {s: [{'name': r['name'], 'named': r['surfaces'][s]['named']}
+                     for r in sorted(ranking_rows, key=lambda r: (-r['surfaces'][s]['named'], r['name'].lower()))
+                     if r['name'] not in tracked and not r['you'] and r['surfaces'][s]['named'] > 0][:VIS_UNTRACKED_KEEP]
+                 for s in surface_list}
+    tiers = [t for t in VIS_TIER_ORDER if any(r['tier'] == t for r in rows)]
+    tiers += sorted({r['tier'] for r in rows} - set(tiers))
+    # 2N-1: a brand's ranking opens on its brand-choice answers, the demo's
+    # "Who agents pick first, Pampers category prompts": every question counts
+    # the ones that name it
+    choice = [r for r in counted if r.get('brand_choice')]
+    brand_choice = None
+    if choice and kind == 'brand':
+        c_denoms = {s: sum(1 for r in choice if on(r['surface'], s)) for s in surface_list}
+        c_agents = {s: _agent_counts([r for r in choice if on(r['surface'], s)], s) for s in surface_list}
+        c_uncoded = {s: _agent_counts([r for r in choice if on(r['surface'], s) and r.get('first_basis') == 'uncoded'], s)
+                     for s in surface_list}
+        who = ours or (merchant or {}).get('brand') or 'the brand'
+        brand_choice = {'tier': VIS_BRAND_CHOICE, 'label': VIS_BRAND_CHOICE_LABEL,
+                        'title': f"Who agents pick first, {who} category prompts",
+                        'sub': f"{c_denoms.get(default, 0)} category and comparison answers",
+                        'rows': _ranking_rows(choice, surface_list, c_agents, default, ours),
+                        'denom': c_denoms.get(default, 0), 'denoms': c_denoms, 'agent_denoms': c_agents,
+                        'first_uncoded': {s: sum(v.values()) for s, v in c_uncoded.items()},
+                        'agent_first_uncoded': c_uncoded}
+    return {
+        'cycle': cycle_code,
+        'lede': (f"Who the answers name, and who they name first, in cycle {cycle_code}. Every agent "
+                 "together, as the demo counts them. Pick a surface to count one alone."),
+        'byQuestion': rows,
+        'ranking': {'surface': default, 'rows': ranking_rows, 'denom': denoms.get(default, 0),
+                    # beside the typed fields
+                    'denoms': denoms, 'agent_denoms': agent_denoms,
+                    'first_uncoded': {s: sum(v.values()) for s, v in uncoded.items()},
+                    'agent_first_uncoded': uncoded,
+                    'untracked': untracked,
+                    **({'brand_choice': brand_choice, 'default_tier': VIS_BRAND_CHOICE} if brand_choice else {})},
+        'note': VIS_FIRST_PICK_RULE,
+        # beside the typed fields
+        'surfaces': [{'surface': s, 'label': surfaces.SURFACE_LABELS.get(s, s), 'answered': denoms[s],
+                      'runs': sum(1 for r in rows if on(r['surface'], s))} for s in surface_list],
+        'tiers': [{'tier': t, 'label': VIS_TIER_LABELS.get(t, t)} for t in tiers],
+        'first_basis': dict(Counter(r.get('first_basis') for r in counted if r.get('first_basis'))),
+        'sources_left_out': sources_left_out,
+        'divergences': VISIBILITY_DIVERGENCES,
+        **({'retired_named': build_retired_named(list(retired), rows=rows, runs=runs, texts=answer_texts or {},
+                                                 surface_list=surface_list, retired_by=retired_by)}
+           if retired else {}),
+        **_routing_block(rows, runs, extractions, surface_list, merchant, ours),
+    }
+
+
+def _ranking_rows(counted: List[dict], surface_list: List[str], agent_denoms: dict, default: Optional[str],
+                  ours: Optional[str]) -> List[dict]:
+    """RankRows over `counted` (answered Visibility rows): every brand named, ours always, most named first."""
+    on = surfaces.on_surface
     tally: Dict[str, dict] = {}
     if ours:
         tally[ours] = {'name': ours, 'you': True}
@@ -2107,40 +2333,7 @@ def build_visibility(cycle_code: str, *, runs: List[dict], entities: List[dict],
         ranking_rows.append({'name': name, 'you': row['you'], 'named': top['named'], 'first': top['first'],
                              'surfaces': per})
     ranking_rows.sort(key=lambda r: (-r['named'], -r['first'], not r['you'], r['name'].lower()))
-    # 2G: brands named outside the comparison set, with how many answers on
-    # each surface named them (over every answered run there), most named
-    # first: the demo's "Also named but not tracked" line
-    tracked = {e['name'] for e in entities if e.get('name')}
-    untracked = {s: [{'name': r['name'], 'named': r['surfaces'][s]['named']}
-                     for r in sorted(ranking_rows, key=lambda r: (-r['surfaces'][s]['named'], r['name'].lower()))
-                     if r['name'] not in tracked and not r['you'] and r['surfaces'][s]['named'] > 0][:VIS_UNTRACKED_KEEP]
-                 for s in surface_list}
-    tiers = [t for t in VIS_TIER_ORDER if any(r['tier'] == t for r in rows)]
-    tiers += sorted({r['tier'] for r in rows} - set(tiers))
-    return {
-        'cycle': cycle_code,
-        'lede': (f"Who the answers name, and who they name first, in cycle {cycle_code}. Every agent "
-                 "together, as the demo counts them. Pick a surface to count one alone."),
-        'byQuestion': rows,
-        'ranking': {'surface': default, 'rows': ranking_rows, 'denom': denoms.get(default, 0),
-                    # beside the typed fields
-                    'denoms': denoms, 'agent_denoms': agent_denoms,
-                    'first_uncoded': {s: sum(v.values()) for s, v in uncoded.items()},
-                    'agent_first_uncoded': uncoded,
-                    'untracked': untracked},
-        'note': VIS_FIRST_PICK_RULE,
-        # beside the typed fields
-        'surfaces': [{'surface': s, 'label': surfaces.SURFACE_LABELS.get(s, s), 'answered': denoms[s],
-                      'runs': sum(1 for r in rows if on(r['surface'], s))} for s in surface_list],
-        'tiers': [{'tier': t, 'label': VIS_TIER_LABELS.get(t, t)} for t in tiers],
-        'first_basis': dict(Counter(r.get('first_basis') for r in counted if r.get('first_basis'))),
-        'sources_left_out': sources_left_out,
-        'divergences': VISIBILITY_DIVERGENCES,
-        **({'retired_named': build_retired_named(list(retired), rows=rows, runs=runs, texts=answer_texts or {},
-                                                 surface_list=surface_list, retired_by=retired_by)}
-           if retired else {}),
-        **_routing_block(rows, runs, extractions, surface_list, merchant, ours),
-    }
+    return ranking_rows
 
 
 def _routing_block(rows, runs, extractions, surface_list, merchant: Optional[dict], ours: Optional[str]) -> dict:
@@ -2382,11 +2575,17 @@ def build_routing(rows: List[dict], runs: List[dict], extractions: Dict[int, dic
     coded = [(r, intent, stores) for r, intent, stores in asked if stores is not None]
     sent = [(r, stores[0]) for r, _i, stores in coded if stores]
 
+    own_first = next((d.lower().removeprefix('www.') for d in own_domains or [] if d), None)
+    brand_words = set(_brand_key(brand).split()) if brand else set()
+
     def bucket(store) -> str:
         if store['domain'] in mine:
             return store['domain']
         if store['domain'] in own:
             return 'own:' + store['domain']
+        # 2N-1: "Pampers", "Pampers Official Store", "Pampers official site / product page" are the brand's site
+        if store['domain'] is None and own_first and brand_words and brand_words <= set(_brand_key(store['name']).split()):
+            return 'own:' + own_first
         return ROUTING_OTHER
 
     from soa_shared import retailers as af
@@ -2867,9 +3066,11 @@ def load_answers(conn, cycle: dict, features: Optional[List[str]] = None) -> Lis
     reference = cycle.get('reference_prices') if 'reference_prices' in cycle else conn.execute(text(
         "SELECT reference_prices FROM soa_cycles WHERE id = :c"), {'c': cycle['id']}).scalar()
     index = reference_index(_json(reference))   # 2L-1: a left-out check's reference
+    truths = attribute_accuracy.truth_index(_json(reference))   # 2N-1: the cycle's brand truths
+    deals = ppt.deals_from_rows([r for r in (_json(reference) or {}).get('prices') or [] if isinstance(r, dict)])
     return [build_answer(dict(r), dict(r), outcomes.get(r['id']), mentions.get(r['id'], []),
                          runs_per_query=cycle.get('runs_per_query'), cycle_code=cycle['cycle_code'],
-                         variant_names=names, features=features, references=index)
+                         variant_names=names, features=features, references=index, truths=truths, deals=deals)
             for r in runs]
 
 
@@ -2932,9 +3133,15 @@ def load_visibility(conn, cycle: dict, merchant: Optional[dict] = None) -> dict:
     # 2L-2: the answers' own text, read only for a study with a retired line
     texts = {r['id']: r['raw_response'] for r in conn.execute(text(
         "SELECT id, raw_response FROM soa_runs WHERE cycle_id = :c"), {'c': cycle['id']}).mappings()} if retired else {}
+    # 2N-1: the merchant's line names name it, and its kind picks the ranking's default
+    stored = study_merchant_block(conn, cycle)
+    brand = stored.get('study_brand') or stored.get('brand') or next(
+        (e['name'] for e in entities if e.get('role') == 'primary'), None)
+    names = list(stored.get('product_names') or []) + [r.get('product_name') for r in retired if r.get('product_name')]
     return build_visibility(cycle['cycle_code'], runs=runs, entities=entities, mentions=mentions,
                             extractions=extractions, terms=load_brand_terms(conn, cycle),
-                            retired=retired, retired_by=retired_by, answer_texts=texts, merchant=merchant)
+                            retired=retired, retired_by=retired_by, answer_texts=texts, merchant=merchant,
+                            lines=line_aliases(names, brand), kind=(merchant or {}).get('kind') or stored.get('kind'))
 
 
 def study_merchant_block(conn, cycle: dict) -> dict:
@@ -3024,9 +3231,21 @@ def asks_attribute(conn, cycle: dict) -> bool:
     return any((_json(r) or {}).get('intent') == attribute_accuracy.ATTRIBUTE_INTENT for r in refs)
 
 
-def attribute_answers(conn, cycle: dict) -> List[dict]:
+def cycle_reference(conn, cycle: dict) -> Optional[dict]:
+    """The retailer-prices payload cached on the cycle (2B), or None."""
+    if 'reference_prices' in cycle:
+        return _json(cycle.get('reference_prices'))
+    return _json(conn.execute(text("SELECT reference_prices FROM soa_cycles WHERE id = :c"),
+                              {'c': cycle['id']}).scalar())
+
+
+def attribute_answers(conn, cycle: dict, reference: Optional[dict] = None) -> List[dict]:
     """Every answered, scored run of the cycle's attribute questions, judged:
-    {run_id, surface, platform, variant_id, variant, size, stated, truth, verdict, evidence}."""
+    {run_id, surface, platform, variant_id, variant, size, stated, truth, verdict, evidence}.
+    2N-1: against the cycle's brand truth: its cached retailer-prices first,
+    then `reference` (supply's /reference, the payload the drift rows read;
+    pass it only for the cycle it is current for), then what the scorer
+    stored. Never the study's copy."""
     rows = conn.execute(text("""
         SELECT r.id, r.platform, r.surface, r.answer_status, r.raw_response, q.source_ref, o.extraction
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
@@ -3034,6 +3253,7 @@ def attribute_answers(conn, cycle: dict) -> List[dict]:
         WHERE r.cycle_id = :c AND q.tier = 'brand_direct'
         ORDER BY r.id
     """), {'c': cycle['id']}).mappings().all()
+    truths = attribute_accuracy.truth_index(cycle_reference(conn, cycle), reference)
     out = []
     for r in rows:
         ref = _json(r['source_ref']) or {}
@@ -3041,7 +3261,7 @@ def attribute_answers(conn, cycle: dict) -> List[dict]:
             continue
         if (r['answer_status'] or surfaces.ANSWERED) != surfaces.ANSWERED:
             continue
-        judged = attribute_accuracy.answer_attribute(ref, _json(r['extraction']), r['raw_response'])
+        judged = attribute_accuracy.answer_attribute(ref, _json(r['extraction']), r['raw_response'], truths=truths)
         out.append({'run_id': r['id'], 'platform': r['platform'],
                     'surface': r['surface'] or surfaces.surface_of(r['platform']),
                     'variant_id': ref.get('variant_id'),
@@ -3096,7 +3316,7 @@ def build_attribute_accuracy(answers: List[dict], reference: Optional[dict]) -> 
 
 
 def load_attribute_accuracy(conn, cycle: dict, reference: Optional[dict]) -> Optional[dict]:
-    return build_attribute_accuracy(attribute_answers(conn, cycle), reference)
+    return build_attribute_accuracy(attribute_answers(conn, cycle, reference), reference)
 
 
 #: 2M-1: the Changes line's and the drift rows' copy (kept out of
@@ -3372,9 +3592,11 @@ def _deal_terms(deal: dict) -> str:
     from soa_shared import retailers as af
     if deal.get('kind') == 'member_cash':
         return deal.get('program') or 'Members'
-    words = {'multi_buy': deal.get('terms') or 'Multi-buy', 'rollback_or_was': 'Rollback' if 'rollback' in
-             (deal.get('text') or '').lower() else 'Was price', 'sale': 'Sale', 'coupon': 'Coupon',
-             'other': deal.get('terms') or 'Deal'}
+    # 2N-1: a price cut in its retailer's words (Rollback, List price cut, Sale, Sale price)
+    cut = ppt.kind_words(deal)
+    words = {'multi_buy': deal.get('terms') or 'Multi-buy',
+             'rollback_or_was': 'Rollback' if 'rollback' in (deal.get('text') or '').lower() else cut[0].upper() + cut[1:],
+             'sale': 'Sale', 'coupon': 'Coupon', 'other': deal.get('terms') or 'Deal'}
     term = words.get(deal.get('kind'), 'Deal')
     return f"{af.retailer_name(deal.get('retailer_domain'))}, {term}" if deal.get('kind') == 'multi_buy' else term
 
@@ -3404,11 +3626,16 @@ def build_prove(promo: Optional[dict], deals: Optional[dict], brand: Optional[st
         where = ', '.join(dict.fromkeys(_variant_words(v) for v in variants))
         prices = '. '.join(dict.fromkeys(f"{_variant_words(v)} {_price_words(v)}" for v in variants if _price_words(v)))
         detail = f"Live on {where}." + (f" {prices}." if prices else '')
+        # 2N-1: the shelf's own words, trimmed of its price-per-count noise, go here, never in the title
+        said = ppt.evidence(next((v.get('evidence') for v in variants if v.get('evidence')), None) or deal.get('text'))
+        if said and re.search(r"\d", said) and said.rstrip('.').lower() not in ppt.title(deal).lower():
+            detail += f" The shelf said: {said.rstrip('.')}."
         asked, named = tally['asked'], tally['named']
         rows.append({'retailer': af.retailer_name(deal.get('retailer_domain')), 'retailer_domain': deal.get('retailer_domain'),
                      'title': ppt.title(deal), 'detail': detail, 'terms': _deal_terms(deal),
                      'agents': t['prove.agents'].format(k=named, n=asked) if asked else 'Not asked this cycle',
-                     'value': _deal_value(deal), 'kind': deal.get('kind'), 'asked': asked, 'named': named,
+                     'value': _deal_value(deal), 'kind': deal.get('kind'), 'kind_label': ppt.kind_words(deal),
+                     'asked': asked, 'named': named,
                      'tone': 'ok' if asked and named * 2 >= asked else ('warn' if named else 'bad'),
                      'skus': len(variants)})
     rows.sort(key=lambda r: (-r['asked'], r['named'], r['retailer'] or ''))
@@ -3435,3 +3662,142 @@ def promo_baseline(promo: Optional[dict]) -> Optional[dict]:
         return None
     return {'key': 'promo', 'label': PROMO_TEMPLATES['baseline.label'], 'value': f"{promo['k']} of {promo['n']}",
             'note': PROMO_TEMPLATES['baseline.note'], 'n': promo['n'], 'k': promo['k']}
+
+
+# ─── The brand's first-cycle Changes and Impact baseline (2N-1) ────────────
+#
+# The demo's Changes for a brand, beside the weight range (2M-1) and the
+# deals named (2M-2): "Retired product named", "First pick, category
+# questions", "Retailer coverage". Each is `new` on a first cycle (or one
+# not compared), and a delta afterwards as 2K-4's lines take one. Impact's
+# baseline holds the same measures: Attribute accuracy, Retailer coverage,
+# Promo pass-through, Category presence. Read from Visibility's blocks; no
+# model.
+
+BRAND_CHANGE_TEMPLATES = {
+    'retired.label': 'Retired product named',
+    'retired.new': '{named}. First cycle with this question.',
+    'first.label': 'First pick, category questions',
+    'first.new': '{brand} {first} of {n}{rivals}. First cycle with these questions.',
+    'coverage.label': 'Retailer coverage',
+    'coverage.new': '{k} of {n} where-to-buy answers named at least two of {names}. First cycle with this question.',
+    'detail': '{a} of {n} this cycle against {b} of {m} in {code}.',
+    'baseline.attribute': 'Attribute accuracy',
+    'baseline.attribute.note': 'Weight range matches {site}, {date}',
+    'baseline.coverage': 'Retailer coverage',
+    'baseline.coverage.note': 'Names 2 of {names}',
+    'baseline.category': 'Category presence',
+    'baseline.category.note': '{brand} named, first in {first}',
+}
+
+
+def _change(label: str, a: int, n: int, then: Optional[tuple], code: Optional[str], *, up_good: bool,
+            new_detail: str, new_tone: str, route: str, metric: str) -> dict:
+    t = BRAND_CHANGE_TEMPLATES
+    if then is not None and then[1]:
+        b, m = then
+        d = a - b
+        delta, direction = (f"+{d}" if d > 0 else str(d) if d < 0 else '0'), ('up' if d > 0 else 'down' if d < 0 else 'flat')
+        tone = 'neu' if direction == 'flat' else ('ok' if (direction == 'up') == up_good else 'bad')
+        detail = t['detail'].format(a=a, n=n, b=b, m=m, code=code)
+    else:
+        b = m = None
+        delta, direction, tone, detail = 'new', 'flat', new_tone, new_detail
+    return {'label': label, 'delta': delta, 'dir': direction, 'tone': tone, 'detail': detail, 'route': route,
+            'metric': metric, 'now': a, 'of_now': n, 'prev': b, 'of_prev': m}
+
+
+def _retired_counts(vis: Optional[dict], surface: str) -> Optional[tuple]:
+    lines = ((vis or {}).get('retired_named') or {}).get('lines') or []
+    cells = [(line, (line.get('brand_choice') or {}).get(surface)) for line in lines]
+    cells = [(line, c) for line, c in cells if c and c.get('answers')]
+    if not cells:
+        return None
+    return sum(c['named'] for _l, c in cells), cells[0][1]['answers'], cells
+
+
+def _first_counts(vis: Optional[dict], surface: str) -> Optional[tuple]:
+    rows = [r for r in (vis or {}).get('byQuestion') or []
+            if r.get('answered') and r.get('brand_choice') and surfaces.on_surface(r.get('surface'), surface)]
+    if not rows:
+        return None
+    firsts = Counter((r.get('first') or {}).get('name') for r in rows if r.get('first'))
+    ours = next((n for r in rows for n in [r.get('first') or {}] if n.get('you')), None)
+    mine = sum(1 for r in rows if (r.get('first') or {}).get('you'))
+    named = sum(1 for r in rows if any(n.get('you') for n in r.get('named') or []))
+    rivals = [(k, v) for k, v in firsts.most_common() if k and k != (ours or {}).get('name')]
+    return mine, len(rows), rivals, named
+
+
+def _coverage_counts(vis: Optional[dict], surface: str) -> Optional[tuple]:
+    routing = (vis or {}).get('routing') or {}
+    c = (routing.get('coverage') or {}).get(surface)
+    if not c or not c.get('answers'):
+        return None
+    return c['named_two_plus'], c['answers'], routing.get('retailers') or []
+
+
+def brand_changes(vis: dict, prev_vis: Optional[dict], prev_code: Optional[str], surface: str, *, compared: bool,
+                  brand: str) -> List[dict]:
+    """2N-1: the brand's Changes lines on `surface`, in the demo's order:
+    Retired product named, First pick (category questions), Retailer
+    coverage. A line appears when this cycle measured it."""
+    t = BRAND_CHANGE_TEMPLATES
+    prev = prev_vis if compared else None
+    out = []
+    retired = _retired_counts(vis, surface)
+    if retired:
+        named, answers, cells = retired
+        then = _retired_counts(prev, surface)
+        words = '. '.join(f"{(line.get('label') or line.get('line'))} in {c['named']} of {c['answers']} category answers" + (
+            f", {line['successor'].get('label')} in {c.get('successor_named') or 0}"
+            if line.get('successor') and c.get('successor_named') is not None else '') for line, c in cells)
+        out.append(_change(t['retired.label'], named, answers, then[:2] if then else None, prev_code, up_good=False,
+                           new_detail=t['retired.new'].format(named=words, answers=answers),
+                           new_tone='bad' if named else 'ok', route='visibility', metric='retired'))
+    first = _first_counts(vis, surface)
+    if first:
+        mine, n, rivals, _named = first
+        then = _first_counts(prev, surface)
+        lead = rivals[0][1] if rivals else 0
+        said = ''.join(f", {k} {v}" for k, v in rivals[:2])
+        out.append(_change(t['first.label'], mine, n, then[:2] if then else None, prev_code, up_good=True,
+                           new_detail=t['first.new'].format(brand=brand, first=mine, n=n, rivals=said),
+                           new_tone='ok' if mine > lead else 'warn', route='visibility', metric='first_category'))
+    coverage = _coverage_counts(vis, surface)
+    if coverage:
+        k, n, names = coverage
+        then = _coverage_counts(prev, surface)
+        listed = [n_ for n_ in names][:3]
+        out.append(_change(t['coverage.label'], k, n, then[:2] if then else None, prev_code, up_good=True,
+                           new_detail=t['coverage.new'].format(k=k, n=n, names=_and(listed) if listed else 'its retailers'),
+                           new_tone='ok' if k * 2 >= n else 'bad', route='visibility', metric='coverage'))
+    return out
+
+
+def brand_baseline(*, attribute: Optional[dict], vis: Optional[dict], promo: Optional[dict], brand: str,
+                   day: Optional[str]) -> List[dict]:
+    """2N-1: Impact's baseline for a brand, in the demo's order: Attribute
+    accuracy, Retailer coverage, Promo pass-through, Category presence. Each
+    {key, label, value, note, n, k}; a measure this cycle did not take is left out."""
+    t = BRAND_CHANGE_TEMPLATES
+    out = []
+    if attribute:
+        out.append({'key': 'attribute', 'label': t['baseline.attribute'], 'value': f"{attribute['k']} of {attribute['n']}",
+                    'note': t['baseline.attribute.note'].format(site=attribute.get('site') or 'the brand site',
+                                                               date=day or 'this cycle'),
+                    'n': attribute['n'], 'k': attribute['k']})
+    coverage = _coverage_counts(vis, surfaces.ALL)
+    if coverage:
+        k, n, names = coverage
+        out.append({'key': 'coverage', 'label': t['baseline.coverage'], 'value': f"{k} of {n}",
+                    'note': t['baseline.coverage.note'].format(names=', '.join(names[:3]) or 'its retailers'), 'n': n, 'k': k})
+    promo_row = promo_baseline(promo)
+    if promo_row:
+        out.append(promo_row)
+    first = _first_counts(vis, surfaces.ALL)
+    if first:
+        mine, n, _rivals, named = first
+        out.append({'key': 'category', 'label': t['baseline.category'], 'value': f"{named} of {n}",
+                    'note': t['baseline.category.note'].format(brand=brand, first=mine), 'n': n, 'k': named})
+    return out

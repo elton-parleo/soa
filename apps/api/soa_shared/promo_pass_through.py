@@ -183,22 +183,126 @@ def judge(answer: Optional[str], live: List[dict]) -> dict:
             'loose': bool(LOOSE.search(answer or '')), 'subscribe': bool(SUBSCRIBE.search(answer or ''))}
 
 
+#: 2N-1: what each retailer calls a price cut against a struck price, in its
+#: own words: Walmart's Rollback, Amazon's list price cut, Target's sale,
+#: Kroger's sale price. The kind supply reads is one (rollback_or_was); the
+#: name is the retailer's.
+RETAILER_CUT_WORDS = {'walmart.com': 'Rollback', 'amazon.com': 'list price cut', 'target.com': 'sale',
+                      'kroger.com': 'sale price'}
+#: The struck price each retailer's cut is taken off, for the title.
+RETAILER_CUT_BASIS = {'amazon.com': 'list price', 'walmart.com': 'Rollback', 'target.com': 'sale',
+                      'kroger.com': 'sale price'}
+_GENERIC_TAIL = {'diapers', 'diaper', 'pants', 'wipes', 'nappies', 'underwear'}
+
+
+def kind_words(deal: dict) -> str:
+    """The deal's kind as its retailer names it ("Rollback", "list price cut", "sale")."""
+    if deal.get('kind') == 'rollback_or_was':
+        return RETAILER_CUT_WORDS.get(deal.get('retailer_domain'), 'price cut')
+    if deal.get('kind') == 'member_cash' and deal.get('program'):
+        return deal['program']
+    return KIND_WORDS.get(deal.get('kind'), 'deal')
+
+
+def deal_line(variant: dict) -> Optional[str]:
+    """"AMORE Size 1" from the variant's product name and label: the line
+    without the brand's word in front or the generic tail, and the size."""
+    from soa_shared import attribute_accuracy as aa
+    name = variant.get('product_name') or ''
+    head = re.split(r",|\bsize\b|\b\d+\s*(?:ct|count)\b", name, maxsplit=1, flags=re.I)[0]
+    words = [w for w in head.split() if w.lower() not in _GENERIC_TAIL]
+    if len(words) > 1:
+        words = words[1:]
+    size = aa.size_label(variant.get('variant_label')) or aa.size_label(name)
+    line = ' '.join(words + ([size] if size else []))
+    return line or variant.get('variant_label') or None
+
+
+def _pct_off(deal: dict) -> Optional[str]:
+    if deal.get('value') is not None and deal.get('value_unit') == 'percent':
+        return format(Decimal(str(deal['value'])).normalize(), 'f')
+    for v in deal.get('variants') or [deal.get('variant') or {}]:
+        was, price = _money(v.get('was_price')), _money(v.get('price'))
+        if was and price and was > price:
+            return str(int(((was - price) / was * 100).quantize(Decimal('1'))))
+    return None
+
+
+def _clean_text(deal: dict) -> Optional[str]:
+    """supply's text for the deal when it is a phrase ("Save 40% on 1 when you
+    buy 2", "$15 Sam's Cash on $100 of P&G"), never shelf evidence."""
+    text = (deal.get('text') or '').strip().rstrip('.')
+    if not text or len(text) > 60 or re.search(r"\$\s+\d|/\s*count|per count|list price:", text, re.I):
+        return None
+    return text[0].lower() + text[1:] if re.match(r"(?:save|get|buy|earn|clip|spend|take)\b", text, re.I) else text
+
+
+def _phrase(deal: dict) -> str:
+    """The kind phrase from the deal's fields (or supply's phrase for it), never its evidence."""
+    kind, domain = deal.get('kind'), deal.get('retailer_domain')
+    pct = _pct_off(deal)
+    if kind == 'rollback_or_was':
+        basis = RETAILER_CUT_BASIS.get(domain)
+        if domain == 'walmart.com':
+            return f"Rollback, {pct}% off" if pct else 'Rollback'
+        if pct:
+            return f"{pct}% off {basis}" if basis else f"{pct}% off the was price"
+        return kind_words(deal)
+    if kind == 'sale':
+        return f"{kind_words(deal)}, {pct}% off" if pct else kind_words(deal)
+    text = _clean_text(deal)
+    if text:
+        return text
+    if kind == 'multi_buy':
+        return f"{pct}% off when you buy {deal.get('terms') or 'more'}" if pct else 'multi-buy'
+    if kind == 'coupon' and deal.get('value') is not None:
+        amount = f"{deal['value']}%" if deal.get('value_unit') == 'percent' else f"${Decimal(str(deal['value'])).quantize(Decimal('0.01'))}"
+        return f"{amount} coupon"
+    if kind == 'member_cash':
+        return deal.get('program') or 'member reward'
+    return KIND_WORDS.get(kind, 'deal')
+
+
 def title(deal: dict) -> str:
-    """"Amazon: save 40% on 1 when you buy 2"."""
+    """2N-1: "<Retailer>: <kind phrase> on <line>", from the deal's fields:
+    "Amazon: 25% off list price on AMORE Size 1, $36.18 from $47.99". A deal
+    on more than one line names none (the row's detail lists them). The
+    evidence string is the detail's (evidence()), never the title."""
     from soa_shared import retailers as af
-    text = (deal.get('text') or KIND_WORDS.get(deal.get('kind'), 'deal')).strip().rstrip('.')
-    # a leading verb reads in the sentence ("save 40% …"); a name keeps its capital ("Rollback")
-    if re.match(r"(?:save|get|buy|earn|clip|spend|take)\b", text, re.I):
-        text = text[0].lower() + text[1:]
-    return f"{af.retailer_name(deal.get('retailer_domain'))}: {text}"
+    variants = deal.get('variants') or ([deal['variant']] if deal.get('variant') else [])
+    lines = list(dict.fromkeys(x for x in (deal_line(v) for v in variants) if x))
+    phrase = _phrase(deal)
+    # one line, and a phrase that names none of its own ("... on $100 of P&G"); more than one: the detail lists them
+    on = f" on {lines[0]}" if len(lines) == 1 and ' on ' not in f" {phrase} " else ''
+    prices = ''
+    if len(variants) == 1 and variants[0].get('price') and variants[0].get('was_price'):
+        prices = f", ${variants[0]['price']} from ${variants[0]['was_price']}"
+    return f"{af.retailer_name(deal.get('retailer_domain'))}: {phrase}{on}{prices}"
 
 
 def short(deal: dict) -> str:
-    """"Amazon multi-buy", "Walmart Rollback", "Sam's Club Sam's Cash": the tile note's name for a deal."""
+    """"Amazon multi-buy", "Walmart Rollback", "Amazon list price cut", "Sam's Club Sam's Cash": the tile note's name."""
     from soa_shared import retailers as af
-    word = deal.get('program') if deal.get('kind') == 'member_cash' and deal.get('program') else \
-        KIND_WORDS.get(deal.get('kind'), 'deal')
-    return f"{af.retailer_name(deal.get('retailer_domain'))} {word}"
+    return f"{af.retailer_name(deal.get('retailer_domain'))} {kind_words(deal)}"
+
+
+#: The price-per-count noise a shelf's evidence carries: "$0.27 per count",
+#: "( $0.27 $0.27 / count)", a price split by spaces ("$ 36 . 18").
+_PER_COUNT = re.compile(r"\(\s*(?:\$\s?\d+(?:\.\d+)?\s*)+/\s*(?:count|ct|diaper|unit)\s*\)|"
+                        r"\$\s?\d+(?:\.\d+)?\s*(?:per|/)\s*(?:count|ct|diaper|unit)s?\b", re.I)
+_SPLIT_PRICE = re.compile(r"\$\s+\d+\s*\.\s*\d+")
+
+
+def evidence(text: Optional[str]) -> Optional[str]:
+    """The shelf's own words for a deal, for the row's detail, trimmed of the
+    price-per-count noise: "$36.18 with 25 percent savings -25% $ 36 . 18
+    $0.27 per count ( $0.27 $0.27 / count) List Price: $47.99" -> "$36.18
+    with 25 percent savings -25% List Price: $47.99"."""
+    if not text:
+        return None
+    out = _SPLIT_PRICE.sub(' ', _PER_COUNT.sub(' ', text))
+    out = re.sub(r"\(\s*\)", ' ', out)
+    return ' '.join(out.split()) or None
 
 
 def count(answers: List[dict], deals_payload: Optional[dict], intent: str = CHEAPEST_PLACE) -> dict:

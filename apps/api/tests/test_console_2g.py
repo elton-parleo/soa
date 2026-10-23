@@ -69,8 +69,9 @@ def test_each_answer_says_what_its_question_expected(http, cycle):
 def test_the_untracked_brands_with_their_counts(http, cycle):
     body = _get(http, '/api/console/visibility')
     top = body['ranking']['untracked']['grounded_api']
-    assert top[:3] == [{'name': 'Target', 'named': 34}, {'name': 'Costco', 'named': 17}, {'name': 'Hello Bello', 'named': 9}]
-    assert not {'Pampers', 'Huggies', 'Pull-Ups', 'Wiggle & Snug'} & {b['name'] for b in top}
+    # 2N-1: retailers are not brands (Target 34, Costco 17 before): they are in the routing table
+    assert top[:1] == [{'name': 'Hello Bello', 'named': 9}]
+    assert not {'Pampers', 'Huggies', 'Pull-Ups', 'Wiggle & Snug', 'Target', 'Costco'} & {b['name'] for b in top}
     assert body['ranking']['denoms']['grounded_api'] == 514                   # "(all 514 answers)"
     assert body['sources_left_out'] == 43                                      # the existing line stays
     assert body['ranking']['untracked']['consumer_ui'] == []

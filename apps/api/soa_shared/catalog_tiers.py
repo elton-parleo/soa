@@ -1368,7 +1368,9 @@ def build_intent_questions(snapshot, *, category, persona, study_pattern,
     carrying `size`, `count` and the brand truth (`weight_truth`,
     `weight_truth_source`: supply's, snapshot.weight_truth, else the feed's
     range on the variant; None when there is none, and the question is still
-    asked). At most ATTRIBUTE_CAP: the first of the sampled variants that
+    asked). 2N-1: that copy is what the preview reports (`no_truth`), never
+    what an answer is judged against: the scorer and the read take the
+    cycle's truth from its reference (attribute_accuracy.truth_index). At most ATTRIBUTE_CAP: the first of the sampled variants that
     name a diaper size, in sample order; one that names none is left out
     (`no_size`).
 

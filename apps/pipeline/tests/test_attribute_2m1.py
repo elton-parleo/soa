@@ -121,11 +121,45 @@ def test_the_coder_writes_the_range_on_the_extraction_of_an_attribute_run_only()
     ref = {'intent': 'attribute', 'size': 'Size 4'}
     x = code_attribute(ref, {'spans': []}, 'Pampers Swaddlers Size 4 is for babies 22–37 lbs; the pack has 120.')
     assert x['weight_range'] == R(22, 37) and x['weight_evidence'] == 'Size 4 is for babies 22-37 lbs'
-    assert code_attribute(ref, {}, 'The 120 ct pack has 120 diapers.') == {'weight_range': None, 'weight_evidence': None}
+    assert code_attribute(ref, {}, 'The 120 ct pack has 120 diapers.') == {
+        'weight_range': None, 'weight_evidence': None, 'weight_truth': None, 'weight_truth_source': None}
     assert code_attribute({'intent': 'where_to_buy'}, {'spans': []}, 'Size 4 is 22-37 lbs') == {'spans': []}
     # a classify-only rescore with no answer text keeps the stored coding
     stored = {'weight_range': R(15, 34), 'weight_evidence': 'Size 4 15 to 34 lb'}
-    assert code_attribute(ref, stored, None) == stored
+    assert code_attribute(ref, stored, None) == {**stored, 'weight_truth': None, 'weight_truth_source': None}
+
+
+def test_2n1_the_truth_stored_is_the_cycles_never_the_questions():
+    """A question generated with no truth, scored against a cycle reference that has one:
+    the run's extraction carries the reference's truth, and the read judges it matched.
+    Two cycles with different truths each store their own."""
+    from scoring.expectation_scorer import ExpectationScorer
+    from soa_shared import attribute_accuracy as aa
+
+    ref = {'intent': 'attribute', 'size': 'Size 4', 'variant_id': '00037000000004', 'merchant_slug': 'pampers',
+           'weight_truth': None}
+    answer = 'Pampers Swaddlers Size 4 is for babies 22-37 lbs.'
+
+    class Refs:
+        def __init__(self, by_cycle):
+            self.by_cycle = by_cycle
+
+        def for_cycle(self, cycle_id, **_kw):
+            return type('R', (), {'payload': self.by_cycle[cycle_id]})()
+
+    def payload(truth):
+        return {'prices': [{'gtin': '37000000004', 'role': 'own', 'attribute': {'truth': truth, 'truth_source': 'brand_page'}}]}
+
+    scorer = ExpectationScorer.__new__(ExpectationScorer)
+    scorer.references = Refs({14: payload(R(22, 37)), 15: payload(R(15, 34))})
+    run = lambda cid: type('Run', (), {'cycle_id': cid, 'study_type': 's'})()  # noqa: E731
+    fl14 = code_attribute(ref, {}, answer, truth=scorer._attribute_truth(run(14), ref))
+    fl15 = code_attribute(ref, {}, answer, truth=scorer._attribute_truth(run(15), ref))
+    assert (fl14['weight_truth'], fl14['weight_truth_source']) == (R(22, 37), 'brand_page')
+    assert aa.answer_attribute(ref, fl14, answer)['verdict'] == 'match'
+    assert aa.answer_attribute(ref, fl15, answer)['verdict'] == 'mismatch'
+    # any other question: no reference read, no truth
+    assert scorer._attribute_truth(run(99), {'intent': 'where_to_buy'}) is None
 
 
 def test_the_parse_forms():
@@ -148,7 +182,11 @@ def _run(text, truth=R(15, 34)):
             'tier': 'brand_direct', 'raw_response': text,
             'query_text': 'What weight range is Pampers Swaddlers Size 4 for, and how many diapers come in the 120 ct pack?',
             'source_ref': {'intent': 'attribute', 'line': 'Pampers Swaddlers', 'size': 'Size 4', 'count': 120,
-                           'weight_truth': truth, 'own_domain': 'pampers.com'}}
+                           'variant_id': 'v2', 'weight_truth': None, 'own_domain': 'pampers.com'}}
+
+
+#: 2N-1: the cycle's brand truths (its cached rows), never the question's copy
+TRUTHS = aa.truth_index({'prices': [{'sku': 'v2', 'role': 'own', 'attribute': {'truth': R(15, 34)}}]})
 
 
 SCALES = [{'product': 'Pampers Swaddlers', 'size': 'Size 4', 'truth': R(15, 34)},
@@ -159,7 +197,7 @@ SCALES = [{'product': 'Pampers Swaddlers', 'size': 'Size 4', 'truth': R(15, 34)}
 def test_an_attribute_miss_is_a_flagged_answer_with_stated_and_truth():
     merchant = nv.Merchant(name='Pampers', kind='brand', terms=('Pampers',))
     outcome = {'outcome': 'grounded', 'extraction': {'weight_range': R(22, 37), 'weight_evidence': 'Size 4 22-37 lbs'}}
-    facts = nv.answer_facts(_run('Size 4 is 22-37 lbs.'), outcome, [], merchant, {}, SCALES)
+    facts = nv.answer_facts(_run('Size 4 is 22-37 lbs.'), outcome, [], merchant, {}, SCALES, truths=TRUTHS)
     assert facts['why'] == ['attribute_mismatch']
     assert (facts['weight_range_stated'], facts['weight_range_brand'], facts['brand_site']) == \
         ('22 to 37 lb', '15 to 34 lb', 'pampers.com')
@@ -174,9 +212,9 @@ def test_an_attribute_miss_is_a_flagged_answer_with_stated_and_truth():
 def test_a_right_range_is_not_flagged_and_an_absent_one_is():
     merchant = nv.Merchant(name='Pampers', kind='brand', terms=('Pampers',))
     right = {'outcome': 'grounded', 'extraction': {'weight_range': R(15, 34), 'weight_evidence': 'x'}}
-    assert nv.answer_facts(_run('Size 4 is 15-34 lbs.'), right, [], merchant, {}, SCALES) is None
+    assert nv.answer_facts(_run('Size 4 is 15-34 lbs.'), right, [], merchant, {}, SCALES, truths=TRUTHS) is None
     none = {'outcome': 'grounded', 'extraction': {'weight_range': None, 'weight_evidence': None}}
-    facts = nv.answer_facts(_run('It holds 120.'), none, [], merchant, {}, SCALES)
+    facts = nv.answer_facts(_run('It holds 120.'), none, [], merchant, {}, SCALES, truths=TRUTHS)
     assert facts['why'] == ['attribute_absent'] and 'weight_range_stated' not in facts
     # the other answers' prompt is unchanged
     assert nv.system_prompt({'kind': nv.ANSWER, 'why': ['wrong_price']}) == nv.SYSTEM_PROMPT

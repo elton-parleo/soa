@@ -125,3 +125,37 @@ def counts(extractions: Iterable[Optional[dict]]) -> dict:
     for x in extractions:
         out[claim_kind(x) or 'undecided'] += 1
     return out
+
+
+# ─── Catalog-built questions (2N-1) ────────────────────────────────────────
+#
+# Brand-direct also holds the questions the catalog builds (2L-2's retired
+# line, 2L-4's where-to-buy and cheapest-place, 2M-1's accuracy). Each is
+# asked for its own verdict: retailer coverage for where-to-buy, deal
+# pass-through for cheapest-place, the weight range for accuracy, still
+# sold / successor for the retired line. The brand-claim rule ("stated a
+# fact the brand never published") is not theirs: a right weight range or a
+# list of the brand's own retailers is no fabrication. They stay outside the
+# brand-claim counts, the fabricated signal and the severity ladder's
+# fabricated rung. The rule stays on the AI-written brand-direct questions.
+
+WHERE_TO_BUY = 'where_to_buy'
+CHEAPEST_PLACE = 'cheapest_place'
+ATTRIBUTE_INTENT = 'attribute'
+RETIRED = 'retired'
+CATALOG_INTENTS = (WHERE_TO_BUY, CHEAPEST_PLACE, ATTRIBUTE_INTENT, RETIRED)
+
+
+def catalog_intent(source_ref: Optional[dict]) -> Optional[str]:
+    """The catalog-built intent a brand-direct question asks (one of
+    CATALOG_INTENTS), or None for an AI-written question."""
+    ref = source_ref if isinstance(source_ref, dict) else {}
+    if ref.get('retired_line'):
+        return RETIRED
+    intent = ref.get('intent')
+    return intent if intent in CATALOG_INTENTS else None
+
+
+def is_brand_claim(tier: Optional[str], source_ref: Optional[dict]) -> bool:
+    """A brand-direct answer the brand-claim rule judges: its question is AI-written."""
+    return tier == 'brand_direct' and catalog_intent(source_ref) is None

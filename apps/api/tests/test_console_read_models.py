@@ -655,6 +655,7 @@ def test_the_verdict_mapping_is_explicit_and_not_lossy():
     assert rm.VALUE_VERDICT == {
         'exact': 'right', 'wrong': 'wrong', 'absent': 'missed', 'partial': 'partial',
         'stale': 'stale', 'unverifiable': 'unverifiable', 'unscoreable': 'unscoreable',
+        'per_unit': 'per_unit',   # 2N-1
     }
     assert len(set(rm.VALUE_VERDICT.values())) == len(rm.VALUE_VERDICT)
     for verdict in rm.VALUE_VERDICT.values():
