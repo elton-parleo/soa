@@ -70,6 +70,8 @@ TEMPLATES = {
     'product.wrong': "Quoted a wrong price in {n} of {runs} {runs_word}.",
     'product.left_out': "No price quoted in {n} of {runs} {runs_word}.",
     'product.unverifiable': "The page could not be read, so {n} of {runs} {runs_word} are not scored.",
+    # 2N-1: after the issue, the retailers whose every quote could not be checked
+    'product.walled': "{retailers} could not be read.",
     'product.right': "Right in {n} of {runs} {runs_word}.",
     'product.not_asked': "Not asked on this surface this cycle.",
     'signal.other_brand': ("Answered {n} price {questions} with another brand's price.",
@@ -533,21 +535,53 @@ PRODUCT_STATUS = {'exact': 'exact', 'wrong': 'wrong', 'stale': 'wrong', 'partial
 
 
 def product_issue(quotes: List[dict]) -> tuple:
+    """(rule, issue sentence). 2N-1: product.unverifiable only when every
+    retailer the row was asked at could not be read; otherwise the rule over
+    the quotes at the retailers that were, those that were not named after
+    it ("Right in 12 of 12 runs. Target could not be read.")."""
     runs = len(quotes)
     if not runs:
         return 'product.not_asked', TEMPLATES['product.not_asked']
+    by: Dict[str, List[dict]] = {}
+    for q in quotes:
+        by.setdefault(str(q.get('retailer')), []).append(q)
+    walled = sorted(r for r, qs in by.items() if all(q.get('outcome') == 'unverifiable' for q in qs))
+    checked = [q for q in quotes if str(q.get('retailer')) not in walled]
+    if not checked:
+        n = sum(1 for q in quotes if q.get('outcome') == 'unverifiable')
+        return 'product.unverifiable', TEMPLATES['product.unverifiable'].format(n=n, runs=runs, runs_word=_n(runs, 'run', 'runs'))
     counts = {
-        'product.other_brand': sum(1 for q in quotes if q.get('outcome') == 'absent' and q.get('reason') == 'other_brand'),
-        'product.wrong': sum(1 for q in quotes if q.get('outcome') in ('wrong', 'stale')),
-        'product.left_out': sum(1 for q in quotes if q.get('outcome') == 'absent' and q.get('reason') != 'other_brand'),
-        'product.unverifiable': sum(1 for q in quotes if q.get('outcome') == 'unverifiable'),
+        'product.other_brand': sum(1 for q in checked if q.get('outcome') == 'absent' and q.get('reason') == 'other_brand'),
+        'product.wrong': sum(1 for q in checked if q.get('outcome') in ('wrong', 'stale')),
+        'product.left_out': sum(1 for q in checked if q.get('outcome') == 'absent' and q.get('reason') != 'other_brand'),
     }
     rule, n = max(counts.items(), key=lambda kv: kv[1])
-    word = _n(runs, 'run', 'runs')
+    asked = len(checked)
+    word = _n(asked, 'run', 'runs')
     if n:
-        return rule, TEMPLATES[rule].format(n=n, runs=runs, runs_word=word)
-    right = sum(1 for q in quotes if q.get('outcome') == 'exact')
-    return 'product.right', TEMPLATES['product.right'].format(n=right, runs=runs, runs_word=word)
+        issue = TEMPLATES[rule].format(n=n, runs=asked, runs_word=word)
+    else:
+        rule = 'product.right'
+        right = sum(1 for q in checked if q.get('outcome') == 'exact')
+        issue = TEMPLATES['product.right'].format(n=right, runs=asked, runs_word=word)
+    names = [r for r in walled if r != 'None']
+    if names:
+        issue += ' ' + TEMPLATES['product.walled'].format(retailers=_retailers_text(names))
+    return rule, issue
+
+
+#: 2N-1: the CHECK column's status follows the row's issue rule, never a
+#: worse cell's: a row whose issue is "No price quoted in 12 of 18 runs" reads
+#: No price, not Wrong price. A right row keeps its cells' exact or partial.
+RULE_STATUS = {'product.wrong': 'wrong', 'product.other_brand': 'wrong', 'product.left_out': 'none',
+               'product.unverifiable': 'none', 'product.not_asked': 'none'}
+
+
+def status_for(rule: str, cell_status: str) -> str:
+    if rule in RULE_STATUS:
+        return RULE_STATUS[rule]
+    status = PRODUCT_STATUS.get(cell_status, 'none')
+    return status if status in ('exact', 'partial') else 'exact'
 
 
 def _retailers_text(domains: List[str]) -> str:
@@ -632,7 +666,7 @@ def build_products(true_value: dict, vis_rows: List[dict], surface: str, *, vari
                 'name': row['product'], 'sku': row['sku'],
                 'named': nf['named'], 'first': nf['first'],
                 'quoted': _quoted_text(quotes), 'live': _live_text(cell, col),
-                'status': PRODUCT_STATUS.get(status, 'none'), 'issue': issue, 'route': 'true-value',
+                'status': status_for(rule, status), 'issue': issue, 'route': 'true-value',
                 # beside the typed fields
                 'cell_status': status, 'quote': sc.get('quoted'), 'retailer': col, 'runs': len(quotes),
                 'answered': len(answered), 'issue_rule': rule,
@@ -664,7 +698,7 @@ def _product_across(row: dict, across: List[tuple], surface: str, counts) -> dic
         'named': nf['named'], 'first': nf['first'],
         'quoted': _quoted_across_text(quotes),
         'live': '. '.join(_live_text(cell, col) for col, cell, _qs in across),
-        'status': PRODUCT_STATUS.get(status, 'none'), 'issue': issue, 'route': 'true-value',
+        'status': status_for(rule, status), 'issue': issue, 'route': 'true-value',
         # beside the typed fields
         'cell_status': status, 'quote': ((worst_cell.get('by_surface') or {}).get(surface) or {}).get('quoted'),
         'retailer': worst_col, 'runs': len(quotes), 'answered': len(answered), 'issue_rule': rule,

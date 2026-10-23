@@ -704,20 +704,38 @@ def attribute_facts(run: dict, attribute: dict, why: List[str], merchant: Mercha
 
 
 def issue_rule(quotes: List[dict]) -> Tuple[str, int, int]:
-    """console_parity.product_issue's rule: (rule, n, runs)."""
+    """console_parity.product_issue's rule: (rule, n, runs). 2N-1: a price
+    that could not be checked is the issue only when every retailer the row
+    was asked at could not be read; otherwise the rule runs over the quotes
+    at the retailers that were (walled_retailers names the rest)."""
     runs = len(quotes)
     if not runs:
         return 'product.not_asked', 0, 0
+    walled = walled_retailers(quotes)
+    checked = [q for q in quotes if str(q.get('asked_at')) not in walled]
+    if not checked:
+        return 'product.unverifiable', sum(1 for q in quotes if q['verdict'] == 'unverifiable'), runs
     counts = {
-        'product.other_brand': sum(1 for q in quotes if q['verdict'] == 'absent' and q.get('reason_code') == 'other_brand'),
-        'product.wrong': sum(1 for q in quotes if q['verdict'] in ('wrong', 'stale')),
-        'product.left_out': sum(1 for q in quotes if q['verdict'] == 'absent' and q.get('reason_code') != 'other_brand'),
-        'product.unverifiable': sum(1 for q in quotes if q['verdict'] == 'unverifiable'),
+        'product.other_brand': sum(1 for q in checked if q['verdict'] == 'absent' and q.get('reason_code') == 'other_brand'),
+        'product.wrong': sum(1 for q in checked if q['verdict'] in ('wrong', 'stale')),
+        'product.left_out': sum(1 for q in checked if q['verdict'] == 'absent' and q.get('reason_code') != 'other_brand'),
     }
     rule, n = max(counts.items(), key=lambda kv: kv[1])
     if n:
-        return rule, n, runs
-    return 'product.right', sum(1 for q in quotes if q['verdict'] == 'exact'), runs
+        return rule, n, len(checked)
+    return 'product.right', sum(1 for q in checked if q['verdict'] == 'exact'), len(checked)
+
+
+def _and(names: List[str]) -> str:
+    return names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
+
+
+def walled_retailers(quotes: List[dict]) -> List[str]:
+    """2N-1: the retailers every quote at which could not be checked, in name order."""
+    by: Dict[str, List[dict]] = {}
+    for q in quotes:
+        by.setdefault(str(q.get('asked_at')), []).append(q)
+    return sorted(r for r, qs in by.items() if all(q['verdict'] == 'unverifiable' for q in qs))
 
 
 def product_facts(reference: Optional[dict], catalog_runs: List[dict], merchant: Merchant) -> Dict[str, dict]:
@@ -807,6 +825,14 @@ def issue_sentence(quotes: List[dict], agents: int, prices: Dict[str, dict]) -> 
     rule, _n, _runs = issue_rule(quotes)
     if rule == 'product.not_asked':
         return None, None
+    walled = walled_retailers(quotes)
+    if rule != 'product.unverifiable' and walled:
+        # 2N-1: the issue over the retailers read, the rest named after it
+        quotes = [q for q in quotes if str(q.get('asked_at')) not in walled]
+        agents = len({q['agent'] for q in quotes})
+        issue, direction = issue_sentence(quotes, agents, prices)
+        names = [w for w in walled if w != 'None']
+        return (f"{issue}. {_and(names)} could not be read" if names and issue else issue), direction
 
     def count(pick) -> int:
         return len({q['agent'] for q in quotes if pick(q)})
@@ -1352,7 +1378,8 @@ _DASHED_RUN = re.compile(r"\S*\s?(?:[‒–—―]|--)\s?\S*")
 
 
 def normalise(line: str, facts: dict) -> str:
-    """2M-3: a dash the source wrote becomes a hyphen, so the line is kept:
+    """2N-1: a product line's issue follows the sentence before it with a
+    period. 2M-3: a dash the source wrote becomes a hyphen, so the line is kept:
     one inside quotation marks (run-14475), or inside a run of the line the
     facts write with that dash, a product name's "Diapers – Size 5" or
     "(8–14 lbs)" (run-14723, 14852, 14864). Any other dash is the
@@ -1363,7 +1390,13 @@ def normalise(line: str, facts: dict) -> str:
     def held(m) -> str:
         run = m.group(0).strip('.,:;!?()"')
         return _DASH.sub('-', m.group(0)) if run and run in known else m.group(0)
-    return _DASHED_RUN.sub(held, line)
+    line = _DASHED_RUN.sub(held, line)
+    # 2N-1: the issue is its own sentence: "... on Oct 23 6 of 6 agents ..." gets its period
+    issue = str(facts.get('issue') or '') if facts.get('kind') == PRODUCT else ''
+    at = line.find(issue) if issue else -1
+    if at > 0 and not line[:at].rstrip().endswith(('.', '!', '?', ':')):
+        line = line[:at].rstrip() + '. ' + line[at:]
+    return line
 
 
 def _plain(text_: str) -> str:

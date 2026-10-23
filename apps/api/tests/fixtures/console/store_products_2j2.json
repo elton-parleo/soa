@@ -1,5 +1,5 @@
 {
- "_note": "2J-2: the Overview's products on every surface (all included) for the store fixtures, taken on main (d5a4f78) before build_products read a brand's retailer cells. test_console_2j2 pins them byte for byte.",
+ "_note": "2J-2: the Overview's products on every surface (all included) for the store fixtures, taken on main (d5a4f78) before build_products read a brand's retailer cells. test_console_2j2 pins them byte for byte. 2N-1: status follows the issue rule (console_parity.status_for).",
  "ws": {
   "all": [
    {
@@ -570,7 +570,7 @@
     "route": "true-value",
     "runs": 1,
     "sku": "snug-fit-overnight-s6",
-    "status": "none",
+    "status": "wrong",
     "wrong_runs": 1
    },
    {
@@ -641,7 +641,7 @@
     "route": "true-value",
     "runs": 1,
     "sku": "cloud-wipes-3pack",
-    "status": "none",
+    "status": "exact",
     "wrong_runs": 0
    }
   ],

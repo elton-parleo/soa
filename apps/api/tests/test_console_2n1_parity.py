@@ -157,3 +157,69 @@ def test_b3_a_per_unit_run_reads_per_unit_on_answers_and_true_value():
     assert rm.aggregate_cell([{'stated': '0.33', 'outcome': 'per_unit'}, {'stated': '27.97', 'outcome': 'exact'}]) == \
         ('exact', '27.97')
     assert rm.TV_STATUS['per_unit'] == 'per_unit' and rm.PER_UNIT_LABEL == 'per-diaper price, not comparable'
+
+
+# ---------------------------------------------------------------------------
+# B4: product rows
+# ---------------------------------------------------------------------------
+
+def _amore_quotes(amazon='exact', walmart='exact'):
+    """AMORE Size 1 on FL14: six agents at each of Amazon, Walmart and Target; Target walled every read."""
+    agents = ('ChatGPT', 'Gemini', 'Google AI Mode', 'Perplexity', 'Copilot', 'Claude')
+    out = []
+    for a in agents:
+        out.append({'agent': a, 'asked_at': 'Amazon', 'quoted': '36.18', 'verdict': amazon})
+        out.append({'agent': a, 'asked_at': 'Walmart', 'quoted': '36.47', 'verdict': walmart})
+        out.append({'agent': a, 'asked_at': 'Target', 'quoted': '36.99', 'verdict': 'unverifiable'})
+    return out
+
+
+def test_b4_unverifiable_only_when_every_retailer_was_walled():
+    before = '6 of 6 agents quoted a price that could not be checked'
+    issue, _d = nv.issue_sentence(_amore_quotes(), 6, {})
+    assert issue != before and issue == '6 of 6 agents quoted the right price. Target could not be read'
+    assert nv.issue_rule(_amore_quotes()) == ('product.right', 12, 12)
+    # Pure Protection: Amazon read and wrong, Target walled
+    pure = [q for q in _amore_quotes(amazon='wrong') if q['asked_at'] != 'Walmart']
+    assert nv.issue_sentence(pure, 6, {})[0] == '6 of 6 agents quoted a wrong price at Amazon. Target could not be read'
+    # every retailer walled: the issue is the unchecked price, as before
+    walled = [{**q, 'verdict': 'unverifiable'} for q in _amore_quotes()]
+    assert nv.issue_sentence(walled, 6, {})[0] == before
+
+
+def test_b4_the_console_issue_follows_the_same_rule():
+    quotes = [{'outcome': {'exact': 'exact', 'unverifiable': 'unverifiable'}[q['verdict']], 'reason': None,
+               'retailer': {'Amazon': 'amazon.com', 'Walmart': 'walmart.com', 'Target': 'target.com'}[q['asked_at']]}
+              for q in _amore_quotes()]
+    assert parity.product_issue(quotes) == ('product.right', 'Right in 12 of 12 runs. Target could not be read.')
+    walled = [{**q, 'outcome': 'unverifiable'} for q in quotes]
+    assert parity.product_issue(walled)[0] == 'product.unverifiable'
+
+
+def test_b4_the_issue_is_its_own_sentence():
+    facts = {'kind': nv.PRODUCT, 'issue': '6 of 6 agents quoted the right price. Target could not be read'}
+    line = 'Claude quoted $36.18 at Amazon. Amazon charged $36.18 on Oct 23 6 of 6 agents quoted the right price. Target could not be read.'
+    assert nv.normalise(line, facts) == ('Claude quoted $36.18 at Amazon. Amazon charged $36.18 on Oct 23. 6 of 6 agents '
+                                         'quoted the right price. Target could not be read.')
+    ok = 'Claude quoted $36.18 at Amazon. Amazon charged $36.18 on Oct 23. ' + facts['issue'] + '.'
+    assert nv.normalise(ok, facts) == ok
+
+
+def test_b4_the_check_label_follows_the_issue_rule():
+    """Swaddlers Newborn on FL14: "No price quoted in 12 of 18 runs" beside a wrong cell read Wrong price."""
+    def cell(quotes, status):
+        return {'quotes': quotes, 'by_surface': {'all': {'status': status, 'quoted': '$9.99'}}, 'live': '$9.99'}
+    q = lambda run, outcome, stated: {'agent': 'chatgpt', 'surface': 'grounded_api', 'outcome': outcome,  # noqa: E731
+                                      'stated': stated, 'run': f'run-{run}'}
+    walmart = [q(i, 'absent', None) for i in range(6)]
+    amazon = [q(10 + i, 'absent', None) for i in range(6)]
+    target = [q(20, 'wrong', '24.99'), q(21, 'wrong', '24.99')] + [q(22 + i, 'exact', '27.97') for i in range(4)]
+    tv = {'retailer_columns': [{'id': 'pampers.com', 'you': True}, {'id': 'walmart.com'}, {'id': 'amazon.com'},
+                               {'id': 'target.com'}],
+          'rows': [{'product': 'Pampers Swaddlers Newborn', 'sku': 'nb', 'cells': {
+              'pampers.com': cell([], 'none'), 'walmart.com': cell(walmart, 'missed'),
+              'amazon.com': cell(amazon, 'missed'), 'target.com': cell(target, 'wrong')}}]}
+    [row] = parity.build_products(tv, [], 'all', variant_of_run={}, reason_of_run={})
+    assert row['issue'] == 'No price quoted in 12 of 18 runs.'
+    assert (row['cell_status'], row['status']) == ('wrong', 'none')
+    assert parity.status_for('product.right', 'partial') == 'partial' and parity.status_for('product.wrong', 'exact') == 'wrong'

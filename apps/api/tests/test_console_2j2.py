@@ -92,8 +92,10 @@ def test_each_surface_counts_its_own_quotes_across_retailers(http, db):
     body = _get(http, 'overview', cycle=_brand(db))
     rows = {s: {p['name']: p for p in v['products']} for s, v in body['by_surface'].items()}
     consumer = rows['consumer_ui']['Swaddlers NB 84']
-    # AI Mode quotes each retailer's own price; Copilot another brand's product
-    assert consumer['runs'] == 4 and consumer['status'] == 'exact' and consumer['wrong_runs'] == 0
+    # AI Mode quotes each retailer's own price; Copilot another brand's product. 2N-1: the
+    # status follows the issue ("Priced another brand's product in 2 of 4 runs"), never the cells'
+    assert consumer['runs'] == 4 and consumer['status'] == 'wrong' and consumer['wrong_runs'] == 0
+    assert consumer['issue_rule'] == 'product.other_brand'
     assert consumer['quoted'] == 'Walmart $24.97, 1 of 4 runs (Google AI Mode 1). Amazon $27.97, 1 of 4 runs ' \
                                  '(Google AI Mode 1). No price, 2 of 4 runs (Copilot 2)'
     assert rows['grounded_api']['Swaddlers NB 84']['runs'] == 8
