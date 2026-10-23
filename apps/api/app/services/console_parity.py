@@ -344,6 +344,11 @@ def extend_visibility(body: dict, ours: Optional[str]) -> dict:
     body['headlines'] = heads
     body['matrix'] = {s: visibility_matrix(rows, s) for s in surface_list}
     body['by_stage'] = {s: visibility_by_stage(rows, s) for s in surface_list}
+    # 2N-1: a brand's ranking opens on its brand-choice answers, and the stage table can follow it
+    if (body.get('ranking') or {}).get('default_tier') == rm.VIS_BRAND_CHOICE:
+        for s in surface_list:
+            mine = [r for r in rows if _on(r.get('surface'), s) and r.get('answered') and _brand_choice(r)]
+            body['by_stage'][s]['stages_by_tier'][rm.VIS_BRAND_CHOICE] = visibility_by_stage(mine, s)['stages']
     return body
 
 
