@@ -292,3 +292,83 @@ def test_b5_the_brand_s_own_names_are_its_site_in_routing():
     table = {r['name']: r for r in block['rows']}
     assert table['pampers.com']['first'] == 3 and table['pampers.com']['you'] is True
     assert table['Other stores']['note'] == 'Hy-Vee' and table['Amazon']['first'] == 1
+
+
+# ---------------------------------------------------------------------------
+# B6: the live deal, Changes, Impact
+# ---------------------------------------------------------------------------
+
+FL14_DEAL = {'retailer_domain': 'amazon.com', 'kind': 'rollback_or_was', 'value': 25, 'value_unit': 'percent',
+             'text': '$36.18 with 25 percent savings -25% $ 36 . 18 $0.27 per count ( $0.27 $0.27 / count) List Price: $47.99',
+             'variants': [{'sku': 'amore-1', 'product_name': 'Pampers AMORE Diapers', 'variant_label': 'Size 1, 132 ct',
+                           'shelf_price': '36.18', 'price': '36.18', 'was_price': '47.99'}]}
+
+
+def test_b6_the_deal_is_titled_from_its_fields_in_its_retailer_s_words():
+    from soa_shared import promo_pass_through as ppt
+    assert ppt.title(FL14_DEAL) == 'Amazon: 25% off list price on AMORE Size 1, $36.18 from $47.99'
+    assert ppt.short(FL14_DEAL) == 'Amazon list price cut'          # was "Amazon Rollback"
+    assert [ppt.kind_words({**FL14_DEAL, 'retailer_domain': d}) for d in
+            ('walmart.com', 'amazon.com', 'target.com', 'kroger.com')] == ['Rollback', 'list price cut', 'sale', 'sale price']
+    assert ppt.evidence(FL14_DEAL['text']) == '$36.18 with 25 percent savings -25% List Price: $47.99'
+    promo = {'n': 6, 'k': 3, 'subscribe': 0, 'per_deal': [{'title': ppt.title(FL14_DEAL), 'short': ppt.short(FL14_DEAL),
+                                                           'asked': 6, 'named': 3}]}
+    body = rm.build_prove(promo, {'deals': [FL14_DEAL], 'walled': []}, 'Pampers', '2026-10-23')
+    [row] = body['rows']
+    assert row['title'] == 'Amazon: 25% off list price on AMORE Size 1, $36.18 from $47.99' and row['kind_label'] == 'list price cut'
+    assert row['detail'] == ('Live on Pampers AMORE Diapers. Pampers AMORE Diapers $47.99 to $36.18. '
+                             'The shelf said: $36.18 with 25 percent savings -25% List Price: $47.99.')
+    assert body['aside']['sub'] == 'Answers named Amazon list price cut 3 times.'
+
+
+def _brand_vis(first_you=5, first_huggies=9, named=25, n=29, coverage=(45, 49), retired=(10, 0)):
+    rows = []
+    for i in range(n):
+        you_first = i < first_you
+        rows.append({'answered': True, 'brand_choice': True, 'surface': 'grounded_api',
+                     'first': {'name': 'Pampers', 'you': True} if you_first else
+                     ({'name': 'Huggies', 'you': False} if i < first_you + first_huggies else None),
+                     'named': [{'name': 'Pampers', 'you': True}] if i < named else []})
+    return {'byQuestion': rows,
+            'routing': {'coverage': {'all': {'answers': coverage[1], 'named_two_plus': coverage[0]}},
+                        'retailers': ['Walmart', 'Target', 'Amazon']},
+            'retired_named': {'lines': [{'line': 'Pure Protection', 'label': 'Pure',
+                                         'successor': {'label': 'AMORE'},
+                                         'brand_choice': {'all': {'answers': n, 'named': retired[0],
+                                                                  'successor_named': retired[1]}}}]}}
+
+
+def test_b6_the_brand_s_first_cycle_changes_in_the_demo_s_order():
+    lines = rm.brand_changes(_brand_vis(), None, None, 'all', compared=False, brand='Pampers')
+    assert [(c['label'], c['delta']) for c in lines] == [
+        ('Retired product named', 'new'), ('First pick, category questions', 'new'), ('Retailer coverage', 'new')]
+    assert lines[0]['detail'] == 'Pure in 10, AMORE in 0 in 29 category answers. First cycle with this question.'
+    assert lines[1]['detail'] == 'Pampers 5 of 29, Huggies 9. First cycle with these questions.'
+    assert lines[2]['detail'] == ('45 of 49 where-to-buy answers named at least two of Walmart, Target and Amazon. '
+                                  'First cycle with this question.')
+    assert [c['tone'] for c in lines] == ['bad', 'warn', 'ok']
+    # afterwards, a delta as 2K-4's lines take one
+    later = rm.brand_changes(_brand_vis(first_you=8, coverage=(47, 49), retired=(6, 2)), _brand_vis(), 'FL14', 'all',
+                             compared=True, brand='Pampers')
+    assert [(c['delta'], c['tone']) for c in later] == [('-4', 'ok'), ('+3', 'ok'), ('+2', 'ok')]
+    assert later[1]['detail'] == '8 of 29 this cycle against 5 of 29 in FL14.'
+
+
+def test_b6_impact_s_baseline_has_the_demo_s_four():
+    rows = rm.brand_baseline(attribute={'n': 79, 'k': 61, 'site': 'pampers.com'}, vis=_brand_vis(),
+                             promo={'n': 50, 'k': 4}, brand='Pampers', day='Oct 23')
+    assert [(r['label'], r['value'], r['note']) for r in rows] == [
+        ('Attribute accuracy', '61 of 79', 'Weight range matches pampers.com, Oct 23'),
+        ('Retailer coverage', '45 of 49', 'Names 2 of Walmart, Target, Amazon'),
+        ('Promo pass-through', '4 of 50', 'Named a deal live that day'),
+        ('Category presence', '25 of 29', 'Pampers named, first in 5')]
+    # a measure not taken this cycle is left out, never a zero
+    assert [r['key'] for r in rm.brand_baseline(attribute=None, vis={}, promo=None, brand='Pampers', day='Oct 23')] == []
+
+
+def test_b6_impact_counts_brand_choice_answers_when_the_cycle_asked_comparison():
+    from app.services import console_revenue as rev
+    rows = [{'answered': True, 'brand_choice': True, 'tier': 'category_control', 'agent': 'chatgpt', 'surface': 'grounded_api', 'run': 'run-1', 'first': {'name': 'Huggies', 'you': False}},
+            {'answered': True, 'brand_choice': True, 'tier': 'comparison', 'agent': 'chatgpt', 'surface': 'grounded_api', 'run': 'run-2', 'first': {'name': 'Pampers', 'you': True}}]
+    shares = rev.revenue_shares(rows, [], 0.3, kind='brand')
+    assert shares['set'] == 'brand-choice' and (shares['lost']['n'], shares['lost']['of']) == (1, 2)

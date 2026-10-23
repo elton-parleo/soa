@@ -3597,11 +3597,16 @@ def build_prove(promo: Optional[dict], deals: Optional[dict], brand: Optional[st
         where = ', '.join(dict.fromkeys(_variant_words(v) for v in variants))
         prices = '. '.join(dict.fromkeys(f"{_variant_words(v)} {_price_words(v)}" for v in variants if _price_words(v)))
         detail = f"Live on {where}." + (f" {prices}." if prices else '')
+        # 2N-1: the shelf's own words, trimmed of its price-per-count noise, go here, never in the title
+        said = ppt.evidence(next((v.get('evidence') for v in variants if v.get('evidence')), None) or deal.get('text'))
+        if said and said.rstrip('.').lower() not in ppt.title(deal).lower():
+            detail += f" The shelf said: {said.rstrip('.')}."
         asked, named = tally['asked'], tally['named']
         rows.append({'retailer': af.retailer_name(deal.get('retailer_domain')), 'retailer_domain': deal.get('retailer_domain'),
                      'title': ppt.title(deal), 'detail': detail, 'terms': _deal_terms(deal),
                      'agents': t['prove.agents'].format(k=named, n=asked) if asked else 'Not asked this cycle',
-                     'value': _deal_value(deal), 'kind': deal.get('kind'), 'asked': asked, 'named': named,
+                     'value': _deal_value(deal), 'kind': deal.get('kind'), 'kind_label': ppt.kind_words(deal),
+                     'asked': asked, 'named': named,
                      'tone': 'ok' if asked and named * 2 >= asked else ('warn' if named else 'bad'),
                      'skus': len(variants)})
     rows.sort(key=lambda r: (-r['asked'], r['named'], r['retailer'] or ''))
@@ -3628,3 +3633,142 @@ def promo_baseline(promo: Optional[dict]) -> Optional[dict]:
         return None
     return {'key': 'promo', 'label': PROMO_TEMPLATES['baseline.label'], 'value': f"{promo['k']} of {promo['n']}",
             'note': PROMO_TEMPLATES['baseline.note'], 'n': promo['n'], 'k': promo['k']}
+
+
+# ─── The brand's first-cycle Changes and Impact baseline (2N-1) ────────────
+#
+# The demo's Changes for a brand, beside the weight range (2M-1) and the
+# deals named (2M-2): "Retired product named", "First pick, category
+# questions", "Retailer coverage". Each is `new` on a first cycle (or one
+# not compared), and a delta afterwards as 2K-4's lines take one. Impact's
+# baseline holds the same measures: Attribute accuracy, Retailer coverage,
+# Promo pass-through, Category presence. Read from Visibility's blocks; no
+# model.
+
+BRAND_CHANGE_TEMPLATES = {
+    'retired.label': 'Retired product named',
+    'retired.new': '{named} in {answers} category answers. First cycle with this question.',
+    'first.label': 'First pick, category questions',
+    'first.new': '{brand} {first} of {n}{rivals}. First cycle with these questions.',
+    'coverage.label': 'Retailer coverage',
+    'coverage.new': '{k} of {n} where-to-buy answers named at least two of {names}. First cycle with this question.',
+    'detail': '{a} of {n} this cycle against {b} of {m} in {code}.',
+    'baseline.attribute': 'Attribute accuracy',
+    'baseline.attribute.note': 'Weight range matches {site}, {date}',
+    'baseline.coverage': 'Retailer coverage',
+    'baseline.coverage.note': 'Names 2 of {names}',
+    'baseline.category': 'Category presence',
+    'baseline.category.note': '{brand} named, first in {first}',
+}
+
+
+def _change(label: str, a: int, n: int, then: Optional[tuple], code: Optional[str], *, up_good: bool,
+            new_detail: str, new_tone: str, route: str, metric: str) -> dict:
+    t = BRAND_CHANGE_TEMPLATES
+    if then is not None and then[1]:
+        b, m = then
+        d = a - b
+        delta, direction = (f"+{d}" if d > 0 else str(d) if d < 0 else '0'), ('up' if d > 0 else 'down' if d < 0 else 'flat')
+        tone = 'neu' if direction == 'flat' else ('ok' if (direction == 'up') == up_good else 'bad')
+        detail = t['detail'].format(a=a, n=n, b=b, m=m, code=code)
+    else:
+        b = m = None
+        delta, direction, tone, detail = 'new', 'flat', new_tone, new_detail
+    return {'label': label, 'delta': delta, 'dir': direction, 'tone': tone, 'detail': detail, 'route': route,
+            'metric': metric, 'now': a, 'of_now': n, 'prev': b, 'of_prev': m}
+
+
+def _retired_counts(vis: Optional[dict], surface: str) -> Optional[tuple]:
+    lines = ((vis or {}).get('retired_named') or {}).get('lines') or []
+    cells = [(line, (line.get('brand_choice') or {}).get(surface)) for line in lines]
+    cells = [(line, c) for line, c in cells if c and c.get('answers')]
+    if not cells:
+        return None
+    return sum(c['named'] for _l, c in cells), cells[0][1]['answers'], cells
+
+
+def _first_counts(vis: Optional[dict], surface: str) -> Optional[tuple]:
+    rows = [r for r in (vis or {}).get('byQuestion') or []
+            if r.get('answered') and r.get('brand_choice') and surfaces.on_surface(r.get('surface'), surface)]
+    if not rows:
+        return None
+    firsts = Counter((r.get('first') or {}).get('name') for r in rows if r.get('first'))
+    ours = next((n for r in rows for n in [r.get('first') or {}] if n.get('you')), None)
+    mine = sum(1 for r in rows if (r.get('first') or {}).get('you'))
+    named = sum(1 for r in rows if any(n.get('you') for n in r.get('named') or []))
+    rivals = [(k, v) for k, v in firsts.most_common() if k and k != (ours or {}).get('name')]
+    return mine, len(rows), rivals, named
+
+
+def _coverage_counts(vis: Optional[dict], surface: str) -> Optional[tuple]:
+    routing = (vis or {}).get('routing') or {}
+    c = (routing.get('coverage') or {}).get(surface)
+    if not c or not c.get('answers'):
+        return None
+    return c['named_two_plus'], c['answers'], routing.get('retailers') or []
+
+
+def brand_changes(vis: dict, prev_vis: Optional[dict], prev_code: Optional[str], surface: str, *, compared: bool,
+                  brand: str) -> List[dict]:
+    """2N-1: the brand's Changes lines on `surface`, in the demo's order:
+    Retired product named, First pick (category questions), Retailer
+    coverage. A line appears when this cycle measured it."""
+    t = BRAND_CHANGE_TEMPLATES
+    prev = prev_vis if compared else None
+    out = []
+    retired = _retired_counts(vis, surface)
+    if retired:
+        named, answers, cells = retired
+        then = _retired_counts(prev, surface)
+        words = ', '.join(f"{(line.get('label') or line.get('line'))} in {c['named']}" + (
+            f", {line['successor'].get('label')} in {c.get('successor_named') or 0}"
+            if line.get('successor') and c.get('successor_named') is not None else '') for line, c in cells)
+        out.append(_change(t['retired.label'], named, answers, then[:2] if then else None, prev_code, up_good=False,
+                           new_detail=t['retired.new'].format(named=words, answers=answers),
+                           new_tone='bad' if named else 'ok', route='visibility', metric='retired'))
+    first = _first_counts(vis, surface)
+    if first:
+        mine, n, rivals, _named = first
+        then = _first_counts(prev, surface)
+        lead = rivals[0][1] if rivals else 0
+        said = ''.join(f", {k} {v}" for k, v in rivals[:2])
+        out.append(_change(t['first.label'], mine, n, then[:2] if then else None, prev_code, up_good=True,
+                           new_detail=t['first.new'].format(brand=brand, first=mine, n=n, rivals=said),
+                           new_tone='ok' if mine > lead else 'warn', route='visibility', metric='first_category'))
+    coverage = _coverage_counts(vis, surface)
+    if coverage:
+        k, n, names = coverage
+        then = _coverage_counts(prev, surface)
+        listed = [n_ for n_ in names][:3]
+        out.append(_change(t['coverage.label'], k, n, then[:2] if then else None, prev_code, up_good=True,
+                           new_detail=t['coverage.new'].format(k=k, n=n, names=_and(listed) if listed else 'its retailers'),
+                           new_tone='ok' if k * 2 >= n else 'bad', route='visibility', metric='coverage'))
+    return out
+
+
+def brand_baseline(*, attribute: Optional[dict], vis: Optional[dict], promo: Optional[dict], brand: str,
+                   day: Optional[str]) -> List[dict]:
+    """2N-1: Impact's baseline for a brand, in the demo's order: Attribute
+    accuracy, Retailer coverage, Promo pass-through, Category presence. Each
+    {key, label, value, note, n, k}; a measure this cycle did not take is left out."""
+    t = BRAND_CHANGE_TEMPLATES
+    out = []
+    if attribute:
+        out.append({'key': 'attribute', 'label': t['baseline.attribute'], 'value': f"{attribute['k']} of {attribute['n']}",
+                    'note': t['baseline.attribute.note'].format(site=attribute.get('site') or 'the brand site',
+                                                               date=day or 'this cycle'),
+                    'n': attribute['n'], 'k': attribute['k']})
+    coverage = _coverage_counts(vis, surfaces.ALL)
+    if coverage:
+        k, n, names = coverage
+        out.append({'key': 'coverage', 'label': t['baseline.coverage'], 'value': f"{k} of {n}",
+                    'note': t['baseline.coverage.note'].format(names=', '.join(names[:3]) or 'its retailers'), 'n': n, 'k': k})
+    promo_row = promo_baseline(promo)
+    if promo_row:
+        out.append(promo_row)
+    first = _first_counts(vis, surfaces.ALL)
+    if first:
+        mine, n, _rivals, named = first
+        out.append({'key': 'category', 'label': t['baseline.category'], 'value': f"{named} of {n}",
+                    'note': t['baseline.category.note'].format(brand=brand, first=mine), 'n': n, 'k': named})
+    return out

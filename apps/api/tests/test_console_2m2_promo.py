@@ -220,8 +220,9 @@ def test_changes_and_the_impact_baseline(http, db, upstream):
         "multi-buy ran on 5 SKUs and 2 of 25 answers named it. First cycle with this question.")
     revenue = _get(http, 'revenue', merchant=WS)
     _dump('revenue-2m2.json', revenue)
-    assert revenue['baseline'][-1] == {'key': 'promo', 'label': 'Promo pass-through', 'value': '5 of 50',
-                                       'note': 'Named a deal live that day', 'n': 50, 'k': 5}
+    # 2N-1: one of the brand's four, in the demo's order
+    assert next(b for b in revenue['baseline'] if b['key'] == 'promo') == {
+        'key': 'promo', 'label': 'Promo pass-through', 'value': '5 of 50', 'note': 'Named a deal live that day', 'n': 50, 'k': 5}
     assert rm.promo_baseline(None) is None
     assert rm.promo_baseline({'n': 50, 'k': 5}) == {'key': 'promo', 'label': 'Promo pass-through', 'value': '5 of 50',
                                                      'note': 'Named a deal live that day', 'n': 50, 'k': 5}
@@ -245,10 +246,11 @@ def test_the_trade_promotions_table(http, db, upstream):
     assert body['state'] == 'measured' and body['title'] == 'Trade promotions'
     assert [(r['title'], r['agents'], r['value'], r['terms'], r['tone']) for r in body['rows']] == [
         ('Amazon: save 40% on 1 when you buy 2', 'Named 2 of 25', '40% off', 'Amazon, when you buy 2', 'warn'),
-        ('Walmart: Rollback', 'Named 2 of 10', '$10.00', 'Rollback', 'warn'),
+        # 2N-1: the title from the deal's fields ($59.77 to $49.77 is 17% off), on no line: it ran on two
+        ('Walmart: Rollback, 17% off', 'Named 2 of 10', '$10.00', 'Rollback', 'warn'),
         ("Sam's Club: $15 Sam's Cash on $100 of P&G", 'Named 1 of 5', '$15.00', "Sam's Cash", 'warn')]
-    assert body['rows'][1]['detail'] == ('Live on Pampers Swaddlers v5, Pampers Swaddlers v6. Pampers Swaddlers v5 '
-                                         '$59.77 to $49.77. Pampers Swaddlers v6 $59.77 to $49.77.')
+    assert body['rows'][1]['detail'].startswith('Live on Pampers Swaddlers v5, Pampers Swaddlers v6. Pampers Swaddlers v5 '
+                                                '$59.77 to $49.77. Pampers Swaddlers v6 $59.77 to $49.77.')
     assert body['aside']['value'] == '5 of 50' and body['aside']['kick'] == 'Promo pass-through, Oct 14'
     assert body['aside']['label'] == 'cheapest-place answers named a deal that was live on a shelf that day'
     assert body['aside']['sub'].startswith("Answers named Amazon multi-buy twice, Walmart Rollback twice and Sam's Club")
