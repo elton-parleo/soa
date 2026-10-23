@@ -3592,9 +3592,11 @@ def _deal_terms(deal: dict) -> str:
     from soa_shared import retailers as af
     if deal.get('kind') == 'member_cash':
         return deal.get('program') or 'Members'
-    words = {'multi_buy': deal.get('terms') or 'Multi-buy', 'rollback_or_was': 'Rollback' if 'rollback' in
-             (deal.get('text') or '').lower() else 'Was price', 'sale': 'Sale', 'coupon': 'Coupon',
-             'other': deal.get('terms') or 'Deal'}
+    # 2N-1: a price cut in its retailer's words (Rollback, List price cut, Sale, Sale price)
+    cut = ppt.kind_words(deal)
+    words = {'multi_buy': deal.get('terms') or 'Multi-buy',
+             'rollback_or_was': 'Rollback' if 'rollback' in (deal.get('text') or '').lower() else cut[0].upper() + cut[1:],
+             'sale': 'Sale', 'coupon': 'Coupon', 'other': deal.get('terms') or 'Deal'}
     term = words.get(deal.get('kind'), 'Deal')
     return f"{af.retailer_name(deal.get('retailer_domain'))}, {term}" if deal.get('kind') == 'multi_buy' else term
 
@@ -3626,7 +3628,7 @@ def build_prove(promo: Optional[dict], deals: Optional[dict], brand: Optional[st
         detail = f"Live on {where}." + (f" {prices}." if prices else '')
         # 2N-1: the shelf's own words, trimmed of its price-per-count noise, go here, never in the title
         said = ppt.evidence(next((v.get('evidence') for v in variants if v.get('evidence')), None) or deal.get('text'))
-        if said and said.rstrip('.').lower() not in ppt.title(deal).lower():
+        if said and re.search(r"\d", said) and said.rstrip('.').lower() not in ppt.title(deal).lower():
             detail += f" The shelf said: {said.rstrip('.')}."
         asked, named = tally['asked'], tally['named']
         rows.append({'retailer': af.retailer_name(deal.get('retailer_domain')), 'retailer_domain': deal.get('retailer_domain'),

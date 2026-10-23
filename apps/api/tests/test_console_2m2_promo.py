@@ -315,7 +315,9 @@ def test_fl14_s_deal_titled_from_its_fields(http, db, upstream):
     prove = _get(http, 'prove', merchant=WS)
     row = next(r for r in prove['rows'] if r['retailer_domain'] == 'amazon.com' and r['kind'] == 'rollback_or_was')
     assert row['title'] == 'Amazon: 25% off list price on AMORE Size 1, $36.18 from $47.99'
-    assert row['kind_label'] == 'list price cut'
+    assert (row['kind_label'], row['terms']) == ('list price cut', 'List price cut')
+    # a shelf's words with no figure in them ("on the page") stay out of the detail
+    assert all('The shelf said: on the page' not in r['detail'] for r in prove['rows'])
     assert row['detail'].endswith('The shelf said: $36.18 with 25 percent savings -25% List Price: $47.99.')
     overview = _get(http, 'overview', merchant=WS)
     revenue = _get(http, 'revenue', merchant=WS)
