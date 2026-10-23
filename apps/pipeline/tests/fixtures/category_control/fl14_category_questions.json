@@ -1,0 +1,18 @@
+{
+ "_note": "FL14-pampers-20261023's AI-written category-control questions, as far as the 2O-1 brief quotes them. The brief names 7 of the 20: the seven that drew no brand from any agent on any surface, verbatim (the seventh is cut off in the brief and is kept as it was given). The other 13 are not in this repository and were not read from production. Replace with an export of FL14's soa_queries (query_text, tier) to check all 20.",
+ "cycle_code": "FL14-pampers-20261023",
+ "of": 20,
+ "drew_no_brand": [
+  "How do parents decide between disposable diapers and other baby care options?",
+  "What are the main differences in baby diaper materials and absorbency?",
+  "What baby care products do new parents usually buy first for diapering?",
+  "How do I know if a diaper is good for preventing leaks during naps and overnight?",
+  "What diaper features matter most for comfort, dryness, and rash prevention?",
+  "What are the most important factors when choosing baby diapers for sensitive skin?",
+  "How often do parents usually restock…"
+ ],
+ "demo": [
+  "what's the safest diaper for a newborn",
+  "best diapers for sensitive skin"
+ ]
+}
