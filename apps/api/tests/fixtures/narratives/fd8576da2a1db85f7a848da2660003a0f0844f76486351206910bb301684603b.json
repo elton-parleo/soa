@@ -1,0 +1,39 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 1119,
+    "output_tokens": 65,
+    "total_tokens": 1184
+   }
+  },
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 1119,
+    "output_tokens": 45,
+    "total_tokens": 1164
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Copilot",
+  "brand": "Pampers",
+  "brand_verdict": "fabricated",
+  "kind": "answer",
+  "meaning": [
+   "The answer stated something about the brand that the brand never published and no source backs."
+  ],
+  "question": "question 1054",
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "why": [
+   "brand_fabricated"
+  ]
+ },
+ "facts_digest": "fd8576da2a1db85f7a848da2660003a0f0844f76486351206910bb301684603b",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "98c06f00000b4448d8cd7ea479d9fee67ba66858ead45e2a1d58b0e456f7ff2e",
+ "subject": "answer:run-70323"
+}

@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Perplexity first picked Huggies, then Pampers, on \\\"question 1013\\\".\"}",
+   "usage": {
+    "input_tokens": 1131,
+    "output_tokens": 34,
+    "total_tokens": 1165
+   }
+  },
+  {
+   "response": "{\"line\":\"Perplexity first picked Huggies, then Pampers, on \\\"question 1013\\\".\"}",
+   "usage": {
+    "input_tokens": 1131,
+    "output_tokens": 34,
+    "total_tokens": 1165
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Perplexity",
+  "brand": "Pampers",
+  "first pick": "Huggies",
+  "kind": "answer",
+  "meaning": [
+   "On a question that let the assistant choose a brand, its first pick was another brand."
+  ],
+  "named in order": [
+   "Huggies",
+   "Pampers"
+  ],
+  "question": "question 1013",
+  "surface": "API with search grounding",
+  "why": [
+   "rival_first_pick"
+  ]
+ },
+ "facts_digest": "881926ba449b74f85b5f58d46484fc94a0fa3237701277948a2a671463ae4d6e",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "5804d3e90e212bb9713e20751d8f91464e11f554acab9ec57338552b90b1593c",
+ "subject": "answer:run-70076"
+}

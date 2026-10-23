@@ -1,0 +1,52 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini quoted $30.97 for Pampers Swaddlers S1 96, but Walmart charged $27.97 on Oct 19. The quote does not match the retailer price.\"}",
+   "usage": {
+    "input_tokens": 1212,
+    "output_tokens": 52,
+    "total_tokens": 1264
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini gives Walmart $30.97 for Pampers. Walmart charged $27.97 that day.\"}",
+   "usage": {
+    "input_tokens": 1212,
+    "output_tokens": 34,
+    "total_tokens": 1246
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Gemini",
+  "agent_quoted": [
+   {
+    "direction": "quoted above the retailer's price",
+    "price_quoted": "30.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "quoted above the retailer's price",
+  "question": "What does the Pampers Swaddlers S1 96 cost at walmart.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "27.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "a2901cf60208646d111bbaa85c2d348c5e7a38e26b43492357ee9b3284209689",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "9b9572d57798adbe2430aeeece6284e37414522c9509900a4f765908aa9481c5",
+ "subject": "answer:run-90014"
+}

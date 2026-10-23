@@ -1,0 +1,55 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Perplexity said Pampers Cruisers 360 costs about $0.38 per diaper. Walmart charged $39.97 that day.\"}",
+   "usage": {
+    "input_tokens": 1239,
+    "output_tokens": 41,
+    "total_tokens": 1280
+   }
+  },
+  {
+   "response": "{\"line\":\"Perplexity said Pampers Cruisers 360 run about $0.38 per diaper. Walmart charged $39.97 that day.\"}",
+   "usage": {
+    "input_tokens": 1239,
+    "output_tokens": 41,
+    "total_tokens": 1280
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Perplexity",
+  "agent_quoted": [
+   {
+    "direction": "per-unit quote, not comparable",
+    "price_quoted": "0.38",
+    "verdict": "wrong"
+   }
+  ],
+  "answer_spans": [
+   "Pampers Cruisers 360 run about $0.38 per diaper."
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "per-unit quote, not comparable",
+  "question": "What does the Pampers Cruisers 360 S4 104 cost at walmart.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "39.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "064fe399265eff42ab2bba123377a1ccbd0bee6c7bb3977abe2afebffc4575a9",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "83f6e573e8f59419e48c0a45ac60291fe7f5daf0414d574dae3a2a759ff331ec",
+ "subject": "answer:run-90052"
+}

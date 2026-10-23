@@ -1,0 +1,52 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini quoted $42.97, but Walmart charged $39.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1213,
+    "output_tokens": 33,
+    "total_tokens": 1246
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini quoted $42.97 but Walmart charged $39.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1213,
+    "output_tokens": 32,
+    "total_tokens": 1245
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Gemini",
+  "agent_quoted": [
+   {
+    "direction": "quoted above the retailer's price",
+    "price_quoted": "42.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "quoted above the retailer's price",
+  "question": "What does the Pampers Cruisers 360 S4 104 cost at walmart.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "39.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "ddf1483a1f12778ef237496e0f80d0b713cee9aace18e7fca7f1a74ab47d09f0",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "04e887f7984f769d66c1ac9152a6ea9cae0aaa4548854a3f7c048490b760492a",
+ "subject": "answer:run-90050"
+}

@@ -1,0 +1,53 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 1171,
+    "output_tokens": 118,
+    "total_tokens": 1289
+   }
+  },
+  {
+   "response": "{\"line\":\"Copilot said Pampers Ultra costs $22.97, and Walmart charged $22.97 that day.\"}",
+   "usage": {
+    "input_tokens": 1171,
+    "output_tokens": 35,
+    "total_tokens": 1206
+   }
+  },
+  {
+   "response": "{\"line\":\"Copilot said it gave no price for Pampers Ultra, and Walmart charged $22.97 that day.\"}",
+   "usage": {
+    "input_tokens": 1171,
+    "output_tokens": 35,
+    "total_tokens": 1206
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Copilot",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The only price in the answer was for another brand's product, so it gave none for this one."
+  ],
+  "question": "What does the Pampers Ultra cost at walmart.com?",
+  "reason_code": "other_brand",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "22.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "verdict": "no price",
+  "why": [
+   "other_brand_price"
+  ]
+ },
+ "facts_digest": "472e1a5e498c3bb03429d8a3d4513110201f77d80e9787a3b38bbb9742306bc8",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "860fb014fa19d5a146abd5e02330aa6865c43225cb4920e1b6d4d50eee6e8c46",
+ "subject": "answer:run-90077"
+}

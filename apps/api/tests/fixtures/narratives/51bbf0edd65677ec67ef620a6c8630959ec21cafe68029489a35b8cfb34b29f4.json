@@ -1,0 +1,57 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini quoted $19.97 and $32.97, Walmart charged $29.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1246,
+    "output_tokens": 182,
+    "total_tokens": 1428
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini quoted $19.97 and $32.97 for Pampers Baby Dry S3 136, but Walmart charged $29.97 on Oct 19. Price does not match the retailer's price.\"}",
+   "usage": {
+    "input_tokens": 1246,
+    "output_tokens": 239,
+    "total_tokens": 1485
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Gemini",
+  "agent_quoted": [
+   {
+    "direction": "quoted below the retailer's price",
+    "price_quoted": "19.97",
+    "verdict": "wrong"
+   },
+   {
+    "direction": "quoted above the retailer's price",
+    "price_quoted": "32.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "range includes the retailer's price",
+  "question": "What does the Pampers Baby Dry S3 136 cost at walmart.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "29.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "51bbf0edd65677ec67ef620a6c8630959ec21cafe68029489a35b8cfb34b29f4",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "56bb3252a990a745351c5141dda8fc0c84096a6223fbb192ebf0eb21aa312191",
+ "subject": "answer:run-90038"
+}

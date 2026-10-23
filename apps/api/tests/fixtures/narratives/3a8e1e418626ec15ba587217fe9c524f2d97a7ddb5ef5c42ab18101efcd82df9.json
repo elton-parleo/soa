@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 1127,
+    "output_tokens": 74,
+    "total_tokens": 1201
+   }
+  },
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 1127,
+    "output_tokens": 96,
+    "total_tokens": 1223
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Claude",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "question": "question 1083",
+  "retailer_price_that_day": {
+   "price": "12.09"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "3a8e1e418626ec15ba587217fe9c524f2d97a7ddb5ef5c42ab18101efcd82df9",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "c4c7508665f560db3680fa588bdeec50eece9acf534bbc4d6e262f9d7956c8de",
+ "subject": "answer:run-70498"
+}

@@ -1,0 +1,52 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"ChatGPT quotes $31.97, but Amazon charged $34.97 on Oct 19 for Pampers Pure.\"}",
+   "usage": {
+    "input_tokens": 1205,
+    "output_tokens": 37,
+    "total_tokens": 1242
+   }
+  },
+  {
+   "response": "{\"line\":\"ChatGPT quoted $31.97 for Pampers Pure. Amazon charged $34.97 that day, so the quote was wrong.\"}",
+   "usage": {
+    "input_tokens": 1205,
+    "output_tokens": 40,
+    "total_tokens": 1245
+   }
+  }
+ ],
+ "facts": {
+  "agent": "ChatGPT",
+  "agent_quoted": [
+   {
+    "direction": "quoted below the retailer's price",
+    "price_quoted": "31.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "quoted below the retailer's price",
+  "question": "What does the Pampers Pure cost at amazon.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "34.97",
+   "retailer": "Amazon"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "351b4f04eb1a2a83cfbd2bdf93b63ee778ca4f17a0f1b41d58faac66c38cada7",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "c2841874aad18d0c0f366af2341fce5b9e2fc611154073f4f80f9c7a77a120ba",
+ "subject": "answer:run-90091"
+}

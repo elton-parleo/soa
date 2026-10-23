@@ -1,0 +1,50 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"ChatGPT quoted $34.97. Amazon charged could not be read that day.\"}",
+   "usage": {
+    "input_tokens": 1187,
+    "output_tokens": 30,
+    "total_tokens": 1217
+   }
+  },
+  {
+   "response": "{\"line\":\"ChatGPT quoted $34.97 for Pampers Easy Ups S5 66, but Amazon charged could not be read that day.\"}",
+   "usage": {
+    "input_tokens": 1187,
+    "output_tokens": 40,
+    "total_tokens": 1227
+   }
+  }
+ ],
+ "facts": {
+  "agent": "ChatGPT",
+  "agent_quoted": [
+   {
+    "price_quoted": "34.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "question": "What does the Pampers Easy Ups S5 66 cost at amazon.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "note": "could not be read",
+   "retailer": "Amazon"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "60490c6262d88973cfc8e5e699b5f1050c2f16d32d00e732f8736f8df72ba2b0",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "4aab319d2a576fd2e8a6429e070b158713bd4bb0170dd95f4e893a9b1947c69f",
+ "subject": "answer:run-90067"
+}

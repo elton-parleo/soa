@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 1130,
+    "output_tokens": 58,
+    "total_tokens": 1188
+   }
+  },
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 1130,
+    "output_tokens": 69,
+    "total_tokens": 1199
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Google AI Mode",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "question": "question 1083",
+  "retailer_price_that_day": {
+   "price": "12.09"
+  },
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "42123094ad99bb31e7384404d9b42b48643004b3410f018e4076d8b6ebe6b5be",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "5a2d1892571c7f790673ad8bd45d8e2ffbb015ea66e937f44b26baf4c7f468a9",
+ "subject": "answer:run-70495"
+}

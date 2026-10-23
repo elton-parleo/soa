@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 1129,
+    "output_tokens": 14,
+    "total_tokens": 1143
+   }
+  },
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 1129,
+    "output_tokens": 79,
+    "total_tokens": 1208
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Perplexity",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "question": "question 1083",
+  "retailer_price_that_day": {
+   "price": "12.09"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "fa7c7bca383d3f689985d9eadb67e04614098ea5e78cd92534b9204931abb7ea",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "e2dba6746d5e80a07b893c5c2678eab0fa5dafe36153e6fa84afbfcd03fa55c4",
+ "subject": "answer:run-70496"
+}

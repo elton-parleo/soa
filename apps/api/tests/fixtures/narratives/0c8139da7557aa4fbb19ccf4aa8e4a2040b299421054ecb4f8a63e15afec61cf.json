@@ -1,0 +1,45 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Copilot gave no price for Pampers Cruisers 360 S4 104. Amazon charged $42.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1177,
+    "output_tokens": 242,
+    "total_tokens": 1419
+   }
+  },
+  {
+   "response": "{\"line\":\"Copilot gave no price for Pampers Cruisers 360 S4 104 at Amazon. Amazon charged $42.97 for the other brand product that day.\"}",
+   "usage": {
+    "input_tokens": 1177,
+    "output_tokens": 46,
+    "total_tokens": 1223
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Copilot",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The only price in the answer was for another brand's product, so it gave none for this one."
+  ],
+  "question": "What does the Pampers Cruisers 360 S4 104 cost at amazon.com?",
+  "reason_code": "other_brand",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "42.97",
+   "retailer": "Amazon"
+  },
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "verdict": "no price",
+  "why": [
+   "other_brand_price"
+  ]
+ },
+ "facts_digest": "0c8139da7557aa4fbb19ccf4aa8e4a2040b299421054ecb4f8a63e15afec61cf",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "f607dbccf1cf15691e2264d84e0bbadca0f49ef2db7d3964a824de3efe6fab16",
+ "subject": "answer:run-90059"
+}

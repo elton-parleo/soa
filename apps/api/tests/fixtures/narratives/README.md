@@ -10,4 +10,7 @@ a recording made from another request is refused with the command to re-record.
     python scripts/record_narratives.py --cycle fl13 --force    # re-record everything
     python scripts/record_narratives.py --cycle fl13 --compare  # call again, compare, write nothing
 
-Recorded Oct 21 2026 with gpt-5.4-nano-2026-03-17. The facts are the fixture's, not production's.
+Re-recorded Oct 22 2026 (2L-3a) with gpt-5.4-nano-2026-03-17, on the fixture with the three FL13 shapes
+(`narratives_fixture.fl13_shapes`: an unreadable reference, a quote range around the price, a per-diaper quote).
+A subject whose two calls split line/null holds a third call, the retry. The facts are the fixture's, not
+production's.

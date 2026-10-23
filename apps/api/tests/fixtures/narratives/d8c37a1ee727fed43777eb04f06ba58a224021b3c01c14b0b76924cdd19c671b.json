@@ -1,0 +1,106 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini and Perplexity quoted $29.97 at Walmart. Walmart charged $26.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1287,
+    "output_tokens": 309,
+    "total_tokens": 1596
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini and Perplexity quoted $29.97 at Walmart. Walmart charged $26.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1287,
+    "output_tokens": 422,
+    "total_tokens": 1709
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "feed_sku:908",
+   "PAM-AMORE-3-60",
+   "sku:PAM-AMORE-3-60"
+  ],
+  "brand": "Pampers",
+  "gave_no_price": [
+   "Claude"
+  ],
+  "issue": "2 of 6 agents quoted Walmart above its price",
+  "kind": "product",
+  "price_direction": "quoted above the retailer's price",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "AMORE",
+  "quotes": [
+   {
+    "agent": "ChatGPT",
+    "price": "26.97",
+    "retailer": "Amazon",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "ChatGPT",
+    "price": "26.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "29.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "29.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "29.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "26.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "29.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "29.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   }
+  ],
+  "retailer_prices_that_day": [
+   {
+    "date": "Oct 19",
+    "price": "29.97",
+    "retailer": "Amazon"
+   },
+   {
+    "date": "Oct 19",
+    "price": "26.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "sku": "PAM-AMORE-3-60"
+ },
+ "facts_digest": "d8c37a1ee727fed43777eb04f06ba58a224021b3c01c14b0b76924cdd19c671b",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "2d2105ee4f7c2f5725c867ab2d8671036c02c8a0c12f49f7776b9e28ef3adaab",
+ "subject": "product:feed_sku:908"
+}

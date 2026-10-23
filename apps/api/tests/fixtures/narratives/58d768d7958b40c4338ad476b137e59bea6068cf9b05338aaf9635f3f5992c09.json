@@ -1,0 +1,52 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini quoted $30.97 for Pampers Swaddlers S2 84. Walmart charged $27.97 that day, but the quote does not match.\"}",
+   "usage": {
+    "input_tokens": 1212,
+    "output_tokens": 47,
+    "total_tokens": 1259
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini quoted $30.97, but Walmart charged $27.97 that day for the Pampers Swaddlers S2 84.\"}",
+   "usage": {
+    "input_tokens": 1212,
+    "output_tokens": 42,
+    "total_tokens": 1254
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Gemini",
+  "agent_quoted": [
+   {
+    "direction": "quoted above the retailer's price",
+    "price_quoted": "30.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "quoted above the retailer's price",
+  "question": "What does the Pampers Swaddlers S2 84 cost at walmart.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "27.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "58d768d7958b40c4338ad476b137e59bea6068cf9b05338aaf9635f3f5992c09",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "cbaa0bb27ba8dfb2fa7717df7c81eec5370bd4cd10b38987801363f5442a7669",
+ "subject": "answer:run-90026"
+}

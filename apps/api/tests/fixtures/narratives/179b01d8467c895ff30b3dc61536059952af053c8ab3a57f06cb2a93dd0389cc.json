@@ -1,0 +1,45 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Copilot gave no price for Pampers Swaddlers S1 96. Walmart charged $27.97 that day.\"}",
+   "usage": {
+    "input_tokens": 1177,
+    "output_tokens": 38,
+    "total_tokens": 1215
+   }
+  },
+  {
+   "response": "{\"line\":\"Copilot did not quote a price for Pampers Swaddlers S1 96, so no retailer price was provided for this product.\"}",
+   "usage": {
+    "input_tokens": 1177,
+    "output_tokens": 41,
+    "total_tokens": 1218
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Copilot",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The only price in the answer was for another brand's product, so it gave none for this one."
+  ],
+  "question": "What does the Pampers Swaddlers S1 96 cost at walmart.com?",
+  "reason_code": "other_brand",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "27.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "verdict": "no price",
+  "why": [
+   "other_brand_price"
+  ]
+ },
+ "facts_digest": "179b01d8467c895ff30b3dc61536059952af053c8ab3a57f06cb2a93dd0389cc",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "f31e42c2db4f8d566ea2e8ab90310da6910205535c65c8b0a98a9cb20d469bf5",
+ "subject": "answer:run-90017"
+}

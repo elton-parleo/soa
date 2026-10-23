@@ -1,0 +1,53 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Copilot said Pampers Swaddlers S1 96, and Amazon charged $30.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1176,
+    "output_tokens": 38,
+    "total_tokens": 1214
+   }
+  },
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 1176,
+    "output_tokens": 146,
+    "total_tokens": 1322
+   }
+  },
+  {
+   "response": "{\"line\":\"Copilot did not quote a price for Pampers Swaddlers S1 96 on amazon.com; Amazon charged $30.97 that day.\"}",
+   "usage": {
+    "input_tokens": 1176,
+    "output_tokens": 43,
+    "total_tokens": 1219
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Copilot",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The only price in the answer was for another brand's product, so it gave none for this one."
+  ],
+  "question": "What does the Pampers Swaddlers S1 96 cost at amazon.com?",
+  "reason_code": "other_brand",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "30.97",
+   "retailer": "Amazon"
+  },
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "verdict": "no price",
+  "why": [
+   "other_brand_price"
+  ]
+ },
+ "facts_digest": "01d1af036d9389ede2462bf37bdbd82d2096d6f564e17012c05ddbde2224da3b",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "483424a909f337885b746c2bedbcc4fd98e5f97817406e9f1b7355048a7fe0b6",
+ "subject": "answer:run-90023"
+}

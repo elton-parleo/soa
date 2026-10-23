@@ -1,0 +1,52 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini quoted $29.97 for Pampers AMORE, but Walmart charged $26.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1207,
+    "output_tokens": 38,
+    "total_tokens": 1245
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini quotes $29.97 for Pampers AMORE and Walmart charged $26.97 that day.\"}",
+   "usage": {
+    "input_tokens": 1207,
+    "output_tokens": 35,
+    "total_tokens": 1242
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Gemini",
+  "agent_quoted": [
+   {
+    "direction": "quoted above the retailer's price",
+    "price_quoted": "29.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "quoted above the retailer's price",
+  "question": "What does the Pampers AMORE cost at walmart.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "26.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "a5826a5b569ad2a81b92ee3087606f6577e05b858b4f9aaf5be4898d73f772b8",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "9c0618f0d0342a3a9d3032edcf8b1501f97c9023804efaa185e9846889bf31d9",
+ "subject": "answer:run-90098"
+}

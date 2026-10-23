@@ -1,0 +1,42 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini first picked Huggies, then Pampers, on \\\"question 1011\\\".\"}",
+   "usage": {
+    "input_tokens": 1130,
+    "output_tokens": 33,
+    "total_tokens": 1163
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini first picked Huggies, then Pampers, on \\\"question 1011\\\".\"}",
+   "usage": {
+    "input_tokens": 1130,
+    "output_tokens": 33,
+    "total_tokens": 1163
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Gemini",
+  "brand": "Pampers",
+  "first pick": "Huggies",
+  "kind": "answer",
+  "meaning": [
+   "On a question that let the assistant choose a brand, its first pick was another brand."
+  ],
+  "named in order": [
+   "Huggies",
+   "Pampers"
+  ],
+  "question": "question 1011",
+  "surface": "API with search grounding",
+  "why": [
+   "rival_first_pick"
+  ]
+ },
+ "facts_digest": "78b219494138f95ff80971408876d9d8c3b034fcf0f73060c9de873bf41b4d56",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "884bf71f40c781b0bf46a51f34f62ac5b6a3f4f1ef89e557aaf115eeb1b1a42a",
+ "subject": "answer:run-70062"
+}

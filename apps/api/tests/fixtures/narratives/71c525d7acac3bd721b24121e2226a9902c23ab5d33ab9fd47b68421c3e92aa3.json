@@ -1,0 +1,52 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"ChatGPT quoted $39.97 for Pampers Cruisers 360 S4 104, while Amazon charged $42.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1212,
+    "output_tokens": 44,
+    "total_tokens": 1256
+   }
+  },
+  {
+   "response": "{\"line\":\"ChatGPT quoted $39.97 for Pampers Cruisers 360 S4 104. Amazon charged $42.97 that day.\"}",
+   "usage": {
+    "input_tokens": 1212,
+    "output_tokens": 41,
+    "total_tokens": 1253
+   }
+  }
+ ],
+ "facts": {
+  "agent": "ChatGPT",
+  "agent_quoted": [
+   {
+    "direction": "quoted below the retailer's price",
+    "price_quoted": "39.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "quoted below the retailer's price",
+  "question": "What does the Pampers Cruisers 360 S4 104 cost at amazon.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "42.97",
+   "retailer": "Amazon"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "71c525d7acac3bd721b24121e2226a9902c23ab5d33ab9fd47b68421c3e92aa3",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "82b9487e23d5f078ba28f2a29c1b4bcb5a910d11bca8e2174fadf8e3a71640ab",
+ "subject": "answer:run-90055"
+}

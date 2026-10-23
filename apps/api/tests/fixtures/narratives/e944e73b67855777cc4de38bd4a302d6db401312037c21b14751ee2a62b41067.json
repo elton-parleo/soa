@@ -1,0 +1,108 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini and Perplexity quoted $27.97 at Walmart. Walmart charged $24.97 on Oct 19\"}",
+   "usage": {
+    "input_tokens": 1302,
+    "output_tokens": 337,
+    "total_tokens": 1639
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini and Perplexity quoted $27.97 at Walmart. Walmart charged $24.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1302,
+    "output_tokens": 262,
+    "total_tokens": 1564
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "00037000863434",
+   "feed_sku:900",
+   "PAM-SW-NB-84",
+   "sku:PAM-SW-NB-84"
+  ],
+  "brand": "Pampers",
+  "gave_no_price": [
+   "Claude"
+  ],
+  "gtin": "00037000863434",
+  "issue": "2 of 6 agents quoted Walmart above its price",
+  "kind": "product",
+  "price_direction": "quoted above the retailer's price",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "Swaddlers NB 84",
+  "quotes": [
+   {
+    "agent": "ChatGPT",
+    "price": "24.97",
+    "retailer": "Amazon",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "ChatGPT",
+    "price": "24.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "27.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "27.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "27.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "24.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "27.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "27.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   }
+  ],
+  "retailer_prices_that_day": [
+   {
+    "date": "Oct 19",
+    "price": "27.97",
+    "retailer": "Amazon"
+   },
+   {
+    "date": "Oct 19",
+    "price": "24.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "sku": "PAM-SW-NB-84"
+ },
+ "facts_digest": "e944e73b67855777cc4de38bd4a302d6db401312037c21b14751ee2a62b41067",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "b250c5a8a42e7868ad404ab5665411908552cc2a02fbe5044d981fbd8cd82ffd",
+ "subject": "product:00037000863434"
+}

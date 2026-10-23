@@ -1,0 +1,52 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Perplexity quoted $34.97, but Walmart charged $31.97 for Pampers Pure on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1207,
+    "output_tokens": 157,
+    "total_tokens": 1364
+   }
+  },
+  {
+   "response": "{\"line\":\"Perplexity quoted $34.97 for Pampers Pure while Walmart charged $31.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1207,
+    "output_tokens": 37,
+    "total_tokens": 1244
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Perplexity",
+  "agent_quoted": [
+   {
+    "direction": "quoted above the retailer's price",
+    "price_quoted": "34.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "quoted above the retailer's price",
+  "question": "What does the Pampers Pure cost at walmart.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "31.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "b1bf07ee83dc1673c909612917bbbef717225a6ea8b0c01463ce76fd01d87051",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "e5358a6823d89afb2817eceadcfa1d531aa7766c0dd5cfb25dc4cc12051c4173",
+ "subject": "answer:run-90088"
+}

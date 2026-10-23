@@ -1,0 +1,52 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini quoted $25.97 for Pampers Ultra, but Walmart charged $22.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1206,
+    "output_tokens": 37,
+    "total_tokens": 1243
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini quotes Pampers Ultra at $25.97, but Walmart charged $22.97 on Oct 19. Price does not match.\"}",
+   "usage": {
+    "input_tokens": 1206,
+    "output_tokens": 42,
+    "total_tokens": 1248
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Gemini",
+  "agent_quoted": [
+   {
+    "direction": "quoted above the retailer's price",
+    "price_quoted": "25.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "quoted above the retailer's price",
+  "question": "What does the Pampers Ultra cost at walmart.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "22.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "92f9a5904e1ab11b9ee83952db5b09266c6bdcd50872123ce86d5ad277b14946",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "d31729ab08a7e67d9c9a5ac36280e591edc18981fd7efb5200748f4460bf7f1c",
+ "subject": "answer:run-90074"
+}

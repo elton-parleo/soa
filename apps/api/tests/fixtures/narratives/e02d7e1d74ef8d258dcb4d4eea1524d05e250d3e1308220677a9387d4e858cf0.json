@@ -1,0 +1,45 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Copilot gave no price for Pampers Pure. Walmart charged $31.97 that day for the other brand product.\"}",
+   "usage": {
+    "input_tokens": 1171,
+    "output_tokens": 37,
+    "total_tokens": 1208
+   }
+  },
+  {
+   "response": "{\"line\":\"Copilot quoted a Pampers product price for another brand, but gave no price for Pampers Pure. Walmart charged $31.97 that day.\"}",
+   "usage": {
+    "input_tokens": 1171,
+    "output_tokens": 43,
+    "total_tokens": 1214
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Copilot",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The only price in the answer was for another brand's product, so it gave none for this one."
+  ],
+  "question": "What does the Pampers Pure cost at walmart.com?",
+  "reason_code": "other_brand",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "31.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "verdict": "no price",
+  "why": [
+   "other_brand_price"
+  ]
+ },
+ "facts_digest": "e02d7e1d74ef8d258dcb4d4eea1524d05e250d3e1308220677a9387d4e858cf0",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "16f1f509ef31fa27da6f114c57636fdbe810848869add5a11ff938d96d744a46",
+ "subject": "answer:run-90089"
+}

@@ -1,0 +1,53 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Copilot said another brand’s product price, but it gave no price for Pampers Easy Ups S5 66. Amazon price that day could not be read.\"}",
+   "usage": {
+    "input_tokens": 1176,
+    "output_tokens": 46,
+    "total_tokens": 1222
+   }
+  },
+  {
+   "response": "{\"line\":null}",
+   "usage": {
+    "input_tokens": 1176,
+    "output_tokens": 14,
+    "total_tokens": 1190
+   }
+  },
+  {
+   "response": "{\"line\":\"Copilot gave no price for Pampers Easy Ups S5 66. Amazon charged could not be read that day.\"}",
+   "usage": {
+    "input_tokens": 1176,
+    "output_tokens": 286,
+    "total_tokens": 1462
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Copilot",
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The only price in the answer was for another brand's product, so it gave none for this one."
+  ],
+  "question": "What does the Pampers Easy Ups S5 66 cost at amazon.com?",
+  "reason_code": "other_brand",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "note": "could not be read",
+   "retailer": "Amazon"
+  },
+  "scorer_note": "r",
+  "surface": "Consumer UI, logged out",
+  "verdict": "no price",
+  "why": [
+   "other_brand_price"
+  ]
+ },
+ "facts_digest": "93ca91dc22a8080a9ce8f9b3ba34e859b3f6e6858a5c11da62e4bd37d6bf4e9d",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "2150a09c7c94bbe5c8e987f643f60266551044dfdf13a69bee2438b41b6275d5",
+ "subject": "answer:run-90071"
+}
