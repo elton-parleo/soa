@@ -257,6 +257,30 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     # 2L-4: Visibility's routing, whose coverage is the second brand tile's input
     if vis.get('routing'):
         body['routing'] = vis['routing']
+    # 2M-1: the Attribute accuracy tile's input (the first brand tile); supply's
+    # /reference for its pages half, read here when the call above did not
+    with engine.connect() as conn:
+        asks = rm.asks_attribute(conn, row)
+        slug = merchant or (score_svc.cycle_merchant(conn, row) if asks else None)
+    attr_reference = reference if merchant and 'reference' not in errors else None
+    if asks and attr_reference is None and slug and not merchant:
+        (_, attr_reference, a_err) = await full_loop._client(scope).get_reference(slug)
+        if a_err is not None:
+            attr_reference = None
+            body.setdefault('read_errors', {})['reference'] = a_err
+    with engine.connect() as conn:
+        answers = rm.attribute_answers(conn, row) if asks else []
+        accuracy = rm.build_attribute_accuracy(answers, attr_reference) if asks or attr_reference else None
+        prev_answers = rm.attribute_answers(conn, prev) if asks and prev is not None else None
+    if accuracy is not None:   # absent, as routing and retired_named are, when there is nothing to count
+        body['attribute_accuracy'] = accuracy
+    # 2M-1: "Size 4 weight range right" in Changes, per size an accuracy answer missed
+    site = next((a['site'] for a in answers if a.get('site')), None) or own_domain or 'the brand site'
+    for s, block in (body.get('by_surface') or {}).items():
+        if answers:
+            block['changes'] = list(block.get('changes') or []) + rm.attribute_changes(
+                answers, prev_answers, (previous or {}).get('code'), s,
+                compared=block.get('changes_status') == 'compared', site=site)
     # 2L-3: the products' and the signals' example answers' narratives
     with engine.connect() as conn:
         narratives_svc.with_overview(body, narratives_svc.lines_for(conn, row['id']))
@@ -345,6 +369,10 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
                 reference_run = (reference or {}).get('reference_run')
             else:
                 errors['reference'] = r_err
+            # 2M-1: the Attribute accuracy tile, supply's pages and the cycle's accuracy answers
+            with engine.connect() as conn:
+                brand_inputs['attribute_accuracy'] = rm.load_attribute_accuracy(
+                    conn, row, reference if r_err is None else None)
         else:
             errors['merchant'] = 'no merchant record for this cycle'
         body = score_svc.build_score(row['cycle_code'], runs=runs, mentions=mentions, vis_rows=vis_rows, access=access,
@@ -596,9 +624,11 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
     the tenant token (rm.build_truesync)."""
     await check_merchant(scope, merchant)   # 2H: a slug that is not the org's is a 404
     client = full_loop._client(scope)
-    (c_status, channels, c_err), (p_status, pubs, p_err), (k_status, catalog, k_err), (_, prov, prov_err) = \
+    (c_status, channels, c_err), (p_status, pubs, p_err), (k_status, catalog, k_err), (_, prov, prov_err), \
+        (_, reference, r_err) = \
         await asyncio.gather(client.get_channels(), client.get_publications(limit=500),
-                             client.get_merchant_catalog(merchant), client.get_provenance(merchant))
+                             client.get_merchant_catalog(merchant), client.get_provenance(merchant),
+                             client.get_reference(merchant))
     for status, error in ((k_status, k_err), (c_status, c_err), (p_status, p_err)):
         if error is not None:
             raise HTTPException(status_code=404 if status == 404 else 502,
@@ -618,6 +648,15 @@ async def get_truesync(merchant: str = Query(...), scope: CustomerScope = Depend
                if e.get('listing_id') == lid for v in e.get('verifications') or []]
         product['timeline'] = parity.record_history(lid, publications=pubs or [], verifications=ver,
                                                     reference_rows=[], channel_names=names)
+    # 2M-1: the records preview's weight rows (markup against chart, retailer
+    # pages against the truth); absent when there are none, named when unread
+    listing_brand = next((l.get('brand') for l in (catalog or {}).get('listings') or [] if l.get('brand')), None)
+    drift = rm.build_weight_drift(reference if r_err is None else None,
+                                  brand=(catalog or {}).get('brand') or listing_brand)
+    if drift:
+        body['weight_drift'] = drift
+    if r_err is not None:
+        body.setdefault('read_errors', {})['reference'] = r_err
     return body
 
 

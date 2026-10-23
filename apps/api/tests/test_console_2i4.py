@@ -129,7 +129,7 @@ def test_the_brand_box_path_is_unchanged_apart_from_the_merchant_field(http, job
     assert b.pop('merchant') == {'slug': STORE, 'from': 'request'}
     differ = {'study_type', 'job_id'}
     assert {k: v for k, v in a.items() if k not in differ} == {k: v for k, v in b.items() if k not in differ}
-    assert a['tally']['total'] == 87
+    assert a['tally']['total'] == 97   # 2M-1: 87 + 10 attribute
     ja, jb = _job(jobs, a['study_type']), _job(jobs, b['study_type'])
     differ = {'id', 'study_type', 'created_at'}
     assert {k: v for k, v in ja.items() if k not in differ} == {k: v for k, v in jb.items() if k not in differ}

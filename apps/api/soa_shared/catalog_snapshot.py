@@ -42,6 +42,9 @@ class CatalogVariant:
     # active, no successor. See soa_shared/retired_lines.py.
     status: str = 'active'
     successor: Optional[dict] = None
+    # 2M-1: the feed's weight range for the size ({min, max} lb), as supply's
+    # catalog serves it; None when the feed states none.
+    weight_range: Optional[dict] = None
 
 
 @dataclass
@@ -130,6 +133,11 @@ class CatalogSnapshot:
     #: caller, or a failed read), {} when supply has no row for any variant.
     reads: Optional[Dict[str, List[PageRead]]] = None
     reads_error: Optional[str] = None
+    #: 2M-1: variant_id -> supply's brand truth for the size's weight range,
+    #: {truth: {min, max}, source: feed | brand_page}, from the retailer-prices
+    #: rows' `attribute` (the truth /reference summarises per variant), else the
+    #: rows' feed `weight_range`. A variant with no truth is absent.
+    weight_truth: Dict[str, dict] = field(default_factory=dict)
 
     @property
     def is_external(self) -> bool:
@@ -228,6 +236,7 @@ def build_snapshot(
                     gtin=variant.get("gtin"),
                     status=variant.get("status") or 'active',
                     successor=variant.get("successor") or None,
+                    weight_range=variant.get("weight_range") or None,
                 )
                 for variant in listing.get("variants") or []
                 if variant.get("variant_id")
@@ -398,7 +407,19 @@ def merge_reads(snapshot: CatalogSnapshot, payload: Optional[dict], *, error: Op
     ids = {v.variant_id for _p, v in snapshot.variants()}
     reads: Dict[str, List[PageRead]] = {}
     for row in payload.get('prices') or payload.get('rows') or []:
-        if not isinstance(row, dict) or row.get('role') in ('comparison', 'own'):
+        if not isinstance(row, dict) or row.get('role') == 'comparison':
+            continue
+        # 2M-1: the brand truth rides on every row of the variant, own rows included
+        truth_keys = [_gtin14(row.get('gtin')), f"sku:{row['sku']}" if row.get('sku') else None,
+                      row.get('variant_label'), row.get('variant_ref')]
+        truth_vid = next((k for k in truth_keys if k and k in ids), None)
+        said = row.get('attribute') or {}
+        if truth_vid and truth_vid not in snapshot.weight_truth:
+            if said.get('truth'):
+                snapshot.weight_truth[truth_vid] = {'truth': said['truth'], 'source': said.get('truth_source')}
+            elif row.get('weight_range'):
+                snapshot.weight_truth[truth_vid] = {'truth': row['weight_range'], 'source': 'feed'}
+        if row.get('role') == 'own':
             continue
         domain = _domain(row.get('retailer_domain'))
         if not domain or domain == snapshot.own_domain or domain not in (snapshot.retailer_list or []):

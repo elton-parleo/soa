@@ -363,6 +363,7 @@ def stored_rows(conn, cid: int, tiers) -> list:
         SELECT o.run_id, o.query_id, o.cycle_id, o.platform, o.tier,
                o.expected_answer, o.extraction, o.extraction_model, o.outcome,
                r.retrieved_sources, r.grounding, r.surface, r.answer_status, r.run_number,
+               r.raw_response,
                q.source_ref, q.study_type, q.query_code,
                q.expected_answer AS query_expected_answer
         FROM soa_expectation_outcomes o
@@ -434,6 +435,8 @@ def classify_only(cycle_code: str, tiers=None, *, scorer=None, write: bool = Tru
             study_type=row['study_type'], retrieved_sources=row['retrieved_sources'],
             grounding=row['grounding'],
             surface=row['surface'], answer_status=row['answer_status'],
+            # 2M-1: _store codes an attribute question's weight range from the answer text
+            raw_response=row.get('raw_response'),
         )
         kwargs = dict(history=scorer.history, brand_facts=scorer.brand_facts,
                       references=scorer.references, domain_checker=scorer.domain_checker,

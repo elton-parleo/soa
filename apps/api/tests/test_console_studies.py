@@ -104,11 +104,14 @@ def test_the_preview_is_the_generator_s_own_questions(http, upstream, studies_db
     # counts absorb: still 87, now 12 + 12 AI-written and 38 + 25 from the catalog
     assert [(i['intent'], i['count'], i['line']) for i in brand['intents']] == [
         ('where_to_buy', 19, '19 where-to-buy questions, one per sampled product, naming no retailer'),
-        ('cheapest_place', 19, '19 cheapest-place questions, one per sampled product, naming no retailer')]
+        ('cheapest_place', 19, '19 cheapest-place questions, one per sampled product, naming no retailer'),
+        # 2M-1: the Accuracy set, 10 attribute questions, which add to the study
+        ('attribute', 10, '10 accuracy questions (weight range and pack count), one per sampled product, '
+                          'naming no retailer, added to the study')]
     assert brand['intents'][0]['questions'][0]['query_text'] == 'Where can I buy Wiggle & Snug Snug-Fit Diapers Size 1 small pack?'
     assert (brand['absorbed'], brand['not_absorbed']) == (38, 0)
-    assert body['tally'] == {'ai_written': 24, 'from_catalog': 63, 'total': 87, 'limit': 100, 'within': True, 'tone': 'ok',
-                             'text': '24 AI-written + 63 from the catalog = 87 questions, within the 100 limit'}
+    assert body['tally'] == {'ai_written': 24, 'from_catalog': 73, 'total': 97, 'limit': 100, 'within': True, 'tone': 'ok',
+                             'text': '24 AI-written + 73 from the catalog = 97 questions, within the 100 limit'}
 
 
 def test_the_variant_cap_samples_and_says_so(http, upstream, studies_db):
@@ -142,7 +145,7 @@ def test_generate_refuses_over_the_cap_server_side(http, upstream, studies_db):
     response = http.post('/api/console/studies/generate', params={'org': 10}, json={
         'study_name': 'W&S after syndication', 'target_count': 70, 'syndicated_merchant': 'wiggle-and-snug', 'tiers': TIERS_ON})
     assert response.status_code == 422
-    assert response.json()['detail'] == '44 AI-written + 63 from the catalog = 107 questions, over the 100 limit. Reduce a stage or untick a tier.'
+    assert response.json()['detail'] == '44 AI-written + 73 from the catalog = 117 questions, over the 100 limit. Reduce a stage or untick a tier.'
 
 
 def test_generate_queues_the_job_for_this_customer(http, upstream, studies_db):
@@ -154,7 +157,7 @@ def test_generate_queues_the_job_for_this_customer(http, upstream, studies_db):
         'allowed_categories': ['Baby Care'], 'syndicated_merchant': 'wiggle-and-snug', 'tiers': TIERS_ON})
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body['status'] == 'pending' and body['tally']['total'] == 87
+    assert body['status'] == 'pending' and body['tally']['total'] == 97   # 2M-1: 87 + 10 attribute
     with studies_db.connect() as c:
         job = c.execute(text("SELECT * FROM soa_query_generation_jobs WHERE study_type = :st"),
                         {'st': body['study_type']}).mappings().one()

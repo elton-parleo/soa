@@ -7444,3 +7444,67 @@ a row's facts puts its template back until the line is rewritten. Both halves ru
   not hold; low did not, at about the same tokens. One accepted product line in the first round credited
   ChatGPT with Walmart's price and Gemini with Amazon's while every number and name was in the facts: that is
   what `who_said_what` was added for, and it drops that line.
+
+## 2M-1: attribute accuracy, the weight range for the size asked
+
+`attribute = "weight range for the size asked"`, the demo's first brand tile. One brand truth per variant, supply's
+(parleo-supply-app#28, `truesync/fullloop/weight.py`): the feed's `weight_min_lb` / `weight_max_lb`, else the range the
+brand's own page states for the size, never its markup. Every retailer page read for the variant (supply) and every
+answer to an attribute question (soa) states a range or doesn't; each is `match` (each bound within 1 lb, an open
+bound only against an open bound), `mismatch` or `absent`. Deterministic; no model. Shared rules:
+`soa_shared/attribute_accuracy.py` (sync copies in apps/api and apps/pipeline).
+
+### B1: the questions (no migration)
+
+A third brand-direct intent, `source_ref.intent = 'attribute'` (catalog_tiers.build_intent_questions), the demo's
+Accuracy set: "What weight range is Pampers Swaddlers Size 4 for, and how many diapers come in the 120 ct pack?", one
+per sampled variant that names a diaper size (Size N, Newborn, Preemie), at most `ATTRIBUTE_CAP` (10), naming no store,
+stage Ready to Buy, soa_focus Accuracy, expectation brand_mention. Its source_ref carries `line`, `size`, `count` and
+the truth (`weight_truth`, `weight_truth_source`): supply's, from the retailer-prices rows' `attribute.truth` (the
+truth /reference summarises per variant; snapshot.weight_truth), else the feed's `weight_range` on the catalog variant,
+else none, and the question is still asked. They add to the study; the stage counts absorb only where-to-buy and
+cheapest-place (`ABSORBED_INTENTS`). Pampers' default: 88 + 10 = **98**; W&S's preview fixture 87 + 10 = 97.
+
+### B2: the coder
+
+`expectation_scorer.code_attribute`, in `_store` (live scoring, no-answer runs and classify-only rescores alike): on
+an attribute run, the first range in the answer that belongs to the asked size within 80 characters (a range belongs to
+the nearest size token before it, else after it), in the forms `X to Y lb`, `X–Y lbs`, `X-Y pounds`, `under N lb`,
+`N+ lb`, `up to N lb`, stored on the extraction as `weight_range` / `weight_evidence` (None when it states none). The
+stated range rides in the stored extraction: no migration.
+
+### B3: /answers
+
+An attribute answer's row: `intent: 'attribute'`, `attribute: {size, count, stated, evidence, truth, truth_source,
+verdict}`, `summary` its one-liner ("stated 22 to 37 lb, where pampers.com says 15 to 34", "stated under 10 lb, as
+pampers.com says", "stated no weight range, where pampers.com says 15 to 34"), severity high on a mismatch, and claim_kind
+`attribute` (2K-1's existing kind) when it stated a range. Every brand-direct row carries `intent`, for the Accuracy chip.
+
+### B4: /overview, /score, /truesync
+
+* `/overview.attribute_accuracy`: `{n, k, pages: {n, k}, answers: {n, k}, answers_by_surface, misses: [{variant, size,
+  surface, kind: page | answer, verdict, stated, truth}]}`, pages from supply's /reference `attributes`, answers from
+  the cycle. Absent when neither half has anything to count (the tile reads "not measured").
+* `/score`'s brand tile `attribute`: matches of retailer pages (every surface) plus the surface's accuracy answers,
+  sub "Weight range for the size asked: pages 24 of 34, answers 37 of 45".
+* Changes: "Size 4 weight range right" per size an accuracy answer missed on the surface; `delta: 'new'` unless the
+  previous cycle is compared and asked the size, then a delta as 2K-4's lines.
+* `/truesync.weight_drift`: the records preview's rows `{field, was, now, prov, kind}`: one per variant whose markup
+  states another range than its chart (`zzz.size_4.weight (markup)`, was the markup, now the chart, prov brand) and one
+  per retailer page that mismatches (`swaddlers.size_4.weight (amazon.com)`, prov retail). One /reference read beside
+  the four others, never one per product.
+
+### B5: narratives
+
+An attribute mismatch or absent range is a flagged answer (`why: attribute_mismatch | attribute_absent`). Its facts:
+product, size, `weight_range_stated`, `weight_range_brand`, `brand_site`, and `same_as` (the cycle's other accuracy
+products whose truth is the stated range). Its own prompt (`ATTRIBUTE_PROMPT`), with the demo's example ("gave 22 to
+37 lb, the Cruisers and Zzz scale, where pampers.com says 15 to 34"), so every other answer's request and recording is
+unchanged. No recording is made for these lines yet: the writer writes them on the next cycle with the flag on.
+
+### Tests
+
+apps/api/tests/test_console_2m1_attribute.py on the FL13 shape with 10 attribute questions (5 answered agents each,
+every parse form) and a /reference carrying ranges: the tile 61 of 79 (pages 24 of 34, answers 37 of 45), the
+one-liners, Changes `new`, the 9 drift rows. apps/pipeline/tests/test_attribute_2m1.py: the questions, the truth's
+source, the cap, the coder, the narratives' facts and prompt.

@@ -19,12 +19,13 @@ Pure functions over rows (the loaders at the bottom do the SQL), so each
 mapping is tested without a database.
 """
 import json
+import re
 from collections import Counter
 from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
-from soa_shared import claim_kinds, local_time, retired_lines, surfaces, unprompted
+from soa_shared import attribute_accuracy, claim_kinds, local_time, retired_lines, surfaces, unprompted
 
 from app.services import console_claims
 
@@ -385,6 +386,13 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     # 2C: which True Value cell this answer is judged in (variant x retailer),
     # so the console's drawer can show the reference price behind the verdict.
     source_ref = _json(query.get('source_ref')) or {}
+    # 2M-1: an attribute question's answer, judged against the brand truth:
+    # its own one-liner and drawer facts, and claim_kind attribute when it
+    # stated a range (soa_shared/attribute_accuracy.py)
+    attribute = attribute_accuracy.answer_attribute(source_ref, extraction, run.get('raw_response')) \
+        if outcome is not None else None
+    if attribute is not None and attribute['stated'] is not None:
+        kind = claim_kinds.ATTRIBUTE
     named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99)]
     first = next((m['name'] for m in mentions if m.get('position') == 1), '')
     return compact({
@@ -394,8 +402,8 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'queryType': TIER_LABELS.get(tier) or query.get('stage') or '',
         'runAt': _iso(run.get('run_at')),
         'runs': f"run {run.get('run_number')} of {runs_per_query}" if runs_per_query else None,
-        'severity': _severity(raw, brand, flags),
-        'summary': (outcome or {}).get('outcome_reason') or (
+        'severity': 'high' if (attribute or {}).get('verdict') == 'mismatch' else _severity(raw, brand, flags),
+        'summary': (attribute or {}).get('line') or (outcome or {}).get('outcome_reason') or (
             f"No answer ({run.get('answer_status')})" if run.get('answer_status') not in (None, 'answered')
             else 'Not scored'),
         'paragraphs': segments(run.get('raw_response'), extraction.get('spans'), claims),
@@ -428,7 +436,12 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'variant_id': source_ref.get('variant_id'),
         'gtin': source_ref.get('gtin'),
         'retailer': expectation.get('attributed_to') or source_ref.get('own_domain') or source_ref.get('domain'),
-    }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer', 'expected_type', 'claim_kind', 'claim_kind_label'))
+        # 2M-1: the brand-direct intent (2L-4's where_to_buy / cheapest_place, 2M-1's
+        # attribute), the Answers list's Accuracy chip; and the attribute verdict
+        'intent': source_ref.get('intent'),
+        'attribute': None if attribute is None else {k: v for k, v in attribute.items() if k != 'line'},
+    }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer', 'expected_type', 'claim_kind', 'claim_kind_label',
+        'intent', 'attribute'))
 
 
 # ─── Answers summary (2C) ──────────────────────────────────────────────────
@@ -2989,3 +3002,184 @@ def load_brand_terms(conn, cycle: dict) -> List[str]:
     job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
                        {'st': cycle.get('study_type')}).fetchone() if cycle.get('study_type') else None
     return study_brand_terms(job[0] if job else None, dict(primary) if primary else None)
+
+
+# ─── Attribute accuracy (2M-1) ─────────────────────────────────────────────
+#
+# The demo's first brand tile: the weight range for the size asked, on the
+# retailer pages supply read for each variant (its /reference `attributes`,
+# truesync/fullloop/weight.py) and in the answers to the study's attribute
+# questions (source_ref.intent 'attribute', soa_shared/attribute_accuracy.py),
+# each match / mismatch / absent against one brand truth per variant.
+# Deterministic; no model.
+
+def asks_attribute(conn, cycle: dict) -> bool:
+    """2M-1: whether the cycle's study has an attribute question."""
+    if not cycle.get('study_type'):
+        return False
+    refs = conn.execute(text("SELECT source_ref FROM soa_queries WHERE study_type = :st AND tier = 'brand_direct'"),
+                        {'st': cycle['study_type']}).scalars()
+    return any((_json(r) or {}).get('intent') == attribute_accuracy.ATTRIBUTE_INTENT for r in refs)
+
+
+def attribute_answers(conn, cycle: dict) -> List[dict]:
+    """Every answered, scored run of the cycle's attribute questions, judged:
+    {run_id, surface, platform, variant_id, variant, size, stated, truth, verdict, evidence}."""
+    rows = conn.execute(text("""
+        SELECT r.id, r.platform, r.surface, r.answer_status, r.raw_response, q.source_ref, o.extraction
+        FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
+        JOIN soa_expectation_outcomes o ON o.run_id = r.id
+        WHERE r.cycle_id = :c AND q.tier = 'brand_direct'
+        ORDER BY r.id
+    """), {'c': cycle['id']}).mappings().all()
+    out = []
+    for r in rows:
+        ref = _json(r['source_ref']) or {}
+        if ref.get('intent') != attribute_accuracy.ATTRIBUTE_INTENT:
+            continue
+        if (r['answer_status'] or surfaces.ANSWERED) != surfaces.ANSWERED:
+            continue
+        judged = attribute_accuracy.answer_attribute(ref, _json(r['extraction']), r['raw_response'])
+        out.append({'run_id': r['id'], 'platform': r['platform'],
+                    'surface': r['surface'] or surfaces.surface_of(r['platform']),
+                    'variant_id': ref.get('variant_id'),
+                    'variant': ' '.join(w for w in (ref.get('line'), ref.get('size')) if w) or ref.get('variant_id'),
+                    'size': ref.get('size'), 'site': ref.get('own_domain') or ref.get('domain'),
+                    'stated': judged['stated'], 'truth': judged['truth'],
+                    'verdict': judged['verdict'], 'evidence': judged['evidence']})
+    return out
+
+
+def build_attribute_accuracy(answers: List[dict], reference: Optional[dict]) -> Optional[dict]:
+    """
+    /overview's attribute_accuracy, the Attribute accuracy tile's input:
+    {n, k, pages: {n, k}, answers: {n, k}, answers_by_surface: {surface:
+    {n, k}}, misses: [{variant, size, surface, kind, stated, truth}], site:
+    the brand site the truth is the size chart of (the questions'), or None}, k the
+    matches. Pages are the retailer pages supply read for each variant
+    (/reference attributes[].pages); answers every judged attribute answer
+    (a variant with no brand truth gives no verdict and is not counted).
+    None when neither half has anything to count: the tile reads "not
+    measured".
+    """
+    phrase = attribute_accuracy.phrase
+    pages_n = pages_k = 0
+    misses = []
+    for variant in (reference or {}).get('attributes') or []:
+        pages = variant.get('pages') or {}
+        pages_n += pages.get('n') or 0
+        pages_k += pages.get('k') or 0
+        size = attribute_accuracy.size_label(variant.get('variant_label'))
+        for p in pages.get('rows') or []:
+            if p.get('verdict') in ('mismatch', 'absent'):
+                misses.append({'variant': variant.get('variant_label') or variant.get('variant_ref'), 'size': size,
+                               'surface': p.get('retailer_domain'), 'kind': 'page', 'verdict': p['verdict'],
+                               'stated': phrase(p.get('stated')), 'truth': phrase(variant.get('truth'))})
+    judged = [a for a in answers if a['verdict'] is not None]
+    by_surface: Dict[str, dict] = {}
+    for a in judged:
+        cell = by_surface.setdefault(a['surface'], {'n': 0, 'k': 0})
+        cell['n'] += 1
+        cell['k'] += a['verdict'] == 'match'
+        if a['verdict'] != 'match':
+            misses.append({'variant': a['variant'], 'size': a['size'], 'surface': a['surface'], 'kind': 'answer',
+                           'verdict': a['verdict'], 'stated': phrase(a['stated']), 'truth': phrase(a['truth'])})
+    answers_k = sum(1 for a in judged if a['verdict'] == 'match')
+    if not pages_n and not judged:
+        return None
+    return {'n': pages_n + len(judged), 'k': pages_k + answers_k,
+            'pages': {'n': pages_n, 'k': pages_k}, 'answers': {'n': len(judged), 'k': answers_k},
+            'answers_by_surface': by_surface, 'misses': misses,
+            'site': next((a.get('site') for a in answers if a.get('site')), None)}
+
+
+def load_attribute_accuracy(conn, cycle: dict, reference: Optional[dict]) -> Optional[dict]:
+    return build_attribute_accuracy(attribute_answers(conn, cycle), reference)
+
+
+#: 2M-1: the Changes line's and the drift rows' copy (kept out of
+#: console_parity.TEMPLATES, which the Overview serves pinned as `rules`).
+ATTRIBUTE_TEMPLATES = {
+    'changes.label': '{size} weight range right',
+    'changes.new': '{a} of {n} accuracy answers on {size} gave the range {site} states. First cycle with this question.',
+    'changes.detail': '{a} of {n} this cycle against {b} of {m} in {code}.',
+}
+
+
+def attribute_changes(now: List[dict], prev: Optional[List[dict]], prev_code: Optional[str], surface: str,
+                      compared: bool, site: str = 'the brand site') -> List[dict]:
+    """
+    2M-1: the Overview's Changes line per size an accuracy answer missed on
+    `surface` this cycle ("Size 4 weight range right"): matches of judged
+    answers on that size. With a compared previous cycle that asked it, a
+    delta as 2K-4's lines give one; otherwise (a first cycle, or one that
+    did not ask the size) `delta` is 'new'.
+    """
+    def on(rows):
+        return [a for a in rows or [] if a['verdict'] is not None and surfaces.on_surface(a['surface'], surface)]
+
+    mine, theirs = on(now), on(prev) if compared else []
+    sizes = list(dict.fromkeys(a['size'] for a in mine if a['verdict'] != 'match' and a['size']))
+    out = []
+    for size in sizes:
+        here = [a for a in mine if a['size'] == size]
+        then = [a for a in theirs if a['size'] == size]
+        a, n = sum(1 for x in here if x['verdict'] == 'match'), len(here)
+        label = ATTRIBUTE_TEMPLATES['changes.label'].format(size=size)
+        if then:
+            b, m = sum(1 for x in then if x['verdict'] == 'match'), len(then)
+            d = a - b
+            delta, direction = (f"+{d}" if d > 0 else str(d) if d < 0 else '0'), ('up' if d > 0 else 'down' if d < 0 else 'flat')
+            tone = 'neu' if direction == 'flat' else ('ok' if direction == 'up' else 'bad')
+            detail = ATTRIBUTE_TEMPLATES['changes.detail'].format(a=a, n=n, b=b, m=m, code=prev_code)
+        else:
+            b = m = None
+            delta, direction, tone = 'new', 'new', 'bad' if a < n else 'neu'
+            detail = ATTRIBUTE_TEMPLATES['changes.new'].format(a=a, n=n, size=size, site=site)
+        out.append({'label': label, 'delta': delta, 'dir': direction, 'tone': tone, 'detail': detail,
+                    'route': 'answers', 'metric': 'attribute', 'size': size,
+                    'now': a, 'prev': b, 'of_now': n, 'of_prev': m})
+    return out
+
+
+def _slug(text: Optional[str]) -> str:
+    return re.sub(r'[^a-z0-9]+', '_', (text or '').lower()).strip('_')
+
+
+def line_of(product_name: Optional[str], brand: Optional[str] = None) -> str:
+    """"Pampers Swaddlers Overnights Diapers, Size 4, 104 Count" -> "swaddlers_overnights": the
+    product's own words before any comma or size, the brand and the word "diapers" left out."""
+    head = re.split(r',|\bsize\b', product_name or '', maxsplit=1, flags=re.I)[0]
+    words = [w for w in re.findall(r"[A-Za-z0-9']+", head)
+             if w.lower() not in {(brand or '').lower(), 'diapers', 'diaper'}]
+    return _slug(' '.join(words)) or 'product'
+
+
+def build_weight_drift(reference: Optional[dict], brand: Optional[str] = None) -> List[dict]:
+    """
+    2M-1: the TrueSync records preview's weight rows, from supply's
+    /reference attributes: one per variant whose brand-page markup states
+    another range than its chart ("zzz.size_4.weight (markup)", was the
+    markup, now the chart, prov brand), and one per retailer page whose
+    stated range mismatches the truth ("swaddlers.size_4.weight (amazon.com)",
+    was the page's, now the truth, prov retail).
+    """
+    phrase = attribute_accuracy.phrase
+    out = []
+    variants = (reference or {}).get('attributes') or []
+    firsts = {(v.get('product_name') or '').split(' ')[0].lower() for v in variants if v.get('product_name')}
+    if len(firsts) == 1 and len([v for v in variants if v.get('product_name')]) > 1:
+        brand = brand if brand and brand.lower() in firsts else next(iter(firsts))   # the brand every name starts with
+    for v in variants:
+        size = attribute_accuracy.size_label(v.get('variant_label'))
+        base = f"{line_of(v.get('product_name') or v.get('variant_label'), brand)}.{_slug(size or v.get('variant_label'))}.weight"
+        chart, markup = v.get('chart') or v.get('truth'), v.get('markup')
+        if chart and markup and not attribute_accuracy.same(chart, markup):
+            out.append({'field': f"{base} (markup)", 'was': phrase(markup), 'now': phrase(chart), 'prov': 'brand',
+                        'kind': 'markup', 'variant_ref': v.get('variant_ref'), 'evidence': v.get('markup_evidence')})
+        for p in (v.get('pages') or {}).get('rows') or []:
+            if p.get('verdict') == 'mismatch':
+                out.append({'field': f"{base} ({p.get('retailer_domain')})", 'was': phrase(p.get('stated')),
+                            'now': phrase(v.get('truth')), 'prov': 'retail', 'kind': 'page',
+                            'variant_ref': v.get('variant_ref'), 'url': p.get('url'), 'evidence': p.get('evidence')})
+    return out

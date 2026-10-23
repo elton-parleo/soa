@@ -135,7 +135,9 @@ def test_each_truesync_product_carries_its_timeline(http, upstream):
     p = next(x for x in body['products'] if x['listing_id'] == 93)
     assert p['timeline'] and {e['kind'] for e in p['timeline']} <= {'publication', 'verification'}
     assert p['timeline'] == sorted(p['timeline'], key=lambda e: e['at'] or '', reverse=True)
-    assert not any(c['path'].endswith('/reference') or c['path'].endswith('/incentives') for c in upstream.calls)
+    assert not any(c['path'].endswith('/incentives') for c in upstream.calls)
+    # 2M-1: one /reference read, beside the four others, for the records preview's weight rows; never one per product
+    assert sum(c['path'].endswith('/reference') for c in upstream.calls) <= 1
 
 
 # ═══ 5. Swap quotes grouped by the sibling, named once ═══════════════════
