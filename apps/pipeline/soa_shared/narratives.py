@@ -110,7 +110,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import inspect, text
 
-from soa_shared import attribute_accuracy, claim_kinds, surfaces
+from soa_shared import attribute_accuracy, claim_kinds, promo_pass_through, surfaces
 from soa_shared import unprompted
 from soa_shared.expected_answers import normalize_domain, normalize_money
 from soa_shared.retailers import KNOWN_RETAILERS, RETAILER_NAMES, retailer_name
@@ -164,6 +164,8 @@ MEANINGS = {
     # 2M-1: an accuracy question's answer against the brand's size chart
     'attribute_mismatch': "The weight range the assistant gave for this size is not the one the brand's site states.",
     'attribute_absent': "The assistant gave no weight range for this size, which the brand's site states.",
+    # 2M-2: a cheapest-place answer against the deals live on a retailer shelf that day
+    'promo_missed': ("A retailer ran a deal on this product that day, and the answer never mentions it."),
 }
 CLAIM_KIND_WORDS = {claim_kinds.ATTRIBUTE: 'stated a fact about the brand',
                     claim_kinds.RECOMMENDATION_ONLY: 'only recommended the brand, stated no fact'}
@@ -328,11 +330,42 @@ says 15 to 34."
 """
 
 
+#: 2M-2: a cheapest-place answer that named no deal live that day, the demo's:
+#: "Amazon charged $47.99 that day and ran save 40% on 1 when you buy 2, which
+#: the answer never mentions". Its own prompt, so the other answers' requests
+#: (and their recordings) are unchanged.
+PROMO_PROMPT = """You write the one line a product console shows beside a shopping assistant's \
+answer to "cheapest place to buy" a product. You get the facts a scorer recorded and nothing else.
+
+The facts:
+- agent_quoted: what the assistant quoted, when it quoted a price.
+- deals_live_that_day: the deals retailers ran on this product that day: the retailer, the deal \
+as the retailer wrote it, its terms, and the retailer's price that day.
+
+What the line says, in this pattern and only this pattern:
+
+<assistant> [quoted $<price> at <retailer>. ]<retailer> charged $<price that day> that day and \
+ran <deal>, which the answer never mentions.
+
+Name one deal, the first in deals_live_that_day, written as the facts write it. Leave out the \
+price that day when the facts give none.
+
+Rules:
+- One or two short sentences, at most 220 characters.
+""" + _COMMON_RULES + """
+
+Style, from the demo: "Perplexity sends the AMORE shopper to Amazon at $36.18. Amazon charged \
+$47.99 that day and ran save 40% on 1 when you buy 2, which the answer never mentions."
+"""
+
+
 def system_prompt(facts: dict) -> str:
     if facts.get('kind') == PRODUCT:
         return PRODUCT_PROMPT
     if any(str(w).startswith('attribute_') for w in facts.get('why') or []):
         return ATTRIBUTE_PROMPT
+    if 'promo_missed' in (facts.get('why') or []):
+        return PROMO_PROMPT
     return SYSTEM_PROMPT
 
 
@@ -521,10 +554,12 @@ def overall_direction(directions: Iterable[Optional[str]]) -> Optional[str]:
 
 
 def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[str], brand_choice: bool,
-                merchant: Merchant, attribute: Optional[dict] = None) -> List[str]:
+                merchant: Merchant, attribute: Optional[dict] = None, promo_missed: bool = False) -> List[str]:
     """The reasons an answer gets a line (empty: it keeps its template).
     2M-1: `attribute` is an accuracy answer's verdict (attribute_accuracy.
-    answer_attribute); a mismatch or an absent range is flagged."""
+    answer_attribute); a mismatch or an absent range is flagged. 2M-2:
+    `promo_missed`, a cheapest-place answer that named none of the deals live
+    for its variant that day, adds promo_missed after the other reasons."""
     o = outcome or {}
     if (attribute or {}).get('verdict') in ('mismatch', 'absent'):
         return [f"attribute_{attribute['verdict']}"]
@@ -541,11 +576,36 @@ def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[st
             why.append(f['flag'])
     if brand_choice and first and not merchant.is_ours(first):
         why.append('rival_first_pick')
+    if promo_missed:
+        why.append('promo_missed')
     return why
 
 
+def promo_missed(run: dict, deals: Optional[dict]) -> List[dict]:
+    """2M-2: the deals live that day for a cheapest-place answer's variant that
+    the answer did not name, when it named none of them (empty otherwise)."""
+    ref = _json(run.get('source_ref')) or {}
+    if ref.get('intent') != promo_pass_through.CHEAPEST_PLACE or not deals:
+        return []
+    live = promo_pass_through.live_for(deals, ref)
+    if not live or promo_pass_through.judge(run.get('raw_response'), live)['named']:
+        return []
+    return live
+
+
+def _deal_fact(deal: dict) -> dict:
+    variant = deal.get('variant') or {}
+    domain = normalize_domain(deal.get('retailer_domain'))
+    return _drop_none({'retailer': retailer_name(domain) if domain else None,
+                       'deal': (deal.get('text') or '').strip() or None, 'terms': deal.get('terms'),
+                       'program': deal.get('program'), 'price_that_day': _money(variant.get('shelf_price')),
+                       'was_price': _money(variant.get('was_price')),
+                       'deal_price': _money(variant.get('price'))})
+
+
 def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merchant: Merchant,
-                 index: Dict[tuple, dict], scales: Optional[List[dict]] = None) -> Optional[dict]:
+                 index: Dict[tuple, dict], scales: Optional[List[dict]] = None,
+                 deals: Optional[dict] = None) -> Optional[dict]:
     """The facts for one answer, or None when it is not flagged. `run`
     carries its question (query_text, tier, source_ref, raw_response); `index` is the
     cycle's reference rows by (domain, key). 2M-1: `scales` is the cycle's
@@ -558,7 +618,8 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     ref = _json(run.get('source_ref')) or {}
     attribute = attribute_accuracy.answer_attribute(ref, _json((outcome or {}).get('extraction')),
                                                     run.get('raw_response')) if outcome else None
-    why = why_flagged(run.get('tier'), outcome, first, brand_choice, merchant, attribute)
+    missed = promo_missed(run, deals) if outcome else []
+    why = why_flagged(run.get('tier'), outcome, first, brand_choice, merchant, attribute, promo_missed=bool(missed))
     if not why:
         return None
     if attribute is not None and why[0].startswith('attribute_'):
@@ -608,6 +669,8 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
         'named in order': named if rival or brand_choice else None,
         'flags': [_drop_none({'flag': f.get('flag'), 'detail': f.get('detail') or f.get('evidence')}) for f in flags],
         'answer_spans': spans,
+        # 2M-2: the deals live that day the answer never mentions
+        'deals_live_that_day': [_deal_fact(d) for d in missed] or None,
     })
 
 
@@ -818,6 +881,8 @@ def load_cycle_facts(conn, cycle_id: int) -> Dict[str, dict]:
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
         WHERE r.cycle_id = :c ORDER BY r.id
     """), {'c': cycle_id}).mappings()]
+    # 2M-2: the deals live that day, from the cached rows' `deals` (supply 2M-2)
+    deals = promo_pass_through.deals_from_rows(_reference_rows(reference))
     # 2M-1: every accuracy question's product, size and brand truth, for same_as
     scales = []
     for run in runs:
@@ -839,7 +904,8 @@ def load_cycle_facts(conn, cycle_id: int) -> Dict[str, dict]:
         mentions.setdefault(m['run_id'], []).append(dict(m))
     out: Dict[str, dict] = {}
     for run in runs:
-        facts = answer_facts(run, outcomes.get(run['id']), mentions.get(run['id'], []), merchant, index, scales)
+        facts = answer_facts(run, outcomes.get(run['id']), mentions.get(run['id'], []), merchant, index, scales,
+                             deals)
         if facts:
             out[f"{ANSWER}:run-{run['id']}"] = facts
     catalog = [{**run, **{k: v for k, v in (outcomes.get(run['id']) or {}).items() if k != 'run_id'}}
@@ -1193,10 +1259,15 @@ def _direction_of(facts: dict) -> Optional[str]:
 
 def _unquoted(line: str, facts: dict) -> str:
     """The line without the question it quotes: what is in quotation marks,
-    and the question's own words written bare."""
+    and the question's own words written bare. 2M-2: a deal's own words too
+    ("save 40% on 1 when you buy 2"), as the facts write them."""
     out = _QUOTED.sub('Q', line)
     question = str(facts.get('question') or '').strip()
     for q in {question, question.rstrip('?.!')}:
+        if len(q) > 3:
+            out = out.replace(q, 'Q')
+    deals = [str(d.get(k) or '').strip() for d in facts.get('deals_live_that_day') or [] for k in ('deal', 'terms')]
+    for q in sorted({w for d in deals for w in (d, d[:1].upper() + d[1:])}, key=len, reverse=True):
         if len(q) > 3:
             out = out.replace(q, 'Q')
     return out

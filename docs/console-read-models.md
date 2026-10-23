@@ -7508,3 +7508,86 @@ apps/api/tests/test_console_2m1_attribute.py on the FL13 shape with 10 attribute
 every parse form) and a /reference carrying ranges: the tile 61 of 79 (pages 24 of 34, answers 37 of 45), the
 one-liners, Changes `new`, the 9 drift rows. apps/pipeline/tests/test_attribute_2m1.py: the questions, the truth's
 source, the cap, the coder, the narratives' facts and prompt.
+
+## 2M-2: promo pass-through, and the Trade promotions screen
+
+The demo's fifth brand tile. `promoPassThrough.rule = "answer names a specific deal that was live on a retailer
+shelf for that SKU that day"`, over the answered cheapest-place answers (source_ref.intent `cheapest_place`,
+2L-4). Where-to-buy answers are counted the same way and reported apart. No migration: the questions are 2L-4's,
+the deals are supply's.
+
+### The shelf: supply's /deals
+
+`GET /api/truesync/merchants/{slug}/deals?as_of=` (parleo-supply-app 2M-2): the deals each retailer page ran on
+each variant, grouped by retailer and deal text with the variants each ran on, plus `walled`. Read with the
+cycle's read date (`rm.promo_as_of`): the as_of of the retailer-prices read cached on the cycle (2B), else the
+cycle's creation, else its start day. A failed read is named in `read_errors.deals`, never zero deals. Only for a
+brand merchant (supply's /tenant), and only when the study asks a cheapest-place question: otherwise no call.
+
+### Named (soa_shared/promo_pass_through.py, deterministic)
+
+An answer names a deal when it names the deal's retailer and the deal's terms, by kind:
+
+| kind | the answer says |
+|---|---|
+| `multi_buy` | "buy 2" (the terms' number), the percent, or the two-box total (two at the shelf price, the percent off one) |
+| `rollback_or_was` | the word Rollback, or the struck price. The Rollback price without the word does not count |
+| `sale` | the sale price |
+| `coupon` | the coupon amount, or "coupon" |
+| `member_cash` | the program's name |
+| `other` | the deal's amount, or its text |
+
+Loose: any of deal, sale, off, coupon, save, promo, discount, rollback, clearance. Subscribe: "Subscribe & Save",
+"auto-delivery", "subscription" (a standing program, not a deal).
+
+### /overview
+
+`promo_pass_through: {n, k, loose, subscribe, per_deal: [{retailer, retailer_domain, text, kind, title, short,
+asked, named}], by_surface, where_to_buy: {n, k, loose, subscribe, by_surface}, rule, as_of, read_date,
+deals_read, live_deals, walled, note}`. `per_deal` is most asked first. `note` is the tile's: "Cheapest-place
+answers naming a deal live that day. Amazon multi-buy: named 0 of 25". Absent when nothing is counted.
+
+Changes, per surface: "Deals named, cheapest-place answers", k of n, `metric: promo`, `route: prove`. Against a
+compared previous cycle that measured it, a delta. Otherwise `new`, with the deals named and the biggest deal's
+count.
+
+### /score
+
+The Promo pass-through brand tile is measured: k of n on the surface, `sub` the tile note counted on the tile's
+surfaces, `surface_note` "<where>, cheapest-place answers".
+
+### /prove (new)
+
+The Trade promotions screen: `{state, title, sub, rows: [{retailer, retailer_domain, title, detail, terms, agents,
+value, tone, kind, asked, named, skus}], aside: {kick, value, label, sub}, note, walled, rule, read_date, as_of,
+cycle, read_errors, promo_pass_through}`. One row per deal supply read live that day. `detail` lists the variants it
+ran on and their prices. `agents` is "Named k of n" over the cheapest-place answers about a SKU it ran on. `tone`:
+ok at half or more, warn when named at all, bad when never. The aside: "k of n cheapest-place answers named a deal
+that was live on a shelf that day". The note names the retailers walled that day. `state`: `measured`;
+`no_deals` (supply read the shelves and found none); `not_measured` (no cheapest-place question, not a brand, or
+supply unread).
+
+### /revenue
+
+`baseline` gains Impact's row `{key: promo, label: Promo pass-through, value: "k of n", note: Named a deal live
+that day, n, k}` when measured.
+
+### Narratives
+
+A cheapest-place answer that named none of the deals live for its variant that day is flagged (`promo_missed`,
+after any other reason), with `deals_live_that_day: [{retailer, deal, terms, program, price_that_day,
+was_price, deal_price}]` in its facts. These are read from the cycle's cached retailer-prices rows, whose `deals`
+supply serves. It has its own prompt (PROMO_PROMPT), the demo's "Amazon charged $47.99 that day and ran save 40%
+on 1 when you buy 2, which the answer never mentions", so every other request and its recordings are unchanged.
+The voice check reads a deal's own words as the facts write them, as it reads the question's ("when you buy 2").
+
+### Tests
+
+`apps/api/tests/test_console_2m2_promo.py` covers the FL13 shape with 10 cheapest-place questions (50 answers), 2
+where-to-buy, and three live deals (an Amazon multi-buy on 5 SKUs, a Walmart Rollback on 2, Sam's Cash on 1):
+* n 50, k 5, loose 8, subscribe 3;
+* per deal: 2 of 25, 2 of 10, 1 of 5;
+* the Rollback price without the word, not counted;
+* the tile, Changes, /prove, no deals, a failed read, and a retailer merchant unaffected.
+
+`apps/pipeline/tests/test_promo_2m2.py` covers the narrative facts.

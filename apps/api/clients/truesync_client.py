@@ -243,6 +243,14 @@ class TrueSyncClient:
         """2A: the latest reference reads and record-vs-page findings per SKU x retailer."""
         return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/reference")
 
+    async def get_deals(self, merchant_slug: str, as_of: Optional[str] = None) -> ForwardResult:
+        """2M-2: supply's /deals, the deals live on the merchant's variants at
+        retailers on a read date (parleo-supply-app 2M-2): {as_of, read_date,
+        deals: [{retailer_domain, kind, text, value, value_unit, terms, program,
+        variants}], retailers, walled, partial}."""
+        return await self.get(f"/api/truesync/merchants/{_slug(merchant_slug)}/deals",
+                              params={"as_of": as_of} if as_of else None)
+
     async def get_retailer_prices(self, merchant_slug: str, as_of: Optional[str] = None, *,
                                   history: bool = False, limit: Optional[int] = None) -> ForwardResult:
         """supply's retailer-prices. 2C-2c: with `history`, ask for every

@@ -161,6 +161,30 @@ def _visibility(conn, row: dict, merchant: Optional[dict] = None, errors: Option
     return parity.extend_visibility(body, ours)
 
 
+async def _promo_inputs(scope: CustomerScope, row: dict, slug: Optional[str]) -> tuple:
+    """2M-2: (promo_pass_through, deals, as_of, error) for a cycle: the cycle's
+    cheapest-place and where-to-buy answers against supply's /deals on the
+    cycle's read date (rm.promo_as_of). (None, None, as_of, None) when the
+    cycle asked no cheapest-place question, names no merchant, or supply's
+    /tenant says the merchant is not a brand (a retailer's deals are its
+    own); a failed supply read is (None, None, as_of, error), never zero
+    deals."""
+    as_of = rm.promo_as_of(row)
+    with engine.connect() as conn:
+        asks = rm.asks_cheapest_place(conn, row)
+        slug = slug or (score_svc.cycle_merchant(conn, row) if asks else None)
+        answers = rm.promo_answers(conn, row) if asks else []
+    if not asks or not slug:
+        return None, None, as_of, None
+    kind = await _tenant_kind(scope, slug)
+    if kind and kind != 'brand':
+        return None, None, as_of, None
+    _, deals, error = await full_loop._client(scope).get_deals(slug, as_of)
+    if error is not None:
+        return None, None, as_of, error
+    return rm.build_promo_pass_through(answers, deals, as_of), deals, as_of, None
+
+
 async def _routing_inputs(scope: CustomerScope, row: dict, merchant: Optional[str]) -> tuple:
     """2L-4: (rm.routing_merchant's facts, read errors) for a cycle whose
     study asks where to buy; (None, {}) for one that does not, with no
@@ -281,6 +305,21 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
             block['changes'] = list(block.get('changes') or []) + rm.attribute_changes(
                 answers, prev_answers, (previous or {}).get('code'), s,
                 compared=block.get('changes_status') == 'compared', site=site)
+    # 2M-2: the Promo pass-through tile's input (the fifth brand tile) and its
+    # Changes line, "Deals named, cheapest-place answers"; absent when the
+    # cycle asked no cheapest-place question
+    promo, _deals, _as_of, p_err = await _promo_inputs(scope, row, merchant)
+    if p_err is not None:
+        body.setdefault('read_errors', {})['deals'] = p_err
+    if promo is not None:
+        body['promo_pass_through'] = {k: v for k, v in promo.items() if k != 'judged'}
+        prev_promo = None
+        if prev is not None:
+            prev_promo, _pd, _pa, _pe = await _promo_inputs(scope, prev, merchant)
+        for s, block in (body.get('by_surface') or {}).items():
+            block['changes'] = list(block.get('changes') or []) + rm.promo_changes(
+                promo, prev_promo, (previous or {}).get('code'), s,
+                compared=block.get('changes_status') == 'compared')
     # 2L-3: the products' and the signals' example answers' narratives
     with engine.connect() as conn:
         narratives_svc.with_overview(body, narratives_svc.lines_for(conn, row['id']))
@@ -373,6 +412,12 @@ async def _score(row: dict, org: int, merchant: Optional[str], rescore: bool, sc
             with engine.connect() as conn:
                 brand_inputs['attribute_accuracy'] = rm.load_attribute_accuracy(
                     conn, row, reference if r_err is None else None)
+            # 2M-2: the Promo pass-through tile, the cycle's cheapest-place answers against supply's deals
+            if kind == 'brand':
+                promo, _deals, _as_of, p_err = await _promo_inputs(scope, row, slug)
+                brand_inputs['promo_pass_through'] = promo
+                if p_err is not None:
+                    errors['deals'] = p_err
         else:
             errors['merchant'] = 'no merchant record for this cycle'
         body = score_svc.build_score(row['cycle_code'], runs=runs, mentions=mentions, vis_rows=vis_rows, access=access,
@@ -1044,6 +1089,33 @@ def _revenue_model(conn, row: dict, inputs: dict, meta: dict, access_requests, v
                                    domain=meta['domain'], access_requests=access_requests)
 
 
+@router.get("/prove")
+async def get_prove(cycle: str = Query(...), merchant: Optional[str] = Query(None),
+                    scope: CustomerScope = Depends(console_scope)):
+    """2M-2: Prove, the Trade promotions screen for one cycle: one row per deal
+    live on a retailer shelf for the cycle's SKUs on its read date (supply's
+    /deals), each with how many cheapest-place answers about a SKU it ran on
+    named it; the aside (k of n cheapest-place answers named a live deal),
+    and the note naming the retailers walled that day (rm.build_prove).
+    `state` not_measured when the cycle asked no cheapest-place question or
+    supply could not be read (named in read_errors), no_deals when supply
+    read the shelves and found none."""
+    if merchant:
+        await check_merchant(scope, merchant)
+    row = dict(cycle_in_scope(cycle, scope))
+    promo, deals, as_of, p_err = await _promo_inputs(scope, row, merchant)
+    with engine.connect() as conn:
+        study = rm.load_study_block(conn, row.get('study_type')) or {}
+        job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
+                           {"st": row['study_type']}).fetchone()
+    brand = (((_json(job[0]) if job else None) or {}).get('merchant') or {}).get('study_brand') or study.get('brand')
+    body = rm.build_prove(promo, deals, brand, as_of)
+    body.update(cycle=row['cycle_code'], read_errors={'deals': p_err} if p_err else {})
+    if promo is not None:
+        body['promo_pass_through'] = {k: v for k, v in promo.items() if k != 'judged'}
+    return body
+
+
 @router.get("/revenue")
 async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(None),
                       scope: CustomerScope = Depends(console_scope)):
@@ -1066,6 +1138,13 @@ async def get_revenue(cycle: str = Query(...), merchant: Optional[str] = Query(N
     with engine.connect() as conn:
         inputs = revenue_svc.inputs_view(revenue_svc.load_inputs(conn, scope.org.id, ms.slug), ms.slug)
         body = _revenue_model(conn, row, inputs, _merchant_meta(ms), requests)
+    # 2M-2: Impact's baseline row for promo pass-through, absent when not measured
+    promo, _deals, _as_of, p_err = await _promo_inputs(scope, row, ms.slug)
+    if p_err is not None:
+        errors['deals'] = p_err
+    baseline = rm.promo_baseline(promo)
+    if baseline is not None:
+        body['baseline'] = list(body.get('baseline') or []) + [baseline]
     body['merchant'] = ms.slug
     body['read_errors'] = errors
     return body
