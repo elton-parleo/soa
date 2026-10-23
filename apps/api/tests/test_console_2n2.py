@@ -13,9 +13,14 @@
 2. The promo tile's note read "Amazon Rollback: named 3 of 6", that same
    stored score. Every reader of the deal's kind takes kind_label, the
    Trade promotions row's.
+3. The narratives' facts: a deal as its title, never the shelf's evidence
+   (run-15013, 15118, 15342); a where-to-buy claim as the stores it named
+   (named_stores), never the scorer's label (run-15031, 15036, 15064,
+   15069, 15185, 15163); a quoted fragment dropped (run-15161).
 """
 from app.services import console_read_models as rm
 from app.services import console_score as score_svc
+from soa_shared import narratives as nv
 from soa_shared import promo_pass_through as ppt
 from tests import console_fixture_2j2 as f2j2
 from tests.test_console_2c3a import db  # noqa: F401  (fixture)
@@ -125,3 +130,72 @@ def test_every_reader_of_the_deal_s_kind_says_what_the_row_says():
     assert row['kind_label'] == entry['kind_label']
     (line,) = rm.promo_changes(promo, None, None, 'all', compared=False)
     assert 'Amazon list price cut ran on 1 SKU' in line['detail'] and 'Rollback' not in line['detail']
+
+
+# ─── 3. Narrative facts for deals, and two quote problems (FL14 --narratives) ───
+
+
+PAMPERS = nv.Merchant(name='Pampers', kind='brand', terms=('Pampers',))
+LABEL = "'told the reader to buy it at Walgreens, Walmart, Target' — where to buy, stated with no source"
+
+
+def test_a_deal_s_facts_are_its_title_never_the_shelf_s_evidence():
+    fact = nv._deal_fact({**FL14_DEAL, 'variant': FL14_DEAL['variants'][0]})
+    assert fact == {'retailer': 'Amazon', 'deal': '25% off list price on AMORE Size 1, $36.18 from $47.99',
+                    'price_that_day': '36.18', 'was_price': '47.99', 'deal_price': '36.18'}
+    facts = {'kind': nv.ANSWER, 'why': ['promo_missed'], 'agent': 'Copilot', 'brand': 'Pampers',
+             'question': 'Cheapest place to buy Pampers AMORE Size 1?', 'deals_live_that_day': [fact],
+             'agent_quoted': [{'price_quoted': '66.98', 'asked_at': 'Amazon'}]}
+    line = ('Copilot quoted $66.98 at Amazon. Amazon charged $36.18 that day and ran 25% off list price on '
+            'AMORE Size 1, which the answer never mentions.')
+    assert nv.check(line, facts) is None
+    # run-15342's line, written from the evidence the facts no longer carry
+    run_15342 = ('Copilot quoted $66.98 at Amazon. Amazon charged $36.18 that day and ran $36.18 with 25 percent '
+                 'savings -25% $ 36 . 18 $0.27 per count ( $0.27 $0.27 / count) List Price: $47.99, which the '
+                 'answer never mentions.')
+    assert nv.check(run_15342, facts) is not None
+
+
+def _where_run():
+    return {'id': 15031, 'platform': 'gemini_grounded', 'surface': 'grounded_api', 'answer_status': 'answered',
+            'tier': 'brand_direct', 'raw_response': 'You can buy Pampers at Walgreens, Walmart and Target.',
+            'query_text': 'Where can I buy Pampers Swaddlers?', 'source_ref': {'merchant_slug': 'pampers'}}
+
+
+def test_a_where_to_buy_claim_gives_the_stores_and_never_the_scorer_s_label():
+    outcome = {'outcome': 'fabricated', 'outcome_reason': LABEL, 'extraction': {}}
+    facts = nv.answer_facts(_where_run(), outcome, [], PAMPERS, {})
+    assert facts['why'] == ['brand_fabricated']
+    assert facts['named_stores'] == ['Walgreens', 'Walmart', 'Target']
+    assert facts['scorer_note'] == 'where to buy, stated with no source' and 'reader' not in nv.facts_text(facts)
+    assert nv.claim_texts(facts) == []
+    assert nv.system_prompt(facts) == nv.STORES_PROMPT
+    assert 'Gemini named Walgreens, Walmart and Target as places to buy it. Pampers never published that list.' \
+        in nv.STORES_PROMPT
+    assert nv.check('Gemini named Walgreens, Walmart and Target as places to buy it. Pampers never published that list.',
+                    facts) is None
+    assert nv.check('Gemini named Walgreens, Costco and Target as places to buy it. Pampers never published that list.',
+                    facts) == 'name_not_in_facts:costco'
+    assert nv.check('Gemini said "told the reader to buy it at Walgreens, Walmart, Target". Pampers never published '
+                    'it and no source backs it.', facts) == 'banned:reader'
+    # any other claim keeps its note, its prompt and its request
+    other = {'outcome': 'fabricated', 'extraction': {},
+             'outcome_reason': "'Pampers Zzz is still available' — a product claim, stated with no source"}
+    facts = nv.answer_facts(_where_run(), other, [], PAMPERS, {})
+    assert 'named_stores' not in facts and nv.system_prompt(facts) == nv.SYSTEM_PROMPT
+    assert nv.claim_texts(facts) == ['Pampers Zzz is still available']
+
+
+def test_a_quoted_fragment_is_dropped():
+    facts = {'kind': nv.ANSWER, 'why': ['brand_fabricated'], 'agent': 'Google AI Mode', 'brand': 'Pampers',
+             'answer_spans': ["Pampers Swaddlers Overnights are Pampers' dedicated, strongest option for overnight "
+                              "protection."]}
+    tail = ' Pampers never published it and no source backs it.'
+    # run-15161, accepted on FL14
+    assert nv.check('Google AI Mode said "Pampers\' never published it and no source backs it.', facts) == \
+        'quote_unclosed'
+    assert nv.check('Google AI Mode said "Pampers\'".' + tail, facts) == 'quote_too_short:8'
+    assert nv.check('Google AI Mode said "Pampers Swaddlers Overnig".' + tail, facts) == 'quote_cut'
+    assert nv.check('Google AI Mode said "Swaddlers Overnights are Pampers\'".' + tail, facts) == 'quote_cut'
+    assert nv.check('Google AI Mode said "are Pampers\' dedicated, strongest option for overnight protection."' + tail,
+                    facts) is None
