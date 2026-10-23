@@ -1,0 +1,52 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"ChatGPT quoted $27.97. Amazon charged $30.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1211,
+    "output_tokens": 32,
+    "total_tokens": 1243
+   }
+  },
+  {
+   "response": "{\"line\":\"ChatGPT quoted $27.97 and Amazon charged $30.97 on Oct 19 for Pampers Swaddlers S2 84.\"}",
+   "usage": {
+    "input_tokens": 1211,
+    "output_tokens": 42,
+    "total_tokens": 1253
+   }
+  }
+ ],
+ "facts": {
+  "agent": "ChatGPT",
+  "agent_quoted": [
+   {
+    "direction": "quoted below the retailer's price",
+    "price_quoted": "27.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "quoted below the retailer's price",
+  "question": "What does the Pampers Swaddlers S2 84 cost at amazon.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "30.97",
+   "retailer": "Amazon"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "5b86b39cbac40983aa8272de7c1f694f72648ce1dcb58a0de6c7dcb2708c9ceb",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "824745c673f28f24a96d6ec06fd183468b9cc732898997f0d7b6b537b3556550",
+ "subject": "answer:run-90031"
+}

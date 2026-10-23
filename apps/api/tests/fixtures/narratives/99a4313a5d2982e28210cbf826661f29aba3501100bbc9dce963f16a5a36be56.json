@@ -1,0 +1,108 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini and Perplexity quoted $37.97 at Walmart. Walmart charged $34.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1303,
+    "output_tokens": 477,
+    "total_tokens": 1780
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini and Perplexity quoted $37.97 at Walmart. Walmart charged $34.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1303,
+    "output_tokens": 321,
+    "total_tokens": 1624
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "00037000863489",
+   "feed_sku:905",
+   "PAM-EU-5-66",
+   "sku:PAM-EU-5-66"
+  ],
+  "brand": "Pampers",
+  "gave_no_price": [
+   "Claude"
+  ],
+  "gtin": "00037000863489",
+  "issue": "2 of 6 agents quoted Walmart above its price",
+  "kind": "product",
+  "price_direction": "quoted above the retailer's price",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "Easy Ups S5 66",
+  "quotes": [
+   {
+    "agent": "ChatGPT",
+    "price": "34.97",
+    "retailer": "Amazon",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "ChatGPT",
+    "price": "34.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "37.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "37.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "37.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "34.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "37.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "37.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   }
+  ],
+  "retailer_prices_that_day": [
+   {
+    "date": "Oct 19",
+    "note": "could not be read",
+    "retailer": "Amazon"
+   },
+   {
+    "date": "Oct 19",
+    "price": "34.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "sku": "PAM-EU-5-66"
+ },
+ "facts_digest": "99a4313a5d2982e28210cbf826661f29aba3501100bbc9dce963f16a5a36be56",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "1b56ed1679508ca1cdb1334ce80123a4f544a5afa0f96eb43a061c7fb74b1cde",
+ "subject": "product:00037000863489"
+}

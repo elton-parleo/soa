@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Copilot gives no Pampers Ultra price. It points to another brand instead. Amazon charged $25.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Copilot says Pampers Ultra costs was $25.97 at Amazon on Oct 19.\"}",
    "usage": {
-    "input_tokens": 763,
-    "output_tokens": 40,
-    "total_tokens": 803
+    "input_tokens": 1170,
+    "output_tokens": 32,
+    "total_tokens": 1202
    }
   },
   {
-   "response": "{\"line\":\"Copilot gives no Pampers Ultra price. Amazon charged $25.97 on Oct 19, but the answer cited another brand’s price instead.\"}",
+   "response": "{\"line\":\"Copilot said $25.97 for another brand’s product on Oct 19, Amazon charged $25.97 that day.\"}",
    "usage": {
-    "input_tokens": 763,
-    "output_tokens": 43,
-    "total_tokens": 806
+    "input_tokens": 1170,
+    "output_tokens": 39,
+    "total_tokens": 1209
    }
   }
  ],
@@ -40,6 +40,6 @@
  },
  "facts_digest": "c41e1ceca58c5e9a4970021296c131e0e0d966c595f7785627499dfe4200e029",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "0117fe8616f914b3ac98c0aa4a71f23991b02d618f8abaf47b8d58f113ab8102",
+ "request_digest": "c0e6780b0b20e9eca3661d3f8df612b501cb9227d66c82ab7151ce1129c5d427",
  "subject": "answer:run-90083"
 }

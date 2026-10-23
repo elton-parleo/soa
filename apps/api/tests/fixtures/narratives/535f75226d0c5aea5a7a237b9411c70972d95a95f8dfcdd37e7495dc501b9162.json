@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Pampers was second, after Huggies, in ChatGPT's first pick. Its answer named Huggies first and Pampers second.\"}",
+   "response": "{\"line\":\"ChatGPT first picked Huggies, then Pampers, on \\\"question 1013\\\".\"}",
    "usage": {
-    "input_tokens": 723,
-    "output_tokens": 43,
-    "total_tokens": 766
+    "input_tokens": 1130,
+    "output_tokens": 33,
+    "total_tokens": 1163
    }
   },
   {
-   "response": "{\"line\":\"Pampers gets picked last. ChatGPT first picked Huggies and named Pampers second.\"}",
+   "response": "{\"line\":\"ChatGPT first picked Huggies, then Pampers, on \\\"question 1013\\\".\"}",
    "usage": {
-    "input_tokens": 723,
+    "input_tokens": 1130,
     "output_tokens": 33,
-    "total_tokens": 756
+    "total_tokens": 1163
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "535f75226d0c5aea5a7a237b9411c70972d95a95f8dfcdd37e7495dc501b9162",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "7fdd4e9eac5fd11f6dc4bd17d67809686186324c6e38fbf311f4757f196ccc22",
+ "request_digest": "1af16d6d5025fdd5db056034f5cac9a67ba72449e9b5b061218e553fa8ffac7e",
  "subject": "answer:run-70073"
 }

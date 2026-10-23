@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Copilot’s first pick was Huggies, with Pampers second. This means the assistant did not lead with the Pampers brand.\"}",
+   "response": "{\"line\":\"Copilot first picked Huggies, then Pampers, on \\\"question 1013\\\".\"}",
    "usage": {
-    "input_tokens": 724,
-    "output_tokens": 41,
-    "total_tokens": 765
+    "input_tokens": 1131,
+    "output_tokens": 33,
+    "total_tokens": 1164
    }
   },
   {
-   "response": "{\"line\":\"Copilot picked Huggies first, then Pampers. Its first pick was a rival brand.\"}",
+   "response": "{\"line\":\"Copilot first picked Huggies, then Pampers, on \\\"question 1013\\\".\"}",
    "usage": {
-    "input_tokens": 724,
+    "input_tokens": 1131,
     "output_tokens": 33,
-    "total_tokens": 757
+    "total_tokens": 1164
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "43cf0d95885fa720332be2237895e7475262d6d02de956551e667be83806f375",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "75f82b2b73f815a318e5a725b5370ee69c089ec0c04cfff12a3caa78e45743a7",
+ "request_digest": "0e497d62211efe4ee6560b43cbae450fbc8d8a9a00aa19ab3db9fad0366cf4e4",
  "subject": "answer:run-70077"
 }

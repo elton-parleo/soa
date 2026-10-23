@@ -1,0 +1,106 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini and Perplexity quoted $40.97 at Walmart. Walmart charged $37.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1289,
+    "output_tokens": 362,
+    "total_tokens": 1651
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini and Perplexity quoted $40.97 at Walmart. Walmart charged $37.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1289,
+    "output_tokens": 300,
+    "total_tokens": 1589
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "feed_sku:909",
+   "PAM-CR-5-92",
+   "sku:PAM-CR-5-92"
+  ],
+  "brand": "Pampers",
+  "gave_no_price": [
+   "Claude"
+  ],
+  "issue": "2 of 6 agents quoted Walmart above its price",
+  "kind": "product",
+  "price_direction": "quoted above the retailer's price",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "Cruisers S5",
+  "quotes": [
+   {
+    "agent": "ChatGPT",
+    "price": "37.97",
+    "retailer": "Amazon",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "ChatGPT",
+    "price": "37.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "40.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "40.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "40.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "37.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "40.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "40.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   }
+  ],
+  "retailer_prices_that_day": [
+   {
+    "date": "Oct 19",
+    "price": "40.97",
+    "retailer": "Amazon"
+   },
+   {
+    "date": "Oct 19",
+    "price": "37.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "sku": "PAM-CR-5-92"
+ },
+ "facts_digest": "1fb048a17fcab7e91aef1d446c39684d16b6dc1ac2e14c5a69dbcfa32fee4abb",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "756963c96fd96635585374d7642d1116ba85eb127933c3eb7146860637bf940d",
+ "subject": "product:feed_sku:909"
+}

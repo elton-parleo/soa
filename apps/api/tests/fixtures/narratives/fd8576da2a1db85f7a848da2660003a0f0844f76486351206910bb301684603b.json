@@ -3,17 +3,17 @@
   {
    "response": "{\"line\":null}",
    "usage": {
-    "input_tokens": 712,
-    "output_tokens": 28,
-    "total_tokens": 740
+    "input_tokens": 1119,
+    "output_tokens": 65,
+    "total_tokens": 1184
    }
   },
   {
    "response": "{\"line\":null}",
    "usage": {
-    "input_tokens": 712,
-    "output_tokens": 14,
-    "total_tokens": 726
+    "input_tokens": 1119,
+    "output_tokens": 45,
+    "total_tokens": 1164
    }
   }
  ],
@@ -34,6 +34,6 @@
  },
  "facts_digest": "fd8576da2a1db85f7a848da2660003a0f0844f76486351206910bb301684603b",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "5b2f58f87af0c212804825a985f38be38a30b4859edf24e0a886fbb605bab91a",
+ "request_digest": "98c06f00000b4448d8cd7ea479d9fee67ba66858ead45e2a1d58b0e456f7ff2e",
  "subject": "answer:run-70323"
 }

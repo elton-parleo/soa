@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Copilot put Huggies first for Pampers, even though Pampers came second in the answer. Its first pick was another brand.\"}",
+   "response": "{\"line\":\"Copilot first picked Huggies, then Pampers, on \\\"question 1012\\\".\"}",
    "usage": {
-    "input_tokens": 724,
-    "output_tokens": 41,
-    "total_tokens": 765
+    "input_tokens": 1131,
+    "output_tokens": 33,
+    "total_tokens": 1164
    }
   },
   {
-   "response": "{\"line\":\"Copilot put Huggies first, even though Pampers is the brand. The answer named Huggies first and Pampers second, so it did not lead with Pampers.\"}",
+   "response": "{\"line\":\"Copilot first picked Huggies, then Pampers, on \\\"question 1012\\\".\"}",
    "usage": {
-    "input_tokens": 724,
-    "output_tokens": 50,
-    "total_tokens": 774
+    "input_tokens": 1131,
+    "output_tokens": 33,
+    "total_tokens": 1164
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "1dd25fd11fd789e2598768d7c5dfb8d60cbd124f8ee2686cce907e8d3567f168",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "d81e30db27a8f76b990fda86699a7c38983bd48e9f5d76ee4a62f63525415312",
+ "request_digest": "24aadaaacf89cca4536698e5b704e8267b4259ee88992418e00292c2f3f91da8",
  "subject": "answer:run-70071"
 }

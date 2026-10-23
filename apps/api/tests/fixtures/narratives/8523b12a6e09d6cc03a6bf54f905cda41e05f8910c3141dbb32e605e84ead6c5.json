@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Copilot gave Pampers Pure no price. Amazon charged $34.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Copilot said another brand's product price was $34.97 at Amazon on Oct 19.\"}",
    "usage": {
-    "input_tokens": 763,
+    "input_tokens": 1170,
     "output_tokens": 33,
-    "total_tokens": 796
+    "total_tokens": 1203
    }
   },
   {
-   "response": "{\"line\":null}",
+   "response": "{\"line\":\"Copilot said Pampers Pure costs nothing and Amazon charged $34.97 that day.\"}",
    "usage": {
-    "input_tokens": 763,
-    "output_tokens": 14,
-    "total_tokens": 777
+    "input_tokens": 1170,
+    "output_tokens": 31,
+    "total_tokens": 1201
    }
   }
  ],
@@ -40,6 +40,6 @@
  },
  "facts_digest": "8523b12a6e09d6cc03a6bf54f905cda41e05f8910c3141dbb32e605e84ead6c5",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "31c5179087eafd3d9e24aed12c55c30be56418c338b28e1d1aa2906b4251aa64",
+ "request_digest": "d075837325afd7aeb0f2ce7cc5f0d2073139df6558a9aa9bc34222cf87505e9e",
  "subject": "answer:run-90095"
 }

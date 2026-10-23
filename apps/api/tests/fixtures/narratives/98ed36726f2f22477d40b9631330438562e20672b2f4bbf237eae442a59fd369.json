@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"ChatGPT first picked Huggies, with Pampers second. The first pick was another brand.\"}",
+   "response": "{\"line\":\"ChatGPT first picked Huggies, then Pampers, on \\\"question 1012\\\".\"}",
    "usage": {
-    "input_tokens": 723,
+    "input_tokens": 1130,
     "output_tokens": 33,
-    "total_tokens": 756
+    "total_tokens": 1163
    }
   },
   {
-   "response": "{\"line\":\"ChatGPT puts Huggies first over Pampers. Facts say the answer’s first pick was another brand on a question that let it choose.\"}",
+   "response": "{\"line\":\"ChatGPT first picked Huggies, then Pampers, on \\\"question 1012\\\".\"}",
    "usage": {
-    "input_tokens": 723,
-    "output_tokens": 42,
-    "total_tokens": 765
+    "input_tokens": 1130,
+    "output_tokens": 33,
+    "total_tokens": 1163
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "98ed36726f2f22477d40b9631330438562e20672b2f4bbf237eae442a59fd369",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "735a825af98217710f57ce4875f9c9b439c76a049a6b4094d96487d7211ca611",
+ "request_digest": "4fe82e48a4ee562c812581850ce4d65fe85b6981e4d82bd4603ce3d986844c64",
  "subject": "answer:run-70067"
 }

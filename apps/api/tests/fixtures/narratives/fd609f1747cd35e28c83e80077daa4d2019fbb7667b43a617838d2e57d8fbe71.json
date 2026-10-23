@@ -1,0 +1,52 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Perplexity quoted $32.97, but Walmart charged $29.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1212,
+    "output_tokens": 34,
+    "total_tokens": 1246
+   }
+  },
+  {
+   "response": "{\"line\":\"Perplexity quoted $32.97 but Walmart charged $29.97 on Oct 19. Wrong price.\"}",
+   "usage": {
+    "input_tokens": 1212,
+    "output_tokens": 36,
+    "total_tokens": 1248
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Perplexity",
+  "agent_quoted": [
+   {
+    "direction": "quoted above the retailer's price",
+    "price_quoted": "32.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "quoted above the retailer's price",
+  "question": "What does the Pampers Baby Dry S3 136 cost at walmart.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "29.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "fd609f1747cd35e28c83e80077daa4d2019fbb7667b43a617838d2e57d8fbe71",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "2e0227854333fe3fcedd7a3fa0930abe7c2b065de9788c0a13f2fd44788577c7",
+ "subject": "answer:run-90040"
+}

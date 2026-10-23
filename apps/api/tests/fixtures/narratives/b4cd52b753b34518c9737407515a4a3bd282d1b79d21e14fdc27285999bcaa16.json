@@ -1,0 +1,106 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini and Perplexity quoted $34.97 at Walmart. Walmart charged $31.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1286,
+    "output_tokens": 358,
+    "total_tokens": 1644
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini and Perplexity quoted $34.97 at Walmart. Walmart charged $31.97 on Oct 19. 2 of 6 agents quoted Walmart above its price\"}",
+   "usage": {
+    "input_tokens": 1286,
+    "output_tokens": 314,
+    "total_tokens": 1600
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "feed_sku:907",
+   "PAM-PURE-2-74",
+   "sku:PAM-PURE-2-74"
+  ],
+  "brand": "Pampers",
+  "gave_no_price": [
+   "Claude"
+  ],
+  "issue": "2 of 6 agents quoted Walmart above its price",
+  "kind": "product",
+  "price_direction": "quoted above the retailer's price",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "Pure",
+  "quotes": [
+   {
+    "agent": "ChatGPT",
+    "price": "31.97",
+    "retailer": "Amazon",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "ChatGPT",
+    "price": "31.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "34.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "34.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "34.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "31.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "34.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "34.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   }
+  ],
+  "retailer_prices_that_day": [
+   {
+    "date": "Oct 19",
+    "price": "34.97",
+    "retailer": "Amazon"
+   },
+   {
+    "date": "Oct 19",
+    "price": "31.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "sku": "PAM-PURE-2-74"
+ },
+ "facts_digest": "b4cd52b753b34518c9737407515a4a3bd282d1b79d21e14fdc27285999bcaa16",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "32d283d7b763567ef3833fc0692f430876a273ac2b6764d4429136beaefd4721",
+ "subject": "product:feed_sku:907"
+}

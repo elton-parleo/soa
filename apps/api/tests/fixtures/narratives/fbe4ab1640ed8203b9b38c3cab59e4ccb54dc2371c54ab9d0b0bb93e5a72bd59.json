@@ -1,0 +1,52 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Perplexity quoted $40.97, but Walmart charged $37.97 on Oct 19. That price does not match.\"}",
+   "usage": {
+    "input_tokens": 1210,
+    "output_tokens": 40,
+    "total_tokens": 1250
+   }
+  },
+  {
+   "response": "{\"line\":\"Perplexity quoted $40.97, but Walmart charged $37.97 that day.\"}",
+   "usage": {
+    "input_tokens": 1210,
+    "output_tokens": 32,
+    "total_tokens": 1242
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Perplexity",
+  "agent_quoted": [
+   {
+    "direction": "quoted above the retailer's price",
+    "price_quoted": "40.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "quoted above the retailer's price",
+  "question": "What does the Pampers Cruisers S5 cost at walmart.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "37.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "fbe4ab1640ed8203b9b38c3cab59e4ccb54dc2371c54ab9d0b0bb93e5a72bd59",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "159f3be8916f76687c6216a69d227c42e4a33250c66b4a24fe67821025444f8b",
+ "subject": "answer:run-90112"
+}

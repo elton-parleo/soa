@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Google AI Mode first picked Huggies while Pampers came second. This means it did not put Pampers first on the brand choice question.\"}",
+   "response": "{\"line\":\"Google AI Mode first picked Huggies, then Pampers, on \\\"question 1012\\\".\"}",
    "usage": {
-    "input_tokens": 725,
-    "output_tokens": 42,
-    "total_tokens": 767
+    "input_tokens": 1132,
+    "output_tokens": 34,
+    "total_tokens": 1166
    }
   },
   {
-   "response": "{\"line\":\"Google AI Mode first picked Huggies over Pampers when choosing a brand. The answer then named Pampers second.\"}",
+   "response": "{\"line\":\"Google AI Mode first picked Huggies, then Pampers, on \\\"question 1012\\\".\"}",
    "usage": {
-    "input_tokens": 725,
-    "output_tokens": 37,
-    "total_tokens": 762
+    "input_tokens": 1132,
+    "output_tokens": 34,
+    "total_tokens": 1166
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "07012fa6c34ab87c25100eb31f611baebc2e8179df9f5dcfa478f58bacf35e07",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "85f772404d2ccab5624c1cea78ab18bee5ac9186a7329e6356033de5d0578cd7",
+ "request_digest": "df09f591bc02663b11b14b9de93b3e3ec4a3f5fd70c58d53c54121fdb51a5480",
  "subject": "answer:run-70069"
 }

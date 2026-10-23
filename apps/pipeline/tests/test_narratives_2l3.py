@@ -131,3 +131,16 @@ def test_rescore_narratives_refuses_to_store_without_the_table(rescore_db, monke
 def test_rescore_narratives_runs_on_its_own():
     with pytest.raises(SystemExit):
         rc.main(['--cycle', 'X', '--narratives', '--classify-only'])
+
+
+def test_rescore_narratives_prints_each_call_of_a_dropped_line(rescore_db, monkeypatch):
+    """2L-3a: a drop is read from what each call wrote (a line beside a null, or a failed check)."""
+    def dropped(engine, cycle_id, writer, **kw):
+        return [{'subject': 'answer:run-2', 'status': 'dropped', 'line': None, 'reason': 'calls_disagree:null',
+                 'calls': [{'line': 'ChatGPT said $1.00.', 'check': None, 'usage': {}},
+                           {'line': None, 'check': 'no_line', 'usage': {}}]}]
+    monkeypatch.setattr(narratives, 'write_cycle', dropped)
+    out = []
+    rc._main_narratives(_args(dry_run=True), writer=type('W', (), {'model': 'm'})(), log=out.append)
+    assert '      call 1 [pass]  ChatGPT said $1.00.' in out
+    assert '      call 2 [no_line]  ' in out

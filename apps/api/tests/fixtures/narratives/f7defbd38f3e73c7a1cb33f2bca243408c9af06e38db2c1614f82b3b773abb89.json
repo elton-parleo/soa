@@ -1,0 +1,52 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"ChatGPT quoted $37.97 for Pampers Cruisers S5 and Amazon charged $40.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1208,
+    "output_tokens": 39,
+    "total_tokens": 1247
+   }
+  },
+  {
+   "response": "{\"line\":\"ChatGPT quoted $37.97 for Pampers, Amazon charged $40.97 on Oct 19. The quoted price was wrong.\"}",
+   "usage": {
+    "input_tokens": 1208,
+    "output_tokens": 41,
+    "total_tokens": 1249
+   }
+  }
+ ],
+ "facts": {
+  "agent": "ChatGPT",
+  "agent_quoted": [
+   {
+    "direction": "quoted below the retailer's price",
+    "price_quoted": "37.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "quoted below the retailer's price",
+  "question": "What does the Pampers Cruisers S5 cost at amazon.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "40.97",
+   "retailer": "Amazon"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "f7defbd38f3e73c7a1cb33f2bca243408c9af06e38db2c1614f82b3b773abb89",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "6a70823183afb915b0a8296cfe8f6c37e62681894af6e473890240ca2aa9775d",
+ "subject": "answer:run-90115"
+}

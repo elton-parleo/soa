@@ -24,6 +24,9 @@ from tests.test_console_read_models import _encode, as_, http, upstream  # noqa:
 
 # ═══ end to end on the FL13-shaped fixture ════════════════════════════════
 
+#: 2L-3a: product rows accepted of the fixture's 10 (9 as recorded Oct 22; the brief asked for 8 of 11 on FL13)
+PRODUCTS_ACCEPTED = 8
+
 def _facts(db):
     with db.connect() as c:
         return n.load_cycle_facts(c, fx.CYCLE_ID)
@@ -35,6 +38,7 @@ def _write(db):
 
 def _load(db):
     f2j2.load(db, _encode)
+    fx.fl13_shapes(db)
 
 
 def test_the_fixture_s_subjects(db):
@@ -81,10 +85,24 @@ def test_every_line_beside_its_facts_and_every_stored_line_passes(db, capsys):
         assert row['facts_digest'] == n.facts_digest(facts[subject])
         if row['status'] == 'accepted':
             assert n.check(row['line'], facts[subject]) is None, (subject, row['line'])
-            assert len(row['line']) <= n.MAX_CHARS
+            assert len(row['line']) <= n.max_chars(facts[subject])
         else:
             assert row['line'] is None
     assert sum(1 for r in stored.values() if r['status'] == 'accepted') >= 60
+    accepted = {s: r['line'] for s, r in stored.items() if r['status'] == 'accepted'}
+    # 2L-3a: no judgment on a reference that could not be read, nor on a range or a per-unit quote
+    unread = [s for s in accepted if (facts[s].get('retailer_price_that_day') or {}).get('note') == 'could not be read']
+    no_judgment = [s for s in accepted if n._has_price(facts[s]) and not n.judgment(facts[s])]
+    assert set(unread) <= set(no_judgment)
+    assert not [(s, accepted[s]) for s in no_judgment if n._JUDGMENT.search(accepted[s])]
+    # every accepted line starts with the agent's name
+    assert all(n.starts_with_agent(line, facts[s]) for s, line in accepted.items())
+    # every brand-choice line is one sentence
+    brand_choice = [s for s in accepted if n.is_brand_choice(facts[s])]
+    assert brand_choice and all(n.sentences(accepted[s], facts[s]) == 1 for s in brand_choice)
+    # the product rows (10 on this fixture)
+    products = [s for s in stored if s.startswith('product:')]
+    assert sum(1 for s in products if s in accepted) >= PRODUCTS_ACCEPTED
     assert all(stored[f"product:{k}"]['status'] in ('accepted', 'dropped', 'null')
                for k in (s.split(':', 1)[1] for s in facts if s.startswith('product:')))
 

@@ -1,0 +1,52 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini quoted $34.97 but Walmart charged $31.97 that day.\"}",
+   "usage": {
+    "input_tokens": 1206,
+    "output_tokens": 30,
+    "total_tokens": 1236
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini quoted $34.97, Walmart charged $31.97 on Oct 19 for Pampers Pure. Price was wrong.\"}",
+   "usage": {
+    "input_tokens": 1206,
+    "output_tokens": 40,
+    "total_tokens": 1246
+   }
+  }
+ ],
+ "facts": {
+  "agent": "Gemini",
+  "agent_quoted": [
+   {
+    "direction": "quoted above the retailer's price",
+    "price_quoted": "34.97",
+    "verdict": "wrong"
+   }
+  ],
+  "brand": "Pampers",
+  "kind": "answer",
+  "meaning": [
+   "The price the assistant gave is not the price the retailer charged."
+  ],
+  "price_direction": "quoted above the retailer's price",
+  "question": "What does the Pampers Pure cost at walmart.com?",
+  "retailer_price_that_day": {
+   "date": "Oct 19",
+   "price": "31.97",
+   "retailer": "Walmart"
+  },
+  "scorer_note": "r",
+  "surface": "API with search grounding",
+  "verdict": "wrong",
+  "why": [
+   "wrong_price"
+  ]
+ },
+ "facts_digest": "15bc15a838c1eef59fca08fa9b9600dfdfd90326af855af33e42e6780dedd913",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "49a85f4de38bf20da1c3f6bc178e7f20cd19c27662a90350dc28395749f3e6b6",
+ "subject": "answer:run-90086"
+}

@@ -1,0 +1,107 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini quoted $19.97 at Walmart. Walmart charged $29.97 on Oct 19. 2 of 6 agents quoted a wrong price at Walmart\"}",
+   "usage": {
+    "input_tokens": 1291,
+    "output_tokens": 831,
+    "total_tokens": 2122
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini quoted $19.97 at Walmart. Walmart charged $29.97 on Oct 19. 2 of 6 agents quoted a wrong price at Walmart\"}",
+   "usage": {
+    "input_tokens": 1291,
+    "output_tokens": 395,
+    "total_tokens": 1686
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "00037000863465",
+   "feed_sku:903",
+   "PAM-BD-3-136",
+   "sku:PAM-BD-3-136"
+  ],
+  "brand": "Pampers",
+  "gave_no_price": [
+   "Claude"
+  ],
+  "gtin": "00037000863465",
+  "issue": "2 of 6 agents quoted a wrong price at Walmart",
+  "kind": "product",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "Baby Dry S3 136",
+  "quotes": [
+   {
+    "agent": "ChatGPT",
+    "price": "29.97",
+    "retailer": "Amazon",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "ChatGPT",
+    "price": "29.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "32.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "19.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "32.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "29.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "32.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "32.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   }
+  ],
+  "retailer_prices_that_day": [
+   {
+    "date": "Oct 19",
+    "price": "32.97",
+    "retailer": "Amazon"
+   },
+   {
+    "date": "Oct 19",
+    "price": "29.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "sku": "PAM-BD-3-136"
+ },
+ "facts_digest": "1dc89944ad14de449cce5c328834d587b8978b4f2ad7c91a7b04adb56b668aee",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "bf112ef19e60191c5dc884acc8c0e7d3e065c5148a1f7d9b6c05132052659a71",
+ "subject": "product:00037000863465"
+}

@@ -821,6 +821,10 @@ def _main_narratives(args, writer=None, log=print) -> int:
     reports = narratives.write_cycle(engine, cid, writer, dry_run=args.dry_run, force=True, log=log)
     for r in sorted(reports, key=lambda r: r['subject']):
         log(f"  {r['subject']}  [{r['status']}{': ' + r['reason'] if r['reason'] else ''}]  {r['line'] or ''}")
+        if r['status'] == 'dropped':
+            # 2L-3a: what each call wrote, so a drop can be read (a line beside a null, or a failed check)
+            for i, c in enumerate(r.get('calls') or [], 1):
+                log(f"      call {i} [{c.get('check') or 'pass'}]  {c.get('line') or ''}")
     counts = {s: sum(1 for r in reports if r['status'] == s) for s in ('accepted', 'dropped', 'null')}
     totals = narratives.usage_totals(reports)
     log(f"accepted {counts['accepted']}, dropped {counts['dropped']}, null {counts['null']}; "

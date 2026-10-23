@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Copilot’s first pick for Pampers questions 1011 was Huggies, and Pampers came second in its named order.\"}",
+   "response": "{\"line\":\"Copilot first picked Huggies, then Pampers, on \\\"question 1011\\\".\"}",
    "usage": {
-    "input_tokens": 724,
-    "output_tokens": 40,
-    "total_tokens": 764
+    "input_tokens": 1131,
+    "output_tokens": 33,
+    "total_tokens": 1164
    }
   },
   {
-   "response": "{\"line\":\"Copilot first picked Huggies, then Pampers. The first pick order named Huggies before Pampers.\"}",
+   "response": "{\"line\":\"Copilot first picked Huggies, then Pampers, on \\\"question 1011\\\".\"}",
    "usage": {
-    "input_tokens": 724,
-    "output_tokens": 37,
-    "total_tokens": 761
+    "input_tokens": 1131,
+    "output_tokens": 33,
+    "total_tokens": 1164
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "ce4b3f8a204da6d1bb87aac75d50e707167b02a82c6f6fe5df5b3646488e06b6",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "26d0e3d6868345d7c87c1b1c59337dc241cd892a8565b23cd6c9821181e56f91",
+ "request_digest": "e0179764b469c3d7c03ffdf32a3af99083691568a7c3347aa54833ca184f26f7",
  "subject": "answer:run-70065"
 }

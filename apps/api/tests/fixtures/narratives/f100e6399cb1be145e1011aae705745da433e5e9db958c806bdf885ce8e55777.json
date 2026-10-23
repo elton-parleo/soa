@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Claude’s first pick was Huggies, but it named Pampers second. On this question, that first pick was a rival brand.\"}",
+   "response": "{\"line\":\"Claude first picked Huggies, then Pampers, on \\\"question 1015\\\".\"}",
    "usage": {
-    "input_tokens": 722,
-    "output_tokens": 41,
-    "total_tokens": 763
+    "input_tokens": 1129,
+    "output_tokens": 32,
+    "total_tokens": 1161
    }
   },
   {
-   "response": "{\"line\":\"Claude puts Huggies first even though Pampers is the brand. The answer named Huggies before Pampers.\"}",
+   "response": "{\"line\":\"Claude first picked Huggies, then Pampers, on \\\"question 1015\\\".\"}",
    "usage": {
-    "input_tokens": 722,
-    "output_tokens": 37,
-    "total_tokens": 759
+    "input_tokens": 1129,
+    "output_tokens": 32,
+    "total_tokens": 1161
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "f100e6399cb1be145e1011aae705745da433e5e9db958c806bdf885ce8e55777",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "e93a05a4825365f8aa462cdcec722c690d75ac64a83e77e85a181e4d12232d7c",
+ "request_digest": "7e51b655e24e20f0c6c24452736c7c1efad5eb9ce9a7a3c316bbc7b80e15b56e",
  "subject": "answer:run-70090"
 }

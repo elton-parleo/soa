@@ -1,0 +1,106 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini and Perplexity quoted $25.97 at Walmart. Walmart charged $22.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1285,
+    "output_tokens": 293,
+    "total_tokens": 1578
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini and Perplexity quoted $25.97 at Walmart. Walmart charged $22.97 on Oct 19.\"}",
+   "usage": {
+    "input_tokens": 1285,
+    "output_tokens": 255,
+    "total_tokens": 1540
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "feed_sku:906",
+   "PAM-ULTRA-120",
+   "sku:PAM-ULTRA-120"
+  ],
+  "brand": "Pampers",
+  "gave_no_price": [
+   "Claude"
+  ],
+  "issue": "2 of 6 agents quoted Walmart above its price",
+  "kind": "product",
+  "price_direction": "quoted above the retailer's price",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "Ultra",
+  "quotes": [
+   {
+    "agent": "ChatGPT",
+    "price": "22.97",
+    "retailer": "Amazon",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "ChatGPT",
+    "price": "22.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "25.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "25.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "25.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "22.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "25.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "25.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   }
+  ],
+  "retailer_prices_that_day": [
+   {
+    "date": "Oct 19",
+    "price": "25.97",
+    "retailer": "Amazon"
+   },
+   {
+    "date": "Oct 19",
+    "price": "22.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "sku": "PAM-ULTRA-120"
+ },
+ "facts_digest": "cece13df0ccbc1f728265cda5e4d84a7d1df26165a775e382c693c97bc9c4004",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "923a69b4facc7b2d0a3b031576261ec5d9135bdc316efe3d9a063bdac4f7e07c",
+ "subject": "product:feed_sku:906"
+}

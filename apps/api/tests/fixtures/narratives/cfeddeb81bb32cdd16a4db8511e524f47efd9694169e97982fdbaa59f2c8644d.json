@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Perplexity named Huggies first and Pampers second. Pampers says its first pick was another brand.\"}",
+   "response": "{\"line\":\"Perplexity first picked Huggies, then Pampers, on \\\"question 1011\\\".\"}",
    "usage": {
-    "input_tokens": 724,
-    "output_tokens": 36,
-    "total_tokens": 760
+    "input_tokens": 1131,
+    "output_tokens": 34,
+    "total_tokens": 1165
    }
   },
   {
-   "response": "{\"line\":\"Perplexity first picked Huggies, with Pampers second. Pampers was the brand it did not choose first.\"}",
+   "response": "{\"line\":\"Perplexity first picked Huggies, then Pampers, on \\\"question 1011\\\".\"}",
    "usage": {
-    "input_tokens": 724,
-    "output_tokens": 38,
-    "total_tokens": 762
+    "input_tokens": 1131,
+    "output_tokens": 34,
+    "total_tokens": 1165
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "cfeddeb81bb32cdd16a4db8511e524f47efd9694169e97982fdbaa59f2c8644d",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "46988c090fce91676dfa90e19a5b89180f5a7b4f5a8dbc536c64a12516fd39a1",
+ "request_digest": "2d357781e5ddc89327e79f78e6bee9480268ad22fe621612306613cc623c1580",
  "subject": "answer:run-70064"
 }

@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Gemini first picked Huggies, even though its named order lists Huggies then Pampers. The first pick was another brand.\"}",
+   "response": "{\"line\":\"Gemini first picked Huggies, then Pampers, on \\\"question 1012\\\".\"}",
    "usage": {
-    "input_tokens": 723,
-    "output_tokens": 41,
-    "total_tokens": 764
+    "input_tokens": 1130,
+    "output_tokens": 33,
+    "total_tokens": 1163
    }
   },
   {
-   "response": "{\"line\":\"Gemini put Huggies first when the question let it choose between brands. Pampers came second in the named order.\"}",
+   "response": "{\"line\":\"Gemini first picked Huggies, then Pampers, on \\\"question 1012\\\".\"}",
    "usage": {
-    "input_tokens": 723,
-    "output_tokens": 38,
-    "total_tokens": 761
+    "input_tokens": 1130,
+    "output_tokens": 33,
+    "total_tokens": 1163
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "292ecf6519eea7ce9cfb04cd9bd9a8ee66c5f8412fa71bcccfab31f7c76db633",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "d8552d6905baa9c9259c070fc54833d5b53d616b632cb8eb743846488a4532f7",
+ "request_digest": "5093b79ae1b2a84f11b988f8ea0a037608c9873d91fb44c67699bb077127be21",
  "subject": "answer:run-70068"
 }

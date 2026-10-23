@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Perplexity first picked Huggies and put Pampers second. Its first pick was not Pampers.\"}",
+   "response": "{\"line\":\"Perplexity first picked Huggies, then Pampers, on \\\"question 1015\\\".\"}",
    "usage": {
-    "input_tokens": 724,
-    "output_tokens": 66,
-    "total_tokens": 790
+    "input_tokens": 1131,
+    "output_tokens": 34,
+    "total_tokens": 1165
    }
   },
   {
-   "response": "{\"line\":\"Perplexity first picked Huggies over Pampers on question 1015, even though it named Pampers second.\"}",
+   "response": "{\"line\":\"Perplexity first picked Huggies, then Pampers, on \\\"question 1015\\\".\"}",
    "usage": {
-    "input_tokens": 724,
-    "output_tokens": 38,
-    "total_tokens": 762
+    "input_tokens": 1131,
+    "output_tokens": 34,
+    "total_tokens": 1165
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "d33d7e593aa99ad3662297ea1f5fa4477148d6f923031b7742e96203453c60b9",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "c7b098ee733ac89f95c0c0278bd1d217bf1a9771375ae2ba40747aeb922e1c18",
+ "request_digest": "d215fc0d679fbb58a77428343aad6e944b2cfdf19c7e701e106e2b84d6ffc681",
  "subject": "answer:run-70088"
 }

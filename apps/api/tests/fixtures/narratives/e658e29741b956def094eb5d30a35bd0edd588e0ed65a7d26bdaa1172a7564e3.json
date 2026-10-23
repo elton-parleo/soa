@@ -1,0 +1,108 @@
+{
+ "calls": [
+  {
+   "response": "{\"line\":\"Gemini quoted $42.97 at Walmart. Walmart charged $39.97 on Oct 19. 2 of 6 agents quoted a wrong price at Walmart.\"}",
+   "usage": {
+    "input_tokens": 1306,
+    "output_tokens": 414,
+    "total_tokens": 1720
+   }
+  },
+  {
+   "response": "{\"line\":\"Gemini quoted $42.97 at Walmart. Walmart charged $39.97 on Oct 19 2 of 6 agents quoted a wrong price at Walmart.\"}",
+   "usage": {
+    "input_tokens": 1306,
+    "output_tokens": 1368,
+    "total_tokens": 2674
+   }
+  }
+ ],
+ "facts": {
+  "agents_asked": 6,
+  "aliases": [
+   "00037000863472",
+   "feed_sku:904",
+   "PAM-CR360-4-104",
+   "sku:PAM-CR360-4-104"
+  ],
+  "brand": "Pampers",
+  "gave_no_price": [
+   "Claude"
+  ],
+  "gtin": "00037000863472",
+  "issue": "2 of 6 agents quoted a wrong price at Walmart",
+  "kind": "product",
+  "priced_another_brand": [
+   "Copilot"
+  ],
+  "product": "Cruisers 360 S4 104",
+  "quotes": [
+   {
+    "agent": "ChatGPT",
+    "price": "39.97",
+    "retailer": "Amazon",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "ChatGPT",
+    "price": "39.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "42.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Gemini",
+    "price": "42.97",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "42.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Google AI Mode",
+    "price": "39.97",
+    "retailer": "Walmart",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "price": "42.97",
+    "retailer": "Amazon",
+    "verdict": "right"
+   },
+   {
+    "agent": "Perplexity",
+    "note": "per-unit quote, not comparable",
+    "price": "0.38",
+    "retailer": "Walmart",
+    "verdict": "wrong"
+   }
+  ],
+  "retailer_prices_that_day": [
+   {
+    "date": "Oct 19",
+    "price": "42.97",
+    "retailer": "Amazon"
+   },
+   {
+    "date": "Oct 19",
+    "price": "39.97",
+    "retailer": "Walmart"
+   }
+  ],
+  "sku": "PAM-CR360-4-104"
+ },
+ "facts_digest": "e658e29741b956def094eb5d30a35bd0edd588e0ed65a7d26bdaa1172a7564e3",
+ "model": "gpt-5.4-nano-2026-03-17",
+ "request_digest": "0203d71804e9b3a86aa4006f645419746a59e924de550c6bf4de1444b7f6072e",
+ "subject": "product:00037000863472"
+}

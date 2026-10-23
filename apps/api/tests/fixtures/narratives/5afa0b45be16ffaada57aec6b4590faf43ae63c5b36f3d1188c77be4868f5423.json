@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":null}",
+   "response": "{\"line\":\"Copilot gave none for Pampers Cruisers S5. Walmart charged $37.97 that day.\"}",
    "usage": {
-    "input_tokens": 767,
-    "output_tokens": 14,
-    "total_tokens": 781
+    "input_tokens": 1174,
+    "output_tokens": 34,
+    "total_tokens": 1208
    }
   },
   {
-   "response": "{\"line\":\"Copilot gives no price for Pampers at Walmart.com. Walmart charged $37.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Copilot said it was $37.97 for another brand’s product. Walmart charged $37.97 that day.\"}",
    "usage": {
-    "input_tokens": 767,
-    "output_tokens": 36,
-    "total_tokens": 803
+    "input_tokens": 1174,
+    "output_tokens": 37,
+    "total_tokens": 1211
    }
   }
  ],
@@ -40,6 +40,6 @@
  },
  "facts_digest": "5afa0b45be16ffaada57aec6b4590faf43ae63c5b36f3d1188c77be4868f5423",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "36bb8af6c3ffedcb81888918d85c408d20be62c5ff829ab5c379f370510d0f0f",
+ "request_digest": "c0d46e21e8739ecbccf5806f140f856f8c3ab080d9f1fa7bbc6ba330b7f14519",
  "subject": "answer:run-90113"
 }
