@@ -3332,13 +3332,12 @@ def promo_changes(now: Optional[dict], prev: Optional[dict], prev_code: Optional
     else:
         delta, direction = 'new', 'flat'
         tone = 'bad' if here['k'] * 2 < here['n'] else 'neu'
-        named = [d for d in now['per_deal'] if d['named']]
-        said = ' and '.join(f"{d['title']} {d['named']} {'time' if d['named'] == 1 else 'times'}" for d in named)
+        said = ppt.named_words(now['per_deal'])
         top = ppt.biggest(now['per_deal'])
         skus = len({j['variant_id'] for j in now.get('judged') or [] if top and ppt.deal_id(top) in j['live']}) if top else 0
         biggest = t['changes.biggest'].format(deal=top['short'], skus=f"{skus} SKU{'s' if skus != 1 else ''}",
                                               named=top['named'], asked=top['asked']) if top else ''
-        detail = t['changes.new'].format(k=here['k'], n=here['n'], named=f"Named: {said}. " if said else '',
+        detail = t['changes.new'].format(k=here['k'], n=here['n'], named=f"Named {said}. " if said else '',
                                          biggest=biggest).replace('  ', ' ')
     return [{'label': t['changes.label'], 'delta': delta, 'dir': direction, 'tone': tone, 'detail': detail.strip(),
              'route': 'prove', 'metric': 'promo', 'now': here['k'], 'of_now': here['n'],
@@ -3420,9 +3419,8 @@ def build_prove(promo: Optional[dict], deals: Optional[dict], brand: Optional[st
         state = 'measured' if rows else 'no_deals'
     aside = None
     if promo is not None:
-        named = [d for d in promo['per_deal'] if d['named']]
-        said = ' and '.join(f"{d['title']} {d['named']} {'time' if d['named'] == 1 else 'times'}" for d in named)
-        sub = ' '.join(x for x in (f"{said}." if said else None,
+        said = ppt.named_words(promo['per_deal'])
+        sub = ' '.join(x for x in (f"Answers named {said}." if said else None,
                                    t['prove.sub.subscribe'].format(s=promo['subscribe']) if promo['subscribe'] else None) if x)
         aside = {'kick': t['prove.kick'].format(date=day), 'value': f"{promo['k']} of {promo['n']}",
                  'label': t['prove.label'], 'sub': sub or None}

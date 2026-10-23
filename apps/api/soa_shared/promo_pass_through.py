@@ -187,7 +187,8 @@ def title(deal: dict) -> str:
     """"Amazon: save 40% on 1 when you buy 2"."""
     from soa_shared import retailers as af
     text = (deal.get('text') or KIND_WORDS.get(deal.get('kind'), 'deal')).strip().rstrip('.')
-    if len(text) > 1 and text[0].isupper() and text[1].islower():
+    # a leading verb reads in the sentence ("save 40% …"); a name keeps its capital ("Rollback")
+    if re.match(r"(?:save|get|buy|earn|clip|spend|take)\b", text, re.I):
         text = text[0].lower() + text[1:]
     return f"{af.retailer_name(deal.get('retailer_domain'))}: {text}"
 
@@ -258,6 +259,16 @@ def deals_from_rows(rows: Optional[List[dict]]) -> dict:
                                       'shelf_price': row.get('price'), 'price': deal.get('price'),
                                       'was_price': deal.get('was_price'), 'evidence': deal.get('evidence')})
     return {'deals': list(groups.values())}
+
+
+def times(n: int) -> str:
+    return 'once' if n == 1 else 'twice' if n == 2 else f"{n} times"
+
+
+def named_words(per_deal: List[dict]) -> str:
+    """"Amazon multi-buy twice, Walmart Rollback twice and Sam's Club Sam's Cash once": the deals answers named."""
+    said = [f"{d['short']} {times(d['named'])}" for d in per_deal if d.get('named')]
+    return said[0] if len(said) == 1 else ', '.join(said[:-1]) + f" and {said[-1]}" if said else ''
 
 
 def biggest(per_deal: List[dict]) -> Optional[dict]:

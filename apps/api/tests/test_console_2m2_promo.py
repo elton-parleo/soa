@@ -216,9 +216,8 @@ def test_changes_and_the_impact_baseline(http, db, upstream):
     assert (line['label'], line['delta'], line['now'], line['of_now'], line['route']) == \
         ('Deals named, cheapest-place answers', 'new', 5, 50, 'prove')
     assert line['detail'] == (
-        "5 of 50. Named: Amazon: save 40% on 1 when you buy 2 2 times and Walmart: rollback 2 times and "
-        "Sam's Club: $15 Sam's Cash on $100 of P&G 1 time. Amazon multi-buy ran on 5 SKUs and 2 of 25 answers "
-        "named it. First cycle with this question.")
+        "5 of 50. Named Amazon multi-buy twice, Walmart Rollback twice and Sam's Club Sam's Cash once. Amazon "
+        "multi-buy ran on 5 SKUs and 2 of 25 answers named it. First cycle with this question.")
     revenue = _get(http, 'revenue', merchant=WS)
     _dump('revenue-2m2.json', revenue)
     assert revenue['baseline'][-1] == {'key': 'promo', 'label': 'Promo pass-through', 'value': '5 of 50',
@@ -246,12 +245,13 @@ def test_the_trade_promotions_table(http, db, upstream):
     assert body['state'] == 'measured' and body['title'] == 'Trade promotions'
     assert [(r['title'], r['agents'], r['value'], r['terms'], r['tone']) for r in body['rows']] == [
         ('Amazon: save 40% on 1 when you buy 2', 'Named 2 of 25', '40% off', 'Amazon, when you buy 2', 'warn'),
-        ('Walmart: rollback', 'Named 2 of 10', '$10.00', 'Rollback', 'warn'),
+        ('Walmart: Rollback', 'Named 2 of 10', '$10.00', 'Rollback', 'warn'),
         ("Sam's Club: $15 Sam's Cash on $100 of P&G", 'Named 1 of 5', '$15.00', "Sam's Cash", 'warn')]
     assert body['rows'][1]['detail'] == ('Live on Pampers Swaddlers v5, Pampers Swaddlers v6. Pampers Swaddlers v5 '
                                          '$59.77 to $49.77. Pampers Swaddlers v6 $59.77 to $49.77.')
     assert body['aside']['value'] == '5 of 50' and body['aside']['kick'] == 'Promo pass-through, Oct 14'
     assert body['aside']['label'] == 'cheapest-place answers named a deal that was live on a shelf that day'
+    assert body['aside']['sub'].startswith("Answers named Amazon multi-buy twice, Walmart Rollback twice and Sam's Club")
     assert body['aside']['sub'].endswith(
         'Subscribe & Save came up in 3 answers, and the charter counts it as a standing program.')
     assert body['note'] == ('Manufacturer mode never sets a price. Every figure here is what a named retailer showed '
