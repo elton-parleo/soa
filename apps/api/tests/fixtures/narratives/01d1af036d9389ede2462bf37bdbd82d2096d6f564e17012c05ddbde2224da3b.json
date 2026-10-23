@@ -1,27 +1,27 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Copilot said Pampers Swaddlers S1 96, and Amazon charged $30.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Copilot did not quote a price for Pampers Swaddlers S1 96. Amazon charged $30.97 that day.\"}",
    "usage": {
-    "input_tokens": 1176,
-    "output_tokens": 38,
-    "total_tokens": 1214
+    "input_tokens": 1251,
+    "output_tokens": 40,
+    "total_tokens": 1291
    }
   },
   {
    "response": "{\"line\":null}",
    "usage": {
-    "input_tokens": 1176,
-    "output_tokens": 146,
-    "total_tokens": 1322
+    "input_tokens": 1251,
+    "output_tokens": 76,
+    "total_tokens": 1327
    }
   },
   {
-   "response": "{\"line\":\"Copilot did not quote a price for Pampers Swaddlers S1 96 on amazon.com; Amazon charged $30.97 that day.\"}",
+   "response": "{\"line\":\"Copilot showed Amazon charged $30.97 that day for this product.\"}",
    "usage": {
-    "input_tokens": 1176,
-    "output_tokens": 43,
-    "total_tokens": 1219
+    "input_tokens": 1251,
+    "output_tokens": 28,
+    "total_tokens": 1279
    }
   }
  ],
@@ -48,6 +48,6 @@
  },
  "facts_digest": "01d1af036d9389ede2462bf37bdbd82d2096d6f564e17012c05ddbde2224da3b",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "483424a909f337885b746c2bedbcc4fd98e5f97817406e9f1b7355048a7fe0b6",
+ "request_digest": "f37c2448a800c2b8b14fc223a46424b80be84bfc41b0ffaa921acdf9ba12aacc",
  "subject": "answer:run-90023"
 }

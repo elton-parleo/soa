@@ -35,14 +35,10 @@ os.environ['DATABASE_URL'] = 'postgresql://nobody@127.0.0.1:1/unused'
 from soa_shared import narratives as n  # noqa: E402
 from tests import narratives_fixture as fx  # noqa: E402
 
-#: USD per million tokens (input, output) for gpt-5.4-nano, the default
-#: (config.SOA_CODING_MODEL). OpenAI's price as supply's 2A-5 recorded it on
-#: Oct 21 2026 (docs/truesync/verification-semantics.md). UNVERIFIED.
-PRICE = {'input': 0.20, 'output': 1.25, 'as_of': '2026-10-21', 'verified': False}
-
-
-def dollars(usage: dict) -> float:
-    return (usage['input_tokens'] * PRICE['input'] + usage['output_tokens'] * PRICE['output']) / 1_000_000
+#: USD per million tokens for the default model (config.SOA_CODING_MODEL), from
+#: OpenAI's pricing page (config.SOA_CODING_MODEL_PRICE says where and when). UNVERIFIED.
+from soa_shared import config  # noqa: E402
+PRICE = config.SOA_CODING_MODEL_PRICE
 
 
 def summary(reports, seconds: float) -> str:
@@ -53,7 +49,7 @@ def summary(reports, seconds: float) -> str:
     return (f"{len(reports)} subjects, {len(calls)} calls, {seconds:.1f} s; input tokens median "
             f"{statistics.median(ins) if ins else 0:.0f} / max {max(ins, default=0)}, output tokens median "
             f"{statistics.median(outs) if outs else 0:.0f} / max {max(outs, default=0)}; "
-            f"${dollars(total):.4f} at ${PRICE['input']:.2f} / ${PRICE['output']:.2f} per million tokens "
+            f"${n.dollars(total) or 0:.4f} at ${PRICE['input']:.2f} / ${PRICE['output']:.2f} per million tokens "
             f"(price of {PRICE['as_of']}, unverified)")
 
 

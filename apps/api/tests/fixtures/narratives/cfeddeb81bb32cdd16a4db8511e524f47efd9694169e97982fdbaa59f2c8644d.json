@@ -3,17 +3,17 @@
   {
    "response": "{\"line\":\"Perplexity first picked Huggies, then Pampers, on \\\"question 1011\\\".\"}",
    "usage": {
-    "input_tokens": 1131,
+    "input_tokens": 1206,
     "output_tokens": 34,
-    "total_tokens": 1165
+    "total_tokens": 1240
    }
   },
   {
    "response": "{\"line\":\"Perplexity first picked Huggies, then Pampers, on \\\"question 1011\\\".\"}",
    "usage": {
-    "input_tokens": 1131,
+    "input_tokens": 1206,
     "output_tokens": 34,
-    "total_tokens": 1165
+    "total_tokens": 1240
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "cfeddeb81bb32cdd16a4db8511e524f47efd9694169e97982fdbaa59f2c8644d",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "2d357781e5ddc89327e79f78e6bee9480268ad22fe621612306613cc623c1580",
+ "request_digest": "8883340acecc1403d82dd32574db7088f5dc09246a921e02cb0e7f1eef3e8c45",
  "subject": "answer:run-70064"
 }

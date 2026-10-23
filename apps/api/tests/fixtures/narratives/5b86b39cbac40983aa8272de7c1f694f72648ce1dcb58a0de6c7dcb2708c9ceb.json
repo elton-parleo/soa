@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"ChatGPT quoted $27.97. Amazon charged $30.97 on Oct 19.\"}",
+   "response": "{\"line\":\"ChatGPT gives Pampers Swaddlers S2 84 $27.97 but Amazon charged $30.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1211,
-    "output_tokens": 32,
-    "total_tokens": 1243
+    "input_tokens": 1286,
+    "output_tokens": 41,
+    "total_tokens": 1327
    }
   },
   {
-   "response": "{\"line\":\"ChatGPT quoted $27.97 and Amazon charged $30.97 on Oct 19 for Pampers Swaddlers S2 84.\"}",
+   "response": "{\"line\":\"ChatGPT gives Pampers Swaddlers S2 84 $27.97 but Amazon charged $30.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1211,
-    "output_tokens": 42,
-    "total_tokens": 1253
+    "input_tokens": 1286,
+    "output_tokens": 41,
+    "total_tokens": 1327
    }
   }
  ],
@@ -47,6 +47,6 @@
  },
  "facts_digest": "5b86b39cbac40983aa8272de7c1f694f72648ce1dcb58a0de6c7dcb2708c9ceb",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "824745c673f28f24a96d6ec06fd183468b9cc732898997f0d7b6b537b3556550",
+ "request_digest": "2eafb99a516e7762158c9c0ce5784295be264dd8e71d4dd8a59c6a6e9362785c",
  "subject": "answer:run-90031"
 }

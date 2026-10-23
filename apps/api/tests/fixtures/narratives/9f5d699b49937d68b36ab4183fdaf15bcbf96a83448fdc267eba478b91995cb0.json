@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Gemini gives $27.97. Walmart charged $24.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Gemini gives Pampers Swaddlers NB 84 $27.97 but Walmart charged $24.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1211,
-    "output_tokens": 32,
-    "total_tokens": 1243
+    "input_tokens": 1286,
+    "output_tokens": 40,
+    "total_tokens": 1326
    }
   },
   {
-   "response": "{\"line\":\"Gemini quoted $27.97 and Walmart charged $24.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Gemini gives Pampers Swaddlers NB 84 $27.97 but Walmart charged $24.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1211,
-    "output_tokens": 32,
-    "total_tokens": 1243
+    "input_tokens": 1286,
+    "output_tokens": 40,
+    "total_tokens": 1326
    }
   }
  ],
@@ -47,6 +47,6 @@
  },
  "facts_digest": "9f5d699b49937d68b36ab4183fdaf15bcbf96a83448fdc267eba478b91995cb0",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "7f1f80a63a84bd2cd01e410b9d3d6afa34059d52dcb7688a72a83d1c3ec2409f",
+ "request_digest": "5bf4be8087aee97ea48a0d3bed2caae44905347e1a90a8dfc6daf869dcae4040",
  "subject": "answer:run-90002"
 }

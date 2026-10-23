@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Perplexity quoted $29.97, but Walmart charged $26.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers AMORE $29.97 but Walmart charged $26.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1208,
-    "output_tokens": 34,
-    "total_tokens": 1242
+    "input_tokens": 1283,
+    "output_tokens": 37,
+    "total_tokens": 1320
    }
   },
   {
-   "response": "{\"line\":\"Perplexity quoted $29.97 for Pampers AMORE and Walmart charged $26.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Perplexity quotes $29.97 for Pampers AMORE but Walmart charged $26.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1208,
+    "input_tokens": 1283,
     "output_tokens": 38,
-    "total_tokens": 1246
+    "total_tokens": 1321
    }
   }
  ],
@@ -47,6 +47,6 @@
  },
  "facts_digest": "a8b7c1ccbfc64cea8c763adbe94d76014fc005fbf3b5c9d573e5e676214d0a9b",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "8526f1c67e8af34b5714d1eaacfc604ce2fa447be0d58db57b62d20dea10b487",
+ "request_digest": "a1d5d92745a5c4c98464c6898735d6f40d66872497c5266309c70d9582b3f835",
  "subject": "answer:run-90100"
 }

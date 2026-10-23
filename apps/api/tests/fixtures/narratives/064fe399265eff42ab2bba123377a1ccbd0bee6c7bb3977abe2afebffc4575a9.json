@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Perplexity said Pampers Cruisers 360 costs about $0.38 per diaper. Walmart charged $39.97 that day.\"}",
+   "response": "{\"line\":\"Perplexity quoted Pampers Cruisers 360 run about $0.38 per diaper but Walmart charged $39.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1239,
-    "output_tokens": 41,
-    "total_tokens": 1280
+    "input_tokens": 1314,
+    "output_tokens": 97,
+    "total_tokens": 1411
    }
   },
   {
-   "response": "{\"line\":\"Perplexity said Pampers Cruisers 360 run about $0.38 per diaper. Walmart charged $39.97 that day.\"}",
+   "response": "{\"line\":\"Perplexity quoted Pampers Cruisers 360 at $0.38 per diaper but Walmart charged $39.97 that day.\"}",
    "usage": {
-    "input_tokens": 1239,
-    "output_tokens": 41,
-    "total_tokens": 1280
+    "input_tokens": 1314,
+    "output_tokens": 135,
+    "total_tokens": 1449
    }
   }
  ],
@@ -50,6 +50,6 @@
  },
  "facts_digest": "064fe399265eff42ab2bba123377a1ccbd0bee6c7bb3977abe2afebffc4575a9",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "83f6e573e8f59419e48c0a45ac60291fe7f5daf0414d574dae3a2a759ff331ec",
+ "request_digest": "afdea25c268e88564ad96d5db464d7dbdf94d8aec0d3f270e0aa8f449d94e0e7",
  "subject": "answer:run-90052"
 }

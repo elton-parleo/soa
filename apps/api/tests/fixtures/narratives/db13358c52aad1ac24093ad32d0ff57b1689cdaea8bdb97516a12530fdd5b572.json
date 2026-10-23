@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"ChatGPT quoted $22.97 for Pampers Ultra, while Amazon charged $25.97 on Oct 19.\"}",
+   "response": "{\"line\":\"ChatGPT gives Pampers Ultra $22.97 but Amazon charged $25.97 that day.\"}",
    "usage": {
-    "input_tokens": 1205,
-    "output_tokens": 37,
-    "total_tokens": 1242
+    "input_tokens": 1280,
+    "output_tokens": 33,
+    "total_tokens": 1313
    }
   },
   {
-   "response": "{\"line\":\"ChatGPT quoted $22.97. Amazon charged $25.97 that day.\"}",
+   "response": "{\"line\":\"ChatGPT gives Pampers Ultra $22.97 but Amazon charged $25.97 that day.\"}",
    "usage": {
-    "input_tokens": 1205,
-    "output_tokens": 30,
-    "total_tokens": 1235
+    "input_tokens": 1280,
+    "output_tokens": 33,
+    "total_tokens": 1313
    }
   }
  ],
@@ -47,6 +47,6 @@
  },
  "facts_digest": "db13358c52aad1ac24093ad32d0ff57b1689cdaea8bdb97516a12530fdd5b572",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "b3e4d4d20309a89e526441e399b6d9a1a08b24d2de0347554c1985e8e9f67d3d",
+ "request_digest": "d54555ce6f8cd280fbe59ad610790aa8d54389b89aa640c9d0a454a6531b588a",
  "subject": "answer:run-90079"
 }

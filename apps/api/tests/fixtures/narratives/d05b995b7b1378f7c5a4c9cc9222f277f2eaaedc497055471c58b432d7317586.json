@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Perplexity quoted $30.97, but Walmart charged $27.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Swaddlers S1 96 $30.97 but Walmart charged $27.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1213,
-    "output_tokens": 34,
-    "total_tokens": 1247
+    "input_tokens": 1288,
+    "output_tokens": 42,
+    "total_tokens": 1330
    }
   },
   {
-   "response": "{\"line\":\"Perplexity gives $30.97 for Pampers Swaddlers S1 96 at Walmart. Walmart charged $27.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Swaddlers S1 96 $30.97 but Walmart charged $27.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1213,
-    "output_tokens": 45,
-    "total_tokens": 1258
+    "input_tokens": 1288,
+    "output_tokens": 42,
+    "total_tokens": 1330
    }
   }
  ],
@@ -47,6 +47,6 @@
  },
  "facts_digest": "d05b995b7b1378f7c5a4c9cc9222f277f2eaaedc497055471c58b432d7317586",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "7d12040865ba25e87d1a27a0fc6f685d1a75cc497a3b7c66bb90c2c40b7ae192",
+ "request_digest": "c5a4cdce0adffe47855d34152427b42ad6405b442dbe23ec8eab8c2035ff87f0",
  "subject": "answer:run-90016"
 }

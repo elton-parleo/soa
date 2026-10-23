@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Perplexity quoted $27.97, but Walmart charged $24.97 on Oct 19 for Pampers Swaddlers NB 84.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Swaddlers NB 84 $27.97 but Walmart charged $24.97 that day.\"}",
    "usage": {
-    "input_tokens": 1212,
-    "output_tokens": 43,
-    "total_tokens": 1255
+    "input_tokens": 1287,
+    "output_tokens": 39,
+    "total_tokens": 1326
    }
   },
   {
-   "response": "{\"line\":\"Perplexity quoted $27.97 for Pampers Swaddlers NB 84, but Walmart charged $24.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Swaddlers NB 84 $27.97 but Walmart charged $24.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1212,
-    "output_tokens": 43,
-    "total_tokens": 1255
+    "input_tokens": 1287,
+    "output_tokens": 41,
+    "total_tokens": 1328
    }
   }
  ],
@@ -47,6 +47,6 @@
  },
  "facts_digest": "073abfe52ddf5e66e8cbdfe4e149c5dde6b4de11ca6b5aa53704fb1100d21328",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "95febbc672e00f99fe420fca5233aa69dfda98ca282a774245ef7d682c6cf9b0",
+ "request_digest": "1a4954629b56307665872cf544ac1cce81f4093ecf492f8b513f8f014aaa20d8",
  "subject": "answer:run-90004"
 }

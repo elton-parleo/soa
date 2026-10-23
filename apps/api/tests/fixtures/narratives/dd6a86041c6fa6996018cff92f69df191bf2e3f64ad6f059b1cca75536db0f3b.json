@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Copilot said another brand's product, and did not quote a price for Pampers Swaddlers NB 84. Walmart charged $24.97 that day.\"}",
+   "response": "{\"line\":\"Copilot said \\\"Pampers Swaddlers NB 84\\\" but gave no price, while Walmart charged $24.97 that day.\"}",
    "usage": {
-    "input_tokens": 1176,
-    "output_tokens": 46,
-    "total_tokens": 1222
+    "input_tokens": 1251,
+    "output_tokens": 42,
+    "total_tokens": 1293
    }
   },
   {
-   "response": "{\"line\":\"Copilot did not quote a price for the Pampers Swaddlers NB 84, but Walmart charged $24.97 that day.\"}",
+   "response": "{\"line\":\"Copilot gave no price for the Pampers Swaddlers NB 84. Walmart charged $24.97 that day.\"}",
    "usage": {
-    "input_tokens": 1176,
-    "output_tokens": 41,
-    "total_tokens": 1217
+    "input_tokens": 1251,
+    "output_tokens": 38,
+    "total_tokens": 1289
    }
   }
  ],
@@ -40,6 +40,6 @@
  },
  "facts_digest": "dd6a86041c6fa6996018cff92f69df191bf2e3f64ad6f059b1cca75536db0f3b",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "2e07e656ed4ea4dfd27f1f54369e1e8bfd890f702c0d057e8096922ffd026dcb",
+ "request_digest": "d5c6bec6f70e4d3cf7d29a6e12a5377fcd0a42768675743941505c1406238092",
  "subject": "answer:run-90005"
 }

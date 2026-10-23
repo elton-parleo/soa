@@ -90,11 +90,9 @@ def test_every_line_beside_its_facts_and_every_stored_line_passes(db, capsys):
             assert row['line'] is None
     assert sum(1 for r in stored.values() if r['status'] == 'accepted') >= 60
     accepted = {s: r['line'] for s, r in stored.items() if r['status'] == 'accepted'}
-    # 2L-3a: no judgment on a reference that could not be read, nor on a range or a per-unit quote
-    unread = [s for s in accepted if (facts[s].get('retailer_price_that_day') or {}).get('note') == 'could not be read']
-    no_judgment = [s for s in accepted if n._has_price(facts[s]) and not n.judgment(facts[s])]
-    assert set(unread) <= set(no_judgment)
-    assert not [(s, accepted[s]) for s in no_judgment if n._JUDGMENT.search(accepted[s])]
+    # 2M-3: no line judges the quote (the console shows the verdict), outside a product row's issue
+    assert not [(s, line) for s, line in accepted.items()
+                if n._JUDGMENT.search(line.replace(str(facts[s].get('issue') or '\0'), ''))]
     # every accepted line starts with the agent's name
     assert all(n.starts_with_agent(line, facts[s]) for s, line in accepted.items())
     # every brand-choice line is one sentence

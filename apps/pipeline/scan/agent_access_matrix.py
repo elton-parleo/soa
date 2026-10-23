@@ -26,6 +26,12 @@ longest-match-wins, Allow beats Disallow on an exact tie — operating on
 the same parsed Entry/RuleLine objects RobotFileParser already built.
 Per rule 8's "don't add a second parser": nothing here re-parses
 robots.txt text; it only re-evaluates already-parsed rules correctly.
+
+CPython's RFC 9309 rewrite of robotparser (on the 3.13 branch and in
+3.14) changed the objects read here: the '*' group is kept in `entries`
+and `default_entry` is never set, a rule's path keeps a literal '*', and
+a trailing '$' moves to RuleLine.fullmatch. _default_entry, _find_entry
+and _pattern read either shape (2M-3: four tests failed on 3.13).
 """
 import re
 from urllib.parse import unquote, urlparse
@@ -64,6 +70,20 @@ def _rule_matches(pattern: str, path: str) -> bool:
         return path.startswith(pattern.rstrip("$"))
 
 
+def _is_star(entry) -> bool:
+    return "*" in (entry.useragents or [])
+
+
+def _default_entry(parser):
+    """The '*' group: default_entry before the RFC 9309 parser, the first
+    '*' entry in `entries` after it (see module docstring)."""
+    if parser is None:
+        return None
+    if getattr(parser, "default_entry", None) is not None:
+        return parser.default_entry
+    return next((e for e in parser.entries if _is_star(e)), None)
+
+
 def _find_entry(parser, agent_token: str):
     """Mirrors RobotFileParser.can_fetch's own lookup order: a named
     group matching this agent wins outright (per-group override, S1's
@@ -72,9 +92,15 @@ def _find_entry(parser, agent_token: str):
     if parser is None:
         return None
     for entry in parser.entries:
-        if entry.applies_to(agent_token):
+        if not _is_star(entry) and entry.applies_to(agent_token):
             return entry
-    return parser.default_entry
+    return _default_entry(parser)
+
+
+def _pattern(rule_line) -> str:
+    """The rule as robots.txt wrote it: unquoted (the older parser quotes
+    '*' and '$'), with the '$' anchor the RFC 9309 parser moves out."""
+    return unquote(rule_line.path) + ("$" if getattr(rule_line, "fullmatch", False) else "")
 
 
 def _evaluate_path(entry, path: str):
@@ -87,7 +113,7 @@ def _evaluate_path(entry, path: str):
         return True, None
     best = None  # (specificity, allowance, original_pattern)
     for rl in entry.rulelines:
-        original = unquote(rl.path)
+        original = _pattern(rl)
         if not _rule_matches(original, path):
             continue
         specificity = len(original)
@@ -141,7 +167,7 @@ def build_agent_access_matrix(discovery, product_urls: list):
     matrix = []
     divergence_evidence = []
 
-    default_entry = parser.default_entry if parser is not None else None
+    default_entry = _default_entry(parser)
     star_root_allowed, _ = _evaluate_path(default_entry, "/") if robots_readable else (True, None)
     star_product_flags = (
         [_evaluate_path(default_entry, p)[0] for p in product_paths]

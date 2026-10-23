@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Perplexity quoted $40.97, but Walmart charged $37.97 on Oct 19. That price does not match.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Cruisers S5 $40.97 but Walmart charged $37.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1210,
-    "output_tokens": 40,
-    "total_tokens": 1250
+    "input_tokens": 1285,
+    "output_tokens": 39,
+    "total_tokens": 1324
    }
   },
   {
-   "response": "{\"line\":\"Perplexity quoted $40.97, but Walmart charged $37.97 that day.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Cruisers S5 $40.97 but Walmart charged $37.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1210,
-    "output_tokens": 32,
-    "total_tokens": 1242
+    "input_tokens": 1285,
+    "output_tokens": 39,
+    "total_tokens": 1324
    }
   }
  ],
@@ -47,6 +47,6 @@
  },
  "facts_digest": "fbe4ab1640ed8203b9b38c3cab59e4ccb54dc2371c54ab9d0b0bb93e5a72bd59",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "159f3be8916f76687c6216a69d227c42e4a33250c66b4a24fe67821025444f8b",
+ "request_digest": "1a028899a9e43a950bc58e1fb8b0cf99c50b292f8a07e133763da0c85f2c75ac",
  "subject": "answer:run-90112"
 }

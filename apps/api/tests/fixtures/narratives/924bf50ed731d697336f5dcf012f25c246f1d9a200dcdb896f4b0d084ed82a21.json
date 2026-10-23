@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Perplexity quoted $30.97 for Pampers Swaddlers S2 84. Walmart charged $27.97 on Oct 19, so the quote does not match.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Swaddlers S2 84 $30.97 but Walmart charged $27.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1213,
-    "output_tokens": 50,
-    "total_tokens": 1263
+    "input_tokens": 1288,
+    "output_tokens": 42,
+    "total_tokens": 1330
    }
   },
   {
-   "response": "{\"line\":\"Perplexity quoted $30.97. Walmart charged $27.97 that day, so it was wrong.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Swaddlers S2 84 $30.97 but Walmart charged $27.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1213,
-    "output_tokens": 36,
-    "total_tokens": 1249
+    "input_tokens": 1288,
+    "output_tokens": 42,
+    "total_tokens": 1330
    }
   }
  ],
@@ -47,6 +47,6 @@
  },
  "facts_digest": "924bf50ed731d697336f5dcf012f25c246f1d9a200dcdb896f4b0d084ed82a21",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "32d5be1079c2245943a6bf562e7238d0a68035144ba553a556512f5477297a86",
+ "request_digest": "362ea10e84a118a64c418d10641cf36e3cd467649b5b82edfcc5785aa7568f41",
  "subject": "answer:run-90028"
 }

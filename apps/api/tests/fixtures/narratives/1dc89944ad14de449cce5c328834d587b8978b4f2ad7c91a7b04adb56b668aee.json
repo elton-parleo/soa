@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Gemini quoted $19.97 at Walmart. Walmart charged $29.97 on Oct 19. 2 of 6 agents quoted a wrong price at Walmart\"}",
+   "response": "{\"line\":\"Gemini quoted $19.97 at Walmart. Walmart charged $29.97 on Oct 19 2 of 6 agents quoted a wrong price at Walmart\"}",
    "usage": {
-    "input_tokens": 1291,
-    "output_tokens": 831,
-    "total_tokens": 2122
+    "input_tokens": 1452,
+    "output_tokens": 1336,
+    "total_tokens": 2788
    }
   },
   {
    "response": "{\"line\":\"Gemini quoted $19.97 at Walmart. Walmart charged $29.97 on Oct 19. 2 of 6 agents quoted a wrong price at Walmart\"}",
    "usage": {
-    "input_tokens": 1291,
-    "output_tokens": 395,
-    "total_tokens": 1686
+    "input_tokens": 1452,
+    "output_tokens": 304,
+    "total_tokens": 1756
    }
   }
  ],
@@ -102,6 +102,6 @@
  },
  "facts_digest": "1dc89944ad14de449cce5c328834d587b8978b4f2ad7c91a7b04adb56b668aee",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "bf112ef19e60191c5dc884acc8c0e7d3e065c5148a1f7d9b6c05132052659a71",
+ "request_digest": "68a17b7401fd7d79a3a5dfdeed54c6f1d13a4cc7841b69eafe70b5a151172876",
  "subject": "product:00037000863465"
 }

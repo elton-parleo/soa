@@ -1219,8 +1219,8 @@ def build_retired_line_questions(snapshot, *, category, persona, study_pattern) 
             category=category, persona=persona, study_pattern=study_pattern,
             stage=RETIRED_LINE_STAGE, specificity='Narrow',
             soa_focus='Retired product',
-            rationale=(f"{line['product_name']} is retired in the brand's record"
-                       + (f"; {line['successor']['product_name']} replaced it." if line['successor'] else ".")),
+            rationale=(f"{line['product_name']} is retired in the brand's record."
+                       + (f" {line['successor']['product_name']} replaced it." if line['successor'] else "")),
         ))
     return rows, {'count': len(rows), 'lines': [l['line'] for l in lines]}
 

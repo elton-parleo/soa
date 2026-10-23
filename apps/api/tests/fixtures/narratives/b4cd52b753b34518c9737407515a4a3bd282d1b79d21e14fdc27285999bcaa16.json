@@ -3,17 +3,17 @@
   {
    "response": "{\"line\":\"Gemini and Perplexity quoted $34.97 at Walmart. Walmart charged $31.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1286,
-    "output_tokens": 358,
-    "total_tokens": 1644
+    "input_tokens": 1447,
+    "output_tokens": 359,
+    "total_tokens": 1806
    }
   },
   {
-   "response": "{\"line\":\"Gemini and Perplexity quoted $34.97 at Walmart. Walmart charged $31.97 on Oct 19. 2 of 6 agents quoted Walmart above its price\"}",
+   "response": "{\"line\":\"Gemini and Perplexity quoted $34.97 at Walmart. Walmart charged $31.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1286,
-    "output_tokens": 314,
-    "total_tokens": 1600
+    "input_tokens": 1447,
+    "output_tokens": 301,
+    "total_tokens": 1748
    }
   }
  ],
@@ -101,6 +101,6 @@
  },
  "facts_digest": "b4cd52b753b34518c9737407515a4a3bd282d1b79d21e14fdc27285999bcaa16",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "32d283d7b763567ef3833fc0692f430876a273ac2b6764d4429136beaefd4721",
+ "request_digest": "9567e2a03f922d6dff3e3b3d1603fb812da19ff1a53d9640eee9f413f7fc4629",
  "subject": "product:feed_sku:907"
 }

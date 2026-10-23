@@ -3,17 +3,17 @@
   {
    "response": "{\"line\":\"ChatGPT first picked Huggies, then Pampers, on \\\"question 1011\\\".\"}",
    "usage": {
-    "input_tokens": 1130,
+    "input_tokens": 1205,
     "output_tokens": 33,
-    "total_tokens": 1163
+    "total_tokens": 1238
    }
   },
   {
    "response": "{\"line\":\"ChatGPT first picked Huggies, then Pampers, on \\\"question 1011\\\".\"}",
    "usage": {
-    "input_tokens": 1130,
+    "input_tokens": 1205,
     "output_tokens": 33,
-    "total_tokens": 1163
+    "total_tokens": 1238
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "2361eda21b7977357f377d324c8ad52362292690cf1f09403f07db363bb9aabc",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "4b73bcb06a11018dbd18b9b717689d7814af724777d21513c7659961f59e7b07",
+ "request_digest": "f9a7303ddc7501f2b8ee497cb43ad310a82ccde2077a200eb7a893fd4a781ed4",
  "subject": "answer:run-70061"
 }

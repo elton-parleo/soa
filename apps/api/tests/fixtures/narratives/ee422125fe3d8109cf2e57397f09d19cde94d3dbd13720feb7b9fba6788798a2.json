@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Copilot did not quote a price for Pampers Cruisers 360 S4 104. Walmart charged $39.97 that day.\"}",
+   "response": "{\"line\":\"Copilot mentioned another brand's product, and Walmart charged $39.97 that day.\"}",
    "usage": {
-    "input_tokens": 1178,
-    "output_tokens": 41,
-    "total_tokens": 1219
+    "input_tokens": 1253,
+    "output_tokens": 31,
+    "total_tokens": 1284
    }
   },
   {
-   "response": "{\"line\":\"Copilot quoted no price for Pampers Cruisers 360 S4 104, and Walmart charged $39.97 that day.\"}",
+   "response": "{\"line\":\"Copilot said \\\"Pampers Cruisers 360 S4 104\\\" but gave no price for it.\"}",
    "usage": {
-    "input_tokens": 1178,
-    "output_tokens": 40,
-    "total_tokens": 1218
+    "input_tokens": 1253,
+    "output_tokens": 36,
+    "total_tokens": 1289
    }
   }
  ],
@@ -40,6 +40,6 @@
  },
  "facts_digest": "ee422125fe3d8109cf2e57397f09d19cde94d3dbd13720feb7b9fba6788798a2",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "4b706ee2703f8ce84a9c3b551aca974453b3ebc34cbe3b90992613fbe6699049",
+ "request_digest": "6e64514acb0a56c1ab5b0bdd7d72018af6af713b60414e69a3d8659960bb8c7c",
  "subject": "answer:run-90053"
 }

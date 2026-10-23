@@ -3,25 +3,17 @@
   {
    "response": "{\"line\":null}",
    "usage": {
-    "input_tokens": 1176,
-    "output_tokens": 62,
-    "total_tokens": 1238
+    "input_tokens": 1251,
+    "output_tokens": 14,
+    "total_tokens": 1265
    }
   },
   {
-   "response": "{\"line\":\"Copilot gave no price for Pampers Swaddlers S2 84, while Amazon charged $30.97 that day.\"}",
+   "response": "{\"line\":null}",
    "usage": {
-    "input_tokens": 1176,
-    "output_tokens": 39,
-    "total_tokens": 1215
-   }
-  },
-  {
-   "response": "{\"line\":\"Copilot said Pampers Swaddlers S2 84 costs $30.97, and Amazon charged $30.97 that day.\"}",
-   "usage": {
-    "input_tokens": 1176,
-    "output_tokens": 41,
-    "total_tokens": 1217
+    "input_tokens": 1251,
+    "output_tokens": 14,
+    "total_tokens": 1265
    }
   }
  ],
@@ -48,6 +40,6 @@
  },
  "facts_digest": "d920f72541950e0b9cb415af0ea39eb3febc394137736093dcc5d56e1ddc2cb3",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "4a551a6bcd79fbb921a32ec47cd17754ca55df4cc5e0f1b1668a5b270d797ce3",
+ "request_digest": "ed521e4d89a6d72c872f49a4adba5b3547b2574944c2aa75a9d06a95ffbaeb56",
  "subject": "answer:run-90035"
 }

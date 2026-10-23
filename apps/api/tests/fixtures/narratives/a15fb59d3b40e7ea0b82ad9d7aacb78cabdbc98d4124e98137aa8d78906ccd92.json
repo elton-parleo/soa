@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Copilot said it provides pricing for another brand only, not Pampers. Amazon charged $40.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Copilot said \\\"$40.97\\\" for Amazon.\"}",
    "usage": {
-    "input_tokens": 1173,
-    "output_tokens": 39,
-    "total_tokens": 1212
+    "input_tokens": 1248,
+    "output_tokens": 24,
+    "total_tokens": 1272
    }
   },
   {
-   "response": "{\"line\":\"Copilot gave no price for this product. Amazon charged $40.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Copilot said it had no price for Pampers Cruisers S5, but Amazon charged $40.97 that day.\"}",
    "usage": {
-    "input_tokens": 1173,
-    "output_tokens": 244,
-    "total_tokens": 1417
+    "input_tokens": 1248,
+    "output_tokens": 38,
+    "total_tokens": 1286
    }
   }
  ],
@@ -40,6 +40,6 @@
  },
  "facts_digest": "a15fb59d3b40e7ea0b82ad9d7aacb78cabdbc98d4124e98137aa8d78906ccd92",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "c605ffa933cf45fb73ac8396e26a38c0e38ad4f2c3e70267ff61dacf8b667a41",
+ "request_digest": "ad0fc97a1b9b9589f7435d676a45d962a21eeb2c06a52c1d63afb5c4e8bcd7ef",
  "subject": "answer:run-90119"
 }

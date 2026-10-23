@@ -152,18 +152,18 @@ def _priced(direction, *quotes, verdict='wrong', reference='49.77'):
     'ChatGPT said $27.99 at Target, which does not match Target on Oct 21.',
 ])
 def test_rule_1_no_judgment_on_an_unverifiable_reference(line):
-    assert n.check(line, UNREAD).startswith('judgment_without_verdict:')
+    assert n.check(line, UNREAD).startswith('verdict_word:')
 
 
 def test_rule_1_the_unverifiable_line_that_passes():
     assert n.check("ChatGPT quoted $27.99 at Target. Target's price could not be read on Oct 21.", UNREAD) is None
 
 
-def test_rule_1_judgment_holds_on_wrong_and_stale_only():
+def test_rule_1_2m3_no_judgment_on_any_verdict():
+    # 2M-3: the console shows the verdict beside the line; 2L-3a allowed one on wrong and stale
     line = 'Claude quoted $42.30. Amazon charged $49.77 on Oct 21, so the quote was wrong.'
-    assert n.check(line, _priced(n.BELOW, '42.30')) is None
-    assert n.check(line, _priced(n.BELOW, '42.30', verdict='stale')) is None
-    assert n.check(line, _priced(n.BELOW, '42.30', verdict='partial')) == 'judgment_without_verdict:wrong'
+    for verdict in ('wrong', 'stale', 'partial'):
+        assert n.check(line, _priced(n.BELOW, '42.30', verdict=verdict)) == 'verdict_word:wrong'
 
 
 @pytest.mark.parametrize('line, reason', [
@@ -202,15 +202,15 @@ def test_rule_2_possessive_with_a_curly_apostrophe_and_a_two_word_name():
      _priced(n.RANGE, '42.30', '54.99', '38.81'), 'direction_without_fact:lower'),
     # run-14539: a range that includes the price gets no judgment
     ('Claude says Amazon ranges $9.97 to $82.70. Amazon charged $49.77 on Oct 21, so the quoted $9.97 was wrong.',
-     _priced(n.RANGE, '9.97', '82.70'), 'judgment_without_verdict:wrong'),
+     _priced(n.RANGE, '9.97', '82.70'), 'verdict_word:wrong'),
     # run-14815: per-diaper prices against a pack price
     ('Claude quotes $0.30 and $0.45 per diaper, but Amazon charged $44.99 on Oct 21. The price was wrong.',
-     _priced(n.PER_UNIT, '0.30', '0.45', reference='44.99'), 'judgment_without_verdict:wrong'),
+     _priced(n.PER_UNIT, '0.30', '0.45', reference='44.99'), 'verdict_word:wrong'),
     ('Claude quotes $0.30 per diaper, cheaper than Amazon, which charged $44.99 on Oct 21.',
      _priced(n.PER_UNIT, '0.30', reference='44.99'), 'direction_without_fact:cheaper'),
     # run-14817's word, against the direction the facts give
     ('Claude quoted $54.99. Amazon charged $49.77 on Oct 21, so it underquoted.',
-     _priced(n.ABOVE, '54.99'), 'direction_without_fact:underquoted'),
+     _priced(n.ABOVE, '54.99'), 'verdict_word:underquoted'),
 ])
 def test_rule_3_a_direction_only_from_the_facts(line, facts, reason):
     assert n.check(line, facts) == reason
@@ -218,7 +218,6 @@ def test_rule_3_a_direction_only_from_the_facts(line, facts, reason):
 
 @pytest.mark.parametrize('line, facts', [
     ('Claude quoted $42.30, below what Amazon charged. Amazon charged $49.77 on Oct 21.', _priced(n.BELOW, '42.30')),
-    ('Claude quoted $42.30, so it underquoted Amazon. Amazon charged $49.77 on Oct 21.', _priced(n.BELOW, '42.30')),
     ('Claude quoted $54.99, higher than Amazon. Amazon charged $49.77 on Oct 21.', _priced(n.ABOVE, '54.99')),
     ('Claude quotes $42.30 and $54.99 at Amazon. Amazon charged $49.77 on Oct 21.', _priced(n.RANGE, '42.30', '54.99')),
 ])
@@ -279,11 +278,12 @@ def test_product_judgment_and_direction():
     line = 'Gemini and Perplexity quoted Walmart at $27.97, above its price. Walmart charged $24.97 on Oct 19.'
     assert n.check(line, PRODUCT) is None
     assert n.check(line, {**PRODUCT, 'price_direction': None}) == 'direction_without_fact:above'
-    # a wrong quote comparable on its own holds a judgment; a per-unit one does not
+    # 2M-3: no judgment of the writer's, but the issue written word for word may say wrong
     wrong = 'Gemini quoted Walmart at $27.97, a wrong price. Walmart charged $24.97 on Oct 19.'
-    assert n.check(wrong, PRODUCT) is None
-    per_unit = {**PRODUCT, 'quotes': [{**q, 'note': n.DIRECTION_WORDS[n.PER_UNIT]} for q in PRODUCT['quotes']]}
-    assert n.check(wrong, per_unit) == 'judgment_without_verdict:wrong'
+    assert n.check(wrong, PRODUCT) == 'verdict_word:wrong'
+    issue = {**PRODUCT, 'issue': '2 of 6 agents quoted a wrong price at Walmart', 'price_direction': None}
+    assert n.check('Gemini quoted $27.97 at Walmart. Walmart charged $24.97 on Oct 19. '
+                   '2 of 6 agents quoted a wrong price at Walmart.', issue) is None
 
 
 def test_a_line_break_inside_a_line_is_a_space():
@@ -353,3 +353,194 @@ def test_a_product_row_leads_with_its_issue():
 def test_a_fabricated_claim_line_needs_the_claim_in_the_facts():
     line = 'Claude said something about Pampers. Pampers never published it and no source backs it.'
     assert n.check(line, {**FABRICATED, 'answer_spans': []}) == 'no_claim_in_facts'
+
+
+# ═══ 2M-3: the second FL13 dry run (Oct 22): lines quoted from it, facts hand-written ═══
+
+def _fabricated(spans=(), note=None):
+    return _drop({'kind': 'answer', 'why': ['brand_fabricated'], 'agent': 'Gemini', 'brand': 'Pampers',
+                  'brand_verdict': 'fabricated', 'answer_spans': list(spans), 'scorer_note': note})
+
+
+def _drop(d):
+    return {k: v for k, v in d.items() if v not in (None, [])}
+
+
+CLAIM = 'Yes, Pampers makes diapers specifically designed for babies with sensitive skin.'
+# run-14553, both calls
+QUOTING = f'Gemini said "{CLAIM}" Pampers never published it and no source backs it.'
+
+
+def test_bug_1_a_fabricated_claim_line_quoting_its_span_passes():
+    assert n.check(QUOTING, _fabricated([CLAIM])) is None
+    # the same line, the same facts with no span: nothing the answer said is in them
+    assert n.check(QUOTING, _fabricated()) == 'no_claim_in_facts'
+
+
+def test_bug_1_the_claim_the_scorer_note_quotes_is_in_the_facts():
+    # production: brand_direct_classifier's reason, "'<claim>' — <why>", is the prompt's scorer_note
+    note = f"{CLAIM!r} — asserted with no source"
+    assert n.claim_texts(_fabricated(note=note)) == [CLAIM]
+    assert n.check(QUOTING, _fabricated(note=note)) is None
+    # a note with no quoted claim ("r", the 2I-8 fixture's filler) holds none
+    assert n.check(QUOTING, _fabricated(note='r')) == 'no_claim_in_facts'
+
+
+def test_bug_1_a_quote_must_be_in_what_the_answer_said():
+    invented = 'Gemini said "Pampers is the only brand for sensitive skin." Pampers never published it and no source backs it.'
+    assert n.check(invented, _fabricated([CLAIM])) == 'quote_not_in_facts'
+    # a part of the claim, curly quotes, the markdown the answer carried (run-14490 call 2, 14574)
+    part = 'Gemini said “Pampers makes diapers” for sensitive skin. Pampers never published it and no source backs it.'
+    assert n.check(part, _fabricated([f'**{CLAIM}**'])) is None
+
+
+def test_bug_1_production_spans_are_labelled_by_kind():
+    # parser/extraction_postprocess writes span_labels as {span_id, text, kind, modality}
+    extraction = {'span_labels': [{'span_id': 0, 'text': CLAIM, 'kind': 'assertion', 'modality': 'asserted'},
+                                  {'span_id': 1, 'text': 'Hope that helps.', 'kind': 'none', 'modality': None}]}
+    assert n._spans(extraction, []) == [CLAIM]
+
+
+WALMART = {'kind': 'answer', 'why': ['wrong_price'], 'agent': 'Gemini', 'brand': 'Pampers', 'verdict': 'wrong',
+           'agent_quoted': [{'price_quoted': '27.97', 'for_product': 'Pampers Swaddlers Overnight Zzz'}],
+           'retailer_price_that_day': {'retailer': 'Walmart', 'price': '24.97', 'date': 'Oct 21'},
+           'price_direction': n.DIRECTION_WORDS[n.ABOVE]}
+
+
+def _at(agent, quoted, retailer, price, product='Pampers Swaddlers Overnight Zzz', direction=None):
+    return {**WALMART, 'agent': agent, 'retailer_price_that_day': {'retailer': retailer, 'price': price, 'date': 'Oct 21'},
+            'agent_quoted': [{'price_quoted': quoted, 'for_product': product}],
+            'price_direction': n.DIRECTION_WORDS[direction] if direction else None}
+
+
+@pytest.mark.parametrize('line, facts', [
+    ('Gemini quoted $27.97 for Pampers Swaddlers Overnight Zzz and Walmart charged $24.97 that day.', WALMART),
+    ('Gemini quoted $27.97 for Pampers Swaddlers Overnight Zzz but Walmart charged $24.97 that day.', WALMART),
+    ('Gemini quoted $27.97 for Pampers Swaddlers Overnight Zzz while Walmart charged $24.97 that day.', WALMART),
+    ('Gemini quoted $27.97 for Pampers Swaddlers Overnight Zzz, so Walmart charged $24.97 more or less.', WALMART),
+    ('Gemini quoted $27.97 for Pampers Swaddlers Overnight Zzz, then Walmart charged $24.97 on Oct 21.', WALMART),
+    # run-14817, its verdict word taken out
+    ('Copilot quoted $27.97 for Pampers Swaddlers Overnight Zzz because Walmart charged $56.90 on Oct 21.',
+     _at('Copilot', '27.97', 'Walmart', '56.90')),
+    # run-14610
+    ("Gemini quotes $21.73 for Pampers Cruisers 360, Size 3, 168 ct on Amazon, below Amazon's $49.77 that day.",
+     _at('Gemini', '21.73', 'Amazon', '49.77', 'Pampers Cruisers 360, Size 3, 168 ct', n.BELOW)),
+    # run-14679
+    ('Google AI Mode quoted $27.97 for Pampers Swaddlers Overnight Zzz and Walmart charged $56.90 that day.',
+     _at('Google AI Mode', '27.97', 'Walmart', '56.90')),
+])
+def test_bug_2_a_retailer_s_clause_is_the_retailer_s(line, facts):
+    assert n.check(line, facts) is None
+
+
+def test_bug_2_which_is_wrong_because_is_split_and_refused_for_its_verdict_word():
+    line = 'Copilot quoted $27.97 for Pampers Swaddlers Overnight Zzz, which is wrong because Walmart charged $56.90 on Oct 21.'
+    facts = _at('Copilot', '27.97', 'Walmart', '56.90')
+    assert n._who_said_what(line, facts) is None
+    assert n.check(line, facts) == 'verdict_word:wrong'
+
+
+@pytest.mark.parametrize('line, facts, reason', [
+    # 2L-3a's loophole
+    ('Gemini quoted $19.97 at Walmart, and so did Perplexity.',
+     {**PRODUCT, 'quotes': [{'agent': 'Gemini', 'retailer': 'Walmart', 'price': '19.97', 'verdict': 'wrong'}]},
+     'borrowed:so did'),
+    # run-14554 call 2: a bare comma keeps Amazon's price in Perplexity's clause
+    ('Perplexity quoted $27.97, Amazon charged $44.99 that day.', _at('Perplexity', '27.97', 'Amazon', '44.99'),
+     'Perplexity $44.99 at Amazon'),
+    # the retailer's clause still has to hold the retailer's price
+    ('Gemini quoted $27.97 and Walmart charged $27.97 that day.', WALMART, 'Walmart charged $27.97'),
+    ("Gemini quoted $27.97, below Walmart's $27.97.", WALMART, 'Walmart charged $27.97'),
+    # a clause with no subject is still the agent's (run-14655 call 2)
+    ('Gemini said nothing for Pampers and gave $24.97 at Walmart.', WALMART, 'Gemini $24.97'),
+    # two agents named together are one clause: both quoted it
+    ('ChatGPT and Gemini quoted $27.97 at Walmart.', PRODUCT, 'ChatGPT $27.97'),
+])
+def test_bug_2_who_said_what_still_catches(line, facts, reason):
+    assert n._who_said_what(line, facts) == reason
+
+
+@pytest.mark.parametrize('line, reason', [
+    # run-14524, 14531, 14607, 14659 (one word each: wrong, does not match, incorrect)
+    ('Gemini quoted $27.97 for Pampers Swaddlers Overnight Zzz. Walmart charged $24.97 that day. The price does not match.',
+     'verdict_word:does not match'),
+    ('Gemini quoted $27.97 for Pampers Swaddlers Overnight Zzz, which is incorrect. Walmart charged $24.97 that day.',
+     'verdict_word:incorrect'),
+    ('Gemini quoted $27.97 for Pampers Swaddlers Overnight Zzz. Walmart charged $24.97 that day, wrong.',
+     'verdict_word:wrong'),
+    # run-14598, 14727, 14803 (semicolons)
+    ('Gemini quoted $27.97 for Pampers Swaddlers Overnight Zzz; Walmart charged $24.97 that day.', 'banned:;'),
+    # run-14537: a range written with a dash is the writer's
+    ('Gemini quoted $27.97–$28.22 for Pampers Swaddlers Overnight Zzz. Walmart charged $24.97 that day.',
+     'banned:–'),
+])
+def test_3_the_writer_s_verdict_semicolon_and_dash(line, reason):
+    facts = {**WALMART, 'agent_quoted': WALMART['agent_quoted'] + [{'price_quoted': '28.22'}], 'price_direction': None}
+    assert n.check(line, facts) == reason
+
+
+def test_3_a_source_s_dash_becomes_a_hyphen():
+    # run-14475: inside a quote
+    claim = 'Yes—Pampers can be a good choice for newborns, especially Pampers Swaddlers.'
+    facts = _fabricated([claim])
+    line = f'Gemini said "{claim}" Pampers never published it and no source backs it.'
+    assert n.normalise(line, facts) == line.replace('—', '-')
+    assert n.check(line, facts) is None
+    d = n.decide(_answer(line, line), facts)
+    assert (d['status'], d['line']) == ('accepted', line.replace('—', '-'))
+    # run-14864, 14852: inside the product name the facts write with it
+    for product, line in (
+            ('Pampers Cruisers 360 Diapers – Size 5',
+             'Claude quoted $41.99 for the Pampers Cruisers 360 Diapers – Size 5. Target price could not be read.'),
+            ('Pampers Pure Protection, Size 1 (8–14 lbs), 82 count',
+             'Claude quoted $22.90 for Pampers Pure Protection, Size 1 (8–14 lbs), 82 count. Target price could not be read.')):
+        facts = {**UNREAD, 'agent': 'Claude', 'agent_quoted': [{'price_quoted': line.split('$')[1].split(' ')[0],
+                                                                 'for_product': product}]}
+        assert n.check(line, facts) is None, line
+        assert '–' not in n.normalise(line, facts)
+        # the same dash beside a word the facts do not write it with is the writer's
+        assert n.check(line.replace('Target price', 'Target – price'), facts) == 'banned:–'
+
+
+@pytest.mark.parametrize('line, reason', [
+    # run-14632
+    ('Google AI Mode quoted $27.99. Target price could not be read.', 'no_product'),
+    ('Google AI Mode quoted $27.99 for Pampers Swaddlers Overnights. Target price could not be read.',
+     None),
+    # the brand alone does not name the product
+    ('Google AI Mode quoted $27.99 for Pampers diapers. Target price could not be read.', 'no_product'),
+])
+def test_4_a_price_line_names_the_product(line, reason):
+    facts = {**UNREAD, 'agent': 'Google AI Mode',
+             'agent_quoted': [{'price_quoted': '27.99', 'for_product': 'Pampers Swaddlers Overnights'}]}
+    assert n.check(line, facts) == reason
+    # facts naming no product: nothing to hold the line to
+    assert n.names_product(line, {**facts, 'agent_quoted': [{'price_quoted': '27.99'}]})
+
+
+NO_PRICE = {'kind': 'product', 'product': 'Pampers Cruisers 360, Size 3, 168 ct', 'brand': 'Pampers', 'agents_asked': 6,
+            'retailer_prices_that_day': [{'retailer': 'Amazon', 'price': '49.77', 'date': 'Oct 21'}],
+            'quotes': [{'agent': 'Copilot', 'retailer': 'Amazon', 'price': '47.00', 'verdict': 'wrong'}],
+            'gave_no_price': ['ChatGPT', 'Claude', 'Copilot', 'Gemini', 'Google AI Mode', 'Perplexity'],
+            'issue': '6 of 6 agents gave no price'}
+UNCHECKED = {'kind': 'product', 'product': 'Pampers Pure Protection, Size 1', 'brand': 'Pampers', 'agents_asked': 6,
+             'retailer_prices_that_day': [{'retailer': 'Amazon', 'price': '46.49', 'date': 'Oct 21'}],
+             'quotes': [{'agent': 'ChatGPT', 'retailer': 'Amazon', 'price': '29.77', 'verdict': 'could not be checked'},
+                        {'agent': 'Gemini', 'retailer': 'Amazon', 'price': '31.00', 'verdict': 'wrong'}],
+             'issue': '6 of 6 agents quoted a price that could not be checked'}
+
+
+def test_5_a_product_row_may_state_its_issue():
+    # product:00037000717379
+    line = 'ChatGPT and Claude gave no price for Pampers Cruisers 360, Size 3, 168 ct. 6 of 6 agents gave no price.'
+    assert n.check(line, NO_PRICE) is None
+    # feed_sku:39 call 2: a quote is not the issue
+    assert n.check('Copilot quoted $47.00 at Amazon. Amazon charged $49.77 on Oct 21. 6 of 6 agents gave no price.',
+                   NO_PRICE) == 'off_issue'
+    # agents who did quote cannot be said to have given none
+    assert n.check(line, {**NO_PRICE, 'gave_no_price': ['ChatGPT']}) == 'off_issue'
+    # feed_sku:35
+    line = ('ChatGPT quoted $29.77 at Amazon. Amazon charged $46.49 on Oct 21. '
+            '6 of 6 agents quoted a price that could not be checked.')
+    assert n.check(line, UNCHECKED) is None
+    assert n.check('ChatGPT quoted $29.77 at Amazon. Amazon charged $46.49 on Oct 21.', UNCHECKED) == 'off_issue'

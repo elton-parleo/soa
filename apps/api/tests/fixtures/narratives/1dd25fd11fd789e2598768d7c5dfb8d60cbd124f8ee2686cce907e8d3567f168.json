@@ -3,17 +3,17 @@
   {
    "response": "{\"line\":\"Copilot first picked Huggies, then Pampers, on \\\"question 1012\\\".\"}",
    "usage": {
-    "input_tokens": 1131,
+    "input_tokens": 1206,
     "output_tokens": 33,
-    "total_tokens": 1164
+    "total_tokens": 1239
    }
   },
   {
    "response": "{\"line\":\"Copilot first picked Huggies, then Pampers, on \\\"question 1012\\\".\"}",
    "usage": {
-    "input_tokens": 1131,
+    "input_tokens": 1206,
     "output_tokens": 33,
-    "total_tokens": 1164
+    "total_tokens": 1239
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "1dd25fd11fd789e2598768d7c5dfb8d60cbd124f8ee2686cce907e8d3567f168",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "24aadaaacf89cca4536698e5b704e8267b4259ee88992418e00292c2f3f91da8",
+ "request_digest": "775a46ba78292149bc440df09af443b36be96f4556a2efcbfd7c74fe5f4cf8da",
  "subject": "answer:run-70071"
 }
