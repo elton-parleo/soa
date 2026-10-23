@@ -342,7 +342,7 @@ def test_b6_the_brand_s_first_cycle_changes_in_the_demo_s_order():
     lines = rm.brand_changes(_brand_vis(), None, None, 'all', compared=False, brand='Pampers')
     assert [(c['label'], c['delta']) for c in lines] == [
         ('Retired product named', 'new'), ('First pick, category questions', 'new'), ('Retailer coverage', 'new')]
-    assert lines[0]['detail'] == 'Pure in 10, AMORE in 0 in 29 category answers. First cycle with this question.'
+    assert lines[0]['detail'] == 'Pure in 10 of 29 category answers, AMORE in 0. First cycle with this question.'
     assert lines[1]['detail'] == 'Pampers 5 of 29, Huggies 9. First cycle with these questions.'
     assert lines[2]['detail'] == ('45 of 49 where-to-buy answers named at least two of Walmart, Target and Amazon. '
                                   'First cycle with this question.')

@@ -3673,7 +3673,7 @@ def promo_baseline(promo: Optional[dict]) -> Optional[dict]:
 
 BRAND_CHANGE_TEMPLATES = {
     'retired.label': 'Retired product named',
-    'retired.new': '{named} in {answers} category answers. First cycle with this question.',
+    'retired.new': '{named}. First cycle with this question.',
     'first.label': 'First pick, category questions',
     'first.new': '{brand} {first} of {n}{rivals}. First cycle with these questions.',
     'coverage.label': 'Retailer coverage',
@@ -3746,7 +3746,7 @@ def brand_changes(vis: dict, prev_vis: Optional[dict], prev_code: Optional[str],
     if retired:
         named, answers, cells = retired
         then = _retired_counts(prev, surface)
-        words = ', '.join(f"{(line.get('label') or line.get('line'))} in {c['named']}" + (
+        words = '. '.join(f"{(line.get('label') or line.get('line'))} in {c['named']} of {c['answers']} category answers" + (
             f", {line['successor'].get('label')} in {c.get('successor_named') or 0}"
             if line.get('successor') and c.get('successor_named') is not None else '') for line, c in cells)
         out.append(_change(t['retired.label'], named, answers, then[:2] if then else None, prev_code, up_good=False,
