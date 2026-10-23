@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Gemini quoted $42.97 at Walmart. Walmart charged $39.97 on Oct 19. 2 of 6 agents quoted a wrong price at Walmart.\"}",
+   "response": "{\"line\":\"Gemini quoted $42.97 at Walmart. Walmart charged $39.97 on Oct 19. 2 of 6 agents quoted a wrong price at Walmart\"}",
    "usage": {
-    "input_tokens": 1306,
-    "output_tokens": 414,
-    "total_tokens": 1720
+    "input_tokens": 1467,
+    "output_tokens": 416,
+    "total_tokens": 1883
    }
   },
   {
-   "response": "{\"line\":\"Gemini quoted $42.97 at Walmart. Walmart charged $39.97 on Oct 19 2 of 6 agents quoted a wrong price at Walmart.\"}",
+   "response": "{\"line\":\"ChatGPT quoted $39.97 at Walmart. Walmart charged $39.97 on Oct 19. 2 of 6 agents quoted a wrong price at Walmart\"}",
    "usage": {
-    "input_tokens": 1306,
-    "output_tokens": 1368,
-    "total_tokens": 2674
+    "input_tokens": 1467,
+    "output_tokens": 632,
+    "total_tokens": 2099
    }
   }
  ],
@@ -103,6 +103,6 @@
  },
  "facts_digest": "e658e29741b956def094eb5d30a35bd0edd588e0ed65a7d26bdaa1172a7564e3",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "0203d71804e9b3a86aa4006f645419746a59e924de550c6bf4de1444b7f6072e",
+ "request_digest": "ef8b531b62c0e593eaca36679fad9e8d0d0ca847b3cecf6a673aff785fc822c8",
  "subject": "product:00037000863472"
 }

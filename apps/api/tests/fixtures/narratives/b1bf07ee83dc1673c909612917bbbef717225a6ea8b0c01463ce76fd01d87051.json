@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Perplexity quoted $34.97, but Walmart charged $31.97 for Pampers Pure on Oct 19.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Pure $34.97 but Walmart charged $31.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1207,
-    "output_tokens": 157,
-    "total_tokens": 1364
+    "input_tokens": 1282,
+    "output_tokens": 36,
+    "total_tokens": 1318
    }
   },
   {
-   "response": "{\"line\":\"Perplexity quoted $34.97 for Pampers Pure while Walmart charged $31.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Pure $34.97 but Walmart charged $31.97 that day.\"}",
    "usage": {
-    "input_tokens": 1207,
-    "output_tokens": 37,
-    "total_tokens": 1244
+    "input_tokens": 1282,
+    "output_tokens": 34,
+    "total_tokens": 1316
    }
   }
  ],
@@ -47,6 +47,6 @@
  },
  "facts_digest": "b1bf07ee83dc1673c909612917bbbef717225a6ea8b0c01463ce76fd01d87051",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "e5358a6823d89afb2817eceadcfa1d531aa7766c0dd5cfb25dc4cc12051c4173",
+ "request_digest": "bb6a2c522982cdf9bc19e139c467751025011946a84de89a15b39cebc3ad2e6e",
  "subject": "answer:run-90088"
 }

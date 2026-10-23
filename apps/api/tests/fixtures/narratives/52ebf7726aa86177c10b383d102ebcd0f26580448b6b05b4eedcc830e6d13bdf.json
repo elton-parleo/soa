@@ -1,27 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Copilot did not quote a price for Pampers Swaddlers S2 84. Walmart charged $27.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Copilot makes no price quote for Pampers Swaddlers S2 84. Walmart charged $27.97 that day.\"}",
    "usage": {
-    "input_tokens": 1177,
-    "output_tokens": 270,
-    "total_tokens": 1447
+    "input_tokens": 1252,
+    "output_tokens": 39,
+    "total_tokens": 1291
    }
   },
   {
-   "response": "{\"line\":null}",
+   "response": "{\"line\":\"Copilot did not quote a price for Pampers Swaddlers S2 84. Walmart charged $27.97 that day for the other brand's product.\"}",
    "usage": {
-    "input_tokens": 1177,
-    "output_tokens": 14,
-    "total_tokens": 1191
-   }
-  },
-  {
-   "response": "{\"line\":\"Copilot gave no price for Pampers Swaddlers S2 84. Walmart charged $27.97 on Oct 19.\"}",
-   "usage": {
-    "input_tokens": 1177,
-    "output_tokens": 217,
-    "total_tokens": 1394
+    "input_tokens": 1252,
+    "output_tokens": 46,
+    "total_tokens": 1298
    }
   }
  ],
@@ -48,6 +40,6 @@
  },
  "facts_digest": "52ebf7726aa86177c10b383d102ebcd0f26580448b6b05b4eedcc830e6d13bdf",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "af8fac42852a0d70d6e1149d3a8af7644097e8b1c7e9699b13b9f08f3a081c4b",
+ "request_digest": "b70e39d782e6b4f23dbc1985641f2f86fb2083c6ae5828adba52d46866a57825",
  "subject": "answer:run-90029"
 }

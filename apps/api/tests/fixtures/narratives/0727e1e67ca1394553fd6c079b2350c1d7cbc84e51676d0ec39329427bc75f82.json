@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Perplexity quoted $25.97 but Walmart charged $22.97 on Oct 19. Wrong.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Ultra $25.97 but Walmart charged $22.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1207,
-    "output_tokens": 35,
-    "total_tokens": 1242
+    "input_tokens": 1282,
+    "output_tokens": 36,
+    "total_tokens": 1318
    }
   },
   {
-   "response": "{\"line\":\"Perplexity quotes Pampers $25.97. Walmart charged $22.97 on Oct 19, so it does not match.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Ultra $25.97 but Walmart charged $22.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1207,
-    "output_tokens": 41,
-    "total_tokens": 1248
+    "input_tokens": 1282,
+    "output_tokens": 36,
+    "total_tokens": 1318
    }
   }
  ],
@@ -47,6 +47,6 @@
  },
  "facts_digest": "0727e1e67ca1394553fd6c079b2350c1d7cbc84e51676d0ec39329427bc75f82",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "c369d30fa64e8defb30f607438a9dc82321a56a06afe0e2e6b6142d78abcab96",
+ "request_digest": "7a62a484101b0130600889e2a52b8a549392eb81ec24dec2566fd8239b437bb8",
  "subject": "answer:run-90076"
 }

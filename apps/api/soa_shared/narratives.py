@@ -43,7 +43,7 @@ checks and were still wrong. Five rules, each deterministic, before storing:
   verdict   "wrong", "underquoted", "overquoted", "incorrect", "not correct",
             "not what ... charged/paid", "does not match" only when the
             verdict is wrong or stale, the retailer's price was read, and the
-            quote is comparable (judgment()). run-14727, 14867.
+            quote is comparable. run-14727, 14867. (2M-3: never; below.)
   subject   the line's first word is the agent's name (a possessive
             counts). Never "you", "your", "the shopper got|was",
             "assistant", or the brand as narrator ("Pampers says").
@@ -56,6 +56,24 @@ checks and were still wrong. Five rules, each deterministic, before storing:
   one       a brand-choice line (why is only rival_first_pick) is one
             sentence, the question in quotes not counted.
   once      "no source" at most once. run-14831, 14838, 14842.
+
+2M-3 (the second FL13 dry run, Oct 22: 95 accepted, 56 dropped, 26 null):
+  claims    a fabricated-claim line needs what the answer said in the facts
+            (claim_texts(): answer_spans, and the claim at the head of
+            scorer_note, which the prompt also shows), and what it quotes is
+            in it. _spans read span_labels' `label`; the labeller writes
+            `kind`. 17 subjects quoted the claim verbatim and were refused.
+  clauses   who said what splits at and, but, while, because, so and then,
+            not at a bare comma; a retailer-subject clause ("and Walmart
+            charged") and a retailer's possessive ("below Amazon's $49.77")
+            are the retailer's price.
+  verdict   no verdict word on any row (the console shows the verdict), no
+            semicolon; a dash the source wrote (quoted, or in a product name
+            the facts write with it) becomes a hyphen (normalise()), any
+            other dash is refused.
+  product   a price line names the product (names_product()).
+  issue     a product row whose issue is "gave no price" or "could not be
+            checked" may state it (off_issue()).
 
 Product rows (2L-3a B2): the facts are one entry per quote, (agent,
 retailer, price, verdict), sorted by agent, the reference per retailer as
@@ -79,6 +97,7 @@ determinism is measured (two recording runs), not assumed.
 Sync copies to apps/api/soa_shared/ and apps/pipeline/soa_shared/ (it reads
 claim_kinds and retailers, which packages/shared/soa_shared/ does not carry).
 """
+import ast
 import hashlib
 import json
 import os
@@ -178,8 +197,14 @@ the subject. Never write the brand or store as the one speaking ("Pampers says",
 - Never write the word "assistant": write its name.
 - Write the line itself, with no label or prefix before it (no "Facts:", no "Line:"), and never \
 the word "fact" in any form ("in fact" included).
-- No dashes of any kind: no em dash, no en dash, no double hyphen. A plain hyphen only inside a \
-product name. No semicolons. Write a second sentence instead.
+- Never write "wrong", "incorrect", "not correct", "does not match", "underquoted", "overquoted" \
+or "not what ... charged": the console shows the verdict beside the line. Say what was quoted and \
+what was charged.
+- No semicolons, anywhere. Write a second sentence instead.
+- Never join what the assistant quoted and what the retailer charged with a bare comma: write \
+"but" between them, or end the sentence.
+- No dashes of any kind outside what you quote: no em dash, no en dash, no double hyphen. A dash \
+inside a quoted span or a product name, as the facts write it, may stay.
 - Never write the word "AI" or the word "model". "Google AI Mode" is an assistant's name and may \
 be written.
 - Write prices with a dollar sign, as "$27.97", and dates as the facts write them.
@@ -197,20 +222,19 @@ What the line says depends on why the answer was flagged (the facts' why):
 - A first pick (why is only rival_first_pick): ONE sentence and nothing after it, in this pattern: \
 <assistant> first picked <rival>, then <brand>, on "<question>". Name the brands in the order the \
 answer named them, up to the brand. Do not restate the pick in a second sentence.
-- A price: what the assistant quoted, then what the retailer charged that day. One or two \
-sentences.
+- A price: what the assistant quoted for which product (name the product as for_product gives \
+it), then what the retailer charged that day. One or two sentences.
   - price_direction says how the quote compares with the retailer's price. Use "below", \
 "above", "lower", "higher", "cheaper" or "more expensive" only to say that direction, and only \
 when price_direction is "quoted below the retailer's price" or "quoted above the retailer's \
 price". Otherwise, write none of them.
   - When price_direction is "range includes the retailer's price" or "per-unit quote, not \
 comparable", say what was quoted and what the retailer charged, and add no judgment.
-  - Write "wrong", "underquoted", "overquoted", "incorrect", "not correct", "does not match" or \
-"not what ... charged" only when the verdict is wrong or stale and the retailer's price was read.
   - When the retailer's price could not be read, say what the assistant quoted and that the \
 retailer's price could not be read. Nothing more.
-- A claim the brand never published (brand_fabricated): only when answer_spans hold what the \
-assistant said, <assistant> said <what it said>. <brand> never published it and no source backs \
+- A claim the brand never published (brand_fabricated): only when the facts hold what the \
+assistant said (answer_spans, or the claim quoted in scorer_note), <assistant> said "<what it \
+said, quoted from there>". <brand> never published it and no source backs \
 it. That second sentence once, and nothing after it. When the facts do not hold what it said, \
 return null.
 - Another brand's price (other_brand_price): the assistant gave no price for this product, only \
@@ -253,13 +277,16 @@ The assistants are ones whose quotes share the issue: when the issue is a wrong 
 whose verdict is wrong. Two only when both have that same price at that same retailer. \
 Each assistant beside its own quote, exactly as its entry in quotes gives it (that assistant, \
 that retailer, that price). Never "so did" or "as did". The last sentence is the issue, word for word, only when it counts \
-more agents than you named. When no assistant quoted a price, write <assistant> and <assistant> \
-gave no price for <product>, then the issue.
+more agents than you named. When the issue is that agents gave no price, or when no assistant \
+quoted a price, write <assistant>[ and <assistant>] gave no price for <product>, then the issue, \
+with assistants from gave_no_price. When the issue is a price that could not be checked, name \
+an assistant beside its own quote and end with the issue.
 
 Rules:
 - One or two short sentences, at most 240 characters.
 - Use "below", "above", "lower", "higher", "cheaper" or "more expensive" only when price_direction \
 is "quoted below the retailer's price" or "quoted above the retailer's price", and only to say that.
+- The issue, written word for word, is the one place the word "wrong" may appear.
 """ + _COMMON_RULES + """
 
 Style, from another brand: "ChatGPT sends the AMORE shopper to Amazon at about $36.18. Amazon \
@@ -405,7 +432,9 @@ def _spans(extraction: dict, claims: List[dict]) -> List[str]:
     stated = [str(c.get('stated')) for c in claims if isinstance(c, dict) and c.get('stated')]
     out = []
     for span in (extraction or {}).get('span_labels') or []:
-        if isinstance(span, dict) and span.get('text') and span.get('label') not in (None, 'none'):
+        # the labeller writes `kind` (parser/extraction_postprocess); 2L-3 read `label`, which no row
+        # carries, so every production span was left out (2M-3)
+        if isinstance(span, dict) and span.get('text') and (span.get('kind') or span.get('label')) not in (None, 'none'):
             out.append(str(span['text'])[:300])
     for span in (extraction or {}).get('spans') or []:
         body = str(span.get('text') or '') if isinstance(span, dict) else ''
@@ -947,7 +976,21 @@ def _unpaired_amount(line: str, facts: dict) -> Optional[str]:
 
 _QUOTE_VERB = re.compile(r"\b(quot\w*|said|says|say|gave|gives|give|put|puts|priced|prices|told|tells|listed by)\b", re.I)
 _TRUTH_VERB = re.compile(r"\b(charged|charges|charge|listed|lists|had|has|sold|sells|was|is|costs?|priced at)\b", re.I)
-_CLAUSE = re.compile(r"(?<=[.!?])\s+|\s+but\s+|,?\s+while\s+|,?\s+whereas\s+|,?\s+when\s+|,\s+and\s+|,\s+so\s+", re.I)
+#: 2M-3: a clause ends at a sentence's end and at "and", "but", "while", "whereas", "when",
+#: "because", "so" or "then", comma or not ("Gemini quoted $27.97 ... and Walmart charged $24.97").
+#: A bare comma does not end one: "Perplexity quoted $27.97, Amazon charged $44.99" keeps $44.99
+#: in Perplexity's clause (run-14554), which the facts do not hold.
+_CLAUSE = re.compile(r"(?<=[.!?])\s+|,?\s+(?:and|but|while|whereas|when|because|so|then)\s+", re.I)
+_AGENT_ALT = '|'.join(re.escape(a) for a in AGENT_WORDS)
+#: "Gemini and Perplexity quoted": one clause, both agents (the "&" keeps _CLAUSE off it)
+_AGENT_PAIR = re.compile(r"(" + _AGENT_ALT + r")(?:,?\s+and\s+)(?=" + _AGENT_ALT + r")")
+_RETAILER_WRITTEN = {**{v: v for v in RETAILER_NAMES.values()}, **RETAILER_NAMES}
+_RETAILER_ALT = '|'.join(re.escape(w) for w in sorted(_RETAILER_WRITTEN, key=len, reverse=True))
+#: a clause whose subject is a retailer: "Walmart charged", "Target's price was", "Amazon listed"
+_RETAILER_SUBJECT = re.compile(r"^\W*(?:on [A-Z][a-z]{2} \d{1,2},?\s+)?(?:the\s+)?(?:" + _RETAILER_ALT +
+                               r")(?:['’]s)?\s+(?:price|listing|charged|charges|listed|lists|sold|sells)\b", re.I)
+#: an amount the retailer owns: "below Amazon's $49.77", "Walmart's price of $36.97"
+_RETAILER_OWNS = re.compile(r"(" + _RETAILER_ALT + r")['’]s\s+(?:(?:price|listing)\s+(?:of\s+|was\s+|at\s+)?)?$")
 
 
 def _retailer_spans(clause: str) -> List[Tuple[int, str]]:
@@ -996,25 +1039,39 @@ _BORROWED = re.compile(r"\b(?:so|as) did\b|\bdid too\b|\blikewise\b|\bthe same p
 
 def _who_said_what(line: str, facts: dict) -> Optional[str]:
     """In a clause naming agents and a quoting verb, every named agent quoted
-    each amount (at the retailer named before it, if one is). In a clause
-    naming a retailer and a verb like charged, the amount is that retailer's
-    price that day. None when every such clause agrees with the facts. A
-    quote handed on ("and so did") is refused: no clause holds it."""
+    each amount (at the retailer named before it, if one is). A clause with
+    no agent and no retailer as its subject ("... and gave $36.18") is still
+    the agents' before it. In a clause whose subject is a retailer
+    ("Walmart charged"), or for an amount a retailer owns ("Amazon's
+    $49.77"), the amount is that retailer's price that day. None when every
+    such clause agrees with the facts. A quote handed on ("and so did") is
+    refused: no clause holds it."""
     said, true = _said_and_true(facts)
     m = _BORROWED.search(line)
     if m:
         return f"borrowed:{m.group(0)}"
-    for clause in _CLAUSE.split(line):
+    speakers, quoting = [], False
+    for clause in _CLAUSE.split(_AGENT_PAIR.sub(r"\1 & ", line)):
+        agents = _agents_in(clause)
+        if agents:
+            speakers, quoting = agents, bool(_QUOTE_VERB.search(clause))
+        elif _RETAILER_SUBJECT.search(clause) or _TRUTH_VERB.search(clause):
+            speakers, quoting = [], False
         amounts = [(m.start(), normalize_money(m.group(1).replace(',', ''))) for m in _AMOUNT.finditer(clause)]
         if not amounts:
             continue
-        agents = _agents_in(clause)
         retailers = _retailer_spans(clause)
         for pos, amount in amounts:
+            owner = _RETAILER_OWNS.search(clause[:pos])
+            if owner:
+                r = _RETAILER_WRITTEN[owner.group(1)]
+                if r in true and true[r] != amount:
+                    return f"{r} charged ${amount}"
+                continue
             before = [name for end, name in retailers if end <= pos]
             at = before[-1] if before else None
-            if agents and _QUOTE_VERB.search(clause):
-                for a in agents:
+            if speakers and quoting:
+                for a in speakers:
                     if not any(sa == a and sp == amount and (at is None or sr in (None, at)) for sa, sr, sp in said):
                         return f"{a} ${amount}" + (f" at {at}" if at else '')
             elif at and _TRUTH_VERB.search(clause[clause.rfind(at, 0, pos) if at in clause else 0:pos]):
@@ -1023,8 +1080,8 @@ def _who_said_what(line: str, facts: dict) -> Optional[str]:
     return None
 
 
-#: 2L-3a: a verdict on the quote. Only with a verdict of wrong or stale, a
-#: retailer's price that was read, and a comparable quote (judgment()).
+#: A verdict on the quote. 2L-3a allowed one on a verdict of wrong or stale;
+#: 2M-3 refuses it on every row (14 of the FL13 dry run's drops wrote one).
 _JUDGMENT = re.compile(r"\b(wrong|underquot\w*|overquot\w*|incorrect|not correct|"
                        r"(?:does|do|did)\s+not\s+match|(?:doesn|don|didn)['\u2019]t\s+match|"
                        r"not\s+what\b[^.!?]*?\b(?:charged|charges|charge|paid|pays|pay))\b", re.I)
@@ -1048,18 +1105,6 @@ def _has_price(facts: dict) -> bool:
 
 def _direction_of(facts: dict) -> Optional[str]:
     return DIRECTION_OF.get(facts.get('price_direction'))
-
-
-def judgment(facts: dict) -> bool:
-    """May the line say the quote was wrong? Only on a verdict of wrong or
-    stale, against a retailer's price that was read, on a quote that is
-    comparable (not a range around the price, not per unit)."""
-    if facts.get('kind') == PRODUCT:
-        # any wrong quote that is comparable on its own (a per-unit one is not)
-        return any(q.get('verdict') in FLAGGED_VALUE and not q.get('note') for q in facts.get('quotes') or [])
-    if _direction_of(facts) in (RANGE, PER_UNIT):
-        return False
-    return facts.get('verdict') in FLAGGED_VALUE and bool((facts.get('retailer_price_that_day') or {}).get('price'))
 
 
 def _unquoted(line: str, facts: dict) -> str:
@@ -1114,14 +1159,18 @@ def voice(line: str, facts: dict) -> Optional[str]:
 
 
 def verdict_words(line: str, facts: dict) -> Optional[str]:
-    """2L-3a rules 1 and 3: a judgment only on a verdict that holds it, a
-    direction only the facts give. The first failure, or None."""
-    if not _has_price(facts):
-        return None
-    m = _JUDGMENT.search(line)
-    if m and not judgment(facts):
-        return f'judgment_without_verdict:{m.group(0)}'
-    if not _AMOUNT.search(line):
+    """2M-3: no verdict word ("wrong", "does not match", "incorrect"), on
+    any row: the console shows the verdict beside the line. One inside a
+    quote, or inside a product row's issue written word for word, is not
+    the writer's. 2L-3a rule 3: a direction only the facts give. The first
+    failure, or None."""
+    outside = _unquoted(line, facts)
+    if facts.get('issue'):
+        outside = outside.replace(str(facts['issue']), 'I')
+    m = _JUDGMENT.search(outside)
+    if m:
+        return f'verdict_word:{m.group(0)}'
+    if not _has_price(facts) or not _AMOUNT.search(line):
         return None
     direction = _direction_of(facts)
     for m in _COMPARATIVE.finditer(line):
@@ -1137,11 +1186,116 @@ def verdict_words(line: str, facts: dict) -> Optional[str]:
     return None
 
 
+#: a dash: the check refuses one the writer wrote, normalise() keeps the source's
+_DASH = re.compile(r"[‒–—―]|--")
+_DASHED_RUN = re.compile(r"\S*\s?(?:[‒–—―]|--)\s?\S*")
+
+
+def normalise(line: str, facts: dict) -> str:
+    """2M-3: a dash the source wrote becomes a hyphen, so the line is kept:
+    one inside quotation marks (run-14475), or inside a run of the line the
+    facts write with that dash, a product name's "Diapers – Size 5" or
+    "(8–14 lbs)" (run-14723, 14852, 14864). Any other dash is the
+    writer's, and check() refuses it ("$27.97–$28.22", run-14537)."""
+    line = _QUOTED.sub(lambda m: _DASH.sub('-', m.group(0)), line)
+    known = facts_text(facts)
+
+    def held(m) -> str:
+        run = m.group(0).strip('.,:;!?()"')
+        return _DASH.sub('-', m.group(0)) if run and run in known else m.group(0)
+    return _DASHED_RUN.sub(held, line)
+
+
+def _plain(text_: str) -> str:
+    """For comparing a quote with the text it quotes: one kind of quote mark
+    and of hyphen, no markdown asterisks, single spaces, no end punctuation."""
+    text_ = text_.replace('’', "'").replace('‘', "'").replace('*', '')
+    text_ = re.sub(r"[‐-―]|--", '-', text_)
+    return ' '.join(text_.split()).lower().strip(' .,:;!?')
+
+
+def claim_texts(facts: dict) -> List[str]:
+    """What the answer said, everywhere the prompt shows it: answer_spans,
+    and the claim the brand-direct classifier quotes at the head of its
+    reason (scorer_note, "'<claim>' — <why>"). 2L-3a's no_claim_in_facts
+    read answer_spans alone, which production rows never filled (_spans), so
+    it refused 17 FL13 lines that quoted the scorer_note's claim verbatim."""
+    out = [str(s) for s in facts.get('answer_spans') or [] if s]
+    note = str(facts.get('scorer_note') or '')
+    head, sep, _why = note.partition(' — ')
+    if sep:
+        try:
+            claim = ast.literal_eval(head)
+        except (ValueError, SyntaxError):
+            claim = None
+        if isinstance(claim, str) and claim.strip():
+            out.append(claim)
+    return out
+
+
+def claim_check(line: str, facts: dict) -> Optional[str]:
+    """A fabricated-claim line: the facts hold what the answer said, and
+    what the line quotes is in it."""
+    texts = [_plain(t) for t in claim_texts(facts)]
+    if not texts:
+        # nothing the answer said is in the facts: any claim in the line is the writer's own
+        return 'no_claim_in_facts'
+    for m in _QUOTED.finditer(line):
+        quoted = _plain(m.group(0)[1:-1])
+        if quoted and not any(quoted in t for t in texts):
+            return 'quote_not_in_facts'
+    return None
+
+
+#: words every product name shares: they do not tell one product from another
+_GENERIC_WORDS = {'diaper', 'diapers', 'baby', 'size', 'sizes', 'count', 'pack', 'packs', 'box', 'the', 'for',
+                  'and', 'with', 'per'}
+
+
+def product_words(facts: dict) -> set:
+    """The words that name the quoted product (agent_quoted's for_product,
+    else for_variant), less the brand's and _GENERIC_WORDS."""
+    brand = {w.lower() for w in re.findall(r"[A-Za-z]+", str(facts.get('brand') or ''))}
+    words = set()
+    for q in facts.get('agent_quoted') or []:
+        for w in re.findall(r"[A-Za-z]{3,}", str(q.get('for_product') or q.get('for_variant') or '')):
+            if w.lower() not in brand | _GENERIC_WORDS:
+                words.add(w.lower())
+    return words
+
+
+def names_product(line: str, facts: dict) -> bool:
+    """2M-3: a price line names the product it is about (run-14632: "Google
+    AI Mode quoted $27.99. Target price could not be read."). True when the
+    facts name no product."""
+    words = product_words(facts)
+    return not words or bool(words & {w.lower() for w in re.findall(r"[A-Za-z]{3,}", line)})
+
+
+_GAVE_NO_PRICE = re.compile(r"((?:" + _AGENT_ALT + r")(?:(?:,\s*|\s+and\s+|\s*&\s*)(?:" + _AGENT_ALT +
+                            r"))*)\s+gave no price")
+
+
+def off_issue(line: str, facts: dict, named: List[str]) -> bool:
+    """A product row's line is about its issue (issue_sentence): agents from
+    gave_no_price giving no price, a price that could not be checked (2M-3:
+    product:00037000717379, feed_sku:35, 36 stated these and were refused),
+    or else, when any quote is wrong, an agent who quoted wrong (2L-3a)."""
+    issue = str(facts.get('issue') or '')
+    if 'gave no price' in issue:
+        none = set(facts.get('gave_no_price') or [])
+        return not any(set(_agents_in(m.group(1))) <= none for m in _GAVE_NO_PRICE.finditer(line))
+    if 'could not be checked' in issue:
+        return 'could not be checked' not in line
+    wrong = {q.get('agent') for q in facts.get('quotes') or [] if q.get('verdict') in FLAGGED_VALUE}
+    return bool(wrong) and not wrong & set(named)
+
+
 def check(line: Optional[str], facts: dict) -> Optional[str]:
     """None when the line passes every check, else the first failure."""
     if line is None or not str(line).strip():
         return 'no_line'
-    line = str(line).strip()
+    line = normalise(str(line).strip(), facts)
     if len(line) > max_chars(facts):
         return f'too_long:{len(line)}'
     scrubbed = line
@@ -1160,9 +1314,12 @@ def check(line: Optional[str], facts: dict) -> Optional[str]:
         return f'brand_choice_sentences:{sentences(line, facts)}'
     if line.lower().count('no source') > 1:
         return 'repeats:no source'
-    if 'brand_fabricated' in (facts.get('why') or []) and not facts.get('answer_spans'):
-        # nothing the answer said is in the facts: any claim in the line is the writer's own
-        return 'no_claim_in_facts'
+    if 'brand_fabricated' in (facts.get('why') or []):
+        claimed = claim_check(line, facts)
+        if claimed:
+            return claimed
+    if facts.get('kind') == ANSWER and facts.get('agent_quoted') and not names_product(line, facts):
+        return 'no_product'
     known = facts_text(facts)
     known_lower = known.lower().replace('’', "'")
     amounts = _amounts(facts)
@@ -1186,9 +1343,7 @@ def check(line: Optional[str], facts: dict) -> Optional[str]:
         return f"agent_not_named:{facts['agent']}"
     if facts.get('kind') == PRODUCT and not named:
         return 'agent_not_named'
-    # 2L-3a: a product row with wrong quotes names an agent who quoted wrong, not only those who were right
-    wrong = {q.get('agent') for q in facts.get('quotes') or [] if q.get('verdict') in FLAGGED_VALUE}
-    if facts.get('kind') == PRODUCT and wrong and not wrong & set(named):
+    if facts.get('kind') == PRODUCT and off_issue(line, facts, named):
         return 'off_issue'
     for name in _names_in(line):
         if name not in known_lower:
@@ -1241,6 +1396,7 @@ def decide(answer: Answer, facts: dict) -> dict:
     calls = []
     for raw, usage in zip(answer.raws, list(answer.usage) + [{}] * (len(answer.raws) - len(answer.usage))):
         line, error = parse(raw)
+        line = normalise(line, facts) if line is not None else None
         calls.append({'response': raw, 'usage': usage, 'line': line,
                       'check': error or (check(line, facts) if line is not None else 'no_line')})
     pair = calls

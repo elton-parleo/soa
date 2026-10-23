@@ -3,17 +3,17 @@
   {
    "response": "{\"line\":\"Gemini first picked Huggies, then Pampers, on \\\"question 1014\\\".\"}",
    "usage": {
-    "input_tokens": 1130,
+    "input_tokens": 1205,
     "output_tokens": 33,
-    "total_tokens": 1163
+    "total_tokens": 1238
    }
   },
   {
    "response": "{\"line\":\"Gemini first picked Huggies, then Pampers, on \\\"question 1014\\\".\"}",
    "usage": {
-    "input_tokens": 1130,
+    "input_tokens": 1205,
     "output_tokens": 33,
-    "total_tokens": 1163
+    "total_tokens": 1238
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "9259716d2829ba9ee9ba7c5ae854e6571e96bcfbfb8d52d4bc7d023b9d8d5a53",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "80ada82d79258557dd228ccbb0ebfc4ca8d68cd455bfb5a17e5de69b7147a586",
+ "request_digest": "f196fc958fb14df5006bd65ec2aa518542ba51d670b3b37b781e7452a22fbf9e",
  "subject": "answer:run-70080"
 }

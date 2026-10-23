@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Perplexity quoted $32.97, but Walmart charged $29.97 on Oct 19.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Baby Dry S3 136 $32.97 but Walmart charged $29.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1212,
-    "output_tokens": 34,
-    "total_tokens": 1246
+    "input_tokens": 1287,
+    "output_tokens": 41,
+    "total_tokens": 1328
    }
   },
   {
-   "response": "{\"line\":\"Perplexity quoted $32.97 but Walmart charged $29.97 on Oct 19. Wrong price.\"}",
+   "response": "{\"line\":\"Perplexity gives Pampers Baby Dry S3 136 $32.97 but Walmart charged $29.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1212,
-    "output_tokens": 36,
-    "total_tokens": 1248
+    "input_tokens": 1287,
+    "output_tokens": 41,
+    "total_tokens": 1328
    }
   }
  ],
@@ -47,6 +47,6 @@
  },
  "facts_digest": "fd609f1747cd35e28c83e80077daa4d2019fbb7667b43a617838d2e57d8fbe71",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "2e0227854333fe3fcedd7a3fa0930abe7c2b065de9788c0a13f2fd44788577c7",
+ "request_digest": "cba57e9d624a4157310d10d55a2ee2670139a4a697ef4b96c534b4d60593d556",
  "subject": "answer:run-90040"
 }

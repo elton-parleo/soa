@@ -3,17 +3,17 @@
   {
    "response": "{\"line\":\"Google AI Mode first picked Huggies, then Pampers, on \\\"question 1012\\\".\"}",
    "usage": {
-    "input_tokens": 1132,
+    "input_tokens": 1207,
     "output_tokens": 34,
-    "total_tokens": 1166
+    "total_tokens": 1241
    }
   },
   {
    "response": "{\"line\":\"Google AI Mode first picked Huggies, then Pampers, on \\\"question 1012\\\".\"}",
    "usage": {
-    "input_tokens": 1132,
+    "input_tokens": 1207,
     "output_tokens": 34,
-    "total_tokens": 1166
+    "total_tokens": 1241
    }
   }
  ],
@@ -37,6 +37,6 @@
  },
  "facts_digest": "07012fa6c34ab87c25100eb31f611baebc2e8179df9f5dcfa478f58bacf35e07",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "df09f591bc02663b11b14b9de93b3e3ec4a3f5fd70c58d53c54121fdb51a5480",
+ "request_digest": "d065e9a8530b39d4fd2aa2bd7dc533c3878331454268639a2f9775f5f31ec782",
  "subject": "answer:run-70069"
 }

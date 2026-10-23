@@ -1,19 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"ChatGPT quoted $29.97 for Pampers Baby Dry S3 136 and Amazon charged $32.97 on Oct 19.\"}",
+   "response": "{\"line\":\"ChatGPT gives Pampers Baby Dry S3 136 $29.97 but Amazon charged $32.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1210,
-    "output_tokens": 41,
-    "total_tokens": 1251
+    "input_tokens": 1285,
+    "output_tokens": 40,
+    "total_tokens": 1325
    }
   },
   {
-   "response": "{\"line\":\"ChatGPT quoted $29.97. Amazon charged $32.97 that day.\"}",
+   "response": "{\"line\":\"ChatGPT gives Pampers Baby Dry S3 136 $29.97 but Amazon charged $32.97 on Oct 19.\"}",
    "usage": {
-    "input_tokens": 1210,
-    "output_tokens": 30,
-    "total_tokens": 1240
+    "input_tokens": 1285,
+    "output_tokens": 40,
+    "total_tokens": 1325
    }
   }
  ],
@@ -47,6 +47,6 @@
  },
  "facts_digest": "5974598d3cbd160bb23d1fc717d948139ceff79f052e7fa9459318beff38201c",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "af2f2249c6ab3338ecdefe0778a07bc837af8b07c0f42dd5346a6c7bbbcd5c4e",
+ "request_digest": "acf7d9aac1852c6542c4a2d68b7faaf6ec3dce84ff8076201c01ea09ba4a3954",
  "subject": "answer:run-90043"
 }

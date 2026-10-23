@@ -1,19 +1,27 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Copilot did not quote a price for Pampers AMORE. Walmart charged $26.97 that day.\"}",
+   "response": "{\"line\":\"Copilot cited Walmart $26.97 for a different brand’s product, but gave no Pampers AMORE price.\"}",
    "usage": {
-    "input_tokens": 1172,
-    "output_tokens": 35,
-    "total_tokens": 1207
+    "input_tokens": 1247,
+    "output_tokens": 37,
+    "total_tokens": 1284
    }
   },
   {
-   "response": "{\"line\":\"Copilot said it gave no price for Pampers AMORE; Walmart charged $26.97 on Oct 19.\"}",
+   "response": "{\"line\":null}",
    "usage": {
-    "input_tokens": 1172,
-    "output_tokens": 37,
-    "total_tokens": 1209
+    "input_tokens": 1247,
+    "output_tokens": 144,
+    "total_tokens": 1391
+   }
+  },
+  {
+   "response": "{\"line\":\"Copilot gave no price for this product. Walmart charged $26.97 that day.\"}",
+   "usage": {
+    "input_tokens": 1247,
+    "output_tokens": 381,
+    "total_tokens": 1628
    }
   }
  ],
@@ -40,6 +48,6 @@
  },
  "facts_digest": "a09ad94d69f033234bf3f3a52c4bb51228f0e221862e70ea11693404e6ac3940",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "55f8b8ff6b10117d1d160fc97a126f0c2c43f3616d562f8ece985386a0e3acdd",
+ "request_digest": "2a81e6370a76629b9663d95ffbcffa838a7d05754c754904637c14c4c8718e01",
  "subject": "answer:run-90101"
 }

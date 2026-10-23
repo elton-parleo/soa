@@ -1,27 +1,19 @@
 {
  "calls": [
   {
-   "response": "{\"line\":\"Copilot did not quote a price for Pampers Easy Ups S5 66; Walmart charged $34.97 for the other brand's product that day.\"}",
+   "response": "{\"line\":\"Copilot said a price for another brand’s product, and Walmart charged $34.97 that day.\"}",
    "usage": {
-    "input_tokens": 1176,
-    "output_tokens": 45,
-    "total_tokens": 1221
+    "input_tokens": 1251,
+    "output_tokens": 34,
+    "total_tokens": 1285
    }
   },
   {
-   "response": "{\"line\":null}",
+   "response": "{\"line\":\"Copilot said a price for another brand's product but gave no price for Pampers Easy Ups S5 66. Walmart charged $34.97 that day.\"}",
    "usage": {
-    "input_tokens": 1176,
-    "output_tokens": 14,
-    "total_tokens": 1190
-   }
-  },
-  {
-   "response": "{\"line\":null}",
-   "usage": {
-    "input_tokens": 1176,
-    "output_tokens": 14,
-    "total_tokens": 1190
+    "input_tokens": 1251,
+    "output_tokens": 46,
+    "total_tokens": 1297
    }
   }
  ],
@@ -48,6 +40,6 @@
  },
  "facts_digest": "36e5b59b1c0a17491a47c9a826531bcac4c2bc679c4a9b82efb8875743ad96a9",
  "model": "gpt-5.4-nano-2026-03-17",
- "request_digest": "17930bda341271e917d56fe770179f99748ee228d40dcb24ef7705bd3e4e971e",
+ "request_digest": "71993d2f9ee7e2dee56dad34ab7bca333ba9c0d1861a96001604ce83e23c6196",
  "subject": "answer:run-90065"
 }
