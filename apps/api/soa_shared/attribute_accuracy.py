@@ -5,9 +5,16 @@ Accuracy set). Sync copies in apps/api/soa_shared/ and apps/pipeline/soa_shared/
 `attribute = "weight range for the size asked"`. One brand truth per
 variant: supply's (parleo-supply-app truesync/fullloop/weight.py), the feed's
 weight_min_lb / weight_max_lb, else what the brand's own page states for the
-size, never its markup. The truth is written on the question when it is
-generated (source_ref.weight_truth, catalog_tiers.build_intent_questions), so
-a cycle is scored against the truth it asked about.
+size, never its markup.
+
+2N-1: the truth is the CYCLE's, resolved from the cycle's reference (the
+retailer-prices rows cached on the cycle, else supply's /reference, the
+payload the drift rows read; truth_index()), at scoring and on read. Never
+the study's: a question generated before supply had a truth for its size
+(source_ref.weight_truth None) is judged once the reference has one, and two
+cycles of one study are each judged against their own reference. The
+scorer stores the truth it judged with on the extraction (`weight_truth`,
+`weight_truth_source`), the read's fallback when no reference is at hand.
 
   coder    weight_from_answer(): the first weight range in the answer that
            sits within SIZE_REACH characters of the asked size's token
@@ -167,8 +174,66 @@ def one_liner(stated: Optional[dict], truth: Optional[dict], brand_site: str = '
     return f"stated {phrase(stated)}, where {brand_site} says {said}"
 
 
+def _gtin14(value) -> Optional[str]:
+    digits = ''.join(ch for ch in str(value or '') if ch.isdigit())
+    return digits.zfill(14) if digits and len(digits) <= 14 else None
+
+
+def _keys(row: dict) -> List[str]:
+    """Every key a variant is known by: its GTIN-14, its sku (bare and sku:<sku>), variant_ref,
+    variant_id. Never its label: "Size 4, 120 ct" names a variant of more than one line."""
+    keys = [_gtin14(row.get('gtin')), row.get('sku'), f"sku:{row['sku']}" if row.get('sku') else None,
+            row.get('variant_ref'), row.get('variant_id'),
+            _gtin14(row.get('variant_id')) if str(row.get('variant_id') or '').isdigit() else None]
+    return [str(k) for k in keys if k]
+
+
+def truth_index(*payloads: Optional[dict]) -> dict:
+    """
+    2N-1: variant key -> {truth, source}, the brand truth for each variant in
+    a cycle's reference. Takes supply's retailer-prices payload (rows under
+    `prices`, each carrying the variant's `attribute.truth` and the feed's
+    `weight_range`) and /reference (rows under `rows`, the per-variant
+    `attributes`). The feed's range first when the feed carries one
+    (source `feed`), else supply's truth (its source). The first payload
+    that has a truth for a variant wins, so pass the cycle's own first.
+    """
+    out: dict = {}
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        found: dict = {}
+        rows = [r for r in (payload.get('prices') or payload.get('rows') or []) if isinstance(r, dict)]
+        for r in rows:
+            if r.get('role') != 'comparison' and r.get('weight_range'):
+                for k in _keys(r):
+                    found.setdefault(k, {'truth': r['weight_range'], 'source': 'feed'})
+        for r in rows:
+            said = r.get('attribute') or {}
+            if r.get('role') != 'comparison' and said.get('truth'):
+                for k in _keys(r):
+                    found.setdefault(k, {'truth': said['truth'], 'source': said.get('truth_source')})
+        for a in payload.get('attributes') or []:
+            if isinstance(a, dict) and a.get('truth'):
+                for k in _keys(a):
+                    found.setdefault(k, {'truth': a['truth'], 'source': a.get('source')})
+        for k, v in found.items():
+            out.setdefault(k, v)
+    return out
+
+
+def truth_for(index: Optional[dict], source_ref: Optional[dict]) -> Optional[dict]:
+    """{truth, source} for the question's variant in a truth_index(), or None."""
+    if not index:
+        return None
+    for k in _keys(source_ref or {}):
+        if k in index:
+            return index[k]
+    return None
+
+
 def answer_attribute(source_ref: Optional[dict], extraction: Optional[dict], answer: Optional[str] = None,
-                     brand_site: Optional[str] = None) -> Optional[dict]:
+                     brand_site: Optional[str] = None, truths: Optional[dict] = None) -> Optional[dict]:
     """
     An attribute question's answer, judged: {size, count, stated, evidence,
     truth, truth_source, site, verdict, line} (line is one_liner's; site the
@@ -176,6 +241,10 @@ def answer_attribute(source_ref: Optional[dict], extraction: Optional[dict], ans
     question. The stated range is the stored coding (the extraction's
     weight_range / weight_evidence, expectation_scorer.code_attribute), else
     coded here from the answer text (an outcome stored before the coder).
+
+    2N-1: the truth is the cycle's: `truths` (truth_index() of the cycle's
+    reference) for the question's variant, else what the scorer stored on
+    the extraction from the same reference. Never source_ref.weight_truth.
     """
     ref = source_ref or {}
     if ref.get('intent') != ATTRIBUTE_INTENT:
@@ -185,10 +254,13 @@ def answer_attribute(source_ref: Optional[dict], extraction: Optional[dict], ans
         stated, evidence = x.get('weight_range'), x.get('weight_evidence')
     else:
         stated, evidence = weight_from_answer(answer, ref.get('size'))
-    truth = ref.get('weight_truth')
+    found = truth_for(truths, ref)
+    if found is None and x.get('weight_truth'):
+        found = {'truth': x['weight_truth'], 'source': x.get('weight_truth_source')}
+    truth, source = (found or {}).get('truth'), (found or {}).get('source')
     site = brand_site or ref.get('own_domain') or ref.get('domain') or 'the brand site'
     return {'size': ref.get('size'), 'count': ref.get('count'), 'stated': stated, 'evidence': evidence,
-            'truth': truth, 'truth_source': ref.get('weight_truth_source'), 'site': site,
+            'truth': truth, 'truth_source': source, 'site': site,
             'verdict': verdict(stated, truth), 'line': one_liner(stated, truth, site)}
 
 

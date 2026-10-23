@@ -605,11 +605,12 @@ def _deal_fact(deal: dict) -> dict:
 
 def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merchant: Merchant,
                  index: Dict[tuple, dict], scales: Optional[List[dict]] = None,
-                 deals: Optional[dict] = None) -> Optional[dict]:
+                 deals: Optional[dict] = None, truths: Optional[dict] = None) -> Optional[dict]:
     """The facts for one answer, or None when it is not flagged. `run`
     carries its question (query_text, tier, source_ref, raw_response); `index` is the
     cycle's reference rows by (domain, key). 2M-1: `scales` is the cycle's
-    accuracy questions' {product, size, truth}, for same_as."""
+    accuracy questions' {product, size, truth}, for same_as. 2N-1: `truths`
+    the cycle's brand truths (attribute_accuracy.truth_index)."""
     if run.get('answer_status') not in (None, surfaces.ANSWERED):
         return None
     named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99)]
@@ -617,7 +618,7 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     brand_choice = unprompted.is_brand_choice(run, merchant.terms)
     ref = _json(run.get('source_ref')) or {}
     attribute = attribute_accuracy.answer_attribute(ref, _json((outcome or {}).get('extraction')),
-                                                    run.get('raw_response')) if outcome else None
+                                                    run.get('raw_response'), truths=truths) if outcome else None
     missed = promo_missed(run, deals) if outcome else []
     why = why_flagged(run.get('tier'), outcome, first, brand_choice, merchant, attribute, promo_missed=bool(missed))
     if not why:
@@ -883,12 +884,15 @@ def load_cycle_facts(conn, cycle_id: int) -> Dict[str, dict]:
     """), {'c': cycle_id}).mappings()]
     # 2M-2: the deals live that day, from the cached rows' `deals` (supply 2M-2)
     deals = promo_pass_through.deals_from_rows(_reference_rows(reference))
-    # 2M-1: every accuracy question's product, size and brand truth, for same_as
+    # 2M-1: every accuracy question's product, size and brand truth, for same_as;
+    # 2N-1: the truth is the cycle's reference's, never the question's copy
+    truths = attribute_accuracy.truth_index(reference)
     scales = []
     for run in runs:
         ref = _json(run.get('source_ref')) or {}
-        if ref.get('intent') == attribute_accuracy.ATTRIBUTE_INTENT and ref.get('weight_truth'):
-            entry = {'product': ref.get('line'), 'size': ref.get('size'), 'truth': ref['weight_truth']}
+        found = attribute_accuracy.truth_for(truths, ref)
+        if ref.get('intent') == attribute_accuracy.ATTRIBUTE_INTENT and found:
+            entry = {'product': ref.get('line'), 'size': ref.get('size'), 'truth': found['truth']}
             if entry not in scales:
                 scales.append(entry)
     outcomes = {o['run_id']: dict(o) for o in conn.execute(text("""
@@ -905,7 +909,7 @@ def load_cycle_facts(conn, cycle_id: int) -> Dict[str, dict]:
     out: Dict[str, dict] = {}
     for run in runs:
         facts = answer_facts(run, outcomes.get(run['id']), mentions.get(run['id'], []), merchant, index, scales,
-                             deals)
+                             deals, truths)
         if facts:
             out[f"{ANSWER}:run-{run['id']}"] = facts
     catalog = [{**run, **{k: v for k, v in (outcomes.get(run['id']) or {}).items() if k != 'run_id'}}

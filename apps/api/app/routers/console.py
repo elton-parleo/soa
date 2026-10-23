@@ -293,7 +293,7 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
             attr_reference = None
             body.setdefault('read_errors', {})['reference'] = a_err
     with engine.connect() as conn:
-        answers = rm.attribute_answers(conn, row) if asks else []
+        answers = rm.attribute_answers(conn, row, attr_reference) if asks else []
         accuracy = rm.build_attribute_accuracy(answers, attr_reference) if asks or attr_reference else None
         prev_answers = rm.attribute_answers(conn, prev) if asks and prev is not None else None
     if accuracy is not None:   # absent, as routing and retired_named are, when there is nothing to count

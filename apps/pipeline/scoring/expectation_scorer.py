@@ -432,6 +432,18 @@ class ExpectationScorer:
 
     # ─── Writing ──────────────────────────────────────────────────────
 
+    def _attribute_truth(self, run, source_ref):
+        """2N-1: an attribute question's brand truth from the cycle's
+        reference (its cached retailer-prices, read once per cycle as a
+        price claim's is), or None. Every other run: None, and no read."""
+        from soa_shared import attribute_accuracy as aa
+
+        if source_ref.get('intent') != aa.ATTRIBUTE_INTENT or self.references is None:
+            return None
+        reference = self.references.for_cycle(run.cycle_id, study_type=getattr(run, 'study_type', None),
+                                              merchant_slug=source_ref.get('merchant_slug'))
+        return aa.truth_for(aa.truth_index(getattr(reference, 'payload', None)), source_ref)
+
     def _store(self, *, run, expectation, extraction, verdict, model):
         """
         One verdict per run. A re-score REPLACES the row rather than
@@ -440,7 +452,8 @@ class ExpectationScorer:
         rather than relying on this.
         """
         source_ref = _as_dict(run.source_ref) or {}
-        extraction = code_attribute(source_ref, extraction, getattr(run, 'raw_response', None))
+        extraction = code_attribute(source_ref, extraction, getattr(run, 'raw_response', None),
+                                    truth=self._attribute_truth(run, source_ref))
         payload = {
             "run_id": run.id,
             "query_id": run.query_id,
@@ -598,22 +611,28 @@ class ExpectationScorer:
         return ScoreRunResult(run_id, 'success', outcome=verdict.outcome)
 
 
-def code_attribute(source_ref: dict, extraction: dict, answer: str) -> dict:
+def code_attribute(source_ref: dict, extraction: dict, answer: str, truth: dict = None) -> dict:
     """
     2M-1: on an attribute question's run (source_ref.intent 'attribute'), the
     weight range the answer states for the asked size, deterministically
     (soa_shared/attribute_accuracy.weight_from_answer), as the extraction's
     `weight_range` / `weight_evidence` (None when it states none). Every
     other run's extraction is returned as it is. No model.
+
+    2N-1: and the brand truth it is judged against, the cycle's (`truth`,
+    {truth, source} from the cycle's reference, attribute_accuracy.truth_for),
+    as `weight_truth` / `weight_truth_source`. None when the cycle's
+    reference has none for the variant: never the study's copy.
     """
     from soa_shared import attribute_accuracy as aa
 
     if (source_ref or {}).get('intent') != aa.ATTRIBUTE_INTENT or not isinstance(extraction, dict):
         return extraction
+    judged = {'weight_truth': (truth or {}).get('truth'), 'weight_truth_source': (truth or {}).get('source')}
     if answer is None and 'weight_range' in extraction:
-        return extraction  # no answer text to read: the stored coding stands
+        return {**extraction, **judged}  # no answer text to read: the stored coding stands
     stated, evidence = aa.weight_from_answer(answer, source_ref.get('size'))
-    return {**extraction, 'weight_range': stated, 'weight_evidence': evidence}
+    return {**extraction, 'weight_range': stated, 'weight_evidence': evidence, **judged}
 
 
 def _as_dict(value):

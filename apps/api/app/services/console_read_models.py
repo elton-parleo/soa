@@ -327,11 +327,12 @@ def _swap_check(claim: dict, expectation: dict, variant_names: Optional[Dict[str
 def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List[dict],
                  *, runs_per_query: Optional[int], cycle_code: str,
                  variant_names: Optional[Dict[str, str]] = None, features: Optional[List[str]] = None,
-                 references: Optional[Dict[tuple, dict]] = None) -> dict:
+                 references: Optional[Dict[tuple, dict]] = None, truths: Optional[dict] = None) -> dict:
     """features (2K-3): the merchant's catalog feature terms for claim_kind
     (app/services/console_claims.py); None reads 2K-1's rule. references
     (2L-1): the cycle's reference_index, for the reference of a check whose
-    answer gave no price."""
+    answer gave no price. truths (2N-1): the cycle's brand truths
+    (attribute_accuracy.truth_index), for an accuracy answer."""
     platform = run['platform']
     agent = surfaces.agent_of(platform) or platform
     extraction = _json((outcome or {}).get('extraction')) or {}
@@ -391,8 +392,8 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     # 2M-1: an attribute question's answer, judged against the brand truth:
     # its own one-liner and drawer facts, and claim_kind attribute when it
     # stated a range (soa_shared/attribute_accuracy.py)
-    attribute = attribute_accuracy.answer_attribute(source_ref, extraction, run.get('raw_response')) \
-        if outcome is not None else None
+    attribute = attribute_accuracy.answer_attribute(source_ref, extraction, run.get('raw_response'),
+                                                    truths=truths) if outcome is not None else None
     if attribute is not None and attribute['stated'] is not None:
         kind = claim_kinds.ATTRIBUTE
     named = [m['name'] for m in sorted(mentions, key=lambda m: m.get('position') or 99)]
@@ -2867,9 +2868,10 @@ def load_answers(conn, cycle: dict, features: Optional[List[str]] = None) -> Lis
     reference = cycle.get('reference_prices') if 'reference_prices' in cycle else conn.execute(text(
         "SELECT reference_prices FROM soa_cycles WHERE id = :c"), {'c': cycle['id']}).scalar()
     index = reference_index(_json(reference))   # 2L-1: a left-out check's reference
+    truths = attribute_accuracy.truth_index(_json(reference))   # 2N-1: the cycle's brand truths
     return [build_answer(dict(r), dict(r), outcomes.get(r['id']), mentions.get(r['id'], []),
                          runs_per_query=cycle.get('runs_per_query'), cycle_code=cycle['cycle_code'],
-                         variant_names=names, features=features, references=index)
+                         variant_names=names, features=features, references=index, truths=truths)
             for r in runs]
 
 
@@ -3024,9 +3026,21 @@ def asks_attribute(conn, cycle: dict) -> bool:
     return any((_json(r) or {}).get('intent') == attribute_accuracy.ATTRIBUTE_INTENT for r in refs)
 
 
-def attribute_answers(conn, cycle: dict) -> List[dict]:
+def cycle_reference(conn, cycle: dict) -> Optional[dict]:
+    """The retailer-prices payload cached on the cycle (2B), or None."""
+    if 'reference_prices' in cycle:
+        return _json(cycle.get('reference_prices'))
+    return _json(conn.execute(text("SELECT reference_prices FROM soa_cycles WHERE id = :c"),
+                              {'c': cycle['id']}).scalar())
+
+
+def attribute_answers(conn, cycle: dict, reference: Optional[dict] = None) -> List[dict]:
     """Every answered, scored run of the cycle's attribute questions, judged:
-    {run_id, surface, platform, variant_id, variant, size, stated, truth, verdict, evidence}."""
+    {run_id, surface, platform, variant_id, variant, size, stated, truth, verdict, evidence}.
+    2N-1: against the cycle's brand truth: its cached retailer-prices first,
+    then `reference` (supply's /reference, the payload the drift rows read;
+    pass it only for the cycle it is current for), then what the scorer
+    stored. Never the study's copy."""
     rows = conn.execute(text("""
         SELECT r.id, r.platform, r.surface, r.answer_status, r.raw_response, q.source_ref, o.extraction
         FROM soa_runs r JOIN soa_queries q ON q.id = r.query_id
@@ -3034,6 +3048,7 @@ def attribute_answers(conn, cycle: dict) -> List[dict]:
         WHERE r.cycle_id = :c AND q.tier = 'brand_direct'
         ORDER BY r.id
     """), {'c': cycle['id']}).mappings().all()
+    truths = attribute_accuracy.truth_index(cycle_reference(conn, cycle), reference)
     out = []
     for r in rows:
         ref = _json(r['source_ref']) or {}
@@ -3041,7 +3056,7 @@ def attribute_answers(conn, cycle: dict) -> List[dict]:
             continue
         if (r['answer_status'] or surfaces.ANSWERED) != surfaces.ANSWERED:
             continue
-        judged = attribute_accuracy.answer_attribute(ref, _json(r['extraction']), r['raw_response'])
+        judged = attribute_accuracy.answer_attribute(ref, _json(r['extraction']), r['raw_response'], truths=truths)
         out.append({'run_id': r['id'], 'platform': r['platform'],
                     'surface': r['surface'] or surfaces.surface_of(r['platform']),
                     'variant_id': ref.get('variant_id'),
@@ -3096,7 +3111,7 @@ def build_attribute_accuracy(answers: List[dict], reference: Optional[dict]) -> 
 
 
 def load_attribute_accuracy(conn, cycle: dict, reference: Optional[dict]) -> Optional[dict]:
-    return build_attribute_accuracy(attribute_answers(conn, cycle), reference)
+    return build_attribute_accuracy(attribute_answers(conn, cycle, reference), reference)
 
 
 #: 2M-1: the Changes line's and the drift rows' copy (kept out of
