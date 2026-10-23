@@ -204,3 +204,43 @@ def test_start_a_cycle_on_the_study_s_comparison_set(http, upstream, studies_db)
     assert [tuple(r) for r in roles] == [(1, 'primary'), (2, 'competitor')]
     other = http.post('/api/console/cycles', params={'org': 20}, json={'study_type': 'ws-2b-fixture', 'platforms': ['chatgpt']})
     assert other.status_code == 422 and 'not this customer' in other.json()['detail']
+
+
+# 2N-1: the Create Study dialog shows soa's tally and absorbed line for the study as set, never
+# its own count. Its old count took every intent out of the stage counts (48 here: 19 + 19 + 10),
+# where soa takes only where-to-buy and cheapest-place (38): 87 in the dialog, 97 here. The bodies
+# are the ones the dialog sends (balanced 50 over the fixture's four stages, the default tiers).
+BALANCED = {'Awareness': 13, 'Research': 13, 'Comparison': 12, 'Ready to Buy': 12}
+DIALOG_TIERS = {'brand_direct': True, 'catalog_accuracy': True, 'value_incentives': True, 'category_control': False}
+
+
+def _sample(name, body):
+    """SOA_2N1_SAMPLE_DUMP=<dir>: the console's samples, unedited."""
+    out = os.environ.get('SOA_2N1_SAMPLE_DUMP')
+    if out:
+        os.makedirs(out, exist_ok=True)
+        with open(os.path.join(out, name), 'w') as fh:
+            json.dump(body, fh, indent=1, sort_keys=True)
+
+
+def test_the_tally_for_the_study_as_set(http, upstream, studies_db):
+    ws_supply(upstream)
+    catalog = preview(http, tiers={**DIALOG_TIERS, 'category_control': True}, stage_total=0)
+    _sample('studies-preview-2n1-catalog.json', catalog)
+    default = preview(http, tiers=DIALOG_TIERS, stage_total=50, stage_targets=BALANCED, brand_direct_count=12)
+    _sample('studies-preview-2n1-default.json', default)
+    assert default['tally']['text'] == '24 AI-written + 73 from the catalog = 97 questions, within the 100 limit'
+    assert default['tiers']['brand_direct']['absorbed_line'] == (
+        '38 taken out of the stage counts, Ready to Buy first, so the study stays the size you set')
+    no_accuracy = preview(http, tiers={**DIALOG_TIERS, 'catalog_accuracy': False}, stage_total=50, stage_targets=BALANCED,
+                          brand_direct_count=12)
+    _sample('studies-preview-2n1-no-accuracy.json', no_accuracy)
+    assert no_accuracy['tally']['text'] == '24 AI-written + 54 from the catalog = 78 questions, within the 100 limit'
+    over = preview(http, tiers=DIALOG_TIERS, stage_total=70, stage_targets={**BALANCED, 'Awareness': 33}, brand_direct_count=12)
+    _sample('studies-preview-2n1-over.json', over)
+    # what generate refuses (test_generate_refuses_over_the_cap_server_side), word for word
+    assert over['tally']['text'] == '44 AI-written + 73 from the catalog = 117 questions, over the 100 limit. Reduce a stage or untick a tier.'
+    control = preview(http, tiers={**DIALOG_TIERS, 'category_control': True}, stage_total=50, stage_targets=BALANCED,
+                      brand_direct_count=12)
+    _sample('studies-preview-2n1-control.json', control)
+    assert control['tiers']['category_control']['line'] == '0 questions, none naming the brand'
