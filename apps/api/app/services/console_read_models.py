@@ -171,7 +171,7 @@ def catalog_verdict(intent: str, source_ref: dict, extraction: Optional[dict], a
     if intent == claim_kinds.ATTRIBUTE_INTENT:
         v = (attribute or {}).get('verdict')
         return {'verdict': v, 'line': (attribute or {}).get('line'),
-                'severity': {'match': 'ok', 'mismatch': 'high', 'absent': 'medium'}.get(v, 'low'),
+                'severity': {'match': 'ok', 'mismatch': 'high', 'absent': 'low'}.get(v, 'low'),
                 'tone': {'match': 'ok', 'mismatch': 'bad', 'absent': 'bad'}.get(v, 'neu')}
     if intent == claim_kinds.RETIRED:
         line = (ref.get('retired_line') or {}).get('line') or 'the line'
@@ -517,8 +517,9 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         'gtin': source_ref.get('gtin'),
         'retailer': expectation.get('attributed_to') or source_ref.get('own_domain') or source_ref.get('domain'),
         # 2M-1: the brand-direct intent (2L-4's where_to_buy / cheapest_place, 2M-1's
-        # attribute), the Answers list's Accuracy chip; and the attribute verdict
-        'intent': source_ref.get('intent'),
+        # attribute), the Answers list's Accuracy chip; and the attribute verdict.
+        # 2N-1: a retired line's question reads 'retired' (claim_kinds.catalog_intent)
+        'intent': source_ref.get('intent') or intent,
         'attribute': None if attribute is None else {k: v for k, v in attribute.items() if k != 'line'},
     }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer', 'expected_type', 'claim_kind', 'claim_kind_label',
         'intent', 'attribute', 'intent_verdict'))
