@@ -42,7 +42,16 @@ KNOWN_RETAILERS = {
     'uniqlo': 'uniqlo.com', 'zara': 'zara.com', 'h&m': 'hm.com',
     'rei': 'rei.com', 'rei co-op': 'rei.com', 'backcountry': 'backcountry.com',
     'moosejaw': 'moosejaw.com', 'public lands': 'publiclands.com', 'scheels': 'scheels.com',
+    # 2N-1: FL14 named it as a brand
+    'hy-vee': 'hy-vee.com', 'hyvee': 'hy-vee.com',
 }
+
+#: 2N-1: a retailer's own label, named by agents as if it were a brand
+#: ("Kirkland" is Costco's). Visibility's brand table leaves it out with
+#: the retailers it belongs to; routing counts the retailer.
+STORE_LABELS = {'kirkland': 'costco.com', 'kirkland signature': 'costco.com'}
+#: Words a store's name carries beside it ("Walmart store", "Amazon.com online").
+_STORE_WORDS = {'store', 'stores', 'online', 'com', 'inc', 'brand', 'website', 'site', 'app'}
 
 #: How a question names a retailer domain. The first alias written for a
 #: domain above that reads as a store name; the domain itself otherwise.
@@ -63,7 +72,7 @@ RETAILER_NAMES = {
     'jdsports.com': 'JD Sports', 'nordstrom.com': 'Nordstrom', 'macys.com': "Macy's",
     'uniqlo.com': 'Uniqlo', 'zara.com': 'Zara', 'hm.com': 'H&M', 'rei.com': 'REI',
     'backcountry.com': 'Backcountry', 'moosejaw.com': 'Moosejaw',
-    'publiclands.com': 'Public Lands', 'scheels.com': 'Scheels',
+    'publiclands.com': 'Public Lands', 'scheels.com': 'Scheels', 'hy-vee.com': 'Hy-Vee',
 }
 
 
@@ -87,6 +96,19 @@ def retailers_named(text) -> List[str]:
         if domain and domain not in found:
             found.append(domain)
     return found
+
+
+def is_store_name(name) -> bool:
+    """2N-1: whether a name an answer gave as a brand is a retailer (or a
+    retailer's own label): the whole name is a known retailer, a written
+    domain or STORE_LABELS, with at most a store word beside it ("Walmart",
+    "Amazon.com", "Hy-Vee", "Kirkland Signature"). "Walmart Parent's
+    Choice" names more than the store and is not one."""
+    words = [w for w in re.split(r"[^a-z0-9'&-]+", _norm_name(name).replace('.com', ' com')) if w]
+    core = ' '.join(w for w in words if w not in _STORE_WORDS)
+    if not core:
+        return False
+    return core in KNOWN_RETAILERS or core in STORE_LABELS or bool(_DOMAIN_IN_TEXT.fullmatch(_norm_name(name)))
 
 
 _DOMAIN_IN_TEXT = re.compile(r'([a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|co|us|io|shop|store|ca|co\.uk))\b')

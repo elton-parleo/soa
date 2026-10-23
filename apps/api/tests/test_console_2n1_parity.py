@@ -223,3 +223,72 @@ def test_b4_the_check_label_follows_the_issue_rule():
     assert row['issue'] == 'No price quoted in 12 of 18 runs.'
     assert (row['cell_status'], row['status']) == ('wrong', 'none')
     assert parity.status_for('product.right', 'partial') == 'partial' and parity.status_for('product.wrong', 'exact') == 'wrong'
+
+
+# ---------------------------------------------------------------------------
+# B5: Visibility and routing hygiene
+# ---------------------------------------------------------------------------
+
+ENTITIES = [{'name': 'Pampers', 'aliases': '[]', 'role': 'primary'}, {'name': 'Huggies', 'aliases': '[]', 'role': 'tracked'},
+            {'name': 'The Honest Company', 'aliases': '[]', 'role': 'tracked'}]
+
+
+def _vis_runs():
+    """30 category questions (180 brand-choice answers) and 43 brand-direct ones that name Pampers (258)."""
+    runs, mentions, extractions, rid = [], [], {}, 0
+    for q in range(73):
+        choice = q < 30
+        for agent in AGENTS:
+            rid += 1
+            runs.append({'id': rid, 'platform': agent, 'run_number': 1, 'surface': SURFACE[agent], 'answer_status': 'answered',
+                         'query_code': f'Q{q:02d}', 'tier': 'category_control' if choice else 'brand_direct',
+                         'query_text': 'Best diapers for a newborn?' if choice else 'Is Pampers Swaddlers hypoallergenic?',
+                         'stage': 'Discovery', 'source_ref': {}})
+            if not choice or rid % 3 == 0:    # every brand-direct answer names Pampers; a third of the category ones
+                mentions.append({'run_id': rid, 'name': 'Pampers', 'position': 1, 'role': 'primary'})
+            if choice:
+                mentions.append({'run_id': rid, 'name': 'Huggies', 'position': 1 if rid % 3 else 2, 'role': 'tracked'})
+                extractions[rid] = {'spans': [], 'other_brands_named': [
+                    {'name': 'Swaddlers', 'presented_as': 'recommendation'}, {'name': 'Honest', 'presented_as': 'recommendation'},
+                    {'name': 'Walmart', 'presented_as': 'recommendation'}, {'name': 'Kirkland', 'presented_as': 'recommendation'},
+                    {'name': 'Hy-Vee', 'presented_as': 'recommendation'}, {'name': 'Cruisers', 'presented_as': 'recommendation'}]}
+    return runs, mentions, extractions
+
+
+def test_b5_a_brand_s_ranking_opens_on_its_brand_choice_answers():
+    runs, mentions, extractions = _vis_runs()
+    lines = rm.line_aliases(['Pampers Swaddlers Diapers', 'Pampers Baby Dry Diapers', 'Pampers Cruisers 360',
+                             'Pampers Pure Protection Diapers'], 'Pampers')
+    assert lines == ['Swaddlers', 'Baby Dry', 'Cruisers 360', 'Pure Protection']
+    body = rm.build_visibility('FL14', runs=runs, entities=ENTITIES, mentions=mentions, extractions=extractions,
+                               terms=['Pampers'], kind='brand', lines=lines + ['Cruisers'])
+    every = {r['name']: r for r in body['ranking']['rows']}
+    # every question: the 258 brand-direct answers name Pampers because the question does
+    assert body['ranking']['denom'] == 438 and every['Pampers']['first'] == 258 + 60
+    choice = body['ranking']['brand_choice']
+    assert body['ranking']['default_tier'] == 'brand_choice' and choice['denom'] == 180
+    assert choice['title'] == 'Who agents pick first, Pampers category prompts'
+    assert choice['sub'] == '180 category and comparison answers'
+    mine = {r['name']: r for r in choice['rows']}
+    # sub-lines are Pampers; Honest is The Honest Company; retailers are not brands
+    assert set(mine) == {'Pampers', 'Huggies', 'The Honest Company'}
+    assert (mine['Pampers']['named'], mine['The Honest Company']['named'], mine['Huggies']['first']) == (180, 180, 120)
+    # a retailer merchant keeps the one ranking
+    store = rm.build_visibility('FL14', runs=runs, entities=ENTITIES, mentions=mentions, extractions=extractions,
+                                terms=['Pampers'], kind='retailer')
+    assert 'brand_choice' not in store['ranking'] and 'default_tier' not in store['ranking']
+
+
+def test_b5_the_brand_s_own_names_are_its_site_in_routing():
+    rows, runs, extractions = [], [], {}
+    for i, store in enumerate(['Pampers', 'Pampers Official Store', 'Pampers official site / product page', 'Amazon',
+                               'Hy-Vee']):
+        rid = 100 + i
+        runs.append({'id': rid, 'source_ref': {'intent': 'where_to_buy'}})
+        rows.append({'run': f'run-{rid}', 'answered': True, 'surface': 'grounded_api'})
+        extractions[rid] = {'spans': [], 'retailer_mentions': [{'name': store, 'role': 'retailer'}]}
+    block = rm.build_routing(rows, runs, extractions, surface_list=['all', 'grounded_api'], brand='Pampers',
+                             retailers=['amazon.com', 'walmart.com'], own_domains=['pampers.com'])
+    table = {r['name']: r for r in block['rows']}
+    assert table['pampers.com']['first'] == 3 and table['pampers.com']['you'] is True
+    assert table['Other stores']['note'] == 'Hy-Vee' and table['Amazon']['first'] == 1
