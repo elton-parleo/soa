@@ -29,10 +29,38 @@ else, and for any line that fails.
             the facts; every retailer, agent and brand name too (a capitalised
             word inside a sentence must be one the facts hold); no banned
             word (the console's copy scan, apps/console/tools/audit.py, plus
-            "AI", "model", semicolons and dashes); at most 220 characters.
+            "AI", "model", semicolons and dashes); at most 220 characters
+            (260 for a product row).
             decide(): taken only when both calls write a line and both pass
-            (the wording may differ, the first is kept). Otherwise dropped,
-            and the console shows its template.
+            (the wording may differ, the first is kept). When exactly one
+            call writes null, the writer makes one more call, which stands in
+            for it; two nulls is null. Otherwise dropped, and the console
+            shows its template.
+
+2L-3a (the FL13 dry run of Oct 22, 177 subjects): lines that passed the
+checks and were still wrong. Five rules, each deterministic, before storing:
+
+  verdict   "wrong", "underquoted", "overquoted", "incorrect", "not correct",
+            "not what ... charged/paid", "does not match" only when the
+            verdict is wrong or stale, the retailer's price was read, and the
+            quote is comparable (judgment()). run-14727, 14867.
+  subject   the line's first word is the agent's name (a possessive
+            counts). Never "you", "your", "the shopper got|was",
+            "assistant", or the brand as narrator ("Pampers says").
+            run-14677, 14680, 14685, 14834, 14678, 14817, 14854.
+  direction price_direction, computed here from the quoted amount(s) and the
+            reference: below, above, the same, a range that includes it, or
+            a per-unit quote. "lower", "higher", "cheaper", "more expensive",
+            "below", "above" only with a single direction; "underquoted"
+            only below, "overquoted" only above. run-14858, 14539, 14815.
+  one       a brand-choice line (why is only rival_first_pick) is one
+            sentence, the question in quotes not counted.
+  once      "no source" at most once. run-14831, 14838, 14842.
+
+Product rows (2L-3a B2): the facts are one entry per quote, (agent,
+retailer, price, verdict), sorted by agent, the reference per retailer as
+(retailer, price, date), and the issue as a sentence with its count; the
+product prompt (PRODUCT_PROMPT) is its own.
   storage   soa_narratives (migration c8e2f4a6b1d3), one row per cycle and
             subject, with the digest, model, time, each call's answer and
             usage. Written by the worker when a full loop's cycle completes
@@ -74,6 +102,8 @@ TABLE = "soa_narratives"
 #: Two calls on the same request; a line is taken only when both pass.
 CALLS = 2
 MAX_CHARS = 220
+#: A product row names a product, a quote and a retailer's price (2L-3a).
+MAX_CHARS_PRODUCT = 260
 #: Calls in flight at once while a cycle's lines are written.
 MAX_WORKERS = 4
 #: Reasoning effort. The 2A-5 extractor reads with none; writing from the
@@ -98,8 +128,6 @@ BRAND_TIER = 'brand_direct'
 FLAGGED_VALUE = ('wrong', 'stale')
 FLAGGED_BRAND = ('fabricated', 'misattributed')
 FLAGGED_FLAGS = ('fabricated_citation', 'fabricated_availability')
-#: TV_CELL_RULE's order: the worst outcome among the runs that quoted a price.
-CELL_ORDER = ('wrong', 'stale', 'partial', 'exact')
 #: The scorer's outcomes in the console's words (console_read_models.VALUE_VERDICT).
 VERDICT_WORDS = {'exact': 'right', 'wrong': 'wrong', 'stale': 'stale', 'partial': 'partial', 'absent': 'no price',
                  'unverifiable': 'could not be checked', 'unscoreable': 'not scored', 'missed': 'no price'}
@@ -117,9 +145,15 @@ MEANINGS = {
 }
 CLAIM_KIND_WORDS = {claim_kinds.ATTRIBUTE: 'stated a fact about the brand',
                     claim_kinds.RECOMMENDATION_ONLY: 'only recommended the brand, stated no fact'}
-ISSUE_WORDS = {'product.wrong': 'quoted a wrong price', 'product.other_brand': "priced another brand's product",
-               'product.left_out': 'gave no price', 'product.unverifiable': 'could not be checked',
-               'product.right': 'quoted the right price', 'product.not_asked': 'not asked'}
+#: How a quote compares with the retailer's price that day (2L-3a), in the
+#: words the facts carry. A line may state only the direction it is given.
+BELOW, ABOVE, SAME, RANGE, PER_UNIT = 'below', 'above', 'same', 'range', 'per-unit'
+DIRECTION_WORDS = {BELOW: "quoted below the retailer's price", ABOVE: "quoted above the retailer's price",
+                   SAME: "quoted the retailer's price", RANGE: "range includes the retailer's price",
+                   PER_UNIT: 'per-unit quote, not comparable'}
+#: "$0.30 per diaper", "$0.45 each", "$0.48/ct": the words after a per-unit amount.
+_PER_UNIT_AFTER = re.compile(r"^\s*(?:(?:/|per\b|a\b|an\b)\s*(?:diaper|wipe|count|ct|unit|piece|pull-?up|pant|pad)s?\b"
+                             r"|each\b)", re.I)
 
 #: The console's banned-word scan (parleohq/truesync console-demo,
 #: apps/console/tools/audit.py BAN), verbatim, plus the house rules.
@@ -132,43 +166,110 @@ _BANNED = re.compile(COPY_SCAN, re.I)
 #: "reader", "facts"
 _HOUSE = re.compile(r"\bAI\b|\bmodels?\b|;|\u2014|\u2013|--|_|\bmerchants?\b|\breaders?\b|\bfacts?\b", re.I)
 
-SYSTEM_PROMPT = """You write the one line a product console shows beside a shopping assistant's \
-answer, or beside one product across many answers. You get the facts a scorer recorded and \
-nothing else.
-
-What the line says, in order: what the assistant said (its price, its pick, its claim), what was \
-true (the retailer's price that day, the brand's own facts), and, when the facts give it, what that \
-means for the shopper or the brand. For a product, lead with its issue: which assistants got the \
-price wrong, what they quoted, and what the retailer charged. For a first pick, say which brand the \
-assistant put first and where the brand came in the order the answer named them.
-
-Rules:
-- Use only the facts. Every price, number, retailer, assistant, brand and product you write must \
+_COMMON_RULES = """- Use only the facts. Every price, number, retailer, assistant, brand and product you write must \
 appear in the facts, written as the facts write it. Never round, convert or compute: no \
 differences, no percentages, no counts the facts do not state.
 - Be exact about who said what. Name an assistant only beside the quote or pick the facts give \
 for that assistant, and a price only beside the retailer the facts give it for.
-- Name the assistant (or assistants) and the retailer.
-- One or two short sentences, at most 200 characters. Plain words.
-- Never use a semicolon, an em dash or an en dash. Write a second sentence instead.
+- The line's first word is the assistant's name ("Claude's first pick" counts). The assistant is \
+the subject. Never write the brand or store as the one speaking ("Pampers says", "Pampers shows", \
+"Pampers puts"), and never address anyone: no "you", no "your", no "the shopper got", no \
+"the shopper was".
+- Never write the word "assistant": write its name.
+- Write the line itself, with no label or prefix before it (no "Facts:", no "Line:"), and never \
+the word "fact" in any form ("in fact" included).
+- No dashes of any kind: no em dash, no en dash, no double hyphen. A plain hyphen only inside a \
+product name. No semicolons. Write a second sentence instead.
 - Never write the word "AI" or the word "model". "Google AI Mode" is an assistant's name and may \
 be written.
 - Write prices with a dollar sign, as "$27.97", and dates as the facts write them.
 - Do not mention the scorer, verdicts, runs or checks. Say what happened.
-- The reader works for the brand (or store) the facts name. Call it by its name, and do not tell \
-the reader what the assistant should have done.
+- Do not tell the brand (or store) what the assistant should have done.
 - If the facts hold nothing specific to say (no price, no pick, no claim, only a verdict), return null.
 
-Style examples, from other merchants:
-- "Sends the AMORE shopper to Amazon at about $36.18. Amazon charged $47.99 that day and ran save \
-40% on 1 when you buy 2, which the answer never mentions."
-- "Calls Walmart the cheapest for a club-only diaper. Only a third-party seller lists it there, at \
-$63.90. Costco sold it for $46.79."
-- "Gets oralb.com's $169.99 right. Gives Best Buy $219.99 for a brush Best Buy sells at $169.99."
-- "Only Gemini said Pure is being replaced by AMORE."
-- "Huggies Little Movers first, Pampers Cruisers 360 second."
-
 Return JSON: {"line": "<the line>"} or {"line": null}."""
+
+SYSTEM_PROMPT = """You write the one line a product console shows beside a shopping assistant's \
+answer. You get the facts a scorer recorded and nothing else.
+
+What the line says depends on why the answer was flagged (the facts' why):
+
+- A first pick (why is only rival_first_pick): ONE sentence and nothing after it, in this pattern: \
+<assistant> first picked <rival>, then <brand>, on "<question>". Name the brands in the order the \
+answer named them, up to the brand. Do not restate the pick in a second sentence.
+- A price: what the assistant quoted, then what the retailer charged that day. One or two \
+sentences.
+  - price_direction says how the quote compares with the retailer's price. Use "below", \
+"above", "lower", "higher", "cheaper" or "more expensive" only to say that direction, and only \
+when price_direction is "quoted below the retailer's price" or "quoted above the retailer's \
+price". Otherwise, write none of them.
+  - When price_direction is "range includes the retailer's price" or "per-unit quote, not \
+comparable", say what was quoted and what the retailer charged, and add no judgment.
+  - Write "wrong", "underquoted", "overquoted", "incorrect", "not correct", "does not match" or \
+"not what ... charged" only when the verdict is wrong or stale and the retailer's price was read.
+  - When the retailer's price could not be read, say what the assistant quoted and that the \
+retailer's price could not be read. Nothing more.
+- A claim the brand never published (brand_fabricated): only when answer_spans hold what the \
+assistant said, <assistant> said <what it said>. <brand> never published it and no source backs \
+it. That second sentence once, and nothing after it. When the facts do not hold what it said, \
+return null.
+- Another brand's price (other_brand_price): the assistant gave no price for this product, only \
+one for another brand's. It quoted nothing for this product, so never write a price beside the \
+assistant's name. The retailer's price that day may follow in its own sentence.
+- Another brand's product described as the brand's, a cited source that does not exist, or where \
+the product is sold: what the assistant said, then what was true, in one or two sentences, only \
+from what the facts hold.
+
+Rules:
+- One or two short sentences, at most 200 characters.
+""" + _COMMON_RULES + """
+
+Style examples, from other brands:
+- "Gemini first picked Huggies Little Movers, then Pampers, on "Best diapers for a crawling baby?"."
+- "ChatGPT gives Best Buy $219.99 for a brush Best Buy sells at $169.99."
+- "Perplexity sends the AMORE shopper to Amazon at $36.18. Amazon charged $47.99 that day."
+"""
+
+#: The demo's product line is the style guide: "Sends the AMORE shopper to
+#: Amazon at about $36.18. Amazon charged $47.99 that day ..." (2L-3),
+#: written with the agent first and without its "when you buy 2".
+PRODUCT_PROMPT = """You write the one line a product console shows beside one product, across the \
+answers several shopping assistants gave about it. You get the facts a scorer recorded and nothing \
+else.
+
+The facts:
+- retailer_prices_that_day: what each retailer charged, and the day.
+- quotes: one entry per quote, sorted by assistant: the assistant, the retailer the answer was \
+about, the price it quoted for that retailer, and the verdict on that quote.
+- issue: the product's issue, with its count.
+
+What the line says: the product's issue, told through at most two assistants whose quotes \
+share it. Write it in this pattern, and only this pattern:
+
+<assistant>[ and <assistant>] quoted $<price> at <retailer>. <retailer> charged $<price> on \
+<date>[. <issue>].
+
+The assistants are ones whose quotes share the issue: when the issue is a wrong price, ones \
+whose verdict is wrong. Two only when both have that same price at that same retailer. \
+Each assistant beside its own quote, exactly as its entry in quotes gives it (that assistant, \
+that retailer, that price). Never "so did" or "as did". The last sentence is the issue, word for word, only when it counts \
+more agents than you named. When no assistant quoted a price, write <assistant> and <assistant> \
+gave no price for <product>, then the issue.
+
+Rules:
+- One or two short sentences, at most 240 characters.
+- Use "below", "above", "lower", "higher", "cheaper" or "more expensive" only when price_direction \
+is "quoted below the retailer's price" or "quoted above the retailer's price", and only to say that.
+""" + _COMMON_RULES + """
+
+Style, from another brand: "ChatGPT sends the AMORE shopper to Amazon at about $36.18. Amazon \
+charged $47.99 that day."
+"""
+
+
+def system_prompt(facts: dict) -> str:
+    return PRODUCT_PROMPT if facts.get('kind') == PRODUCT else SYSTEM_PROMPT
+
 
 SCHEMA = {
     "type": "object",
@@ -313,6 +414,45 @@ def _spans(extraction: dict, claims: List[dict]) -> List[str]:
     return out[:4]
 
 
+def _per_unit(amount: str, spans: List[str], against: Optional[str]) -> bool:
+    """A quote for one diaper, not the pack: the answer's words after the
+    amount say so ("$0.30 per diaper", "$0.45 each"), or it is under a
+    dollar against a retailer's price of five or more."""
+    for span in spans:
+        for m in _AMOUNT.finditer(span):
+            if normalize_money(m.group(1).replace(',', '')) == amount and _PER_UNIT_AFTER.match(span[m.end():m.end() + 30]):
+                return True
+    try:
+        return against is not None and float(amount) < 1 and float(against) >= 5
+    except ValueError:
+        return False
+
+
+def _direction(amount: Optional[str], against: Optional[str], spans: List[str]) -> Optional[str]:
+    """One quote against the price it is judged by: BELOW, ABOVE, SAME,
+    PER_UNIT, or None when there is no price to judge it by."""
+    if not amount or not against:
+        return None
+    if _per_unit(amount, spans, against):
+        return PER_UNIT
+    a, b = float(amount), float(against)
+    return SAME if a == b else BELOW if a < b else ABOVE
+
+
+def overall_direction(directions: Iterable[Optional[str]]) -> Optional[str]:
+    """The line's one direction over its quotes: theirs when they agree,
+    RANGE when the comparable quotes sit on both sides of (or on) the price,
+    PER_UNIT when no quote is comparable. Per-unit quotes beside pack quotes
+    are left out of the pack quotes' direction."""
+    found = [d for d in directions if d]
+    if not found:
+        return None
+    comparable = {d for d in found if d != PER_UNIT}
+    if not comparable:
+        return PER_UNIT
+    return comparable.pop() if len(comparable) == 1 else RANGE
+
+
 def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[str], brand_choice: bool,
                 merchant: Merchant) -> List[str]:
     """The reasons an answer gets a line (empty: it keeps its template)."""
@@ -362,6 +502,15 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
                                     'price': _money(expected.get('amount'))})
     surface = run.get('surface') or surfaces.surface_of(run.get('platform') or '')
     rival = 'rival_first_pick' in why
+    spans = _spans(extraction, claims)
+    quoted = [f for f in (_claim_fact(c) for c in claims) if f]
+    directions = []
+    for q in quoted:
+        d = _direction(q['price_quoted'], q.get('judged_against') or (reference or {}).get('price'), spans)
+        directions.append(d)
+        if d:
+            q['direction'] = DIRECTION_WORDS[d]
+    direction = overall_direction(directions)
     return _drop_none({
         'kind': ANSWER,
         'why': why,
@@ -370,8 +519,9 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
         'agent': _agent(run.get('platform')),
         'surface': surfaces.SURFACE_LABELS.get(surface, surface),
         **merchant.facts(),
-        'agent_quoted': [f for f in (_claim_fact(c) for c in claims) if f],
+        'agent_quoted': quoted,
         'retailer_price_that_day': reference,
+        'price_direction': DIRECTION_WORDS.get(direction),
         'verdict': None if brand else VERDICT_WORDS.get(o.get('outcome'), o.get('outcome')),
         'reason_code': o.get('reason_code'),
         'scorer_note': o.get('outcome_reason'),
@@ -380,17 +530,8 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
         'first pick': first if rival or brand_choice else None,
         'named in order': named if rival or brand_choice else None,
         'flags': [_drop_none({'flag': f.get('flag'), 'detail': f.get('detail') or f.get('evidence')}) for f in flags],
-        'answer_spans': _spans(extraction, claims),
+        'answer_spans': spans,
     })
-
-
-def cell_status(quotes: List[dict]) -> str:
-    """TV_CELL_RULE over one retailer's quotes: the worst outcome among the
-    runs that quoted a price, else missed."""
-    quoted = [q['verdict'] for q in quotes if q.get('quoted') and q.get('verdict') in CELL_ORDER]
-    if not quoted:
-        return 'unverifiable' if any(q.get('verdict') == 'unverifiable' for q in quotes) else 'missed'
-    return min(quoted, key=CELL_ORDER.index)
 
 
 def issue_rule(quotes: List[dict]) -> Tuple[str, int, int]:
@@ -437,6 +578,7 @@ def product_facts(reference: Optional[dict], catalog_runs: List[dict], merchant:
         asked = next((c for c in claims if c.get('target', 'asked') == 'asked' and _money(c.get('stated'))), None)
         other = next((c for c in claims if c.get('target') in ('swap', 'clash') and _money(c.get('stated'))), None)
         quote = asked or other
+        extraction = _json(run.get('extraction')) or {}
         quotes.setdefault(key, []).append(_drop_none({
             'agent': _agent(run.get('platform')),
             'asked_at': retailer_name(expected.get('attributed_to')) if expected.get('attributed_to') else None,
@@ -444,49 +586,84 @@ def product_facts(reference: Optional[dict], catalog_runs: List[dict], merchant:
             'for_variant': (other.get('variant_name') or other.get('product')) if quote is other and other else None,
             'verdict': run.get('outcome'),
             'reason_code': run.get('reason_code'),
+            'spans': _spans(extraction, claims) if quote else None,
         }))
     out = {}
     for key, g in groups.items():
         qs = quotes.get(key) or []
         if not qs:
             continue
-        rule, n, runs = issue_rule(qs)
         prices: Dict[str, dict] = {}
         for row in g['rows']:
             if row.get('role') == 'own' and row.get('method') != 'none_by_design' and not _money(row.get('price')):
                 continue
             fact = _reference_fact(row)
             if fact and fact.get('retailer'):
-                prices[fact['retailer']] = _drop_none({'price': fact.get('price'), 'date': fact.get('date'),
-                                                       'note': fact.get('note')})
-        quoted: Dict[tuple, List[str]] = {}
-        for q in qs:
-            if q.get('quoted'):
-                quoted.setdefault((q['verdict'], q.get('asked_at'), q['quoted'], q.get('for_variant')), []).append(q['agent'])
-
-        def listed(verdicts):
-            return [_drop_none({'retailer': at, 'quoted': price, 'for_variant': variant, 'agents': sorted(agents),
-                                'retailer_charged': (prices.get(at) or {}).get('price') if verdict != 'exact' else None})
-                    for (verdict, at, price, variant), agents in sorted(quoted.items(), key=lambda kv: (str(kv[0][1]), kv[0][2]))
-                    if verdict in verdicts]
-        asked_at = sorted({q.get('asked_at') for q in qs if q.get('asked_at')})
+                prices[fact['retailer']] = fact
+        listed = []
+        for q in sorted((q for q in qs if q.get('quoted')),
+                        key=lambda q: (q['agent'], str(q.get('asked_at')), q['quoted'])):
+            d = _direction(q['quoted'], (prices.get(q.get('asked_at')) or {}).get('price'), q.get('spans') or [])
+            listed.append(_drop_none({'agent': q['agent'], 'retailer': q.get('asked_at'), 'price': q['quoted'],
+                                      'verdict': VERDICT_WORDS.get(q['verdict'], q['verdict']),
+                                      'for_variant': q.get('for_variant'),
+                                      'note': DIRECTION_WORDS[PER_UNIT] if d == PER_UNIT else None}))
+        row0 = g['rows'][0]
+        agents = len({q['agent'] for q in qs})
+        issue, direction = issue_sentence(qs, agents, prices)
         out[key] = _drop_none({
             'kind': PRODUCT,
             'product': g['label'],
             **merchant.facts(),
-            'agents_asked': len({q['agent'] for q in qs}),
-            'answers': runs,
-            'retailer_prices_that_day': prices,
-            'wrong_quotes': listed(('wrong', 'stale', 'partial')),
-            'right_quotes': listed(('exact',)),
+            'gtin': _gtin14(row0.get('gtin')),
+            'sku': row0.get('sku') or row0.get('variant_ref'),
+            'agents_asked': agents,
+            'retailer_prices_that_day': sorted(prices.values(), key=lambda r: r['retailer']),
+            'quotes': listed,
             'gave_no_price': sorted({q['agent'] for q in qs if not q.get('quoted') and q.get('reason_code') != 'other_brand'}),
             'priced_another_brand': sorted({q['agent'] for q in qs if q.get('reason_code') == 'other_brand'}),
-            'cell_status': {r: VERDICT_WORDS.get(cell_status([q for q in qs if q.get('asked_at') == r]), 'no price')
-                            for r in asked_at},
-            'issue': {'rule': rule, 'meaning': ISSUE_WORDS.get(rule, rule), 'answers': n, 'of': runs},
+            'issue': issue,
+            'price_direction': DIRECTION_WORDS.get(direction),
             'aliases': g['aliases'],
         })
     return out
+
+
+def issue_sentence(quotes: List[dict], agents: int, prices: Dict[str, dict]) -> Tuple[Optional[str], Optional[str]]:
+    """(issue, direction): the product's issue (issue_rule) with its count,
+    in agents, "3 of 6 agents quoted Walmart below its price". For wrong
+    prices, the retailer the most agents got wrong, and the direction of
+    their quotes there when they all share it (the line's price_direction:
+    a product row's is BELOW, ABOVE or None, never RANGE)."""
+    rule, _n, _runs = issue_rule(quotes)
+    if rule == 'product.not_asked':
+        return None, None
+
+    def count(pick) -> int:
+        return len({q['agent'] for q in quotes if pick(q)})
+
+    if rule == 'product.wrong':
+        wrong = [q for q in quotes if q['verdict'] in FLAGGED_VALUE]
+        at = max(sorted({str(q.get('asked_at')) for q in wrong}),
+                 key=lambda r: len({q['agent'] for q in wrong if str(q.get('asked_at')) == r}))
+        here = [q for q in wrong if str(q.get('asked_at')) == at]
+        if at == 'None':
+            return f"{count(lambda q: q in wrong)} of {agents} agents quoted a wrong price", None
+        each = {_direction(q.get('quoted'), (prices.get(at) or {}).get('price'), q.get('spans') or []) for q in here}
+        # a direction only when every agent's quote there has it; agents on both sides of
+        # the price are each wrong on their own, not one answer's range around it
+        direction = next(iter(each)) if len(each) == 1 and each <= {BELOW, ABOVE} else None
+        said = {BELOW: f"quoted {at} below its price", ABOVE: f"quoted {at} above its price"}.get(
+            direction, f"quoted a wrong price at {at}")
+        return f"{len({q['agent'] for q in here})} of {agents} agents {said}", direction
+    words = {'product.other_brand': ("priced another brand's product",
+                                     lambda q: q['verdict'] == 'absent' and q.get('reason_code') == 'other_brand'),
+             'product.left_out': ('gave no price',
+                                  lambda q: q['verdict'] == 'absent' and q.get('reason_code') != 'other_brand'),
+             'product.unverifiable': ('quoted a price that could not be checked', lambda q: q['verdict'] == 'unverifiable'),
+             'product.right': ('quoted the right price', lambda q: q['verdict'] == 'exact')}
+    phrase, pick = words[rule]
+    return f"{count(pick)} of {agents} agents {phrase}", None
 
 
 def facts_digest(facts: dict) -> str:
@@ -570,7 +747,7 @@ def prompt(facts: dict) -> str:
 
 def request_digest(facts: dict, model: str) -> str:
     """What was asked: the model, the system prompt, the schema and the prompt."""
-    body = json.dumps({"model": model, "effort": EFFORT, "system": SYSTEM_PROMPT, "schema": SCHEMA,
+    body = json.dumps({"model": model, "effort": EFFORT, "system": system_prompt(facts), "schema": SCHEMA,
                        "prompt": prompt(facts)},
                       sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(body.encode('utf-8')).hexdigest()
@@ -592,7 +769,8 @@ Writer = Callable[[dict], Answer]
 
 
 class LiveWriter:
-    """CALLS OpenAI calls per subject, on the same request, with structured output."""
+    """CALLS OpenAI calls per subject, on the same request, with structured
+    output, and one more when exactly one of them wrote null (needs_retry)."""
 
     def __init__(self, model: Optional[str] = None, client=None):
         self.model = model or model_name()
@@ -610,11 +788,13 @@ class LiveWriter:
 
     def __call__(self, facts: dict) -> Answer:
         raws, usages = [], []
-        for _ in range(CALLS):
+        for _ in range(CALLS + 1):
+            if len(raws) == CALLS and not needs_retry(raws):
+                break
             # verbosity low, as the 2A-5 extractor; effort EFFORT (see there)
             response = self.client().responses.create(
                 model=self.model,
-                instructions=SYSTEM_PROMPT,
+                instructions=system_prompt(facts),
                 input=[{"role": "user", "content": prompt(facts)}],
                 reasoning={"effort": EFFORT},
                 text={"verbosity": "low",
@@ -650,8 +830,9 @@ class RecordedWriter:
             raise MissingRecording(f"the recording of facts {digest[:12]} was made from a different request "
                                    f"(prompt or schema changed); re-record with: {record_command()}")
         calls = found.get('calls') or []
-        if len(calls) != CALLS:
-            raise MissingRecording(f"the recording of facts {digest[:12]} holds {len(calls)} call(s), not {CALLS}; "
+        expected = CALLS + 1 if needs_retry([c['response'] for c in calls[:CALLS]]) else CALLS
+        if len(calls) != expected:
+            raise MissingRecording(f"the recording of facts {digest[:12]} holds {len(calls)} call(s), not {expected}; "
                                    f"re-record with: {record_command()}")
         return Answer(raws=tuple(c['response'] for c in calls), model=found['model'],
                       usage=tuple(c.get('usage') or {} for c in calls))
@@ -794,12 +975,11 @@ def _said_and_true(facts: dict) -> Tuple[set, Dict[str, str]]:
     """({(agent, retailer or None, amount)} the facts say was quoted, {retailer: price that day})."""
     said, true = set(), {}
     if facts.get('kind') == PRODUCT:
-        for r, v in (facts.get('retailer_prices_that_day') or {}).items():
-            if v.get('price'):
-                true[r] = v['price']
-        for q in (facts.get('wrong_quotes') or []) + (facts.get('right_quotes') or []):
-            for a in q.get('agents') or []:
-                said.add((a, q.get('retailer'), q.get('quoted')))
+        for r in facts.get('retailer_prices_that_day') or []:
+            if r.get('retailer') and r.get('price'):
+                true[r['retailer']] = r['price']
+        for q in facts.get('quotes') or []:
+            said.add((q.get('agent'), q.get('retailer'), q.get('price')))
     else:
         ref = facts.get('retailer_price_that_day') or {}
         if ref.get('retailer') and ref.get('price'):
@@ -809,12 +989,21 @@ def _said_and_true(facts: dict) -> Tuple[set, Dict[str, str]]:
     return said, true
 
 
+#: "and so did Perplexity": an agent given another's quote with no amount
+#: beside it, which the clauses below cannot read (2L-3a, the FL13 fixture)
+_BORROWED = re.compile(r"\b(?:so|as) did\b|\bdid too\b|\blikewise\b|\bthe same price\b", re.I)
+
+
 def _who_said_what(line: str, facts: dict) -> Optional[str]:
     """In a clause naming agents and a quoting verb, every named agent quoted
     each amount (at the retailer named before it, if one is). In a clause
     naming a retailer and a verb like charged, the amount is that retailer's
-    price that day. None when every such clause agrees with the facts."""
+    price that day. None when every such clause agrees with the facts. A
+    quote handed on ("and so did") is refused: no clause holds it."""
     said, true = _said_and_true(facts)
+    m = _BORROWED.search(line)
+    if m:
+        return f"borrowed:{m.group(0)}"
     for clause in _CLAUSE.split(line):
         amounts = [(m.start(), normalize_money(m.group(1).replace(',', ''))) for m in _AMOUNT.finditer(clause)]
         if not amounts:
@@ -834,12 +1023,126 @@ def _who_said_what(line: str, facts: dict) -> Optional[str]:
     return None
 
 
+#: 2L-3a: a verdict on the quote. Only with a verdict of wrong or stale, a
+#: retailer's price that was read, and a comparable quote (judgment()).
+_JUDGMENT = re.compile(r"\b(wrong|underquot\w*|overquot\w*|incorrect|not correct|"
+                       r"(?:does|do|did)\s+not\s+match|(?:doesn|don|didn)['\u2019]t\s+match|"
+                       r"not\s+what\b[^.!?]*?\b(?:charged|charges|charge|paid|pays|pay))\b", re.I)
+#: a direction: only with a price_direction of below or above (underquoted
+#: only below, overquoted only above)
+_COMPARATIVE = re.compile(r"\b(lower|higher|cheaper|more expensive|below|above|underquot\w*|overquot\w*)\b", re.I)
+#: nobody addressed, the shopper not the subject, no "assistant"
+_VOICE = re.compile(r"\byou\b|\byour\b|\bthe shopper (?:got|was)\b|\bassistants?\b", re.I)
+_NARRATOR_VERBS = r"(?:says|said|shows|showed|puts|put|reports|reported|notes|noted)"
+_QUOTED = re.compile(r"\u201c[^\u201d]*\u201d|\"[^\"]*\"")
+DIRECTION_OF = {v: k for k, v in DIRECTION_WORDS.items()}
+
+
+def max_chars(facts: dict) -> int:
+    return MAX_CHARS_PRODUCT if facts.get('kind') == PRODUCT else MAX_CHARS
+
+
+def _has_price(facts: dict) -> bool:
+    return bool(facts.get('kind') == PRODUCT or facts.get('agent_quoted') or facts.get('retailer_price_that_day'))
+
+
+def _direction_of(facts: dict) -> Optional[str]:
+    return DIRECTION_OF.get(facts.get('price_direction'))
+
+
+def judgment(facts: dict) -> bool:
+    """May the line say the quote was wrong? Only on a verdict of wrong or
+    stale, against a retailer's price that was read, on a quote that is
+    comparable (not a range around the price, not per unit)."""
+    if facts.get('kind') == PRODUCT:
+        # any wrong quote that is comparable on its own (a per-unit one is not)
+        return any(q.get('verdict') in FLAGGED_VALUE and not q.get('note') for q in facts.get('quotes') or [])
+    if _direction_of(facts) in (RANGE, PER_UNIT):
+        return False
+    return facts.get('verdict') in FLAGGED_VALUE and bool((facts.get('retailer_price_that_day') or {}).get('price'))
+
+
+def _unquoted(line: str, facts: dict) -> str:
+    """The line without the question it quotes: what is in quotation marks,
+    and the question's own words written bare."""
+    out = _QUOTED.sub('Q', line)
+    question = str(facts.get('question') or '').strip()
+    for q in {question, question.rstrip('?.!')}:
+        if len(q) > 3:
+            out = out.replace(q, 'Q')
+    return out
+
+
+def sentences(line: str, facts: dict) -> int:
+    return len([s for s in re.split(r"(?<=[.!?])\s+(?=\S)", _unquoted(line, facts).strip()) if s.strip()])
+
+
+def is_brand_choice(facts: dict) -> bool:
+    return facts.get('why') == ['rival_first_pick']
+
+
+def _agents_of(facts: dict) -> List[str]:
+    if facts.get('kind') == PRODUCT:
+        named = [q.get('agent') for q in facts.get('quotes') or []]
+        named += list(facts.get('gave_no_price') or []) + list(facts.get('priced_another_brand') or [])
+        return sorted({a for a in named if a})
+    return [facts['agent']] if facts.get('agent') else []
+
+
+def starts_with_agent(line: str, facts: dict) -> bool:
+    """The line's first word is the agent's name, or its possessive."""
+    agents = _agents_of(facts)
+    if not agents:
+        return True
+    text_ = line.replace('\u2019', "'")
+    return any(text_.startswith(a) and (len(text_) == len(a) or text_[len(a)] in " ',") for a in agents)
+
+
+def voice(line: str, facts: dict) -> Optional[str]:
+    """Who the line speaks as: the first failure, or None."""
+    m = _VOICE.search(_unquoted(line, facts))
+    if m:
+        return f'banned:{m.group(0)}'
+    name = (facts.get('brand') or facts.get('store') or '').strip()
+    if name:
+        m = re.search(r"\b" + re.escape(name) + r"(?:['\u2019]s)?\s+" + _NARRATOR_VERBS + r"\b", line, re.I)
+        if m:
+            return f'narrator:{m.group(0)}'
+    if not starts_with_agent(line, facts):
+        return 'not_agent_first'
+    return None
+
+
+def verdict_words(line: str, facts: dict) -> Optional[str]:
+    """2L-3a rules 1 and 3: a judgment only on a verdict that holds it, a
+    direction only the facts give. The first failure, or None."""
+    if not _has_price(facts):
+        return None
+    m = _JUDGMENT.search(line)
+    if m and not judgment(facts):
+        return f'judgment_without_verdict:{m.group(0)}'
+    if not _AMOUNT.search(line):
+        return None
+    direction = _direction_of(facts)
+    for m in _COMPARATIVE.finditer(line):
+        word = m.group(0).lower()
+        if word.startswith('underquot'):
+            ok = direction == BELOW
+        elif word.startswith('overquot'):
+            ok = direction == ABOVE
+        else:
+            ok = direction in (BELOW, ABOVE)
+        if not ok:
+            return f'direction_without_fact:{m.group(0)}'
+    return None
+
+
 def check(line: Optional[str], facts: dict) -> Optional[str]:
     """None when the line passes every check, else the first failure."""
     if line is None or not str(line).strip():
         return 'no_line'
     line = str(line).strip()
-    if len(line) > MAX_CHARS:
+    if len(line) > max_chars(facts):
         return f'too_long:{len(line)}'
     scrubbed = line
     for agent in AGENT_WORDS:
@@ -847,6 +1150,19 @@ def check(line: Optional[str], facts: dict) -> Optional[str]:
     m = _HOUSE.search(scrubbed) or _BANNED.search(scrubbed)
     if m:
         return f'banned:{m.group(0)}'
+    spoken = voice(line, facts)
+    if spoken:
+        return spoken
+    judged = verdict_words(line, facts)
+    if judged:
+        return judged
+    if is_brand_choice(facts) and sentences(line, facts) > 1:
+        return f'brand_choice_sentences:{sentences(line, facts)}'
+    if line.lower().count('no source') > 1:
+        return 'repeats:no source'
+    if 'brand_fabricated' in (facts.get('why') or []) and not facts.get('answer_spans'):
+        # nothing the answer said is in the facts: any claim in the line is the writer's own
+        return 'no_claim_in_facts'
     known = facts_text(facts)
     known_lower = known.lower().replace('’', "'")
     amounts = _amounts(facts)
@@ -870,6 +1186,10 @@ def check(line: Optional[str], facts: dict) -> Optional[str]:
         return f"agent_not_named:{facts['agent']}"
     if facts.get('kind') == PRODUCT and not named:
         return 'agent_not_named'
+    # 2L-3a: a product row with wrong quotes names an agent who quoted wrong, not only those who were right
+    wrong = {q.get('agent') for q in facts.get('quotes') or [] if q.get('verdict') in FLAGGED_VALUE}
+    if facts.get('kind') == PRODUCT and wrong and not wrong & set(named):
+        return 'off_issue'
     for name in _names_in(line):
         if name not in known_lower:
             # a retailer the facts hold by its domain, or the reverse
@@ -901,23 +1221,40 @@ def parse(raw: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
     if not isinstance(body, dict) or 'line' not in body:
         return None, 'malformed'
     line = body.get('line')
-    return (line.strip() if isinstance(line, str) and line.strip() else None), None
+    # one row of the console: a line break the model writes inside it is a space
+    return (' '.join(line.split()) if isinstance(line, str) and line.strip() else None), None
+
+
+def needs_retry(raws) -> bool:
+    """Exactly one of the CALLS calls wrote null and the other wrote a line:
+    one more call stands in for the null (2L-3a: 14 of the FL13 dry run's 48
+    drops were a line beside a null, never two lines that disagreed)."""
+    parsed = [parse(r) for r in raws]
+    return len(parsed) == CALLS and sum(1 for line, error in parsed if line is None and error is None) == 1 \
+        and sum(1 for line, _ in parsed if line is not None) == 1
 
 
 def decide(answer: Answer, facts: dict) -> dict:
-    """Both calls must write a line and both must pass. The first is kept."""
+    """Both calls must write a line and both must pass. The first is kept.
+    With a retry (needs_retry), the retry stands in for the null: a line
+    that passes is taken, a second null is null."""
     calls = []
     for raw, usage in zip(answer.raws, list(answer.usage) + [{}] * (len(answer.raws) - len(answer.usage))):
         line, error = parse(raw)
         calls.append({'response': raw, 'usage': usage, 'line': line,
                       'check': error or (check(line, facts) if line is not None else 'no_line')})
-    lines = [c['line'] for c in calls]
-    if len(calls) == CALLS and all(c['check'] is None for c in calls):
+    pair = calls
+    if len(calls) == CALLS + 1 and needs_retry(answer.raws[:CALLS]):
+        pair = [c for c in calls[:CALLS] if c['line'] is not None] + [calls[CALLS]]
+        if pair[1]['line'] is None and pair[1]['check'] == 'no_line':
+            return {'status': 'null', 'line': None, 'reason': 'no_line', 'calls': calls}
+    lines = [c['line'] for c in pair]
+    if len(pair) == CALLS and all(c['check'] is None for c in pair):
         return {'status': 'accepted', 'line': lines[0], 'reason': None, 'calls': calls}
-    if all(line is None for line in lines) and all(c['check'] == 'no_line' for c in calls):
+    if all(line is None for line in lines) and all(c['check'] == 'no_line' for c in pair):
         return {'status': 'null', 'line': None, 'reason': 'no_line', 'calls': calls}
-    failed = [c['check'] for c in calls if c['check'] not in (None, 'no_line')]
-    # a line beside a null: the two calls disagree on whether there is anything to say
+    failed = [c['check'] for c in pair if c['check'] not in (None, 'no_line')]
+    # a line beside a null, with no retry: the two calls disagree on whether there is anything to say
     reason = failed[0] if failed else 'calls_disagree:null'
     return {'status': 'dropped', 'line': None, 'reason': reason, 'calls': calls}
 
