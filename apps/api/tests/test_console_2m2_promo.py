@@ -306,7 +306,12 @@ FL14_CUT = {'retailer_domain': 'amazon.com', 'kind': 'rollback_or_was', 'text': 
 
 
 def test_fl14_s_deal_titled_from_its_fields(http, db, upstream):
+    from tests import test_console_2m1_attribute as t2m1
     _shape(db, http, upstream, deals={**DEALS, 'deals': [MULTI, CASH, ROLLBACK, FL14_CUT]})
+    # 2M-1's accuracy questions beside them, judged against the cycle's truth (2N-1 B1), for Impact's baseline
+    t2m1._attribute_questions(db)
+    t2m1._cache_truths(db)
+    upstream.answer('GET', f'/api/truesync/merchants/{WS}/reference', body=t2m1.ATTRIBUTE_REFERENCE, token=TOKEN_A)
     prove = _get(http, 'prove', merchant=WS)
     row = next(r for r in prove['rows'] if r['retailer_domain'] == 'amazon.com' and r['kind'] == 'rollback_or_was')
     assert row['title'] == 'Amazon: 25% off list price on AMORE Size 1, $36.18 from $47.99'
@@ -314,6 +319,8 @@ def test_fl14_s_deal_titled_from_its_fields(http, db, upstream):
     assert row['detail'].endswith('The shelf said: $36.18 with 25 percent savings -25% List Price: $47.99.')
     overview = _get(http, 'overview', merchant=WS)
     revenue = _get(http, 'revenue', merchant=WS)
+    assert [b['key'] for b in revenue['baseline']] == ['attribute', 'promo', 'category']
+    assert revenue['baseline'][0]['value'] == '61 of 79'
     out = os.environ.get('SOA_2N1_SAMPLE_DUMP')
     if out:
         os.makedirs(out, exist_ok=True)
