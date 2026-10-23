@@ -294,3 +294,29 @@ def test_a_study_with_no_cheapest_place_question_reads_no_deals(http, db, upstre
     before = len(upstream.calls)
     assert 'promo_pass_through' not in _get(http, 'overview', merchant=WS)
     assert not [c for c in upstream.calls[before:] if c['path'].endswith('/deals')]
+
+
+# 2N-1 (B6): FL14's one live deal, as supply read it, beside the three above: its shelf evidence was
+# its title, and its kind read Rollback. SOA_2N1_SAMPLE_DUMP=<dir> writes the console's samples.
+FL14_TEXT = '$36.18 with 25 percent savings -25% $ 36 . 18 $0.27 per count ( $0.27 $0.27 / count) List Price: $47.99'
+FL14_CUT = {'retailer_domain': 'amazon.com', 'kind': 'rollback_or_was', 'text': FL14_TEXT, 'value': '25.00',
+            'value_unit': 'percent', 'terms': None, 'program': None,
+            'variants': [{**_variant('v8', '36.18', '36.18', '47.99'), 'product_name': 'Pampers AMORE Diapers',
+                          'variant_label': 'Size 1, 132 ct', 'evidence': FL14_TEXT}]}
+
+
+def test_fl14_s_deal_titled_from_its_fields(http, db, upstream):
+    _shape(db, http, upstream, deals={**DEALS, 'deals': [MULTI, CASH, ROLLBACK, FL14_CUT]})
+    prove = _get(http, 'prove', merchant=WS)
+    row = next(r for r in prove['rows'] if r['retailer_domain'] == 'amazon.com' and r['kind'] == 'rollback_or_was')
+    assert row['title'] == 'Amazon: 25% off list price on AMORE Size 1, $36.18 from $47.99'
+    assert row['kind_label'] == 'list price cut'
+    assert row['detail'].endswith('The shelf said: $36.18 with 25 percent savings -25% List Price: $47.99.')
+    overview = _get(http, 'overview', merchant=WS)
+    revenue = _get(http, 'revenue', merchant=WS)
+    out = os.environ.get('SOA_2N1_SAMPLE_DUMP')
+    if out:
+        os.makedirs(out, exist_ok=True)
+        for name, body in (('prove-2n1.json', prove), ('overview-2n1.json', overview), ('revenue-2n1.json', revenue)):
+            with open(os.path.join(out, name), 'w') as fh:
+                json.dump(body, fh, indent=1, sort_keys=True)
