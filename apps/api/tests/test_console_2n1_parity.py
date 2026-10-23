@@ -133,3 +133,27 @@ def test_b2_the_narratives_flag_the_brand_claim_on_ai_written_questions_only():
     outcome = {'outcome': 'fabricated'}
     assert nv.why_flagged('brand_direct', outcome, None, False, merchant) == ['brand_fabricated']
     assert nv.why_flagged('brand_direct', outcome, None, False, merchant, catalog_intent='where_to_buy') == []
+
+
+# ---------------------------------------------------------------------------
+# B3: a per-unit quote on Answers and True Value
+# ---------------------------------------------------------------------------
+
+def test_b3_a_per_unit_run_reads_per_unit_on_answers_and_true_value():
+    query = {'tier': 'catalog_accuracy', 'query_text': 'What does Pampers Swaddlers Size 1 cost?',
+             'source_ref': {'variant_id': '00037000863441'}}
+    run = {'id': 7, 'platform': 'chatgpt', 'raw_response': 'About $0.33 per diaper.', 'answer_status': 'answered',
+           'run_number': 1}
+    outcome = {'outcome': 'unscoreable', 'reason_code': 'per_unit', 'outcome_reason': 'per-diaper price, not comparable',
+               'expected_answer': {'type': 'price', 'amount': None, 'attributed_to': 'walmart.com'},
+               'claim_results': [{'stated': '0.33', 'amount': '0.33', 'product': 'per diaper', 'target': 'asked',
+                                  'outcome': 'per_unit', 'reason': 'per-diaper price, not comparable',
+                                  'reason_code': 'per_unit'}]}
+    a = rm.build_answer(run, query, outcome, [], runs_per_query=1, cycle_code='FL14')
+    assert (a['verdict'], a['tone'], a['severity']) == ('per_unit', 'neu', 'low')
+    assert a['checks'][0]['verdict'] == 'per_unit' and a['checks'][0]['reason'] == 'per_unit'
+    # a cell whose quotes are per diaper reads per_unit, never wrong or "not ours"
+    assert rm.aggregate_cell([{'stated': '0.33', 'outcome': 'per_unit'}]) == ('per_unit', '0.33')
+    assert rm.aggregate_cell([{'stated': '0.33', 'outcome': 'per_unit'}, {'stated': '27.97', 'outcome': 'exact'}]) == \
+        ('exact', '27.97')
+    assert rm.TV_STATUS['per_unit'] == 'per_unit' and rm.PER_UNIT_LABEL == 'per-diaper price, not comparable'

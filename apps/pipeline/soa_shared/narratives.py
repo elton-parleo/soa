@@ -110,7 +110,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from sqlalchemy import inspect, text
 
-from soa_shared import attribute_accuracy, claim_kinds, promo_pass_through, surfaces
+from soa_shared import attribute_accuracy, claim_kinds, per_unit, promo_pass_through, surfaces
 from soa_shared import unprompted
 from soa_shared.expected_answers import normalize_domain, normalize_money
 from soa_shared.retailers import KNOWN_RETAILERS, RETAILER_NAMES, retailer_name
@@ -149,7 +149,8 @@ FLAGGED_BRAND = ('fabricated', 'misattributed')
 FLAGGED_FLAGS = ('fabricated_citation', 'fabricated_availability')
 #: The scorer's outcomes in the console's words (console_read_models.VALUE_VERDICT).
 VERDICT_WORDS = {'exact': 'right', 'wrong': 'wrong', 'stale': 'stale', 'partial': 'partial', 'absent': 'no price',
-                 'unverifiable': 'could not be checked', 'unscoreable': 'not scored', 'missed': 'no price'}
+                 'unverifiable': 'could not be checked', 'unscoreable': 'not scored', 'missed': 'no price',
+                 'per_unit': per_unit.NOTE}
 #: Why an answer was flagged, in words with no number in them: the scorer's
 #: rules (expectation_comparator, brand_direct_classifier, answer_flags).
 MEANINGS = {
@@ -176,8 +177,8 @@ DIRECTION_WORDS = {BELOW: "quoted below the retailer's price", ABOVE: "quoted ab
                    SAME: "quoted the retailer's price", RANGE: "range includes the retailer's price",
                    PER_UNIT: 'per-unit quote, not comparable'}
 #: "$0.30 per diaper", "$0.45 each", "$0.48/ct": the words after a per-unit amount.
-_PER_UNIT_AFTER = re.compile(r"^\s*(?:(?:/|per\b|a\b|an\b)\s*(?:diaper|wipe|count|ct|unit|piece|pull-?up|pant|pad)s?\b"
-                             r"|each\b)", re.I)
+#: 2N-1: the scorer's rule (soa_shared/per_unit.py), one definition for both.
+_PER_UNIT_AFTER = per_unit.AFTER
 
 #: The console's banned-word scan (parleohq/truesync console-demo,
 #: apps/console/tools/audit.py BAN), verbatim, plus the house rules.
@@ -516,16 +517,10 @@ def _spans(extraction: dict, claims: List[dict]) -> List[str]:
 
 def _per_unit(amount: str, spans: List[str], against: Optional[str]) -> bool:
     """A quote for one diaper, not the pack: the answer's words after the
-    amount say so ("$0.30 per diaper", "$0.45 each"), or it is under a
-    dollar against a retailer's price of five or more."""
-    for span in spans:
-        for m in _AMOUNT.finditer(span):
-            if normalize_money(m.group(1).replace(',', '')) == amount and _PER_UNIT_AFTER.match(span[m.end():m.end() + 30]):
-                return True
-    try:
-        return against is not None and float(amount) < 1 and float(against) >= 5
-    except ValueError:
-        return False
+    amount say so ("$0.30 per diaper", "$0.45 each"), or it is under $2
+    against a retailer's price over $10. 2N-1: the scorer's rule
+    (soa_shared/per_unit.py); a claim it scored per_unit is one."""
+    return per_unit.said_after(amount, spans) or per_unit.below_pack(amount, against)
 
 
 def _direction(amount: Optional[str], against: Optional[str], spans: List[str]) -> Optional[str]:

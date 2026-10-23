@@ -26,7 +26,7 @@ from typing import Dict, Iterable, List, Optional
 
 from sqlalchemy import text
 
-from soa_shared import attribute_accuracy, claim_kinds, local_time, retired_lines, surfaces, unprompted
+from soa_shared import attribute_accuracy, claim_kinds, local_time, per_unit, retired_lines, surfaces, unprompted
 from soa_shared import promo_pass_through as ppt
 
 from app.services import console_claims
@@ -44,10 +44,12 @@ AGENT_NAMES = {
 VALUE_VERDICT = {
     'exact': 'right', 'wrong': 'wrong', 'absent': 'missed', 'partial': 'partial',
     'stale': 'stale', 'unverifiable': 'unverifiable', 'unscoreable': 'unscoreable',
+    # 2N-1: a per-unit quote, outside scored and outside wrong (soa_shared/per_unit.py)
+    'per_unit': 'per_unit',
 }
 VERDICT_TONE = {
     'right': 'ok', 'wrong': 'bad', 'missed': 'warn', 'partial': 'warn',
-    'stale': 'warn', 'unverifiable': 'neu', 'unscoreable': 'neu',
+    'stale': 'warn', 'unverifiable': 'neu', 'unscoreable': 'neu', 'per_unit': 'neu',
 }
 BRAND_TONE = {
     'grounded': 'ok', 'echoed': 'neu', 'misattributed': 'bad', 'fabricated': 'bad',
@@ -59,7 +61,15 @@ MARK = {'exact': 'ok', 'wrong': 'wrong', 'partial': 'miss', 'stale': 'miss'}
 #: TvCell.status, extended by `unverifiable`. A stale quote is wrong today;
 #: the raw outcome rides beside it in `outcome`.
 TV_STATUS = {'exact': 'exact', 'wrong': 'wrong', 'partial': 'partial', 'absent': 'missed',
-             'stale': 'wrong', 'unverifiable': 'unverifiable', 'unscoreable': 'none'}
+             'stale': 'wrong', 'unverifiable': 'unverifiable', 'unscoreable': 'none', 'per_unit': 'per_unit'}
+#: 2N-1: the console's words for a per-unit quote's cell and check.
+PER_UNIT_LABEL = per_unit.NOTE
+
+
+def read_outcome(outcome: Optional[str], reason_code: Optional[str]) -> Optional[str]:
+    """The run's outcome as the console reads it: a run stored unscoreable for a
+    per-unit quote (reason per_unit, the scorer's 2N-1 rule) reads per_unit."""
+    return per_unit.PER_UNIT if outcome == 'unscoreable' and reason_code == per_unit.PER_UNIT else outcome
 #: StudyCell.s per outcome (value and brand vocabularies).
 CELL_TONE = {
     'exact': 'ok', 'grounded': 'ok', 'wrong': 'bad', 'fabricated': 'bad', 'misattributed': 'bad',
@@ -400,7 +410,7 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
     flags = _json((outcome or {}).get('flags')) or []
     tier = query.get('tier')
     brand = tier == 'brand_direct'
-    raw = (outcome or {}).get('outcome')
+    raw = read_outcome((outcome or {}).get('outcome'), (outcome or {}).get('reason_code'))
 
     verdict = None if brand or raw is None else VALUE_VERDICT.get(raw, raw)
     # 2N-1: a catalog-built brand-direct question is judged by its own verdict, not the brand-claim rule
@@ -680,6 +690,9 @@ def aggregate_cell(runs: List[dict]) -> tuple:
     if any(r.get('outcome') == 'unverifiable' for r in quoting):
         return 'unverifiable', Counter(str(r['stated']) for r in quoting
                                        if r.get('outcome') == 'unverifiable').most_common(1)[0][0]
+    if any(r.get('outcome') == per_unit.PER_UNIT for r in quoting):   # 2N-1: quoted, per diaper
+        return per_unit.PER_UNIT, Counter(str(r['stated']) for r in quoting
+                                          if r.get('outcome') == per_unit.PER_UNIT).most_common(1)[0][0]
     return 'absent', None
 
 

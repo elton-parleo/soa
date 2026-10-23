@@ -502,7 +502,7 @@ def _true_value_inputs(conn, row) -> tuple:
             deciding = swap
         scored.append({'variant_id': ref.get('variant_id'), 'gtin': ref.get('gtin'),
                        'retailer': expected.get('attributed_to') or own_domain,
-                       'outcome': o['outcome'], 'reason_code': o['reason_code'],
+                       'outcome': rm.read_outcome(o['outcome'], o['reason_code']), 'reason_code': o['reason_code'],
                        'stated': deciding.get('stated') if deciding else None,
                        # 2C-2c: the sibling resolved to its record name, once
                        'swap_product': rm.sibling_name(swap, names) if swap else None,

@@ -205,3 +205,62 @@ def carries_descriptor(claim: Optional[str], asked: RecordVariant, rivals) -> bo
         return True
     stated = _tokens(claim)
     return any(rival and rival <= stated for rival in rivals or [])
+
+
+# ─── 2N-1: a description of ours, and the retailer's own title ─────────────
+
+#: Words that name nothing: pronouns, articles, the generic nouns an answer
+#: puts around a size or count ("the NB 84-count option", "this one").
+GENERIC = frozenset({
+    'the', 'a', 'an', 'this', 'that', 'these', 'those', 'it', 'its', 'one', 'ones', 'them', 'they',
+    'option', 'options', 'version', 'variant', 'listing', 'product', 'item', 'pack', 'package', 'box',
+    'size', 'count', 'ct', 'of', 'for', 'with', 'in', 'on', 'and', 'or', 'at',
+}) | vr.DESCRIPTORS
+#: The ways an answer writes a size the record writes otherwise.
+SIZE_ALIASES = {'nb': 'newborn', 'n': 'newborn', 'p': 'preemie'}
+
+
+def _words(text) -> set:
+    return {SIZE_ALIASES.get(t, t) for t in _tokens(str(text or '').replace("'", ''))}
+
+
+def describes_asked(claim: Optional[str], asked: RecordVariant) -> bool:
+    """
+    Whether a claim with no product name of its own describes the ASKED
+    variant: every word is a generic one, a descriptor, a number, or a word
+    of the asked variant's record, and at least one is positive evidence for
+    it (its count stated, a size word of its record: "NB" for Newborn).
+    "the NB 84-count option" on the Newborn 84 ct question does; "an
+    $11.00 pack" names nothing of the asked variant and does not.
+    """
+    if not claim:
+        return False
+    stated = _words(claim)
+    record = _words(asked.text) | {SIZE_ALIASES.get(w, w) for w in _words(asked.text)}
+    named = {w for w in stated if not w.isdigit() and w not in GENERIC}
+    if not named <= record:
+        return False
+    counted = bool(asked.count and asked.count in vr.pack_numbers(claim))
+    sized = bool(named & record - GENERIC)
+    return counted or sized
+
+
+def is_pronoun(claim: Optional[str]) -> bool:
+    """A claim attached to a pronoun or a bare generic phrase ("it", "this one"): no product named."""
+    stated = _words(claim)
+    return bool(stated) and all(w in GENERIC and w not in vr.DESCRIPTORS for w in stated)
+
+
+def in_title(claim: Optional[str], title: Optional[str]) -> bool:
+    """
+    The quoted name is contained in the retailer page's own title for the
+    variant: every word of it, the generic ones aside, is a word of the
+    title, so it is that variant ("Pampers Swaddlers Fragrance-Free Baby
+    Diapers, Size 1, 96 Count" against Walmart's title for it).
+    """
+    if not claim or not title:
+        return False
+    stated = {w for w in _words(claim) if w not in GENERIC or w in vr.DESCRIPTORS}
+    page = _words(title) | {'ct' if w == 'count' else w for w in _words(title)}
+    stated = {'ct' if w == 'count' else w for w in stated}
+    return bool(stated) and stated <= page

@@ -184,8 +184,20 @@ ENGINE_VARIANT_MARKERS = frozenset({
 })
 
 SOA_VARIANT_MARKERS = frozenset({
-    'overnight', 'nighttime', 'sensitive', 'unscented', 'scented', 'fragrancefree',
+    'overnight', 'nighttime', 'sensitive', 'unscented', 'scented',
     'preemie', 'refill', 'travel', 'trial',
+    # 2N-1: a line, as the brief names them ("Overnights", "Pure", "Ultra")
+    'overnights', 'pure', 'ultra',
+})
+
+#: 2N-1: words a retailer's title carries about the product it is, never a
+#: different one: "Fragrance-Free", "Wetness Indicator", "Soft and
+#: Absorbent", "Baby Diapers", "Disposable Diapers". Walmart's own title for
+#: Swaddlers Size 1, 96 Count is "Pampers Swaddlers Fragrance-Free Baby
+#: Diapers, Size 1, 96 Count". A descriptor is not a variant marker.
+DESCRIPTORS = frozenset({
+    'fragrancefree', 'fragrance', 'free', 'wetness', 'indicator', 'soft', 'absorbent', 'baby', 'disposable',
+    'diapers', 'diaper', 'hypoallergenic', 'breathable', 'leakproof', 'protection',
 })
 
 VARIANT_MARKERS = ENGINE_VARIANT_MARKERS | SOA_VARIANT_MARKERS
