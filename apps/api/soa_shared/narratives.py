@@ -341,7 +341,7 @@ answer to "cheapest place to buy" a product. You get the facts a scorer recorded
 The facts:
 - agent_quoted: what the assistant quoted, when it quoted a price.
 - deals_live_that_day: the deals retailers ran on this product that day: the retailer, the deal \
-as the retailer wrote it, its terms, and the retailer's price that day.
+as the console titles it, its terms, and the retailer's price that day.
 
 What the line says, in this pattern and only this pattern:
 
@@ -360,6 +360,32 @@ $47.99 that day and ran save 40% on 1 when you buy 2, which the answer never men
 """
 
 
+#: 2N-2: a where-to-buy claim the brand never published. The scorer's claim is
+#: its own label ("told the reader to buy it at Amazon, Target, Walmart",
+#: scoring/brand_direct_classifier.py), never the assistant's words, so the
+#: facts give the stores (named_stores) and the line names them. Its own
+#: prompt, so the other answers' requests (and their recordings) are unchanged.
+STORES_PROMPT = """You write the one line a product console shows beside a shopping assistant's \
+answer. You get the facts a scorer recorded and nothing else.
+
+The assistant told the shopper where to buy the product, with no source behind it, and the brand \
+never published that list. named_stores is the stores it named, in its order.
+
+What the line says, in this pattern and only this pattern:
+
+<assistant> named <the stores in named_stores, joined with commas and a final "and"> as places to \
+buy it. <brand> never published that list.
+
+Rules:
+- One or two short sentences, at most 200 characters.
+- Name every store in named_stores, written as named_stores writes it, and no other.
+""" + _COMMON_RULES + """
+
+Style, from the demo: "Gemini named Walgreens, Walmart and Target as places to buy it. Pampers \
+never published that list."
+"""
+
+
 def system_prompt(facts: dict) -> str:
     if facts.get('kind') == PRODUCT:
         return PRODUCT_PROMPT
@@ -367,6 +393,8 @@ def system_prompt(facts: dict) -> str:
         return ATTRIBUTE_PROMPT
     if 'promo_missed' in (facts.get('why') or []):
         return PROMO_PROMPT
+    if facts.get('named_stores') and 'brand_fabricated' in (facts.get('why') or []):
+        return STORES_PROMPT
     return SYSTEM_PROMPT
 
 
@@ -592,10 +620,17 @@ def promo_missed(run: dict, deals: Optional[dict]) -> List[dict]:
 
 
 def _deal_fact(deal: dict) -> dict:
+    """2N-2: the deal as the console titles it for this variant
+    (promo_pass_through.title, "25% off list price on AMORE Size 1, $36.18
+    from $47.99") and its retailer, never supply's text: a shelf's evidence
+    ("$36.18 with 25 percent savings -25% $ 36 . 18 $0.27 per count ...")
+    is too long to write and carries amounts no retailer is tied to
+    (FL14 run-15013, 15118, 15342)."""
     variant = deal.get('variant') or {}
     domain = normalize_domain(deal.get('retailer_domain'))
+    titled = promo_pass_through.title({**deal, 'variants': [variant]} if variant else deal)
     return _drop_none({'retailer': retailer_name(domain) if domain else None,
-                       'deal': (deal.get('text') or '').strip() or None, 'terms': deal.get('terms'),
+                       'deal': titled.partition(': ')[2].strip() or None, 'terms': deal.get('terms'),
                        'program': deal.get('program'), 'price_that_day': _money(variant.get('shelf_price')),
                        'was_price': _money(variant.get('was_price')),
                        'deal_price': _money(variant.get('price'))})
@@ -642,6 +677,7 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     surface = run.get('surface') or surfaces.surface_of(run.get('platform') or '')
     rival = 'rival_first_pick' in why
     spans = _spans(extraction, claims)
+    stores = named_stores(o.get('outcome_reason'))
     quoted = [f for f in (_claim_fact(c) for c in claims) if f]
     directions = []
     for q in quoted:
@@ -663,7 +699,9 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
         'price_direction': DIRECTION_WORDS.get(direction),
         'verdict': None if brand else VERDICT_WORDS.get(o.get('outcome'), o.get('outcome')),
         'reason_code': o.get('reason_code'),
-        'scorer_note': o.get('outcome_reason'),
+        # 2N-2: a where-to-buy claim's note is the scorer's label: its why only, the stores apart
+        'scorer_note': _note_why(o.get('outcome_reason')) if stores else o.get('outcome_reason'),
+        'named_stores': stores,
         # 2N-1: the brand-claim verdict is the AI-written questions' only
         'brand_verdict': o.get('outcome') if brand and not intent else None,
         'claim_kind': CLAIM_KIND_WORDS.get(claim_kinds.claim_kind(extraction)) if brand and not intent else None,
@@ -1407,36 +1445,96 @@ def _plain(text_: str) -> str:
     return ' '.join(text_.split()).lower().strip(' .,:;!?')
 
 
+def _note_claim(note: Optional[str]) -> Optional[str]:
+    """The claim the brand-direct classifier quotes at the head of its reason
+    ("'<claim>' — <why>"), or None."""
+    head, sep, _why = str(note or '').partition(' — ')
+    if not sep:
+        return None
+    try:
+        claim = ast.literal_eval(head)
+    except (ValueError, SyntaxError):
+        return None
+    return claim if isinstance(claim, str) and claim.strip() else None
+
+
+def _note_why(note: Optional[str]) -> Optional[str]:
+    return str(note or '').partition(' — ')[2].strip() or None
+
+
+#: 2N-2: the brand-direct classifier's own words for a where-to-buy claim
+#: (scoring/brand_direct_classifier._recommended_without_source), the stores after them
+WHERE_TO_BUY_LABEL = 'told the reader to buy it at '
+
+
+def named_stores(note: Optional[str]) -> Optional[List[str]]:
+    """2N-2: the stores a where-to-buy claim named, in the answer's order, from
+    the classifier's label in the reason; None for any other reason. FL14
+    run-15031, 15036, 15064, 15069, 15185 quoted the label as the assistant's
+    words and were dropped on "reader"."""
+    claim = _note_claim(note)
+    if not claim or not claim.startswith(WHERE_TO_BUY_LABEL):
+        return None
+    return [s.strip() for s in claim[len(WHERE_TO_BUY_LABEL):].split(',') if s.strip()] or None
+
+
 def claim_texts(facts: dict) -> List[str]:
     """What the answer said, everywhere the prompt shows it: answer_spans,
     and the claim the brand-direct classifier quotes at the head of its
     reason (scorer_note, "'<claim>' — <why>"). 2L-3a's no_claim_in_facts
     read answer_spans alone, which production rows never filled (_spans), so
-    it refused 17 FL13 lines that quoted the scorer_note's claim verbatim."""
+    it refused 17 FL13 lines that quoted the scorer_note's claim verbatim.
+    2N-2: never the where-to-buy label, which is the scorer's words."""
     out = [str(s) for s in facts.get('answer_spans') or [] if s]
-    note = str(facts.get('scorer_note') or '')
-    head, sep, _why = note.partition(' — ')
-    if sep:
-        try:
-            claim = ast.literal_eval(head)
-        except (ValueError, SyntaxError):
-            claim = None
-        if isinstance(claim, str) and claim.strip():
-            out.append(claim)
+    claim = _note_claim(facts.get('scorer_note'))
+    if claim and not claim.startswith(WHERE_TO_BUY_LABEL):
+        out.append(claim)
     return out
+
+
+#: 2N-2: a quoted claim shorter than this is a fragment, not what the answer said
+MIN_QUOTE_CHARS = 12
+
+
+def unclosed_quote(line: str) -> bool:
+    """2N-2: a quotation mark opened and never closed (FL14 run-15161: Google
+    AI Mode said "Pampers' never published it and no source backs it.)."""
+    return line.count('"') % 2 == 1 or line.count('\u201c') != line.count('\u201d')
+
+
+def _cut_quote(quoted: str, texts: List[str]) -> Optional[str]:
+    """2N-2: a quoted claim that is a fragment: under MIN_QUOTE_CHARS, or
+    ending inside a word of the text it quotes ("Pampers'" of "Pampers'
+    dedicated, strongest option")."""
+    if len(quoted) < MIN_QUOTE_CHARS:
+        return f'quote_too_short:{len(quoted)}'
+    if quoted.endswith("'"):
+        return 'quote_cut'
+    for t in texts:
+        at = t.find(quoted)
+        if at >= 0 and at + len(quoted) < len(t) and t[at + len(quoted)].isalnum() and quoted[-1].isalnum():
+            return 'quote_cut'
+    return None
 
 
 def claim_check(line: str, facts: dict) -> Optional[str]:
     """A fabricated-claim line: the facts hold what the answer said, and
     what the line quotes is in it."""
     texts = [_plain(t) for t in claim_texts(facts)]
+    quotes = [q for q in (_plain(m.group(0)[1:-1]) for m in _QUOTED.finditer(line)) if q]
+    stores = facts.get('named_stores') or []
+    if stores and not quotes:
+        # 2N-2: a where-to-buy claim, told by the stores it named
+        return None if any(s in line for s in stores) else 'no_claim_in_facts'
     if not texts:
         # nothing the answer said is in the facts: any claim in the line is the writer's own
         return 'no_claim_in_facts'
-    for m in _QUOTED.finditer(line):
-        quoted = _plain(m.group(0)[1:-1])
-        if quoted and not any(quoted in t for t in texts):
+    for quoted in quotes:
+        if not any(quoted in t for t in texts):
             return 'quote_not_in_facts'
+        cut = _cut_quote(quoted, texts)
+        if cut:
+            return cut
     return None
 
 
@@ -1497,6 +1595,8 @@ def check(line: Optional[str], facts: dict) -> Optional[str]:
     m = _HOUSE.search(scrubbed) or _BANNED.search(scrubbed)
     if m:
         return f'banned:{m.group(0)}'
+    if unclosed_quote(line):
+        return 'quote_unclosed'
     spoken = voice(line, facts)
     if spoken:
         return spoken

@@ -281,7 +281,9 @@ def title(deal: dict) -> str:
 
 
 def short(deal: dict) -> str:
-    """"Amazon multi-buy", "Walmart Rollback", "Amazon list price cut", "Sam's Club Sam's Cash": the tile note's name."""
+    """"Amazon multi-buy", "Walmart Rollback", "Amazon list price cut", "Sam's Club Sam's Cash": the tile note's
+    name. 2N-2: the retailer and kind_words(), the kind_label the Trade promotions row shows, so every reader
+    of the deal's kind (tile note, Changes, Impact baseline, narratives) says what the row says."""
     from soa_shared import retailers as af
     return f"{af.retailer_name(deal.get('retailer_domain'))} {kind_words(deal)}"
 
@@ -311,7 +313,7 @@ def count(answers: List[dict], deals_payload: Optional[dict], intent: str = CHEA
     Returns {n, k, loose, subscribe, per_deal, by_surface, judged} over the
     answers of `intent`: n the answers, k those naming a live deal; per_deal
     one entry per deal live on any asked variant {id, retailer, retailer_domain,
-    text, kind, asked, named} (asked: answers about a SKU it was live on),
+    text, kind, title, short, kind_label, asked, named} (asked: answers about a SKU it was live on),
     most asked first; by_surface {surface: {n, k, loose, subscribe}}; judged
     per answer {run_id, surface, live: [ids], named: [ids], loose, subscribe}.
     """
@@ -325,7 +327,7 @@ def count(answers: List[dict], deals_payload: Optional[dict], intent: str = CHEA
             entry = per.setdefault(deal_id(d), {
                 'id': deal_id(d), 'retailer_domain': d.get('retailer_domain'),
                 'retailer': title(d).split(':', 1)[0], 'text': d.get('text'), 'kind': d.get('kind'),
-                'title': title(d), 'short': short(d), 'asked': 0, 'named': 0})
+                'title': title(d), 'short': short(d), 'kind_label': kind_words(d), 'asked': 0, 'named': 0})
             entry['asked'] += 1
             entry['named'] += deal_id(d) in verdict['named']
         cell = by_surface.setdefault(a.get('surface'), {'n': 0, 'k': 0, 'loose': 0, 'subscribe': 0})
