@@ -372,3 +372,15 @@ def test_b6_impact_counts_brand_choice_answers_when_the_cycle_asked_comparison()
             {'answered': True, 'brand_choice': True, 'tier': 'comparison', 'agent': 'chatgpt', 'surface': 'grounded_api', 'run': 'run-2', 'first': {'name': 'Pampers', 'you': True}}]
     shares = rev.revenue_shares(rows, [], 0.3, kind='brand')
     assert shares['set'] == 'brand-choice' and (shares['lost']['n'], shares['lost']['of']) == (1, 2)
+
+
+def test_a_cell_priced_for_another_pack_says_so():
+    """Cruisers 360 Size 5 at Amazon on FL14: "live $49.77, couldn't verify". The page's pack is 56 ct."""
+    reads = [{'retailer_domain': 'amazon.com', 'variant_ref': 'v6', 'sku': 'v6', 'price': '49.77', 'currency': 'USD',
+              'observed_at': '2026-10-23T14:00:00+00:00',
+              'findings': [{'finding': 'pack_differs', 'expected': '66', 'observed': '56', 'detail': {'page_numbers': [56]}},
+                           {'finding': 'price_observed', 'observed': '49.77'}]}]
+    assert rm.other_pack(reads, {'variant_id': 'v6'}, 'amazon.com') == {
+        'price': '$49.77', 'pack': '56 ct', 'text': 'other pack ($49.77 for 56 ct)'}
+    assert rm.other_pack(reads, {'variant_id': 'v6'}, 'walmart.com') is None
+    assert rm.other_pack([{**reads[0], 'findings': []}], {'variant_id': 'v6'}, 'amazon.com') is None

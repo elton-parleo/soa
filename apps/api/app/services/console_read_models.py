@@ -712,6 +712,27 @@ def deciding_swap(claims: List[dict], outcome: Optional[str]) -> Optional[dict]:
             or (swaps[0] if swaps else None))
 
 
+def other_pack(reads: Optional[List[dict]], variant: dict, domain: Optional[str]) -> Optional[dict]:
+    """2N-1: {price, pack, text} when supply's newest read of the variant's
+    page at `domain` found the page's pack is not the variant's (its
+    `pack_differs` finding): "other pack ($49.77 for 56 ct)". None otherwise."""
+    want = _domain_key(domain)
+    hits = [r for r in reads or [] if _domain_key(r.get('retailer_domain')) == want
+            and reference_matches(r, variant) and any(f.get('finding') == 'pack_differs' for f in r.get('findings') or [])]
+    if not hits:
+        return None
+    row = max(hits, key=lambda r: str(r.get('observed_at') or ''))
+    finding = next(f for f in row.get('findings') or [] if f.get('finding') == 'pack_differs')
+    numbers = [n for n in (finding.get('detail') or {}).get('page_numbers') or [] if str(n).strip()]
+    pack = f"{numbers[0]} ct" if numbers else (str(finding.get('observed')) if finding.get('observed') else None)
+    seen = next((f.get('observed') for f in row.get('findings') or [] if f.get('finding') == 'price_observed'), None)
+    price = row.get('price') or seen
+    if not price:
+        return None
+    shown = money(price, row.get('currency') or 'USD')
+    return {'price': shown, 'pack': pack, 'text': f"other pack ({shown} for {pack})" if pack else f"other pack ({shown})"}
+
+
 def _newest_read(reads: Optional[List[dict]], variant: dict) -> Optional[dict]:
     """2C-2a: the newest readable reference read of a record variant (its
     page stated a price), or None when no read of it exists."""
@@ -1038,6 +1059,11 @@ def build_true_value(reference: Optional[dict], scored: List[dict], *, own_domai
     rows = []
     for key, meta in rows_by_key.items():
         retailer_cells = {d: full_cell(grouped.get((key, d), []), live.get((key, d)), surface_list) for d in columns}
+        for d, cell in retailer_cells.items():
+            # 2N-1: a page priced for another pack is no price to check against
+            pack = other_pack(reads, {'variant_id': key, 'gtin': meta['gtin']}, d) if cell['status'] == 'unverifiable' else None
+            if pack:
+                cell['other_pack'] = pack
         if by_agent_runs and agent_columns:
             runs = grouped.get((key, domain), [])
             cells = {a: full_cell([r for r in runs if (r.get('agent') or 'unknown') == a], live.get((key, domain)),
