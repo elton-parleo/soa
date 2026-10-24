@@ -34,7 +34,10 @@ the rows that would move, and the brand-direct block (the fact index's size
 by source, the claim sentences selected, per answer min / median / max,
 the no_checkable_fact answers, and "claim sets changed since the stored
 scoring: N of M", the second run's check that nothing moved). With only
-brand_direct named, neither run needs OPEN_AI_API_KEY.
+brand_direct named, neither run needs OPEN_AI_API_KEY. 2O-5: and the index's
+slots (lines, sizes and counts per line, ranges per size), the split with
+`unverified` apart from unscoreable, fabricated by the slot contradicted and
+unverified by the fact type left unverified.
 
 --classify-only (2B) makes NO model call at all. It re-runs the
 deterministic classifier (scoring/expectation_comparator.py, through the
@@ -313,13 +316,19 @@ def selection_report(rows) -> dict:
     outcome, reason_code): answers selected by rule (coder version 4), the
     claim sentences (total, per answer), their kinds, the no_checkable_fact
     and fact_type_not_read answers, the missing facts by type, and the fact
-    index each was judged against (version, digest, size, by source)."""
+    index each was judged against (version, digest, size, by source).
+    2O-5: the split as the console reads it (unverified apart from
+    unscoreable), the fabricated answers by the slot contradicted, the
+    unverified answers by the fact types left unverified, and the slots of
+    the last index stamped."""
     out = {'answers': 0, 'claims': 0, 'per_answer': [], 'kinds': Counter(), 'no_checkable_fact': 0,
-           'fact_type_not_read': 0, 'missing_by_type': Counter(), 'indexes': Counter()}
+           'fact_type_not_read': 0, 'missing_by_type': Counter(), 'indexes': Counter(), 'split': Counter(),
+           'unverified': 0, 'contradicted_by_slot': Counter(), 'unverified_by_type': Counter(), 'slots': None}
     for extraction, outcome, reason_code in rows:
         if not isinstance(extraction, dict) or 'selector' not in extraction:
             continue
         out['answers'] += 1
+        out['split'][ea.UNVERIFIED if outcome == 'unscoreable' and reason_code == ea.UNVERIFIED else outcome] += 1
         claim = extraction.get('brand_claim') or {}
         spans = claim.get('spans') or []
         out['claims'] += len(spans)
@@ -329,14 +338,22 @@ def selection_report(rows) -> dict:
         if outcome == 'unscoreable' and reason_code in ('no_checkable_fact', 'fact_type_not_read'):
             out[reason_code] += 1
         decided = claim.get('decided_by')
-        if outcome == 'fabricated' and isinstance(decided, int) and decided < len(spans):
-            for fact in spans[decided].get('facts_missing') or []:
+        deciding = spans[decided] if isinstance(decided, int) and decided < len(spans) else {}
+        if outcome == 'fabricated':
+            for fact in deciding.get('facts_missing') or []:
                 out['missing_by_type'][fact.get('type')] += 1
+                out['contradicted_by_slot'][fact.get('slot') or 'missing (2O-4)'] += 1
+        if outcome == 'unscoreable' and reason_code == ea.UNVERIFIED:
+            out['unverified'] += 1
+            for kind in sorted({f.get('type') for f in deciding.get('facts_unverified') or []}):
+                out['unverified_by_type'][kind] += 1
         index = claim.get('index') or {}
         if index:
             by = index.get('by_source') or {}
             out['indexes'][(index.get('version'), index.get('digest'), index.get('size'),
                             by.get('record'), by.get('catalog'), by.get('brand_pages'))] += 1
+            if index.get('slots'):
+                out['slots'] = index['slots']
     counts = sorted(out['per_answer'])
     out['min'], out['max'] = (counts[0], counts[-1]) if counts else (None, None)
     out['median'] = (counts[len(counts) // 2] if len(counts) % 2 else
@@ -344,6 +361,27 @@ def selection_report(rows) -> dict:
     out['no_checkable_fact_share'] = (round(out['no_checkable_fact'] / out['answers'], 3)
                                       if out['answers'] else None)
     return out
+
+
+def _pairs(counts: dict) -> str:
+    return ', '.join(f"{k} {n}" for k, n in counts.items()) or 'none'
+
+
+def _render_slots(slots: Optional[dict]) -> list:
+    """2O-5: the index's slots, as the printout's lines."""
+    if not slots:
+        return ['    index slots          none stamped (an index before 2O-5)']
+    served = 'not served' if slots.get('brand_lines') is None else f"{slots['brand_lines']} lines"
+    retired = ', '.join(slots.get('retired') or []) or 'none'
+    complete = lambda key: ', '.join(slots.get(key) or []) or 'none'  # noqa: E731
+    return [
+        f"    index slots          lines {slots['lines']} (status known {slots['status']}, retired: {retired}; "
+        f"the brand's line list {served})",
+        f"      sizes per line     {_pairs(slots.get('sizes') or {})}  (complete: {complete('sizes_complete')})",
+        f"      counts per line    {_pairs(slots.get('counts') or {})}  (complete: {complete('counts_complete')})",
+        f"      ranges per size    {_pairs(slots.get('ranges_per_size') or {})}  (lines with a range for the size)",
+        f"      attributes / line  {_pairs(slots.get('attributes') or {})}",
+    ]
 
 
 def _render_selection(report: dict, changed: dict) -> str:
@@ -356,17 +394,27 @@ def _render_selection(report: dict, changed: dict) -> str:
         for (v, d, n, r, c, b), k in sorted(report['indexes'].items(), key=str))
     kinds = ', '.join(f"{k} {n}" for k, n in sorted(report['kinds'].items(), key=lambda kv: str(kv[0])))
     missing = ', '.join(f"{k} {n}" for k, n in sorted(report['missing_by_type'].items())) or 'none'
+    order = ['grounded', 'fabricated', 'misattributed', ea.UNVERIFIED, 'echoed', 'acknowledged_unknown', 'absent',
+             'unscoreable']
+    split = ', '.join(f"{o} {report['split'][o]}" for o in order if report['split'].get(o)) or 'none'
     median = report['median']
     median = int(median) if median is not None and float(median).is_integer() else median
     return '\n'.join([
         f"    fact index           {indexes or 'none stored'}",
+        *_render_slots(report.get('slots')),
         f"    answers              {report['answers']}",
+        f"    split                {split}  (unverified: {ea.UNVERIFIED_NOTE}; stored unscoreable, outside "
+        f"the counts)",
         f"    claim sentences      {report['claims']}  (per answer: min {report['min']}, median {median}, "
         f"max {report['max']}; {kinds or 'none'})",
         f"    no_checkable_fact    {report['no_checkable_fact']}  ({report['no_checkable_fact_share']:.1%} of "
         f"answers; unscoreable, outside the counts)",
         f"    fact_type_not_read   {report['fact_type_not_read']}",
         f"    fabricated, by the fact missing: {missing}",
+        f"    fabricated, by the slot contradicted: "
+        f"{', '.join(f'{k} {n}' for k, n in sorted(report['contradicted_by_slot'].items())) or 'none'}",
+        f"    unverified, by the fact left unverified: "
+        f"{', '.join(f'{k} {n}' for k, n in sorted(report['unverified_by_type'].items())) or 'none'}",
         sets,
     ])
 
@@ -409,7 +457,8 @@ def print_brand_direct(before_rows, after_rows) -> None:
     the dry run (rows planned): see selection_report and claim_sets_changed."""
     changed = claim_sets_changed(claim_sets((r[0], r[1]) for r in before_rows),
                                  claim_sets((r[0], r[1]) for r in after_rows))
-    print("\nbrand-direct claims (2O-4: selected by rule, no model call; each looked up in the fact index):")
+    print("\nbrand-direct claims (2O-4: selected by rule, no model call; 2O-5: fabricated is contradicted by "
+          "the fact index, absent is unverified):")
     print(_render_selection(selection_report([r[1:] for r in after_rows]), changed))
 
 
@@ -456,6 +505,8 @@ RULES = {
     'facts_published': "brand-direct (2O-3): every fact the claim states is in the brand's fact index",
     'no_checkable_fact': 'brand-direct (2O-3): the answer states no checkable fact about the brand',
     'fact_type_not_read': 'brand-direct (2O-3): its facts are of a type the cycle read nothing of',
+    'fact_contradicted': "brand-direct (2O-5): a fact the claim states, the brand's pages state otherwise",
+    ea.UNVERIFIED: "brand-direct (2O-5): facts not on the pages read, nothing contradicts them (unverified)",
 }
 
 

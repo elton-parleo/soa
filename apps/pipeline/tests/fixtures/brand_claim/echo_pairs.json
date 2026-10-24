@@ -1,5 +1,5 @@
 {
- "_note": "HAND-WRITTEN question/answer pairs in the demo's shape (Pampers brand-direct questions, one answer sentence each), with the verdict a reader gives the sentence against fl13_record_pages.json's index. Not recorded answers. The echo threshold (brand_claim_verdict.ECHO_THRESHOLD) is set between the restatements and the rest.",
+ "_note": "HAND-WRITTEN question/answer pairs in the demo's shape (Pampers brand-direct questions, one answer sentence each), with the verdict a reader gives the sentence against fl13_record_pages.json's index (2O-5: a fact the index does not hold and nothing contradicts is unverified, not fabricated). Not recorded answers. The echo threshold (brand_claim_verdict.ECHO_THRESHOLD) is set between the restatements and the rest.",
  "pairs": [
   {
    "question": "Are Pampers Swaddlers good for newborns?",
@@ -49,7 +49,7 @@
   {
    "question": "Are Pampers Swaddlers good for newborns?",
    "span": "Pampers Swaddlers are widely considered the gold standard in hospitals.",
-   "verdict": "fabricated"
+   "verdict": "unverified"
   },
   {
    "question": "Is Pampers Pure Protection fragrance free?",
@@ -59,7 +59,7 @@
   {
    "question": "Where can I buy Pampers Swaddlers?",
    "span": "You can buy Pampers Swaddlers at Target.",
-   "verdict": "fabricated"
+   "verdict": "unverified"
   }
  ]
 }

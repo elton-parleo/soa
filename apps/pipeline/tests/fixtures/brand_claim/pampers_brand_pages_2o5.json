@@ -1,0 +1,389 @@
+{
+ "_note": "2O-5: the brand-page rows the fact index reads, from supply's RECORDED\npampers.com pages (parleo-supply-app tests/fixtures/reads/pampers-2026-10-20,\nhonest fetches made by supply's reader in reference run 11, 2026-10-20).",
+ "prices": [
+  {
+   "final_url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+   "json_ld": {
+    "@type": "ProductGroup",
+    "additionalProperty": [
+     {
+      "@type": "PropertyValue",
+      "name": "Size Range",
+      "value": "Preemie, Newborn, 1, 2, 3, 4, 5, 6, 7, 8"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Age Range",
+      "value": "Newborn, Baby"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Baby Weight",
+      "value": "<6 lbs, <10 lbs, 8 - 14 lbs, 10 - 22 lbs, 13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs, 41+ lbs, 46+ lbs"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Pack Count",
+      "value": "19, 27, 29, 38, 44, 58, 60, 70, 72, 84, 88, 100, 104, 108, 112, 120, 132, 136, 140, 148, 150, 164, 168, 186, 198"
+     }
+    ],
+    "category": "Taped Diapers",
+    "description": "Pampers Swaddlers\u2122 for babies and newborns offer gentle care for sensitive skin and stop blowouts with trusted leak protection. Find out and shop now!",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "description": "<6 lb",
+      "gtin13": "037000863403",
+      "name": "Preemie",
+      "size": "Preemie",
+      "sku": "037000863403"
+     },
+     {
+      "@type": "Product",
+      "description": "<10 lbs",
+      "gtin13": "037000772552",
+      "name": "Newborn",
+      "size": "Newborn",
+      "sku": "037000772552"
+     },
+     {
+      "@type": "Product",
+      "description": "8 - 14 lbs",
+      "gtin13": "037000799788",
+      "name": "1",
+      "size": "1",
+      "sku": "037000799788"
+     },
+     {
+      "@type": "Product",
+      "description": "10-22 lbs",
+      "gtin13": "037000833109",
+      "name": "2",
+      "size": "2",
+      "sku": "037000833109"
+     },
+     {
+      "@type": "Product",
+      "description": "13-26 lbs",
+      "gtin13": "037000833178",
+      "name": "3",
+      "size": "3",
+      "sku": "037000833178"
+     },
+     {
+      "@type": "Product",
+      "description": "15-34 lbs",
+      "gtin13": "037000799818",
+      "name": "4",
+      "size": "4",
+      "sku": "037000799818"
+     },
+     {
+      "@type": "Product",
+      "description": "20-37 lbs",
+      "gtin13": "037000799825",
+      "name": "5",
+      "size": "5",
+      "sku": "037000799825"
+     },
+     {
+      "@type": "Product",
+      "description": "23-44 lbs",
+      "gtin13": "037000833086",
+      "name": "6",
+      "size": "6",
+      "sku": "037000833086"
+     },
+     {
+      "@type": "Product",
+      "description": "26-50 lbs",
+      "gtin13": "030772098141",
+      "name": "7",
+      "size": "7",
+      "sku": "030772098141"
+     },
+     {
+      "@type": "Product",
+      "description": "30+ lbs",
+      "gtin13": "030772098639",
+      "name": "8",
+      "size": "8",
+      "sku": "030772098639"
+     }
+    ],
+    "name": "Pampers\u00ae Swaddlers\u2122 Diapers for Babies and Newborns",
+    "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers"
+   },
+   "page_title": "Pampers\u00ae Swaddlers\u2122 Diapers for Babies and Newborns",
+   "price": null,
+   "recording": "parleo-supply-app tests/fixtures/reads/pampers-2026-10-20/pampers.com_037000749622__fetch__read72.html.gz",
+   "retailer_domain": "pampers.com",
+   "role": "own",
+   "size_chart": [
+    {
+     "max": 6.0,
+     "min": null,
+     "size": "preemie"
+    },
+    {
+     "max": 10.0,
+     "min": null,
+     "size": "newborn"
+    },
+    {
+     "max": 14.0,
+     "min": 8.0,
+     "size": "1"
+    },
+    {
+     "max": 22.0,
+     "min": 10.0,
+     "size": "2"
+    },
+    {
+     "max": 26.0,
+     "min": 13.0,
+     "size": "3"
+    },
+    {
+     "max": 34.0,
+     "min": 15.0,
+     "size": "4"
+    },
+    {
+     "max": 37.0,
+     "min": 20.0,
+     "size": "5"
+    },
+    {
+     "max": 44.0,
+     "min": 23.0,
+     "size": "6"
+    },
+    {
+     "max": 50.0,
+     "min": 26.0,
+     "size": "7"
+    },
+    {
+     "max": null,
+     "min": 30.0,
+     "size": "8"
+    }
+   ],
+   "url": "https://www.pampers.com/en-us/products/pampers-swaddlers-diapers",
+   "variant_ref": null
+  },
+  {
+   "final_url": "https://www.pampers.com/en-us/products/pampers-zzz",
+   "json_ld": {
+    "@type": "ProductGroup",
+    "additionalProperty": [
+     {
+      "@type": "PropertyValue",
+      "name": "Size Range",
+      "value": "3, 4, 5, 6"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Baby Weight",
+      "value": "13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Pack Count",
+      "value": "72, 88, 104, 116"
+     }
+    ],
+    "category": "Taped Diapers",
+    "description": "Say goodnight to overnight wakeups and hello to Pampers ZZZ, the overnight diaper designed with extra absorbency for more peaceful nights. ",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "description": "16 - 28 lbs",
+      "gtin13": "037000833963",
+      "name": "3",
+      "size": "3",
+      "sku": "037000833963"
+     },
+     {
+      "@type": "Product",
+      "description": "22-37 lbs",
+      "gtin13": "037000833970",
+      "name": "4",
+      "size": "4",
+      "sku": "037000833970"
+     },
+     {
+      "@type": "Product",
+      "description": "27+ lbs",
+      "gtin13": "037000833987",
+      "name": "5",
+      "size": "5",
+      "sku": "037000833987"
+     },
+     {
+      "@type": "Product",
+      "description": "35+ lbs",
+      "gtin13": "037000834021",
+      "name": "6",
+      "size": "6",
+      "sku": "037000834021"
+     }
+    ],
+    "name": "Pampers\u00ae Zzz | Pampers",
+    "url": "https://www.pampers.com/en-us/products/pampers-zzz"
+   },
+   "page_title": "Pampers\u00ae Zzz | Pampers",
+   "price": null,
+   "recording": "parleo-supply-app tests/fixtures/reads/pampers-2026-10-20/pampers.com_037000833970__fetch__read135.html.gz",
+   "retailer_domain": "pampers.com",
+   "role": "own",
+   "size_chart": [
+    {
+     "max": 28.0,
+     "min": 16.0,
+     "size": "3"
+    },
+    {
+     "max": 37.0,
+     "min": 22.0,
+     "size": "4"
+    },
+    {
+     "max": null,
+     "min": 27.0,
+     "size": "5"
+    },
+    {
+     "max": null,
+     "min": 35.0,
+     "size": "6"
+    }
+   ],
+   "url": "https://www.pampers.com/en-us/products/pampers-zzz",
+   "variant_ref": null
+  },
+  {
+   "final_url": "https://www.pampers.com/en-us/products/pampers-cruisers-360",
+   "json_ld": {
+    "@type": "ProductGroup",
+    "additionalProperty": [
+     {
+      "@type": "PropertyValue",
+      "name": "Size Range",
+      "value": "3, 4, 5, 6, 7, 8"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Age Range",
+      "value": "Toddler"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Baby Weight",
+      "value": "13 - 26 lbs, 15 - 34 lbs, 27+ lbs, 35+ lbs, 41+ lbs, 46+ lbs"
+     },
+     {
+      "@type": "PropertyValue",
+      "name": "Pack Count",
+      "value": "21, 26, 56, 58, 60, 66, 70, 74, 76, 80, 88, 96, 100, 104, 108, 116, 132, 136"
+     }
+    ],
+    "category": "Pull-On Diapers",
+    "description": "Pull-on diapers made for active babies who crawl, stand, or walk, with a flexible fit and leak-proof protection. Shop Pampers Cruisers 360.",
+    "hasVariant": [
+     {
+      "@type": "Product",
+      "description": "16 - 28 lbs",
+      "gtin13": "037000716556",
+      "name": "3",
+      "size": "3",
+      "sku": "037000716556"
+     },
+     {
+      "@type": "Product",
+      "description": "22 - 37 lbs",
+      "gtin13": "037000716679",
+      "name": "4",
+      "size": "4",
+      "sku": "037000716679"
+     },
+     {
+      "@type": "Product",
+      "description": "27+ lbs",
+      "gtin13": "037000716549",
+      "name": "5",
+      "size": "5",
+      "sku": "037000716549"
+     },
+     {
+      "@type": "Product",
+      "description": "35+ lbs",
+      "gtin13": "030772046074",
+      "name": "6",
+      "size": "6",
+      "sku": "030772046074"
+     },
+     {
+      "@type": "Product",
+      "description": "41+ lbs",
+      "gtin13": "037000717072",
+      "name": "7",
+      "size": "7",
+      "sku": "037000717072"
+     },
+     {
+      "@type": "Product",
+      "description": "46+ lbs",
+      "gtin13": "80847562",
+      "name": "8",
+      "size": "8",
+      "sku": "80847562"
+     }
+    ],
+    "name": "Pampers\u00ae Cruisers 360\u00b0 Pull-on Diapers | Pampers",
+    "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360"
+   },
+   "page_title": "Pampers\u00ae Cruisers 360\u00b0 Pull-on Diapers | Pampers",
+   "price": null,
+   "recording": "parleo-supply-app tests/fixtures/reads/pampers-2026-10-20/pampers.com_037000717379__fetch__read124.html.gz",
+   "retailer_domain": "pampers.com",
+   "role": "own",
+   "size_chart": [
+    {
+     "max": 28.0,
+     "min": 16.0,
+     "size": "3"
+    },
+    {
+     "max": 37.0,
+     "min": 22.0,
+     "size": "4"
+    },
+    {
+     "max": null,
+     "min": 27.0,
+     "size": "5"
+    },
+    {
+     "max": null,
+     "min": 35.0,
+     "size": "6"
+    },
+    {
+     "max": null,
+     "min": 41.0,
+     "size": "7"
+    },
+    {
+     "max": null,
+     "min": 46.0,
+     "size": "8"
+    }
+   ],
+   "url": "https://www.pampers.com/en-us/products/pampers-cruisers-360",
+   "variant_ref": null
+  }
+ ]
+}

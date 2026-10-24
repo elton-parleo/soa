@@ -144,7 +144,22 @@ BRAND_OUTCOMES = BRAND_ASSESSMENTS + ['absent', 'unscoreable']
 # the question), every one is judged as version 3 judges a span, and the
 # worst decides. An outcome row's extraction carries `coder.version` 4 and
 # `selector` (the vocabulary, the claims and their facts), with no calls.
-BRAND_CODER_VERSION = 4
+#
+# 2O-5: version 5. The selection is version 4's; the verdict is "contradicted
+# by what the brand publishes", not "absent from the pilot": a fact is
+# checked against the index's slots (scoring/brand_fact_index.check: a line's
+# sizes, counts, status and (line, size) weight ranges, the attributes a page
+# states the opposite of, the brand's served line list). A fact the index
+# does not hold and nothing contradicts is UNVERIFIED: an answer with claims
+# none grounded or contradicted is stored `unscoreable` with reason code
+# UNVERIFIED, outside every count and the fabricated signal (as per_unit is;
+# the outcome column's constraint is unchanged), and the console reads it as
+# `unverified`. A price is always unverified in a brand-direct answer (the
+# price tier judges prices), a store off the merchant's list too (coverage
+# judges it).
+BRAND_CODER_VERSION = 5
+UNVERIFIED = 'unverified'
+UNVERIFIED_NOTE = 'not on the pages read; nothing contradicts it'
 CODER_DISAGREED = 'coder_disagreed'
 CODER_DISAGREED_NOTE = 'the coder could not settle this answer'
 NO_CHECKABLE_FACT = 'no_checkable_fact'

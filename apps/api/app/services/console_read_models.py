@@ -28,6 +28,7 @@ from sqlalchemy import text
 
 from soa_shared import attribute_accuracy, claim_kinds, local_time, per_unit, retired_lines, surfaces, unprompted
 from soa_shared import promo_pass_through as ppt
+from soa_shared.expected_answers import UNVERIFIED
 
 from app.services import console_claims
 
@@ -54,6 +55,8 @@ VERDICT_TONE = {
 BRAND_TONE = {
     'grounded': 'ok', 'echoed': 'neu', 'misattributed': 'bad', 'fabricated': 'bad',
     'acknowledged_unknown': 'warn', 'absent': 'warn', 'unscoreable': 'neu',
+    # 2O-5: facts not on the pages read, nothing contradicts them (stored unscoreable, reason unverified)
+    'unverified': 'neu',
 }
 #: Segment.mark per claim outcome. The console labels `miss` "left out";
 #: soa uses it for a claim that landed near the reference but not on it.
@@ -68,17 +71,23 @@ PER_UNIT_LABEL = per_unit.NOTE
 
 def read_outcome(outcome: Optional[str], reason_code: Optional[str]) -> Optional[str]:
     """The run's outcome as the console reads it: a run stored unscoreable for a
-    per-unit quote (reason per_unit, the scorer's 2N-1 rule) reads per_unit."""
-    return per_unit.PER_UNIT if outcome == 'unscoreable' and reason_code == per_unit.PER_UNIT else outcome
+    per-unit quote (reason per_unit, the scorer's 2N-1 rule) reads per_unit;
+    2O-5: a brand-direct run stored unscoreable for facts the index does not
+    hold and nothing contradicts (reason unverified) reads unverified."""
+    if outcome == 'unscoreable' and reason_code == per_unit.PER_UNIT:
+        return per_unit.PER_UNIT
+    if outcome == 'unscoreable' and reason_code == UNVERIFIED:
+        return UNVERIFIED
+    return outcome
 #: StudyCell.s per outcome (value and brand vocabularies).
 CELL_TONE = {
     'exact': 'ok', 'grounded': 'ok', 'wrong': 'bad', 'fabricated': 'bad', 'misattributed': 'bad',
     'partial': 'warn', 'stale': 'warn', 'echoed': 'warn', 'acknowledged_unknown': 'warn',
-    'absent': 'neu', 'unverifiable': 'neu', 'unscoreable': 'neu',
+    'absent': 'neu', 'unverifiable': 'neu', 'unscoreable': 'neu', 'unverified': 'neu',
 }
 #: Worst first, for picking one outcome to stand for several runs.
 SEVERITY = ['wrong', 'fabricated', 'misattributed', 'stale', 'partial', 'acknowledged_unknown',
-            'absent', 'echoed', 'unverifiable', 'unscoreable', 'exact', 'grounded']
+            'absent', 'echoed', 'unverifiable', 'unverified', 'unscoreable', 'exact', 'grounded']
 TIER_LABELS = {'brand_direct': 'Brand-direct', 'catalog_accuracy': 'Catalog accuracy',
                'value_incentives': 'Value & incentives', 'category_control': 'Category control',
                'comparison': 'Comparison'}
@@ -536,21 +545,28 @@ def brand_claim_evidence(extraction: Optional[dict]) -> Optional[dict]:
     decided (no_checkable_fact, acknowledged_unknown) or the row predates it.
     2O-4: and `sentences`, every claim sentence judged, in answer order, each
     {text, kind, verdict, facts_found, facts_missing, facts_unchecked,
-    decided}, so the drawer lists them all, not only the one that decided."""
+    decided}, so the drawer lists them all, not only the one that decided.
+    2O-5: and `facts_unverified` beside each, on a row coder 5 decided."""
     claim = (extraction or {}).get('brand_claim') if isinstance(extraction, dict) else None
     if not isinstance(claim, dict):
         return None
     spans = [s for s in claim.get('spans') or [] if isinstance(s, dict)]
     at = claim.get('decided_by')
     span = spans[at] if isinstance(at, int) and 0 <= at < len(spans) else {}
-    return {'span': span.get('text'), 'kind': span.get('kind'),
-            'facts_found': span.get('facts_found') or [], 'facts_missing': span.get('facts_missing') or [],
-            'facts_unchecked': span.get('facts_unchecked') or [], 'spans': len(spans),
-            'index': claim.get('index'),
-            'sentences': [{'text': s.get('text'), 'kind': s.get('kind'), 'verdict': s.get('verdict'),
-                           'facts_found': s.get('facts_found') or [], 'facts_missing': s.get('facts_missing') or [],
-                           'facts_unchecked': s.get('facts_unchecked') or [], 'decided': i == at}
-                          for i, s in enumerate(spans)]}
+    out = {'span': span.get('text'), 'kind': span.get('kind'),
+           'facts_found': span.get('facts_found') or [], 'facts_missing': span.get('facts_missing') or [],
+           'facts_unchecked': span.get('facts_unchecked') or [], 'spans': len(spans),
+           'index': claim.get('index'),
+           'sentences': [{'text': s.get('text'), 'kind': s.get('kind'), 'verdict': s.get('verdict'),
+                          'facts_found': s.get('facts_found') or [], 'facts_missing': s.get('facts_missing') or [],
+                          'facts_unchecked': s.get('facts_unchecked') or [], 'decided': i == at,
+                          **({'facts_unverified': s['facts_unverified']} if 'facts_unverified' in s else {})}
+                         for i, s in enumerate(spans)]}
+    if 'facts_unverified' in span:
+        # 2O-5 (coder 5): facts_missing are the contradicted (slot, claimed, published),
+        # facts_unverified those not on the pages read that nothing contradicts
+        out['facts_unverified'] = span['facts_unverified']
+    return out
 
 
 # ─── Answers summary (2C) ──────────────────────────────────────────────────

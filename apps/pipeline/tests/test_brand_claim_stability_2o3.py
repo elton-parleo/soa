@@ -52,7 +52,8 @@ def index():
 
 def test_the_index_from_the_fl13_shaped_record_and_brand_pages(index):
     stamp = index.stamp()
-    assert (stamp['version'], stamp['size']) == (1, 83)
+    # 2O-5: version 2, the line slots on top of version 1's 83 facts
+    assert (stamp['version'], stamp['size']) == (2, 191)
     assert stamp['types_read'] == list(bfi.FACT_TYPES)
     d = index.as_dict()
     # the retailer rows' prices (Walmart, and Amazon $3.00 above), the titles' counts and sizes
@@ -83,7 +84,9 @@ def test_the_index_is_the_same_twice(index):
     ('at Walmart', 'retailer', 'found'),
     ('at Target', 'retailer', 'missing'),
     ('fragrance-free', 'attribute', 'found'),
-    ('latex free', 'attribute', 'missing'),
+    # 2O-5: the Swaddlers page's "free of parabens and latex" states it
+    ('latex free', 'attribute', 'found'),
+    ('chlorine free', 'attribute', 'missing'),
     ('Pampers Pure Protection', 'name', 'found'),
     ('Pampers Swaddlers Overnights', 'name', 'missing'),
 ])
@@ -99,7 +102,8 @@ def test_a_type_the_cycle_read_nothing_of_is_unchecked_not_missing():
     one = {'brand_mentioned': True, 'extraction_confident': True, 'spans': [{'text': 'Pampers is latex free.'}],
            'brand_claims': [{'claim': 'Pampers is latex free.', 'kind': 'assertion', 'modality': 'asserted'}]}
     v = bcv.decide(one, EXPECTATION, question='Is Pampers safe?', index=titles_only)
-    assert (v['outcome'], v['reason_code']) == ('unscoreable', ea.FACT_TYPE_NOT_READ)
+    # 2O-5: not on the index and nothing contradicts it: unverified (unchecked was its special case)
+    assert (v['outcome'], v['reason_code']) == ('unscoreable', ea.UNVERIFIED)
 
 
 # ── one span per verdict ──────────────────────────────────────────────────
@@ -115,8 +119,11 @@ def _one(span, *, unknown=None, others=()):
     ('Are Pampers Swaddlers good for newborns?', _one('Pampers Swaddlers are good for newborns.'), 'echoed', None),
     ('What weight does Size 1 fit?', _one('Pampers Swaddlers Size 1 fit babies 8-14 lbs.'), 'grounded',
      'facts_published'),
+    # 2O-5: Swaddlers Size 1 is 8-14 on the record and the page's chart: contradicted
     ('What weight does Size 1 fit?', _one('Pampers Swaddlers Size 1 fit babies 6-12 lbs.'), 'fabricated',
-     'fact_not_published'),
+     'fact_contradicted'),
+    ('Where can I buy Pampers Swaddlers?', _one('You can buy Pampers Swaddlers at Target.'), 'unscoreable',
+     ea.UNVERIFIED),
     ('Do Pampers make a newborn diaper?', _one('Pampers Little Snugglers fit babies up to 14 lbs.',
                                                others=['Huggies Little Snugglers']), 'misattributed', None),
     ('Is Pampers AMORE good?', _one(None, unknown="I couldn't find information about Pampers AMORE."),
@@ -132,11 +139,14 @@ def test_one_span_per_verdict(index, question, record, outcome, code):
 def test_the_fabricated_reason_names_the_fact_and_the_page(index):
     v = bcv.decide(_one('Pampers Swaddlers Size 1 fit babies 6-12 lbs.'), EXPECTATION,
                    question='What weight does Size 1 fit?', index=index, own_domains=OWN)
-    assert v['reason'] == ("'Pampers Swaddlers Size 1 fit babies 6-12 lbs.' — '6-12 lbs' is not on "
-                           "pampers.com's Swaddlers page")
+    # 2O-5: the drawer line names the slot, the claim's value and the index's
+    assert v['reason'] == "fabricated: '6-12 lbs' for Swaddlers Size 1 — pampers.com's chart says 8 to 14 lb"
+    span = v['brand_claim']['spans'][v['brand_claim']['decided_by']]
+    assert span['facts_missing'] == [{'type': 'weight', 'text': '6-12 lbs', 'slot': 'ranges', 'claimed': '6-12 lbs',
+                                      'published': '8 to 14 lb', 'line': 'Swaddlers', 'size': '1'}]
     v = bcv.decide(_one('You can buy Pampers Swaddlers at Target.'), EXPECTATION,
                    question='Where can I buy Pampers Swaddlers?', index=index, own_domains=OWN)
-    assert v['reason'].endswith("— Target is not on Pampers' retailer list")
+    assert v['reason'] == "'You can buy Pampers Swaddlers at Target.' — " + ea.UNVERIFIED_NOTE
 
 
 @pytest.mark.parametrize('span,kind', [
@@ -202,20 +212,25 @@ def test_fl14_shaped_split_per_run_and_the_variance_left(index):
     vs = verdicts(index)
     run1 = Counter(v[0]['outcome'] for v in vs)
     run2 = Counter(v[1]['outcome'] for v in vs)
-    assert run1 == Counter({'unscoreable': 116, 'grounded': 74, 'fabricated': 52, 'absent': 6,
-                            'acknowledged_unknown': 6, 'misattributed': 4})
-    assert run2 == Counter({'unscoreable': 127, 'grounded': 66, 'fabricated': 52, 'absent': 6,
-                            'acknowledged_unknown': 7})
-    # of run 1's 116 unscoreable, 112 state no checkable fact and 4 could not be read
+    # 2O-5: fabricated is contradicted, so the 52 a fact merely absent from the
+    # index made fabricated are unverified or grounded on another sentence
+    assert run1 == Counter({'unscoreable': 142, 'grounded': 87, 'fabricated': 12, 'absent': 6,
+                            'acknowledged_unknown': 7, 'misattributed': 4})
+    assert run2 == Counter({'unscoreable': 150, 'grounded': 80, 'fabricated': 14, 'absent': 6,
+                            'acknowledged_unknown': 8})
+    # of run 1's 142 unscoreable, 112 state no checkable fact, 26 are unverified and 4 could not be read
     codes = Counter(v[0]['reason_code'] for v in vs if v[0]['outcome'] == 'unscoreable')
-    assert codes == Counter({ea.NO_CHECKABLE_FACT: 112, None: 4})
+    assert codes == Counter({ea.NO_CHECKABLE_FACT: 112, ea.UNVERIFIED: 26, None: 4})
+    # every fabricated answer left is the one sentence the record contradicts
+    assert {s['text'] for v in vs for s in v[0]['brand_claim']['spans'] if s['verdict'] == 'fabricated'} == \
+        {'Pampers Swaddlers Size 1 fit babies 6-12 lbs.'}
     # the span sets that differ between the two recordings: the only variance left
     differ = sum(1 for a in FL14['answers']
                  if not bcv.spans_agree(bcv.claim_spans(a['runs'][0]), bcv.claim_spans(a['runs'][1])))
     assert differ == 50
     # and the answers whose verdict differs, beside the printout's 66
     moved = [(a['query_code'], a['agent']) for a, v in zip(FL14['answers'], vs) if v[0]['outcome'] != v[1]['outcome']]
-    assert len(moved) == 31
+    assert len(moved) == 26      # 2O-5: 31 under 2O-3's absent-is-fabricated
     # every one of them is an answer whose spans differ (the fixture's moves are span wobble)
     assert all(not bcv.spans_agree(bcv.claim_spans(a['runs'][0]), bcv.claim_spans(a['runs'][1]))
                for a, v in zip(FL14['answers'], vs) if v[0]['outcome'] != v[1]['outcome'])

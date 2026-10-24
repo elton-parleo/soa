@@ -173,10 +173,14 @@ class BrandFactsCache:
                     'program_name': snapshot.program_name,
                     # 2O-3: what the brand fact index reads off the record
                     # (scoring/brand_fact_index.build)
+                    # 2O-5: and each variant's line (its product's title) and the
+                    # feed's status and successor, for the index's line slots
                     'variants': [
                         {'title': v.title, 'size': v.size, 'count': v.count,
                          'list_price': v.list_price, 'member_price': v.member_price,
-                         'weight_range': v.weight_range, 'attributes': v.attributes}
+                         'weight_range': v.weight_range, 'attributes': v.attributes,
+                         'line': p.title, 'status': getattr(v, 'status', None),
+                         'successor': getattr(v, 'successor', None)}
                         for p in (snapshot.products or []) for v in (p.variants or [])
                     ],
                     'features': [f for p in (snapshot.products or [])

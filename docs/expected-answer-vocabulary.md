@@ -309,6 +309,28 @@ sentence is stored (`extraction.brand_claim.spans`) with how it qualified
 (`extraction.selector`). Rules: `scoring/brand_claim_selector.py`. A stored
 version-3 record is still decided over its calls.
 
+**2O-5 (brand-claim coder version 5): fabricated means contradicted.** A
+claim's fact is `fabricated` only when the brand's own record or pages hold a
+value for its slot and the claim's differs: a weight range for (line, size),
+a line's weight with no size against its complete chart, the sizes or pack
+counts a line comes in (complete from the brand page's JSON-LD `hasVariant`
+and its "Size Range" / "Pack Count" properties, or its size chart), a line's
+status (the feed's, or a brand page that redirected to another line's), an
+attribute the line's own page states the opposite of ("lightly scented"
+against fragrance free), or a line name off the brand's line list when supply
+serves one (`brand_lines`). A fact the index does not hold, and nothing
+contradicts, is `unverified`, shown on Answers as "not on the pages read;
+nothing contradicts it": stored `unscoreable` with reason code `unverified`
+(no migration, as `per_unit`), so it is outside every count and the
+fabricated signal. A price in a brand-direct answer is always unverified (the
+price tier judges prices), and so is a store off the merchant's list
+(coverage judges it). An answer's verdict, worst first: misattributed,
+fabricated, grounded, acknowledged_unknown, unverified, echoed. A contradicted
+fact stores its slot, the claim's value and the index's, and the reason is the
+drawer line: "fabricated: '2 to 9 lbs' for Swaddlers Newborn — pampers.com's
+chart says under 10 lb". Rules: `scoring/brand_fact_index.py` (`check`) and
+`scoring/brand_claim_verdict.py`.
+
 Two consequences worth stating:
 
 **Visibility is retired for this tier**, not renamed. It was the pass-1
