@@ -75,6 +75,21 @@ checks and were still wrong. Five rules, each deterministic, before storing:
   issue     a product row whose issue is "gave no price" or "could not be
             checked" may state it (off_issue()).
 
+2P-2 (FL14's --narratives run after 2P-1): 13 accepted lines were about a
+grounded sentence beside the flagged one, joined with a "but" that
+contradicts nothing (run-15090: "Gemini said Target is a place to buy Pampers
+Baby-Dry but Pampers' record includes target.com").
+  facts     a brand-direct answer's facts carry only the sentences its verdict
+            flagged (flagged_sentences(): contradicted or misattributed), and
+            claim_facts never the facts the brand did publish. Its answer flags
+            make it a subject only beside such a verdict; an unverified answer
+            never is.
+  check     contradicted_check(): with a contradiction, every quote is the
+            contradicted value (as the scorer normalised it, or as the answer
+            wrote it) or the brand's, and the line states that value
+            (claim_not_contradicted); a "but" has the brand's value after it
+            (but_without_brand_value).
+
 Product rows (2L-3a B2): the facts are one entry per quote, (agent,
 retailer, price, verdict), sorted by agent, the reference per retailer as
 (retailer, price, date), and the issue as a sentence with its count; the
@@ -112,7 +127,7 @@ from sqlalchemy import inspect, text
 
 from soa_shared import attribute_accuracy, claim_kinds, per_unit, promo_pass_through, surfaces
 from soa_shared import unprompted
-from soa_shared.expected_answers import normalize_domain, normalize_money
+from soa_shared.expected_answers import UNVERIFIED, normalize_domain, normalize_money
 from soa_shared.retailers import KNOWN_RETAILERS, RETAILER_NAMES, retailer_name, retailers_named
 
 FLAG = "SOA_NARRATIVES_ENABLED"
@@ -630,11 +645,16 @@ def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[st
     `promo_missed`, a cheapest-place answer that named none of the deals live
     for its variant that day, adds promo_missed after the other reasons.
     2N-1: a catalog-built question's answer (`catalog_intent`,
-    claim_kinds.catalog_intent) is never flagged by the brand-claim rule."""
+    claim_kinds.catalog_intent) is never flagged by the brand-claim rule.
+    2P-2: a brand-direct answer stored unverified is never flagged, and its
+    answer flags count only beside a fabricated or misattributed verdict."""
     o = outcome or {}
     if (attribute or {}).get('verdict') in ('mismatch', 'absent'):
         return [f"attribute_{attribute['verdict']}"]
     raw, reason = o.get('outcome'), o.get('reason_code')
+    if tier == BRAND_TIER and not catalog_intent and reason == UNVERIFIED:
+        # 2P-2: nothing the brand states contradicts it, so there is nothing to write, flag or none
+        return []
     why = []
     if tier in VALUE_TIERS and raw in FLAGGED_VALUE:
         why.append(f'{raw}_price')
@@ -642,7 +662,10 @@ def why_flagged(tier: Optional[str], outcome: Optional[dict], first: Optional[st
         why.append('other_brand_price')
     if tier == BRAND_TIER and raw in FLAGGED_BRAND and not catalog_intent:
         why.append(f'brand_{raw}')
-    for f in _json(o.get('flags')) or []:
+    # 2P-2: on a brand-direct answer a flag is written only beside a flagged claim: alone, the facts
+    # hold no claim (its sentences are grounded), and FL14's lines wrote about a grounded one
+    claim_only = tier == BRAND_TIER and not catalog_intent and raw not in FLAGGED_BRAND
+    for f in [] if claim_only else _json(o.get('flags')) or []:
         if isinstance(f, dict) and f.get('flag') in FLAGGED_FLAGS:
             why.append(f['flag'])
     if brand_choice and first and not merchant.is_ours(first):
@@ -746,10 +769,19 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
     surface = run.get('surface') or surfaces.surface_of(run.get('platform') or '')
     rival = 'rival_first_pick' in why
     spans = _spans(extraction, claims)
+    # 2P-2: a brand-direct answer's line is about the sentences its verdict flagged, never a grounded or
+    # unverified one beside them (FL14 run-15090: "... but Pampers' record includes target.com")
+    claim_verdict = brand and not intent
+    flagged_claim = claim_verdict and o.get('outcome') in FLAGGED_BRAND
+    kept = flagged_sentences(extraction) if claim_verdict else None
+    if kept is not None:
+        spans = [s for s in spans if any(s == k[:300] for k in kept)]
     stores = named_stores(o.get('outcome_reason'))
     # 2P-1 (B4): what the brand's pages state instead, for a claim they contradict
-    against = contradiction(o.get('outcome_reason')) if brand and not intent and o.get('outcome') == 'fabricated' \
+    against = contradiction(o.get('outcome_reason')) if claim_verdict and o.get('outcome') == 'fabricated' \
         else None
+    # 2P-2: the reason of any other brand verdict quotes the sentence it judged (grounded, echoed)
+    note = o.get('outcome_reason') if flagged_claim or not claim_verdict else None
     quoted = [f for f in (_claim_fact(c) for c in claims) if f]
     directions = []
     for q in quoted:
@@ -774,18 +806,19 @@ def answer_facts(run: dict, outcome: Optional[dict], mentions: List[dict], merch
         'reason_code': o.get('reason_code'),
         # 2N-2: a where-to-buy claim's note is the scorer's label: its why only, the stores apart;
         # 2P-1: a contradicted claim's is `contradicted`, in the scorer's own words
-        'scorer_note': None if against else _note_why(o.get('outcome_reason')) if stores else o.get('outcome_reason'),
+        'scorer_note': None if against else _note_why(note) if stores else note,
         'contradicted': against,
         'named_stores': stores,
         # 2N-1: the brand-claim verdict is the AI-written questions' only
-        'brand_verdict': o.get('outcome') if brand and not intent else None,
-        'claim_kind': CLAIM_KIND_WORDS.get(claim_kinds.claim_kind(extraction)) if brand and not intent else None,
+        'brand_verdict': o.get('outcome') if claim_verdict else None,
+        'claim_kind': CLAIM_KIND_WORDS.get(claim_kinds.claim_kind(extraction)) if claim_verdict else None,
         'first pick': first if rival or brand_choice else None,
         'named in order': named if rival or brand_choice else None,
         'flags': [_drop_none({'flag': f.get('flag'), 'detail': f.get('detail') or f.get('evidence')}) for f in flags],
         'answer_spans': spans,
         # 2O-3: the claim that decided the brand-claim verdict, and its facts against the brand's index
-        'claim_facts': claim_facts(extraction) if brand and not intent else None,
+        # 2P-2: only when that claim is the one flagged
+        'claim_facts': claim_facts(extraction) if flagged_claim else None,
         # 2M-2: the deals live that day the answer never mentions
         'deals_live_that_day': [_deal_fact(d) for d in missed] or None,
         # 2O-1 (B3): and where the answer sent the shopper instead
@@ -807,11 +840,24 @@ def claim_facts(extraction: dict) -> Optional[dict]:
     span = spans[claim['decided_by']]
     missing = [f for f in span.get('facts_missing') or [] if isinstance(f, dict)]
     # 2P-1 (B4): a coder-5 fact the brand states otherwise (it carries its slot) is
-    # contradicted, not unpublished: only a fact with no slot (coder 3 and 4) never was
+    # contradicted, not unpublished: only a fact with no slot (coder 3 and 4) never was.
+    # 2P-2: the facts the same sentence holds that the brand did publish are not carried:
+    # the writer set them against the claim ("but Pampers' record includes target.com")
     return _drop_none({'said': span.get('text'),
                        'never_published': [f.get('text') for f in missing if not f.get('slot')] or None,
-                       'stated_otherwise': [f.get('text') for f in missing if f.get('slot')] or None,
-                       'published': [f.get('text') for f in span.get('facts_found') or []] or None})
+                       'stated_otherwise': [f.get('text') for f in missing if f.get('slot')] or None})
+
+
+def flagged_sentences(extraction: dict) -> Optional[List[str]]:
+    """2P-2: the judged sentences (extraction.brand_claim.spans) a brand-direct
+    line may be about: the ones contradicted (fabricated) or misattributed,
+    in answer order. None when the record holds no judged sentences (a coder
+    before 2O-3), whose spans stand as before."""
+    claim = (extraction or {}).get('brand_claim')
+    if not isinstance(claim, dict) or not isinstance(claim.get('spans'), list):
+        return None
+    return [str(s['text']) for s in claim['spans']
+            if isinstance(s, dict) and s.get('text') and s.get('verdict') in FLAGGED_BRAND]
 
 
 #: 2P-1 (B4): the scorer's contradiction() ("fabricated: '<claimed>' for <subject> —
@@ -1679,6 +1725,41 @@ def claim_check(line: str, facts: dict) -> Optional[str]:
     return None
 
 
+_BUT = re.compile(r"\bbut\b", re.I)
+
+
+def contradicted_values(facts: dict) -> List[str]:
+    """2P-2: the values a brand-direct line may quote: each contradicted value,
+    as the scorer normalised it (contradicted.claimed) and as the answer wrote
+    it (claim_facts.stated_otherwise). Empty when nothing was contradicted."""
+    values = [(facts.get('contradicted') or {}).get('claimed'),
+              *((facts.get('claim_facts') or {}).get('stated_otherwise') or [])]
+    return list(dict.fromkeys(_plain(str(v)) for v in values if v and _plain(str(v))))
+
+
+def contradicted_check(line: str, facts: dict) -> Optional[str]:
+    """2P-2: a brand-direct line is about the contradicted value. FL14's
+    --narratives run after 2P-1 accepted 13 lines about a grounded sentence
+    beside it, joined with a "but" that contradicts nothing (run-15090:
+    "Gemini said Target is a place to buy Pampers Baby-Dry but Pampers'
+    record includes target.com"; 14982, 15428, 15439 ...).
+      claim_not_contradicted  with a contradiction, the line quotes something
+                              other than the contradicted value or the brand's
+                              own, or never states the contradicted value
+      but_without_brand_value a "but" of the line's own (not inside a quote)
+                              with no brand value after it"""
+    says = _plain(str((facts.get('contradicted') or {}).get('says') or ''))
+    values = contradicted_values(facts)
+    if values:
+        quotes = [q for q in (_plain(m.group(0)[1:-1]) for m in _QUOTED.finditer(line)) if q]
+        if any(q not in values and q != says for q in quotes) or not any(v in _plain(line) for v in values):
+            return 'claim_not_contradicted'
+    m = _BUT.search(_QUOTED.sub(lambda q: ' ' * len(q.group(0)), line))
+    if m and not (says and says in _plain(line[m.end():])):
+        return 'but_without_brand_value'
+    return None
+
+
 #: words every product name shares: they do not tell one product from another
 _GENERIC_WORDS = {'diaper', 'diapers', 'baby', 'size', 'sizes', 'count', 'pack', 'packs', 'box', 'the', 'for',
                   'and', 'with', 'per'}
@@ -1759,6 +1840,10 @@ def check(line: Optional[str], facts: dict) -> Optional[str]:
                 return 'contradicted_never_published'
             if _plain(against.get('says') or '') not in _plain(line):
                 return 'contradiction_not_said'
+    if facts.get('brand_verdict'):
+        off = contradicted_check(line, facts)
+        if off:
+            return off
 
     if facts.get('kind') == ANSWER and facts.get('agent_quoted') and not names_product(line, facts):
         return 'no_product'

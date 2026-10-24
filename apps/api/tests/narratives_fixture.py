@@ -123,6 +123,56 @@ def fl14_claims(e) -> None:
                       {'o': outcome, 'c': code, 'w': reason, 'x': json.dumps(extraction), 'r': run_id})
 
 
+# 2P-2: FL14's --narratives run after 2P-1 wrote 14 brand-claim lines about a grounded sentence
+# ("Gemini said Target is a place to buy Pampers Baby-Dry but Pampers' record includes target.com",
+# run-15090). fl14_beside() puts the shapes on three more of 2I-8's brand-direct rows, apart from
+# fl14_claims() so the two recorded subjects stay as recorded: a contradicted sentence with a grounded
+# one beside it, both labelled; a grounded answer flagged for a store off the brand's list; an
+# unverified answer with the same flag.
+TARGET = 'You can buy Pampers Baby-Dry at Target.'
+BABY_DRY_SIZES = 'Baby-Dry comes in Newborn through Size 8.'
+TARGET_OR_BJS = "You can buy Pampers Baby-Dry at Target or BJ's Wholesale Club."
+BJS = {'flag': 'fabricated_availability', 'retailers': [{'name': "BJ's Wholesale Club", 'domain': 'bjs.com'}],
+       'unrecognised': []}
+_FOUND_TARGET = [{'type': 'retailer', 'text': 'target.com'}]
+#: (run, outcome, reason_code, reason, flags, the judged sentences as FL14_CLAIMS, the one that decided)
+FL14_BESIDE = (
+    (70331, 'fabricated', 'fact_contradicted',
+     "fabricated: 'Newborn through Size 8' for Baby-Dry — pampers.com's size list says Newborn to Size 7", [],
+     [(TARGET, 'grounded', [], _FOUND_TARGET, []),
+      (BABY_DRY_SIZES, 'fabricated', [{'type': 'size', 'text': 'Newborn through Size 8', 'slot': 'sizes',
+                                       'claimed': 'Newborn through Size 8', 'published': 'Newborn to Size 7',
+                                       'line': 'Baby-Dry',
+                                       'evidence': "pampers.com's size list says Newborn to Size 7"}], [], [])], 1),
+    (70332, 'grounded', 'facts_published', f"'{TARGET_OR_BJS}' — on Pampers' record or pages: 'target.com'", [BJS],
+     [(TARGET_OR_BJS, 'grounded', [], _FOUND_TARGET, [])], 0),
+    (70334, 'unscoreable', 'unverified', f"'{TARGET_OR_BJS}' — not on the pages read; nothing contradicts it", [BJS],
+     [(TARGET_OR_BJS, 'unverified', [], [], [{'type': 'retailer', 'text': 'bjs.com'}])], 0),
+)
+
+
+def fl14_beside(e) -> None:
+    """FL14_BESIDE on the loaded fixture, each sentence labelled as the selector labels it (span_labels)."""
+    from sqlalchemy import text
+    with e.begin() as c:
+        for run_id, outcome, code, reason, flags, sentences, decided in FL14_BESIDE:
+            spans = [{'text': t, 'kind': 'attribute', 'verdict': v, 'facts_missing': m, 'facts_found': f,
+                      'facts_unverified': u, 'facts_unchecked': []} for t, v, m, f, u in sentences]
+            extraction = {'brand_mentioned': True, 'extraction_confident': True,
+                          'spans': [{'id': i + 1, 'text': t} for i, (t, *_rest) in enumerate(sentences)],
+                          'span_labels': [{'span_id': i + 1, 'text': t, 'kind': 'assertion', 'modality': 'asserted'}
+                                          for i, (t, *_rest) in enumerate(sentences)],
+                          'coder': {'version': 6, 'calls': []},
+                          'brand_claim': {'version': 6, 'spans': spans, 'decided_by': decided,
+                                          'index': {'version': 3, 'digest': 'fl14', 'size': 72}}}
+            c.execute(text("UPDATE soa_runs SET raw_response = :t WHERE id = :r"),
+                      {'t': ' '.join(t for t, *_rest in sentences), 'r': run_id})
+            c.execute(text("UPDATE soa_expectation_outcomes SET outcome = :o, reason_code = :c, outcome_reason = :w, "
+                           "extraction = :x, flags = :f WHERE run_id = :r"),
+                      {'o': outcome, 'c': code, 'w': reason, 'x': json.dumps(extraction), 'f': json.dumps(flags),
+                       'r': run_id})
+
+
 def engine(cycle: str = NAME):
     """A fresh sqlite engine holding the console schema and the 2J-2 fixture
     (with 2P-1's FL14 claims for cycle 'fl14')."""
