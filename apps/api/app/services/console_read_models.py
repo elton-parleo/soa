@@ -2060,7 +2060,7 @@ VIS_FIRST_PICK_RULE = (
     "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every "
     "brand named, so when the comparison set's first brand sits second or later, another brand came first, "
     "and the brands the answer named outside the set decide which, by where each first appears. When no "
-    "coding names that brand (unprompted answers carry no list of other brands), nobody gets the pick.")
+    "coding names that brand (a brand-choice answer's coding carries no list of other brands), nobody gets the pick.")
 VISIBILITY_DIVERGENCES = [
     "2I-8: Visibility counts every agent together, as the demo does. RankRow.named and RankRow.first "
     "are the counts on `ranking.surface`, which is `all` (every answered run, whatever its surface), "

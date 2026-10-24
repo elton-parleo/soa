@@ -4638,7 +4638,7 @@ answer, so W&S is the only row.
       "consumer_ui": {}
     }
   },
-  "note": "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every brand named, so when the comparison set's first brand sits second or later, another brand came first, and the brands the answer named outside the set decide which, by where each first appears. When no coding names that brand (unprompted answers carry no list of other brands), nobody gets the pick.",
+  "note": "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every brand named, so when the comparison set's first brand sits second or later, another brand came first, and the brands the answer named outside the set decide which, by where each first appears. When no coding names that brand (a brand-choice answer's coding carries no list of other brands), nobody gets the pick.",
   "surfaces": [
     {
       "surface": "grounded_api",
@@ -4849,7 +4849,7 @@ store). Two of 516 rows (one first pick by span position, one uncoded) and 4 of 
       }
     }
   },
-  "note": "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every brand named, so when the comparison set's first brand sits second or later, another brand came first, and the brands the answer named outside the set decide which, by where each first appears. When no coding names that brand (unprompted answers carry no list of other brands), nobody gets the pick.",
+  "note": "First pick is the first brand the answer names, as coded when it was scored. The coding ranks every brand named, so when the comparison set's first brand sits second or later, another brand came first, and the brands the answer named outside the set decide which, by where each first appears. When no coding names that brand (a brand-choice answer's coding carries no list of other brands), nobody gets the pick.",
   "surfaces": [
     {
       "surface": "grounded_api",

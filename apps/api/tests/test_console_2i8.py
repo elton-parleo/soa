@@ -135,7 +135,10 @@ def _before_2p1(x):
         return {k: _before_2p1(v) for k, v in x.items()}
     if isinstance(x, list):
         return [_before_2p1(v) for v in x]
-    return x.replace('brand-choice', 'unprompted') if isinstance(x, str) else x
+    if not isinstance(x, str):
+        return x
+    x = x.replace("a brand-choice answer's coding carries no list of other brands", 'unprompted answers carry no list of other brands')
+    return x.replace('brand-choice', 'unprompted')
 
 
 def per_surface_view(endpoint, body):
