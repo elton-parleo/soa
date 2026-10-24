@@ -137,7 +137,14 @@ BRAND_OUTCOMES = BRAND_ASSESSMENTS + ['absent', 'unscoreable']
 # a great choice") is `unscoreable` for NO_CHECKABLE_FACT, outside every count;
 # one whose facts are all of a type the cycle read nothing of is
 # `unscoreable` for FACT_TYPE_NOT_READ.
-BRAND_CODER_VERSION = 3
+#
+# 2O-4: version 4. No model call: the claim sentences are selected by rule
+# from the answer text (scoring/brand_claim_selector.py: a sentence naming
+# the brand or one of its lines that carries a checkable fact, or restates
+# the question), every one is judged as version 3 judges a span, and the
+# worst decides. An outcome row's extraction carries `coder.version` 4 and
+# `selector` (the vocabulary, the claims and their facts), with no calls.
+BRAND_CODER_VERSION = 4
 CODER_DISAGREED = 'coder_disagreed'
 CODER_DISAGREED_NOTE = 'the coder could not settle this answer'
 NO_CHECKABLE_FACT = 'no_checkable_fact'

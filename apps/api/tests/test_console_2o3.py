@@ -25,11 +25,11 @@ def _body(version, coded, of=258, oldest=None):
 
 
 def test_the_version():
-    assert score_svc.SCORER_VERSION == '13' and ea.BRAND_CODER_VERSION == 3
+    # 2O-4 moved the current version on (test_console_2o4); version 3's outcomes still compare as "13"
     assert score_svc.SCORER_CHANGES['13'] == "brand-direct verdict decided from the claim's facts"
     # no dimension reads the brand-direct outcome: the version never explains a moved score
     assert score_svc.SCORER_CHANGE_APPLIES['13']({}) is False
-    assert score_svc.CODER_SCORER_VERSIONS == {None: '11', 1: '11', 2: '12', 3: '13'}
+    assert {k: score_svc.CODER_SCORER_VERSIONS[k] for k in (None, 1, 2, 3)} == {None: '11', 1: '11', 2: '12', 3: '13'}
 
 
 def test_a_cycle_compares_as_its_oldest_brand_direct_outcome():
@@ -52,7 +52,7 @@ def test_fl14_re_scored_is_not_comparable_to_a_cycle_on_version_2():
 
 def test_the_coder_count_names_the_oldest_version():
     rows = [{'tier': 'brand_direct', 'outcome': 'echoed', 'coder_version': v} for v in (3, 3, 2, None)]
-    assert score_svc.brand_coder(rows) == {'version': 3, 'coded': 2, 'of': 4, 'oldest': 1}
+    assert score_svc.brand_coder(rows) == {'version': ea.BRAND_CODER_VERSION, 'coded': 0, 'of': 4, 'oldest': 1}
 
 
 CLAIM = {'version': 3, 'index': {'version': 1, 'digest': 'abc123', 'size': 40, 'types_read': ['weight']},
@@ -74,7 +74,12 @@ def test_the_drawer_shows_the_claim_and_the_fact_missing():
     assert a['summary'] == REASON and a['brand_verdict'] == 'fabricated'
     assert a['brand_claim'] == {'span': 'Pampers Swaddlers fit babies 2-9 lbs.', 'kind': 'attribute',
                                 'facts_found': [], 'facts_missing': [{'type': 'weight', 'text': '2-9 lbs'}],
-                                'facts_unchecked': [], 'spans': 1, 'index': CLAIM['index']}
+                                'facts_unchecked': [], 'spans': 1, 'index': CLAIM['index'],
+                                # 2O-4: every judged sentence, the one that decided marked
+                                'sentences': [{'text': 'Pampers Swaddlers fit babies 2-9 lbs.', 'kind': 'attribute',
+                                               'verdict': 'fabricated', 'facts_found': [],
+                                               'facts_missing': [{'type': 'weight', 'text': '2-9 lbs'}],
+                                               'facts_unchecked': [], 'decided': True}]}
 
 
 def test_a_row_before_the_new_verdict_carries_no_claim_evidence():

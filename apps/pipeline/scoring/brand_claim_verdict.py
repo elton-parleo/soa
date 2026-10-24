@@ -1,6 +1,11 @@
 """
 2O-3: the brand-claim verdict, decided by code from the claim's facts.
 
+2O-4: the live scorer no longer makes the calls described below. The claim
+sentences are selected by rule (scoring/brand_claim_selector.py) and each
+is judged here (judge_span); decide() takes them already judged. A stored
+version-3 record is still settled over its calls and decided as below.
+
 The coder's calls (2O-1: two, a third on a disagreement) still transcribe
 and label the answer, exactly as before: the same prompts, the same
 settings, the same record. What the model no longer decides, even
@@ -226,14 +231,18 @@ def other_brand_names(record) -> List[List[str]]:
     return [w for w in out if w]
 
 
-def judge_span(text, *, question, brand, index, others=(), own_domains=()) -> dict:
-    facts = bfi.facts_in(text, brand, own_domains=own_domains)
+def judge_span(text, *, question, brand, index, others=(), own_domains=(), facts=None, line=None) -> dict:
+    """One span's verdict. 2O-4: `facts` the selector's (brand_claim_selector.
+    checkable: the span's facts less the line that qualifies it) and `line`
+    that line, for the reason; else the span's own facts."""
+    if facts is None:
+        facts = bfi.facts_in(text, brand, own_domains=own_domains)
     q_facts = bfi.facts_in(question, brand, own_domains=own_domains)
     q_words = {bfi.stem(t) for t in bfi.tokens(question)}
     out = {'text': text, 'kind': span_kind(text, facts)}
     names = [f for f in facts if f['type'] == 'name']
     # the brand's own line the span names, for the reason ("pampers.com's Swaddlers page")
-    out['line'] = next((f['text'] for f in names if bfi.lookup(f, index) == bfi.FOUND), None)
+    out['line'] = line or next((f['text'] for f in names if bfi.lookup(f, index) == bfi.FOUND), None)
     for f in names:
         if bfi.lookup(f, index) == bfi.FOUND:
             continue
@@ -287,12 +296,15 @@ def unknown_sentence(record) -> Optional[str]:
     return statement if statement and pp.looks_unknown(statement) else None
 
 
-def decide(record, expectation, *, question, index: 'bfi.FactIndex', own_domains=()) -> dict:
-    """{outcome, reason, reason_code, brand_claim} for one call's record."""
+def decide(record, expectation, *, question, index: 'bfi.FactIndex', own_domains=(), spans=None) -> dict:
+    """{outcome, reason, reason_code, brand_claim} for one call's record.
+    2O-4: `spans` already judged (brand_claim_selector.decide), else the
+    record's claim spans, judged here."""
     record = record or {}
     brand = (expectation or {}).get('brand') or index.brand or 'the brand'
-    claim = {'version': ea.BRAND_CODER_VERSION, 'index': index.stamp(), 'echo_threshold': ECHO_THRESHOLD,
-             'spans': [], 'decided_by': None}
+    # a version-3 call's record carries no coder block: it is version 3's
+    claim = {'version': (record.get('coder') or {}).get('version') or 3, 'index': index.stamp(),
+             'echo_threshold': ECHO_THRESHOLD, 'spans': [], 'decided_by': None}
 
     def done(outcome, reason, code=None, at=None):
         claim['decided_by'] = at
@@ -303,9 +315,10 @@ def decide(record, expectation, *, question, index: 'bfi.FactIndex', own_domains
     if not record.get('brand_mentioned'):
         return done(ABSENT, f"the answer did not name {brand}")
 
-    others = other_brand_names(record)
-    spans = [judge_span(t, question=question or '', brand=brand, index=index, others=others,
-                        own_domains=own_domains) for t in claim_spans(record)]
+    if spans is None:
+        others = other_brand_names(record)
+        spans = [judge_span(t, question=question or '', brand=brand, index=index, others=others,
+                            own_domains=own_domains) for t in claim_spans(record)]
     claim['spans'] = spans
 
     def first(verdict):

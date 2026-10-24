@@ -11,6 +11,11 @@ scoring/brand_claim_verdict.py).
 No model is called: each call's record is built here from the answer with
 the pipeline's own segmenter and labels (parser/extraction_postprocess.
 apply_labels), as the labelling call leaves it.
+
+2O-4: the scorer no longer makes these calls (the claims are selected by
+rule, tests/test_brand_claim_selector_2o4.py). A stored version-3 record is
+still decided over its calls, as rescore --classify-only decides it, and
+that is what these tests keep pinning.
 """
 import asyncio
 import json
@@ -21,7 +26,7 @@ import pytest
 from sqlalchemy import text
 
 from parser import extraction_postprocess as pp
-from parser.expectation_client import CODER_SETTINGS, ExtractionResult
+from parser.expectation_client import ExtractionResult
 from scoring import brand_claim_verdict as bcv
 from scoring import brand_fact_index as bfi
 from scoring import expectation_comparator as cmp
@@ -157,62 +162,44 @@ def seed(db, answer, question=QUESTION):
         """), {'a': answer})
 
 
-def score(db, answer, records, *, labeled=True):
-    seed(db, answer)
-    client = Replay(records)
-    scorer = scorer_module.ExpectationScorer(client, NoHistory(), FakeFacts(FACTS), labeler=False,
-                                             references=Pages(), tenant_domains=NoTenant())
-    result = asyncio.run(scorer.score_run(7))
-    (row,) = outcomes(db)
-    return client, scorer, result, row
-
-
-def test_two_calls_with_the_same_spans_settle_and_the_evidence_is_stored(db):
-    client, _s, result, row = score(db, FABRICATED, [record(FABRICATED), record(FABRICATED)])
-    assert client.extract.await_count == 2
-    assert all(c.kwargs['settings'] == CODER_SETTINGS for c in client.extract.await_args_list)
-    stored = json.loads(row['extraction'])
-    coder = stored['coder']
-    assert (coder['version'], coder['pair'], coder['question']) == (3, [0, 1], QUESTION)
-    assert coder['refused'] == [False, False] and all(c['evidence']['ok'] for c in coder['calls'])
-    assert row['outcome'] == result.outcome == 'fabricated' and row['reason_code'] == 'fact_not_published'
-    claim = stored['brand_claim']
+def test_a_stored_version_3_record_settles_on_its_spans_and_keeps_the_evidence():
+    v = decide([record(FABRICATED), record(FABRICATED)], FABRICATED)
+    assert v.coder == {'pair': [0, 1], 'refused': [False, False]}
+    assert (v.outcome, v.reason_code) == ('fabricated', 'fact_not_published')
+    claim = v.brand_claim
+    assert claim['version'] == 3
     assert claim['spans'][claim['decided_by']]['facts_missing'] == [{'type': 'weight', 'text': '2-9 lbs'}]
 
 
-def test_a_span_not_in_the_answer_refuses_the_call_and_a_third_decides(db):
+def test_a_span_not_in_the_answer_refuses_the_call_and_a_third_decides():
     """2A-5: a call whose claim is not the answer's words agrees with nothing."""
     invented = {**record(FABRICATED), 'brand_claims': [
         {'claim': 'Pampers Swaddlers are made in Ohio.', 'sentence': 'Pampers Swaddlers are made in Ohio.',
          'kind': 'assertion', 'modality': 'asserted', 'effective_modality': 'asserted'}]}
-    client, _s, _r, row = score(db, FABRICATED, [invented, record(FABRICATED), record(FABRICATED)])
-    assert client.extract.await_count == 3
-    coder = json.loads(row['extraction'])['coder']
-    assert coder['refused'] == [True, False, False] and coder['pair'] == [1, 2]
-    assert coder['calls'][0]['evidence']['missing'] == ['Pampers Swaddlers are made in Ohio.']
-    assert row['outcome'] == 'fabricated'
+    v = decide([invented, record(FABRICATED), record(FABRICATED)], FABRICATED)
+    assert v.coder == {'pair': [1, 2], 'refused': [True, False, False]}
+    assert bcv.evidence(invented, FABRICATED)['missing'] == ['Pampers Swaddlers are made in Ohio.']
+    assert v.outcome == 'fabricated'
 
 
-def test_span_sets_that_do_not_overlap_are_a_disagreement(db):
+def test_span_sets_that_do_not_overlap_are_a_disagreement():
     answer = "Pampers Swaddlers fit babies 2-9 lbs. Pampers Pure Protection is fragrance free."
     first = record(answer, asserted=['Pampers Swaddlers fit babies 2-9 lbs.'])
     second = record(answer, asserted=['Pampers Pure Protection is fragrance free.'])
-    client, _s, _r, row = score(db, answer, [first, second, second])
-    assert client.extract.await_count == 3
-    assert json.loads(row['extraction'])['coder']['pair'] == [1, 2]
-    assert row['outcome'] == 'grounded'
+    v = decide([first, second, second], answer)
+    assert v.coder['pair'] == [1, 2] and v.outcome == 'grounded'
+    assert decide([first, second], answer).reason_code == ea.CODER_DISAGREED
 
 
-def test_a_classify_only_re_score_re_takes_the_verdict_from_the_stored_calls(db):
-    _c, scorer, _r, row = score(db, FABRICATED, [record(FABRICATED), record(FABRICATED)])
-    stored = json.loads(row['extraction'])
+def test_a_classify_only_re_score_re_takes_the_verdict_from_the_stored_calls():
+    stored = coded([record(FABRICATED), record(FABRICATED)], FABRICATED)
     run = SimpleNamespace(tier='brand_direct', source_ref={'merchant_slug': 'pampers'}, study_type=None, cycle_id=3,
                           answer_status=None, retrieved_sources=None, grounding=None)
-    kwargs = dict(brand_facts=scorer.brand_facts, references=scorer.references)
+    kwargs = dict(brand_facts=FakeFacts(FACTS), references=Pages())
     first = scorer_module.classify(run, EXPECTATION, stored, **kwargs)
     second = scorer_module.classify(run, EXPECTATION, stored, **kwargs)
-    assert first.outcome == second.outcome == row['outcome']
-    assert first.brand_claim == second.brand_claim == stored['brand_claim']
+    assert first.outcome == second.outcome == 'fabricated'
+    assert first.brand_claim == second.brand_claim and first.brand_claim['version'] == 3
     assert rescore_cycle._signature(first) == rescore_cycle._signature(second)
 
 
@@ -223,12 +210,13 @@ def test_the_page_reads_cached_on_the_cycle_are_in_the_index(db):
     pages = Pages({'prices': [{'retailer_domain': DOMAIN, 'role': 'own', 'variant_label': 'Swaddlers S3',
                                'page_title': 'Pampers Swaddlers Diapers Size 3, 84 Count',
                                'size_chart': [{'size': '3', 'min': 16, 'max': 28}]}]})
-    scorer = scorer_module.ExpectationScorer(Replay([record(answer), record(answer)]), NoHistory(),
-                                             FakeFacts(FACTS), labeler=False, references=pages,
-                                             tenant_domains=NoTenant())
+    client = Replay([])
+    scorer = scorer_module.ExpectationScorer(client, NoHistory(), FakeFacts(FACTS), labeler=False,
+                                             references=pages, tenant_domains=NoTenant())
     asyncio.run(scorer.score_run(7))
     (row,) = outcomes(db)
-    assert row['outcome'] == 'grounded'
+    # 2O-4: selected by rule, so no call
+    assert row['outcome'] == 'grounded' and client.extract.await_count == 0
 
 
 def test_a_version_2_record_is_still_decided_by_the_version_2_rule():
@@ -239,7 +227,7 @@ def test_a_version_2_record_is_still_decided_by_the_version_2_rule():
     assert decide(calls, answer).outcome == 'unscoreable'
 
 
-def test_a_wall_is_stamped_with_version_3_and_no_call(db):
+def test_a_wall_is_stamped_with_the_coder_version_and_no_call(db):
     seed(db, '')
     with db.begin() as conn:
         conn.execute(text("UPDATE soa_runs SET answer_status = 'sign_in_wall'"))
@@ -249,7 +237,7 @@ def test_a_wall_is_stamped_with_version_3_and_no_call(db):
     asyncio.run(scorer.score_run(7))
     (row,) = outcomes(db)
     assert client.extract.await_count == 0 and row['outcome'] == 'absent'
-    assert json.loads(row['extraction'])['coder'] == {'version': 3, 'calls': []}
+    assert json.loads(row['extraction'])['coder'] == {'version': ea.BRAND_CODER_VERSION, 'calls': []}
 
 
 # ── the rescore names the rules and reports the spans ─────────────────────
@@ -257,18 +245,6 @@ def test_a_wall_is_stamped_with_version_3_and_no_call(db):
 def test_the_new_reason_codes_are_named_rules():
     for code in ('fact_not_published', 'facts_published', 'no_checkable_fact', 'fact_type_not_read'):
         assert code in rescore_cycle.RULES
-
-
-def test_the_claim_report(db):
-    _c, _s, _r, row = score(db, FABRICATED, [record(FABRICATED), record(FABRICATED)])
-    stored = json.loads(row['extraction'])
-    praise = {'coder': {'version': 3, 'calls': [record('Pampers is great.')] * 2}, 'brand_claim': {'spans': []}}
-    report = rescore_cycle.claim_report([(stored, 'fabricated', 'fact_not_published'),
-                                         (praise, 'unscoreable', 'no_checkable_fact'),
-                                         ({'coder': {'version': 2, 'calls': [{}]}}, 'echoed', None)])
-    assert (report['answers'], report['no_checkable_fact'], report['no_checkable_fact_share']) == (2, 1, 0.5)
-    assert report['first_two_differ'] == 0 and report['missing_by_type'] == {'weight': 1}
-    assert 'no_checkable_fact    1  (50.0% of answers' in rescore_cycle._render_claims(report)
 
 
 @pytest.mark.parametrize('copy', ['apps/api', 'packages/shared'])
@@ -279,34 +255,3 @@ def test_the_vocabulary_copies_agree(copy):
     with open(os.path.join(here, 'soa_shared', 'expected_answers.py')) as a, \
             open(os.path.join(root, copy, 'soa_shared', 'expected_answers.py')) as b:
         assert a.read() == b.read()
-
-
-def test_the_rescore_prints_the_claim_report_and_the_span_sets_that_changed(db, capsys, monkeypatch):
-    """rescore_cycle --tier brand_direct, end to end on sqlite: the stored
-    row is re-scored with a different span set, and the printout says so."""
-    answer = "Pampers Swaddlers fit babies 2-9 lbs. Pampers Pure Protection is fragrance free."
-    first = record(answer, asserted=['Pampers Swaddlers fit babies 2-9 lbs.'])
-    second = record(answer, asserted=['Pampers Pure Protection is fragrance free.'])
-    _c, _s, _r, row = score(db, answer, [first, first])
-    with db.begin() as conn:
-        conn.exec_driver_sql("CREATE TABLE soa_cycles (id INTEGER PRIMARY KEY, cycle_code TEXT)")
-        conn.exec_driver_sql("INSERT INTO soa_cycles (id, cycle_code) VALUES (3, 'FL14-pampers-20261023')")
-        conn.exec_driver_sql("ALTER TABLE soa_queries ADD COLUMN query_code TEXT")
-        conn.exec_driver_sql("UPDATE soa_queries SET query_code = 'PAM_208'")
-    monkeypatch.setattr(rescore_cycle, 'engine', db)
-
-    async def rescore(run_ids, concurrency=None):
-        scorer = scorer_module.ExpectationScorer(Replay([second, second]), NoHistory(), FakeFacts(FACTS),
-                                                 labeler=False, references=Pages(), tenant_domains=NoTenant())
-        for run_id in run_ids:
-            await scorer.score_run(run_id)
-        return SimpleNamespace(succeeded=len(run_ids), total=len(run_ids), skipped=0, failed=0, retried=0,
-                               failures=[])
-
-    monkeypatch.setattr('scoring.expectation_batch.score_runs', rescore)
-    rescore_cycle.main(['--cycle', 'FL14-pampers-20261023', '--tier', 'brand_direct'])
-    out = capsys.readouterr().out
-    assert 'PAM_208 · perplexity · run 1 · brand_direct: fabricated -> grounded' in out
-    assert 'brand-claim verdict (2O-3, no model call; the verdict is a lookup):' in out
-    assert 'span sets changed since the stored scoring: 1 of 1' in out
-    assert 'no_checkable_fact    0  (0.0% of answers' in out

@@ -23,7 +23,7 @@ from typing import Optional
 from sqlalchemy import text
 
 from clients.truesync_catalog import TrueSyncCatalogClient, TrueSyncNotAuthorized
-from parser.expectation_client import CODER_SETTINGS, ExpectationClient
+from parser.expectation_client import ExpectationClient
 from parser.extraction_postprocess import apply_labels
 from scoring import brand_direct_classifier as bdc
 from scoring import expectation_comparator as cmp
@@ -223,6 +223,55 @@ class TenantDomainsCache:
         return self._by_cycle[cycle_id]
 
 
+class BrandTermsCache:
+    """
+    2O-4: the words that name the merchant's brand and its rivals, once per
+    cycle, for the brand-claim selector (scoring/brand_claim_selector.py):
+    the study's terms as Visibility counts them (the console's
+    study_brand_terms: the primary entity's name and aliases, and
+    tier_config.merchant.product_names), and the cycle's competitor
+    entities' names and aliases. {terms, product_names, rivals}.
+
+    A database without the entity tables (a scorer test's) gives nothing:
+    the selector still has the brand's name and the catalog's titles.
+    """
+
+    def __init__(self) -> None:
+        self._by_cycle = {}
+
+    def for_cycle(self, cycle_id, study_type=None) -> dict:
+        key = (cycle_id, study_type)
+        if key not in self._by_cycle:
+            self._by_cycle[key] = self._read(cycle_id, study_type)
+        return self._by_cycle[key]
+
+    @staticmethod
+    def _read(cycle_id, study_type) -> dict:
+        from sqlalchemy.exc import DBAPIError
+
+        out = {'terms': [], 'product_names': [], 'rivals': []}
+        try:
+            with engine.connect() as conn:
+                entities = conn.execute(text("""
+                    SELECT e.name, e.aliases, ce.role FROM soa_cycle_entities ce
+                    JOIN soa_entities e ON e.id = ce.entity_id
+                    WHERE ce.cycle_id = :c ORDER BY ce.comparison_code
+                """), {"c": cycle_id}).fetchall()
+                job = conn.execute(text(
+                    "SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"
+                ), {"st": study_type}).fetchone() if study_type else None
+        except DBAPIError as exc:
+            logger.warning("[expectation] brand terms for cycle %s not read (%s) — the brand-claim "
+                           "selector names the brand from its name and the catalog only", cycle_id, exc)
+            return out
+        for name, aliases, role in entities:
+            words = [name] + [a for a in (_as_dict(aliases) or []) if isinstance(a, str)]
+            out['terms' if role == 'primary' else 'rivals'].extend(w for w in words if w)
+        merchant = (_as_dict(job[0]) or {}).get('merchant') or {} if job else {}
+        out['product_names'] = [n for n in merchant.get('product_names') or [] if isinstance(n, str)]
+        return out
+
+
 class ReferenceCache:
     """
     2B: one retailer-prices read per cycle, cached ON the cycle.
@@ -412,7 +461,8 @@ class ExpectationScorer:
                  history: HistoryCache = None,
                  brand_facts: BrandFactsCache = None,
                  labeler=None, references: ReferenceCache = None,
-                 domain_checker=None, tenant_domains: TenantDomainsCache = None) -> None:
+                 domain_checker=None, tenant_domains: TenantDomainsCache = None,
+                 brand_terms: BrandTermsCache = None) -> None:
         self.client = client or ExpectationClient()
         self.history = history if history is not None else HistoryCache()
         self.brand_facts = (
@@ -426,6 +476,8 @@ class ExpectationScorer:
         # 2D: the tenant's own domains, once per cycle, same client
         self.tenant_domains = tenant_domains if tenant_domains is not None else TenantDomainsCache(
             getattr(self.history, '_client', None))
+        # 2O-4: the brand's and its rivals' terms, for the brand-claim selector
+        self.brand_terms = brand_terms if brand_terms is not None else BrandTermsCache()
         if domain_checker is None and citation_checks_enabled():
             from scoring.citation_check import DbDomainCheckStore, DomainChecker
             domain_checker = DomainChecker(store=DbDomainCheckStore())
@@ -532,24 +584,18 @@ class ExpectationScorer:
 
     # ─── The model calls ──────────────────────────────────────────────
 
-    async def _code_once(self, run, *, brand, brand_domain, settings=None) -> dict:
+    async def _code_once(self, run, *, brand, brand_domain) -> dict:
         """One transcription of the answer and its labels: {record, model,
-        usage: {extract, label}}. `settings` is CODER_SETTINGS for the
-        brand-claim coder (2O-1), None for every other tier."""
-        result = await self.client.extract(
-            run.raw_response, brand=brand, brand_domain=brand_domain,
-            **({'settings': settings} if settings else {}),
-        )
+        usage: {extract, label}}. Every tier but brand-direct (2O-4: its
+        claims are selected by rule, brand_claim_selector)."""
+        result = await self.client.extract(run.raw_response, brand=brand, brand_domain=brand_domain)
         usage = {'extract': dict(getattr(result, 'usage', None) or {})}
 
         # Step 1b: what each transcribed span IS. A failed call leaves
         # every span unlabelled, which asserted_claims reads as no claims
         # — never as claims nobody classified.
         if self.labeler is not None:
-            labels = await self.labeler.label(
-                result.record, answer_text=run.raw_response,
-                **({'settings': settings} if settings else {}),
-            )
+            labels = await self.labeler.label(result.record, answer_text=run.raw_response)
             usage['label'] = dict(getattr(labels, 'usage', None) or {})
             result.record = apply_labels(
                 result.record, labels.labels,
@@ -569,65 +615,43 @@ class ExpectationScorer:
             domain_checker=self.domain_checker, tenant_domains=self.tenant_domains,
         )
 
-    async def _code_brand_direct(self, run, expectation, *, brand, brand_domain) -> tuple:
-        """
-        2O-1 (H27): the brand-claim coder. Two calls, each transcribed,
-        labelled and classified on its own; a category is kept only when
-        they agree (the same category, and for fabricated or grounded an
-        overlapping claim: brand_direct_classifier.agree). A disagreement
-        makes a third call and two of three decides; with no majority the
-        answer is `unscoreable` for coder_disagreed.
+    def _select_brand_direct(self, run, expectation, *, brand, facts) -> dict:
+        """2O-4: the brand-direct record, by rule (scoring/brand_claim_selector.
+        select): the answer's claim sentences, chosen from its text with the
+        cycle's vocabulary. No model call."""
+        from scoring import brand_claim_selector as sel
 
-        Returns (record, verdict, model). The record is the settling call's
-        (the first call's when nothing settled) with `coder` beside it:
-        every call's record, its category, its usage, and the settings, so
-        the comparator re-takes the decision from what is stored.
-        """
-        calls = [await self._code_call(run, brand=brand, brand_domain=brand_domain)
-                 for _ in range(bdc.CODER_CALLS)]
-        record, verdict = self._settled(run, expectation, calls)
-        if (verdict.coder or {}).get('pair') is None and len(calls) < bdc.CODER_MAX_CALLS:
-            calls.append(await self._code_call(run, brand=brand, brand_domain=brand_domain))
-            record, verdict = self._settled(run, expectation, calls)
-        return record, verdict, calls[0]['model']
-
-    async def _code_call(self, run, *, brand, brand_domain) -> dict:
-        """2O-3: one coder call, with 2A-5's evidence rule checked on its
-        claim spans (brand_claim_verdict.evidence): a span not in the answer
-        text refuses the call, which then agrees with no other."""
-        from scoring import brand_claim_verdict as bcv
-        call = await self._code_once(run, brand=brand, brand_domain=brand_domain, settings=CODER_SETTINGS)
-        call['record'] = {**call['record'], 'evidence': bcv.evidence(call['record'], run.raw_response)}
-        return call
-
-    def _settled(self, run, expectation, calls) -> tuple:
-        coder = {'version': ea.BRAND_CODER_VERSION, 'settings': CODER_SETTINGS,
-                 # 2O-3: the question, for the echo rule on a classify-only re-score
-                 'question': getattr(run, 'query_text', None),
-                 'calls': [c['record'] for c in calls], 'usage': [c['usage'] for c in calls]}
-        verdict = self._classify(run, expectation, {**calls[0]['record'], 'coder': coder})
-        decided = verdict.coder or {}
-        pair = decided.get('pair')
-        coder['pair'] = pair
-        # 2O-1's record: each call's category; 2O-3's: which calls 2A-5's rule refused
-        coder.update({k: decided[k] for k in ('outcomes', 'refused') if k in decided})
-        record = {**calls[pair[0] if pair else 0]['record'], 'coder': coder}
-        # the flags and the source split are the settling call's
-        return record, self._classify(run, expectation, record)
+        study = self.brand_terms.for_cycle(run.cycle_id, getattr(run, 'study_type', None)) \
+            if self.brand_terms is not None else {}
+        vocab = sel.vocabulary(brand, facts=facts, study=study)
+        own = bdc.ours({**facts, 'tenant_own_domains': self.tenant_domains.for_cycle(
+            run.cycle_id, study_type=run.study_type)} if self.tenant_domains is not None else facts, expectation)
+        return sel.select(run.raw_response, question=getattr(run, 'query_text', None), vocab=vocab,
+                          own_domains=own)
 
     # ─── One run ──────────────────────────────────────────────────────
 
-    async def score_run(self, run_id: int) -> ScoreRunResult:
+    def plan(self, run_id: int):
+        """
+        Everything score_run decides before its model call and its write:
+        (status, run, expectation, extraction, verdict, model). `status` is
+        skipped_no_run / skipped_no_expectation (nothing to store),
+        skipped_no_answer or success (a verdict, ready to store), or
+        needs_model (every tier but brand-direct: extraction and verdict
+        are None, and score_run makes the call). 2O-4: a brand-direct run is
+        always decided here, with no model call, which is what lets
+        rescore_cycle --dry-run print what the real run would.
+        """
         run = self._load_run(run_id)
         if run is None:
-            return ScoreRunResult(run_id, 'skipped_no_run')
+            return 'skipped_no_run', None, None, None, None, None
 
         expectation = _as_dict(run.expected_answer)
         if not ea.is_scoreable(expectation):
             # Not a failure. Category-control questions carry no
             # expectation deliberately, and so does every query written
             # before the tiers existed. Layer 1 has already run on them.
-            return ScoreRunResult(run_id, 'skipped_no_expectation')
+            return 'skipped_no_expectation', run, expectation, None, None, None
 
         if getattr(run, 'answer_status', None) in NO_ANSWER_STATUSES:
             # A consumer surface's wall or empty answer: a result, scored
@@ -636,14 +660,7 @@ class ExpectationScorer:
             extraction = {**EMPTY_EXTRACTION, 'extraction_confident': True,
                           'extraction_note': f"surface returned {run.answer_status}",
                           **_coder_stamp(run, expectation)}
-            verdict = classify(run, expectation, extraction)
-            try:
-                self._store(run=run, expectation=expectation,
-                            extraction=extraction, verdict=verdict, model=None)
-            except Exception as exc:
-                logger.exception("[expectation] run %s: could not store", run_id)
-                return ScoreRunResult(run_id, 'db_error', error_message=str(exc))
-            return ScoreRunResult(run_id, 'skipped_no_answer', outcome=verdict.outcome)
+            return 'skipped_no_answer', run, expectation, extraction, classify(run, expectation, extraction), None
 
         if run.status != 'success' or not (run.raw_response or '').strip():
             # An answer that never arrived is not an assistant error. It
@@ -657,40 +674,47 @@ class ExpectationScorer:
                 **_coder_stamp(run, expectation),
             }
             verdict = cmp.compare(expectation, extraction, tier=run.tier)
-            try:
-                self._store(run=run, expectation=expectation,
-                            extraction=extraction, verdict=verdict, model=None)
-            except Exception as exc:
-                logger.exception("[expectation] run %s: could not store", run_id)
-                return ScoreRunResult(run_id, 'db_error', error_message=str(exc))
-            return ScoreRunResult(run_id, 'skipped_no_answer', outcome=verdict.outcome)
+            return 'skipped_no_answer', run, expectation, extraction, verdict, None
 
+        if bdc.is_brand_direct(getattr(run, 'tier', None), expectation):
+            # 2O-4: the claim sentences are selected by rule; no model call
+            facts = self._facts(run)
+            record = self._select_brand_direct(run, expectation, brand=self._brand(run, expectation, facts),
+                                               facts=facts)
+            return 'success', run, expectation, record, self._classify(run, expectation, record), None
+        return 'needs_model', run, expectation, None, None, None
+
+    def _facts(self, run) -> dict:
         source_ref = _as_dict(run.source_ref) or {}
-        facts = self.brand_facts.for_merchant(
+        return self.brand_facts.for_merchant(
             source_ref.get('merchant_slug'), study_type=run.study_type,
         ) if self.brand_facts else {}
 
+    @staticmethod
+    def _brand(run, expectation, facts):
         # The study's merchant, for every tier. A price expectation
         # carries no brand, and without this fallback brand_mentioned was
         # computed with nothing to look for on every catalog and value
         # row in the study — which ea.names_brand answers True to.
-        brand = (expectation.get('brand')
-                 or source_ref.get('brand')
-                 or facts.get('brand'))
+        source_ref = _as_dict(run.source_ref) or {}
+        return expectation.get('brand') or source_ref.get('brand') or facts.get('brand')
 
-        # So the post-processor can tell the brand's own site from another
-        # brand when the answer writes one as the other.
-        brand_domain = (expectation.get('domain') or source_ref.get('domain')
-                        or facts.get('domain'))
+    async def score_run(self, run_id: int) -> ScoreRunResult:
+        status, run, expectation, record, verdict, model = self.plan(run_id)
+        if status in ('skipped_no_run', 'skipped_no_expectation'):
+            return ScoreRunResult(run_id, status)
 
-        if bdc.is_brand_direct(getattr(run, 'tier', None), expectation):
-            # 2O-1: the brand-claim coder, two calls that must agree
-            record, verdict, model = await self._code_brand_direct(
-                run, expectation, brand=brand, brand_domain=brand_domain)
-        else:
-            call = await self._code_once(run, brand=brand, brand_domain=brand_domain)
+        if status == 'needs_model':
+            facts = self._facts(run)
+            source_ref = _as_dict(run.source_ref) or {}
+            # So the post-processor can tell the brand's own site from another
+            # brand when the answer writes one as the other.
+            brand_domain = (expectation.get('domain') or source_ref.get('domain')
+                            or facts.get('domain'))
+            call = await self._code_once(run, brand=self._brand(run, expectation, facts), brand_domain=brand_domain)
             record, model = call['record'], call['model']
             verdict = self._classify(run, expectation, record)
+            status = 'success'
 
         try:
             self._store(run=run, expectation=expectation,
@@ -700,7 +724,7 @@ class ExpectationScorer:
             logger.exception("[expectation] run %s: could not store", run_id)
             return ScoreRunResult(run_id, 'db_error', error_message=str(exc))
 
-        return ScoreRunResult(run_id, 'success', outcome=verdict.outcome)
+        return ScoreRunResult(run_id, status, outcome=verdict.outcome)
 
 
 def _with_brand_claim(extraction, verdict) -> dict:
@@ -716,8 +740,8 @@ def _with_brand_claim(extraction, verdict) -> dict:
 
 
 def _coder_stamp(run, expectation) -> dict:
-    """2O-1: a brand-direct row scored with no model call (a wall, an answer
-    that never arrived) is still this coder version's, with no calls."""
+    """2O-1: a brand-direct row scored with no answer to read (a wall, an
+    answer that never arrived) is still this coder version's, with no calls."""
     if bdc.is_brand_direct(getattr(run, 'tier', None), expectation):
         return {'coder': {'version': ea.BRAND_CODER_VERSION, 'calls': []}}
     return {}

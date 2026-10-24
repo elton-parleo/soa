@@ -801,6 +801,17 @@ def _compare_core(expectation, extraction, *, history, source_ref, brand_domain,
     if bdc.is_brand_direct(tier, expectation):
         # 2O-1: a record the two-call coder wrote is decided over its calls,
         # each classified on its own; a record one call wrote, as before
+        if bdc.coder_version(extraction) >= 4 and 'selector' in extraction:
+            # 2O-4: the claim sentences were selected by rule; each is judged
+            # against the index and the worst decides. No call to settle.
+            from scoring import brand_claim_selector as sel
+            from scoring import brand_fact_index as bfi
+            index = brand_index if brand_index is not None else bfi.build(brand_facts)
+            decided = sel.decide(extraction, expectation, index=index, own_domains=bdc.ours(brand_facts, expectation))
+            result = verdict(decided['outcome'], decided['reason'])
+            result.reason_code = decided['reason_code']
+            result.brand_claim = decided['brand_claim']
+            return result
         calls = bdc.coder_calls(extraction)
         if calls and bdc.coder_version(extraction) >= 3:
             # 2O-3: the calls agree on their spans; the verdict is a lookup
