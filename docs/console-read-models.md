@@ -7968,3 +7968,11 @@ Recorded (`scripts/record_narratives.py --cycle fl14`, two subjects, gpt-5.4-nan
 `narratives_fixture.fl14_claims` and replayed: Gemini's line "Gemini said "2 to 9 lbs" for Swaddlers Newborn.
 pampers.com's chart says under 10 lb."; Claude's "Claude said "6 to 12 lbs" for Swaddlers Size 1. Pampers' record
 says "8 to 14 lb"."; Perplexity's unverified answer no subject. Tests: `apps/api/tests/test_narratives_2p1.py`.
+
+### Copy: one name for the answers a first pick counts
+
+The console's copy scan (truesync 2P-1) asks for "brand-choice answers" in place of "unprompted answers". soa named the
+set by whether the cycle asked a comparison question (2K-1); it now names the unprompted set and the brand-choice set the
+one way (`console_parity._answers`, `_tier_words`; the revenue model's `set`, `counts.lost_set`): with no comparison
+question asked the two sets are the same answers. The `tier` fields (`unprompted` | `brand_choice`) are unchanged.
+`test_console_2i8`'s and `test_console_2k1_score_pin`'s pins map the word back to what main served.

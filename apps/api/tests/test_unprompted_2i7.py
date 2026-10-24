@@ -175,7 +175,7 @@ def test_fl12_measures_visibility_over_the_37_unbranded_control_questions(http, 
     assert over['coverage']['unprompted'] == 222
     assert body['metric_counts']['grounded_api']['first']['of'] == 222
     tiles = {m['key']: m for m in retailer_rows(score_svc.with_previous(body, None, None))}
-    assert tiles['first']['surface_note'].endswith('unprompted answers')
+    assert tiles['first']['surface_note'].endswith('brand-choice answers')
     [study] = [s for s in http.get('/api/console/studio/studies', params={'org': 10}).json()
                if s['id'] == f229.STUDY]
     # 11 brand-direct + 19 catalog + 6 value + 13 control naming the brand;

@@ -128,7 +128,18 @@ def _without_zero(x, key):
     return x
 
 
+def _before_2p1(x):
+    """2P-1 names the unprompted set "brand-choice" (console_parity._answers, _tier_words; the revenue model's set); main
+    named it "unprompted" (these fixtures ask no comparison question)."""
+    if isinstance(x, dict):
+        return {k: _before_2p1(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_before_2p1(v) for v in x]
+    return x.replace('brand-choice', 'unprompted') if isinstance(x, str) else x
+
+
 def per_surface_view(endpoint, body):
+    body = _before_2p1(body)
     if endpoint == 'score':
         # 2L-4: the brand tiles beside the five, and the rows the merchant's kind picks
         body = before_2l4(body)
@@ -241,7 +252,7 @@ def test_the_headline_counts_every_agent_first(fl12):
     assert (heads['consumer_ui']['first'], heads['consumer_ui']['denom']) == (11, 34)
     assert (heads['all']['first'], heads['all']['denom']) == (22 + 11, 68 + 34)
     assert heads['all']['named'] == heads['grounded_api']['named'] + heads['consumer_ui']['named']
-    assert heads['all']['text'] == vis['headline'] == 'First in 33 of 102 unprompted answers.'
+    assert heads['all']['text'] == vis['headline'] == 'First in 33 of 102 brand-choice answers.'
     assert vis['ranking']['surface'] == 'all' and vis['ranking']['denom'] == 515
 
 
@@ -295,7 +306,7 @@ def test_the_overview_reads_all_by_default_with_six_agents(fl12):
     for k in ('answers', 'named', 'first', 'named_of', 'exact', 'scored', 'wrong', 'other_brand', 'fabricated'):
         assert every['totals'][k] == g['totals'][k] + c['totals'][k], k
     assert every['totals']['first'] == 33 and every['totals']['named_of'] == 102
-    assert every['summary']['lines'][0] == 'First in 33 of 102 unprompted answers, ahead of every other brand.'
+    assert every['summary']['lines'][0] == 'First in 33 of 102 brand-choice answers, ahead of every other brand.'
     assert over['coverage']['unprompted'] == 102
 
 

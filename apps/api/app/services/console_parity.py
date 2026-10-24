@@ -211,13 +211,16 @@ def _in_tier(row: dict, tier: str) -> bool:
 
 
 def _tier_words(tier: str) -> str:
-    return {UNPROMPTED: 'unprompted', BRAND_CHOICE: 'brand-choice'}.get(tier, '')
+    # 2P-1: one name for the answers a first pick counts, whatever set they are
+    return {UNPROMPTED: 'brand-choice', BRAND_CHOICE: 'brand-choice'}.get(tier, '')
 
 
 def _answers(tier: str) -> str:
-    """'brand-choice answers' when the cycle asked comparison questions (2K-1),
-    else 'unprompted answers' when it asked any, else 'answers'."""
-    return {UNPROMPTED: 'unprompted answers', BRAND_CHOICE: 'brand-choice answers'}.get(tier, 'answers')
+    """'brand-choice answers' over the unprompted set or the brand-choice set
+    (2K-1: unprompted plus comparison), else 'answers'. 2P-1: the console's
+    copy names both the one way; with no comparison question asked the two
+    sets are the same answers."""
+    return {UNPROMPTED: 'brand-choice answers', BRAND_CHOICE: 'brand-choice answers'}.get(tier, 'answers')
 
 
 def _picks(rows: List[dict]) -> Dict[str, dict]:

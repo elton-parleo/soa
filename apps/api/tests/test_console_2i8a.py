@@ -85,7 +85,7 @@ def test_fl12_s_rows_count_every_agent_as_the_overview_does(http, db, upstream):
     assert {k: (m['value'], m['denominator']) for k, m in rows.items()} == {
         'first': (33, 102), 'share': (51, 102), 'program': (0, 51), 'exact': (22, 42), 'terms': (24, 30)}
     assert {k: m['by_surface'] for k, m in rows.items()} == MAIN_BY_SURFACE
-    assert rows['first']['surface_note'] == 'across every agent, unprompted answers'
+    assert rows['first']['surface_note'] == 'across every agent, brand-choice answers'
     assert rows['exact']['surface_note'] == 'across every agent, catalog tier, exact of scored'
     # the same counts as 2I-8's Overview headline, totals and answers summary
     as_('op')

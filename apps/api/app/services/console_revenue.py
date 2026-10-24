@@ -229,7 +229,8 @@ def revenue_shares(vis_rows: list, catalog_rows: list, lost_gainable: float = 0.
         return v['brand_choice'] if 'brand_choice' in v else bool(v.get('unprompted'))
     unprompted = [v for v in vis_rows if v.get('answered') and choice(v)]
     asked_unprompted = any(choice(v) for v in vis_rows)
-    set_words = 'brand-choice' if any(v.get('tier') == 'comparison' for v in unprompted) else 'unprompted'
+    # 2P-1: the console's copy names the set one way (parity._answers)
+    set_words = 'brand-choice'
 
     def lost_pick(v) -> bool:
         f = v.get('first')
@@ -309,7 +310,7 @@ def build_model(shares: dict, inputs: dict, *, cycle: str, kind: str, name: str,
     from app.services.console_read_models import AGENT_NAMES
     k = 'brand' if kind == 'brand' else 'retailer'
     L, M = shares['lost'], shares['missed']
-    set_words = shares.get('set') or 'unprompted'
+    set_words = shares.get('set') or 'brand-choice'
     drivers = []
     if shares['measured']:
         rivals = L['rivals']
