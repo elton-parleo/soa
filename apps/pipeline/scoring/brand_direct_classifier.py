@@ -581,6 +581,15 @@ def coder_calls(extraction) -> list:
     return [c for c in calls if isinstance(c, dict)] if isinstance(calls, list) else []
 
 
+def coder_version(extraction) -> int:
+    """The coder version a record carries (extraction['coder']['version']), 1 for none."""
+    coder = (extraction or {}).get('coder')
+    try:
+        return int(coder.get('version')) if isinstance(coder, dict) and coder.get('version') else 1
+    except (TypeError, ValueError):
+        return 1
+
+
 def is_brand_direct(tier, expectation) -> bool:
     """The classifier runs for the brand-direct tier only. Everything else
     is compared against a published value and is not on this axis."""

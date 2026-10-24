@@ -89,9 +89,19 @@ from clients import truesync_client as supply_fields
 #: holds was coded by it (comparable_version): one re-scored with
 #: rescore_cycle.py since. A cycle whose outcomes one call wrote compares as
 #: "11", the version they were coded under.
-SCORER_VERSION = "12"
+#: 2O-3: "13", the brand-claim verdict decided by code from the claim's facts
+#: (brand-claim coder version 3). No dimension reads it either; comparability
+#: as 2O-1 made it: a cycle compares as the version its OLDEST brand-direct
+#: outcome was coded under (CODER_SCORER_VERSIONS), so FL14 re-scored on the
+#: new verdict is not comparable to a cycle still on version 2 until that one
+#: is re-scored too.
+SCORER_VERSION = "13"
 #: The version a cycle whose brand-direct outcomes predate 2O-1 compares as.
 SINGLE_CALL_CODER_VERSION = "11"
+#: 2O-3: the scorer version each brand-claim coder version's outcomes compare as
+#: (None: one call, before 2O-1).
+CODER_SCORER_VERSIONS = {None: SINGLE_CALL_CODER_VERSION, 1: SINGLE_CALL_CODER_VERSION, 2: "12",
+                         BRAND_CODER_VERSION: SCORER_VERSION}
 #: The adapter's own revision, beside the scorer's: a change to how loop
 #: counts become scorer inputs re-scores stored cycles too. Not a scorer
 #: version and never shown as one.
@@ -1042,10 +1052,13 @@ def build_score(cycle_code: str, *, runs: List[dict], mentions: List[dict], vis_
 
 def brand_coder(runs: List[dict]) -> dict:
     """2O-1: {version, coded, of}: of the cycle's scored brand-direct runs,
-    how many the current brand-claim coder (BRAND_CODER_VERSION) coded."""
+    how many the current brand-claim coder (BRAND_CODER_VERSION) coded.
+    2O-3: and `oldest`, the oldest coder version among them (None: one call)."""
     scored = [r for r in runs if r.get('tier') == 'brand_direct' and r.get('outcome') is not None]
+    versions = [r.get('coder_version') or 1 for r in scored]
     return {'version': BRAND_CODER_VERSION, 'of': len(scored),
-            'coded': sum(1 for r in scored if r.get('coder_version') == BRAND_CODER_VERSION)}
+            'coded': sum(1 for r in scored if r.get('coder_version') == BRAND_CODER_VERSION),
+            'oldest': min(versions) if versions else None}
 
 
 def comparable_version(body: Optional[dict]) -> Optional[str]:
@@ -1059,7 +1072,13 @@ def comparable_version(body: Optional[dict]) -> Optional[str]:
         return None
     version = body.get('scorer_version')
     coder = body.get('brand_coder')
-    if str(version) == SCORER_VERSION and isinstance(coder, dict) and coder.get('coded', 0) < coder.get('of', 0):
+    if not isinstance(coder, dict) or coder.get('coded', 0) >= coder.get('of', 0):
+        return version
+    if str(version) == SCORER_VERSION:
+        # 2O-3: the version the oldest outcome was coded under
+        return CODER_SCORER_VERSIONS.get(coder.get('oldest'), SINGLE_CALL_CODER_VERSION)
+    if str(version) == "12":
+        # a score stored under 2O-1, which counted version-2 rows only
         return SINGLE_CALL_CODER_VERSION
     return version
 
@@ -1263,7 +1282,8 @@ SCORER_CHANGES = {'7': 'ungrounded surfaces excluded from pooling',
                   '9': 'category-control questions count as unprompted',
                   '10': 'metric rows count every agent',
                   '11': 'brand-choice set for Lost and the first-pick tiles',
-                  '12': 'brand-direct answers coded by two agreeing calls'}
+                  '12': 'brand-direct answers coded by two agreeing calls',
+                  '13': "brand-direct verdict decided from the claim's facts"}
 
 
 def _no_rivals(body: dict) -> bool:
@@ -1289,7 +1309,9 @@ SCORER_CHANGE_APPLIES = {'7': lambda new: bool((new.get('coverage') or {}).get('
                          # 2K-1 never moves a score either: no dimension reads the brand-choice set
                          '11': lambda _new: False,
                          # 2O-1 never moves a score: no dimension reads the brand-direct outcome
-                         '12': lambda _new: False}
+                         '12': lambda _new: False,
+                         # 2O-3 never moves a score either: still no dimension reads it
+                         '13': lambda _new: False}
 
 
 _NOT_CARRIED = object()

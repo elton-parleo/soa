@@ -1,0 +1,312 @@
+"""
+2O-3 (B1): the brand-claim verdict is decided by code; the model only extracts.
+
+The coder's calls (2O-1: two, a third on a disagreement) transcribe and label
+the answer as before. Version 3 takes only the claim spans from them, checks
+2A-5's evidence rule on each, makes the calls agree on their spans, and
+decides the category by looking each span's facts up in the brand's fact
+index for the cycle (scoring/brand_fact_index.py,
+scoring/brand_claim_verdict.py).
+
+No model is called: each call's record is built here from the answer with
+the pipeline's own segmenter and labels (parser/extraction_postprocess.
+apply_labels), as the labelling call leaves it.
+"""
+import asyncio
+import json
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+from sqlalchemy import text
+
+from parser import extraction_postprocess as pp
+from parser.expectation_client import CODER_SETTINGS, ExtractionResult
+from scoring import brand_claim_verdict as bcv
+from scoring import brand_fact_index as bfi
+from scoring import expectation_comparator as cmp
+from scoring import expectation_scorer as scorer_module
+from scripts import rescore_cycle
+from soa_shared import expected_answers as ea
+from tests.test_expectation_scorer import FakeFacts, db, outcomes  # noqa: F401  (db is a fixture)
+
+BRAND, DOMAIN = 'Pampers', 'pampers.com'
+EXPECTATION = ea.brand_mention(BRAND, DOMAIN)
+QUESTION = 'What sizes do Pampers Swaddlers come in?'
+FACTS = {
+    'brand': BRAND, 'domain': DOMAIN, 'own_domains': [DOMAIN], 'retailer_list': ['walmart.com', 'amazon.com'],
+    'tier_names': [], 'program_name': None,
+    'product_titles': ['Pampers Swaddlers Diapers Size 1, 96 Count', 'Pampers Pure Protection Diapers Size 2, 74 Count'],
+    'variants': [
+        {'title': 'Pampers Swaddlers Diapers Size 1, 96 Count', 'size': '1', 'count': 96, 'list_price': '27.97',
+         'weight_range': {'min': 8, 'max': 14}, 'attributes': {'wetness_indicator': True}},
+        {'title': 'Pampers Pure Protection Diapers Size 2, 74 Count', 'size': '2', 'count': 74,
+         'list_price': '31.97', 'weight_range': {'min': 12, 'max': 18}, 'attributes': {'fragrance_free': True}},
+    ],
+    'features': ['Wetness indicator lets you know when it is time to change', 'Hypoallergenic and fragrance free'],
+}
+BASE = {'prices': [], 'codes': [], 'pack_counts': [], 'sizes': [], 'gtins': [], 'member_prices': [], 'points': [],
+        'brand_mentioned': True, 'brand_unknown_statement': None, 'other_brands_named': [],
+        'loyalty_tiers_named': [], 'brand_claims': [], 'sources_cited': [], 'recommended_retailers': [],
+        'postprocess': [], 'extraction_confident': True, 'extraction_note': None}
+
+
+def record(answer, asserted=None, **fields):
+    """One call's record: the answer segmented, the spans whose text is in
+    `asserted` labelled asserted assertions (every span when None), the rest
+    `none`, as apply_labels stores the labelling call's answer."""
+    spans = pp.segment(answer)
+    labels = {'spans': [{'span_id': s['id'],
+                         'kind': 'assertion' if asserted is None or s['text'] in asserted else 'none',
+                         'modality': 'asserted'} for s in spans],
+              'other_brands': [{'name': o['name'], 'relation': 'comparison'}
+                               for o in fields.get('other_brands_named') or []],
+              'retailers': [{'name': n, 'role': 'recommendation'} for n in fields.get('recommended_retailers') or []]}
+    return pp.apply_labels({**BASE, **fields}, labels, answer_text=answer, brand=BRAND)
+
+
+def coded(calls, answer, question=QUESTION):
+    calls = [{**c, 'evidence': bcv.evidence(c, answer)} for c in calls]
+    return {**calls[0], 'coder': {'version': 3, 'question': question, 'calls': calls}}
+
+
+def decide(calls, answer, question=QUESTION, facts=FACTS, index=None):
+    return cmp.compare(EXPECTATION, coded(calls, answer, question), tier='brand_direct', brand_facts=facts,
+                       brand_index=index)
+
+
+# ── the verdict is the index's ────────────────────────────────────────────
+
+FABRICATED = "Pampers Swaddlers fit babies 2-9 lbs. They come in a 96 count box."
+
+
+def test_a_fact_not_on_the_index_is_fabricated_and_the_reason_names_it():
+    v = decide([record(FABRICATED), record(FABRICATED)], FABRICATED)
+    assert (v.outcome, v.reason_code) == ('fabricated', 'fact_not_published')
+    assert v.reason == ("'Pampers Swaddlers fit babies 2-9 lbs.' — '2-9 lbs' is not on pampers.com's "
+                        "Swaddlers page")
+    span = v.brand_claim['spans'][v.brand_claim['decided_by']]
+    assert span['facts_missing'] == [{'type': 'weight', 'text': '2-9 lbs'}]
+    # Swaddlers is the question's, so not a fact the span adds; it names the page
+    assert span['facts_found'] == [] and span['line'] == 'Swaddlers'
+    assert v.brand_claim['index']['version'] == bfi.INDEX_VERSION and v.brand_claim['index']['digest']
+
+
+def test_every_fact_on_the_index_is_grounded():
+    answer = "Pampers Swaddlers fit babies 8-14 lbs in Size 1 and have a wetness indicator."
+    v = decide([record(answer), record(answer)], answer)
+    assert (v.outcome, v.reason_code) == ('grounded', 'facts_published')
+    assert [f['type'] for f in v.brand_claim['spans'][0]['facts_found']] == ['size', 'weight', 'attribute']
+
+
+def test_a_span_with_no_checkable_fact_is_unscoreable_outside_the_counts():
+    answer = "Pampers is a great choice for most families and parents love it."
+    v = decide([record(answer), record(answer)], answer, question='Is Pampers a good diaper brand?')
+    assert (v.outcome, v.reason_code, v.reason) == ('unscoreable', ea.NO_CHECKABLE_FACT, ea.NO_CHECKABLE_FACT_NOTE)
+
+
+def test_the_label_wobble_that_moved_fl14_no_longer_moves_the_category():
+    """Call 1 labels the praise an asserted claim, call 2 labels it none:
+    under version 2 that was fabricated against echoed. Neither span set has a
+    checkable fact, so both calls give the same verdict."""
+    answer = "Pampers Swaddlers are widely considered the gold standard. Parents love them."
+    one = record(answer)                    # both sentences asserted
+    two = record(answer, asserted=[])       # nothing asserted
+    q = 'Are Pampers Swaddlers good for newborns?'
+    assert decide([one, one], answer, q).outcome == decide([two, two], answer, q).outcome == 'unscoreable'
+
+
+# ── the calls agree on spans; 2A-5's evidence rule refuses a call ─────────
+
+class Replay:
+    def __init__(self, records):
+        self.extract = AsyncMock(side_effect=[
+            ExtractionResult(record=json.loads(json.dumps(r)), model='gpt-5.4-mini',
+                             usage={'input_tokens': 2900, 'output_tokens': 240}) for r in records])
+
+
+class NoHistory:
+    def for_variant(self, *_a, **_k):
+        return None
+
+
+class NoTenant:
+    def for_cycle(self, *_a, **_k):
+        return []
+
+
+class Pages:
+    """The cycle's cached retailer-prices read (ReferenceCache.for_cycle)."""
+
+    def __init__(self, payload=None):
+        self.payload = payload
+
+    def for_cycle(self, *_a, **_k):
+        return SimpleNamespace(payload=self.payload) if self.payload else None
+
+
+def seed(db, answer, question=QUESTION):
+    with db.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO soa_queries (id, query_text, tier, expected_answer, provenance, source_ref)
+            VALUES (1, :q, 'brand_direct', :e, 'ai', :r)
+        """), {'q': question, 'e': json.dumps(EXPECTATION), 'r': json.dumps({'merchant_slug': 'pampers'})})
+        conn.execute(text("""
+            INSERT INTO soa_runs (id, cycle_id, query_id, platform, run_number, raw_response, status)
+            VALUES (7, 3, 1, 'perplexity', 1, :a, 'success')
+        """), {'a': answer})
+
+
+def score(db, answer, records, *, labeled=True):
+    seed(db, answer)
+    client = Replay(records)
+    scorer = scorer_module.ExpectationScorer(client, NoHistory(), FakeFacts(FACTS), labeler=False,
+                                             references=Pages(), tenant_domains=NoTenant())
+    result = asyncio.run(scorer.score_run(7))
+    (row,) = outcomes(db)
+    return client, scorer, result, row
+
+
+def test_two_calls_with_the_same_spans_settle_and_the_evidence_is_stored(db):
+    client, _s, result, row = score(db, FABRICATED, [record(FABRICATED), record(FABRICATED)])
+    assert client.extract.await_count == 2
+    assert all(c.kwargs['settings'] == CODER_SETTINGS for c in client.extract.await_args_list)
+    stored = json.loads(row['extraction'])
+    coder = stored['coder']
+    assert (coder['version'], coder['pair'], coder['question']) == (3, [0, 1], QUESTION)
+    assert coder['refused'] == [False, False] and all(c['evidence']['ok'] for c in coder['calls'])
+    assert row['outcome'] == result.outcome == 'fabricated' and row['reason_code'] == 'fact_not_published'
+    claim = stored['brand_claim']
+    assert claim['spans'][claim['decided_by']]['facts_missing'] == [{'type': 'weight', 'text': '2-9 lbs'}]
+
+
+def test_a_span_not_in_the_answer_refuses_the_call_and_a_third_decides(db):
+    """2A-5: a call whose claim is not the answer's words agrees with nothing."""
+    invented = {**record(FABRICATED), 'brand_claims': [
+        {'claim': 'Pampers Swaddlers are made in Ohio.', 'sentence': 'Pampers Swaddlers are made in Ohio.',
+         'kind': 'assertion', 'modality': 'asserted', 'effective_modality': 'asserted'}]}
+    client, _s, _r, row = score(db, FABRICATED, [invented, record(FABRICATED), record(FABRICATED)])
+    assert client.extract.await_count == 3
+    coder = json.loads(row['extraction'])['coder']
+    assert coder['refused'] == [True, False, False] and coder['pair'] == [1, 2]
+    assert coder['calls'][0]['evidence']['missing'] == ['Pampers Swaddlers are made in Ohio.']
+    assert row['outcome'] == 'fabricated'
+
+
+def test_span_sets_that_do_not_overlap_are_a_disagreement(db):
+    answer = "Pampers Swaddlers fit babies 2-9 lbs. Pampers Pure Protection is fragrance free."
+    first = record(answer, asserted=['Pampers Swaddlers fit babies 2-9 lbs.'])
+    second = record(answer, asserted=['Pampers Pure Protection is fragrance free.'])
+    client, _s, _r, row = score(db, answer, [first, second, second])
+    assert client.extract.await_count == 3
+    assert json.loads(row['extraction'])['coder']['pair'] == [1, 2]
+    assert row['outcome'] == 'grounded'
+
+
+def test_a_classify_only_re_score_re_takes_the_verdict_from_the_stored_calls(db):
+    _c, scorer, _r, row = score(db, FABRICATED, [record(FABRICATED), record(FABRICATED)])
+    stored = json.loads(row['extraction'])
+    run = SimpleNamespace(tier='brand_direct', source_ref={'merchant_slug': 'pampers'}, study_type=None, cycle_id=3,
+                          answer_status=None, retrieved_sources=None, grounding=None)
+    kwargs = dict(brand_facts=scorer.brand_facts, references=scorer.references)
+    first = scorer_module.classify(run, EXPECTATION, stored, **kwargs)
+    second = scorer_module.classify(run, EXPECTATION, stored, **kwargs)
+    assert first.outcome == second.outcome == row['outcome']
+    assert first.brand_claim == second.brand_claim == stored['brand_claim']
+    assert rescore_cycle._signature(first) == rescore_cycle._signature(second)
+
+
+def test_the_page_reads_cached_on_the_cycle_are_in_the_index(db):
+    """A weight the record does not carry and the brand page's size chart does is grounded."""
+    answer = "Pampers Swaddlers Size 3 fit babies 16-28 lbs."
+    seed(db, answer)
+    pages = Pages({'prices': [{'retailer_domain': DOMAIN, 'role': 'own', 'variant_label': 'Swaddlers S3',
+                               'page_title': 'Pampers Swaddlers Diapers Size 3, 84 Count',
+                               'size_chart': [{'size': '3', 'min': 16, 'max': 28}]}]})
+    scorer = scorer_module.ExpectationScorer(Replay([record(answer), record(answer)]), NoHistory(),
+                                             FakeFacts(FACTS), labeler=False, references=pages,
+                                             tenant_domains=NoTenant())
+    asyncio.run(scorer.score_run(7))
+    (row,) = outcomes(db)
+    assert row['outcome'] == 'grounded'
+
+
+def test_a_version_2_record_is_still_decided_by_the_version_2_rule():
+    answer = "Pampers Swaddlers are widely considered the gold standard."
+    calls = [record(answer), record(answer)]
+    v2 = {**calls[0], 'coder': {'version': 2, 'calls': calls}}
+    assert cmp.compare(EXPECTATION, v2, tier='brand_direct', brand_facts=FACTS).outcome == 'fabricated'
+    assert decide(calls, answer).outcome == 'unscoreable'
+
+
+def test_a_wall_is_stamped_with_version_3_and_no_call(db):
+    seed(db, '')
+    with db.begin() as conn:
+        conn.execute(text("UPDATE soa_runs SET answer_status = 'sign_in_wall'"))
+    client = Replay([])
+    scorer = scorer_module.ExpectationScorer(client, NoHistory(), FakeFacts(FACTS), labeler=False,
+                                             references=Pages(), tenant_domains=NoTenant())
+    asyncio.run(scorer.score_run(7))
+    (row,) = outcomes(db)
+    assert client.extract.await_count == 0 and row['outcome'] == 'absent'
+    assert json.loads(row['extraction'])['coder'] == {'version': 3, 'calls': []}
+
+
+# ── the rescore names the rules and reports the spans ─────────────────────
+
+def test_the_new_reason_codes_are_named_rules():
+    for code in ('fact_not_published', 'facts_published', 'no_checkable_fact', 'fact_type_not_read'):
+        assert code in rescore_cycle.RULES
+
+
+def test_the_claim_report(db):
+    _c, _s, _r, row = score(db, FABRICATED, [record(FABRICATED), record(FABRICATED)])
+    stored = json.loads(row['extraction'])
+    praise = {'coder': {'version': 3, 'calls': [record('Pampers is great.')] * 2}, 'brand_claim': {'spans': []}}
+    report = rescore_cycle.claim_report([(stored, 'fabricated', 'fact_not_published'),
+                                         (praise, 'unscoreable', 'no_checkable_fact'),
+                                         ({'coder': {'version': 2, 'calls': [{}]}}, 'echoed', None)])
+    assert (report['answers'], report['no_checkable_fact'], report['no_checkable_fact_share']) == (2, 1, 0.5)
+    assert report['first_two_differ'] == 0 and report['missing_by_type'] == {'weight': 1}
+    assert 'no_checkable_fact    1  (50.0% of answers' in rescore_cycle._render_claims(report)
+
+
+@pytest.mark.parametrize('copy', ['apps/api', 'packages/shared'])
+def test_the_vocabulary_copies_agree(copy):
+    import os
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    root = os.path.dirname(os.path.dirname(here))
+    with open(os.path.join(here, 'soa_shared', 'expected_answers.py')) as a, \
+            open(os.path.join(root, copy, 'soa_shared', 'expected_answers.py')) as b:
+        assert a.read() == b.read()
+
+
+def test_the_rescore_prints_the_claim_report_and_the_span_sets_that_changed(db, capsys, monkeypatch):
+    """rescore_cycle --tier brand_direct, end to end on sqlite: the stored
+    row is re-scored with a different span set, and the printout says so."""
+    answer = "Pampers Swaddlers fit babies 2-9 lbs. Pampers Pure Protection is fragrance free."
+    first = record(answer, asserted=['Pampers Swaddlers fit babies 2-9 lbs.'])
+    second = record(answer, asserted=['Pampers Pure Protection is fragrance free.'])
+    _c, _s, _r, row = score(db, answer, [first, first])
+    with db.begin() as conn:
+        conn.exec_driver_sql("CREATE TABLE soa_cycles (id INTEGER PRIMARY KEY, cycle_code TEXT)")
+        conn.exec_driver_sql("INSERT INTO soa_cycles (id, cycle_code) VALUES (3, 'FL14-pampers-20261023')")
+        conn.exec_driver_sql("ALTER TABLE soa_queries ADD COLUMN query_code TEXT")
+        conn.exec_driver_sql("UPDATE soa_queries SET query_code = 'PAM_208'")
+    monkeypatch.setattr(rescore_cycle, 'engine', db)
+
+    async def rescore(run_ids, concurrency=None):
+        scorer = scorer_module.ExpectationScorer(Replay([second, second]), NoHistory(), FakeFacts(FACTS),
+                                                 labeler=False, references=Pages(), tenant_domains=NoTenant())
+        for run_id in run_ids:
+            await scorer.score_run(run_id)
+        return SimpleNamespace(succeeded=len(run_ids), total=len(run_ids), skipped=0, failed=0, retried=0,
+                               failures=[])
+
+    monkeypatch.setattr('scoring.expectation_batch.score_runs', rescore)
+    rescore_cycle.main(['--cycle', 'FL14-pampers-20261023', '--tier', 'brand_direct'])
+    out = capsys.readouterr().out
+    assert 'PAM_208 · perplexity · run 1 · brand_direct: fabricated -> grounded' in out
+    assert 'brand-claim verdict (2O-3, no model call; the verdict is a lookup):' in out
+    assert 'span sets changed since the stored scoring: 1 of 1' in out
+    assert 'no_checkable_fact    0  (0.0% of answers' in out

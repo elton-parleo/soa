@@ -108,6 +108,6 @@ def test_the_score_moves_by_version_only(http, db, upstream):
         c.execute(text("UPDATE soa_cycles SET share_of_algorithm = :b, share_of_algorithm_version = '9' WHERE id = 229"),
                   {'b': json.dumps(old)})
     body = _get(http).json()
-    assert (body['score'], body['scorer_version']) == (old['score'], '12')
-    assert body['history'][-1]['replaced_because'] == 'scorer 9 → 12'
+    assert (body['score'], body['scorer_version']) == (old['score'], '13')
+    assert body['history'][-1]['replaced_because'] == 'scorer 9 → 13'
     assert score_svc.SCORER_CHANGES['10'] == 'metric rows count every agent'

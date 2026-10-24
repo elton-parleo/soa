@@ -127,9 +127,22 @@ BRAND_OUTCOMES = BRAND_ASSESSMENTS + ['absent', 'unscoreable']
 # and with no majority the answer is `unscoreable` for CODER_DISAGREED,
 # outside every count (scoring/brand_direct_classifier.settle). An outcome
 # row's extraction carries `coder.version`; a row scored before carries none.
-BRAND_CODER_VERSION = 2
+#
+# 2O-3: version 3. The calls still agree, now on the claim spans they
+# extract (the same span set, or overlapping spans), and the category is no
+# longer computed from the model's labels: it is a lookup of each span's
+# checkable facts (prices, counts, sizes, weights, names, stores, attribute
+# words) in the brand's fact index for the cycle (scoring/brand_fact_index.py,
+# scoring/brand_claim_verdict.py). A span with no checkable fact ("Pampers is
+# a great choice") is `unscoreable` for NO_CHECKABLE_FACT, outside every count;
+# one whose facts are all of a type the cycle read nothing of is
+# `unscoreable` for FACT_TYPE_NOT_READ.
+BRAND_CODER_VERSION = 3
 CODER_DISAGREED = 'coder_disagreed'
 CODER_DISAGREED_NOTE = 'the coder could not settle this answer'
+NO_CHECKABLE_FACT = 'no_checkable_fact'
+NO_CHECKABLE_FACT_NOTE = 'the answer states nothing about the brand a record could confirm or contradict'
+FACT_TYPE_NOT_READ = 'fact_type_not_read'
 
 # Every value the outcome column may hold, across both vocabularies. A
 # row's tier says which of the two applies; nothing reads this union

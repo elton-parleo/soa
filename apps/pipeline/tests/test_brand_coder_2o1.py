@@ -8,6 +8,11 @@ fabricated or grounded an overlapping claim), makes a third on a
 disagreement, and with no two agreeing scores the answer `unscoreable` for
 coder_disagreed.
 
+2O-3: the live coder is version 3 (the verdict a lookup of the claim's facts,
+tests/test_brand_claim_2o3.py). A stored version-2 record is still decided by
+the rule below, so these tests pin the version to 2 (pin_v2) and keep
+testing it.
+
 No model is called. The pairs (fixtures/brand_coder/coder_pairs.json) are
 hand-built records, not recordings: no key was present when this was
 written. The FL14-shaped fixture is built from the rescore printout
@@ -37,6 +42,12 @@ from sqlalchemy import text
 HERE = os.path.dirname(os.path.abspath(__file__))
 PAIRS = json.load(open(os.path.join(HERE, 'fixtures', 'brand_coder', 'coder_pairs.json')))
 FL14 = json.load(open(os.path.join(HERE, 'fixtures', 'brand_coder', 'fl14_shaped.json')))
+
+@pytest.fixture(autouse=True)
+def pin_v2(monkeypatch):
+    """2O-3: the version-2 rule, which a record that version wrote is decided by."""
+    monkeypatch.setattr(ea, 'BRAND_CODER_VERSION', 2)
+
 
 BRAND, DOMAIN = PAIRS['brand'], PAIRS['domain']
 EXPECTATION = ea.brand_mention(BRAND, DOMAIN)

@@ -28,7 +28,10 @@ It costs one extraction call per run, and (2O-1) two per brand-direct
 answer, a third when they disagree: the brand-claim coder keeps a category
 only when two calls agree (scoring/brand_direct_classifier.settle). After a
 re-score it prints the coder's calls, how often the first two agreed, and
-their tokens. --dry-run prints the plan and the current counts and makes no
+their tokens. 2O-3: the calls agree on their claim spans and the verdict is
+a lookup of the spans' facts in the brand's fact index (no call); it prints
+the spans, how often the first two calls' span sets differed, the
+no_checkable_fact share and the index's size. --dry-run prints the plan and the current counts and makes no
 model call and no write.
 
 --classify-only (2B) makes NO model call at all. It re-runs the
@@ -364,6 +367,99 @@ def _render_coder(report: dict, model: Optional[str]) -> str:
     ])
 
 
+# ─── 2O-3: the brand-claim verdict's spans and facts ──────────────────────
+
+def claim_report(rows) -> dict:
+    """What the version-3 verdict decided on, from each brand-direct row's
+    (extraction, outcome, reason_code): answers, claim spans and their kinds,
+    the first two calls whose span sets differed (the variance the model can
+    still put in), refused calls (2A-5's rule), the no_checkable_fact and
+    fact_type_not_read answers, the missing facts by type, and the index
+    each was judged against (its size and digest)."""
+    from scoring import brand_claim_verdict as bcv
+    out = {'answers': 0, 'spans': 0, 'kinds': Counter(), 'first_two_differ': 0, 'refused_calls': 0,
+           'no_checkable_fact': 0, 'fact_type_not_read': 0, 'missing_by_type': Counter(), 'indexes': Counter()}
+    for extraction, outcome, reason_code in rows:
+        coder = (extraction or {}).get('coder') if isinstance(extraction, dict) else None
+        if not isinstance(coder, dict) or (coder.get('version') or 0) < 3 or not coder.get('calls'):
+            continue
+        out['answers'] += 1
+        calls = coder['calls']
+        out['refused_calls'] += sum(1 for c in calls if bcv.refused(c))
+        if len(calls) >= 2 and not bcv.calls_agree(calls[0], calls[1]):
+            out['first_two_differ'] += 1
+        if outcome == 'unscoreable' and reason_code in ('no_checkable_fact', 'fact_type_not_read'):
+            out[reason_code] += 1
+        claim = extraction.get('brand_claim') or {}
+        for span in claim.get('spans') or []:
+            out['spans'] += 1
+            out['kinds'][span.get('kind')] += 1
+        decided = claim.get('decided_by')
+        if outcome == 'fabricated' and decided is not None:
+            for fact in (claim['spans'][decided].get('facts_missing') or []):
+                out['missing_by_type'][fact.get('type')] += 1
+        index = claim.get('index') or {}
+        if index:
+            out['indexes'][(index.get('version'), index.get('digest'), index.get('size'))] += 1
+    out['no_checkable_fact_share'] = (round(out['no_checkable_fact'] / out['answers'], 3)
+                                      if out['answers'] else None)
+    return out
+
+
+def _render_claims(report: dict) -> str:
+    if not report['answers']:
+        return '    (no brand-direct answer decided by the version-3 verdict)'
+    kinds = ', '.join(f"{k} {n}" for k, n in sorted(report['kinds'].items()))
+    missing = ', '.join(f"{k} {n}" for k, n in sorted(report['missing_by_type'].items())) or 'none'
+    indexes = '; '.join(f"v{v} {d} ({n} facts) x{c}" for (v, d, n), c in sorted(report['indexes'].items()))
+    return '\n'.join([
+        f"    answers              {report['answers']}",
+        f"    claim spans          {report['spans']}  ({kinds or 'none'})",
+        f"    first two differed   {report['first_two_differ']}  (span sets; the variance left to the model)",
+        f"    refused calls        {report['refused_calls']}  (a span not in the answer text, 2A-5)",
+        f"    no_checkable_fact    {report['no_checkable_fact']}  ({report['no_checkable_fact_share']:.1%} of "
+        f"answers; unscoreable, outside the counts)",
+        f"    fact_type_not_read   {report['fact_type_not_read']}",
+        f"    fabricated, by the fact missing: {missing}",
+        f"    fact index           {indexes or 'none stored'}",
+    ])
+
+
+def settled_spans(conn, cid: int) -> dict:
+    """{run_id: the claim spans of the call that settled it} for every
+    brand-direct row a version-3 coder decided, read before and after a
+    re-extract to count the span sets that changed between two scorings."""
+    from scoring import brand_claim_verdict as bcv
+    out = {}
+    rows = conn.execute(text("""
+        SELECT run_id, extraction FROM soa_expectation_outcomes
+        WHERE cycle_id = :cid AND tier = 'brand_direct'
+    """), {"cid": cid}).fetchall()
+    for run_id, extraction in rows:
+        coder = (_as_json(extraction) or {}).get('coder') or {}
+        pair = coder.get('pair')
+        if (coder.get('version') or 0) >= 3 and pair:
+            out[run_id] = bcv.claim_spans(coder['calls'][pair[0]])
+    return out
+
+
+def spans_changed(before: dict, after: dict) -> dict:
+    """{compared, changed}: of the runs both scorings settled on spans, how
+    many settled on span sets that do not agree (brand_claim_verdict.spans_agree)."""
+    from scoring import brand_claim_verdict as bcv
+    common = sorted(set(before) & set(after))
+    return {'compared': len(common),
+            'changed': sum(1 for r in common if not bcv.spans_agree(before[r], after[r]))}
+
+
+def brand_claim_rows(conn, cid: int) -> list:
+    rows = conn.execute(text("""
+        SELECT extraction, outcome, reason_code FROM soa_expectation_outcomes
+        WHERE cycle_id = :cid AND tier = 'brand_direct'
+    """), {"cid": cid}).fetchall()
+    return [(_as_json(r[0]), r[1], r[2]) for r in rows]
+
+
 def brand_direct_extractions(conn, cid: int) -> tuple:
     """(each brand-direct row's stored extraction, the extraction model)."""
     rows = conn.execute(text("""
@@ -387,6 +483,10 @@ RULES = {
     'tenant_own_domains': "brand-direct: every own domain of every merchant in the tenant is ours (2D)",
     'program_name_not_tier': "brand-direct: the programme's name is not a tier claim",
     'coder_disagreed': 'brand-direct (2O-1): no two of the coder\'s calls agreed',
+    'fact_not_published': "brand-direct (2O-3): a fact the claim states is not in the brand's fact index",
+    'facts_published': "brand-direct (2O-3): every fact the claim states is in the brand's fact index",
+    'no_checkable_fact': 'brand-direct (2O-3): the answer states no checkable fact about the brand',
+    'fact_type_not_read': 'brand-direct (2O-3): its facts are of a type the cycle read nothing of',
 }
 
 
@@ -1041,6 +1141,11 @@ def main(argv=None) -> int:
 
     from scoring.expectation_batch import score_runs
 
+    if 'brand_direct' in tiers:
+        # 2O-3: the stored spans, to count the span sets this scoring changes
+        with engine.connect() as conn:
+            before_spans = settled_spans(conn, cid)
+
     summary = asyncio.run(score_runs(run_ids, concurrency=args.concurrency))
 
     with engine.connect() as conn:
@@ -1069,6 +1174,14 @@ def main(argv=None) -> int:
             extractions, model = brand_direct_extractions(conn, cid)
         print("\nbrand-direct coder (2O-1):")
         print(_render_coder(coder_report(extractions), model))
+        with engine.connect() as conn:
+            claims = claim_report(brand_claim_rows(conn, cid))
+        print("\nbrand-claim verdict (2O-3, no model call; the verdict is a lookup):")
+        print(_render_claims(claims))
+        with engine.connect() as conn:
+            changed = spans_changed(before_spans, settled_spans(conn, cid))
+        print(f"    span sets changed since the stored scoring: {changed['changed']} of {changed['compared']} "
+              f"(answers both scorings decided on spans; the run-to-run variance the model still puts in)")
 
     for failure in summary.failures[:10]:
         print(f"    FAILED run {failure.run_id}: {failure.status} "

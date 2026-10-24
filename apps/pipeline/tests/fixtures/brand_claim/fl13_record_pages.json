@@ -1,0 +1,742 @@
+{
+ "_note": "FL13-SHAPED, HAND-BUILT. The record and retailer rows are console_fixture_2j2's 10 variants; the own-page titles, bullets, JSON-LD and size chart are the fixture's, not pampers.com's. Built by tests/fixtures/build_brand_claim_2o3.py. Nothing was read from production.",
+ "facts": {
+  "brand": "Pampers",
+  "domain": "pampers.com",
+  "own_domains": [
+   "pampers.com"
+  ],
+  "retailer_list": [
+   "walmart.com",
+   "amazon.com"
+  ],
+  "tier_names": [],
+  "program_name": null,
+  "product_titles": [
+   "Pampers Swaddlers NB 84",
+   "Pampers Swaddlers S1 96",
+   "Pampers Swaddlers S2 84",
+   "Pampers Baby Dry S3 136",
+   "Pampers Cruisers 360 S4 104",
+   "Pampers Easy Ups S5 66",
+   "Pampers Ultra",
+   "Pampers Pure",
+   "Pampers AMORE",
+   "Pampers Cruisers S5"
+  ],
+  "variants": [
+   {
+    "title": "Pampers Swaddlers NB 84",
+    "size": "newborn",
+    "count": 84,
+    "list_price": null,
+    "member_price": null,
+    "weight_range": {
+     "min": null,
+     "max": 10
+    },
+    "attributes": {}
+   },
+   {
+    "title": "Pampers Swaddlers S1 96",
+    "size": "1",
+    "count": 96,
+    "list_price": null,
+    "member_price": null,
+    "weight_range": {
+     "min": 8,
+     "max": 14
+    },
+    "attributes": {}
+   },
+   {
+    "title": "Pampers Swaddlers S2 84",
+    "size": "2",
+    "count": 84,
+    "list_price": null,
+    "member_price": null,
+    "weight_range": {
+     "min": 12,
+     "max": 18
+    },
+    "attributes": {}
+   },
+   {
+    "title": "Pampers Baby Dry S3 136",
+    "size": "3",
+    "count": 136,
+    "list_price": null,
+    "member_price": null,
+    "weight_range": {
+     "min": 16,
+     "max": 28
+    },
+    "attributes": {}
+   },
+   {
+    "title": "Pampers Cruisers 360 S4 104",
+    "size": "4",
+    "count": 104,
+    "list_price": null,
+    "member_price": null,
+    "weight_range": {
+     "min": 22,
+     "max": 37
+    },
+    "attributes": {}
+   },
+   {
+    "title": "Pampers Easy Ups S5 66",
+    "size": "5",
+    "count": 66,
+    "list_price": null,
+    "member_price": null,
+    "weight_range": {
+     "min": 27,
+     "max": null
+    },
+    "attributes": {}
+   },
+   {
+    "title": "Pampers Ultra",
+    "size": null,
+    "count": null,
+    "list_price": null,
+    "member_price": null,
+    "weight_range": null,
+    "attributes": {}
+   },
+   {
+    "title": "Pampers Pure",
+    "size": null,
+    "count": null,
+    "list_price": null,
+    "member_price": null,
+    "weight_range": null,
+    "attributes": {}
+   },
+   {
+    "title": "Pampers AMORE",
+    "size": null,
+    "count": null,
+    "list_price": null,
+    "member_price": null,
+    "weight_range": null,
+    "attributes": {}
+   },
+   {
+    "title": "Pampers Cruisers S5",
+    "size": "5",
+    "count": null,
+    "list_price": null,
+    "member_price": null,
+    "weight_range": {
+     "min": 27,
+     "max": null
+    },
+    "attributes": {}
+   }
+  ],
+  "features": [],
+  "descriptions": []
+ },
+ "reference": {
+  "merchant": "pampers",
+  "kind": "brand",
+  "as_of": "2026-10-19T14:00:00+00:00",
+  "prices": [
+   {
+    "variant_ref": "feed_sku:900",
+    "gtin": "00037000863434",
+    "sku": "PAM-SW-NB-84",
+    "variant_label": "Swaddlers NB 84",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "price": "24.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:900",
+    "gtin": "00037000863434",
+    "sku": "PAM-SW-NB-84",
+    "variant_label": "Swaddlers NB 84",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "price": "27.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:901",
+    "gtin": "00037000863441",
+    "sku": "PAM-SW-1-96",
+    "variant_label": "Swaddlers S1 96",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "price": "27.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:901",
+    "gtin": "00037000863441",
+    "sku": "PAM-SW-1-96",
+    "variant_label": "Swaddlers S1 96",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "price": "30.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:902",
+    "gtin": "00037000863458",
+    "sku": "PAM-SW-2-84",
+    "variant_label": "Swaddlers S2 84",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "price": "27.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:902",
+    "gtin": "00037000863458",
+    "sku": "PAM-SW-2-84",
+    "variant_label": "Swaddlers S2 84",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "price": "30.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:903",
+    "gtin": "00037000863465",
+    "sku": "PAM-BD-3-136",
+    "variant_label": "Baby Dry S3 136",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "price": "29.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:903",
+    "gtin": "00037000863465",
+    "sku": "PAM-BD-3-136",
+    "variant_label": "Baby Dry S3 136",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "price": "32.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:904",
+    "gtin": "00037000863472",
+    "sku": "PAM-CR360-4-104",
+    "variant_label": "Cruisers 360 S4 104",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "price": "39.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:904",
+    "gtin": "00037000863472",
+    "sku": "PAM-CR360-4-104",
+    "variant_label": "Cruisers 360 S4 104",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "price": "42.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:905",
+    "gtin": "00037000863489",
+    "sku": "PAM-EU-5-66",
+    "variant_label": "Easy Ups S5 66",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "price": "34.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:905",
+    "gtin": "00037000863489",
+    "sku": "PAM-EU-5-66",
+    "variant_label": "Easy Ups S5 66",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "price": "37.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:906",
+    "gtin": null,
+    "sku": "PAM-ULTRA-120",
+    "variant_label": "Ultra",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "price": "22.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:906",
+    "gtin": null,
+    "sku": "PAM-ULTRA-120",
+    "variant_label": "Ultra",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "price": "25.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:907",
+    "gtin": null,
+    "sku": "PAM-PURE-2-74",
+    "variant_label": "Pure",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "price": "31.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:907",
+    "gtin": null,
+    "sku": "PAM-PURE-2-74",
+    "variant_label": "Pure",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "price": "34.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:908",
+    "gtin": null,
+    "sku": "PAM-AMORE-3-60",
+    "variant_label": "AMORE",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "price": "26.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:908",
+    "gtin": null,
+    "sku": "PAM-AMORE-3-60",
+    "variant_label": "AMORE",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "price": "29.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:909",
+    "gtin": null,
+    "sku": "PAM-CR-5-92",
+    "variant_label": "Cruisers S5",
+    "retailer_domain": "walmart.com",
+    "role": "retailer",
+    "price": "37.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": "feed_sku:909",
+    "gtin": null,
+    "sku": "PAM-CR-5-92",
+    "variant_label": "Cruisers S5",
+    "retailer_domain": "amazon.com",
+    "role": "retailer",
+    "price": "40.97",
+    "currency": "USD",
+    "method": "json_ld",
+    "read_status": "ok",
+    "verifiable": true
+   },
+   {
+    "variant_ref": null,
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "price": null,
+    "verifiable": false,
+    "method": "none_by_design",
+    "page_title": "Pampers Swaddlers Diapers",
+    "bullets": [
+     "Wetness indicator that changes color",
+     "Umbilical cord notch",
+     "Hypoallergenic and free of parabens and latex"
+    ],
+    "json_ld": {
+     "@type": "Product",
+     "name": "Pampers Swaddlers Diapers",
+     "brand": "Pampers"
+    },
+    "size_chart": [
+     {
+      "size": "newborn",
+      "min": null,
+      "max": 10
+     },
+     {
+      "size": "1",
+      "min": 8,
+      "max": 14
+     },
+     {
+      "size": "2",
+      "min": 12,
+      "max": 18
+     },
+     {
+      "size": "3",
+      "min": 16,
+      "max": 28
+     },
+     {
+      "size": "4",
+      "min": 22,
+      "max": 37
+     },
+     {
+      "size": "5",
+      "min": 27,
+      "max": null
+     },
+     {
+      "size": "6",
+      "min": 35,
+      "max": null
+     }
+    ]
+   },
+   {
+    "variant_ref": null,
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "price": null,
+    "verifiable": false,
+    "method": "none_by_design",
+    "page_title": "Pampers Baby Dry Diapers",
+    "bullets": [
+     "Up to 12 hours of overnight protection",
+     "LeakGuard barriers"
+    ],
+    "json_ld": {
+     "@type": "Product",
+     "name": "Pampers Baby Dry Diapers",
+     "brand": "Pampers"
+    },
+    "size_chart": [
+     {
+      "size": "newborn",
+      "min": null,
+      "max": 10
+     },
+     {
+      "size": "1",
+      "min": 8,
+      "max": 14
+     },
+     {
+      "size": "2",
+      "min": 12,
+      "max": 18
+     },
+     {
+      "size": "3",
+      "min": 16,
+      "max": 28
+     },
+     {
+      "size": "4",
+      "min": 22,
+      "max": 37
+     },
+     {
+      "size": "5",
+      "min": 27,
+      "max": null
+     },
+     {
+      "size": "6",
+      "min": 35,
+      "max": null
+     }
+    ]
+   },
+   {
+    "variant_ref": null,
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "price": null,
+    "verifiable": false,
+    "method": "none_by_design",
+    "page_title": "Pampers Cruisers 360 Diapers",
+    "bullets": [
+     "Stretchy waistband for 360 fit",
+     "Up to 100% leakproof"
+    ],
+    "json_ld": {
+     "@type": "Product",
+     "name": "Pampers Cruisers 360 Diapers",
+     "brand": "Pampers"
+    },
+    "size_chart": [
+     {
+      "size": "newborn",
+      "min": null,
+      "max": 10
+     },
+     {
+      "size": "1",
+      "min": 8,
+      "max": 14
+     },
+     {
+      "size": "2",
+      "min": 12,
+      "max": 18
+     },
+     {
+      "size": "3",
+      "min": 16,
+      "max": 28
+     },
+     {
+      "size": "4",
+      "min": 22,
+      "max": 37
+     },
+     {
+      "size": "5",
+      "min": 27,
+      "max": null
+     },
+     {
+      "size": "6",
+      "min": 35,
+      "max": null
+     }
+    ]
+   },
+   {
+    "variant_ref": null,
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "price": null,
+    "verifiable": false,
+    "method": "none_by_design",
+    "page_title": "Pampers Easy Ups Training Underwear",
+    "bullets": [
+     "Tear-away sides",
+     "Pull-on training pants"
+    ],
+    "json_ld": {
+     "@type": "Product",
+     "name": "Pampers Easy Ups Training Underwear",
+     "brand": "Pampers"
+    },
+    "size_chart": [
+     {
+      "size": "newborn",
+      "min": null,
+      "max": 10
+     },
+     {
+      "size": "1",
+      "min": 8,
+      "max": 14
+     },
+     {
+      "size": "2",
+      "min": 12,
+      "max": 18
+     },
+     {
+      "size": "3",
+      "min": 16,
+      "max": 28
+     },
+     {
+      "size": "4",
+      "min": 22,
+      "max": 37
+     },
+     {
+      "size": "5",
+      "min": 27,
+      "max": null
+     },
+     {
+      "size": "6",
+      "min": 35,
+      "max": null
+     }
+    ]
+   },
+   {
+    "variant_ref": null,
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "price": null,
+    "verifiable": false,
+    "method": "none_by_design",
+    "page_title": "Pampers Pure Protection Diapers",
+    "bullets": [
+     "Fragrance free",
+     "Hypoallergenic",
+     "Plant-based liner"
+    ],
+    "json_ld": {
+     "@type": "Product",
+     "name": "Pampers Pure Protection Diapers",
+     "brand": "Pampers"
+    },
+    "size_chart": [
+     {
+      "size": "newborn",
+      "min": null,
+      "max": 10
+     },
+     {
+      "size": "1",
+      "min": 8,
+      "max": 14
+     },
+     {
+      "size": "2",
+      "min": 12,
+      "max": 18
+     },
+     {
+      "size": "3",
+      "min": 16,
+      "max": 28
+     },
+     {
+      "size": "4",
+      "min": 22,
+      "max": 37
+     },
+     {
+      "size": "5",
+      "min": 27,
+      "max": null
+     },
+     {
+      "size": "6",
+      "min": 35,
+      "max": null
+     }
+    ]
+   },
+   {
+    "variant_ref": null,
+    "retailer_domain": "pampers.com",
+    "role": "own",
+    "price": null,
+    "verifiable": false,
+    "method": "none_by_design",
+    "page_title": "Pampers AMORE Diapers",
+    "bullets": [
+     "Hypoallergenic",
+     "Cotton-enhanced liner"
+    ],
+    "json_ld": {
+     "@type": "Product",
+     "name": "Pampers AMORE Diapers",
+     "brand": "Pampers"
+    },
+    "size_chart": [
+     {
+      "size": "newborn",
+      "min": null,
+      "max": 10
+     },
+     {
+      "size": "1",
+      "min": 8,
+      "max": 14
+     },
+     {
+      "size": "2",
+      "min": 12,
+      "max": 18
+     },
+     {
+      "size": "3",
+      "min": 16,
+      "max": 28
+     },
+     {
+      "size": "4",
+      "min": 22,
+      "max": 37
+     },
+     {
+      "size": "5",
+      "min": 27,
+      "max": null
+     },
+     {
+      "size": "6",
+      "min": 35,
+      "max": null
+     }
+    ]
+   }
+  ]
+ }
+}

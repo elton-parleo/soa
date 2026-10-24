@@ -171,6 +171,18 @@ class BrandFactsCache:
                         [snapshot.domain] if snapshot.domain else []),
                     'retailer_list': list(snapshot.retailer_list or []),
                     'program_name': snapshot.program_name,
+                    # 2O-3: what the brand fact index reads off the record
+                    # (scoring/brand_fact_index.build)
+                    'variants': [
+                        {'title': v.title, 'size': v.size, 'count': v.count,
+                         'list_price': v.list_price, 'member_price': v.member_price,
+                         'weight_range': v.weight_range, 'attributes': v.attributes}
+                        for p in (snapshot.products or []) for v in (p.variants or [])
+                    ],
+                    'features': [f for p in (snapshot.products or [])
+                                 for f in (getattr(p, 'features', None) or [])],
+                    'descriptions': [p.description for p in (snapshot.products or [])
+                                     if getattr(p, 'description', None)],
                 }
         return self._by_merchant[merchant_slug]
 
@@ -368,8 +380,17 @@ def classify(run, expectation, extraction, *, history=None, brand_facts=None,
             if check.fabricated:
                 dead[domain] = check.as_dict()
 
+    # 2O-3: a version-3 brand-direct record is judged against the cycle's
+    # fact index: the record, and the page reads cached on the cycle
+    brand_index = None
+    if bdc.is_brand_direct(getattr(run, 'tier', None), expectation) and bdc.coder_version(extraction) >= 3:
+        from scoring import brand_fact_index as bfi
+        cached = references.for_cycle(run.cycle_id, study_type=run.study_type, merchant_slug=merchant) \
+            if references is not None else None
+        brand_index = bfi.build(facts, getattr(cached, 'payload', None))
+
     return cmp.compare_with_secondary(
-        expectation, extraction,
+        expectation, extraction, brand_index=brand_index,
         history=history.for_variant(merchant, source_ref.get('variant_id'),
                                     study_type=run.study_type) if history else None,
         source_ref=source_ref,
@@ -424,7 +445,7 @@ class ExpectationScorer:
             return conn.execute(text("""
                 SELECT r.id, r.cycle_id, r.query_id, r.platform, r.raw_response,
                        r.status, r.retrieved_sources, r.grounding, r.surface, r.answer_status,
-                       q.tier, q.expected_answer, q.source_ref, q.study_type
+                       q.tier, q.expected_answer, q.source_ref, q.study_type, q.query_text
                 FROM soa_runs r
                 JOIN soa_queries q ON q.id = r.query_id
                 WHERE r.id = :run_id
@@ -465,7 +486,8 @@ class ExpectationScorer:
             # to the new one would silently restate what it compared
             # against.
             "expected_answer": json.dumps(expectation),
-            "extraction": json.dumps(extraction),
+            # 2O-3: the brand-claim verdict's evidence rides on the extraction
+            "extraction": json.dumps(_with_brand_claim(extraction, verdict)),
             "outcome": verdict.outcome,
             "outcome_reason": verdict.reason,
             "domain_cited": verdict.domain_cited,
@@ -561,23 +583,34 @@ class ExpectationScorer:
         every call's record, its category, its usage, and the settings, so
         the comparator re-takes the decision from what is stored.
         """
-        calls = [await self._code_once(run, brand=brand, brand_domain=brand_domain,
-                                       settings=CODER_SETTINGS)
+        calls = [await self._code_call(run, brand=brand, brand_domain=brand_domain)
                  for _ in range(bdc.CODER_CALLS)]
         record, verdict = self._settled(run, expectation, calls)
         if (verdict.coder or {}).get('pair') is None and len(calls) < bdc.CODER_MAX_CALLS:
-            calls.append(await self._code_once(run, brand=brand, brand_domain=brand_domain,
-                                               settings=CODER_SETTINGS))
+            calls.append(await self._code_call(run, brand=brand, brand_domain=brand_domain))
             record, verdict = self._settled(run, expectation, calls)
         return record, verdict, calls[0]['model']
 
+    async def _code_call(self, run, *, brand, brand_domain) -> dict:
+        """2O-3: one coder call, with 2A-5's evidence rule checked on its
+        claim spans (brand_claim_verdict.evidence): a span not in the answer
+        text refuses the call, which then agrees with no other."""
+        from scoring import brand_claim_verdict as bcv
+        call = await self._code_once(run, brand=brand, brand_domain=brand_domain, settings=CODER_SETTINGS)
+        call['record'] = {**call['record'], 'evidence': bcv.evidence(call['record'], run.raw_response)}
+        return call
+
     def _settled(self, run, expectation, calls) -> tuple:
         coder = {'version': ea.BRAND_CODER_VERSION, 'settings': CODER_SETTINGS,
+                 # 2O-3: the question, for the echo rule on a classify-only re-score
+                 'question': getattr(run, 'query_text', None),
                  'calls': [c['record'] for c in calls], 'usage': [c['usage'] for c in calls]}
         verdict = self._classify(run, expectation, {**calls[0]['record'], 'coder': coder})
         decided = verdict.coder or {}
         pair = decided.get('pair')
-        coder.update(outcomes=decided.get('outcomes'), pair=pair)
+        coder['pair'] = pair
+        # 2O-1's record: each call's category; 2O-3's: which calls 2A-5's rule refused
+        coder.update({k: decided[k] for k in ('outcomes', 'refused') if k in decided})
         record = {**calls[pair[0] if pair else 0]['record'], 'coder': coder}
         # the flags and the source split are the settling call's
         return record, self._classify(run, expectation, record)
@@ -668,6 +701,18 @@ class ExpectationScorer:
             return ScoreRunResult(run_id, 'db_error', error_message=str(exc))
 
         return ScoreRunResult(run_id, 'success', outcome=verdict.outcome)
+
+
+def _with_brand_claim(extraction, verdict) -> dict:
+    """2O-3: the extraction as stored, with the verdict's brand_claim (the
+    spans, facts and index it was decided on) when it has one; a stale one
+    from an earlier scoring is never kept."""
+    if not isinstance(extraction, dict):
+        return extraction
+    out = {k: v for k, v in extraction.items() if k != 'brand_claim'}
+    if getattr(verdict, 'brand_claim', None):
+        out['brand_claim'] = verdict.brand_claim
+    return out
 
 
 def _coder_stamp(run, expectation) -> dict:

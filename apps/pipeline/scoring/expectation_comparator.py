@@ -113,6 +113,11 @@ class Verdict:
     #: 2O-1: a brand-direct record the two-call coder wrote: {'outcomes':
     #: each call's category, 'pair': the two calls that agreed, or None}.
     coder: Optional[dict] = None
+    #: 2O-3: a version-3 brand-direct verdict's evidence (scoring/
+    #: brand_claim_verdict.decide): the spans, their facts found, missing and
+    #: unchecked, the deciding span, and the fact index's version and digest.
+    #: The scorer stores it on the extraction as `brand_claim`.
+    brand_claim: Optional[dict] = None
 
     @property
     def flag_names(self) -> List[str]:
@@ -681,7 +686,7 @@ def compare(expectation: dict, extraction: dict, *, history=None,
             source_ref=None, brand_domain=None, tier=None,
             brand_facts=None, record_variants=None, history_for=None,
             reference=None, retrieved_sources=None, dead_domains=None,
-            grounding=None) -> Verdict:
+            grounding=None, brand_index=None) -> Verdict:
     """
     One (question x surface x sample) -> one outcome.
 
@@ -711,12 +716,15 @@ def compare(expectation: dict, extraction: dict, *, history=None,
       dead_domains     {domain: check} from citation_check, already run
       grounding        the run's soa_runs.grounding (runners/grounding.py),
                        for a brand-direct claim backed by a platform source
+      brand_index      2O-3: the cycle's brand_fact_index.FactIndex, for a
+                       version-3 brand-direct record (built from brand_facts
+                       alone when not given)
     """
     verdict = _compare_core(
         expectation, extraction, history=history, source_ref=source_ref,
         brand_domain=brand_domain, tier=tier, brand_facts=brand_facts,
         record_variants=record_variants, history_for=history_for, reference=reference,
-        grounding=grounding,
+        grounding=grounding, brand_index=brand_index,
     )
     _decorate(verdict, expectation, extraction, source_ref=source_ref,
               brand_domain=brand_domain, retrieved_sources=retrieved_sources,
@@ -773,7 +781,7 @@ def _decorate(verdict, expectation, extraction, *, source_ref, brand_domain,
 
 def _compare_core(expectation, extraction, *, history, source_ref, brand_domain, tier,
                   brand_facts, record_variants, history_for, reference,
-                  grounding=None) -> Verdict:
+                  grounding=None, brand_index=None) -> Verdict:
     source_attribution, domain_cited = classify_sources(
         extraction.get('sources_cited'), brand_domain,
     )
@@ -794,6 +802,24 @@ def _compare_core(expectation, extraction, *, history, source_ref, brand_domain,
         # 2O-1: a record the two-call coder wrote is decided over its calls,
         # each classified on its own; a record one call wrote, as before
         calls = bdc.coder_calls(extraction)
+        if calls and bdc.coder_version(extraction) >= 3:
+            # 2O-3: the calls agree on their spans; the verdict is a lookup
+            from scoring import brand_claim_verdict as bcv
+            from scoring import brand_fact_index as bfi
+            index = brand_index if brand_index is not None else bfi.build(brand_facts)
+            pair = bcv.settle(calls)
+            if pair is None:
+                result = verdict(UNSCOREABLE, ea.CODER_DISAGREED_NOTE)
+                result.reason_code = ea.CODER_DISAGREED
+                result.coder = {'pair': None, 'refused': [bcv.refused(c) for c in calls]}
+                return result
+            decided = bcv.decide(calls[pair[0]], expectation, question=extraction['coder'].get('question'),
+                                 index=index, own_domains=bdc.ours(brand_facts, expectation))
+            result = verdict(decided['outcome'], decided['reason'])
+            result.reason_code = decided['reason_code']
+            result.coder = {'pair': list(pair), 'refused': [bcv.refused(c) for c in calls]}
+            result.brand_claim = decided['brand_claim']
+            return result
         if calls:
             codes = [bdc.code_call(c, expectation, brand_facts=brand_facts, grounding=grounding)
                      for c in calls]

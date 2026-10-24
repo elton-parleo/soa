@@ -39,8 +39,8 @@ def test_229_with_a_moved_score_and_the_same_inputs_reads_the_plain_line(http, d
     now = _229_now(http, db, upstream)
     _as_v6(db, now, 229, score=now['score'] + 4)
     body = _get(http).json()
-    assert body['scorer_version'] == '12'
-    assert body['history'][-1]['replaced_because'] == 'scorer 6 → 12'
+    assert body['scorer_version'] == '13'
+    assert body['history'][-1]['replaced_because'] == 'scorer 6 → 13'
 
 
 def test_229_with_an_older_reference_read_names_it(http, db, upstream):
@@ -48,7 +48,7 @@ def test_229_with_an_older_reference_read_names_it(http, db, upstream):
     inputs = {**now['inputs'], 'reference_run': {**now['inputs']['reference_run'], 'finished_at': '2026-09-20T10:00:00+00:00'}}
     _as_v6(db, now, 229, score=now['score'] + 4, inputs=inputs)
     line = _get(http).json()['history'][-1]['replaced_because']
-    assert line == 'scorer 6 → 12 · reference read changed' and 'ungrounded' not in line
+    assert line == 'scorer 6 → 13 · reference read changed' and 'ungrounded' not in line
 
 
 def test_229_with_other_incentive_flags_names_them(http, db, upstream):
@@ -61,7 +61,7 @@ def test_229_with_other_incentive_flags_names_them(http, db, upstream):
                     if d['code'] == 'deal_citability' and part['half'] == 'seen':
                         part['numerator'] = (part['numerator'] or 0) + 1   # supply before #24 flagged one more page
     _as_v6(db, old, 229, score=now['score'] + 4)
-    assert _get(http).json()['history'][-1]['replaced_because'] == 'scorer 6 → 12 · incentive flags changed'
+    assert _get(http).json()['history'][-1]['replaced_because'] == 'scorer 6 → 13 · incentive flags changed'
 
 
 def test_a_v6_score_that_carries_no_inputs_reads_the_plain_line(http, db, upstream):
@@ -71,7 +71,7 @@ def test_a_v6_score_that_carries_no_inputs_reads_the_plain_line(http, db, upstre
                   {'b': json.dumps({'scorer_version': '6', 'adapter_revision': score_svc.ADAPTER_REVISION,
                                     'score': now['score'] + 4})})
     entry = _get(http).json()['history'][-1]
-    assert entry['replaced_because'] == 'scorer 6 → 12'
+    assert entry['replaced_because'] == 'scorer 6 → 13'
     assert entry['pillars'] == []
 
 
@@ -98,7 +98,7 @@ def test_a_two_surface_cycle_with_one_ungrounded_reads_the_ungrounded_line(http,
     as_('alice')
     body = _score(http)
     assert body['coverage']['ungrounded'] == ['api']
-    assert body['history'][-1]['replaced_because'] == 'scorer 6 → 12: ungrounded surfaces excluded from pooling'
+    assert body['history'][-1]['replaced_because'] == 'scorer 6 → 13: ungrounded surfaces excluded from pooling'
 
 
 # ═══ the line itself ═════════════════════════════════════════════════════

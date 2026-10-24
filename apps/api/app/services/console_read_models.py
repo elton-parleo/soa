@@ -521,8 +521,29 @@ def build_answer(run: dict, query: dict, outcome: Optional[dict], mentions: List
         # 2N-1: a retired line's question reads 'retired' (claim_kinds.catalog_intent)
         'intent': source_ref.get('intent') or intent,
         'attribute': None if attribute is None else {k: v for k, v in attribute.items() if k != 'line'},
+        # 2O-3: the claim that decided a brand-direct verdict, and its facts against the brand's fact index
+        'brand_claim': brand_claim_evidence(extraction) if brand_verdict else None,
     }, ('runs', 'reason', 'variant_id', 'gtin', 'retailer', 'expected_type', 'claim_kind', 'claim_kind_label',
-        'intent', 'attribute', 'intent_verdict'))
+        'intent', 'attribute', 'intent_verdict', 'brand_claim'))
+
+
+def brand_claim_evidence(extraction: Optional[dict]) -> Optional[dict]:
+    """2O-3: the drawer's evidence for a brand-direct verdict the version-3
+    coder decided (extraction.brand_claim, scoring/brand_claim_verdict.py):
+    {span, kind, facts_found, facts_missing, facts_unchecked, spans, index}.
+    `span` is the claim that decided ("fabricated: '2-9 lbs' is not on
+    pampers.com's Swaddlers page" is the row's summary); None when no span
+    decided (no_checkable_fact, acknowledged_unknown) or the row predates it."""
+    claim = (extraction or {}).get('brand_claim') if isinstance(extraction, dict) else None
+    if not isinstance(claim, dict):
+        return None
+    spans = [s for s in claim.get('spans') or [] if isinstance(s, dict)]
+    at = claim.get('decided_by')
+    span = spans[at] if isinstance(at, int) and 0 <= at < len(spans) else {}
+    return {'span': span.get('text'), 'kind': span.get('kind'),
+            'facts_found': span.get('facts_found') or [], 'facts_missing': span.get('facts_missing') or [],
+            'facts_unchecked': span.get('facts_unchecked') or [], 'spans': len(spans),
+            'index': claim.get('index')}
 
 
 # ─── Answers summary (2C) ──────────────────────────────────────────────────

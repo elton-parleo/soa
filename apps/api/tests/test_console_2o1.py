@@ -33,19 +33,22 @@ def _body(version, coded, of=258):
 
 
 def test_the_version():
-    assert score_svc.SCORER_VERSION == '12' and score_svc.SINGLE_CALL_CODER_VERSION == '11'
+    # 2O-3 bumps the console to 13 (tests/test_console_2o3.py); 12 keeps its change line
+    assert score_svc.SINGLE_CALL_CODER_VERSION == '11'
     assert score_svc.SCORER_CHANGES['12'] == 'brand-direct answers coded by two agreeing calls'
     # no dimension reads the brand-direct outcome: the version never explains a moved score
     assert score_svc.SCORER_CHANGE_APPLIES['12']({}) is False
-    assert ea.BRAND_CODER_VERSION == 2
+    assert score_svc.CODER_SCORER_VERSIONS[2] == '12'
 
 
 def test_the_coder_count_reads_the_scored_brand_direct_runs():
-    assert score_svc.brand_coder(_runs(258, 258)) == {'version': 2, 'coded': 258, 'of': 258}
-    assert score_svc.brand_coder(_runs(258, 0)) == {'version': 2, 'coded': 0, 'of': 258}
+    v = ea.BRAND_CODER_VERSION
+    # 2O-3: and the oldest coder version among them (1: one call, before 2O-1)
+    assert score_svc.brand_coder(_runs(258, 258)) == {'version': v, 'coded': 258, 'of': 258, 'oldest': v}
+    assert score_svc.brand_coder(_runs(258, 0)) == {'version': v, 'coded': 0, 'of': 258, 'oldest': 1}
     # an unscored run is not counted; a cycle with no brand-direct tier is all coded
     unscored = [{'tier': 'brand_direct', 'outcome': None}]
-    assert score_svc.brand_coder(unscored) == {'version': 2, 'coded': 0, 'of': 0}
+    assert score_svc.brand_coder(unscored) == {'version': v, 'coded': 0, 'of': 0, 'oldest': None}
 
 
 def test_the_overview_rows_carry_the_coder_that_scored_them():
@@ -103,7 +106,8 @@ def test_fl14_before_its_rescore_is_stale_and_after_it_current():
     ('stale'); recomputed over two-call outcomes it is current."""
     assert score_svc.needs_recompute({'scorer_version': '11', 'adapter_revision': score_svc.ADAPTER_REVISION},
                                      None) == 'stale'
-    assert score_svc.is_current({'scorer_version': '12', 'adapter_revision': score_svc.ADAPTER_REVISION})
+    assert score_svc.is_current({'scorer_version': score_svc.SCORER_VERSION,
+                                 'adapter_revision': score_svc.ADAPTER_REVISION})
 
 
 def test_an_unsettled_answer_reads_the_coder_could_not_settle_it():

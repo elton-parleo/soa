@@ -56,6 +56,10 @@ class CatalogProduct:
     product_url: Optional[str] = None
     published_at: Optional[str] = None
     variants: List[CatalogVariant] = field(default_factory=list)
+    # 2O-3: a listing's features or bullets and its description, when the
+    # catalog serves them (the brand fact index reads them).
+    features: List[str] = field(default_factory=list)
+    description: Optional[str] = None
 
 
 @dataclass
@@ -224,6 +228,9 @@ def build_snapshot(
             brand=listing.get("brand"),
             product_url=listing.get("product_url"),
             published_at=listing.get("published_at"),
+            features=[f for f in list(listing.get("features") or []) + list(listing.get("bullets") or [])
+                      if isinstance(f, str) and f.strip()],
+            description=listing.get("description") if isinstance(listing.get("description"), str) else None,
             variants=[
                 CatalogVariant(
                     variant_id=variant.get("variant_id"),
