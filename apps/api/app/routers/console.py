@@ -240,9 +240,12 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         if prev is not None:
             prev = {**prev, 'customer_org_id': row['customer_org_id']}
             # 2N-1: with the merchant's facts, so its routing (Retailer coverage) compares
-            previous = {'code': prev['cycle_code'], 'rows': parity.load_overview_rows(conn, prev, features),
-                        'visibility': _visibility(conn, prev, facts), 'study': rm.study_identity(conn, prev)}
-        study = rm.study_identity(conn, row)   # 2K-4 (B1): the study and its questions, compared first
+            prev_rows = parity.load_overview_rows(conn, prev, features)
+            # 2P-1 (B2): with the version its outcomes compare under, as the score's previous is
+            previous = {'code': prev['cycle_code'], 'rows': prev_rows, 'visibility': _visibility(conn, prev, facts),
+                        'study': {**rm.study_identity(conn, prev), 'scorer_version': score_svc.outcomes_version(prev_rows)}}
+        # 2K-4 (B1): the study and its questions, compared first; 2P-1: and the outcomes' version
+        study = {**rm.study_identity(conn, row), 'scorer_version': score_svc.outcomes_version(rows)}
         job = conn.execute(text("SELECT tier_config FROM soa_query_generation_jobs WHERE study_type = :st"),
                            {"st": row['study_type']}).fetchone()
         study_questions = conn.execute(text("SELECT COUNT(*) FROM soa_queries WHERE study_type = :st"),
@@ -301,7 +304,12 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         body['attribute_accuracy'] = accuracy
     # 2M-1: "Size 4 weight range right" in Changes, per size an accuracy answer missed
     site = next((a['site'] for a in answers if a.get('site')), None) or own_domain or 'the brand site'
-    for s, block in (body.get('by_surface') or {}).items():
+    # 2P-1 (B2): against another study the lines read "new" (this study's first cycle
+    # that asked it); a previous cycle of the same study that is not comparable for
+    # another reason (its version, its agents) gets none, as the core lines get none
+    lined = {s: b for s, b in (body.get('by_surface') or {}).items()
+             if b.get('changes_status') != 'not_comparable' or b.get('changes_condition') == 'study'}
+    for s, block in lined.items():
         if answers:
             block['changes'] = list(block.get('changes') or []) + rm.attribute_changes(
                 answers, prev_answers, (previous or {}).get('code'), s,
@@ -309,7 +317,7 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
     # 2N-1: a brand's first-cycle Changes, after the weight range and before the deals:
     # Retired product named, First pick (category questions), Retailer coverage
     if (vis.get('ranking') or {}).get('default_tier') == rm.VIS_BRAND_CHOICE:
-        for s, block in (body.get('by_surface') or {}).items():
+        for s, block in lined.items():
             block['changes'] = list(block.get('changes') or []) + rm.brand_changes(
                 vis, (previous or {}).get('visibility'), (previous or {}).get('code'), s,
                 compared=block.get('changes_status') == 'compared', brand=brand)
@@ -324,7 +332,7 @@ async def get_overview(cycle: str = Query(...), merchant: Optional[str] = Query(
         prev_promo = None
         if prev is not None:
             prev_promo, _pd, _pa, _pe = await _promo_inputs(scope, prev, merchant)
-        for s, block in (body.get('by_surface') or {}).items():
+        for s, block in lined.items():
             block['changes'] = list(block.get('changes') or []) + rm.promo_changes(
                 promo, prev_promo, (previous or {}).get('code'), s,
                 compared=block.get('changes_status') == 'compared')
@@ -1205,7 +1213,9 @@ async def get_revenue_history(merchant: Optional[str] = Query(None), scope: Cust
             vis_rows = rm.load_visibility(conn, c).get('byQuestion') or []
             m = _revenue_model(conn, c, inputs, meta, None, vis_rows)
             # every agent together, as the revenue model counts them
-            here = {**parity.surface_metrics([], vis_rows, surfaces.ALL), **rm.study_identity(conn, c)}
+            here = {**parity.surface_metrics([], vis_rows, surfaces.ALL), **rm.study_identity(conn, c),
+                    # 2P-1 (B2): the version its outcomes compare under, as the score's
+                    'scorer_version': score_svc.outcomes_version(parity.load_overview_rows(conn, c))}
             vs = None
             if before is not None:
                 ok, condition, reason = cycle_compare.cycles_comparable(

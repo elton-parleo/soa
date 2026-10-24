@@ -1095,6 +1095,17 @@ def comparable_version(body: Optional[dict]) -> Optional[str]:
     return version
 
 
+def outcomes_version(rows: List[dict]) -> str:
+    """2P-1 (B2): the version a cycle's counts compare under, read from its
+    outcomes (load_overview_rows' rows), never a stored score: the current
+    scorer, or the version its oldest brand-direct outcome was coded under
+    (comparable_version). The Changes block, the Impact history and every
+    other two-cycle count pass it to cycle_compare beside the study, so a
+    cycle on an older coder reads "Scored under v<n>, re-score to compare"
+    there as on the score tile, and is never compared silently."""
+    return comparable_version({'scorer_version': SCORER_VERSION, 'brand_coder': brand_coder(rows)})
+
+
 def verdict(score: Optional[int], true_value: Optional[dict], unmeasured: float) -> Optional[str]:
     """The Audit's readiness verdict (scan_dimensions.compute_verdict, called
     as is: AGENT-READY at or above the bar with True Value at or above a
