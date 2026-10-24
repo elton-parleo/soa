@@ -67,7 +67,9 @@ FACT_TYPES = ('price', 'unit_price', 'count', 'size', 'weight', 'name', 'retaile
 #: Checkable attribute words: what a brand's page states and a reader could
 #: check against it. Closed and written out; a word not here is not a fact
 #: the verdict looks up (it is no evidence either way). Matched as phrases,
-#: a space or hyphen between words either way.
+#: a space or hyphen between words either way. A word ordinary prose uses
+#: for something else stays out ("overnight": "works well overnight" is no
+#: claim about overnight protection; "blowout" alone, "soft").
 ATTRIBUTE_TERMS = (
     'fragrance free', 'unscented', 'scented', 'fragrance', 'perfume free',
     'hypoallergenic', 'latex free', 'chlorine free', 'elemental chlorine free', 'paraben free',
@@ -76,7 +78,7 @@ ATTRIBUTE_TERMS = (
     'dermatologist recommended', 'pediatrician recommended', 'hospital', 'hospitals',
     'wetness indicator', 'umbilical cord notch', 'cord notch', 'breathable', 'stretchy sides',
     'stretchy waistband', 'tear away sides', 'tear-away sides', 'refastenable', 'leak guard',
-    'leakguard', 'blowout', 'blowout barrier', 'overnight', 'overnight protection', 'extra absorb channels',
+    'leakguard', 'blowout barrier', 'overnight protection', 'extra absorb channels',
     'absorb away liner', 'air channels', 'heart quilts', 'pocketed back waistband', 'sleep and play',
     'swim', 'tsa', 'eu ecolabel', 'number one', '#1', 'best selling', 'award winning',
 )

@@ -279,3 +279,34 @@ def test_the_vocabulary_copies_agree(copy):
     with open(os.path.join(here, 'soa_shared', 'expected_answers.py')) as a, \
             open(os.path.join(root, copy, 'soa_shared', 'expected_answers.py')) as b:
         assert a.read() == b.read()
+
+
+def test_the_rescore_prints_the_claim_report_and_the_span_sets_that_changed(db, capsys, monkeypatch):
+    """rescore_cycle --tier brand_direct, end to end on sqlite: the stored
+    row is re-scored with a different span set, and the printout says so."""
+    answer = "Pampers Swaddlers fit babies 2-9 lbs. Pampers Pure Protection is fragrance free."
+    first = record(answer, asserted=['Pampers Swaddlers fit babies 2-9 lbs.'])
+    second = record(answer, asserted=['Pampers Pure Protection is fragrance free.'])
+    _c, _s, _r, row = score(db, answer, [first, first])
+    with db.begin() as conn:
+        conn.exec_driver_sql("CREATE TABLE soa_cycles (id INTEGER PRIMARY KEY, cycle_code TEXT)")
+        conn.exec_driver_sql("INSERT INTO soa_cycles (id, cycle_code) VALUES (3, 'FL14-pampers-20261023')")
+        conn.exec_driver_sql("ALTER TABLE soa_queries ADD COLUMN query_code TEXT")
+        conn.exec_driver_sql("UPDATE soa_queries SET query_code = 'PAM_208'")
+    monkeypatch.setattr(rescore_cycle, 'engine', db)
+
+    async def rescore(run_ids, concurrency=None):
+        scorer = scorer_module.ExpectationScorer(Replay([second, second]), NoHistory(), FakeFacts(FACTS),
+                                                 labeler=False, references=Pages(), tenant_domains=NoTenant())
+        for run_id in run_ids:
+            await scorer.score_run(run_id)
+        return SimpleNamespace(succeeded=len(run_ids), total=len(run_ids), skipped=0, failed=0, retried=0,
+                               failures=[])
+
+    monkeypatch.setattr('scoring.expectation_batch.score_runs', rescore)
+    rescore_cycle.main(['--cycle', 'FL14-pampers-20261023', '--tier', 'brand_direct'])
+    out = capsys.readouterr().out
+    assert 'PAM_208 · perplexity · run 1 · brand_direct: fabricated -> grounded' in out
+    assert 'brand-claim verdict (2O-3, no model call; the verdict is a lookup):' in out
+    assert 'span sets changed since the stored scoring: 1 of 1' in out
+    assert 'no_checkable_fact    0  (0.0% of answers' in out

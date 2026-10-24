@@ -425,6 +425,33 @@ def _render_claims(report: dict) -> str:
     ])
 
 
+def settled_spans(conn, cid: int) -> dict:
+    """{run_id: the claim spans of the call that settled it} for every
+    brand-direct row a version-3 coder decided, read before and after a
+    re-extract to count the span sets that changed between two scorings."""
+    from scoring import brand_claim_verdict as bcv
+    out = {}
+    rows = conn.execute(text("""
+        SELECT run_id, extraction FROM soa_expectation_outcomes
+        WHERE cycle_id = :cid AND tier = 'brand_direct'
+    """), {"cid": cid}).fetchall()
+    for run_id, extraction in rows:
+        coder = (_as_json(extraction) or {}).get('coder') or {}
+        pair = coder.get('pair')
+        if (coder.get('version') or 0) >= 3 and pair:
+            out[run_id] = bcv.claim_spans(coder['calls'][pair[0]])
+    return out
+
+
+def spans_changed(before: dict, after: dict) -> dict:
+    """{compared, changed}: of the runs both scorings settled on spans, how
+    many settled on span sets that do not agree (brand_claim_verdict.spans_agree)."""
+    from scoring import brand_claim_verdict as bcv
+    common = sorted(set(before) & set(after))
+    return {'compared': len(common),
+            'changed': sum(1 for r in common if not bcv.spans_agree(before[r], after[r]))}
+
+
 def brand_claim_rows(conn, cid: int) -> list:
     rows = conn.execute(text("""
         SELECT extraction, outcome, reason_code FROM soa_expectation_outcomes
@@ -1114,6 +1141,11 @@ def main(argv=None) -> int:
 
     from scoring.expectation_batch import score_runs
 
+    if 'brand_direct' in tiers:
+        # 2O-3: the stored spans, to count the span sets this scoring changes
+        with engine.connect() as conn:
+            before_spans = settled_spans(conn, cid)
+
     summary = asyncio.run(score_runs(run_ids, concurrency=args.concurrency))
 
     with engine.connect() as conn:
@@ -1146,6 +1178,10 @@ def main(argv=None) -> int:
             claims = claim_report(brand_claim_rows(conn, cid))
         print("\nbrand-claim verdict (2O-3, no model call; the verdict is a lookup):")
         print(_render_claims(claims))
+        with engine.connect() as conn:
+            changed = spans_changed(before_spans, settled_spans(conn, cid))
+        print(f"    span sets changed since the stored scoring: {changed['changed']} of {changed['compared']} "
+              f"(answers both scorings decided on spans; the run-to-run variance the model still puts in)")
 
     for failure in summary.failures[:10]:
         print(f"    FAILED run {failure.run_id}: {failure.status} "

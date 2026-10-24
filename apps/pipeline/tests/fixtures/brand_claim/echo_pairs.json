@@ -1,0 +1,65 @@
+{
+ "_note": "HAND-WRITTEN question/answer pairs in the demo's shape (Pampers brand-direct questions, one answer sentence each), with the verdict a reader gives the sentence against fl13_record_pages.json's index. Not recorded answers. The echo threshold (brand_claim_verdict.ECHO_THRESHOLD) is set between the restatements and the rest.",
+ "pairs": [
+  {
+   "question": "Are Pampers Swaddlers good for newborns?",
+   "span": "Pampers Swaddlers are good for newborns.",
+   "verdict": "echoed"
+  },
+  {
+   "question": "Are Pampers Swaddlers good for newborns?",
+   "span": "Yes, Pampers Swaddlers are a good diaper for newborns.",
+   "verdict": "echoed"
+  },
+  {
+   "question": "Is Pampers Pure Protection fragrance free?",
+   "span": "Pampers Pure Protection is fragrance free.",
+   "verdict": "echoed"
+  },
+  {
+   "question": "Are Pampers Cruisers 360 good for active babies?",
+   "span": "Pampers Cruisers 360 are good for active babies.",
+   "verdict": "echoed"
+  },
+  {
+   "question": "Is Pampers a good diaper brand?",
+   "span": "Pampers is a good diaper brand.",
+   "verdict": "echoed"
+  },
+  {
+   "question": "Where can I buy Pampers Swaddlers?",
+   "span": "You can buy Pampers Swaddlers in many places.",
+   "verdict": "no_fact"
+  },
+  {
+   "question": "Are Pampers Swaddlers good for newborns?",
+   "span": "Parents love how soft and absorbent Pampers Swaddlers feel.",
+   "verdict": "no_fact"
+  },
+  {
+   "question": "Is Pampers a good diaper brand?",
+   "span": "Pampers is trusted by millions of parents and known for comfort.",
+   "verdict": "no_fact"
+  },
+  {
+   "question": "How long do Pampers Baby Dry last overnight?",
+   "span": "Pampers Baby Dry diapers are designed to keep babies comfortable all night long.",
+   "verdict": "no_fact"
+  },
+  {
+   "question": "Are Pampers Swaddlers good for newborns?",
+   "span": "Pampers Swaddlers are widely considered the gold standard in hospitals.",
+   "verdict": "fabricated"
+  },
+  {
+   "question": "Is Pampers Pure Protection fragrance free?",
+   "span": "Pampers Pure Protection is fragrance free and has a plant-based liner.",
+   "verdict": "grounded"
+  },
+  {
+   "question": "Where can I buy Pampers Swaddlers?",
+   "span": "You can buy Pampers Swaddlers at Target.",
+   "verdict": "fabricated"
+  }
+ ]
+}
