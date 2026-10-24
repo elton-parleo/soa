@@ -51,6 +51,23 @@ Now the record gives only spans, and the verdict is a lookup:
                transcription's cannot-find check already uses), echoed, then
                unscoreable: fact_type_not_read, else no_checkable_fact.
 
+2O-5: a fact is looked up against the index's slots (brand_fact_index.
+check): `fabricated` now means contradicted, the index holding a value for
+the fact's slot and the claim's differing (a (line, size) weight range, a
+line's sizes, counts or status, an attribute the page states the opposite
+of, a line off the brand's served line list). A fact the index does not
+hold, and nothing contradicts, is `unverified`: per span, and per answer
+when no span is grounded or contradicted, stored `unscoreable` with reason
+code `unverified` (outside every count and the fabricated signal, as 2N-1's
+per_unit is; no migration) and read as `unverified` by the console ("not on
+the pages read; nothing contradicts it"). A price is always unverified here,
+a store off the merchant's list too. Per answer, worst first: misattributed,
+fabricated, grounded, acknowledged_unknown, unverified, echoed, then
+unscoreable no_checkable_fact. A contradicted fact stores its slot, the
+claim's value and the index's, and the reason is the drawer line
+("fabricated: '2 to 9 lbs' for Swaddlers Newborn — pampers.com's chart says
+under 10 lb").
+
 `unscoreable` / no_checkable_fact is outside every count, as unscoreable
 always is: "Pampers is a great choice" states nothing a brand could have
 published or not.
@@ -61,12 +78,14 @@ unchecked, the span that decided, and the index's version and digest; the
 reason quotes the deciding span and names the fact ("'Swaddlers fit 2-9
 lbs.' — '2-9 lbs' is not on pampers.com's Swaddlers page").
 """
+import json
 import re
 from typing import List, Optional
 
 from parser import extraction_postprocess as pp
 from scoring import brand_fact_index as bfi
 from scoring.brand_direct_classifier import spans_overlap
+from soa_shared import attribute_accuracy as aa
 from soa_shared import expected_answers as ea
 from soa_shared.retailers import retailer_name, retailers_named
 
@@ -74,6 +93,8 @@ GROUNDED, ECHOED, MISATTRIBUTED, FABRICATED = 'grounded', 'echoed', 'misattribut
 ACKNOWLEDGED_UNKNOWN, ABSENT, UNSCOREABLE = 'acknowledged_unknown', 'absent', 'unscoreable'
 #: a span's own verdicts that are not answer outcomes
 NO_FACT, NOT_READ = 'no_fact', 'not_read'
+#: 2O-5: facts, none found or contradicted (the answer's is stored unscoreable, reason UNVERIFIED)
+UNVERIFIED = ea.UNVERIFIED
 
 #: A span echoes the question when at least this share of its words (stop
 #: words, numbers and names aside) are the question's, and it states no
@@ -86,6 +107,9 @@ SPAN_KINDS = ('price', 'availability', 'attribute', 'where_to_buy', 'recommendat
 
 #: Reason codes (scripts/rescore_cycle.RULES names each)
 CODE_FACT_MISSING = 'fact_not_published'
+#: 2O-5: a fact the brand's pages state otherwise
+CODE_CONTRADICTED = 'fact_contradicted'
+CODE_UNVERIFIED = ea.UNVERIFIED
 CODE_FACTS_FOUND = 'facts_published'
 CODE_NO_CHECKABLE_FACT = ea.NO_CHECKABLE_FACT
 CODE_NOT_READ = ea.FACT_TYPE_NOT_READ
@@ -231,10 +255,35 @@ def other_brand_names(record) -> List[List[str]]:
     return [w for w in out if w]
 
 
-def judge_span(text, *, question, brand, index, others=(), own_domains=(), facts=None, line=None) -> dict:
+def weight_sizes(text) -> dict:
+    """2O-5: the size each weight range in the text is for, the nearest size
+    token before it within SIZE_REACH, else the nearest after it (attribute_
+    accuracy.weight_from_answer's rule): {json(range): size or None}."""
+    flat = aa.normalize(str(text or ''))
+    sizes = [(m.start(), m.end(), aa._SIZE_ALIASES.get((m.group(1) or m.group(2)).lower(),
+                                                         (m.group(1) or m.group(2)).lower()))
+             for m in aa._ANY_SIZE.finditer(flat)]
+    out = {}
+    for rng, start, end in aa.parse_ranges(flat):
+        before = [t for t in sizes if t[1] <= start and start - t[1] <= aa.SIZE_REACH]
+        after = [t for t in sizes if t[0] >= end and t[0] - end <= aa.SIZE_REACH]
+        owner = before[-1] if before else (after[0] if after else None)
+        out.setdefault(json.dumps(rng, sort_keys=True), owner[2] if owner else None)
+    return out
+
+
+def _only_size(facts) -> Optional[str]:
+    sizes = [v for f in facts if f['type'] == 'size' for v in (f.get('value') or [])]
+    return sizes[0] if len(sizes) == 1 else None
+
+
+def judge_span(text, *, question, brand, index, others=(), own_domains=(), facts=None, line=None,
+               lines=(), question_lines=()) -> dict:
     """One span's verdict. 2O-4: `facts` the selector's (brand_claim_selector.
     checkable: the span's facts less the line that qualifies it) and `line`
-    that line, for the reason; else the span's own facts."""
+    that line, for the reason; else the span's own facts. 2O-5: `lines` the
+    brand's lines the unit, its sentence or its lead-in names, and
+    `question_lines` the question's, for the slot a fact is checked in."""
     if facts is None:
         facts = bfi.facts_in(text, brand, own_domains=own_domains)
     q_facts = bfi.facts_in(question, brand, own_domains=own_domains)
@@ -244,30 +293,51 @@ def judge_span(text, *, question, brand, index, others=(), own_domains=(), facts
     # the brand's own line the span names, for the reason ("pampers.com's Swaddlers page")
     out['line'] = line or next((f['text'] for f in names if bfi.lookup(f, index) == bfi.FOUND), None)
     for f in names:
-        if bfi.lookup(f, index) == bfi.FOUND:
+        if bfi.check(f, index)['status'] == bfi.FOUND:
             continue
         want = {bfi.stem(t) for t in f['value']}
         other = next((o for o in others if want <= {bfi.stem(t) for t in o}), None)
         if other:
             out.update(verdict=MISATTRIBUTED, other=' '.join(other), facts_found=[], facts_unchecked=[],
-                       facts_missing=[{'type': 'name', 'text': f['text']}])
+                       facts_unverified=[], facts_missing=[{'type': 'name', 'text': f['text']}])
             return out
+    # 2O-5: the slot a fact is checked in: the line the claim is about, and
+    # for a weight the size it is for (in the sentence, else the question's)
+    about = out['line'] or next(iter(lines or ()), None) or next(iter(question_lines or ()), None) or \
+        next((f['text'] for f in bfi.brand_names(question, brand)), None)
+    sentence_sizes = weight_sizes(text)
+    has_size = any(f['type'] == 'size' for f in facts) or any(sentence_sizes.values())
+    asked_size = None if has_size else _only_size(q_facts)
     added = [f for f in facts if not _in_question(f, q_facts, q_words)]
-    found, missing, unchecked = [], [], []
+    found, missing, unverified = [], [], []
     for f in added:
-        status = bfi.lookup(f, index)
-        (found if status == bfi.FOUND else missing if status == bfi.MISSING else unchecked).append(
-            {'type': f['type'], 'text': f['text']})
-    out.update(facts_found=found, facts_missing=missing, facts_unchecked=unchecked)
+        size = None
+        if f['type'] == 'weight':
+            size = sentence_sizes.get(json.dumps(f.get('value'), sort_keys=True)) or \
+                (_only_size(facts) if len(sentence_sizes) == 1 else None) or asked_size
+        checked = bfi.check(f, index, line=about, size=size)
+        entry = {'type': f['type'], 'text': f['text']}
+        if checked['status'] == bfi.FOUND:
+            found.append(entry)
+        elif checked['status'] == bfi.CONTRADICTED:
+            missing.append({**entry, **{k: checked[k] for k in ('slot', 'claimed', 'published', 'line', 'size',
+                                                                 'source') if k in checked}})
+        else:
+            unverified.append(entry)
+    out.update(facts_found=found, facts_missing=missing, facts_unverified=unverified, facts_unchecked=[],
+               about=about)
     if not added:
         out['overlap'] = round(overlap(text, question, brand, [f['value'] for f in names]), 3)
         out['verdict'] = ECHOED if out['overlap'] >= ECHO_THRESHOLD else NO_FACT
     elif missing:
         out['verdict'] = FABRICATED
-    elif found:
+    elif [f for f in found if not (f['type'] == 'name' and f['text'] == about)] or (found and not unverified):
+        # 2O-5: the line a claim is about being the brand's grounds nothing
+        # by itself ("Pampers Swaddlers fit 2-9 lbs": the line is real, the
+        # range is the claim) unless nothing else it states is unverified
         out['verdict'] = GROUNDED
     else:
-        out['verdict'] = NOT_READ
+        out['verdict'] = UNVERIFIED
     return out
 
 
@@ -282,6 +352,22 @@ def _where(fact: dict, span: dict, index, brand) -> str:
     line = span.get('line')
     place = f"{domain}'s {line} page" if line else f"{possessive(brand)} record or the {domain} pages read this cycle"
     return f"{fact['text']!r} is not on {place}"
+
+
+def contradiction(fact: dict, index, brand) -> str:
+    """2O-5: the drawer line for a contradicted fact: "fabricated: '2 to 9
+    lbs' for Swaddlers Newborn — pampers.com's chart says under 10 lb"."""
+    domain = index.domain or 'the brand site'
+    claimed = fact.get('claimed') or fact.get('text')
+    if fact.get('slot') == 'lines':
+        return f"fabricated: {claimed!r} — not a {brand} line; {domain}'s line list is {fact.get('published')}"
+    subject = ' '.join(x for x in (fact.get('line') or brand,
+                                   bfi.size_label(fact['size']) if fact.get('size') and fact['type'] == 'weight'
+                                   else None) if x)
+    if fact.get('source') == 'record':   # the feed's range alone: the brand's record, not a page
+        return f"fabricated: {claimed!r} for {subject} — {possessive(brand)} record says {fact.get('published')}"
+    source = bfi.SLOT_SOURCE.get(fact['type'], 'page')
+    return f"fabricated: {claimed!r} for {subject} — {domain}'s {source} says {fact.get('published')}"
 
 
 def unknown_sentence(record) -> Optional[str]:
@@ -329,8 +415,10 @@ def decide(record, expectation, *, question, index: 'bfi.FactIndex', own_domains
         return done(MISATTRIBUTED, f"named {brand} but described {span['other']}: {span['text']!r}", at=i)
     i, span = first(FABRICATED)
     if span:
-        return done(FABRICATED, f"{span['text']!r} — {_where(span['facts_missing'][0], span, index, brand)}",
-                    CODE_FACT_MISSING, i)
+        fact = span['facts_missing'][0]
+        if fact.get('slot'):
+            return done(FABRICATED, contradiction(fact, index, brand), CODE_CONTRADICTED, i)
+        return done(FABRICATED, f"{span['text']!r} — {_where(fact, span, index, brand)}", CODE_FACT_MISSING, i)
     i, span = first(GROUNDED)
     if span:
         facts = ', '.join(repr(f['text']) for f in span['facts_found'])
@@ -339,6 +427,9 @@ def decide(record, expectation, *, question, index: 'bfi.FactIndex', own_domains
     unknown = unknown_sentence(record)
     if unknown:
         return done(ACKNOWLEDGED_UNKNOWN, f"said it could not find {brand}: {unknown!r}")
+    i, span = first(UNVERIFIED)
+    if span:
+        return done(UNSCOREABLE, f"{span['text']!r} — {ea.UNVERIFIED_NOTE}", CODE_UNVERIFIED, i)
     i, span = first(ECHOED)
     if span:
         return done(ECHOED, f"{span['text']!r} — restates the question and adds no fact", at=i)

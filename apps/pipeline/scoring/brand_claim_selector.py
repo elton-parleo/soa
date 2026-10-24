@@ -256,8 +256,11 @@ def select(answer, *, question, vocab: Vocabulary, own_domains=()) -> dict:
         labels.append({'span_id': unit['id'], 'text': text, 'kind': 'assertion' if claim else 'none',
                        'modality': 'hedged' if is_hedged else 'asserted'})
         if claim:
+            # 2O-5: the brand's lines the unit (or the sentence or lead-in it was
+            # chosen by) names, for the slot its facts are checked in
             claims.append({'span_id': unit['id'], 'text': text, 'via': via, 'qualifier': qualifier,
-                           'facts': facts, 'selected_for': claim})
+                           'facts': facts, 'selected_for': claim,
+                           'lines': [n for n in named if n in vocab.lines]})
         elif is_hedged:
             hedges += 1
         else:
@@ -274,7 +277,8 @@ def select(answer, *, question, vocab: Vocabulary, own_domains=()) -> dict:
         'recommended_retailers': [retailer_name(d) for d in stores],
         'sources_cited': [],
         'selector': {'vocabulary': vocab.stamp(), 'units': len(units), 'about_brand': len(labels),
-                     'hedged': hedges, 'no_fact': no_fact, 'claims': claims},
+                     'hedged': hedges, 'no_fact': no_fact, 'claims': claims,
+                     'question_lines': [n for n in vocab.names_brand(question or '') if n in vocab.lines]},
     }
 
 
@@ -306,7 +310,8 @@ def decide(record, expectation, *, index: 'bfi.FactIndex', own_domains=()) -> di
     for claim in claims:
         judged = bcv.judge_span(claim['text'], question=question, brand=brand, index=index, others=others,
                                 own_domains=own_domains, facts=claim.get('facts') or [],
-                                line=claim.get('qualifier'))
+                                line=claim.get('qualifier'), lines=claim.get('lines') or (),
+                                question_lines=(record.get('selector') or {}).get('question_lines') or ())
         judged.update(via=claim.get('via'), qualifier=claim.get('qualifier'))
         spans.append(judged)
     decided = bcv.decide(record, expectation, question=question, index=index, own_domains=own_domains, spans=spans)

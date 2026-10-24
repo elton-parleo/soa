@@ -48,6 +48,13 @@ EXPECTATION = ea.brand_mention('Pampers', 'pampers.com')
 OWN = ['pampers.com']
 STUDY = {'terms': ['Pampers'], 'product_names': [], 'rivals': ANSWERS['rivals']}
 HAND = [a for a in ANSWERS['answers'] if a.get('hand')]
+#: 2O-5: the hand counts' outcomes under "fabricated means contradicted". Each
+#: was fabricated for a fact the index did not hold, and nothing contradicts:
+#: 3 Target off the retailer list (Walmart and Amazon on it), 6 a 120 count
+#: box (the stretchy waistband on the page), 7 "#1 pediatrician recommended"
+#: (Swaddlers and Cruisers named), 8 Size 7 (Newborn to 6 on the chart). The
+#: sentences counted are unchanged.
+HAND_2O5 = {3: 'grounded', 6: 'grounded', 7: 'grounded', 8: 'grounded'}
 
 
 def vocab():
@@ -153,7 +160,7 @@ def test_the_brand_terms_are_read_once_per_cycle_from_the_entities_and_the_study
 def test_the_claim_sentences_counted_by_hand(answer):
     record, decided = judge(answer['answer'], answer['question'])
     assert [c['text'] for c in record['selector']['claims']] == answer['hand']['claims']
-    assert decided['outcome'] == answer['hand']['outcome']
+    assert decided['outcome'] == HAND_2O5.get(answer['id'], answer['hand']['outcome'])
 
 
 def test_ten_answers_are_counted_by_hand_and_eighteen_claims_between_them():
@@ -164,16 +171,22 @@ def test_every_claim_is_judged_and_the_worst_decides():
     one = next(a for a in ANSWERS['answers'] if a['id'] == 7)
     _record, decided = judge(one['answer'], one['question'])
     spans = decided['brand_claim']['spans']
-    assert [s['verdict'] for s in spans] == ['echoed', 'fabricated', 'grounded']
-    assert decided['brand_claim']['decided_by'] == 1
-    assert {f['text'] for f in spans[1]['facts_missing']} == {'#1', 'pediatrician recommended'}
+    # 2O-5: "#1 pediatrician recommended" is not on the pages read, and nothing contradicts it
+    assert [s['verdict'] for s in spans] == ['echoed', 'unverified', 'grounded']
+    assert decided['brand_claim']['decided_by'] == 2
+    assert {f['text'] for f in spans[1]['facts_unverified']} == {'#1', 'pediatrician recommended'}
     assert [(s['via'], s['qualifier']) for s in spans] == [('named', None), ('named', None), ('named', 'Swaddlers')]
     # misattributed beats fabricated, fabricated beats grounded
     answer = ("Huggies Little Snugglers are popular. Pampers Swaddlers come in a 120 count box. "
               "Pampers Little Snugglers fit babies 8-14 lbs. Pampers Swaddlers Size 1 fit 8-14 lbs.")
     _record, decided = judge(answer, 'What weight do Pampers Swaddlers Size 1 fit?')
-    assert [s['verdict'] for s in decided['brand_claim']['spans']] == ['fabricated', 'misattributed', 'grounded']
+    assert [s['verdict'] for s in decided['brand_claim']['spans']] == ['unverified', 'misattributed', 'grounded']
     assert decided['outcome'] == 'misattributed'
+    # contradicted beats grounded: Swaddlers Size 1 is 8-14 on the record and the page's chart
+    answer = "Pampers Swaddlers Size 1 fit 8-14 lbs. Pampers Swaddlers Size 1 fit 2-9 lbs."
+    _record, decided = judge(answer, 'What weight do Pampers Swaddlers Size 1 fit?')
+    assert [s['verdict'] for s in decided['brand_claim']['spans']] == ['grounded', 'fabricated']
+    assert decided['outcome'] == 'fabricated'
 
 
 @pytest.mark.parametrize('answer,question,outcome,code', [
@@ -190,9 +203,10 @@ def test_every_claim_is_judged_and_the_worst_decides():
      ea.NO_CHECKABLE_FACT),
     ('Some parents say Pampers Swaddlers fit babies 6-12 lbs.', 'What weight do Pampers Swaddlers Size 1 fit?',
      'unscoreable', ea.NO_CHECKABLE_FACT),
-    # a line the brand never made, as the line that qualifies the sentence, is still looked up
+    # a line the brand never made, as the line that qualifies the sentence, is still looked up;
+    # 2O-5: and with no line list served, not on the index is unverified, never fabricated
     ('Pampers Swaddlers Overnights fit babies 8-14 lbs.', 'What weight do Pampers Swaddlers Size 1 fit?',
-     'fabricated', 'fact_not_published'),
+     'unscoreable', ea.UNVERIFIED),
     # a clause that names a rival and not the brand is the rival's
     ('Pampers Swaddlers fit 8-14 lbs, while Huggies fits 6-12 lbs.', 'What weight do Pampers Swaddlers fit?',
      'grounded', 'facts_published'),
@@ -207,14 +221,15 @@ def test_what_is_a_claim(answer, question, outcome, code):
 def test_the_record_stores_every_judged_sentence_and_how_it_was_chosen():
     one = next(a for a in ANSWERS['answers'] if a['id'] == 8)
     record, decided = judge(one['answer'], one['question'])
-    assert record['coder'] == {'version': 4, 'question': one['question'], 'calls': []}
+    assert record['coder'] == {'version': 5, 'question': one['question'], 'calls': []}
     assert record['selector']['units'] == 5 and record['selector']['about_brand'] == 4
     assert [c['via'] for c in record['selector']['claims']] == ['named', 'lead_in', 'lead_in', 'lead_in']
     assert record['selector']['vocabulary']['lines'][:2] == ['Swaddlers', 'Baby Dry']
     claim = decided['brand_claim']
-    assert claim['version'] == 4 and len(claim['spans']) == 4
-    assert claim['spans'][3]['facts_missing'][0] == {'type': 'size', 'text': 'Size 7'}
-    assert claim['index']['by_source'] == {'record': 3, 'catalog': 27, 'brand_pages': 53}
+    assert claim['version'] == 5 and len(claim['spans']) == 4
+    # 2O-5: under a lead-in naming no line, Size 7 is unverified (the chart is Swaddlers', Baby Dry's ...)
+    assert claim['spans'][3]['facts_unverified'][0] == {'type': 'size', 'text': 'Size 7'}
+    assert claim['index']['by_source'] == {'record': 3, 'catalog': 34, 'brand_pages': 154}
     assert claim['selector'] == {'units': 5, 'about_brand': 4, 'hedged': 0, 'no_fact': 0}
     # span_labels: the units about the brand, by rule, for the claim-kind chip
     assert [lab['kind'] for lab in record['span_labels']] == ['assertion'] * 4
@@ -291,7 +306,7 @@ def test_the_scorer_makes_no_model_call_and_stores_the_selection(db):
     row = next(r for r in outcomes(db) if r['run_id'] == 107)
     extraction = json.loads(row['extraction'])
     assert row['extraction_model'] is None and extraction['coder']['calls'] == []
-    assert [s['verdict'] for s in extraction['brand_claim']['spans']] == ['echoed', 'fabricated', 'grounded']
+    assert [s['verdict'] for s in extraction['brand_claim']['spans']] == ['echoed', 'unverified', 'grounded']
 
 
 def test_two_runs_over_the_fixture_give_identical_outcomes(db):
@@ -308,8 +323,8 @@ def test_two_runs_over_the_fixture_give_identical_outcomes(db):
 
 def test_the_fl13_shaped_split():
     outcomes_ = Counter(judge(a['answer'], a['question'])[1]['outcome'] for a in ANSWERS['answers'])
-    assert outcomes_ == Counter({'grounded': 6, 'fabricated': 4, 'echoed': 2, 'misattributed': 1, 'unscoreable': 1,
-                                 'absent': 1})
+    # 2O-5: the four fabricated for a fact absent from the index are grounded on another sentence
+    assert outcomes_ == Counter({'grounded': 10, 'echoed': 2, 'misattributed': 1, 'unscoreable': 1, 'absent': 1})
 
 
 # ── the FL14-shaped fixture ───────────────────────────────────────────────
@@ -333,9 +348,12 @@ def test_fl14_shaped_verdict_split():
     """The 2O-3 fixture's 258 answers (one sentence or two each, from its
     bank), decided by rule. Its records' model picks no longer matter."""
     verdicts = fl14_verdicts()
+    # 2O-5: of 2O-4's 64 fabricated, 15 are contradicted (Swaddlers Size 1 at 6-12 lbs), the rest
+    # unverified (31), grounded on another sentence (16) or acknowledged_unknown (2)
     assert Counter((d['outcome'], d['reason_code']) for _r, d in verdicts) == Counter({
-        ('unscoreable', ea.NO_CHECKABLE_FACT): 92, ('grounded', 'facts_published'): 78,
-        ('fabricated', 'fact_not_published'): 64, ('absent', None): 22, ('acknowledged_unknown', None): 2})
+        ('unscoreable', ea.NO_CHECKABLE_FACT): 92, ('grounded', 'facts_published'): 94,
+        ('fabricated', 'fact_contradicted'): 15, ('unscoreable', ea.UNVERIFIED): 31, ('absent', None): 22,
+        ('acknowledged_unknown', None): 4})
     claims = sorted(len(r['selector']['claims']) for r, _d in verdicts)
     assert (sum(claims), claims[0], claims[len(claims) // 2], claims[-1]) == (145, 0, 1, 2)
 
@@ -394,9 +412,15 @@ def test_the_rescore_twice_and_dry_run_print_the_same_brand_direct_lines(db, cap
     code, second = _main(monkeypatch, capsys)
     assert code == 0
     assert 'rows whose outcome moved: 0 of 15' in second and 'primary outcomes changed in: nothing' in second
-    assert 'brand-direct claims (2O-4: selected by rule, no model call; each looked up in the fact index):' in second
+    assert ('brand-direct claims (2O-4: selected by rule, no model call; 2O-5: fabricated is contradicted by the '
+            'fact index, absent is unverified):') in second
     digest = index().digest()
-    assert f'    fact index           83 facts (record 3, catalog 27, brand pages 53); v1 {digest}' in second
+    assert f'    fact index           191 facts (record 3, catalog 34, brand pages 154); v2 {digest}' in second
+    # 2O-5: the slots, and the split with unverified apart from unscoreable
+    assert "    index slots          lines 10 (status known 6, retired: none; the brand's line list not served)" in second
+    assert '      ranges per size    Newborn 6, Size 1 6, Size 2 6, Size 3 6, Size 4 6, Size 5 8, Size 6 6' in second
+    assert '    split                grounded 10, misattributed 1, echoed 2, absent 1, unscoreable 1  (' in second
+    assert '    fabricated, by the slot contradicted: none' in second
     assert '    answers              15' in second
     assert '    claim sentences      22  (per answer: min 0, median 1, max 4;' in second
     assert '    no_checkable_fact    1  (6.7% of answers; unscoreable, outside the counts)' in second

@@ -82,19 +82,37 @@ def decide(calls, answer, question=QUESTION, facts=FACTS, index=None):
 
 # ── the verdict is the index's ────────────────────────────────────────────
 
-FABRICATED = "Pampers Swaddlers fit babies 2-9 lbs. They come in a 96 count box."
+# 2O-5: fabricated is contradicted: the record's Swaddlers Size 1 is 8-14 lbs
+FABRICATED = "Pampers Swaddlers Size 1 fit babies 2-9 lbs. They come in a 96 count box."
 
 
 def test_a_fact_not_on_the_index_is_fabricated_and_the_reason_names_it():
     v = decide([record(FABRICATED), record(FABRICATED)], FABRICATED)
-    assert (v.outcome, v.reason_code) == ('fabricated', 'fact_not_published')
-    assert v.reason == ("'Pampers Swaddlers fit babies 2-9 lbs.' — '2-9 lbs' is not on pampers.com's "
-                        "Swaddlers page")
+    assert (v.outcome, v.reason_code) == ('fabricated', 'fact_contradicted')
+    # the feed's range alone is the brand's record, not a page's chart
+    assert v.reason == "fabricated: '2-9 lbs' for Swaddlers Size 1 — Pampers' record says 8 to 14 lb"
     span = v.brand_claim['spans'][v.brand_claim['decided_by']]
-    assert span['facts_missing'] == [{'type': 'weight', 'text': '2-9 lbs'}]
+    assert span['facts_missing'] == [{'type': 'weight', 'text': '2-9 lbs', 'slot': 'ranges', 'claimed': '2-9 lbs',
+                                      'published': '8 to 14 lb', 'line': 'Swaddlers', 'size': '1',
+                                      'source': 'record'}]
     # Swaddlers is the question's, so not a fact the span adds; it names the page
-    assert span['facts_found'] == [] and span['line'] == 'Swaddlers'
+    assert span['facts_found'] == [{'type': 'size', 'text': 'Size 1'}] and span['line'] == 'Swaddlers'
     assert v.brand_claim['index']['version'] == bfi.INDEX_VERSION and v.brand_claim['index']['digest']
+
+
+def test_a_fact_the_index_does_not_hold_is_unverified_not_fabricated():
+    """2O-5: no size named, and the record's Swaddlers sizes are the feed's
+    sample, not a chart: nothing contradicts 2-9 lbs. The 96 count box is
+    on the record, so the answer is grounded on its second sentence."""
+    answer = "Pampers Swaddlers fit babies 2-9 lbs. They come in a 96 count box."
+    v = decide([record(answer), record(answer)], answer)
+    assert (v.outcome, v.reason_code) == ('grounded', 'facts_published')
+    first = v.brand_claim['spans'][0]
+    assert first['verdict'] == 'unverified' and first['facts_unverified'] == [{'type': 'weight', 'text': '2-9 lbs'}]
+    alone = "Pampers Swaddlers fit babies 2-9 lbs."
+    v = decide([record(alone), record(alone)], alone)
+    assert (v.outcome, v.reason_code) == ('unscoreable', ea.UNVERIFIED)
+    assert v.reason == f"'Pampers Swaddlers fit babies 2-9 lbs.' — {ea.UNVERIFIED_NOTE}"
 
 
 def test_every_fact_on_the_index_is_grounded():
@@ -165,10 +183,10 @@ def seed(db, answer, question=QUESTION):
 def test_a_stored_version_3_record_settles_on_its_spans_and_keeps_the_evidence():
     v = decide([record(FABRICATED), record(FABRICATED)], FABRICATED)
     assert v.coder == {'pair': [0, 1], 'refused': [False, False]}
-    assert (v.outcome, v.reason_code) == ('fabricated', 'fact_not_published')
+    assert (v.outcome, v.reason_code) == ('fabricated', 'fact_contradicted')
     claim = v.brand_claim
     assert claim['version'] == 3
-    assert claim['spans'][claim['decided_by']]['facts_missing'] == [{'type': 'weight', 'text': '2-9 lbs'}]
+    assert claim['spans'][claim['decided_by']]['facts_missing'][0]['text'] == '2-9 lbs'
 
 
 def test_a_span_not_in_the_answer_refuses_the_call_and_a_third_decides():

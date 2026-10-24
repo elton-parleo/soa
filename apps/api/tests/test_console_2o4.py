@@ -21,17 +21,18 @@ def _body(version, coded, of=258, oldest=None, coder=None):
 
 
 def test_the_version():
-    assert score_svc.SCORER_VERSION == '14' and ea.BRAND_CODER_VERSION == 4
+    # 2O-5 moved the current version on (test_console_2o5); version 4's outcomes still compare as "14"
     assert score_svc.SCORER_CHANGES['14'] == 'brand-direct claims selected by rule, no model call'
     # no dimension reads the brand-direct outcome: the version never explains a moved score
     assert score_svc.SCORER_CHANGE_APPLIES['14']({}) is False
-    assert score_svc.CODER_SCORER_VERSIONS == {None: '11', 1: '11', 2: '12', 3: '13', 4: '14'}
+    assert {k: score_svc.CODER_SCORER_VERSIONS[k] for k in (None, 1, 2, 3, 4)} == \
+        {None: '11', 1: '11', 2: '12', 3: '13', 4: '14'}
 
 
 def test_a_cycle_compares_as_its_oldest_brand_direct_outcome():
-    assert score_svc.comparable_version(_body('14', 258, oldest=4)) == '14'
-    assert score_svc.comparable_version(_body('14', 200, oldest=3)) == '13'
-    assert score_svc.comparable_version(_body('14', 200, oldest=2)) == '12'
+    assert score_svc.comparable_version(_body('14', 258, oldest=4, coder=4)) == '14'
+    assert score_svc.comparable_version(_body('14', 200, oldest=3, coder=4)) == '13'
+    assert score_svc.comparable_version(_body('14', 200, oldest=2, coder=4)) == '12'
     # a score stored under 13, whose block counted version-3 rows
     assert score_svc.comparable_version(_body('13', 258, oldest=3, coder=3)) == '13'
     assert score_svc.comparable_version(_body('13', 200, oldest=2, coder=3)) == '12'
@@ -47,7 +48,8 @@ def test_fl14_re_scored_is_not_comparable_to_a_cycle_on_version_3():
 
 def test_the_coder_count():
     rows = [{'tier': 'brand_direct', 'outcome': 'echoed', 'coder_version': v} for v in (4, 4, 3)]
-    assert score_svc.brand_coder(rows) == {'version': 4, 'coded': 2, 'of': 3, 'oldest': 3}
+    # 2O-5: coded counts the current coder's (5) rows
+    assert score_svc.brand_coder(rows) == {'version': ea.BRAND_CODER_VERSION, 'coded': 0, 'of': 3, 'oldest': 3}
 
 
 SPANS = [
