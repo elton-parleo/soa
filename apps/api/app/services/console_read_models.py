@@ -533,7 +533,10 @@ def brand_claim_evidence(extraction: Optional[dict]) -> Optional[dict]:
     {span, kind, facts_found, facts_missing, facts_unchecked, spans, index}.
     `span` is the claim that decided ("fabricated: '2-9 lbs' is not on
     pampers.com's Swaddlers page" is the row's summary); None when no span
-    decided (no_checkable_fact, acknowledged_unknown) or the row predates it."""
+    decided (no_checkable_fact, acknowledged_unknown) or the row predates it.
+    2O-4: and `sentences`, every claim sentence judged, in answer order, each
+    {text, kind, verdict, facts_found, facts_missing, facts_unchecked,
+    decided}, so the drawer lists them all, not only the one that decided."""
     claim = (extraction or {}).get('brand_claim') if isinstance(extraction, dict) else None
     if not isinstance(claim, dict):
         return None
@@ -543,7 +546,11 @@ def brand_claim_evidence(extraction: Optional[dict]) -> Optional[dict]:
     return {'span': span.get('text'), 'kind': span.get('kind'),
             'facts_found': span.get('facts_found') or [], 'facts_missing': span.get('facts_missing') or [],
             'facts_unchecked': span.get('facts_unchecked') or [], 'spans': len(spans),
-            'index': claim.get('index')}
+            'index': claim.get('index'),
+            'sentences': [{'text': s.get('text'), 'kind': s.get('kind'), 'verdict': s.get('verdict'),
+                           'facts_found': s.get('facts_found') or [], 'facts_missing': s.get('facts_missing') or [],
+                           'facts_unchecked': s.get('facts_unchecked') or [], 'decided': i == at}
+                          for i, s in enumerate(spans)]}
 
 
 # ─── Answers summary (2C) ──────────────────────────────────────────────────

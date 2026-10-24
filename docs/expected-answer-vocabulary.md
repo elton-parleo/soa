@@ -295,6 +295,20 @@ facts all on it, `grounded`; a span that only restates the question,
 outside the counts. Rules and precedence: `scoring/brand_claim_verdict.py`.
 A record version 2 wrote is still decided by the classifier below.
 
+**2O-4 (brand-claim coder version 4): the claims are selected by rule.** No
+model call for this tier. The answer is cut by the pipeline's segmenter, and
+a sentence is a claim when it names the brand or one of its lines (the
+brand's name, the study's terms as Visibility counts them, the cycle's
+competitor entities kept apart, the line names in the catalog's and the
+study's product titles), or is a clause of such a sentence or an item of a
+list it introduces, is not hedged and not a cannot-find statement, and
+carries a checkable fact beyond the line that qualifies it, or restates the
+question (`echoed`). Each claim is judged as version 3 judges a span; the
+worst decides (misattributed > fabricated > grounded > echoed). Every judged
+sentence is stored (`extraction.brand_claim.spans`) with how it qualified
+(`extraction.selector`). Rules: `scoring/brand_claim_selector.py`. A stored
+version-3 record is still decided over its calls.
+
 Two consequences worth stating:
 
 **Visibility is retired for this tier**, not renamed. It was the pass-1

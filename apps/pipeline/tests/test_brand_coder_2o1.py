@@ -13,6 +13,11 @@ tests/test_brand_claim_2o3.py). A stored version-2 record is still decided by
 the rule below, so these tests pin the version to 2 (pin_v2) and keep
 testing it.
 
+2O-4: the scorer makes no brand-direct call at all (the claims are selected
+by rule, tests/test_brand_claim_selector_2o4.py), so the scorer's two calls
+and the rescore's coder report are gone; what stays is a stored version-2
+record decided over its calls, as rescore --classify-only decides it.
+
 No model is called. The pairs (fixtures/brand_coder/coder_pairs.json) are
 hand-built records, not recordings: no key was present when this was
 written. The FL14-shaped fixture is built from the rescore printout
@@ -145,47 +150,16 @@ def seed_brand(db, answer):
         """), {'a': answer})
 
 
-def score_case(db, case):
-    seed_brand(db, case['answer'])
-    client = Replay(case)
-    scorer = scorer_module.ExpectationScorer(client, NoHistory(), FakeFacts(FACTS), labeler=False,
-                                             tenant_domains=NoTenant())
-    result = asyncio.run(scorer.score_run(7))
-    (row,) = outcomes(db)
-    return client, result, row
-
-
-@pytest.mark.parametrize('case', PAIRS['cases'], ids=[c['name'] for c in PAIRS['cases']])
-def test_the_scorer_makes_two_calls_and_a_third_only_on_a_disagreement(db, case):
-    client, result, row = score_case(db, case)
-    want = case['expect']
-    assert client.extract.await_count == want['calls']
-    # the extractor's settings, on every coder call
-    assert all(c.kwargs['settings'] == CODER_SETTINGS for c in client.extract.await_args_list)
-    assert row['outcome'] == want['outcome'] == result.outcome
-    stored = json.loads(row['extraction'])
-    coder = stored['coder']
-    assert coder['version'] == ea.BRAND_CODER_VERSION and len(coder['calls']) == want['calls']
-    assert coder['pair'] == want['pair'] and coder['settings'] == CODER_SETTINGS
-    assert [u['extract'] for u in coder['usage']] == [u['extract'] for u in case['usage']]
-    if want['pair']:
-        # the record is the settling call's
-        assert stored['brand_claims'] == case['calls'][want['pair'][0]]['brand_claims']
-    else:
-        assert (row['reason_code'], row['outcome_reason']) == (ea.CODER_DISAGREED, ea.CODER_DISAGREED_NOTE)
-
-
-def test_a_classify_only_re_score_re_takes_the_decision_from_the_stored_calls(db):
+def test_a_classify_only_re_score_re_takes_the_decision_from_the_stored_calls():
     """rescore --classify-only classifies the stored record: the same
     decision, twice, with no model call."""
     case = next(c for c in PAIRS['cases'] if c['name'] == 'disagree_claim_third_decides')
-    _client, _result, row = score_case(db, case)
-    stored = json.loads(row['extraction'])
+    stored = coded(case['calls'])
     run = SimpleNamespace(tier='brand_direct', source_ref={'merchant_slug': 'pampers'}, study_type=None, cycle_id=3,
                           answer_status=None, retrieved_sources=None, grounding=None)
     first = scorer_module.classify(run, EXPECTATION, stored, brand_facts=FakeFacts(FACTS))
     second = scorer_module.classify(run, EXPECTATION, stored, brand_facts=FakeFacts(FACTS))
-    assert first.outcome == second.outcome == row['outcome'] == 'fabricated'
+    assert first.outcome == second.outcome == 'fabricated'
     assert first.coder == second.coder == {'outcomes': ['fabricated', 'fabricated', 'fabricated'], 'pair': [0, 2]}
 
 
@@ -306,28 +280,6 @@ def test_the_moved_answers_are_the_printouts():
 
 
 # ── the rescore's report ──────────────────────────────────────────────────
-
-def test_the_rescore_reports_the_coders_calls_agreement_and_tokens(db):
-    stored = []
-    for case in PAIRS['cases']:
-        with db.begin() as conn:
-            conn.execute(text("DELETE FROM soa_runs")); conn.execute(text("DELETE FROM soa_queries"))
-            conn.execute(text("DELETE FROM soa_expectation_outcomes"))
-        _c, _r, row = score_case(db, case)
-        stored.append(json.loads(row['extraction']))
-    stored.append({'brand_mentioned': True})            # a row one call wrote, before 2O-1
-    report = rescore_cycle.coder_report(stored)
-    assert {k: report[k] for k in ('answers', 'single_call', 'calls', 'agreed_first_two', 'third_calls',
-                                   'settled_by_third', 'unsettled')} == \
-        {'answers': 5, 'single_call': 1, 'calls': 13, 'agreed_first_two': 2, 'third_calls': 3,
-         'settled_by_third': 2, 'unsettled': 1}
-    assert report['agreement_rate'] == 0.4
-    # the extraction's tokens only here: labeler=False makes no labelling call
-    assert (report['input_tokens'], report['output_tokens']) == (13 * 2900, 13 * 240)
-    # no stored price for the coder's model: no dollar figure, and the line says so
-    assert rescore_cycle.coder_dollars(report, 'gpt-5.4-mini') is None
-    assert 'no stored price for gpt-5.4-mini' in rescore_cycle._render_coder(report, 'gpt-5.4-mini')
-
 
 def test_coder_disagreed_is_a_named_rule():
     assert 'coder_disagreed' in rescore_cycle.RULES

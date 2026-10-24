@@ -1,0 +1,161 @@
+{
+  "_note": "FL13-SHAPED, HAND-WRITTEN, NOT RECORDED (2O-4). Fifteen brand-direct answers in the shape the FL13/FL14 agents give (markdown headings and lists, store lists, hedges, a rival named beside the brand), written against fl13_record_pages.json's record and pages (not pampers.com's). The questions are FL14's brand-direct questions. For ten answers `hand` lists the claim sentences counted by hand from the selector's rule (brand_claim_selector's docstring) before the selector was run, with why each other sentence is not one, and the verdict the claims should give against the FL13-shaped index. Rivals for the vocabulary: Huggies, Luvs. Nothing was read from production.",
+  "brand": "Pampers",
+  "domain": "pampers.com",
+  "rivals": ["Huggies", "Luvs"],
+  "answers": [
+    {
+      "id": 1, "query_code": "PAM_207", "agent": "perplexity",
+      "question": "Are Pampers Swaddlers good for newborns?",
+      "answer": "Pampers Swaddlers are widely considered the gold standard for newborns. They feature a wetness indicator that changes color and an umbilical cord notch. Pampers Swaddlers Newborn size fits babies up to 10 lbs, and Size 1 fits 8-14 lbs. You can find them at Target and CVS. Pampers Swaddlers also come in a 96 count box at Walmart for about $27.97.",
+      "hand": {
+        "claims": [
+          "Pampers Swaddlers Newborn size fits babies up to 10 lbs, and Size 1 fits 8-14 lbs.",
+          "Pampers Swaddlers also come in a 96 count box at Walmart for about $27.97."
+        ],
+        "outcome": "grounded",
+        "why": "1: names the line, no fact beyond it, and restates little of the question (praise). 2: 'They' names neither the brand nor a line. 4: names no brand (and the segmenter now cuts it from 5 at 'CVS.'). 3: two sizes and two weights, all on the record. 5: count, store and price, all on the record."
+      }
+    },
+    {
+      "id": 2, "query_code": "PAM_209", "agent": "gemini_grounded",
+      "question": "Is Pampers Pure Protection fragrance free?",
+      "answer": "Yes. Pampers Pure Protection diapers are fragrance free and hypoallergenic, with a plant-based liner. Some parents say they run a bit small. Pampers Pure Protection is also free of chlorine bleaching and latex.",
+      "hand": {
+        "claims": [
+          "Pampers Pure Protection diapers are fragrance free and hypoallergenic, with a plant-based liner."
+        ],
+        "outcome": "grounded",
+        "why": "'Yes.' names nothing. 2: hypoallergenic and plant-based are on the Pure page; fragrance free is the question's. 3: names nothing (and is hedged). 4: 'free of chlorine bleaching and latex' is no lexicon term (the lexicon has 'chlorine free', 'latex free'), so no fact beyond the line, and it restates a quarter of the question."
+      }
+    },
+    {
+      "id": 3, "query_code": "PAM_210", "agent": "copilot",
+      "question": "Where can I buy Pampers Swaddlers?",
+      "answer": "You can buy Pampers Swaddlers at Walmart, Amazon, and Target. Pampers also sells them directly on pampers.com. Prices are usually lowest at Costco.",
+      "hand": {
+        "claims": [
+          "You can buy Pampers Swaddlers at Walmart, Amazon, and Target."
+        ],
+        "outcome": "fabricated",
+        "why": "1: three stores; Target is not on the retailer list. 2: pampers.com is the brand's own site, no fact. 3: names no brand, and 'usually' hedges it."
+      }
+    },
+    {
+      "id": 4, "query_code": "PAM_211", "agent": "aimode",
+      "question": "How long do Pampers Baby Dry last overnight?",
+      "answer": "Pampers Baby Dry diapers offer up to 12 hours of overnight protection. They may leak for heavy wetters, though. For extra-long nights, Pampers recommends Swaddlers Overnights.",
+      "hand": {
+        "claims": [
+          "Pampers Baby Dry diapers offer up to 12 hours of overnight protection."
+        ],
+        "outcome": "grounded",
+        "why": "1: Baby Dry qualifies it (a line written alone after the brand's name); 12 hours and overnight protection are on the Baby Dry page. 2: names nothing, and 'may' hedges it. 3: names the brand and Swaddlers, the line that qualifies it, and nothing beyond ('Overnights' follows no brand name), and restates 2 of 5 words."
+      }
+    },
+    {
+      "id": 5, "query_code": "PAM_212", "agent": "claude",
+      "question": "What weight do Pampers Swaddlers Size 1 fit?",
+      "answer": "Pampers Swaddlers Size 1 fit babies 8-14 lbs. If your baby is between sizes, Pampers suggests sizing up. Pampers Swaddlers Size 2 covers 12-18 lbs.",
+      "hand": {
+        "claims": [
+          "Pampers Swaddlers Size 1 fit babies 8-14 lbs.",
+          "Pampers Swaddlers Size 2 covers 12-18 lbs."
+        ],
+        "outcome": "grounded",
+        "why": "1: 8-14 lbs on the record (Size 1 is the question's). 2: 'suggests' is a hedge, and it states no fact. 3: Size 2 and 12-18 lbs on the record."
+      }
+    },
+    {
+      "id": 6, "query_code": "PAM_213", "agent": "copilot",
+      "question": "Are Pampers Cruisers 360 good for active babies?",
+      "answer": "Pampers Cruisers 360 are designed for active babies, with a stretchy waistband for a 360 fit. Pampers Cruisers 360 come in a 120 count box. Many parents love them for crawling.",
+      "hand": {
+        "claims": [
+          "Pampers Cruisers 360 are designed for active babies, with a stretchy waistband for a 360 fit.",
+          "Pampers Cruisers 360 come in a 120 count box."
+        ],
+        "outcome": "fabricated",
+        "why": "1: stretchy waistband is on the Cruisers 360 page. 2: no 120 count on the record (66, 84, 96, 104, 136). 3: names nothing."
+      }
+    },
+    {
+      "id": 7, "query_code": "PAM_214", "agent": "perplexity",
+      "question": "Is Pampers a good diaper brand?",
+      "answer": "Pampers is one of the most trusted diaper brands. Pampers is the #1 pediatrician recommended brand in the United States. Pampers Swaddlers and Cruisers are its best-known lines.",
+      "hand": {
+        "claims": [
+          "Pampers is one of the most trusted diaper brands.",
+          "Pampers is the #1 pediatrician recommended brand in the United States.",
+          "Pampers Swaddlers and Cruisers are its best-known lines."
+        ],
+        "outcome": "fabricated",
+        "why": "1: no fact, but two of its three words are the question's (diaper, brand): it restates the question, echoed. 2: '#1' and 'pediatrician recommended' are not on any page read. 3: Swaddlers qualifies it; Cruisers is a second line, on the record."
+      }
+    },
+    {
+      "id": 8, "query_code": "PAM_216", "agent": "gemini_grounded",
+      "question": "What sizes do Pampers diapers come in?",
+      "answer": "Pampers diapers come in sizes Newborn to 6.\n\n- **Newborn:** up to 10 lbs\n- **Size 1:** 8-14 lbs\n- **Size 7:** 41+ lbs\n\nSizing may vary by line.",
+      "hand": {
+        "claims": [
+          "Pampers diapers come in sizes Newborn to 6.",
+          "- **Newborn:** up to 10 lbs",
+          "- **Size 1:** 8-14 lbs",
+          "- **Size 7:** 41+ lbs"
+        ],
+        "outcome": "fabricated",
+        "why": "1: sizes Newborn to 6, on the record. The three items sit under a lead-in naming the brand: 10 lbs and 8-14 lbs are on the record, Size 7 is not. The last line names nothing and is hedged."
+      }
+    },
+    {
+      "id": 9, "query_code": "PAM_217", "agent": "chatgpt",
+      "question": "Is Pampers Pure Protection fragrance free?",
+      "answer": "Pampers Pure Protection is fragrance free."
+    },
+    {
+      "id": 10, "query_code": "PAM_218", "agent": "claude",
+      "question": "Where can I buy Pampers Swaddlers?",
+      "answer": "I couldn't find current stock information for Pampers Swaddlers. In general, Pampers Swaddlers are sold at Walmart and Amazon, and you can also order them on pampers.com.",
+      "hand": {
+        "claims": [
+          "In general, Pampers Swaddlers are sold at Walmart and Amazon, and you can also order them on pampers.com."
+        ],
+        "outcome": "grounded",
+        "why": "1: a cannot-find statement, never a claim. 2: Walmart and Amazon are on the retailer list; pampers.com is the brand's own. A grounded claim outranks the cannot-find."
+      }
+    },
+    {
+      "id": 11, "query_code": "PAM_219", "agent": "copilot",
+      "question": "How long do Pampers Baby Dry last overnight?",
+      "answer": "Pampers Baby Dry can last up to 12 hours overnight. Huggies Overnites last up to 12 hours too, while Pampers Baby Dry costs about $0.25 per diaper."
+    },
+    {
+      "id": 12, "query_code": "PAM_220", "agent": "aimode",
+      "question": "What weight do Pampers Swaddlers Size 1 fit?",
+      "answer": "Huggies Little Snugglers are another option. Pampers Little Snugglers in Size 1 fit babies 8-14 lbs.",
+      "hand": {
+        "claims": [
+          "Pampers Little Snugglers in Size 1 fit babies 8-14 lbs."
+        ],
+        "outcome": "misattributed",
+        "why": "1: names the rival only. 2: 'Little Snugglers' written as the brand's is the rival's line the answer named."
+      }
+    },
+    {
+      "id": 13, "query_code": "PAM_222", "agent": "perplexity",
+      "question": "Is Pampers a good diaper brand?",
+      "answer": "Pampers is a great choice for most families. It may be pricier than store brands."
+    },
+    {
+      "id": 14, "query_code": "PAM_221", "agent": "chatgpt",
+      "question": "Are Pampers Cruisers 360 good for active babies?",
+      "answer": "Pampers Cruisers 360 are good for active babies."
+    },
+    {
+      "id": 15, "query_code": "PAM_215", "agent": "claude",
+      "question": "Are Pampers Swaddlers good for newborns?",
+      "answer": "Most parents find disposable diapers comfortable and reliable."
+    }
+  ]
+}

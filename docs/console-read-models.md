@@ -7723,3 +7723,50 @@ and counted (`tier_config.category_control.not_a_product_ask_dropped`). Stored s
 the FL14-shaped fixture `fl14_shaped.json`, built by `fixtures/build_brand_coder_fl14_2o1.py` from the rescore
 printout, its third calls synthetic), `apps/api/tests/test_console_2o1.py`, `apps/pipeline/tests/
 test_category_product_ask_2o1.py`, `apps/pipeline/tests/test_narratives_2o1.py`.
+
+## 2O-4: brand-direct claims are selected by rule, not by the model (console scorer 14)
+
+### B1: the selector
+
+Two re-scores of FL14 under scorer 13 moved 51 of 258 brand-direct answers: the verdict was a lookup (2O-3), and
+the sentences it looked up were the model's pick, which changed between runs. `scoring/brand_claim_selector.py`
+now picks them from the answer text, and the tier makes no model call (the scorer's `_code_brand_direct`, its
+two-to-three calls and their settings are gone; `ExpectationScorer.plan` decides a brand-direct run with no call).
+
+* The segmenter (`parser/span_segmenter.py`): an abbreviation is the piece's last whole word, so "…Target and CVS.
+  Pampers…" splits and "vs." still does not. `units()` gives each span its sentence and a list item its lead-in.
+* A unit is about the brand when it names the brand or a line (`Vocabulary`: `unprompted.brand_terms` over the
+  primary entity's name and aliases and `tier_config.merchant.product_names`, read once per cycle by
+  `expectation_scorer.BrandTermsCache`, plus the line each catalog and study title names; competitor entities are
+  the rivals), or is a clause of a sentence that does, or a list item under a line that does. A unit naming a
+  rival and not the brand is the rival's. A one-word line written alone counts capitalised and not as its
+  sentence's first word.
+* A claim: about the brand, not hedged (the hedge lexicon, a hedged lead-in, or `HEDGE_PHRASES`, "some parents
+  say"), not a cannot-find, and carrying a checkable fact beyond the line that qualifies it, or (`echoed`)
+  restating the question at `ECHO_THRESHOLD`. Judged by `brand_claim_verdict.judge_span` (the qualifying line is
+  looked up too); the worst decides.
+* Stored: `extraction.coder` `{version: 4, question, calls: []}`, `extraction.selector` (vocabulary and its
+  digest, units, the claims with their facts and how each qualified), `span_labels` by rule (for `claim_kinds`),
+  `retailer_mentions` for the stores a unit sends the reader to (the fabricated-availability flag), and
+  `brand_claim` with every judged sentence. The drawer's `brand_claim.sentences` lists them, the deciding one
+  marked `decided`.
+
+Console `SCORER_VERSION` **14**, `SCORER_CHANGES['14']` "brand-direct claims selected by rule, no model call"; it
+never explains a moved score. `CODER_SCORER_VERSIONS` gains 3 → "13" and 4 → "14"; a score stored under 13 compares
+as its oldest outcome's version, as one under 14 does.
+
+### B2: the printout
+
+`rescore_cycle.py --tier brand_direct` needs no `OPEN_AI_API_KEY` when only brand-direct is named, and `--dry-run`
+prints for brand-direct exactly what the real run prints (writing nothing; the cycle's reference is read, never
+fetched). The block: the fact index's size by source (record, catalog, brand pages: `FactIndex.by_source`), the
+claim sentences (total, per answer min / median / max, by kind), `no_checkable_fact` answers,
+`fact_type_not_read`, fabricated by the fact missing, and "claim sets changed since the stored scoring: N of M"
+(a version-3 row's settling call's spans against the rule's sentences on the first run; the second must read 0).
+
+### Tests
+
+`apps/pipeline/tests/test_brand_claim_selector_2o4.py` (the hand-written FL13-shaped answers in
+`fixtures/brand_claim/fl13_brand_direct_answers.json`, ten of them hand-counted; the 2O-3 FL14-shaped fixture),
+`apps/api/tests/test_console_2o4.py`. The 2O-1 and 2O-3 tests keep pinning a stored version-2 or version-3 record's
+decision over its calls.

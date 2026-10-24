@@ -95,12 +95,15 @@ from clients import truesync_client as supply_fields
 #: outcome was coded under (CODER_SCORER_VERSIONS), so FL14 re-scored on the
 #: new verdict is not comparable to a cycle still on version 2 until that one
 #: is re-scored too.
-SCORER_VERSION = "13"
+#: 2O-4: "14", the brand-direct claim sentences selected by rule (brand-claim
+#: coder version 4, no model call), so two re-scores of one cycle give the
+#: same outcomes. No dimension reads it; comparability as 2O-3 made it.
+SCORER_VERSION = "14"
 #: The version a cycle whose brand-direct outcomes predate 2O-1 compares as.
 SINGLE_CALL_CODER_VERSION = "11"
 #: 2O-3: the scorer version each brand-claim coder version's outcomes compare as
 #: (None: one call, before 2O-1).
-CODER_SCORER_VERSIONS = {None: SINGLE_CALL_CODER_VERSION, 1: SINGLE_CALL_CODER_VERSION, 2: "12",
+CODER_SCORER_VERSIONS = {None: SINGLE_CALL_CODER_VERSION, 1: SINGLE_CALL_CODER_VERSION, 2: "12", 3: "13",
                          BRAND_CODER_VERSION: SCORER_VERSION}
 #: The adapter's own revision, beside the scorer's: a change to how loop
 #: counts become scorer inputs re-scores stored cycles too. Not a scorer
@@ -1074,8 +1077,9 @@ def comparable_version(body: Optional[dict]) -> Optional[str]:
     coder = body.get('brand_coder')
     if not isinstance(coder, dict) or coder.get('coded', 0) >= coder.get('of', 0):
         return version
-    if str(version) == SCORER_VERSION:
-        # 2O-3: the version the oldest outcome was coded under
+    if str(version) in ("13", SCORER_VERSION):
+        # 2O-3: the version the oldest outcome was coded under (2O-4: a score
+        # stored under 13 too, its block counting version-3 rows)
         return CODER_SCORER_VERSIONS.get(coder.get('oldest'), SINGLE_CALL_CODER_VERSION)
     if str(version) == "12":
         # a score stored under 2O-1, which counted version-2 rows only
@@ -1283,7 +1287,8 @@ SCORER_CHANGES = {'7': 'ungrounded surfaces excluded from pooling',
                   '10': 'metric rows count every agent',
                   '11': 'brand-choice set for Lost and the first-pick tiles',
                   '12': 'brand-direct answers coded by two agreeing calls',
-                  '13': "brand-direct verdict decided from the claim's facts"}
+                  '13': "brand-direct verdict decided from the claim's facts",
+                  '14': 'brand-direct claims selected by rule, no model call'}
 
 
 def _no_rivals(body: dict) -> bool:
@@ -1311,7 +1316,9 @@ SCORER_CHANGE_APPLIES = {'7': lambda new: bool((new.get('coverage') or {}).get('
                          # 2O-1 never moves a score: no dimension reads the brand-direct outcome
                          '12': lambda _new: False,
                          # 2O-3 never moves a score either: still no dimension reads it
-                         '13': lambda _new: False}
+                         '13': lambda _new: False,
+                         # 2O-4 never moves a score either
+                         '14': lambda _new: False}
 
 
 _NOT_CARRIED = object()

@@ -221,8 +221,12 @@ def test_fl14_shaped_split_per_run_and_the_variance_left(index):
                for a, v in zip(FL14['answers'], vs) if v[0]['outcome'] != v[1]['outcome'])
 
 
-def test_the_rescore_counts_the_span_sets_that_changed():
+def test_the_rescore_counts_the_claim_sets_that_changed():
+    """2O-4: the rescore compares claim sets sentence for sentence (no
+    overlap allowance: a rule-selected set either is the same or is not)."""
     from scripts import rescore_cycle
     before = {i: bcv.claim_spans(a['runs'][0]) for i, a in enumerate(FL14['answers'])}
     after = {i: bcv.claim_spans(a['runs'][1]) for i, a in enumerate(FL14['answers'])}
-    assert rescore_cycle.spans_changed(before, after) == {'compared': 258, 'changed': 50}
+    changed = rescore_cycle.claim_sets_changed(before, after)
+    assert changed == {'compared': 258, 'changed': 50}
+    assert rescore_cycle.claim_sets_changed(before, before) == {'compared': 258, 'changed': 0}

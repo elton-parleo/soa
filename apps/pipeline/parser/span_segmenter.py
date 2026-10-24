@@ -77,8 +77,11 @@ MIN_SPAN_CHARS = 3
 
 
 def _ends_with_abbreviation(text: str) -> bool:
+    """2O-4: the abbreviation is the piece's last whole word. "CVS." ends
+    with "vs." and is no abbreviation: "…at Target and CVS. Pampers…" was
+    one span, and the store sentence took the next one's claim with it."""
     lowered = text.lower().rstrip('"”’*)')
-    return any(lowered.endswith(a) for a in _ABBREVIATIONS)
+    return any(lowered.endswith(a) and not lowered[:-len(a)][-1:].isalnum() for a in _ABBREVIATIONS)
 
 
 def _split_sentences(line: str):
@@ -143,6 +146,37 @@ def segment(answer_text) -> list:
         {'id': i, 'text': span, 'inherits_hedge': inherited}
         for i, (span, inherited) in enumerate(spans, start=1)
     ]
+
+
+def units(answer_text) -> list:
+    """
+    2O-4: segment()'s spans, each with the sentence it was cut from and,
+    for a list item, the line that introduced the list (`lead_in`, the last
+    non-item line above it, or None). The brand-claim selector reads a
+    clause as its sentence's ("Pampers Swaddlers are soft, but they cost
+    $45." — the second clause is still about Swaddlers) and an item as its
+    lead-in's ("Pampers Pure Protection:" / "- Fragrance free"). Same cuts,
+    same order and ids as segment().
+    """
+    from parser import extraction_postprocess as _pp   # late: mutual import
+
+    text = str(answer_text or '')
+    out, lead_in, lead_in_hedged = [], None, False
+    for line in text.split('\n'):
+        if not line.strip():
+            continue
+        is_item = bool(_LIST_ITEM.match(line))
+        if not is_item:
+            lead_in = line.strip()
+            lead_in_hedged = bool(_LEAD_IN.search(line)) and _pp.is_hedged(line)
+        for sentence in _split_sentences(line):
+            for clause in _split_clauses(sentence):
+                stripped = clause.strip()
+                if len(stripped) >= MIN_SPAN_CHARS:
+                    out.append({'id': len(out) + 1, 'text': stripped, 'inherits_hedge': is_item and lead_in_hedged,
+                                'sentence': sentence.strip(), 'item': is_item,
+                                'lead_in': lead_in if is_item else None})
+    return out
 
 
 def covers(answer_text, spans) -> bool:
