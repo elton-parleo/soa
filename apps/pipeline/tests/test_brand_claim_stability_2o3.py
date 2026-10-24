@@ -53,7 +53,7 @@ def index():
 def test_the_index_from_the_fl13_shaped_record_and_brand_pages(index):
     stamp = index.stamp()
     # 2O-5: version 2, the line slots on top of version 1's 83 facts
-    assert (stamp['version'], stamp['size']) == (2, 191)
+    assert (stamp['version'], stamp['size']) == (3, 191)
     assert stamp['types_read'] == list(bfi.FACT_TYPES)
     d = index.as_dict()
     # the retailer rows' prices (Walmart, and Amazon $3.00 above), the titles' counts and sizes

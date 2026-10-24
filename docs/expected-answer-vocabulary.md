@@ -331,6 +331,17 @@ drawer line: "fabricated: '2 to 9 lbs' for Swaddlers Newborn — pampers.com's
 chart says under 10 lb". Rules: `scoring/brand_fact_index.py` (`check`) and
 `scoring/brand_claim_verdict.py`.
 
+**2O-6 (brand-claim coder version 6): counts are an open set.** A brand page
+lists the packs it sells, not every pack its retailers do, so a pack count the
+line's page does not list (a club-only 210 ct box) is `unverified`, never
+`fabricated`. The closed sets still contradict: a line's sizes, a (line, size)
+weight range, a line's status, and the brand's lines only when supply says
+its line list is complete (`brand_lines_complete`; supply's list, from the
+feed and the pages read, is never complete, so a line off it is unverified).
+The attribute check reads the line page's feature bullets: "Fragrance Free"
+on the Swaddlers page contradicts "scented"; an attribute no page states
+stays unverified.
+
 Two consequences worth stating:
 
 **Visibility is retired for this tier**, not renamed. It was the pass-1

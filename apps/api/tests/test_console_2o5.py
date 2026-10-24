@@ -24,22 +24,25 @@ def _body(version, coded, of=258, oldest=None, coder=None):
 
 
 def test_the_version():
-    assert score_svc.SCORER_VERSION == '15' and ea.BRAND_CODER_VERSION == 5
+    # 2O-6 moved the current versions on (test_console_2o6); 2O-5's stay as they were
+    assert score_svc.CODER_SCORER_VERSIONS[5] == '15' and ea.BRAND_CODER_VERSION > 5
     assert score_svc.SCORER_CHANGES['15'] == \
         'brand-direct fabricated means contradicted by the brand; absent is unverified'
     assert score_svc.SCORER_CHANGE_APPLIES['15']({}) is False
-    assert score_svc.CODER_SCORER_VERSIONS == {None: '11', 1: '11', 2: '12', 3: '13', 4: '14', 5: '15'}
+    assert {k: v for k, v in score_svc.CODER_SCORER_VERSIONS.items() if k is None or k <= 5} == \
+        {None: '11', 1: '11', 2: '12', 3: '13', 4: '14', 5: '15'}
     assert (ea.UNVERIFIED, ea.UNVERIFIED_NOTE) == ('unverified', 'not on the pages read; nothing contradicts it')
     # the outcome column's vocabulary is unchanged: unverified is a reason code, as per_unit is
     assert 'unverified' not in ea.BRAND_OUTCOMES
 
 
 def test_fl14_re_scored_compares_as_its_oldest_outcome():
-    assert score_svc.comparable_version(_body('15', 258, oldest=5)) == '15'
-    assert score_svc.comparable_version(_body('15', 200, oldest=4)) == '14'
+    assert score_svc.comparable_version(_body('15', 258, oldest=5, coder=5)) == '15'
+    assert score_svc.comparable_version(_body('15', 200, oldest=4, coder=5)) == '14'
     # a score stored under 14 whose block counted version-4 rows, some not coded by 4
     assert score_svc.comparable_version(_body('14', 200, oldest=3, coder=4)) == '13'
-    prev = score_svc.compare(_body('15', 258, oldest=5), 'FL13-pampers-20261022', _body('15', 0, oldest=4))
+    prev = score_svc.compare(_body('15', 258, oldest=5, coder=5), 'FL13-pampers-20261022',
+                             _body('15', 0, oldest=4, coder=5))
     assert prev['comparable'] is False and prev['reason'] == 'Scored under v14, re-score to compare.'
 
 
